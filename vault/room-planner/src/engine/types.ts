@@ -64,6 +64,9 @@ export type ApplyErrorCode =
 
 // ---------------------------------------------------------------- entities
 
+/** What a finish looks like close up in the Realistic look (generated textures; Spec Addition A2). */
+export type FinishTexture = 'wood' | 'linen' | 'leather' | 'metal' | 'paint';
+
 /** C13 */
 export interface Material {
   id: string;
@@ -71,6 +74,8 @@ export interface Material {
   colour: string; // hex
   roughness: number; // 0.4–0.8
   metalness: number; // 0.0–0.1
+  /** Optional, so materials saved before M4.6 load unchanged: they simply have no texture. */
+  texture?: FinishTexture;
 }
 
 export interface WallSegment {

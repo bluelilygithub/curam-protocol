@@ -11,6 +11,8 @@ export type Tool = 'select' | 'pan' | 'wall_edit' | 'measure';
 export type ViewMode = '2d' | '3d';
 /** Cinematic render quality (Spec Addition A1): low = no post effects, small shadow map; high = soft shadows and ambient occlusion. */
 export type Quality = 'low' | 'high';
+/** The Cinematic look (Spec Addition A1/A2): clay (white model) or realistic (generated textures, daylight). */
+export type Look = 'clay' | 'realistic';
 export const TOOL_KEYS: Record<string, Tool> = { '1': 'select', '2': 'pan', '3': 'wall_edit', '4': 'measure' };
 
 /** What the next click on the canvas will place (a ghost follows the pointer). */
@@ -27,6 +29,7 @@ export interface UiState {
   /** Cinematic mode of the 3D view (clay look, fly-through). Presentation only: never touches the project. */
   cinematic: boolean;
   quality: Quality;
+  look: Look;
   tourPlaying: boolean;
   /** First-person walk mode (Spec Addition A1, C4). Exclusive with the fly-through. */
   walking: boolean;
@@ -60,6 +63,7 @@ export interface UiActions {
   setViewMode(m: ViewMode): void;
   setCinematic(on: boolean): void;
   setQuality(q: Quality): void;
+  setLook(l: Look): void;
   setTourPlaying(on: boolean): void;
   setWalking(on: boolean): void;
   setTourLoop(on: boolean): void;
@@ -90,6 +94,7 @@ export function createUiStore(): UiStore {
     viewMode: '2d',
     cinematic: false,
     quality: 'low',
+    look: 'clay',
     tourPlaying: false,
     walking: false,
     tourLoop: true,
@@ -114,6 +119,7 @@ export function createUiStore(): UiStore {
     setViewMode: (viewMode) => set(viewMode === '3d' ? { viewMode } : { viewMode, tourPlaying: false, walking: false, immersive: false }),
     setCinematic: (cinematic) => set(cinematic ? { cinematic } : { cinematic, tourPlaying: false, immersive: false, tourProgress: null }),
     setQuality: (quality) => set({ quality }),
+    setLook: (look) => set({ look }),
     setTourPlaying: (tourPlaying) => set(tourPlaying ? { tourPlaying, walking: false } : { tourPlaying }),
     setWalking: (walking) => set(walking ? { walking, tourPlaying: false, tourProgress: null } : { walking }),
     setTourLoop: (tourLoop) => set({ tourLoop }),

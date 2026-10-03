@@ -130,3 +130,7 @@ same angle.
 - Perf ceilings (Test Plan §6) are asserted in `tests/perf/` and excluded from the coverage run, because v8 instrumentation
   makes timings meaningless.
 - Wall corner joins for unequal thickness (C16) and everything outside Phase 1 are untouched.
+
+## D72 - Realistic look (M4.6)
+
+Realistic is a second look inside Cinematic (`ui.look`: `clay` | `realistic`, stored per browser, default clay), not a separate mode. Textures are generated at run time from seeded periodic noise (`render3d/textureData.ts`): no image files, so no licences, tileable by construction, deterministic. Finishes are data: `Material.texture` is optional (old files load unchanged); each library item has default finishes per part (`DEFAULT_FINISHES`), and a designer finish (`finishOverrides`, C13) always wins. Furniture gains `rbox` (rounded box) and `taper` part shapes; every recipe still fills its exact width x length x height. Room details in this look only: plank floor, plaster walls, skirting boards (stopped at doors, cut away with a cut-away wall), door panels and handles, window sill and glazing bars, pale sky behind windows. The look switch rebuilds the scene once.

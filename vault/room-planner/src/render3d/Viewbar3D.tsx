@@ -12,6 +12,7 @@ export function Viewbar3D() {
   const views = useProject((s) => s.project?.savedViews ?? NO_VIEWS);
   const cinematic = useUi((s) => s.cinematic);
   const quality = useUi((s) => s.quality);
+  const look = useUi((s) => s.look);
   const playing = useUi((s) => s.tourPlaying);
   const loop = useUi((s) => s.tourLoop);
   const immersive = useUi((s) => s.immersive);
@@ -63,6 +64,12 @@ export function Viewbar3D() {
         </button>
         {cinematic && (
           <>
+            <button className={`btn ${look === 'clay' ? 'active' : ''}`} aria-pressed={look === 'clay'} onClick={() => app.setLook('clay')} title="Clay: a white architectural model">
+              <span className="label">Clay</span>
+            </button>
+            <button className={`btn ${look === 'realistic' ? 'active' : ''}`} aria-pressed={look === 'realistic'} onClick={() => app.setLook('realistic')} title="Realistic: wood, fabric and daylight">
+              <span className="label">Realistic</span>
+            </button>
             <button className={`btn ${quality === 'low' ? 'active' : ''}`} aria-pressed={quality === 'low'} onClick={() => app.setQuality('low')} title="Low quality: fastest, for laptops">
               <span className="label">Low</span>
             </button>

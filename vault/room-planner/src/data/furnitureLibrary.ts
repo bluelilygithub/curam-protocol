@@ -51,12 +51,39 @@ export const FIXTURE_LIBRARY: FixtureDefinition[] = [
   { id: 'window-std', name: 'Window', type: 'window', width: 1.2, height: 1.2, elevation: 0.9 },
 ];
 
-/** Small starter material list for finish overrides (Spec §8 ranges: roughness 0.4–0.8, metalness 0.0–0.1). */
+/** Starter material list for finishes (Spec §8 ranges: roughness 0.4–0.8, metalness 0.0–0.1). `texture` is what it looks like in the Realistic look. */
 export const SEED_MATERIALS: Material[] = [
-  { id: 'oak', name: 'Oak', colour: '#b98b57', roughness: 0.6, metalness: 0 },
-  { id: 'walnut', name: 'Walnut', colour: '#6b4a32', roughness: 0.55, metalness: 0 },
-  { id: 'linen', name: 'Linen', colour: '#d9d2c3', roughness: 0.8, metalness: 0 },
-  { id: 'charcoal-fabric', name: 'Charcoal fabric', colour: '#44464a', roughness: 0.8, metalness: 0 },
-  { id: 'leather-tan', name: 'Tan leather', colour: '#a0623a', roughness: 0.5, metalness: 0.02 },
-  { id: 'brushed-steel', name: 'Brushed steel', colour: '#a9adb2', roughness: 0.4, metalness: 0.1 },
+  { id: 'oak', name: 'Oak', colour: '#b98b57', roughness: 0.6, metalness: 0, texture: 'wood' },
+  { id: 'walnut', name: 'Walnut', colour: '#6b4a32', roughness: 0.55, metalness: 0, texture: 'wood' },
+  { id: 'linen', name: 'Linen', colour: '#d9d2c3', roughness: 0.8, metalness: 0, texture: 'linen' },
+  { id: 'charcoal-fabric', name: 'Charcoal fabric', colour: '#44464a', roughness: 0.8, metalness: 0, texture: 'linen' },
+  { id: 'leather-tan', name: 'Tan leather', colour: '#a0623a', roughness: 0.5, metalness: 0.02, texture: 'leather' },
+  { id: 'brushed-steel', name: 'Brushed steel', colour: '#a9adb2', roughness: 0.4, metalness: 0.1, texture: 'metal' },
+  { id: 'white-paint', name: 'White paint', colour: '#f1eee8', roughness: 0.6, metalness: 0, texture: 'paint' },
+  { id: 'grey-fabric', name: 'Grey fabric', colour: '#8d8a82', roughness: 0.8, metalness: 0, texture: 'linen' },
+  { id: 'sage-fabric', name: 'Sage fabric', colour: '#7d8a84', roughness: 0.8, metalness: 0, texture: 'linen' },
+  { id: 'dark-wood', name: 'Dark wood', colour: '#3b2d24', roughness: 0.55, metalness: 0.02, texture: 'wood' },
+  { id: 'pale-oak', name: 'Pale oak', colour: '#d8b98c', roughness: 0.6, metalness: 0, texture: 'wood' },
 ];
+
+/**
+ * What each part of each library item is made of in the Realistic look when the designer has not chosen a finish (material ids from
+ * SEED_MATERIALS). A finish chosen in the Inspector (`finishOverrides`, C13) always wins; the ordinary and clay looks ignore this.
+ */
+export const DEFAULT_FINISHES: Record<string, Partial<Record<'frame' | 'upholstery' | 'top' | 'leg' | 'fabric' | 'accent' | 'handle', string>>> = {
+  'sofa-3': { upholstery: 'grey-fabric', frame: 'grey-fabric', leg: 'dark-wood' },
+  armchair: { upholstery: 'sage-fabric', frame: 'sage-fabric', leg: 'dark-wood' },
+  'coffee-table': { top: 'pale-oak', frame: 'pale-oak', leg: 'dark-wood' },
+  'side-table': { top: 'walnut', leg: 'dark-wood' },
+  'dining-table': { top: 'pale-oak', frame: 'pale-oak', leg: 'pale-oak' },
+  'dining-chair': { upholstery: 'linen', frame: 'pale-oak', leg: 'pale-oak' },
+  'bed-queen': { frame: 'walnut', fabric: 'linen', upholstery: 'grey-fabric', leg: 'dark-wood' },
+  'bedside-table': { frame: 'walnut', top: 'walnut', accent: 'walnut', leg: 'dark-wood', handle: 'brushed-steel' },
+  wardrobe: { frame: 'white-paint', accent: 'white-paint', leg: 'white-paint', handle: 'brushed-steel' },
+  desk: { top: 'pale-oak', frame: 'white-paint', accent: 'pale-oak', handle: 'brushed-steel' },
+  bookshelf: { frame: 'pale-oak', accent: 'pale-oak' },
+  'tv-unit': { frame: 'walnut', top: 'walnut', accent: 'walnut', leg: 'dark-wood', handle: 'brushed-steel' },
+};
+
+/** Finishes of doors and windows in the Realistic look. */
+export const FIXTURE_FINISHES = { frame: 'white-paint', door: 'white-paint', handle: 'brushed-steel' } as const;

@@ -316,6 +316,27 @@ await page.waitForSelector('[data-testid=stage] canvas');
 check('quality is remembered per browser', (await ev(() => window.roomPlanner.ui.getState().quality)) === 'high');
 await ev(() => window.roomPlanner.ui.getState().setQuality('low'));
 
+// ------------------------------------------------------------------ Realistic look (Spec Addition A2, M4.6)
+await page.getByRole('button', { name: '3D', exact: true }).click();
+await page.waitForSelector('[data-testid=stage3d] canvas', { timeout: 20000 });
+await ev(() => window.roomPlanner.ui.getState().setCinematic(true));
+await wait(600);
+// PNG size is a fair measure of image detail: flat clay compresses far smaller than wood, fabric and plank textures
+const pixelSpread = async () => (await page.locator('[data-testid=stage3d]').screenshot()).length;
+await page.getByRole('button', { name: 'Clay', exact: true }).click();
+await wait(900);
+const clayColours = await pixelSpread();
+await page.getByRole('button', { name: 'Realistic', exact: true }).click();
+await wait(1200);
+const realColours = await pixelSpread();
+await shot('realistic');
+check('Realistic look is far more detailed than clay', realColours > clayColours * 1.3, `${realColours} vs ${clayColours}`);
+check('look is remembered per browser', (await ev(() => localStorage.getItem('room-planner:look:v1'))) === 'realistic');
+await page.getByRole('button', { name: 'Clay', exact: true }).click();
+await wait(500);
+check('switching back to clay works', (await ev(() => window.roomPlanner.ui.getState().look)) === 'clay');
+await ev(() => window.roomPlanner.ui.getState().setCinematic(false));
+
 // ------------------------------------------------------------------ Walk mode (Spec Addition A1, C4)
 await page.getByRole('button', { name: '3D', exact: true }).click();
 await page.waitForSelector('[data-testid=stage3d] canvas', { timeout: 20000 });

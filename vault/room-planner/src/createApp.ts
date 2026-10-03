@@ -19,7 +19,7 @@ import { ProjectsController } from './state/projects';
 import { convertProjection, presetCamera, type CameraPreset, type CameraState, type Projection } from './render3d/cameraPresets';
 import { buildTour } from './render3d/tour';
 import { walkStart } from './render3d/walk';
-import { createUiStore, type Quality, type ViewMode } from './state/uiStore';
+import { createUiStore, type Look, type Quality, type ViewMode } from './state/uiStore';
 import { createViewStore } from './state/viewStore';
 
 /**
@@ -47,11 +47,23 @@ export function createApp(storage: StorageLike) {
     const q = storage.getItem(QUALITY_KEY);
     if (q === 'low' || q === 'high') ui.getState().setQuality(q);
   } catch { /* storage unavailable: keep the default */ }
+  // The Cinematic look (clay / realistic) is a per-browser preference too. Default clay.
+  const LOOK_KEY = 'room-planner:look:v1';
+  try {
+    const l = storage.getItem(LOOK_KEY);
+    if (l === 'clay' || l === 'realistic') ui.getState().setLook(l);
+  } catch { /* storage unavailable: keep the default */ }
   let lastQuality = ui.getState().quality;
+  let lastLook = ui.getState().look;
   ui.subscribe((s) => {
-    if (s.quality === lastQuality) return;
-    lastQuality = s.quality;
-    try { storage.setItem(QUALITY_KEY, s.quality); } catch { /* ignore */ }
+    if (s.quality !== lastQuality) {
+      lastQuality = s.quality;
+      try { storage.setItem(QUALITY_KEY, s.quality); } catch { /* ignore */ }
+    }
+    if (s.look !== lastLook) {
+      lastLook = s.look;
+      try { storage.setItem(LOOK_KEY, s.look); } catch { /* ignore */ }
+    }
   });
 
   /** Put the 3D camera back on the (new) active room, if the 3D view has been used. */
@@ -161,6 +173,7 @@ export function createApp(storage: StorageLike) {
       ui.getState().setCinematic(on);
     },
     setQuality(q: Quality): void { ui.getState().setQuality(q); },
+    setLook(l: Look): void { ui.getState().setLook(l); },
     walkInput,
 
     /** Start walking through the room at eye height (collides with walls and furniture). False, with a message, if there is nowhere to stand. */

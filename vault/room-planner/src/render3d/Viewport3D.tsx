@@ -28,6 +28,8 @@ interface Orbit {
   removeEventListener(type: string, fn: () => void): void;
 }
 
+const SKY_BACKGROUND = '#bcd6ec';
+
 const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const isOrtho = (c: THREE.Camera): boolean => !!(c as THREE.OrthographicCamera).isOrthographicCamera;
 
@@ -39,6 +41,7 @@ function Host() {
   const hasRoom = useProject((s) => !!s.project?.rooms.length);
   const cinematic = useUi((s) => s.cinematic);
   const quality = useUi((s) => s.quality);
+  const look = useUi((s) => s.look);
   const tourPlaying = useUi((s) => s.tourPlaying);
   const walking = useUi((s) => s.walking);
   const tourLoop = useUi((s) => s.tourLoop);
@@ -62,14 +65,15 @@ function Host() {
     gl.shadowMap.type = cinematic ? THREE.VSMShadowMap : THREE.PCFSoftShadowMap;
     gl.toneMapping = cinematic ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
     gl.toneMappingExposure = 1;
-    scene.background = new THREE.Color(cinematic ? CLAY_BACKGROUND : BACKGROUND);
+    // realistic: a pale daylight sky is what shows through the windows
+    scene.background = new THREE.Color(cinematic ? (look === 'realistic' ? SKY_BACKGROUND : CLAY_BACKGROUND) : BACKGROUND);
     let pm: THREE.PMREMGenerator | null = null;
     let env: THREE.Texture | null = null;
     if (cinematic) {
       pm = new THREE.PMREMGenerator(gl);
       env = pm.fromScene(new RoomEnvironment(), 0.04).texture;
       scene.environment = env;
-      scene.environmentIntensity = 0.8;
+      scene.environmentIntensity = look === 'realistic' ? 0.6 : 0.8;
     } else {
       scene.environment = null;
     }
@@ -79,7 +83,7 @@ function Host() {
     });
     invalidate();
     return () => { env?.dispose(); pm?.dispose(); };
-  }, [cinematic, gl, scene, invalidate]);
+  }, [cinematic, look, gl, scene, invalidate]);
 
   // exposed for the browser walkthrough and tests; harmless in production
   useEffect(() => {

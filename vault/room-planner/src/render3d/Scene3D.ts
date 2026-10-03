@@ -12,10 +12,12 @@ import type { UiStore } from '../state/uiStore';
 import { roomBounds } from './cameraPresets';
 import { fixtureModel } from './fixtureParts';
 import { furnitureParts, type Part } from './furnitureParts';
-import { lookOf, MaterialCache, TINT, type Tint } from './materials';
+import { partGeometry } from './partGeometry';
+import { lookOf, MaterialCache, realisticFixtureLook, realisticLookOf, TINT, type Tint } from './materials';
+import { textureOf } from './textures';
 import { instanceTransform } from './transforms';
 import { wallsToFade } from './wallFade';
-import { prism, wallPieces } from './wallPieces';
+import { prism, skirtingPieces, wallPieces } from './wallPieces';
 
 export interface Scene3DPorts {
   project: ProjectStore;
@@ -41,6 +43,12 @@ export const CLAY_FLOOR_COLOUR = '#d9d6cf';
 export const SHADOW_MAP_BY_QUALITY = { low: 1024, high: 2048 } as const;
 export const CLAY_SUN = 2.6;
 export const CLAY_AMBIENT = 0.35;
+/** Realistic look (Spec Addition A2): warm daylight, a soft fill, painted plaster walls and oak boards. */
+export const REAL_SUN = 3.4;
+export const REAL_AMBIENT = 0.25;
+export const REAL_WALL_COLOUR = '#efe9de';
+export const REAL_FLOOR_COLOUR = '#c79a62';
+export const REAL_SKIRTING_COLOUR = '#f3f0ea';
 
 /** Everything is the same white matte clay; glass stays a pale translucent pane so openings still read. */
 function clayLook(role: string): { colour: string; roughness: number; metalness: number; opacity: number } {
@@ -57,9 +65,7 @@ export interface PickHit { ref: SelectionRef; distance: number; point: THREE.Vec
 interface PreviewEntry { group: THREE.Group; sig: string }
 
 function partMesh(part: Part, material: THREE.Material): THREE.Mesh {
-  const m = new THREE.Mesh(part.shape === 'box' ? unitBox : unitCylinder, material);
-  if (part.shape === 'box') m.scale.set(part.size[0], part.size[1], part.size[2]);
-  else m.scale.set(part.size[0] / 2, part.size[1], part.size[2] / 2);
+  const m = new THREE.Mesh(partGeometry(part), material);
   m.position.set(part.centre[0], part.centre[1], part.centre[2]);
   m.castShadow = part.role !== 'glass';
   m.receiveShadow = true;
@@ -108,6 +114,7 @@ export class Scene3D {
   /** Rebuilds of the committed scene so far (tests: pointer moves must not cause any). */
   rebuildCount = 0;
   private lookKey = '';
+  private readonly skirting = new Map<string, THREE.Mesh[]>();
 
   constructor(private readonly p: Scene3DPorts) {
     this.root.name = 'room-planner-3d';
@@ -154,7 +161,9 @@ export class Scene3D {
   // ------------------------------------------------------------------ look (Cinematic)
 
   private get cinematic(): boolean { return this.p.ui.getState().cinematic; }
-  private currentLookKey(): string { const u = this.p.ui.getState(); return `${u.cinematic}|${u.quality}`; }
+  /** Which materials the committed scene uses: the ordinary role colours, the clay model, or the realistic textured look. */
+  private get mode(): 'ordinary' | 'clay' | 'realistic' { const u = this.p.ui.getState(); return u.cinematic ? u.look : 'ordinary'; }
+  private currentLookKey(): string { const u = this.p.ui.getState(); return `${u.cinematic}|${u.quality}|${u.look}`; }
 
   /** Light levels and shadow-map size for the current look and Quality. The renderer sets the shadow type and the environment. */
   private applyLighting(): void {
@@ -164,7 +173,14 @@ export class Scene3D {
     this.sun.shadow.mapSize.set(size, size);
     this.sun.shadow.map?.dispose();
     this.sun.shadow.map = null;
-    if (u.cinematic) {
+    const mode = this.mode;
+    if (mode === 'realistic') {
+      this.sun.intensity = REAL_SUN;
+      this.sun.color.set('#ffe7c7');
+      this.ambient.intensity = REAL_AMBIENT;
+      this.sun.shadow.radius = 5;
+      this.sun.shadow.blurSamples = 16;
+    } else if (mode === 'clay') {
       this.sun.intensity = CLAY_SUN;
       this.sun.color.set('#ffffff');
       this.ambient.intensity = CLAY_AMBIENT;
@@ -172,6 +188,7 @@ export class Scene3D {
       this.sun.shadow.blurSamples = 16;
     } else {
       this.sun.intensity = 0.8 * Math.PI;
+      this.sun.color.set('#ffffff');
       this.ambient.intensity = 0.6 * Math.PI;
       this.sun.shadow.radius = 1;
     }
@@ -197,6 +214,7 @@ export class Scene3D {
     this.furnitureObjects.clear();
     this.fixtureObjects.clear();
     this.wallMaterials.clear();
+    this.skirting.clear();
     this.pickables.length = 0;
     for (const d of this.disposables) d.dispose();
     this.disposables.length = 0;
@@ -205,9 +223,12 @@ export class Scene3D {
   private furnitureGroup(inst: FurnitureInstance, project: Project, tint: Tint, opacity = 1): THREE.Group {
     const g = new THREE.Group();
     for (const part of furnitureParts(inst.definitionId, inst.width, inst.length, inst.height)) {
-      const look = this.cinematic
+      const mode = this.mode;
+      const look = mode === 'clay'
         ? { ...clayLook(part.role), tint: null as Tint }
-        : { ...lookOf(part.role, inst, project.materials), tint };
+        : mode === 'realistic'
+          ? { ...realisticLookOf(inst.definitionId, part, inst, project.materials), tint: null as Tint }
+          : { ...lookOf(part.role, inst, project.materials), tint };
       look.opacity = Math.min(look.opacity, opacity);
       g.add(partMesh(part, this.materials.get(look)));
     }
@@ -222,9 +243,12 @@ export class Scene3D {
     if (!model) return null;
     const g = new THREE.Group();
     for (const part of model.parts) {
-      const look = this.cinematic
+      const mode = this.mode;
+      const look = mode === 'clay'
         ? { ...clayLook(part.role), tint: null as Tint }
-        : { ...lookOf(part.role, undefined, []), tint: part.role === 'glass' ? null : tint };
+        : mode === 'realistic'
+          ? { ...realisticFixtureLook(part.role, this.p.project.getState().project?.materials ?? []), tint: null as Tint }
+          : { ...lookOf(part.role, undefined, []), tint: part.role === 'glass' ? null : tint };
       look.opacity = Math.min(look.opacity, opacity);
       g.add(partMesh(part, this.materials.get(look)));
     }
@@ -250,7 +274,10 @@ export class Scene3D {
 
     // walls: one material per wall so a wall can fade on its own
     for (const w of room.walls) {
-      const mat = new THREE.MeshStandardMaterial({ color: this.cinematic ? CLAY_COLOUR : WALL_COLOUR, roughness: this.cinematic ? 1 : 0.9, metalness: 0 });
+      const mode = this.mode;
+      const mat = mode === 'realistic'
+        ? new THREE.MeshStandardMaterial({ color: REAL_WALL_COLOUR, roughness: 0.95, metalness: 0, map: textureOf('plaster'), bumpMap: textureOf('plaster'), bumpScale: 0.35 })
+        : new THREE.MeshStandardMaterial({ color: mode === 'clay' ? CLAY_COLOUR : WALL_COLOUR, roughness: mode === 'clay' ? 1 : 0.9, metalness: 0 });
       this.wallMaterials.set(w.id, mat);
       this.disposables.push(mat);
     }
@@ -259,6 +286,7 @@ export class Scene3D {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(m.positions, 3));
       geo.setAttribute('normal', new THREE.Float32BufferAttribute(m.normals, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(m.uvs, 2));
       geo.setIndex(m.indices);
       this.disposables.push(geo);
       const mesh = new THREE.Mesh(geo, this.wallMaterials.get(piece.wallId));
@@ -267,6 +295,29 @@ export class Scene3D {
       mesh.userData = { ref: { kind: 'wall', id: piece.wallId } satisfies SelectionRef };
       this.committed.add(mesh);
       this.pickables.push(mesh);
+    }
+
+    // skirting boards (Realistic look): a low painted board along each wall, interrupted at doors
+    if (this.mode === 'realistic') {
+      const skirtMat = new THREE.MeshStandardMaterial({ color: REAL_SKIRTING_COLOUR, roughness: 0.55, metalness: 0, map: textureOf('paint') });
+      this.disposables.push(skirtMat);
+      for (const piece of skirtingPieces(room)) {
+        const m = prism(piece.polygon, piece.y0, piece.y1);
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(m.positions, 3));
+        geo.setAttribute('normal', new THREE.Float32BufferAttribute(m.normals, 3));
+        geo.setAttribute('uv', new THREE.Float32BufferAttribute(m.uvs, 2));
+        geo.setIndex(m.indices);
+        this.disposables.push(geo);
+        const mesh = new THREE.Mesh(geo, skirtMat);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.name = 'skirting';
+        this.committed.add(mesh);
+        const list = this.skirting.get(piece.wallId) ?? [];
+        list.push(mesh);
+        this.skirting.set(piece.wallId, list);
+      }
     }
 
     // doors and windows
@@ -310,18 +361,23 @@ export class Scene3D {
     const tris = THREE.ShapeUtils.triangulateShape(pts, []);
     const positions: number[] = [];
     const normals: number[] = [];
+    const uvs: number[] = [];
     for (const t of tris) {
       let [a, b, c] = t.map((i) => pts[i]);
       // keep the face pointing up whatever the polygon's orientation
       const cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
       if (cross > 0) [b, c] = [c, b]; // plan CCW → three (x, z) is mirrored, so up-facing needs the reverse order
-      for (const p of [a, b, c]) { positions.push(p.x, 0, p.y); normals.push(0, 1, 0); }
+      for (const p of [a, b, c]) { positions.push(p.x, 0, p.y); normals.push(0, 1, 0); uvs.push(p.x, p.y); }
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     this.disposables.push(geo);
-    const mat = new THREE.MeshStandardMaterial({ color: this.cinematic ? CLAY_FLOOR_COLOUR : FLOOR_COLOUR, roughness: this.cinematic ? 1 : 0.9, metalness: 0 });
+    const mode = this.mode;
+    const mat = mode === 'realistic'
+      ? new THREE.MeshStandardMaterial({ color: REAL_FLOOR_COLOUR, roughness: 0.42, metalness: 0, map: textureOf('planks'), bumpMap: textureOf('planks'), bumpScale: 0.5 })
+      : new THREE.MeshStandardMaterial({ color: mode === 'clay' ? CLAY_FLOOR_COLOUR : FLOOR_COLOUR, roughness: mode === 'clay' ? 1 : 0.9, metalness: 0 });
     this.disposables.push(mat);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.receiveShadow = true;
@@ -488,6 +544,7 @@ export class Scene3D {
       m.opacity = transparent ? FADED_WALL_OPACITY : 1;
       m.depthWrite = !transparent;
       m.visible = !(fade && cut);
+      for (const sk of this.skirting.get(id) ?? []) sk.visible = !(fade && cut);
     }
     const changed = next.size !== this.faded.size || [...next].some((x) => !this.faded.has(x));
     this.faded = next;

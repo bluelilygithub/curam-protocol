@@ -135,19 +135,28 @@ export interface MeshData {
   positions: number[];
   normals: number[];
   indices: number[];
+  /** UVs in metres (box-projected along each face's dominant axis), so textures keep their real-world scale. */
+  uvs: number[];
 }
 
 /** Extruded convex plan polygon (either orientation) from `y0` to `y1`: top, bottom and one quad per side, normals pointing outwards. */
 export function prism(input: Vec2[], y0: number, y1: number): MeshData {
   const polygon = polygonArea(input) < 0 ? [...input].reverse() : input; // outward side normals below assume CCW
-  const m: MeshData = { positions: [], normals: [], indices: [] };
+  const m: MeshData = { positions: [], normals: [], indices: [], uvs: [] };
   const tri = (a: Vec3, b: Vec3, c: Vec3, n: Vec3): void => {
     const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
     const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
     const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
     const flip = cx * n[0] + cy * n[1] + cz * n[2] < 0;
     const base = m.positions.length / 3;
-    for (const p of flip ? [a, c, b] : [a, b, c]) { m.positions.push(p[0], p[1], p[2]); m.normals.push(n[0], n[1], n[2]); }
+    for (const p of flip ? [a, c, b] : [a, b, c]) {
+      m.positions.push(p[0], p[1], p[2]);
+      m.normals.push(n[0], n[1], n[2]);
+      const ax = Math.abs(n[0]), ay = Math.abs(n[1]), az = Math.abs(n[2]);
+      if (ay >= ax && ay >= az) m.uvs.push(p[0], p[2]);
+      else if (ax >= az) m.uvs.push(p[2], p[1]);
+      else m.uvs.push(p[0], p[1]);
+    }
     m.indices.push(base, base + 1, base + 2);
   };
   const at = (p: Vec2, y: number): Vec3 => [p.x, y, p.y];
@@ -172,3 +181,37 @@ export function prism(input: Vec2[], y0: number, y1: number): MeshData {
 
 /** Volume of a prism's plan polygon × height. */
 export const pieceVolume = (p: Pick<WallPiece, 'polygon' | 'y0' | 'y1'>): number => Math.abs(polygonArea(p.polygon)) * (p.y1 - p.y0);
+
+// ------------------------------------------------------------------ skirting boards (Realistic look)
+
+export const SKIRTING_HEIGHT = 0.1;
+export const SKIRTING_THICKNESS = 0.012;
+
+export interface SkirtingPiece { wallId: string; polygon: Vec2[]; y0: number; y1: number }
+
+/** A low board along the inside face of every wall, interrupted by the width of each door. Windows sit above it, so it runs on. */
+export function skirtingPieces(room: Room): SkirtingPiece[] {
+  const out: SkirtingPiece[] = [];
+  for (const w of room.walls) {
+    const g = wallGeometry(room, w.id);
+    if (!g || g.length < 0.05) continue;
+    const cuts = room.fixtures
+      .filter((f) => f.wallId === w.id && f.type === 'door')
+      .map((f) => ({ lo: Math.max(0, f.offsetAlongWall - f.width / 2), hi: Math.min(g.length, f.offsetAlongWall + f.width / 2) }))
+      .sort((a, b) => a.lo - b.lo);
+    let from = 0;
+    const spans: Array<[number, number]> = [];
+    for (const c of cuts) {
+      if (c.lo - from > 0.02) spans.push([from, c.lo]);
+      from = Math.max(from, c.hi);
+    }
+    if (g.length - from > 0.02) spans.push([from, g.length]);
+    for (const [s0, s1] of spans) {
+      const a = { x: g.start.x + g.dir.x * s0, y: g.start.y + g.dir.y * s0 };
+      const b = { x: g.start.x + g.dir.x * s1, y: g.start.y + g.dir.y * s1 };
+      const n = { x: g.normal.x * SKIRTING_THICKNESS, y: g.normal.y * SKIRTING_THICKNESS };
+      out.push({ wallId: w.id, polygon: [a, b, { x: b.x + n.x, y: b.y + n.y }, { x: a.x + n.x, y: a.y + n.y }], y0: 0, y1: SKIRTING_HEIGHT });
+    }
+  }
+  return out;
+}
