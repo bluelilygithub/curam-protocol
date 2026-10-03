@@ -1,6 +1,8 @@
 node_modules/
 dist/
 data/
+# room-planner/src/data holds source code (furniture + fixture library), not runtime data
+!/room-planner/src/data/
 uploads/
 .env
 .env.local
