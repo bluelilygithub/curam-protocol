@@ -51,6 +51,10 @@ Exports are built from the domain model (Spec §10), never from screenshots, so 
 
 Open points to settle at M5 start: where PDF is produced (client-side with the same drawing code, or server-side like Finance's `invoicePdf.js` via react-pdf, which Vault already ships); font embedding; whether exports from the library (saved plans) can be re-generated without opening the plan; and which paper sizes/scales to offer.
 
+### Library, rugs and colour palettes
+
+The Library has 29 pieces, including plants, a floor lamp, a floor mirror and three rugs. Furniture can stand on a rug (rugs are not checked for overlap, clearance or door swing, only for staying inside the room). Pick a colour palette for a room in the Inspector (nothing selected) or from **Palette** in the 3D bar: it colours the walls, floor, trim, sofas, wood and rugs together in the 3D view and in Render photo; a finish you chose for a piece is kept. Not shown in Clay or in the plan.
+
 ### Help
 
 The compass beside the title starts a guided tour (11 steps); the (i) opens How This Works, which also opens by itself the first time. Hover any button or field for an explanation. Vault's Settings page has a Room Planner Tour card to retake the tour.

@@ -5,14 +5,15 @@ import { projectName } from '../engine/roomOps';
 import type { SavedView } from '../engine/types';
 import { useApp, useProject, useUi } from '../ui/AppContext';
 import { presetCamera, type CameraState } from './cameraPresets';
+import { autoStops } from './tour';
 import {
-  DEFAULT_SIZE_ID, formatDuration, LIGHTING, photoFileName, PhotoJob, QUALITY_LABELS, QUALITY_SAMPLES, SIZE_PRESETS, SLOW_WARNING_SECONDS, sizeById,
+  DEFAULT_SIZE_ID, formatDuration, INSIDE_FOV, LIGHTING, ORBIT_FOV, PHOTO_EXPECTATIONS, PHOTO_TIPS, photoFileName, PhotoJob, QUALITY_LABELS, QUALITY_SAMPLES, SIZE_PRESETS, SLOW_WARNING_SECONDS, sizeById,
   type JobSnapshot, type PhotoLighting, type PhotoQuality,
 } from './photo';
 import { checkPhotoSupport, PathTracerTracer } from './photoTracer';
 
 const NO_VIEWS: SavedView[] = [];
-const IDLE: JobSnapshot = { state: 'idle', samples: 0, target: 1, progress: 0, samplesPerSecond: 0, etaSeconds: null, message: '' };
+const IDLE: JobSnapshot = { state: 'idle', samples: 0, target: 1, progress: 0, samplesPerSecond: 0, etaSeconds: null, message: '', phase: '' };
 
 const viewToCamera = (v: SavedView): CameraState => ({ position: v.cameraPosition, target: v.target, projection: 'perspective', zoom: v.zoom ?? 1 });
 
@@ -64,7 +65,16 @@ export function PhotoPanel() {
     return () => window.removeEventListener('keydown', onKey, true);
   });
 
+  // eye-level views from inside the room (the same stops the fly-through uses): the entrance and the far corners
+  const room0 = useProject((s) => s.project?.rooms[0]);
+  const insideStops = useMemo(() => (room0 ? autoStops(room0, false).filter((s) => s.inside) : []), [room0]);
+  const insideCamera = (id: string): CameraState | null => {
+    const n = Number(id.replace('inside:', ''));
+    const s = Number.isInteger(n) ? insideStops[n] : undefined;
+    return s ? { position: s.position, target: s.target, projection: 'perspective', zoom: 1 } : null;
+  };
   const cameraFor = (): CameraState | null => {
+    if (source.startsWith('inside:')) return insideCamera(source);
     if (source !== 'current') { const v = views.find((x) => x.id === source); if (v) return viewToCamera(v); }
     const cur = app.camera.getState().camera;
     if (cur) return cur;
@@ -77,7 +87,7 @@ export function PhotoPanel() {
     if (!cam || unsupported) return;
     teardown();
     setProblem(null);
-    const t = new PathTracerTracer({ project: app.project, camera: cam, width: size.width, height: size.height, lighting });
+    const t = new PathTracerTracer({ project: app.project, camera: cam, width: size.width, height: size.height, lighting, fov: source.startsWith('inside:') ? INSIDE_FOV : ORBIT_FOV });
     tracer.current = t;
     holder.current?.replaceChildren(t.previewCanvas);
     const j = new PhotoJob(t, QUALITY_SAMPLES[quality]);
@@ -132,17 +142,25 @@ export function PhotoPanel() {
           <h2>Render photo</h2>
           <button className="btn icon" onClick={close} aria-label="Close render photo" title="Close (Esc)">×</button>
         </div>
+        <p className="photo-caption" data-testid="photo-expectations">{PHOTO_EXPECTATIONS}</p>
         {unsupported && <p className="storage-note" role="alert">{unsupported}</p>}
         <div className="photo-body">
           <div className="photo-stage">
             <div ref={holder} className="photo-canvas" data-testid="photo-canvas" />
             {snap.state === 'idle' && <p className="photo-hint">Pick a view, lighting and size, then press Render. The picture starts grainy and sharpens while it works.</p>}
-            {snap.state === 'building' && <p className="photo-hint" role="status">Building the scene…</p>}
+            {(snap.state === 'building' || (snap.state === 'rendering' && snap.samples === 0)) && (
+              <div className="photo-busy" role="status" aria-live="polite">
+                <span className="busy-bar" aria-hidden="true"><i /></span>
+                <span>{snap.phase || 'Getting ready…'}</span>
+                <span className="busy-note">This is the slow part before the first picture appears. It is working, even if the screen looks still.</span>
+              </div>
+            )}
           </div>
           <div className="photo-controls">
             <label title="Which camera position to photograph from: the 3D view as it is now, or one of your saved views">View
               <select value={source} onChange={(e) => setSource(e.target.value)} disabled={running} aria-label="View">
                 <option value="current">Current 3D view</option>
+                {insideStops.map((s, i) => <option key={`in-${i}`} value={`inside:${i}`}>Inside the room: {s.label === 'Entrance' ? 'from the entrance' : `corner view ${insideStops.slice(0, i + 1).filter((x) => x.label !== 'Entrance').length}`}</option>)}
                 {views.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
               </select>
             </label>
@@ -163,7 +181,12 @@ export function PhotoPanel() {
             </label>
             <label className="check" title="Adds a thin strip under the picture with the project name, room and date"><input type="checkbox" checked={caption} onChange={(e) => setCaption(e.target.checked)} /> Add a caption (project, room, date)</label>
 
-            {(running || finished) && (
+            {snap.state === 'idle' && (
+              <ul className="photo-tips" aria-label="Tips for a better picture">
+                {PHOTO_TIPS.map((t) => <li key={t}>{t}</li>)}
+              </ul>
+            )}
+            {(finished || (running && snap.samples > 0)) && (
               <div className="photo-progress" role="status" aria-live="polite">
                 <div className="bar"><div className="fill" style={{ width: `${Math.round(snap.progress * 100)}%` }} /></div>
                 <span>

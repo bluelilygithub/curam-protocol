@@ -48,6 +48,8 @@ M4: `tests/interaction/m4gates.test.ts`, `m4geometry`, `transforms.properties`, 
 
 M4.6/M4.7 (Realistic look, Render photo): `textures.test.ts`, `photo.test.ts` (unit), `realistic.test.ts` (interaction), the Realistic section of `npm run e2e3d`, and `npm run e2e-photo` (renders a tiny picture for a few passes on software GL, pauses, stops, downloads the PNG and checks its size and that the design is unchanged). `node scripts/photo-samples.mjs <dir> draft sm` renders finished sample photos.
 
+M4.8 (library, rugs, palettes, photo expectations): `tests/unit/m48.test.ts` (every new piece has a model that fills its envelope, finishes and a drawing; rugs ignored by collision/clearance/door checks; palettes; `UpdateRoom` undo; older projects get the new pieces), the palette check in `npm run e2e3d`, and `scripts/stills-palettes.mjs` for stills.
+
 Help (tooltips, How This Works, tour): `tests/unit/help.test.ts` and `npm run e2e-help` (first-visit info modal, remembered, tooltip on hover and on a field, title restored, all 11 tour steps, Skip and Esc, `?tour=1`, a tour with no room yet). The other e2e scripts set `vault_room_planner_info_seen` before loading so the modal does not cover the page.
 
 **Laptop check for Render photo - run by the owner:** open a furnished room, 3D, Render photo, 1920 x 1080, Draft, press Render and note the time shown when it reaches Done; repeat with Good. Note the GPU and times in this file. If Draft takes over about 3 minutes, tell the assistant (a smaller default size or fewer passes is an easy change).

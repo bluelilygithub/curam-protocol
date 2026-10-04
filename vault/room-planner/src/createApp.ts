@@ -160,6 +160,13 @@ export function createApp(storage: StorageLike) {
 
     // ------------------------------------------------------------ help (tour; the info modal is plain UI state)
 
+    /** Choose the colour palette of the active room (`null` = the standard colours). One undoable step; shown in the 3D view. */
+    setPalette(id: string | null): void {
+      const room = project.getState().project?.rooms[0];
+      if (!room || (room.palette ?? null) === id) return;
+      project.getState().commit({ type: 'UpdateRoom', roomId: room.id, from: { palette: room.palette ?? null }, to: { palette: id } }, id ? 'Change colour palette' : 'Remove colour palette');
+    },
+
     /** Start the guided tour (Shepherd is loaded on first use, so it stays out of the main bundle). */
     async startTour(): Promise<void> {
       const m = await import('./help/roomPlannerTour');

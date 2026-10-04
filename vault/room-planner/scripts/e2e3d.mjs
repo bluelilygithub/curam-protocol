@@ -336,6 +336,18 @@ check('look is remembered per browser', (await ev(() => localStorage.getItem('ro
 await page.getByRole('button', { name: 'Clay', exact: true }).click();
 await wait(500);
 check('switching back to clay works', (await ev(() => window.roomPlanner.ui.getState().look)) === 'clay');
+// colour palette: choose, see it on the room, undo
+await page.getByRole('button', { name: '3D', exact: true }).click().catch(() => undefined);
+await ev(() => { const u = window.roomPlanner.ui.getState(); u.setCinematic(true); u.setLook('realistic'); });
+await page.getByLabel('Colour palette').first().selectOption('coastal');
+await wait(500);
+check('choosing a palette sets it on the room', (await ev(() => window.roomPlanner.project.getState().project.rooms[0].palette)) === 'coastal');
+const palCol = await ev(() => { const m = window.roomPlanner3d.scene3d.wallMaterial(window.roomPlanner.project.getState().project.rooms[0].walls[0].id); return m.color.getHexString(); });
+check('the walls take the palette colour in the Realistic look', palCol === 'e9f0f2', palCol);
+await ev(() => window.roomPlanner.project.getState().undo());
+await wait(300);
+check('undo removes the palette', (await ev(() => window.roomPlanner.project.getState().project.rooms[0].palette)) === undefined);
+await ev(() => window.roomPlanner.ui.getState().setLook('clay'));
 await ev(() => window.roomPlanner.ui.getState().setCinematic(false));
 
 // ------------------------------------------------------------------ Walk mode (Spec Addition A1, C4)

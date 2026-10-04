@@ -34,6 +34,12 @@ function build(part: Part): THREE.BufferGeometry {
     case 'rbox':
       g = new RoundedBoxGeometry(sx, sy, sz, 3, part.radius ?? 0.01);
       break;
+    case 'ellipsoid': {
+      g = new THREE.SphereGeometry(0.5, 20, 14);
+      g.scale(sx, sy, sz);
+      g.computeVertexNormals();
+      break;
+    }
     case 'taper': {
       // wide at the top, `taper` × as wide at the foot; elliptical if the footprint is not square
       g = new THREE.CylinderGeometry(sx / 2, (sx / 2) * (part.taper ?? 0.6), sy, 24);

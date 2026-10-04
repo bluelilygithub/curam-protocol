@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useStore } from 'zustand';
 import type { SavedView } from '../engine/types';
+import { PALETTES } from '../data/palettes';
 import { useApp, useProject, useUi } from '../ui/AppContext';
 
 const NO_VIEWS: SavedView[] = [];
@@ -19,6 +20,7 @@ export function Viewbar3D() {
   const walking = useUi((s) => s.walking);
   const progress = useUi((s) => s.tourProgress);
   const project = useProject((s) => s.project);
+  const palette = useProject((s) => s.project?.rooms[0]?.palette);
   const summary = useMemo(() => app.tourSummary(), [app, project]);
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
@@ -78,6 +80,15 @@ export function Viewbar3D() {
             </button>
           </>
         )}
+      </div>
+      <div className="group" role="group" aria-label="Colours">
+        <label className="palette-select" title="Choose a colour palette for this room: walls, floor, trim, sofas and rugs together. Not shown in the Clay look.">
+          <span className="label">Palette</span>
+          <select aria-label="Colour palette" value={palette ?? ''} onChange={(e) => app.setPalette(e.target.value || null)}>
+            <option value="">Standard</option>
+            {PALETTES.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </label>
       </div>
       <div className="group" role="group" aria-label="Photo" data-tour="rp-photo">
         <button className="btn" onClick={() => app.ui.getState().setPhotoOpen(true)} title="Make a photographic picture of this room to download (takes a minute or more)">

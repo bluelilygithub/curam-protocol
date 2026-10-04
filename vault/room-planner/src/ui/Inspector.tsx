@@ -8,6 +8,7 @@ import type { ValidationViolation, Project } from '../engine/types';
 import { useApp, useProject, useUi } from './AppContext';
 import { tipFor } from '../help/fieldTips';
 import { Icons } from './icons';
+import { PalettePicker } from './PalettePicker';
 import {
   previewFixtureEdit, previewFurnitureEdit, previewVertexPosition, previewWallLength, previewWallThickness, readFixtureField, readFurnitureField,
   type FieldPreview, type FieldValue, type FixtureField, type FurnitureField,
@@ -344,6 +345,10 @@ export function Inspector() {
             <dt>Objects</dt><dd>{room.furniture.length} furniture · {room.fixtures.length} doors/windows</dd>
             <dt>Problems</dt><dd>{issues === 0 ? 'None' : `${issues} to look at`}</dd>
           </dl>
+        </Section>
+        <Section title="Colour palette">
+          <PalettePicker />
+          <p className="hint">Colours the walls, floor, trim, sofas and rugs together. Shown in the 3D view (not in the plan, and not in the Clay look).</p>
         </Section>
         <p className="hint">Click a wall, door, window or piece of furniture to edit it. Drag on empty floor to select several. Use the Walls tool (key 3) to move, add or remove corners.</p>
         <div className="actions">

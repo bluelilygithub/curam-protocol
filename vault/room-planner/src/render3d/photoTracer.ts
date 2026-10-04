@@ -31,13 +31,14 @@ export interface PhotoSetup {
   width: number;
   height: number;
   lighting: PhotoLighting;
+  /** Vertical field of view in degrees (wider for an eye-level view inside the room). */
+  fov?: number;
 }
 
-const FOV = 50;
 
 /** A perspective camera for the picture, looking from the 3D view's position at its target (an orthographic view becomes a perspective one). */
-export function photoCamera(c: CameraState, width: number, height: number): THREE.PerspectiveCamera {
-  const cam = new THREE.PerspectiveCamera(FOV, width / height, 0.05, 200);
+export function photoCamera(c: CameraState, width: number, height: number, fov = 50): THREE.PerspectiveCamera {
+  const cam = new THREE.PerspectiveCamera(fov, width / height, 0.05, 200);
   cam.position.set(...c.position);
   cam.lookAt(new THREE.Vector3(...c.target));
   cam.updateMatrixWorld(true);
@@ -51,6 +52,7 @@ export class PathTracerTracer implements Tracer {
   private scene3d: Scene3D | null = null;
   private sky: GradientEquirectTexture | null = null;
   private disposed = false;
+  private phaseText = 'Starting…';
 
   constructor(private readonly setup: PhotoSetup) {
     this.canvas = document.createElement('canvas');
@@ -59,17 +61,24 @@ export class PathTracerTracer implements Tracer {
   }
 
   get previewCanvas(): HTMLCanvasElement { return this.canvas; }
+  get phase(): string { return this.phaseText; }
+
+  /** Let the browser paint the current message before the next heavy, blocking step. */
+  private async yieldToPaint(text: string): Promise<void> {
+    this.phaseText = text;
+    await new Promise<void>((r) => requestAnimationFrame(() => setTimeout(r, 30)));
+  }
 
   async prepare(): Promise<void> {
     const { setup } = this;
+    await this.yieldToPaint('Starting the picture engine…');
     const renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: false, preserveDrawingBuffer: true, alpha: false });
     renderer.setPixelRatio(1);
     renderer.setSize(setup.width, setup.height, false);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1;
     this.renderer = renderer;
-    // let the browser paint "Building the scene…" before the heavy, synchronous build
-    await new Promise<void>((r) => setTimeout(r, 30));
+    await this.yieldToPaint('Building the room and furniture…');
 
     // The scene: the Realistic look of this project, built by the same Scene3D as the live view but with its own private UI state
     const ui = createUiStore();
@@ -82,7 +91,7 @@ export class PathTracerTracer implements Tracer {
     const scene = new THREE.Scene();
     scene.add(scene3d.root);
 
-    const camera = photoCamera(setup.camera, setup.width, setup.height);
+    const camera = photoCamera(setup.camera, setup.width, setup.height, setup.fov);
     scene3d.updateFade({ x: camera.position.x, y: camera.position.z }, polarFromVertical(setup.camera.position, setup.camera.target));
 
     // Bump maps (a rasteriser trick) show up as speckle in a path-traced picture; the colour maps already carry the detail
@@ -115,9 +124,13 @@ export class PathTracerTracer implements Tracer {
     tracer.dynamicLowRes = false;
     tracer.synchronizeRenderSize = true;
     this.tracer = tracer;
+    await this.yieldToPaint('Preparing the light and surfaces (this can take a little while)…');
     tracer.setScene(scene, camera); // synchronous: the async path needs a BVH worker, which is one more moving part
     if (this.disposed) return;
     tracer.reset();
+    // a quick flat preview, so there is something to look at while the graphics card compiles the path tracer
+    try { renderer.render(scene, camera); } catch { /* the preview is optional */ }
+    this.phaseText = 'Getting your graphics card ready (up to a minute the first time)…';
   }
 
   private applyLighting(scene: THREE.Scene, scene3d: Scene3D, p: LightingPreset, camera: THREE.Camera): void {
@@ -156,6 +169,7 @@ export class PathTracerTracer implements Tracer {
     const t = this.tracer;
     if (!t) throw new Error('The picture has not been set up yet.');
     t.renderSample();
+    this.phaseText = (t as unknown as { isCompiling?: boolean }).isCompiling ? 'Getting your graphics card ready (up to a minute the first time)…' : 'Rendering';
     return Math.floor(t.samples);
   }
 

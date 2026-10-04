@@ -336,3 +336,24 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--co
 .title-help button:hover, .title-help button:focus-visible { color: var(--color-primary); }
 .title-help button svg { width: 15px; height: 15px; }
 @media (pointer: coarse) { .title-help button { width: var(--ctl); height: var(--ctl); } }
+
+/* Colour palettes (M4.8) */
+.palette-list { display: grid; gap: 4px; }
+.palette-row { display: flex; align-items: center; gap: 10px; min-height: var(--ctl); padding: 4px 8px; text-align: left; background: transparent; border: 1px solid var(--color-border); border-radius: var(--radius); font: inherit; color: var(--color-text); cursor: pointer; transition: opacity 200ms, border-color 200ms; }
+.palette-row:hover { opacity: .7; }
+.palette-row.active { border-color: var(--color-primary); background: var(--color-surface); }
+.palette-row .swatches { display: inline-flex; flex: none; }
+.palette-row .swatches i { display: block; width: 18px; height: 18px; border: 1px solid rgba(0,0,0,.12); margin-left: -4px; border-radius: 50%; }
+.palette-row .swatches i:first-child { margin-left: 0; }
+.palette-select { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.palette-select select { min-height: var(--ctl); padding: 0 6px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius); font: inherit; color: var(--color-text); }
+
+/* Render photo: expectation line, busy state, tips (M4.8) */
+.photo-caption { margin: 2px 16px 0; font-size: 12px; line-height: 1.5; color: var(--color-muted); }
+.photo-busy { position: absolute; inset: auto 16px 16px 16px; display: grid; gap: 6px; padding: 10px 12px; font-size: 13px; background: color-mix(in srgb, var(--rp-paper) 92%, transparent); border: 1px solid var(--color-border); border-radius: 8px; }
+.photo-busy .busy-note { font-size: 11px; color: var(--color-muted); }
+.busy-bar { display: block; height: 6px; border-radius: 3px; background: var(--color-surface); overflow: hidden; }
+.busy-bar i { display: block; height: 100%; width: 35%; background: var(--color-primary); border-radius: 3px; animation: busy-slide 1.4s ease-in-out infinite; }
+@keyframes busy-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
+.photo-tips { margin: 0; padding-left: 18px; font-size: 12px; color: var(--color-muted); display: grid; gap: 3px; }
+@media (prefers-reduced-motion: reduce) { .busy-bar i { animation: none; width: 100%; } }

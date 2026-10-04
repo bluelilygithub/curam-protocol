@@ -13,6 +13,7 @@ import { roomBounds } from './cameraPresets';
 import { fixtureModel } from './fixtureParts';
 import { furnitureParts, type Part } from './furnitureParts';
 import { partGeometry } from './partGeometry';
+import { paletteOf, type Palette } from '../data/palettes';
 import { lookOf, MaterialCache, realisticFixtureLook, realisticLookOf, TINT, type Tint } from './materials';
 import { textureOf } from './textures';
 import { instanceTransform } from './transforms';
@@ -164,6 +165,8 @@ export class Scene3D {
   /** Which materials the committed scene uses: the ordinary role colours, the clay model, or the realistic textured look. */
   private get mode(): 'ordinary' | 'clay' | 'realistic' { const u = this.p.ui.getState(); return u.cinematic ? u.look : 'ordinary'; }
   private currentLookKey(): string { const u = this.p.ui.getState(); return `${u.cinematic}|${u.quality}|${u.look}`; }
+  /** The room's colour palette, unless the clay look is showing (clay is white by design). */
+  private get palette(): Palette | undefined { return this.mode === 'clay' ? undefined : paletteOf(this.room?.palette); }
 
   /** Light levels and shadow-map size for the current look and Quality. The renderer sets the shadow type and the environment. */
   private applyLighting(): void {
@@ -227,7 +230,7 @@ export class Scene3D {
       const look = mode === 'clay'
         ? { ...clayLook(part.role), tint: null as Tint }
         : mode === 'realistic'
-          ? { ...realisticLookOf(inst.definitionId, part, inst, project.materials), tint: null as Tint }
+          ? { ...realisticLookOf(inst.definitionId, part, inst, project.materials, this.palette), tint: null as Tint }
           : { ...lookOf(part.role, inst, project.materials), tint };
       look.opacity = Math.min(look.opacity, opacity);
       g.add(partMesh(part, this.materials.get(look)));
@@ -247,7 +250,7 @@ export class Scene3D {
       const look = mode === 'clay'
         ? { ...clayLook(part.role), tint: null as Tint }
         : mode === 'realistic'
-          ? { ...realisticFixtureLook(part.role, this.p.project.getState().project?.materials ?? []), tint: null as Tint }
+          ? { ...realisticFixtureLook(part.role, this.p.project.getState().project?.materials ?? [], this.palette), tint: null as Tint }
           : { ...lookOf(part.role, undefined, []), tint: part.role === 'glass' ? null : tint };
       look.opacity = Math.min(look.opacity, opacity);
       g.add(partMesh(part, this.materials.get(look)));
@@ -276,8 +279,8 @@ export class Scene3D {
     for (const w of room.walls) {
       const mode = this.mode;
       const mat = mode === 'realistic'
-        ? new THREE.MeshStandardMaterial({ color: REAL_WALL_COLOUR, roughness: 0.7, metalness: 0, map: textureOf('plaster'), bumpMap: textureOf('plaster'), bumpScale: 0.35 })
-        : new THREE.MeshStandardMaterial({ color: mode === 'clay' ? CLAY_COLOUR : WALL_COLOUR, roughness: mode === 'clay' ? 1 : 0.9, metalness: 0 });
+        ? new THREE.MeshStandardMaterial({ color: this.palette?.wall ?? REAL_WALL_COLOUR, roughness: 0.7, metalness: 0, map: textureOf('plaster'), bumpMap: textureOf('plaster'), bumpScale: 0.35 })
+        : new THREE.MeshStandardMaterial({ color: mode === 'clay' ? CLAY_COLOUR : (this.palette?.wall ?? WALL_COLOUR), roughness: mode === 'clay' ? 1 : 0.9, metalness: 0 });
       this.wallMaterials.set(w.id, mat);
       this.disposables.push(mat);
     }
@@ -299,7 +302,7 @@ export class Scene3D {
 
     // skirting boards (Realistic look): a low painted board along each wall, interrupted at doors
     if (this.mode === 'realistic') {
-      const skirtMat = new THREE.MeshStandardMaterial({ color: REAL_SKIRTING_COLOUR, roughness: 0.55, metalness: 0, map: textureOf('paint') });
+      const skirtMat = new THREE.MeshStandardMaterial({ color: this.palette?.trim ?? REAL_SKIRTING_COLOUR, roughness: 0.55, metalness: 0, map: textureOf('paint') });
       this.disposables.push(skirtMat);
       for (const piece of skirtingPieces(room)) {
         const m = prism(piece.polygon, piece.y0, piece.y1);
@@ -376,8 +379,8 @@ export class Scene3D {
     this.disposables.push(geo);
     const mode = this.mode;
     const mat = mode === 'realistic'
-      ? new THREE.MeshStandardMaterial({ color: REAL_FLOOR_COLOUR, roughness: 0.42, metalness: 0, map: textureOf('planks'), bumpMap: textureOf('planks'), bumpScale: 0.5 })
-      : new THREE.MeshStandardMaterial({ color: mode === 'clay' ? CLAY_FLOOR_COLOUR : FLOOR_COLOUR, roughness: mode === 'clay' ? 1 : 0.9, metalness: 0 });
+      ? new THREE.MeshStandardMaterial({ color: this.palette?.floor ?? REAL_FLOOR_COLOUR, roughness: 0.42, metalness: 0, map: textureOf('planks'), bumpMap: textureOf('planks'), bumpScale: 0.5 })
+      : new THREE.MeshStandardMaterial({ color: mode === 'clay' ? CLAY_FLOOR_COLOUR : (this.palette?.floor ?? FLOOR_COLOUR), roughness: mode === 'clay' ? 1 : 0.9, metalness: 0 });
     this.disposables.push(mat);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.receiveShadow = true;

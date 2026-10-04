@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { DEFAULT_FINISHES, FIXTURE_FINISHES, SEED_MATERIALS } from '../data/furnitureLibrary';
+import type { Palette } from '../data/palettes';
 import type { FurnitureInstance, Material } from '../engine/types';
 import { ROLE_DEFAULTS, type Part, type PartRole } from './furnitureParts';
 import { TEXTURE_SPECS, type TextureKind } from './textureData';
@@ -42,21 +43,38 @@ function fromMaterial(m: Material, opacity = 1): Omit<Look, 'tint'> {
  */
 export function realisticLookOf(
   definitionId: string, part: Pick<Part, 'role' | 'tint'>, inst: Pick<FurnitureInstance, 'finishOverrides'> | undefined, materials: Material[],
+  palette?: Palette,
 ): Omit<Look, 'tint'> {
   if (part.role === 'glass') return lookOf('glass', undefined, materials);
   const chosen = inst?.finishOverrides?.[part.role];
   if (!chosen && part.tint) return { colour: part.tint, roughness: 0.8, metalness: 0, opacity: 1, texture: 'paint', bump: TEXTURE_SPECS.paint.bump };
   const m = findMaterial(chosen ?? DEFAULT_FINISHES[definitionId]?.[part.role as keyof (typeof DEFAULT_FINISHES)[string]], materials);
-  if (m) return fromMaterial(m);
+  if (m) {
+    const look = fromMaterial(m);
+    // The room's palette colours what the designer has not chosen themselves; a finish picked in the Inspector always wins.
+    const colour = chosen ? undefined : paletteColour(palette, definitionId, part.role, m);
+    return colour ? { ...look, colour } : look;
+  }
   return lookOf(part.role, undefined, materials);
 }
 
+/** The palette's colour for a part, or undefined to leave it as it is. Rugs take the rug colours; fabric furniture the upholstery colour; wood furniture the wood tone. */
+export function paletteColour(palette: Palette | undefined, definitionId: string, role: PartRole, m: Pick<Material, 'id' | 'texture'>): string | undefined {
+  if (!palette) return undefined;
+  if (definitionId.startsWith('rug-')) return role === 'fabric' ? palette.rug : role === 'accent' ? palette.rugAccent : undefined;
+  if (m.texture === 'linen' && (role === 'upholstery' || role === 'frame')) return palette.upholstery;
+  if (m.texture === 'wood' && m.id !== 'dark-wood' && (role === 'top' || role === 'frame' || role === 'accent' || role === 'upholstery')) return palette.wood;
+  return undefined;
+}
+
 /** The Realistic look of a door or window part. */
-export function realisticFixtureLook(role: PartRole, materials: Material[]): Omit<Look, 'tint'> {
+export function realisticFixtureLook(role: PartRole, materials: Material[], palette?: Palette): Omit<Look, 'tint'> {
   if (role === 'glass') return lookOf('glass', undefined, materials);
   const id = role === 'handle' ? FIXTURE_FINISHES.handle : role === 'door' ? FIXTURE_FINISHES.door : FIXTURE_FINISHES.frame;
   const m = findMaterial(id, materials);
-  return m ? fromMaterial(m) : lookOf(role, undefined, materials);
+  if (!m) return lookOf(role, undefined, materials);
+  const look = fromMaterial(m);
+  return palette && role !== 'handle' ? { ...look, colour: palette.trim } : look;
 }
 
 /** Materials are shared by look, so a scene of hundreds of parts has a handful of GPU materials. */

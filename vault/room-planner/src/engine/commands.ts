@@ -295,9 +295,16 @@ export function apply(command: Command, project: Project): Project {
       const id = reqId(c.roomId, 'roomId');
       const room = findRoom(project, id);
       const to = c.to;
-      if (!isObj(to) || typeof to.name !== 'string' || !to.name.trim()) corrupt('to.name must be a non-empty string');
-      if (!isObj(c.from) || typeof c.from.name !== 'string') corrupt('from.name must be a string');
-      return withRoom(project, { ...room, name: (to as { name: string }).name });
+      if (!isObj(to)) corrupt('to must be an object');
+      if (!isObj(c.from)) corrupt('from must be an object');
+      const patch = to as { name?: unknown; palette?: unknown };
+      if ('name' in patch && (typeof patch.name !== 'string' || !patch.name.trim())) corrupt('to.name must be a non-empty string');
+      if ('palette' in patch && patch.palette !== null && typeof patch.palette !== 'string') corrupt('to.palette must be a string or null');
+      if (!('name' in patch) && !('palette' in patch)) corrupt('to must change the name or the palette');
+      const next: Room = { ...room };
+      if ('name' in patch) next.name = patch.name as string;
+      if ('palette' in patch) { if (patch.palette) next.palette = patch.palette as string; else delete next.palette; }
+      return withRoom(project, next);
     }
     case 'DeleteRoom': {
       const id = reqId(c.roomId, 'roomId');

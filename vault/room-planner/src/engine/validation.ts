@@ -26,13 +26,18 @@ interface Prepared {
   zones: ClearanceZone[];
   /** Largest clearance offset: bounds how far this object's zones can reach beyond its footprint. */
   reach: number;
+  /** A rug: ignored by every check except staying inside the room. */
+  covering: boolean;
 }
+
+/** Rugs lie on the floor and are walked and built over: no overlap, clearance or door-swing checks, but they must stay inside the room. */
+export const isFloorCovering = (defs: FurnitureDefinition[], definitionId: string): boolean => defs.find((d) => d.id === definitionId)?.category === 'rugs';
 
 function prepare(inst: FurnitureInstance, defs: FurnitureDefinition[]): Prepared {
   const corners = footprintOf(inst);
   const policies = defs.find((d) => d.id === inst.definitionId)?.clearancePolicies ?? [];
   return {
-    inst, corners, box: aabbOf(corners), interval: verticalInterval(inst),
+    inst, corners, box: aabbOf(corners), interval: verticalInterval(inst), covering: isFloorCovering(defs, inst.definitionId),
     zones: policies.length ? clearanceZones(inst, policies) : [],
     reach: policies.reduce((m, p) => Math.max(m, p.offset), 0),
   };
@@ -64,6 +69,7 @@ function containmentViolations(room: Room, p: Prepared): ValidationViolation[] {
 
 function doorViolations(room: Room, doors: Map<string, DoorShapes>, p: Prepared): ValidationViolation[] {
   const out: ValidationViolation[] = [];
+  if (p.covering) return out;
   for (const f of room.fixtures) {
     const s = doors.get(f.id);
     if (s) out.push(...checkFurnitureVsDoor(p.inst, f, s));
@@ -88,6 +94,7 @@ function zoneHits(owner: Prepared, target: Prepared): ValidationViolation[] {
 
 function pairViolations(a: Prepared, b: Prepared): ValidationViolation[] {
   const out: ValidationViolation[] = [];
+  if (a.covering || b.covering) return out;
   if (aabbOverlap(a.box, b.box) && verticalOverlap(a.interval, b.interval)) {
     const depth = convexPenetration(a.corners, b.corners);
     if (depth > 0) {
@@ -103,7 +110,7 @@ function pairViolations(a: Prepared, b: Prepared): ValidationViolation[] {
 
 /** The object's own clearance zones against door swing sectors and access zones. */
 function doorClearance(room: Room, doors: Map<string, DoorShapes>, p: Prepared): ValidationViolation[] {
-  if (!p.zones.length) return [];
+  if (!p.zones.length || p.covering) return [];
   const out: ValidationViolation[] = [];
   for (const f of room.fixtures) {
     const s = doors.get(f.id);
@@ -144,11 +151,11 @@ export function validateInstance(
 }
 
 /** Violations involving a fixture: wall fit, objects in its swing/access zones, door-vs-door. */
-export function validateFixture(room: Room, f: Fixture): ValidationViolation[] {
+export function validateFixture(room: Room, f: Fixture, defs: FurnitureDefinition[] = []): ValidationViolation[] {
   const out: ValidationViolation[] = checkFixtureInWall(room, f);
   const s = doorShapes(room, f);
   if (!s) return out;
-  for (const inst of room.furniture) out.push(...checkFurnitureVsDoor(inst, f, s));
+  for (const inst of room.furniture) if (!isFloorCovering(defs, inst.definitionId)) out.push(...checkFurnitureVsDoor(inst, f, s));
   for (const other of room.fixtures) {
     if (other.id === f.id) continue;
     const so = doorShapes(room, other);

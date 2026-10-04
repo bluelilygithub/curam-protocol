@@ -34,7 +34,7 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: 'rp-library', title: 'Library', target: 'rp-library', on: 'right', needs2d: true, panel: 'left',
-    text: 'Pick a door, window or piece of furniture, then click the plan to place it. Search or filter by type. Doors and windows snap to walls; furniture snaps to walls and other pieces.',
+    text: 'Pick a door, window or piece of furniture, then click the plan to place it. Search or filter by type: seating, tables, storage, bedroom, plants and decor, and rugs. Doors and windows snap to walls; furniture snaps to walls and other pieces and can stand on a rug.',
   },
   {
     id: 'rp-canvas', title: 'The Plan', target: 'rp-stage', on: 'left', needs2d: true,
@@ -42,7 +42,7 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: 'rp-inspector', title: 'Inspector', target: 'rp-inspector', on: 'left', needs2d: true, panel: 'right',
-    text: 'Select anything to edit it exactly: type a size, position, rotation or finish. Select a wall and type its length to set the room’s size. Hover any field for what it means.',
+    text: 'Select anything to edit it exactly: type a size, position, rotation or finish. Select a wall and type its length to set the room’s size. With nothing selected you can pick a colour palette for the room. Hover any field for what it means.',
   },
   {
     id: 'rp-view', title: '2D and 3D', target: 'rp-view', on: 'bottom',

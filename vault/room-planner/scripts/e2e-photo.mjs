@@ -42,13 +42,15 @@ const before = await page.evaluate(() => JSON.stringify(window.roomPlanner.proje
 await page.getByRole('button', { name: 'Render photo', exact: true }).click();
 await page.getByRole('dialog', { name: 'Render photo' }).waitFor();
 check('the Render photo panel opens', true);
+check('the panel says what to expect under its title', /not a studio photograph/.test(await page.getByTestId('photo-expectations').innerText()));
+check('there is an eye-level view from inside the room', (await page.getByRole('dialog', { name: 'Render photo' }).getByLabel('View', { exact: true }).locator('option', { hasText: 'Inside the room' }).count()) > 0);
 check('no WebGL2 warning on this browser', (await page.getByText("can't render photos").count()) === 0);
 
 await page.getByLabel('Size').selectOption('sm');
 await page.getByLabel('Lighting').selectOption('daylight');
 await page.getByRole('button', { name: 'Render', exact: true }).click();
-await page.getByText('Building the scene…').first().waitFor({ timeout: 10000 });
-check('shows building the scene', true);
+await page.locator('.photo-busy').waitFor({ timeout: 10000 });
+check('shows a plain progress message while it prepares', /\S/.test(await page.locator('.photo-busy').innerText()));
 // wait for some passes (software GL is slow: allow a long time)
 await page.waitForFunction(() => /\d+% · about/.test(document.querySelector('.photo-progress')?.textContent ?? '') || /Done/.test(document.querySelector('.photo-progress')?.textContent ?? ''), null, { timeout: 240000 });
 check('reaches rendering with progress and a time estimate', true);
@@ -82,7 +84,7 @@ await page.getByRole('button', { name: 'Render photo', exact: true }).click();
 await page.getByRole('dialog', { name: 'Render photo' }).waitFor();
 await page.getByLabel('Size').selectOption('sm');
 await page.getByRole('button', { name: 'Render', exact: true }).click();
-await page.getByText('Building the scene…').first().waitFor({ timeout: 10000 });
+await page.locator('.photo-busy').waitFor({ timeout: 10000 });
 await wait(300);
 await page.evaluate((p) => { const x = JSON.parse(JSON.stringify(p)); x.rooms[0].furniture = []; window.roomPlanner.project.getState().load(x); }, q);
 await page.getByText('The design changed, so the render was stopped.').first().waitFor({ timeout: 120000 });

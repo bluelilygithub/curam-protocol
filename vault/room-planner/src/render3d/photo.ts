@@ -12,7 +12,7 @@ export const SIZE_PRESETS: SizePreset[] = [
   { id: 'fhd', label: '1920 × 1080', width: 1920, height: 1080 },
   { id: 'uhd', label: '3840 × 2160 (4K)', width: 3840, height: 2160 },
 ];
-export const DEFAULT_SIZE_ID = 'fhd';
+export const DEFAULT_SIZE_ID = 'hd';
 
 /** Samples per pixel to reach. More samples = less noise, longer wait. */
 export const QUALITY_SAMPLES: Record<PhotoQuality, number> = { draft: 64, good: 256, best: 1024 };
@@ -120,6 +120,8 @@ export type PhotoState = 'idle' | 'building' | 'rendering' | 'paused' | 'done' |
 
 /** What the job needs from the renderer. `step` adds one sample and returns the total so far. */
 export interface Tracer {
+  /** What it is doing right now, in plain words (shown while there is no picture to look at yet). */
+  readonly phase?: string;
   prepare(): Promise<void>;
   step(): number;
   dispose(): void;
@@ -134,6 +136,8 @@ export interface JobSnapshot {
   samplesPerSecond: number;
   etaSeconds: number | null;
   message: string;
+  /** The tracer's own account of the current step ("Building the room…"). */
+  phase: string;
 }
 
 const TERMINAL: PhotoState[] = ['done', 'stopped', 'failed'];
@@ -162,7 +166,7 @@ export class PhotoJob {
     const sps = this.activeMs > 0 ? (this.n - this.stepsAtStart) / (this.activeMs / 1000) : 0;
     return {
       state: this.st, samples: this.n, target: this.target, progress: Math.min(1, this.n / this.target),
-      samplesPerSecond: sps, etaSeconds: this.st === 'rendering' || this.st === 'paused' ? etaSeconds(this.n, this.target, sps) : null, message: this.note,
+      samplesPerSecond: sps, etaSeconds: this.st === 'rendering' || this.st === 'paused' ? etaSeconds(this.n, this.target, sps) : null, message: this.note, phase: this.tracer.phase ?? '',
     };
   }
 
@@ -224,3 +228,19 @@ export class PhotoJob {
     this.emit();
   }
 }
+
+/** What to expect, shown under the panel title. Honest about what the picture is and how long it takes. */
+export const PHOTO_EXPECTATIONS =
+  'A computer-generated picture of your design with realistic light and shadow. It is built from simple models, so it is a clear visualisation, not a studio photograph. ' +
+  'It starts grainy and sharpens; Draft is quick, Good takes several minutes and Best much longer, and larger sizes take longer still. The first few seconds are spent preparing, so it may look still at first.';
+
+/** Short tips for a better picture. */
+export const PHOTO_TIPS = [
+  'Choose “Inside the room” in View for an eye-level picture.',
+  'Use Good for a client; Draft is for checking the view.',
+  'Pick a colour palette first: it changes the walls, floor and furniture together.',
+];
+
+/** The view choices that stand inside the room at eye level, wider than the 3D view's camera. */
+export const INSIDE_FOV = 72;
+export const ORBIT_FOV = 50;

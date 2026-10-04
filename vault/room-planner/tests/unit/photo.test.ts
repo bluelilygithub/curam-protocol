@@ -23,7 +23,7 @@ describe('presets', () => {
     expect(QUALITY_SAMPLES.draft).toBeLessThan(QUALITY_SAMPLES.good);
     expect(QUALITY_SAMPLES.good).toBeLessThan(QUALITY_SAMPLES.best);
   });
-  it('falls back to 1080p for an unknown size', () => { expect(sizeById('nope').width).toBe(1920); });
+  it('falls back to the default size (1280 × 720) for an unknown size', () => { expect(sizeById('nope').width).toBe(1280); });
   it('has daylight, overcast and evening lighting; evening is lower and warmer than daylight, overcast has the weakest sun', () => {
     expect(Object.keys(LIGHTING).sort()).toEqual(['daylight', 'evening', 'overcast']);
     expect(LIGHTING.evening.sunElevationDeg).toBeLessThan(LIGHTING.daylight.sunElevationDeg);

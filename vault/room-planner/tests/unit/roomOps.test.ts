@@ -148,7 +148,8 @@ describe('UpdateRoom (rename a room)', () => {
     try { apply({ ...cmd, roomId: 'nope' } as Command, base); } catch (e) { expect((e as ApplyError).code).toBe('ID_NOT_FOUND'); }
     try { apply({ ...cmd, to: { name: '   ' } } as Command, base); } catch (e) { expect((e as ApplyError).code).toBe('STRUCTURALLY_CORRUPT_COMMAND'); }
     expect(() => apply({ ...cmd, to: { name: '   ' } } as Command, base)).toThrow();
-    expect(() => apply({ ...cmd, from: {} } as unknown as Command, base)).toThrow();
+    expect(() => apply({ ...cmd, from: 'x' } as unknown as Command, base)).toThrow();
+    expect(() => apply({ ...cmd, to: {} } as unknown as Command, base)).toThrow();
     expect(() => apply({ type: 'UpdateRoom', roomId: 'room-1' } as unknown as Command, base)).toThrow();
   });
 });

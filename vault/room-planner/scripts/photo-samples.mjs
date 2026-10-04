@@ -38,12 +38,13 @@ for (const light of (process.env.LIGHTS ?? 'daylight,evening').split(',')) {
   await page.getByLabel('Size').selectOption(size);
   await page.getByLabel('Quality').selectOption(quality);
   await page.getByLabel('Lighting').selectOption(light);
+  if (process.env.VIEW) await page.getByRole('dialog', { name: 'Render photo' }).getByLabel('View', { exact: true }).selectOption(process.env.VIEW);
   const t0 = Date.now();
   await page.getByRole('button', { name: 'Render', exact: true }).click();
   await page.waitForFunction(() => /^Done/.test(document.querySelector('.photo-progress span')?.textContent ?? ''), null, { timeout: 40 * 60 * 1000, polling: 2000 });
   const secs = Math.round((Date.now() - t0) / 1000);
   const png = await page.evaluate(() => document.querySelector('[data-testid=photo-canvas] canvas').toDataURL('image/png'));
-  writeFileSync(join(out, `sample-${light}-${quality}-${size}.png`), Buffer.from(png.split(',')[1], 'base64'));
+  writeFileSync(join(out, `sample-${light}-${quality}-${size}${process.env.VIEW ? '-' + process.env.VIEW.replace(':', '') : ''}.png`), Buffer.from(png.split(',')[1], 'base64'));
   console.log(`${light} ${quality} ${size}: ${secs} s (software GL, not your GPU)`);
   await page.keyboard.press('Escape');
   await page.waitForTimeout(500);

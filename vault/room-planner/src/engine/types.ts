@@ -148,6 +148,8 @@ export interface Room {
   walls: WallSegment[];
   fixtures: Fixture[]; // kept sorted by id
   furniture: FurnitureInstance[]; // kept sorted by id
+  /** Colour palette id (`data/palettes.ts`). Optional so older files load unchanged; none = the standard colours. Shown in the 3D view. */
+  palette?: string;
 }
 
 /**
@@ -238,8 +240,9 @@ export interface UpdateFixtureCommand {
   to: FixturePatch;
 }
 export interface DeleteFixtureCommand { type: 'DeleteFixture'; fixtureId: string; snapshot: Fixture }
-/** Rename a room (the only room property edited through a command so far). */
-export interface UpdateRoomCommand { type: 'UpdateRoom'; roomId: string; from: { name: string }; to: { name: string } }
+/** Rename a room and/or choose its colour palette (`palette: null` = back to the standard colours). Only the keys present are changed. */
+export interface RoomPatch { name?: string; palette?: string | null }
+export interface UpdateRoomCommand { type: 'UpdateRoom'; roomId: string; from: RoomPatch; to: RoomPatch }
 export interface CreateRoomCommand { type: 'CreateRoom'; room: Room }
 export interface DeleteRoomCommand { type: 'DeleteRoom'; roomId: string; snapshot: Room }
 export interface CompositeCommand { type: 'Composite'; commands: Command[] }

@@ -5,9 +5,9 @@
 import type { Vec3 } from './transforms';
 
 /** Part names double as the keys of `finishOverrides` (C13): part name → material id. */
-export type PartRole = 'frame' | 'upholstery' | 'top' | 'leg' | 'fabric' | 'accent' | 'handle' | 'glass' | 'door';
+export type PartRole = 'frame' | 'upholstery' | 'top' | 'leg' | 'fabric' | 'accent' | 'handle' | 'glass' | 'door' | 'foliage' | 'pot';
 
-export type PartShape = 'box' | 'rbox' | 'cylinder' | 'taper';
+export type PartShape = 'box' | 'rbox' | 'cylinder' | 'taper' | 'ellipsoid';
 
 export interface Part {
   shape: PartShape;
@@ -37,6 +37,8 @@ export const ROLE_DEFAULTS: Record<PartRole, { colour: string; roughness: number
   handle: { colour: '#a9adb2', roughness: 0.4, metalness: 0.1 },
   glass: { colour: '#bfe3f2', roughness: 0.4, metalness: 0.1, opacity: 0.35 },
   door: { colour: '#d8d2c6', roughness: 0.6, metalness: 0 },
+  foliage: { colour: '#4f7a3a', roughness: 0.7, metalness: 0 },
+  pot: { colour: '#eeece6', roughness: 0.45, metalness: 0 },
 };
 
 type Ext = [number, number]; // [min, max]
@@ -54,6 +56,8 @@ const rbox = (role: PartRole, x: Ext, y: Ext, z: Ext, r = 0.015, tint?: string):
 };
 const cyl = (role: PartRole, x: Ext, y: Ext, z: Ext, axis: 'x' | 'y' | 'z' = 'y'): Part => ({ ...box(role, x, y, z), shape: 'cylinder', axis });
 /** A leg that narrows toward the floor: `top` wide at the top of height `height`, `ratio` at the foot. */
+/** An ellipsoid (a leaf mass) filling the box given by the extents. */
+const ell = (role: PartRole, x: Ext, y: Ext, z: Ext): Part => ({ ...box(role, x, y, z), shape: 'ellipsoid' });
 const leg = (role: PartRole, cx: number, cz: number, top: number, height: number, ratio = 0.6): Part => ({
   shape: 'taper', role, centre: [cx, height / 2, cz], size: [top, height, top], taper: ratio,
 });
@@ -119,8 +123,12 @@ function bed(w: number, l: number, h: number): Part[] {
     rbox('frame', [-w / 2, w / 2], [legH, rail], [-l / 2, l / 2], 0.02),
     rbox('fabric', [-w / 2 + 0.03, w / 2 - 0.03], [rail, matTop], [-l / 2 + hb, l / 2 - 0.02], 0.04),
     rbox('upholstery', [-w / 2 + 0.01, w / 2 - 0.01], [matTop - 0.02, matTop + Math.min(0.05, h * 0.05)], [-l / 2 + hb + l * 0.26, l / 2 - 0.005], 0.04),
-    rbox('fabric', [-w / 2 + 0.06, -w / 2 + 0.06 + pw], [matTop, pillowTop], [-l / 2 + hb + 0.04, -l / 2 + hb + 0.04 + Math.min(0.5, l * 0.22)], 0.06),
-    rbox('fabric', [w / 2 - 0.06 - pw, w / 2 - 0.06], [matTop, pillowTop], [-l / 2 + hb + 0.04, -l / 2 + hb + 0.04 + Math.min(0.5, l * 0.22)], 0.06),
+    ...(w > 1.3
+      ? [
+        rbox('fabric', [-w / 2 + 0.06, -w / 2 + 0.06 + pw], [matTop, pillowTop], [-l / 2 + hb + 0.04, -l / 2 + hb + 0.04 + Math.min(0.5, l * 0.22)], 0.06),
+        rbox('fabric', [w / 2 - 0.06 - pw, w / 2 - 0.06], [matTop, pillowTop], [-l / 2 + hb + 0.04, -l / 2 + hb + 0.04 + Math.min(0.5, l * 0.22)], 0.06),
+      ]
+      : [rbox('fabric', [-w / 2 + 0.08, w / 2 - 0.08], [matTop, pillowTop], [-l / 2 + hb + 0.04, -l / 2 + hb + 0.04 + Math.min(0.5, l * 0.22)], 0.06)]),
     rbox('frame', [-w / 2, w / 2], [legH, h], [-l / 2, -l / 2 + hb], 0.035),
   ];
 }
@@ -251,6 +259,126 @@ function shelf(w: number, l: number, h: number): Part[] {
   return parts;
 }
 
+// ------------------------------------------------------------------ more pieces (M4.8)
+
+function ottoman(w: number, l: number, h: number): Part[] {
+  const legH = Math.min(0.1, h * 0.25);
+  return [
+    ...fourLegs(w, l, legH, 0.04, 0.05),
+    rbox('frame', [-w / 2, w / 2], [legH, h * 0.62], [-l / 2, l / 2], 0.04),
+    rbox('upholstery', [-w / 2 + 0.01, w / 2 - 0.01], [h * 0.58, h], [-l / 2 + 0.01, l / 2 - 0.01], 0.08),
+  ];
+}
+
+function bench(w: number, l: number, h: number): Part[] {
+  const seat = 0.05;
+  const pad = 0.05;
+  return [
+    ...fourLegs(w, l, h - seat - pad, 0.05, 0.04),
+    rbox('top', [-w / 2, w / 2], [h - seat - pad, h - pad], [-l / 2, l / 2], 0.015),
+    rbox('upholstery', [-w / 2 + 0.03, w / 2 - 0.03], [h - pad, h], [-l / 2 + 0.03, l / 2 - 0.03], 0.02),
+  ];
+}
+
+function officeChair(w: number, l: number, h: number): Part[] {
+  const seatY = h * 0.47;
+  const post = 0.045;
+  return [
+    cyl('leg', [-w / 2, w / 2], [0, 0.04], [-l / 2, l / 2]), // the base (a disc stands in for the five-star)
+    cyl('leg', [-post / 2, post / 2], [0.04, seatY - 0.08], [-post / 2, post / 2]),
+    rbox('upholstery', [-w * 0.38, w * 0.38], [seatY - 0.08, seatY], [-l * 0.4, l * 0.4], 0.04),
+    rbox('upholstery', [-w * 0.36, w * 0.36], [seatY + 0.05, h], [-l * 0.42, -l * 0.42 + 0.1], 0.04),
+    rbox('handle', [-w * 0.42, -w * 0.42 + 0.04], [seatY + 0.1, seatY + 0.2], [-l * 0.2, l * 0.3], 0.01),
+    rbox('handle', [w * 0.42 - 0.04, w * 0.42], [seatY + 0.1, seatY + 0.2], [-l * 0.2, l * 0.3], 0.01),
+  ];
+}
+
+function roundTable(w: number, l: number, h: number): Part[] {
+  const top = 0.035;
+  const stem = Math.min(0.12, w / 8);
+  return [
+    cyl('top', [-w / 2, w / 2], [h - top, h], [-l / 2, l / 2]),
+    { shape: 'taper', role: 'leg', centre: [0, (h - top + 0.04) / 2, 0], size: [stem * 1.5, h - top - 0.04, stem * 1.5], taper: 0.6 },
+    cyl('leg', [-w * 0.2, w * 0.2], [0, 0.04], [-l * 0.2, l * 0.2]),
+  ];
+}
+
+function dresser(w: number, l: number, h: number): Part[] {
+  const legH = 0.1;
+  const slab = 0.03;
+  const front = l / 2 - 0.02;
+  const parts: Part[] = [
+    ...fourLegs(w, l, legH, 0.045, 0.04),
+    rbox('frame', [-w / 2, w / 2], [legH, h - slab], [-l / 2, front], 0.008),
+    rbox('top', [-w / 2, w / 2], [h - slab, h], [-l / 2, l / 2], 0.01),
+  ];
+  const rows = 3;
+  const cols = 2;
+  const dw = (w - 0.04 - GAP * (cols - 1)) / cols;
+  const rh = (h - slab - legH - 0.03) / rows;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const x0 = -w / 2 + 0.02 + c * (dw + GAP);
+      const y0 = legH + 0.015 + r * rh;
+      parts.push(rbox('accent', [x0, x0 + dw], [y0, y0 + rh - GAP], [front, front + 0.01], 0.004));
+      parts.push(rbox('handle', [x0 + dw / 2 - 0.05, x0 + dw / 2 + 0.05], [y0 + rh / 2 - 0.008, y0 + rh / 2 + 0.008], [front + 0.01, l / 2], 0.004));
+    }
+  }
+  return parts;
+}
+
+/** A pot with a crown of leaf masses; the crown spans the whole width and length and reaches the top. */
+function plant(w: number, l: number, h: number, big: boolean): Part[] {
+  const potH = h * (big ? 0.28 : 0.38);
+  const potW = w * (big ? 0.66 : 0.72);
+  const potL = l * (big ? 0.66 : 0.72);
+  const parts: Part[] = [
+    { shape: 'taper', role: 'pot', centre: [0, potH / 2, 0], size: [potW, potH, potL], taper: 0.72 },
+    // the crown: one mass as wide as the envelope, the rest piled above it
+    ell('foliage', [-w / 2, w / 2], [potH * 0.8, potH * 0.8 + (h - potH * 0.8) * 0.55], [-l / 2, l / 2]),
+    ell('foliage', [-w * 0.34, w * 0.34], [potH * 0.8 + (h - potH * 0.8) * 0.3, potH * 0.8 + (h - potH * 0.8) * 0.78], [-l * 0.34, l * 0.34]),
+    ell('foliage', [-w * 0.22, w * 0.22], [potH * 0.8 + (h - potH * 0.8) * 0.55, h], [-l * 0.22, l * 0.22]),
+  ];
+  if (big) {
+    parts.push(ell('foliage', [-w * 0.46, -w * 0.02], [potH * 0.8 + (h - potH * 0.8) * 0.2, potH * 0.8 + (h - potH * 0.8) * 0.62], [-l * 0.12, l * 0.42]));
+    parts.push(ell('foliage', [w * 0.02, w * 0.46], [potH * 0.8 + (h - potH * 0.8) * 0.25, potH * 0.8 + (h - potH * 0.8) * 0.66], [-l * 0.42, l * 0.1]));
+  }
+  return parts;
+}
+
+function floorLamp(w: number, l: number, h: number): Part[] {
+  const shadeH = h * 0.2;
+  const pole = 0.03;
+  return [
+    cyl('frame', [-w / 2, w / 2], [0, 0.03], [-l / 2, l / 2]),
+    cyl('leg', [-pole / 2, pole / 2], [0.03, h - shadeH], [-pole / 2, pole / 2]),
+    cyl('fabric', [-w * 0.41, w * 0.41], [h - shadeH, h], [-l * 0.41, l * 0.41]), // the shade
+  ];
+}
+
+function mirror(w: number, l: number, h: number): Part[] {
+  const f = Math.min(0.05, w / 8);
+  return [
+    rbox('frame', [-w / 2, w / 2], [0, h], [-l / 2, l / 2], 0.015),
+    rbox('handle', [-w / 2 + f, w / 2 - f], [f, h - f], [l / 2 - 0.012, l / 2], 0.003), // the glass, bright metal
+  ];
+}
+
+function rugRect(w: number, l: number, h: number): Part[] {
+  const b = Math.min(0.12, w / 8, l / 8);
+  return [
+    rbox('fabric', [-w / 2, w / 2], [0, h * 0.8], [-l / 2, l / 2], Math.min(0.004, h / 3)),
+    rbox('accent', [-w / 2 + b, w / 2 - b], [0, h], [-l / 2 + b, l / 2 - b], Math.min(0.004, h / 3)),
+  ];
+}
+
+function rugRound(w: number, l: number, h: number): Part[] {
+  return [
+    cyl('fabric', [-w / 2, w / 2], [0, h * 0.8], [-l / 2, l / 2]),
+    cyl('accent', [-w * 0.38, w * 0.38], [0, h], [-l * 0.38, l * 0.38]),
+  ];
+}
+
 type Recipe = (w: number, l: number, h: number) => Part[];
 
 const RECIPES: Record<string, Recipe> = {
@@ -266,6 +394,23 @@ const RECIPES: Record<string, Recipe> = {
   desk,
   bookshelf: shelf,
   'tv-unit': (w, l, h) => cabinet(w, l, h, { baseH: 0.1, doors: 3, plinth: false, slab: true, handleLen: 0.12 }),
+  loveseat: (w, l, h) => sofa(w, l, h, { seats: 2, arm: 0.15 }),
+  ottoman,
+  bench,
+  'office-chair': officeChair,
+  'console-table': (w, l, h) => table(w, l, h, { topT: 0.03, legT: 0.04, apron: true }),
+  'round-table': roundTable,
+  sideboard: (w, l, h) => cabinet(w, l, h, { baseH: 0.12, doors: 4, plinth: false, slab: true, handleLen: 0.1 }),
+  dresser,
+  'bed-single': bed,
+  'bed-king': bed,
+  'plant-large': (w, l, h) => plant(w, l, h, true),
+  'plant-small': (w, l, h) => plant(w, l, h, false),
+  'floor-lamp': floorLamp,
+  'mirror-floor': mirror,
+  'rug-rect': rugRect,
+  'rug-round': rugRound,
+  'rug-runner': rugRect,
 };
 
 /** Parts of a furniture model at the given size. Unknown definitions get a single box. */

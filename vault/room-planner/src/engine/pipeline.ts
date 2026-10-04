@@ -236,7 +236,7 @@ export function proposePlaceFixture(project: Project, fixture: Fixture): Pipelin
   const q = quantizeFixture(fixture);
   const room = project.rooms.find((r) => r.walls.some((w) => w.id === q.wallId));
   if (!room) throw new ApplyError('ID_NOT_FOUND', `wall ${q.wallId} not found`);
-  const hard = hardOnly(validateFixture({ ...room, fixtures: [...room.fixtures, q] }, q))
+  const hard = hardOnly(validateFixture({ ...room, fixtures: [...room.fixtures, q] }, q, project.furnitureDefinitions))
     .filter((v) => (v.involvedFixtureIds ?? []).includes(q.id));
   return hard.length ? reject(hard) : accept({ type: 'PlaceFixture', fixture: q });
 }
@@ -254,8 +254,8 @@ export function proposeUpdateFixture(project: Project, id: string, to: FixturePa
   const command: Command = { type: 'UpdateFixture', fixtureId: id, from: from as FixturePatch, to: q };
   const afterRoom = apply(command, project).rooms.find((r) => r.id === room.id)!;
   const afterFx = afterRoom.fixtures.find((f) => f.id === id)!;
-  const afterHard = hardOnly(validateFixture(afterRoom, afterFx)).filter((v) => (v.involvedFixtureIds ?? []).includes(id));
-  const beforeHard = hardOnly(validateFixture(room, fx)).filter((v) => (v.involvedFixtureIds ?? []).includes(id));
+  const afterHard = hardOnly(validateFixture(afterRoom, afterFx, project.furnitureDefinitions)).filter((v) => (v.involvedFixtureIds ?? []).includes(id));
+  const beforeHard = hardOnly(validateFixture(room, fx, project.furnitureDefinitions)).filter((v) => (v.involvedFixtureIds ?? []).includes(id));
   return escapeOk(beforeHard, afterHard) ? accept(command) : reject(afterHard);
 }
 

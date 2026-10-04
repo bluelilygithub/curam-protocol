@@ -407,7 +407,7 @@ export class Interaction {
     const moved: Fixture = { ...fx, wallId: snap.wallId, offsetAlongWall: snap.offsetAlongWall };
     const r = proposeUpdateFixture(project, fx.id, { wallId: snap.wallId, offsetAlongWall: snap.offsetAlongWall });
     const afterRoom = { ...room, fixtures: room.fixtures.map((f) => (f.id === fx.id ? moved : f)) };
-    const violations = validateFixture(afterRoom, moved).filter((v) => (v.involvedFixtureIds ?? []).includes(fx.id));
+    const violations = validateFixture(afterRoom, moved, project.furnitureDefinitions).filter((v) => (v.involvedFixtureIds ?? []).includes(fx.id));
     s.last = { valid: !r.rejected || !!r.noop, wallId: snap.wallId, offset: snap.offsetAlongWall };
     this.p.bus.set({ previews: [{ id: fx.id, kind: 'fixture', fixture: moved, valid: s.last.valid, violations, ghost: false }] });
     this.announce(violations);
@@ -587,7 +587,7 @@ export class Interaction {
         elevation: def.elevation,
         ...(def.type === 'door' ? { hingeSide: s.hinge, swingAngle: def.swingAngle ?? Math.PI / 2, ...(def.accessZoneDepth ? { accessZoneDepth: def.accessZoneDepth } : {}) } : {}),
       };
-      const vs = validateFixture({ ...room, fixtures: [...room.fixtures, fixture] }, fixture).filter((v) => (v.involvedFixtureIds ?? []).includes(GHOST_ID));
+      const vs = validateFixture({ ...room, fixtures: [...room.fixtures, fixture] }, fixture, project.furnitureDefinitions).filter((v) => (v.involvedFixtureIds ?? []).includes(GHOST_ID));
       const valid = !vs.some((v) => v.severity === 'hard');
       s.last = { valid, pos: e.world, wallId: snap.wallId, offset: snap.offsetAlongWall };
       this.p.bus.set({ previews: [{ id: GHOST_ID, kind: 'fixture', fixture, valid, violations: vs, ghost: true }], snap: null, dims: [] });

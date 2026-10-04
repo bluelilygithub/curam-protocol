@@ -1,4 +1,5 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
+import { FURNITURE_LIBRARY } from '../data/furnitureLibrary';
 import { CommandHistory, type HistoryJSON } from '../engine/history';
 import { apply } from '../engine/commands';
 import type { PipelineResult } from '../engine/pipeline';
@@ -61,6 +62,17 @@ export interface ProjectStoreHooks {
 }
 
 /** The view of `doc` with only the room `activeId` in it (none for null or an unknown id). */
+/**
+ * The project's definitions plus any library item it does not have yet (a file saved before new pieces were added still offers them).
+ * Applied to the view only, so opening a file never changes it; the new items are simply offered again each time it is opened.
+ */
+export function withLibrary(p: Project | null): Project | null {
+  if (!p) return p;
+  const have = new Set(p.furnitureDefinitions.map((d) => d.id));
+  const missing = FURNITURE_LIBRARY.filter((d) => !have.has(d.id));
+  return missing.length ? { ...p, furnitureDefinitions: [...p.furnitureDefinitions, ...structuredClone(missing)] } : p;
+}
+
 export function viewOf(doc: Project | null, activeId: string | null): Project | null {
   if (!doc) return null;
   const room = activeId ? doc.rooms.find((r) => r.id === activeId) : undefined;
@@ -89,7 +101,7 @@ export function createProjectStore(initial: Project | null = null, hooks: Projec
   let viewKey: { doc: Project | null; active: string | null; view: Project | null } | null = null;
   const view = (doc: Project | null, active: string | null): Project | null => {
     if (viewKey && viewKey.doc === doc && viewKey.active === active) return viewKey.view;
-    const v = viewOf(doc, active);
+    const v = withLibrary(viewOf(doc, active));
     viewKey = { doc, active, view: v };
     return v;
   };

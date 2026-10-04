@@ -4,9 +4,10 @@ import { FURNITURE_LIBRARY } from '../../src/data/furnitureLibrary';
 const byName = (n: string) => FURNITURE_LIBRARY.find((d) => d.name === n)!;
 
 describe('seed furniture library (C17)', () => {
-  it('has the 12 listed items with unique ids', () => {
-    expect(FURNITURE_LIBRARY).toHaveLength(12);
-    expect(new Set(FURNITURE_LIBRARY.map((d) => d.id)).size).toBe(12);
+  it('has the 12 listed starter items first, then the M4.8 additions, all with unique ids', () => {
+    expect(FURNITURE_LIBRARY.slice(0, 12).map((d) => d.id)).toEqual(['sofa-3', 'armchair', 'coffee-table', 'side-table', 'dining-table', 'dining-chair', 'bed-queen', 'bedside-table', 'wardrobe', 'desk', 'bookshelf', 'tv-unit']);
+    expect(FURNITURE_LIBRARY).toHaveLength(29);
+    expect(new Set(FURNITURE_LIBRARY.map((d) => d.id)).size).toBe(29);
   });
   it.each([
     ['3-seat sofa', 2.2, 0.95, 0.85], ['Armchair', 0.85, 0.85, 0.85], ['Coffee table', 1.2, 0.6, 0.42],
@@ -30,7 +31,11 @@ describe('seed furniture library (C17)', () => {
     expect(byName('Wardrobe').defaultHeight).toBeGreaterThan(1.2);
     expect(byName('Bookshelf').defaultHeight).toBeGreaterThan(1.2);
   });
-  it('no rug (the engine cannot stack things under others yet)', () => {
-    expect(FURNITURE_LIBRARY.some((d) => /rug/i.test(d.name))).toBe(false);
+  it('has rugs, plants and a lamp; rugs are in the "rugs" category (floor coverings, which the engine lets furniture stand on)', () => {
+    const rugs = FURNITURE_LIBRARY.filter((d) => /rug/i.test(d.name));
+    expect(rugs.map((d) => d.id).sort()).toEqual(['rug-rect', 'rug-round', 'rug-runner']);
+    for (const r of rugs) { expect(r.category).toBe('rugs'); expect(r.defaultHeight).toBeLessThan(0.03); expect(r.clearancePolicies).toBeUndefined(); }
+    expect(FURNITURE_LIBRARY.filter((d) => /plant/i.test(d.name))).toHaveLength(2);
+    expect(FURNITURE_LIBRARY.some((d) => /lamp/i.test(d.name))).toBe(true);
   });
 });
