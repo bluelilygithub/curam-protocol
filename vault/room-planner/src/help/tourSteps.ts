@@ -50,11 +50,11 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: 'rp-cinematic', title: 'Cinematic', target: 'rp-cinematic', on: 'bottom', needs3d: true,
-    text: 'Cinematic shows a clean model with soft shadows. Choose Clay (white model) or Realistic (wood, fabric, daylight), then Low or High quality, play a fly-through of your saved views, or press Walk to move through the room at eye height.',
+    text: 'Cinematic shows a clean model with soft shadows. Choose Clay (white model) or Realistic (wood, fabric, daylight), pick a colour palette for the room, then Low or High quality, play a fly-through of your saved views, or press Walk to move through the room at eye height.',
   },
   {
     id: 'rp-photo', title: 'Render Photo', target: 'rp-photo', on: 'bottom', needs3d: true,
-    text: 'Make a real picture of your design to download as a PNG. Choose the view, lighting, size and quality; it starts grainy and sharpens. This can take minutes, so try Draft first. Your design is never changed.',
+    text: 'Make a real picture of your design to download as a PNG. Choose the view (the 3D view, a saved view, or an eye-level view inside the room), lighting, size and quality. It starts grainy and sharpens, and can take minutes, so try Draft first. Your design is never changed.',
   },
   {
     id: 'rp-done', title: 'You’re Set',

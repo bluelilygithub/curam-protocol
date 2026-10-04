@@ -42,7 +42,7 @@ The demo walkthrough is in `docs/room-planner.md` (Vault docs folder).
 | `src/render2d/` | blueprint glyphs (pure data), Konva scene + overlay renderer |
 | `src/ui/` | toolbar, library, inspector (+ pure `inspectorLogic.ts`), status bar, HUD, empty state |
 
-`src/data/furnitureLibrary.ts` is the seed library (C17), the only place those numbers live.
+`src/data/furnitureLibrary.ts` is the seed library (C17, plus the M4.8 additions: 29 pieces incl. rugs, plants, lamp, mirror), the only place those numbers live; `src/data/palettes.ts` holds the room colour palettes.
 
 See `TESTING.md` for how to run and what is enforced, and **`DECISIONS.md` for the choices that need owner confirmation**.
 

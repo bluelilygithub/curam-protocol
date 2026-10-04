@@ -52,7 +52,7 @@ M4.8 (library, rugs, palettes, photo expectations): `tests/unit/m48.test.ts` (ev
 
 Help (tooltips, How This Works, tour): `tests/unit/help.test.ts` and `npm run e2e-help` (first-visit info modal, remembered, tooltip on hover and on a field, title restored, all 11 tour steps, Skip and Esc, `?tour=1`, a tour with no room yet). The other e2e scripts set `vault_room_planner_info_seen` before loading so the modal does not cover the page.
 
-**Laptop check for Render photo - run by the owner:** open a furnished room, 3D, Render photo, 1920 x 1080, Draft, press Render and note the time shown when it reaches Done; repeat with Good. Note the GPU and times in this file. If Draft takes over about 3 minutes, tell the assistant (a smaller default size or fewer passes is an easy change).
+**Laptop check for Render photo - run by the owner:** open a furnished room, 3D, Render photo, 1920 x 1080, Draft, press Render and note (a) how long until the first picture appears and (b) the time shown when it reaches Done; repeat with Good. Note the GPU and times in this file. If Draft takes over about 3 minutes, tell the assistant (a smaller default size or fewer passes is an easy change).
 
 **Laptop (integrated GPU) check for Quality — run by the owner before release:** open a plan with ≥ 10 objects, turn on Cinematic, Low, press Play tour and watch the frame rate (Chrome: DevTools → Rendering → Frame Rendering Stats). Low must stay near 30 fps; High may drop and is allowed to. Note the GPU and results in this file.
 M5 gates are in the Test Plan §4.
