@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useStore } from 'zustand';
 import type { SavedView } from '../engine/types';
+import { AMBIENT_OPTIONS, type AmbientKind } from '../audio/ambient';
 import { PALETTES } from '../data/palettes';
 import { useApp, useProject, useUi } from '../ui/AppContext';
 
@@ -21,6 +22,9 @@ export function Viewbar3D() {
   const progress = useUi((s) => s.tourProgress);
   const project = useProject((s) => s.project);
   const palette = useProject((s) => s.project?.rooms[0]?.palette);
+  const lightsOn = useUi((s) => s.lightsOn);
+  const ambient = useUi((s) => s.ambient);
+  const ambientVolume = useUi((s) => s.ambientVolume);
   const summary = useMemo(() => app.tourSummary(), [app, project]);
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
@@ -79,6 +83,23 @@ export function Viewbar3D() {
               <span className="label">High</span>
             </button>
           </>
+        )}
+      </div>
+      <div className="group" role="group" aria-label="Light and sound">
+        <button className={`btn ${lightsOn ? 'active' : ''}`} aria-pressed={lightsOn} onClick={() => app.setLightsOn(!lightsOn)} title="Switch the ceiling lights and lamps on or off. They light the room in the Realistic look and in Render photo.">
+          <span className="label">Lights</span>
+        </button>
+        <label className="palette-select" title="Soothing ambient sound while you look around in 3D: rain, ocean waves, a forest breeze or calm music. Made in your browser; nothing is downloaded.">
+          <span className="label">Sound</span>
+          <select aria-label="Ambient sound" value={ambient} onChange={(e) => app.setAmbient(e.target.value as AmbientKind)}>
+            {AMBIENT_OPTIONS.map((o) => <option key={o.id} value={o.id} title={o.note}>{o.label}</option>)}
+          </select>
+        </label>
+        {ambient !== 'off' && (
+          <input
+            type="range" className="volume" min={0} max={1} step={0.05} value={ambientVolume} aria-label="Sound volume" title="Sound volume"
+            onChange={(e) => app.setAmbientVolume(Number(e.target.value))}
+          />
         )}
       </div>
       <div className="group" role="group" aria-label="Colours">

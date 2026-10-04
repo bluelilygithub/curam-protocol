@@ -19,6 +19,7 @@ import { ProjectsController } from './state/projects';
 import { convertProjection, presetCamera, type CameraPreset, type CameraState, type Projection } from './render3d/cameraPresets';
 import { buildTour } from './render3d/tour';
 import { walkStart } from './render3d/walk';
+import { AmbientPlayer, browserAudioContext, isAmbientKind, type AmbientKind } from './audio/ambient';
 import { createUiStore, type Look, type Quality, type SnapMode, type ViewMode } from './state/uiStore';
 import { createViewStore } from './state/viewStore';
 
@@ -26,7 +27,7 @@ import { createViewStore } from './state/viewStore';
  * Composition root: the stores, the interaction engine and the project-level actions the UI buttons call.
  * Everything here is DOM-free except `saveFile`/`openFile`, which take the browser pieces they need as arguments.
  */
-export function createApp(storage: StorageLike) {
+export function createApp(storage: StorageLike, audio: AmbientPlayer = new AmbientPlayer(browserAudioContext)) {
   const project = createProjectStore(null);
   const ui = createUiStore();
   const view = createViewStore();
@@ -47,6 +48,28 @@ export function createApp(storage: StorageLike) {
     const q = storage.getItem(QUALITY_KEY);
     if (q === 'low' || q === 'high') ui.getState().setQuality(q);
   } catch { /* storage unavailable: keep the default */ }
+  // Ambient sound and the lights switch are per-browser preferences too. Sound plays only while the 3D view is showing.
+  const SOUND_KEY = 'room-planner:sound:v1';
+  try {
+    const raw = storage.getItem(SOUND_KEY);
+    const v = raw ? (JSON.parse(raw) as { kind?: unknown; volume?: unknown; lights?: unknown }) : null;
+    if (v && isAmbientKind(v.kind)) ui.getState().setAmbient(v.kind);
+    if (v && typeof v.volume === 'number') ui.getState().setAmbientVolume(v.volume);
+    if (v && typeof v.lights === 'boolean') ui.getState().setLightsOn(v.lights);
+  } catch { /* storage unavailable or damaged: keep the defaults */ }
+  const applySound = (): void => {
+    const u = ui.getState();
+    audio.set(u.viewMode === '3d' ? u.ambient : 'off', u.ambientVolume);
+  };
+  let lastSound = `${ui.getState().ambient}|${ui.getState().ambientVolume}|${ui.getState().lightsOn}`;
+  let lastView = ui.getState().viewMode;
+  let lastSoundApplied = '';
+  // browsers only start sound after a click or key press: wake a waiting sound on the first one
+  if (typeof window !== 'undefined') {
+    const wake = (): void => { audio.wake(); };
+    window.addEventListener('pointerdown', wake, { passive: true });
+    window.addEventListener('keydown', wake);
+  }
   // Snapping (mode and grid size) is a per-browser preference too.
   const SNAP_KEY = 'room-planner:snap:v1';
   try {
@@ -69,6 +92,12 @@ export function createApp(storage: StorageLike) {
       lastQuality = s.quality;
       try { storage.setItem(QUALITY_KEY, s.quality); } catch { /* ignore */ }
     }
+    const soundNow = `${s.ambient}|${s.ambientVolume}|${s.lightsOn}`;
+    if (soundNow !== lastSound) {
+      lastSound = soundNow;
+      try { storage.setItem(SOUND_KEY, JSON.stringify({ kind: s.ambient, volume: s.ambientVolume, lights: s.lightsOn })); } catch { /* ignore */ }
+    }
+    if (s.viewMode !== lastView || soundNow !== lastSoundApplied) { lastView = s.viewMode; lastSoundApplied = soundNow; applySound(); }
     const snapNow = `${s.snapMode}|${s.grid}`;
     if (snapNow !== lastSnap) {
       lastSnap = snapNow;
@@ -134,7 +163,9 @@ export function createApp(storage: StorageLike) {
       }
     };
     if (typeof document !== 'undefined') document.addEventListener('fullscreenchange', onFullscreen);
+    applySound();
     return () => {
+      audio.set('off');
       autosave.dispose();
       detach();
       interaction.cancel();
@@ -204,6 +235,9 @@ export function createApp(storage: StorageLike) {
     setQuality(q: Quality): void { ui.getState().setQuality(q); },
     setLook(l: Look): void { ui.getState().setLook(l); },
     setSnapMode(m: SnapMode): void { ui.getState().setSnapMode(m); },
+    setAmbient(k: AmbientKind): void { ui.getState().setAmbient(k); },
+    setAmbientVolume(v: number): void { ui.getState().setAmbientVolume(v); },
+    setLightsOn(on: boolean): void { ui.getState().setLightsOn(on); },
     setGrid(metres: number): void { ui.getState().setGrid(metres); },
     walkInput,
 

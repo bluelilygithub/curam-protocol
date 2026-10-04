@@ -361,3 +361,6 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--co
 /* Snap and grid selects in the toolbar (M4.9) */
 .snap-select { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--color-muted); }
 .snap-select select { min-height: var(--ctl); padding: 0 4px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius); font: inherit; color: var(--color-text); }
+
+/* Sound volume (M4.10) */
+.volume { width: 84px; accent-color: var(--color-primary); }

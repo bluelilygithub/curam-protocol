@@ -1,5 +1,6 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { sameRef, type SelectionRef } from '../engine/selection';
+import { DEFAULT_VOLUME, type AmbientKind } from '../audio/ambient';
 import type { FurnitureInstance, SnapTargetType } from '../engine/types';
 
 /**
@@ -54,6 +55,11 @@ export interface UiState {
   placing: Placing;
   showClearances: boolean;
   showGrid: boolean;
+  /** Ceiling lights, lamps and the like give off light in the Realistic look (and Render photo). */
+  lightsOn: boolean;
+  /** Soothing ambient sound while the 3D view is showing (synthesised in the browser). */
+  ambient: AmbientKind;
+  ambientVolume: number;
   snapMode: SnapMode;
   snapEnabled: SnapTargetType[];
   /** Grid unit in metres (Spec §3 default 0.1 m). */
@@ -80,6 +86,9 @@ export interface UiActions {
   setImmersive(on: boolean): void;
   setProjectsOpen(on: boolean): void;
   setPhotoOpen(on: boolean): void;
+  setLightsOn(on: boolean): void;
+  setAmbient(kind: AmbientKind): void;
+  setAmbientVolume(v: number): void;
   setSnapMode(mode: SnapMode): void;
   setGrid(metres: number): void;
   setInfoOpen(on: boolean): void;
@@ -122,6 +131,9 @@ export function createUiStore(): UiStore {
     placing: null,
     showClearances: false,
     showGrid: true,
+    lightsOn: true,
+    ambient: 'off',
+    ambientVolume: DEFAULT_VOLUME,
     snapMode: 'smart',
     snapEnabled: ALL_SNAPS,
     grid: 0.1,
@@ -142,6 +154,9 @@ export function createUiStore(): UiStore {
     setTourLoop: (tourLoop) => set({ tourLoop }),
     setImmersive: (immersive) => set({ immersive }),
     setProjectsOpen: (projectsOpen) => set({ projectsOpen }),
+    setLightsOn: (lightsOn) => set({ lightsOn }),
+    setAmbient: (ambient) => set({ ambient }),
+    setAmbientVolume: (ambientVolume) => set({ ambientVolume: Math.max(0, Math.min(1, ambientVolume)) }),
     setSnapMode: (snapMode) => set({ snapMode, snapEnabled: snapsFor(snapMode) }),
     setGrid: (grid) => set({ grid: GRID_SIZES.includes(grid as (typeof GRID_SIZES)[number]) ? grid : 0.1 }),
     setInfoOpen: (infoOpen) => set({ infoOpen }),

@@ -34,7 +34,7 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: 'rp-library', title: 'Library', target: 'rp-library', on: 'right', needs2d: true, panel: 'left',
-    text: 'Pick a door, window or piece of furniture, then click the plan to place it. Search or filter by type: seating, tables, storage, bedroom, plants and decor, rugs, and wall art (pictures and mirrors that hang on a wall). Doors and windows snap to walls; furniture snaps to walls and other pieces and can stand on a rug.',
+    text: 'Pick a door, window or piece of furniture, then click the plan to place it. Search or filter by type: seating, tables, storage, bedroom, plants and decor, rugs, wall art (pictures and mirrors that hang on a wall) and ceiling lights. Doors and windows snap to walls; furniture snaps to walls and other pieces and can stand on a rug.',
   },
   {
     id: 'rp-canvas', title: 'The Plan', target: 'rp-stage', on: 'left', needs2d: true,
@@ -50,7 +50,7 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: 'rp-cinematic', title: 'Cinematic', target: 'rp-cinematic', on: 'bottom', needs3d: true,
-    text: 'Cinematic shows a clean model with soft shadows. Choose Clay (white model) or Realistic (wood, fabric, daylight), pick a colour palette for the room, then Low or High quality, play a fly-through of your saved views, or press Walk to move through the room at eye height.',
+    text: 'Cinematic shows a clean model with soft shadows. Choose Clay (white model) or Realistic (wood, fabric, daylight), pick a colour palette for the room, switch the lights on or off, choose a soothing background sound, then Low or High quality, play a fly-through of your saved views, or press Walk to move through the room at eye height.',
   },
   {
     id: 'rp-photo', title: 'Render Photo', target: 'rp-photo', on: 'bottom', needs3d: true,

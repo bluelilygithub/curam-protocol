@@ -13,6 +13,7 @@ import { roomBounds } from './cameraPresets';
 import { fixtureModel } from './fixtureParts';
 import { furnitureParts, type Part } from './furnitureParts';
 import { partGeometry } from './partGeometry';
+import { LIGHT_EMITTERS } from '../data/furnitureLibrary';
 import { paletteOf, type Palette } from '../data/palettes';
 import { lookOf, MaterialCache, realisticFixtureLook, realisticLookOf, TINT, type Tint } from './materials';
 import { textureOf } from './textures';
@@ -164,7 +165,7 @@ export class Scene3D {
   private get cinematic(): boolean { return this.p.ui.getState().cinematic; }
   /** Which materials the committed scene uses: the ordinary role colours, the clay model, or the realistic textured look. */
   private get mode(): 'ordinary' | 'clay' | 'realistic' { const u = this.p.ui.getState(); return u.cinematic ? u.look : 'ordinary'; }
-  private currentLookKey(): string { const u = this.p.ui.getState(); return `${u.cinematic}|${u.quality}|${u.look}`; }
+  private currentLookKey(): string { const u = this.p.ui.getState(); return `${u.cinematic}|${u.quality}|${u.look}|${u.lightsOn}`; }
   /** The room's colour palette, unless the clay look is showing (clay is white by design). */
   private get palette(): Palette | undefined { return this.mode === 'clay' ? undefined : paletteOf(this.room?.palette); }
 
@@ -234,6 +235,15 @@ export class Scene3D {
           : { ...lookOf(part.role, inst, project.materials), tint };
       look.opacity = Math.min(look.opacity, opacity);
       g.add(partMesh(part, this.materials.get(look)));
+    }
+    // a lamp or ceiling light lights the room (Realistic look only; clay is lit by the studio light alone)
+    const emitter = LIGHT_EMITTERS[inst.definitionId];
+    if (emitter && opacity >= 1 && this.mode === 'realistic' && this.p.ui.getState().lightsOn) {
+      const light = new THREE.PointLight(emitter.colour, emitter.intensity, 0, 2);
+      light.position.set(0, inst.height * emitter.atFraction + (inst.definitionId === 'floor-lamp' ? 0 : 0.01), 0);
+      light.castShadow = false;
+      light.name = 'lamp-light';
+      g.add(light);
     }
     const t = instanceTransform(inst);
     g.position.set(...t.position);

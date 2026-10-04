@@ -100,6 +100,10 @@ export interface FurnitureDefinition {
   defaultHeight: Metres;
   /** Height of the underside above the floor when first placed (pictures and mirrors hang on the wall). Default 0. */
   defaultElevation?: Metres;
+  /** Small pieces (a plant) that stand on whatever is under them: a table top, a sideboard, or the floor. */
+  settles?: boolean;
+  /** `ceiling`: starts hanging from the ceiling (its top at the room's ceiling height), whatever that is. */
+  mount?: 'ceiling';
   clearancePolicies?: ClearancePolicy[];
 }
 

@@ -48,7 +48,7 @@ export const FURNITURE_LIBRARY: FurnitureDefinition[] = [
 
   // ---- decor: plants, a lamp and a mirror
   { id: 'plant-large', name: 'Large plant', category: 'decor', defaultWidth: 0.55, defaultLength: 0.55, defaultHeight: 1.4 },
-  { id: 'plant-small', name: 'Small plant', category: 'decor', defaultWidth: 0.3, defaultLength: 0.3, defaultHeight: 0.5 },
+  { id: 'plant-small', name: 'Small plant', category: 'decor', defaultWidth: 0.3, defaultLength: 0.3, defaultHeight: 0.5, settles: true },
   { id: 'floor-lamp', name: 'Floor lamp', category: 'decor', defaultWidth: 0.35, defaultLength: 0.35, defaultHeight: 1.65 },
   { id: 'mirror-floor', name: 'Floor mirror', category: 'decor', defaultWidth: 0.7, defaultLength: 0.06, defaultHeight: 1.7 },
 
@@ -56,6 +56,11 @@ export const FURNITURE_LIBRARY: FurnitureDefinition[] = [
   { id: 'rug-rect', name: 'Rug', category: 'rugs', defaultWidth: 2.4, defaultLength: 1.7, defaultHeight: 0.015 },
   { id: 'rug-round', name: 'Round rug', category: 'rugs', defaultWidth: 1.6, defaultLength: 1.6, defaultHeight: 0.015 },
   { id: 'rug-runner', name: 'Runner rug', category: 'rugs', defaultWidth: 0.8, defaultLength: 2.4, defaultHeight: 0.012 },
+
+  // ---- ceiling lights (M4.10): they hang from the ceiling (whatever its height) and light the room in the Realistic look and Render photo
+  { id: 'ceiling-light', name: 'Ceiling light', category: 'lighting', defaultWidth: 0.45, defaultLength: 0.45, defaultHeight: 0.1, mount: 'ceiling' },
+  { id: 'pendant-light', name: 'Pendant light', category: 'lighting', defaultWidth: 0.4, defaultLength: 0.4, defaultHeight: 0.9, mount: 'ceiling' },
+  { id: 'downlight', name: 'Downlight', category: 'lighting', defaultWidth: 0.12, defaultLength: 0.12, defaultHeight: 0.04, mount: 'ceiling' },
 
   // ---- wall art (M4.9 stage 1): hang flat on a wall at a set height; change the height in the Inspector (Elevation)
   { id: 'art-landscape', name: 'Painting: landscape', category: 'wall art', defaultWidth: 0.9, defaultLength: 0.03, defaultHeight: 0.6, defaultElevation: 1.3 },
@@ -66,6 +71,17 @@ export const FURNITURE_LIBRARY: FurnitureDefinition[] = [
   { id: 'mirror-wall', name: 'Wall mirror', category: 'wall art', defaultWidth: 0.8, defaultLength: 0.04, defaultHeight: 1.2, defaultElevation: 0.8 },
   { id: 'mirror-round', name: 'Round mirror', category: 'wall art', defaultWidth: 0.7, defaultLength: 0.04, defaultHeight: 0.7, defaultElevation: 1.1 },
 ];
+
+/**
+ * Pieces that give off light in the Realistic look and in Render photo: warm colour, strength in candela (physical units, like the sun),
+ * and the height of the bulb above the piece's underside as a fraction of its height. The bulb part glows; the light itself is a point light.
+ */
+export const LIGHT_EMITTERS: Record<string, { colour: string; intensity: number; atFraction: number }> = {
+  'ceiling-light': { colour: '#ffe3bd', intensity: 16, atFraction: 0.1 },
+  'pendant-light': { colour: '#ffe0b5', intensity: 13, atFraction: 0.1 },
+  downlight: { colour: '#ffe9cf', intensity: 5, atFraction: 0.1 },
+  'floor-lamp': { colour: '#ffd9a0', intensity: 4, atFraction: 0.88 },
+};
 
 /** Pieces that lie on the floor and may be walked and built over: no overlap, clearance or door-swing checks (they must still sit inside the room). */
 export const FLOOR_COVERING_CATEGORY = 'rugs';
@@ -145,6 +161,9 @@ export const DEFAULT_FINISHES: Record<string, Partial<Record<'frame' | 'upholste
   'rug-rect': { fabric: 'rug-cream', accent: 'rug-border' },
   'rug-round': { fabric: 'rug-cream', accent: 'rug-border' },
   'rug-runner': { fabric: 'rug-cream', accent: 'rug-border' },
+  'ceiling-light': { frame: 'white-paint' },
+  'pendant-light': { frame: 'brushed-steel', fabric: 'white-paint', leg: 'dark-wood' },
+  downlight: { frame: 'white-paint' },
   'art-landscape': { frame: 'dark-wood', fabric: 'white-paint' },
   'art-abstract': { frame: 'white-paint', fabric: 'white-paint' },
   'art-arches': { frame: 'oak', fabric: 'white-paint' },

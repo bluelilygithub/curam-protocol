@@ -336,6 +336,14 @@ check('look is remembered per browser', (await ev(() => localStorage.getItem('ro
 await page.getByRole('button', { name: 'Clay', exact: true }).click();
 await wait(500);
 check('switching back to clay works', (await ev(() => window.roomPlanner.ui.getState().look)) === 'clay');
+// lights and ambient sound controls
+await page.getByRole('button', { name: 'Lights', exact: true }).click();
+check('the Lights button switches lights off', (await ev(() => window.roomPlanner.ui.getState().lightsOn)) === false);
+await page.getByRole('button', { name: 'Lights', exact: true }).click();
+await page.getByLabel('Ambient sound').selectOption('ocean');
+check('choosing a sound sets it (and shows the volume)', (await ev(() => window.roomPlanner.ui.getState().ambient)) === 'ocean' && (await page.getByLabel('Sound volume').count()) === 1);
+check('four sounds plus Off are offered', (await page.getByLabel('Ambient sound').locator('option').count()) === 5);
+await page.getByLabel('Ambient sound').selectOption('off');
 // colour palette: choose, see it on the room, undo
 await page.getByRole('button', { name: '3D', exact: true }).click().catch(() => undefined);
 await ev(() => { const u = window.roomPlanner.ui.getState(); u.setCinematic(true); u.setLook('realistic'); });

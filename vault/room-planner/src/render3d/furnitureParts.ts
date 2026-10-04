@@ -6,7 +6,7 @@ import type { ArtKind } from './artData';
 import type { Vec3 } from './transforms';
 
 /** Part names double as the keys of `finishOverrides` (C13): part name → material id. */
-export type PartRole = 'frame' | 'upholstery' | 'top' | 'leg' | 'fabric' | 'accent' | 'handle' | 'glass' | 'door' | 'foliage' | 'pot' | 'picture' | 'mirror';
+export type PartRole = 'frame' | 'upholstery' | 'top' | 'leg' | 'fabric' | 'accent' | 'handle' | 'glass' | 'door' | 'foliage' | 'pot' | 'picture' | 'mirror' | 'bulb';
 
 export type PartShape = 'box' | 'rbox' | 'cylinder' | 'taper' | 'ellipsoid';
 
@@ -44,6 +44,7 @@ export const ROLE_DEFAULTS: Record<PartRole, { colour: string; roughness: number
   pot: { colour: '#eeece6', roughness: 0.45, metalness: 0 },
   picture: { colour: '#c9c3b6', roughness: 0.55, metalness: 0 },
   mirror: { colour: '#dfe6ea', roughness: 0.05, metalness: 0.95 },
+  bulb: { colour: '#fff1d6', roughness: 0.4, metalness: 0 },
 };
 
 type Ext = [number, number]; // [min, max]
@@ -385,6 +386,32 @@ function artFrame(w: number, l: number, h: number, art: ArtKind): Part[] {
   ];
 }
 
+/** Ceiling fixtures hang from the top of their box: the lit face is at the bottom (y = 0). */
+function ceilingLight(w: number, l: number, h: number): Part[] {
+  return [
+    cyl('frame', [-w / 2, w / 2], [h * 0.45, h], [-l / 2, l / 2]), // the canopy against the ceiling
+    cyl('bulb', [-w * 0.46, w * 0.46], [0, h * 0.45], [-l * 0.46, l * 0.46]), // the diffuser
+  ];
+}
+
+function pendantLight(w: number, l: number, h: number): Part[] {
+  const shade = h * 0.3;
+  const cord = Math.min(0.012, w / 20);
+  return [
+    cyl('leg', [-cord / 2, cord / 2], [shade, h], [-cord / 2, cord / 2]),
+    cyl('frame', [-w * 0.12, w * 0.12], [h - 0.03, h], [-l * 0.12, l * 0.12]), // the rose on the ceiling
+    cyl('fabric', [-w / 2, w / 2], [0.02, shade], [-l / 2, l / 2]), // the shade
+    cyl('bulb', [-w * 0.42, w * 0.42], [0, 0.02], [-l * 0.42, l * 0.42]), // the lit underside
+  ];
+}
+
+function downlight(w: number, l: number, h: number): Part[] {
+  return [
+    cyl('frame', [-w / 2, w / 2], [h * 0.25, h], [-l / 2, l / 2]),
+    cyl('bulb', [-w * 0.36, w * 0.36], [0, h * 0.25], [-l * 0.36, l * 0.36]),
+  ];
+}
+
 function roundMirror(w: number, l: number, h: number): Part[] {
   const f = Math.min(0.04, w / 12);
   return [
@@ -447,6 +474,9 @@ const RECIPES: Record<string, Recipe> = {
   'art-portrait': (w, l, h) => artFrame(w, l, h, 'portrait'),
   'mirror-wall': mirror,
   'mirror-round': roundMirror,
+  'ceiling-light': ceilingLight,
+  'pendant-light': pendantLight,
+  downlight,
 };
 
 /** Parts of a furniture model at the given size. Unknown definitions get a single box. */

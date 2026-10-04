@@ -18,6 +18,8 @@ export interface Look {
   bump?: number;
   /** A built-in artwork drawn in full colour on the surface (pictures). */
   art?: { kind: ArtKind; width: number; height: number };
+  /** A glowing surface (a lit bulb): its own colour, bright. */
+  glow?: string;
 }
 
 /** The look of a part: a finish override on the instance (C13: part name → material id) wins over the part's default. */
@@ -49,6 +51,7 @@ export function realisticLookOf(
   palette?: Palette,
 ): Omit<Look, 'tint'> {
   if (part.role === 'glass' || part.role === 'mirror') return lookOf(part.role, undefined, materials);
+  if (part.role === 'bulb') return { ...lookOf('bulb', undefined, materials), glow: '#ffe6bf' };
   if (part.role === 'picture') {
     if (part.art && part.size) return { colour: '#ffffff', roughness: 0.55, metalness: 0, opacity: 1, art: { kind: part.art, ...artSize(part.size[0], part.size[1]) } };
     return lookOf('picture', undefined, materials);
@@ -89,13 +92,13 @@ export class MaterialCache {
   private readonly cache = new Map<string, THREE.MeshStandardMaterial>();
 
   get(look: Look): THREE.MeshStandardMaterial {
-    const key = `${look.colour}|${look.roughness}|${look.metalness}|${look.opacity}|${look.tint ?? ''}|${look.texture ?? ''}|${look.art ? `${look.art.kind}${look.art.width}x${look.art.height}` : ''}`;
+    const key = `${look.colour}|${look.roughness}|${look.metalness}|${look.opacity}|${look.tint ?? ''}|${look.texture ?? ''}|${look.glow ?? ''}|${look.art ? `${look.art.kind}${look.art.width}x${look.art.height}` : ''}`;
     let m = this.cache.get(key);
     if (!m) {
       m = new THREE.MeshStandardMaterial({
         color: look.colour, roughness: look.roughness, metalness: look.metalness,
         transparent: look.opacity < 1, opacity: look.opacity, depthWrite: look.opacity >= 1,
-        emissive: look.tint ? TINT[look.tint] : '#000000', emissiveIntensity: look.tint ? 0.35 : 0,
+        emissive: look.glow ?? (look.tint ? TINT[look.tint] : '#000000'), emissiveIntensity: look.glow ? 1.6 : look.tint ? 0.35 : 0,
         ...(look.texture ? (() => { const t = textureOf(look.texture); return { map: t, bumpMap: t, bumpScale: look.bump ?? 0.3 }; })() : {}),
         ...(look.art ? { map: artTexture(look.art.kind, look.art.width, look.art.height) } : {}),
       });

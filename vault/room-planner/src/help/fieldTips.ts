@@ -5,7 +5,7 @@ export const FIELD_TIPS: Record<string, string> = {
   Width: 'Size across the object, in metres. For a door or window this is the opening width.',
   Length: 'Size front to back, in metres.',
   Height: 'Size from bottom to top, in metres.',
-  Elevation: 'Height of the underside above the floor, in metres. A window sill sits at about 0.9 m; furniture normally 0; a picture hangs at about 1.3 m. Raise a small plant to a sideboard’s height to stand it on top.',
+  Elevation: 'Height of the underside above the floor, in metres. A window sill sits at about 0.9 m; furniture normally 0; a picture hangs at about 1.3 m. A small plant takes the height of what you drop it on.',
   Rotation: 'Turn the object in degrees. Rotate 45° (key R) is the quick way.',
   'Offset along wall': 'Where the opening sits along its wall: distance from the wall’s start to the centre of the opening, in metres.',
   'Swing angle': 'How far the door opens, in degrees. The swing area is kept clear of furniture.',

@@ -150,6 +150,14 @@ export function glyphFor(definitionId: string, w: number, l: number): Glyph {
       // seen from above a picture is a thin frame on the wall: a double line along its length
       shapes.push(line([-hw + 0.03, 0, hw - 0.03, 0], 'detail'));
       break;
+    case 'ceiling-light':
+    case 'pendant-light':
+    case 'downlight': {
+      const r = Math.min(w, l) / 2;
+      shapes.push(circle(0, 0, r * 0.9, 'detail'), circle(0, 0, r * 0.4, 'faint'));
+      for (let i = 0; i < 8; i++) { const a = (i * Math.PI) / 4; shapes.push(line([Math.cos(a) * r * 0.5, Math.sin(a) * r * 0.5, Math.cos(a) * r * 0.78, Math.sin(a) * r * 0.78], 'faint')); } // rays, all inside the outline
+      break;
+    }
     case 'rug-rect':
     case 'rug-runner': {
       const b = Math.min(0.12, w / 8, l / 8);

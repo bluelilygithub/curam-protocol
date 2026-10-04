@@ -14,6 +14,7 @@ import {
   cyclePick, marqueeSelect, pickAll, sameRef, type PickCycleState, type SelectionRef,
 } from '../engine/selection';
 import { generateSnapCandidates, rankSnapCandidates, wallFlushAngle, DEFAULT_SNAP_DISTANCE } from '../engine/snapping';
+import { isSettler, ridersOf, supportElevation } from '../engine/support';
 import { primaryViolation, validateFixture, validateInstance } from '../engine/validation';
 import type {
   Command, Fixture, FurnitureInstance, Project, Room, ValidationViolation, Vec2,
@@ -319,18 +320,33 @@ export class Interaction {
     }
     const picked = (start.hits ?? pickAll(room, start.world)).find((h) => h.kind === 'furniture' && ids.includes(h.id));
     const primary = picked?.id ?? insts[0].id;
+    // small pieces standing on what is being moved (a plant on a sideboard) travel with it
+    const riders = ridersOf(room, this.project!.furnitureDefinitions, insts);
+    const moving = [...insts, ...riders];
     this.state = {
-      t: 'drag', ids: insts.map((i) => i.id), primary, startWorld: start.world,
-      origins: new Map(insts.map((i) => [i.id, { ...i.position }])), last: null,
+      t: 'drag', ids: moving.map((i) => i.id), primary, startWorld: start.world,
+      origins: new Map(moving.map((i) => [i.id, { ...i.position }])), last: null,
     };
-    this.p.bus.set({ hiddenIds: insts.map((i) => i.id) });
+    this.p.bus.set({ hiddenIds: moving.map((i) => i.id) });
   }
 
   private moveCommand(ids: string[], origins: Map<string, Vec2>, delta: Vec2): Command {
     const cmds: Command[] = ids.map((id): Command => ({
       type: 'MoveFurniture', instanceId: id, from: { ...origins.get(id)! }, to: quantizeVec2(add(origins.get(id)!, delta)),
     }));
-    return cmds.length === 1 ? cmds[0] : { type: 'Composite', commands: cmds };
+    const cmd: Command = cmds.length === 1 ? cmds[0] : { type: 'Composite', commands: cmds };
+    return ids.length === 1 ? this.settled(cmd, ids[0], quantizeVec2(add(origins.get(ids[0])!, delta))) : cmd;
+  }
+
+  /** A small piece (a plant) dragged alone also takes the height of whatever is under it: the same single undoable step. */
+  private settled(cmd: Command, id: string, to: Vec2): Command {
+    const project = this.project;
+    const room = this.room;
+    const inst = room?.furniture.find((f) => f.id === id);
+    if (!project || !room || !inst || !isSettler(project.furnitureDefinitions, inst.definitionId)) return cmd;
+    const elevation = supportElevation(room, project.furnitureDefinitions, inst, to);
+    if (Math.abs(elevation - inst.elevation) < 1e-6) return cmd;
+    return { type: 'Composite', commands: [cmd, { type: 'UpdateFurniture', instanceId: id, from: { elevation: inst.elevation }, to: { elevation } }] };
   }
 
   private updateDrag(e: PointerEv): void {
@@ -391,9 +407,14 @@ export class Interaction {
     }
     const origin = s.origins.get(s.primary)!;
     const target = add(origin, last.value);
-    const result = s.ids.length === 1
+    let result = s.ids.length === 1
       ? proposeMove(project, s.ids[0], target)
       : proposeGroupMove(project, s.ids, last.value);
+    if (s.ids.length === 1) {
+      // a settler dropped on (or off) a surface changes height with the move
+      const cmd = this.moveCommand(s.ids, s.origins, last.value);
+      if (cmd.type === 'Composite' && evaluateCommand(project, cmd, s.ids).ok) result = { rejected: false, command: cmd };
+    }
     const label = s.ids.length === 1 ? LABELS.move(nameOf(project, s.ids[0])) : LABELS.group('Move', s.ids.length);
     this.commit(result, label);
     this.clearPreview();
@@ -563,8 +584,14 @@ export class Interaction {
     if (placing.template) return { ...structuredClone(placing.template), id: GHOST_ID, position: pos, rotation };
     const def = project.furnitureDefinitions.find((d) => d.id === placing.definitionId);
     if (!def) return null;
+    const probe: FurnitureInstance = {
+      id: GHOST_ID, definitionId: def.id, roomId: room.id, position: pos, elevation: 0, rotation,
+      width: def.defaultWidth, length: def.defaultLength, height: def.defaultHeight,
+    };
+    const elevation = def.settles ? supportElevation(room, project.furnitureDefinitions, probe, pos)
+      : def.mount === 'ceiling' ? Math.max(0, room.ceilingHeight - def.defaultHeight) : def.defaultElevation ?? 0;
     return {
-      id: GHOST_ID, definitionId: def.id, roomId: room.id, position: pos, elevation: def.defaultElevation ?? 0, rotation,
+      id: GHOST_ID, definitionId: def.id, roomId: room.id, position: pos, elevation, rotation,
       width: def.defaultWidth, length: def.defaultLength, height: def.defaultHeight,
     };
   }

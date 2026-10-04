@@ -35,9 +35,9 @@ await page.evaluate(([cx, cz]) => window.roomPlanner.camera.getState().setCamera
 for (const light of (process.env.LIGHTS ?? 'daylight,evening').split(',')) {
   await page.getByRole('button', { name: 'Render photo', exact: true }).click();
   await page.getByRole('dialog', { name: 'Render photo' }).waitFor();
-  await page.getByLabel('Size').selectOption(size);
-  await page.getByLabel('Quality').selectOption(quality);
-  await page.getByLabel('Lighting').selectOption(light);
+  await page.getByRole('dialog', { name: 'Render photo' }).getByLabel('Size', { exact: true }).selectOption(size);
+  await page.getByRole('dialog', { name: 'Render photo' }).getByLabel('Quality', { exact: true }).selectOption(quality);
+  await page.getByRole('dialog', { name: 'Render photo' }).getByLabel('Lighting', { exact: true }).selectOption(light);
   if (process.env.VIEW) await page.getByRole('dialog', { name: 'Render photo' }).getByLabel('View', { exact: true }).selectOption(process.env.VIEW);
   const t0 = Date.now();
   await page.getByRole('button', { name: 'Render', exact: true }).click();

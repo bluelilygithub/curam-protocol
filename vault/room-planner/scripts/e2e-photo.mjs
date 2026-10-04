@@ -46,8 +46,8 @@ check('the panel says what to expect under its title', /not a studio photograph/
 check('there is an eye-level view from inside the room', (await page.getByRole('dialog', { name: 'Render photo' }).getByLabel('View', { exact: true }).locator('option', { hasText: 'Inside the room' }).count()) > 0);
 check('no WebGL2 warning on this browser', (await page.getByText("can't render photos").count()) === 0);
 
-await page.getByLabel('Size').selectOption('sm');
-await page.getByLabel('Lighting').selectOption('daylight');
+await page.getByRole('dialog', { name: 'Render photo' }).getByLabel('Size', { exact: true }).selectOption('sm');
+await page.getByRole('dialog', { name: 'Render photo' }).getByLabel('Lighting', { exact: true }).selectOption('daylight');
 await page.getByRole('button', { name: 'Render', exact: true }).click();
 await page.locator('.photo-busy').waitFor({ timeout: 10000 });
 check('shows a plain progress message while it prepares', /\S/.test(await page.locator('.photo-busy').innerText()));
@@ -82,7 +82,7 @@ check('the 3D view is still there', (await page.locator('[data-testid=stage3d] c
 // a change to the design while rendering stops the render
 await page.getByRole('button', { name: 'Render photo', exact: true }).click();
 await page.getByRole('dialog', { name: 'Render photo' }).waitFor();
-await page.getByLabel('Size').selectOption('sm');
+await page.getByRole('dialog', { name: 'Render photo' }).getByLabel('Size', { exact: true }).selectOption('sm');
 await page.getByRole('button', { name: 'Render', exact: true }).click();
 await page.locator('.photo-busy').waitFor({ timeout: 10000 });
 await wait(300);

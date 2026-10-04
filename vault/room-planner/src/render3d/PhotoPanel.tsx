@@ -87,7 +87,7 @@ export function PhotoPanel() {
     if (!cam || unsupported) return;
     teardown();
     setProblem(null);
-    const t = new PathTracerTracer({ project: app.project, camera: cam, width: size.width, height: size.height, lighting, fov: source.startsWith('inside:') ? INSIDE_FOV : ORBIT_FOV });
+    const t = new PathTracerTracer({ project: app.project, camera: cam, width: size.width, height: size.height, lighting, fov: source.startsWith('inside:') ? INSIDE_FOV : ORBIT_FOV, lightsOn: app.ui.getState().lightsOn });
     tracer.current = t;
     holder.current?.replaceChildren(t.previewCanvas);
     const j = new PhotoJob(t, QUALITY_SAMPLES[quality]);
