@@ -25,6 +25,7 @@ export const Icons = {
   warn: <I><path d="M10 3L2 17h16zM10 8v4m0 2.5h.01" /></I>,
   panelLeft: <I><rect x="3" y="4" width="14" height="12" rx="1.5" /><path d="M8 4v12" /></I>,
   panelRight: <I><rect x="3" y="4" width="14" height="12" rx="1.5" /><path d="M12 4v12" /></I>,
+  compass: <I><circle cx="10" cy="10" r="7" /><path d="M12.8 7.2l-1.6 4-4 1.6 1.6-4z" /></I>,
   info: <I><circle cx="10" cy="10" r="7" /><path d="M10 9v5m0-7.5h.01" /></I>,
   rect: <I><rect x="3" y="5" width="14" height="10" rx="1" /></I>,
   pencil: <I><path d="M3 17l1-4 9-9 3 3-9 9zM12 5l3 3" /></I>,

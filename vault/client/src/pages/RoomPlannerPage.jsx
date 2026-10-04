@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 
 /**
  * Room Planner lives in its own app (vault/room-planner/, Vite + React 19 + Konva) and is built into
  * dist/room-planner-app/ by the root build. This page hosts it in the Vault shell, same pattern as ThemeBuilderPage.
- * The planner has no server API: it saves to this browser's localStorage and exports .json files.
+
  */
 const APP_URL = '/room-planner-app/';
 
 export default function RoomPlannerPage() {
+  // Settings → Room Planner Tour opens the page with ?tour=1; the planner (inside the frame) then runs its own tour
+  const wantsTour = new URLSearchParams(useLocation().search).has('tour');
   // 'checking' | 'ok' | 'missing' — a failed room-planner build must show a clear notice, not Vault's own page inside the frame
   const [state, setState] = useState('checking');
 
@@ -39,7 +42,7 @@ export default function RoomPlannerPage() {
     <div className="flex flex-col h-full min-h-0" style={{ height: '100%' }}>
       {state === 'ok' && (
         <iframe
-          src={`${APP_URL}?embedded=1`}
+          src={`${APP_URL}?embedded=1${wantsTour ? '&tour=1' : ''}`}
           title="Room Planner"
           allow="fullscreen"
           allowFullScreen

@@ -33,12 +33,16 @@ export function Toolbar() {
 
   return (
     <header className="toolbar" role="toolbar" aria-label="Main toolbar">
-      <div className="brand" title="Room Planner">
+      <div className="brand">
         <span className="brand-mark" aria-hidden="true" />
         <span className="brand-name">Room Planner</span>
+        <span className="title-help">
+          <button onClick={() => void app.startTour()} aria-label="Take the Room Planner tour" title="Take the Room Planner tour">{Icons.compass}</button>
+          <button onClick={() => app.ui.getState().setInfoOpen(true)} aria-label="How this works" title="How this works">{Icons.info}</button>
+        </span>
       </div>
 
-      <div className="group" role="group" aria-label="Tools">
+      <div className="group" role="group" aria-label="Tools" data-tour="rp-tools">
         {TOOLS.map((t) => (
           <button
             key={t.tool}
@@ -54,7 +58,7 @@ export function Toolbar() {
         ))}
       </div>
 
-      <div className="group seg3d" role="group" aria-label="Switch view">
+      <div className="group seg3d" role="group" aria-label="Switch view" data-tour="rp-view">
         <button className={`btn ${viewMode === '2d' ? 'active' : ''}`} aria-pressed={viewMode === '2d'} title="2D plan view (V)" onClick={() => app.setViewMode('2d')}>
           <span className="label">2D</span>
         </button>
@@ -84,7 +88,7 @@ export function Toolbar() {
 
       <div className="spacer" />
 
-      <div className="group" role="group" aria-label="Project">
+      <div className="group" role="group" aria-label="Project" data-tour="rp-project">
         <button className="btn project-button" onClick={() => app.ui.getState().setProjectsOpen(true)} title="Projects: new, open, rename, duplicate, delete, import, export">
           {Icons.file}<span className="label">{name || 'Projects'}</span>
         </button>

@@ -98,7 +98,7 @@ export function StatusBar() {
             ))}
           </ul>
           {selection.length === 1 && selection[0].kind === 'furniture' && relevant.some((v) => v.severity === 'hard') && (
-            <button className="btn primary" onClick={() => { app.fixPosition(selection[0].id); app.ui.getState().setPopover(false); }}>Fix position</button>
+            <button className="btn primary" title="Move this piece to the nearest spot where it fits" onClick={() => { app.fixPosition(selection[0].id); app.ui.getState().setPopover(false); }}>Fix position</button>
           )}
         </div>
       )}

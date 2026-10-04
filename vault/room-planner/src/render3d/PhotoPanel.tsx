@@ -140,28 +140,28 @@ export function PhotoPanel() {
             {snap.state === 'building' && <p className="photo-hint" role="status">Building the scene…</p>}
           </div>
           <div className="photo-controls">
-            <label>View
+            <label title="Which camera position to photograph from: the 3D view as it is now, or one of your saved views">View
               <select value={source} onChange={(e) => setSource(e.target.value)} disabled={running} aria-label="View">
                 <option value="current">Current 3D view</option>
                 {views.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
               </select>
             </label>
-            <label>Lighting
+            <label title="Daylight is bright with a clear sun; Overcast is soft and even; Evening is low and warm">Lighting
               <select value={lighting} onChange={(e) => setLighting(e.target.value as PhotoLighting)} disabled={running} aria-label="Lighting">
                 {Object.values(LIGHTING).map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
               </select>
             </label>
-            <label>Size
+            <label title="Larger pictures take longer. 640 × 360 is a quick look; 1920 × 1080 suits most screens; 4K is for print">Size
               <select value={sizeId} onChange={(e) => setSizeId(e.target.value)} disabled={running} aria-label="Size">
                 {SIZE_PRESETS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
               </select>
             </label>
-            <label>Quality
+            <label title="More passes give a smoother picture and take longer. Draft to check, Good for a client, Best for the finished piece">Quality
               <select value={quality} onChange={(e) => setQuality(e.target.value as PhotoQuality)} disabled={running} aria-label="Quality">
                 {(Object.keys(QUALITY_LABELS) as PhotoQuality[]).map((q) => <option key={q} value={q}>{QUALITY_LABELS[q]} ({QUALITY_SAMPLES[q]} passes)</option>)}
               </select>
             </label>
-            <label className="check"><input type="checkbox" checked={caption} onChange={(e) => setCaption(e.target.checked)} /> Add a caption (project, room, date)</label>
+            <label className="check" title="Adds a thin strip under the picture with the project name, room and date"><input type="checkbox" checked={caption} onChange={(e) => setCaption(e.target.checked)} /> Add a caption (project, room, date)</label>
 
             {(running || finished) && (
               <div className="photo-progress" role="status" aria-live="polite">
@@ -176,11 +176,11 @@ export function PhotoPanel() {
             {problem && <p className="storage-note" role="alert">{problem}</p>}
 
             <div className="photo-actions">
-              {!running && <button className="btn primary" onClick={start} disabled={!!unsupported}>{finished || snap.state === 'failed' ? 'Render again' : 'Render'}</button>}
-              {(snap.state === 'rendering' || snap.state === 'paused') && <button className="btn" onClick={pauseResume}>{snap.state === 'paused' ? 'Resume' : 'Pause'}</button>}
-              {running && <button className="btn" onClick={() => job.current?.stop('Stopped')}>Stop</button>}
-              <button className="btn primary" onClick={() => void download()} disabled={!hasPicture}>Download PNG</button>
-              <button className="btn" onClick={close}>Back to 3D</button>
+              {!running && <button className="btn primary" title="Start making the picture. Your design is not changed." onClick={start} disabled={!!unsupported}>{finished || snap.state === 'failed' ? 'Render again' : 'Render'}</button>}
+              {(snap.state === 'rendering' || snap.state === 'paused') && <button className="btn" title="Pause or resume the render; the picture so far is kept" onClick={pauseResume}>{snap.state === 'paused' ? 'Resume' : 'Pause'}</button>}
+              {running && <button className="btn" title="Stop here and keep the picture so far (Esc)" onClick={() => job.current?.stop('Stopped')}>Stop</button>}
+              <button className="btn primary" title="Save the picture as a PNG file" onClick={() => void download()} disabled={!hasPicture}>Download PNG</button>
+              <button className="btn" title="Close this panel and return to the 3D view" onClick={close}>Back to 3D</button>
             </div>
             <p className="storage-note">Your design is not changed. Esc stops a render, then closes this panel. Size {size.width} × {size.height}.</p>
           </div>

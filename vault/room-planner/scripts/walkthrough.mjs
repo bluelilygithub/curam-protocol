@@ -10,6 +10,7 @@ const URL = process.env.RP_URL ?? 'http://127.0.0.1:5174/room-planner-app/';
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 860 }, deviceScaleFactor: 1 });
+await ctx.addInitScript(() => { try { localStorage.setItem('vault_room_planner_info_seen', '1'); } catch { /* ignore */ } }); // the How This Works modal would cover the page on a first visit
 const page = await ctx.newPage();
 const problems = [];
 page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
@@ -82,7 +83,7 @@ await page.mouse.up();
 
 // clearances
 await click(2.0, 4.1);
-await page.getByTitle('Show clearance zones of the selection').click();
+await page.locator('[title="Show clearance zones of the selection"], [data-tip="Show clearance zones of the selection"]').click();
 await shot('09-clearance-selected');
 
 // high object (dashed) and invalid placement

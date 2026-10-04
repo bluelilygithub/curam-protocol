@@ -42,6 +42,7 @@ const shot = async (page, name) => { if (out) await page.screenshot({ path: join
 // ================================================================== A. this browser
 {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 860 } });
+  await ctx.addInitScript(() => { try { localStorage.setItem('vault_room_planner_info_seen', '1'); } catch { /* ignore */ } }); // the How This Works modal would cover the page on a first visit
   const page = await ctx.newPage();
   watch(page);
   await page.goto(URL);
@@ -209,6 +210,7 @@ const shot = async (page, name) => { if (out) await page.screenshot({ path: join
 // ================================================================== B. a Vault account (fake /api/room-projects)
 {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 860 } });
+  await ctx.addInitScript(() => { try { localStorage.setItem('vault_room_planner_info_seen', '1'); } catch { /* ignore */ } }); // the How This Works modal would cover the page on a first visit
   await ctx.addInitScript(() => { if (!localStorage.getItem('vault-auth') && !localStorage.getItem('__cleared')) localStorage.setItem('vault-auth', JSON.stringify({ state: { token: 'tok-123', user: { id: 1 } }, version: 0 })); });
   const page = await ctx.newPage();
   watch(page, ['401', 'Failed to load resource']);
@@ -287,6 +289,7 @@ const shot = async (page, name) => { if (out) await page.screenshot({ path: join
 // ================================================================== C. signed in but Vault not reachable → this browser
 {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 860 } });
+  await ctx.addInitScript(() => { try { localStorage.setItem('vault_room_planner_info_seen', '1'); } catch { /* ignore */ } }); // the How This Works modal would cover the page on a first visit
   await ctx.addInitScript(() => { localStorage.setItem('vault-auth', JSON.stringify({ state: { token: 'tok-123' }, version: 0 })); });
   const page = await ctx.newPage();
   watch(page, ['Failed to load resource', 'ERR_FAILED', 'net::']);

@@ -6,6 +6,7 @@ import { validateRoom } from '../engine/validation';
 import { describeViolation, nameOf } from '../interaction/statusMessages';
 import type { ValidationViolation, Project } from '../engine/types';
 import { useApp, useProject, useUi } from './AppContext';
+import { tipFor } from '../help/fieldTips';
 import { Icons } from './icons';
 import {
   previewFixtureEdit, previewFurnitureEdit, previewVertexPosition, previewWallLength, previewWallThickness, readFixtureField, readFurnitureField,
@@ -59,7 +60,7 @@ function Field({ label, unit, committed, mixed, unavailable, preview, onCommit, 
     },
   };
   return (
-    <label className={`field ${cls} ${unavailable ? 'disabled' : ''}`}>
+    <label className={`field ${cls} ${unavailable ? 'disabled' : ''}`} title={tipFor(label)}>
       <span className="field-label">{label}</span>
       <span className="field-control">
         {kind === 'area' ? <textarea rows={2} {...common} /> : <input inputMode={kind === 'number' ? 'decimal' : 'text'} spellCheck={false} {...common} />}
@@ -108,7 +109,7 @@ function RoomNameField({ id, name }: { id: string; name: string }) {
     else app.renameRoom(id, next);
   };
   return (
-    <label className="field">
+    <label className="field" title={tipFor('Room name')}>
       <span className="field-label">Room name</span>
       <input
         value={draft} maxLength={80} aria-label="Room name"
@@ -132,7 +133,7 @@ export function Inspector() {
   const validation = useMemo(() => (project && room ? validateRoom(room, project.furnitureDefinitions) : null), [project, room]);
 
   if (!project || !room) {
-    return <aside className="panel right" aria-label="Inspector"><div className="panel-head"><h2>Inspector</h2></div><div className="panel-body"><p className="hint">Nothing to inspect yet.</p></div></aside>;
+    return <aside className="panel right" aria-label="Inspector" data-tour="rp-inspector"><div className="panel-head"><h2>Inspector</h2></div><div className="panel-body"><p className="hint">Nothing to inspect yet.</p></div></aside>;
   }
 
   const furnitureIds = selection.filter((s) => s.kind === 'furniture').map((s) => s.id);
@@ -190,7 +191,7 @@ export function Inspector() {
           {group && <p className="hint">Position is changed by moving the group.</p>}
         </Section>
         <Section title="Appearance">
-          <label className="field">
+          <label className="field" title={tipFor('Finish')}>
             <span className="field-label">Finish</span>
             <span className="field-control">
               <select
@@ -206,7 +207,7 @@ export function Inspector() {
         </Section>
         <Section title="Constraints">
           <ViolationList items={violations} project={project} />
-          {hard && !group && <button className="btn primary" onClick={() => app.fixPosition(ids[0])}>Fix position</button>}
+          {hard && !group && <button className="btn primary" title="Move this piece to the nearest spot where it fits: no overlaps, clear of doors and walls" onClick={() => app.fixPosition(ids[0])}>Fix position</button>}
         </Section>
         <Section title="Metadata">
           {txt('meta.vendor', 'Vendor')}
@@ -216,9 +217,9 @@ export function Inspector() {
           {txt('meta.notes', 'Notes', 'area')}
         </Section>
         <div className="actions">
-          <button className="btn" onClick={() => app.interaction.keyDown({ key: 'r', ctrl: false, shift: false, alt: false })}>{Icons.rotate}<span className="label">Rotate 45°</span></button>
-          <button className="btn" onClick={() => app.interaction.duplicate(ids)}>{Icons.copy}<span className="label">Duplicate</span></button>
-          <button className="btn danger" onClick={() => app.interaction.keyDown({ key: 'Delete', ctrl: false, shift: false, alt: false })}>{Icons.trash}<span className="label">Delete</span></button>
+          <button className="btn" title="Turn the selected pieces by 45° (R)" onClick={() => app.interaction.keyDown({ key: 'r', ctrl: false, shift: false, alt: false })}>{Icons.rotate}<span className="label">Rotate 45°</span></button>
+          <button className="btn" title="Make a copy beside this one (Ctrl+D)" onClick={() => app.interaction.duplicate(ids)}>{Icons.copy}<span className="label">Duplicate</span></button>
+          <button className="btn danger" title="Remove the selected pieces (Delete). Undo brings them back." onClick={() => app.interaction.keyDown({ key: 'Delete', ctrl: false, shift: false, alt: false })}>{Icons.trash}<span className="label">Delete</span></button>
         </div>
       </>
     );
@@ -252,7 +253,7 @@ export function Inspector() {
           </Section>
           {fx.type === 'door' && (
             <Section title="Door">
-              <label className="field">
+              <label className="field" title={tipFor('Hinge side')}>
                 <span className="field-label">Hinge side</span>
                 <span className="field-control">
                   <select value={fx.hingeSide ?? 'left'} onChange={(e) => commit(previewFixtureEdit(project, fx.id, 'hingeSide', e.target.value))}>
@@ -353,7 +354,7 @@ export function Inspector() {
               <button className="btn" onClick={() => setConfirmDelete(false)}>No</button>
             </span>
           ) : (
-            <button className="btn danger" onClick={() => setConfirmDelete(true)}>
+            <button className="btn danger" title="Delete this room and everything in it. You are asked to confirm." onClick={() => setConfirmDelete(true)}>
               {Icons.trash}<span className="label">Delete room</span>
             </button>
           )}
@@ -363,7 +364,7 @@ export function Inspector() {
   }
 
   return (
-    <aside className="panel right" aria-label="Inspector">
+    <aside className="panel right" aria-label="Inspector" data-tour="rp-inspector">
       <div className="panel-head"><h2>Inspector</h2></div>
       <div className="panel-body" key={selection.map((s) => `${s.kind}:${s.id}`).join(',')}>{body}</div>
     </aside>

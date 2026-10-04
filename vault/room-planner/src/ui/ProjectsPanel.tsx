@@ -57,7 +57,7 @@ export function ProjectsPanel() {
             aria-label="New project name" placeholder="New project name" value={name} maxLength={120} autoFocus
             onChange={(e) => setName(e.target.value)}
           />
-          <button className="btn primary" type="submit" disabled={busy || !ready}>New project</button>
+          <button className="btn primary" type="submit" title="Start an empty project with the name you typed" disabled={busy || !ready}>New project</button>
         </form>
 
         <ul className="project-list" aria-label="Your projects">
@@ -86,9 +86,9 @@ export function ProjectsPanel() {
                 </span>
               ) : (
                 <span className="project-actions">
-                  <button className="btn" onClick={() => { setRenaming(e.id); setDraft(e.name); }} aria-label={`Rename ${e.name}`}>Rename</button>
-                  <button className="btn" disabled={busy} onClick={() => void run(() => app.duplicateProject(e.id))} aria-label={`Duplicate ${e.name}`}>Duplicate</button>
-                  <button className="btn danger" onClick={() => setDeleting(e.id)} aria-label={`Delete ${e.name}`}>Delete</button>
+                  <button className="btn" onClick={() => { setRenaming(e.id); setDraft(e.name); }} aria-label={`Rename ${e.name}`} title="Change this project’s name">Rename</button>
+                  <button className="btn" disabled={busy} onClick={() => void run(() => app.duplicateProject(e.id))} aria-label={`Duplicate ${e.name}`} title="Make a copy of this project with all its rooms">Duplicate</button>
+                  <button className="btn danger" onClick={() => setDeleting(e.id)} aria-label={`Delete ${e.name}`} title="Delete this project for good. You are asked to confirm.">Delete</button>
                 </span>
               )}
             </li>

@@ -153,10 +153,18 @@ export function createApp(storage: StorageLike) {
     try { if (typeof document !== 'undefined' && document.fullscreenElement) void document.exitFullscreen().catch(() => undefined); } catch { /* ignore */ }
   }
 
-  return {
+  const api = {
     project, ui, view, bus, interaction, camera,
 
     fitToRoom,
+
+    // ------------------------------------------------------------ help (tour; the info modal is plain UI state)
+
+    /** Start the guided tour (Shepherd is loaded on first use, so it stays out of the main bundle). */
+    async startTour(): Promise<void> {
+      const m = await import('./help/roomPlannerTour');
+      m.startRoomPlannerTour(api as unknown as App);
+    },
 
     // ------------------------------------------------------------ 3D view (M4)
 
@@ -364,6 +372,7 @@ export function createApp(storage: StorageLike) {
     notify,
     start,
   };
+  return api;
 }
 
 export type App = ReturnType<typeof createApp>;

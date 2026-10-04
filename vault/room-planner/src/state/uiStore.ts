@@ -40,6 +40,8 @@ export interface UiState {
   projectsOpen: boolean;
   /** The Render photo panel (path-traced still image, M4.7). */
   photoOpen: boolean;
+  /** The How This Works modal. */
+  infoOpen: boolean;
   /** Where the fly-through is: stop index (0-based) of `total`. */
   tourProgress: { stop: number; total: number } | null;
   tool: Tool;
@@ -72,6 +74,7 @@ export interface UiActions {
   setImmersive(on: boolean): void;
   setProjectsOpen(on: boolean): void;
   setPhotoOpen(on: boolean): void;
+  setInfoOpen(on: boolean): void;
   setTourProgress(p: { stop: number; total: number } | null): void;
   setTool(t: Tool): void;
   select(refs: SelectionRef[]): void;
@@ -104,6 +107,7 @@ export function createUiStore(): UiStore {
     immersive: false,
     projectsOpen: false,
     photoOpen: false,
+    infoOpen: false,
     tourProgress: null,
     tool: 'select',
     selection: [],
@@ -129,6 +133,7 @@ export function createUiStore(): UiStore {
     setTourLoop: (tourLoop) => set({ tourLoop }),
     setImmersive: (immersive) => set({ immersive }),
     setProjectsOpen: (projectsOpen) => set({ projectsOpen }),
+    setInfoOpen: (infoOpen) => set({ infoOpen }),
     setPhotoOpen: (photoOpen) => set(photoOpen ? { photoOpen, tourPlaying: false, walking: false } : { photoOpen }),
     setTourProgress(p) {
       const cur = get().tourProgress;

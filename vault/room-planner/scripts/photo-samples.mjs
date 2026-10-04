@@ -11,7 +11,9 @@ const file = process.argv[5] ?? 'C:/Users/micha/Downloads/room-1.roomplan (4).js
 mkdirSync(out, { recursive: true });
 const base = JSON.parse(readFileSync(file, 'utf8'));
 const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
+const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+await ctx.addInitScript(() => { try { localStorage.setItem('vault_room_planner_info_seen', '1'); } catch { /* ignore */ } }); // the How This Works modal would cover the page on a first visit
+const page = await ctx.newPage();
 await page.goto(URL);
 await page.waitForFunction(() => window.roomPlanner);
 const q = JSON.parse(JSON.stringify(base));

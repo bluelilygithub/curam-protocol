@@ -17,7 +17,7 @@ export function EmptyState() {
           <li>Click the <em>first</em> corner again, or press <kbd>Enter</kbd>, to close the room.</li>
           <li><kbd>Backspace</kbd> removes the last corner · <kbd>Esc</kbd> twice gives up.</li>
         </ol>
-        <button className="btn" onClick={() => app.cancelNewRoom()}>Cancel</button>
+        <button className="btn" title="Go back to your other rooms" onClick={() => app.cancelNewRoom()}>Cancel</button>
       </div>
     );
   }
@@ -42,7 +42,7 @@ export function EmptyState() {
         <h1>Start with a room</h1>
         <p className="lede">Begin with a ready-made rectangle, or draw your own shape corner by corner. Then add wall thickness, doors, windows and furniture.</p>
         <div className="empty-actions">
-          <button className="btn primary big" onClick={() => app.startRectangle()}>
+          <button className="btn primary big" title="Place a 4 × 5 m rectangular room. You can change every wall length afterwards." onClick={() => app.startRectangle()}>
             {Icons.rect}<span>Start from a rectangle</span><small>4 × 5 m, change it later</small>
           </button>
           <button className="btn big" onClick={() => app.startDrawing()} title="Click each corner of the room">

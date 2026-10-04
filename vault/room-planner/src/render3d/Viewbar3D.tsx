@@ -44,7 +44,7 @@ export function Viewbar3D() {
   if (immersive) {
     return (
       <div className="immersive-bar" role="toolbar" aria-label="Presentation controls">
-        <button className="btn" onClick={() => app.toggleTour()} aria-pressed={playing}><span className="label">{playing ? 'Pause tour' : 'Play tour'}</span></button>
+        <button className="btn" title="Play or pause the fly-through (Space)" onClick={() => app.toggleTour()} aria-pressed={playing}><span className="label">{playing ? 'Pause tour' : 'Play tour'}</span></button>
         {progress && summary && <span className="tour-note" role="status">Stop {progress.stop + 1} of {progress.total}</span>}
         <button className="btn" onClick={() => app.exitImmersive()} title="Esc"><span className="label">Exit full screen</span></button>
       </div>
@@ -58,7 +58,7 @@ export function Viewbar3D() {
           <span className="label">Walk</span>
         </button>
       </div>
-      <div className="group" role="group" aria-label="Cinematic">
+      <div className="group" role="group" aria-label="Cinematic" data-tour="rp-cinematic">
         <button className={`btn ${cinematic ? 'active' : ''}`} aria-pressed={cinematic} onClick={() => app.setCinematic(!cinematic)} title="Cinematic: clay look and a fly-through of your room">
           <span className="label">Cinematic</span>
         </button>
@@ -79,7 +79,7 @@ export function Viewbar3D() {
           </>
         )}
       </div>
-      <div className="group" role="group" aria-label="Photo">
+      <div className="group" role="group" aria-label="Photo" data-tour="rp-photo">
         <button className="btn" onClick={() => app.ui.getState().setPhotoOpen(true)} title="Make a photographic picture of this room to download (takes a minute or more)">
           <span className="label">Render photo</span>
         </button>

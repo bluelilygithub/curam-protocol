@@ -1,6 +1,6 @@
 ﻿import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { createApp } from './createApp';
-import { AppContext, useProject, useUi } from './ui/AppContext';
+import { AppContext, useApp, useProject, useUi } from './ui/AppContext';
 import { EmptyState } from './ui/EmptyState';
 import { Hud } from './ui/Hud';
 import { Inspector } from './ui/Inspector';
@@ -11,11 +11,26 @@ import { LibraryPanel } from './ui/LibraryPanel';
 import { Stage2D } from './ui/Stage2D';
 import { StatusBar } from './ui/StatusBar';
 import { Toolbar } from './ui/Toolbar';
+import { InfoModal } from './help/InfoModal';
+import { INFO_SEEN_KEY, TOUR_KEY, safeGet, safeRemove } from './help/helpKeys';
+import { TooltipHost } from './help/TooltipHost';
 
 const Viewport3D = lazy(() => import('./render3d/Viewport3D'));
 const PhotoPanel = lazy(() => import('./render3d/PhotoPanel'));
 
 function Shell() {
+  const app = useApp();
+  // First visit: show How This Works once. Vault's Settings page opens the planner with ?tour=1 to retake the tour instead.
+  useEffect(() => {
+    const wantsTour = new URLSearchParams(window.location.search).has('tour');
+    if (wantsTour) {
+      safeRemove(TOUR_KEY);
+      const t = window.setTimeout(() => void app.startTour(), 600);
+      return () => window.clearTimeout(t);
+    }
+    if (!safeGet(INFO_SEEN_KEY)) app.ui.getState().setInfoOpen(true);
+    return undefined;
+  }, [app]);
   const hasRoom = useProject((s) => !!s.project?.rooms.length);
   const viewMode = useUi((s) => s.viewMode);
   const immersive = useUi((s) => s.immersive);
@@ -29,7 +44,7 @@ function Shell() {
     <div className={`app ${leftOpen ? 'left-open' : ''} ${rightOpen ? 'right-open' : ''} ${immersive ? 'immersive' : ''}`}>
       <Toolbar />
       {leftOpen && <LibraryPanel />}
-      <main className="viewport">
+      <main className="viewport" data-tour="rp-stage">
         <div className={`stage-slot ${viewMode === '2d' ? '' : 'inactive'}`}><Stage2D /></div>
         {load3d && (
           <Suspense fallback={<div className="loading3d">Loading 3D view…</div>}>
@@ -43,6 +58,8 @@ function Shell() {
       {rightOpen && <Inspector />}
       <StatusBar />
       <ProjectsPanel />
+      <InfoModal />
+      <TooltipHost />
       {photoOpen && <Suspense fallback={null}><PhotoPanel /></Suspense>}
     </div>
   );

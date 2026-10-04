@@ -17,6 +17,7 @@ const near = (a, b, tol = 0.011) => Math.abs(a - b) <= tol;
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 860 }, acceptDownloads: true });
+await ctx.addInitScript(() => { try { localStorage.setItem('vault_room_planner_info_seen', '1'); } catch { /* ignore */ } }); // the How This Works modal would cover the page on a first visit
 const page = await ctx.newPage();
 const problems = [];
 page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
@@ -227,14 +228,14 @@ check('the release committed exactly one project update', after.p === 1, JSON.st
 
 // lock
 await click(sofa0.x - 0.4, sofa0.y - 0.3);
-await page.getByTitle('Lock in place').first().click();
+await page.locator('[title="Lock in place"], [data-tip="Lock in place"]').first().click();
 s = await S();
 check('lock is an undoable UpdateFurniture', s.furniture['sofa-3'].locked && s.undo === 'Lock 3-seat sofa');
 const lockedBefore = await S();
 await drag([sofa0.x - 0.4, sofa0.y - 0.3], [2.5, 3.5]);
 s = await S();
 check('a locked object does not move and says why', s.hist === lockedBefore.hist && /locked/.test((await page.locator('.statusbar').innerText())), await page.locator('.statusbar').innerText());
-await page.getByTitle('Unlock').first().click();
+await page.locator('[title="Unlock"], [data-tip="Unlock"]').first().click();
 
 // metadata
 await click(s.furniture['sofa-3'].x, s.furniture['sofa-3'].y);
@@ -249,7 +250,7 @@ check('undo reverts the metadata edit', s.furniture['sofa-3'].meta === null);
 
 // ------------------------------------------------------------------ 5. clearance overlay, marquee, group ops
 await click(s.furniture['sofa-3'].x, s.furniture['sofa-3'].y);
-await page.getByTitle('Show clearance zones of the selection').click();
+await page.locator('[title="Show clearance zones of the selection"], [data-tip="Show clearance zones of the selection"]').click();
 await page.waitForTimeout(200); // the scene redraws on the next animation frame
 const zones = await nodes(() => window.roomPlannerRenderer.stage.find('Line').filter((l) => l.closed() && (l.dash?.() ?? []).length === 2 && l.fill() && String(l.fill()).startsWith('rgba(245,158,11')).length);
 check("clearance toggle draws the selected object's zones", zones >= 1, JSON.stringify(await ev(() => ({
@@ -258,7 +259,7 @@ check("clearance toggle draws the selected object's zones", zones >= 1, JSON.str
   dashed: window.roomPlannerRenderer.stage.find('Line').filter((l) => (l.dash?.() ?? []).length === 2).map((l) => String(l.fill())),
 }))));
 await shot('e06-clearance');
-await page.getByTitle('Show clearance zones of the selection').click();
+await page.locator('[title="Show clearance zones of the selection"], [data-tip="Show clearance zones of the selection"]').click();
 
 await page.keyboard.press('Escape');
 before = await S();
@@ -436,6 +437,7 @@ await shot('e13-after-m3');
 
 // ------------------------------------------------------------------ 7. touch targets on a coarse-pointer device
 const touch = await browser.newContext({ viewport: { width: 1180, height: 820 }, hasTouch: true, isMobile: true });
+await touch.addInitScript(() => { try { localStorage.setItem('vault_room_planner_info_seen', '1'); } catch { /* ignore */ } }); // the How This Works modal would cover the page on a first visit
 const tp = await touch.newPage();
 await tp.goto(URL);
 await tp.waitForSelector('[data-testid=stage] canvas');

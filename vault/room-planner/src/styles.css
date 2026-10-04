@@ -60,7 +60,7 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--co
 .brand { display: flex; align-items: center; gap: 9px; padding-right: 10px; margin-right: 2px; border-right: 1px solid var(--color-border); height: 28px; flex: none; }
 .brand-mark { width: 18px; height: 14px; border: 2px solid var(--color-text); position: relative; }
 .brand-mark::after { content: ""; position: absolute; left: 3px; top: 3px; width: 6px; height: 4px; background: var(--color-primary); }
-[data-embedded] .brand { display: none; }
+[data-embedded] .brand-mark { display: none; }
 .brand-name { font-family: var(--font-display); font-size: 16px; letter-spacing: .02em; white-space: nowrap; }
 .group { display: flex; align-items: center; gap: 2px; padding: 3px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 8px; flex: none; }
 .spacer { flex: 1; min-width: 8px; }
@@ -316,3 +316,23 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--co
 .photo-progress .fill { height: 100%; background: var(--color-primary); transition: width 200ms; }
 .photo-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 @media (max-width: 760px) { .photo-body { grid-template-columns: 1fr; } }
+
+/* Planner tooltip (same look as Vault's Tooltip) */
+.rp-tooltip { position: fixed; z-index: 30; pointer-events: none; max-width: 240px; padding: 6px 10px; border-radius: 8px; font-size: 11px; line-height: 1.4;
+  background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border); box-shadow: 0 6px 18px rgba(26,26,26,.18); animation: rp-tip-in 200ms; }
+@keyframes rp-tip-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* Info modal */
+.info-modal { width: min(560px, 100%); }
+.info-title { display: flex; align-items: center; gap: 8px; font: 600 15px var(--font-ui) !important; }
+.info-body { padding: 8px 16px 4px; overflow: auto; font-size: 13px; line-height: 1.55; }
+.info-card { display: grid; gap: 8px; padding: 10px 12px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; }
+.info-card p, .info-body p { margin: 0; }
+.info-foot { margin-top: 10px !important; color: var(--color-muted); font-size: 12px; }
+
+/* Help buttons beside the title (compass + info), like Vault's page headers */
+.title-help { display: inline-flex; align-items: center; gap: 6px; margin-left: 6px; }
+.title-help button { all: unset; cursor: pointer; display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: var(--color-muted); transition: color 200ms, opacity 200ms; }
+.title-help button:hover, .title-help button:focus-visible { color: var(--color-primary); }
+.title-help button svg { width: 15px; height: 15px; }
+@media (pointer: coarse) { .title-help button { width: var(--ctl); height: var(--ctl); } }

@@ -51,6 +51,10 @@ Exports are built from the domain model (Spec §10), never from screenshots, so 
 
 Open points to settle at M5 start: where PDF is produced (client-side with the same drawing code, or server-side like Finance's `invoicePdf.js` via react-pdf, which Vault already ships); font embedding; whether exports from the library (saved plans) can be re-generated without opening the plan; and which paper sizes/scales to offer.
 
+### Help
+
+The compass beside the title starts a guided tour (11 steps); the (i) opens How This Works, which also opens by itself the first time. Hover any button or field for an explanation. Vault's Settings page has a Room Planner Tour card to retake the tour.
+
 ### Render photo (M4.7)
 
 In the 3D view press **Render photo**. Pick the view (the current 3D view or any saved view), the lighting (Daylight, Overcast, Evening), the size (640 x 360 quick look up to 4K) and the quality (Draft 64 passes, Good 256, Best 1024), then **Render**. The picture starts grainy and sharpens while it works; a bar shows the progress and the time left, measured from the real speed. **Pause**, **Stop** (keeps the picture so far) and **Download PNG** (with an optional caption: project, room, date; file name `<project>-<room>-<date>.png`). Esc stops a render, then closes the panel. Your design is never changed; if it changes while rendering, the render stops. It needs WebGL2 with float render targets; otherwise the panel says so and the Realistic 3D view still works. Draft is visibly grainy in shaded areas; use Good for a client. Cut-away walls are left out of the picture just as in Cinematic, so the room is lit from the camera's side.

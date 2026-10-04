@@ -22,7 +22,7 @@ export function RoomBar() {
   const drawing = rooms.length > 0 && activeId === null;
 
   return (
-    <div className="roombar" role="toolbar" aria-label="Rooms">
+    <div className="roombar" role="toolbar" aria-label="Rooms" data-tour="rp-rooms">
       {rooms.map((r) => (
         <span key={r.id} className={`room-tab ${r.id === activeId ? 'active' : ''}`}>
           {renaming === r.id ? (
@@ -60,9 +60,9 @@ export function RoomBar() {
         </button>
         {adding && (
           <div className="menu" role="menu">
-            <button role="menuitem" className="btn" onClick={() => { setAdding(false); app.startRectangle(); }}>Rectangle (4 × 5 m)</button>
-            <button role="menuitem" className="btn" onClick={() => { setAdding(false); app.startDrawing(); }}>Draw a room</button>
-            <button role="menuitem" className="btn" disabled={!activeId} onClick={() => { setAdding(false); app.duplicateRoom(); }}>Copy of this room</button>
+            <button role="menuitem" className="btn" title="Add a ready-made 4 × 5 m room" onClick={() => { setAdding(false); app.startRectangle(); }}>Rectangle (4 × 5 m)</button>
+            <button role="menuitem" className="btn" title="Click each corner to draw a room of any shape" onClick={() => { setAdding(false); app.startDrawing(); }}>Draw a room</button>
+            <button role="menuitem" className="btn" title="Add a copy of the room you are in, with its furniture" disabled={!activeId} onClick={() => { setAdding(false); app.duplicateRoom(); }}>Copy of this room</button>
           </div>
         )}
       </span>

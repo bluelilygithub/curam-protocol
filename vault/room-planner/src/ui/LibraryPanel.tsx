@@ -54,15 +54,15 @@ export function LibraryPanel() {
     placing?.kind === kind && placing.definitionId === id && !(placing.kind === 'furniture' && placing.template);
 
   return (
-    <aside className="panel left" aria-label="Library">
+    <aside className="panel left" aria-label="Library" data-tour="rp-library">
       <div className="panel-head">
         <h2>Library</h2>
       </div>
       <div className="panel-body">
-        <input className="search" type="search" placeholder="Search furniture" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search library" />
+        <input className="search" type="search" title="Type part of a name, for example “sofa” or “desk”" placeholder="Search furniture" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search library" />
         <div className="chips" role="group" aria-label="Category">
           {categories.map((c) => (
-            <button key={c} className={`chip ${category === c ? 'active' : ''}`} aria-pressed={category === c} onClick={() => setCategory(c)}>
+            <button key={c} className={`chip ${category === c ? 'active' : ''}`} aria-pressed={category === c} title={c === 'all' ? 'Show every piece' : `Show only ${c}`} onClick={() => setCategory(c)}>
               {c === 'all' ? 'All' : c}
             </button>
           ))}
