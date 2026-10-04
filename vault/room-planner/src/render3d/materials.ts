@@ -3,8 +3,9 @@ import { DEFAULT_FINISHES, FIXTURE_FINISHES, SEED_MATERIALS } from '../data/furn
 import type { Palette } from '../data/palettes';
 import type { FurnitureInstance, Material } from '../engine/types';
 import { ROLE_DEFAULTS, type Part, type PartRole } from './furnitureParts';
+import { artSize, type ArtKind } from './artData';
 import { TEXTURE_SPECS, type TextureKind } from './textureData';
-import { textureOf } from './textures';
+import { artTexture, textureOf } from './textures';
 
 /** Status tints (same ink as the 2D view): a hard violation glows red, a soft one amber. */
 export const TINT = { hard: '#ef4444', soft: '#f59e0b', selected: '#CC785C' } as const;
@@ -15,6 +16,8 @@ export interface Look {
   /** Realistic look only: a generated detail texture that multiplies `colour`, and how strongly it bumps. */
   texture?: TextureKind;
   bump?: number;
+  /** A built-in artwork drawn in full colour on the surface (pictures). */
+  art?: { kind: ArtKind; width: number; height: number };
 }
 
 /** The look of a part: a finish override on the instance (C13: part name → material id) wins over the part's default. */
@@ -42,10 +45,14 @@ function fromMaterial(m: Material, opacity = 1): Omit<Look, 'tint'> {
  * plain role colour. A part with its own `tint` (a book) takes that colour on a smooth painted surface.
  */
 export function realisticLookOf(
-  definitionId: string, part: Pick<Part, 'role' | 'tint'>, inst: Pick<FurnitureInstance, 'finishOverrides'> | undefined, materials: Material[],
+  definitionId: string, part: Pick<Part, 'role' | 'tint'> & Partial<Pick<Part, 'art' | 'size'>>, inst: Pick<FurnitureInstance, 'finishOverrides'> | undefined, materials: Material[],
   palette?: Palette,
 ): Omit<Look, 'tint'> {
-  if (part.role === 'glass') return lookOf('glass', undefined, materials);
+  if (part.role === 'glass' || part.role === 'mirror') return lookOf(part.role, undefined, materials);
+  if (part.role === 'picture') {
+    if (part.art && part.size) return { colour: '#ffffff', roughness: 0.55, metalness: 0, opacity: 1, art: { kind: part.art, ...artSize(part.size[0], part.size[1]) } };
+    return lookOf('picture', undefined, materials);
+  }
   const chosen = inst?.finishOverrides?.[part.role];
   if (!chosen && part.tint) return { colour: part.tint, roughness: 0.8, metalness: 0, opacity: 1, texture: 'paint', bump: TEXTURE_SPECS.paint.bump };
   const m = findMaterial(chosen ?? DEFAULT_FINISHES[definitionId]?.[part.role as keyof (typeof DEFAULT_FINISHES)[string]], materials);
@@ -82,7 +89,7 @@ export class MaterialCache {
   private readonly cache = new Map<string, THREE.MeshStandardMaterial>();
 
   get(look: Look): THREE.MeshStandardMaterial {
-    const key = `${look.colour}|${look.roughness}|${look.metalness}|${look.opacity}|${look.tint ?? ''}|${look.texture ?? ''}`;
+    const key = `${look.colour}|${look.roughness}|${look.metalness}|${look.opacity}|${look.tint ?? ''}|${look.texture ?? ''}|${look.art ? `${look.art.kind}${look.art.width}x${look.art.height}` : ''}`;
     let m = this.cache.get(key);
     if (!m) {
       m = new THREE.MeshStandardMaterial({
@@ -90,6 +97,7 @@ export class MaterialCache {
         transparent: look.opacity < 1, opacity: look.opacity, depthWrite: look.opacity >= 1,
         emissive: look.tint ? TINT[look.tint] : '#000000', emissiveIntensity: look.tint ? 0.35 : 0,
         ...(look.texture ? (() => { const t = textureOf(look.texture); return { map: t, bumpMap: t, bumpScale: look.bump ?? 0.3 }; })() : {}),
+        ...(look.art ? { map: artTexture(look.art.kind, look.art.width, look.art.height) } : {}),
       });
       this.cache.set(key, m);
     }

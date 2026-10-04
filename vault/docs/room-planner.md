@@ -24,6 +24,7 @@ state. The domain is a pure TypeScript engine with no UI code.
 | M4.5 | **Cinematic mode** (Spec Addition A1, `specs/05-spec-addition-cinematic.md`): **clay look** (decided and confirmed), Quality low/high, fly-through from saved views, walk mode with collision. **C2, C3 and C4 built** (C2 + C3 are on `staging`; walk mode awaiting review); C5 "See an example" (lowest) still to do | **In progress** |
 | M4.6 | **Realistic look** (Spec Addition A2, `specs/06-spec-addition-photo.md`): better furniture shapes, generated textures, finishes as data, `Clay | Realistic` switch in Cinematic | **Built, awaiting owner check of stills** |
 | M4.7 | **Render photo** (A2): path-traced still image of the open room for client presentation; camera / lighting / size / quality, progressive render, PNG download with optional caption | **Built; on `staging`; owner timing on a laptop outstanding** |
+| M4.9 | **Snap controls** (Smart / Grid only / Off, grid size, grid from the room corner, Alt to bypass) and **wall art stage 1** (7 hanging pieces with generated artworks and mirrors) | **Built; awaiting push** |
 | M4.8 | **Library, rugs, colour palettes, photo polish**: 17 new pieces (29 in all, incl. rugs, plants, lamp, mirror), 8 room colour palettes, Render photo expectation line + named progress steps + eye-level "inside the room" views, plus the help system (tour, How This Works, themed tooltips) | **On `staging`** |
 | M5 | **Plan library** (saved projects in Vault's database, several rooms per project: **built, awaiting review**); **export** (PDF, PNG/JPG, SVG, CSV/XLSX, plain 2D DXF, glTF after M4), furniture schedule (**not started**) | **Library built; export not started** |
 
@@ -54,7 +55,13 @@ Open points to settle at M5 start: where PDF is produced (client-side with the s
 
 ### Library, rugs and colour palettes
 
-The Library has 29 pieces, including plants, a floor lamp, a floor mirror and three rugs. Furniture can stand on a rug (rugs are not checked for overlap, clearance or door swing, only for staying inside the room). Pick a colour palette for a room in the Inspector (nothing selected) or from **Palette** in the 3D bar: it colours the walls, floor, trim, sofas, wood and rugs together in the 3D view and in Render photo; a finish you chose for a piece is kept. Not shown in Clay or in the plan.
+The Library has 36 pieces, including plants, a floor lamp, a floor mirror and three rugs. Furniture can stand on a rug (rugs are not checked for overlap, clearance or door swing, only for staying inside the room). Pick a colour palette for a room in the Inspector (nothing selected) or from **Palette** in the 3D bar: it colours the walls, floor, trim, sofas, wood and rugs together in the 3D view and in Render photo; a finish you chose for a piece is kept. Not shown in Clay or in the plan.
+
+**Wall art:** seven pieces (paintings, prints, photos, a wall mirror and a round mirror) that hang flat on a wall at a set height (`defaultElevation`; change it with Elevation in the Inspector). The artworks are generated in code (`render3d/artData.ts`), so no image files or licences; mirrors are real reflective surfaces in Render photo. Your own photos in a frame are not built yet.
+
+### Snapping
+
+The **Snap** list in the toolbar: **Smart** (walls, corners, furniture edges and centres, alignment, grid), **Grid only** (a dragged piece's nearest edges land on grid lines) or **Off**; **Grid** sets 5, 10, 25 or 50 cm. The grid is measured from the room's first corner, and the 2D grid lines are drawn from it. Hold **Alt** while dragging to skip snapping for one move. The choice is remembered per browser. Corner and room-drawing drags honour Off, Grid only and Alt but keep the plan origin as the grid start.
 
 ### Help
 

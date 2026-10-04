@@ -357,3 +357,7 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--co
 @keyframes busy-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
 .photo-tips { margin: 0; padding-left: 18px; font-size: 12px; color: var(--color-muted); display: grid; gap: 3px; }
 @media (prefers-reduced-motion: reduce) { .busy-bar i { animation: none; width: 100%; } }
+
+/* Snap and grid selects in the toolbar (M4.9) */
+.snap-select { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--color-muted); }
+.snap-select select { min-height: var(--ctl); padding: 0 4px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius); font: inherit; color: var(--color-text); }

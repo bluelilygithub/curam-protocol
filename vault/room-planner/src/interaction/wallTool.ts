@@ -60,7 +60,11 @@ export class WallTool {
 
   // ------------------------------------------------------------------ pointer
 
+  /** Alt held on the latest pointer event: bypass snapping. */
+  private altHeld = false;
+
   pointerDown(e: PointerEv): void {
+    this.altHeld = e.alt;
     const room = this.room;
     if (!this.project) return;
     if (!room) { this.drawClick(e); return; }
@@ -91,6 +95,7 @@ export class WallTool {
   }
 
   pointerMove(e: PointerEv): void {
+    this.altHeld = e.alt;
     if (this.draw) { this.drawMove(e); return; }
     const s = this.s;
     if (s.t === 'vertex_press' && dist(s.start.screen, e.screen) > DRAG_SLOP_PX) {
@@ -138,7 +143,8 @@ export class WallTool {
       const g = moveVertex(room, s.id, p);
       return !!g && validatePolygon(g.vertices).ok;
     };
-    const ranked = rankSnapCandidates(vertexSnapCandidates(room, s.id, raw, { grid: ui.grid, snapDistance: DEFAULT_SNAP_DISTANCE }), DEFAULT_SNAP_DISTANCE);
+    const allowed = this.altHeld ? [] : ui.snapEnabled;
+    const ranked = rankSnapCandidates(vertexSnapCandidates(room, s.id, raw, { grid: ui.grid, snapDistance: DEFAULT_SNAP_DISTANCE }).filter((c) => allowed.includes(c.targetType)), DEFAULT_SNAP_DISTANCE);
     let pos: Vec2 | null = null;
     let snap = null as (typeof ranked)[number] | null;
     for (const c of ranked) {
@@ -231,9 +237,12 @@ export class WallTool {
   // ------------------------------------------------------------------ draw a room (C14)
 
   private snapDraw(p: Vec2, mpp: number): Vec2 {
-    const grid = this.h.p.ui.getState().grid;
+    const ui = this.h.p.ui.getState();
+    if (this.altHeld || ui.snapMode === 'off') return quantizeVec2(p);
+    const grid = ui.grid;
     let best: Vec2 = quantizeVec2({ x: Math.round(p.x / grid) * grid, y: Math.round(p.y / grid) * grid });
     if (dist(best, p) > DEFAULT_SNAP_DISTANCE) best = quantizeVec2(p);
+    if (ui.snapMode === 'grid') return best;
     for (const q of this.draw ?? []) {
       if (dist(q, p) <= Math.max(DEFAULT_SNAP_DISTANCE / 2, vertexPickRadius(mpp)) && dist(q, p) < dist(best, p) + 1e-9) best = { ...q };
     }

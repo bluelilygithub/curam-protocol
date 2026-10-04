@@ -1,5 +1,6 @@
 // three.js wrapper for the generated textures (see textureData.ts). DataTexture, so it needs no canvas and works in Node tests too.
 import * as THREE from 'three';
+import { generateArt, type ArtKind } from './artData';
 import { generateTexture, TEXTURE_SPECS, type TextureKind } from './textureData';
 
 const cache = new Map<TextureKind, THREE.DataTexture>();
@@ -26,4 +27,26 @@ export function textureOf(kind: TextureKind): THREE.DataTexture {
 export function disposeTextures(): void {
   for (const t of cache.values()) t.dispose();
   cache.clear();
+  for (const t of artCache.values()) t.dispose();
+  artCache.clear();
+}
+
+const artCache = new Map<string, THREE.DataTexture>();
+
+/** The (shared, cached) texture of a built-in artwork at a size. Colour, clamped (no tiling). */
+export function artTexture(kind: ArtKind, width: number, height: number): THREE.DataTexture {
+  const key = `${kind}|${width}|${height}`;
+  let t = artCache.get(key);
+  if (!t) {
+    const raw = generateArt(kind, width, height);
+    t = new THREE.DataTexture(raw.data, raw.width, raw.height, THREE.RGBAFormat);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.magFilter = THREE.LinearFilter;
+    t.minFilter = THREE.LinearMipmapLinearFilter;
+    t.generateMipmaps = true;
+    t.anisotropy = 8;
+    t.needsUpdate = true;
+    artCache.set(key, t);
+  }
+  return t;
 }

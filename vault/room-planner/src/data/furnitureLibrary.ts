@@ -56,6 +56,15 @@ export const FURNITURE_LIBRARY: FurnitureDefinition[] = [
   { id: 'rug-rect', name: 'Rug', category: 'rugs', defaultWidth: 2.4, defaultLength: 1.7, defaultHeight: 0.015 },
   { id: 'rug-round', name: 'Round rug', category: 'rugs', defaultWidth: 1.6, defaultLength: 1.6, defaultHeight: 0.015 },
   { id: 'rug-runner', name: 'Runner rug', category: 'rugs', defaultWidth: 0.8, defaultLength: 2.4, defaultHeight: 0.012 },
+
+  // ---- wall art (M4.9 stage 1): hang flat on a wall at a set height; change the height in the Inspector (Elevation)
+  { id: 'art-landscape', name: 'Painting: landscape', category: 'wall art', defaultWidth: 0.9, defaultLength: 0.03, defaultHeight: 0.6, defaultElevation: 1.3 },
+  { id: 'art-abstract', name: 'Painting: abstract', category: 'wall art', defaultWidth: 0.6, defaultLength: 0.03, defaultHeight: 0.8, defaultElevation: 1.2 },
+  { id: 'art-arches', name: 'Print: arches', category: 'wall art', defaultWidth: 0.5, defaultLength: 0.03, defaultHeight: 0.7, defaultElevation: 1.3 },
+  { id: 'art-seascape', name: 'Photo: seascape', category: 'wall art', defaultWidth: 0.7, defaultLength: 0.03, defaultHeight: 0.5, defaultElevation: 1.35 },
+  { id: 'art-portrait', name: 'Photo: portrait', category: 'wall art', defaultWidth: 0.3, defaultLength: 0.03, defaultHeight: 0.4, defaultElevation: 1.4 },
+  { id: 'mirror-wall', name: 'Wall mirror', category: 'wall art', defaultWidth: 0.8, defaultLength: 0.04, defaultHeight: 1.2, defaultElevation: 0.8 },
+  { id: 'mirror-round', name: 'Round mirror', category: 'wall art', defaultWidth: 0.7, defaultLength: 0.04, defaultHeight: 0.7, defaultElevation: 1.1 },
 ];
 
 /** Pieces that lie on the floor and may be walked and built over: no overlap, clearance or door-swing checks (they must still sit inside the room). */
@@ -136,6 +145,13 @@ export const DEFAULT_FINISHES: Record<string, Partial<Record<'frame' | 'upholste
   'rug-rect': { fabric: 'rug-cream', accent: 'rug-border' },
   'rug-round': { fabric: 'rug-cream', accent: 'rug-border' },
   'rug-runner': { fabric: 'rug-cream', accent: 'rug-border' },
+  'art-landscape': { frame: 'dark-wood', fabric: 'white-paint' },
+  'art-abstract': { frame: 'white-paint', fabric: 'white-paint' },
+  'art-arches': { frame: 'oak', fabric: 'white-paint' },
+  'art-seascape': { frame: 'walnut', fabric: 'white-paint' },
+  'art-portrait': { frame: 'brushed-steel', fabric: 'white-paint' },
+  'mirror-wall': { frame: 'dark-wood' },
+  'mirror-round': { frame: 'brushed-steel' },
 };
 
 /** Finishes of doors and windows in the Realistic look. */

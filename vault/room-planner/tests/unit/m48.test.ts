@@ -42,11 +42,11 @@ describe('the new library items', () => {
     const ids = new Set(SEED_MATERIALS.map((m) => m.id));
     for (const id of NEW_IDS) for (const m of Object.values(DEFAULT_FINISHES[id])) expect(ids.has(m as string), `${id} ${m}`).toBe(true);
   });
-  it('plants have foliage and a pot; the lamp has a shade; a mirror has bright glass; a single bed has one pillow, a double two', () => {
+  it('plants have foliage and a pot; the lamp has a shade; a mirror has a mirror panel; a single bed has one pillow, a double two', () => {
     const roles = (id: string) => furnitureParts(id, 0.5, 0.5, 1.4).map((p) => p.role);
     expect(roles('plant-large')).toEqual(expect.arrayContaining(['foliage', 'pot']));
     expect(furnitureParts('floor-lamp', 0.35, 0.35, 1.65).some((p) => p.role === 'fabric')).toBe(true);
-    expect(furnitureParts('mirror-floor', 0.7, 0.06, 1.7).some((p) => p.role === 'handle')).toBe(true);
+    expect(furnitureParts('mirror-floor', 0.7, 0.06, 1.7).some((p) => p.role === 'mirror')).toBe(true);
     const pillows = (id: string, w: number) => furnitureParts(id, w, 2.0, 0.9).filter((p) => p.role === 'fabric' && p.size[1] < 0.12 && p.size[1] > 0.05).length;
     expect(pillows('bed-single', 0.95)).toBe(1);
     expect(pillows('bed-king', 1.9)).toBe(2);

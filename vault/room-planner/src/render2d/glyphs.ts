@@ -136,7 +136,19 @@ export function glyphFor(definitionId: string, w: number, l: number): Glyph {
       shapes.push(circle(0, 0, Math.min(w, l) * 0.34, 'detail'), circle(0, 0, Math.min(w, l) * 0.06, 'faint'));
       break;
     case 'mirror-floor':
+    case 'mirror-wall':
       shapes.push(line([-hw + 0.04, 0, hw - 0.04, 0], 'detail'));
+      break;
+    case 'mirror-round':
+      shapes.push(circle(0, 0, Math.min(w, l) / 2, 'detail'), line([-hw * 0.7, 0, hw * 0.7, 0], 'faint'));
+      break;
+    case 'art-landscape':
+    case 'art-abstract':
+    case 'art-arches':
+    case 'art-seascape':
+    case 'art-portrait':
+      // seen from above a picture is a thin frame on the wall: a double line along its length
+      shapes.push(line([-hw + 0.03, 0, hw - 0.03, 0], 'detail'));
       break;
     case 'rug-rect':
     case 'rug-runner': {

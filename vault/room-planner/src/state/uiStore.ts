@@ -13,6 +13,11 @@ export type ViewMode = '2d' | '3d';
 export type Quality = 'low' | 'high';
 /** The Cinematic look (Spec Addition A1/A2): clay (white model) or realistic (generated textures, daylight). */
 export type Look = 'clay' | 'realistic';
+/** Snapping: `smart` = corners, walls, furniture edges and centres, alignment and grid; `grid` = grid only; `off` = none. Holding Alt while dragging bypasses it. */
+export type SnapMode = 'smart' | 'grid' | 'off';
+export const GRID_SIZES = [0.05, 0.1, 0.25, 0.5] as const;
+export const snapsFor = (mode: SnapMode): SnapTargetType[] => (mode === 'smart' ? ALL_SNAPS_LIST : mode === 'grid' ? ['grid'] : []);
+const ALL_SNAPS_LIST: SnapTargetType[] = ['wall_endpoint', 'wall', 'furniture_edge', 'furniture_centre', 'alignment', 'grid'];
 export const TOOL_KEYS: Record<string, Tool> = { '1': 'select', '2': 'pan', '3': 'wall_edit', '4': 'measure' };
 
 /** What the next click on the canvas will place (a ghost follows the pointer). */
@@ -49,6 +54,7 @@ export interface UiState {
   placing: Placing;
   showClearances: boolean;
   showGrid: boolean;
+  snapMode: SnapMode;
   snapEnabled: SnapTargetType[];
   /** Grid unit in metres (Spec §3 default 0.1 m). */
   grid: number;
@@ -74,6 +80,8 @@ export interface UiActions {
   setImmersive(on: boolean): void;
   setProjectsOpen(on: boolean): void;
   setPhotoOpen(on: boolean): void;
+  setSnapMode(mode: SnapMode): void;
+  setGrid(metres: number): void;
   setInfoOpen(on: boolean): void;
   setTourProgress(p: { stop: number; total: number } | null): void;
   setTool(t: Tool): void;
@@ -114,6 +122,7 @@ export function createUiStore(): UiStore {
     placing: null,
     showClearances: false,
     showGrid: true,
+    snapMode: 'smart',
     snapEnabled: ALL_SNAPS,
     grid: 0.1,
     status: null,
@@ -133,6 +142,8 @@ export function createUiStore(): UiStore {
     setTourLoop: (tourLoop) => set({ tourLoop }),
     setImmersive: (immersive) => set({ immersive }),
     setProjectsOpen: (projectsOpen) => set({ projectsOpen }),
+    setSnapMode: (snapMode) => set({ snapMode, snapEnabled: snapsFor(snapMode) }),
+    setGrid: (grid) => set({ grid: GRID_SIZES.includes(grid as (typeof GRID_SIZES)[number]) ? grid : 0.1 }),
     setInfoOpen: (infoOpen) => set({ infoOpen }),
     setPhotoOpen: (photoOpen) => set(photoOpen ? { photoOpen, tourPlaying: false, walking: false } : { photoOpen }),
     setTourProgress(p) {

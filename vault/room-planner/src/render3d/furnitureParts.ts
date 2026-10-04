@@ -2,10 +2,11 @@
 // local frame (x = width axis, y = up from the instance elevation, z = length axis, front = +z, C20). Pure data, no three.js.
 // Every recipe fits inside the instance's width × height × length and the parts together span all three extents exactly, so the model
 // never pokes out of the footprint the engine validates. Unknown definitions fall back to one plain box.
+import type { ArtKind } from './artData';
 import type { Vec3 } from './transforms';
 
 /** Part names double as the keys of `finishOverrides` (C13): part name → material id. */
-export type PartRole = 'frame' | 'upholstery' | 'top' | 'leg' | 'fabric' | 'accent' | 'handle' | 'glass' | 'door' | 'foliage' | 'pot';
+export type PartRole = 'frame' | 'upholstery' | 'top' | 'leg' | 'fabric' | 'accent' | 'handle' | 'glass' | 'door' | 'foliage' | 'pot' | 'picture' | 'mirror';
 
 export type PartShape = 'box' | 'rbox' | 'cylinder' | 'taper' | 'ellipsoid';
 
@@ -22,6 +23,8 @@ export interface Part {
   taper?: number;
   /** `cylinder`: the axis it runs along (default y). The cross-section is an ellipse in the other two extents. */
   axis?: 'x' | 'y' | 'z';
+  /** `picture` parts: which built-in artwork is drawn on the front face (the +z side). */
+  art?: ArtKind;
   /** A decorative colour for this one part in the Realistic look (the books); the Clay look ignores it. */
   tint?: string;
 }
@@ -39,6 +42,8 @@ export const ROLE_DEFAULTS: Record<PartRole, { colour: string; roughness: number
   door: { colour: '#d8d2c6', roughness: 0.6, metalness: 0 },
   foliage: { colour: '#4f7a3a', roughness: 0.7, metalness: 0 },
   pot: { colour: '#eeece6', roughness: 0.45, metalness: 0 },
+  picture: { colour: '#c9c3b6', roughness: 0.55, metalness: 0 },
+  mirror: { colour: '#dfe6ea', roughness: 0.05, metalness: 0.95 },
 };
 
 type Ext = [number, number]; // [min, max]
@@ -359,8 +364,32 @@ function floorLamp(w: number, l: number, h: number): Part[] {
 function mirror(w: number, l: number, h: number): Part[] {
   const f = Math.min(0.05, w / 8);
   return [
-    rbox('frame', [-w / 2, w / 2], [0, h], [-l / 2, l / 2], 0.015),
-    rbox('handle', [-w / 2 + f, w / 2 - f], [f, h - f], [l / 2 - 0.012, l / 2], 0.003), // the glass, bright metal
+    rbox('frame', [-w / 2, w / 2], [0, h], [-l / 2, l / 2 - 0.004], 0.012), // the frame stops just short of the glass, which stands proud of it
+    rbox('mirror', [-w / 2 + f, w / 2 - f], [f, h - f], [l / 2 - 0.012, l / 2], 0.003), // the glass
+  ];
+}
+
+/** A framed picture hanging on a wall: frame, white mat and the artwork, recessed inside the frame. The back (-z) is against the wall. */
+function artFrame(w: number, l: number, h: number, art: ArtKind): Part[] {
+  const f = Math.min(0.035, w / 10, h / 10);
+  const m = Math.min(0.05, w / 8, h / 8);
+  const z1 = l / 2;
+  return [
+    // the frame is four bars (a solid slab would hide the mat and the picture behind its front face)
+    rbox('frame', [-w / 2, w / 2], [h - f, h], [-l / 2, l / 2], 0.004),
+    rbox('frame', [-w / 2, w / 2], [0, f], [-l / 2, l / 2], 0.004),
+    rbox('frame', [-w / 2, -w / 2 + f], [f, h - f], [-l / 2, l / 2], 0.004),
+    rbox('frame', [w / 2 - f, w / 2], [f, h - f], [-l / 2, l / 2], 0.004),
+    box('fabric', [-w / 2 + f, w / 2 - f], [f, h - f], [-l / 2 + 0.004, z1 - 0.006]), // the mat
+    { ...box('picture', [-w / 2 + f + m, w / 2 - f - m], [f + m, h - f - m], [-l / 2 + 0.004, z1 - 0.004]), art },
+  ];
+}
+
+function roundMirror(w: number, l: number, h: number): Part[] {
+  const f = Math.min(0.04, w / 12);
+  return [
+    cyl('frame', [-w / 2, w / 2], [0, h], [-l / 2, l / 2 - 0.004], 'z'),
+    cyl('mirror', [-w / 2 + f, w / 2 - f], [f, h - f], [l / 2 - 0.012, l / 2], 'z'),
   ];
 }
 
@@ -411,6 +440,13 @@ const RECIPES: Record<string, Recipe> = {
   'rug-rect': rugRect,
   'rug-round': rugRound,
   'rug-runner': rugRect,
+  'art-landscape': (w, l, h) => artFrame(w, l, h, 'landscape'),
+  'art-abstract': (w, l, h) => artFrame(w, l, h, 'abstract'),
+  'art-arches': (w, l, h) => artFrame(w, l, h, 'arches'),
+  'art-seascape': (w, l, h) => artFrame(w, l, h, 'seascape'),
+  'art-portrait': (w, l, h) => artFrame(w, l, h, 'portrait'),
+  'mirror-wall': mirror,
+  'mirror-round': roundMirror,
 };
 
 /** Parts of a furniture model at the given size. Unknown definitions get a single box. */

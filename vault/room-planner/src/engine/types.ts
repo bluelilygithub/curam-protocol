@@ -98,6 +98,8 @@ export interface FurnitureDefinition {
   defaultWidth: Metres;
   defaultLength: Metres;
   defaultHeight: Metres;
+  /** Height of the underside above the floor when first placed (pictures and mirrors hang on the wall). Default 0. */
+  defaultElevation?: Metres;
   clearancePolicies?: ClearancePolicy[];
 }
 

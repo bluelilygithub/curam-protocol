@@ -121,10 +121,17 @@ export class Interaction {
     return this.ui.selection.filter((s) => s.kind === kind).map((s) => s.id);
   }
 
+  /** Alt held on the latest pointer event: bypass snapping for this move. */
+  private altHeld = false;
+
+  /** Where the grid starts: the room's first corner, so distances from the walls come out as round numbers. */
+  private gridOrigin(room: Room): Vec2 { return room.vertices[0]?.position ?? { x: 0, y: 0 }; }
+
   private snapOpts(moving: OrientedRect, others: FurnitureInstance[], room: Room) {
     const u = this.ui;
     return generateSnapCandidates({
-      moving, room, others, grid: u.grid, snapDistance: DEFAULT_SNAP_DISTANCE, enabled: u.snapEnabled,
+      moving, room, others, grid: u.grid, snapDistance: DEFAULT_SNAP_DISTANCE, enabled: this.altHeld ? [] : u.snapEnabled,
+      gridOrigin: this.gridOrigin(room), gridMode: u.snapMode === 'grid' ? 'edges' : 'centre',
     });
   }
 
@@ -157,6 +164,7 @@ export class Interaction {
   // ---------------------------------------------------------------- pointer
 
   pointerDown(e: PointerEv): void {
+    this.altHeld = e.alt;
     const project = this.project;
     const room = this.room;
     if (!project) return;
@@ -207,6 +215,7 @@ export class Interaction {
   }
 
   pointerMove(e: PointerEv): void {
+    this.altHeld = e.alt;
     const s = this.state;
     const u = this.ui;
     if (s.t === 'pan') {
@@ -256,6 +265,7 @@ export class Interaction {
   }
 
   pointerUp(e: PointerEv): void {
+    this.altHeld = e.alt;
     const s = this.state;
     if (this.ui.tool === 'wall_edit' && s.t !== 'pan') { this.wall.pointerUp(e); return; }
     switch (s.t) {
@@ -554,7 +564,7 @@ export class Interaction {
     const def = project.furnitureDefinitions.find((d) => d.id === placing.definitionId);
     if (!def) return null;
     return {
-      id: GHOST_ID, definitionId: def.id, roomId: room.id, position: pos, elevation: 0, rotation,
+      id: GHOST_ID, definitionId: def.id, roomId: room.id, position: pos, elevation: def.defaultElevation ?? 0, rotation,
       width: def.defaultWidth, length: def.defaultLength, height: def.defaultHeight,
     };
   }
@@ -661,7 +671,10 @@ export class Interaction {
   private measureSnap(p: Vec2): Vec2 {
     const room = this.room;
     if (!room) return p;
-    let best: Vec2 = { x: Math.round(p.x / this.ui.grid) * this.ui.grid, y: Math.round(p.y / this.ui.grid) * this.ui.grid };
+    if (this.altHeld || this.ui.snapMode === 'off') return { x: quantizeLinear(p.x), y: quantizeLinear(p.y) };
+    const g = this.ui.grid;
+    const o = this.gridOrigin(room);
+    let best: Vec2 = { x: o.x + Math.round((p.x - o.x) / g) * g, y: o.y + Math.round((p.y - o.y) / g) * g };
     let bestD = dist(best, p) <= DEFAULT_SNAP_DISTANCE ? dist(best, p) : Infinity;
     if (bestD === Infinity) best = p;
     for (const v of room.vertices) {

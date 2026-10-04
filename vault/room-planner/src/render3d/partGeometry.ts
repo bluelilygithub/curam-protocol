@@ -56,11 +56,11 @@ function build(part: Part): THREE.BufferGeometry {
       break;
     }
   }
-  projectUV(g);
+  if (!part.art) projectUV(g); // a picture keeps the box's own 0–1 UVs so the artwork fills its face
   return g;
 }
 
-const keyOf = (p: Part): string => `${p.shape}|${mm(p.size[0])}|${mm(p.size[1])}|${mm(p.size[2])}|${mm(p.radius ?? 0)}|${p.taper ?? ''}|${p.axis ?? ''}`;
+const keyOf = (p: Part): string => `${p.shape}|${mm(p.size[0])}|${mm(p.size[1])}|${mm(p.size[2])}|${mm(p.radius ?? 0)}|${p.taper ?? ''}|${p.axis ?? ''}|${p.art ?? ''}`;
 
 /** The shared geometry for a part, centred on the origin (position the mesh at `part.centre`). */
 export function partGeometry(part: Part): THREE.BufferGeometry {

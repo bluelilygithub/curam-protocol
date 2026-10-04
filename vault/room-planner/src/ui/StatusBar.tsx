@@ -12,6 +12,7 @@ export function StatusBar() {
   const status = useUi((s) => s.status);
   const popoverOpen = useUi((s) => s.popoverOpen);
   const grid = useUi((s) => s.grid);
+  const snapMode = useUi((s) => s.snapMode);
   const live = useBus((s) => s.message);
   const room = project?.rooms[0];
 
@@ -61,7 +62,7 @@ export function StatusBar() {
   return (
     <footer className="statusbar" role="status">
       <span className="ctx" title="Current selection">{context}</span>
-      <span className="snap" title="Snapping: wall corners, walls, furniture edges and centres, alignment, grid">Snap on · grid {grid * 100} cm</span>
+      <span className="snap" title="Change snapping in the toolbar. Hold Alt while dragging to skip it for one move.">{snapMode === 'off' ? 'Snap off' : `${snapMode === 'grid' ? 'Snap: grid only' : 'Snap: smart'} · grid ${grid * 100} cm`} · Alt = no snap</span>
       <span className="spacer" />
       {message ? (
         <button

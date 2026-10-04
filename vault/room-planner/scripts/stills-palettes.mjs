@@ -43,13 +43,18 @@ add('bookshelf', 0.25, 2.2, 270);
 add('ottoman', 2.6, 2.7);
 add('mirror-floor', 3.2, 3.6, 180);
 add('plant-small', 0.5, 0.5, 0, { elevation: 0.55 });
+// wall art on the back wall (the wall along the first corner's y), above the sofa and beside it
+add('art-landscape', 1.6, 0.016, 0, { elevation: 1.3 });
+add('art-abstract', 0.55, 0.016, 0, { elevation: 1.2 });
+add('mirror-round', 2.9, 0.021, 0, { elevation: 1.1 });
+add('art-seascape', 4.1, 0.016, 0, { elevation: 1.35 });
 await page.evaluate((p) => { window.roomPlanner.project.getState().load(p); window.roomPlanner.ui.getState().setViewMode('3d'); }, q);
 await page.waitForSelector('[data-testid=stage3d] canvas', { timeout: 30000 });
 await page.waitForTimeout(1000);
 const cx = x0 + 2.4, cz = y0 + 1.8;
-await page.evaluate(([cx, cz]) => window.roomPlanner.camera.getState().requestCamera({ position: [cx + 3.4, 3.1, cz + 3.6], target: [cx - 0.3, 0.5, cz - 0.2], projection: 'perspective', zoom: 1 }, false), [cx, cz]);
+await page.evaluate(([cx, cz]) => window.roomPlanner.camera.getState().requestCamera({ position: [cx + 0.8, 1.9, cz + 4.6], target: [cx - 0.2, 1.0, cz - 1.4], projection: 'perspective', zoom: 1 }, false), [cx, cz]);
 await page.evaluate(() => { const u = window.roomPlanner.ui.getState(); u.setCinematic(true); u.setLook('realistic'); u.setQuality('high'); });
-for (const pal of ['', 'scandi', 'coastal', 'moody', 'terracotta', 'sage']) {
+for (const pal of (process.env.PALS ?? ',scandi,coastal,moody,terracotta,sage').split(',')) {
   await page.evaluate((id) => window.roomPlanner.setPalette(id || null), pal);
   await page.waitForTimeout(1600);
   await page.locator('[data-testid=stage3d]').screenshot({ path: join(out, `palette-${pal || 'standard'}.png`) });

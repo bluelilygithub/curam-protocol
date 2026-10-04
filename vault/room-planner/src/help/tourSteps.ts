@@ -30,11 +30,11 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: 'rp-tools', title: 'Tools', target: 'rp-tools', on: 'bottom', needs2d: true,
-    text: 'Select (1) picks and moves things. Pan (2) moves the view. Walls (3) drags corners, adds a corner or draws a room. Measure (4) reads a distance. Undo and Redo cover every change.',
+    text: 'Select (1) picks and moves things. Pan (2) moves the view. Walls (3) drags corners, adds a corner or draws a room. Measure (4) reads a distance. Undo and Redo cover every change. Further along, Snap chooses Smart, Grid only or Off (hold Alt to skip it for one move) and Grid sets the spacing.',
   },
   {
     id: 'rp-library', title: 'Library', target: 'rp-library', on: 'right', needs2d: true, panel: 'left',
-    text: 'Pick a door, window or piece of furniture, then click the plan to place it. Search or filter by type: seating, tables, storage, bedroom, plants and decor, and rugs. Doors and windows snap to walls; furniture snaps to walls and other pieces and can stand on a rug.',
+    text: 'Pick a door, window or piece of furniture, then click the plan to place it. Search or filter by type: seating, tables, storage, bedroom, plants and decor, rugs, and wall art (pictures and mirrors that hang on a wall). Doors and windows snap to walls; furniture snaps to walls and other pieces and can stand on a rug.',
   },
   {
     id: 'rp-canvas', title: 'The Plan', target: 'rp-stage', on: 'left', needs2d: true,

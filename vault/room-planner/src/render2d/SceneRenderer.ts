@@ -117,8 +117,8 @@ export class SceneRenderer {
     this.d.container.style.cursor = ui.placing || ui.tool === 'measure' ? 'crosshair' : ui.tool === 'pan' ? 'grab' : 'default';
     this.gridLayer.destroyChildren();
     this.sceneLayer.destroyChildren();
-    this.drawGrid(ui.showGrid, ui.grid);
     const room = project?.rooms[0];
+    this.drawGrid(ui.showGrid, ui.grid, room?.vertices[0]?.position ?? { x: 0, y: 0 });
     if (project && room) {
       const wallTool = ui.tool === 'wall_edit';
       const roomHidden = bus.hiddenIds.includes(ROOM_ID); // a candidate room is being dragged: it is drawn in the overlay
@@ -137,7 +137,8 @@ export class SceneRenderer {
     this.sceneLayer.batchDraw();
   }
 
-  private drawGrid(show: boolean, base: number): void {
+  /** The grid starts at the room's first corner (the same origin the snapping uses), so lines and snaps agree. */
+  private drawGrid(show: boolean, base: number, origin: Vec2): void {
     if (!show) return;
     const v = this.view;
     const { width, height } = this.stage.size();
@@ -145,20 +146,20 @@ export class SceneRenderer {
     const br = canvasToWorld({ x: width, y: height }, v);
     const step = gridStep(v.scale, base);
     const p = this.palette;
-    const x0 = Math.floor(tl.x / step) * step;
-    const y0 = Math.floor(br.y / step) * step;
-    const major = (n: number): boolean => Math.abs(n / 1 - Math.round(n / 1)) < 1e-6;
+    const x0 = origin.x + Math.floor((tl.x - origin.x) / step) * step;
+    const y0 = origin.y + Math.floor((br.y - origin.y) / step) * step;
+    const major = (n: number, o: number): boolean => Math.abs(n - o - Math.round(n - o)) < 1e-6; // whole metres from the room corner
     this.gridLayer.add(new Konva.Shape({
       sceneFunc: (ctx) => {
         for (const pass of ['minor', 'major'] as const) {
           ctx.beginPath();
           for (let x = x0; x <= br.x; x += step) {
-            if (major(x) !== (pass === 'major')) continue;
+            if (major(x, origin.x) !== (pass === 'major')) continue;
             const c = worldToCanvas({ x, y: 0 }, v).x;
             ctx.moveTo(c, 0); ctx.lineTo(c, height);
           }
           for (let y = y0; y <= tl.y; y += step) {
-            if (major(y) !== (pass === 'major')) continue;
+            if (major(y, origin.y) !== (pass === 'major')) continue;
             const c = worldToCanvas({ x: 0, y }, v).y;
             ctx.moveTo(0, c); ctx.lineTo(width, c);
           }

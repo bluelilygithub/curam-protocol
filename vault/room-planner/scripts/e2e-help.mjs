@@ -17,6 +17,7 @@ const problems = [];
 page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
 page.on('console', (m) => { if (m.type() === 'error') problems.push(`console.error: ${m.text().slice(0, 240)}`); });
 const wait = (ms) => page.waitForTimeout(ms);
+const ev2 = () => page.evaluate(() => { const u = window.roomPlanner.ui.getState(); return `${u.snapMode}|${u.grid}`; });
 const shot = async (n) => { if (out) await page.screenshot({ path: join(out, `${n}.png`) }); };
 
 await page.goto(URL + '?embedded=1');
@@ -66,6 +67,16 @@ if (fieldCount) {
   await page.locator('.rp-tooltip').waitFor({ timeout: 3000 });
   check('an inspector field shows its explanation', (await page.locator('.rp-tooltip').innerText()).length > 20);
 }
+// snapping controls: choose, remembered after a reload
+await page.getByLabel('Snap mode').selectOption('grid');
+await page.getByLabel('Grid size').selectOption('0.25');
+check('Snap and Grid selects change the mode and size', (await ev2()) === 'grid|0.25');
+await page.reload();
+await page.waitForFunction(() => window.roomPlanner);
+check('the snap choice is remembered per browser', (await ev2()) === 'grid|0.25');
+check('the status bar says so', /grid only/i.test(await page.locator('.statusbar .snap').innerText()) && /25 cm/.test(await page.locator('.statusbar .snap').innerText()));
+await page.getByLabel('Snap mode').selectOption('smart');
+await page.getByLabel('Grid size').selectOption('0.1');
 await page.keyboard.press('Tab');
 await wait(500);
 await shot('tooltip');

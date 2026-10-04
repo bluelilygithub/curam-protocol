@@ -131,7 +131,7 @@ s = await S();
 check('an invalid fixture offset is rejected (reverts) with a message', s.fixtures.find((f) => f.id === doorId).off === 1.5);
 await page.waitForTimeout(650); // outside the 500 ms pick-cycle window (B6)
 await click(1.5, -0.05);
-await page.locator('select').selectOption('right');
+await page.locator('aside[aria-label="Inspector"] select').selectOption('right');
 s = await S();
 check('hinge side is editable', s.fixtures.find((f) => f.id === doorId).hinge === 'right');
 await page.waitForTimeout(650);

@@ -29,6 +29,10 @@ export interface SnapContext {
   others: FurnitureInstance[];
   snapDistance?: number;
   grid?: number;
+  /** Where the grid starts (the room's first corner); default the plan origin. */
+  gridOrigin?: Vec2;
+  /** `centre`: the piece's centre lands on a grid point (the default). `edges`: its nearest edges land on grid lines, so wall-to-piece distances are round numbers. */
+  gridMode?: 'centre' | 'edges';
   enabled?: SnapTargetType[];
 }
 
@@ -67,7 +71,20 @@ export function generateSnapCandidates(ctx: SnapContext): SnapCandidate[] {
   const out: SnapCandidate[] = [];
 
   if (enabled.has('grid')) {
-    out.push(make('grid', { x: Math.round(P.x / grid) * grid, y: Math.round(P.y / grid) * grid }, P, 'grid'));
+    const o = ctx.gridOrigin ?? { x: 0, y: 0 };
+    if (ctx.gridMode === 'edges') {
+      // per axis: the smaller shift of "left/bottom edge on a line" and "right/top edge on a line"
+      const shift = (lo: number, hi: number, origin: number): number => {
+        const a = Math.round((lo - origin) / grid) * grid + origin - lo;
+        const b = Math.round((hi - origin) / grid) * grid + origin - hi;
+        return Math.abs(a) <= Math.abs(b) ? a : b;
+      };
+      const xs = corners.map((c) => c.x);
+      const ys = corners.map((c) => c.y);
+      out.push(make('grid', { x: P.x + shift(Math.min(...xs), Math.max(...xs), o.x), y: P.y + shift(Math.min(...ys), Math.max(...ys), o.y) }, P, 'grid (edges)'));
+    } else {
+      out.push(make('grid', { x: o.x + Math.round((P.x - o.x) / grid) * grid, y: o.y + Math.round((P.y - o.y) / grid) * grid }, P, 'grid'));
+    }
   }
 
   const verts = ctx.room.vertices;

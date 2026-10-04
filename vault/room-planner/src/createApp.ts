@@ -19,7 +19,7 @@ import { ProjectsController } from './state/projects';
 import { convertProjection, presetCamera, type CameraPreset, type CameraState, type Projection } from './render3d/cameraPresets';
 import { buildTour } from './render3d/tour';
 import { walkStart } from './render3d/walk';
-import { createUiStore, type Look, type Quality, type ViewMode } from './state/uiStore';
+import { createUiStore, type Look, type Quality, type SnapMode, type ViewMode } from './state/uiStore';
 import { createViewStore } from './state/viewStore';
 
 /**
@@ -47,6 +47,15 @@ export function createApp(storage: StorageLike) {
     const q = storage.getItem(QUALITY_KEY);
     if (q === 'low' || q === 'high') ui.getState().setQuality(q);
   } catch { /* storage unavailable: keep the default */ }
+  // Snapping (mode and grid size) is a per-browser preference too.
+  const SNAP_KEY = 'room-planner:snap:v1';
+  try {
+    const raw = storage.getItem(SNAP_KEY);
+    const v = raw ? (JSON.parse(raw) as { mode?: unknown; grid?: unknown }) : null;
+    if (v && (v.mode === 'smart' || v.mode === 'grid' || v.mode === 'off')) ui.getState().setSnapMode(v.mode);
+    if (v && typeof v.grid === 'number') ui.getState().setGrid(v.grid);
+  } catch { /* storage unavailable or damaged: keep the defaults */ }
+  let lastSnap = `${ui.getState().snapMode}|${ui.getState().grid}`;
   // The Cinematic look (clay / realistic) is a per-browser preference too. Default clay.
   const LOOK_KEY = 'room-planner:look:v1';
   try {
@@ -59,6 +68,11 @@ export function createApp(storage: StorageLike) {
     if (s.quality !== lastQuality) {
       lastQuality = s.quality;
       try { storage.setItem(QUALITY_KEY, s.quality); } catch { /* ignore */ }
+    }
+    const snapNow = `${s.snapMode}|${s.grid}`;
+    if (snapNow !== lastSnap) {
+      lastSnap = snapNow;
+      try { storage.setItem(SNAP_KEY, JSON.stringify({ mode: s.snapMode, grid: s.grid })); } catch { /* ignore */ }
     }
     if (s.look !== lastLook) {
       lastLook = s.look;
@@ -189,6 +203,8 @@ export function createApp(storage: StorageLike) {
     },
     setQuality(q: Quality): void { ui.getState().setQuality(q); },
     setLook(l: Look): void { ui.getState().setLook(l); },
+    setSnapMode(m: SnapMode): void { ui.getState().setSnapMode(m); },
+    setGrid(metres: number): void { ui.getState().setGrid(metres); },
     walkInput,
 
     /** Start walking through the room at eye height (collides with walls and furniture). False, with a message, if there is nowhere to stand. */

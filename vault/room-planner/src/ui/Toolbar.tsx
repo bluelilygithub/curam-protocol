@@ -1,6 +1,6 @@
 import { useApp, useLibrary, useProject, useUi } from './AppContext';
 import { Icons } from './icons';
-import type { Tool } from '../state/uiStore';
+import { GRID_SIZES, type SnapMode, type Tool } from '../state/uiStore';
 
 const TOOLS: Array<{ tool: Tool; key: string; label: string; icon: keyof typeof Icons; disabled?: boolean; hint?: string }> = [
   { tool: 'select', key: '1', label: 'Select', icon: 'select' },
@@ -15,6 +15,8 @@ export function Toolbar() {
   const viewMode = useUi((s) => s.viewMode);
   const showClearances = useUi((s) => s.showClearances);
   const showGrid = useUi((s) => s.showGrid);
+  const snapMode = useUi((s) => s.snapMode);
+  const grid = useUi((s) => s.grid);
   const leftOpen = useUi((s) => s.leftOpen);
   const rightOpen = useUi((s) => s.rightOpen);
   const status = useLibrary((s) => s.status);
@@ -83,6 +85,20 @@ export function Toolbar() {
         <button className={`btn icon ${showGrid ? 'active' : ''}`} aria-pressed={showGrid} title="Grid" onClick={() => app.ui.getState().toggleGrid()}>
           {Icons.grid}
         </button>
+        <label className="snap-select" title="Snapping while you drag. Smart: corners, walls, furniture edges and centres, alignment and grid. Grid only: pieces land with their edges on grid lines measured from the room's first corner. Off: no snapping. Hold Alt while dragging to skip it for one move.">
+          <span className="label">Snap</span>
+          <select aria-label="Snap mode" value={snapMode} onChange={(e) => app.setSnapMode(e.target.value as SnapMode)}>
+            <option value="smart">Smart</option>
+            <option value="grid">Grid only</option>
+            <option value="off">Off</option>
+          </select>
+        </label>
+        <label className="snap-select" title="Grid spacing, measured from the room's first corner. Used by Grid only and by Smart.">
+          <span className="label">Grid</span>
+          <select aria-label="Grid size" value={grid} onChange={(e) => app.setGrid(Number(e.target.value))}>
+            {GRID_SIZES.map((g) => <option key={g} value={g}>{g * 100} cm</option>)}
+          </select>
+        </label>
         <button className="btn icon" disabled={!hasRoom} title="Fit room to view" onClick={() => (viewMode === '3d' ? app.cameraPreset('fit') : app.fitToRoom())}>{Icons.fit}</button>
       </div>
 
