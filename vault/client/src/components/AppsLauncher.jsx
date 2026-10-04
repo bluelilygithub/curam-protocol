@@ -4,6 +4,8 @@ import { useIcon } from '../providers/IconProvider';
 import { getAppsNavGroups, isNavItemActive, applyNavLayout } from '../config/appNavigation';
 import api from '../utils/apiClient';
 
+const SET_ICONS = ['layout-grid', 'grid-3x3', 'layers'];
+
 export default function AppsLauncher({
   canUseFeature,
   isAdmin = false,
@@ -51,7 +53,7 @@ export default function AppsLauncher({
         <NavDropdown
           key={set.id}
           label={set.label}
-          icon={i === 0 ? 'layout-grid' : 'grid-3x3'}
+          icon={SET_ICONS[i] || 'layout-grid'}
           groups={set.groups}
           location={location}
           missionReminderDue={i === 0 && missionReminderDue}
