@@ -291,7 +291,7 @@ await page.waitForSelector('.shepherd-element.vault-tour', { timeout: 8000 }).ca
 check('the guided tour starts', true);
 await page.getByRole('button', { name: /Start Tour/ }).click();
 await page.locator('.vault-tour-step-count:visible').waitFor();
-check('the tour shows Step 2 of 9', /Step 2 of 9/.test(await page.locator('.vault-tour-step-count:visible').innerText()));
+check('the tour shows Step 2 of 12', /Step 2 of 12/.test(await page.locator('.vault-tour-step-count:visible').innerText()));
 await wait(450); // the card takes focus a moment after it appears
 await page.keyboard.press('Escape');
 await wait(300);

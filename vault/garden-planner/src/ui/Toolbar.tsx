@@ -76,8 +76,8 @@ export function Toolbar() {
       </div>
 
       <div className="tb-group tb-right">
-        <button type="button" className="tb-btn" title="Plant schedule: every plant in the garden, with a CSV download" data-testid="open-schedule" onClick={() => ui.set({ scheduleOpen: true })}><Icon name="table" /></button>
-        <button type="button" className="tb-btn" title="Checks: problems found in the plan" onClick={() => ui.set({ inspectorOpen: true, rightTab: 'checks' })}><Icon name="alert" /></button>
+        <button type="button" className="tb-btn" title="Plant schedule: every plant in the garden, with a CSV download" data-testid="open-schedule" data-tour="gp-schedule" onClick={() => ui.set({ scheduleOpen: true })}><Icon name="table" /></button>
+        <button type="button" className="tb-btn" data-tour="gp-checks" title="Checks: problems found in the plan" onClick={() => ui.set({ inspectorOpen: true, rightTab: 'checks' })}><Icon name="alert" /></button>
         <button type="button" className="tb-btn" title="Show or hide the details panel" aria-pressed={inspectorOpen} onClick={() => ui.set({ inspectorOpen: !inspectorOpen })}><Icon name="panelRight" /></button>
         <button type="button" className="tb-btn" title="Take the guided tour" onClick={() => void app.startTour()}><Icon name="compass" /></button>
         {app.plantPhotos.isAdmin() && <button type="button" className="tb-btn" title="Plant photo curator (admin)" data-testid="open-curator" onClick={() => ui.set({ curatorOpen: true })}><Icon name="image" /></button>}

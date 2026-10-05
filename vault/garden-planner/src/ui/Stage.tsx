@@ -111,7 +111,7 @@ export function Stage() {
       {viewMode === '2d' && <p className="hint-banner">{mapAlign ? 'Drag the map until your house and plot line up with what you drew. Press Done moving (or Esc) when it fits.' : HINTS[tool]}</p>}
       {project && <MapAttribution project={project} />}
       {viewMode === '3d' && (
-        <div className="view3d-bar" role="group" aria-label="3D camera">
+        <div className="view3d-bar" role="group" aria-label="3D camera" data-tour="gp-3dbar">
           {!walking && !touring && <button type="button" title="Isometric view" onClick={() => three.current?.iso()}>Iso</button>}
           {!walking && !touring && <button type="button" title="Straight down" onClick={() => three.current?.top()}>Top</button>}
           {!walking && !touring && <button type="button" title="From the front" onClick={() => three.current?.front()}>Front</button>}

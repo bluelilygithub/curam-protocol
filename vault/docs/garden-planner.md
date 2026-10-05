@@ -1,14 +1,14 @@
 # Garden Planner
 
-Design an Australian garden to scale: plot, house, beds, lawns, paths, structures and plants, with growth over time, seasons, plant suitability checks and a 3D view. Own Vite app (`garden-planner/`, React 19 + Konva + three.js), built into `dist/garden-planner-app/` by the root `npm run build` and shown in Vault at `/garden-planner` by `GardenPlannerPage.jsx` (iframe, same pattern as Room Planner). Feature flag `gardenPlanner`. Nav: Content Creation. Tour: Settings → Tour section (`?tour=1`).
+Design an Australian garden to scale and find out whether it will work: plot, house, beds, lawns, paths, structures and plants, with growth over time and seasons, **sun and shade** through the day, **checks** for problems, a satellite map under the plan, a 3D view you can **walk** and **fly through**, a realistic **Render photo**, a **plant schedule** (CSV) and a **printable planting plan** (PDF), plant photos with proper credits, and a **plant tag scan**. Own Vite app (`garden-planner/`, React 19 + Konva + three.js), built into `dist/garden-planner-app/` by the root `npm run build` and shown in Vault at `/garden-planner` by `GardenPlannerPage.jsx` (iframe, same pattern as Room Planner). Feature flag `gardenPlanner` (Settings, Feature Access).
 
-Built on the Room Planner engine through **`planner-core/`** (see `planner-core/README.md`). Room Planner is unchanged: 51 test files / 1,131 tests, plus its Chrome 2D and 3D suites, pass before and after.
+Built on the Room Planner engine through **`planner-core/`** (see `planner-core/README.md`): geometry, undo, view and camera maths, speech, OCR, tooltips and tour styling, project saving, CSV export, the fly-through curve, and the PDF drawing code are shared, not copied. Room Planner keeps its own behaviour: its 1,143 unit tests pass after every change to the shared code.
 
 **Saving (done 2026-10-06):** gardens autosave to the Vault account (table `garden_projects`, `/api/garden-projects`, flag `gardenPlanner`, optimistic 409 on a stale save, 200 gardens per user, **2 MB of design data per garden**). Browser storage is only the offline/signed-out fallback and a one-garden draft that survives an unfinished save; the status bar says which ("Saved to Vault" / "Saved in this browser" / "Not saved") and a conflict shows Keep mine / Load the saved version. **Staging checks must include Room Planner's project library.** The library and its save state machine now live in `planner-core/library` and drive Room Planner's saving too (`room-planner/src/state/library.ts` and `projects.ts` are thin bindings). Its unit tests and Chrome project suite pass unchanged, but only staging exercises the real `room_projects` Postgres path: create, autosave, rename, duplicate, delete, a stale save from a second tab (409), and signed-out/offline fallback.
 
 **Tracing pictures are stored apart from the design (2026-10-07).** A picture is shrunk to at most 4000 px on the long edge (JPEG), uploaded once to its own table (`garden_images`, 12 MB and 50 pictures per user, bytes checked against the claimed type, owner-only download) and referenced from the garden as `underlay.imageId` (`srv-<id>` in the account, `loc-<id>` in this browser's IndexedDB when signed out or offline, promoted to the account the next time the library is saving there). Autosave sends only the design; the server refuses a design that embeds a picture. **Soft delete (2026-10-08):** a picture no garden references is only *marked* deleted (`garden_images."deletedAt"`), never removed at once, so Undo and duplicated gardens are safe. After every garden save or delete the server runs three steps for that user: mark unreferenced pictures older than an hour; **restore** any marked picture a garden references again (Undo, a copy); **purge** marked pictures still unreferenced after **30 days**. A marked picture still downloads. A duplicated garden shares the picture by reference (same `imageId`; nothing is copied or re-uploaded), and "referenced" means by **any** of the user's gardens, so deleting the original never removes what the copy uses. Tested: remove picture, save, undo; duplicate then delete the original; purge only after 30 days and never for a restored picture; a fresh upload is never marked (`server/routes/gardenImages.test.js`, `garden-planner/tests/library.test.ts`). The three statements are exercised against a fake pool that implements their semantics, so **staging must run the real SQL**. An exported file still carries its picture so it works anywhere; importing stores it again. **Migration** of gardens saved with an embedded picture: on server boot `migrateEmbeddedPictures` (`server/services/gardenImages.js`, idempotent, leaves `updatedAt` alone, reports unreadable ones) moves them into `garden_images`; and the client does the same for any garden it opens that still embeds one (covers browser-saved and imported gardens). Tests: `npm run test:garden-projects` (20 server tests incl. the migration), `garden-planner/tests/images.test.ts`, and the Chrome run (wizard upload, saved design never contains the picture, reload fetches it from the account, opening an old embedded garden migrates it). **Pictures that live only in a browser (`loc-…`, IndexedDB) are not cleaned up**: they stay until the browser data is cleared. A picture stored in a browser by an offline garden is promoted to the account, and the browser copy is left behind. Tests: `npm run test:garden-projects` (server route, 12), `garden-planner/tests/library.test.ts`, and the e2e signed-in/offline flow. Gardens saved only in the browser by the very first build are not migrated (by decision).
 
-Run: `cd garden-planner && npm install && npm run dev` (port 5175; Vault's dev proxy forwards `/garden-planner-app`). `npm test` (30 unit tests), `npm run e2e` (real Chrome, start `npm run dev` first), `npm run typecheck`.
+Run: `cd garden-planner && npm install && npm run dev` (port 5175; Vault's dev proxy forwards `/garden-planner-app`). `npm test` (unit tests, about 300), `npm run e2e` (real Chrome, start `npm run dev` first), `node scripts/e2e-photo.mjs` (Render photo in Chrome with software graphics: slow, kept separate), `npm run typecheck`. Server tests: `npm run test:garden-projects`, `test:geocode`, `test:plant-images`, `test:map-tiles` (from `vault/`).
 
 ## Status against the build order
 
@@ -17,7 +17,7 @@ Run: `cd garden-planner && npm install && npm run dev` (port 5175; Vault's dev p
 | 1. Extract shared engine, Room Planner tests still pass | **Done** for the domain-agnostic parts (geometry, history, view/camera, audio, tooltips, speech, OCR). The room-typed interaction/renderers were not generalised; see `planner-core/README.md`. |
 | 2. Shell: wizard, boundary, underlay, house, beds, paths, lawn, structures | **Done** (below). |
 | 3. Plant dataset (150) + library UI + growth and season controls | **Done**: 171 plants, generic 2D/3D forms. Dataset is a **draft**, see below. |
-| 4. Image pipeline (ALA, iNaturalist, Wikimedia, licence filter, curator tools, credits page) | **Built except live ALA**: iNaturalist and Wikimedia work live; ALA is written and tested with fixtures and switches on when `ALA_API_KEY` is set. Curator tools are API only (see "Plant photos"). |
+| 4. Image pipeline (ALA, iNaturalist, Wikimedia, licence filter, curator tools, credits page) | **Built except live ALA**: iNaturalist and Wikimedia work live; ALA is written and tested with fixtures and switches on when `ALA_API_KEY` is set. The admin curator screen is built (see "Plant photos"). |
 | 5. Checks | **Done** (see "Checks" below). |
 | 6. Sun and shade | **Done** (see "Sun and shade" below). Built before the checks, because the sun-mismatch check needs the sun-hours map. |
 | 7. 3D / Render photo adaptations | **Done**: Render photo, walk mode, saved views and the fly-through (see "Fly-through and saved views", "Walk mode" and "Render photo" below). |
@@ -32,10 +32,11 @@ Run: `cd garden-planner && npm install && npm run dev` (port 5175; Vault's dev p
 - **Placing a plant (like Room Planner)**: click **Add to plan** then click the plan, or **drag a plant from the library and release it on the plan** (2D). Either way the plant is placed once, selected, and the tool returns to Select. The selection bar at the bottom of the plan offers **Duplicate** (Ctrl+D, copy 0.6 m away, selected), **Delete** (Del) and **Done** (Esc); drag the plant to move it. Hold **Shift** while clicking to keep planting. Dropping in 3D is not supported (a message says to switch to 2D).
 - **Plants**: search, filters (type, origin, sun, water, flowering month, flower colour, features, max height/spread), **Suits my garden** (on by default: hides plants outside the climate, too frost-tender, or listed as a weed in the state), favourites, plant cards (size, sun, water, frost, climates, soil, flowering calendar, cautions, pet-toxic badge when pets are on), **Add to plan**, **Fill bed** at recommended spacing.
 - **Growth and season** (always visible): Planted → 1 yr → 3 yrs → 5 yrs → Mature; month slider. Size comes only from the plant record and the stage (no resize handles). Flowers, bare winter deciduous trees and autumn colour follow the month. Southern-hemisphere seasons.
-- **3D**: ground, lawns, beds, paths, house, fences, structures and plants as generic forms (columnar, rounded, spreading, weeping, palm, clumping grass, groundcover mat, climber) tinted with the plant's own colours, sun shadows, orbit, Iso/Top/Front.
+- **3D**: ground, lawns, beds, paths, house, fences, structures and plants as generic forms (columnar, rounded, spreading, weeping, palm, clumping grass, groundcover mat, climber) tinted with the plant's own colours, the real sun and its shadows (Month and Time sliders), the satellite map on the ground, orbit, Iso/Top/Front. **Walk** (eye height, collision), **Fly-through** (the camera tours by itself, never through the house or trees), **Views** (saved camera positions, kept with the garden) and **Render photo** (path-traced picture, PNG download). See their sections below.
 - **Voice**: every text and number input has a mic (`planner-core/speech`, en-AU, same recogniser code as Vault's `useVoice`); numbers use Vault's spoken-number parser ("two point five").
-- **Help**: guided tour (9 steps, compass button), How This Works (opens once), tooltips on every control.
-- **Saving**: autosave to the browser (localStorage), a library of gardens, JSON import/export.
+- **Sun and shade**, **Checks**, **Plant tag scan**, **Satellite map**, **Plant photos** (with an admin curator screen), **Plant schedule**, **Printable planting plan**, **Render photo**, **Walk mode** and the **Fly-through** each have their own section below, with what is built, what is not, and how it is tested.
+- **Help**: the guided tour (12 steps, compass button: gardens, drawing, library and tag scan, the plan, details and the map, growth and sun, checks, schedule and plan, 2D/3D, the 3D tools), **How this works** (the (i) button, opens once; covers every part of the app in plain words), and tooltips on every control. The tour test checks that every step points at something that really exists on screen, so the tour cannot drift from the interface.
+- **Saving**: autosave to the Vault account (browser storage only as the offline fallback), a library of gardens, JSON import/export. See "Saving" at the top.
 
 ## Sun and shade (built 2026-10-09)
 
@@ -86,12 +87,12 @@ The **Time** slider shows the clock on the garden's wall. The zone comes from th
 ## Things you need to know
 
 1. **The plant dataset is a draft and unverified.** `garden-planner/src/plants/plantRows.ts` was compiled from general horticultural knowledge. Every record says so in `source`, and the plant card shows "draft, unverified". Sizes, frost tolerance, zones and especially **weed states** must be checked against ANBG / ALA / state weed lists before the weed rule is relied on (spec 4.1). Only a handful of known weeds are in the set (lantana, English ivy, Mexican feather grass, Cootamundra wattle, nandina, pink jasmine, agapanthus in WA), so the filter has something to test on; the list of weeds per state is not complete.
-2. **No admin plant editor yet** (spec 4.2). Plants are edited in `plantRows.ts`. A real editor needs server storage, so it belongs with step 4's curator tools.
+2. **No admin plant-data editor yet** (spec 4.2). Plants are edited in `plantRows.ts`. The admin **curator screen** covers plant *photos* only (hide, default, role). A real data editor needs server storage and a verification workflow (source per value, draft to verified): it is the most valuable thing still to build, because every check and printout carries a draft disclaimer until the data is verified.
 3. **Plant verification checklist:** `docs/plant-verification-checklist.csv` (171 rows, regenerate with `npx vite-node scripts/plantChecklist.ts ../docs/plant-verification-checklist.csv` inside `garden-planner/`). Draft values for the fields the checks use, a weed column per state, and blank verification columns. Weed status other than "LISTED" is written as **unknown**, not "not a weed". Note the app does not yet treat it that way: today a missing weed entry means "not hidden". Step 5 changes that.
-4. **Location is not a map.** Spec 2 asks for "a point on a map". There is no tile source wired in, so the wizard offers a place list, postcode, an OpenStreetMap Nominatim lookup (needs a network) and manual latitude/longitude.
+4. **Choosing a location by clicking a map is not built.** The wizard offers a place list, postcode, an OpenStreetMap lookup (needs a network) and latitude/longitude, and shows a small map of the chosen place; the **satellite map** under the plan (needs `MAPTILER_API_KEY`) is lined up with the house by dragging it.
 5. **Climate zone is a heuristic** (latitude/longitude boxes), a starting suggestion the user can override. It puts Brisbane subtropical, Sydney/Perth/Adelaide warm temperate, Melbourne/Hobart/Canberra cool temperate, Alice Springs arid, Thredbo alpine, Darwin/Cairns tropical (unit-tested).
-6. **Terrain** is level only (as spec 3 allows for v1). Services/easements and garden lighting from spec 3 are not built.
-7. **Plant photos** are not shown yet; cards use a colour swatch drawn from the plant's own foliage and flower colours.
+6. **Terrain** is level only (as spec 3 allows for v1): no slopes, steps or levels, and neighbours' buildings and trees are not modelled in the sun and shade results. Services and easements are built (the Service tool); garden lighting from spec 3 is not.
+7. **Plant photos** come from iNaturalist and Wikimedia Commons (and ALA once its key is set), only under allowed open licences, each with creator, licence and source; a plant with no photo yet falls back to a colour swatch drawn from its own foliage and flower colours. See "Plant photos".
 
 ## Place lookup and OpenStreetMap's usage policy (checked 2026-10-08)
 
@@ -235,6 +236,17 @@ Real photos of a plant, only under open licences, each with its creator, licence
 
 **Not built yet:** the user's own plant photos (spec 6.1 item 4). Photos are fetched when a plant is first opened, or in bulk from the curator screen. The Postgres store (`createPgStore`) is only exercised on staging (checks 11 to 13); the tests use the in-memory store.
 
+## Keys and settings (Railway)
+
+Two new API keys matter; everything else already exists in Vault. Set them on the **server** (never with a `VITE_` prefix: nothing here is for the browser), then redeploy.
+
+- **`MAPTILER_API_KEY`**: the satellite map (2D plan, 3D ground and Render photo). Without it the map option says it is not set up and nothing else changes. Check MapTiler's plan terms (the free plan is for non-commercial use) and what they allow for tracing and for imagery inside downloaded pictures.
+- **`ALA_API_KEY`**: Atlas of Living Australia as a third photo source. Optional: iNaturalist and Wikimedia Commons already work without it. `ALA_ALLOW_ANONYMOUS=true` is a deliberate stopgap that turns ALA on without a key.
+- **`APP_URL`**: identifies Vault in the User-Agent sent to the photo and place-lookup services (probably already set for sign-in and password emails).
+- **`NOMINATIM_CONTACT`** (recommended): an email or URL appended to that User-Agent, as OpenStreetMap's usage policy asks. `NOMINATIM_URL` only if you self-host the geocoder.
+- Optional settings that are not keys: `ALLOWED_LICENCES` (replaces the default photo-licence list), `ALLOW_NONCOMMERCIAL` (leave unset). `SENTRY_DSN` for error tracking: the MapTiler key is scrubbed from reports.
+- **No key needed:** iNaturalist, Wikimedia Commons, OpenStreetMap place lookup, the reading model the tag scan downloads once, and the PDF library.
+
 ## Staging checks
 
 Run these on staging before relying on the features. The unit and Chrome tests use fake servers and a fake database pool, so these are the checks that touch the real thing.
@@ -273,12 +285,20 @@ Run these on staging before relying on the features. The unit and Chrome tests u
 ```
 garden-planner/src/
   domain/    types, commands (invertible), shapes (curves), climate, edit (build commands), hit (picking + snapping), projectFactory
-  plants/    types, plantRows (dataset), plants (parser), growth (size/season), suitability, filters
-  state/     projectStore (+ undo), uiStore, persistence (browser library, autosave)
+  plants/    types, plantRows (dataset), plants (parser), growth (size/season), suitability, weeds, filters, tagMatch (tag text -> plants), photoName
+  sun/       solar (sun position), shadows, canopy, sunHours (sun-hours map), timezone
+  checks/    the checks (spacing, boundary, house/pipes, sun, climate, weed, pets, paths, gates, mower), Fix position, the draft label
+  map/       mercator (map maths), tiles (tile loader)
+  walk/      walk (first-person collision), gardenTour (fly-through stops and the never-through-things guarantee)
+  schedule/  plantSchedule (rows + CSV), planSheet (to-scale plan primitives), planPdf (the PDF writer)
+  state/     projectStore (+ undo), uiStore, library (saving), images, geocode, plantPhotos, tagScan, checksStore
   render2d/  Plan2D (imperative Konva + pointer interaction), theme
-  render3d/  plantParts (pure forms, testable), Garden3D (three.js)
-  ui/        Toolbar, Stage, PlantLibrary, Inspector, GrowthBar, Wizard, ProjectsPanel, InfoModal, fields (mic inputs)
+  render3d/  plantParts (pure forms), Garden3D (three.js: orbit, walk, tour, map ground), photoTracer + photoLighting (Render photo)
+  ui/        Toolbar, Stage, PlantLibrary, Inspector, ChecksPanel, GrowthBar, Wizard, ProjectsPanel, InfoModal, ScheduleModal, PhotoModal,
+             TagScanModal, CuratorModal, CreditsModal, ViewsMenu, MapSection, WalkPad, fields (mic inputs)
   help/      gardenTour (Shepherd)
+server/ (in vault/)   routes/{gardenProjects,geocode,plantImages,mapTiles}*.js, services/{gardenImages,geocode,plantImages,imageLicences}.js
+planner-core/src/     engine, library, speech, ocr, help, export/{csv,pdfDraw}, render3d/{photo,tour}
 ```
 
 Conventions: metres everywhere; plan +Y is up the screen; `northDeg` is the angle the north arrow points, clockwise from the top of the plan (0 = top is north); in 3D plan (x, y) maps to (x, up, −y) so the view is not mirrored. Per-frame state (drag, cursor, polygon being drawn) lives in `Plan2D`, never in a store. Only a finished gesture commits one command.

@@ -2774,7 +2774,7 @@ function SettingsPage() {
             <div>
               <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Garden Planner Tour</p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                9-step tour — gardens, drawing tools, plant library, details, growth and season, 2D and 3D
+                12-step tour — gardens, drawing, plant library and tags, details and the map, growth and sun, checks, schedule and printable plan, and the 3D tools
               </p>
             </div>
             <button
