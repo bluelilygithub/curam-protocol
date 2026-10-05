@@ -90,6 +90,7 @@ export const APP_NAV_GROUPS = [
       { id: 'translate', label: 'Translate', path: '/translate', icon: 'languages', featureKey: 'translate' },
       { id: 'guitar',    label: 'Guitar',    path: '/guitar',    icon: 'guitar',    featureKey: 'guitar'    },
       { id: 'recipes', label: 'Recipes', path: '/recipes', icon: 'utensils', featureKey: 'recipes' },
+      { id: 'measurements', label: 'Measurements', path: '/measurements', icon: 'ruler', featureKey: 'measurements' },
       { id: 'youtube', label: 'YouTube', path: '/youtube', icon: 'youtube', featureKey: 'youtube' },
       { id: 'productScout', label: 'Amazon Search', path: '/product-scout', icon: 'productScout', featureKey: 'productScout' },
     ],

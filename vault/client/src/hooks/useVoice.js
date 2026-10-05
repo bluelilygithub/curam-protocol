@@ -50,7 +50,9 @@ function speechErrorMessage(error) {
   }
 }
 
-export function useVoice() {
+export function useVoice(options = {}) {
+  // Optional: existing callers pass nothing and keep en-US + continuous dictation.
+  const { lang = 'en-US', continuous = true } = options;
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [interimText, setInterimText] = useState('');
@@ -259,9 +261,9 @@ export function useVoice() {
     if (!isSTTAvailable) return;
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
-    recognition.continuous = true;
+    recognition.continuous = continuous;
     recognition.interimResults = true;
-    recognition.lang = 'en-US';
+    recognition.lang = lang;
 
     recognition.onstart = () => {
       setVoiceError('');
@@ -308,7 +310,7 @@ export function useVoice() {
 
     recognitionRef.current = recognition;
     return () => recognition.abort();
-  }, [startLocalListening]);
+  }, [startLocalListening, lang, continuous]);
 
   const startListening = useCallback(() => {
     if (!isSTTAvailable || !recognitionRef.current) {

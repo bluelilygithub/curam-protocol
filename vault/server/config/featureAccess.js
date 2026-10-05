@@ -37,6 +37,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   restyle: true,
   browserAgent: true,
   roomPlanner: true,
+  measurements: true,
 };
 
 const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);

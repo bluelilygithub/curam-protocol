@@ -186,6 +186,10 @@ const semanticMap = {
   'square': { lucide: 'Square' },
   'mouse-pointer': { lucide: 'MousePointer2' },
   'move': { lucide: 'Move' },
+  ruler: { lucide: 'Ruler' },
+  'mic-off': { lucide: 'MicOff' },
+  'arrow-left-right': { lucide: 'ArrowLeftRight' },
+  'scan-text': { lucide: 'ScanText' },
 };
 
 const IconContext = createContext(null);
