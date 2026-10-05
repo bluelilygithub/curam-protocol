@@ -300,3 +300,12 @@ textarea.vi-input { padding: 8px 34px 8px 10px; }
 .walk-hint { top: 54px; left: 12px; }
 .walkpad { position: absolute; left: 16px; bottom: 16px; width: 112px; height: 112px; border-radius: 50%; background: rgba(255,255,255,.55); border: 1px solid var(--color-border); touch-action: none; display: grid; place-items: center; user-select: none; }
 .walkpad-knob { width: 44px; height: 44px; border-radius: 50%; background: var(--color-primary); opacity: .85; pointer-events: none; }
+
+/* fly-through and saved views */
+.tour-note { align-self: center; font-size: 12px; background: rgba(255,255,255,.85); padding: 4px 8px; border-radius: var(--radius); border: 1px solid var(--color-border); }
+.tour-loop { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; background: rgba(255,255,255,.85); padding: 0 8px; border-radius: var(--radius); border: 1px solid var(--color-border); }
+.views-wrap { position: relative; display: inline-flex; }
+.views-pop { position: absolute; top: 40px; left: 0; z-index: 5; width: 320px; max-height: 60vh; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 10px; background: #fff; border: 1px solid var(--color-border); border-radius: var(--radius); box-shadow: 0 6px 24px rgba(0,0,0,.18); }
+.views-pop ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.views-pop li { display: grid; grid-template-columns: auto 1fr auto; gap: 6px; align-items: end; }
+.views-pop .note { margin: 0; }

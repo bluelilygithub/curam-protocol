@@ -1062,6 +1062,144 @@ check('no page errors or console errors', problems.length === 0, problems.slice(
   check('no page errors while walking', errs.length === 0, errs.join(' | '));
   await ctxW.close();
 }
+// ---- fly-through and saved views
+{
+  const ctxF = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await ctxF.addInitScript(() => { try { localStorage.setItem('garden-planner:info-seen:v1', '1'); } catch { /* ignore */ } });
+  const pg = await ctxF.newPage();
+  const errs = [];
+  pg.on('pageerror', (e) => errs.push(e.message));
+  await pg.goto(URL);
+  await pg.waitForSelector('.wizard');
+  await pg.evaluate(() => window.gardenPlanner.newProject({ meta: { name: 'Tour garden', location: { label: 'Brisbane QLD', lat: -27.47, lng: 153.03, state: 'QLD' }, climateZone: 'subtropical', frost: 'none', pets: false, northDeg: 0 }, plot: { kind: 'rect', width: 24, depth: 20 } }));
+  await pg.waitForSelector('.stage canvas');
+  await pg.evaluate(() => {
+    const a = window.gardenPlanner;
+    const rect = (x0, y0, x1, y1) => [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
+    a.project.getState().commit({ type: 'Composite', commands: [
+      { type: 'SetSingleton', name: 'house', from: null, to: { id: 'h', vertices: rect(8, 14, 16, 19).map((position, i) => ({ id: 'v' + i, position })), height: 3.2, fixtures: [] } },
+      { type: 'SetItem', collection: 'structures', id: 'gate1', from: null, to: { id: 'gate1', kind: 'gate', name: 'Gate', position: { x: 12, y: 0 }, width: 0.9, length: 0.1, height: 1.5, rotation: 0, swing: 1 } },
+      { type: 'SetItem', collection: 'plants', id: 't1', from: null, to: { id: 't1', plantId: 'syzygium-smithii', position: { x: 4, y: 8 } } },
+      { type: 'SetItem', collection: 'plants', id: 't2', from: null, to: { id: 't2', plantId: 'syzygium-smithii', position: { x: 20, y: 9 } } },
+    ] }, 'demo');
+    a.ui.getState().set({ viewMode: '3d', month: 12, hour: 11, stage: 'mature' });
+  });
+  await pg.waitForSelector('[data-testid="tour-start"]', { timeout: 15000 });
+  await wait(800);
+  const cam = () => pg.evaluate(() => window.gardenPlanner.view3d.current.cameraState());
+  const ds = () => pg.locator('.stage canvas').evaluate((c) => ({ stop: Number(c.dataset.tourStop), t: Number(c.dataset.tourT), y: Number(c.dataset.tourY) }));
+  const before = await cam();
+
+  check('there is a Fly-through button in the 3D view', (await pg.getByTestId('tour-start').count()) === 1);
+  await pg.getByTestId('tour-start').click();
+  await pg.getByTestId('tour-progress').waitFor();
+  const total = Number((/of (\d+)/.exec(await pg.getByTestId('tour-progress').innerText()) ?? [])[1]);
+  check('the tour has an overview, the entrance and views from the corners (4 or more stops)', total >= 4, String(total));
+  check('it says which stop it is at', /Stop 1 of/.test(await pg.getByTestId('tour-progress').innerText()));
+  check('while touring the camera buttons give way to Pause, Stop and Loop', (await pg.getByTestId('tour-toggle').count()) === 1 && (await pg.getByTestId('tour-stop').count()) === 1 && (await pg.getByRole('button', { name: 'Iso', exact: true }).count()) === 0);
+  const c0 = await cam();
+  check('the wide-angle cinematic view is on', c0.fov === 55, JSON.stringify(c0.fov));
+  await wait(2500);
+  // the overview rests for 2.5 s, then the camera travels
+  await wait(3500);
+  const c1 = await cam();
+  check('the camera moves along the tour by itself', Math.hypot(c1.position[0] - c0.position[0], c1.position[1] - c0.position[1], c1.position[2] - c0.position[2]) > 1, JSON.stringify([c0.position, c1.position]));
+  check('and never goes under the ground', c1.position[1] >= 0.5);
+
+  // pause with Space: the camera holds still; Space again resumes
+  await pg.keyboard.press(' ');
+  await wait(200);
+  check('Space pauses (the button now says Play)', (await pg.getByTestId('tour-toggle').innerText()) === 'Play');
+  const p1 = await cam(); await wait(1200); const p2 = await cam();
+  check('a paused tour holds the camera still', Math.hypot(p1.position[0] - p2.position[0], p1.position[1] - p2.position[1], p1.position[2] - p2.position[2]) < 1e-6);
+  await pg.keyboard.press(' ');
+  await wait(1500);
+  const p3 = await cam();
+  check('Space again plays on', Math.hypot(p3.position[0] - p2.position[0], p3.position[1] - p2.position[1], p3.position[2] - p2.position[2]) > 0.05 && (await pg.getByTestId('tour-toggle').innerText()) === 'Pause');
+
+  // the tour reaches the next stops in order
+  await pg.waitForFunction(() => Number(document.querySelector('.stage canvas').dataset.tourStop) >= 1, null, { timeout: 40000 });
+  check('it moves on to the next stop', (await ds()).stop >= 1);
+  check('the progress label follows', new RegExp('Stop ' + ((await ds()).stop + 1) + ' of').test(await pg.getByTestId('tour-progress').innerText()));
+
+  // Render photo from the tour's camera
+  const mid = await cam();
+  await pg.getByTestId('open-photo').click();
+  await pg.getByRole('dialog', { name: 'Render photo' }).waitFor();
+  check('Render photo is offered during the tour and uses its wide view', mid.fov === 55);
+  await pg.getByRole('button', { name: 'Back to 3D', exact: true }).click();
+
+  // loop toggle
+  await pg.getByTestId('tour-loop').uncheck();
+  check('Loop can be turned off', (await pg.evaluate(() => window.gardenPlanner.ui.getState().tourLoop)) === false);
+  await pg.getByTestId('tour-loop').check();
+
+  // Esc stops and puts the camera back exactly
+  await pg.keyboard.press('Escape');
+  await wait(300);
+  check('Esc stops the tour', (await pg.evaluate(() => window.gardenPlanner.ui.getState().tourState)) === 'off');
+  const after = await cam();
+  check('and the camera is back exactly where it was', JSON.stringify(after.position.map((v) => Math.round(v * 1000))) === JSON.stringify(before.position.map((v) => Math.round(v * 1000))), JSON.stringify([before.position, after.position]));
+  check('the camera buttons are back', (await pg.getByRole('button', { name: 'Iso', exact: true }).count()) === 1);
+
+  // saved views
+  await pg.getByTestId('views-toggle').click();
+  await pg.getByTestId('views-pop').waitFor();
+  check('an empty Views menu explains itself', /Save this view/.test(await pg.getByTestId('views-pop').innerText()));
+  await pg.getByTestId('views-save').click();
+  await wait(200);
+  check('Save this view adds View 1', (await pg.getByTestId('views-item').count()) === 1);
+  const v1 = await cam();
+  await pg.getByTestId('views-toggle').click();
+  await pg.getByRole('button', { name: 'Top', exact: true }).click();
+  await wait(300);
+  await pg.getByTestId('views-toggle').click();
+  await pg.getByTestId('views-save').click();
+  await wait(200);
+  const saved = await pg.evaluate(() => window.gardenPlanner.project.getState().project.savedViews);
+  check('a second view is saved with its own camera', saved.length === 2 && JSON.stringify(saved[0].cameraPosition) !== JSON.stringify(saved[1].cameraPosition) && saved[0].name === 'View 1' && saved[1].name === 'View 2', JSON.stringify(saved.map((s) => s.name)));
+  check('the first view is where the camera was when it was saved', JSON.stringify(saved[0].cameraPosition.map((x) => Math.round(x * 100))) === JSON.stringify(v1.position.map((x) => Math.round(x * 100))));
+  const nameBox = pg.getByTestId('views-item').first().getByLabel('View name');
+  await nameBox.fill('Front lawn');
+  await nameBox.press('Enter');
+  await wait(200);
+  check('a view can be renamed', (await pg.evaluate(() => window.gardenPlanner.project.getState().project.savedViews[0].name)) === 'Front lawn');
+  await pg.getByTestId('views-item').first().getByRole('button', { name: 'Go', exact: true }).click();
+  await wait(1200);
+  const gone = await cam();
+  check('Go glides the camera to the saved view', JSON.stringify(gone.position.map((x) => Math.round(x * 100))) === JSON.stringify(saved[0].cameraPosition.map((x) => Math.round(x * 100))), JSON.stringify([gone.position, saved[0].cameraPosition]));
+
+  // two saved views become the tour
+  await pg.getByTestId('tour-start').click();
+  await pg.getByTestId('tour-progress').waitFor();
+  check('with two saved views the tour visits just those two', /Stop 1 of 2/.test(await pg.getByTestId('tour-progress').innerText()), await pg.getByTestId('tour-progress').innerText());
+  await pg.keyboard.press('Escape');
+  await wait(200);
+
+  // saved with the garden: survives a reload
+  await pg.waitForFunction(() => window.gardenPlanner.library.getState().status === 'saved', null, { timeout: 8000 }).catch(() => undefined);
+  await wait(500);
+  await pg.reload();
+  await pg.waitForFunction(() => window.gardenPlanner.project.getState().project?.savedViews?.length === 2, null, { timeout: 15000 });
+  check('saved views are kept with the garden, across a reload', (await pg.evaluate(() => window.gardenPlanner.project.getState().project.savedViews.map((v) => v.name))).join(',') === 'Front lawn,View 2');
+  await pg.evaluate(() => window.gardenPlanner.ui.getState().set({ viewMode: '3d' }));
+  await pg.getByTestId('views-toggle').waitFor({ timeout: 15000 });
+  await pg.getByTestId('views-toggle').click();
+  await pg.getByTestId('views-item').first().getByRole('button', { name: 'Delete Front lawn' }).click();
+  await wait(200);
+  check('a view can be deleted', (await pg.evaluate(() => window.gardenPlanner.project.getState().project.savedViews.length)) === 1);
+  await pg.getByTestId('views-item').first().getByRole('button', { name: /^Delete/ }).click();
+  await wait(200);
+  check('deleting the last one leaves no empty list in the garden', (await pg.evaluate(() => 'savedViews' in window.gardenPlanner.project.getState().project)) === false);
+
+  // walking and the tour do not run together
+  await pg.getByTestId('walk-start').click();
+  await pg.getByTestId('walk-hint').waitFor();
+  check('while walking there is no Fly-through button', (await pg.getByTestId('tour-start').count()) === 0);
+  await pg.keyboard.press('Escape');
+  check('no page errors in the fly-through', errs.length === 0, errs.join(' | '));
+  await ctxF.close();
+}
 await browser.close();
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nAll checks passed');
 process.exit(failures ? 1 : 0);

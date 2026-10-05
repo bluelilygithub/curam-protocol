@@ -20,7 +20,7 @@ Run: `cd garden-planner && npm install && npm run dev` (port 5175; Vault's dev p
 | 4. Image pipeline (ALA, iNaturalist, Wikimedia, licence filter, curator tools, credits page) | **Built except live ALA**: iNaturalist and Wikimedia work live; ALA is written and tested with fixtures and switches on when `ALA_API_KEY` is set. Curator tools are API only (see "Plant photos"). |
 | 5. Checks | **Done** (see "Checks" below). |
 | 6. Sun and shade | **Done** (see "Sun and shade" below). Built before the checks, because the sun-mismatch check needs the sun-hours map. |
-| 7. 3D / Render photo adaptations | **Render photo and walk mode done** (see "Walk mode" and "Render photo" below). Still not built: saved views and the fly-through. |
+| 7. 3D / Render photo adaptations | **Done**: Render photo, walk mode, saved views and the fly-through (see "Fly-through and saved views", "Walk mode" and "Render photo" below). |
 | 8. Plant tag scan, plant schedule CSV | **Done** (see "Plant tag scan" and "Plant schedule" below). |
 | 9. Billboard cut-outs | Not started. |
 
@@ -108,6 +108,20 @@ The wizard's **Look up** uses OpenStreetMap's public Nominatim. Policy read at h
 
 Other behaviour: signed-out users get a plain message (the place list, postcode-to-state and latitude/longitude still work); the service being down or busy gives plain messages and is not retried in a loop; failures are not cached. The public service has no uptime promise, so for heavy use set `NOMINATIM_URL` to a self-hosted Nominatim (or a provider with the same API) and no code changes. Set `NOMINATIM_CONTACT` (an email or URL for OSM to reach you) in Railway; I did not put an email in the code. Cost/terms conclusion: the public instance's terms fit this use (moderate user count, user-triggered, cached, attributed, not primarily a geocoding service), so no provider switch was needed. Revisit if usage grows beyond a handful of lookups a day per user.
 
+## Fly-through and saved views (built 2026-10-18)
+
+**Fly-through** in the 3D view makes the camera tour the garden by itself. **Pause / Play** (or Space), **Stop tour** (or Esc, which puts the overview camera back exactly where it was), a **Loop** switch, and "Stop 2 of 5". Render photo stays available and photographs from wherever the tour camera is.
+
+**Which stops.** When you have **two or more saved views** the tour visits those (3 s at each). Otherwise it is chosen from the garden: an **overview** (the Iso camera), the **entrance** at eye height just inside the gate (or the middle of the plot), then **eye-level views from the far corners of the plot** looking across it or at the house, ordered around the plot so the camera circles it. One saved view is the first stop, followed by the automatic ones. An eye-level stop is only ever placed where a person could stand, the camera is in clear air, and **there is open sky above it** (not under a tree's leaves, which the walker can stand under but a camera would film).
+
+**It never flies through anything** (`src/walk/gardenTour.ts`, pure and property-tested). The same curve and timing as Room Planner's tour (now shared in `planner-core/src/render3d/tour.ts`) can slice through the house, a fence, a shed or a tree if left alone, so every leg is sampled, and where it would clip something the camera does a **crane move**: straight up from where it rests, across at one **cruising height above the tallest thing in the garden**, and straight down onto the next stop (waypoints that are not counted as stops). The camera never goes under the ground. Tested on 14 random gardens at three growth stages with the whole looped path checked every tenth of a second, plus the house-in-the-way case, a young tree beside a stop, saved views that cross the house, and the loop join.
+
+**Saved views** (**Views** menu): **Save this view** remembers where the camera is (or where you are standing when walking), up to 20; **Go** glides there; each can be **renamed** (with the microphone on the name like every other input) or deleted. They are saved **with the garden** (they survive a reload and travel with an exported file), and are **not undoable** (like the garden's name).
+
+**Not built:** recording the fly-through as a video, a speed control, and choosing the order of the stops other than by saving the views in that order.
+
+**Tests:** `tests/gardenTour.test.ts` (14) and the Chrome run (the Fly-through button, 4 or more stops, "Stop 1 of N", the controls replacing the camera buttons, the cinematic field of view, the camera moving and never under the ground, Space pausing and holding still and resuming, moving on to the next stops, Render photo from the tour, Loop, Esc restoring the camera exactly, saved views: saving, two distinct cameras, renaming, Go, two views becoming the tour, surviving a reload, deleting, and no Fly-through while walking). Room Planner's own 1,143 unit tests (including its fly-through property tests) pass on the shared path code.
+
 ## Walk mode (built 2026-10-17)
 
 **Walk** in the 3D view puts you in the garden at eye height (1.6 m), first person, with a wider view (70 degrees). It starts just inside the gate if there is one (otherwise the middle of the plot), facing the house (or the middle of the plot).
@@ -121,7 +135,7 @@ Other behaviour: signed-out users get a plain message (the place list, postcode-
 - **Growth stage matters:** plants are small when planted, so you can walk where a mature plant would block. The obstacles are rebuilt when the garden or the growth stage changes, and a walker who finds a plant has grown around them is moved to the nearest free spot.
 - The walker cannot leave a box 40 m beyond the plot (the 3D ground is only so big). A stalled browser tab cannot make the walker jump through a wall (a long frame is capped).
 
-**Not built:** doors into the house (you cannot go inside it), slopes and steps (the ground is flat), clicking a spot to walk there, a choice of start points, and a fly-through.
+**Not built:** doors into the house (you cannot go inside it), slopes and steps (the ground is flat), clicking a spot to walk there, and a choice of start points.
 
 **Tests:** `tests/walk.test.ts` (22: what blocks and what does not, knee height, trunk versus leaves, a seedling versus a mature plant, a removed plant, the gate in and out and the fence beside it, direction and speed, turning, sliding along a wall, **12 random walks of 400 steps that are never inside anything**, a long frame not tunnelling, the start spot, an empty garden, the camera pose) and the Chrome run (the Walk button, eye height and field of view, the start, W, the right arrow turning and not nudging a selected plant, drag to look, **running at the house stops one body radius from its wall**, the pad, the sliders still lighting the scene, Render photo at eye level, Esc restoring the overview camera exactly, the Stop walking button, the 2D switch).
 
@@ -233,6 +247,8 @@ Run these on staging before relying on the features. The unit and Chrome tests u
 18. **Render photo, on real hardware:** in 3D, open **Render photo**, choose Good and 1280 x 720, and time it. Try each Lighting mood, a morning and an evening hour (the shadows should point the same way as in the 3D view), and a garden with the satellite map on (check the credit is in the corner of the downloaded picture, and the ground matches the map). Confirm the picture is a fair likeness of your garden and report how long it took.
 
 19. **Walk mode, with a real garden:** in 3D press **Walk**. Check you start at the gate, walk to the house and along a fence (you must slide, not stick or pass through), out through a gate and back, around a tree trunk and under a pergola, and onto a deck. Try the pad and drag-to-look on a phone. Try 1 year and 5 years growth. Report anything you can walk through that should be solid, or get stuck on that should not be.
+
+20. **Fly-through, with a real garden:** in 3D press **Fly-through** and watch a whole loop. The camera must never go through the house, a fence, a shed or a tree; it should sweep over them. Try it at 1 year and 5 years growth. Save two or three views (a good angle on the house, the back lawn) and play it again: it should visit just those, in order. Report any moment the camera clips something solid or does something odd.
 
 ## Layout
 

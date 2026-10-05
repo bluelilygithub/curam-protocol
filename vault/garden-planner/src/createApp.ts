@@ -37,6 +37,8 @@ export interface NewProjectOptions {
  * Composition root: the stores plus the project-level actions the UI buttons call. DOM-free except where the browser pieces
  * (storage) are passed in, so it can be tested.
  */
+const MAX_SAVED_VIEWS = 20;
+
 export function createApp(storage: StorageLike) {
   const project = createProjectStore(null);
   const ui = createUiStore();
@@ -69,7 +71,7 @@ export function createApp(storage: StorageLike) {
   const mapTiles = createMapTiles(storage);
   const tagScanner = createTagScanner();
   /** The live 3D view, while there is one (Render photo asks it where the camera is). */
-  const view3d: { current: { cameraState(): { position: [number, number, number]; target: [number, number, number]; fov?: number }; walking: boolean; startWalk(): boolean; stopWalk(): void; presetPose(k: 'iso' | 'front' | 'top'): { position: [number, number, number]; target: [number, number, number] } | null } | null } = { current: null };
+  const view3d: { current: { cameraState(): { position: [number, number, number]; target: [number, number, number]; fov?: number }; walking: boolean; startWalk(): boolean; stopWalk(): void; touring: boolean; startTour(): boolean; toggleTour(): void; stopTour(): void; refreshTour(): void; goTo(position: [number, number, number], target: [number, number, number]): void; presetPose(k: 'iso' | 'front' | 'top'): { position: [number, number, number]; target: [number, number, number] } | null } | null } = { current: null };
   const checks = createChecksStore();
   const images = browserImageStore(() => library.getState().kind, randomId, storage);
 
@@ -359,6 +361,32 @@ export function createApp(storage: StorageLike) {
       if (!project.getState().commit({ type: 'Composite', commands } as never, n === 1 ? 'Duplicate' : `Make a row of ${n}`)) return 0;
       ui.getState().select({ kind: sel.kind, id: lastId });
       return n;
+    },
+
+    // ------------------------------------------------------------ saved views (not undoable; saved with the garden)
+    /** Remember where the 3D camera is (or where the walker stands) as a named view, up to 20. */
+    saveView(): string | null {
+      const v = view3d.current;
+      const p = cur();
+      if (!v || !p) return null;
+      const list = p.savedViews ?? [];
+      if (list.length >= MAX_SAVED_VIEWS) { notify(`You can keep up to ${MAX_SAVED_VIEWS} views. Delete one first.`, 'warn'); return null; }
+      const pose = v.cameraState();
+      const id = randomId();
+      let n = list.length + 1;
+      while (list.some((x) => x.name === `View ${n}`)) n += 1;
+      project.getState().updateSilently((q) => ({ ...q, savedViews: [...(q.savedViews ?? []), { id, name: `View ${n}`, cameraPosition: pose.position, target: pose.target }] }));
+      return id;
+    },
+    renameView(id: string, name: string): void {
+      project.getState().updateSilently((q) => ({ ...q, savedViews: (q.savedViews ?? []).map((v) => (v.id === id ? { ...v, name: cleanName(name, v.name, 40) } : v)) }));
+    },
+    deleteView(id: string): void {
+      project.getState().updateSilently((q) => { const list = (q.savedViews ?? []).filter((v) => v.id !== id); const { savedViews: _old, ...rest } = q; return list.length ? { ...rest, savedViews: list } : rest; });
+    },
+    goToView(id: string): void {
+      const v = cur()?.savedViews?.find((x) => x.id === id);
+      if (v) view3d.current?.goTo(v.cameraPosition, v.target);
     },
 
     // ------------------------------------------------------------ satellite map

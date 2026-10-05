@@ -11,6 +11,7 @@ import { mid } from '../plants/growth';
 import { findItem } from '../domain/edit';
 import { MapAttribution } from './MapSection';
 import { WalkPad } from './WalkPad';
+import { ViewsMenu } from './ViewsMenu';
 import { useApp, useProject, useUi } from './AppContext';
 
 const HINTS: Record<string, string> = {
@@ -45,6 +46,10 @@ export function Stage() {
   const project = useProject((s) => s.project);
   const mapAlign = useUi((s) => s.mapAlign);
   const walking = useUi((s) => s.walking);
+  const tourState = useUi((s) => s.tourState);
+  const tourLoop = useUi((s) => s.tourLoop);
+  const progress = useUi((s) => s.tourProgress);
+  const touring = tourState !== 'off';
 
   useEffect(() => {
     const el = ref.current;
@@ -65,6 +70,8 @@ export function Stage() {
       const ui = app.ui.getState();
       // while walking the keys belong to the walker (arrows must not nudge a selected item); only Esc does anything else
       if (ui.walking) { if (e.key === 'Escape') { e.preventDefault(); three.current?.stopWalk(); } return; }
+      // the same for the fly-through: Esc stops it, Space pauses and plays
+      if (ui.tourState !== 'off') { if (e.key === 'Escape') { e.preventDefault(); three.current?.stopTour(); } else if (e.key === ' ') { e.preventDefault(); three.current?.toggleTour(); } return; }
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) app.redo(); else app.undo(); return; }
       if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); app.redo(); return; }
@@ -105,10 +112,16 @@ export function Stage() {
       {project && <MapAttribution project={project} />}
       {viewMode === '3d' && (
         <div className="view3d-bar" role="group" aria-label="3D camera">
-          {!walking && <button type="button" title="Isometric view" onClick={() => three.current?.iso()}>Iso</button>}
-          {!walking && <button type="button" title="Straight down" onClick={() => three.current?.top()}>Top</button>}
-          {!walking && <button type="button" title="From the front" onClick={() => three.current?.front()}>Front</button>}
-          {!walking && <button type="button" title="Walk around the garden at eye height" data-testid="walk-start" onClick={() => { if (!three.current?.startWalk()) app.notify('There is nowhere free to stand in this garden yet.', 'warn'); }}>Walk</button>}
+          {!walking && !touring && <button type="button" title="Isometric view" onClick={() => three.current?.iso()}>Iso</button>}
+          {!walking && !touring && <button type="button" title="Straight down" onClick={() => three.current?.top()}>Top</button>}
+          {!walking && !touring && <button type="button" title="From the front" onClick={() => three.current?.front()}>Front</button>}
+          {!walking && !touring && <button type="button" title="Walk around the garden at eye height" data-testid="walk-start" onClick={() => { if (!three.current?.startWalk()) app.notify('There is nowhere free to stand in this garden yet.', 'warn'); }}>Walk</button>}
+          {!walking && !touring && <button type="button" title="Fly-through: the camera tours the garden by itself" data-testid="tour-start" onClick={() => { if (!three.current?.startTour()) app.notify('There is nothing to fly through yet. Draw the plot, or save two views.', 'warn'); }}>Fly-through</button>}
+          {!walking && !touring && <ViewsMenu />}
+          {touring && <button type="button" title="Pause or play the fly-through (Space)" data-testid="tour-toggle" aria-pressed={tourState === 'playing'} onClick={() => three.current?.toggleTour()}>{tourState === 'playing' ? 'Pause' : 'Play'}</button>}
+          {touring && <button type="button" title="Stop the fly-through and go back (Esc)" data-testid="tour-stop" onClick={() => three.current?.stopTour()}>Stop tour</button>}
+          {touring && <label className="tour-loop" title="Go round again when it reaches the end"><input type="checkbox" data-testid="tour-loop" checked={tourLoop} onChange={(e) => { app.ui.getState().set({ tourLoop: e.target.checked }); three.current?.refreshTour(); }} /> Loop</label>}
+          {touring && progress && <span className="tour-note" data-testid="tour-progress" role="status">Stop {progress.stop + 1} of {progress.total}</span>}
           {walking && <button type="button" title="Stop walking and go back to the overview (Esc)" data-testid="walk-stop" onClick={() => three.current?.stopWalk()}>Stop walking</button>}
           <button type="button" title="Render photo: a realistic picture with the sun where the time slider puts it" data-testid="open-photo" onClick={() => app.ui.getState().set({ photoOpen: true })}>Render photo</button>
         </div>
@@ -116,6 +129,7 @@ export function Stage() {
       {viewMode === '2d' && <SelectionBar />}
       {viewMode === '3d' && walking && <p className="hint-banner walk-hint" data-testid="walk-hint">Walking at eye height. W A S D or the pad to walk, arrow keys or drag to look, hold Shift to run, Esc to stop. Fences, walls, structures and trunks are solid; gates let you through.</p>}
       {viewMode === '3d' && <WalkPad />}
+      {viewMode === '3d' && touring && <p className="hint-banner walk-hint" data-testid="tour-hint">Fly-through. Space pauses and plays, Esc stops. The camera sweeps over the house and trees instead of through them.</p>}
       <ScalePrompt />
       {viewMode === '2d' && <SunLegend />}
     </div>

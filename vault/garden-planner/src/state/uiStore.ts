@@ -63,6 +63,11 @@ export interface UiState {
   photoOpen: boolean;
   /** Walking around the garden in the 3D view (first person, eye height). */
   walking: boolean;
+  /** The fly-through: off, playing, or paused (the camera follows the tour path while it is on). */
+  tourState: 'off' | 'playing' | 'paused';
+  tourLoop: boolean;
+  /** Which counted stop the camera is at or heading to, for "stop 2 of 4". */
+  tourProgress: { stop: number; total: number } | null;
   /** Dragging on the plan moves the satellite map (to line it up with the plot) instead of selecting. */
   mapAlign: boolean;
   snap: boolean;
@@ -89,7 +94,7 @@ export function createUiStore(): UiStore {
     tool: 'select', structureKind: 'shed', serviceKind: 'sewer', placingPlantId: null, smoothShapes: true,
     selection: null, boundaryEdge: null, viewMode: '2d', stage: 'mature', month: new Date().getMonth() + 1,
     hour: 12, showSun: false, showShadows: false, sunThresholds: { ...DEFAULT_SUN_THRESHOLDS }, matchBedSun: false, pathMinWidth: 0.9, mowerWidth: 0.9, rightTab: 'details',
-    suitsOnly: true, libraryOpen: true, inspectorOpen: true, projectsOpen: false, wizardOpen: false, infoOpen: false, creditsOpen: false, curatorOpen: false, tagScanOpen: false, scheduleOpen: false, photoOpen: false, walking: false, mapAlign: false,
+    suitsOnly: true, libraryOpen: true, inspectorOpen: true, projectsOpen: false, wizardOpen: false, infoOpen: false, creditsOpen: false, curatorOpen: false, tagScanOpen: false, scheduleOpen: false, photoOpen: false, walking: false, tourState: 'off', tourLoop: true, tourProgress: null, mapAlign: false,
     snap: true, grid: 0.5, showGrid: true, scaleDraft: null, status: null,
 
     set: (patch) => set(patch),

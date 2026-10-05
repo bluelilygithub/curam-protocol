@@ -12,6 +12,8 @@ import { placeFor } from '../sun/timezone';
 import { MIN_SUN_ALTITUDE } from '../sun/shadows';
 import type { View } from '@planner-core/adapters/canvas';
 import { chooseZoom, metresPerPixel, TILE, visibleTiles, type LatLng } from '../map/mercator';
+import type { Tour } from '@planner-core/render3d/tour';
+import { buildGardenTour, buildTourWorld, countedIndex, countedStops, samplePose, TOUR_FOV } from '../walk/gardenTour';
 import { buildWalkWorld, NO_INPUT, nearestWalkable, stepWalk, TURN_RATE, walkPose, walkStart, type WalkInput, type WalkState, type WalkWorld } from '../walk/walk';
 import { FENCE_COLOUR, GRASS_COLOUR, MULCH_COLOUR, PATH_COLOUR, STRUCTURE_COLOUR } from '../render2d/theme';
 
@@ -70,6 +72,10 @@ export class Garden3D {
   private mapJob: { anchor: LatLng; north: number; view: View; z: number; size: number; pxPerM: number } | null = null;
   private mapPaintQueued = false;
   /** Walk mode: first person at eye height, with collision (see src/walk/walk.ts). Null when not walking. */
+  /** The fly-through: the camera follows `tour` at time `t` while `playing`. */
+  private tourRun: { tour: Tour; t: number; last: number; saved: { position: THREE.Vector3; target: THREE.Vector3; fov: number; near: number }; target: [number, number, number] } | null = null;
+  /** A short glide to a saved view. */
+  private glide: { from: THREE.Vector3; fromT: THREE.Vector3; to: THREE.Vector3; toT: THREE.Vector3; t0: number } | null = null;
   private walk: { state: WalkState; world: WalkWorld; saved: { position: THREE.Vector3; target: THREE.Vector3; fov: number; near: number }; keys: Set<string>; lookX: number; lookY: number; drag: number | null; last: number; off: Array<() => void> } | null = null;
 
   /**
@@ -128,8 +134,116 @@ export class Garden3D {
   /** The camera as it is now (Render photo photographs from here). */
   cameraState(): { position: [number, number, number]; target: [number, number, number]; fov?: number } {
     if (this.walk) return { ...walkPose(this.walk.state), fov: WALK_FOV };
+    if (this.tourRun) return { position: [this.camera.position.x, this.camera.position.y, this.camera.position.z], target: [...this.tourRun.target], fov: TOUR_FOV };
     const t = this.controls?.target ?? new THREE.Vector3();
     return { position: [this.camera.position.x, this.camera.position.y, this.camera.position.z], target: [t.x, t.y, t.z] };
+  }
+
+  // ---------------------------------------------------------------- fly-through
+  get touring(): boolean { return this.tourRun !== null; }
+
+  private buildTourNow(): Tour | null {
+    const p = this.app.project.getState().project;
+    const ov = this.presetPose('iso');
+    if (!p || !ov) return null;
+    const ui = this.app.ui.getState();
+    return buildGardenTour(p, buildTourWorld(p, ui.stage), ov, ui.tourLoop);
+  }
+
+  /** Start the fly-through: the saved views when there are two or more, otherwise a tour chosen from the garden. False when there is nothing to fly through. */
+  startTour(): boolean {
+    if (this.tourRun || !this.renderer || !this.controls) return false;
+    this.stopWalk();
+    const tour = this.buildTourNow();
+    if (!tour || countedStops(tour) < 2) return false;
+    const saved = { position: this.camera.position.clone(), target: this.controls.target.clone(), fov: this.camera.fov, near: this.camera.near };
+    this.controls.enabled = false;
+    this.glide = null;
+    this.camera.fov = TOUR_FOV; this.camera.near = 0.05; this.camera.updateProjectionMatrix();
+    this.tourRun = { tour, t: 0, last: performance.now(), saved, target: [0, 0, 0] };
+    this.app.ui.getState().set({ tourState: 'playing', tourProgress: { stop: 0, total: countedStops(tour) } });
+    this.applyTourPose();
+    return true;
+  }
+
+  /** Play or pause the fly-through (the camera stays where it is while paused). */
+  toggleTour(): void {
+    const r = this.tourRun;
+    if (!r) return;
+    const ui = this.app.ui.getState();
+    r.last = performance.now();
+    ui.set({ tourState: ui.tourState === 'playing' ? 'paused' : 'playing' });
+  }
+
+  /** Back to the orbit camera exactly where it was. */
+  stopTour(): void {
+    const r = this.tourRun;
+    if (!r) return;
+    this.tourRun = null;
+    if (this.controls) { this.controls.enabled = true; this.controls.target.copy(r.saved.target); }
+    this.camera.position.copy(r.saved.position);
+    this.camera.fov = r.saved.fov; this.camera.near = r.saved.near; this.camera.updateProjectionMatrix();
+    this.camera.up.set(0, 1, 0);
+    this.controls?.update();
+    this.app.ui.getState().set({ tourState: 'off', tourProgress: null });
+    this.dirty = true;
+  }
+
+  /** Looping or one pass: rebuild the path (the camera keeps its place in the tour). */
+  refreshTour(): void {
+    const r = this.tourRun;
+    if (!r) return;
+    const tour = this.buildTourNow();
+    if (!tour || countedStops(tour) < 2) { this.stopTour(); return; }
+    r.tour = tour;
+    r.t = Math.min(r.t, tour.duration);
+    this.app.ui.getState().set({ tourProgress: { stop: countedIndex(tour, r.t), total: countedStops(tour) } });
+  }
+
+  private applyTourPose(): void {
+    const r = this.tourRun;
+    if (!r) return;
+    const pose = samplePose(r.tour, r.t);
+    r.target = pose.target;
+    this.camera.position.set(...pose.position);
+    this.camera.up.set(0, 1, 0);
+    this.camera.lookAt(new THREE.Vector3(...pose.target));
+    this.dirty = true;
+    const ui = this.app.ui.getState();
+    const stop = countedIndex(r.tour, r.t);
+    if (ui.tourProgress?.stop !== stop) ui.set({ tourProgress: { stop, total: countedStops(r.tour) } });
+    const ds = this.ds;
+    ds.tourStop = String(stop); ds.tourT = r.t.toFixed(2); ds.tourY = pose.position[1].toFixed(2);
+  }
+
+  private tickTour(now: number): void {
+    const r = this.tourRun;
+    if (!r) return;
+    const dt = Math.min(0.5, Math.max(0, (now - r.last) / 1000)); // a slow graphics card skips frames instead of slowing the tour
+    r.last = now;
+    if (this.app.ui.getState().tourState !== 'playing') return;
+    r.t += dt;
+    if (!r.tour.loop && r.t >= r.tour.duration) { r.t = r.tour.duration; this.applyTourPose(); this.stopTour(); return; }
+    this.applyTourPose();
+  }
+
+  /** Move the camera to a saved view: a short glide, leaving walking or the tour first. */
+  goTo(position: [number, number, number], target: [number, number, number]): void {
+    this.stopTour(); this.stopWalk();
+    if (!this.controls) return;
+    this.glide = { from: this.camera.position.clone(), fromT: this.controls.target.clone(), to: new THREE.Vector3(...position), toT: new THREE.Vector3(...target), t0: performance.now() };
+    this.dirty = true;
+  }
+
+  private tickGlide(now: number): void {
+    const g = this.glide;
+    if (!g || !this.controls) return;
+    const u = Math.min(1, (now - g.t0) / 700);
+    const e = u * u * (3 - 2 * u);
+    this.camera.position.lerpVectors(g.from, g.to, e);
+    this.controls.target.lerpVectors(g.fromT, g.toT, e);
+    this.dirty = true;
+    if (u >= 1) this.glide = null;
   }
 
   // ---------------------------------------------------------------- walk mode
@@ -139,6 +253,7 @@ export class Garden3D {
   startWalk(): boolean {
     const p = this.app.project.getState().project;
     if (!p || this.walk || !this.renderer || !this.controls) return false;
+    this.stopTour();
     const world = buildWalkWorld(p, this.app.ui.getState().stage);
     const state = walkStart(world);
     if (!state) return false;
@@ -261,6 +376,7 @@ export class Garden3D {
 
   destroy(): void {
     this.stopWalk();
+    this.stopTour();
     cancelAnimationFrame(this.raf);
     this.offs.forEach((f) => f());
     this.controls?.dispose();
@@ -313,7 +429,7 @@ export class Garden3D {
 
   private loop = (): void => {
     this.raf = requestAnimationFrame(this.loop);
-    if (this.walk) this.tickWalk(performance.now()); else this.controls?.update();
+    if (this.walk) this.tickWalk(performance.now()); else if (this.tourRun) this.tickTour(performance.now()); else { this.tickGlide(performance.now()); this.controls?.update(); }
     if (!this.dirty || !this.renderer) return;
     this.dirty = false;
     this.renderer.render(this.scene, this.camera);
@@ -449,6 +565,7 @@ export class Garden3D {
     this.updateSun();
     if (!this.framed) this.iso();
     this.refreshWalkWorld();
+    this.refreshTour();
     this.dirty = true;
   }
 
