@@ -42,10 +42,15 @@ function shapeMesh(points: Vec2[], colour: string, y: number, depth = 0): THREE.
 }
 
 export class Garden3D {
-  private renderer: THREE.WebGLRenderer;
+  private renderer: THREE.WebGLRenderer | null = null;
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(45, 1, 0.1, 600);
-  private controls: OrbitControls;
+  private controls: OrbitControls | null = null;
+  /** Where the test hooks (data-sun-alt, data-map-tiles) go: the canvas when there is one, a scratch object when there is not. */
+  private scratchDs: DOMStringMap = {};
+  private sunAlt = 0;
+  private sunAz = 0;
+  private mapProgress: { drawn: number; total: number } | null = null;
   private content = new THREE.Group();
   private sun = new THREE.DirectionalLight('#fff4e0', 2.2);
   private hemi = new THREE.HemisphereLight('#dbeafe', '#8a9a6a', 0.9);
@@ -58,15 +63,11 @@ export class Garden3D {
   private mapJob: { anchor: LatLng; north: number; view: View; z: number; size: number; pxPerM: number } | null = null;
   private mapPaintQueued = false;
 
-  constructor(private container: HTMLDivElement, private app: App) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-    this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    container.appendChild(this.renderer.domElement);
-    this.renderer.domElement.style.display = 'block';
-    this.renderer.domElement.style.touchAction = 'none';
-
+  /**
+   * `container` is where the live view draws. With `headless` (or no container) it builds the same scene without any screen, which is what
+   * Render photo path-traces: see `snapshotApp` for feeding it a frozen copy of the garden.
+   */
+  constructor(private container: HTMLDivElement | null, private app: App, headless = false) {
     this.scene.background = new THREE.Color(SKY);
     this.scene.fog = new THREE.Fog(SKY, 120, 400);
     this.scene.add(this.hemi);
@@ -76,34 +77,88 @@ export class Garden3D {
     this.sun.shadow.normalBias = 0.04;
     this.scene.add(this.sun, this.sun.target);
     this.scene.add(this.content);
+    if (headless || !container) { this.rebuild(); return; }
 
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.enableDamping = true;
-    this.controls.maxPolarAngle = Math.PI / 2 - 0.02;
-    this.controls.addEventListener('change', () => { this.dirty = true; });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    this.renderer = renderer;
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+    renderer.domElement.style.display = 'block';
+    renderer.domElement.style.touchAction = 'none';
+
+    const controls = new OrbitControls(this.camera, renderer.domElement);
+    this.controls = controls;
+    controls.enableDamping = true;
+    controls.maxPolarAngle = Math.PI / 2 - 0.02;
+    controls.addEventListener('change', () => { this.dirty = true; });
 
     const ro = new ResizeObserver(() => this.resize());
     ro.observe(container);
     this.offs.push(() => ro.disconnect());
-    this.offs.push(app.project.subscribe(() => this.rebuild()));
-    this.offs.push(app.ui.subscribe((s, p) => {
+    this.offs.push(this.app.project.subscribe(() => this.rebuild()));
+    this.offs.push(this.app.ui.subscribe((s, p) => {
       if (s.stage !== p.stage || s.month !== p.month) this.rebuild();
       else if (s.hour !== p.hour) this.updateSun();
     }));
+    this.app.view3d.current = this;
     this.resize();
     this.rebuild();
     this.loop();
   }
 
+  /** A frozen copy of the garden and of the growth stage, month and time, for a headless scene: later edits do not touch a render in progress. */
+  static snapshotApp(app: App): App {
+    const frozen = <T,>(state: T) => ({ getState: () => state, subscribe: () => () => undefined });
+    return { ...app, project: frozen({ ...app.project.getState() }), ui: frozen({ ...app.ui.getState() }) } as unknown as App;
+  }
+
+  private get ds(): DOMStringMap { return this.renderer?.domElement.dataset ?? this.scratchDs; }
+
+  /** The camera as it is now (Render photo photographs from here). */
+  cameraState(): { position: [number, number, number]; target: [number, number, number] } {
+    const t = this.controls?.target ?? new THREE.Vector3();
+    return { position: [this.camera.position.x, this.camera.position.y, this.camera.position.z], target: [t.x, t.y, t.z] };
+  }
+
+  /** The camera of the Iso, Front or Top buttons, without moving the live view. */
+  presetPose(kind: 'iso' | 'front' | 'top'): { position: [number, number, number]; target: [number, number, number] } | null {
+    const p = this.app.project.getState().project;
+    if (!p) return null;
+    const [dx, dy, dz] = kind === 'iso' ? [1, 0.8, 1] : kind === 'front' ? [0, 0.45, 1] : [0, 1, 0.001];
+    const b = this.bounds(p);
+    const d = b.r * 2.3, n = Math.hypot(dx, dy, dz);
+    return { position: [b.cx + (dx / n) * d, (dy / n) * d, b.cz + (dz / n) * d], target: [b.cx, 0, b.cz] };
+  }
+
+  /** Where the sun is for the garden, month and time on show (degrees above the horizon, and the compass bearing). */
+  sunPosition(): { altitude: number; azimuth: number } { return { altitude: this.sunAlt, azimuth: this.sunAz }; }
+
+  /** What a path tracer needs: the scene (ground, house, plants, sun) and the sun light, ready for it to adopt. */
+  get photo(): { scene: THREE.Scene; sun: THREE.DirectionalLight; hemi: THREE.HemisphereLight } { return { scene: this.scene, sun: this.sun, hemi: this.hemi }; }
+
+  /** Wait (up to `timeoutMs`) until the satellite tiles the ground needs have arrived, repainting as they do. Resolves at once when the map is off. */
+  async ready(timeoutMs = 20000): Promise<void> {
+    const t0 = Date.now();
+    while (this.mapJob && Date.now() - t0 < timeoutMs) {
+      this.paintMap();
+      const p = this.mapProgress;
+      if (p && p.total > 0 && p.drawn >= p.total) return;
+      await new Promise((r) => setTimeout(r, 150));
+    }
+  }
+
   destroy(): void {
     cancelAnimationFrame(this.raf);
     this.offs.forEach((f) => f());
-    this.controls.dispose();
+    this.controls?.dispose();
     this.disposeContent();
     this.mapTex?.dispose();
     this.mapTex = null;
-    this.renderer.dispose();
-    this.renderer.domElement.remove();
+    if (this.app.view3d.current === this) this.app.view3d.current = null;
+    this.renderer?.dispose();
+    this.renderer?.domElement.remove();
   }
 
   /** Camera presets. */
@@ -128,15 +183,16 @@ export class Garden3D {
     const b = this.bounds(p);
     const d = b.r * 2.3;
     const n = Math.hypot(dx, dy, dz);
-    this.controls.target.set(b.cx, 0, b.cz);
+    this.controls?.target.set(b.cx, 0, b.cz);
     this.camera.position.set(b.cx + (dx / n) * d, (dy / n) * d, b.cz + (dz / n) * d);
     this.camera.up.set(0, 1, 0);
-    this.controls.update();
+    this.controls?.update();
     this.dirty = true;
     this.framed = true;
   }
 
   private resize(): void {
+    if (!this.renderer || !this.container) return;
     const w = Math.max(100, this.container.clientWidth), h = Math.max(100, this.container.clientHeight);
     this.renderer.setSize(w, h);
     this.camera.aspect = w / h;
@@ -146,8 +202,8 @@ export class Garden3D {
 
   private loop = (): void => {
     this.raf = requestAnimationFrame(this.loop);
-    this.controls.update();
-    if (!this.dirty) return;
+    this.controls?.update();
+    if (!this.dirty || !this.renderer) return;
     this.dirty = false;
     this.renderer.render(this.scene, this.camera);
   };
@@ -158,7 +214,7 @@ export class Garden3D {
    * Returns whether the map is on and usable.
    */
   private addMap(p: GardenProject, c: THREE.Group): boolean {
-    const ds = this.renderer.domElement.dataset;
+    const ds = this.ds;
     const m = p.map;
     this.mapJob = null;
     if (!m?.on) { ds.mapTiles = 'off'; return false; }
@@ -178,7 +234,7 @@ export class Garden3D {
       canvas.width = size; canvas.height = size;
       this.mapTex = new THREE.CanvasTexture(canvas);
       this.mapTex.colorSpace = THREE.SRGBColorSpace;
-      this.mapTex.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+      this.mapTex.anisotropy = this.renderer?.capabilities.getMaxAnisotropy() ?? 4;
     }
     // plan -> canvas: x = offsetX + wx * scale, y = offsetY - wy * scale, with the canvas covering the square S x S around the plot centre
     const view = { scale: pxPerM, offsetX: -(centre.x - S / 2) * pxPerM, offsetY: (centre.y + S / 2) * pxPerM } as View;
@@ -215,7 +271,8 @@ export class Garden3D {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     tex.needsUpdate = true;
     this.dirty = true;
-    this.renderer.domElement.dataset.mapTiles = `${drawn}/${list.length}`;
+    this.mapProgress = { drawn, total: list.length };
+    this.ds.mapTiles = `${drawn}/${list.length}`;
   }
 
   private queueMapPaint(): void {
@@ -320,7 +377,8 @@ export class Garden3D {
     (this.scene.fog as THREE.Fog).color.copy(sky);
     this.hemi.intensity = alt >= 15 ? 0.9 : alt > -8 ? 0.2 + 0.7 * ((alt + 8) / 23) : 0.2;
     // exposed for the browser tests: where the light is relative to the garden centre, and how bright
-    const ds = this.renderer.domElement.dataset;
+    this.sunAlt = alt; this.sunAz = sun.azimuth;
+    const ds = this.ds;
     ds.sunAlt = alt.toFixed(1); ds.sunAz = sun.azimuth.toFixed(1); ds.sunIntensity = this.sun.intensity.toFixed(2);
     ds.sunDx = (this.sun.position.x - b.cx).toFixed(1); ds.sunDz = (this.sun.position.z - b.cz).toFixed(1);
     this.dirty = true;

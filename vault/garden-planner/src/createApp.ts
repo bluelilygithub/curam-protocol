@@ -68,6 +68,8 @@ export function createApp(storage: StorageLike) {
   const plantPhotos = createPlantPhotos(storage);
   const mapTiles = createMapTiles(storage);
   const tagScanner = createTagScanner();
+  /** The live 3D view, while there is one (Render photo asks it where the camera is). */
+  const view3d: { current: { cameraState(): { position: [number, number, number]; target: [number, number, number] }; presetPose(k: 'iso' | 'front' | 'top'): { position: [number, number, number]; target: [number, number, number] } | null } | null } = { current: null };
   const checks = createChecksStore();
   const images = browserImageStore(() => library.getState().kind, randomId, storage);
 
@@ -167,7 +169,7 @@ export function createApp(storage: StorageLike) {
   }
 
   const api = {
-    project, ui, view, notify, fitToPlot, library, projects, images, places, plantPhotos, mapTiles, tagScanner, checks,
+    project, ui, view, notify, fitToPlot, library, projects, images, places, plantPhotos, mapTiles, tagScanner, view3d, checks,
     /** Resolves when the library has been chosen and the last garden opened (start-up, tests). */
     whenReady(): Promise<void> { return initDone ?? Promise.resolve(); },
 

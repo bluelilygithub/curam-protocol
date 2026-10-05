@@ -27,9 +27,14 @@
     "konva": "^10.7.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "shepherd.js": "14.5.0",
     "tesseract.js": "^7.0.0",
     "three": "^0.186.1",
-    "zustand": "^5.0.15",
-    "shepherd.js": "14.5.0"
+    "three-gpu-pathtracer": "0.0.26",
+    "three-mesh-bvh": "0.9.15",
+    "zustand": "^5.0.15"
+  },
+  "overrides": {
+    "three-mesh-bvh": "0.9.15"
   }
 }

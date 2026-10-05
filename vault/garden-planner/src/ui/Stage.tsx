@@ -104,6 +104,7 @@ export function Stage() {
           <button type="button" title="Isometric view" onClick={() => three.current?.iso()}>Iso</button>
           <button type="button" title="Straight down" onClick={() => three.current?.top()}>Top</button>
           <button type="button" title="From the front" onClick={() => three.current?.front()}>Front</button>
+          <button type="button" title="Render photo: a realistic picture with the sun where the time slider puts it" data-testid="open-photo" onClick={() => app.ui.getState().set({ photoOpen: true })}>Render photo</button>
         </div>
       )}
       {viewMode === '2d' && <SelectionBar />}

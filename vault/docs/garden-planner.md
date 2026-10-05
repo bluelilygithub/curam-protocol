@@ -20,7 +20,7 @@ Run: `cd garden-planner && npm install && npm run dev` (port 5175; Vault's dev p
 | 4. Image pipeline (ALA, iNaturalist, Wikimedia, licence filter, curator tools, credits page) | **Built except live ALA**: iNaturalist and Wikimedia work live; ALA is written and tested with fixtures and switches on when `ALA_API_KEY` is set. Curator tools are API only (see "Plant photos"). |
 | 5. Checks | **Done** (see "Checks" below). |
 | 6. Sun and shade | **Done** (see "Sun and shade" below). Built before the checks, because the sun-mismatch check needs the sun-hours map. |
-| 7. 3D / Render photo adaptations | Not started. 3D has orbit + Iso/Top/Front. No saved views, fly-through, walk or Render photo yet. |
+| 7. 3D / Render photo adaptations | **Render photo done** (see "Render photo" below). Still not built: saved views, fly-through and walk mode. |
 | 8. Plant tag scan, plant schedule CSV | **Done** (see "Plant tag scan" and "Plant schedule" below). |
 | 9. Billboard cut-outs | Not started. |
 
@@ -108,6 +108,24 @@ The wizard's **Look up** uses OpenStreetMap's public Nominatim. Policy read at h
 
 Other behaviour: signed-out users get a plain message (the place list, postcode-to-state and latitude/longitude still work); the service being down or busy gives plain messages and is not retried in a loop; failures are not cached. The public service has no uptime promise, so for heavy use set `NOMINATIM_URL` to a self-hosted Nominatim (or a provider with the same API) and no code changes. Set `NOMINATIM_CONTACT` (an email or URL for OSM to reach you) in Railway; I did not put an email in the code. Cost/terms conclusion: the public instance's terms fit this use (moderate user count, user-triggered, cached, attributed, not primarily a geocoding service), so no provider switch was needed. Revisit if usage grows beyond a handful of lookups a day per user.
 
+## Render photo (built 2026-10-16)
+
+In the 3D view, **Render photo** opens a panel that path-traces the garden into a realistic picture and lets you download it as a PNG. It uses the same engine as Room Planner's Render photo (`three-gpu-pathtracer`, MIT, in its own off-screen canvas; the pure job, presets, caption and support check are shared from `planner-core/render3d/photo.ts`), so the live 3D view is never touched. The path tracer is a lazy 210 kB chunk that only loads when a picture starts.
+
+**The sun is the real sun.** Its direction is where the **Month** and **Time** sliders put it for the garden's latitude, longitude and north arrow, so the shadows of the house, fences, structures and plants fall exactly where they do in the live view. The **Lighting** list only chooses the mood (`src/render3d/photoLighting.ts`, pure and tested): *Daylight* is a clear sky that turns golden as the sun sinks below 12 degrees; *Overcast* is a soft, much weaker sun under a bright even sky; *Evening* is warm with a rosy sky. A low sun is always weaker and warmer. When the sun is down at the chosen time the panel says so and will not start ("Choose a daytime hour with the Time slider"): there is no night picture.
+
+**The panel.** View (the current 3D view, Corner, From the front, From above), Lighting, Size (640 x 360 quick look to 4K), Quality (Draft 64, Good 256, Best 1024 passes), a caption strip under the picture (garden, place, date) you can turn off, Render, Pause or Resume, Stop (keeps the picture so far), Download PNG, Esc (stops, then closes). A live, grainy picture sharpens as it works, with a progress bar and a time estimate, and a plain message while it prepares ("Building the garden…", "Loading the satellite map…", "Getting your graphics card ready (up to a minute the first time)…"). A device without WebGL2 float targets gets a plain message and the 3D view still works.
+
+**It copies the garden when it starts** (`Garden3D.snapshotApp`: a frozen copy of the project and of the growth stage, month and time, built by the same `Garden3D` scene code running without a screen), so editing while a picture renders neither changes the picture nor is changed by it. The design is never modified.
+
+**With the satellite map on,** the map lies on the ground in the picture (the renderer waits for the tiles it needs first), and **the map provider's credit is printed inside the saved PNG**, in the corner of the picture itself, because it has to travel with the image. File name: `<garden>-<place>-<date>.png`.
+
+**What it is not.** Plants are the same simple shapes as the 3D view (a trunk and a ball of leaves, a cone, a clump), not botanical models, so it shows light, layout and shade rather than leaves; the panel says so. There are no eye-level views from inside the garden yet, and no real 3D models (Room Planner has 13).
+
+**Things to confirm.** MapTiler's terms on exporting their imagery inside a downloaded picture (the credit is printed, but whether export is allowed on your plan is for you to read). Speed on real hardware: the test machine uses software GL (a 640 x 360 Draft takes tens of minutes to finish there; a real graphics card is far faster), so please time a Good 1280 x 720 picture on your own computer.
+
+**Tests:** `tests/photoLighting.test.ts` (8), and `node scripts/e2e-photo.mjs` in real Chrome with software GL (separate from `e2e.mjs` because it is slow): the panel opens, says what to expect, reports the sun position for the sliders, refuses to start with the sun down, renders with progress and an estimate, Pause, Resume, Stop, Download PNG (name, content, 640 wide with the caption strip), the garden unchanged, Esc, and a second run with the satellite map on that renders and **has the credit inside the saved PNG**.
+
 ## Plant schedule (built 2026-10-15)
 
 The **table button** in the toolbar opens **Plant schedule**: every plant in the garden, one row per kind of plant, as a table and as a **CSV download** (named `<garden>-plant-schedule.csv`) for a nursery order or a spreadsheet. The table and the CSV come from the same rows (`src/schedule/plantSchedule.ts`, pure), so they cannot disagree.
@@ -194,6 +212,8 @@ Run these on staging before relying on the features. The unit and Chrome tests u
 16. **Plant tags, with real tags:** on a phone, press the camera button above the plant list and photograph five real nursery tags (one shiny, one curved, one small print, one handwritten if you have it). For each, note whether the right plant was offered and where it ranked, whether the words read were close, and whether the tag's size or sun differed from our data. Photograph one in poor light and confirm it says the photo was hard to read. Confirm the network tab shows no upload of the photo (only the one-time model download). Report what fails: the matcher can be tuned, but only against real tags.
 
 17. **Plant schedule with a real garden:** plan a real garden with a few beds and 10 or more plants, open the schedule (table button), check the quantities and "where" against the plan, download the CSV and open it in Excel and in Google Sheets: columns line up, sizes sort as numbers, accents (for example in a plant name) display correctly, and a note starting with = shows as text. Check it against a nursery's own plant list for one or two plants.
+
+18. **Render photo, on real hardware:** in 3D, open **Render photo**, choose Good and 1280 x 720, and time it. Try each Lighting mood, a morning and an evening hour (the shadows should point the same way as in the 3D view), and a garden with the satellite map on (check the credit is in the corner of the downloaded picture, and the ground matches the map). Confirm the picture is a fair likeness of your garden and report how long it took.
 
 ## Layout
 

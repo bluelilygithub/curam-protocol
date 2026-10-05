@@ -8,6 +8,7 @@ import { CreditsModal } from './ui/CreditsModal';
 import { CuratorModal } from './ui/CuratorModal';
 import { TagScanModal } from './ui/TagScanModal';
 import { ScheduleModal } from './ui/ScheduleModal';
+import { PhotoModal } from './ui/PhotoModal';
 import { Inspector } from './ui/Inspector';
 import { PlantLibrary } from './ui/PlantLibrary';
 import { ProjectsPanel } from './ui/ProjectsPanel';
@@ -54,6 +55,7 @@ export default function App() {
       <CuratorModal />
       <TagScanModal />
       <ScheduleModal />
+      <PhotoModal />
       <TooltipHost />
     </AppContext.Provider>
   );
