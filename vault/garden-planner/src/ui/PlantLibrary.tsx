@@ -80,6 +80,7 @@ export function PlantLibrary() {
     <aside className="panel panel-left" aria-label="Plant library" data-tour="gp-library">
       <div className="panel-head">
         <h2>Plants</h2>
+        <button type="button" className="icon-btn" title="Scan a plant tag: photograph the tag from the nursery to find the plant" data-testid="open-tag-scan" onClick={() => app.ui.getState().set({ tagScanOpen: true })}><Icon name="camera" size={16} /></button>
         <button type="button" className="icon-btn" title="Hide the plant library" onClick={() => app.ui.getState().set({ libraryOpen: false })}><Icon name="close" size={16} /></button>
       </div>
 

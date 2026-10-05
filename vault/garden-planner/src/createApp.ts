@@ -14,6 +14,7 @@ import { MAX_PROJECT_NAME } from '@planner-core/library/library';
 import { createPlaceLookup } from './state/geocode';
 import { createPlantPhotos } from './state/plantPhotos';
 import { createMapTiles } from './map/tiles';
+import { createTagScanner } from './state/tagScan';
 import type { MapSettings } from './domain/types';
 import { createChecksStore } from './state/checksStore';
 import { computeChecks, makeSunLookup, nearestValidPosition, type Issue } from './checks';
@@ -66,6 +67,7 @@ export function createApp(storage: StorageLike) {
   const places = createPlaceLookup(storage);
   const plantPhotos = createPlantPhotos(storage);
   const mapTiles = createMapTiles(storage);
+  const tagScanner = createTagScanner();
   const checks = createChecksStore();
   const images = browserImageStore(() => library.getState().kind, randomId, storage);
 
@@ -165,7 +167,7 @@ export function createApp(storage: StorageLike) {
   }
 
   const api = {
-    project, ui, view, notify, fitToPlot, library, projects, images, places, plantPhotos, mapTiles, checks,
+    project, ui, view, notify, fitToPlot, library, projects, images, places, plantPhotos, mapTiles, tagScanner, checks,
     /** Resolves when the library has been chosen and the last garden opened (start-up, tests). */
     whenReady(): Promise<void> { return initDone ?? Promise.resolve(); },
 

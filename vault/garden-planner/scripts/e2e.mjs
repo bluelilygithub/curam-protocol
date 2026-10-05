@@ -793,6 +793,90 @@ check('no page errors or console errors', problems.length === 0, problems.slice(
   check('no page errors in the curator', errs.length === 0, errs.join(' | '));
   await ctxC.close();
 }
+// ---- plant tag scan (a fake reader stands in for Tesseract, so no network is needed)
+{
+  const ctxT = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await ctxT.addInitScript(() => { try { localStorage.setItem('garden-planner:info-seen:v1', '1'); } catch { /* ignore */ } });
+  const pg = await ctxT.newPage();
+  const errs = [];
+  pg.on('pageerror', (e) => errs.push(e.message));
+  await pg.goto(URL);
+  await pg.waitForSelector('.wizard');
+  await pg.evaluate(() => window.gardenPlanner.newProject({ meta: { name: 'Tags', location: { label: 'Brisbane QLD', lat: -27.47, lng: 153.03, state: 'QLD' }, climateZone: 'subtropical', frost: 'none', pets: false, northDeg: 0 }, plot: { kind: 'rect', width: 20, depth: 20 } }));
+  await pg.waitForSelector('.stage canvas');
+  const openScan = async () => { await pg.getByTestId('open-tag-scan').click(); await pg.getByRole('dialog', { name: 'Scan a plant tag' }).waitFor(); };
+  const fakeReader = (lines, conf) => pg.evaluate(([ls, c]) => {
+    const g = window.gardenPlanner;
+    g.tagScanner.createEngine = async () => ({ recognize: async () => ({ lines: ls.map((text) => ({ text, segs: [] })), meanConf: c }), terminate: async () => undefined });
+    g.tagScanner.dispose();
+  }, [lines, conf]);
+  const choosePhoto = () => pg.evaluate(async () => {
+    const c = document.createElement('canvas'); c.width = 300; c.height = 200;
+    const g = c.getContext('2d'); g.fillStyle = '#eee'; g.fillRect(0, 0, 300, 200); g.fillStyle = '#111'; g.fillText('tag', 20, 40);
+    const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+    const dt = new DataTransfer(); dt.items.add(new File([blob], 'tag.png', { type: 'image/png' }));
+    const input = document.querySelector('[data-testid="tag-file"]');
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+
+  await openScan();
+  check('the tag scan has a microphone on its text box (voice on every input)', (await pg.getByRole('dialog', { name: 'Scan a plant tag' }).getByRole('button', { name: /Speak instead of typing|Voice input/ }).count()) >= 1);
+
+  // typing the name instead of using a photo
+  await pg.getByLabel('Text from the tag').fill('English Lavender\nLavandula angustifolia\nFull sun. Height 60cm Width 60cm');
+  await pg.getByTestId('tag-match').first().waitFor();
+  check('typing the botanical name offers that plant first, as a strong match', (await pg.getByTestId('tag-match').first().getAttribute('data-plant')) === 'lavandula-angustifolia' && /Strong match/.test(await pg.getByTestId('tag-match').first().innerText()));
+  check('the match says why', /botanical name Lavandula angustifolia is on the tag/.test(await pg.getByTestId('tag-match').first().innerText()));
+  check('the size and sun on the tag are shown', /60? ?cm|0\.6 m high/.test(await pg.getByTestId('tag-facts').innerText()) || /0\.6 m high, 0\.6 m wide, full sun/.test(await pg.getByTestId('tag-facts').innerText()), await pg.getByTestId('tag-facts').innerText());
+  check('the draft, unverified warning is shown with the matches', /draft, unverified/.test(await pg.getByTestId('tag-results').innerText()));
+  check('a strong botanical match is not called ambiguous', (await pg.getByTestId('tag-ambiguous').count()) === 0);
+
+  // a name shared by several plants: the person must choose
+  await pg.getByLabel('Text from the tag').fill('Lilly Pilly');
+  await pg.getByTestId('tag-ambiguous').waitFor();
+  check('a shared common name lists several plants and asks the person to choose', (await pg.getByTestId('tag-match').count()) > 1);
+
+  await pg.getByLabel('Text from the tag').fill('qzxv wlkj');
+  await pg.getByTestId('tag-none').waitFor();
+  check('nothing matching says so plainly, and offers nothing to add', (await pg.getByTestId('tag-match').count()) === 0);
+
+  // a photo: the reader fakes a poor-quality reading
+  await fakeReader(["Grevillea 'Robyn Gordon'", 'Native shrub', 'Height 1.5m x Width 1.5m', 'Full sun'], 40);
+  await choosePhoto();
+  await pg.getByTestId('tag-lowconf').waitFor({ timeout: 8000 });
+  check('a poor reading tells the person to check the words', true);
+  check('the words that were read are shown, and can be corrected', /Robyn Gordon/.test(await pg.getByLabel('Text from the tag').inputValue()));
+  check('the photo is shown back to the person', (await pg.locator('.tag-photo').count()) === 1);
+  await pg.getByTestId('tag-match').first().waitFor();
+  check('the matching plant is offered', (await pg.getByTestId('tag-match').first().getAttribute('data-plant')) === 'grevillea-robyn-gordon');
+  if (out) await pg.screenshot({ path: join(out, '13-tag-scan.png') });
+
+  // nothing is added until the person chooses
+  check('scanning added nothing to the garden', (await pg.evaluate(() => window.gardenPlanner.project.getState().project.plants.length)) === 0);
+  await pg.getByTestId('tag-match').first().getByRole('button', { name: /Add to plan/ }).click();
+  const armed = await pg.evaluate(() => { const u = window.gardenPlanner.ui.getState(); return { tool: u.tool, id: u.placingPlantId, open: u.tagScanOpen }; });
+  check('Add to plan arms the plant tool for that plant and closes the scan', armed.tool === 'plant' && armed.id === 'grevillea-robyn-gordon' && armed.open === false, JSON.stringify(armed));
+
+  // a reader that finds no words, and one that fails
+  await pg.evaluate(() => window.gardenPlanner.ui.getState().set({ tool: 'select', placingPlantId: null }));
+  await openScan();
+  await fakeReader([], 0);
+  await choosePhoto();
+  await pg.getByTestId('tag-empty').waitFor({ timeout: 8000 });
+  check('a photo with no words says so and suggests typing the name', true);
+  await pg.evaluate(() => { const g = window.gardenPlanner; g.tagScanner.createEngine = async () => { throw new Error('the reading model could not be downloaded'); }; g.tagScanner.dispose(); });
+  await choosePhoto();
+  await pg.getByTestId('tag-error').waitFor({ timeout: 8000 });
+  check('a failure is explained in plain words and the typed route still works', /could not be downloaded/.test(await pg.getByTestId('tag-error').innerText()));
+  await pg.getByLabel('Text from the tag').fill('Lavandula angustifolia');
+  await pg.getByTestId('tag-match').first().waitFor();
+  check('after a failure, typing the name still finds the plant', (await pg.getByTestId('tag-match').first().getAttribute('data-plant')) === 'lavandula-angustifolia');
+  await pg.getByRole('button', { name: 'Close' }).click();
+  check('closing the scan hides it', (await pg.getByRole('dialog', { name: 'Scan a plant tag' }).count()) === 0);
+  check('no page errors in the tag scan', errs.length === 0, errs.join(' | '));
+  await ctxT.close();
+}
 await browser.close();
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nAll checks passed');
 process.exit(failures ? 1 : 0);

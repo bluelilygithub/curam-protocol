@@ -32,6 +32,8 @@ export function InfoModal() {
           <p>In Australia the sun is in the north, so a north-facing bed is the sunny one. Drag the north arrow on the plan to match your plot. Sun and shade maps are coming next.</p>
           <h3>Voice</h3>
           <p>Every text and number box has a microphone button. Tap it and say a name or a number, like “two point five”. It works in Chrome, Edge and Safari.</p>
+          <h3>Plant tags</h3>
+          <p>Got a tag from the nursery? Press the camera button above the plant list, photograph the tag and Garden Planner reads it on your device (the photo is not uploaded). It suggests the plants it could be and says why; you choose, and nothing is added for you. You can correct the words it read, or type the name instead.</p>
           <h3>Satellite map</h3>
           <p>In Garden settings, switch on <b>Show a satellite map</b> to see an aerial photo of your street under the plan. Press <b>Move map</b> and drag it until your house sits where you drew it, then draw over it. The map is true to scale and turns with the north arrow, and the sun shadows fall across it, in 2D and in 3D.</p>
           <h3>Plant data and photos</h3>

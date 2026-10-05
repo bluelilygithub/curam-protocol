@@ -21,6 +21,7 @@ const P: Record<string, string> = {
   copy: 'M8 8h12v12H8zM4 16V4h12',
   search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-5-5',
   close: 'M5 5l14 14M19 5L5 19',
+  camera: 'M4 8h3l2-3h6l2 3h3v11H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   star: 'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z',
   panelLeft: 'M3 4h18v16H3zM9 4v16',
   panelRight: 'M3 4h18v16H3zM15 4v16',

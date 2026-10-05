@@ -6,6 +6,7 @@ import { GrowthBar } from './ui/GrowthBar';
 import { InfoModal } from './ui/InfoModal';
 import { CreditsModal } from './ui/CreditsModal';
 import { CuratorModal } from './ui/CuratorModal';
+import { TagScanModal } from './ui/TagScanModal';
 import { Inspector } from './ui/Inspector';
 import { PlantLibrary } from './ui/PlantLibrary';
 import { ProjectsPanel } from './ui/ProjectsPanel';
@@ -50,6 +51,7 @@ export default function App() {
       <InfoModal />
       <CreditsModal />
       <CuratorModal />
+      <TagScanModal />
       <TooltipHost />
     </AppContext.Provider>
   );

@@ -55,6 +55,8 @@ export interface UiState {
   creditsOpen: boolean;
   /** The admin plant-photo curator. */
   curatorOpen: boolean;
+  /** The plant tag scan. */
+  tagScanOpen: boolean;
   /** Dragging on the plan moves the satellite map (to line it up with the plot) instead of selecting. */
   mapAlign: boolean;
   snap: boolean;
@@ -81,7 +83,7 @@ export function createUiStore(): UiStore {
     tool: 'select', structureKind: 'shed', serviceKind: 'sewer', placingPlantId: null, smoothShapes: true,
     selection: null, boundaryEdge: null, viewMode: '2d', stage: 'mature', month: new Date().getMonth() + 1,
     hour: 12, showSun: false, showShadows: false, sunThresholds: { ...DEFAULT_SUN_THRESHOLDS }, matchBedSun: false, pathMinWidth: 0.9, mowerWidth: 0.9, rightTab: 'details',
-    suitsOnly: true, libraryOpen: true, inspectorOpen: true, projectsOpen: false, wizardOpen: false, infoOpen: false, creditsOpen: false, curatorOpen: false, mapAlign: false,
+    suitsOnly: true, libraryOpen: true, inspectorOpen: true, projectsOpen: false, wizardOpen: false, infoOpen: false, creditsOpen: false, curatorOpen: false, tagScanOpen: false, mapAlign: false,
     snap: true, grid: 0.5, showGrid: true, scaleDraft: null, status: null,
 
     set: (patch) => set(patch),
