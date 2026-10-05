@@ -13,6 +13,8 @@ import { ProjectsController } from '@planner-core/library/projectsController';
 import { MAX_PROJECT_NAME } from '@planner-core/library/library';
 import { createPlaceLookup } from './state/geocode';
 import { createPlantPhotos } from './state/plantPhotos';
+import { createMapTiles } from './map/tiles';
+import type { MapSettings } from './domain/types';
 import { createChecksStore } from './state/checksStore';
 import { computeChecks, makeSunLookup, nearestValidPosition, type Issue } from './checks';
 import { blobToDataUrl, browserImageStore, dataUrlToBlob, isLocalRef } from './state/images';
@@ -63,6 +65,7 @@ export function createApp(storage: StorageLike) {
   });
   const places = createPlaceLookup(storage);
   const plantPhotos = createPlantPhotos(storage);
+  const mapTiles = createMapTiles(storage);
   const checks = createChecksStore();
   const images = browserImageStore(() => library.getState().kind, randomId, storage);
 
@@ -162,7 +165,7 @@ export function createApp(storage: StorageLike) {
   }
 
   const api = {
-    project, ui, view, notify, fitToPlot, library, projects, images, places, plantPhotos, checks,
+    project, ui, view, notify, fitToPlot, library, projects, images, places, plantPhotos, mapTiles, checks,
     /** Resolves when the library has been chosen and the last garden opened (start-up, tests). */
     whenReady(): Promise<void> { return initDone ?? Promise.resolve(); },
 
@@ -350,6 +353,25 @@ export function createApp(storage: StorageLike) {
       if (!project.getState().commit({ type: 'Composite', commands } as never, n === 1 ? 'Duplicate' : `Make a row of ${n}`)) return 0;
       ui.getState().select({ kind: sel.kind, id: lastId });
       return n;
+    },
+
+    // ------------------------------------------------------------ satellite map
+    /** Change the satellite map settings (one undo step). `null` removes them. */
+    setMap(next: MapSettings | null, label: string): void {
+      const p = cur(); if (!p) return;
+      project.getState().commit({ type: 'SetSingleton', name: 'map', from: p.map ?? null, to: next }, label);
+    },
+    /** Switch the map on, anchored at the garden's location the first time. */
+    showMap(on: boolean): void {
+      const p = cur(); if (!p) return;
+      const base: MapSettings = p.map ?? { on: false, lat: p.location.lat, lng: p.location.lng, opacity: 1 };
+      this.setMap({ ...base, on }, on ? 'Show map' : 'Hide map');
+      if (!on) ui.getState().set({ mapAlign: false });
+    },
+    /** Put the map back under the garden's location. */
+    resetMap(): void {
+      const p = cur(); if (!p?.map) return;
+      this.setMap({ ...p.map, lat: p.location.lat, lng: p.location.lng }, 'Reset map position');
     },
 
     // ------------------------------------------------------------ tracing underlay

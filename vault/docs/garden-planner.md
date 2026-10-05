@@ -108,6 +108,20 @@ The wizard's **Look up** uses OpenStreetMap's public Nominatim. Policy read at h
 
 Other behaviour: signed-out users get a plain message (the place list, postcode-to-state and latitude/longitude still work); the service being down or busy gives plain messages and is not retried in a loop; failures are not cached. The public service has no uptime promise, so for heavy use set `NOMINATIM_URL` to a self-hosted Nominatim (or a provider with the same API) and no code changes. Set `NOMINATIM_CONTACT` (an email or URL for OSM to reach you) in Railway; I did not put an email in the code. Cost/terms conclusion: the public instance's terms fit this use (moderate user count, user-triggered, cached, attributed, not primarily a geocoding service), so no provider switch was needed. Revisit if usage grows beyond a handful of lookups a day per user.
 
+## Satellite map (built 2026-10-11, needs MAPTILER_API_KEY)
+
+An aerial photo under the 2D plan, so the plot, house and beds can be traced over the real street. Switch on in **Garden settings, Satellite map**; the wizard also shows a small map of the chosen place.
+
+**How it lines up.** The garden stores `map: { on, lat, lng, opacity }`: (lat, lng) is the point of the earth at plan position (0, 0). The map is turned by the garden's north arrow and drawn to scale (one plan metre is a true metre on the map), so what you trace has real lengths. The wizard's location is only as exact as a suburb, so the user presses **Move map** and drags until their house sits where they drew it (one undo step; Esc or Done moving to leave). **Reset** puts it back at the location. Lawn and bed fills turn translucent while the map is on, so the photo shows through, and the **sun shadows and sun-hours map are drawn over it**: moving the time slider casts the house, fence, structure and tree shadows across the aerial photo. Maths (zoom choice, rotation, tile cover, anchor shifts) is pure and tested in `src/map/mercator.ts`.
+
+**MapTiler, kept server side.** The browser never talks to MapTiler and never sees the key. `GET /api/map-tiles/status` and `/api/map-tiles/:z/:x/:y` (`server/routes/mapTilesRouter.js`, behind sign-in and the `gardenPlanner` flag) fetch `satellite-v2` tiles with `MAPTILER_API_KEY` and pass them through. Tile addresses are validated, each user is limited to 900 tiles a minute, tiles are **not stored** on the server (the browser may keep them for a day, and the client keeps a bounded in-memory set), and the credit line is read from MapTiler's own TileJSON and shown over the map whenever it is. The outbound URL carries the key, so `api.maptiler.com` is scrubbed from Sentry events, breadcrumbs and spans (tested). Provider errors become plain messages that never contain the key; a rejected key or used-up plan is logged once a minute without the URL. Without the key the panel says "The satellite map is not set up on this server yet" and nothing else changes.
+
+**Things to confirm before relying on it (not decided by code):** MapTiler's plan terms. Their free plan is for non-commercial use; commercial use needs a paid plan, and their terms on tracing and on caching imagery should be read for how Vault is used. A tile address reveals roughly where a garden is (the request path is logged like any other request); the geocoder avoids this with POST, tiles cannot.
+
+**Not built:** the map in the 3D view (2D only), a map picker for choosing the location by clicking, and scale or rotation adjustment beyond the north arrow (the map is true to scale already).
+
+**Tests:** `garden-planner/tests/mercator.test.ts` (10), `tests/mapTiles.test.ts` (6), `node server/routes/mapTiles.test.js` (7, with fake MapTiler), and the Chrome run (fake tile server: the wizard preview, tiles drawn under the plan with the Vault token, the tiles around the location, the credit, Move map and its undo, rotation, switching off, and the not-set-up message).
+
 ## Plant photos (built 2026-10-10, ALA part waiting for the key)
 
 Real photos of a plant, only under open licences, each with its creator, licence and source. Built and tested against the real iNaturalist and Wikimedia Commons APIs; the Atlas of Living Australia (ALA) source is written and tested with fixtures but **stays off until `ALA_API_KEY` is set** on the server (spec 6.1: the key lives server side only, sent as an `x-api-key` header, never in a URL, a response or the client).
@@ -146,6 +160,8 @@ Run these on staging before relying on the features. The unit and Chrome tests u
 12. **ALA once the key arrives:** set `ALA_API_KEY` on Railway (server only), run the smoke script, confirm `sources: inaturalist, wikimedia, ala`, that ALA photos are credited to their creators, and that nothing from `dr413` / canbr.gov.au appears. Search responses and logs for the key: it must not appear.
 13. **Curator tools:** as an admin, hide a photo and set a flower default via the API; the card shows it first; a non-admin gets 403.
 14. **Photo credits:** How This Works, then **See all photo credits**; the list matches what the cards showed, and the CSV downloads.
+
+15. **Satellite map, live:** set `MAPTILER_API_KEY` on Railway (server only). Create a garden for a real address: the wizard shows a map of the place with the MapTiler credit. In Garden settings switch on **Show a satellite map**, then **Move map** until your house lines up with what you drew; move the Time slider and watch the shadows fall across the photo. Confirm the key does not appear in any response, the browser's network tab or the logs, and that the tile requests go to `/api/map-tiles/...` on Vault, not to maptiler.com. Read the MapTiler plan terms (see the Satellite map section).
 
 ## Layout
 

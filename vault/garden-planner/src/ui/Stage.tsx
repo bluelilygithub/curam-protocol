@@ -9,6 +9,7 @@ import { PLANT_DRAG_TYPE } from './PlantLibrary';
 import { plantById, plantLabel } from '../plants/plants';
 import { mid } from '../plants/growth';
 import { findItem } from '../domain/edit';
+import { MapAttribution } from './MapSection';
 import { useApp, useProject, useUi } from './AppContext';
 
 const HINTS: Record<string, string> = {
@@ -40,6 +41,8 @@ export function Stage() {
   const plan = useRef<Plan2D | null>(null);
   const three = useRef<Garden3D | null>(null);
   const hasProject = useProject((s) => s.project !== null);
+  const project = useProject((s) => s.project);
+  const mapAlign = useUi((s) => s.mapAlign);
 
   useEffect(() => {
     const el = ref.current;
@@ -64,7 +67,8 @@ export function Stage() {
       if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); app.duplicateSelected(); return; }
       const p = plan.current;
       if (e.key === 'Escape') {
-        if (p?.drawing) p.cancelDraft();
+        if (ui.mapAlign) ui.set({ mapAlign: false });
+        else if (p?.drawing) p.cancelDraft();
         else if (ui.tool !== 'select') app.setTool('select');
         else ui.select(null);
         return;
@@ -93,7 +97,8 @@ export function Stage() {
           if (viewMode !== '2d' || !plan.current) { app.notify('Switch to the 2D plan to drop a plant.', 'info'); return; }
           plan.current.dropPlant(id, e.clientX, e.clientY, e.shiftKey);
         }} />
-      {viewMode === '2d' && <p className="hint-banner">{HINTS[tool]}</p>}
+      {viewMode === '2d' && <p className="hint-banner">{mapAlign ? 'Drag the map until your house and plot line up with what you drew. Press Done moving (or Esc) when it fits.' : HINTS[tool]}</p>}
+      {viewMode === '2d' && project && <MapAttribution project={project} />}
       {viewMode === '3d' && (
         <div className="view3d-bar" role="group" aria-label="3D camera">
           <button type="button" title="Isometric view" onClick={() => three.current?.iso()}>Iso</button>

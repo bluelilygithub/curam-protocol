@@ -1,6 +1,7 @@
 // End-to-end checks of Garden Planner in real Chrome (SwiftShader WebGL). Start `npm run dev` first, then
 // `node scripts/e2e.mjs [screenshotDir]`. Exits non-zero if any check fails.
 import { mkdirSync } from 'node:fs';
+import { deflateSync } from 'node:zlib';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
 
@@ -547,6 +548,123 @@ check('no page errors or console errors', problems.length === 0, problems.slice(
   check('and the saved design now references it instead of embedding it', !!migrated.data.underlay.imageId && !('dataUrl' in migrated.data.underlay), JSON.stringify(Object.keys(migrated.data.underlay)));
   check('no page errors while saving to the account', probs2.length === 0, probs2.join(' | '));
   await ctx2.close();
+}
+// ---- satellite map (a fake /api/map-tiles stands in for the server and MapTiler)
+{
+  // a solid green 8x8 PNG, built here so no file is needed
+  const crcTable = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = (buf) => { let c = 0xffffffff; for (const b of buf) c = crcTable[(c ^ b) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const body = Buffer.concat([Buffer.from(type), data]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(body)); return Buffer.concat([len, body, c]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(8, 0); ihdr.writeUInt32BE(8, 4); ihdr[8] = 8; ihdr[9] = 2;
+  const raw = Buffer.concat(Array.from({ length: 8 }, () => Buffer.concat([Buffer.from([0]), Buffer.from(Array.from({ length: 8 }, () => [30, 160, 40]).flat())])));
+  const GREEN_PNG = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+
+  const mapContext = async (enabled) => {
+    const ctxM = await browser.newContext({ viewport: { width: 1440, height: 860 } });
+    await ctxM.addInitScript(() => { try { localStorage.setItem('garden-planner:info-seen:v1', '1'); localStorage.setItem('vault-auth', JSON.stringify({ state: { token: 'test-token' }, version: 0 }));} catch { /* ignore */ } });
+    const pg = await ctxM.newPage();
+    const reqs = [];
+    const errs = [];
+    pg.on('pageerror', (e) => errs.push(e.message));
+    await pg.route('**/api/garden-projects**', (route) => route.abort('failed')); // saving falls back to this browser
+    await pg.route('**/api/map-tiles/**', (route) => {
+      const r = route.request();
+      const path = new globalThis.URL(r.url()).pathname.replace(/^.*\/api\/map-tiles/, '');
+      reqs.push({ path, auth: r.headers().authorization });
+      if (path === '/status') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(enabled ? { enabled: true, attribution: '© MapTiler © OpenStreetMap contributors', maxZoom: 20 } : { enabled: false, attribution: '', maxZoom: 20 }) });
+      return route.fulfill({ status: 200, contentType: 'image/png', body: GREEN_PNG });
+    });
+    await pg.goto(URL);
+    await pg.waitForSelector('.wizard');
+    return { ctxM, pg, reqs, errs };
+  };
+
+  // not set up on the server: a plain explanation, no tiles requested
+  {
+    const { ctxM, pg, reqs, errs } = await mapContext(false);
+    await pg.evaluate(() => window.gardenPlanner.newProject({ meta: { name: 'Map off', location: { label: 'Brisbane QLD', lat: -27.47, lng: 153.03, state: 'QLD' }, climateZone: 'subtropical', frost: 'none', pets: false, northDeg: 0 }, plot: { kind: 'rect', width: 20, depth: 20 } }));
+    await pg.waitForSelector('.stage canvas');
+    await pg.evaluate(() => window.gardenPlanner.ui.getState().select(null));
+    await pg.getByLabel('Show a satellite map under the plan').check();
+    await pg.getByTestId('map-unavailable').waitFor({ timeout: 5000 });
+    check('map not set up: the panel says so in plain words', /MapTiler key/.test(await pg.getByTestId('map-unavailable').innerText()));
+    check('and no map tile is asked for', reqs.every((r) => r.path === '/status'), JSON.stringify(reqs.map((r) => r.path)));
+    check('no page errors with the map unavailable', errs.length === 0, errs.join(' | '));
+    await ctxM.close();
+  }
+
+  const { ctxM, pg, reqs, errs } = await mapContext(true);
+  // the wizard shows a map of the chosen place
+  await pg.getByTestId('map-preview').waitFor({ timeout: 8000 });
+  const previewOk = await (async () => { for (let i = 0; i < 40; i++) { const g = await pg.getByTestId('map-preview').locator('canvas').evaluate((cv) => { const d = cv.getContext('2d').getImageData(10, 10, 1, 1).data; return d[1] > 120 && d[0] < 80; }); if (g) return true; await wait(150); } return false; })();
+  check('the wizard shows a map of the place, with its credit', previewOk && /MapTiler/.test(await pg.getByTestId('map-preview').innerText()));
+  await pg.evaluate(() => window.gardenPlanner.newProject({ meta: { name: 'Map on', location: { label: 'Brisbane QLD', lat: -27.47, lng: 153.03, state: 'QLD' }, climateZone: 'subtropical', frost: 'none', pets: false, northDeg: 0 }, plot: { kind: 'rect', width: 20, depth: 20 } }));
+  await pg.waitForSelector('.stage canvas');
+  await pg.evaluate(() => window.gardenPlanner.ui.getState().select(null));
+  const mapShot = async (n) => { if (out) await pg.screenshot({ path: join(out, n) }); };
+  const pixel = () => pg.evaluate(() => {
+    const cv = document.querySelector('.stage canvas'); // the first Konva layer is the map
+    const c = cv.getContext('2d');
+    const w = cv.width, h = cv.height;
+    let green = 0, any = 0;
+    for (let y = 0; y < h; y += Math.max(1, Math.floor(h / 24))) for (let x = 0; x < w; x += Math.max(1, Math.floor(w / 24))) { const d = c.getImageData(x, y, 1, 1).data; if (d[3] > 0) { any++; if (d[1] > 120 && d[0] < 80) green++; } }
+    return { green, any };
+  });
+  await pg.getByLabel('Show a satellite map under the plan').check();
+  await pg.waitForFunction(() => window.gardenPlanner.project.getState().project.map?.on === true);
+  let seen = await (async () => { for (let i = 0; i < 40; i++) { const r = await pixel(); if (r.green > 20) return r; await wait(150); } return pixel(); })();
+  check('turning the map on draws the aerial tiles under the plan', seen.green > 20, JSON.stringify(seen));
+  const tileReqs = reqs.filter((r) => r.path !== '/status');
+  check('tiles come from Vault with the Vault token (never from MapTiler)', tileReqs.length > 0 && tileReqs.every((r) => r.auth === 'Bearer test-token' && /^\/\d+\/\d+\/\d+$/.test(r.path)), JSON.stringify(tileReqs.slice(0, 2)));
+  // the tile asked for first is the one at the garden's location (checked with an independent calculation)
+  const planReqs = tileReqs.filter((r) => Number(r.path.split('/')[1]) !== 16); // (zoom 16 is the wizard preview)
+  const z = Number(planReqs[0].path.split('/')[1]);
+  const n = 256 * 2 ** z;
+  const wx = ((153.03 + 180) / 360) * n;
+  const sinLat = Math.sin((-27.47 * Math.PI) / 180);
+  const wy = (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * n;
+  const near = planReqs.some((r) => { const [, , x, y] = r.path.split('/').map(Number); return Math.abs(x - Math.floor(wx / 256)) <= 6 && Math.abs(y - Math.floor(wy / 256)) <= 6; });
+  check('and they are the tiles around the garden location', near, `zoom ${z}, wanted near ${Math.floor(wx / 256)}/${Math.floor(wy / 256)}`);
+  check('the credit the provider requires is shown with the map', /MapTiler/.test(await pg.getByTestId('map-attribution').innerText()));
+  await mapShot('10-map.png');
+
+  // line the map up with the plot: dragging moves the map, and it is one undo step
+  const before = await pg.evaluate(() => window.gardenPlanner.project.getState().project.map);
+  await pg.getByRole('button', { name: 'Move map' }).click();
+  const screenOn = (x, y) => pg.evaluate(([wx, wy]) => { const g = window.gardenPlanner; const v = g.view.getState().view; const r = document.querySelector('.stage').getBoundingClientRect(); return { x: r.left + v.offsetX + wx * v.scale, y: r.top + v.offsetY - wy * v.scale }; }, [x, y]);
+  const a = await screenOn(4, 4), b = await screenOn(9, 4); // 5 m to the right on the plan
+  await pg.mouse.move(a.x, a.y); await pg.mouse.down(); await pg.mouse.move((a.x + b.x) / 2, a.y, { steps: 4 }); await pg.mouse.move(b.x, b.y, { steps: 4 }); await pg.mouse.up();
+  await wait(250);
+  const after = await pg.evaluate(() => window.gardenPlanner.project.getState().project.map);
+  const dEast = (before.lng - after.lng) * 111320 * Math.cos((-27.47 * Math.PI) / 180);
+  check('dragging the map east by 5 m moves its anchor 5 m west', Math.abs(dEast - 5) < 0.2 && Math.abs(after.lat - before.lat) < 1e-6, JSON.stringify({ dEast, dLat: after.lat - before.lat }));
+  check('moving the map did not select or move anything else', (await pg.evaluate(() => window.gardenPlanner.ui.getState().selection)) === null);
+  await pg.keyboard.press('Control+z');
+  await wait(200);
+  const undone = await pg.evaluate(() => window.gardenPlanner.project.getState().project.map);
+  check('Ctrl+Z puts the map back in one step', Math.abs(undone.lng - before.lng) < 1e-9 && Math.abs(undone.lat - before.lat) < 1e-9);
+  await pg.keyboard.press('Escape');
+  check('Esc leaves Move map', (await pg.evaluate(() => window.gardenPlanner.ui.getState().mapAlign)) === false);
+
+  // the map turns with the north arrow, and the plan fills let it show through
+  await pg.evaluate(() => window.gardenPlanner.updateMeta({ northDeg: 90 }));
+  await wait(300);
+  seen = await pixel();
+  check('the map is still drawn after turning north', seen.green > 10, JSON.stringify(seen));
+
+  // shadows still fall across it: switch the sun map on with a house
+  await pg.evaluate(() => { const a = window.gardenPlanner; a.updateMeta({ northDeg: 0 }); a.ui.getState().set({ showShadows: true }); });
+  await wait(300);
+  check('no page errors with the map on', errs.length === 0, errs.join(' | '));
+
+  // switching off removes it and the credit
+  await pg.evaluate(() => window.gardenPlanner.ui.getState().select(null));
+  await pg.getByLabel('Show a satellite map under the plan').uncheck();
+  await wait(300);
+  check('turning the map off removes the credit', (await pg.getByTestId('map-attribution').count()) === 0);
+  const off = await pixel();
+  check('and the tiles', off.green === 0, JSON.stringify(off));
+  await ctxM.close();
 }
 await browser.close();
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nAll checks passed');

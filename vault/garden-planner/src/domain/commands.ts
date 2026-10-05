@@ -57,6 +57,7 @@ export function apply(c: Command, p: GardenProject): GardenProject {
     case 'SetSingleton': {
       const next: GardenProject = { ...p, [c.name]: c.to };
       if (c.to === null && c.name === 'underlay') delete next.underlay; // optional field: absent, not null
+      if (c.to === null && c.name === 'map') delete next.map;
       return next;
     }
     case 'SetMeta': return { ...p, ...c.to };

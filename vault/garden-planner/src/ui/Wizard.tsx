@@ -6,6 +6,7 @@ import { AU_STATES, CLIMATE_ZONES, FROST_LEVELS, type ClimateZone, type Drainage
 import { useApp, useUi } from './AppContext';
 import { CheckField, Field, NumField, SelectField, TextField, optionsOf } from './fields';
 import { Icon } from './icons';
+import { MapPreview } from './MapSection';
 
 const STEPS = ['Where', 'Climate', 'North', 'Your plot'] as const;
 
@@ -123,6 +124,7 @@ export function Wizard() {
                 <NumField label="Latitude" value={loc.lat} min={-44} max={-9} step={0.01} decimals={3} onCommit={(v) => place({ ...loc, lat: v })} hint="Negative: Australia is in the southern hemisphere." />
                 <NumField label="Longitude" value={loc.lng} min={112} max={155} step={0.01} decimals={3} onCommit={(v) => place({ ...loc, lng: v })} />
               </div>
+              <MapPreview lat={loc.lat} lng={loc.lng} />
               <p className="note">Your location sets the sun path and suggests a climate zone. It is stored only in your garden file.</p>
             </>
           )}

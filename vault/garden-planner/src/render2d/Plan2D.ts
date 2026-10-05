@@ -22,6 +22,7 @@ import { placeFor } from '../sun/timezone';
 import { obstaclesOf, shadowsFor, type Shadow } from '../sun/shadows';
 import { computeSunHours, hoursAt, SUN_COLOURS, type SunGrid } from '../sun/sunHours';
 import { sunLevelForHours } from '../plants/suitability';
+import { chooseZoom, groupTransform, shiftAnchor, visibleTiles, TILE, type LatLng } from '../map/mercator';
 
 const DRAW_TOOLS: ReadonlySet<Tool> = new Set(['boundary', 'house', 'bed', 'lawn', 'zone', 'path', 'service']);
 const POLY_TOOLS: ReadonlySet<Tool> = new Set(['boundary', 'house', 'bed', 'lawn', 'zone']);
@@ -33,6 +34,7 @@ type Drag =
   | { mode: 'move'; sel: Selection; start: Vec2; startPx: Vec2; orig: unknown; moved: boolean }
   | { mode: 'vertex'; sel: Selection; index: number; orig: unknown }
   | { mode: 'north' }
+  | { mode: 'map'; start: Vec2; anchor0: LatLng }
   | { mode: 'pan'; startPx: Vec2; startView: View }
   | { mode: 'rect' };
 
@@ -41,7 +43,11 @@ const flat = (pts: Vec2[]): number[] => pts.flatMap((p) => [p.x, p.y]);
 
 export class Plan2D {
   private stage: Konva.Stage;
+  private mapLayer = new Konva.Layer({ listening: false });
   private world = new Konva.Layer({ listening: false });
+  /** While the map is being dragged into place: where its anchor is right now (committed on release). */
+  private mapOverride: LatLng | null = null;
+  private mapOn = false;
   private overlay = new Konva.Layer({ listening: false });
   private underlayImg: { src: string; image: HTMLImageElement } | null = null;
   /** The sun-hours map, kept until the garden, growth stage or month changes (never recomputed per frame of a drag). */
@@ -63,6 +69,7 @@ export class Plan2D {
   constructor(private container: HTMLDivElement, private app: App) {
     this.coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
     this.stage = new Konva.Stage({ container, width: container.clientWidth || 800, height: container.clientHeight || 600 });
+    this.stage.add(this.mapLayer);
     this.stage.add(this.world);
     this.stage.add(this.overlay);
     container.style.touchAction = 'none';
@@ -183,6 +190,7 @@ export class Plan2D {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
 
     if (this.northHit(px)) { this.drag = { mode: 'north' }; return; }
+    if (ui.mapAlign && p.map?.on) { this.drag = { mode: 'map', start: world, anchor0: { lat: p.map.lat, lng: p.map.lng } }; return; }
 
     if (ui.tool === 'select') {
       const sel = ui.selection;
@@ -227,6 +235,11 @@ export class Plan2D {
       return;
     }
     if (d?.mode === 'north') { this.setNorthFromPointer(px, false); return; }
+    if (d?.mode === 'map') {
+      const p = this.app.project.getState().project;
+      if (p) { this.mapOverride = shiftAnchor(d.anchor0, p.northDeg, { x: world.x - d.start.x, y: world.y - d.start.y }); this.schedule(); }
+      return;
+    }
     if (d?.mode === 'move') {
       if (!d.moved && dist(px, d.startPx) < 4) return;
       d.moved = true;
@@ -275,6 +288,13 @@ export class Plan2D {
 
     if (d?.mode === 'north') { this.setNorthFromPointer(px, true); return; }
     if (d?.mode === 'pan') return;
+    if (d?.mode === 'map') {
+      const at = this.mapOverride;
+      this.mapOverride = null;
+      if (at && p.map && (at.lat !== p.map.lat || at.lng !== p.map.lng)) this.app.setMap({ ...p.map, lat: at.lat, lng: at.lng }, 'Move map');
+      this.schedule();
+      return;
+    }
     if (d?.mode === 'move' || d?.mode === 'vertex') {
       const ov = this.override;
       this.override = null;
@@ -401,18 +421,21 @@ export class Plan2D {
     const p = this.current();
     const v = this.view;
     this.world.destroyChildren();
+    this.mapLayer.destroyChildren();
     this.overlay.destroyChildren();
     this.world.position({ x: v.offsetX, y: v.offsetY });
     this.world.scale({ x: v.scale, y: -v.scale });
     if (!p) { this.stage.batchDraw(); return; }
     const ui = this.app.ui.getState();
 
+    this.mapOn = !!p.map?.on;
+    this.drawMap(p, v);
     this.drawUnderlay(p);
     if (ui.showGrid) this.drawGrid(v);
-    for (const l of p.lawns) this.world.add(new Konva.Line({ points: flat(sampleShape(l.shape)), closed: true, fill: GRASS_COLOUR[l.grass], stroke: '#86ad68', strokeWidth: 1, strokeScaleEnabled: false }));
+    for (const l of p.lawns) this.world.add(new Konva.Line({ points: flat(sampleShape(l.shape)), closed: true, fill: this.soft(GRASS_COLOUR[l.grass]), stroke: '#86ad68', strokeWidth: 1, strokeScaleEnabled: false }));
     for (const z of p.zones) this.world.add(new Konva.Line({ points: flat(sampleShape(z.shape)), closed: true, fill: `${COLOURS.zone}22`, stroke: COLOURS.zone, strokeWidth: 1.5, dash: [8, 6], strokeScaleEnabled: false }));
     for (const b of p.beds) {
-      this.world.add(new Konva.Line({ points: flat(sampleShape(b.shape)), closed: true, fill: MULCH_COLOUR[b.mulch], stroke: EDGING_COLOUR[b.edging], strokeWidth: b.edging === 'none' ? 1 : b.raised ? 4 : 2.5, strokeScaleEnabled: false }));
+      this.world.add(new Konva.Line({ points: flat(sampleShape(b.shape)), closed: true, fill: this.soft(MULCH_COLOUR[b.mulch]), stroke: EDGING_COLOUR[b.edging], strokeWidth: b.edging === 'none' ? 1 : b.raised ? 4 : 2.5, strokeScaleEnabled: false }));
     }
     for (const pa of p.paths) this.world.add(new Konva.Line({ points: flat(pa.points), stroke: PATH_COLOUR[pa.material], strokeWidth: pa.width, lineCap: 'butt', lineJoin: 'round', dash: pa.material === 'stepping_stones' ? [pa.width * 0.7, pa.width * 0.45] : undefined }));
     for (const sv of p.services) {
@@ -505,6 +528,30 @@ export class Plan2D {
         }));
       }
     }
+  }
+
+  /** Lawn and bed fills let the aerial photo show through when the map is on (so the plan can be traced over it). */
+  private soft(colour: string): string { return this.mapOn && /^#[0-9a-f]{6}$/i.test(colour) ? `${colour}8c` : colour; }
+
+  /** The satellite map: tiles drawn north-up, turned to the garden's north and scaled to metres, under everything else. */
+  private drawMap(p: GardenProject, v: View): void {
+    const m = p.map;
+    if (!m?.on) return;
+    const tiles = this.app.mapTiles;
+    const st = tiles.peekStatus();
+    if (!st) { void tiles.status().then(() => this.schedule()); return; }
+    if (!st.enabled) return;
+    const anchor = this.mapOverride ?? { lat: m.lat, lng: m.lng };
+    const z = chooseZoom(v.scale, anchor.lat, st.maxZoom);
+    const list = visibleTiles(anchor, p.northDeg, v, this.stage.width(), this.stage.height(), z);
+    const t = groupTransform(v, p.northDeg, z, anchor.lat);
+    const g = new Konva.Group({ x: t.x, y: t.y, rotation: t.rotation, scaleX: t.scale, scaleY: t.scale, opacity: m.opacity });
+    for (const q of list) {
+      const img = tiles.tile(q.z, q.x, q.y, () => this.schedule());
+      // a hair of overlap hides the seams that fractional scaling would otherwise show between tiles
+      if (img) g.add(new Konva.Image({ image: img as CanvasImageSource as never, x: q.px, y: q.py, width: TILE + 0.6, height: TILE + 0.6 }));
+    }
+    this.mapLayer.add(g);
   }
 
   private drawUnderlay(p: GardenProject): void {

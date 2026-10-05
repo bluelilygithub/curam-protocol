@@ -15,6 +15,12 @@ export type Drainage = 'good' | 'poor';
 
 export interface Location { label: string; lat: number; lng: number; state: AuState; postcode?: string }
 
+/**
+ * The satellite map under the plan. (lat, lng) is the point of the earth at plan position (0, 0); the garden's `northDeg` turns the map to
+ * match the plan. The location from the wizard is only as exact as a suburb, so the user lines the map up with their plot once ("Move map").
+ */
+export interface MapSettings { on: boolean; lat: number; lng: number; opacity: number }
+
 /** A closed outline. `smooth` draws a curve through the points (Catmull-Rom); otherwise straight edges. */
 export interface Shape { points: Vec2[]; smooth: boolean }
 
@@ -105,6 +111,8 @@ export interface GardenProject {
   structures: Structure[];
   plants: PlantInstance[];
   underlay?: Underlay;
+  /** The satellite map under the plan (optional; absent = never switched on). */
+  map?: MapSettings;
   savedViews?: SavedView[];
 }
 
@@ -117,4 +125,4 @@ export const COLLECTION_NAMES: readonly CollectionName[] = ['zones', 'beds', 'pa
 
 /** The settings that live at the top of the project (the wizard's answers). */
 export type ProjectMeta = Pick<GardenProject, 'name' | 'location' | 'climateZone' | 'frost' | 'pets' | 'soil' | 'drainage' | 'northDeg'>;
-export type SingletonName = 'boundary' | 'house' | 'underlay';
+export type SingletonName = 'boundary' | 'house' | 'underlay' | 'map';

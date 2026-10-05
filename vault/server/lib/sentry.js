@@ -9,7 +9,8 @@ const enabled = Boolean(process.env.SENTRY_DSN);
 // instrumentation records URLs (ours, and the outbound call to the geocoder, whose URL carries the text), so those are scrubbed here:
 // anything after "?" is dropped from events, transactions, spans and breadcrumbs that mention these endpoints, and request bodies with it.
 function sensitiveUrls(env = process.env) {
-  const list = ['/api/geocode', 'nominatim.openstreetmap.org'];
+  // api.maptiler.com: the outbound tile URL carries the MapTiler key as ?key=, which must never reach an error report
+  const list = ['/api/geocode', 'nominatim.openstreetmap.org', 'api.maptiler.com'];
   try { if (env.NOMINATIM_URL) list.push(new URL(env.NOMINATIM_URL).host); } catch { /* not a URL: ignore */ }
   return list;
 }

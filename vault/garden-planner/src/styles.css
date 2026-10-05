@@ -213,3 +213,14 @@ textarea.vi-input { padding: 8px 34px 8px 10px; }
 .selbar { flex-wrap: wrap; justify-content: center; }
 .selbar-row { flex: 1 1 100%; display: grid; grid-template-columns: repeat(3, minmax(90px, 1fr)); gap: 8px; align-items: end; padding-bottom: 6px; border-bottom: 1px solid var(--color-border); }
 .selbar-row .row { grid-column: 1 / -1; }
+
+/* satellite map */
+.map-credit { position: absolute; right: 0; bottom: 0; margin: 0; padding: 2px 8px; font-size: 11px; background: rgba(255,255,255,.8); color: #333; pointer-events: none; border-top-left-radius: 6px; }
+.map-preview { margin: 6px 0; display: flex; flex-direction: column; gap: 2px; }
+.map-preview canvas { width: 100%; max-width: 360px; height: auto; border-radius: 8px; border: 1px solid var(--color-border); }
+.map-preview figcaption { font-size: 11px; color: var(--muted, #666); }
+.note.warn { color: #8a5a00; }
+
+/* a checkbox with a hint must not be squashed by the scrolling panel (the hint overflowed onto the next item) */
+.check { flex-shrink: 0; }
+.check .field-hint { flex: 1 1 100%; }

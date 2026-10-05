@@ -173,6 +173,7 @@ app.use('/api/restyle', requireFeature('restyle'), require('./routes/restyle'));
 app.use('/api/room-projects', requireFeature('roomPlanner'), require('./routes/roomProjects'));
 app.use('/api/garden-projects', requireFeature('gardenPlanner'), require('./routes/gardenProjects'));
 app.use('/api/geocode', requireFeature('gardenPlanner'), require('./routes/geocode'));
+app.use('/api/map-tiles', requireFeature('gardenPlanner'), require('./routes/mapTiles'));
 app.use('/api/plant-images', requireFeature('gardenPlanner'), require('./routes/plantImages'));
 require('./services/fontGoogleCatalog').warmCatalog(); // background build — first real request shouldn't pay this cost
 app.use('/api/videos', requireFeature('videos'), aiLimiter, require('./routes/videos'));

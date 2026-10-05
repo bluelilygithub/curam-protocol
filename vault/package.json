@@ -14,6 +14,7 @@
     "test:room-projects": "node server/routes/roomProjects.test.js",
     "test:garden-projects": "node server/routes/gardenProjects.test.js && node server/routes/gardenImages.test.js",
     "test:geocode": "node server/services/geocode.test.js",
+    "test:map-tiles": "node server/routes/mapTiles.test.js",
     "test:plant-images": "node server/services/imageLicences.test.js && node server/services/plantImages.test.js && node server/routes/plantImages.test.js",
     "test:document-redaction-m1": "node server/services/documentRedaction/milestone1.test.js",
     "test:contract-review-m1": "node server/services/contractReview/milestone1.test.js",

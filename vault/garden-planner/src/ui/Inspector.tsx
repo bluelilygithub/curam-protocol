@@ -18,6 +18,7 @@ import type { Selection } from '../state/uiStore';
 import { useApp, useProject, useUi } from './AppContext';
 import { CheckField, NumField, SelectField, TextField, labelOf, optionsOf } from './fields';
 import { Icon } from './icons';
+import { MapSection } from './MapSection';
 import { ChecksPanel } from './ChecksPanel';
 import { useStore } from 'zustand';
 import { countBySeverity } from '../state/checksStore';
@@ -76,6 +77,7 @@ function ProjectPanel({ project }: { project: GardenProject }) {
       <SelectField label="Drainage" value={project.drainage ?? 'good'} options={[['good', 'Good'], ['poor', 'Poor']]} onChange={(v) => m({ drainage: v })} />
       <CheckField label="We have pets" checked={project.pets} onChange={(v) => m({ pets: v })} hint="Warns about plants that are toxic to pets." />
       <NumField label="North points" unit="degrees" value={project.northDeg} min={0} max={359} step={1} decimals={0} onCommit={(v) => m({ northDeg: v })} hint="0 = the top of the plan is north. You can also drag the north arrow on the plan." />
+      <MapSection project={project} />
       {project.underlay && (
         <>
           <h3>Tracing picture</h3>
