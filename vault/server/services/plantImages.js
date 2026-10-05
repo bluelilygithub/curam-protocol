@@ -193,6 +193,7 @@ const quality = (img) => (img.width ?? 800) + (img.licenceCode === 'CC0 1.0' || 
  * @param {object} o
  * @param {object} o.store    listImages(plantId), upsertImage(plantId, img) -> id, updateImage(id, patch), getLookup, saveLookup, getImage
  * @param {(plantId: string) => string|null} o.names  botanical name for a plant id (the server's own list: clients cannot ask for arbitrary names)
+ * @param {string[]} [o.allIds]  every plant id the server knows (for the curator overview and "fetch the missing ones")
  */
 function createPlantImageService(o) {
   const env = o.env ?? process.env;
@@ -307,6 +308,22 @@ function createPlantImageService(o) {
     },
 
     // ---- curator tools (admin)
+    /** One row per plant that has anything stored or a lookup on record: how many photos are shown / hidden, how many defaults are set, and the lookup status. */
+    async summary() {
+      const rows = await o.store.summary();
+      return rows.map((r) => ({ plantId: r.plantId, visible: r.visible, hidden: r.hidden, defaults: r.defaults, status: r.status ?? null, fetchedAt: r.fetchedAt ?? null }));
+    },
+    /** Start a background fetch for every plant that has never been looked up, or whose last lookup failed. Returns how many were queued. */
+    async refreshMissing() {
+      const ids = o.allIds ?? [];
+      const queued = [];
+      for (const id of ids) {
+        const l = await o.store.getLookup(id);
+        if (!l || l.status === 'error') queued.push(id);
+      }
+      for (const id of queued) startRefresh(id);
+      return queued.length;
+    },
     /** Every candidate for a plant, hidden ones too. */
     async allImages(plantId) {
       const rows = await o.store.listImages(plantId);
@@ -355,6 +372,14 @@ function createMemoryStore() {
     async updateImage(id, patch) { const i = images.find((x) => String(x.id) === String(id)); if (i) Object.assign(i, patch); },
     async getLookup(plantId) { return lookups.get(plantId) ?? null; },
     async saveLookup(plantId, l) { lookups.set(plantId, l); },
+    async summary() {
+      const ids = new Set([...images.map((i) => i.plantId), ...lookups.keys()]);
+      return [...ids].sort().map((plantId) => {
+        const mine = images.filter((i) => i.plantId === plantId);
+        const l = lookups.get(plantId);
+        return { plantId, visible: mine.filter((i) => !i.hidden).length, hidden: mine.filter((i) => i.hidden).length, defaults: new Set(mine.filter((i) => !i.hidden && i.defaultFor).map((i) => i.defaultFor)).size, status: l?.status ?? null, fetchedAt: l?.fetchedAt ?? null };
+      });
+    },
   };
 }
 
@@ -392,6 +417,20 @@ function createPgStore(pool) {
     async getLookup(plantId) {
       const { rows } = await pool.query(`SELECT status, "fetchedAt", "lastError" FROM plant_image_lookups WHERE "plantId" = $1`, [plantId]);
       return rows[0] ? { status: rows[0].status, fetchedAt: new Date(rows[0].fetchedAt).getTime(), error: rows[0].lastError } : null;
+    },
+    async summary() {
+      const { rows } = await pool.query(
+        `SELECT COALESCE(i."plantId", l."plantId") AS "plantId",
+                COALESCE(i.visible, 0) AS visible, COALESCE(i.hidden, 0) AS hidden, COALESCE(i.defaults, 0) AS defaults, l.status, l."fetchedAt"
+           FROM (SELECT "plantId",
+                        COUNT(*) FILTER (WHERE NOT hidden) AS visible,
+                        COUNT(*) FILTER (WHERE hidden) AS hidden,
+                        COUNT(DISTINCT "defaultFor") FILTER (WHERE "defaultFor" IS NOT NULL AND NOT hidden) AS defaults
+                   FROM plant_images GROUP BY "plantId") i
+           FULL OUTER JOIN plant_image_lookups l ON l."plantId" = i."plantId"
+          ORDER BY 1`,
+      );
+      return rows.map((r) => ({ plantId: r.plantId, visible: Number(r.visible), hidden: Number(r.hidden), defaults: Number(r.defaults), status: r.status ?? null, fetchedAt: r.fetchedAt ? new Date(r.fetchedAt).getTime() : null }));
     },
     async saveLookup(plantId, l) {
       await pool.query(

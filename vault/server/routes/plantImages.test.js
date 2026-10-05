@@ -16,6 +16,8 @@ const service = {
   setRole: async (id, r) => { calls.push(['role', id, r]); if (r === 'bad') throw new Error('unknown role'); return true; },
   setDefault: async (p, r, i) => { calls.push(['default', p, r, i]); if (r === 'habitat') throw new Error('role must be flower, foliage or plant'); return true; },
   startRefresh: (id) => calls.push(['refresh', id]),
+  summary: async () => { calls.push(['summary']); return [{ plantId: 'a', visible: 2, hidden: 0, defaults: 1, status: 'ok', fetchedAt: 1 }]; },
+  refreshMissing: async () => { calls.push(['missing']); return 7; },
 };
 const admin = (req, res, next) => (req.headers['x-admin'] === '1' ? next() : res.status(403).json({ error: 'Admin only' }));
 const app = express();
@@ -60,6 +62,21 @@ test('curator routes are admin only', async (p) => {
   }
   assert.deepStrictEqual(calls, [], 'the service is never reached');
 });
+test('summary and refresh-missing are admin only, and are not mistaken for plant ids', async (p) => {
+  calls.length = 0;
+  assert.strictEqual((await call(p, 'GET', '/api/plant-images/summary')).status, 403);
+  assert.strictEqual((await call(p, 'POST', '/api/plant-images/refresh-missing', {})).status, 403);
+  assert.deepStrictEqual(calls, []);
+  const h = { 'x-admin': '1' };
+  const s = await call(p, 'GET', '/api/plant-images/summary', null, h);
+  assert.strictEqual(s.status, 200);
+  assert.strictEqual(s.body.plants[0].plantId, 'a');
+  assert.ok(!calls.some((c) => c[0] === 'images'), 'summary did not reach the /:plantId route');
+  const m = await call(p, 'POST', '/api/plant-images/refresh-missing', {}, h);
+  assert.strictEqual(m.status, 202);
+  assert.strictEqual(m.body.queued, 7);
+});
+
 test('curator actions validate input and report not-found / bad role', async (p) => {
   const h = { 'x-admin': '1' };
   assert.strictEqual((await call(p, 'POST', '/api/plant-images/images/5/hide', { hidden: 'yes' }, h)).status, 400);

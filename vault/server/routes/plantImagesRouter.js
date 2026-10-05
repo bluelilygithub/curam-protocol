@@ -20,6 +20,14 @@ function createRouter(service, adminOnly = (_req, _res, next) => next()) {
     try { res.json({ credits: await service.credits(ids) }); } catch (err) { fail(res, err, 'credits'); }
   });
 
+  // curator overview (admin): counts per plant, and a bulk "fetch the ones never looked up". Named routes sit before /:plantId.
+  router.get('/summary', adminOnly, async (_req, res) => {
+    try { res.set('Cache-Control', 'no-store'); res.json({ plants: await service.summary() }); } catch (err) { fail(res, err, 'summary'); }
+  });
+  router.post('/refresh-missing', adminOnly, async (_req, res) => {
+    try { res.status(202).json({ queued: await service.refreshMissing() }); } catch (err) { fail(res, err, 'refresh-missing'); }
+  });
+
   // curator tools (admin)
   router.post('/images/:id/hide', adminOnly, async (req, res) => {
     if (!IMAGE_ID.test(req.params.id) || typeof req.body?.hidden !== 'boolean') return res.status(400).json({ error: 'Send { hidden: true | false }.' });

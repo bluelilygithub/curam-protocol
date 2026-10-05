@@ -5,6 +5,7 @@ import { AppContext } from './ui/AppContext';
 import { GrowthBar } from './ui/GrowthBar';
 import { InfoModal } from './ui/InfoModal';
 import { CreditsModal } from './ui/CreditsModal';
+import { CuratorModal } from './ui/CuratorModal';
 import { Inspector } from './ui/Inspector';
 import { PlantLibrary } from './ui/PlantLibrary';
 import { ProjectsPanel } from './ui/ProjectsPanel';
@@ -48,6 +49,7 @@ export default function App() {
       <ProjectsPanel />
       <InfoModal />
       <CreditsModal />
+      <CuratorModal />
       <TooltipHost />
     </AppContext.Provider>
   );

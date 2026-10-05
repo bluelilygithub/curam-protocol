@@ -13,7 +13,13 @@ export interface PlantPhoto {
 export type PhotoStatus = 'pending' | 'ready' | 'none' | 'error' | 'disabled' | 'offline' | 'unknown_plant';
 export interface PhotoAnswer { status: PhotoStatus; images: PlantPhoto[] }
 
-type FetchJson = (url: string, init: { headers: Record<string, string> }) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
+type FetchJson = (url: string, init: { headers: Record<string, string>; method?: string; body?: string }) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
+
+/** What a curator sees of a photo: everything the plant card sees, plus whether it is hidden and why. */
+export type AdminPhoto = PlantPhoto & { hidden: boolean; hiddenReason: string | null };
+export interface AdminSummaryRow { plantId: string; visible: number; hidden: number; defaults: number; status: string | null; fetchedAt: number | null }
+export type DefaultRole = 'flower' | 'foliage' | 'plant';
+export interface AdminResult<T = undefined> { ok: boolean; error?: string; data?: T }
 const POLL_MS = [2500, 5000, 10000, 20000];
 
 /** CSV of credits (for the Credits page): one row per photo. */
@@ -25,6 +31,7 @@ export function creditsCsv(rows: Array<PlantPhoto & { plantId: string }>): strin
 
 export function createPlantPhotos(storage: ReadableStorage, fetchFn: FetchJson | undefined = typeof fetch === 'function' ? (fetch as unknown as FetchJson) : undefined, wait: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)), base = '/api/plant-images') {
   const done = new Map<string, PhotoAnswer>();
+  const authed = (): Record<string, string> | null => { const t = readVaultToken(storage); return t ? { Authorization: `Bearer ${t}` } : null; };
   const asking = new Map<string, Promise<PhotoAnswer>>();
 
   async function once(plantId: string): Promise<PhotoAnswer> {
@@ -60,6 +67,41 @@ export function createPlantPhotos(storage: ReadableStorage, fetchFn: FetchJson |
       asking.set(plantId, p);
       return p;
     },
+    /** Forget what was learned about a plant (after a curator changed its photos), so the card asks again. */
+    forget: (plantId: string): void => { done.delete(plantId); },
+
+    /** Is the signed-in Vault user an admin? Only decides whether the curator button shows: the server checks again on every call. */
+    isAdmin(): boolean {
+      try {
+        const raw = storage.getItem('vault-auth');
+        return !!raw && (JSON.parse(raw) as { state?: { user?: { isAdmin?: unknown } } } | null)?.state?.user?.isAdmin === true;
+      } catch { return false; }
+    },
+    /** Curator calls (admin only on the server). Each says plainly what went wrong, never throws. */
+    admin: (() => {
+      async function call<T>(method: string, path: string, body?: unknown): Promise<AdminResult<T>> {
+        const h = authed();
+        if (!h || !fetchFn) return { ok: false, error: 'Sign in to Vault as an admin to curate photos.' };
+        try {
+          const res = await fetchFn(`${base}${path}`, { method, headers: body === undefined ? h : { ...h, 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+          const j = (await res.json().catch(() => ({}))) as T & { error?: string };
+          if (res.status === 403) return { ok: false, error: 'Only a Vault admin can curate photos.' };
+          if (!res.ok) return { ok: false, error: (j as { error?: string }).error ?? 'That did not work.' };
+          return { ok: true, data: j };
+        } catch { return { ok: false, error: 'Could not reach Vault.' }; }
+      }
+      const enc = encodeURIComponent;
+      return {
+        summary: async (): Promise<AdminResult<AdminSummaryRow[]>> => { const r = await call<{ plants: AdminSummaryRow[] }>('GET', '/summary'); return r.ok ? { ok: true, data: r.data?.plants ?? [] } : { ok: false, error: r.error }; },
+        all: async (plantId: string): Promise<AdminResult<AdminPhoto[]>> => { const r = await call<{ images: AdminPhoto[] }>('GET', `/${enc(plantId)}/all`); return r.ok ? { ok: true, data: r.data?.images ?? [] } : { ok: false, error: r.error }; },
+        hide: (plantId: string, imageId: string, hidden: boolean) => call('POST', `/images/${enc(imageId)}/hide`, { hidden }).then((r) => { done.delete(plantId); return r; }),
+        role: (plantId: string, imageId: string, role: string) => call('POST', `/images/${enc(imageId)}/role`, { role }).then((r) => { done.delete(plantId); return r; }),
+        setDefault: (plantId: string, role: DefaultRole, imageId: string | null) => call('POST', `/${enc(plantId)}/default`, { role, imageId }).then((r) => { done.delete(plantId); return r; }),
+        refresh: (plantId: string) => call('POST', `/${enc(plantId)}/refresh`, {}).then((r) => { done.delete(plantId); return r; }),
+        refreshMissing: async (): Promise<AdminResult<number>> => { const r = await call<{ queued: number }>('POST', '/refresh-missing', {}); return r.ok ? { ok: true, data: r.data?.queued ?? 0 } : { ok: false, error: r.error }; },
+      };
+    })(),
+
     /** Credits for these plants (the Credits panel and CSV). */
     async credits(plantIds: string[]): Promise<Array<PlantPhoto & { plantId: string }>> {
       const token = readVaultToken(storage);

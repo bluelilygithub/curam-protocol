@@ -77,7 +77,7 @@ function rig(opts = {}) {
   const store = createMemoryStore();
   const env = { APP_URL: 'https://vault.example', ...(opts.env ?? {}) };
   const service = createPlantImageService({
-    store, env, fetchFn, now: () => t, sleep: async (ms) => { t += ms; }, names: (id) => ({ 'grevillea-robusta': 'Grevillea robusta', 'rosa-iceberg': "Rosa 'Iceberg'" }[id] ?? null),
+    store, env, fetchFn, now: () => t, sleep: async (ms) => { t += ms; }, allIds: ['grevillea-robusta', 'rosa-iceberg', 'never-looked-up'], names: (id) => ({ 'grevillea-robusta': 'Grevillea robusta', 'rosa-iceberg': "Rosa 'Iceberg'", 'never-looked-up': 'Banksia integrifolia' }[id] ?? null),
   });
   return { service, store, calls, world, advance: (ms) => { t += ms; }, now: () => t };
 }
@@ -380,6 +380,39 @@ test('cultivars without a species are searched by their full name', async () => 
   await r.service.startRefresh('rosa-iceberg');
   assert.ok(r.calls.some((c) => decodeURIComponent(c.url.replace(/\+/g, ' ')).includes("Rosa 'Iceberg'")));
 });
+
+test('summary counts shown, hidden and defaults per plant, with the lookup status', async () => {
+  const r = rig();
+  await settle(r);
+  const first = r.store.images.find((i) => i.sourceId === 'photo-101');
+  const second = r.store.images.find((i) => i.sourceId === 'photo-102');
+  await r.service.setDefault('grevillea-robusta', 'flower', first.id);
+  await r.service.setHidden(second.id, true);
+  const s = (await r.service.summary()).find((x) => x.plantId === 'grevillea-robusta');
+  assert.strictEqual(s.status, 'ok');
+  assert.strictEqual(s.hidden, 1);
+  assert.strictEqual(s.defaults, 1);
+  assert.strictEqual(s.visible, r.store.images.filter((i) => !i.hidden).length);
+  assert.ok(s.fetchedAt > 0);
+  assert.ok(!(await r.service.summary()).some((x) => x.plantId === 'never-looked-up'), 'a plant never looked up has no row');
+});
+
+test('refreshMissing queues only plants never looked up (or whose last lookup failed), and fetches them politely', async () => {
+  const r = rig();
+  await settle(r); // grevillea-robusta is done
+  r.calls.length = 0;
+  const n = await r.service.refreshMissing();
+  assert.strictEqual(n, 2, 'rosa-iceberg and never-looked-up');
+  await settleAll(r, ['rosa-iceberg', 'never-looked-up']);
+  assert.ok(r.calls.every((c) => c.ua.startsWith('CuramVault-GardenPlanner/1.0')));
+  assert.strictEqual(await r.service.refreshMissing(), 0, 'nothing left to do');
+  const dead = rig({ fail: ['inaturalist', 'wikimedia'] });
+  await dead.service.refreshMissing();
+  await settleAll(dead, ['grevillea-robusta', 'rosa-iceberg', 'never-looked-up']);
+  assert.strictEqual(await dead.service.refreshMissing(), 3, 'failed lookups are tried again');
+});
+
+async function settleAll(r, ids) { for (const id of ids) await r.service.startRefresh(id); }
 
 (async () => {
   for (const [name, fn] of tests) {

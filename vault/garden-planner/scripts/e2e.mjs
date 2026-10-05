@@ -685,6 +685,114 @@ check('no page errors or console errors', problems.length === 0, problems.slice(
   check('and the tiles', off.green === 0, JSON.stringify(off));
   await ctxM.close();
 }
+// ---- plant photo curator (a fake /api/plant-images stands in for the server)
+{
+  const GIF = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+  const photoRow = (id, o = {}) => ({ id: String(id), source: 'inaturalist', sourceLabel: 'iNaturalist', sourceUrl: 'https://www.inaturalist.org/observations/' + id, imageUrl: 'https://photos.example.test/' + id + '.jpg', thumbUrl: 'https://photos.example.test/' + id + '.jpg', creator: 'Creator ' + id, licenceCode: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/', displayOnly: false, title: 't', role: 'plant', width: 2000, height: 1000, modified: false, credit: 'x', defaultFor: [], hidden: false, hiddenReason: null, ...o });
+  const openCurator = async (isAdmin) => {
+    const ctxC = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await ctxC.addInitScript((admin) => { try { localStorage.setItem('garden-planner:info-seen:v1', '1'); localStorage.setItem('vault-auth', JSON.stringify({ state: { token: 'test-token', user: { id: 1, email: 'a@b.c', isAdmin: admin } }, version: 0 })); } catch { /* ignore */ } }, isAdmin);
+    const pg = await ctxC.newPage();
+    const errs = [];
+    pg.on('pageerror', (e) => errs.push(e.message));
+    const world = { images: [photoRow(1, { role: 'flower' }), photoRow(2, { source: 'wikimedia', sourceLabel: 'Wikimedia Commons', licenceCode: 'CC BY-SA 4.0', displayOnly: true }), photoRow(3, { hidden: true, hiddenReason: 'removed-or-relicensed' })], forbid: false };
+    const posts = [];
+    await pg.route('**/api/garden-projects**', (r) => r.abort('failed'));
+    await pg.route('https://photos.example.test/**', (r) => r.fulfill({ status: 200, contentType: 'image/gif', body: GIF }));
+    await pg.route('**/api/plant-images/**', async (route) => {
+      const req = route.request();
+      const path = new globalThis.URL(req.url()).pathname.replace(/^.*\/api\/plant-images/, '');
+      const json = (b, s = 200) => route.fulfill({ status: s, contentType: 'application/json', body: JSON.stringify(b) });
+      if (req.method() === 'POST') posts.push({ path, body: req.postData() });
+      if (world.forbid && path !== '/lavandula-angustifolia') return json({ error: 'Admin only' }, 403);
+      if (path === '/summary') return json({ plants: [{ plantId: 'lavandula-angustifolia', visible: 2, hidden: 1, defaults: 0, status: 'ok', fetchedAt: 1 }] });
+      if (path === '/refresh-missing') return json({ queued: 5 }, 202);
+      if (path.endsWith('/all')) return json({ images: world.images });
+      let m = /^\/images\/(\d+)\/hide$/.exec(path);
+      if (m) { const im = world.images.find((i) => i.id === m[1]); im.hidden = JSON.parse(req.postData()).hidden; im.hiddenReason = im.hidden ? 'curator' : null; if (im.hidden) im.defaultFor = []; return json({ ok: true }); }
+      m = /^\/images\/(\d+)\/role$/.exec(path);
+      if (m) { world.images.find((i) => i.id === m[1]).role = JSON.parse(req.postData()).role; return json({ ok: true }); }
+      if (path.endsWith('/default')) { const { role, imageId } = JSON.parse(req.postData()); for (const i of world.images) i.defaultFor = i.defaultFor.filter((r) => r !== role); if (imageId) world.images.find((i) => i.id === String(imageId)).defaultFor.push(role); return json({ ok: true }); }
+      if (path.endsWith('/refresh')) return json({ ok: true }, 202);
+      return json({ status: 'ready', images: [] });
+    });
+    await pg.goto(URL);
+    await pg.waitForSelector('.wizard');
+    await pg.evaluate(() => window.gardenPlanner.newProject({ meta: { name: 'Curator', location: { label: 'Brisbane QLD', lat: -27.47, lng: 153.03, state: 'QLD' }, climateZone: 'subtropical', frost: 'none', pets: false, northDeg: 0 }, plot: { kind: 'rect', width: 20, depth: 20 } }));
+    await pg.waitForSelector('.stage canvas');
+    return { ctxC, pg, world, posts, errs };
+  };
+
+  // a member (not an admin) does not even see the button
+  {
+    const { ctxC, pg } = await openCurator(false);
+    check('a non-admin does not see the curator button', (await pg.getByTestId('open-curator').count()) === 0);
+    await ctxC.close();
+  }
+
+  const { ctxC, pg, world, posts, errs } = await openCurator(true);
+  check('an admin sees the curator button', (await pg.getByTestId('open-curator').count()) === 1);
+  await pg.getByTestId('open-curator').click();
+  await pg.getByRole('dialog', { name: 'Plant photo curator' }).waitFor();
+  await pg.getByTestId('curator-plants').locator('li').first().waitFor();
+  const total = await pg.getByTestId('curator-plants').locator('li').count();
+  check('the curator lists every plant (171)', total === 171, String(total));
+  await pg.getByLabel('Show', { exact: true }).selectOption('unlooked');
+  const unlooked = await pg.getByTestId('curator-plants').locator('li').count();
+  check('the filter "Not looked up yet" leaves out the plant that has photos', unlooked === 170, String(unlooked));
+  await pg.getByLabel('Show', { exact: true }).selectOption('all');
+  await pg.getByLabel('Find a plant').fill('lavandula angustifolia');
+  await wait(200);
+  const lavRow = pg.getByTestId('curator-plants').locator('li').first();
+  check('the list shows what is stored for a plant in plain words', /2 shown · 1 hidden · 0\/3 chosen/.test(await lavRow.innerText()), await lavRow.innerText());
+  await lavRow.locator('button').click();
+  await pg.getByTestId('curator-photo').first().waitFor();
+  check('every photo found is listed, hidden ones too', (await pg.getByTestId('curator-photo').count()) === 3);
+  check('a hidden photo is marked and says why', /gone from its source/.test(await pg.getByTestId('curator-photo').nth(2).innerText()));
+  check('each photo shows its creator, licence and source', /Creator 1, CC BY 4\.0 via iNaturalist/.test(await pg.getByTestId('curator-photo').nth(0).innerText()));
+  check('share-alike is flagged as shown unedited', /Share-alike/.test(await pg.getByTestId('curator-photo').nth(1).innerText()));
+
+  const card0 = pg.getByTestId('curator-photo').nth(0);
+  await card0.getByRole('button', { name: 'Flower' }).click();
+  await wait(300);
+  check('choosing a default sends the plant, role and photo', posts.some((p) => p.path === '/lavandula-angustifolia/default' && p.body === '{"role":"flower","imageId":"1"}'), JSON.stringify(posts));
+  check('and the button shows it is chosen', (await card0.getByRole('button', { name: /Flower/ }).getAttribute('aria-pressed')) === 'true');
+
+  await card0.getByRole('button', { name: /Flower/ }).click();
+  await wait(300);
+  check('pressing a chosen default clears it', posts.some((p) => p.body === '{"role":"flower","imageId":null}'));
+
+  const card1 = pg.getByTestId('curator-photo').nth(1);
+  await card1.getByRole('button', { name: 'Hide' }).click();
+  await wait(300);
+  check('Hide sends the request and the photo is dimmed', posts.some((p) => p.path === '/images/2/hide' && p.body === '{"hidden":true}') && /hidden/.test((await pg.getByTestId('curator-photo').nth(1).getAttribute('class')) ?? ''));
+  check('a hidden photo cannot be chosen as a default until it is shown', await pg.getByTestId('curator-photo').nth(1).getByRole('button', { name: 'Flower' }).isDisabled());
+  await pg.getByTestId('curator-photo').nth(1).getByRole('button', { name: 'Show' }).click();
+  await wait(300);
+  check('Show brings it back', posts.some((p) => p.path === '/images/2/hide' && p.body === '{"hidden":false}'));
+
+  await card0.getByLabel('What the photo shows').selectOption('foliage');
+  await wait(300);
+  check('changing what a photo shows sends the new role', posts.some((p) => p.path === '/images/1/role' && p.body === '{"role":"foliage"}'));
+
+  await pg.getByTestId('curator-refresh').click();
+  await wait(300);
+  check('Look again asks the server to search the sources', posts.some((p) => p.path === '/lavandula-angustifolia/refresh'));
+
+  await pg.getByTestId('fetch-missing').click();
+  await pg.getByTestId('curator-msg').filter({ hasText: 'Started looking for photos for 5 plants' }).waitFor({ timeout: 5000 });
+  check('the bulk lookup says how many plants it started on', true);
+  if (out) await pg.screenshot({ path: join(out, '12-curator.png') });
+
+  // the server refuses (not an admin after all): a plain message, nothing breaks
+  world.forbid = true;
+  await pg.getByTestId('fetch-missing').click();
+  await pg.getByTestId('curator-msg').filter({ hasText: 'Only a Vault admin' }).waitFor({ timeout: 5000 });
+  check('a refusal from the server is explained in plain words', true);
+  await pg.keyboard.press('Escape');
+  check('no page errors in the curator', errs.length === 0, errs.join(' | '));
+  await ctxC.close();
+}
 await browser.close();
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nAll checks passed');
 process.exit(failures ? 1 : 0);

@@ -7,6 +7,7 @@ const names = require('../config/plantNames.json');
 
 const service = createPlantImageService({
   store: createPgStore(require('../db').pool),
+  allIds: Object.keys(names),
   names: (id) => (Object.prototype.hasOwnProperty.call(names, id) ? names[id] : null),
   log: require('../lib/logger'),
 });
