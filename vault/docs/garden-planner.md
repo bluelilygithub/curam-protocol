@@ -20,7 +20,7 @@ Run: `cd garden-planner && npm install && npm run dev` (port 5175; Vault's dev p
 | 4. Image pipeline (ALA, iNaturalist, Wikimedia, licence filter, curator tools, credits page) | **Built except live ALA**: iNaturalist and Wikimedia work live; ALA is written and tested with fixtures and switches on when `ALA_API_KEY` is set. Curator tools are API only (see "Plant photos"). |
 | 5. Checks | **Done** (see "Checks" below). |
 | 6. Sun and shade | **Done** (see "Sun and shade" below). Built before the checks, because the sun-mismatch check needs the sun-hours map. |
-| 7. 3D / Render photo adaptations | **Render photo done** (see "Render photo" below). Still not built: saved views, fly-through and walk mode. |
+| 7. 3D / Render photo adaptations | **Render photo and walk mode done** (see "Walk mode" and "Render photo" below). Still not built: saved views and the fly-through. |
 | 8. Plant tag scan, plant schedule CSV | **Done** (see "Plant tag scan" and "Plant schedule" below). |
 | 9. Billboard cut-outs | Not started. |
 
@@ -108,6 +108,23 @@ The wizard's **Look up** uses OpenStreetMap's public Nominatim. Policy read at h
 
 Other behaviour: signed-out users get a plain message (the place list, postcode-to-state and latitude/longitude still work); the service being down or busy gives plain messages and is not retried in a loop; failures are not cached. The public service has no uptime promise, so for heavy use set `NOMINATIM_URL` to a self-hosted Nominatim (or a provider with the same API) and no code changes. Set `NOMINATIM_CONTACT` (an email or URL for OSM to reach you) in Railway; I did not put an email in the code. Cost/terms conclusion: the public instance's terms fit this use (moderate user count, user-triggered, cached, attributed, not primarily a geocoding service), so no provider switch was needed. Revisit if usage grows beyond a handful of lookups a day per user.
 
+## Walk mode (built 2026-10-17)
+
+**Walk** in the 3D view puts you in the garden at eye height (1.6 m), first person, with a wider view (70 degrees). It starts just inside the gate if there is one (otherwise the middle of the plot), facing the house (or the middle of the plot).
+
+**Controls.** W A S D walk (arrow up and down too), the left and right arrows or **Q and E** turn, **drag the picture** to look around (up and down as well), **hold Shift to run** (2.4 m/s; walking is 1.4 m/s), and an **on-screen pad** (drag the knob: up is forward, sideways strafes) for a phone or tablet. **Esc** or **Stop walking** goes back to the overview camera exactly where it was. While walking the Iso, Top and Front buttons give way to Stop walking; **Render photo stays available, and photographs from where you are standing at eye level** (this is the eye-level view the Render photo section said was missing). The Month and Time sliders and the growth stage still work, so you can walk through the garden at 4 pm in winter, or as it will be in five years. Arrow keys belong to the walker, so they do not nudge a selected item; switching to the 2D plan ends the walk.
+
+**What is solid** (`src/walk/walk.ts`, pure, so the one guarantee that matters is property-tested): the walker is a circle 0.25 m in radius that is never inside anything and slides along a wall instead of stopping dead.
+- **Blocks:** the house; sheds, water tanks, retaining walls, raised beds, trellises and **pools** (nobody walks into a pool, however low it is modelled); **fences by type and thickness** (colorbond 6 cm, timber 8 cm, brick 20 cm, a hedge 60 cm) except where a boundary segment is "open"; a tree's **trunk** (its leaves you can walk under) and a shrub's **dense core** (you can brush its edge).
+- **Does not block:** anything at or below knee height (0.4 m: lawn, paths, groundcover, a low raised bed), a **deck**, a **pergola** (you walk under it) and a clothesline.
+- **Gates are openings:** the fence does not block while you are in a gateway, so you can walk out into the street and back in.
+- **Growth stage matters:** plants are small when planted, so you can walk where a mature plant would block. The obstacles are rebuilt when the garden or the growth stage changes, and a walker who finds a plant has grown around them is moved to the nearest free spot.
+- The walker cannot leave a box 40 m beyond the plot (the 3D ground is only so big). A stalled browser tab cannot make the walker jump through a wall (a long frame is capped).
+
+**Not built:** doors into the house (you cannot go inside it), slopes and steps (the ground is flat), clicking a spot to walk there, a choice of start points, and a fly-through.
+
+**Tests:** `tests/walk.test.ts` (22: what blocks and what does not, knee height, trunk versus leaves, a seedling versus a mature plant, a removed plant, the gate in and out and the fence beside it, direction and speed, turning, sliding along a wall, **12 random walks of 400 steps that are never inside anything**, a long frame not tunnelling, the start spot, an empty garden, the camera pose) and the Chrome run (the Walk button, eye height and field of view, the start, W, the right arrow turning and not nudging a selected plant, drag to look, **running at the house stops one body radius from its wall**, the pad, the sliders still lighting the scene, Render photo at eye level, Esc restoring the overview camera exactly, the Stop walking button, the 2D switch).
+
 ## Render photo (built 2026-10-16)
 
 In the 3D view, **Render photo** opens a panel that path-traces the garden into a realistic picture and lets you download it as a PNG. It uses the same engine as Room Planner's Render photo (`three-gpu-pathtracer`, MIT, in its own off-screen canvas; the pure job, presets, caption and support check are shared from `planner-core/render3d/photo.ts`), so the live 3D view is never touched. The path tracer is a lazy 210 kB chunk that only loads when a picture starts.
@@ -120,7 +137,7 @@ In the 3D view, **Render photo** opens a panel that path-traces the garden into 
 
 **With the satellite map on,** the map lies on the ground in the picture (the renderer waits for the tiles it needs first), and **the map provider's credit is printed inside the saved PNG**, in the corner of the picture itself, because it has to travel with the image. File name: `<garden>-<place>-<date>.png`.
 
-**What it is not.** Plants are the same simple shapes as the 3D view (a trunk and a ball of leaves, a cone, a clump), not botanical models, so it shows light, layout and shade rather than leaves; the panel says so. There are no eye-level views from inside the garden yet, and no real 3D models (Room Planner has 13).
+**What it is not.** Plants are the same simple shapes as the 3D view (a trunk and a ball of leaves, a cone, a clump), not botanical models, so it shows light, layout and shade rather than leaves; the panel says so. For an eye-level picture, walk to where you want it (see "Walk mode") and choose Render photo. No real 3D models (Room Planner has 13).
 
 **Things to confirm.** MapTiler's terms on exporting their imagery inside a downloaded picture (the credit is printed, but whether export is allowed on your plan is for you to read). Speed on real hardware: the test machine uses software GL (a 640 x 360 Draft takes tens of minutes to finish there; a real graphics card is far faster), so please time a Good 1280 x 720 picture on your own computer.
 
@@ -214,6 +231,8 @@ Run these on staging before relying on the features. The unit and Chrome tests u
 17. **Plant schedule with a real garden:** plan a real garden with a few beds and 10 or more plants, open the schedule (table button), check the quantities and "where" against the plan, download the CSV and open it in Excel and in Google Sheets: columns line up, sizes sort as numbers, accents (for example in a plant name) display correctly, and a note starting with = shows as text. Check it against a nursery's own plant list for one or two plants.
 
 18. **Render photo, on real hardware:** in 3D, open **Render photo**, choose Good and 1280 x 720, and time it. Try each Lighting mood, a morning and an evening hour (the shadows should point the same way as in the 3D view), and a garden with the satellite map on (check the credit is in the corner of the downloaded picture, and the ground matches the map). Confirm the picture is a fair likeness of your garden and report how long it took.
+
+19. **Walk mode, with a real garden:** in 3D press **Walk**. Check you start at the gate, walk to the house and along a fence (you must slide, not stick or pass through), out through a gate and back, around a tree trunk and under a pergola, and onto a deck. Try the pad and drag-to-look on a phone. Try 1 year and 5 years growth. Report anything you can walk through that should be solid, or get stuck on that should not be.
 
 ## Layout
 

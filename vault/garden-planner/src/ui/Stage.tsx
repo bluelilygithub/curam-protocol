@@ -10,6 +10,7 @@ import { plantById, plantLabel } from '../plants/plants';
 import { mid } from '../plants/growth';
 import { findItem } from '../domain/edit';
 import { MapAttribution } from './MapSection';
+import { WalkPad } from './WalkPad';
 import { useApp, useProject, useUi } from './AppContext';
 
 const HINTS: Record<string, string> = {
@@ -43,6 +44,7 @@ export function Stage() {
   const hasProject = useProject((s) => s.project !== null);
   const project = useProject((s) => s.project);
   const mapAlign = useUi((s) => s.mapAlign);
+  const walking = useUi((s) => s.walking);
 
   useEffect(() => {
     const el = ref.current;
@@ -61,6 +63,8 @@ export function Stage() {
     const down = (e: KeyboardEvent): void => {
       if (isTyping(e.target as HTMLElement | null)) return;
       const ui = app.ui.getState();
+      // while walking the keys belong to the walker (arrows must not nudge a selected item); only Esc does anything else
+      if (ui.walking) { if (e.key === 'Escape') { e.preventDefault(); three.current?.stopWalk(); } return; }
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) app.redo(); else app.undo(); return; }
       if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); app.redo(); return; }
@@ -101,13 +105,17 @@ export function Stage() {
       {project && <MapAttribution project={project} />}
       {viewMode === '3d' && (
         <div className="view3d-bar" role="group" aria-label="3D camera">
-          <button type="button" title="Isometric view" onClick={() => three.current?.iso()}>Iso</button>
-          <button type="button" title="Straight down" onClick={() => three.current?.top()}>Top</button>
-          <button type="button" title="From the front" onClick={() => three.current?.front()}>Front</button>
+          {!walking && <button type="button" title="Isometric view" onClick={() => three.current?.iso()}>Iso</button>}
+          {!walking && <button type="button" title="Straight down" onClick={() => three.current?.top()}>Top</button>}
+          {!walking && <button type="button" title="From the front" onClick={() => three.current?.front()}>Front</button>}
+          {!walking && <button type="button" title="Walk around the garden at eye height" data-testid="walk-start" onClick={() => { if (!three.current?.startWalk()) app.notify('There is nowhere free to stand in this garden yet.', 'warn'); }}>Walk</button>}
+          {walking && <button type="button" title="Stop walking and go back to the overview (Esc)" data-testid="walk-stop" onClick={() => three.current?.stopWalk()}>Stop walking</button>}
           <button type="button" title="Render photo: a realistic picture with the sun where the time slider puts it" data-testid="open-photo" onClick={() => app.ui.getState().set({ photoOpen: true })}>Render photo</button>
         </div>
       )}
       {viewMode === '2d' && <SelectionBar />}
+      {viewMode === '3d' && walking && <p className="hint-banner walk-hint" data-testid="walk-hint">Walking at eye height. W A S D or the pad to walk, arrow keys or drag to look, hold Shift to run, Esc to stop. Fences, walls, structures and trunks are solid; gates let you through.</p>}
+      {viewMode === '3d' && <WalkPad />}
       <ScalePrompt />
       {viewMode === '2d' && <SunLegend />}
     </div>

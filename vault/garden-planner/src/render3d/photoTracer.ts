@@ -23,7 +23,7 @@ export function checkPhotoSupport(width: number, height: number): string | null 
   }
 }
 
-export interface Pose { position: [number, number, number]; target: [number, number, number] }
+export interface Pose { position: [number, number, number]; target: [number, number, number]; /** A walker's eye-level view is wider than the orbit camera. */ fov?: number }
 export interface PhotoSetup {
   app: App;
   camera: Pose;

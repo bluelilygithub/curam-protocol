@@ -12,10 +12,17 @@ import { placeFor } from '../sun/timezone';
 import { MIN_SUN_ALTITUDE } from '../sun/shadows';
 import type { View } from '@planner-core/adapters/canvas';
 import { chooseZoom, metresPerPixel, TILE, visibleTiles, type LatLng } from '../map/mercator';
+import { buildWalkWorld, NO_INPUT, nearestWalkable, stepWalk, TURN_RATE, walkPose, walkStart, type WalkInput, type WalkState, type WalkWorld } from '../walk/walk';
 import { FENCE_COLOUR, GRASS_COLOUR, MULCH_COLOUR, PATH_COLOUR, STRUCTURE_COLOUR } from '../render2d/theme';
 
 const GROUND = '#9aa57a';
 const SKY = '#cfe3ee';
+
+/** Walk mode: how wide the view is (wider than the orbit camera, like standing in the garden), how far a drag turns, and the keys it listens to. */
+export const WALK_FOV = 70;
+const LOOK_RAD_PER_PX = 0.004;
+const WALK_KEYS = ['w', 'a', 's', 'd', 'q', 'e', 'shift', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
+const clampUnit = (n: number): number => Math.max(-1, Math.min(1, n));
 
 const sphereG = new THREE.SphereGeometry(0.5, 14, 10);
 const cylG = new THREE.CylinderGeometry(0.5, 0.5, 1, 14);
@@ -62,6 +69,8 @@ export class Garden3D {
   private mapTex: THREE.CanvasTexture | null = null;
   private mapJob: { anchor: LatLng; north: number; view: View; z: number; size: number; pxPerM: number } | null = null;
   private mapPaintQueued = false;
+  /** Walk mode: first person at eye height, with collision (see src/walk/walk.ts). Null when not walking. */
+  private walk: { state: WalkState; world: WalkWorld; saved: { position: THREE.Vector3; target: THREE.Vector3; fov: number; near: number }; keys: Set<string>; lookX: number; lookY: number; drag: number | null; last: number; off: Array<() => void> } | null = null;
 
   /**
    * `container` is where the live view draws. With `headless` (or no container) it builds the same scene without any screen, which is what
@@ -117,9 +126,110 @@ export class Garden3D {
   private get ds(): DOMStringMap { return this.renderer?.domElement.dataset ?? this.scratchDs; }
 
   /** The camera as it is now (Render photo photographs from here). */
-  cameraState(): { position: [number, number, number]; target: [number, number, number] } {
+  cameraState(): { position: [number, number, number]; target: [number, number, number]; fov?: number } {
+    if (this.walk) return { ...walkPose(this.walk.state), fov: WALK_FOV };
     const t = this.controls?.target ?? new THREE.Vector3();
     return { position: [this.camera.position.x, this.camera.position.y, this.camera.position.z], target: [t.x, t.y, t.z] };
+  }
+
+  // ---------------------------------------------------------------- walk mode
+  get walking(): boolean { return this.walk !== null; }
+
+  /** Stand at the gate (or the middle of the plot) at eye height. False when there is nowhere free to stand. */
+  startWalk(): boolean {
+    const p = this.app.project.getState().project;
+    if (!p || this.walk || !this.renderer || !this.controls) return false;
+    const world = buildWalkWorld(p, this.app.ui.getState().stage);
+    const state = walkStart(world);
+    if (!state) return false;
+    const saved = { position: this.camera.position.clone(), target: this.controls.target.clone(), fov: this.camera.fov, near: this.camera.near };
+    const keys = new Set<string>();
+    const off: Array<() => void> = [];
+    const el = this.renderer.domElement;
+    const typing = (t: EventTarget | null): boolean => { const n = (t as HTMLElement | null)?.tagName; return n === 'INPUT' || n === 'TEXTAREA' || n === 'SELECT' || !!(t as HTMLElement | null)?.isContentEditable; };
+    const down = (e: KeyboardEvent): void => {
+      if (typing(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (WALK_KEYS.includes(k)) { keys.add(k); e.preventDefault(); }
+    };
+    const up = (e: KeyboardEvent): void => { keys.delete(e.key.toLowerCase()); };
+    const blur = (): void => keys.clear();
+    window.addEventListener('keydown', down); window.addEventListener('keyup', up); window.addEventListener('blur', blur);
+    off.push(() => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', blur); });
+    // drag on the picture to look around (a finger or the mouse); the walking pad is a separate control
+    const w = { drag: null as number | null, x: 0, y: 0 };
+    const pd = (e: PointerEvent): void => { w.drag = e.pointerId; w.x = e.clientX; w.y = e.clientY; el.setPointerCapture(e.pointerId); };
+    const pm = (e: PointerEvent): void => { if (w.drag !== e.pointerId || !this.walk) return; this.walk.lookX += e.clientX - w.x; this.walk.lookY += e.clientY - w.y; w.x = e.clientX; w.y = e.clientY; };
+    const pu = (e: PointerEvent): void => { if (w.drag === e.pointerId) w.drag = null; };
+    el.addEventListener('pointerdown', pd); el.addEventListener('pointermove', pm); el.addEventListener('pointerup', pu); el.addEventListener('pointercancel', pu);
+    off.push(() => { el.removeEventListener('pointerdown', pd); el.removeEventListener('pointermove', pm); el.removeEventListener('pointerup', pu); el.removeEventListener('pointercancel', pu); });
+
+    this.controls.enabled = false;
+    this.camera.fov = WALK_FOV; this.camera.near = 0.05; this.camera.updateProjectionMatrix();
+    this.walk = { state, world, saved, keys, lookX: 0, lookY: 0, drag: null, last: performance.now(), off };
+    this.app.ui.getState().set({ walking: true });
+    this.applyWalkCamera();
+    return true;
+  }
+
+  /** Back to the orbit camera exactly where it was. */
+  stopWalk(): void {
+    const w = this.walk;
+    if (!w) return;
+    w.off.forEach((f) => f());
+    this.walk = null;
+    if (this.controls) { this.controls.enabled = true; this.controls.target.copy(w.saved.target); }
+    this.camera.position.copy(w.saved.position);
+    this.camera.fov = w.saved.fov; this.camera.near = w.saved.near; this.camera.updateProjectionMatrix();
+    this.camera.up.set(0, 1, 0);
+    this.controls?.update();
+    this.app.ui.getState().set({ walking: false });
+    this.dirty = true;
+  }
+
+  private applyWalkCamera(): void {
+    if (!this.walk) return;
+    const pose = walkPose(this.walk.state);
+    this.camera.position.set(...pose.position);
+    this.camera.up.set(0, 1, 0);
+    this.camera.lookAt(new THREE.Vector3(...pose.target));
+    this.dirty = true;
+  }
+
+  /** One frame of walking: read the keys, the pad and the drag, move with collision, point the camera. */
+  private tickWalk(now: number): void {
+    const w = this.walk;
+    if (!w) return;
+    const dt = Math.min(0.1, Math.max(0, (now - w.last) / 1000)); // a stalled tab does not teleport the walker
+    w.last = now;
+    const k = w.keys;
+    const pad = this.app.walkInput;
+    const input: WalkInput = {
+      forward: clampUnit((k.has('w') || k.has('arrowup') ? 1 : 0) - (k.has('s') || k.has('arrowdown') ? 1 : 0) + pad.padY),
+      strafe: clampUnit((k.has('d') ? 1 : 0) - (k.has('a') ? 1 : 0) + pad.padX),
+      turn: ((k.has('arrowright') || k.has('e') ? 1 : 0) - (k.has('arrowleft') || k.has('q') ? 1 : 0)) * TURN_RATE,
+      run: k.has('shift'),
+      lookYaw: w.lookX * LOOK_RAD_PER_PX,
+      lookPitch: -w.lookY * LOOK_RAD_PER_PX,
+    };
+    w.lookX = 0; w.lookY = 0;
+    const moving = input.forward !== 0 || input.strafe !== 0 || input.turn !== 0 || input.lookYaw !== 0 || input.lookPitch !== 0;
+    if (!moving) return;
+    w.state = stepWalk(w.world, w.state, { ...NO_INPUT, ...input }, dt);
+    this.applyWalkCamera();
+    const ds = this.ds;
+    ds.walkX = w.state.position.x.toFixed(2); ds.walkY = w.state.position.y.toFixed(2); ds.walkYaw = w.state.yaw.toFixed(3);
+  }
+
+  /** The garden changed (or grew) while walking: use the new obstacles, and step out of anything that has appeared under the walker. */
+  private refreshWalkWorld(): void {
+    const w = this.walk;
+    const p = this.app.project.getState().project;
+    if (!w || !p) return;
+    w.world = buildWalkWorld(p, this.app.ui.getState().stage);
+    const here = nearestWalkable(w.world, w.state.position);
+    if (here) w.state = { ...w.state, position: here };
+    this.applyWalkCamera();
   }
 
   /** The camera of the Iso, Front or Top buttons, without moving the live view. */
@@ -150,6 +260,7 @@ export class Garden3D {
   }
 
   destroy(): void {
+    this.stopWalk();
     cancelAnimationFrame(this.raf);
     this.offs.forEach((f) => f());
     this.controls?.dispose();
@@ -202,7 +313,7 @@ export class Garden3D {
 
   private loop = (): void => {
     this.raf = requestAnimationFrame(this.loop);
-    this.controls?.update();
+    if (this.walk) this.tickWalk(performance.now()); else this.controls?.update();
     if (!this.dirty || !this.renderer) return;
     this.dirty = false;
     this.renderer.render(this.scene, this.camera);
@@ -337,6 +448,7 @@ export class Garden3D {
 
     this.updateSun();
     if (!this.framed) this.iso();
+    this.refreshWalkWorld();
     this.dirty = true;
   }
 

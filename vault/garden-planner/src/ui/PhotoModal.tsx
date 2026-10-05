@@ -96,7 +96,7 @@ export function PhotoModal() {
     teardown();
     setProblem(null);
     const { GardenPathTracer } = await import('../render3d/photoTracer');
-    const t = new GardenPathTracer({ app, camera: pose, width: size.width, height: size.height, lighting, fov: ORBIT_FOV });
+    const t = new GardenPathTracer({ app, camera: pose, width: size.width, height: size.height, lighting, fov: pose.fov ?? ORBIT_FOV });
     tracer.current = t;
     holder.current?.replaceChildren(t.previewCanvas);
     const j = new PhotoJob(t, QUALITY_SAMPLES[quality]);

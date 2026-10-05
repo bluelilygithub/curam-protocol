@@ -932,6 +932,136 @@ check('no page errors or console errors', problems.length === 0, problems.slice(
   check('no page errors in the schedule', errs.length === 0, errs.join(' | '));
   await ctxS.close();
 }
+// ---- walk mode (first person, with collision)
+{
+  const ctxW = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await ctxW.addInitScript(() => { try { localStorage.setItem('garden-planner:info-seen:v1', '1'); } catch { /* ignore */ } });
+  const pg = await ctxW.newPage();
+  const errs = [];
+  pg.on('pageerror', (e) => errs.push(e.message));
+  await pg.goto(URL);
+  await pg.waitForSelector('.wizard');
+  await pg.evaluate(() => window.gardenPlanner.newProject({ meta: { name: 'Walk garden', location: { label: 'Brisbane QLD', lat: -27.47, lng: 153.03, state: 'QLD' }, climateZone: 'subtropical', frost: 'none', pets: false, northDeg: 0 }, plot: { kind: 'rect', width: 24, depth: 20 } }));
+  await pg.waitForSelector('.stage canvas');
+  await pg.evaluate(() => {
+    const a = window.gardenPlanner;
+    const rect = (x0, y0, x1, y1) => [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
+    const house = { id: 'h', vertices: rect(8, 14, 16, 19).map((position, i) => ({ id: 'v' + i, position })), height: 3.2, fixtures: [] };
+    a.project.getState().commit({ type: 'Composite', commands: [
+      { type: 'SetSingleton', name: 'house', from: null, to: house },
+      { type: 'SetItem', collection: 'structures', id: 'gate1', from: null, to: { id: 'gate1', kind: 'gate', name: 'Gate', position: { x: 12, y: 0 }, width: 0.9, length: 0.1, height: 1.5, rotation: 0, swing: 1 } },
+      { type: 'SetItem', collection: 'plants', id: 'tree1', from: null, to: { id: 'tree1', plantId: 'syzygium-smithii', position: { x: 4, y: 8 } } },
+    ] }, 'demo');
+    a.ui.getState().set({ viewMode: '3d', month: 12, hour: 11, stage: 'mature' });
+  });
+  await pg.waitForSelector('[data-testid="walk-start"]', { timeout: 15000 });
+  await wait(800);
+  const state = () => pg.evaluate(() => { const c = document.querySelector('.stage canvas').dataset; return { x: Number(c.walkX), y: Number(c.walkY), yaw: Number(c.walkYaw) }; });
+  const cam = () => pg.evaluate(() => window.gardenPlanner.view3d.current.cameraState());
+  const orbitBefore = await cam();
+
+  check('there is a Walk button in the 3D view', (await pg.getByTestId('walk-start').count()) === 1);
+  await pg.getByTestId('walk-start').click();
+  await pg.getByTestId('walk-hint').waitFor();
+  check('walking says how to move', /W A S D/.test(await pg.getByTestId('walk-hint').innerText()));
+  check('while walking the camera buttons give way to Stop walking', (await pg.getByTestId('walk-stop').count()) === 1 && (await pg.getByRole('button', { name: 'Iso', exact: true }).count()) === 0);
+  const eye = await cam();
+  check('the camera is at eye height (1.6 m) with a wider view', Math.abs(eye.position[1] - 1.6) < 1e-6 && eye.fov === 70, JSON.stringify(eye));
+  check('the walker starts just inside the gate', Math.abs(eye.position[0] - 12.2) < 1 && -eye.position[2] > 0.5 && -eye.position[2] < 3, JSON.stringify(eye.position));
+
+  // keyboard: walk forward
+  const s0 = eye.position;
+  await pg.keyboard.down('w'); await wait(700); await pg.keyboard.up('w');
+  const s1 = (await cam()).position;
+  check('W walks forward (into the garden)', Math.hypot(s1[0] - s0[0], s1[2] - s0[2]) > 0.5 && -s1[2] > -s0[2], JSON.stringify([s0, s1]));
+  check('and stays at eye height', Math.abs(s1[1] - 1.6) < 1e-6);
+
+  // arrow keys turn; they must not nudge a selected item
+  await pg.evaluate(() => window.gardenPlanner.ui.getState().select({ kind: 'plant', id: 'tree1' }));
+  const treeBefore = await pg.evaluate(() => JSON.stringify(window.gardenPlanner.project.getState().project.plants[0].position));
+  const yaw0 = (await state()).yaw;
+  await pg.keyboard.down('ArrowRight'); await wait(400); await pg.keyboard.up('ArrowRight');
+  const yaw1 = (await state()).yaw;
+  check('the right arrow turns the walker to the right (clockwise on the plan)', yaw1 < yaw0 - 0.2, JSON.stringify([yaw0, yaw1]));
+  check('and does not nudge the selected plant', (await pg.evaluate(() => JSON.stringify(window.gardenPlanner.project.getState().project.plants[0].position))) === treeBefore);
+  await pg.keyboard.down('ArrowLeft'); await wait(400); await pg.keyboard.up('ArrowLeft');
+
+  // drag to look
+  const yawA = (await state()).yaw;
+  const box = await pg.locator('.stage canvas').boundingBox();
+  await pg.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await pg.mouse.down(); await pg.mouse.move(box.x + box.width / 2 + 120, box.y + box.height / 2, { steps: 6 }); await pg.mouse.up();
+  await pg.keyboard.down('w'); await wait(120); await pg.keyboard.up('w'); // a step so the new heading is reported
+  const yawB = (await state()).yaw;
+  check('dragging the picture to the right turns the view to the right', yawB < yawA - 0.2, JSON.stringify([yawA, yawB]));
+
+  // collision: face the house and run at it
+  await pg.evaluate(() => window.gardenPlanner.ui.getState().select(null));
+  // turn to face north (towards the house) using the heading: yaw pi/2
+  const turnTo = async (target) => { for (let i = 0; i < 40; i++) { const { yaw } = await state(); let d = target - yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); if (Math.abs(d) < 0.06) return; await pg.keyboard.down(d > 0 ? 'ArrowLeft' : 'ArrowRight'); await wait(Math.min(250, Math.abs(d) / 1.8 * 1000 + 20)); await pg.keyboard.up(d > 0 ? 'ArrowLeft' : 'ArrowRight'); await pg.keyboard.down('w'); await wait(20); await pg.keyboard.up('w'); } };
+  await turnTo(Math.PI / 2);
+  await pg.keyboard.down('Shift'); await pg.keyboard.down('w');
+  await wait(9000);
+  await pg.keyboard.up('w'); await pg.keyboard.up('Shift');
+  const hit = await state();
+  check('running at the house stops one body radius from its wall (it is solid)', hit.y > 13.2 && hit.y < 13.8, JSON.stringify(hit));
+  check('the walker is still outside the house', !(hit.x > 8 && hit.x < 16 && hit.y > 14 && hit.y < 19));
+
+  // the on-screen pad walks too
+  const pad = await pg.getByTestId('walkpad').boundingBox();
+  const before = await state();
+  await pg.mouse.move(pad.x + pad.width / 2, pad.y + pad.height / 2);
+  await pg.mouse.down(); await pg.mouse.move(pad.x + pad.width / 2, pad.y + pad.height / 2 + 40, { steps: 4 }); // down = backwards
+  await wait(600);
+  await pg.mouse.up();
+  const after = await state();
+  check('dragging the pad back walks backwards, and releasing it stops', Math.hypot(after.x - before.x, after.y - before.y) > 0.3 && after.y < before.y);
+  await wait(300);
+  const still = await state();
+  await wait(300);
+  const still2 = await state();
+  check('letting go of the pad stops the walker', Math.hypot(still2.x - still.x, still2.y - still.y) < 0.01);
+
+  // the 3D view is not frozen: the sun still moves with the time slider while walking
+  const sunBefore = await pg.locator('.stage canvas').evaluate((c) => c.dataset.sunAlt);
+  await pg.evaluate(() => window.gardenPlanner.ui.getState().set({ hour: 8 }));
+  await wait(300);
+  check('the Time slider still changes the light while walking', (await pg.locator('.stage canvas').evaluate((c) => c.dataset.sunAlt)) !== sunBefore);
+  await pg.evaluate(() => window.gardenPlanner.ui.getState().set({ hour: 11 }));
+
+  // Render photo from where you are standing
+  const stand = await cam();
+  await pg.getByTestId('open-photo').click();
+  await pg.getByRole('dialog', { name: 'Render photo' }).waitFor();
+  check('Render photo is offered while walking', true);
+  const via = await pg.evaluate(() => window.gardenPlanner.view3d.current.cameraState());
+  check('and photographs from eye level with the wide view', via.fov === 70 && Math.abs(via.position[1] - 1.6) < 1e-6 && Math.abs(via.position[0] - stand.position[0]) < 1e-6);
+  await pg.getByRole('button', { name: 'Back to 3D', exact: true }).click();
+
+  // Esc stops walking and puts the orbit camera back exactly where it was
+  await pg.keyboard.press('Escape');
+  await wait(300);
+  check('Esc stops walking', (await pg.evaluate(() => window.gardenPlanner.ui.getState().walking)) === false);
+  const orbitAfter = await cam();
+  check('and the overview camera is exactly where it was', JSON.stringify(orbitAfter.position.map((v) => Math.round(v * 1000))) === JSON.stringify(orbitBefore.position.map((v) => Math.round(v * 1000))), JSON.stringify([orbitBefore.position, orbitAfter.position]));
+  check('the camera buttons are back', (await pg.getByRole('button', { name: 'Iso', exact: true }).count()) === 1);
+
+  // the Stop walking button is reachable (the hint banner must not cover it) and works
+  await pg.getByTestId('walk-start').click();
+  await pg.getByTestId('walk-hint').waitFor();
+  await pg.getByTestId('walk-stop').click({ timeout: 5000 });
+  await wait(200);
+  check('the Stop walking button works (and is not covered by the hint)', (await pg.evaluate(() => window.gardenPlanner.ui.getState().walking)) === false);
+
+  // leaving the 3D view while walking ends the walk cleanly
+  await pg.getByTestId('walk-start').click();
+  await pg.getByTestId('walk-hint').waitFor();
+  await pg.getByRole('button', { name: '2D', exact: true }).click();
+  await wait(300);
+  check('switching to the 2D plan while walking ends the walk', (await pg.evaluate(() => window.gardenPlanner.ui.getState().walking)) === false);
+  check('no page errors while walking', errs.length === 0, errs.join(' | '));
+  await ctxW.close();
+}
 await browser.close();
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nAll checks passed');
 process.exit(failures ? 1 : 0);

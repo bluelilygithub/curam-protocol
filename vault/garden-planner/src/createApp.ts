@@ -69,7 +69,7 @@ export function createApp(storage: StorageLike) {
   const mapTiles = createMapTiles(storage);
   const tagScanner = createTagScanner();
   /** The live 3D view, while there is one (Render photo asks it where the camera is). */
-  const view3d: { current: { cameraState(): { position: [number, number, number]; target: [number, number, number] }; presetPose(k: 'iso' | 'front' | 'top'): { position: [number, number, number]; target: [number, number, number] } | null } | null } = { current: null };
+  const view3d: { current: { cameraState(): { position: [number, number, number]; target: [number, number, number]; fov?: number }; walking: boolean; startWalk(): boolean; stopWalk(): void; presetPose(k: 'iso' | 'front' | 'top'): { position: [number, number, number]; target: [number, number, number] } | null } | null } = { current: null };
   const checks = createChecksStore();
   const images = browserImageStore(() => library.getState().kind, randomId, storage);
 
@@ -169,7 +169,9 @@ export function createApp(storage: StorageLike) {
   }
 
   const api = {
-    project, ui, view, notify, fitToPlot, library, projects, images, places, plantPhotos, mapTiles, tagScanner, view3d, checks,
+    project, ui, view, notify, fitToPlot, library, projects, images, places, plantPhotos, mapTiles, tagScanner, view3d,
+    /** The on-screen walking pad's position (-1..1), read by the 3D view while walking: it changes every pointer move, so it is not a store. */
+    walkInput: { padX: 0, padY: 0 }, checks,
     /** Resolves when the library has been chosen and the last garden opened (start-up, tests). */
     whenReady(): Promise<void> { return initDone ?? Promise.resolve(); },
 

@@ -295,3 +295,8 @@ textarea.vi-input { padding: 8px 34px 8px 10px; }
 @keyframes busy-slide { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
 @media (prefers-reduced-motion: reduce) { .busy-bar i { animation: none; width: 100%; } }
 @media (max-width: 760px) { .photo-body { grid-template-columns: 1fr; } }
+
+/* walk mode */
+.walk-hint { top: 54px; left: 12px; }
+.walkpad { position: absolute; left: 16px; bottom: 16px; width: 112px; height: 112px; border-radius: 50%; background: rgba(255,255,255,.55); border: 1px solid var(--color-border); touch-action: none; display: grid; place-items: center; user-select: none; }
+.walkpad-knob { width: 44px; height: 44px; border-radius: 50%; background: var(--color-primary); opacity: .85; pointer-events: none; }
