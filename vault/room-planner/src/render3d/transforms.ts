@@ -8,7 +8,8 @@
 import { threeToWorld, worldToThree } from '../engine/coordinates';
 import type { FurnitureInstance, Vec2 } from '../engine/types';
 
-export type Vec3 = [number, number, number];
+export type { Vec3 } from '@planner-core/render3d/camera';
+import type { Vec3 } from '@planner-core/render3d/camera';
 
 /** Plan point + elevation → three position. */
 export function planToThree(p: Vec2, elevation = 0): Vec3 {

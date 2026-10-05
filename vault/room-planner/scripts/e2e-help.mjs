@@ -89,21 +89,35 @@ check('the compass starts the tour', true);
 check('step counter reads Step 1 of 11', /Step 1 of 11/.test(await page.locator('.vault-tour-step-count').innerText()));
 await shot('tour-1');
 let steps = 1;
+const wrongCounter = [];
 for (let i = 0; i < 12; i++) {
   const label = await page.locator('.shepherd-footer .shepherd-button').last().innerText();
   if (/Finish/.test(label)) break;
   await page.locator('.shepherd-footer .shepherd-button').last().click();
   await wait(900);
   steps++;
+  // the counter must be on the card that is showing, not on an earlier hidden one (shared planner-core/help/tourCard)
+  const counter = await page.locator('.vault-tour-step-count:visible').innerText().catch(() => '(none visible)');
+  if (counter !== `Step ${steps} of 11`) wrongCounter.push(`step ${steps}: ${counter}`);
   if (out && [4, 9, 10].includes(steps)) await shot(`tour-${steps}`);
 }
 check('the tour has 11 steps and reaches the last one', steps === 11, String(steps));
+check('every step shows its own Step n of 11 on the visible card', wrongCounter.length === 0, wrongCounter.join('; '));
 const title3d = await page.locator('.shepherd-title').innerText().catch(() => '');
 await page.locator('.shepherd-footer .shepherd-button').last().click();
 await wait(600);
 check('Finish ends the tour', (await page.locator('.shepherd-element.vault-tour').count()) === 0);
 check('it records completion for Vault’s Settings page', (await page.evaluate(() => localStorage.getItem('vault_tour_room_planner_completed'))) === '1');
 check('the planner is back in the view it started in (2D)', (await page.evaluate(() => window.roomPlanner.ui.getState().viewMode)) === '2d');
+
+// Esc leaves the tour from any step (keyboard focus stays on the showing card)
+await page.getByRole('button', { name: 'Take the Room Planner tour' }).click();
+await page.locator('.shepherd-element.vault-tour').waitFor();
+await page.locator('.shepherd-footer .shepherd-button').last().click();
+await wait(1000);
+await page.keyboard.press('Escape');
+await wait(400);
+check('Esc closes the tour from step 2', (await page.locator('.shepherd-element.vault-tour:visible').count()) === 0);
 
 // Skip works and also records it
 await page.getByRole('button', { name: 'Take the Room Planner tour' }).click();

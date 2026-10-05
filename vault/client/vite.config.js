@@ -8,6 +8,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   root: __dirname,
   plugins: [react()],
+  resolve: {
+    // planner-core: code shared with the Room / Garden Planner apps (speech recognition, OCR). Libraries stay de-duplicated to Vault's copy.
+    alias: { '@planner-core': path.resolve(__dirname, '../planner-core/src') },
+    dedupe: ['react', 'react-dom', 'zustand'],
+  },
   define: {
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production'),
   },
@@ -16,6 +21,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    fs: { allow: [path.resolve(__dirname, '..')] },
     proxy: {
       '/api': {
         target: 'http://localhost:3001',

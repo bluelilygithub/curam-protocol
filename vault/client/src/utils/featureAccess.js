@@ -37,6 +37,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   restyle: true,
   browserAgent: true,
   roomPlanner: true,
+  gardenPlanner: true,
   measurements: true,
 };
 
@@ -81,6 +82,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'restyle', label: 'CSS' },
       { key: 'browserAgent', label: 'Browser Agent' },
       { key: 'roomPlanner', label: 'Room Planner' },
+      { key: 'gardenPlanner', label: 'Garden Planner' },
       { key: 'measurements', label: 'Measurements' },
       { key: 'wellbeing', label: 'Wellbeing Check' },
       { key: 'gmailIntel', label: 'Inbox Intel' },

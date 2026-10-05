@@ -895,6 +895,82 @@ async function initSchema() {
       CREATE INDEX IF NOT EXISTS idx_room_projects_user_updated ON room_projects ("userId", "updatedAt" DESC)
     `);
 
+    // ── Garden Planner project library (same shape as room_projects) ─────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS garden_projects (
+        id            SERIAL PRIMARY KEY,
+        "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name          TEXT NOT NULL,
+        data          JSONB NOT NULL,
+        "plantCount"  INTEGER NOT NULL DEFAULT 0,
+        location      TEXT NOT NULL DEFAULT '',
+        "createdAt"   TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt"   TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_garden_projects_user_updated ON garden_projects ("userId", "updatedAt" DESC)
+    `);
+    // Tracing pictures are stored apart from the garden design (a garden references one by underlay.imageId = 'srv-<id>')
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS garden_images (
+        id          SERIAL PRIMARY KEY,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        mime        TEXT NOT NULL,
+        bytes       INTEGER NOT NULL,
+        data        BYTEA NOT NULL,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "deletedAt" TIMESTAMPTZ
+      )
+    `);
+    // soft delete: a picture no garden references is marked, restored if one references it again, purged after 30 days
+    await client.query(`ALTER TABLE garden_images ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMPTZ`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_garden_images_user ON garden_images ("userId")`);
+    // Plant photos (open licences only), cached from iNaturalist / Wikimedia Commons / ALA. Shared by all users; each row keeps creator, licence and source.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS plant_images (
+        id              SERIAL PRIMARY KEY,
+        "plantId"       TEXT NOT NULL,
+        source          TEXT NOT NULL,
+        "sourceId"      TEXT NOT NULL,
+        "sourceUrl"     TEXT NOT NULL,
+        "imageUrl"      TEXT NOT NULL,
+        "thumbUrl"      TEXT NOT NULL,
+        creator         TEXT NOT NULL,
+        "licenceCode"   TEXT NOT NULL,
+        "licenceUrl"    TEXT,
+        "displayOnly"   BOOLEAN NOT NULL DEFAULT FALSE,
+        "nonCommercial" BOOLEAN NOT NULL DEFAULT FALSE,
+        title           TEXT NOT NULL DEFAULT '',
+        role            TEXT NOT NULL DEFAULT 'other',
+        width           INTEGER,
+        height          INTEGER,
+        modified        BOOLEAN NOT NULL DEFAULT FALSE,
+        hidden          BOOLEAN NOT NULL DEFAULT FALSE,
+        "hiddenReason"  TEXT,
+        "defaultFor"    TEXT,
+        "fetchedAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE ("plantId", source, "sourceId")
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_plant_images_plant ON plant_images ("plantId")`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS plant_image_lookups (
+        "plantId"   TEXT PRIMARY KEY,
+        status      TEXT NOT NULL,
+        "fetchedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "lastError" TEXT
+      )
+    `);
+    // Cache of place lookups (Nominatim policy: results must be cached). Keyed by the normalised query text.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS geocode_cache (
+        query       TEXT PRIMARY KEY,
+        results     JSONB NOT NULL,
+        "fetchedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
     // ── Browser agent run archive ─────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS browser_agent_runs (
@@ -3449,6 +3525,13 @@ async function initSchema() {
        VALUES ($1, $2, 'v1') ON CONFLICT (key, "taxonomyVersion") DO NOTHING`,
       [key, label]
     );
+  }
+
+  // Gardens saved by the first server build embedded the tracing picture in the design: move those pictures out (idempotent).
+  try {
+    await require('./services/gardenImages').migrateEmbeddedPictures(pool, require('./lib/logger'));
+  } catch (err) {
+    console.error('[db] garden picture migration failed (will retry next boot):', err.message);
   }
 
   console.log('[db] Schema ready');

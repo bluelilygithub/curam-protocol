@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import removeMd from 'remove-markdown';
 import api from '../utils/apiClient';
 import useAuthStore from '../store/authStore';
+import { createRecognizer } from '@planner-core/speech/speechRecognizer';
 
 export const LOCAL_CLONE_VOICE_URI = 'vault:local-clone-voice';
 export const LOCAL_CLONE_VOICE_LABEL = 'My voice (local clone)';
@@ -32,24 +33,6 @@ const isLocalSTTAvailable = typeof window !== 'undefined' &&
 const VOICE_STORAGE_KEY = 'vault:chat:selected-voice-uri';
 const VOICE_SETTING_KEY = 'audio_voice_uri';
 
-function speechErrorMessage(error) {
-  switch (error) {
-    case 'not-allowed':
-    case 'service-not-allowed':
-      return 'Microphone permission is blocked for this browser or site.';
-    case 'audio-capture':
-      return 'No microphone was found. Check the Mac input device and browser permission.';
-    case 'network':
-      return 'Speech recognition service is unavailable. Check the browser network/service access.';
-    case 'no-speech':
-      return 'No speech detected. Try again after confirming the mic is selected and not held by another app.';
-    case 'aborted':
-      return '';
-    default:
-      return error ? `Speech recognition stopped: ${error}` : '';
-  }
-}
-
 export function useVoice(options = {}) {
   // Optional: existing callers pass nothing and keep en-US + continuous dictation.
   const { lang = 'en-US', continuous = true } = options;
@@ -75,7 +58,6 @@ export function useVoice(options = {}) {
     }
   });
   const recognitionRef = useRef(null);
-  const accumulatedRef = useRef('');
   const mediaRecorderRef = useRef(null);
   const mediaChunksRef = useRef([]);
   const mediaStreamRef = useRef(null);
@@ -258,58 +240,33 @@ export function useVoice(options = {}) {
   }, [stopLocalStream, transcribeLocalAudio]);
 
   useEffect(() => {
-    if (!isSTTAvailable) return;
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    recognition.continuous = continuous;
-    recognition.interimResults = true;
-    recognition.lang = lang;
-
-    recognition.onstart = () => {
-      setVoiceError('');
-      setIsListening(true);
-    };
-
-    recognition.onresult = (e) => {
-      let interim = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const result = e.results[i];
-        if (result.isFinal) {
-          accumulatedRef.current += result[0].transcript;
-        } else {
-          interim += result[0].transcript;
+    if (!isSTTAvailable) return undefined;
+    // The recognition handling itself (accumulate finals, interim text, error messages) is shared with the planner apps: planner-core.
+    const recognizer = createRecognizer({ lang, continuous }, {
+      onStart: () => {
+        setVoiceError('');
+        setIsListening(true);
+      },
+      onInterim: (text) => setInterimText(text),
+      onEnd: (finalText) => {
+        if (voiceModeRef.current === 'local') return;
+        if (finalText) setTranscript(finalText);
+        setIsListening(false);
+        setInterimText('');
+      },
+      onError: (code, message, finalText) => {
+        const shouldUseLocalFallback = ['network', 'service-not-allowed'].includes(code);
+        setVoiceError(shouldUseLocalFallback ? 'Browser speech service unavailable. Using local transcription instead.' : message);
+        if (finalText) setTranscript(finalText);
+        setIsListening(false);
+        setInterimText('');
+        if (shouldUseLocalFallback) {
+          startLocalListening('Browser speech service unavailable. Recording locally instead.');
         }
-      }
-      setInterimText((accumulatedRef.current + (interim ? ` ${interim}` : '')).trim());
-    };
-
-    recognition.onend = () => {
-      if (voiceModeRef.current === 'local') return;
-      if (accumulatedRef.current) {
-        setTranscript(accumulatedRef.current);
-        accumulatedRef.current = '';
-      }
-      setIsListening(false);
-      setInterimText('');
-    };
-
-    recognition.onerror = (e) => {
-      const message = speechErrorMessage(e.error);
-      const shouldUseLocalFallback = ['network', 'service-not-allowed'].includes(e.error);
-      setVoiceError(shouldUseLocalFallback ? 'Browser speech service unavailable. Using local transcription instead.' : message);
-      if (accumulatedRef.current) {
-        setTranscript(accumulatedRef.current);
-        accumulatedRef.current = '';
-      }
-      setIsListening(false);
-      setInterimText('');
-      if (shouldUseLocalFallback) {
-        startLocalListening('Browser speech service unavailable. Recording locally instead.');
-      }
-    };
-
-    recognitionRef.current = recognition;
-    return () => recognition.abort();
+      },
+    });
+    recognitionRef.current = recognizer;
+    return () => recognizer?.abort();
   }, [startLocalListening, lang, continuous]);
 
   const startListening = useCallback(() => {
@@ -318,7 +275,6 @@ export function useVoice(options = {}) {
       return;
     }
     voiceModeRef.current = 'browser';
-    accumulatedRef.current = '';
     setTranscript('');
     setInterimText('');
     setVoiceError('');
@@ -338,10 +294,8 @@ export function useVoice(options = {}) {
       return;
     }
     if (!isSTTAvailable || !recognitionRef.current) return;
-    if (accumulatedRef.current) {
-      setTranscript(accumulatedRef.current);
-      accumulatedRef.current = '';
-    }
+    const heard = recognitionRef.current.flush();
+    if (heard) setTranscript(heard);
     recognitionRef.current.stop();
     setIsListening(false);
     setInterimText('');

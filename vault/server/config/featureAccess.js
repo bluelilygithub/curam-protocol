@@ -37,6 +37,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   restyle: true,
   browserAgent: true,
   roomPlanner: true,
+  gardenPlanner: true,
   measurements: true,
 };
 

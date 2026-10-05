@@ -1,10 +1,7 @@
 // Phase 1 core types (Phase 1 contract §2–§4) plus Appendix C additions (C5, C9, C13).
 
-export type Metres = number;
-export interface Vec2 { x: Metres; y: Metres }
-export interface Vertex { id: string; position: Vec2 }
-export interface AABB { min: Vec2; max: Vec2 }
-export interface Interval { min: Metres; max: Metres }
+export type { Metres, Vec2, Vertex, AABB, Interval, PolygonErrorCode } from '@planner-core/types';
+import type { Metres, Vec2, Vertex } from '@planner-core/types';
 
 export type ConstraintSeverity = 'hard' | 'soft';
 export type ConstraintType =
@@ -48,13 +45,6 @@ export interface SnapCandidate {
   priority: number;
   reason: string;
 }
-
-export type PolygonErrorCode =
-  | 'SELF_INTERSECTION'
-  | 'ZERO_AREA'
-  | 'DEGENERATE_EDGE'
-  | 'DUPLICATE_VERTEX'
-  | 'TOO_FEW_VERTICES';
 
 export type ApplyErrorCode =
   | 'UNKNOWN_COMMAND_TYPE'

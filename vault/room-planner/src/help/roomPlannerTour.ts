@@ -4,26 +4,12 @@
 import Shepherd from 'shepherd.js';
 import 'shepherd.js/dist/css/shepherd.css';
 import './tour.css';
+import { injectStepCounter } from '@planner-core/help/tourCard';
 import type { App } from '../createApp';
 import { TOUR_KEY, safeSet } from './helpKeys';
 import { TOUR_STEPS, type TourStep } from './tourSteps';
 
 const selectorOf = (target: string): string => `[data-tour="${target}"]`;
-
-function injectStepCounter(n: number, tries = 20): void {
-  requestAnimationFrame(() => {
-    const el = document.querySelector('.shepherd-element.vault-tour');
-    const footer = el?.querySelector('.shepherd-footer');
-    if (!el || !footer) { if (tries > 0) injectStepCounter(n, tries - 1); return; } // the card is drawn a frame or two after `show`
-    let c = el.querySelector('.vault-tour-step-count');
-    if (!c) {
-      c = document.createElement('div');
-      c.className = 'vault-tour-step-count';
-      footer.parentElement?.insertBefore(c, footer);
-    }
-    c.textContent = `Step ${n} of ${TOUR_STEPS.length}`;
-  });
-}
 
 /** Start the tour. Returns the Shepherd tour (tests drive it). */
 export function startRoomPlannerTour(app: App): InstanceType<typeof Shepherd.Tour> {
@@ -69,7 +55,7 @@ export function startRoomPlannerTour(app: App): InstanceType<typeof Shepherd.Tou
           resolve();
         }, s.needs3d || s.needs2d || s.panel ? 650 : 50);
       }),
-      when: { show() { injectStepCounter(i + 1); } },
+      when: { show() { injectStepCounter(i + 1, TOUR_STEPS.length); } },
       buttons: first
         ? [secondary('Skip Tour', () => tour.cancel()), { text: 'Start Tour →', action: () => tour.next() }]
         : last
