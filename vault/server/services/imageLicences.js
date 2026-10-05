@@ -5,13 +5,14 @@
 //   iNaturalist  "cc-by", "cc0", "cc-by-nc"            (no version: iNaturalist's CC BY is 4.0, per its terms and licence links)
 //   ALA          "CC-BY 4.0 (Int)", "CC-BY 3.0 (Au)", "CC-BY-NC-SA 4.0 (Int)", "PDM", "UNSPECIFIED"
 //   Wikimedia    "CC BY-SA 4.0", "CC0", "Public domain", "GFDL", plus a licence URL
-// Allowed by default (safe for any use, commercial included): CC0 and public domain; CC BY 2.5 AU, 3.0 AU, 4.0, 4.0 AU.
+// Allowed by default (safe for any use, commercial included): CC0 and public domain; CC BY 2.5 AU, 3.0 (unported), 3.0 AU, 4.0, 4.0 AU.
+// (3.0 unported and BY-SA 3.0 unported added 2026-10-10 by decision: most Wikimedia photos use them. Ported versions such as 3.0 US stay excluded.)
 // CC BY-SA (same versions) is allowed for DISPLAY ONLY: no cut-outs or modified copies, because a derivative would have to be share-alike.
 // Excluded: any ND (no derivatives); any NC (non-commercial) unless ALLOW_NONCOMMERCIAL is switched on (only valid if Vault and its use are
 // genuinely non-commercial); anything unrecognised ("all rights reserved", "UNSPECIFIED", GFDL, "free use"...).
-// The list can be narrowed or widened with ALLOWED_LICENCES (comma separated canonical codes), e.g. to add "CC BY 3.0".
+// The list can be narrowed or widened with ALLOWED_LICENCES (comma separated canonical codes), which REPLACES the default list.
 
-const DEFAULT_ALLOWED = ['CC0 1.0', 'Public domain', 'CC BY 2.5 AU', 'CC BY 3.0 AU', 'CC BY 4.0', 'CC BY 4.0 AU', 'CC BY-SA 2.5 AU', 'CC BY-SA 3.0 AU', 'CC BY-SA 4.0', 'CC BY-SA 4.0 AU'];
+const DEFAULT_ALLOWED = ['CC0 1.0', 'Public domain', 'CC BY 2.5 AU', 'CC BY 3.0', 'CC BY 3.0 AU', 'CC BY 4.0', 'CC BY 4.0 AU', 'CC BY-SA 2.5 AU', 'CC BY-SA 3.0', 'CC BY-SA 3.0 AU', 'CC BY-SA 4.0', 'CC BY-SA 4.0 AU'];
 
 const CC_URL = 'https://creativecommons.org/licenses';
 

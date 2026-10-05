@@ -69,7 +69,9 @@ test('unrecognised licences are rejected: all rights reserved, unspecified, GFDL
 
 test('a CC BY version that is not on the list is rejected, a missing version is rejected unless the source defines it', () => {
   assert.strictEqual(c('CC BY 2.0').allowed, false);
-  assert.strictEqual(c('CC BY 3.0').allowed, false, 'unported 3.0 is not on the default list');
+  assert.strictEqual(c('CC BY 3.0').allowed, true, 'unported 3.0 is on the default list (decision 2026-10-10)');
+  assert.strictEqual(c('CC BY-SA 3.0').displayOnly, true);
+  assert.strictEqual(c('https://creativecommons.org/licenses/by/3.0/us/').allowed, false, 'ported 3.0 US stays excluded');
   assert.strictEqual(c('CC BY 1.0').allowed, false);
   assert.strictEqual(c('cc-by').allowed, false, 'no version stated and no source default');
   assert.match(c('cc-by').reason, /version not stated/);
