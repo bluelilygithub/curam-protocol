@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
+import { PDFDocument } from 'pdf-lib';
 
 const URL = process.env.GP_URL ?? 'http://127.0.0.1:5175/garden-planner-app/';
 const out = process.argv[2];
@@ -890,7 +891,8 @@ check('no page errors or console errors', problems.length === 0, problems.slice(
   await pg.waitForSelector('.stage canvas');
   await pg.getByTestId('open-schedule').click();
   await pg.getByTestId('schedule-empty').waitFor();
-  check('an empty garden says there are no plants yet, with no download offered', (await pg.getByTestId('schedule-download').count()) === 0);
+  check('an empty garden says there are no plants yet, with no CSV offered', (await pg.getByTestId('schedule-download').count()) === 0);
+  check('but the printable plan is still offered (a plan of the plot alone is useful)', (await pg.getByTestId('plan-download').count()) === 1 && !(await pg.getByTestId('plan-download').isDisabled()));
   await pg.keyboard.press('Escape');
   check('Esc closes the schedule', (await pg.getByRole('dialog', { name: 'Plant schedule' }).count()) === 0);
 
@@ -929,6 +931,23 @@ check('no page errors or console errors', problems.length === 0, problems.slice(
   check('the quantities are in the file', lines[1].split(',')[3] === '2' && /,4,/.test(lines[2]), lines.slice(1, 3).join(' | ').slice(0, 160));
   check('every plant row says Draft, unverified', lines.slice(1, 3).every((l) => l.endsWith('"Draft, unverified"')));
   check('a note that looks like a spreadsheet formula was made harmless', /'=cmd/.test(csv) && !/(^|,)=cmd/m.test(csv));
+  // the printable planting plan
+  check('the schedule screen offers a printable plan', (await pg.getByTestId('plan-print').count()) === 1);
+  const [pdfDl] = await Promise.all([pg.waitForEvent('download'), pg.getByTestId('plan-download').click()]);
+  check('the plan PDF is named after the garden', pdfDl.suggestedFilename() === 'schedule-test-garden-planting-plan.pdf', pdfDl.suggestedFilename());
+  const pdfBytes = readFileSync(await pdfDl.path());
+  check('it is a PDF', pdfBytes.slice(0, 5).toString() === '%PDF-');
+  const pdfDoc = await PDFDocument.load(pdfBytes);
+  check('with the plan sheet and the schedule (2 pages)', pdfDoc.getPageCount() === 2, String(pdfDoc.getPageCount()));
+  const pg1 = pdfDoc.getPage(0);
+  check('the plan is A4', Math.abs(Math.max(pg1.getWidth(), pg1.getHeight()) - 841.89) < 1);
+  check('and the schedule page is A4 portrait', Math.round(pdfDoc.getPage(1).getWidth()) === 595 && Math.round(pdfDoc.getPage(1).getHeight()) === 842);
+  check('the PDF has the garden name as its title', pdfDoc.getTitle() === 'Schedule "test" garden - planting plan', String(pdfDoc.getTitle()));
+  await pg.getByLabel('Paper size').selectOption('a3');
+  await pg.getByLabel('Include the plant schedule').uncheck();
+  const [pdf3] = await Promise.all([pg.waitForEvent('download'), pg.getByTestId('plan-download').click()]);
+  const doc3 = await PDFDocument.load(readFileSync(await pdf3.path()));
+  check('A3 without the schedule is a single A3 sheet', doc3.getPageCount() === 1 && Math.abs(Math.max(doc3.getPage(0).getWidth(), doc3.getPage(0).getHeight()) - 1190.55) < 1);
   check('no page errors in the schedule', errs.length === 0, errs.join(' | '));
   await ctxS.close();
 }

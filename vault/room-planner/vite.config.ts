@@ -18,7 +18,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: { '@planner-core': path.resolve(here, '../planner-core/src') },
-    dedupe: ['three', 'react', 'react-dom', 'zustand', 'konva'],
+    dedupe: ['three', 'react', 'react-dom', 'zustand', 'konva', 'pdf-lib'],
   },
   server: { port: 5174, strictPort: true, fs: { allow: ['..'] } },
   build: { outDir: '../dist/room-planner-app', emptyOutDir: true, sourcemap: true },

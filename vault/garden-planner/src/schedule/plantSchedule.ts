@@ -20,6 +20,8 @@ export const WEED_NOTE = 'Weed status is only known where it was checked against
 
 export interface ScheduleRow {
   ref: string;
+  /** The ids of the plants in the plan that make up this row (so the printed plan can number each one). */
+  instanceIds: string[];
   plantId: string;
   common: string;
   botanical: string;
@@ -103,11 +105,11 @@ export function buildPlantSchedule(p: GardenProject): PlantSchedule {
     const notes = [...new Set(insts.map((i) => i.note?.trim()).filter((n): n is string => !!n))].join('; ');
     if (!rec) {
       missing += insts.length;
-      rows.push({ plantId, common: plantId, botanical: '', qty: insts.length, type: '', origin: '', height: [0, 0], spread: [0, 0], spacing: 0, sun: '', water: '', frost: '', flowers: '', colours: '', foliage: '', cautions: '', weed: '', where: whereText, notes: notes ? `${notes}; no longer in the plant library` : 'No longer in the plant library', status: DRAFT_STATUS });
+      rows.push({ plantId, instanceIds: insts.map((i) => i.id), common: plantId, botanical: '', qty: insts.length, type: '', origin: '', height: [0, 0], spread: [0, 0], spacing: 0, sun: '', water: '', frost: '', flowers: '', colours: '', foliage: '', cautions: '', weed: '', where: whereText, notes: notes ? `${notes}; no longer in the plant library` : 'No longer in the plant library', status: DRAFT_STATUS });
       continue;
     }
     rows.push({
-      plantId, common: rec.common[0] ?? rec.botanical, botanical: rec.cultivar ? `${rec.botanical} '${rec.cultivar}'` : rec.botanical,
+      plantId, instanceIds: insts.map((i) => i.id), common: rec.common[0] ?? rec.botanical, botanical: rec.cultivar ? `${rec.botanical} '${rec.cultivar}'` : rec.botanical,
       qty: insts.length, type: label(rec.type), origin: rec.native ? `Australian native${rec.origin.length ? ` (${rec.origin.join(', ')})` : ''}` : 'Exotic',
       height: rec.height, spread: rec.spread, spacing: r1(recommendedSpacing(plantId)),
       sun: rec.sun.map(label).join(', '), water: label(rec.water) + (rec.droughtTolerant ? ', drought tolerant' : ''),

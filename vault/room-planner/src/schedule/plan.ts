@@ -7,13 +7,10 @@ import { add, aabbOf, rotateVec, scale as vscale } from '../engine/geometry';
 import { wallOutlines } from '../engine/wallOutline';
 import type { Project, Room, Vec2 } from '../engine/types';
 import type { Schedule } from './schedule';
-
-export type Rgb = [number, number, number];
-export type Prim =
-  | { t: 'poly'; pts: Vec2[]; fill?: Rgb; stroke?: Rgb; width?: number; dash?: number[]; closed?: boolean }
-  | { t: 'line'; a: Vec2; b: Vec2; width: number; color: Rgb; dash?: number[] }
-  | { t: 'text'; x: number; y: number; size: number; text: string; anchor: 'left' | 'centre' | 'right'; color: Rgb; bold?: boolean; rotate?: number }
-  | { t: 'circle'; x: number; y: number; r: number; fill?: Rgb; stroke?: Rgb; width?: number };
+import { A4, chooseScale, type Prim, type Rgb } from '@planner-core/export/pdfDraw';
+// the drawing primitives, page sizes and scale choice are shared with Garden Planner's planting plan
+export { A4, chooseScale };
+export type { Prim, Rgb };
 
 export interface PlanSheet {
   /** Page size in points (1/72 inch), y up. */
@@ -32,12 +29,9 @@ const WALL_FILL: Rgb = [0.82, 0.81, 0.78];
 const RUG_FILL: Rgb = [0.94, 0.92, 0.88];
 const PRIMARY: Rgb = [0.8, 0.47, 0.36];
 
-export const A4 = { w: 595.28, h: 841.89 };
 const MARGIN = 36;
 const TITLE_H = 56;
 const DIM_MARGIN = 38;
-const DENOMS = [10, 20, 25, 50, 75, 100, 150, 200, 250, 500, 1000];
-const PT_PER_MM = 72 / 25.4;
 
 export interface PlanOptions {
   projectName: string;
@@ -54,16 +48,6 @@ export function numbersFor(schedule: Schedule): Map<string, number> {
   const m = new Map<string, number>();
   for (const r of schedule.furniture) for (const id of r.instanceIds) m.set(id, r.no);
   return m;
-}
-
-/** The biggest standard scale (1:50, 1:100 …) at which `w × h` metres fits in `fitW × fitH` points; the page is then chosen to suit. */
-export function chooseScale(w: number, h: number, fitW: number, fitH: number): { denom: number; k: number } {
-  for (const denom of DENOMS) {
-    const k = (1000 / denom) * PT_PER_MM;
-    if (w * k <= fitW && h * k <= fitH) return { denom, k };
-  }
-  const denom = DENOMS[DENOMS.length - 1];
-  return { denom, k: (1000 / denom) * PT_PER_MM };
 }
 
 const metres = (v: number): string => `${v.toFixed(2)} m`;

@@ -11,7 +11,7 @@ export default defineConfig({
       // Vault's existing spoken-number parser ("two point five" -> 2.5), reused for number fields
       '@vault-client': path.resolve(here, '../client/src'),
     },
-    dedupe: ['three', 'react', 'react-dom', 'zustand', 'konva', 'tesseract.js'],
+    dedupe: ['three', 'react', 'react-dom', 'zustand', 'konva', 'tesseract.js', 'pdf-lib'],
   },
   test: { include: ['tests/**/*.test.ts'] },
 });

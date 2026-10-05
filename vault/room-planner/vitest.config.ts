@@ -7,7 +7,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   resolve: {
     alias: { '@planner-core': path.resolve(here, '../planner-core/src') },
-    dedupe: ['three', 'react', 'react-dom', 'zustand', 'konva'],
+    dedupe: ['three', 'react', 'react-dom', 'zustand', 'konva', 'pdf-lib'],
   },
   test: {
     include: ['tests/**/*.test.ts'],

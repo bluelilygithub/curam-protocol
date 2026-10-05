@@ -108,6 +108,22 @@ The wizard's **Look up** uses OpenStreetMap's public Nominatim. Policy read at h
 
 Other behaviour: signed-out users get a plain message (the place list, postcode-to-state and latitude/longitude still work); the service being down or busy gives plain messages and is not retried in a loop; failures are not cached. The public service has no uptime promise, so for heavy use set `NOMINATIM_URL` to a self-hosted Nominatim (or a provider with the same API) and no code changes. Set `NOMINATIM_CONTACT` (an email or URL for OSM to reach you) in Railway; I did not put an email in the code. Cost/terms conclusion: the public instance's terms fit this use (moderate user count, user-triggered, cached, attributed, not primarily a geocoding service), so no provider switch was needed. Revisit if usage grows beyond a handful of lookups a day per user.
 
+## Printable planting plan (built 2026-10-19)
+
+The schedule screen (table button in the toolbar, now **Plant schedule and plan**) has a **Printable planting plan** section: **Download plan (PDF)**. It is offered even for a garden with no plants yet (a plan of the plot alone is useful).
+
+**The sheet** (`src/schedule/planSheet.ts`, pure: it builds plain drawing primitives, which tests check without a PDF): the garden **to scale** on A4 or A3, with lawns, zones (named in a corner), beds, paths, service lines, the house, structures, the plot boundary (a solid line for a fence, dashed where it is open), and **every plant drawn at its canopy size, numbered to match the schedule** (P1, P2...). A plant too small for its number inside gets the number just above it. Plants are drawn at **mature size** by default (a planting plan shows what to leave room for), or at the growth stage now showing. Optional **length labels along each boundary edge**. A **key** (only what is actually on the plan), a **north arrow** that points where the garden's north points, a **scale bar**, and a **title block** (garden, place and climate, plot area and plant count, scale such as 1:150, paper and orientation, date, "Sheet 1 of 2"). The scale is the biggest standard one (1:50 to 1:1000) that fits, and the page is **portrait or landscape, whichever gives the bigger drawing**; a drawing is true to scale (tested: a 24 m edge is 24 m times the scale in points, and the scale bar is the length on its label).
+
+**The schedule pages** follow (optional): the same table as on screen, with wrapped text (plant and botanical name in italics, quantity, mature size, spacing, where planted, cautions, weed status and notes), a repeated header on every page and a total.
+
+**Honest labelling, on the sheet itself.** Under every plan sheet: *Positions are only as accurate as the plan. Underground services shown are only what was drawn: call Dial Before You Dig (1100) before you dig*, and *Plant data in this schedule is a draft and has not been verified...* The schedule pages repeat both, and say weed status is only known where it was checked ("unknown" is not the same as safe). The satellite map is **not** drawn on the printed plan (imagery licences), only your own drawing.
+
+**Shared code.** The drawing primitives, the PDF drawing, page sizes, scale choice, text fitting and wrapping now live in `planner-core/src/export/pdfDraw.ts`, and **Room Planner's plan PDF uses them too** (its 1,143 unit tests pass unchanged). `pdf-lib` (MIT, already used by Room Planner and Vault's PDF tools) loads only when a plan is asked for.
+
+**Not built:** a preview before downloading (open the PDF), scale choice other than automatic, several plants shown as one planting group symbol, and elevations or sections.
+
+**Tests:** `tests/planSheet.test.ts` (21: scale, orientation, A3 versus A4, everything inside the page at five plot shapes and both sizes, true scale and scale bar, canopy sizes and numbers matching the schedule, growth stage, small-plant labels, title block, key, footnotes, north arrow at 0, 90 and 180 degrees, boundary labels, empty garden, long names, the PDF itself: pages, sizes, title, A3, a big garden running onto more pages, pagination, file names) and the Chrome run (the section is offered, even for an empty garden; a downloaded PDF has the right name, is a PDF, 2 pages, A4, a schedule page that is A4 portrait, the title; A3 without the schedule is one A3 sheet). A visual check: `npx vite-node scripts/samplePlanPdf.ts out.pdf` then `node scripts/renderPdf.mjs out.pdf prefix` (pdf.js from a CDN) turns a demo garden's PDF into PNGs.
+
 ## Fly-through and saved views (built 2026-10-18)
 
 **Fly-through** in the 3D view makes the camera tour the garden by itself. **Pause / Play** (or Space), **Stop tour** (or Esc, which puts the overview camera back exactly where it was), a **Loop** switch, and "Stop 2 of 5". Render photo stays available and photographs from wherever the tour camera is.
@@ -167,7 +183,7 @@ The **table button** in the toolbar opens **Plant schedule**: every plant in the
 
 **CSV details.** RFC 4180 quoting; CRLF line ends; a UTF-8 byte-order mark so Excel reads accents; and **text that starts with = + - or @ gets a leading apostrophe** so a note like `=HYPERLINK(...)` cannot run as a formula in Excel or Sheets (names and notes are typed by people). These helpers now live in `planner-core/src/export/csv.ts` and **Room Planner's furniture schedule uses the same ones** (its 20 schedule tests pass unchanged).
 
-**Not built:** a PDF or printable version (Room Planner has one; the CSV and on-screen table cover the need for now), costs and suppliers (the plant data has none), and the size of the plants at the growth stage shown (the schedule is always the mature size).
+**Not built:** costs and suppliers (the plant data has none), and the size of the plants at the growth stage shown (the schedule is always the mature size).
 
 **Tests:** `tests/plantSchedule.test.ts` (18: grouping and order, the record's numbers, varieties, where planted with counts, notes, weed status for all 171 plants, draft labelling, a removed plant, an empty garden, flowering ranges, CSV round trip, formula guard, byte-order mark, file names, the shared helpers) and the Chrome run (empty state, Esc, rows, total, order, where, draft and weed notes shown, the downloaded file: name, byte-order mark, rows, quantities, draft status, formula made harmless).
 
@@ -249,6 +265,8 @@ Run these on staging before relying on the features. The unit and Chrome tests u
 19. **Walk mode, with a real garden:** in 3D press **Walk**. Check you start at the gate, walk to the house and along a fence (you must slide, not stick or pass through), out through a gate and back, around a tree trunk and under a pergola, and onto a deck. Try the pad and drag-to-look on a phone. Try 1 year and 5 years growth. Report anything you can walk through that should be solid, or get stuck on that should not be.
 
 20. **Fly-through, with a real garden:** in 3D press **Fly-through** and watch a whole loop. The camera must never go through the house, a fence, a shed or a tree; it should sweep over them. Try it at 1 year and 5 years growth. Save two or three views (a good angle on the house, the back lawn) and play it again: it should visit just those, in order. Report any moment the camera clips something solid or does something odd.
+
+21. **Printable plan, on paper:** print the plan of a real garden on A4 and A3 and check it against the garden: the scale (measure a known edge with a ruler: it should match the scale on the sheet), the plant numbers against the schedule pages, the north arrow against the real north, and that the footnotes are legible. Try a long thin plot, a small courtyard and a garden with many plants (labels crowd where plants overlap: report any that are unreadable).
 
 ## Layout
 

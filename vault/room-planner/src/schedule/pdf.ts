@@ -1,7 +1,10 @@
 // The PDF: a to-scale plan sheet for each room (plan.ts), then the furniture schedule. Uses pdf-lib (MIT), loaded only when the PDF is asked for.
-import { degrees, PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from 'pdf-lib';
+import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from 'pdf-lib';
+import { col, drawPrims, fit, winAnsi } from '@planner-core/export/pdfDraw';
+// text fitting and drawing primitives live in planner-core, shared with Garden Planner
+export { winAnsi };
 import type { Project, Room } from '../engine/types';
-import { INK, MUTED, A4, numbersFor, planSheet, type PlanSheet, type Prim, type Rgb } from './plan';
+import { INK, MUTED, A4, numbersFor, planSheet, type Rgb } from './plan';
 import { money, roomsText, sizeText, type Schedule, type ScheduleRow } from './schedule';
 
 export interface PdfOptions {
@@ -13,47 +16,6 @@ export interface PdfOptions {
   date: string;
 }
 
-const col = (c: Rgb) => rgb(c[0], c[1], c[2]);
-
-/** Text the standard PDF fonts can draw: Latin letters and common punctuation; anything else becomes "?". */
-export function winAnsi(s: string): string {
-  return s.replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/…/g, '...').replace(/[–—]/g, '-')
-    .replace(/[^ -~ -ÿ]/g, '?');
-}
-
-function fit(font: PDFFont, text: string, size: number, maxWidth: number): string {
-  const t = winAnsi(text);
-  if (font.widthOfTextAtSize(t, size) <= maxWidth) return t;
-  let s = t;
-  while (s.length > 1 && font.widthOfTextAtSize(`${s}...`, size) > maxWidth) s = s.slice(0, -1);
-  return `${s.trimEnd()}...`;
-}
-
-function drawPrims(page: PDFPage, sheet: PlanSheet, regular: PDFFont, bold: PDFFont): void {
-  for (const p of sheet.prims as Prim[]) {
-    if (p.t === 'line') {
-      page.drawLine({ start: p.a, end: p.b, thickness: p.width, color: col(p.color), dashArray: p.dash });
-    } else if (p.t === 'poly') {
-      if (p.pts.length < 2) continue;
-      // pdf-lib draws SVG paths with y pointing down from the origin, so a negated y lands at the right place on the page
-      const path = p.pts.map((q, i) => `${i === 0 ? 'M' : 'L'} ${q.x.toFixed(3)} ${(-q.y).toFixed(3)}`).join(' ') + (p.closed === false ? '' : ' Z');
-      page.drawSvgPath(path, {
-        x: 0, y: 0,
-        ...(p.fill ? { color: col(p.fill) } : {}),
-        ...(p.stroke ? { borderColor: col(p.stroke), borderWidth: p.width ?? 0.8, ...(p.dash ? { borderDashArray: p.dash } : {}) } : {}),
-      });
-    } else if (p.t === 'circle') {
-      page.drawCircle({ x: p.x, y: p.y, size: p.r, ...(p.fill ? { color: col(p.fill) } : {}), ...(p.stroke ? { borderColor: col(p.stroke), borderWidth: p.width ?? 0.8 } : {}) });
-    } else {
-      const font = p.bold ? bold : regular;
-      const text = winAnsi(p.text);
-      const w = font.widthOfTextAtSize(text, p.size);
-      const shift = p.anchor === 'centre' ? -w / 2 : p.anchor === 'right' ? -w : 0;
-      const a = ((p.rotate ?? 0) * Math.PI) / 180;
-      page.drawText(text, { x: p.x + shift * Math.cos(a), y: p.y + shift * Math.sin(a), size: p.size, font, color: col(p.color), rotate: degrees(p.rotate ?? 0) });
-    }
-  }
-}
 
 // ------------------------------------------------------------------ the schedule pages
 
