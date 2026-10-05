@@ -337,6 +337,7 @@ await page.getByRole('button', { name: 'Clay', exact: true }).click();
 await wait(500);
 check('switching back to clay works', (await ev(() => window.roomPlanner.ui.getState().look)) === 'clay');
 // lights and ambient sound controls
+await ev(() => { const u = window.roomPlanner.ui.getState(); u.setCinematic(true); u.setLook('realistic'); }); // Lights only shows in the Realistic look, so the button is only enabled there
 await page.getByRole('button', { name: 'Lights', exact: true }).click();
 check('the Lights button switches lights off', (await ev(() => window.roomPlanner.ui.getState().lightsOn)) === false);
 await page.getByRole('button', { name: 'Lights', exact: true }).click();

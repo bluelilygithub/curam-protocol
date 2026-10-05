@@ -10,6 +10,7 @@
     "e2e3d": "node scripts/e2e3d.mjs",
     "e2e-photo": "node scripts/e2e-photo.mjs",
     "e2e-help": "node scripts/e2e-help.mjs",
+    "e2e-picture": "node scripts/e2e-picture.mjs",
     "e2e-projects": "node scripts/e2e-projects.mjs",
     "walkthrough": "node scripts/walkthrough.mjs",
     "test": "vitest run",

@@ -23,6 +23,7 @@ export function Viewbar3D() {
   const project = useProject((s) => s.project);
   const palette = useProject((s) => s.project?.rooms[0]?.palette);
   const lightsOn = useUi((s) => s.lightsOn);
+  const lightsShow = cinematic && look === 'realistic';
   const ambient = useUi((s) => s.ambient);
   const ambientVolume = useUi((s) => s.ambientVolume);
   const summary = useMemo(() => app.tourSummary(), [app, project]);
@@ -86,7 +87,7 @@ export function Viewbar3D() {
         )}
       </div>
       <div className="group" role="group" aria-label="Light and sound">
-        <button className={`btn ${lightsOn ? 'active' : ''}`} aria-pressed={lightsOn} onClick={() => app.setLightsOn(!lightsOn)} title="Switch the ceiling lights and lamps on or off. They light the room in the Realistic look and in Render photo.">
+        <button className={`btn ${lightsOn ? 'active' : ''}`} aria-pressed={lightsOn} disabled={!lightsShow} onClick={() => app.setLightsOn(!lightsOn)} title={lightsShow ? 'Switch the ceiling lights and lamps on or off: they light the room in this Realistic look and in Render photo.' : 'Lights show in the Cinematic Realistic look (turn on Cinematic, then Realistic) and in Render photo. Place a ceiling light or lamp from the Library to see them.'}>
           <span className="label">Lights</span>
         </button>
         <label className="palette-select" title="Soothing ambient sound while you look around in 3D: rain, ocean waves, a forest breeze or calm music. Made in your browser; nothing is downloaded.">

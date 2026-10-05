@@ -94,6 +94,8 @@ export class PathTracerTracer implements Tracer {
     const scene = new THREE.Scene();
     scene.add(scene3d.root);
 
+    await this.yieldToPaint('Loading your photos…');
+    await scene3d.ready();
     const camera = photoCamera(setup.camera, setup.width, setup.height, setup.fov);
     scene3d.updateFade({ x: camera.position.x, y: camera.position.z }, polarFromVertical(setup.camera.position, setup.camera.target));
 

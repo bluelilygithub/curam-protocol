@@ -60,6 +60,7 @@ export const FURNITURE_LIBRARY: FurnitureDefinition[] = [
   // ---- ceiling lights (M4.10): they hang from the ceiling (whatever its height) and light the room in the Realistic look and Render photo
   { id: 'ceiling-light', name: 'Ceiling light', category: 'lighting', defaultWidth: 0.45, defaultLength: 0.45, defaultHeight: 0.1, mount: 'ceiling' },
   { id: 'pendant-light', name: 'Pendant light', category: 'lighting', defaultWidth: 0.4, defaultLength: 0.4, defaultHeight: 0.9, mount: 'ceiling' },
+  { id: 'table-lamp', name: 'Table lamp', category: 'lighting', defaultWidth: 0.3, defaultLength: 0.3, defaultHeight: 0.55, settles: true },
   { id: 'downlight', name: 'Downlight', category: 'lighting', defaultWidth: 0.12, defaultLength: 0.12, defaultHeight: 0.04, mount: 'ceiling' },
 
   // ---- wall art (M4.9 stage 1): hang flat on a wall at a set height; change the height in the Inspector (Elevation)
@@ -68,6 +69,7 @@ export const FURNITURE_LIBRARY: FurnitureDefinition[] = [
   { id: 'art-arches', name: 'Print: arches', category: 'wall art', defaultWidth: 0.5, defaultLength: 0.03, defaultHeight: 0.7, defaultElevation: 1.3 },
   { id: 'art-seascape', name: 'Photo: seascape', category: 'wall art', defaultWidth: 0.7, defaultLength: 0.03, defaultHeight: 0.5, defaultElevation: 1.35 },
   { id: 'art-portrait', name: 'Photo: portrait', category: 'wall art', defaultWidth: 0.3, defaultLength: 0.03, defaultHeight: 0.4, defaultElevation: 1.4 },
+  { id: 'photo-frame', name: 'Your photo frame', category: 'wall art', defaultWidth: 0.4, defaultLength: 0.03, defaultHeight: 0.5, defaultElevation: 1.4 },
   { id: 'mirror-wall', name: 'Wall mirror', category: 'wall art', defaultWidth: 0.8, defaultLength: 0.04, defaultHeight: 1.2, defaultElevation: 0.8 },
   { id: 'mirror-round', name: 'Round mirror', category: 'wall art', defaultWidth: 0.7, defaultLength: 0.04, defaultHeight: 0.7, defaultElevation: 1.1 },
 ];
@@ -77,10 +79,11 @@ export const FURNITURE_LIBRARY: FurnitureDefinition[] = [
  * and the height of the bulb above the piece's underside as a fraction of its height. The bulb part glows; the light itself is a point light.
  */
 export const LIGHT_EMITTERS: Record<string, { colour: string; intensity: number; atFraction: number }> = {
-  'ceiling-light': { colour: '#ffe3bd', intensity: 16, atFraction: 0.1 },
-  'pendant-light': { colour: '#ffe0b5', intensity: 13, atFraction: 0.1 },
-  downlight: { colour: '#ffe9cf', intensity: 5, atFraction: 0.1 },
-  'floor-lamp': { colour: '#ffd9a0', intensity: 4, atFraction: 0.88 },
+  'ceiling-light': { colour: '#ffe3bd', intensity: 40, atFraction: 0.1 },
+  'pendant-light': { colour: '#ffe0b5', intensity: 32, atFraction: 0.1 },
+  downlight: { colour: '#ffe9cf', intensity: 12, atFraction: 0.1 },
+  'floor-lamp': { colour: '#ffd9a0', intensity: 14, atFraction: 0.88 },
+  'table-lamp': { colour: '#ffd9a0', intensity: 7, atFraction: 0.72 },
 };
 
 /** Pieces that lie on the floor and may be walked and built over: no overlap, clearance or door-swing checks (they must still sit inside the room). */
@@ -161,6 +164,7 @@ export const DEFAULT_FINISHES: Record<string, Partial<Record<'frame' | 'upholste
   'rug-rect': { fabric: 'rug-cream', accent: 'rug-border' },
   'rug-round': { fabric: 'rug-cream', accent: 'rug-border' },
   'rug-runner': { fabric: 'rug-cream', accent: 'rug-border' },
+  'table-lamp': { frame: 'ceramic-white', leg: 'brushed-steel' },
   'ceiling-light': { frame: 'white-paint' },
   'pendant-light': { frame: 'brushed-steel', fabric: 'white-paint', leg: 'dark-wood' },
   downlight: { frame: 'white-paint' },
@@ -169,6 +173,7 @@ export const DEFAULT_FINISHES: Record<string, Partial<Record<'frame' | 'upholste
   'art-arches': { frame: 'oak', fabric: 'white-paint' },
   'art-seascape': { frame: 'walnut', fabric: 'white-paint' },
   'art-portrait': { frame: 'brushed-steel', fabric: 'white-paint' },
+  'photo-frame': { frame: 'oak', fabric: 'white-paint' },
   'mirror-wall': { frame: 'dark-wood' },
   'mirror-round': { frame: 'brushed-steel' },
 };

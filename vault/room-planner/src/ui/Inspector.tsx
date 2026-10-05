@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { aabbOf } from '../engine/geometry';
 import { cleanName } from '../engine/roomOps';
 import { polygonArea } from '../engine/polygons';
@@ -9,6 +9,7 @@ import { useApp, useProject, useUi } from './AppContext';
 import { tipFor } from '../help/fieldTips';
 import { Icons } from './icons';
 import { PalettePicker } from './PalettePicker';
+import { holdsPicture, imageOf } from '../state/pictures';
 import {
   previewFixtureEdit, previewFurnitureEdit, previewVertexPosition, previewWallLength, previewWallThickness, readFixtureField, readFurnitureField,
   type FieldPreview, type FieldValue, type FixtureField, type FurnitureField,
@@ -206,6 +207,7 @@ export function Inspector() {
             </span>
           </label>
         </Section>
+        {!group && holdsPicture(room.furniture.find((f) => f.id === ids[0])?.definitionId ?? '') && <PictureSection id={ids[0]} />}
         <Section title="Constraints">
           <ViolationList items={violations} project={project} />
           {hard && !group && <button className="btn primary" title="Move this piece to the nearest spot where it fits: no overlaps, clear of doors and walls" onClick={() => app.fixPosition(ids[0])}>Fix position</button>}
@@ -373,5 +375,32 @@ export function Inspector() {
       <div className="panel-head"><h2>Inspector</h2></div>
       <div className="panel-body" key={selection.map((s) => `${s.kind}:${s.id}`).join(',')}>{body}</div>
     </aside>
+  );
+}
+
+/** Choose one of your own photos for a picture frame (shrunk and kept in the project), or go back to the built-in artwork. */
+function PictureSection({ id }: { id: string }) {
+  const app = useApp();
+  const project = useProject((s) => s.project);
+  const inst = useProject((s) => s.project?.rooms[0]?.furniture.find((f) => f.id === id));
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const mine = inst ? imageOf(project, inst) : undefined;
+  const choose = async (file: File | undefined): Promise<void> => {
+    if (!file) return;
+    setBusy(true); setNote(null);
+    try { setNote(await app.setPicture(id, file)); } finally { setBusy(false); if (input.current) input.current.value = ''; }
+  };
+  return (
+    <Section title="Picture">
+      <p className="hint">{mine ? `Showing your photo “${mine.name}”.` : 'Showing the built-in picture.'} Your photo is shrunk and kept inside the project, and the frame is reshaped to fit it. It shows in the Realistic 3D look and in Render photo.</p>
+      <input ref={input} type="file" accept="image/*" hidden aria-label="Choose a photo" onChange={(e) => void choose(e.target.files?.[0])} />
+      <div className="actions">
+        <button className="btn primary" disabled={busy} title="Pick a photo or painting from your computer to show in this frame. It is shrunk so the project stays small." onClick={() => input.current?.click()}>{busy ? 'Working…' : mine ? 'Change photo…' : 'Use my photo…'}</button>
+        {mine && <button className="btn" disabled={busy} title="Go back to the built-in picture" onClick={() => app.clearPicture(id)}>Use the built-in picture</button>}
+      </div>
+      {note && <p className="field-msg hard" role="alert">{note}</p>}
+    </Section>
   );
 }

@@ -127,6 +127,8 @@ export interface FurnitureInstance {
   height: Metres;
   locked?: boolean;
   finishOverrides?: Record<string, string>; // part name → material id (C13)
+  /** A photo of your own shown in this picture frame instead of the built-in artwork (key of `Project.images`). */
+  imageId?: string;
   metadata?: FurnitureMetadata;
 }
 
@@ -183,7 +185,11 @@ export interface Project {
   materials: Material[];
   /** Optional so projects saved before M4 load unchanged; kept in creation order. */
   savedViews?: SavedView[];
+  /** Your own photos for picture frames, shrunk and stored here (see `state/pictures.ts`). Optional so older files load unchanged. */
+  images?: Record<string, ProjectImage>;
 }
+
+export interface ProjectImage { name: string; dataUrl: string; width: number; height: number }
 
 // ---------------------------------------------------------------- commands
 
@@ -218,6 +224,7 @@ export interface EditWallCommand {
 export interface FurniturePatch {
   elevation?: Metres;
   height?: Metres;
+  imageId?: string | null;
   locked?: boolean | null;
   finishOverrides?: Record<string, string> | null;
   metadata?: FurnitureMetadata | null;

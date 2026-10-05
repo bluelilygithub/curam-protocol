@@ -132,6 +132,7 @@ export function glyphFor(definitionId: string, w: number, l: number): Glyph {
       for (const a of [0.3, 1.5, 2.7, 3.9, 5.1]) shapes.push(line([0, 0, Math.cos(a) * r * 0.95, Math.sin(a) * r * 0.95], 'faint'));
       break;
     }
+    case 'table-lamp':
     case 'floor-lamp':
       shapes.push(circle(0, 0, Math.min(w, l) * 0.34, 'detail'), circle(0, 0, Math.min(w, l) * 0.06, 'faint'));
       break;
@@ -147,6 +148,7 @@ export function glyphFor(definitionId: string, w: number, l: number): Glyph {
     case 'art-arches':
     case 'art-seascape':
     case 'art-portrait':
+    case 'photo-frame':
       // seen from above a picture is a thin frame on the wall: a double line along its length
       shapes.push(line([-hw + 0.03, 0, hw - 0.03, 0], 'detail'));
       break;

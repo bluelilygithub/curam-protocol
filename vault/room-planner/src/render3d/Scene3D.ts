@@ -120,6 +120,7 @@ export class Scene3D {
 
   constructor(private readonly p: Scene3DPorts) {
     this.root.name = 'room-planner-3d';
+    this.materials.onLoad = () => this.p.invalidate();
     this.sun.castShadow = true;
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.02;
@@ -231,7 +232,7 @@ export class Scene3D {
       const look = mode === 'clay'
         ? { ...clayLook(part.role), tint: null as Tint }
         : mode === 'realistic'
-          ? { ...realisticLookOf(inst.definitionId, part, inst, project.materials, this.palette), tint: null as Tint }
+          ? { ...realisticLookOf(inst.definitionId, part, inst, project.materials, this.palette, this.p.ui.getState().lightsOn, part.role === 'picture' && inst.imageId && project.images?.[inst.imageId] ? { id: inst.imageId, dataUrl: project.images[inst.imageId].dataUrl } : undefined), tint: null as Tint }
           : { ...lookOf(part.role, inst, project.materials), tint };
       look.opacity = Math.min(look.opacity, opacity);
       g.add(partMesh(part, this.materials.get(look)));
@@ -269,6 +270,9 @@ export class Scene3D {
     g.rotation.y = model.rotationY;
     return g;
   }
+
+  /** Resolves when every photo the scene shows has finished loading (a path-traced picture must not start with a blank frame). */
+  ready(): Promise<void> { return this.materials.ready(); }
 
   rebuild(): void {
     this.rebuildCount++;

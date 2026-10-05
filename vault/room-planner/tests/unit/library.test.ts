@@ -6,8 +6,8 @@ const byName = (n: string) => FURNITURE_LIBRARY.find((d) => d.name === n)!;
 describe('seed furniture library (C17)', () => {
   it('has the 12 listed starter items first, then the M4.8 additions, all with unique ids', () => {
     expect(FURNITURE_LIBRARY.slice(0, 12).map((d) => d.id)).toEqual(['sofa-3', 'armchair', 'coffee-table', 'side-table', 'dining-table', 'dining-chair', 'bed-queen', 'bedside-table', 'wardrobe', 'desk', 'bookshelf', 'tv-unit']);
-    expect(FURNITURE_LIBRARY).toHaveLength(39);
-    expect(new Set(FURNITURE_LIBRARY.map((d) => d.id)).size).toBe(39);
+    expect(FURNITURE_LIBRARY).toHaveLength(41);
+    expect(new Set(FURNITURE_LIBRARY.map((d) => d.id)).size).toBe(41);
   });
   it.each([
     ['3-seat sofa', 2.2, 0.95, 0.85], ['Armchair', 0.85, 0.85, 0.85], ['Coffee table', 1.2, 0.6, 0.42],

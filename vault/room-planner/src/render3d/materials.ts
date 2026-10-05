@@ -18,8 +18,11 @@ export interface Look {
   bump?: number;
   /** A built-in artwork drawn in full colour on the surface (pictures). */
   art?: { kind: ArtKind; width: number; height: number };
-  /** A glowing surface (a lit bulb): its own colour, bright. */
+  /** A glowing surface (a lit bulb or lampshade): its own colour, and how strongly (default 1.6). */
   glow?: string;
+  glowStrength?: number;
+  /** One of the project's own photos, drawn on the surface (a picture frame the designer filled). */
+  photo?: { id: string; dataUrl: string };
 }
 
 /** The look of a part: a finish override on the instance (C13: part name → material id) wins over the part's default. */
@@ -49,9 +52,14 @@ function fromMaterial(m: Material, opacity = 1): Omit<Look, 'tint'> {
 export function realisticLookOf(
   definitionId: string, part: Pick<Part, 'role' | 'tint'> & Partial<Pick<Part, 'art' | 'size'>>, inst: Pick<FurnitureInstance, 'finishOverrides'> | undefined, materials: Material[],
   palette?: Palette,
+  lightsOn = true,
+  photo?: { id: string; dataUrl: string },
 ): Omit<Look, 'tint'> {
   if (part.role === 'glass' || part.role === 'mirror') return lookOf(part.role, undefined, materials);
-  if (part.role === 'bulb') return { ...lookOf('bulb', undefined, materials), glow: '#ffe6bf' };
+  // bulbs and lampshades glow only while the lights are on
+  if (part.role === 'bulb') return { ...lookOf('bulb', undefined, materials), ...(lightsOn ? { glow: '#ffe6bf' } : {}) };
+  if (part.role === 'shade') return { ...lookOf('shade', undefined, materials), ...(lightsOn ? { glow: '#ffdca8', glowStrength: 0.7 } : {}) };
+  if (part.role === 'picture' && photo) return { colour: '#ffffff', roughness: 0.55, metalness: 0, opacity: 1, photo };
   if (part.role === 'picture') {
     if (part.art && part.size) return { colour: '#ffffff', roughness: 0.55, metalness: 0, opacity: 1, art: { kind: part.art, ...artSize(part.size[0], part.size[1]) } };
     return lookOf('picture', undefined, materials);
@@ -90,17 +98,46 @@ export function realisticFixtureLook(role: PartRole, materials: Material[], pale
 /** Materials are shared by look, so a scene of hundreds of parts has a handful of GPU materials. */
 export class MaterialCache {
   private readonly cache = new Map<string, THREE.MeshStandardMaterial>();
+  private readonly photos = new Map<string, THREE.Texture>();
+  /** Photos still being decoded; `ready()` waits for them (Render photo must not start with a blank frame). */
+  private readonly pending: Array<Promise<void>> = [];
+  /** Called when a photo has finished loading, so the host can redraw. */
+  onLoad: (() => void) | null = null;
+
+  ready(): Promise<void> { return Promise.all(this.pending).then(() => undefined); }
+
+  private photoTexture(id: string, dataUrl: string): THREE.Texture | null {
+    if (typeof Image === 'undefined') return null; // no browser (tests)
+    let t = this.photos.get(id);
+    if (!t) {
+      const img = new Image();
+      t = new THREE.Texture(img);
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = 8;
+      t.generateMipmaps = true;
+      t.minFilter = THREE.LinearMipmapLinearFilter;
+      const tex = t;
+      this.pending.push(new Promise<void>((resolve) => {
+        img.onload = () => { tex.needsUpdate = true; this.onLoad?.(); resolve(); };
+        img.onerror = () => resolve();
+      }));
+      img.src = dataUrl;
+      this.photos.set(id, t);
+    }
+    return t;
+  }
 
   get(look: Look): THREE.MeshStandardMaterial {
-    const key = `${look.colour}|${look.roughness}|${look.metalness}|${look.opacity}|${look.tint ?? ''}|${look.texture ?? ''}|${look.glow ?? ''}|${look.art ? `${look.art.kind}${look.art.width}x${look.art.height}` : ''}`;
+    const key = `${look.colour}|${look.roughness}|${look.metalness}|${look.opacity}|${look.tint ?? ''}|${look.texture ?? ''}|${look.glow ?? ''}${look.glowStrength ?? ''}|${look.art ? `${look.art.kind}${look.art.width}x${look.art.height}` : ''}|${look.photo?.id ?? ''}`;
     let m = this.cache.get(key);
     if (!m) {
       m = new THREE.MeshStandardMaterial({
         color: look.colour, roughness: look.roughness, metalness: look.metalness,
         transparent: look.opacity < 1, opacity: look.opacity, depthWrite: look.opacity >= 1,
-        emissive: look.glow ?? (look.tint ? TINT[look.tint] : '#000000'), emissiveIntensity: look.glow ? 1.6 : look.tint ? 0.35 : 0,
+        emissive: look.glow ?? (look.tint ? TINT[look.tint] : '#000000'), emissiveIntensity: look.glow ? (look.glowStrength ?? 1.6) : look.tint ? 0.35 : 0,
         ...(look.texture ? (() => { const t = textureOf(look.texture); return { map: t, bumpMap: t, bumpScale: look.bump ?? 0.3 }; })() : {}),
         ...(look.art ? { map: artTexture(look.art.kind, look.art.width, look.art.height) } : {}),
+        ...(look.photo ? (() => { const t = this.photoTexture(look.photo.id, look.photo.dataUrl); return t ? { map: t } : {}; })() : {}),
       });
       this.cache.set(key, m);
     }
@@ -112,5 +149,7 @@ export class MaterialCache {
   dispose(): void {
     for (const m of this.cache.values()) m.dispose();
     this.cache.clear();
+    for (const t of this.photos.values()) t.dispose();
+    this.photos.clear();
   }
 }

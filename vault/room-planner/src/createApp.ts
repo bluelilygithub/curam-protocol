@@ -1,5 +1,7 @@
 import { fitView, panBy } from './adapters/canvas';
-import { proposeCreateRoom, proposeDeleteRoom, proposeFixPosition } from './engine/pipeline';
+import { evaluateCommand, proposeCreateRoom, proposeDeleteRoom, proposeFixPosition, proposeUpdateFurniture } from './engine/pipeline';
+import { readPicture } from './state/pictureImport';
+import { addImage, frameSizeFor, pictureCommand } from './state/pictures';
 import { cleanName, cloneRoom, nextRoomName } from './engine/roomOps';
 import { aabbOf } from './engine/geometry';
 import { addSavedView, deleteSavedView, renameSavedView, savedViewsOf } from './engine/savedViews';
@@ -204,6 +206,31 @@ export function createApp(storage: StorageLike, audio: AmbientPlayer = new Ambie
     fitToRoom,
 
     // ------------------------------------------------------------ help (tour; the info modal is plain UI state)
+
+    /** Put one of your own photos in a picture frame: shrunk, stored in the project, and the frame reshaped to match. One undoable step. Resolves to an error message, or null. */
+    async setPicture(id: string, file: File): Promise<string | null> {
+      const room = project.getState().project?.rooms[0];
+      const inst = room?.furniture.find((f) => f.id === id);
+      if (!room || !inst) return 'Select a picture frame first.';
+      let img;
+      try { img = await readPicture(file); } catch (e) { return e instanceof Error ? e.message : 'That picture could not be used.'; }
+      const imageId = `img-${randomId()}`;
+      const added = addImage(project.getState().document!, imageId, { name: img.name, dataUrl: img.dataUrl, width: img.width, height: img.height });
+      if (!added.ok) return added.message;
+      project.getState().updateSilently((p) => { const r = addImage(p, imageId, { name: img.name, dataUrl: img.dataUrl, width: img.width, height: img.height }); return r.ok ? r.project : p; });
+      const size = frameSizeFor(img.width, img.height, inst.width, inst.height);
+      const command = pictureCommand(inst, imageId, size);
+      if (!evaluateCommand(project.getState().project!, command, [id]).ok) return 'The frame would not fit there with that shape. Move it somewhere with more room first, then try again.';
+      project.getState().commit(command, 'Use my photo');
+      return null;
+    },
+
+    /** Back to the built-in picture. */
+    clearPicture(id: string): void {
+      const inst = project.getState().project?.rooms[0]?.furniture.find((f) => f.id === id);
+      if (!inst?.imageId) return;
+      project.getState().commitResult(proposeUpdateFurniture(project.getState().project!, id, { imageId: null }), 'Use the built-in picture');
+    },
 
     /** Choose the colour palette of the active room (`null` = the standard colours). One undoable step; shown in the 3D view. */
     setPalette(id: string | null): void {

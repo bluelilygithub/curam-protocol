@@ -169,7 +169,7 @@ function applyPatch<T extends object>(target: T, patch: Record<string, unknown>)
   return next as T;
 }
 
-const FURNITURE_KEYS = new Set(['elevation', 'height', 'locked', 'finishOverrides', 'metadata']);
+const FURNITURE_KEYS = new Set(['elevation', 'height', 'imageId', 'locked', 'finishOverrides', 'metadata']);
 const FIXTURE_KEYS = new Set([
   'wallId', 'offsetAlongWall', 'width', 'height', 'elevation', 'hingeSide', 'swingAngle', 'accessZoneDepth',
 ]);

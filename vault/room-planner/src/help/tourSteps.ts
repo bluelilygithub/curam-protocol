@@ -34,7 +34,7 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: 'rp-library', title: 'Library', target: 'rp-library', on: 'right', needs2d: true, panel: 'left',
-    text: 'Pick a door, window or piece of furniture, then click the plan to place it. Search or filter by type: seating, tables, storage, bedroom, plants and decor, rugs, wall art (pictures and mirrors that hang on a wall) and ceiling lights. Doors and windows snap to walls; furniture snaps to walls and other pieces and can stand on a rug.',
+    text: 'Pick a door, window or piece of furniture, then click the plan to place it. Search or filter by type: seating, tables, storage, bedroom, plants and decor, rugs, wall art (pictures and mirrors that hang on a wall; put your own photo in a frame from the Inspector), and lighting (ceiling lights and a table lamp). Doors and windows snap to walls; furniture snaps to walls and other pieces and can stand on a rug.',
   },
   {
     id: 'rp-canvas', title: 'The Plan', target: 'rp-stage', on: 'left', needs2d: true,

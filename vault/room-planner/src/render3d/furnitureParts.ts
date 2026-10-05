@@ -6,7 +6,7 @@ import type { ArtKind } from './artData';
 import type { Vec3 } from './transforms';
 
 /** Part names double as the keys of `finishOverrides` (C13): part name → material id. */
-export type PartRole = 'frame' | 'upholstery' | 'top' | 'leg' | 'fabric' | 'accent' | 'handle' | 'glass' | 'door' | 'foliage' | 'pot' | 'picture' | 'mirror' | 'bulb';
+export type PartRole = 'frame' | 'upholstery' | 'top' | 'leg' | 'fabric' | 'accent' | 'handle' | 'glass' | 'door' | 'foliage' | 'pot' | 'picture' | 'mirror' | 'bulb' | 'shade';
 
 export type PartShape = 'box' | 'rbox' | 'cylinder' | 'taper' | 'ellipsoid';
 
@@ -45,6 +45,7 @@ export const ROLE_DEFAULTS: Record<PartRole, { colour: string; roughness: number
   picture: { colour: '#c9c3b6', roughness: 0.55, metalness: 0 },
   mirror: { colour: '#dfe6ea', roughness: 0.05, metalness: 0.95 },
   bulb: { colour: '#fff1d6', roughness: 0.4, metalness: 0 },
+  shade: { colour: '#f3ead8', roughness: 0.8, metalness: 0 },
 };
 
 type Ext = [number, number]; // [min, max]
@@ -358,7 +359,18 @@ function floorLamp(w: number, l: number, h: number): Part[] {
   return [
     cyl('frame', [-w / 2, w / 2], [0, 0.03], [-l / 2, l / 2]),
     cyl('leg', [-pole / 2, pole / 2], [0.03, h - shadeH], [-pole / 2, pole / 2]),
-    cyl('fabric', [-w * 0.41, w * 0.41], [h - shadeH, h], [-l * 0.41, l * 0.41]), // the shade
+    cyl('shade', [-w * 0.41, w * 0.41], [h - shadeH, h], [-l * 0.41, l * 0.41]), // the shade, which glows when the lights are on
+  ];
+}
+
+function tableLamp(w: number, l: number, h: number): Part[] {
+  const shadeH = h * 0.42;
+  const stem = Math.min(0.04, w / 6);
+  return [
+    { shape: 'taper', role: 'frame', centre: [0, h * 0.22, 0], size: [w * 0.55, h * 0.4, l * 0.55], taper: 0.7 }, // the base
+    cyl('leg', [-stem / 2, stem / 2], [h * 0.4, h - shadeH], [-stem / 2, stem / 2]),
+    cyl('shade', [-w / 2, w / 2], [h - shadeH, h], [-l / 2, l / 2]),
+    cyl('frame', [-w * 0.3, w * 0.3], [0, 0.012], [-l * 0.3, l * 0.3]), // a foot so the lamp starts at its underside exactly
   ];
 }
 
@@ -472,8 +484,10 @@ const RECIPES: Record<string, Recipe> = {
   'art-arches': (w, l, h) => artFrame(w, l, h, 'arches'),
   'art-seascape': (w, l, h) => artFrame(w, l, h, 'seascape'),
   'art-portrait': (w, l, h) => artFrame(w, l, h, 'portrait'),
+  'photo-frame': (w, l, h) => artFrame(w, l, h, 'portrait'),
   'mirror-wall': mirror,
   'mirror-round': roundMirror,
+  'table-lamp': tableLamp,
   'ceiling-light': ceilingLight,
   'pendant-light': pendantLight,
   downlight,
