@@ -10,6 +10,8 @@ import { plantParts, type Part } from './plantParts';
 import { MID_MONTH_DAY, solarPosition, sunDirectionOnPlan } from '../sun/solar';
 import { placeFor } from '../sun/timezone';
 import { MIN_SUN_ALTITUDE } from '../sun/shadows';
+import type { View } from '@planner-core/adapters/canvas';
+import { chooseZoom, metresPerPixel, TILE, visibleTiles, type LatLng } from '../map/mercator';
 import { FENCE_COLOUR, GRASS_COLOUR, MULCH_COLOUR, PATH_COLOUR, STRUCTURE_COLOUR } from '../render2d/theme';
 
 const GROUND = '#9aa57a';
@@ -51,6 +53,10 @@ export class Garden3D {
   private raf = 0;
   private dirty = true;
   private framed = false;
+  /** The satellite map as a texture on the ground: painted from the tile cache, repainted as tiles arrive. Kept across rebuilds. */
+  private mapTex: THREE.CanvasTexture | null = null;
+  private mapJob: { anchor: LatLng; north: number; view: View; z: number; size: number; pxPerM: number } | null = null;
+  private mapPaintQueued = false;
 
   constructor(private container: HTMLDivElement, private app: App) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -94,6 +100,8 @@ export class Garden3D {
     this.offs.forEach((f) => f());
     this.controls.dispose();
     this.disposeContent();
+    this.mapTex?.dispose();
+    this.mapTex = null;
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
@@ -144,6 +152,78 @@ export class Garden3D {
     this.renderer.render(this.scene, this.camera);
   };
 
+  /**
+   * The satellite photo on the ground. A square canvas covering the plot and its surroundings is painted with the tiles (the same maths as
+   * the 2D plan: anchored at plan (0, 0), turned by the north arrow, true to scale) and laid flat as a texture, so the sun's shadows land on it.
+   * Returns whether the map is on and usable.
+   */
+  private addMap(p: GardenProject, c: THREE.Group): boolean {
+    const ds = this.renderer.domElement.dataset;
+    const m = p.map;
+    this.mapJob = null;
+    if (!m?.on) { ds.mapTiles = 'off'; return false; }
+    const tiles = this.app.mapTiles;
+    const st = tiles.peekStatus();
+    if (!st) { ds.mapTiles = 'pending'; void tiles.status().then(() => this.rebuild()); return false; }
+    if (!st.enabled) { ds.mapTiles = 'unavailable'; return false; }
+    const b = this.bounds(p);
+    const centre = { x: b.cx, y: -b.cz };
+    const S = Math.min(320, Math.max(60, b.r * 3));
+    const anchor = { lat: m.lat, lng: m.lng };
+    const pxPerM = Math.min(2048 / S, 1 / metresPerPixel(st.maxZoom, anchor.lat)); // never finer than the imagery
+    const size = Math.max(64, Math.round(S * pxPerM));
+    if (!this.mapTex || (this.mapTex.image as HTMLCanvasElement).width !== size) {
+      this.mapTex?.dispose();
+      const canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      this.mapTex = new THREE.CanvasTexture(canvas);
+      this.mapTex.colorSpace = THREE.SRGBColorSpace;
+      this.mapTex.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+    }
+    // plan -> canvas: x = offsetX + wx * scale, y = offsetY - wy * scale, with the canvas covering the square S x S around the plot centre
+    const view = { scale: pxPerM, offsetX: -(centre.x - S / 2) * pxPerM, offsetY: (centre.y + S / 2) * pxPerM } as View;
+    this.mapJob = { anchor, north: p.northDeg, view, z: chooseZoom(pxPerM, anchor.lat, st.maxZoom), size, pxPerM };
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(S, S), new THREE.MeshStandardMaterial({ map: this.mapTex, roughness: 1, metalness: 0, transparent: m.opacity < 1, opacity: m.opacity }));
+    mesh.rotation.x = -Math.PI / 2; // texture top = plan +y (north when the north arrow is up), as on the plan
+    mesh.position.set(centre.x, 0.004, -centre.y);
+    mesh.receiveShadow = true;
+    c.add(mesh);
+    this.paintMap();
+    return true;
+  }
+
+  private paintMap(): void {
+    const job = this.mapJob;
+    const tex = this.mapTex;
+    if (!job || !tex) return;
+    const canvas = tex.image as HTMLCanvasElement;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = GROUND; // where a tile has not arrived yet the ground colour shows
+    ctx.fillRect(0, 0, job.size, job.size);
+    const list = visibleTiles(job.anchor, job.north, job.view, job.size, job.size, job.z, 160);
+    const s = metresPerPixel(job.z, job.anchor.lat) * job.pxPerM;
+    ctx.setTransform(1, 0, 0, 1, job.view.offsetX, job.view.offsetY);
+    ctx.rotate((job.north * Math.PI) / 180);
+    ctx.scale(s, s);
+    let drawn = 0;
+    for (const q of list) {
+      const img = this.app.mapTiles.tile(q.z, q.x, q.y, () => this.queueMapPaint());
+      if (img) { ctx.drawImage(img, q.px, q.py, TILE + 0.6, TILE + 0.6); drawn += 1; }
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    tex.needsUpdate = true;
+    this.dirty = true;
+    this.renderer.domElement.dataset.mapTiles = `${drawn}/${list.length}`;
+  }
+
+  private queueMapPaint(): void {
+    if (this.mapPaintQueued) return;
+    this.mapPaintQueued = true;
+    requestAnimationFrame(() => { this.mapPaintQueued = false; this.paintMap(); });
+  }
+
   private disposeContent(): void {
     this.content.traverse((o) => {
       const m = o as THREE.Mesh;
@@ -167,15 +247,19 @@ export class Garden3D {
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
     c.add(ground);
+    const mapOn = this.addMap(p, c);
+    // with the aerial photo on, flat fills let it show through (the same as the 2D plan)
+    const soft = (m: THREE.Mesh): THREE.Mesh => { if (mapOn) { const x = m.material as THREE.MeshStandardMaterial; x.transparent = true; x.opacity = 0.55; } return m; };
 
-    for (const l of p.lawns) c.add(shapeMesh(sampleShape(l.shape), GRASS_COLOUR[l.grass], 0.012));
+    for (const l of p.lawns) c.add(soft(shapeMesh(sampleShape(l.shape), GRASS_COLOUR[l.grass], 0.012)));
     for (const z of p.zones) void z; // zones are plan-only
     for (const b of p.beds) {
       const poly = sampleShape(b.shape);
-      c.add(shapeMesh(poly, MULCH_COLOUR[b.mulch], b.raised ? 0.35 : 0.02, b.raised ? 0.02 : 0));
+      const bedMesh = shapeMesh(poly, MULCH_COLOUR[b.mulch], b.raised ? 0.35 : 0.02, b.raised ? 0.02 : 0);
+      c.add(b.raised ? bedMesh : soft(bedMesh));
       if (b.raised) c.add(this.rim(poly, 0.35, '#8a6a44'));
     }
-    for (const pa of p.paths) for (const q of pathSegments(pa.points, pa.width)) c.add(shapeMesh(q, PATH_COLOUR[pa.material], 0.025));
+    for (const pa of p.paths) for (const q of pathSegments(pa.points, pa.width)) c.add(soft(shapeMesh(q, PATH_COLOUR[pa.material], 0.025)));
     if (p.house) {
       const m = shapeMesh(p.house.vertices.map((v) => v.position), '#e8e2d6', 0, p.house.height);
       c.add(m);

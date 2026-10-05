@@ -33,7 +33,7 @@ export function InfoModal() {
           <h3>Voice</h3>
           <p>Every text and number box has a microphone button. Tap it and say a name or a number, like “two point five”. It works in Chrome, Edge and Safari.</p>
           <h3>Satellite map</h3>
-          <p>In Garden settings, switch on <b>Show a satellite map</b> to see an aerial photo of your street under the plan. Press <b>Move map</b> and drag it until your house sits where you drew it, then draw over it. The map is true to scale and turns with the north arrow, and the sun shadows fall across it.</p>
+          <p>In Garden settings, switch on <b>Show a satellite map</b> to see an aerial photo of your street under the plan. Press <b>Move map</b> and drag it until your house sits where you drew it, then draw over it. The map is true to scale and turns with the north arrow, and the sun shadows fall across it, in 2D and in 3D.</p>
           <h3>Plant data and photos</h3>
           <p>The starter plant list is a draft. Please check sizes, frost and weed information against a local nursery or your state weed list before relying on it. Plant photos come from iNaturalist, Wikimedia Commons and the Atlas of Living Australia, only under open licences, with the creator and licence shown under each photo. <button type="button" className="linklike" onClick={() => app.ui.getState().set({ infoOpen: false, creditsOpen: true })}>See all photo credits</button>.</p>
           <h3>Place lookup</h3>

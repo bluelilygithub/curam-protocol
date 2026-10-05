@@ -40,7 +40,7 @@ export function MapSection({ project }: { project: GardenProject }) {
             <button type="button" className="btn" title="Put the map back at the garden's location" onClick={() => app.resetMap()}>Reset</button>
           </div>
           <NumField label="Map strength" unit="%" value={Math.round((project.map?.opacity ?? 1) * 100)} min={10} max={100} step={5} decimals={0} onCommit={(v) => project.map && app.setMap({ ...project.map, opacity: v / 100 }, 'Change map strength')} />
-          <p className="note">The map turns with the north arrow, and is true to scale, so lengths you draw are real. Shown in the 2D plan only.</p>
+          <p className="note">The map turns with the north arrow, and is true to scale, so lengths you draw are real. It lies on the ground in the 3D view too, where the sun's shadows fall across it.</p>
         </>
       )}
     </>

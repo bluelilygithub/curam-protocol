@@ -98,7 +98,7 @@ export function Stage() {
           plan.current.dropPlant(id, e.clientX, e.clientY, e.shiftKey);
         }} />
       {viewMode === '2d' && <p className="hint-banner">{mapAlign ? 'Drag the map until your house and plot line up with what you drew. Press Done moving (or Esc) when it fits.' : HINTS[tool]}</p>}
-      {viewMode === '2d' && project && <MapAttribution project={project} />}
+      {project && <MapAttribution project={project} />}
       {viewMode === '3d' && (
         <div className="view3d-bar" role="group" aria-label="3D camera">
           <button type="button" title="Isometric view" onClick={() => three.current?.iso()}>Iso</button>

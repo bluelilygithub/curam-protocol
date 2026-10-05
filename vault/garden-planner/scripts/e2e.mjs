@@ -652,6 +652,25 @@ check('no page errors or console errors', problems.length === 0, problems.slice(
   seen = await pixel();
   check('the map is still drawn after turning north', seen.green > 10, JSON.stringify(seen));
 
+  // the 3D view lays the same photo on the ground
+  await pg.getByRole('button', { name: '3D', exact: true }).click();
+  await pg.waitForSelector('.stage canvas');
+  const mapDs = async () => { for (let i = 0; i < 60; i++) { const d = await pg.locator('.stage canvas').evaluate((c) => c.dataset.mapTiles); const m = /^(\d+)\/(\d+)$/.exec(d ?? ''); if (m && Number(m[1]) > 0 && Number(m[1]) === Number(m[2])) return d; await wait(200); } return pg.locator('.stage canvas').evaluate((c) => c.dataset.mapTiles); };
+  const ds3 = await mapDs();
+  check('3D: the ground is painted with the satellite tiles (all that are needed have arrived)', /^[1-9]\d*\/\d+$/.test(ds3) && ds3.split('/')[0] === ds3.split('/')[1], String(ds3));
+  check('3D: the provider credit is shown with the map', /MapTiler/.test(await pg.getByTestId('map-attribution').innerText()));
+  await mapShot('11-map-3d.png');
+  await pg.evaluate(() => window.gardenPlanner.ui.getState().set({ month: 6, hour: 15 }));
+  await wait(400);
+  await mapShot('11b-map-3d-june-3pm.png');
+  await pg.evaluate(() => window.gardenPlanner.updateMeta({ northDeg: 90 }));
+  await wait(400);
+  check('3D: turning north repaints the ground, still all tiles', /^[1-9]\d*\/\d+$/.test(await mapDs()));
+  await pg.evaluate(() => window.gardenPlanner.updateMeta({ northDeg: 0 }));
+  await pg.getByRole('button', { name: '2D', exact: true }).click();
+  await pg.waitForSelector('.stage canvas');
+  await wait(300);
+
   // shadows still fall across it: switch the sun map on with a house
   await pg.evaluate(() => { const a = window.gardenPlanner; a.updateMeta({ northDeg: 0 }); a.ui.getState().set({ showShadows: true }); });
   await wait(300);

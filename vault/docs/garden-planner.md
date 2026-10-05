@@ -118,9 +118,11 @@ An aerial photo under the 2D plan, so the plot, house and beds can be traced ove
 
 **Things to confirm before relying on it (not decided by code):** MapTiler's plan terms. Their free plan is for non-commercial use; commercial use needs a paid plan, and their terms on tracing and on caching imagery should be read for how Vault is used. A tile address reveals roughly where a garden is (the request path is logged like any other request); the geocoder avoids this with POST, tiles cannot.
 
-**Not built:** the map in the 3D view (2D only), a map picker for choosing the location by clicking, and scale or rotation adjustment beyond the north arrow (the map is true to scale already).
+**In 3D (built 2026-10-12).** The same photo lies on the ground in the 3D view. A square canvas covering the plot and its surroundings (at least 60 m, up to 320 m across) is painted with the tiles using the same maths as the plan (anchored at plan (0, 0), turned by the north arrow, true to scale, never finer than the imagery) and laid flat as a texture, so **the sun's shadows from the house, fences, structures and plants land on it** as the time slider moves. Tiles that have not arrived show the ground colour and the texture repaints as they land; the texture is kept across edits and only rebuilt when its size changes. Lawn, bed and path fills are drawn 55% opaque so the photo shows through, as on the plan. The credit shows in both views, and the canvas exposes `data-map-tiles="drawn/needed"` for tests. One limit: the imagery has its own baked-in shadows from when it was taken, which the 3D sun does not remove, so the photo's shadows and the model's can disagree.
 
-**Tests:** `garden-planner/tests/mercator.test.ts` (10), `tests/mapTiles.test.ts` (6), `node server/routes/mapTiles.test.js` (7, with fake MapTiler), and the Chrome run (fake tile server: the wizard preview, tiles drawn under the plan with the Vault token, the tiles around the location, the credit, Move map and its undo, rotation, switching off, and the not-set-up message).
+**Not built:** a map picker for choosing the location by clicking, and scale or rotation adjustment beyond the north arrow (the map is true to scale already).
+
+**Tests:** `garden-planner/tests/mercator.test.ts` (10), `tests/mapTiles.test.ts` (6), `node server/routes/mapTiles.test.js` (7, with fake MapTiler), and the Chrome run (fake tile server: the wizard preview, tiles drawn under the plan with the Vault token, the tiles around the location, the credit, Move map and its undo, rotation, the 3D ground painted with every needed tile and repainted when north turns, switching off, and the not-set-up message).
 
 ## Plant photos (built 2026-10-10, ALA part waiting for the key)
 
@@ -161,7 +163,7 @@ Run these on staging before relying on the features. The unit and Chrome tests u
 13. **Curator tools:** as an admin, hide a photo and set a flower default via the API; the card shows it first; a non-admin gets 403.
 14. **Photo credits:** How This Works, then **See all photo credits**; the list matches what the cards showed, and the CSV downloads.
 
-15. **Satellite map, live:** set `MAPTILER_API_KEY` on Railway (server only). Create a garden for a real address: the wizard shows a map of the place with the MapTiler credit. In Garden settings switch on **Show a satellite map**, then **Move map** until your house lines up with what you drew; move the Time slider and watch the shadows fall across the photo. Confirm the key does not appear in any response, the browser's network tab or the logs, and that the tile requests go to `/api/map-tiles/...` on Vault, not to maptiler.com. Read the MapTiler plan terms (see the Satellite map section).
+15. **Satellite map, live:** set `MAPTILER_API_KEY` on Railway (server only). Create a garden for a real address: the wizard shows a map of the place with the MapTiler credit. In Garden settings switch on **Show a satellite map**, then **Move map** until your house lines up with what you drew; move the Time slider and watch the shadows fall across the photo, then switch to 3D and check the photo lies on the ground with the house and fence shadows on it. Confirm the key does not appear in any response, the browser's network tab or the logs, and that the tile requests go to `/api/map-tiles/...` on Vault, not to maptiler.com. Read the MapTiler plan terms (see the Satellite map section).
 
 ## Layout
 
