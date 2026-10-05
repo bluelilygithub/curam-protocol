@@ -14,6 +14,7 @@
     "e2e-layout": "node scripts/e2e-layout.mjs",
     "e2e-hints": "node scripts/e2e-hints.mjs",
     "e2e-schedule": "node scripts/e2e-schedule.mjs",
+    "e2e-models": "node scripts/e2e-models.mjs",
     "e2e-projects": "node scripts/e2e-projects.mjs",
     "walkthrough": "node scripts/walkthrough.mjs",
     "test": "vitest run",

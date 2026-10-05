@@ -10,6 +10,7 @@ import { tipFor } from '../help/fieldTips';
 import { Icons } from './icons';
 import { SceneSettings } from './SceneSettings';
 import { LIGHT_EMITTERS } from '../data/furnitureLibrary';
+import { isRealModel } from '../data/realModels';
 import { GLOBAL_POWER_MAX, PIECE_POWER_MAX, percent } from '../render3d/lightPower';
 import { holdsPicture, imageOf } from '../state/pictures';
 import {
@@ -195,6 +196,9 @@ export function Inspector() {
           {group && <p className="hint">Position is changed by moving the group.</p>}
         </Section>
         <Section title="Appearance">
+          {!group && isRealModel(room.furniture.find((f) => f.id === ids[0])?.definitionId ?? '') ? (
+            <p className="hint">A real 3D model keeps its own materials, so there is no finish to choose. <button className="link" onClick={() => app.ui.getState().setCreditsOpen(true)}>Credits</button></p>
+          ) : (
           <label className="field" title={tipFor('Finish')}>
             <span className="field-label">Finish</span>
             <span className="field-control">
@@ -208,6 +212,7 @@ export function Inspector() {
               </select>
             </span>
           </label>
+          )}
         </Section>
         {!group && LIGHT_EMITTERS[room.furniture.find((f) => f.id === ids[0])?.definitionId ?? ''] && <LightSection id={ids[0]} />}
         {!group && holdsPicture(room.furniture.find((f) => f.id === ids[0])?.definitionId ?? '') && <PictureSection id={ids[0]} />}

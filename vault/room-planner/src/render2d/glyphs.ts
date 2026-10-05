@@ -3,6 +3,7 @@
  * Pure data in the object's LOCAL frame (metres, origin at the centre, +X right, +Y front, back = −Y — C20), so they are
  * testable without a canvas and rendered identically by the React scene and the imperative overlay.
  */
+import { REAL_MODELS } from '../data/realModels';
 export type Weight = 'outline' | 'detail' | 'faint';
 
 export type GlyphShape =
@@ -27,7 +28,8 @@ export function frontMarker(w: number, l: number): Glyph['frontMarker'] {
 }
 
 /** Which drawing a definition gets. Unknown ids fall back to a crossed box. */
-export function glyphFor(definitionId: string, w: number, l: number): Glyph {
+export function glyphFor(rawId: string, w: number, l: number): Glyph {
+  const definitionId = REAL_MODELS[rawId]?.blockAs ?? rawId; // a real 3D model is drawn in the plan as the piece it stands for
   const hw = w / 2;
   const hl = l / 2;
   const outline = rect(-hw, -hl, w, l, 'outline');

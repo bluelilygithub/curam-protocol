@@ -429,3 +429,11 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--co
 .schedule-table .group-row td { padding-top: 12px; font: 600 11px var(--font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--color-muted); border-bottom: 0; }
 .schedule-table tfoot td { font-weight: 600; border-top: 2px solid var(--color-border); border-bottom: 0; }
 .modal-foot .spacer { flex: 1; }
+
+/* Credits panel and the small text links used for it */
+.credits-panel { width: min(560px, 100%); }
+.credits-h { margin: 14px 0 4px; font: 600 11px var(--font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--color-muted); }
+.credits-list { margin: 4px 0 0; padding-left: 18px; font-size: 13px; }
+.credits-list li { margin: 2px 0; }
+button.link { background: none; border: 0; padding: 0; color: inherit; text-decoration: underline; cursor: pointer; font: inherit; }
+button.link:hover { opacity: .7; }

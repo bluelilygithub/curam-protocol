@@ -48,6 +48,8 @@ export interface UiState {
   photoOpen: boolean;
   /** The How This Works modal. */
   infoOpen: boolean;
+  /** The credits panel (authors and licences of the 3D models). */
+  creditsOpen: boolean;
   /** The furniture schedule and plan PDF panel. */
   scheduleOpen: boolean;
   /** Where the fly-through is: stop index (0-based) of `total`. */
@@ -97,6 +99,7 @@ export interface UiActions {
   setSnapMode(mode: SnapMode): void;
   setGrid(metres: number): void;
   setInfoOpen(on: boolean): void;
+  setCreditsOpen(on: boolean): void;
   setScheduleOpen(on: boolean): void;
   setTourProgress(p: { stop: number; total: number } | null): void;
   setTool(t: Tool): void;
@@ -131,6 +134,7 @@ export function createUiStore(): UiStore {
     projectsOpen: false,
     photoOpen: false,
     infoOpen: false,
+    creditsOpen: false,
     scheduleOpen: false,
     tourProgress: null,
     tool: 'select',
@@ -169,6 +173,7 @@ export function createUiStore(): UiStore {
     setSnapMode: (snapMode) => set({ snapMode, snapEnabled: snapsFor(snapMode) }),
     setGrid: (grid) => set({ grid: GRID_SIZES.includes(grid as (typeof GRID_SIZES)[number]) ? grid : 0.1 }),
     setInfoOpen: (infoOpen) => set({ infoOpen }),
+    setCreditsOpen: (creditsOpen) => set({ creditsOpen }),
     setScheduleOpen: (scheduleOpen) => set({ scheduleOpen }),
     setPhotoOpen: (photoOpen) => set(photoOpen ? { photoOpen, tourPlaying: false, walking: false } : { photoOpen }),
     setTourProgress(p) {

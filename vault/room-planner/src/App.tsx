@@ -7,6 +7,7 @@ import { Inspector } from './ui/Inspector';
 import { LibraryBanner } from './ui/LibraryBanner';
 import { ProjectsPanel } from './ui/ProjectsPanel';
 import { SchedulePanel } from './ui/SchedulePanel';
+import { CreditsPanel } from './ui/CreditsPanel';
 import { RecentreChip } from './ui/RecentreChip';
 import { RoomBar } from './ui/RoomBar';
 import { LibraryPanel } from './ui/LibraryPanel';
@@ -62,6 +63,7 @@ function Shell() {
       <StatusBar />
       <ProjectsPanel />
       <SchedulePanel />
+      <CreditsPanel />
       <InfoModal />
       <TooltipHost />
       {photoOpen && <Suspense fallback={null}><PhotoPanel /></Suspense>}

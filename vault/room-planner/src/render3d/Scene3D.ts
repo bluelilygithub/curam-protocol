@@ -13,6 +13,8 @@ import { roomBounds } from './cameraPresets';
 import { fixtureModel } from './fixtureParts';
 import { furnitureParts, type Part } from './furnitureParts';
 import { partGeometry } from './partGeometry';
+import { isRealModel } from '../data/realModels';
+import { modelCache } from './modelCache';
 import { LIGHT_EMITTERS } from '../data/furnitureLibrary';
 import { effectiveIntensity, lightPowerOnly } from './lightPower';
 import { paletteOf, type Palette } from '../data/palettes';
@@ -113,6 +115,7 @@ export class Scene3D {
   private unsub: Array<() => void> = [];
   private lastProject: Project | null = null;
   private disposed = false;
+  private readonly onModelLoaded: () => void;
 
   /** Rebuilds of the committed scene so far (tests: pointer moves must not cause any). */
   rebuildCount = 0;
@@ -124,6 +127,9 @@ export class Scene3D {
   constructor(private readonly p: Scene3DPorts) {
     this.root.name = 'room-planner-3d';
     this.materials.onLoad = () => this.p.invalidate();
+    // a real model that has just loaded replaces its block stand-in
+    this.onModelLoaded = () => { if (!this.disposed && this.mode === 'realistic') { this.rebuild(); this.p.invalidate(); } };
+    modelCache.listeners.add(this.onModelLoaded);
     this.sun.castShadow = true;
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.02;
@@ -237,7 +243,10 @@ export class Scene3D {
 
   private furnitureGroup(inst: FurnitureInstance, project: Project, tint: Tint, opacity = 1): THREE.Group {
     const g = new THREE.Group();
-    for (const part of furnitureParts(inst.definitionId, inst.width, inst.length, inst.height)) {
+    // a real model, once it has loaded, stands in for the blocks (Realistic look only; previews while dragging stay as blocks)
+    const model = this.mode === 'realistic' && opacity >= 1 && isRealModel(inst.definitionId) ? modelCache.instance(inst.definitionId, inst.width, inst.length, inst.height) : null;
+    if (model) g.add(model);
+    else    for (const part of furnitureParts(inst.definitionId, inst.width, inst.length, inst.height)) {
       const mode = this.mode;
       const look = mode === 'clay'
         ? { ...clayLook(part.role), tint: null as Tint }
@@ -291,7 +300,7 @@ export class Scene3D {
   }
 
   /** Resolves when every photo the scene shows has finished loading (a path-traced picture must not start with a blank frame). */
-  ready(): Promise<void> { return this.materials.ready(); }
+  ready(): Promise<void> { return Promise.all([this.materials.ready(), modelCache.ready()]).then(() => undefined); }
 
   rebuild(): void {
     this.rebuildCount++;
@@ -619,6 +628,7 @@ export class Scene3D {
 
   dispose(): void {
     this.disposed = true;
+    modelCache.listeners.delete(this.onModelLoaded);
     for (const u of this.unsub) u();
     this.unsub = [];
     this.clearCommitted();

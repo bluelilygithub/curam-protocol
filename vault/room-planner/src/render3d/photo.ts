@@ -231,7 +231,7 @@ export class PhotoJob {
 
 /** What to expect, shown under the panel title. Honest about what the picture is and how long it takes. */
 export const PHOTO_EXPECTATIONS =
-  'A computer-generated picture of your design with realistic light and shadow. It is built from simple models, so it is a clear visualisation, not a studio photograph. ' +
+  'A computer-generated picture of your design with realistic light and shadow. Most furniture is built from simple shapes (only pieces marked 3D model are real models), so it is a clear visualisation, not a studio photograph. ' +
   'It starts grainy and sharpens; Draft is quick, Good takes several minutes and Best much longer, and larger sizes take longer still. The first few seconds are spent preparing, so it may look still at first.';
 
 /** Short tips for a better picture. */

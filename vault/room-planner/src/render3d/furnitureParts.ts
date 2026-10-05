@@ -2,6 +2,7 @@
 // local frame (x = width axis, y = up from the instance elevation, z = length axis, front = +z, C20). Pure data, no three.js.
 // Every recipe fits inside the instance's width × height × length and the parts together span all three extents exactly, so the model
 // never pokes out of the footprint the engine validates. Unknown definitions fall back to one plain box.
+import { REAL_MODELS } from '../data/realModels';
 import type { ArtKind } from './artData';
 import type { Vec3 } from './transforms';
 
@@ -495,12 +496,12 @@ const RECIPES: Record<string, Recipe> = {
 
 /** Parts of a furniture model at the given size. Unknown definitions get a single box. */
 export function furnitureParts(definitionId: string, width: number, length: number, height: number): Part[] {
-  const recipe = RECIPES[definitionId];
+  const recipe = RECIPES[REAL_MODELS[definitionId]?.blockAs ?? definitionId];
   if (!recipe) return [box('frame', [-width / 2, width / 2], [0, height], [-length / 2, length / 2])];
   return recipe(width, length, height);
 }
 
-export const hasFurnitureRecipe = (definitionId: string): boolean => definitionId in RECIPES;
+export const hasFurnitureRecipe = (definitionId: string): boolean => (REAL_MODELS[definitionId]?.blockAs ?? definitionId) in RECIPES;
 
 /** Axis-aligned bounds of a part list (local frame). */
 export function partsBounds(parts: Part[]): { min: Vec3; max: Vec3 } {

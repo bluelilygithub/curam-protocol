@@ -72,6 +72,17 @@ export const FURNITURE_LIBRARY: FurnitureDefinition[] = [
   { id: 'photo-frame', name: 'Your photo frame', category: 'wall art', defaultWidth: 0.4, defaultLength: 0.03, defaultHeight: 0.5, defaultElevation: 1.4 },
   { id: 'mirror-wall', name: 'Wall mirror', category: 'wall art', defaultWidth: 0.8, defaultLength: 0.04, defaultHeight: 1.2, defaultElevation: 0.8 },
   { id: 'mirror-round', name: 'Round mirror', category: 'wall art', defaultWidth: 0.7, defaultLength: 0.04, defaultHeight: 0.7, defaultElevation: 1.1 },
+
+  // ---- real 3D models (CC0, Poly Haven; see data/realModels.ts): drawn as the real thing in the Realistic look and Render photo, as blocks elsewhere
+  { id: 'real-sofa', name: 'Sofa (3D model)', category: 'seating', defaultWidth: 1.807, defaultLength: 0.818, defaultHeight: 0.709,
+    clearancePolicies: [{ side: 'front', offset: 0.45, severity: 'soft' }] },
+  { id: 'real-armchair', name: 'Modern armchair (3D model)', category: 'seating', defaultWidth: 0.82, defaultLength: 0.987, defaultHeight: 1.023,
+    clearancePolicies: [{ side: 'front', offset: 0.45, severity: 'soft' }] },
+  { id: 'real-lounge-chair', name: 'Lounge chair (3D model)', category: 'seating', defaultWidth: 1.009, defaultLength: 1.19, defaultHeight: 1.169,
+    clearancePolicies: [{ side: 'front', offset: 0.45, severity: 'soft' }] },
+  { id: 'real-dining-chair', name: 'Dining chair (3D model)', category: 'seating', defaultWidth: 0.434, defaultLength: 0.576, defaultHeight: 0.973 },
+  { id: 'real-coffee-table', name: 'Coffee table (3D model)', category: 'tables', defaultWidth: 1.202, defaultLength: 0.6, defaultHeight: 0.39 },
+  { id: 'real-display-shelves', name: 'Display shelves (3D model)', category: 'storage', defaultWidth: 1.078, defaultLength: 0.372, defaultHeight: 1.556 },
 ];
 
 /**
@@ -136,6 +147,12 @@ export const SEED_MATERIALS: Material[] = [
  */
 export const DEFAULT_FINISHES: Record<string, Partial<Record<'frame' | 'upholstery' | 'top' | 'leg' | 'fabric' | 'accent' | 'handle' | 'foliage' | 'pot', string>>> = {
   'sofa-3': { upholstery: 'grey-fabric', frame: 'grey-fabric', leg: 'dark-wood' },
+  'real-sofa': { upholstery: 'grey-fabric', frame: 'grey-fabric', leg: 'dark-wood' },
+  'real-armchair': { upholstery: 'sage-fabric', frame: 'sage-fabric', leg: 'dark-wood' },
+  'real-lounge-chair': { upholstery: 'sage-fabric', frame: 'sage-fabric', leg: 'dark-wood' },
+  'real-dining-chair': { upholstery: 'linen', frame: 'pale-oak', leg: 'pale-oak' },
+  'real-coffee-table': { top: 'pale-oak', frame: 'pale-oak', leg: 'dark-wood' },
+  'real-display-shelves': { frame: 'pale-oak', accent: 'pale-oak' },
   armchair: { upholstery: 'sage-fabric', frame: 'sage-fabric', leg: 'dark-wood' },
   'coffee-table': { top: 'pale-oak', frame: 'pale-oak', leg: 'dark-wood' },
   'side-table': { top: 'walnut', leg: 'dark-wood' },

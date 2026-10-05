@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { FIXTURE_LIBRARY, LIGHT_EMITTERS } from '../data/furnitureLibrary';
+import { isRealModel } from '../data/realModels';
 import { glyphFor, type GlyphShape } from '../render2d/glyphs';
 import { useApp, useProject, useUi } from './AppContext';
 import { Icons } from './icons';
@@ -86,7 +87,7 @@ export function LibraryPanel() {
     </details>
   );
   const card = (d: (typeof defs)[number], keyPrefix = ''): React.ReactNode => (
-    <button key={`${keyPrefix}${d.id}`} className={`card ${active('furniture', d.id) ? 'active' : ''}`} disabled={!hasRoom} onClick={() => start('furniture', d.id)} title={`Place ${d.name}: ${fmt(d.defaultWidth)} × ${fmt(d.defaultLength)} × ${fmt(d.defaultHeight)} m${LIGHT_EMITTERS[d.id] ? '. Gives light: shows in the Realistic 3D look and in Render photo.' : ''}`}>
+    <button key={`${keyPrefix}${d.id}`} className={`card ${active('furniture', d.id) ? 'active' : ''}`} disabled={!hasRoom} onClick={() => start('furniture', d.id)} title={`Place ${d.name}: ${fmt(d.defaultWidth)} × ${fmt(d.defaultLength)} × ${fmt(d.defaultHeight)} m${LIGHT_EMITTERS[d.id] ? '. Gives light: shows in the Realistic 3D look and in Render photo.' : ''}${isRealModel(d.id) ? '. A real 3D model: it shows as the real thing in the Realistic 3D look and in Render photo, and as a plain shape elsewhere.' : ''}`}>
       <GlyphThumb id={d.id} w={d.defaultWidth} l={d.defaultLength} />
       <span className="name">{d.name}</span>
       <span className="dims">{fmt(d.defaultWidth)}×{fmt(d.defaultLength)}×{fmt(d.defaultHeight)}</span>
@@ -121,6 +122,8 @@ export function LibraryPanel() {
         {groups.map((g) => group(g.id, label(g.id), g.items.length, g.items.map((d) => card(d))))}
 
         {q && fixtures.length === 0 && groups.length === 0 && <p className="hint">Nothing matches “{query}”.</p>}
+
+        <p className="hint credits-link">Pieces marked “3D model” are real models, shown in the Realistic look and Render photo. <button className="link" onClick={() => app.ui.getState().setCreditsOpen(true)}>Credits</button></p>
 
         {placing && (
           <p className="hint placing">
