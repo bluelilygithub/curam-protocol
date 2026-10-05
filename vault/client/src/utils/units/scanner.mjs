@@ -74,9 +74,11 @@ const NUM_STICKY = new RegExp(String.raw`[-−]?(?:${NUMBER_SRC})`, 'y');
 const NUM_STICKY_OCR = new RegExp(String.raw`[-−]?(?:${NUMBER_SRC.split('|').slice(0, 4).join('|')}|${OCR_NUM})`, 'y');
 const DIM_SEP = /\s*(?:×|x|X|\*)\s*(?=[-−]?[\d½¼¾])|\s+by\s+(?=[-−]?\d)/y;
 const RANGE_SEP = /\s*[–—-]\s*(?=[-−]?[\d½¼¾])|\s+to\s+(?=[-−]?[\d½¼¾])/y;
+const AXIS = /[DWHLTdwhlt](?![A-Za-z0-9])/y;
 const OCR_FIX = { O: '0', o: '0', I: '1', l: '1', S: '5' };
+const OK_AFTER_IN = /^(?:x|by|wide|long|high|tall|thick|deep|diameter|dia|from|and|or|to|per|each|square|cubed)(?![A-Za-z])/i;
 const STOPWORDS_AFTER_IN = /^(?:the|a|an|and|of|this|that|my|your|our|their|his|her|its|to|stock|total|all|case|case|order|addition|fact|time|general|front|use|place|which|any|each|every|one|two|three|four|five|six|seven|eight|nine|ten)\b/i;
-const TIME_HINT = /(?:for|every|about|within|after|until|wait|cook|cooking|bake|baking|boil|simmer|rest|stand|chill|soak|takes?|minutes?|mins?|hours?|hrs?|seconds?)/i;
+const TIME_HINT = /\b(?:for|every|about|within|after|until|wait|cook|cooking|bake|baking|boil|simmer|rest|stand|chill|soak|takes?|minutes?|mins?|hours?|hrs?|seconds?)\b/i;
 const LIQUID_WORDS = /\b(?:milk|water|juice|cream|liquid|fluid|beer|wine|oil|stock|broth|drink|beverage|soda|cola|vodka|syrup|vinegar|sauce|coffee|tea)\b/i;
 
 function readNumber(line, pos, ocr) {
@@ -178,7 +180,7 @@ function pushQuoteFlags(flags, matchText, unitId, pairedCompound, nextText) {
     if (matchText === '"' || matchText === "'" || matchText === '”' || matchText === '’') {
       if (!pairedCompound) flags.push({ code: 'ambiguous-unit', message: `A straight ${matchText === '"' || matchText === '”' ? 'double' : 'single'} quote mark may be a quotation mark rather than ${unitId === 'length.inch' ? 'inches' : 'feet'}.` });
     }
-    if (matchText === 'in' && STOPWORDS_AFTER_IN.test(nextText || '')) flags.push({ code: 'ambiguous-unit', message: '"in" here may be the word "in", not inches.' });
+    if (matchText === 'in' && /^[A-Za-z]/.test(nextText || '') && !OK_AFTER_IN.test(nextText)) flags.push({ code: 'word-in', message: '"in" here is probably the word "in" (as in "1,240 in Clothing"), not inches.' });
   }
 }
 
@@ -230,9 +232,16 @@ function scanLine(line, lineIdx, pageIdx, ctx, ocr) {
       const n = readNumber(text, pos, ocr);
       if (!n) break;
       const el = { num: n, unit: null };
-      let p = skipSpaces(text, n.end);
+      // axis letters in "10.4D x 6.8W x 1.9H cm": D/W/H/L/T label a dimension, they are not units (W is not watts here)
+      let after = n.end;
+      AXIS.lastIndex = n.end;
+      if (AXIS.test(text)) {
+        DIM_SEP.lastIndex = n.end + 1;
+        if (elems.length > 0 || DIM_SEP.test(text)) after = n.end + 1;
+      }
+      let p = skipSpaces(text, after);
       const um = matchUnit(text, p);
-      if (um) { el.unit = { match: um, start: p, end: p + um.len }; p += um.len; } else p = n.end;
+      if (um) { el.unit = { match: um, start: p, end: p + um.len }; p += um.len; } else p = after;
       el.end = p;
       elems.push(el);
       DIM_SEP.lastIndex = p;
@@ -377,6 +386,7 @@ function makeHit({ line, lineIdx, pageIdx, start, end, kind, values, unitIds, fl
     else if (oc < 80) { confidence = lowest(confidence, 'medium'); flags.push({ code: 'low-ocr', message: `Moderate OCR confidence (${Math.round(oc)}%).` }); }
   }
   if (flags.some((f) => f.code === 'ocr-digit-fix')) confidence = lowest(confidence, 'medium');
+  if (flags.some((f) => f.code === 'word-in')) confidence = 'low';
   if (flags.some((f) => f.code === 'degree-ambiguous') && !unitIds.every((x) => x === 'angle.degree')) confidence = 'low';
   const first = unitIds.find(Boolean);
   const unit = first ? getUnit(first) : null;
@@ -473,7 +483,7 @@ export function scanLines(lines, opts = {}, pageIdx = 0) {
 export function scanDocument(pages, opts = {}) {
   const all = pages.map((p) => p.lines.map((l) => l.text).join('\n')).join('\n');
   const decimalComma = analyzeSeparators(all);
-  const lengthEvidence = /\d\s*(?:mm|cm|km|metres?|meters?|ft|feet|inch(?:es)?|yd|yards?)/i.test(all);
+  const lengthEvidence = /\d\s*(?:mm|cm|km|metres?|meters?|ft|feet|inch(?:es)?|yd|yards?)\b/i.test(all);
   const hits = [];
   pages.forEach((p, i) => hits.push(...scanLines(p.lines, { ...opts, ocr: !!p.ocr, decimalComma, lengthEvidence }, i)));
   return hits;

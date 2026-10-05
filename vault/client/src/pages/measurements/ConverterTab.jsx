@@ -216,6 +216,7 @@ export default function ConverterTab({ prefs, update, history, addHistory, clear
                       onChange={(v) => setPartTexts((p) => p.map((x, j) => (j === i ? v : x)))}
                       parse={(t) => { const n = parseSpokenNumber(t); return n === null ? null : String(n); }}
                       placeholder={partLabel(pid)}
+                      mic={false}
                       label={`${getUnit(pid).plural}`}
                     />
                   </div>
@@ -234,6 +235,7 @@ export default function ConverterTab({ prefs, update, history, addHistory, clear
                   return false;
                 }}
                 placeholder="Value"
+                mic={false}
                 label="Value to convert"
               />
             )}
@@ -307,6 +309,7 @@ export default function ConverterTab({ prefs, update, history, addHistory, clear
                     onChange={(v) => { const n = Math.max(0, Math.min(12, parseInt(v, 10))); if (!Number.isNaN(n)) update({ precision: { ...prefs.precision, n } }); }}
                     parse={(t) => { const n = parseSpokenNumber(t); return n === null ? null : String(Math.round(n)); }}
                     placeholder="n"
+                    mic={false}
                     label="Number of digits"
                   />
                 </div>

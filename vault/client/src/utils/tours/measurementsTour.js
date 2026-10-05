@@ -54,7 +54,7 @@ export function startMeasurementsTour(goTab) {
   tour.addStep({
     id: 'measure-welcome',
     title: 'Measurements — Quick Tour',
-    text: 'Convert any measurement, see the exact formula behind it, and scan a PDF or photo for measurements to convert. Every input has a microphone, so you can speak instead of type.',
+    text: 'Convert any measurement, see the exact formula behind it, and scan a PDF or photo for measurements to convert. Speak a whole conversion with the microphone.',
     when: { show() { injectStepCounter(1); } },
     buttons: [btnSecondary('Skip Tour', () => tour.cancel()), { text: 'Start Tour →', action: () => tour.next() }],
   });
@@ -82,7 +82,7 @@ export function startMeasurementsTour(goTab) {
   tour.addStep({
     id: 'measure-value',
     title: 'Value and units',
-    text: 'Type or speak the value, then choose the units — you can search them or say their name. Feet + inches and stones + pounds show two boxes. Cups and spoons follow your cup standard (Australian by default).',
+    text: 'Type the value, then choose the units — you can search them. Feet + inches and stones + pounds show two boxes. Cups and spoons follow your cup standard (Australian by default).',
     attachTo: { element: '[data-tour="measure-value"]', on: 'bottom' },
     beforeShowPromise: showTab('convert', 'measure-value', '[data-tour="measure-value"]'),
     when: { show() { injectStepCounter(4); } },

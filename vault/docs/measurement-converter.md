@@ -20,7 +20,7 @@ Route `/measurements` (nav: Research & Utilities → **Measurements**, feature f
 
 ## Behaviour worth knowing
 
-- **Voice on every text/number input.** Add `VoiceInput` (or a `MicButton`) with any new input. Unsupported browsers: the mic is shown disabled with an explanation; typing is unaffected.
+- **Voice** is on the Say-it box, search boxes (formulas), pasted text and scan corrections. Value fields and unit/ingredient dropdowns deliberately have no mic (`<VoiceInput mic={false}>`); spoken values go through Say it. Unsupported browsers: the mic is shown disabled with an explanation; typing is unaffected.
 - **Cup standards:** Australian default (250 ml cup, **20 ml** tablespoon, 5 ml teaspoon). US cup 236.588 ml; UK/metric 15 ml tablespoon. Cups/spoons ↔ grams use the *cooking* group and need an ingredient.
 - **Ingredient densities are approximate** (`approximate: true`, generic source text). They are typical baking-chart values, **not individually verified citations** — review and replace `source` with specific references before treating them as authoritative.
 - **Scanner never converts silently.** Every find starts `pending`; the user accepts, edits (typing or speaking) or ignores it. Flags: straight quotes / "in" (inches vs quote/word), `m` (metres vs minutes), `t`/`T` (teaspoon/tablespoon/tonne), `oz` (weight vs fluid), regional cups/gallons/pints/mpg, bare `°` (angle vs temperature — left unresolved), decimal comma vs thousands separator, OCR digit fixes (`O→0`, `l/I→1`, `S→5` only next to a unit), low OCR confidence (<80%, with a cropped image beside the edit field), unit taken from a table column header.

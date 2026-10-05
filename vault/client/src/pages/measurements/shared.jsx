@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
-import { VoiceInput, MicButton } from '../../components/voiceInput/VoiceInput';
+import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 
 export const FOCUS_RING = 'outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[var(--color-primary)]';
 
@@ -122,21 +122,13 @@ export function Combobox({ items, value, onChange, speak, placeholder = 'Searchâ
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-label={label}
-          className={`w-full flex items-center justify-between gap-2 pl-3 ${speak ? 'pr-16' : 'pr-3'} py-2.5 rounded-xl border text-sm text-left transition-all duration-200 hover:opacity-80 ${FOCUS_RING}`}
+          className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border text-sm text-left transition-all duration-200 hover:opacity-80 ${FOCUS_RING}`}
           style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
         >
           <span className="truncate">{selectedLabel || current?.label || 'Chooseâ€¦'}</span>
           <span style={{ color: 'var(--color-muted)' }} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">{getIcon('chevron-down', { size: 14 })}</span>
         </button>
       </Tooltip>
-      {speak && (
-        <div className="absolute right-8 top-1/2 -translate-y-1/2">
-          <MicButton
-            label={`Say the ${label || 'item'} name`}
-            onFinal={(text) => { const id = speak(text); if (id) onChange(id); }}
-          />
-        </div>
-      )}
       {open && (
         <div className="absolute z-20 mt-1 left-0 w-full min-w-[17rem] rounded-xl border shadow-lg p-2" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <VoiceInput
@@ -145,11 +137,7 @@ export function Combobox({ items, value, onChange, speak, placeholder = 'Searchâ
             placeholder={placeholder}
             label={`Search ${label || 'list'}`}
             autoFocus
-            onSpoken={speak ? (text) => {
-              const id = speak(text);
-              if (id) { choose(id); return true; }
-              return false;
-            } : undefined}
+            mic={false}
             onKeyDown={(e) => {
               if (e.key === 'ArrowDown') { e.preventDefault(); setActive((a) => Math.min(a + 1, filtered.length - 1)); }
               else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)); }

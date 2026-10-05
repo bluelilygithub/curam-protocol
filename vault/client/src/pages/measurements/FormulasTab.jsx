@@ -39,7 +39,7 @@ function EntryTest({ unit, prefs }) {
     <div className="space-y-1.5">
       <div className="flex flex-wrap items-center gap-2">
         <div className="w-40">
-          <VoiceInput type="number" value={text} onChange={setText} parse={(t) => { const n = parseSpokenNumber(t); return n === null ? null : String(n); }} placeholder={`Try a value (${unitShort(unit)})`} label={`Test value for ${unit.name}`} />
+          <VoiceInput type="number" value={text} onChange={setText} parse={(t) => { const n = parseSpokenNumber(t); return n === null ? null : String(n); }} placeholder={`Try a value (${unitShort(unit)})`} mic={false} label={`Test value for ${unit.name}`} />
         </div>
         <Tooltip text="Unit to convert the test value into">
           <select aria-label="Test target unit" value={target} onChange={(e) => setTarget(e.target.value)} className={`px-2.5 py-2.5 rounded-xl border text-sm ${FOCUS_RING}`} style={selectStyle}>

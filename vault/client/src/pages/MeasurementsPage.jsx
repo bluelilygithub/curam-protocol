@@ -29,7 +29,7 @@ function HowItWorks({ onClose }) {
       <div className="space-y-1"><H>Converter</H><P>Pick a kind of measurement, type or say a value, choose the two units. The result updates as you go, shows the formula used, and lists the value in every unit of that kind. Cups and spoons follow the cup standard you pick (Australian by default: 250 ml cup, 20 ml tablespoon). Converting cups or spoons to grams needs an ingredient.</P></div>
       <div className="space-y-1"><H>Formulas</H><P>Every conversion comes from one list: the exact factor, the source, a worked example, and a warning where look-alike units differ (US vs imperial gallons, KB vs KiB). Each result links back to its entry. Ingredient densities are typical baking-chart values and are approximate.</P></div>
       <div className="space-y-1"><H>Document scanner</H><P>Drop a PDF, photo or screenshot, or paste text. Vault reads the text (running text recognition on scanned pages), finds measurements — fractions, ranges, sizes like 1200 × 600 × 18 mm, feet and inches, table columns with the unit in the heading — and proposes conversions. Unclear ones are flagged for you (a ” could be inches or a quote mark; m could be metres or minutes; oz weight or fluid). Nothing is converted until you accept it.</P></div>
-      <div className="space-y-1"><H>Voice</H><P>Every input has a microphone. Say a number (“one and a half”), a unit (“kilometres per hour”) or a whole conversion (“five feet eleven in centimetres”). You see what was understood before it is used. Voice needs a browser with speech recognition (Chrome, Edge, Safari); typing always works.</P></div>
+      <div className="space-y-1"><H>Voice</H><P>The microphone is on the “Say it” box, the search boxes, pasted text and scan corrections. Say a whole conversion (“five feet eleven in centimetres”) and you see what was understood before it is used. Voice needs a browser with speech recognition (Chrome, Edge, Safari); typing always works.</P></div>
       <div className="space-y-1"><H>Privacy</H><P>Documents are read on this device. Nothing you scan is uploaded. Text recognition downloads its language data once, then is cached by the browser. Only your preferences and recent conversions are saved to your Vault account — never document contents.</P></div>
       <div className="space-y-1"><H>Not included yet</H><P>Currency, time zones, clothing sizes, and measuring drawn lines on plans (that needs a scale you set, like 1:100).</P></div>
     </ToolInfoModal>
@@ -119,13 +119,13 @@ export default function MeasurementsPage() {
           </nav>
         </header>
 
-        <main className="flex-1 w-full max-w-4xl mx-auto px-4 sm:px-6 py-5">
+        <div className="flex-1 w-full max-w-4xl mx-auto px-4 sm:px-6 py-5">
           {!loaded && <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>Loading your saved choices…</p>}
           {/* All three stay mounted (just hidden) so a typed value or a scanned document survives switching tabs */}
           <div style={{ display: tab === 'convert' ? 'block' : 'none' }}><ConverterTab prefs={prefs} update={update} history={history} addHistory={addHistory} clearHistory={clearHistory} onOpenFormula={openFormula} /></div>
           <div style={{ display: tab === 'formulas' ? 'block' : 'none' }}><FormulasTab prefs={prefs} focusUnit={focusUnit} onUseInConverter={useInConverter} /></div>
           <div style={{ display: tab === 'scan' ? 'block' : 'none' }}><ScannerTab prefs={prefs} update={update} /></div>
-        </main>
+        </div>
       </div>
       {info.show && <HowItWorks onClose={info.close} />}
     </VoiceInputProvider>

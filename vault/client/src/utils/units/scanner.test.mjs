@@ -82,13 +82,21 @@ test('straight quote alone is flagged as maybe a quote mark', () => {
   const h = one('The board is 8" wide'); assert.strictEqual(h.unitIds[0], 'length.inch'); assert.ok(flagCodes(h).includes('ambiguous-unit'));
 });
 test('"in" as a word is flagged', () => {
-  const h = one('Only 5 in the box'); assert.ok(flagCodes(h).includes('ambiguous-unit'));
+  const h = one('Only 5 in the box'); assert.ok(flagCodes(h).includes('word-in')); assert.strictEqual(h.confidence, 'low');
+  assert.ok(flagCodes(one('Rank 1,240 in Clothing, Shoes')).includes('word-in'));
+  assert.strictEqual(flagCodes(one('Board 5 in wide')).length, 0);
   assert.strictEqual(flagCodes(one('Width 5 in.')).length, 0);
 });
 test('regional gallon / cup are flagged with the assumption stated', () => {
   const g = one('Tank 10 gallons', { region: 'us' }); assert.strictEqual(g.unitIds[0], 'volume.gallon_us'); assert.ok(g.flags[0].message.includes('US'));
   const gi = one('Tank 10 gallons', { region: 'imperial' }); assert.strictEqual(gi.unitIds[0], 'volume.gallon_imp');
   const c = one('1 cup milk', { cupStandard: 'us' }); assert.ok(c.flags[0].message.includes('US'));
+});
+test('axis letters in dimensions: 10.4D x 6.8W x 1.9H centimetres', () => {
+  const h = one('Item Dimensions D x W x H 10.4D x 6.8W x 1.9H centimetres');
+  assert.strictEqual(h.kind, 'dimension'); assert.deepStrictEqual(h.values, [10.4, 6.8, 1.9]); assert.ok(h.unitIds.every((u) => u === 'length.centimetre'));
+  assert.deepStrictEqual(one('Size 5W x 3H x 2D m', { context: 'building' }).values, [5, 3, 2]);
+  assert.strictEqual(one('Motor 5 W').unitIds[0], 'power.watt');
 });
 test('KB / MB flagged (decimal vs binary)', () => assert.ok(flagCodes(one('File is 500 KB')).includes('ambiguous-unit')));
 test('°C is not flagged as ambiguous', () => assert.strictEqual(flagCodes(one('Heat to 180 °C')).length, 0));
