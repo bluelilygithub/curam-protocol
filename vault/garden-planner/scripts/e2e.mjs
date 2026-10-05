@@ -1,6 +1,6 @@
 // End-to-end checks of Garden Planner in real Chrome (SwiftShader WebGL). Start `npm run dev` first, then
 // `node scripts/e2e.mjs [screenshotDir]`. Exits non-zero if any check fails.
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
@@ -876,6 +876,61 @@ check('no page errors or console errors', problems.length === 0, problems.slice(
   check('closing the scan hides it', (await pg.getByRole('dialog', { name: 'Scan a plant tag' }).count()) === 0);
   check('no page errors in the tag scan', errs.length === 0, errs.join(' | '));
   await ctxT.close();
+}
+// ---- plant schedule (table and CSV)
+{
+  const ctxS = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
+  await ctxS.addInitScript(() => { try { localStorage.setItem('garden-planner:info-seen:v1', '1'); } catch { /* ignore */ } });
+  const pg = await ctxS.newPage();
+  const errs = [];
+  pg.on('pageerror', (e) => errs.push(e.message));
+  await pg.goto(URL);
+  await pg.waitForSelector('.wizard');
+  await pg.evaluate(() => window.gardenPlanner.newProject({ meta: { name: 'Schedule "test" garden', location: { label: 'Brisbane QLD', lat: -27.47, lng: 153.03, state: 'QLD' }, climateZone: 'subtropical', frost: 'none', pets: true, northDeg: 0 }, plot: { kind: 'rect', width: 20, depth: 20 } }));
+  await pg.waitForSelector('.stage canvas');
+  await pg.getByTestId('open-schedule').click();
+  await pg.getByTestId('schedule-empty').waitFor();
+  check('an empty garden says there are no plants yet, with no download offered', (await pg.getByTestId('schedule-download').count()) === 0);
+  await pg.keyboard.press('Escape');
+  check('Esc closes the schedule', (await pg.getByRole('dialog', { name: 'Plant schedule' }).count()) === 0);
+
+  // plants: a bed of lavender (filled), two lilly pillies in the open with a note
+  await pg.evaluate(() => {
+    const a = window.gardenPlanner;
+    const mk = (id, plantId, x, y, note) => ({ id, plantId, position: { x, y }, ...(note ? { note } : {}) });
+    const bed = { id: 'bed1', name: 'Front bed', shape: { points: [{ x: 2, y: 2 }, { x: 8, y: 2 }, { x: 8, y: 5 }, { x: 2, y: 5 }], smooth: false }, edging: 'none', mulch: 'bark', raised: false };
+    a.project.getState().commit({ type: 'Composite', commands: [
+      { type: 'SetItem', collection: 'beds', id: 'bed1', from: null, to: bed },
+      ...[3, 4, 5, 6].map((x, i) => ({ type: 'SetItem', collection: 'plants', id: 'lav' + i, from: null, to: mk('lav' + i, 'lavandula-angustifolia', x, 3.5) })),
+      { type: 'SetItem', collection: 'plants', id: 'lil1', from: null, to: mk('lil1', 'syzygium-smithii', 14, 14, '=cmd|"/c calc"!A1') },
+      { type: 'SetItem', collection: 'plants', id: 'lil2', from: null, to: mk('lil2', 'syzygium-smithii', 16, 12) },
+    ] }, 'test plants');
+  });
+  await wait(300);
+  await pg.getByTestId('open-schedule').click();
+  await pg.getByTestId('schedule-row').first().waitFor();
+  check('the schedule has one row per kind of plant', (await pg.getByTestId('schedule-row').count()) === 2);
+  check('with the total', /6 plants in 2 kinds/.test(await pg.getByTestId('schedule-total').innerText()), await pg.getByTestId('schedule-total').innerText());
+  const rowsText = await pg.getByTestId('schedule-row').allInnerTexts();
+  check('trees come before shrubs, as P1 and P2', /^P1[\s\S]*Lilly pilly[\s\S]*2/.test(rowsText[0]) && /^P2[\s\S]*lavender/i.test(rowsText[1]), JSON.stringify(rowsText.map((r) => r.slice(0, 60))));
+  check('each row says where the plants are', /Front bed/.test(rowsText[1]) && /Open ground/.test(rowsText[0]));
+  check('the draft and weed notes are shown with the schedule', /draft and has not been verified/.test(await pg.getByTestId('schedule-draft').innerText()) && /not the same as safe/.test(await pg.getByTestId('schedule-draft').innerText()));
+  check('weed status that was never checked is shown as unknown, not as safe', /Unknown in QLD/.test(rowsText[0]) && !/not a weed/i.test(rowsText.join(' ')));
+  if (out) await pg.screenshot({ path: join(out, '14-schedule.png') });
+
+  const [dl] = await Promise.all([pg.waitForEvent('download'), pg.getByTestId('schedule-download').click()]);
+  check('the download is named after the garden', dl.suggestedFilename() === 'schedule-test-garden-plant-schedule.csv', dl.suggestedFilename());
+  const path = await dl.path();
+  const buf = readFileSync(path);
+  check('the file starts with a byte-order mark so Excel reads accents correctly', buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf);
+  const csv = buf.toString('utf8').replace(/^\uFEFF/, '');
+  const lines = csv.split('\r\n').filter(Boolean);
+  check('the CSV has a header, the two kinds of plant, a total and a note', lines.length === 5 && lines[0].startsWith('No.,Common name,Botanical name,Qty'), String(lines.length));
+  check('the quantities are in the file', lines[1].split(',')[3] === '2' && /,4,/.test(lines[2]), lines.slice(1, 3).join(' | ').slice(0, 160));
+  check('every plant row says Draft, unverified', lines.slice(1, 3).every((l) => l.endsWith('"Draft, unverified"')));
+  check('a note that looks like a spreadsheet formula was made harmless', /'=cmd/.test(csv) && !/(^|,)=cmd/m.test(csv));
+  check('no page errors in the schedule', errs.length === 0, errs.join(' | '));
+  await ctxS.close();
 }
 await browser.close();
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nAll checks passed');

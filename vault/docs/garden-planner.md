@@ -21,7 +21,7 @@ Run: `cd garden-planner && npm install && npm run dev` (port 5175; Vault's dev p
 | 5. Checks | **Done** (see "Checks" below). |
 | 6. Sun and shade | **Done** (see "Sun and shade" below). Built before the checks, because the sun-mismatch check needs the sun-hours map. |
 | 7. 3D / Render photo adaptations | Not started. 3D has orbit + Iso/Top/Front. No saved views, fly-through, walk or Render photo yet. |
-| 8. Plant tag scan, plant schedule CSV | Not started. `planner-core/ocr` is ready for the scan. |
+| 8. Plant tag scan, plant schedule CSV | **Done** (see "Plant tag scan" and "Plant schedule" below). |
 | 9. Billboard cut-outs | Not started. |
 
 ## What works now
@@ -108,6 +108,20 @@ The wizard's **Look up** uses OpenStreetMap's public Nominatim. Policy read at h
 
 Other behaviour: signed-out users get a plain message (the place list, postcode-to-state and latitude/longitude still work); the service being down or busy gives plain messages and is not retried in a loop; failures are not cached. The public service has no uptime promise, so for heavy use set `NOMINATIM_URL` to a self-hosted Nominatim (or a provider with the same API) and no code changes. Set `NOMINATIM_CONTACT` (an email or URL for OSM to reach you) in Railway; I did not put an email in the code. Cost/terms conclusion: the public instance's terms fit this use (moderate user count, user-triggered, cached, attributed, not primarily a geocoding service), so no provider switch was needed. Revisit if usage grows beyond a handful of lookups a day per user.
 
+## Plant schedule (built 2026-10-15)
+
+The **table button** in the toolbar opens **Plant schedule**: every plant in the garden, one row per kind of plant, as a table and as a **CSV download** (named `<garden>-plant-schedule.csv`) for a nursery order or a spreadsheet. The table and the CSV come from the same rows (`src/schedule/plantSchedule.ts`, pure), so they cannot disagree.
+
+**Columns:** No. (P1, P2... trees first, then palms, shrubs, climbers, perennials, grasses, groundcovers, succulents, ferns, edibles, annuals, aquatics, each by name), common name, botanical name (with the variety), **Qty**, type, origin, height min/max and spread min/max in metres (numbers, so they sort in a spreadsheet), recommended spacing (the same figure Fill bed uses), sun, water, frost, flowering months ("Sep-Dec", wrapping over the new year: "Nov-Feb"), flower colours, foliage, cautions (toxic to pets or people, spiky, invasive roots), **weed status** for the garden's state, **where planted**, notes and **data status**. **Where planted** counts each plant by the bed, lawn or zone it is in (in that order of priority), "Open ground", or "Outside the boundary": "Front bed (4), Lawn (1)". Notes are the notes typed on the plants, each different note once. After the plants come a **total** row (plants and kinds) and a **note** row.
+
+**Honest labelling.** Every row's last column says **"Draft, unverified"** (spec: anything that uses plant data must), and the note row says the plant data is a draft and that weed status is only known where it was checked against a state list: a plant whose list was never checked says **"Unknown in QLD (not checked)"**, never "not a weed". The on-screen table shows the same notes. A plant in the plan whose record is no longer in the library is listed (and counted, with a note), not dropped.
+
+**CSV details.** RFC 4180 quoting; CRLF line ends; a UTF-8 byte-order mark so Excel reads accents; and **text that starts with = + - or @ gets a leading apostrophe** so a note like `=HYPERLINK(...)` cannot run as a formula in Excel or Sheets (names and notes are typed by people). These helpers now live in `planner-core/src/export/csv.ts` and **Room Planner's furniture schedule uses the same ones** (its 20 schedule tests pass unchanged).
+
+**Not built:** a PDF or printable version (Room Planner has one; the CSV and on-screen table cover the need for now), costs and suppliers (the plant data has none), and the size of the plants at the growth stage shown (the schedule is always the mature size).
+
+**Tests:** `tests/plantSchedule.test.ts` (18: grouping and order, the record's numbers, varieties, where planted with counts, notes, weed status for all 171 plants, draft labelling, a removed plant, an empty garden, flowering ranges, CSV round trip, formula guard, byte-order mark, file names, the shared helpers) and the Chrome run (empty state, Esc, rows, total, order, where, draft and weed notes shown, the downloaded file: name, byte-order mark, rows, quantities, draft status, formula made harmless).
+
 ## Plant tag scan (built 2026-10-14)
 
 Photograph the tag that came with a plant and find it in the library. The camera button above the plant list opens **Scan a plant tag**.
@@ -178,6 +192,8 @@ Run these on staging before relying on the features. The unit and Chrome tests u
 15. **Satellite map, live:** set `MAPTILER_API_KEY` on Railway (server only). Create a garden for a real address: the wizard shows a map of the place with the MapTiler credit. In Garden settings switch on **Show a satellite map**, then **Move map** until your house lines up with what you drew; move the Time slider and watch the shadows fall across the photo, then switch to 3D and check the photo lies on the ground with the house and fence shadows on it. Confirm the key does not appear in any response, the browser's network tab or the logs, and that the tile requests go to `/api/map-tiles/...` on Vault, not to maptiler.com. Read the MapTiler plan terms (see the Satellite map section).
 
 16. **Plant tags, with real tags:** on a phone, press the camera button above the plant list and photograph five real nursery tags (one shiny, one curved, one small print, one handwritten if you have it). For each, note whether the right plant was offered and where it ranked, whether the words read were close, and whether the tag's size or sun differed from our data. Photograph one in poor light and confirm it says the photo was hard to read. Confirm the network tab shows no upload of the photo (only the one-time model download). Report what fails: the matcher can be tuned, but only against real tags.
+
+17. **Plant schedule with a real garden:** plan a real garden with a few beds and 10 or more plants, open the schedule (table button), check the quantities and "where" against the plan, download the CSV and open it in Excel and in Google Sheets: columns line up, sizes sort as numbers, accents (for example in a plant name) display correctly, and a note starting with = shows as text. Check it against a nursery's own plant list for one or two plants.
 
 ## Layout
 

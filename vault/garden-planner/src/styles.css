@@ -261,3 +261,12 @@ textarea.vi-input { padding: 8px 34px 8px 10px; }
 .tag-match-name { margin: 0; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
 .tag-match-body .note { margin: 0; }
 .chip.conf-strong { background: #dff0d8; } .chip.conf-possible { background: #fdf0c8; } .chip.conf-weak { background: #eee; }
+
+/* plant schedule */
+.modal.schedule { width: min(1100px, calc(100vw - 24px)); max-height: calc(100vh - 32px); display: flex; flex-direction: column; }
+.schedule .modal-body { overflow: auto; display: flex; flex-direction: column; gap: 8px; }
+.schedule-scroll { overflow: auto; border: 1px solid var(--color-border); border-radius: var(--radius); }
+.schedule-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.schedule-table th, .schedule-table td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid var(--color-border); }
+.schedule-table th { position: sticky; top: 0; background: #f4f1e8; font-size: 12px; }
+.schedule-table .num { text-align: right; white-space: nowrap; }

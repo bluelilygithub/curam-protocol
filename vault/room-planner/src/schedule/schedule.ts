@@ -130,16 +130,9 @@ export const roomsText = (r: ScheduleRow): string => Object.entries(r.rooms).map
 
 const CSV_COLUMNS = ['No.', 'Category', 'Item', 'Qty', 'Width (m)', 'Length (m)', 'Height (m)', 'Vendor', 'SKU', 'Finish code', 'Unit cost', 'Total cost', 'Rooms', 'Notes'] as const;
 
-/** A spreadsheet runs text that starts with = + - @ as a formula; a leading apostrophe keeps it as plain text. */
-export function safeCell(s: string): string {
-  return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
-}
-
-/** One CSV field: quoted when it holds a comma, quote or line break, quotes doubled (RFC 4180). */
-export function csvField(v: string | number | undefined): string {
-  const s = v === undefined ? '' : typeof v === 'number' ? String(v) : safeCell(v);
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
+// the cell guard and quoting live in planner-core, shared with Garden Planner's plant schedule
+export { safeCell, csvField } from '@planner-core/export/csv';
+import { csvField } from '@planner-core/export/csv';
 
 /** The schedule as CSV text: furniture, then doors and windows, then totals. A byte-order mark is added by `csvBlobParts`. */
 export function toCsv(s: Schedule): string {
