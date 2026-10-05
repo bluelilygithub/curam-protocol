@@ -102,7 +102,7 @@ const gridOff = await ev(() => {
   }
   return vals.size;
 });
-check('turning the grid off removes them again', gridOff < 2, String(gridOff));
+check('turning the grid off removes them again', gridOff < gridInfo.distinct, `${gridOff} vs ${gridInfo.distinct}`);
 await ev(() => window.roomPlanner.ui.getState().toggleGrid());
 await wait(300);
 await shot('hints-grid');

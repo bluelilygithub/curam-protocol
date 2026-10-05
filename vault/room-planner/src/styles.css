@@ -412,3 +412,20 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--co
 .recentre { position: absolute; left: 0; right: 0; bottom: 18px; margin: 0 auto; width: max-content; z-index: 6; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; background: var(--rp-paper); border: 1px solid var(--color-border); border-radius: 999px; box-shadow: 0 10px 28px -14px rgba(26,26,26,.55); font-size: 13px; }
 .light-hint { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; margin: 8px 0; background: color-mix(in srgb, var(--rp-soft) 14%, var(--rp-paper)); border: 1px solid var(--rp-soft); border-radius: 8px; font-size: 12px; line-height: 1.4; }
 .dock-hint { position: absolute; left: 0; right: 0; bottom: 70px; margin: 0 auto; width: max-content; max-width: calc(100% - 24px); z-index: 5; }
+
+/* Furniture schedule panel (M5) */
+.schedule-panel { width: min(860px, 100%); }
+.schedule-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 4px 16px 0; }
+.schedule-bar .storage-note { margin: 0; }
+.seg-choice { display: inline-flex; gap: 2px; padding: 3px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 8px; }
+.seg-choice .btn.active { background: var(--color-text); color: var(--rp-paper); }
+.schedule-body { padding: 8px 16px 6px; overflow: auto; flex: 1; }
+.schedule-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.schedule-table th { text-align: left; padding: 6px 8px; font: 600 11px var(--font-ui); letter-spacing: .05em; text-transform: uppercase; color: var(--color-muted); border-bottom: 1px solid var(--color-border); background: var(--color-surface); position: sticky; top: 0; }
+.schedule-table td { padding: 6px 8px; border-bottom: 1px solid var(--color-border); vertical-align: top; }
+.schedule-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.schedule-table small { display: block; color: var(--color-muted); font-size: 11px; }
+.schedule-table small.plain { display: inline; }
+.schedule-table .group-row td { padding-top: 12px; font: 600 11px var(--font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--color-muted); border-bottom: 0; }
+.schedule-table tfoot td { font-weight: 600; border-top: 2px solid var(--color-border); border-bottom: 0; }
+.modal-foot .spacer { flex: 1; }

@@ -48,6 +48,8 @@ export interface UiState {
   photoOpen: boolean;
   /** The How This Works modal. */
   infoOpen: boolean;
+  /** The furniture schedule and plan PDF panel. */
+  scheduleOpen: boolean;
   /** Where the fly-through is: stop index (0-based) of `total`. */
   tourProgress: { stop: number; total: number } | null;
   tool: Tool;
@@ -95,6 +97,7 @@ export interface UiActions {
   setSnapMode(mode: SnapMode): void;
   setGrid(metres: number): void;
   setInfoOpen(on: boolean): void;
+  setScheduleOpen(on: boolean): void;
   setTourProgress(p: { stop: number; total: number } | null): void;
   setTool(t: Tool): void;
   select(refs: SelectionRef[]): void;
@@ -128,6 +131,7 @@ export function createUiStore(): UiStore {
     projectsOpen: false,
     photoOpen: false,
     infoOpen: false,
+    scheduleOpen: false,
     tourProgress: null,
     tool: 'select',
     selection: [],
@@ -165,6 +169,7 @@ export function createUiStore(): UiStore {
     setSnapMode: (snapMode) => set({ snapMode, snapEnabled: snapsFor(snapMode) }),
     setGrid: (grid) => set({ grid: GRID_SIZES.includes(grid as (typeof GRID_SIZES)[number]) ? grid : 0.1 }),
     setInfoOpen: (infoOpen) => set({ infoOpen }),
+    setScheduleOpen: (scheduleOpen) => set({ scheduleOpen }),
     setPhotoOpen: (photoOpen) => set(photoOpen ? { photoOpen, tourPlaying: false, walking: false } : { photoOpen }),
     setTourProgress(p) {
       const cur = get().tourProgress;

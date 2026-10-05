@@ -110,6 +110,9 @@ export function Toolbar() {
         <button className="btn project-button" onClick={() => app.ui.getState().setProjectsOpen(true)} title="Projects: new, open, rename, duplicate, delete, import, export">
           {Icons.file}<span className="label">{name || 'Projects'}</span>
         </button>
+        <button className="btn" disabled={!hasRoom} onClick={() => app.ui.getState().setScheduleOpen(true)} title="Furniture schedule: what is in the room, with quantities, sizes and costs. Download it as a CSV for a spreadsheet, or as a PDF with a to-scale plan.">
+          {Icons.list}<span className="label">Schedule</span>
+        </button>
         {(status === 'unsaved' || status === 'error' || status === 'conflict') && (
           <button className="btn" onClick={() => void app.saveProject()} title="Save now (autosave also runs a moment after each change)">
             <span className="label">Save</span>
