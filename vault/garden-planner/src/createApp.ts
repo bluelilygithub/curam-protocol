@@ -326,6 +326,32 @@ export function createApp(storage: StorageLike) {
       ui.getState().select({ kind: sel.kind, id: moved.id });
     },
 
+    /**
+     * Copies of the selected item in a straight line (a hedge, an avenue, a row of herbs): `count` copies, `spacing` metres apart, in the
+     * direction `angleDeg` (0 = right on the plan, 90 = up). One undo step; the last copy is selected. Returns how many were made.
+     */
+    duplicateRow(count: number, spacing: number, angleDeg: number): number {
+      const p = cur(); const sel = ui.getState().selection;
+      if (!p || !sel || sel.kind === 'boundary' || sel.kind === 'house') return 0;
+      const n = Math.min(50, Math.max(1, Math.round(count)));
+      if (!(spacing > 0)) return 0;
+      const src = findItem(p, sel);
+      if (!src) return 0;
+      const coll = ({ zone: 'zones', bed: 'beds', path: 'paths', service: 'services', lawn: 'lawns', structure: 'structures', plant: 'plants' } as const)[sel.kind];
+      const a = (angleDeg * Math.PI) / 180;
+      const commands = [];
+      let lastId = '';
+      for (let i = 1; i <= n; i += 1) {
+        const copy = translated(structuredClone(src), sel.kind, Math.cos(a) * spacing * i, Math.sin(a) * spacing * i) as { id: string };
+        copy.id = randomId();
+        lastId = copy.id;
+        commands.push(setItem(coll, copy.id, null, copy as never));
+      }
+      if (!project.getState().commit({ type: 'Composite', commands } as never, n === 1 ? 'Duplicate' : `Make a row of ${n}`)) return 0;
+      ui.getState().select({ kind: sel.kind, id: lastId });
+      return n;
+    },
+
     // ------------------------------------------------------------ tracing underlay
     setUnderlay(u: Underlay | null): void {
       const p = cur(); if (!p) return;

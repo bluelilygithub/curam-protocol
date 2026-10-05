@@ -3,10 +3,11 @@ import { Garden3D } from '../render3d/Garden3D';
 import { MONTH_NAMES } from '../plants/growth';
 import { Plan2D } from '../render2d/Plan2D';
 import { SUN_COLOURS } from '../sun/sunHours';
-import { NumField } from './fields';
+import { NumField, SelectField } from './fields';
 import { Icon } from './icons';
 import { PLANT_DRAG_TYPE } from './PlantLibrary';
 import { plantById, plantLabel } from '../plants/plants';
+import { mid } from '../plants/growth';
 import { findItem } from '../domain/edit';
 import { useApp, useProject, useUi } from './AppContext';
 
@@ -119,11 +120,36 @@ function SelectionBar() {
     if (sel.kind === 'plant') { const r = plantById(it.plantId ?? ''); return r ? plantLabel(r) : 'Plant'; }
     return it.name ?? sel.kind;
   });
+  const [rowOpen, setRowOpen] = useState(false);
+  const [count, setCount] = useState(5);
+  const [spacing, setSpacing] = useState<number | null>(null);
+  const [dir, setDir] = useState('0');
+  // a plant's natural spacing is its mature spread, so the row closes up into a hedge exactly when it has grown
+  const plantSpread = useProject((s) => {
+    if (!sel || sel.kind !== 'plant' || !s.project) return null;
+    const it = findItem(s.project, sel) as { plantId?: string } | null;
+    const r = it ? plantById(it.plantId ?? '') : null;
+    return r ? Math.round(mid(r.spread) * 10) / 10 : null;
+  });
+  useEffect(() => { setRowOpen(false); setSpacing(null); }, [sel?.kind, sel?.kind === undefined ? '' : (sel as { id?: string }).id]);
   if (!sel || tool !== 'select' || !name) return null;
   const copyable = sel.kind !== 'boundary' && sel.kind !== 'house';
+  const gap = spacing ?? plantSpread ?? 1;
   return (
     <div className="selbar" role="toolbar" aria-label="Selected item" data-testid="selection-bar">
+      {rowOpen && copyable && (
+        <div className="selbar-row" data-testid="row-panel">
+          <NumField label="Copies" value={count} min={1} max={50} step={1} decimals={0} onCommit={setCount} />
+          <NumField label="Spacing" unit="m" value={gap} min={0.1} max={50} step={0.1} onCommit={setSpacing} hint={plantSpread !== null ? 'Starts at the plant’s grown width, so the row meets up when it has grown.' : undefined} />
+          <SelectField label="Direction" value={dir} options={[['0', 'Right'], ['180', 'Left'], ['90', 'Up'], ['270', 'Down'], ['45', 'Up and right'], ['135', 'Up and left'], ['315', 'Down and right'], ['225', 'Down and left']] as const} onChange={setDir} />
+          <div className="row">
+            <button type="button" className="btn primary" onClick={() => { const n = app.duplicateRow(count, gap, Number(dir)); if (n) { app.notify(`Made a row of ${n} more.`); setRowOpen(false); } }}>Make row</button>
+            <button type="button" className="btn" onClick={() => setRowOpen(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
       <span className="selbar-name">{name}</span>
+      {copyable && <button type="button" className="btn" title="Several copies in a straight line, set distance apart" aria-expanded={rowOpen} onClick={() => setRowOpen((v) => !v)}><Icon name="copy" size={15} /> Row…</button>}
       {copyable && <button type="button" className="btn" title="Make a copy beside this one (Ctrl+D)" onClick={() => app.duplicateSelected()}><Icon name="copy" size={15} /> Duplicate</button>}
       <button type="button" className="btn danger" title="Delete (Del)" onClick={() => app.deleteSelected()}><Icon name="trash" size={15} /> Delete</button>
       <button type="button" className="btn" title="Done (Esc)" onClick={() => app.ui.getState().select(null)}>Done</button>

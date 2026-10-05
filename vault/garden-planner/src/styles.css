@@ -210,3 +210,6 @@ textarea.vi-input { padding: 8px 34px 8px 10px; }
 .selbar { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: #fff; border: 1px solid var(--color-border); border-radius: var(--radius); box-shadow: 0 6px 24px rgba(0,0,0,.18); max-width: calc(100% - 24px); }
 .selbar-name { font-size: 12px; font-weight: 600; padding: 0 6px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .plant-head[draggable="true"] { cursor: grab; }
+.selbar { flex-wrap: wrap; justify-content: center; }
+.selbar-row { flex: 1 1 100%; display: grid; grid-template-columns: repeat(3, minmax(90px, 1fr)); gap: 8px; align-items: end; padding-bottom: 6px; border-bottom: 1px solid var(--color-border); }
+.selbar-row .row { grid-column: 1 / -1; }

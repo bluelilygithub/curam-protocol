@@ -162,6 +162,25 @@ await page.getByTestId('selection-bar').getByRole('button', { name: /Delete/ }).
 await wait(200);
 p = await proj();
 check('Delete in the selection bar removes it', p.plants.length === 2 && (await ui()).selection === null, String(p.plants.length));
+// a row of copies
+await ev(() => { const g = window.gardenPlanner; g.ui.getState().select({ kind: 'plant', id: g.project.getState().project.plants[0].id }); });
+await wait(150);
+await page.getByTestId('selection-bar').getByRole('button', { name: /Row/ }).click();
+await page.getByTestId('row-panel').locator('input').first().fill('4');
+await page.getByTestId('row-panel').locator('input').first().blur();
+await page.getByTestId('row-panel').getByLabel('Spacing').fill('2');
+await page.getByTestId('row-panel').getByLabel('Spacing').blur();
+await page.getByTestId('row-panel').getByRole('button', { name: 'Make row' }).click();
+await wait(200);
+p = await proj();
+const orig = p.plants[0];
+const rowPts = p.plants.slice(2);
+check('Make row adds the requested number of copies', p.plants.length === 6 && rowPts.length === 4, String(p.plants.length));
+check('the copies are in a straight line, evenly spaced', rowPts.every((q, i) => Math.abs(q.position.y - orig.position.y) < 1e-6 && Math.abs(q.position.x - (orig.position.x + 2 * (i + 1))) < 1e-6), JSON.stringify(rowPts.map((q) => q.position)));
+await page.keyboard.press('Control+z');
+await wait(200);
+check('one undo removes the whole row', (await proj()).plants.length === 2, String((await proj()).plants.length));
+await ev(() => { window.gardenPlanner.ui.getState().select(null); });
 // Shift-click keeps planting
 await page.getByRole('button', { name: /Add to plan/ }).click();
 const sp = await screen(18, 3); await page.keyboard.down('Shift'); await page.mouse.click(sp.x, sp.y); await page.keyboard.up('Shift');
