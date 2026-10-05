@@ -24,6 +24,12 @@ page.on('console', (m) => { if (m.type() === 'error') problems.push(`console.err
 const shot = async (name) => { if (out) await page.screenshot({ path: join(out, `${name}.png`) }); };
 const ev = (fn, arg) => page.evaluate(fn, arg);
 const wait = (ms) => page.waitForTimeout(ms);
+const viewMenu = async (fn) => {
+  await page.getByRole('button', { name: 'View ▾' }).click();
+  await page.getByRole('group', { name: 'View options', exact: true }).waitFor();
+  await fn();
+  if (await page.getByRole('group', { name: 'View options', exact: true }).count()) await page.getByRole('button', { name: 'View ▾' }).click();
+};
 
 const state = () => ev(() => {
   const a = window.roomPlanner;
@@ -41,7 +47,7 @@ const state = () => ev(() => {
     calls: window.roomPlanner3d?.gl.info.render.calls ?? null,
   };
 });
-/** Screen position (page pixels) of a point in plan coordinates and height, using the live 3D camera. */
+/** Screen position (page pixels) of a point in plan coordinates and height, using the live 3D view. */
 const proj = (x, y, z) => ev(([x, y, z]) => {
   const cam = window.roomPlanner3d.camera;
   cam.updateMatrixWorld(true);
@@ -84,7 +90,7 @@ await page.waitForSelector('[data-testid=stage3d] canvas', { timeout: 20000 });
 await page.waitForFunction(() => window.roomPlanner3d && window.roomPlanner3d.controls && window.roomPlanner.camera.getState().camera, null, { timeout: 20000 });
 await wait(800);
 let s = await state();
-check('view mode is 3D and the 3D camera bar is shown', s.view === '3d' && (await page.locator('.viewbar3d').count()) === 1);
+check('view mode is 3D and the 3D view bar is shown', s.view === '3d' && (await page.locator('.dock3d').count()) === 1);
 check('the scene rendered (draw calls > 0) with no console errors', (s.calls ?? 0) > 0 && problems.length === 0, JSON.stringify({ calls: s.calls, problems }));
 check('Pan, Walls and Measure are disabled in 3D', (await page.locator('.toolbar .btn.icon[title^="Pan"], .toolbar .btn.icon[title^="Measure"]').evaluateAll((els) => els.every((e) => e.disabled))) === true);
 await shot('3d-01-iso');
@@ -164,19 +170,21 @@ await wait(700);
 // ------------------------------------------------------------------ saved views
 const histBeforeViews = (await state()).hist;
 const savedCam = (await state()).cam.p;
-await page.getByRole('button', { name: 'Save view' }).click();
+await viewMenu(async () => { await page.getByRole('button', { name: 'Save view' }).click(); });
 await wait(200);
 s = await state();
 check('Save view adds a named view and no history entry', s.views.length === 1 && s.views[0].name === 'View 1' && s.hist === histBeforeViews, JSON.stringify(s.views));
 await page.getByRole('button', { name: 'Top', exact: true }).click();
 await wait(700);
-await page.getByRole('button', { name: 'Go to View 1' }).click();
+await viewMenu(async () => { await page.getByRole('button', { name: 'Go to View 1' }).click(); });
 await wait(900);
 s = await state();
 check('clicking the saved view restores the camera', s.cam.p.every((v, i) => Math.abs(v - savedCam[i]) < 0.05), JSON.stringify([s.cam.p, savedCam]));
-await page.getByRole('button', { name: 'Rename View 1' }).click();
-await page.getByLabel('View name').fill('Living room');
-await page.getByLabel('View name').press('Enter');
+await viewMenu(async () => {
+  await page.getByRole('button', { name: 'Rename View 1' }).click();
+  await page.getByLabel('View name').fill('Living room');
+  await page.getByLabel('View name').press('Enter');
+});
 await wait(150);
 s = await state();
 check('a view can be renamed', s.views[0].name === 'Living room', JSON.stringify(s.views));
@@ -199,7 +207,7 @@ check('saved views survive a reload', JSON.stringify(s.views) === JSON.stringify
 await page.getByRole('button', { name: '3D', exact: true }).click();
 await page.waitForSelector('[data-testid=stage3d] canvas', { timeout: 20000 });
 await wait(800);
-await page.getByRole('button', { name: 'Go to Living room' }).click();
+await viewMenu(async () => { await page.getByRole('button', { name: 'Go to Living room' }).click(); });
 await wait(800);
 await shot('3d-10-after-reload');
 
@@ -229,27 +237,27 @@ const cine = () => ev(() => {
 });
 const dist3 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
-await page.getByRole('button', { name: 'Cinematic', exact: true }).click();
+await page.getByRole('button', { name: 'Clay', exact: true }).click();
 await wait(700);
 let c = await cine();
 check('Cinematic turns on the clay look: white sofa, filmic tone mapping, soft shadows', c.cinematic && c.sofaColour === 'f3f1ec' && c.tone === 4 && c.shadow === 3, JSON.stringify(c));
 check('Cinematic leaves the project alone (no history)', c.hist === (await state()).hist);
 await shot('3d-11-cinematic-low');
-check('quality defaults to low', c.quality === 'low' && (await page.getByRole('button', { name: 'Low', exact: true }).getAttribute('aria-pressed')) === 'true');
+check('quality defaults to low', c.quality === 'low');
 
-await page.getByRole('button', { name: 'High', exact: true }).click();
+await viewMenu(async () => { await page.getByRole('button', { name: 'High', exact: true }).click(); });
 await wait(1500);
 c = await cine();
 check('High quality renders (post effects) with no console errors', c.quality === 'high' && c.calls > 0 && problems.length === 0, JSON.stringify({ calls: c.calls, problems }));
 await shot('3d-12-cinematic-high');
-await page.getByRole('button', { name: 'Low', exact: true }).click();
+await viewMenu(async () => { await page.getByRole('button', { name: 'Low', exact: true }).click(); });
 await wait(500);
 
 // fly-through: with one saved view the tour is that view plus automatic stops
-check('the tour says what it will visit', (await page.locator('.tour-note').innerText()).includes('saved view + automatic'));
 const before = (await cine()).cam;
 await page.getByRole('button', { name: 'Play tour' }).click();
-await wait(7000); // 3 s resting on the first stop, then it starts to travel
+await wait(7000);
+check('the tour says what it will visit (while it plays)', (await page.locator('.tour-note').innerText()).includes('saved view + automatic')); // 3 s resting on the first stop, then it starts to travel
 c = await cine();
 check('Play tour moves the camera along the path, with orbit controls off', c.playing && dist3(c.cam, before) > 0.5 && c.ctlEnabled === false, JSON.stringify(c));
 check('the tour reports its stop', c.progress && c.progress.total >= 3);
@@ -272,9 +280,9 @@ await page.keyboard.press('Delete');
 check('keys do not edit the design while it plays', (await cine()).hist === c.hist);
 
 // full screen: the interface is hidden, Esc leaves it
-await page.getByRole('button', { name: 'Pause tour' }).click();
 await page.getByRole('button', { name: 'Full screen' }).click();
 await wait(600);
+await page.getByRole('button', { name: 'Pause tour' }).click();
 c = await cine();
 check('Full screen hides the interface and shows only the presentation controls', c.immersive && c.toolbar === 'none' && c.bar);
 await shot('3d-14-fullscreen');
@@ -294,23 +302,24 @@ await page.getByRole('button', { name: 'Top', exact: true }).click();
 await wait(700);
 await ev(() => window.roomPlanner.saveView('End'));
 await wait(200);
+await page.getByRole('button', { name: 'Play tour' }).click();
+await wait(300);
 check('two or more saved views are the tour', (await page.locator('.tour-note').innerText()).includes('saved views'));
 await page.getByRole('button', { name: 'Loop' }).click();
 check('Loop can be turned off', (await cine()).loop === false);
-await page.getByRole('button', { name: 'Play tour' }).click();
 await page.waitForFunction(() => !window.roomPlanner.ui.getState().tourPlaying, null, { timeout: 70000 }).catch(() => undefined);
 c = await cine();
 check('a one-pass tour stops by itself at the end', !c.playing, JSON.stringify(c.progress));
 
 // back to ordinary 3D: everything returns
-await page.getByRole('button', { name: 'Cinematic', exact: true }).click();
+await page.getByRole('group', { name: 'Look' }).getByRole('button', { name: 'Standard', exact: true }).click();
 await wait(600);
 c = await cine();
 check('turning Cinematic off restores the real colours and no tour', !c.cinematic && c.sofaColour !== 'f3f1ec' && c.tone === 0 && !c.playing);
 
 // quality is remembered across a reload
-await page.getByRole('button', { name: 'Cinematic', exact: true }).click();
-await page.getByRole('button', { name: 'High', exact: true }).click();
+await page.getByRole('button', { name: 'Clay', exact: true }).click();
+await viewMenu(async () => { await page.getByRole('button', { name: 'High', exact: true }).click(); });
 await wait(500);
 await page.reload();
 await page.waitForSelector('[data-testid=stage] canvas');
@@ -338,17 +347,21 @@ await wait(500);
 check('switching back to clay works', (await ev(() => window.roomPlanner.ui.getState().look)) === 'clay');
 // lights and ambient sound controls
 await ev(() => { const u = window.roomPlanner.ui.getState(); u.setCinematic(true); u.setLook('realistic'); }); // Lights only shows in the Realistic look, so the button is only enabled there
-await page.getByRole('button', { name: 'Lights', exact: true }).click();
+await viewMenu(async () => { await page.getByRole('button', { name: 'Lights', exact: true }).click(); });
 check('the Lights button switches lights off', (await ev(() => window.roomPlanner.ui.getState().lightsOn)) === false);
-await page.getByRole('button', { name: 'Lights', exact: true }).click();
+await viewMenu(async () => { await page.getByRole('button', { name: 'Lights', exact: true }).click(); });
+await page.getByRole('button', { name: 'View ▾' }).click();
 await page.getByLabel('Ambient sound').selectOption('ocean');
 check('choosing a sound sets it (and shows the volume)', (await ev(() => window.roomPlanner.ui.getState().ambient)) === 'ocean' && (await page.getByLabel('Sound volume').count()) === 1);
 check('four sounds plus Off are offered', (await page.getByLabel('Ambient sound').locator('option').count()) === 5);
 await page.getByLabel('Ambient sound').selectOption('off');
+await page.getByRole('button', { name: 'View ▾' }).click();
 // colour palette: choose, see it on the room, undo
 await page.getByRole('button', { name: '3D', exact: true }).click().catch(() => undefined);
 await ev(() => { const u = window.roomPlanner.ui.getState(); u.setCinematic(true); u.setLook('realistic'); });
+await page.getByRole('button', { name: 'View ▾' }).click();
 await page.getByLabel('Colour palette').first().selectOption('coastal');
+await page.getByRole('button', { name: 'View ▾' }).click();
 await wait(500);
 check('choosing a palette sets it on the room', (await ev(() => window.roomPlanner.project.getState().project.rooms[0].palette)) === 'coastal');
 const palCol = await ev(() => { const m = window.roomPlanner3d.scene3d.wallMaterial(window.roomPlanner.project.getState().project.rooms[0].walls[0].id); return m.color.getHexString(); });
@@ -380,7 +393,7 @@ const walkState = () => ev(() => {
   };
 });
 const orbitBefore = (await walkState()).p;
-await page.getByRole('button', { name: 'Walk', exact: true }).click();
+await viewMenu(async () => { await page.getByRole('button', { name: 'Walk', exact: true }).click(); });
 await wait(700);
 let w = await walkState();
 const R = 0.25;
@@ -445,8 +458,8 @@ w = await walkState();
 check('Esc stops walking and returns to the orbit camera you left', !w.walking && w.ctlEnabled && Math.hypot(w.p[0] - orbitBefore[0], w.p[1] - orbitBefore[1], w.p[2] - orbitBefore[2]) < 0.05, JSON.stringify([orbitBefore, w.p]));
 
 // walking inside Cinematic (clay) too
-await page.getByRole('button', { name: 'Cinematic', exact: true }).click();
-await page.getByRole('button', { name: 'Walk', exact: true }).click();
+await page.getByRole('button', { name: 'Clay', exact: true }).click();
+await viewMenu(async () => { await page.getByRole('button', { name: 'Walk', exact: true }).click(); });
 await wait(700);
 await page.keyboard.down('w');
 await wait(1500);

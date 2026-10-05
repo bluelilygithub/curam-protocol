@@ -30,11 +30,11 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: 'rp-tools', title: 'Tools', target: 'rp-tools', on: 'bottom', needs2d: true,
-    text: 'Select (1) picks and moves things. Pan (2) moves the view. Walls (3) drags corners, adds a corner or draws a room. Measure (4) reads a distance. Undo and Redo cover every change. Further along, Snap chooses Smart, Grid only or Off (hold Alt to skip it for one move) and Grid sets the spacing.',
+    text: 'Select (1) picks and moves things. Pan (2) moves the view. Walls (3) drags corners, adds a corner or draws a room. Measure (4) reads a distance. Undo and Redo cover every change. In the plan, Snap chooses Smart, Grid only or Off (hold Alt to skip it for one move) and Grid sets the spacing.',
   },
   {
     id: 'rp-library', title: 'Library', target: 'rp-library', on: 'right', needs2d: true, panel: 'left',
-    text: 'Pick a door, window or piece of furniture, then click the plan to place it. Search or filter by type: seating, tables, storage, bedroom, plants and decor, rugs, wall art (pictures and mirrors that hang on a wall; put your own photo in a frame from the Inspector), and lighting (ceiling lights and a table lamp). Doors and windows snap to walls; furniture snaps to walls and other pieces and can stand on a rug.',
+    text: 'Pick a door, window or piece of furniture, then click the plan to place it. Search, or open a group (seating, tables, storage, bedroom, decor, rugs, wall art (pictures and mirrors that hang on a wall; put your own photo in a frame from the Inspector), and lighting); the groups you open are remembered. Doors and windows snap to walls; furniture snaps to walls and other pieces and can stand on a rug.',
   },
   {
     id: 'rp-canvas', title: 'The Plan', target: 'rp-stage', on: 'left', needs2d: true,
@@ -49,11 +49,11 @@ export const TOUR_STEPS: TourStep[] = [
     text: 'Switch between the plan you edit (2D) and a 3D view of the same design. In 3D you can orbit, switch to isometric, and save viewpoints to return to.',
   },
   {
-    id: 'rp-cinematic', title: 'Cinematic', target: 'rp-cinematic', on: 'bottom', needs3d: true,
-    text: 'Cinematic shows a clean model with soft shadows. Choose Clay (white model) or Realistic (wood, fabric, daylight), pick a colour palette for the room, switch the lights on or off, choose a soothing background sound, then Low or High quality, play a fly-through of your saved views, or press Walk to move through the room at eye height.',
+    id: 'rp-cinematic', title: 'The 3D bar', target: 'rp-cinematic', on: 'top', needs3d: true,
+    text: 'One slim bar at the bottom of the 3D view. Choose the look: Standard, Clay (a white model with soft shadows) or Realistic (wood, fabric, lights and daylight). Play tour flies through your saved views. The View menu holds quality, lights, a soothing background sound, the colour palette, Walk (move through the room at eye height), full screen and your saved views.',
   },
   {
-    id: 'rp-photo', title: 'Render Photo', target: 'rp-photo', on: 'bottom', needs3d: true,
+    id: 'rp-photo', title: 'Render Photo', target: 'rp-photo', on: 'top', needs3d: true,
     text: 'Make a real picture of your design to download as a PNG. Choose the view (the 3D view, a saved view, or an eye-level view inside the room), lighting, size and quality. It starts grainy and sharpens, and can take minutes, so try Draft first. Your design is never changed.',
   },
   {

@@ -16,6 +16,12 @@ const page = await ctx.newPage();
 const problems = [];
 page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
 page.on('console', (m) => { if (m.type() === 'error') problems.push(`console.error: ${m.text().slice(0, 240)}`); });
+const viewMenu = async (fn) => {
+  await page.getByRole('button', { name: 'View ▾' }).click();
+  await page.getByRole('group', { name: 'View options', exact: true }).waitFor();
+  await fn();
+  if (await page.getByRole('group', { name: 'View options', exact: true }).count()) await page.getByRole('button', { name: 'View ▾' }).click();
+};
 const wait = (ms) => page.waitForTimeout(ms);
 const ev = (fn, arg) => page.evaluate(fn, arg);
 await page.goto(URL);
@@ -74,21 +80,25 @@ check('the frame shows the photo in the Realistic look', hasMap);
 await page.screenshot({ path: join(out, 'photo-in-frame.png') });
 
 // ---------------------------------------------------------------- Lights button
-check('Lights is enabled in the Realistic look', !(await page.getByRole('button', { name: 'Lights', exact: true }).isDisabled()));
+let lightsDisabled = true;
+await viewMenu(async () => { lightsDisabled = await page.getByRole('button', { name: 'Lights', exact: true }).isDisabled(); });
+check('Lights is enabled in the Realistic look', !lightsDisabled);
 const glow = () => ev(() => { let n = 0; window.roomPlanner3d.scene3d.root.traverse((o) => { if (o.isMesh && o.material?.emissive && o.material.emissive.getHex() !== 0) n++; }); return n; });
 const lamps = () => ev(() => { let n = 0; window.roomPlanner3d.scene3d.root.traverse((o) => { if (o.isPointLight) n++; }); return n; });
 const onGlow = await glow();
 const onLamps = await lamps();
 check('with the lights on the ceiling light and table lamp glow and light the room', onGlow >= 2 && onLamps === 2, `${onGlow} glowing, ${onLamps} lights`);
-await page.getByRole('button', { name: 'Lights', exact: true }).click();
+await viewMenu(async () => { await page.getByRole('button', { name: 'Lights', exact: true }).click(); });
 await wait(500);
 check('switching the lights off removes the glow and the light', (await glow()) === 0 && (await lamps()) === 0, `${await glow()} glowing, ${await lamps()} lights`);
-await page.getByRole('button', { name: 'Lights', exact: true }).click();
+await viewMenu(async () => { await page.getByRole('button', { name: 'Lights', exact: true }).click(); });
 await wait(500);
 check('and on again brings them back', (await lamps()) === 2);
 await ev(() => window.roomPlanner.ui.getState().setLook('clay'));
 await wait(300);
-check('Lights is disabled in the Clay look, with a tooltip that says why', await page.getByRole('button', { name: 'Lights', exact: true }).isDisabled());
+let clayDisabled = false;
+await viewMenu(async () => { clayDisabled = await page.getByRole('button', { name: 'Lights', exact: true }).isDisabled(); });
+check('Lights is disabled in the Clay look, with a tooltip that says why', clayDisabled);
 await ev(() => window.roomPlanner.ui.getState().setLook('realistic'));
 
 // ---------------------------------------------------------------- undo and back to the built-in picture

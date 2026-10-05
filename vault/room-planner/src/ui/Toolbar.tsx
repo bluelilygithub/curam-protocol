@@ -70,11 +70,11 @@ export function Toolbar() {
       </div>
 
       <div className="group" role="group" aria-label="History">
-        <button className="btn" disabled={!canUndo} onClick={undo} title={undoLabel ? `Undo · ${undoLabel}` : 'Nothing to undo'}>
-          {Icons.undo}<span className="label">{canUndo && undoLabel ? `Undo · ${undoLabel}` : 'Undo'}</span>
+        <button className="btn icon" disabled={!canUndo} onClick={undo} aria-label={canUndo && undoLabel ? `Undo · ${undoLabel}` : 'Undo'} title={undoLabel ? `Undo · ${undoLabel} (Ctrl+Z)` : 'Nothing to undo'}>
+          {Icons.undo}
         </button>
-        <button className="btn" disabled={!canRedo} onClick={redo} title={redoLabel ? `Redo · ${redoLabel}` : 'Nothing to redo'}>
-          {Icons.redo}<span className="label">{canRedo && redoLabel ? `Redo · ${redoLabel}` : 'Redo'}</span>
+        <button className="btn icon" disabled={!canRedo} onClick={redo} aria-label={canRedo && redoLabel ? `Redo · ${redoLabel}` : 'Redo'} title={redoLabel ? `Redo · ${redoLabel} (Ctrl+Shift+Z)` : 'Nothing to redo'}>
+          {Icons.redo}
         </button>
       </div>
 
@@ -85,6 +85,7 @@ export function Toolbar() {
         <button className={`btn icon ${showGrid ? 'active' : ''}`} aria-pressed={showGrid} title="Grid" onClick={() => app.ui.getState().toggleGrid()}>
           {Icons.grid}
         </button>
+        {viewMode === '2d' && tool !== 'pan' && (<>
         <label className="snap-select" title="Snapping while you drag. Smart: corners, walls, furniture edges and centres, alignment and grid. Grid only: pieces land with their edges on grid lines measured from the room's first corner. Off: no snapping. Hold Alt while dragging to skip it for one move.">
           <span className="label">Snap</span>
           <select aria-label="Snap mode" value={snapMode} onChange={(e) => app.setSnapMode(e.target.value as SnapMode)}>
@@ -99,6 +100,7 @@ export function Toolbar() {
             {GRID_SIZES.map((g) => <option key={g} value={g}>{g * 100} cm</option>)}
           </select>
         </label>
+        </>)}
         <button className="btn icon" disabled={!hasRoom} title="Fit room to view" onClick={() => (viewMode === '3d' ? app.cameraPreset('fit') : app.fitToRoom())}>{Icons.fit}</button>
       </div>
 
@@ -108,17 +110,19 @@ export function Toolbar() {
         <button className="btn project-button" onClick={() => app.ui.getState().setProjectsOpen(true)} title="Projects: new, open, rename, duplicate, delete, import, export">
           {Icons.file}<span className="label">{name || 'Projects'}</span>
         </button>
-        <button className="btn" onClick={() => void app.saveProject()} disabled={status === 'saved' || status === 'saving' || status === 'loading'} title="Save now (autosave also runs a moment after each change)">
-          <span className="label">Save</span>
-        </button>
+        {(status === 'unsaved' || status === 'error' || status === 'conflict') && (
+          <button className="btn" onClick={() => void app.saveProject()} title="Save now (autosave also runs a moment after each change)">
+            <span className="label">Save</span>
+          </button>
+        )}
       </div>
 
       <span
-        className={`save save-${status}`}
+        className={`save-status ${status === 'unsaved' ? 'warn' : status === 'error' || status === 'conflict' ? 'bad' : ''}`}
         role="status"
-        title={`${note ? `${note} ` : ''}${error ?? ''}Undo history is not saved: it starts fresh each time a project is opened.`}
+        title={`${kind === 'server' ? 'Saved to your Vault account.' : 'Saved in this browser.'} ${note ? `${note} ` : ''}${error ?? ''} Changes save by themselves a moment after you make them. Undo history is not saved: it starts fresh each time a project is opened.`}
       >
-        {status === 'loading' ? 'Loading…' : status === 'saving' ? 'Saving…' : status === 'unsaved' ? 'Unsaved changes' : status === 'error' ? 'Could not save' : status === 'conflict' ? 'Needs your attention' : kind === 'server' ? 'Saved to Vault' : 'Saved in this browser'}
+        {status === 'loading' ? 'Loading…' : status === 'saving' ? 'Saving…' : status === 'unsaved' ? 'Unsaved' : status === 'error' ? 'Could not save' : status === 'conflict' ? 'Needs your attention' : 'Saved ✓'}
       </span>
 
       <div className="group" role="group" aria-label="Panels">

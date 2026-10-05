@@ -338,7 +338,14 @@ export function Inspector() {
       <>
         <div className="subject"><div><h3 className="subject-name">{room.name}</h3><p className="subject-sub">Room</p></div></div>
         <RoomNameField key={room.id} id={room.id} name={room.name} />
-        <Section title="Room">
+        <p className="room-summary" data-testid="room-summary">
+          {size.w.toFixed(2).replace(/\.?0+$/, '')} × {size.l.toFixed(2).replace(/\.?0+$/, '')} m · {area.toFixed(1).replace(/\.0$/, '')} m² · {room.furniture.length + room.fixtures.length} object{room.furniture.length + room.fixtures.length === 1 ? '' : 's'} · {issues === 0 ? 'no problems' : `${issues} to look at`}
+        </p>
+        <Section title="Colour palette">
+          <PalettePicker />
+          <p className="hint">Colours the walls, floor, trim, sofas and rugs together. Shown in the 3D view (not in the plan, and not in the Clay look).</p>
+        </Section>
+        <Section title="Room details" open={false}>
           <dl className="facts">
             <dt>Size</dt><dd>{size.w.toFixed(2)} × {size.l.toFixed(2)} m</dd>
             <dt>Area</dt><dd>{area.toFixed(2)} m²</dd>
@@ -347,10 +354,6 @@ export function Inspector() {
             <dt>Objects</dt><dd>{room.furniture.length} furniture · {room.fixtures.length} doors/windows</dd>
             <dt>Problems</dt><dd>{issues === 0 ? 'None' : `${issues} to look at`}</dd>
           </dl>
-        </Section>
-        <Section title="Colour palette">
-          <PalettePicker />
-          <p className="hint">Colours the walls, floor, trim, sofas and rugs together. Shown in the 3D view (not in the plan, and not in the Clay look).</p>
         </Section>
         <p className="hint">Click a wall, door, window or piece of furniture to edit it. Drag on empty floor to select several. Use the Walls tool (key 3) to move, add or remove corners.</p>
         <div className="actions">

@@ -49,7 +49,8 @@ const drag = async (a, b, { hold = false, steps = 12, shift = false } = {}) => {
   await page.mouse.move(p.x, p.y); await page.mouse.down(); await page.mouse.move(q.x, q.y, { steps });
   if (!hold) { await page.mouse.up(); if (shift) await page.keyboard.up('Shift'); await page.waitForTimeout(80); }
 };
-const card = (name) => page.locator('.card', { hasText: name }).first();
+// the library is grouped and collapsible now, so find a piece through the search box
+const card = (name) => ({ click: async (...a) => { const s = page.getByLabel('Search library'); await s.fill(name); await page.locator('.card', { hasText: name }).first().click(...a); await s.fill(''); } });
 // M5 projects: the Projects panel replaced the Save file / Open / New buttons
 const openPanel = async () => { if (!(await page.locator('.projects-panel').count())) await page.locator('.project-button').click(); await page.waitForSelector('.projects-panel'); };
 const closePanel = async () => { if (await page.locator('.projects-panel').count()) await page.getByRole('button', { name: 'Close projects' }).click(); };
@@ -305,7 +306,7 @@ await page.waitForTimeout(300);
 s = await S();
 check('reload reopens the saved project from the library', s.rooms === 1 && Object.keys(s.furniture).length === 3, JSON.stringify({ rooms: s.rooms, f: Object.keys(s.furniture) }));
 check('...but undo history starts fresh and the UI does not pretend otherwise', !s.canUndo && !s.canRedo && (await page.getByRole('button', { name: /^Undo/ }).isDisabled()));
-check('the autosave label never mentions undo', !/undo/i.test(await page.locator('.save').innerText()));
+check('the autosave label never mentions undo', !/undo/i.test(await page.locator('.save-status').innerText()));
 await newProjectViaPanel('Second plan');
 s = await S();
 check('New project opens an empty one, named as typed, and the first stays in the list', s.rooms === 0 && (await ev(() => window.roomPlanner.library.getState().entries.map((e) => e.name))).includes('Second plan'));

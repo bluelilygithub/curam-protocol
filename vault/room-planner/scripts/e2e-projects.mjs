@@ -52,14 +52,14 @@ const shot = async (page, name) => { if (out) await page.screenshot({ path: join
   await ready(page);
   let s = await S(page);
   check('a fresh browser opens "Untitled project", saved in this browser', s.kind === 'local' && s.entries.length === 1 && s.name === 'Untitled project' && s.status === 'saved', JSON.stringify(s));
-  check('the toolbar shows the project name and where it is saved', (await page.locator('.project-button').innerText()).includes('Untitled project') && /Saved in this browser/.test(await page.locator('.save').innerText()));
+  check('the toolbar shows the project name and where it is saved', (await page.locator('.project-button').innerText()).includes('Untitled project') && /Saved/.test(await page.locator('.save-status').innerText()) && /Saved in this browser/.test((await page.locator('.save-status').getAttribute('title')) ?? ''));
 
   await page.getByRole('button', { name: /Start from a rectangle/ }).click();
   await wait(300);
   s = await S(page);
   check('the first room is "Room 1" and the room bar shows it', s.docRooms.length === 1 && s.docRooms[0].name === 'Room 1' && (await page.getByRole('button', { name: 'Room Room 1', exact: true }).count()) === 1);
-  check('an edit shows "Unsaved changes", then autosaves', /Unsaved/.test(await page.locator('.save').innerText()) && (await settle(page)));
-  check('Save is disabled when saved', await page.getByRole('button', { name: 'Save', exact: true }).isDisabled());
+  check('an edit shows "Unsaved changes", then autosaves', /Unsaved/.test(await page.locator('.save-status').innerText()) && (await settle(page)));
+  check('Save is hidden when everything is saved, and the status says Saved', (await page.getByRole('button', { name: 'Save', exact: true }).count()) === 0 && /Saved/.test(await page.locator('.save-status').innerText()));
 
   await addRoom(page, /Rectangle/);
   s = await S(page);
@@ -244,7 +244,7 @@ const shot = async (page, name) => { if (out) await page.screenshot({ path: join
   await ready(page);
   let s = await S(page);
   check('signed in to Vault: projects are saved to the account', s.kind === 'server' && /Vault account/.test(s.note) && s.entries.length === 1 && db.length === 1, JSON.stringify([s.kind, s.note, db.length]));
-  check('the toolbar says so', /Saved to Vault/.test(await page.locator('.save').innerText()));
+  check('the toolbar says so', /Saved to your Vault account/.test((await page.locator('.save-status').getAttribute('title')) ?? ''));
   check('requests carry the Vault token', seenAuth.length > 0 && seenAuth.every((h) => h === 'Bearer tok-123'));
   await page.getByRole('button', { name: /Start from a rectangle/ }).click();
   await settle(page, 'unsaved', 3000);
