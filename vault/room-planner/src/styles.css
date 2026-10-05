@@ -437,3 +437,6 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--co
 .credits-list li { margin: 2px 0; }
 button.link { background: none; border: 0; padding: 0; color: inherit; text-decoration: underline; cursor: pointer; font: inherit; }
 button.link:hover { opacity: .7; }
+
+/* Thumbnails of the real 3D models in the Library cards */
+.card .thumb-3d { display: block; margin: 0 auto; width: 88px; height: 60px; object-fit: contain; }

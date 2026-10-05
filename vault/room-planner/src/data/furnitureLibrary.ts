@@ -1,4 +1,5 @@
 import type { FurnitureDefinition, Material } from '../engine/types';
+import { REAL_MODELS } from './realModels';
 
 /**
  * Seed furniture library (Appendix C, C17). Generic metric set, edit freely: this is the only place the numbers live.
@@ -83,6 +84,13 @@ export const FURNITURE_LIBRARY: FurnitureDefinition[] = [
   { id: 'real-dining-chair', name: 'Dining chair (3D model)', category: 'seating', defaultWidth: 0.434, defaultLength: 0.576, defaultHeight: 0.973 },
   { id: 'real-coffee-table', name: 'Coffee table (3D model)', category: 'tables', defaultWidth: 1.202, defaultLength: 0.6, defaultHeight: 0.39 },
   { id: 'real-display-shelves', name: 'Display shelves (3D model)', category: 'storage', defaultWidth: 1.078, defaultLength: 0.372, defaultHeight: 1.556 },
+  { id: 'real-bed', name: 'Bed (3D model)', category: 'bedroom', defaultWidth: 1.494, defaultLength: 2.04, defaultHeight: 1.534 },
+  { id: 'real-desk', name: 'Office desk (3D model)', category: 'office', defaultWidth: 2.0, defaultLength: 0.947, defaultHeight: 0.788 },
+  { id: 'real-vase', name: 'Vase (3D model)', category: 'decor', defaultWidth: 0.204, defaultLength: 0.204, defaultHeight: 0.4, settles: true },
+  { id: 'real-ceiling-lamp', name: 'Ceiling lamp (3D model)', category: 'lighting', defaultWidth: 0.432, defaultLength: 0.432, defaultHeight: 0.952, mount: 'ceiling' },
+  { id: 'real-rug', name: 'Wool rug (3D model)', category: 'rugs', defaultWidth: 2.4, defaultLength: 1.7, defaultHeight: 0.015 },
+  { id: 'real-mirror', name: 'Ornate mirror (3D model)', category: 'wall art', defaultWidth: 0.486, defaultLength: 0.026, defaultHeight: 0.744, defaultElevation: 1.0 },
+  { id: 'real-picture', name: 'Framed painting (3D model)', category: 'wall art', defaultWidth: 0.603, defaultLength: 0.03, defaultHeight: 0.464, defaultElevation: 1.3 },
 ];
 
 /**
@@ -92,6 +100,7 @@ export const FURNITURE_LIBRARY: FurnitureDefinition[] = [
 export const LIGHT_EMITTERS: Record<string, { colour: string; intensity: number; atFraction: number }> = {
   'ceiling-light': { colour: '#ffe3bd', intensity: 40, atFraction: 0.1 },
   'pendant-light': { colour: '#ffe0b5', intensity: 32, atFraction: 0.1 },
+  'real-ceiling-lamp': { colour: '#ffe0b5', intensity: 32, atFraction: 0.15 },
   downlight: { colour: '#ffe9cf', intensity: 12, atFraction: 0.1 },
   'floor-lamp': { colour: '#ffd9a0', intensity: 14, atFraction: 0.88 },
   'table-lamp': { colour: '#ffd9a0', intensity: 7, atFraction: 0.72 },
@@ -196,4 +205,6 @@ export const DEFAULT_FINISHES: Record<string, Partial<Record<'frame' | 'upholste
 };
 
 /** Finishes of doors and windows in the Realistic look. */
+// a real 3D model's block stand-in (Standard and Clay looks, previews) is finished like the piece it stands for
+for (const [id, m] of Object.entries(REAL_MODELS)) DEFAULT_FINISHES[id] ??= DEFAULT_FINISHES[m.blockAs] ?? {};
 export const FIXTURE_FINISHES = { frame: 'white-paint', door: 'white-paint', handle: 'brushed-steel' } as const;

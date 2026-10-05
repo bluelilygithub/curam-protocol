@@ -128,6 +128,7 @@ export function glyphFor(rawId: string, w: number, l: number): Glyph {
       shapes.push(line([0, -hl, 0, hl], 'faint'));
       break;
     case 'plant-large':
+    case 'vase':
     case 'plant-small': {
       const r = Math.min(w, l) / 2;
       shapes.push(circle(0, 0, r * 0.62, 'detail'), circle(0, 0, r * 0.28, 'faint'));

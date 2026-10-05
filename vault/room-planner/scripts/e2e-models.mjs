@@ -29,7 +29,9 @@ await wait(500);
 // library
 await page.getByLabel('Search library').fill('3D model');
 const cards = await page.locator('.card', { hasText: '3D model' }).count();
-check('the library offers the six 3D models', cards === 6, String(cards));
+check('the library offers the thirteen 3D models', cards === 13, String(cards));
+const thumbs = await page.locator('.card img.thumb-3d').evaluateAll((els) => els.map((e) => e.complete && e.naturalWidth > 0));
+check('each 3D card shows a picture of the model', thumbs.length === 13 && thumbs.every(Boolean), JSON.stringify(thumbs));
 await page.getByLabel('Search library').fill('');
 
 // place a sofa and an armchair, look at them in 3D
@@ -65,7 +67,7 @@ await dlg.waitFor();
 const text = await dlg.innerText();
 check('the credits name every model and its author', /Sofa 02 by Kirill Sannikov/.test(text) && /Modern Arm Chair 01 by Vibrant Nordic/.test(text) && /Dining Chair 02 by James Ray Cock/.test(text) && /Wooden Display Shelves 01 by James Ray Cock/.test(text) && /Mid Century Lounge Chair by Kuutti Siitonen/.test(text) && /Modern Coffee Table 01 by Amin/.test(text), text.slice(0, 400));
 check('and state the CC0 licence with a link', /CC0/.test(text) && (await dlg.locator('a[href*="creativecommons.org/publicdomain/zero"]').count()) === 1);
-check('model links go to Poly Haven', (await dlg.locator('a[href^="https://polyhaven.com/a/"]').count()) === 6);
+check('model links go to Poly Haven', (await dlg.locator('a[href^="https://polyhaven.com/a/"]').count()) === 13);
 if (out) await page.screenshot({ path: join(out, 'credits.png') });
 await page.keyboard.press('Escape');
 await wait(200);

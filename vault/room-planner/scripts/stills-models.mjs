@@ -24,12 +24,10 @@ await page.evaluate(() => {
   const xs = r.vertices.map((v) => v.position.x), ys = r.vertices.map((v) => v.position.y);
   const x0 = Math.min(...xs), y0 = Math.min(...ys);
   const defs = Object.fromEntries(a.project.getState().project.furnitureDefinitions.map((d) => [d.id, d]));
-  const add = (definitionId, dx, dy, rot = 0) => { const d = defs[definitionId]; r.furniture.push({ id: `m-${r.furniture.length}`, definitionId, roomId: r.id, position: { x: x0 + dx, y: y0 + dy }, elevation: 0, rotation: rot, width: d.defaultWidth, length: d.defaultLength, height: d.defaultHeight }); };
-  add('real-sofa', 1.2, 0.6); add('sofa-3', 3.4, 0.6);
-  add('real-armchair', 0.6, 2.0); add('armchair', 2.0, 2.0);
-  add('real-lounge-chair', 3.4, 2.0); add('real-coffee-table', 1.4, 3.4); add('coffee-table', 3.0, 3.4);
-  add('real-dining-chair', 1.0, 4.4); add('dining-chair', 2.6, 4.4);
-  add('real-display-shelves', 0.25, 3.0, 270); add('bookshelf', 3.75, 3.0, 90);
+  const add = (definitionId, dx, dy, rot = 0) => { const d = defs[definitionId]; r.furniture.push({ id: `m-${r.furniture.length}`, definitionId, roomId: r.id, position: { x: x0 + dx, y: y0 + dy }, elevation: d.mount === 'ceiling' ? 2.6 - d.defaultHeight : (d.defaultElevation ?? (definitionId === 'real-vase' ? 0.39 : 0)), rotation: rot, width: d.defaultWidth, length: d.defaultLength, height: d.defaultHeight }); };
+  add('real-rug', 2.0, 2.6); add('real-bed', 3.0, 1.3); add('real-desk', 1.2, 0.55); add('real-sofa', 1.4, 3.6, 180);
+  add('real-coffee-table', 2.0, 2.6); add('real-vase', 2.0, 2.6); add('real-ceiling-lamp', 2.0, 2.6);
+  add('real-mirror', 3.99, 3.0, 270); add('real-picture', 2.0, 0.02);
   a.project.getState().load(p);
   a.ui.getState().setViewMode('3d');
 });
@@ -50,7 +48,8 @@ const shotAt = async (name, pos, target) => {
 };
 const org = await page.evaluate(() => { const r = window.roomPlanner.project.getState().project.rooms[0]; return { x: Math.min(...r.vertices.map((v) => v.position.x)), y: Math.min(...r.vertices.map((v) => v.position.y)) }; });
 // dining chairs seen from the room side (+y), and the shelves from the middle of the room
-await shotAt('close-chairs', [org.x + 1.8, 1.4, org.y + 6.2], [org.x + 1.8, 0.5, org.y + 4.4]);
-await shotAt('close-shelves', [org.x + 2.0, 1.6, org.y + 3.0], [org.x + 0.3, 0.9, org.y + 3.0]);
+await shotAt('close-bed', [org.x + 3.0, 2.2, org.y + 4.2], [org.x + 3.0, 0.6, org.y + 1.3]);
+await shotAt('close-wall', [org.x + 2.2, 1.5, org.y + 3.6], [org.x + 2.0, 1.0, org.y + 0.3]);
+await shotAt('close-mirror', [org.x + 1.5, 1.4, org.y + 3.0], [org.x + 3.95, 1.2, org.y + 3.0]);
 console.log(errors.length ? `errors: ${errors.slice(0, 5).join(' | ')}` : 'no errors');
 await browser.close();

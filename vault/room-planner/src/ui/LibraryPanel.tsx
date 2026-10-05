@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { FIXTURE_LIBRARY, LIGHT_EMITTERS } from '../data/furnitureLibrary';
-import { isRealModel } from '../data/realModels';
+import { isRealModel, thumbUrl } from '../data/realModels';
 import { glyphFor, type GlyphShape } from '../render2d/glyphs';
 import { useApp, useProject, useUi } from './AppContext';
 import { Icons } from './icons';
@@ -88,7 +88,9 @@ export function LibraryPanel() {
   );
   const card = (d: (typeof defs)[number], keyPrefix = ''): React.ReactNode => (
     <button key={`${keyPrefix}${d.id}`} className={`card ${active('furniture', d.id) ? 'active' : ''}`} disabled={!hasRoom} onClick={() => start('furniture', d.id)} title={`Place ${d.name}: ${fmt(d.defaultWidth)} × ${fmt(d.defaultLength)} × ${fmt(d.defaultHeight)} m${LIGHT_EMITTERS[d.id] ? '. Gives light: shows in the Realistic 3D look and in Render photo.' : ''}${isRealModel(d.id) ? '. A real 3D model: it shows as the real thing in the Realistic 3D look and in Render photo, and as a plain shape elsewhere.' : ''}`}>
-      <GlyphThumb id={d.id} w={d.defaultWidth} l={d.defaultLength} />
+      {isRealModel(d.id)
+        ? <img className="thumb-3d" src={thumbUrl(d.id)} width={88} height={60} alt="" draggable={false} />
+        : <GlyphThumb id={d.id} w={d.defaultWidth} l={d.defaultLength} />}
       <span className="name">{d.name}</span>
       <span className="dims">{fmt(d.defaultWidth)}×{fmt(d.defaultLength)}×{fmt(d.defaultHeight)}</span>
     </button>

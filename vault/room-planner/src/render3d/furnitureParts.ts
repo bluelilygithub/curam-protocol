@@ -475,6 +475,7 @@ const RECIPES: Record<string, Recipe> = {
   'bed-king': bed,
   'plant-large': (w, l, h) => plant(w, l, h, true),
   'plant-small': (w, l, h) => plant(w, l, h, false),
+  vase: (w, l, h) => [cyl('pot', [-w / 2, w / 2], [0, h], [-l / 2, l / 2])],
   'floor-lamp': floorLamp,
   'mirror-floor': mirror,
   'rug-rect': rugRect,

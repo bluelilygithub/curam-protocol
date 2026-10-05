@@ -12,10 +12,16 @@ const root = join(__dirname, '..', '..', 'public', 'models');
 describe('real 3D models', () => {
   const entries = Object.entries(REAL_MODELS);
 
-  it('has six curated models, each a library item', () => {
-    expect(entries.length).toBe(6);
+  it('has thirteen curated models, each a library item', () => {
+    expect(entries.length).toBe(13);
     for (const [id] of entries) expect(FURNITURE_LIBRARY.some((d) => d.id === id), id).toBe(true);
     expect(FURNITURE_LIBRARY.filter((d) => isRealModel(d.id)).length).toBe(entries.length);
+  });
+
+  it('every furniture group in the Library has at least one 3D model (doors and windows are fixtures, not furniture)', () => {
+    const groups = new Set(FURNITURE_LIBRARY.map((d) => d.category));
+    for (const g of groups) expect(FURNITURE_LIBRARY.some((d) => d.category === g && isRealModel(d.id)), g).toBe(true);
+    expect(groups.size).toBe(9);
   });
 
   it('every model has its files and a CC0 source record naming the author', () => {
@@ -25,8 +31,9 @@ describe('real 3D models', () => {
       expect(existsSync(join(dir, `${m.folder}.bin`)), `${id} bin`).toBe(true);
       const src = JSON.parse(readFileSync(join(dir, 'source.json'), 'utf8')) as { authors: string[]; licence: string; url: string };
       expect(src.licence, id).toBe('CC0');
-      expect(src.authors, id).toContain(m.author);
-      expect(src.url, id).toBe(`https://polyhaven.com/a/${m.folder}`);
+      for (const a of m.author.split(' and ')) expect(src.authors, id).toContain(a);
+      expect(src.url, id).toBe(`https://polyhaven.com/a/${m.asset ?? m.folder}`);
+      expect(existsSync(join(root, 'thumbs', `${id}.png`)), `${id} thumbnail`).toBe(true);
       expect(m.title.length, id).toBeGreaterThan(2);
     }
     expect(MODEL_LICENCE.name).toMatch(/CC0/);
