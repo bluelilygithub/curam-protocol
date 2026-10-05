@@ -10,6 +10,39 @@ import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import Tooltip from '../components/Tooltip';
 import { scaleIngredients } from '../utils/recipeScaling';
 
+// Same button-hierarchy pattern as ContractReviewPage.jsx's PrimaryButton/
+// SecondaryButton — page-local per DESIGN.md's "no shared <Button>
+// component" rule, brought over here for consistency across both pages plus
+// a real fix: none of these buttons previously had a focus-visible ring,
+// only the browser's default outline.
+const FOCUS_RING = 'outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[var(--color-primary)]';
+
+function PrimaryButton({ children, className = '', style, large = false, ...props }) {
+  return (
+    <button
+      type="button"
+      {...props}
+      className={`rounded-xl font-medium text-white hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity ${large ? 'px-4 py-2 text-sm' : 'px-3 py-1.5 text-xs'} ${FOCUS_RING} ${className}`}
+      style={{ background: 'var(--color-primary)', ...style }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SecondaryButton({ children, className = '', style, ...props }) {
+  return (
+    <button
+      type="button"
+      {...props}
+      className={`rounded-xl border px-3 py-1.5 text-xs font-medium hover:opacity-70 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity ${FOCUS_RING} ${className}`}
+      style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', ...style }}
+    >
+      {children}
+    </button>
+  );
+}
+
 const RECIPE_TAG_OPTIONS = [
   'breakfast', 'lunch', 'dinner', 'snack', 'curry', 'pasta', 'rice', 'soup',
   'salad', 'fast', 'slow', 'vegetarian', 'vegan', 'leftovers', 'comfort', 'healthy',
@@ -822,15 +855,9 @@ function RecipeDetailPanel({
               </p>
             )}
             <Tooltip text="Look up live Coles & Woolworths prices for these ingredients">
-              <button
-                type="button"
-                onClick={() => onComparePrices(displayIngredients, effectiveServings)}
-                disabled={groceryLoading || !status?.webSearch}
-                className="text-xs px-3 py-1.5 rounded-lg text-white transition-opacity hover:opacity-80 disabled:opacity-40"
-                style={{ background: 'var(--color-primary)' }}
-              >
+              <PrimaryButton onClick={() => onComparePrices(displayIngredients, effectiveServings)} disabled={groceryLoading || !status?.webSearch}>
                 {groceryLoading ? 'Finding prices…' : groceryResult ? 'Refresh prices' : 'Get prices'}
-              </button>
+              </PrimaryButton>
             </Tooltip>
           </div>
           {groceryResult && <GroceryPriceResults result={groceryResult} onResultChange={onGroceryResultChange} />}
@@ -841,14 +868,7 @@ function RecipeDetailPanel({
         <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Categories</p>
         <TagPicker selected={saveTags} onChange={onSaveTagsChange} />
         <Tooltip text="Save this recipe to your library">
-          <button
-            type="button"
-            onClick={onSave}
-            className="text-xs px-3 py-1.5 rounded-lg text-white transition-opacity hover:opacity-80"
-            style={{ background: 'var(--color-primary)' }}
-          >
-            Save to my recipes
-          </button>
+          <PrimaryButton onClick={onSave}>Save to my recipes</PrimaryButton>
         </Tooltip>
       </div>
     </div>
@@ -954,14 +974,7 @@ function MealPlanTool({
         </label>
 
         <Tooltip text="Save this selection as a named meal plan">
-          <button
-            type="button"
-            onClick={onCreatePlan}
-            className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
-            style={{ background: 'var(--color-primary)' }}
-          >
-            Save plan
-          </button>
+          <PrimaryButton onClick={onCreatePlan} large>Save plan</PrimaryButton>
         </Tooltip>
       </div>
 
@@ -986,7 +999,7 @@ function MealPlanTool({
                 </span>
               ) : (
                 <Tooltip text="Delete this meal plan">
-                  <button type="button" onClick={() => setDeleteConfirmId(plan.id)} className="shrink-0" style={{ color: '#ef4444' }}>Delete</button>
+                  <button type="button" onClick={() => setDeleteConfirmId(plan.id)} className={`shrink-0 rounded ${FOCUS_RING}`} style={{ color: '#ef4444' }}>Delete</button>
                 </Tooltip>
               )}
             </li>
@@ -1003,15 +1016,9 @@ function MealPlanTool({
             ))}
           </ul>
           <Tooltip text="Merge ingredients across every recipe in this plan and price them once">
-            <button
-              type="button"
-              onClick={() => onPricePlan(activeMealPlan.id)}
-              disabled={mealPlanPricing}
-              className="text-xs px-3 py-1.5 rounded-lg text-white transition-opacity hover:opacity-80 disabled:opacity-40"
-              style={{ background: 'var(--color-primary)' }}
-            >
+            <PrimaryButton onClick={() => onPricePlan(activeMealPlan.id)} disabled={mealPlanPricing}>
               {mealPlanPricing ? 'Pricing…' : mealPlanResult ? 'Refresh plan prices' : 'Price this plan'}
-            </button>
+            </PrimaryButton>
           </Tooltip>
           {mealPlanResult?.missingRecipes?.length > 0 && (
             <p className="text-[10px]" style={{ color: '#b45309' }}>
@@ -1570,14 +1577,9 @@ export default function RecipesPage() {
             </div>
 
             <Tooltip text="Generate four dish ideas from your ingredients">
-              <button
-                type="button"
-                onClick={handleSuggest}
-                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
-                style={{ background: 'var(--color-primary)' }}
-              >
+              <PrimaryButton onClick={handleSuggest} large>
                 Suggest four recipes
-              </button>
+              </PrimaryButton>
             </Tooltip>
 
             {suggestions?.recipes?.length > 0 && (
@@ -1675,14 +1677,9 @@ export default function RecipesPage() {
             </div>
 
             <Tooltip text="Generate Basic, Advanced, and Master versions of this dish">
-              <button
-                type="button"
-                onClick={handleNamedSuggest}
-                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
-                style={{ background: 'var(--color-primary)' }}
-              >
+              <PrimaryButton onClick={handleNamedSuggest} large>
                 Show Basic / Advanced / Master
-              </button>
+              </PrimaryButton>
             </Tooltip>
 
             {nameSuggestions?.tiers?.length > 0 && (
@@ -1783,15 +1780,9 @@ export default function RecipesPage() {
             </label>
 
             <Tooltip text="Look up live Coles & Woolworths prices for this list">
-              <button
-                type="button"
-                onClick={handleGroceryPrice}
-                disabled={!status?.webSearch}
-                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
-                style={{ background: 'var(--color-primary)' }}
-              >
+              <PrimaryButton onClick={handleGroceryPrice} disabled={!status?.webSearch} large>
                 {groceryResult ? 'Refresh prices' : 'Get prices'}
-              </button>
+              </PrimaryButton>
             </Tooltip>
 
             {groceryResult && <GroceryPriceResults result={groceryResult} onResultChange={setGroceryResult} />}
@@ -1828,9 +1819,9 @@ export default function RecipesPage() {
                 <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Favourites saved from leftovers or recipe by name.</p>
               </div>
               <Tooltip text="Reload your saved recipes">
-                <button type="button" onClick={loadLibrary} disabled={libraryLoading} className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                <SecondaryButton onClick={loadLibrary} disabled={libraryLoading}>
                   {libraryLoading ? 'Refreshing…' : 'Refresh'}
-                </button>
+                </SecondaryButton>
               </Tooltip>
             </div>
 
@@ -1867,7 +1858,7 @@ export default function RecipesPage() {
                         </span>
                       ) : (
                         <Tooltip text="Delete this saved recipe">
-                          <button type="button" onClick={() => setDeleteConfirmId(item.id)} className="text-xs" style={{ color: '#ef4444' }}>Delete</button>
+                          <button type="button" onClick={() => setDeleteConfirmId(item.id)} className={`text-xs rounded ${FOCUS_RING}`} style={{ color: '#ef4444' }}>Delete</button>
                         </Tooltip>
                       )}
                     </div>
