@@ -267,6 +267,14 @@ export function createApp(storage: StorageLike, audio: AmbientPlayer = new Ambie
     setAmbient(k: AmbientKind): void { ui.getState().setAmbient(k); },
     setAmbientVolume(v: number): void { ui.getState().setAmbientVolume(v); },
     setLightsOn(on: boolean): void { ui.getState().setLightsOn(on); },
+    /** Go to the view where lights can be seen: 3D, Cinematic, Realistic, lights on. */
+    showLights(): void {
+      const u = ui.getState();
+      if (u.viewMode !== '3d') interaction.switchView('3d');
+      this.setCinematic(true);
+      u.setLook('realistic');
+      u.setLightsOn(true);
+    },
     setLightPower(v: number): void { ui.getState().setLightPower(v); },
     /** One light's own power (1 = standard). Like saved views this is not an undo step, so dragging a slider does not fill the history. */
     setPiecePower(id: string, v: number): void { project.getState().updateSilently((p) => withLightPower(p, id, v)); },

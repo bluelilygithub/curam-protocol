@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import type { SavedView } from '../engine/types';
+import { LIGHT_EMITTERS } from '../data/furnitureLibrary';
 import { useApp, useProject, useUi } from '../ui/AppContext';
 
 const NO_VIEWS: SavedView[] = [];
@@ -27,6 +28,8 @@ export function Viewbar3D() {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [hintGone, setHintGone] = useState(false);
+  const hasLights = useProject((s) => !!s.project?.rooms[0]?.furniture.some((f) => LIGHT_EMITTERS[f.definitionId]));
   const menu = useRef<HTMLDivElement>(null);
 
   // the View menu closes on a click elsewhere or Esc (Esc is swallowed so it does not also leave 3D)
@@ -80,7 +83,16 @@ export function Viewbar3D() {
     );
   }
 
+  const showHint = hasLights && !hintGone && !(cinematic && look === 'realistic');
   return (
+    <>
+    {showHint && (
+      <div className="light-hint dock-hint" role="note" data-testid="lights-hint">
+        <span>This room has lights. They show in the <strong>Realistic</strong> look.</span>
+        <button className="btn primary" onClick={() => chooseLook('realistic')}>Show Realistic</button>
+        <button className="btn icon" onClick={() => setHintGone(true)} aria-label="Dismiss" title="Dismiss">×</button>
+      </div>
+    )}
     <div className="dock3d" role="toolbar" aria-label="3D view">
       <div className="seg" role="group" aria-label="Camera">
         <button className={`btn ${projection === 'perspective' ? 'active' : ''}`} aria-pressed={projection === 'perspective'} aria-label="Perspective" onClick={() => app.setProjection('perspective')} title="Perspective camera">
@@ -191,5 +203,6 @@ export function Viewbar3D() {
         )}
       </div>
     </div>
+    </>
   );
 }

@@ -38,7 +38,7 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: 'rp-canvas', title: 'The Plan', target: 'rp-stage', on: 'left', needs2d: true,
-    text: 'Drag to move a piece, press R to rotate it. Anything that overlaps, blocks a door swing or leaves too little clearance is flagged in red or amber with the reason. The mouse wheel zooms.',
+    text: 'Hover a piece for its name and size. Drag to move it, press R to rotate it. Press Home (or the Show room button) if the plan is ever dragged out of view. Anything that overlaps, blocks a door swing or leaves too little clearance is flagged in red or amber with the reason. The mouse wheel zooms.',
   },
   {
     id: 'rp-inspector', title: 'Inspector', target: 'rp-inspector', on: 'left', needs2d: true, panel: 'right',

@@ -414,8 +414,15 @@ function PictureSection({ id }: { id: string }) {
 function LightSection({ id }: { id: string }) {
   const app = useApp();
   const power = useProject((s) => s.project?.rooms[0]?.furniture.find((f) => f.id === id)?.lightPower ?? 1);
+  const seen = useUi((s) => s.viewMode === '3d' && s.cinematic && s.look === 'realistic');
   return (
     <Section title="Light">
+      {!seen && (
+        <div className="light-hint" role="note">
+          <span>Lights show in the <strong>Realistic 3D look</strong> and in Render photo, not in the plan.</span>
+          <button className="btn primary" onClick={() => app.showLights()} title="Switch to the 3D view in the Realistic look with the lights on">See it in 3D</button>
+        </div>
+      )}
       <label className="field power" title="How bright this light is. 100 % is the standard strength; it is multiplied by the All lights power in the Lights box below.">
         <span className="field-label">Power</span>
         <span className="field-control">

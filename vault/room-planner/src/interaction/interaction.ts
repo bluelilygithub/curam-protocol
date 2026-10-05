@@ -14,6 +14,7 @@ import {
   cyclePick, marqueeSelect, pickAll, sameRef, type PickCycleState, type SelectionRef,
 } from '../engine/selection';
 import { generateSnapCandidates, rankSnapCandidates, wallFlushAngle, DEFAULT_SNAP_DISTANCE } from '../engine/snapping';
+import { LIGHT_EMITTERS } from '../data/furnitureLibrary';
 import { isSettler, ridersOf, supportElevation } from '../engine/support';
 import { primaryViolation, validateFixture, validateInstance } from '../engine/validation';
 import type {
@@ -684,6 +685,11 @@ export class Interaction {
       this.p.ui.getState().noteRecent(probe.definitionId);
       this.endPlacing();
       this.p.ui.getState().select([{ kind: 'furniture', id }]);
+      // lights are only seen in action in the Realistic 3D look: say so when one is placed
+      if (LIGHT_EMITTERS[probe.definitionId]) {
+        const u = this.p.ui.getState();
+        if (!(u.viewMode === '3d' && u.cinematic && u.look === 'realistic')) u.setStatus({ text: `${defName} placed. Lights show in the Realistic 3D look and in Render photo: use the Inspector's “See it in 3D”.`, severity: 'info' });
+      }
     }
   }
 

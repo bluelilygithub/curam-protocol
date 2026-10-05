@@ -172,10 +172,54 @@ export class SceneRenderer {
     }));
   }
 
+  /**
+   * The grid lines over the floor, inside the room only. The floor is opaque, so the page grid is hidden under it; this draws the same
+   * lines, from the same corner the snapping uses, clipped to the room, so you can see what pieces snap to.
+   */
+  private drawFloorGrid(room: Room): void {
+    const ui = this.d.ui.getState();
+    if (!ui.showGrid || room.vertices.length < 3) return;
+    const v = this.view;
+    const step = gridStep(v.scale, ui.grid);
+    const origin = room.vertices[0].position;
+    const box = aabbOf(room.vertices.map((q) => q.position));
+    const poly = room.vertices.map((q) => this.cv(q.position));
+    const p = this.palette;
+    const lines = (box.max.x - box.min.x + box.max.y - box.min.y) / step;
+    if (lines > 600) return; // far too fine to be useful at this zoom
+    const major = (n: number, o: number): boolean => Math.abs(n - o - Math.round(n - o)) < 1e-6;
+    this.sceneLayer.add(new Konva.Shape({
+      listening: false,
+      sceneFunc: (ctx) => {
+        ctx.beginPath();
+        poly.forEach((q, i) => (i === 0 ? ctx.moveTo(q.x, q.y) : ctx.lineTo(q.x, q.y)));
+        ctx.closePath();
+        ctx.clip();
+        for (const pass of ['minor', 'major'] as const) {
+          ctx.beginPath();
+          for (let x = origin.x + Math.ceil((box.min.x - origin.x) / step) * step; x <= box.max.x + 1e-9; x += step) {
+            if (major(x, origin.x) !== (pass === 'major')) continue;
+            const c = this.cv({ x, y: 0 }).x;
+            ctx.moveTo(c, 0); ctx.lineTo(c, this.stage.height());
+          }
+          for (let y = origin.y + Math.ceil((box.min.y - origin.y) / step) * step; y <= box.max.y + 1e-9; y += step) {
+            if (major(y, origin.y) !== (pass === 'major')) continue;
+            const c = this.cv({ x: 0, y }).y;
+            ctx.moveTo(0, c); ctx.lineTo(this.stage.width(), c);
+          }
+          ctx.strokeStyle = pass === 'major' ? p.gridMajor : p.grid;
+          ctx.lineWidth = pass === 'major' ? 1 : 0.7;
+          ctx.stroke();
+        }
+      },
+    }));
+  }
+
   private drawRoom(room: Room, selectedWalls: string[]): void {
     const p = this.palette;
     const layer = this.sceneLayer;
     layer.add(new Konva.Line({ points: this.flat(room.vertices.map((v) => v.position)), closed: true, fill: p.floor, listening: false }));
+    this.drawFloorGrid(room);
     for (const o of wallOutlines(room.vertices, room.walls)) {
       const sel = !!o.wallId && selectedWalls.includes(o.wallId);
       layer.add(new Konva.Line({

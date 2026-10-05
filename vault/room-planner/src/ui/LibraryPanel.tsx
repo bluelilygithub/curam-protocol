@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FIXTURE_LIBRARY } from '../data/furnitureLibrary';
+import { FIXTURE_LIBRARY, LIGHT_EMITTERS } from '../data/furnitureLibrary';
 import { glyphFor, type GlyphShape } from '../render2d/glyphs';
 import { useApp, useProject, useUi } from './AppContext';
 import { Icons } from './icons';
@@ -86,7 +86,7 @@ export function LibraryPanel() {
     </details>
   );
   const card = (d: (typeof defs)[number], keyPrefix = ''): React.ReactNode => (
-    <button key={`${keyPrefix}${d.id}`} className={`card ${active('furniture', d.id) ? 'active' : ''}`} disabled={!hasRoom} onClick={() => start('furniture', d.id)} title={`Place ${d.name}: ${fmt(d.defaultWidth)} × ${fmt(d.defaultLength)} × ${fmt(d.defaultHeight)} m`}>
+    <button key={`${keyPrefix}${d.id}`} className={`card ${active('furniture', d.id) ? 'active' : ''}`} disabled={!hasRoom} onClick={() => start('furniture', d.id)} title={`Place ${d.name}: ${fmt(d.defaultWidth)} × ${fmt(d.defaultLength)} × ${fmt(d.defaultHeight)} m${LIGHT_EMITTERS[d.id] ? '. Gives light: shows in the Realistic 3D look and in Render photo.' : ''}`}>
       <GlyphThumb id={d.id} w={d.defaultWidth} l={d.defaultLength} />
       <span className="name">{d.name}</span>
       <span className="dims">{fmt(d.defaultWidth)}×{fmt(d.defaultLength)}×{fmt(d.defaultHeight)}</span>

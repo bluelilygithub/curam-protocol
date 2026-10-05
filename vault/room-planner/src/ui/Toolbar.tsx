@@ -101,7 +101,7 @@ export function Toolbar() {
           </select>
         </label>
         </>)}
-        <button className="btn icon" disabled={!hasRoom} title="Fit room to view" onClick={() => (viewMode === '3d' ? app.cameraPreset('fit') : app.fitToRoom())}>{Icons.fit}</button>
+        <button className="btn icon" disabled={!hasRoom} title={viewMode === '3d' ? 'Fit room to view' : 'Bring the whole room back to the middle of the page (Home)'} onClick={() => (viewMode === '3d' ? app.cameraPreset('fit') : app.fitToRoom())}>{Icons.fit}</button>
       </div>
 
       <div className="spacer" />

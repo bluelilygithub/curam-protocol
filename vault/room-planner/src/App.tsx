@@ -6,6 +6,7 @@ import { Hud } from './ui/Hud';
 import { Inspector } from './ui/Inspector';
 import { LibraryBanner } from './ui/LibraryBanner';
 import { ProjectsPanel } from './ui/ProjectsPanel';
+import { RecentreChip } from './ui/RecentreChip';
 import { RoomBar } from './ui/RoomBar';
 import { LibraryPanel } from './ui/LibraryPanel';
 import { Stage2D } from './ui/Stage2D';
@@ -53,6 +54,7 @@ function Shell() {
         )}
         {hasRoom ? (viewMode === '2d' ? <Hud /> : null) : <EmptyState />}
         <RoomBar />
+        <RecentreChip />
         <LibraryBanner />
       </main>
       {rightOpen && <Inspector />}
