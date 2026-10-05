@@ -66,11 +66,18 @@ export interface ProjectStoreHooks {
  * The project's definitions plus any library item it does not have yet (a file saved before new pieces were added still offers them).
  * Applied to the view only, so opening a file never changes it; the new items are simply offered again each time it is opened.
  */
+// the same stored list always gives the same merged list, so unchanged definitions compare equal between edits
+const mergedDefs = new WeakMap<object, Project['furnitureDefinitions']>();
 export function withLibrary(p: Project | null): Project | null {
   if (!p) return p;
-  const have = new Set(p.furnitureDefinitions.map((d) => d.id));
-  const missing = FURNITURE_LIBRARY.filter((d) => !have.has(d.id));
-  return missing.length ? { ...p, furnitureDefinitions: [...p.furnitureDefinitions, ...structuredClone(missing)] } : p;
+  let merged = mergedDefs.get(p.furnitureDefinitions);
+  if (!merged) {
+    const have = new Set(p.furnitureDefinitions.map((d) => d.id));
+    const missing = FURNITURE_LIBRARY.filter((d) => !have.has(d.id));
+    merged = missing.length ? [...p.furnitureDefinitions, ...structuredClone(missing)] : p.furnitureDefinitions;
+    mergedDefs.set(p.furnitureDefinitions, merged);
+  }
+  return merged === p.furnitureDefinitions ? p : { ...p, furnitureDefinitions: merged };
 }
 
 export function viewOf(doc: Project | null, activeId: string | null): Project | null {

@@ -24,6 +24,11 @@ page.on('console', (m) => { if (m.type() === 'error') problems.push(`console.err
 const shot = async (name) => { if (out) await page.screenshot({ path: join(out, `${name}.png`) }); };
 const ev = (fn, arg) => page.evaluate(fn, arg);
 const wait = (ms) => page.waitForTimeout(ms);
+const openBox = async (title) => {
+  const box = page.locator('.scene-settings details', { has: page.locator('summary', { hasText: new RegExp(`^${title}$`) }) });
+  if ((await box.getAttribute('open')) === null) await box.locator('summary').click();
+  return box;
+};
 const viewMenu = async (fn) => {
   await page.getByRole('button', { name: 'View ▾' }).click();
   await page.getByRole('group', { name: 'View options', exact: true }).waitFor();
@@ -345,23 +350,27 @@ check('look is remembered per browser', (await ev(() => localStorage.getItem('ro
 await page.getByRole('button', { name: 'Clay', exact: true }).click();
 await wait(500);
 check('switching back to clay works', (await ev(() => window.roomPlanner.ui.getState().look)) === 'clay');
-// lights and ambient sound controls
-await ev(() => { const u = window.roomPlanner.ui.getState(); u.setCinematic(true); u.setLook('realistic'); }); // Lights only shows in the Realistic look, so the button is only enabled there
-await viewMenu(async () => { await page.getByRole('button', { name: 'Lights', exact: true }).click(); });
+// lights, sound and palette live in collapsed boxes in the Inspector
+await ev(() => { const u = window.roomPlanner.ui.getState(); u.setCinematic(true); u.setLook('realistic'); });
+check('the Lights, Sound and Colour palette boxes start collapsed', (await page.locator('.scene-settings details[open]').count()) === 0 && (await page.locator('.scene-settings details').count()) === 3);
+let box = await openBox('Lights');
+await box.getByRole('button', { name: /^Lights (on|off)$/ }).click();
 check('the Lights button switches lights off', (await ev(() => window.roomPlanner.ui.getState().lightsOn)) === false);
-await viewMenu(async () => { await page.getByRole('button', { name: 'Lights', exact: true }).click(); });
-await page.getByRole('button', { name: 'View ▾' }).click();
-await page.getByLabel('Ambient sound').selectOption('ocean');
+await box.getByRole('button', { name: /^Lights (on|off)$/ }).click();
+check('and on again', (await ev(() => window.roomPlanner.ui.getState().lightsOn)) === true);
+await box.getByLabel('All lights power').fill('0.5');
+check('the All lights slider sets the power', Math.abs((await ev(() => window.roomPlanner.ui.getState().lightPower)) - 0.5) < 1e-9 && /50 %/.test(await box.innerText()));
+await box.getByLabel('All lights power').fill('1');
+box = await openBox('Sound');
+await box.getByLabel('Ambient sound').selectOption('ocean');
 check('choosing a sound sets it (and shows the volume)', (await ev(() => window.roomPlanner.ui.getState().ambient)) === 'ocean' && (await page.getByLabel('Sound volume').count()) === 1);
 check('four sounds plus Off are offered', (await page.getByLabel('Ambient sound').locator('option').count()) === 5);
-await page.getByLabel('Ambient sound').selectOption('off');
-await page.getByRole('button', { name: 'View ▾' }).click();
+await box.getByLabel('Ambient sound').selectOption('off');
 // colour palette: choose, see it on the room, undo
 await page.getByRole('button', { name: '3D', exact: true }).click().catch(() => undefined);
 await ev(() => { const u = window.roomPlanner.ui.getState(); u.setCinematic(true); u.setLook('realistic'); });
-await page.getByRole('button', { name: 'View ▾' }).click();
-await page.getByLabel('Colour palette').first().selectOption('coastal');
-await page.getByRole('button', { name: 'View ▾' }).click();
+box = await openBox('Colour palette');
+await box.getByRole('button', { name: 'Coastal' }).click();
 await wait(500);
 check('choosing a palette sets it on the room', (await ev(() => window.roomPlanner.project.getState().project.rooms[0].palette)) === 'coastal');
 const palCol = await ev(() => { const m = window.roomPlanner3d.scene3d.wallMaterial(window.roomPlanner.project.getState().project.rooms[0].walls[0].id); return m.color.getHexString(); });

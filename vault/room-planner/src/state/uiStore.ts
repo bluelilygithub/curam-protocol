@@ -57,6 +57,8 @@ export interface UiState {
   showGrid: boolean;
   /** Ceiling lights, lamps and the like give off light in the Realistic look (and Render photo). */
   lightsOn: boolean;
+  /** How bright all lights are together, 0-2 (1 = standard). Remembered per browser. */
+  lightPower: number;
   /** Soothing ambient sound while the 3D view is showing (synthesised in the browser). */
   ambient: AmbientKind;
   ambientVolume: number;
@@ -87,6 +89,7 @@ export interface UiActions {
   setProjectsOpen(on: boolean): void;
   setPhotoOpen(on: boolean): void;
   setLightsOn(on: boolean): void;
+  setLightPower(v: number): void;
   setAmbient(kind: AmbientKind): void;
   setAmbientVolume(v: number): void;
   setSnapMode(mode: SnapMode): void;
@@ -132,6 +135,7 @@ export function createUiStore(): UiStore {
     showClearances: false,
     showGrid: true,
     lightsOn: true,
+    lightPower: 1,
     ambient: 'off',
     ambientVolume: DEFAULT_VOLUME,
     snapMode: 'smart',
@@ -155,6 +159,7 @@ export function createUiStore(): UiStore {
     setImmersive: (immersive) => set({ immersive }),
     setProjectsOpen: (projectsOpen) => set({ projectsOpen }),
     setLightsOn: (lightsOn) => set({ lightsOn }),
+    setLightPower: (v) => set({ lightPower: Math.max(0, Math.min(2, Number.isFinite(v) ? v : 1)) }),
     setAmbient: (ambient) => set({ ambient }),
     setAmbientVolume: (ambientVolume) => set({ ambientVolume: Math.max(0, Math.min(1, ambientVolume)) }),
     setSnapMode: (snapMode) => set({ snapMode, snapEnabled: snapsFor(snapMode) }),

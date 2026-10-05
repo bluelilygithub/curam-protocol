@@ -47,7 +47,8 @@ await page.keyboard.press('Escape');
 const summary = await page.getByTestId('room-summary').innerText();
 check('the room shows a one-line summary', /^4 × 5 m · 20 m² · \d+ objects? · no problems$/.test(summary), summary);
 check('the long list of facts is collapsed under Room details', (await page.locator('details.section', { hasText: 'Room details' }).getAttribute('open')) === null);
-check('the colour palette is open under the name', (await page.locator('details.section', { hasText: 'Colour palette' }).getAttribute('open')) !== null);
+const boxes = page.locator('.scene-settings details');
+check('Colour palette, Lights and Sound are three collapsed boxes below the inspector', (await boxes.count()) === 3 && (await page.locator('.scene-settings details[open]').count()) === 0);
 
 // ---------------------------------------------------------------- toolbar
 check('Undo and Redo are icon-only (no text) but named for screen readers and tooltips', (await page.getByRole('button', { name: /^Undo/ }).innerText()).trim() === '' && (await page.getByRole('button', { name: /^Redo/ }).count()) === 1);
@@ -78,8 +79,8 @@ check('tour settings are hidden until a tour plays', (await page.locator('.dock3
 await page.locator('.dock3d').getByRole('button', { name: 'View ▾' }).click();
 const menu = page.getByRole('group', { name: 'View options', exact: true });
 await menu.waitFor();
-for (const label of ['Low', 'High', 'Lights', 'Walk', 'Full screen', 'Save view']) check(`the View menu has ${label}`, (await menu.getByRole('button', { name: label, exact: true }).count()) === 1);
-check('the View menu has Sound and Palette', (await menu.getByLabel('Ambient sound').count()) === 1 && (await menu.getByLabel('Colour palette').count()) === 1);
+for (const label of ['Low', 'High', 'Walk', 'Full screen', 'Save view']) check(`the View menu has ${label}`, (await menu.getByRole('button', { name: label, exact: true }).count()) === 1);
+check('Lights, Sound and Palette are no longer in the View menu', (await menu.getByRole('button', { name: 'Lights', exact: true }).count()) === 0 && (await menu.getByLabel('Ambient sound').count()) === 0 && (await menu.getByLabel('Colour palette').count()) === 0);
 const mgeo = await page.evaluate(() => { const m = document.querySelector('.dock-menu').getBoundingClientRect(); const d = document.querySelector('.dock3d').getBoundingClientRect(); const v = document.querySelector('.viewport').getBoundingClientRect(); return { above: m.bottom <= d.top + 1, inside: m.left >= v.left - 1 && m.right <= v.right + 1 && m.top >= v.top - 1 }; });
 check('the menu opens upward from the bar and stays inside the view', mgeo.above && mgeo.inside, JSON.stringify(mgeo));
 await shot('layout-3d-menu');

@@ -22,6 +22,11 @@ const viewMenu = async (fn) => {
   await fn();
   if (await page.getByRole('group', { name: 'View options', exact: true }).count()) await page.getByRole('button', { name: 'View ▾' }).click();
 };
+const openBox = async (title) => {
+  const box = page.locator('.scene-settings details', { has: page.locator('summary', { hasText: new RegExp(`^${title}$`) }) });
+  if ((await box.getAttribute('open')) === null) await box.locator('summary').click();
+  return box;
+};
 const wait = (ms) => page.waitForTimeout(ms);
 const ev = (fn, arg) => page.evaluate(fn, arg);
 await page.goto(URL);
@@ -80,26 +85,36 @@ check('the frame shows the photo in the Realistic look', hasMap);
 await page.screenshot({ path: join(out, 'photo-in-frame.png') });
 
 // ---------------------------------------------------------------- Lights button
-let lightsDisabled = true;
-await viewMenu(async () => { lightsDisabled = await page.getByRole('button', { name: 'Lights', exact: true }).isDisabled(); });
-check('Lights is enabled in the Realistic look', !lightsDisabled);
+const lightsBox = await openBox('Lights');
+check('Lights is on and the switch is there in the Realistic look', (await lightsBox.getByRole('button', { name: 'Lights on' }).count()) === 1 && (await lightsBox.getByRole('button', { name: 'Show Realistic' }).count()) === 0);
 const glow = () => ev(() => { let n = 0; window.roomPlanner3d.scene3d.root.traverse((o) => { if (o.isMesh && o.material?.emissive && o.material.emissive.getHex() !== 0) n++; }); return n; });
 const lamps = () => ev(() => { let n = 0; window.roomPlanner3d.scene3d.root.traverse((o) => { if (o.isPointLight) n++; }); return n; });
 const onGlow = await glow();
 const onLamps = await lamps();
 check('with the lights on the ceiling light and table lamp glow and light the room', onGlow >= 2 && onLamps === 2, `${onGlow} glowing, ${onLamps} lights`);
-await viewMenu(async () => { await page.getByRole('button', { name: 'Lights', exact: true }).click(); });
+await lightsBox.getByRole('button', { name: /^Lights (on|off)$/ }).click();
 await wait(500);
 check('switching the lights off removes the glow and the light', (await glow()) === 0 && (await lamps()) === 0, `${await glow()} glowing, ${await lamps()} lights`);
-await viewMenu(async () => { await page.getByRole('button', { name: 'Lights', exact: true }).click(); });
+await lightsBox.getByRole('button', { name: /^Lights (on|off)$/ }).click();
 await wait(500);
 check('and on again brings them back', (await lamps()) === 2);
 await ev(() => window.roomPlanner.ui.getState().setLook('clay'));
 await wait(300);
-let clayDisabled = false;
-await viewMenu(async () => { clayDisabled = await page.getByRole('button', { name: 'Lights', exact: true }).isDisabled(); });
-check('Lights is disabled in the Clay look, with a tooltip that says why', clayDisabled);
+await ev(() => window.roomPlanner.ui.getState().setLook('clay'));
+await wait(300);
+check('in Clay the Lights box offers to show the Realistic look and says lights show there', (await lightsBox.getByRole('button', { name: 'Show Realistic' }).count()) === 1 && /Realistic look/.test(await lightsBox.innerText()));
 await ev(() => window.roomPlanner.ui.getState().setLook('realistic'));
+
+// a single light's own power, from the Inspector, retunes it without a rebuild and is saved in the project
+await ev(() => { const u = window.roomPlanner.ui.getState(); u.setLook('realistic'); u.select([{ kind: 'furniture', id: 't-ceiling-light' }]); });
+await page.getByLabel("This light's power").fill('2');
+await wait(300);
+const own = await ev(() => window.roomPlanner.project.getState().project.rooms[0].furniture.find((f) => f.id === 't-ceiling-light').lightPower);
+const lampIntensities = await ev(() => { const out = []; window.roomPlanner3d.scene3d.root.traverse((o) => { if (o.isPointLight) out.push(o.intensity); }); return out.sort((a, b) => a - b); });
+check('a light has its own power slider, saved with the project', own === 2, String(own));
+check('and the scene light follows it (the ceiling light is twice its standard 40)', lampIntensities.includes(80), JSON.stringify(lampIntensities));
+await page.getByRole('button', { name: 'Reset to 100 %' }).click();
+check('Reset puts it back to the standard strength', (await ev(() => window.roomPlanner.project.getState().project.rooms[0].furniture.find((f) => f.id === 't-ceiling-light').lightPower)) === undefined);
 
 // ---------------------------------------------------------------- undo and back to the built-in picture
 await ev(() => { window.roomPlanner.setViewMode('2d'); window.roomPlanner.ui.getState().select([{ kind: 'furniture', id: 't-photo-frame' }]); });

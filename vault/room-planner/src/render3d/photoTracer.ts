@@ -35,6 +35,8 @@ export interface PhotoSetup {
   fov?: number;
   /** Whether lamps and ceiling lights are on (the live view's Lights switch). */
   lightsOn?: boolean;
+  /** The all-lights power of the live view (1 = standard). */
+  lightPower?: number;
 }
 
 
@@ -89,6 +91,7 @@ export class PathTracerTracer implements Tracer {
     ui.getState().setLook('realistic');
     ui.getState().setQuality('high');
     ui.getState().setLightsOn(setup.lightsOn !== false);
+    ui.getState().setLightPower(setup.lightPower ?? 1);
     const scene3d = new Scene3D({ project: setup.project, ui, bus: createFeedbackBus(), invalidate: () => {}, animateMs: 0 });
     this.scene3d = scene3d;
     const scene = new THREE.Scene();

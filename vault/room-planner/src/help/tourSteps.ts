@@ -50,7 +50,7 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: 'rp-cinematic', title: 'The 3D bar', target: 'rp-cinematic', on: 'top', needs3d: true,
-    text: 'One slim bar at the bottom of the 3D view. Choose the look: Standard, Clay (a white model with soft shadows) or Realistic (wood, fabric, lights and daylight). Play tour flies through your saved views. The View menu holds quality, lights, a soothing background sound, the colour palette, Walk (move through the room at eye height), full screen and your saved views.',
+    text: 'One slim bar at the bottom of the 3D view. Choose the look: Standard, Clay (a white model with soft shadows) or Realistic (wood, fabric, lights and daylight). Play tour flies through your saved views. The View menu holds quality, Walk (move through the room at eye height), full screen and your saved views. Colour palette, Lights (with power sliders) and a soothing background Sound are three collapsed boxes at the bottom of the Inspector.',
   },
   {
     id: 'rp-photo', title: 'Render Photo', target: 'rp-photo', on: 'top', needs3d: true,

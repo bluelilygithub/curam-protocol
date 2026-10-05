@@ -8,7 +8,9 @@ import type { ValidationViolation, Project } from '../engine/types';
 import { useApp, useProject, useUi } from './AppContext';
 import { tipFor } from '../help/fieldTips';
 import { Icons } from './icons';
-import { PalettePicker } from './PalettePicker';
+import { SceneSettings } from './SceneSettings';
+import { LIGHT_EMITTERS } from '../data/furnitureLibrary';
+import { GLOBAL_POWER_MAX, PIECE_POWER_MAX, percent } from '../render3d/lightPower';
 import { holdsPicture, imageOf } from '../state/pictures';
 import {
   previewFixtureEdit, previewFurnitureEdit, previewVertexPosition, previewWallLength, previewWallThickness, readFixtureField, readFurnitureField,
@@ -207,6 +209,7 @@ export function Inspector() {
             </span>
           </label>
         </Section>
+        {!group && LIGHT_EMITTERS[room.furniture.find((f) => f.id === ids[0])?.definitionId ?? ''] && <LightSection id={ids[0]} />}
         {!group && holdsPicture(room.furniture.find((f) => f.id === ids[0])?.definitionId ?? '') && <PictureSection id={ids[0]} />}
         <Section title="Constraints">
           <ViolationList items={violations} project={project} />
@@ -341,10 +344,6 @@ export function Inspector() {
         <p className="room-summary" data-testid="room-summary">
           {size.w.toFixed(2).replace(/\.?0+$/, '')} × {size.l.toFixed(2).replace(/\.?0+$/, '')} m · {area.toFixed(1).replace(/\.0$/, '')} m² · {room.furniture.length + room.fixtures.length} object{room.furniture.length + room.fixtures.length === 1 ? '' : 's'} · {issues === 0 ? 'no problems' : `${issues} to look at`}
         </p>
-        <Section title="Colour palette">
-          <PalettePicker />
-          <p className="hint">Colours the walls, floor, trim, sofas and rugs together. Shown in the 3D view (not in the plan, and not in the Clay look).</p>
-        </Section>
         <Section title="Room details" open={false}>
           <dl className="facts">
             <dt>Size</dt><dd>{size.w.toFixed(2)} × {size.l.toFixed(2)} m</dd>
@@ -376,7 +375,10 @@ export function Inspector() {
   return (
     <aside className="panel right" aria-label="Inspector" data-tour="rp-inspector">
       <div className="panel-head"><h2>Inspector</h2></div>
-      <div className="panel-body" key={selection.map((s) => `${s.kind}:${s.id}`).join(',')}>{body}</div>
+      <div className="panel-body">
+        <div key={selection.map((s) => `${s.kind}:${s.id}`).join(',')}>{body}</div>
+        <SceneSettings />
+      </div>
     </aside>
   );
 }
@@ -404,6 +406,27 @@ function PictureSection({ id }: { id: string }) {
         {mine && <button className="btn" disabled={busy} title="Go back to the built-in picture" onClick={() => app.clearPicture(id)}>Use the built-in picture</button>}
       </div>
       {note && <p className="field-msg hard" role="alert">{note}</p>}
+    </Section>
+  );
+}
+
+/** A light source's own power, a slider (0 to 300 %). It multiplies the "All lights" power in the Lights box. Not an undo step. */
+function LightSection({ id }: { id: string }) {
+  const app = useApp();
+  const power = useProject((s) => s.project?.rooms[0]?.furniture.find((f) => f.id === id)?.lightPower ?? 1);
+  return (
+    <Section title="Light">
+      <label className="field power" title="How bright this light is. 100 % is the standard strength; it is multiplied by the All lights power in the Lights box below.">
+        <span className="field-label">Power</span>
+        <span className="field-control">
+          <input type="range" min={0} max={PIECE_POWER_MAX} step={0.05} value={power} aria-label="This light's power" onChange={(e) => app.setPiecePower(id, Number(e.target.value))} />
+          <span className="unit power-value">{percent(power)}</span>
+        </span>
+      </label>
+      <div className="actions">
+        <button className="btn" disabled={Math.abs(power - 1) < 1e-9} onClick={() => app.setPiecePower(id, 1)} title="Back to the standard strength">Reset to 100 %</button>
+      </div>
+      <p className="hint">Shows in the Realistic look and in Render photo. All lights together can be dimmed to {percent(0)} or raised to {percent(GLOBAL_POWER_MAX)} in the Lights box.</p>
     </Section>
   );
 }

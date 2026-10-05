@@ -18,6 +18,7 @@ export const FIELD_TIPS: Record<string, string> = {
   'Finish code': 'The supplier’s code for the chosen finish. For your own records.',
   'Unit cost': 'Price of one piece. For your own records.',
   Notes: 'Anything worth remembering about this piece.',
+  Power: 'How bright this light is. 100 % is the standard strength; it is multiplied by the All lights power in the Lights box.',
   'Room name': 'The name shown on the room tab and in Projects. Press Enter to save.',
 };
 

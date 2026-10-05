@@ -14,6 +14,7 @@ import { fixtureModel } from './fixtureParts';
 import { furnitureParts, type Part } from './furnitureParts';
 import { partGeometry } from './partGeometry';
 import { LIGHT_EMITTERS } from '../data/furnitureLibrary';
+import { effectiveIntensity, lightPowerOnly } from './lightPower';
 import { paletteOf, type Palette } from '../data/palettes';
 import { lookOf, MaterialCache, realisticFixtureLook, realisticLookOf, TINT, type Tint } from './materials';
 import { textureOf } from './textures';
@@ -117,6 +118,8 @@ export class Scene3D {
   rebuildCount = 0;
   private lookKey = '';
   private readonly skirting = new Map<string, THREE.Mesh[]>();
+  /** The point lights of lamps and ceiling lights, with their base strength, so power can change without a rebuild. */
+  private readonly lamps: Array<{ id: string; light: THREE.PointLight; base: number }> = [];
 
   constructor(private readonly p: Scene3DPorts) {
     this.root.name = 'room-planner-3d';
@@ -131,12 +134,18 @@ export class Scene3D {
     this.applySelection();
     this.applyBus(p.bus.get());
     let lastSel = p.ui.getState().selection;
+    let lastPower = p.ui.getState().lightPower;
     this.unsub.push(
       p.project.subscribe((s) => {
-        if (s.project !== this.lastProject) { this.rebuild(); this.applySelection(); this.applyBus(this.p.bus.get()); this.p.invalidate(); }
+        if (s.project !== this.lastProject) {
+          // only a light's power changed (a slider is being dragged): retune the lights, do not rebuild the room
+          if (this.lastProject && s.project && lightPowerOnly(this.lastProject, s.project)) { this.lastProject = s.project; this.applyLightPower(); this.p.invalidate(); return; }
+          this.rebuild(); this.applySelection(); this.applyBus(this.p.bus.get()); this.p.invalidate();
+        }
       }),
       p.ui.subscribe((s) => {
         if (s.selection !== lastSel) { lastSel = s.selection; this.applySelection(); this.p.invalidate(); }
+        if (s.lightPower !== lastPower) { lastPower = s.lightPower; this.applyLightPower(); this.p.invalidate(); }
         if (this.currentLookKey() !== this.lookKey) {
           this.applyLighting();
           this.rebuild();
@@ -221,6 +230,7 @@ export class Scene3D {
     this.wallMaterials.clear();
     this.skirting.clear();
     this.pickables.length = 0;
+    this.lamps.length = 0;
     for (const d of this.disposables) d.dispose();
     this.disposables.length = 0;
   }
@@ -244,7 +254,9 @@ export class Scene3D {
       light.position.set(0, inst.height * emitter.atFraction + (inst.definitionId === 'floor-lamp' ? 0 : 0.01), 0);
       light.castShadow = false;
       light.name = 'lamp-light';
+      light.intensity = effectiveIntensity(emitter.intensity, this.p.ui.getState().lightPower, inst.lightPower);
       g.add(light);
+      this.lamps.push({ id: inst.id, light, base: emitter.intensity });
     }
     const t = instanceTransform(inst);
     g.position.set(...t.position);
@@ -269,6 +281,13 @@ export class Scene3D {
     g.position.set(...model.position);
     g.rotation.y = model.rotationY;
     return g;
+  }
+
+  /** Set every lamp's strength from the all-lights power and the piece's own power. */
+  private applyLightPower(): void {
+    const room = this.room;
+    const global = this.p.ui.getState().lightPower;
+    for (const l of this.lamps) l.light.intensity = effectiveIntensity(l.base, global, room?.furniture.find((f) => f.id === l.id)?.lightPower);
   }
 
   /** Resolves when every photo the scene shows has finished loading (a path-traced picture must not start with a blank frame). */

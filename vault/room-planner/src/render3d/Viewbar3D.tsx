@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import type { SavedView } from '../engine/types';
-import { AMBIENT_OPTIONS, type AmbientKind } from '../audio/ambient';
-import { PALETTES } from '../data/palettes';
 import { useApp, useProject, useUi } from '../ui/AppContext';
 
 const NO_VIEWS: SavedView[] = [];
@@ -10,7 +8,7 @@ const NO_VIEWS: SavedView[] = [];
 /**
  * The 3D controls, as ONE slim bar docked at the bottom of the view (not floating over the room). Always on the bar: camera (projection,
  * Isometric / Top / Fit), the look (Standard / Clay / Realistic), the fly-through, Render photo. Everything else lives in the View menu:
- * quality, lights, sound, palette, walk, full screen and saved views. Tour settings appear only while a tour is playing.
+ * quality, walk, full screen and saved views. Lights, sound and the colour palette are collapsed boxes in the Inspector. Tour settings appear only while a tour is playing.
  */
 export function Viewbar3D() {
   const app = useApp();
@@ -25,11 +23,6 @@ export function Viewbar3D() {
   const walking = useUi((s) => s.walking);
   const progress = useUi((s) => s.tourProgress);
   const project = useProject((s) => s.project);
-  const palette = useProject((s) => s.project?.rooms[0]?.palette);
-  const lightsOn = useUi((s) => s.lightsOn);
-  const lightsShow = cinematic && look === 'realistic';
-  const ambient = useUi((s) => s.ambient);
-  const ambientVolume = useUi((s) => s.ambientVolume);
   const summary = useMemo(() => app.tourSummary(), [app, project]);
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
@@ -142,7 +135,7 @@ export function Viewbar3D() {
       </div>
 
       <div className="seg view-menu" role="group" aria-label="More view options" ref={menu}>
-        <button className={`btn ${menuOpen ? 'active' : ''}`} aria-expanded={menuOpen} aria-haspopup="true" onClick={() => setMenuOpen((v) => !v)} title="More: quality, lights, sound, colour palette, walk, full screen and saved views">
+        <button className={`btn ${menuOpen ? 'active' : ''}`} aria-expanded={menuOpen} aria-haspopup="true" onClick={() => setMenuOpen((v) => !v)} title="More: quality, walk, full screen and saved views (lights, sound and the colour palette are in the Inspector)">
           <span className="label">View ▾</span>
         </button>
         {menuOpen && (
@@ -157,36 +150,6 @@ export function Viewbar3D() {
                   <span className="label">High</span>
                 </button>
               </div>
-            </section>
-            <section>
-              <h4>Light and sound</h4>
-              <div className="row">
-                <button className={`btn ${lightsOn ? 'active' : ''}`} aria-pressed={lightsOn} disabled={!lightsShow} onClick={() => app.setLightsOn(!lightsOn)} title={lightsShow ? 'Switch the ceiling lights and lamps on or off: they light the room in this Realistic look and in Render photo.' : 'Lights show in the Realistic look and in Render photo. Choose Realistic, and place a ceiling light or lamp from the Library to see them.'}>
-                  <span className="label">Lights</span>
-                </button>
-              </div>
-              <label className="palette-select" title="Soothing ambient sound while you look around in 3D: rain, ocean waves, a forest breeze or calm music. Made in your browser; nothing is downloaded.">
-                <span className="label">Sound</span>
-                <select aria-label="Ambient sound" value={ambient} onChange={(e) => app.setAmbient(e.target.value as AmbientKind)}>
-                  {AMBIENT_OPTIONS.map((o) => <option key={o.id} value={o.id} title={o.note}>{o.label}</option>)}
-                </select>
-              </label>
-              {ambient !== 'off' && (
-                <input
-                  type="range" className="volume" min={0} max={1} step={0.05} value={ambientVolume} aria-label="Sound volume" title="Sound volume"
-                  onChange={(e) => app.setAmbientVolume(Number(e.target.value))}
-                />
-              )}
-            </section>
-            <section>
-              <h4>Colours</h4>
-              <label className="palette-select" title="Choose a colour palette for this room: walls, floor, trim, sofas and rugs together. Not shown in the Clay look.">
-                <span className="label">Palette</span>
-                <select aria-label="Colour palette" value={palette ?? ''} onChange={(e) => app.setPalette(e.target.value || null)}>
-                  <option value="">Standard</option>
-                  {PALETTES.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </label>
             </section>
             <section>
               <h4>Move around</h4>

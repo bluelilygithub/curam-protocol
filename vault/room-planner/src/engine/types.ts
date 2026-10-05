@@ -129,6 +129,8 @@ export interface FurnitureInstance {
   finishOverrides?: Record<string, string>; // part name → material id (C13)
   /** A photo of your own shown in this picture frame instead of the built-in artwork (key of `Project.images`). */
   imageId?: string;
+  /** Light sources: how bright this one is, as a multiplier (1 = the standard strength; stored only when changed). */
+  lightPower?: number;
   metadata?: FurnitureMetadata;
 }
 

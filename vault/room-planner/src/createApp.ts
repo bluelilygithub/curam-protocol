@@ -1,5 +1,6 @@
 import { fitView, panBy } from './adapters/canvas';
 import { evaluateCommand, proposeCreateRoom, proposeDeleteRoom, proposeFixPosition, proposeUpdateFurniture } from './engine/pipeline';
+import { withLightPower } from './render3d/lightPower';
 import { readPicture } from './state/pictureImport';
 import { addImage, frameSizeFor, pictureCommand } from './state/pictures';
 import { cleanName, cloneRoom, nextRoomName } from './engine/roomOps';
@@ -54,7 +55,8 @@ export function createApp(storage: StorageLike, audio: AmbientPlayer = new Ambie
   const SOUND_KEY = 'room-planner:sound:v1';
   try {
     const raw = storage.getItem(SOUND_KEY);
-    const v = raw ? (JSON.parse(raw) as { kind?: unknown; volume?: unknown; lights?: unknown }) : null;
+    const v = raw ? (JSON.parse(raw) as { kind?: unknown; volume?: unknown; lights?: unknown; power?: unknown }) : null;
+    if (v && typeof v.power === 'number') ui.getState().setLightPower(v.power);
     if (v && isAmbientKind(v.kind)) ui.getState().setAmbient(v.kind);
     if (v && typeof v.volume === 'number') ui.getState().setAmbientVolume(v.volume);
     if (v && typeof v.lights === 'boolean') ui.getState().setLightsOn(v.lights);
@@ -63,7 +65,7 @@ export function createApp(storage: StorageLike, audio: AmbientPlayer = new Ambie
     const u = ui.getState();
     audio.set(u.viewMode === '3d' ? u.ambient : 'off', u.ambientVolume);
   };
-  let lastSound = `${ui.getState().ambient}|${ui.getState().ambientVolume}|${ui.getState().lightsOn}`;
+  let lastSound = `${ui.getState().ambient}|${ui.getState().ambientVolume}|${ui.getState().lightsOn}|${ui.getState().lightPower}`;
   let lastView = ui.getState().viewMode;
   let lastSoundApplied = '';
   // browsers only start sound after a click or key press: wake a waiting sound on the first one
@@ -94,10 +96,10 @@ export function createApp(storage: StorageLike, audio: AmbientPlayer = new Ambie
       lastQuality = s.quality;
       try { storage.setItem(QUALITY_KEY, s.quality); } catch { /* ignore */ }
     }
-    const soundNow = `${s.ambient}|${s.ambientVolume}|${s.lightsOn}`;
+    const soundNow = `${s.ambient}|${s.ambientVolume}|${s.lightsOn}|${s.lightPower}`;
     if (soundNow !== lastSound) {
       lastSound = soundNow;
-      try { storage.setItem(SOUND_KEY, JSON.stringify({ kind: s.ambient, volume: s.ambientVolume, lights: s.lightsOn })); } catch { /* ignore */ }
+      try { storage.setItem(SOUND_KEY, JSON.stringify({ kind: s.ambient, volume: s.ambientVolume, lights: s.lightsOn, power: s.lightPower })); } catch { /* ignore */ }
     }
     if (s.viewMode !== lastView || soundNow !== lastSoundApplied) { lastView = s.viewMode; lastSoundApplied = soundNow; applySound(); }
     const snapNow = `${s.snapMode}|${s.grid}`;
@@ -265,6 +267,9 @@ export function createApp(storage: StorageLike, audio: AmbientPlayer = new Ambie
     setAmbient(k: AmbientKind): void { ui.getState().setAmbient(k); },
     setAmbientVolume(v: number): void { ui.getState().setAmbientVolume(v); },
     setLightsOn(on: boolean): void { ui.getState().setLightsOn(on); },
+    setLightPower(v: number): void { ui.getState().setLightPower(v); },
+    /** One light's own power (1 = standard). Like saved views this is not an undo step, so dragging a slider does not fill the history. */
+    setPiecePower(id: string, v: number): void { project.getState().updateSilently((p) => withLightPower(p, id, v)); },
     setGrid(metres: number): void { ui.getState().setGrid(metres); },
     walkInput,
 
