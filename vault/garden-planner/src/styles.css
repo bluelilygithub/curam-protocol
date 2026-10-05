@@ -205,3 +205,8 @@ textarea.vi-input { padding: 8px 34px 8px 10px; }
 .photo-empty { display: flex; align-items: center; gap: 10px; }
 .credits { padding-left: 18px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
 .linklike { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }
+
+/* selection bar + plant drag */
+.selbar { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: #fff; border: 1px solid var(--color-border); border-radius: var(--radius); box-shadow: 0 6px 24px rgba(0,0,0,.18); max-width: calc(100% - 24px); }
+.selbar-name { font-size: 12px; font-weight: 600; padding: 0 6px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plant-head[draggable="true"] { cursor: grab; }

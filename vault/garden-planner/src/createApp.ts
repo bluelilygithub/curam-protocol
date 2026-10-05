@@ -279,8 +279,13 @@ export function createApp(storage: StorageLike) {
       project.getState().commit(cmd, 'Place structure');
       if (cmd.type === 'SetItem') ui.getState().select({ kind: 'structure', id: cmd.id });
     },
-    addPlant(plantId: string, at: Vec2): void {
-      project.getState().commit(addPlant(plantId, at, randomId), 'Plant');
+    /** Plant once, then select the new plant and go back to Select (like Room Planner), so it can be dragged, duplicated or deleted. `keepPlanting` (Shift) stays armed. */
+    addPlant(plantId: string, at: Vec2, keepPlanting = false): void {
+      const cmd = addPlant(plantId, at, randomId);
+      if (!project.getState().commit(cmd, 'Plant')) return;
+      if (keepPlanting || cmd.type !== 'SetItem') return;
+      ui.getState().setTool('select');
+      ui.getState().select({ kind: 'plant', id: cmd.id });
     },
     fillBed(bedId: string, plantId: string): number {
       const p = cur(); if (!p) return 0;

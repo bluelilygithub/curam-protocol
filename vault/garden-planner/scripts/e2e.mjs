@@ -131,11 +131,46 @@ check('search finds lilly pillies', names.length >= 2 && names.every((n) => /lil
 await page.locator('.plant-head').first().click();
 await page.getByRole('button', { name: /Add to plan/ }).click();
 check('Add to plan arms the Plant tool', (await ui()).tool === 'plant');
-await clickWorld(15, 3); await clickWorld(15, 8);
+await clickWorld(15, 3);
 await wait(200);
 p = await proj();
-check('two plants placed by clicking', p.plants.length === 2, String(p.plants.length));
-await ev(() => { window.gardenPlanner.ui.getState().set({ tool: 'select' }); });
+check('a click plants one plant', p.plants.length === 1, String(p.plants.length));
+check('placing finishes: back to Select with the new plant selected', (await ui()).tool === 'select' && (await ui()).selection?.kind === 'plant' && (await ui()).selection.id === p.plants[0].id);
+check('the selection bar offers Duplicate and Delete', (await page.getByTestId('selection-bar').getByRole('button', { name: /Duplicate/ }).count()) === 1 && (await page.getByTestId('selection-bar').getByRole('button', { name: /Delete/ }).count()) === 1);
+await page.getByTestId('selection-bar').getByRole('button', { name: /Duplicate/ }).click();
+await wait(200);
+p = await proj();
+const firstId = p.plants[0].id;
+const selNow = (await ui()).selection;
+check('Duplicate makes a copy and selects the copy', p.plants.length === 2 && selNow?.id !== firstId && p.plants.some((q) => q.id === selNow?.id), String(p.plants.length));
+check('the copy is beside the original, not on top of it', Math.hypot(p.plants[0].position.x - p.plants[1].position.x, p.plants[0].position.y - p.plants[1].position.y) > 0.3);
+// drag a plant from the library and release it on the plan
+await page.locator('.plant-head').first().scrollIntoViewIfNeeded();
+const dropAt = await screen(15, 8);
+await page.evaluate(({ x, y }) => {
+  const dt = new DataTransfer();
+  const id = window.gardenPlanner.project.getState().project.plants[0].plantId;
+  dt.setData('application/x-garden-plant', id);
+  const el = document.querySelector('.stage');
+  el.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt, clientX: x, clientY: y }));
+  el.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt, clientX: x, clientY: y }));
+}, dropAt);
+await wait(200);
+p = await proj();
+check('dropping a plant from the library plants it where released and selects it', p.plants.length === 3 && Math.hypot(p.plants[2].position.x - 15, p.plants[2].position.y - 8) < 1.0 && (await ui()).selection?.id === p.plants[2].id, JSON.stringify(p.plants[2]?.position));
+await page.getByTestId('selection-bar').getByRole('button', { name: /Delete/ }).click();
+await wait(200);
+p = await proj();
+check('Delete in the selection bar removes it', p.plants.length === 2 && (await ui()).selection === null, String(p.plants.length));
+// Shift-click keeps planting
+await page.getByRole('button', { name: /Add to plan/ }).click();
+const sp = await screen(18, 3); await page.keyboard.down('Shift'); await page.mouse.click(sp.x, sp.y); await page.keyboard.up('Shift');
+await wait(200);
+check('Shift-click keeps the Plant tool armed', (await ui()).tool === 'plant' && (await proj()).plants.length === 3);
+await page.keyboard.press('Escape');
+await ev(() => { const a = window.gardenPlanner; a.undo(); a.ui.getState().set({ tool: 'select', selection: null }); });
+await wait(150);
+check('back to two plants for the steps below', (await proj()).plants.length === 2);
 
 // ---- fill the bed from the Inspector
 await clickWorld(4, 3.5);

@@ -27,7 +27,7 @@ export function InfoModal() {
           </ul>
           <h3>Plants, growth and seasons</h3>
           <p>A plant's size comes from the plant itself, never from dragging handles. Use the <b>Growth</b> buttons at the bottom to see the garden when it is just planted, at 1, 3 and 5 years, and fully grown. Use the <b>Month</b> slider to see flowers, bare winter trees and autumn colour. This is the southern hemisphere: summer is December to February.</p>
-          <p>The library hides plants that will not suit your climate or frost level, and weeds in your state, while <b>Suits my garden</b> is on. Turn it off to browse everything. Select a bed and press <b>Fill bed</b> to plant it at the recommended spacing.</p>
+          <p>The library hides plants that will not suit your climate or frost level, and weeds in your state, while <b>Suits my garden</b> is on. Turn it off to browse everything. To plant, click <b>Add to plan</b> then click the plan, or drag a plant from the library and release it where you want it. It is then selected: drag to move it, press <b>Duplicate</b> (Ctrl+D) for another, or <b>Delete</b>. Hold <b>Shift</b> while clicking to keep planting. Select a bed and press <b>Fill bed</b> to plant it at the recommended spacing.</p>
           <h3>North and the sun</h3>
           <p>In Australia the sun is in the north, so a north-facing bed is the sunny one. Drag the north arrow on the plan to match your plot. Sun and shade maps are coming next.</p>
           <h3>Voice</h3>

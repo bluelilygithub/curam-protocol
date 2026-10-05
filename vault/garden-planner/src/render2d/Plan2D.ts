@@ -141,6 +141,14 @@ export class Plan2D {
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
   private toWorld(px: Vec2): Vec2 { return canvasToWorld(px, this.view); }
+
+  /** A plant dragged from the library and released over the plan: plant it there (snapped like a click) and select it. */
+  dropPlant(plantId: string, clientX: number, clientY: number, shift = false): void {
+    const r = this.container.getBoundingClientRect();
+    const world = this.toWorld({ x: clientX - r.left, y: clientY - r.top });
+    this.app.addPlant(plantId, this.snap(world, null, shift).point);
+    this.schedule();
+  }
   private tolMetres(px = 10): number { return (this.coarse ? px * 1.6 : px) / this.view.scale; }
 
   /** The project as drawn right now: with a drag in progress, the dragged item at its provisional place. */
@@ -297,7 +305,7 @@ export class Plan2D {
       case 'path': case 'service': this.addPoint(snapped, px); return;
       case 'structure': this.app.addStructure(ui.structureKind, snapped); this.app.setTool('select'); return;
       case 'plant':
-        if (ui.placingPlantId) { this.app.addPlant(ui.placingPlantId, snapped); this.schedule(); }
+        if (ui.placingPlantId) { this.app.addPlant(ui.placingPlantId, snapped, e.shiftKey); this.schedule(); }
         return;
       case 'scale': this.scaleClick(world); return;
       default: return;

@@ -156,10 +156,13 @@ export function PlantLibrary() {
   );
 }
 
+export const PLANT_DRAG_TYPE = 'application/x-garden-plant';
+
 function PlantRow({ p, open, fav, pets, armed, onToggle, onFav }: { p: PlantRecord; open: boolean; fav: boolean; pets: boolean; armed: boolean; onToggle(): void; onFav(): void }) {
   return (
     <div className={`plant-row${open ? ' open' : ''}${armed ? ' armed' : ''}`}>
-      <button type="button" className="plant-head" aria-expanded={open} onClick={onToggle}>
+      <button type="button" className="plant-head" aria-expanded={open} onClick={onToggle} draggable title="Drag onto the plan to plant it"
+        onDragStart={(e) => { e.dataTransfer.setData(PLANT_DRAG_TYPE, p.id); e.dataTransfer.setData('text/plain', plantLabel(p)); e.dataTransfer.effectAllowed = 'copy'; }}>
         <PlantSwatch p={p} />
         <span className="plant-names"><strong>{plantLabel(p)}</strong><em>{botanicalLabel(p)}</em></span>
         {pets && p.cautions.includes('toxic_pets') && <span className="badge warn" title="Toxic to pets">Pets</span>}

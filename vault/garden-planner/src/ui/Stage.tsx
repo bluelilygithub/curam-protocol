@@ -4,6 +4,10 @@ import { MONTH_NAMES } from '../plants/growth';
 import { Plan2D } from '../render2d/Plan2D';
 import { SUN_COLOURS } from '../sun/sunHours';
 import { NumField } from './fields';
+import { Icon } from './icons';
+import { PLANT_DRAG_TYPE } from './PlantLibrary';
+import { plantById, plantLabel } from '../plants/plants';
+import { findItem } from '../domain/edit';
 import { useApp, useProject, useUi } from './AppContext';
 
 const HINTS: Record<string, string> = {
@@ -16,7 +20,7 @@ const HINTS: Record<string, string> = {
   service: 'Click along the line of the sewer, water or other service (or the middle of an easement). Double-click or press Enter to finish.',
   path: 'Click along the path. Double-click or press Enter to finish. Set its width in the panel.',
   structure: 'Click where the structure goes.',
-  plant: 'Click to plant. Keep clicking to add more. Press Esc when you are done.',
+  plant: 'Click to plant it. The plant is then selected: drag it to move, Duplicate for another, Delete to remove. Hold Shift while clicking to keep planting. Esc cancels.',
   scale: 'Click two points on your picture whose real distance apart you know, then type that distance.',
 };
 
@@ -79,7 +83,15 @@ export function Stage() {
 
   return (
     <div className="stage-wrap" data-tour="gp-stage">
-      <div ref={ref} className="stage" data-view={viewMode} />
+      <div ref={ref} className="stage" data-view={viewMode}
+        onDragOver={(e) => { if (viewMode === '2d' && e.dataTransfer.types.includes(PLANT_DRAG_TYPE)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
+        onDrop={(e) => {
+          const id = e.dataTransfer.getData(PLANT_DRAG_TYPE);
+          if (!id) return;
+          e.preventDefault();
+          if (viewMode !== '2d' || !plan.current) { app.notify('Switch to the 2D plan to drop a plant.', 'info'); return; }
+          plan.current.dropPlant(id, e.clientX, e.clientY, e.shiftKey);
+        }} />
       {viewMode === '2d' && <p className="hint-banner">{HINTS[tool]}</p>}
       {viewMode === '3d' && (
         <div className="view3d-bar" role="group" aria-label="3D camera">
@@ -88,8 +100,33 @@ export function Stage() {
           <button type="button" title="From the front" onClick={() => three.current?.front()}>Front</button>
         </div>
       )}
+      {viewMode === '2d' && <SelectionBar />}
       <ScalePrompt />
       {viewMode === '2d' && <SunLegend />}
+    </div>
+  );
+}
+
+/** On-canvas actions for the selected item (like Room Planner's): Duplicate (Ctrl+D) and Delete (Del). Boundary and house cannot be duplicated. */
+function SelectionBar() {
+  const app = useApp();
+  const sel = useUi((s) => s.selection);
+  const tool = useUi((s) => s.tool);
+  const name = useProject((s) => {
+    if (!sel || !s.project) return '';
+    const it = findItem(s.project, sel) as { plantId?: string; name?: string } | null;
+    if (!it) return '';
+    if (sel.kind === 'plant') { const r = plantById(it.plantId ?? ''); return r ? plantLabel(r) : 'Plant'; }
+    return it.name ?? sel.kind;
+  });
+  if (!sel || tool !== 'select' || !name) return null;
+  const copyable = sel.kind !== 'boundary' && sel.kind !== 'house';
+  return (
+    <div className="selbar" role="toolbar" aria-label="Selected item" data-testid="selection-bar">
+      <span className="selbar-name">{name}</span>
+      {copyable && <button type="button" className="btn" title="Make a copy beside this one (Ctrl+D)" onClick={() => app.duplicateSelected()}><Icon name="copy" size={15} /> Duplicate</button>}
+      <button type="button" className="btn danger" title="Delete (Del)" onClick={() => app.deleteSelected()}><Icon name="trash" size={15} /> Delete</button>
+      <button type="button" className="btn" title="Done (Esc)" onClick={() => app.ui.getState().select(null)}>Done</button>
     </div>
   );
 }
