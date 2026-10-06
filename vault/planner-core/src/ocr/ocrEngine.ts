@@ -24,13 +24,19 @@ interface TesseractData {
 export async function createOcrEngine({ lang = 'eng' }: { lang?: string } = {}): Promise<OcrEngine> {
   const mod = (await import('tesseract.js')) as unknown as { default?: unknown } & Record<string, unknown>;
   const Tesseract = (mod.default ?? mod) as {
-    createWorker(lang: string, oem: number, opts: { logger: (m: { status: string; progress: number }) => void }): Promise<{
+    createWorker(lang: string, oem: number, opts: { workerPath?: string; corePath?: string; langPath?: string; gzip?: boolean; logger: (m: { status: string; progress: number }) => void }): Promise<{
       recognize(image: unknown, a: object, b: object): Promise<{ data: TesseractData }>;
       terminate(): Promise<unknown>;
     }>;
   };
   let progressCb: ((p: number) => void) | null = null;
+  // The worker, wasm core and English data come from our own origin (`<base>ocr/`, put there by planner-core/vite/ocrAssets.mjs), never a CDN:
+  // Vault's Content Security Policy only allows 'self' for scripts and fetches. Other languages fall back to tesseract.js's default source.
+  const siteBase = (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
+  const base = new URL(`${siteBase}ocr/`, globalThis.location?.href ?? 'http://localhost/').href;
+  const own = lang === 'eng' ? { workerPath: base + 'worker.min.js', corePath: base, langPath: base, gzip: true } : {};
   const worker = await Tesseract.createWorker(lang, 1, {
+    ...own,
     logger: (m) => { if (m.status === 'recognizing text' && progressCb) progressCb(m.progress); },
   });
   return {

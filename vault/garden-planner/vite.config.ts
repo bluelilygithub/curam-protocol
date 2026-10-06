@@ -2,6 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+import { ocrAssets } from '../planner-core/vite/ocrAssets.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -11,7 +12,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
  */
 export default defineConfig({
   base: '/garden-planner-app/',
-  plugins: [react()],
+  plugins: [react(), ocrAssets({ from: here })],
   resolve: {
     alias: {
       '@planner-core': path.resolve(here, '../planner-core/src'),

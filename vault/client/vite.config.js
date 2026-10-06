@@ -2,12 +2,13 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { ocrAssets } from '../planner-core/vite/ocrAssets.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   root: __dirname,
-  plugins: [react()],
+  plugins: [react(), ocrAssets({ from: __dirname })],
   resolve: {
     // planner-core: code shared with the Room / Garden Planner apps (speech recognition, OCR). Libraries stay de-duplicated to Vault's copy.
     alias: { '@planner-core': path.resolve(__dirname, '../planner-core/src') },
