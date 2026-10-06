@@ -121,17 +121,19 @@ Not yet in the cut list: site scribe pieces, hardware (LED channel, runners), do
 
 ## 10. Decisions log
 
-| ID | Decision | Alternative / note |
-|---|---|---|
-| D-01 | Label-forward display: bottles lie along the depth, width pitch = slot pitch, so a 400 mm display holds 2 tiers x 8 = **16**. | Pitch 310 mm (bottles lying across the width) gives 4. **Confirm.** |
-| D-02 | Run-split remainder goes to the site-cut scribes, so bays are identical. | Giving it to end bays makes unequal bays. **Confirm.** |
-| D-03 | Display tiers use the same shelf-separated rule as rows, with 25 mm hand clearance. | A 15 mm clearance gives the same tiers for the golden case (tested). |
-| D-04 | With the 15 mm depth rule, Magnum needs 410 mm outer depth, not 400. | 400 leaves 378 inside for a 385 mm need. |
-| D-05 | Dead corner width = owner depth + 20 mm (the run length actually lost). | Depth alone understates it. |
-| D-06 | Engine lives in `src/engine/`, matching the other planners. | |
-| D-07 | `CASE_DRAWER` holds no counted bottles in V1. | |
-| D-08 | An inclined display's depth need does not add the 15 mm clearance (its 20 mm lip is the front allowance). | With it, Bordeaux needs 345 inside. |
-| D-09 | Cut-list part sizes follow section 9's typical rules and are indicative. | The cabinet maker's rules replace them. |
+**Confirmed** = agreed with the project owner. **Open** = still to decide. **Proposed** = my default, not yet discussed.
+
+| ID | Status | Decision | Alternative / note |
+|---|---|---|---|
+| D-01 | **Confirmed** | Label-forward display: bottles lie along the depth, width pitch = slot pitch, so a 400 mm display holds 2 tiers x 8 = **16**. | Pitch 310 mm (bottles lying across the width) gives 4. |
+| D-02 | **Confirmed** | Run-split remainder goes to the site-cut scribes, so bays are identical. | Giving it to end bays makes unequal bays. |
+| D-03 | **Open** | Display tiers use the same shelf-separated rule as rows, with 25 mm hand clearance. | A 15 mm clearance gives the same tiers for the golden case (tested). |
+| D-04 | **Confirmed** | With the 15 mm depth rule, Magnum needs 410 mm outer depth, not 400. | 400 leaves 378 inside for a 385 mm need. |
+| D-05 | Proposed | Dead corner width = owner depth + 20 mm (the run length actually lost). | Depth alone understates it. |
+| D-06 | Proposed | Engine lives in `src/engine/`, matching the other planners. | |
+| D-07 | Proposed | `CASE_DRAWER` holds no counted bottles in V1. | |
+| D-08 | Proposed | An inclined display's depth need does not add the 15 mm clearance (its 20 mm lip is the front allowance). | With it, Bordeaux needs 345 inside. |
+| D-09 | Proposed | Cut-list part sizes follow section 9's typical rules and are indicative. | The cabinet maker's rules replace them. |
 
 ## 11. Golden Test Case #01 and validation
 
