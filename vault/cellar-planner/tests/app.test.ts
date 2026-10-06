@@ -90,3 +90,51 @@ describe('the store', () => {
     expect(s.getState().project.name).toBe('Sample enclosure (A101 as read)');
   });
 });
+
+// ---------------------------------------------------------------- the ready-made test case
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { ESTIMATE_FIELDS, testCaseProject } from '../src/app/model';
+
+describe('the test case (best-guess rack values, all marked estimated)', () => {
+  const p = testCaseProject();
+  const a = analyseApp(p);
+
+  it('is the sample enclosure with racks on every wall, so there are bottles to count', () => {
+    expect(p.enclosure).toEqual(sampleProject().enclosure);
+    expect([...new Set(p.runs.map((r) => r.wall))].sort()).toEqual(['EAST', 'NORTH', 'SOUTH', 'WEST']);
+    expect(p.runs.reduce((n, r) => n + r.units, 0)).toBe(8);
+  });
+  it('holds 1120 bottles: 8 units x 20 rows (2000 / 100) x 7 per row', () => {
+    expect(a.racks.total).toEqual({ status: 'OK', capacity: 8 * 20 * 7 });
+  });
+  it('has no errors; the missing walkway minimum is only an information note', () => {
+    expect(a.issues.filter((i) => i.severity === 'error')).toEqual([]);
+    expect(a.issues.map((i) => i.code)).toContain('WALKWAY_NOT_SET');
+    expect(p.walkwayMm).toBeNull(); // the business's number, not a guess
+  });
+  it('marks EVERY guessed value as estimated, and nothing else', () => {
+    expect([...(p.estimated ?? [])].sort()).toEqual([...ESTIMATE_FIELDS].sort());
+    for (const k of ESTIMATE_FIELDS) expect(p.rackSpec[k], k).not.toBeNull();
+  });
+  it('leaves the default project and the Sample blank (guesses only ever come from the Test case button)', () => {
+    expect(sampleProject().estimated).toBeUndefined();
+    expect(sampleProject().rackSpec.unitWidthMm).toBeNull();
+  });
+  it('overwriting works: change the bottles per row and the total follows', () => {
+    const changed = { ...p, rackSpec: { ...p.rackSpec, bottlesPerRow: 8 }, estimated: p.estimated?.filter((k) => k !== 'bottlesPerRow') };
+    expect(analyseApp(changed).racks.total).toEqual({ status: 'OK', capacity: 8 * 20 * 8 });
+    expect(changed.estimated).not.toContain('bottlesPerRow');
+    expect(changed.estimated).toContain('unitWidthMm');
+  });
+  it('the estimated markers survive saving and opening; unknown markers are dropped', () => {
+    expect(deserializeApp(serializeApp(p)).estimated).toEqual(p.estimated);
+    const odd = JSON.parse(serializeApp(p));
+    odd.estimated = ['unitWidthMm', 'nonsense', 42];
+    expect(deserializeApp(JSON.stringify(odd)).estimated).toEqual(['unitWidthMm']);
+  });
+  it('the example file you can open is exactly the button\'s test case (run `npm run example` after changing it)', () => {
+    const file = readFileSync(join(__dirname, '../examples/test-case-1.cellar.json'), 'utf8');
+    expect(deserializeApp(file)).toEqual(p);
+  });
+});

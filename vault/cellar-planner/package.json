@@ -10,17 +10,20 @@
     "typecheck": "tsc --noEmit",
     "dev": "vite",
     "build": "vite build",
-    "e2e": "node scripts/e2e.mjs"
+    "e2e": "node scripts/e2e.mjs",
+    "example": "vite-node scripts/writeExample.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.2.0",
+    "axe-core": "^4.14.0",
     "fast-check": "^4.1.1",
     "playwright-core": "^1.63.0",
     "typescript": "^5.8.3",
     "vite": "^7.3.7",
+    "vite-node": "^6.0.0",
     "vitest": "^3.2.4"
   },
   "dependencies": {

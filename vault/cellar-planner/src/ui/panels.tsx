@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { createContext, useContext } from 'react';
 import { useStore } from 'zustand';
-import { analyseApp, sortIssues, type AppProject } from '../app/model';
+import { analyseApp, sortIssues, type AppProject, type EstimateField } from '../app/model';
 import type { AppStore } from '../app/store';
 import type { HeaderComponent, WallKind, WallSide } from '../enclosure';
 import { BOTTLE_PROFILES, type BottleProfileId } from '../engine';
@@ -85,28 +85,35 @@ export function EnclosurePanel() {
 
 const ORIENTATIONS: Array<[RackOrientation, string]> = [['NECK_OUT', 'Neck-out'], ['LABEL_FORWARD', 'Label-forward']];
 
+const FIELD_NAMES: Record<EstimateField, string> = { unitWidthMm: 'unit width', unitDepthMm: 'unit depth', unitHeightMm: 'unit height', rowPitchMm: 'row pitch', bottlesPerRow: 'bottles per row', orientation: 'bottle orientation', postsPerUnit: 'posts per unit' };
+
 export function RackPanel() {
   const p = useProject();
   const edit = useEdit();
   const s = p.rackSpec;
-  const set = (patch: Partial<RackSpec>): void => edit((q) => ({ ...q, rackSpec: { ...q.rackSpec, ...patch } }));
+  /** Change rack values. Each edited field stops being "estimated": the person has put their own number there. */
+  const set = (patch: Partial<RackSpec>): void => edit((q) => ({ ...q, rackSpec: { ...q.rackSpec, ...patch }, ...(q.estimated?.length ? { estimated: q.estimated.filter((k) => !(k in patch)) } : {}) }));
   const missing = missingFields(s);
+  const est = (k: EstimateField): boolean => p.estimated?.includes(k) ?? false;
+  const stillEstimated = (p.estimated ?? []).map((k) => FIELD_NAMES[k]);
   return (
     <Section
       title="Rack specification" testid="rack-panel" tour="cp-rack"
-      note={missing.length
-        ? <p className="banner" data-testid="rack-missing">Rack values are not set (missing: {missing.join(', ')}). Enter your supplier's or fabricator's values: until then bottles cannot be counted or quoted.</p>
-        : <p className="note">All rack values entered. Rows = the number of rows if given, otherwise height divided by row pitch.</p>}
+      note={stillEstimated.length
+        ? <p className="banner estimate" role="note" data-testid="rack-estimated"><b>Best guesses for testing, not supplier values</b> (still estimated: {stillEstimated.join(', ')}). Type your supplier's or fabricator's number over each one; its "estimated" marker goes as you do. Do not quote from these.</p>
+        : missing.length
+          ? <p className="banner" role="note" data-testid="rack-missing">Rack values are not set (missing: {missing.join(', ')}). Enter your supplier's or fabricator's values: until then bottles cannot be counted or quoted.</p>
+          : <p className="note">All rack values entered. Rows = the number of rows if given, otherwise height divided by row pitch.</p>}
     >
       <SelectField label="Bottle" value={p.bottle} options={Object.values(BOTTLE_PROFILES).map((b): [BottleProfileId, string] => [b.id, b.label])} hint="The bottle the racks are for. Its length sets how deep a unit must be (typical sizes, unverified)." onChange={(v) => edit((q) => ({ ...q, bottle: v as BottleProfileId }))} testid="bottle" />
-      <NumField label="Unit width" nullable value={s.unitWidthMm} min={1} hint="Width of one rack unit along the wall. Blank means not set: it is never counted as zero." onCommit={(v) => set({ unitWidthMm: v })} testid="rack-width" />
-      <NumField label="Unit depth" nullable value={s.unitDepthMm} min={1} hint="How far one rack unit stands out from the wall." onCommit={(v) => set({ unitDepthMm: v })} testid="rack-depth" />
-      <NumField label="Unit height" nullable value={s.unitHeightMm} min={1} hint="Height of one rack unit. It cannot be taller than the inside." onCommit={(v) => set({ unitHeightMm: v })} testid="rack-height" />
-      <NumField label="Row pitch" nullable value={s.rowPitchMm} min={1} hint="The vertical distance from one row of bottles to the next." onCommit={(v) => set({ rowPitchMm: v })} testid="rack-pitch" />
+      <NumField label="Unit width" nullable value={s.unitWidthMm} min={1} estimated={est('unitWidthMm')} hint="Width of one rack unit along the wall. Blank means not set: it is never counted as zero." onCommit={(v) => set({ unitWidthMm: v })} testid="rack-width" />
+      <NumField label="Unit depth" nullable value={s.unitDepthMm} min={1} estimated={est('unitDepthMm')} hint="How far one rack unit stands out from the wall." onCommit={(v) => set({ unitDepthMm: v })} testid="rack-depth" />
+      <NumField label="Unit height" nullable value={s.unitHeightMm} min={1} estimated={est('unitHeightMm')} hint="Height of one rack unit. It cannot be taller than the inside." onCommit={(v) => set({ unitHeightMm: v })} testid="rack-height" />
+      <NumField label="Row pitch" nullable value={s.rowPitchMm} min={1} estimated={est('rowPitchMm')} hint="The vertical distance from one row of bottles to the next." onCommit={(v) => set({ rowPitchMm: v })} testid="rack-pitch" />
       <NumField label="Rows per unit (optional)" nullable unit="" value={s.rowsPerUnit ?? null} min={1} hint="If your fabricator states the number of rows, enter it. Then unit height and row pitch are not needed." onCommit={(v) => set({ rowsPerUnit: v })} testid="rack-rows" />
-      <NumField label="Bottles per row" nullable unit="" value={s.bottlesPerRow} min={1} hint="How many bottles one row of one unit holds." onCommit={(v) => set({ bottlesPerRow: v })} testid="rack-per-row" />
-      <SelectField label="Bottle orientation" value={s.orientation} blank="not set" options={ORIENTATIONS} hint="Neck-out needs the bottle's length plus 15 mm of depth. Label-forward needs the inclined footprint (a joinery assumption until your fabricator confirms how their rods hold the bottle)." onChange={(v) => set({ orientation: v })} testid="rack-orientation" />
-      <NumField label="Posts per unit" nullable unit="" value={s.postsPerUnit} min={1} hint="Posts in one unit, for the parts list. It does not change the bottle count." onCommit={(v) => set({ postsPerUnit: v })} testid="rack-posts" />
+      <NumField label="Bottles per row" nullable unit="" value={s.bottlesPerRow} min={1} estimated={est('bottlesPerRow')} hint="How many bottles one row of one unit holds." onCommit={(v) => set({ bottlesPerRow: v })} testid="rack-per-row" />
+      <SelectField label="Bottle orientation" value={s.orientation} blank="not set" options={ORIENTATIONS} estimated={est('orientation')} hint="Neck-out needs the bottle's length plus 15 mm of depth. Label-forward needs the inclined footprint (a joinery assumption until your fabricator confirms how their rods hold the bottle)." onChange={(v) => set({ orientation: v })} testid="rack-orientation" />
+      <NumField label="Posts per unit" nullable unit="" value={s.postsPerUnit} min={1} estimated={est('postsPerUnit')} hint="Posts in one unit, for the parts list. It does not change the bottle count." onCommit={(v) => set({ postsPerUnit: v })} testid="rack-posts" />
       <NumField label="Minimum walkway" nullable value={p.walkwayMm} min={1} hint="The least clear width you design to between racks. Blank: it is not checked. A step-in cabinet and a walk-in room need different minimums, so there is no default. It is only ever a warning." onCommit={(v) => edit((q) => ({ ...q, walkwayMm: v }))} testid="walkway" />
     </Section>
   );

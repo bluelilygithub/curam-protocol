@@ -58,3 +58,15 @@ body { background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
 :root[data-embedded] .top h1 { display: none; }
+.estimated { color: #8a5a00; font-style: normal; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+.banner.estimate { border-color: #b7791f; background: #fef6e4; }
+:focus-visible { outline: 2px solid #1a5fb4; outline-offset: 2px; }
+
+/* accessibility: text and button colours that meet WCAG AA contrast */
+:root { --muted: #595959; --primary-dark: #a5502f; --err: #b42318; --warn-text: #8a5a00; }
+.tab.on, .btn.primary { background: var(--primary-dark); border-color: var(--primary-dark); color: #fff; }
+.notset, .estimated { color: var(--warn-text); }
+.field-err { color: var(--err); }
+.issue.error .sev { color: var(--err); } .issue.warning .sev { color: var(--warn-text); }
+.modal-body:focus-visible { outline: 2px solid #1a5fb4; outline-offset: -2px; }
+.tab.on:hover, .btn.primary:hover { opacity: 1; background: #8f4426; border-color: #8f4426; } /* hover must not wash out white text */

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import { TooltipHost } from '@planner-core/help/TooltipHost';
-import { analyseApp, deserializeApp, fullRuns, ParseError, sampleProject, serializeApp, type AppProject } from './app/model';
+import { analyseApp, deserializeApp, fullRuns, ParseError, sampleProject, serializeApp, testCaseProject, type AppProject } from './app/model';
 import type { AppStore } from './app/store';
 import { INFO_KEY, type UiStore } from './app/uiStore';
 import type { WallSide } from './enclosure';
@@ -33,6 +33,8 @@ export function App({ store, ui }: { store: AppStore; ui: UiStore }) {
   useEffect(() => {
     try { if (!localStorage.getItem(INFO_KEY)) ui.getState().set({ infoOpen: true }); } catch { /* storage blocked: skip the auto-open */ }
     if (new URLSearchParams(window.location.search).has('tour')) window.setTimeout(() => void startTour(), 400);
+    // ?testcase=1 opens the ready-made test case (estimated rack values) instead of the saved draft
+    if (new URLSearchParams(window.location.search).has('testcase')) { store.getState().load(testCaseProject()); setMsg('Loaded the test case: its rack values are best guesses.'); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   /** Shepherd is loaded on first use, so it stays out of the main bundle. */
@@ -47,6 +49,10 @@ export function App({ store, ui }: { store: AppStore; ui: UiStore }) {
   const analysis = useMemo(() => analyseApp(project), [project]);
   const plan = useMemo(() => planView(project.enclosure, fullRuns(project), analysis.racks, { walkwayMm: project.walkwayMm, badRuns: badRunIds(analysis.racks.issues) }), [project, analysis]);
   const elevation = useMemo(() => elevationView(project.enclosure, wall), [project.enclosure, wall]);
+  const e = project.enclosure;
+  const bottles = analysis.racks.total.status === 'OK' ? `${analysis.racks.total.capacity} bottles` : 'bottles not set';
+  const planText = `Plan of the enclosure from above: ${e.outerWidthMm} by ${e.outerDepthMm} millimetres outside, ${analysis.enclosure.internal.widthMm} by ${analysis.enclosure.internal.depthMm} inside, door on the ${e.door.wall.toLowerCase()} wall opening ${e.door.swing === 'OUT' ? 'outwards' : 'inwards'}, ${project.runs.length} rack run${project.runs.length === 1 ? '' : 's'}, ${bottles}.`;
+  const elevText = `The ${wall.toLowerCase()} wall seen from outside: ${wall === e.door.wall ? `door ${e.door.widthMm} by ${e.door.heightMm} millimetres, ` : 'no door, '}wall height ${e.heightMm} millimetres, header ${e.headerHeightMm} millimetres.`;
 
   const download = (): void => {
     const url = URL.createObjectURL(new Blob([serializeApp(project)], { type: 'application/json' }));
@@ -71,6 +77,7 @@ export function App({ store, ui }: { store: AppStore; ui: UiStore }) {
             <button type="button" className="btn" disabled={!canRedo} title="Put back the change you just undid." onClick={() => store.getState().redo()} data-testid="redo">Redo</button>
             <button type="button" className="btn" title="Download this design as a .cellar.json file you can keep or send to someone." onClick={download} data-testid="save">Save file</button>
             <button type="button" className="btn" title="Open a .cellar.json file saved earlier or sent to you. It replaces the design on screen." onClick={() => file.current?.click()} data-testid="open">Open file</button>
+            <button type="button" className="btn" title="Load a ready-made test case: the sample enclosure with racks on every wall, filled with best-guess rack values so there are bottles to count. Every guess is marked estimated until you type your own number over it. It replaces the design on screen." onClick={() => { store.getState().load(testCaseProject()); setMsg('Loaded the test case: its rack values are best guesses.'); }} data-testid="testcase">Test case</button>
             <button type="button" className="btn" title="Load the sample enclosure, read from the Carter Noir drawings (values unverified). It replaces the design on screen." onClick={() => { store.getState().load(sampleProject()); setMsg('Loaded the sample enclosure.'); }} data-testid="sample">Sample</button>
             <button type="button" className="btn icon" title="How this works: the plain-language guide." onClick={() => ui.getState().set({ infoOpen: true })} data-testid="info-open"><Icon name="info" /></button>
             <button type="button" className="btn icon" title="Take the guided tour." onClick={() => void startTour()} data-testid="tour-start"><Icon name="compass" /></button>
@@ -80,13 +87,13 @@ export function App({ store, ui }: { store: AppStore; ui: UiStore }) {
         </header>
         <aside className="left" data-testid="left"><EnclosurePanel /><RackPanel /><RunsPanel /></aside>
         <main className="stage">
-          <div className="tabs" role="tablist" data-tour="cp-tabs">
-            <button type="button" role="tab" aria-selected={tab === 'plan'} className={`tab${tab === 'plan' ? ' on' : ''}`} title="The enclosure from above: walls, door, racks and sizes." onClick={() => ui.getState().set({ tab: 'plan' })} data-testid="tab-plan">Plan</button>
-            <button type="button" role="tab" aria-selected={tab === 'elevation'} className={`tab${tab === 'elevation' ? ' on' : ''}`} title="One wall seen from outside: door, header, conditioner, vents and sizes." onClick={() => ui.getState().set({ tab: 'elevation' })} data-testid="tab-elevation">Elevation</button>
-            {tab === 'elevation' && WALLS.map(([w, name]) => <button type="button" key={w} className={`tab small${wall === w ? ' on' : ''}`} title={`Show the ${name.toLowerCase()} wall as seen from outside.`} onClick={() => ui.getState().set({ wall: w })} data-testid={`wall-${w}`}>{name}</button>)}
+          <div className="tabs" role="group" aria-label="Drawing" data-tour="cp-tabs">
+            <button type="button" aria-pressed={tab === 'plan'} className={`tab${tab === 'plan' ? ' on' : ''}`} title="The enclosure from above: walls, door, racks and sizes." onClick={() => ui.getState().set({ tab: 'plan' })} data-testid="tab-plan">Plan</button>
+            <button type="button" aria-pressed={tab === 'elevation'} className={`tab${tab === 'elevation' ? ' on' : ''}`} title="One wall seen from outside: door, header, conditioner, vents and sizes." onClick={() => ui.getState().set({ tab: 'elevation' })} data-testid="tab-elevation">Elevation</button>
+            {tab === 'elevation' && WALLS.map(([w, name]) => <button type="button" key={w} aria-pressed={wall === w} className={`tab small${wall === w ? ' on' : ''}`} title={`Show the ${name.toLowerCase()} wall as seen from outside.`} onClick={() => ui.getState().set({ wall: w })} data-testid={`wall-${w}`}>{name}</button>)}
             <span className="hint">{tab === 'plan' ? 'From above. Drag to move, scroll to zoom.' : `The ${wall.toLowerCase()} wall seen from outside.`}</span>
           </div>
-          {tab === 'plan' ? <DrawingView key="plan" prims={plan} testid="plan" /> : <DrawingView key={`elev-${wall}`} prims={elevation} testid="elevation" />}
+          {tab === 'plan' ? <DrawingView key="plan" prims={plan} testid="plan" description={planText} /> : <DrawingView key={`elev-${wall}`} prims={elevation} testid="elevation" description={elevText} />}
           <p className="foot">PRELIMINARY DESIGN ONLY: FINAL SITE MEASURE REQUIRED PRIOR TO FABRICATION</p>
         </main>
         <aside className="right"><ChecksPanel /></aside>

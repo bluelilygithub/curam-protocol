@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "name": "Test case (estimated rack values)",
+  "enclosure": {
+    "outerWidthMm": 2850,
+    "outerDepthMm": 1665,
+    "heightMm": 2200,
+    "ceilingBuildUpMm": 50,
+    "floorBuildUpMm": 0,
+    "walls": {
+      "NORTH": {
+        "kind": "PANEL",
+        "buildUpMm": 50
+      },
+      "EAST": {
+        "kind": "PANEL",
+        "buildUpMm": 50
+      },
+      "SOUTH": {
+        "kind": "PANEL",
+        "buildUpMm": 50
+      },
+      "WEST": {
+        "kind": "PANEL",
+        "buildUpMm": 50
+      }
+    },
+    "door": {
+      "wall": "SOUTH",
+      "widthMm": 970,
+      "heightMm": 2120,
+      "swing": "OUT",
+      "hinge": "LEFT",
+      "glazed": true
+    },
+    "headerHeightMm": 500,
+    "header": [
+      {
+        "id": "conditioner",
+        "kind": "CONDITIONER",
+        "xMm": 974,
+        "yMm": 0,
+        "widthMm": 902,
+        "heightMm": 317
+      },
+      {
+        "id": "vent-left",
+        "kind": "VENT",
+        "xMm": 271,
+        "yMm": 100,
+        "widthMm": 400,
+        "heightMm": 100
+      },
+      {
+        "id": "vent-right",
+        "kind": "VENT",
+        "xMm": 2179,
+        "yMm": 100,
+        "widthMm": 400,
+        "heightMm": 100
+      }
+    ]
+  },
+  "rackSpec": {
+    "unitWidthMm": 600,
+    "unitDepthMm": 350,
+    "unitHeightMm": 2000,
+    "rowPitchMm": 100,
+    "bottlesPerRow": 7,
+    "orientation": "NECK_OUT",
+    "postsPerUnit": 2,
+    "rowsPerUnit": null
+  },
+  "bottle": "BORDEAUX",
+  "runs": [
+    {
+      "id": "north-1",
+      "wall": "NORTH",
+      "startMm": 0,
+      "units": 4
+    },
+    {
+      "id": "south-1",
+      "wall": "SOUTH",
+      "startMm": 0,
+      "units": 1
+    },
+    {
+      "id": "south-2",
+      "wall": "SOUTH",
+      "startMm": 1860,
+      "units": 1
+    },
+    {
+      "id": "west-1",
+      "wall": "WEST",
+      "startMm": 350,
+      "units": 1
+    },
+    {
+      "id": "east-1",
+      "wall": "EAST",
+      "startMm": 350,
+      "units": 1
+    }
+  ],
+  "walkwayMm": null,
+  "estimated": [
+    "unitWidthMm",
+    "unitDepthMm",
+    "unitHeightMm",
+    "rowPitchMm",
+    "bottlesPerRow",
+    "orientation",
+    "postsPerUnit"
+  ]
+}

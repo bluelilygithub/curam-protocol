@@ -61,6 +61,9 @@ describe('the guide (the (i) modal)', () => {
   it('explains the core ideas in plain words', () => {
     for (const phrase of ['not set', 'outer faces', 'build-up', 'outside', 'Advisory guidance', 'sign-off', 'preliminary design only', 'Save file', 'minimum walkway']) expect(modal.toLowerCase(), phrase).toContain(phrase.toLowerCase());
   });
+  it('explains the Test case and that its values are guesses to overwrite', () => {
+    for (const phrase of ['Test case', 'best-guess', 'estimated', 'do not quote']) expect(modal.toLowerCase(), phrase).toContain(phrase.toLowerCase());
+  });
   it('is honest about what is not built', () => {
     expect(modal).toMatch(/What is not here yet/);
     for (const phrase of ['pricing', '3D', 'joinery', 'supplier']) expect(modal.toLowerCase(), phrase).toContain(phrase.toLowerCase());

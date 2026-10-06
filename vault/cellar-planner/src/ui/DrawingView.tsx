@@ -45,7 +45,7 @@ function draw(layer: Konva.Layer, prims: Prim[], v: { scale: number; ox: number;
   layer.batchDraw();
 }
 
-export function DrawingView({ prims, testid }: { prims: Prim[]; testid: string }) {
+export function DrawingView({ prims, testid, description }: { prims: Prim[]; testid: string; description: string }) {
   const host = useRef<HTMLDivElement>(null);
   const stage = useRef<Konva.Stage | null>(null);
   const layer = useRef<Konva.Layer | null>(null);
@@ -100,7 +100,7 @@ export function DrawingView({ prims, testid }: { prims: Prim[]; testid: string }
 
   return (
     <div className="drawing" data-testid={testid} data-tour="cp-drawing">
-      <div ref={host} className="drawing-canvas" data-testid={`${testid}-canvas`} />
+      <div ref={host} className="drawing-canvas" data-testid={`${testid}-canvas`} role="img" aria-label={description} />
       <button type="button" className="btn fit" title="Bring the whole drawing back into view." onClick={() => { touched.current = false; redraw(); }} data-testid={`${testid}-fit`}>Fit</button>
     </div>
   );

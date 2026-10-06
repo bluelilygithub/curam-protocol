@@ -240,6 +240,89 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
   await ctx2.close();
 }
 
+// ---- the ready-made test case, and accessibility
+{
+  const ctx3 = await browser.newContext({ viewport: { width: 1500, height: 900 } });
+  await ctx3.addInitScript(() => { try { localStorage.setItem('cellar-planner:info-seen:v1', '1'); } catch { /* ignore */ } });
+  const p3 = await ctx3.newPage();
+  const errs3 = [];
+  p3.on('pageerror', (e) => errs3.push(e.message));
+  p3.on('console', (m) => { if (m.type() === 'error') errs3.push(m.text()); });
+  const shot3 = async (n) => { if (out) await p3.screenshot({ path: join(out, n + '.png') }); };
+  const total3 = async () => (await p3.getByTestId('total').innerText()).split('\n')[0];
+  const est3 = () => p3.locator('[data-testid$="-estimated"]:not([data-testid="rack-estimated"])').count();
+  await p3.goto(URL);
+  await p3.getByTestId('plan-canvas').waitFor();
+
+  check('there is a visible Test case button, with an explanation', (await p3.getByTestId('testcase').isVisible()) && /best-guess/.test((await p3.getByTestId('testcase').getAttribute('title')) ?? ''));
+  check('the Sample (and the default) stay blank: no guesses', (await p3.getByTestId('total').innerText()).startsWith('0 bottles') && (await p3.getByTestId('rack-width').inputValue()) === '' && (await est3()) === 0);
+  await p3.getByTestId('testcase').click();
+  await p3.waitForTimeout(300);
+  check('the Test case fills the racks: 1120 bottles', (await total3()) === '1120 bottles', await total3());
+  check('a banner says these are best guesses, not supplier values, and not to quote from them', /Best guesses for testing, not supplier values/.test(await p3.getByTestId('rack-estimated').innerText()) && /Do not quote/.test(await p3.getByTestId('rack-estimated').innerText()));
+  check('all seven guessed fields carry a visible "estimated" word (not colour alone)', (await est3()) === 7, String(await est3()));
+  check('the status line says so too', /best guesses/.test(await p3.getByTestId('status').innerText()));
+  check('the test case has no errors', (await p3.evaluate(() => window.cellar.analyse().issues.filter((i) => i.severity === 'error').length)) === 0);
+  await shot3('20-test-case-plan');
+  await p3.getByTestId('tab-elevation').click();
+  await p3.waitForTimeout(300);
+  await p3.getByTestId('tab-plan').click();
+
+  // overwrite the guesses
+  await p3.getByTestId('rack-per-row').fill('8');
+  await p3.getByTestId('rack-per-row').press('Enter');
+  await p3.waitForTimeout(200);
+  check('overwriting a value updates the total (8 units x 20 rows x 8 = 1280) and drops only that marker', (await total3()) === '1280 bottles' && (await est3()) === 6 && (await p3.getByTestId('rack-per-row-estimated').count()) === 0 && (await p3.getByTestId('rack-width-estimated').count()) === 1, `${await total3()} ${await est3()}`);
+  await p3.getByTestId('undo').click();
+  check('undo puts the guess and its marker back', (await total3()) === '1120 bottles' && (await est3()) === 7);
+  await p3.getByTestId('rack-orientation').selectOption('LABEL_FORWARD');
+  check('changing a menu value clears its marker too', (await p3.getByTestId('rack-orientation-estimated').count()) === 0 && (await est3()) === 6);
+  for (const [id, v] of [['rack-width', '800'], ['rack-depth', '400'], ['rack-height', '2000'], ['rack-pitch', '110'], ['rack-posts', '3'], ['rack-per-row', '9']]) { await p3.getByTestId(id).fill(v); await p3.getByTestId(id).press('Enter'); }
+  await p3.waitForTimeout(200);
+  check('once every guess is overwritten the banner goes and no marker is left', (await p3.getByTestId('rack-estimated').count()) === 0 && (await est3()) === 0);
+  await shot3('21-test-case-overwritten');
+
+  // other ways in: the address, the example file, the keyboard
+  await p3.goto(URL + '?testcase=1');
+  await p3.getByTestId('plan-canvas').waitFor();
+  await p3.waitForTimeout(300);
+  check('?testcase=1 opens it directly', (await total3()) === '1120 bottles');
+  await p3.getByTestId('sample').click();
+  check('Sample goes back to blank', (await total3()).startsWith('0 bottles') && (await est3()) === 0);
+  await p3.setInputFiles('input[type=file]', join(import.meta.dirname, '..', 'examples', 'test-case-1.cellar.json'));
+  await p3.waitForTimeout(300);
+  check('the example file opens to the same test case (1120 bottles, markers kept)', (await total3()) === '1120 bottles' && (await est3()) === 7);
+  await p3.getByTestId('sample').click();
+  await p3.getByTestId('testcase').focus();
+  await p3.keyboard.press('Enter');
+  await p3.waitForTimeout(200);
+  check('the Test case can be reached and used from the keyboard alone', (await total3()) === '1120 bottles');
+
+  // accessibility: automated WCAG 2.1 A and AA scan (axe-core) of the main screen, the elevation, and the guide
+  await p3.addScriptTag({ path: join(import.meta.dirname, '..', 'node_modules', 'axe-core', 'axe.min.js') });
+  const scan = async (label) => {
+    const r = await p3.evaluate(async () => (await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } })).violations.map((v) => ({ id: v.id, impact: v.impact, count: v.nodes.length, sample: v.nodes[0]?.html.slice(0, 110), help: v.help })));
+    for (const v of r) console.log(`   a11y [${label}] ${v.impact} ${v.id} x${v.count}: ${v.help} :: ${v.sample}`);
+    return r;
+  };
+  const planScan = await scan('plan');
+  check('accessibility scan, plan screen: no WCAG 2.1 A or AA violations', planScan.length === 0, planScan.map((v) => v.id).join(', '));
+  await p3.getByTestId('tab-elevation').click();
+  await p3.waitForTimeout(300);
+  const elevScan = await scan('elevation');
+  check('accessibility scan, elevation screen: no violations', elevScan.length === 0, elevScan.map((v) => v.id).join(', '));
+  await p3.getByTestId('tab-plan').click();
+  await p3.getByTestId('info-open').click();
+  const guideScan = await scan('guide');
+  check('accessibility scan, the guide: no violations', guideScan.length === 0, guideScan.map((v) => v.id).join(', '));
+  await p3.getByTestId('info-close').click();
+  const names = await p3.evaluate(() => [...document.querySelectorAll('canvas')].length + ' canvases; drawing labels: ' + [...document.querySelectorAll('[role=img]')].map((e) => e.getAttribute('aria-label')?.slice(0, 60)).join(' | '));
+  check('each drawing has a text description for screen readers', /Plan of the enclosure from above/.test(names), names);
+
+  check('no page errors in the test-case flow', errs3.length === 0, errs3.join(' | '));
+  await ctx3.close();
+}
+
 check('no page errors', errors.length === 0, errors.join(' | '));
 await browser.close();
 console.log(failed ? `${failed} check(s) FAILED` : 'All checks passed');
