@@ -15,7 +15,7 @@ Walk-in wine cellar configurator. **Glass enclosure with metal racking first**, 
 | 2D plan, wall elevation and the rack face (bottles) as pure drawing primitives | `src/views/` | Built, tested |
 | Project model layer (invertible commands, store, file format, library binding) | `src/domain/`, `src/state/` | Built, tested; **not used by the screens yet** (see below) |
 | Screens, guide, tour, tooltips | `src/App.tsx`, `src/ui/`, `src/app/`, `src/help/` | Built, tested in Chrome |
-| Saving to the Vault account, 3D view, pricing, drawing-package PDF, quote request, public front door | | **Not built** |
+| Saving to the Vault account, 3D view, pricing, drawing-package PDF, quote request, public front door, **lighting** (placed LED strips, post lights, spotlights: spec section 20, proposed) | | **Not built** |
 
 The screens edit a simple model (`src/app/model.ts`: one enclosure, one rack spec, the runs, the walkway minimum) with undo and redo in `src/app/store.ts`. The commands/library layer in `src/domain` and `src/state` (built for the joinery cabinets and the Vault library) is not connected to them yet.
 

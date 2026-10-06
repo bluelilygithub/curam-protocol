@@ -12,7 +12,7 @@ Walk-in wine cellar and fridge configurator. A bespoke-first design tool: cabine
 - **Phase 2, quote generator and public front door:** procedural layout presets, pricing and bill of materials, door and drawer animation, installer PDF and cut-list export; then an unauthenticated guest session, a CSP `frame-ancestors` change for embedding on another site, an email notification when a quote is requested, and a photo retention policy.
 - **Phase 3, photo overlay:** manual 3-point camera match with a shadow catcher. AI blending is optional and later (it can change dimensions, and uploads a customer's home photo to a third party).
 - Phase 1 gates the cut-list **export UI**; the engine's cut-list calculation is active from Milestone 1.
-- Not in scope: cooling load, insulation, structural advice, WebXR/AR on a phone.
+- Not in scope: cooling load, insulation, structural advice, WebXR/AR on a phone, and **electrical design** (drivers, wiring, circuits) and **home-automation integration** (section 20).
 
 ## 2. Conventions
 
@@ -144,6 +144,9 @@ Not yet in the cut list: site scribe pieces, hardware (LED channel, runners), do
 | D-18 | **Confirmed** | The bottle total counts **only runs with no error**; runs with errors are reported as "not counted" (their runs and bottles), never added to the headline. A run too tall, too shallow for the bottle, off its wall, in the door's way, or with a bottle that cannot fit is such a run. | Showing the total with a footnote. A clean number must never include something the tool says cannot be built. |
 | D-19 | **Confirmed** | Bottles per row left blank is **calculated**: floor(unit width / the bottle's slot pitch) (600 mm: Bordeaux 7, Burgundy 6, Champagne 5, Magnum 4), labelled calculated, and a typed number overrides it. A typed number that cannot fit across the unit at the bottle's diameter is an error (`RACK_ROW_TOO_WIDE`). The Test case leaves it calculated, so the Bottle setting moves the count. | A typed 7 that silently ignores the bottle choice. |
 | D-20 | **Confirmed** | **Label-forward** has its own bottles-per-row, never calculated, "not set" until typed: the neck-out figure never carries over. On a metal rack label-forward may mean the bottle lies side-on and takes about its own length of width (so a 600 mm unit might hold 1 or 2), unlike the joinery display (D-01). | Reusing the neck-out count (wrong). **Ask the fabricator.** |
+| D-21 | Proposed | **Lighting is in scope as design information, not electrical design** (section 20): where lights go, what kind, colour temperature, dimming, and a parts list. No circuits, loads or wiring. | A full lighting designer (rejected: that is a specialist's job). |
+| D-22 | Proposed | Internal lighting is **low-heat LED only**, **2700 K to 3000 K** by default, with the 3000 K to 4000 K range available for neutral-white displays (the original brief allowed 2700 to 4000 K). | The owner's text names 2700 to 3000 K as usual for high-end cellars. |
+| D-23 | **Open** | How far lighting appears in the drawings and the 3D/render views, and whether the lights are costed. | Depends on the quote and drawing package (Phase 2). |
 | D-17 | **Revised** | The minimum walkway belongs to the project and has **no default**: blank means the walkway and landing checks do not run (one information note says so). When set, a narrow walkway is a **warning**, never an error. The floor-inside-the-door check applies **only when the door swings in**. | A 900 mm default would flag a step-in glass cabinet, whose two rack rows are roughly 600 mm apart (scaled from the sample plan, unverified): the same trap as the 50% glass rule. If the business has a minimum it designs to, that is the default. |
 | D-16 | Proposed | Enclosure defaults are read from sample drawings A101 to A103 and are unverified. Checked against the drawings: the **2120 mm door** and **500 mm header** are consistent with A102. The **50 mm ceiling build-up and the 2150 mm inside height are NOT confirmed** (A103 says "reinforced ceiling panel" with no thickness; no drawing shows a floor build-up, which moves the inside height as much as the ceiling does): only the drawing's authors can confirm either. | Owner confirms or corrects. |
 | D-15 | **Confirmed** | With no supplier spec sheet, metal-rack capacity comes from a user-editable rack-module table whose fields start BLANK. Blank means "not set", never zero; `RACK_SPEC_MISSING` explains why. | Wait for the supplier sheet. |
@@ -225,6 +228,7 @@ M1 (built) and M2a (built, product-agnostic: commands, undo, store, file format,
 5. **2D plan and wall elevation for the glass enclosure (built, standalone; section 19).**
 6. Joinery in the same app (its engine is built).
 7. Drawing package and the quote request flow (Phase 2).
+8. **Lighting** (section 20): placed lights, advisory notes, parts list, symbols in the drawings, and lit views once there is a 3D or render view. Not built.
 
 ## 19. The screens (built, standalone)
 
@@ -237,3 +241,39 @@ Run with `npm run dev` inside `cellar-planner/` (port 5176); `npm run e2e` drive
 - **Saving:** Save and Open a `.cellar.json` file (so the plan can be sent to someone to look at), plus a draft kept in the browser. Not yet: saving to the Vault account, dragging runs on the plan, free-standing runs, the drawing package PDF.
 - **Help:** a first-visit guide (the (i) modal), a 13-step Shepherd tour (the compass; `?tour=1`; key `vault_tour_cellar_planner_completed`) and a tooltip on every control, as in the other planners; see `docs/cellar-planner.md`.
 - **Tests:** `tests/app.test.ts` (model, store, file format), `tests/help.test.ts` (tour hooks, guide, tooltip coverage) and `scripts/e2e.mjs` (the screens, in Chrome: blanks and "not set", the 160 and 480 bottle totals from invented rack values, fill a wall, walkway warning, run error, undo and redo, inward door, bad numbers, save/open/draft).
+
+## 20. Lighting (PROPOSED)
+
+Source: **owner-supplied text** describing how high-end and luxury cellars are lit. It is general guidance, **not verified by this project**: the technical claims (UV and heat harming wine, "light strike", typical colour temperatures, which control systems are used) should be checked before they appear in anything a customer relies on. The text **was cut off** in the message that supplied it: its last sentence, about dimmable and scene-controlled lighting tied into home automation (Control4, Dynalite and Lutron are named), ends mid-sentence ("... with"). The automation part below is therefore only what the text states up to that point.
+
+### 20.1 Why cellars are lit this way
+
+Lighting does two jobs: it **shows the collection as a display piece**, and it must **not harm the wine**. Heat and ultraviolet light are the concern, so expensive cellars avoid halogen and incandescent lamps inside the enclosure and use **low-heat, zero-UV LED** systems. This fits the construction guidance already in section 16: *no additional heat source inside the cellar*.
+
+### 20.2 Internal lighting (inside the enclosure)
+
+- **Integrated LED strip channels:** recessed or flush strips hidden in timber or metal shelf channels, lighting individual bottle labels or giving ambient backlighting behind display racks without glare.
+- **Post and racking accent lighting:** low-voltage LEDs built into metal racking posts or timber uprights, casting a soft glow across the bottle necks.
+- **Colour temperature:** usually **2700 K (warm white) to 3000 K (soft neutral)**.
+- **Control:** high-end systems are dimmable or smart, for example switching on by motion sensor when someone approaches or steps inside.
+
+### 20.3 External lighting (outside the enclosure)
+
+For frameless glass walls, or a cellar that is the centrepiece of a dining room, kitchen or basement, lights outside the glass highlight the structure:
+
+- **Ceiling surface-mounted or recessed track spotlights** on the room ceiling, aimed at showcase bottles, display rows or timber inside.
+- **Narrow-beam accent spotlights** for prized bottles (Magnums, display cradles) without washing out the room.
+- **Dimmable, scene-controlled lighting**, often tied into home automation. *(The source text ends here, mid-sentence.)*
+
+### 20.4 What this means for the planner (PROPOSED)
+
+1. **A light is a placed component**, like a vent or conditioner: a kind (`LED_STRIP`, `POST_LIGHT`, `SPOTLIGHT`), where it is (on a rack unit or post, in a shelf channel, or on the room ceiling outside the enclosure), a length or count, a colour temperature, and whether it is dimmable. Nothing is placed by default.
+2. **Checks and advice** (advisory, never blocking, always needing sign-off like section 16): lamps inside the enclosure should be low-heat LED; a light outside the enclosure that is aimed through glass adds nothing to the cooling load, but wiring and drivers must not put a heat source inside; **cable penetrations through the insulated panels** are a thermal and vapour-barrier concern to be sealed by the installer.
+3. **Drivers and controllers sit outside the enclosure** (no heat source inside); the parts list says so.
+4. **Parts list and quote:** LED strip metres, post lights and spotlights appear as hardware lines (with a rate, like runners and LED channel in section 9). Prices come from the rate table, as an estimate.
+5. **Drawings:** lights have symbols and a legend on the plan and elevations; the 3D or render views (not built) would show them lit and let the colour temperature be switched, as the original brief (FR-03) asked.
+6. **Not modelled:** circuits, loads, voltage drop, dimmer or scene programming, and any home-automation integration. The planner records *that* a light is dimmable or smart, not how it is wired or controlled.
+
+### 20.5 Questions for whoever supplies the lighting
+
+Which products are standard (strip channel profile, post light, spotlight beam angle); the colour-temperature options and whether they are tunable; the dimming standard (for example 0-10 V, DALI or trailing-edge); who specifies the driver and where it goes; how the strip is let into a shelf or post; whether motion-sensor switching is offered; price per metre and per fitting; and which automation systems customers ask to connect to (and the rest of the source text on that point, which was cut off).
