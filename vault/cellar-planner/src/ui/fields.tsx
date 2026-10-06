@@ -34,11 +34,11 @@ export function NumField({ label, value, onCommit, nullable = false, unit = 'mm'
   );
 }
 
-export function SelectField<T extends string>({ label, value, options, onChange, blank, testid }: {
-  label: string; value: T | null; options: Array<[T, string]>; onChange(v: T | null): void; blank?: string; testid?: string;
+export function SelectField<T extends string>({ label, value, options, onChange, blank, testid, hint }: {
+  label: string; value: T | null; options: Array<[T, string]>; onChange(v: T | null): void; blank?: string; testid?: string; hint?: string;
 }) {
   return (
-    <label className="field">
+    <label className="field" title={hint}>
       <span className="field-label">{label}{value === null && blank && <em className="notset"> not set</em>}</span>
       <select value={value ?? ''} aria-label={label} data-testid={testid} onChange={(e) => onChange((e.target.value || null) as T | null)}>
         {blank !== undefined && <option value="">{blank}</option>}
@@ -48,18 +48,18 @@ export function SelectField<T extends string>({ label, value, options, onChange,
   );
 }
 
-export function CheckField({ label, checked, onChange, testid }: { label: string; checked: boolean; onChange(v: boolean): void; testid?: string }) {
+export function CheckField({ label, checked, onChange, testid, hint }: { label: string; checked: boolean; onChange(v: boolean): void; testid?: string; hint?: string }) {
   return (
-    <label className="field check">
+    <label className="field check" title={hint}>
       <input type="checkbox" checked={checked} data-testid={testid} onChange={(e) => onChange(e.target.checked)} />
       <span>{label}</span>
     </label>
   );
 }
 
-export function Section({ title, children, note, testid }: { title: string; children: ReactNode; note?: ReactNode; testid?: string }) {
+export function Section({ title, children, note, testid, tour }: { title: string; children: ReactNode; note?: ReactNode; testid?: string; tour?: string }) {
   return (
-    <section className="section" data-testid={testid}>
+    <section className="section" data-testid={testid} data-tour={tour}>
       <h2>{title}</h2>
       {note}
       <div className="grid">{children}</div>

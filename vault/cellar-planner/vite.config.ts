@@ -13,6 +13,8 @@ export default defineConfig({
   base: '/cellar-planner-app/',
   plugins: [react()],
   resolve: { alias: { '@planner-core': path.resolve(here, '../planner-core/src') }, dedupe: ['react', 'react-dom', 'zustand', 'konva'] },
+  // Shepherd is loaded on first use; pre-bundling it stops the dev server reloading the page the first time the tour opens
+  optimizeDeps: { include: ['shepherd.js'] },
   server: { port: 5176, strictPort: true, fs: { allow: ['..'] } },
   build: { outDir: '../dist/cellar-planner-app', emptyOutDir: true, sourcemap: true },
 });

@@ -99,9 +99,9 @@ export function DrawingView({ prims, testid }: { prims: Prim[]; testid: string }
   useEffect(() => { redraw(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [prims, size]);
 
   return (
-    <div className="drawing" data-testid={testid}>
+    <div className="drawing" data-testid={testid} data-tour="cp-drawing">
       <div ref={host} className="drawing-canvas" data-testid={`${testid}-canvas`} />
-      <button type="button" className="btn fit" onClick={() => { touched.current = false; redraw(); }} data-testid={`${testid}-fit`}>Fit</button>
+      <button type="button" className="btn fit" title="Bring the whole drawing back into view." onClick={() => { touched.current = false; redraw(); }} data-testid={`${testid}-fit`}>Fit</button>
     </div>
   );
 }

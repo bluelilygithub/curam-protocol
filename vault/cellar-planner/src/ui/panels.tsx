@@ -36,45 +36,45 @@ export function EnclosurePanel() {
   });
   return (
     <>
-      <Section title="Enclosure" testid="enclosure-panel" note={<p className="note">Sizes to the outer faces of the walls. Values from the sample drawings are unverified.</p>}>
-        <NumField label="Width (north / south walls)" value={e.outerWidthMm} min={500} onCommit={(v) => set({ outerWidthMm: v as number })} testid="outer-width" />
-        <NumField label="Depth (east / west walls)" value={e.outerDepthMm} min={500} onCommit={(v) => set({ outerDepthMm: v as number })} testid="outer-depth" />
-        <NumField label="Height" value={e.heightMm} min={1000} onCommit={(v) => set({ heightMm: v as number })} testid="outer-height" />
-        <NumField label="Ceiling build-up" value={e.ceilingBuildUpMm} hint="Unconfirmed: the sample says 'reinforced ceiling panel' with no thickness." onCommit={(v) => set({ ceilingBuildUpMm: v as number })} testid="ceiling-buildup" />
-        <NumField label="Floor build-up" value={e.floorBuildUpMm} hint="Unconfirmed: no drawing shows a floor build-up." onCommit={(v) => set({ floorBuildUpMm: v as number })} testid="floor-buildup" />
-        <NumField label="Header height" value={e.headerHeightMm} onCommit={(v) => set({ headerHeightMm: v as number })} testid="header-height" />
+      <Section title="Enclosure" testid="enclosure-panel" tour="cp-enclosure" note={<p className="note">Sizes to the outer faces of the walls. Values from the sample drawings are unverified.</p>}>
+        <NumField label="Width (north / south walls)" value={e.outerWidthMm} min={500} hint="The length of the north and south walls, measured on their outer faces." onCommit={(v) => set({ outerWidthMm: v as number })} testid="outer-width" />
+        <NumField label="Depth (east / west walls)" value={e.outerDepthMm} min={500} hint="The length of the east and west walls, measured on their outer faces." onCommit={(v) => set({ outerDepthMm: v as number })} testid="outer-depth" />
+        <NumField label="Height" value={e.heightMm} min={1000} hint="Floor to the top of the ceiling panel. The header sits above this." onCommit={(v) => set({ heightMm: v as number })} testid="outer-height" />
+        <NumField label="Ceiling build-up" value={e.ceilingBuildUpMm} hint="How much of the height the ceiling takes, so it is taken off the inside height. Unconfirmed: the sample says 'reinforced ceiling panel' with no thickness." onCommit={(v) => set({ ceilingBuildUpMm: v as number })} testid="ceiling-buildup" />
+        <NumField label="Floor build-up" value={e.floorBuildUpMm} hint="How much a floor build-up takes off the inside height. Unconfirmed: no sample drawing shows one." onCommit={(v) => set({ floorBuildUpMm: v as number })} testid="floor-buildup" />
+        <NumField label="Header height" value={e.headerHeightMm} hint="The box above the enclosure that carries the conditioner and vents. It does not reduce the inside height." onCommit={(v) => set({ headerHeightMm: v as number })} testid="header-height" />
       </Section>
       <Section title="Walls" testid="walls-panel">
         {WALLS.map(([side, name]) => (
           <div className="pair" key={side}>
-            <SelectField label={`${name} wall`} value={e.walls[side].kind} options={KINDS} onChange={(v) => setWall(side, { kind: v as WallKind })} testid={`wall-kind-${side}`} />
-            <NumField label="Build-up" value={e.walls[side].buildUpMm} onCommit={(v) => setWall(side, { buildUpMm: v as number })} testid={`wall-build-${side}`} />
+            <SelectField label={`${name} wall`} value={e.walls[side].kind} options={KINDS} hint={`What the ${name.toLowerCase()} wall is made of. It sets how the wall is drawn and whether it counts as glass.`} onChange={(v) => setWall(side, { kind: v as WallKind })} testid={`wall-kind-${side}`} />
+            <NumField label="Build-up" value={e.walls[side].buildUpMm} hint={`How thick the ${name.toLowerCase()} wall is, from its outer face inwards. It is taken off the inside size.`} onCommit={(v) => setWall(side, { buildUpMm: v as number })} testid={`wall-build-${side}`} />
           </div>
         ))}
       </Section>
-      <Section title="Door" testid="door-panel">
-        <SelectField label="On wall" value={e.door.wall} options={WALLS} onChange={(v) => setDoor({ wall: v as WallSide })} testid="door-wall" />
-        <NumField label="Width" value={e.door.widthMm} min={300} onCommit={(v) => setDoor({ widthMm: v as number })} testid="door-width" />
-        <NumField label="Height" value={e.door.heightMm} min={1000} onCommit={(v) => setDoor({ heightMm: v as number })} testid="door-height" />
-        <SelectField label="Swings" value={e.door.swing} options={[['OUT', 'Out'], ['IN', 'In']]} onChange={(v) => setDoor({ swing: v as 'OUT' | 'IN' })} testid="door-swing" />
-        <SelectField label="Hinge (seen from outside)" value={e.door.hinge} options={[['LEFT', 'Left'], ['RIGHT', 'Right']]} onChange={(v) => setDoor({ hinge: v as 'LEFT' | 'RIGHT' })} testid="door-hinge" />
-        <NumField label="Offset from wall start" nullable value={e.door.offsetMm ?? null} hint="Blank = centred" onCommit={(v) => setDoor({ offsetMm: v === null ? undefined : v })} testid="door-offset" />
-        <CheckField label="Glazed" checked={e.door.glazed} onChange={(v) => setDoor({ glazed: v })} testid="door-glazed" />
+      <Section title="Door" testid="door-panel" tour="cp-door">
+        <SelectField label="On wall" value={e.door.wall} options={WALLS} hint="Which wall the door is in." onChange={(v) => setDoor({ wall: v as WallSide })} testid="door-wall" />
+        <NumField label="Width" value={e.door.widthMm} min={300} hint="The door's width. It is also the radius of the arc the open leaf sweeps." onCommit={(v) => setDoor({ widthMm: v as number })} testid="door-width" />
+        <NumField label="Height" value={e.door.heightMm} min={1000} hint="The door's height. It cannot be taller than the inside." onCommit={(v) => setDoor({ heightMm: v as number })} testid="door-height" />
+        <SelectField label="Swings" value={e.door.swing} options={[['OUT', 'Out'], ['IN', 'In']]} hint="Out swings away from the enclosure. In takes floor inside, which racks must stay clear of." onChange={(v) => setDoor({ swing: v as 'OUT' | 'IN' })} testid="door-swing" />
+        <SelectField label="Hinge (seen from outside)" value={e.door.hinge} options={[['LEFT', 'Left'], ['RIGHT', 'Right']]} hint="Which side the hinge is on when you stand outside facing the door." onChange={(v) => setDoor({ hinge: v as 'LEFT' | 'RIGHT' })} testid="door-hinge" />
+        <NumField label="Offset from wall start" nullable value={e.door.offsetMm ?? null} hint="Distance from the start of the wall (the west or north end) to the door's near edge. Blank centres the door." onCommit={(v) => setDoor({ offsetMm: v === null ? undefined : v })} testid="door-offset" />
+        <CheckField label="Glazed" checked={e.door.glazed} hint="A glazed door counts towards the glass share of the walls (advisory only)." onChange={(v) => setDoor({ glazed: v })} testid="door-glazed" />
       </Section>
-      <Section title="Header: conditioner and vents" testid="header-panel">
+      <Section title="Header: conditioner and vents" testid="header-panel" tour="cp-header">
         {e.header.map((c) => (
           <div className="part" key={c.id} data-testid={`part-${c.id}`}>
             <strong>{c.kind === 'VENT' ? 'Vent' : 'Conditioner'} <small>{c.id}</small></strong>
-            <NumField label="x" value={c.xMm} onCommit={(v) => setPart(c.id, { xMm: v as number })} />
-            <NumField label="y" value={c.yMm} onCommit={(v) => setPart(c.id, { yMm: v as number })} />
-            <NumField label="w" value={c.widthMm} min={1} onCommit={(v) => setPart(c.id, { widthMm: v as number })} />
-            <NumField label="h" value={c.heightMm} min={1} onCommit={(v) => setPart(c.id, { heightMm: v as number })} />
-            <button type="button" className="btn small" onClick={() => edit((q) => ({ ...q, enclosure: { ...q.enclosure, header: q.enclosure.header.filter((x) => x.id !== c.id) } }))}>Remove</button>
+            <NumField label="x" value={c.xMm} hint="Distance from the left end of the header to the left edge of this part." onCommit={(v) => setPart(c.id, { xMm: v as number })} />
+            <NumField label="y" value={c.yMm} hint="Height of this part's bottom edge above the bottom of the header." onCommit={(v) => setPart(c.id, { yMm: v as number })} />
+            <NumField label="w" value={c.widthMm} min={1} hint="Width of this part." onCommit={(v) => setPart(c.id, { widthMm: v as number })} />
+            <NumField label="h" value={c.heightMm} min={1} hint="Height of this part." onCommit={(v) => setPart(c.id, { heightMm: v as number })} />
+            <button type="button" className="btn small" title="Remove this part from the header." onClick={() => edit((q) => ({ ...q, enclosure: { ...q.enclosure, header: q.enclosure.header.filter((x) => x.id !== c.id) } }))}>Remove</button>
           </div>
         ))}
         <div className="row">
-          <button type="button" className="btn small" onClick={() => addPart('VENT')} data-testid="add-vent">Add vent</button>
-          <button type="button" className="btn small" onClick={() => addPart('CONDITIONER')} data-testid="add-conditioner">Add conditioner</button>
+          <button type="button" className="btn small" title="Add a vent to the header, then set where it goes." onClick={() => addPart('VENT')} data-testid="add-vent">Add vent</button>
+          <button type="button" className="btn small" title="Add a ceiling conditioner to the header, then set where it goes." onClick={() => addPart('CONDITIONER')} data-testid="add-conditioner">Add conditioner</button>
         </div>
       </Section>
     </>
@@ -93,21 +93,21 @@ export function RackPanel() {
   const missing = missingFields(s);
   return (
     <Section
-      title="Rack specification" testid="rack-panel"
+      title="Rack specification" testid="rack-panel" tour="cp-rack"
       note={missing.length
         ? <p className="banner" data-testid="rack-missing">Rack values are not set (missing: {missing.join(', ')}). Enter your supplier's or fabricator's values: until then bottles cannot be counted or quoted.</p>
         : <p className="note">All rack values entered. Rows = the number of rows if given, otherwise height divided by row pitch.</p>}
     >
-      <SelectField label="Bottle" value={p.bottle} options={Object.values(BOTTLE_PROFILES).map((b): [BottleProfileId, string] => [b.id, b.label])} onChange={(v) => edit((q) => ({ ...q, bottle: v as BottleProfileId }))} testid="bottle" />
-      <NumField label="Unit width" nullable value={s.unitWidthMm} min={1} onCommit={(v) => set({ unitWidthMm: v })} testid="rack-width" />
-      <NumField label="Unit depth" nullable value={s.unitDepthMm} min={1} onCommit={(v) => set({ unitDepthMm: v })} testid="rack-depth" />
-      <NumField label="Unit height" nullable value={s.unitHeightMm} min={1} onCommit={(v) => set({ unitHeightMm: v })} testid="rack-height" />
-      <NumField label="Row pitch" nullable value={s.rowPitchMm} min={1} onCommit={(v) => set({ rowPitchMm: v })} testid="rack-pitch" />
-      <NumField label="Rows per unit (optional)" nullable unit="" value={s.rowsPerUnit ?? null} min={1} hint="If the fabricator states the rows, enter them; then height and pitch are not needed." onCommit={(v) => set({ rowsPerUnit: v })} testid="rack-rows" />
-      <NumField label="Bottles per row" nullable unit="" value={s.bottlesPerRow} min={1} onCommit={(v) => set({ bottlesPerRow: v })} testid="rack-per-row" />
-      <SelectField label="Bottle orientation" value={s.orientation} blank="not set" options={ORIENTATIONS} onChange={(v) => set({ orientation: v })} testid="rack-orientation" />
-      <NumField label="Posts per unit" nullable unit="" value={s.postsPerUnit} min={1} onCommit={(v) => set({ postsPerUnit: v })} testid="rack-posts" />
-      <NumField label="Minimum walkway" nullable value={p.walkwayMm} min={1} hint="Blank: the walkway check does not run. A step-in cabinet and a walk-in room are designed to different minimums." onCommit={(v) => edit((q) => ({ ...q, walkwayMm: v }))} testid="walkway" />
+      <SelectField label="Bottle" value={p.bottle} options={Object.values(BOTTLE_PROFILES).map((b): [BottleProfileId, string] => [b.id, b.label])} hint="The bottle the racks are for. Its length sets how deep a unit must be (typical sizes, unverified)." onChange={(v) => edit((q) => ({ ...q, bottle: v as BottleProfileId }))} testid="bottle" />
+      <NumField label="Unit width" nullable value={s.unitWidthMm} min={1} hint="Width of one rack unit along the wall. Blank means not set: it is never counted as zero." onCommit={(v) => set({ unitWidthMm: v })} testid="rack-width" />
+      <NumField label="Unit depth" nullable value={s.unitDepthMm} min={1} hint="How far one rack unit stands out from the wall." onCommit={(v) => set({ unitDepthMm: v })} testid="rack-depth" />
+      <NumField label="Unit height" nullable value={s.unitHeightMm} min={1} hint="Height of one rack unit. It cannot be taller than the inside." onCommit={(v) => set({ unitHeightMm: v })} testid="rack-height" />
+      <NumField label="Row pitch" nullable value={s.rowPitchMm} min={1} hint="The vertical distance from one row of bottles to the next." onCommit={(v) => set({ rowPitchMm: v })} testid="rack-pitch" />
+      <NumField label="Rows per unit (optional)" nullable unit="" value={s.rowsPerUnit ?? null} min={1} hint="If your fabricator states the number of rows, enter it. Then unit height and row pitch are not needed." onCommit={(v) => set({ rowsPerUnit: v })} testid="rack-rows" />
+      <NumField label="Bottles per row" nullable unit="" value={s.bottlesPerRow} min={1} hint="How many bottles one row of one unit holds." onCommit={(v) => set({ bottlesPerRow: v })} testid="rack-per-row" />
+      <SelectField label="Bottle orientation" value={s.orientation} blank="not set" options={ORIENTATIONS} hint="Neck-out needs the bottle's length plus 15 mm of depth. Label-forward needs the inclined footprint (a joinery assumption until your fabricator confirms how their rods hold the bottle)." onChange={(v) => set({ orientation: v })} testid="rack-orientation" />
+      <NumField label="Posts per unit" nullable unit="" value={s.postsPerUnit} min={1} hint="Posts in one unit, for the parts list. It does not change the bottle count." onCommit={(v) => set({ postsPerUnit: v })} testid="rack-posts" />
+      <NumField label="Minimum walkway" nullable value={p.walkwayMm} min={1} hint="The least clear width you design to between racks. Blank: it is not checked. A step-in cabinet and a walk-in room need different minimums, so there is no default. It is only ever a warning." onCommit={(v) => edit((q) => ({ ...q, walkwayMm: v }))} testid="walkway" />
     </Section>
   );
 }
@@ -132,23 +132,23 @@ export function RunsPanel() {
     edit((q) => ({ ...q, runs: [...q.runs.filter((x) => x.wall !== side), ...r.runs.map(({ id, wall: w, startMm, units }) => ({ id, wall: w, startMm, units }))] }));
   };
   return (
-    <Section title="Rack runs" testid="runs-panel">
+    <Section title="Rack runs" testid="runs-panel" tour="cp-runs">
       {p.runs.length === 0 && <p className="note">No racks placed yet.</p>}
       {p.runs.map((r) => (
         <div className="run" key={r.id} data-testid={`run-${r.id}`}>
           <strong>{r.id}</strong>
-          <SelectField label="Wall" value={r.wall} options={WALLS} onChange={(v) => patch(r.id, { wall: v as WallSide })} />
-          <NumField label="Start along wall" value={r.startMm} onCommit={(v) => patch(r.id, { startMm: v as number })} testid={`run-start-${r.id}`} />
-          <NumField label="Units" unit="" value={r.units} onCommit={(v) => patch(r.id, { units: v as number })} testid={`run-units-${r.id}`} />
-          <button type="button" className="btn small" onClick={() => edit((q) => ({ ...q, runs: q.runs.filter((x) => x.id !== r.id) }))}>Remove</button>
+          <SelectField label="Wall" value={r.wall} options={WALLS} hint="Which wall this run of racks stands against." onChange={(v) => patch(r.id, { wall: v as WallSide })} />
+          <NumField label="Start along wall" value={r.startMm} hint="Where the first unit starts, measured along the inside of the wall from its start (the west or north end)." onCommit={(v) => patch(r.id, { startMm: v as number })} testid={`run-start-${r.id}`} />
+          <NumField label="Units" unit="" value={r.units} hint="How many rack units are in this run." onCommit={(v) => patch(r.id, { units: v as number })} testid={`run-units-${r.id}`} />
+          <button type="button" className="btn small" title="Remove this run." onClick={() => edit((q) => ({ ...q, runs: q.runs.filter((x) => x.id !== r.id) }))}>Remove</button>
         </div>
       ))}
       <div className="row">
-        <SelectField label="New run on" value={wall} options={WALLS} onChange={(v) => setWall(v as WallSide)} testid="new-run-wall" />
-        <button type="button" className="btn small" onClick={add} data-testid="add-run">Add run</button>
+        <SelectField label="New run on" value={wall} options={WALLS} hint="The wall the next run will be added to." onChange={(v) => setWall(v as WallSide)} testid="new-run-wall" />
+        <button type="button" className="btn small" title="Add one rack unit on the chosen wall, then set where it starts and how many." onClick={add} data-testid="add-run">Add run</button>
       </div>
       <div className="row">
-        {WALLS.map(([side, name]) => <button type="button" key={side} className="btn small" onClick={() => fill(side)} data-testid={`fill-${side}`}>Fill {name.toLowerCase()}</button>)}
+        {WALLS.map(([side, name]) => <button type="button" key={side} className="btn small" title={`Fill the ${name.toLowerCase()} wall with as many whole units as fit, leaving the door opening free. It replaces any runs already on that wall and needs the unit width first.`} onClick={() => fill(side)} data-testid={`fill-${side}`}>Fill {name.toLowerCase()}</button>)}
       </div>
       {msg && <p className="note" role="status" data-testid="fill-msg">{msg}</p>}
     </Section>
@@ -164,15 +164,15 @@ export function ChecksPanel() {
   const total = a.racks.total;
   return (
     <div className="checks" data-testid="checks-panel">
-      <section className="section">
+      <section className="section" data-tour="cp-total" title="The bottles all the runs hold. It says 'not set' until every run has its rack values.">
         <h2>Bottles</h2>
         <p className={`total${total.status === 'NOT_SET' ? ' notset-total' : ''}`} data-testid="total">
           {total.status === 'OK' ? `${total.capacity} bottles` : `not set (${total.unsetRuns} run${total.unsetRuns === 1 ? '' : 's'} without rack values)`}
         </p>
         <p className="note">Inside {a.enclosure.internal.widthMm} x {a.enclosure.internal.depthMm} x {a.enclosure.internal.heightMm} mm. Glass {(a.enclosure.glassFraction * 100).toFixed(1)}% of the outer wall area.</p>
       </section>
-      <section className="section">
-        <h2>Checks <span className="count" data-testid="issue-count">{issues.filter((i) => i.severity === 'error').length} errors, {issues.filter((i) => i.severity === 'warning').length} warnings</span></h2>
+      <section className="section" data-tour="cp-checks">
+        <h2 title="Problems with the design. Errors mean something does not fit; warnings and information are for you to judge.">Checks <span className="count" data-testid="issue-count">{issues.filter((i) => i.severity === 'error').length} errors, {issues.filter((i) => i.severity === 'warning').length} warnings</span></h2>
         {issues.length === 0 && <p className="note">Nothing to report.</p>}
         <ul className="issues">
           {issues.map((i, n) => (
@@ -183,8 +183,8 @@ export function ChecksPanel() {
           ))}
         </ul>
       </section>
-      <section className="section advisory" data-testid="advisories">
-        <h2>Advisory guidance <small>information only</small></h2>
+      <section className="section advisory" data-testid="advisories" data-tour="cp-advisory">
+        <h2 title="Guidance from a cellar-building guide. Information only: it never blocks a design and always needs engineer or HVAC sign-off.">Advisory guidance <small>information only</small></h2>
         <ul className="issues">
           {a.advisories.map((x) => <li key={x.code} className="issue info" data-testid={`advisory-${x.code}`}>{x.text}</li>)}
         </ul>

@@ -41,3 +41,18 @@ body { background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans
 .issue.error { border-left-color: var(--err); } .issue.error .sev { color: var(--err); } .issue.warning { border-left-color: var(--warn); } .issue.warning .sev { color: #b7791f; }
 .advisory h2 small { text-transform: none; letter-spacing: 0; font-weight: 400; }
 @media (max-width: 1100px) { .app { grid-template-columns: 280px 1fr; grid-template-areas: "top top" "left stage" "right right"; grid-template-rows: auto minmax(420px, 1fr) auto; height: auto; min-height: 100vh; } }
+
+/* ------------------------------------------------------------------ guide, tooltip, icons (same look as the other planners) */
+.btn.icon { display: inline-flex; align-items: center; padding: 5px 8px; }
+.icon-btn { display: inline-flex; border: 0; background: none; cursor: pointer; padding: 4px; border-radius: 6px; color: var(--text); transition: opacity var(--duration); } .icon-btn:hover { opacity: .6; }
+.modal-back { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.35); padding: 12px; }
+.modal { width: min(560px, 100%); max-height: 100%; display: flex; flex-direction: column; background: var(--bg); border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+.modal.wide { width: min(720px, 100%); max-height: calc(100vh - 24px); }
+.modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 6px; } .modal-head h2 { margin: 0; font-size: 16px; }
+.modal-body { padding: 8px 16px 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.modal-body h3 { margin: 10px 0 0; font-size: 13px; } .modal-body p, .modal-body ul { margin: 0; } .modal-body ul { padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.modal-foot { display: flex; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--border); } .grow { flex: 1; }
+.btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+.rp-tooltip { position: fixed; z-index: 70; pointer-events: none; max-width: 160px; /* the shared placement keeps the centre 80 px from the window edge, so the card must be no wider than 160 px */ width: max-content; padding: 6px 10px; border-radius: 8px; font-size: 11px; line-height: 1.4; background: var(--text); color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,.25); animation: tipin var(--duration) ease-out; }
+@keyframes tipin { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }

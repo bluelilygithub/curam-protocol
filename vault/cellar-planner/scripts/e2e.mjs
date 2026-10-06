@@ -12,6 +12,8 @@ const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'}  
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const ctx = await browser.newContext({ viewport: { width: 1500, height: 900 } });
+// the first-visit guide has its own checks below; the main run starts with it already seen
+await ctx.addInitScript(() => { try { localStorage.setItem('cellar-planner:info-seen:v1', '1'); } catch { /* ignore */ } });
 const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
@@ -145,6 +147,98 @@ await page.waitForTimeout(600);
 await page.reload();
 await page.getByTestId('plan-canvas').waitFor();
 check('the draft survives a reload', (await state()).runs.length === JSON.parse(saved).runs.length && (await state()).enclosure.header.length === 4);
+
+// ---- the guide, tooltips and tour, in a fresh browser (nothing seen yet)
+{
+  const ctx2 = await browser.newContext({ viewport: { width: 1500, height: 900 } });
+  const p2 = await ctx2.newPage();
+  const errs2 = [];
+  p2.on('pageerror', (e) => errs2.push(e.message));
+  p2.on('console', (m) => { if (m.type() === 'error') errs2.push(m.text()); });
+  const shot2 = async (n) => { if (out) await p2.screenshot({ path: join(out, n + '.png') }); };
+  const key = (k) => p2.evaluate((x) => localStorage.getItem(x), k);
+  await p2.goto(URL);
+  await p2.getByTestId('plan-canvas').waitFor();
+  await p2.getByTestId('info-modal').waitFor({ timeout: 5000 });
+  check('the first visit opens the guide by itself', /How Cellar Planner works/.test(await p2.getByTestId('info-modal').innerText()));
+  const guide = await p2.getByTestId('info-modal').innerText();
+  check('the guide says blanks are "not set", advice needs sign-off, and drawings are preliminary', /not set/.test(guide) && /sign-off/.test(guide) && /preliminary design only/i.test(guide));
+  check('the guide says what is not built yet', /What is not here yet/.test(guide));
+  await shot2('10-guide');
+  await p2.getByTestId('info-got-it').click();
+  check('Got it closes it and remembers', (await p2.getByTestId('info-modal').count()) === 0 && (await key('cellar-planner:info-seen:v1')) === '1');
+  await p2.reload();
+  await p2.getByTestId('plan-canvas').waitFor();
+  await p2.waitForTimeout(400);
+  check('it does not open again on the next visit', (await p2.getByTestId('info-modal').count()) === 0);
+  await p2.getByTestId('info-open').click();
+  check('the (i) button opens it again', (await p2.getByTestId('info-modal').count()) === 1);
+  await p2.getByTestId('info-close').click();
+  check('the X closes it', (await p2.getByTestId('info-modal').count()) === 0);
+
+  // tooltips
+  await p2.getByTestId('outer-width').hover();
+  await p2.waitForSelector('.rp-tooltip', { timeout: 3000 });
+  check('hovering a field shows its explanation in the themed tooltip', /outer faces/.test(await p2.locator('.rp-tooltip').innerText()), await p2.locator('.rp-tooltip').innerText());
+  const box = await p2.locator('.rp-tooltip').boundingBox();
+  check('the tooltip stays fully on screen even beside the left edge', box.x >= 0 && box.x + box.width <= 1500, JSON.stringify(box));
+  await shot2('11-tooltip');
+  await p2.mouse.move(5, 5);
+  await p2.getByTestId('save').hover();
+  await p2.waitForFunction(() => /Download this design/.test(document.querySelector('.rp-tooltip')?.textContent ?? ''), null, { timeout: 3000 });
+  check('hovering a button shows its explanation', true);
+  await p2.mouse.move(5, 5);
+  await p2.waitForTimeout(300);
+  const bare = await p2.evaluate(() => {
+    const out = [];
+    for (const el of document.querySelectorAll('button, select, input:not([type=hidden]):not([hidden])')) {
+      if (!(el instanceof HTMLElement) || el.offsetParent === null) continue;
+      if (el.closest('.modal-back')) continue;
+      if (!el.closest('[title],[data-tip]')) out.push(el.getAttribute('data-testid') || el.getAttribute('aria-label') || el.textContent.slice(0, 30));
+    }
+    return out;
+  });
+  check('every visible button, field and menu has a tooltip', bare.length === 0, bare.join(', '));
+  const emptyTitles = await p2.evaluate(() => document.querySelectorAll('[title=""]').length);
+  check('no empty tooltips', emptyTitles === 0, String(emptyTitles));
+
+  // the guided tour
+  await p2.getByTestId('tour-start').click();
+  await p2.waitForSelector('.shepherd-element.vault-tour', { timeout: 8000 });
+  const title = () => p2.locator('.shepherd-element.vault-tour:not([hidden]) .shepherd-title').innerText();
+  const counter = () => p2.locator('.vault-tour-step-count:visible').innerText();
+  await p2.locator('.vault-tour-step-count:visible').waitFor();
+  check('the tour starts on its welcome card, Step 1 of 13', /Quick Tour/.test(await title()) && /Step 1 of 13/.test(await counter()), await counter());
+  await shot2('12-tour-welcome');
+  const next = () => p2.locator('.shepherd-element.vault-tour:not([hidden]) .shepherd-button:not(.vault-tour-btn-secondary)').click();
+  const titles = [await title()];
+  const tabAt = {};
+  for (let i = 2; i <= 13; i++) {
+    await next();
+    await p2.waitForFunction((n) => [...document.querySelectorAll('.vault-tour-step-count')].some((c) => c.textContent === 'Step ' + n + ' of 13' && c.offsetParent !== null), i, { timeout: 6000 });
+    await p2.waitForTimeout(500);
+    titles.push(await title());
+    tabAt[i] = await p2.evaluate(() => window.cellar.ui.getState().tab);
+    if (i === 3 || i === 9) await shot2('13-tour-step-' + i);
+  }
+  check('the tour has 13 steps in order, from "Your design" to the finish', titles.length === 13 && titles[1] === 'Your design' && titles[2] === 'The enclosure' && /set/.test(titles[12]), JSON.stringify(titles));
+  check('the plan-and-elevation step switches to the elevation, and the drawing step back to the plan', tabAt[8] === 'elevation' && tabAt[9] === 'plan', JSON.stringify(tabAt));
+  check('a dimming overlay spotlights the target', await p2.evaluate(() => document.querySelector('.shepherd-modal-overlay-container') !== null));
+  await next();
+  await p2.waitForTimeout(400);
+  check('Finish closes the tour, marks it done, and puts the screen back to the plan', (await p2.locator('.shepherd-element.vault-tour:not([hidden])').count()) === 0 && (await key('vault_tour_cellar_planner_completed')) === '1' && (await p2.evaluate(() => window.cellar.ui.getState().tab)) === 'plan');
+
+  // Esc leaves it too, and Vault's Settings page can open it with ?tour=1
+  await p2.evaluate(() => localStorage.removeItem('vault_tour_cellar_planner_completed'));
+  await p2.goto(URL + '?tour=1');
+  await p2.waitForSelector('.shepherd-element.vault-tour', { timeout: 8000 });
+  check('?tour=1 starts the tour (how Vault\'s Settings page retakes it)', true);
+  await p2.keyboard.press('Escape');
+  await p2.waitForTimeout(400);
+  check('Esc leaves the tour and marks it done', (await key('vault_tour_cellar_planner_completed')) === '1');
+  check('no page errors in the help flow', errs2.length === 0, errs2.join(' | '));
+  await ctx2.close();
+}
 
 check('no page errors', errors.length === 0, errors.join(' | '));
 await browser.close();
