@@ -15,7 +15,7 @@ process.env.LOG_LEVEL = process.env.LOG_LEVEL || 'silent';
 const assert = require('assert');
 const http = require('http');
 const express = require('express');
-const { createGeocoder, normalizeQuery, mapResults, userAgent, MIN_GAP_MS, MAX_PENDING, ATTRIBUTION } = require('./geocode');
+const { createGeocoder, normalizeQuery, isAddressQuery, mapResults, userAgent, MIN_GAP_MS, MAX_PENDING, ATTRIBUTION } = require('./geocode');
 const { createRouter } = require('../routes/geocodeRouter');
 
 const ROW = (name, lat, lon, state, code = 'au', postcode = '4064') => ({ display_name: `${name}, Brisbane, ${state}, Australia`, lat: String(lat), lon: String(lon), address: { state, postcode, country_code: code } });
@@ -184,8 +184,71 @@ test('results: Australian rows only, state from the address, label trimmed, junk
   const rows = [ROW('Paddington', -27.46, 153.0, 'Queensland'), ROW('Paddington', 51.5, -0.18, 'England', 'gb'), { display_name: 'x', lat: 'abc', lon: '1' }, { display_name: '', lat: '1', lon: '2' }];
   const out = mapResults(rows);
   assert.strictEqual(out.length, 1);
-  assert.deepStrictEqual(out[0], { label: 'Paddington, Brisbane, Queensland', lat: -27.46, lng: 153.0, state: 'QLD', postcode: '4064' });
+  assert.deepStrictEqual(out[0], { label: 'Paddington, Brisbane, Queensland', lat: -27.46, lng: 153.0, state: 'QLD', postcode: '4064', precision: 'place', address: null });
   assert.deepStrictEqual(mapResults('nope'), []);
+});
+
+// ---------------------------------------------------------------- street addresses
+const HOUSE = (n, road, suburb, extra = {}) => ({ display_name: n + ', ' + road + ', ' + suburb + ', Brisbane, Queensland, 4064, Australia', lat: '-27.4605', lon: '153.0012', address: { house_number: n, road, suburb, city: 'Brisbane', state: 'Queensland', postcode: '4064', country_code: 'au', ...extra } });
+
+test('an address result says how exactly it is known: a house on a street, only a street, or only a place', () => {
+  const house = mapResults([HOUSE('12', 'Smith Street', 'Paddington')])[0];
+  assert.deepStrictEqual(house, { label: 'Paddington QLD', lat: -27.4605, lng: 153.0012, state: 'QLD', postcode: '4064', precision: 'address', address: '12 Smith Street, Paddington QLD 4064' });
+  const street = mapResults([{ ...HOUSE('', 'Smith Street', 'Paddington'), address: { road: 'Smith Street', suburb: 'Paddington', state: 'Queensland', postcode: '4064', country_code: 'au' } }])[0];
+  assert.strictEqual(street.precision, 'street');
+  assert.strictEqual(street.address, 'Smith Street, Paddington QLD 4064');
+  assert.strictEqual(street.label, 'Paddington QLD');
+  const place = mapResults([ROW('Paddington', -27.46, 153.0, 'Queensland')])[0];
+  assert.strictEqual(place.precision, 'place');
+  assert.strictEqual(place.address, null);
+});
+
+test('unit numbers, towns without suburbs, and missing postcodes still make a sensible address', () => {
+  const unit = mapResults([HOUSE('3/45', 'Smith Street', 'Paddington')])[0];
+  assert.strictEqual(unit.address, '3/45 Smith Street, Paddington QLD 4064');
+  const town = mapResults([{ lat: '-30', lon: '150', display_name: 'x', address: { house_number: '7', road: 'Main Road', town: 'Tamworth', state: 'New South Wales', country_code: 'au' } }])[0];
+  assert.strictEqual(town.address, '7 Main Road, Tamworth NSW');
+  assert.strictEqual(town.label, 'Tamworth NSW');
+  assert.strictEqual(town.postcode, null);
+});
+
+test('what counts as an address: any word with a digit that is not a bare four-digit postcode', () => {
+  for (const q of ['12 smith st', '12 smith street, paddington', '3/45 smith st', '12a smith st', 'unit 4 12 smith st']) assert.strictEqual(isAddressQuery(normalizeQuery(q)), true, q);
+  for (const q of ['paddington', 'paddington qld 4064', '4064', 'paddington, 4064', 'mount gravatt east']) assert.strictEqual(isAddressQuery(normalizeQuery(q)), false, q);
+});
+
+test('a street address is answered and remembered in MEMORY ONLY: it never touches the table, in either direction', async () => {
+  const writes = [], reads = [];
+  const store = { get: async (k) => { reads.push(k); return null; }, set: async (k) => { writes.push(k); } };
+  const r = rig({ store });
+  const a = await r.geocoder.search('12 Smith Street Paddington');
+  assert.strictEqual(a.cached, false);
+  assert.deepStrictEqual(writes, [], 'the address was not written to the table');
+  assert.deepStrictEqual(reads, [], 'and the table was not asked about it');
+  const b = await r.geocoder.search('12 smith street  paddington');
+  assert.strictEqual(b.cached, true, 'a retry is answered from memory without another upstream call');
+  assert.strictEqual(r.calls.length, 1);
+  // a suburb is still cached in the table
+  await r.geocoder.search('toowong');
+  assert.deepStrictEqual(writes, ['toowong']);
+});
+
+test('an address is forgotten from memory after about 15 minutes', async () => {
+  const r = rig();
+  await r.geocoder.search('12 smith street paddington');
+  r.advance(14 * 60 * 1000);
+  assert.strictEqual((await r.geocoder.search('12 smith street paddington')).cached, true);
+  r.advance(2 * 60 * 1000);
+  assert.strictEqual((await r.geocoder.search('12 smith street paddington')).cached, false);
+  assert.strictEqual(r.calls.length, 2);
+});
+
+test('an address search is still one deliberate request at the polite pace, with the identifying agent', async () => {
+  const r = rig();
+  await Promise.all(['1 a street paddington', '2 b street toowong'].map((q) => r.geocoder.search(q)));
+  assert.strictEqual(r.calls.length, 2);
+  assert.ok(r.calls[1].at - r.calls[0].at >= 1000);
+  assert.ok(r.calls.every((c) => c.ua.startsWith('CuramVault-GardenPlanner/1.0') && new URL(c.url).searchParams.get('countrycodes') === 'au'));
 });
 
 // ---------------------------------------------------------------- the route

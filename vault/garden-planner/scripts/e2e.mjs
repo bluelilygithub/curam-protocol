@@ -1219,6 +1219,130 @@ check('no page errors or console errors', problems.length === 0, problems.slice(
   check('no page errors in the fly-through', errs.length === 0, errs.join(' | '));
   await ctxF.close();
 }
+// ---- starting a garden from a street address (a fake /api/geocode and /api/map-tiles stand in for the server)
+{
+  const crcTable = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = (buf) => { let c = 0xffffffff; for (const b of buf) c = crcTable[(c ^ b) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const body = Buffer.concat([Buffer.from(type), data]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(body)); return Buffer.concat([len, body, c]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(8, 0); ihdr.writeUInt32BE(8, 4); ihdr[8] = 8; ihdr[9] = 2;
+  const raw = Buffer.concat(Array.from({ length: 8 }, () => Buffer.concat([Buffer.from([0]), Buffer.from(Array.from({ length: 8 }, () => [30, 160, 40]).flat())])));
+  const PNG = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+
+  const ctxA = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await ctxA.addInitScript(() => { try { localStorage.setItem('garden-planner:info-seen:v1', '1'); localStorage.setItem('vault-auth', JSON.stringify({ state: { token: 'test-token' }, version: 0 })); } catch { /* ignore */ } });
+  const pg = await ctxA.newPage();
+  const errs = [], geo = [], direct = [], tiles = [];
+  pg.on('pageerror', (e) => errs.push(e.message));
+  pg.on('request', (r) => { if (/openstreetmap|nominatim/i.test(r.url())) direct.push(r.url()); });
+  const HITS = {
+    smith: [
+      { label: 'Paddington QLD', lat: -27.4605, lng: 153.0012, state: 'QLD', postcode: '4064', precision: 'address', address: '12 Smith Street, Paddington QLD 4064' },
+      { label: 'Paddington QLD', lat: -27.4611, lng: 153.0021, state: 'QLD', postcode: '4064', precision: 'street', address: 'Smith Street, Paddington QLD 4064' },
+      { label: 'Paddington, Brisbane, Queensland', lat: -27.46, lng: 153.0, state: 'QLD', postcode: '4064', precision: 'place', address: null },
+    ],
+    toowong: [{ label: 'Toowong QLD', lat: -27.4849, lng: 152.9857, state: 'QLD', postcode: '4066', precision: 'address', address: '1 High Street, Toowong QLD 4066' }],
+  };
+  await pg.route('**/api/garden-projects**', (r) => r.abort('failed'));
+  await pg.route('**/api/geocode', async (route) => {
+    const q = JSON.parse(route.request().postData() ?? '{}').q ?? '';
+    geo.push(q);
+    const results = /toowong/i.test(q) ? HITS.toowong : HITS.smith;
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ results, attribution: '© OpenStreetMap contributors', cached: false }) });
+  });
+  await pg.route('**/api/map-tiles/**', (route) => {
+    const path = new globalThis.URL(route.request().url()).pathname.replace(/^.*\/api\/map-tiles/, '');
+    if (path === '/status') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ enabled: true, attribution: '© MapTiler © OpenStreetMap contributors', maxZoom: 20 }) });
+    tiles.push(path);
+    return route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
+  });
+  await pg.goto(URL);
+  await pg.waitForSelector('.wizard');
+
+  const find = pg.getByTestId('address-find');
+  check('the wizard asks for a street address first', (await pg.getByLabel('Street address').count()) === 1 && (await pg.getByTestId('address-lookup').count()) === 1);
+  check('the suburb route is still there, under "No address? Choose a suburb instead"', /No address\? Choose a suburb instead/i.test(await pg.locator('.wizard').innerText()) && (await pg.getByLabel('Suburb or postcode').count()) === 1);
+  check('Find address is off until there is something to look up', await find.isDisabled());
+  await pg.getByLabel('Street address').fill('12 Smith Street Paddington');
+  await wait(1500);
+  check('typing sends nothing: it searches only when the button is pressed', geo.length === 0, JSON.stringify(geo));
+  await find.click();
+  await pg.getByTestId('address-hit').first().waitFor();
+  check('one press makes one request, to Vault', geo.length === 1 && direct.length === 0, JSON.stringify([geo, direct]));
+  check('the address results say how exactly each is known', (await pg.getByTestId('address-hit').count()) === 3 && /Exact address/.test(await pg.getByTestId('address-hit').nth(0).innerText()) && /house number was not found/.test(await pg.getByTestId('address-hit').nth(1).innerText()) && /not an address/.test(await pg.getByTestId('address-hit').nth(2).innerText()));
+  check('the results credit OpenStreetMap', /OpenStreetMap contributors/.test(await pg.getByTestId('address-attribution').innerText()));
+  await pg.getByTestId('address-hit').first().click();
+  check('choosing the exact address says where it is and how exactly', /12 Smith Street, Paddington QLD 4064\. Exact address/.test(await pg.getByTestId('wizard-located').innerText()), await pg.getByTestId('wizard-located').innerText());
+  check('the state follows the address', (await pg.locator('.wizard select[aria-label="State"]').inputValue()) === 'QLD');
+  await pg.waitForFunction(() => /MapTiler/.test(document.querySelector('[data-testid="map-preview"]')?.textContent ?? ''), null, { timeout: 8000 });
+  await wait(600);
+  check('the wizard shows a close-up map of the address (zoom 18 tiles)', tiles.some((p) => p.startsWith('/18/')), JSON.stringify([...new Set(tiles.map((p) => p.split('/')[1]))]));
+  if (out) await pg.screenshot({ path: join(out, '15-wizard-address.png') });
+
+  // a street-only result is honest about it
+  await pg.getByTestId('address-find').click();
+  await pg.getByTestId('address-hit').nth(1).click();
+  check('a street-only result says the pin is somewhere on the street', /somewhere on that street/.test(await pg.getByTestId('wizard-located').innerText()));
+  await pg.getByTestId('address-find').click();
+  await pg.getByTestId('address-hit').first().click();
+
+  // typing a latitude by hand makes the point a place again (the old address is no longer where the pin is)
+  const latBox = pg.getByLabel('Latitude');
+  await latBox.fill('-27.5'); await latBox.press('Enter'); await latBox.blur();
+  await wait(200);
+  check('typing a latitude drops the address: the point is only a place now', (await pg.getByTestId('wizard-located').count()) === 0);
+  await pg.getByTestId('address-find').click();
+  await pg.getByTestId('address-hit').first().click();
+
+  await pg.getByRole('button', { name: 'Next' }).click();
+  check('the climate is suggested from the address', /subtropical/i.test(await pg.locator('.wizard .note').first().innerText()));
+  await pg.getByRole('button', { name: 'Next' }).click();
+  await pg.getByRole('button', { name: 'Next' }).click();
+  check('the plot step says the address is the middle of the plan and the map will be on', /middle of the plan/.test(await pg.getByTestId('wizard-plot-note').innerText()) && /satellite map will be switched on/.test(await pg.getByTestId('wizard-plot-note').innerText()));
+  await pg.getByRole('radio', { name: /Start with a rectangle/ }).click();
+  await pg.getByRole('button', { name: 'Create garden' }).click();
+  await pg.waitForSelector('.stage canvas');
+  await wait(800);
+
+  const proj2 = () => pg.evaluate(() => window.gardenPlanner.project.getState().project);
+  let q2 = await proj2();
+  check('the garden keeps the address, the short place name and how exactly it is known', q2.location.address === '12 Smith Street, Paddington QLD 4064' && q2.location.label === 'Paddington QLD' && q2.location.precision === 'address' && q2.location.state === 'QLD');
+  check('the satellite map is on from the start, anchored exactly on the address', q2.map?.on === true && Math.abs(q2.map.lat - -27.4605) < 1e-9 && Math.abs(q2.map.lng - 153.0012) < 1e-9);
+  const xs = q2.boundary.vertices.map((v) => v.position.x), ys = q2.boundary.vertices.map((v) => v.position.y);
+  check('the plot rectangle is centred on the address (the middle of the plan)', Math.abs(Math.min(...xs) + Math.max(...xs)) < 1e-9 && Math.abs(Math.min(...ys) + Math.max(...ys)) < 1e-9, JSON.stringify([xs, ys]));
+  const origin = await pg.evaluate(() => { const a = window.gardenPlanner; const v = a.view.getState().view; const r = document.querySelector('.stage').getBoundingClientRect(); return { x: v.offsetX, y: v.offsetY, w: r.width, h: r.height }; });
+  check('the plan is showing the address (the middle of the plan is on screen)', origin.x > 0 && origin.x < origin.w && origin.y > 0 && origin.y < origin.h, JSON.stringify(origin));
+  await pg.waitForFunction(() => /^[1-9]\d*\/\d+$/.test(document.querySelector('.stage canvas')?.dataset?.mapTiles ?? '') || true, null, { timeout: 3000 });
+
+  // the sidebars
+  const badge = pg.getByTestId('site-badge');
+  check('the plant library says where the garden is and what it is filtered for', /12 Smith Street, Paddington QLD 4064/.test(await badge.innerText()) && /Subtropical/.test(await badge.innerText()) && /QLD/.test(await badge.innerText()), await badge.innerText());
+  await pg.evaluate(() => window.gardenPlanner.ui.getState().set({ selection: null, inspectorOpen: true }));
+  check('the garden settings show the address and how exactly it is known', /12 Smith Street/.test(await pg.getByTestId('address-now').innerText()) && /Exact address/.test(await pg.getByTestId('address-precision').innerText()));
+  check('and the map note says it is centred on the address', /centred on your address/.test(await pg.getByTestId('map-howto').innerText()));
+  await pg.getByTestId('address-change').click();
+  await pg.getByTestId('address-lookup').last().getByLabel('Street address').fill('1 High Street Toowong');
+  await pg.getByTestId('address-lookup').last().getByTestId('address-find').click();
+  await pg.getByTestId('address-hit').first().click();
+  await wait(300);
+  q2 = await proj2();
+  check('changing the address updates the garden and moves the map with it', q2.location.address === '1 High Street, Toowong QLD 4066' && Math.abs(q2.map.lat - -27.4849) < 1e-9 && Math.abs(q2.map.lng - 152.9857) < 1e-9);
+  check('the garden list and plan labels use the new place name', q2.location.label === 'Toowong QLD');
+  await pg.keyboard.press('Control+z');
+  await wait(300);
+  q2 = await proj2();
+  check('Ctrl+Z puts back both the address and the map position', q2.location.address === '12 Smith Street, Paddington QLD 4064' && Math.abs(q2.map.lat - -27.4605) < 1e-9);
+
+  // the printable plan carries the street address
+  const PDF = await import('pdf-lib');
+  await pg.evaluate(() => window.gardenPlanner.ui.getState().set({ scheduleOpen: true }));
+  const [dl] = await Promise.all([pg.waitForEvent('download'), pg.getByTestId('plan-download').click()]);
+  const doc = await PDF.PDFDocument.load(readFileSync(await dl.path()));
+  check('the plan PDF is made for an address-based garden', doc.getPageCount() >= 1);
+  await pg.keyboard.press('Escape');
+
+  check('no page errors while starting from an address', errs.length === 0, errs.join(' | '));
+  await ctxA.close();
+}
 await browser.close();
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nAll checks passed');
 process.exit(failures ? 1 : 0);

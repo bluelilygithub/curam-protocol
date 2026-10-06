@@ -16,7 +16,8 @@ export function InfoModal() {
         <div className="modal-head"><h2>How Garden Planner works</h2><button type="button" className="icon-btn" title="Close" onClick={close}><Icon name="close" size={16} /></button></div>
         <div className="modal-body">
           <h3>Getting started</h3>
-          <p>Make a new garden and tell it where you are. That sets the climate, the frost level and which way the sun goes (the wizard shows a map of the place once you pick it). Then draw your plot, the house, beds, lawn and paths, and add plants from the library on the left. Everything is to scale, in metres.</p>
+          <p>Make a new garden and enter its <b>street address</b>. Garden Planner finds it, says how exactly (an exact address, or only the street), and shows a close-up map. The address sets the state, the climate, the frost level and which way the sun goes, and it becomes the middle of your plan, so the satellite map starts right on your house. No address? Choose a suburb instead. Then draw your plot, the house, beds, lawn and paths, and add plants from the library on the left. Everything is to scale, in metres.</p>
+          <p>Your address and climate are shown at the top of the plant library, because the library is filtered for them. Change the address later in the garden settings on the right: the map moves with it.</p>
 
           <h3>Drawing</h3>
           <ul>
@@ -43,7 +44,7 @@ export function InfoModal() {
           <p>Got a tag from the nursery? Press the camera button above the plant list, photograph the tag and Garden Planner reads it on your device (the photo is not uploaded). It suggests the plants it could be and says why; you choose, and nothing is added for you. You can correct the words it read, or type the name instead.</p>
 
           <h3>Satellite map</h3>
-          <p>In Garden settings, switch on <b>Show a satellite map</b> to see an aerial photo of your street under the plan. Press <b>Move map</b> and drag it until your house sits where you drew it, then draw over it. The map is true to scale and turns with the north arrow, and the sun shadows fall across it, in 2D and in 3D. (The map needs a MapTiler key set up on the server.)</p>
+          <p>In Garden settings, switch on <b>Show a satellite map</b> to see an aerial photo of your street under the plan. Press <b>Move map</b> and drag it until your house sits where you drew it, then draw over it. With a street address the map starts centred on it and switches on by itself, so you can draw the plot around your house on the aerial photo; if the pin is a little off, move the map until it fits. It is true to scale and turns with the north arrow, and the sun shadows fall across it, in 2D and in 3D. (The map needs a MapTiler key set up on the server.)</p>
 
           <h3>3D, walking and flying through</h3>
           <ul>
@@ -64,7 +65,7 @@ export function InfoModal() {
           <p>The starter plant list is a draft. Please check sizes, frost and weed information against a local nursery or your state weed list before relying on it. Plant photos come from iNaturalist, Wikimedia Commons and the Atlas of Living Australia, only under open licences, with the creator and licence shown under each photo. <button type="button" className="linklike" onClick={() => app.ui.getState().set({ infoOpen: false, creditsOpen: true })}>See all photo credits</button>. (Vault admins also get a photo curator button, to hide wrong photos and choose the best ones.)</p>
 
           <h3>Place lookup</h3>
-          <p>Looking up a suburb or postcode uses OpenStreetMap data, © OpenStreetMap contributors. It searches only when you press Look up, never as you type.</p>
+          <p>Looking up an address, suburb or postcode uses OpenStreetMap data, © OpenStreetMap contributors. It searches only when you press the button, never as you type. An address is sent to OpenStreetMap's lookup service for that search; Vault keeps it in memory for a few minutes at most and does not save it on the server or in any log. It is saved only in your garden, and it appears on your printed plan (not in picture captions or file names).</p>
 
           <h3>Saving</h3>
           <p>Gardens save automatically to your Vault account (or in this browser if you are signed out or offline; the bar at the bottom says which). Use <b>Your gardens</b> to switch between them, or to export a file you can keep or move to another device.</p>

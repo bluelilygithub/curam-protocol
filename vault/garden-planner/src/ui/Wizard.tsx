@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { readPicture } from '../state/images';
-import { OSM_ATTRIBUTION, OSM_COPYRIGHT_URL, PlaceLookupError, type PlaceHit } from '../state/geocode';
+import { OSM_ATTRIBUTION, OSM_COPYRIGHT_URL, PlaceLookupError, PRECISION_TEXT, type PlaceHit } from '../state/geocode';
 import { CLIMATE_LABEL, FROST_LABEL, KNOWN_PLACES, stateFromPostcode, suggestClimate, suggestFrost } from '../domain/climate';
-import { AU_STATES, CLIMATE_ZONES, FROST_LEVELS, type ClimateZone, type Drainage, type Frost, type Location, type Soil } from '../domain/types';
+import { AU_STATES, CLIMATE_ZONES, FROST_LEVELS, isLocated, type ClimateZone, type Drainage, type Frost, type Location, type Soil } from '../domain/types';
 import { useApp, useUi } from './AppContext';
 import { CheckField, Field, NumField, SelectField, TextField, optionsOf } from './fields';
 import { Icon } from './icons';
-import { MapPreview } from './MapSection';
+import { MapPreview, useMapStatus } from './MapSection';
+import { AddressLookup } from './AddressLookup';
 
 const STEPS = ['Where', 'Climate', 'North', 'Your plot'] as const;
 
@@ -36,7 +37,16 @@ export function Wizard() {
   useEffect(() => () => { if (pic) URL.revokeObjectURL(pic.preview); }, [pic]);
   const [err, setErr] = useState('');
 
+  const mapStatus = useMapStatus(open);
   if (!open) return null;
+
+  /** A result from either lookup becomes the garden's location: exact point, state, postcode, and how exactly it is known. */
+  const fromHit = (h: PlaceHit, fallbackState: Location['state']): Location => ({
+    label: h.label, lat: h.lat, lng: h.lng, state: h.state ?? fallbackState, ...(h.postcode ? { postcode: h.postcode } : {}),
+    ...(h.address ? { address: h.address } : {}), precision: h.precision,
+  });
+  /** Typing a latitude or longitude makes the point a place, not an address: the old address would no longer be where the pin is. */
+  const moved = (l: Location): Location => { const { address: _a, precision: _p, ...rest } = l; return { ...rest, precision: 'place' }; };
 
   const place = (l: Location): void => {
     setLoc(l);
@@ -70,6 +80,7 @@ export function Wizard() {
   const finish = async (): Promise<void> => {
     setBusy(true);
     await app.newProject({
+      mapOn: !!mapStatus?.enabled,
       meta: { name: name.trim() || 'My garden', location: loc, climateZone: zone, frost, pets, soil: soil || undefined, drainage, northDeg: north },
       plot: plot === 'rect' ? { kind: 'rect', width: w, depth: d } : null,
       picture: plot === 'picture' && pic ? { blob: pic.blob, name: pic.name, widthPx: pic.widthPx, heightPx: pic.heightPx } : null,
@@ -96,6 +107,13 @@ export function Wizard() {
           {step === 0 && (
             <>
               <TextField label="Garden name" value={name} onCommit={setName} />
+              <AddressLookup onPick={(h) => place(fromHit(h, loc.state))} />
+              {isLocated(loc) && (
+                <p className="note located" data-testid="wizard-located" role="status">
+                  <Icon name="check" size={14} /> {loc.address ?? loc.label}. {PRECISION_TEXT[loc.precision ?? 'place']}.{loc.precision === 'street' ? ' The pin is somewhere on that street: you can line the map up with your house later.' : ''}
+                </p>
+              )}
+              <h3 className="wiz-h">No address? Choose a suburb instead</h3>
               <label className="field">
                 <span className="field-label">Pick a place</span>
                 <select className="vi-input" value={KNOWN_PLACES.find((p) => p.label === loc.label)?.label ?? ''} onChange={(e) => { const p = KNOWN_PLACES.find((x) => x.label === e.target.value); if (p) { place(p); setPostcode(p.postcode ?? ''); setFromOsm(false); } }} aria-label="Pick a place">
@@ -110,7 +128,7 @@ export function Wizard() {
               {lookupMsg && <p className="note" role="status">{lookupMsg}</p>}
               {hits.length > 0 && (
                 <ul className="hits">
-                  {hits.map((h) => <li key={`${h.lat},${h.lng}`}><button type="button" className="btn" onClick={() => { const st = h.state ?? loc.state; place({ label: h.label, lat: h.lat, lng: h.lng, state: st, postcode: postcode || undefined }); setHits([]); setFromOsm(true); }}>{h.label}{h.state ? ` (${h.state})` : ''}</button></li>)}
+                  {hits.map((h) => <li key={`${h.lat},${h.lng}`}><button type="button" className="btn" onClick={() => { const st = h.state ?? loc.state; place({ ...fromHit(h, st), postcode: h.postcode ?? (postcode || undefined) }); setHits([]); setFromOsm(true); }}>{h.label}{h.state ? ` (${h.state})` : ''}</button></li>)}
                 </ul>
               )}
               {(hits.length > 0 || fromOsm) && (
@@ -121,11 +139,11 @@ export function Wizard() {
                 <TextField label="Place name" value={loc.label} onCommit={(v) => setLoc({ ...loc, label: v })} />
               </div>
               <div className="grid2">
-                <NumField label="Latitude" value={loc.lat} min={-44} max={-9} step={0.01} decimals={3} onCommit={(v) => place({ ...loc, lat: v })} hint="Negative: Australia is in the southern hemisphere." />
-                <NumField label="Longitude" value={loc.lng} min={112} max={155} step={0.01} decimals={3} onCommit={(v) => place({ ...loc, lng: v })} />
+                <NumField label="Latitude" value={loc.lat} min={-44} max={-9} step={0.01} decimals={3} onCommit={(v) => place(moved({ ...loc, lat: v }))} hint="Negative: Australia is in the southern hemisphere." />
+                <NumField label="Longitude" value={loc.lng} min={112} max={155} step={0.01} decimals={3} onCommit={(v) => place(moved({ ...loc, lng: v }))} />
               </div>
-              <MapPreview lat={loc.lat} lng={loc.lng} />
-              <p className="note">Your location sets the sun path and suggests a climate zone. It is stored only in your garden file.</p>
+              <MapPreview lat={loc.lat} lng={loc.lng} zoom={isLocated(loc) ? 18 : 16} />
+              <p className="note">Your location sets the sun path and suggests a climate zone. {isLocated(loc) ? 'With an address, the plan is centred on it and the satellite map starts there. ' : ''}It is stored only in your garden file.</p>
             </>
           )}
 
@@ -153,6 +171,7 @@ export function Wizard() {
 
           {step === 3 && (
             <>
+              {isLocated(loc) && <p className="note" data-testid="wizard-plot-note">Your address is the middle of the plan{mapStatus?.enabled ? ', and the satellite map will be switched on under it, so you can draw the plot around your house on the aerial photo' : ''}.</p>}
               <div className="choices" role="radiogroup" aria-label="How to start your plot">
                 {([['draw', 'Draw it myself', 'Click the corners of your plot on the plan.'], ['rect', 'Start with a rectangle', 'Type the width and depth; reshape it later.'], ['picture', 'Trace a picture', 'Use a site plan, aerial photo or sketch under the plan.']] as const).map(([k, t, sub]) => (
                   <button key={k} type="button" role="radio" aria-checked={plot === k} className={`choice${plot === k ? ' on' : ''}`} onClick={() => setPlot(k)}><strong>{t}</strong><span>{sub}</span></button>

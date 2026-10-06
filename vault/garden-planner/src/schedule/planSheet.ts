@@ -264,7 +264,7 @@ export function planSheet(p: GardenProject, opts: PlanOptions): PlanSheet {
   prims.push({ t: 'poly', pts: [{ x: tx0, y: ty0 }, { x: tx1, y: ty0 }, { x: tx1, y: ty1 }, { x: tx0, y: ty1 }], stroke: INK, width: 0.8, closed: true });
   const cx = tx0 + Math.min(300, (tx1 - tx0) * 0.5);
   text(tx0 + 10, ty1 - 18, 14, cutApprox(opts.gardenName, 14, cx - tx0 - 24, true), { anchor: 'left', bold: true });
-  text(tx0 + 10, ty0 + 9, 8, `${opts.place} · ${CLIMATE_LABEL[p.climateZone]}`, { anchor: 'left', color: MUTED });
+  text(tx0 + 10, ty0 + 9, 8, cutApprox(`${opts.place} · ${CLIMATE_LABEL[p.climateZone]}`, 8, cx - tx0 - 24), { anchor: 'left', color: MUTED });
   const plot = p.boundary ? shapeArea({ points: p.boundary.vertices.map((v) => v.position), smooth: false }) : 0;
   if (plot > 0) text(tx0 + 10, ty0 + 20, 8, `Plot ${plot.toFixed(0)} m² · ${p.plants.length} plant${p.plants.length === 1 ? '' : 's'}`, { anchor: 'left', color: MUTED });
   text(cx, ty1 - 18, 11, `Scale 1:${denom}`, { anchor: 'left', bold: true });

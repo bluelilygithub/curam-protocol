@@ -28,6 +28,13 @@ describe('guided tour', () => {
     expect(TOUR_STEPS.length).toBe(12);
   });
 
+  it('the tour talks about the address, now that the garden starts from one', () => {
+    const all = TOUR_STEPS.map((s) => s.text).join(' ');
+    expect(all).toMatch(/street address/);
+    expect(TOUR_STEPS.find((s) => s.id === 'gp-library')?.text).toMatch(/address/);
+    expect(TOUR_STEPS.find((s) => s.id === 'gp-inspector')?.text).toMatch(/address/);
+  });
+
   it('every step has a title and some text', () => {
     for (const s of TOUR_STEPS) { expect(s.title.length).toBeGreaterThan(3); expect(s.text.length).toBeGreaterThan(30); }
   });

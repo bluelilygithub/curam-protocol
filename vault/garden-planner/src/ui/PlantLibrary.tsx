@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { CLIMATE_LABEL, FROST_LABEL } from '../domain/climate';
 import { VoiceInput } from '@planner-core/speech/VoiceInput';
 import { MONTHS, mid } from '../plants/growth';
 import { COLOUR_FAMILIES, NO_FILTERS, filterPlants, type PlantFilters } from '../plants/filters';
@@ -84,6 +85,8 @@ export function PlantLibrary() {
         <button type="button" className="icon-btn" title="Hide the plant library" onClick={() => app.ui.getState().set({ libraryOpen: false })}><Icon name="close" size={16} /></button>
       </div>
 
+      <SiteBadge />
+
       <div className="lib-search">
         <Icon name="search" size={16} />
         <VoiceInput value={f.text} onChange={(v) => set('text', v)} placeholder="Search by common or botanical name" aria-label="Search plants" />
@@ -154,6 +157,24 @@ export function PlantLibrary() {
         </details>
       )}
     </aside>
+  );
+}
+
+/** Where the garden is and what the library is filtering for: the address (or suburb), climate zone, frost and state. Click to change them. */
+function SiteBadge() {
+  const app = useApp();
+  const address = useProject((s) => s.project?.location.address);
+  const label = useProject((s) => s.project?.location.label);
+  const zone = useProject((s) => s.project?.climateZone);
+  const frost = useProject((s) => s.project?.frost);
+  const state = useProject((s) => s.project?.location.state);
+  if (!label || !zone || !frost) return null;
+  return (
+    <button type="button" className="site-badge" data-testid="site-badge" title="Where the garden is. The library is filtered for this climate, frost level and state. Click to change them."
+      onClick={() => app.ui.getState().set({ inspectorOpen: true, selection: null, rightTab: 'details' })}>
+      <Icon name="map" size={15} />
+      <span><strong>{address ?? label}</strong><small>{CLIMATE_LABEL[zone]} · frost: {FROST_LABEL[frost].toLowerCase()} · {state}</small></span>
+    </button>
   );
 }
 

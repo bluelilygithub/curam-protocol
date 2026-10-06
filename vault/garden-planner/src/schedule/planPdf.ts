@@ -121,7 +121,7 @@ export async function makePlanPdf(project: GardenProject, o: PlanPdfOptions): Pr
   const schedule = buildPlantSchedule(project);
   const pages: number[][] = o.includeSchedule && schedule.rows.length > 0 ? paginate(schedule.rows.map((r) => layoutRow(r, fonts).height), A4.h, 22, 58) : [];
   const sheets = 1 + pages.length;
-  const planOpts: PlanOptions = { gardenName: project.name, place: project.location.label, date: o.date, paper: o.paper, stage: o.stage, dimensions: o.dimensions, sheet: 1, sheets, refs: refsFor(schedule) };
+  const planOpts: PlanOptions = { gardenName: project.name, place: project.location.address ?? project.location.label, date: o.date, paper: o.paper, stage: o.stage, dimensions: o.dimensions, sheet: 1, sheets, refs: refsFor(schedule) };
   const sheet = planSheet(project, planOpts);
   const planPage = doc.addPage([sheet.width, sheet.height]);
   drawPrims(planPage, sheet, fonts.regular, fonts.bold, fonts.italic);

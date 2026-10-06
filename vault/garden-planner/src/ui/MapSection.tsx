@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { GardenProject } from '../domain/types';
+import { isLocated, type GardenProject } from '../domain/types';
 import { toPixel, TILE } from '../map/mercator';
 import type { MapStatus } from '../map/tiles';
 import { useApp, useUi } from './AppContext';
@@ -32,7 +32,9 @@ export function MapSection({ project }: { project: GardenProject }) {
       {status && !status.enabled && <p className="note warn" role="status" data-testid="map-unavailable">{status.reason}</p>}
       {on && status?.enabled && (
         <>
-          <p className="note" data-testid="map-howto">Your location is only as exact as a suburb, so move the map until your house sits where you drew it. Then draw over it.</p>
+          <p className="note" data-testid="map-howto">{isLocated(project.location)
+            ? 'The map is centred on your address (the middle of the plan). If the pin is a little off your house, move the map until it sits where you drew it. Then draw over it.'
+            : 'Your location is only as exact as a suburb, so move the map until your house sits where you drew it. Then draw over it.'}</p>
           <div className="row">
             <button type="button" className={`btn${align ? ' primary' : ''}`} aria-pressed={align} onClick={() => app.ui.getState().set({ mapAlign: !align })}>
               <Icon name="map" size={15} /> {align ? 'Done moving' : 'Move map'}
@@ -58,12 +60,12 @@ export function MapAttribution({ project }: { project: GardenProject }) {
  * A small map of the place chosen in the wizard: the tiles around it with a pin. Only asks once the place has settled for a moment, and
  * shows nothing (not an error) when the map is not available.
  */
-export function MapPreview({ lat, lng }: { lat: number; lng: number }) {
+export function MapPreview({ lat, lng, zoom = 16 }: { lat: number; lng: number; zoom?: number }) {
   const app = useApp();
   const ref = useRef<HTMLCanvasElement>(null);
   const status = useMapStatus(true);
   const [tick, setTick] = useState(0);
-  const W = 360, H = 200, Z = 16;
+  const W = 360, H = 200, Z = Math.min(20, Math.max(10, Math.round(zoom)));
   useEffect(() => {
     const c = ref.current;
     if (!c || !status?.enabled) return;
@@ -81,7 +83,7 @@ export function MapPreview({ lat, lng }: { lat: number; lng: number }) {
     }
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.fillStyle = '#d93a2b';
     ctx.beginPath(); ctx.arc(W / 2, H / 2, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  }, [app, lat, lng, status, tick]);
+  }, [app, lat, lng, status, tick, Z]);
   if (!status?.enabled) return null;
   return (
     <figure className="map-preview" data-testid="map-preview">

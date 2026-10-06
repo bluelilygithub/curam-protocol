@@ -2,9 +2,11 @@
 // everyone together (1 request a second, identifying User-Agent, cached results). This side makes one request per deliberate button press,
 // never while typing (no type-ahead), and never for text that is too short to be a place.
 import { readVaultToken, type ReadableStorage } from '@planner-core/library/library';
-import type { AuState } from '../domain/types';
+import type { AuState, LocationPrecision } from '../domain/types';
 
-export interface PlaceHit { label: string; lat: number; lng: number; state: AuState | null; postcode: string | null }
+export interface PlaceHit { label: string; lat: number; lng: number; state: AuState | null; postcode: string | null; precision: LocationPrecision; address: string | null }
+/** What each precision means, in words for the person. */
+export const PRECISION_TEXT: Record<LocationPrecision, string> = { address: 'Exact address', street: 'Street only: the house number was not found', place: 'A suburb or place, not an address' };
 export interface PlaceAnswer { results: PlaceHit[]; attribution: string; cached: boolean }
 
 /** The text OpenStreetMap asks to be shown next to results that come from its data (ODbL). */
@@ -22,7 +24,7 @@ export function createPlaceLookup(storage: ReadableStorage, fetchFn: FetchJson |
     /** Look a suburb, town or postcode up. Throws `PlaceLookupError` with a plain message when it cannot. */
     async search(raw: string): Promise<PlaceAnswer> {
       const q = raw.trim().replace(/\s+/g, ' ');
-      if (q.length < MIN_QUERY) throw new PlaceLookupError(`Type at least ${MIN_QUERY} letters of a suburb, town or postcode, then press Look up.`);
+      if (q.length < MIN_QUERY) throw new PlaceLookupError(`Type an address, or at least ${MIN_QUERY} letters of a suburb or postcode, then press the button.`);
       const key = q.toLowerCase();
       const have = session.get(key);
       if (have) return have;
@@ -35,7 +37,7 @@ export function createPlaceLookup(storage: ReadableStorage, fetchFn: FetchJson |
       }
       const body = (await res.json().catch(() => ({}))) as Partial<PlaceAnswer> & { error?: string };
       if (!res.ok) throw new PlaceLookupError(body.error ?? 'The place lookup did not work. Pick a place from the list instead.');
-      const answer: PlaceAnswer = { results: body.results ?? [], attribution: body.attribution ?? OSM_ATTRIBUTION, cached: !!body.cached };
+      const answer: PlaceAnswer = { results: (body.results ?? []).map((h) => ({ ...h, precision: h.precision ?? 'place', address: h.address ?? null })), attribution: body.attribution ?? OSM_ATTRIBUTION, cached: !!body.cached };
       session.set(key, answer);
       return answer;
     },

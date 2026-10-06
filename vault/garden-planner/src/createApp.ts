@@ -8,7 +8,7 @@ import {
 } from './domain/edit';
 import { boundaryFromPoints, cleanName, cloneGarden, isBlank, newGardenProject, randomId, rectanglePoints } from './domain/projectFactory';
 import { sampleShape } from './domain/shapes';
-import type { GardenProject, ProjectMeta, ServiceKind, StructureKind, Underlay, Vec2 } from './domain/types';
+import { GardenProject, ProjectMeta, ServiceKind, StructureKind, Underlay, Vec2, isLocated, type Location } from './domain/types';
 import { ProjectsController } from '@planner-core/library/projectsController';
 import { MAX_PROJECT_NAME } from '@planner-core/library/library';
 import { createPlaceLookup } from './state/geocode';
@@ -31,6 +31,8 @@ export interface NewProjectOptions {
   plot?: { kind: 'rect'; width: number; depth: number } | null;
   /** A tracing picture (already shrunk): stored once, apart from the design, and referenced from it. */
   picture?: { blob: Blob; name: string; widthPx: number; heightPx: number } | null;
+  /** The satellite map is available (the server has its key): with a street address it is switched on under the plan from the start. */
+  mapOn?: boolean;
 }
 
 /**
@@ -87,7 +89,8 @@ export function createApp(storage: StorageLike) {
       pts.push(u.origin, { x: u.origin.x + u.widthPx * u.metresPerPixel, y: u.origin.y + u.heightPx * u.metresPerPixel });
     }
     for (const b of p.beds) pts.push(...sampleShape(b.shape));
-    if (!pts.length) return { min: { x: -2, y: -2 }, max: { x: 18, y: 14 } };
+    // nothing drawn yet: around the address when there is one (the plan is centred on it), otherwise a default corner of the plan
+    if (!pts.length) return isLocated(p.location) ? { min: { x: -20, y: -13 }, max: { x: 20, y: 13 } } : { min: { x: -2, y: -2 }, max: { x: 18, y: 14 } };
     return aabbOf(pts);
   }
 
@@ -182,7 +185,10 @@ export function createApp(storage: StorageLike) {
     async newProject(o: NewProjectOptions): Promise<void> {
       const p = newGardenProject(o.meta.name, o.meta.location);
       Object.assign(p, o.meta);
-      if (o.plot?.kind === 'rect') p.boundary = boundaryFromPoints(rectanglePoints(o.plot.width, o.plot.depth));
+      const located = isLocated(o.meta.location);
+      // with an address the plan's centre (0, 0) IS the address, so a plot typed in as a rectangle is centred on it, and the map is anchored there
+      if (o.plot?.kind === 'rect') p.boundary = boundaryFromPoints(rectanglePoints(o.plot.width, o.plot.depth, located ? { x: -o.plot.width / 2, y: -o.plot.depth / 2 } : { x: 0, y: 0 }));
+      if (located) p.map = { on: !!o.mapOn, lat: o.meta.location.lat, lng: o.meta.location.lng, opacity: 1 };
       if (o.picture) {
         const stored = await images.put(o.picture.blob);
         if (stored.note) notify(stored.note, 'warn');
@@ -239,6 +245,18 @@ export function createApp(storage: StorageLike) {
     redo(): void { const l = project.getState().redo(); if (l) notify(`Redid: ${l}`); ui.getState().select(stillThere(ui.getState().selection)); },
 
     /** Change the wizard answers (location, climate, frost, pets, soil, north). One undoable step. */
+    /**
+     * Change where the garden is (a new address, say). One undo step. If a satellite map is set up it moves to the new place too (the person
+     * lines it up again with Move map): leaving it under the old place would show the wrong street.
+     */
+    setLocation(next: Location): void {
+      const p = cur();
+      if (!p) return;
+      const meta: Command = { type: 'SetMeta', from: { location: p.location }, to: { location: next } };
+      const map: Command[] = p.map ? [{ type: 'SetSingleton', name: 'map', from: p.map, to: { ...p.map, lat: next.lat, lng: next.lng } }] : [];
+      project.getState().commit({ type: 'Composite', commands: [meta, ...map] }, 'Change address');
+      if (map.length) notify('The map moved to the new address. Use Move map to line it up with your house.');
+    },
     updateMeta(patch: Partial<ProjectMeta>): void {
       const p = cur();
       if (!p) return;

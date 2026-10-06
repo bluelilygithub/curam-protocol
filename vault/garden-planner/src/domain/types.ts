@@ -13,7 +13,14 @@ export const AU_STATES: readonly AuState[] = ['NSW', 'VIC', 'QLD', 'SA', 'WA', '
 export type Soil = 'sandy' | 'loam' | 'clay';
 export type Drainage = 'good' | 'poor';
 
-export interface Location { label: string; lat: number; lng: number; state: AuState; postcode?: string }
+/**
+ * Where the garden is. \`label\` is the short place name ("Paddington QLD", used in titles and file names). \`address\` is the street address when one
+ * was entered, and \`precision\` how exactly lat/lng is known: a house on a street, only a street, or only a place (a suburb or a point typed in).
+ */
+export interface Location { label: string; lat: number; lng: number; state: AuState; postcode?: string; address?: string; precision?: LocationPrecision }
+export type LocationPrecision = 'address' | 'street' | 'place';
+/** True when the point is as exact as a street or better: the plan can sit on it and the map can be trusted to be near the house. */
+export const isLocated = (l: Pick<Location, 'precision'>): boolean => l.precision === 'address' || l.precision === 'street';
 
 /**
  * The satellite map under the plan. (lat, lng) is the point of the earth at plan position (0, 0); the garden's `northDeg` turns the map to

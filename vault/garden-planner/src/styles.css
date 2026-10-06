@@ -317,3 +317,22 @@ textarea.vi-input { padding: 8px 34px 8px 10px; }
 .plan-opts { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; }
 .plan-opts label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
 .plan-opts select { min-height: 30px; padding: 0 8px; border: 1px solid var(--color-border); border-radius: var(--radius); background: #fff; }
+
+/* address lookup, site badge */
+.addr { display: flex; flex-direction: column; gap: 8px; }
+.addr-row { display: flex; gap: 8px; align-items: stretch; }
+.addr-row .vi-wrap { flex: 1; min-width: 0; }
+.addr-hits { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.addr-hit { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; height: auto; padding: 8px 10px; }
+.prec { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: #eee; }
+.prec-address { background: #dff0d8; } .prec-street { background: #fdf0c8; } .prec-place { background: #eee; }
+.note.located { display: flex; gap: 6px; align-items: center; color: #2f6a2f; }
+.wiz-h { margin: 8px 0 0; font-size: 13px; color: var(--color-muted); font-weight: 600; }
+.addr-section { display: flex; flex-direction: column; gap: 6px; padding-bottom: 6px; }
+.addr-now { margin: 0; display: flex; flex-direction: column; gap: 2px; }
+.addr-precision { margin: 0; }
+.site-badge { display: flex; gap: 8px; align-items: center; width: calc(100% - 20px); margin: 0 10px 8px; padding: 6px 10px; text-align: left; border: 1px solid var(--color-border); border-radius: var(--radius); background: #fff; cursor: pointer; transition: opacity var(--duration); }
+.site-badge:hover { opacity: .7; }
+.site-badge span { display: flex; flex-direction: column; min-width: 0; }
+.site-badge strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.site-badge small { font-size: 11px; color: var(--color-muted); }

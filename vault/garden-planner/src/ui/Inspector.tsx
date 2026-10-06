@@ -19,6 +19,8 @@ import { useApp, useProject, useUi } from './AppContext';
 import { CheckField, NumField, SelectField, TextField, labelOf, optionsOf } from './fields';
 import { Icon } from './icons';
 import { MapSection } from './MapSection';
+import { AddressLookup } from './AddressLookup';
+import { PRECISION_TEXT } from '../state/geocode';
 import { ChecksPanel } from './ChecksPanel';
 import { useStore } from 'zustand';
 import { countBySeverity } from '../state/checksStore';
@@ -53,6 +55,23 @@ export function Inspector() {
 const titleOf = (s: Selection): string => ({ boundary: 'Plot boundary', house: 'House', zone: 'Zone', bed: 'Bed', path: 'Path', service: 'Service line', lawn: 'Lawn', structure: 'Structure', plant: 'Plant' } as const)[s.kind];
 
 // ------------------------------------------------------------------ whole-garden settings
+/** The garden's address: what it is, how exactly the point is known, and a way to change it (which moves the map too). */
+function AddressSection({ project }: { project: GardenProject }) {
+  const app = useApp();
+  const [changing, setChanging] = useState(false);
+  const l = project.location;
+  return (
+    <div className="addr-section" data-testid="address-section">
+      <p className="addr-now"><span className="field-label">Address</span><strong data-testid="address-now">{l.address ?? 'Not set: only the suburb is known'}</strong></p>
+      <p className="note addr-precision" data-testid="address-precision">{PRECISION_TEXT[l.precision ?? 'place']}. {l.lat.toFixed(5)}, {l.lng.toFixed(5)}</p>
+      {changing
+        ? <AddressLookup initial={l.address ?? ''} label="Find address" onPick={(h) => { app.setLocation({ label: h.label, lat: h.lat, lng: h.lng, state: h.state ?? l.state, ...(h.postcode ? { postcode: h.postcode } : {}), ...(h.address ? { address: h.address } : {}), precision: h.precision }); setChanging(false); }} />
+        : <button type="button" className="btn" data-testid="address-change" onClick={() => setChanging(true)}><Icon name="search" size={15} /> {l.address ? 'Change address' : 'Enter an address'}</button>}
+      {changing && <button type="button" className="btn" onClick={() => setChanging(false)}>Cancel</button>}
+    </div>
+  );
+}
+
 function ProjectPanel({ project }: { project: GardenProject }) {
   const app = useApp();
   const m = (patch: Parameters<typeof app.updateMeta>[0]): void => app.updateMeta(patch);
@@ -69,7 +88,8 @@ function ProjectPanel({ project }: { project: GardenProject }) {
         <span>{project.plants.length} plant{project.plants.length === 1 ? '' : 's'}</span>
       </p>
       <h3>Where and what the weather is like</h3>
-      <TextField label="Location" value={project.location.label} onCommit={(v) => m({ location: { ...project.location, label: v } })} />
+      <AddressSection project={project} />
+      <TextField label="Place name" value={project.location.label} onCommit={(v) => m({ location: { ...project.location, label: v } })} hint="The short name used on plans and file names, such as the suburb." />
       <SelectField label="State" value={project.location.state} options={AU_STATES.map((s) => [s, s] as const)} onChange={(v) => m({ location: { ...project.location, state: v } })} hint="Used for the weed check." />
       <SelectField label="Climate zone" value={project.climateZone} options={CLIMATE_ZONES.map((z) => [z, CLIMATE_LABEL[z]] as const)} onChange={(v) => m({ climateZone: v })} />
       <SelectField label="Frost" value={project.frost} options={FROST_LEVELS.map((f) => [f, FROST_LABEL[f]] as const)} onChange={(v) => m({ frost: v })} />
