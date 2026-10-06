@@ -39,6 +39,17 @@ function fromWallFrame(side: WallSide, r: WallRect, w: number, d: number): Rect 
   }
 }
 
+/** A point given along a wall (s) and in from it (d, negative = outside), as inside coordinates. */
+export function wallPoint(e: Enclosure, side: WallSide, s: number, d: number): { x: number; y: number } {
+  const { widthMm: w, depthMm: depth } = internalSize(e);
+  switch (side) {
+    case 'NORTH': return { x: s, y: d };
+    case 'SOUTH': return { x: s, y: depth - d };
+    case 'WEST': return { x: d, y: s };
+    case 'EAST': return { x: w - d, y: s };
+  }
+}
+
 /** The same rectangle seen from a wall: along it and in from it. */
 function toWallFrame(side: WallSide, r: Rect, w: number, d: number): WallRect {
   switch (side) {
