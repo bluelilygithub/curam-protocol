@@ -6,6 +6,9 @@ import { createAppStore } from './app/store';
 import { createUiStore } from './app/uiStore';
 import './styles.css';
 
+// Embedded in Vault's shell (?embedded=1): Vault's own nav already names the page.
+if (new URLSearchParams(window.location.search).has('embedded')) document.documentElement.dataset.embedded = '1';
+
 const store = createAppStore(loadDraft() ?? undefined);
 const ui = createUiStore(store.getState().project.enclosure.door.wall);
 // a handle for the browser tests, as the other planners have

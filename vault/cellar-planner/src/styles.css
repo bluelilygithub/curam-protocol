@@ -56,3 +56,5 @@ body { background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans
 .rp-tooltip { position: fixed; z-index: 70; pointer-events: none; max-width: 160px; /* the shared placement keeps the centre 80 px from the window edge, so the card must be no wider than 160 px */ width: max-content; padding: 6px 10px; border-radius: 8px; font-size: 11px; line-height: 1.4; background: var(--text); color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,.25); animation: tipin var(--duration) ease-out; }
 @keyframes tipin { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+:root[data-embedded] .top h1 { display: none; }
