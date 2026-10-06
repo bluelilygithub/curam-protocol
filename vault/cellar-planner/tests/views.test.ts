@@ -37,11 +37,11 @@ describe('the plan', () => {
   });
   it('the open leaf is a quarter circle of 970 mm about the hinge, outside an outward-swinging door', () => {
     const arc = p.find((x): x is Extract<Prim, { kind: 'poly' }> => x.kind === 'poly' && x.dash === true && x.tone === 'door')!;
-    // hinge RIGHT seen from outside on the south wall = the east end of the opening: inside s 1860 -> outer x 1910, on the outer face y 1665
-    const cx = 1910, cy = 1665;
+    // hinge LEFT seen from outside on the south wall = the west end of the opening: inside s 890 -> outer x 940, on the outer face y 1665 (as A101)
+    const cx = 940, cy = 1665;
     for (let i = 0; i < arc.pts.length; i += 2) expect(Math.hypot(arc.pts[i] - cx, arc.pts[i + 1] - cy)).toBeCloseTo(970, 3);
     expect(Math.min(...arc.pts.filter((_, i) => i % 2 === 1))).toBeGreaterThanOrEqual(1665 - 1e-6); // all of it below (outside) the south wall
-    expect(hingeAt(e)).toBe(1860);
+    expect(hingeAt(e)).toBe(890);
   });
   it('an inward door sweeps inside, from the inner face', () => {
     const inward: Enclosure = { ...e, door: { ...e.door, swing: 'IN', hinge: 'LEFT' } };
@@ -119,6 +119,20 @@ describe('the wall elevation', () => {
     e2.door = { ...e2.door, wall: 'EAST', widthMm: 900 };
     expect(rects(elevationView(e2, 'EAST')).some((r) => r.label === 'VENT')).toBe(false);
     expect(rects(elevationView(e2, 'SOUTH')).filter((r) => r.label === 'VENT')).toHaveLength(2);
+  });
+  it('the door diagonal points to the HANDLE side, opposite the hinge, as on the sample drawings (hinge left: point on the right)', () => {
+    const apex = (side: 'SOUTH' | 'NORTH', hinge: 'LEFT' | 'RIGHT'): number => {
+      const e2 = goldenCase02();
+      e2.door = { ...e2.door, wall: side, hinge };
+      const poly = elevationView(e2, side).find((x): x is Extract<Prim, { kind: 'poly' }> => x.kind === 'poly')!;
+      return poly.pts[2]; // the middle point of the three
+    };
+    const door = rects(elevationView(goldenCase02(), 'SOUTH')).find((r) => r.label === 'DOOR')!;
+    expect(apex('SOUTH', 'LEFT')).toBe(door.x + door.w);
+    expect(apex('SOUTH', 'RIGHT')).toBe(door.x);
+    // seen from outside, left is left on every wall, so the north wall (drawn mirrored) behaves the same
+    const north = rects(elevationView({ ...goldenCase02(), door: { ...goldenCase02().door, wall: 'NORTH' } }, 'NORTH')).find((r) => r.label === 'DOOR')!;
+    expect(apex('NORTH', 'LEFT')).toBe(north.x + north.w);
   });
   it('a glazed door is glass-toned, a solid one is door-toned', () => {
     expect(rects(south).find((r) => r.label === 'DOOR')?.tone).toBe('glass');

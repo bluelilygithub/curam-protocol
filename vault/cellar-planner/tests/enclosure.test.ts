@@ -19,7 +19,7 @@ describe('Golden Test Case #02 (sample A101 to A103, as read)', () => {
     expect(a.issues.filter((i) => i.severity === 'error')).toEqual([]);
   });
   it('an outward-swinging door sweeps a 970 mm quarter circle outside', () => {
-    expect(doorSwing(e)).toEqual({ radiusMm: 970, side: 'OUTSIDE', hinge: 'RIGHT', wall: 'SOUTH' });
+    expect(doorSwing(e)).toEqual({ radiusMm: 970, side: 'OUTSIDE', hinge: 'LEFT', wall: 'SOUTH' });
   });
   it('the header parts are symmetric about the centre of the front', () => {
     const left = e.header.find((c) => c.id === 'vent-left')!, right = e.header.find((c) => c.id === 'vent-right')!, motor = e.header.find((c) => c.id === 'conditioner')!;

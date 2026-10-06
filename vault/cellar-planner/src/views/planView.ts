@@ -89,7 +89,7 @@ export function planView(e: Enclosure, runs: RackRun[], analysis?: RackLayoutAna
     out.push({ kind: 'dim', x1: startOfWall[0] + dirOfWall[0] * from, y1: startOfWall[1] + dirOfWall[1] * from, x2: startOfWall[0] + dirOfWall[0] * (from + len), y2: startOfWall[1] + dirOfWall[1] * (from + len), offset: outward * away, text: `${len}` });
   };
   seg(0, lay.beforeMm); seg(lay.beforeMm, lay.doorMm); seg(lay.beforeMm + lay.doorMm, lay.afterMm);
-  out.push({ kind: 'text', x: wB + inner.widthMm / 2, y: nB + inner.depthMm / 2, text: `${inner.widthMm} x ${inner.depthMm} inside`, tone: 'muted', size: 13, anchor: 'middle' });
+  out.push({ kind: 'text', x: wB + inner.widthMm / 2, y: nB + inner.depthMm * 0.4, text: `${inner.widthMm} x ${inner.depthMm} inside`, tone: 'muted', size: 13, anchor: 'middle' });
   return out;
 }
 

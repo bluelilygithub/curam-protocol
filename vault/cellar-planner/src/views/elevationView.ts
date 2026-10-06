@@ -32,12 +32,11 @@ export function elevationView(e: Enclosure, side: WallSide): Prim[] {
     const lay = doorLayout(e);
     const dx = view(lay.beforeMm, lay.doorMm);
     out.push({ kind: 'rect', x: dx, y: groundY - e.door.heightMm, w: lay.doorMm, h: e.door.heightMm, tone: e.door.glazed ? 'glass' : 'door', label: 'DOOR' });
-    // the leaf's diagonal shows which side it is hinged on (the apex of the opening triangle is the hinge side, seen from outside)
-    const leftIsLow = side === 'SOUTH' || side === 'WEST';
-    const hingeLow = e.door.hinge === 'LEFT' ? leftIsLow : !leftIsLow;
-    const hingeX = (hingeLow !== mirrored ? dx : dx + lay.doorMm);
-    const farX = hingeX === dx ? dx + lay.doorMm : dx;
-    out.push({ kind: 'poly', pts: [farX, groundY - e.door.heightMm, hingeX, groundY - e.door.heightMm / 2, farX, groundY], tone: 'door', dash: true });
+    // the leaf's diagonal, as on the sample drawings: its point is on the HANDLE side, opposite the hinge. The hinge side is already as the viewer
+    // sees it (the hinge is defined from outside), so left is the left edge of the drawn door on every wall.
+    const hingeX = e.door.hinge === 'LEFT' ? dx : dx + lay.doorMm;
+    const handleX = hingeX === dx ? dx + lay.doorMm : dx;
+    out.push({ kind: 'poly', pts: [hingeX, groundY - e.door.heightMm, handleX, groundY - e.door.heightMm / 2, hingeX, groundY], tone: 'door', dash: true });
     // the door wall split either side of the door, as on the sample drawings
     const a = view(0, lay.beforeMm), c = view(lay.beforeMm + lay.doorMm, lay.afterMm);
     const parts: Array<[number, number, number]> = [[a, lay.beforeMm, 0], [dx, lay.doorMm, 0], [c, lay.afterMm, 0]];
