@@ -25,9 +25,6 @@ interface WallRect { s0: number; s1: number; d0: number; d1: number }
 
 export type Footprint = { status: 'OK'; rect: Rect; lengthMm: number; depthMm: number } | { status: 'NOT_SET'; missing: string[] };
 
-/** The shortest clear width to walk. PROPOSED default: the owner confirms. */
-export const DEFAULT_WALKWAY_MM = 900;
-
 const alongLength = (side: WallSide, w: number, d: number): number => (side === 'NORTH' || side === 'SOUTH' ? w : d);
 const acrossLength = (side: WallSide, w: number, d: number): number => (side === 'NORTH' || side === 'SOUTH' ? d : w);
 const opposite: Record<WallSide, WallSide> = { NORTH: 'SOUTH', SOUTH: 'NORTH', EAST: 'WEST', WEST: 'EAST' };
@@ -105,12 +102,14 @@ export type TotalCapacity = { status: 'OK'; capacity: number } | { status: 'NOT_
 export interface RackLayoutAnalysis { runs: RunAnalysis[]; issues: Issue[]; total: TotalCapacity }
 
 /**
- * Checks and capacity for rack runs in an enclosure: each run inside its wall and the height, none on the door or in an inward swing, a landing in
- * front of the door, no two runs overlapping, and the walkway between runs (or run and wall) wide enough. Runs with blank sizes are skipped by the
- * geometry and reported as "not set".
+ * Checks and capacity for rack runs in an enclosure: each run inside its wall and the height, none on the door or in an inward swing, no two runs
+ * overlapping, a clear landing inside an INWARD-opening door, and a walkway between runs (or run and wall). The walkway minimum belongs to the
+ * project and has NO default: with `walkwayMm` blank the walkway and landing checks are skipped (and one information note says so), because a
+ * step-in glass cabinet and a walk-in room are designed to different minimums. A narrow walkway is a warning, never an error. Runs with blank
+ * sizes are skipped by the geometry and reported as "not set".
  */
-export function analyseRacks(e: Enclosure, runs: RackRun[], opts: { walkwayMm?: number } = {}): RackLayoutAnalysis {
-  const walkway = opts.walkwayMm ?? DEFAULT_WALKWAY_MM;
+export function analyseRacks(e: Enclosure, runs: RackRun[], opts: { walkwayMm?: number | null } = {}): RackLayoutAnalysis {
+  const walkway = opts.walkwayMm ?? null;
   const { widthMm: iw, depthMm: id, heightMm: ih } = internalSize(e);
   const issues: Issue[] = [];
   const results: RunAnalysis[] = runs.map((run) => ({ runId: run.id, footprint: footprint(e, run), capacity: rackCapacity(run.spec, run.units) }));
@@ -119,7 +118,8 @@ export function analyseRacks(e: Enclosure, runs: RackRun[], opts: { walkwayMm?: 
 
   const placed = runs.map((run, i) => ({ run, fp: results[i].footprint })).filter((x): x is { run: RackRun; fp: Extract<Footprint, { status: 'OK' }> } => x.fp.status === 'OK' && x.run.units > 0);
   const opening = doorOpening(e);
-  const landing = fromWallFrame(opening.wall, { s0: opening.aMm, s1: opening.bMm, d0: 0, d1: walkway }, iw, id);
+  // the floor inside the door must stay clear only when the door swings IN (an outward door does not need it) and a minimum is set
+  const landing = walkway !== null && e.door.swing === 'IN' ? fromWallFrame(opening.wall, { s0: opening.aMm, s1: opening.bMm, d0: 0, d1: walkway }, iw, id) : null;
 
   for (const { run, fp } of placed) {
     const len = alongLength(run.wall, iw, id);
@@ -134,7 +134,7 @@ export function analyseRacks(e: Enclosure, runs: RackRun[], opts: { walkwayMm?: 
       issues.push({ code: 'RUN_ON_DOOR', severity: 'error', message: 'This run stands across the door opening.', fix: `Keep it to the free wall either side of the ${opening.aMm} to ${opening.bMm} mm opening.`, where: run.id });
     }
     if (hitsDoorSwing(e, fp.rect)) issues.push({ code: 'RUN_IN_DOOR_SWING', severity: 'error', message: `The door swings in and sweeps a ${e.door.widthMm} mm radius that this run is in.`, fix: 'Shorten or move the run, or make the door swing out.', where: run.id });
-    else if (overlaps(fp.rect, landing)) issues.push({ code: 'DOOR_PATH_BLOCKED', severity: 'error', message: `This run is in the ${walkway} mm of floor in front of the door.`, fix: 'Move it back or make it shallower.', where: run.id });
+    else if (landing && overlaps(fp.rect, landing)) issues.push({ code: 'DOOR_PATH_BLOCKED', severity: 'error', message: `This run is in the ${walkway} mm of floor inside the door that must stay clear (it swings in).`, fix: 'Move it back or make it shallower.', where: run.id });
   }
 
   placed.forEach((a, i) => placed.slice(i + 1).forEach((b) => {
@@ -142,14 +142,15 @@ export function analyseRacks(e: Enclosure, runs: RackRun[], opts: { walkwayMm?: 
   }));
 
   // walkway: across the enclosure from each run, past any run facing it, to the far wall
-  for (const { run, fp } of placed) {
+  if (walkway === null && placed.length) issues.push({ code: 'WALKWAY_NOT_SET', severity: 'info', message: 'No minimum walkway is set for this project, so walkway width is not checked.', fix: 'Enter the minimum you design to.' });
+  if (walkway !== null) for (const { run, fp } of placed) {
     const across = acrossLength(run.wall, iw, id);
     const s0 = run.startMm, s1 = run.startMm + fp.lengthMm;
     const facing = placed.filter((o) => o.run.wall === opposite[run.wall] && o.run.startMm < s1 && o.run.startMm + o.fp.lengthMm > s0);
     const taken = fp.depthMm + Math.max(0, ...facing.map((o) => o.fp.depthMm));
     const gap = across - taken;
     if (gap < walkway && (facing.length === 0 || run.wall < opposite[run.wall])) {
-      issues.push({ code: 'WALKWAY_TOO_NARROW', severity: 'error', message: `Only ${gap} mm is left to walk ${facing.length ? 'between these runs' : 'in front of this run'}; ${walkway} mm is wanted.`, fix: `Make the units ${walkway - gap} mm shallower in total, or remove a run.`, where: run.id });
+      issues.push({ code: 'WALKWAY_TOO_NARROW', severity: 'warning', message: `Only ${gap} mm is left to walk ${facing.length ? 'between these runs' : 'in front of this run'}; ${walkway} mm is wanted.`, fix: `Make the units ${walkway - gap} mm shallower in total, or remove a run.`, where: run.id });
     }
   }
 

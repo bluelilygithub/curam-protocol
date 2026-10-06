@@ -71,9 +71,19 @@ describe('the door', () => {
     expect(codes(e, [run('s', 'SOUTH', 700, 1)])).toContain('RUN_ON_DOOR');
     expect(codes(e, [run('s', 'SOUTH', 0, 1)])).not.toContain('RUN_ON_DOOR');
   });
-  it('the floor in front of the door must stay clear: a 700 mm deep run opposite blocks it, a 600 mm one does not', () => {
-    expect(codes(e, [run('n', 'NORTH', 890, 1, spec({ unitDepthMm: 700 }))])).toContain('DOOR_PATH_BLOCKED');
-    expect(codes(e, [run('n', 'NORTH', 890, 1, spec({ unitDepthMm: 600 }))])).not.toContain('DOOR_PATH_BLOCKED');
+  it('an inward door needs the floor inside it clear: with a 900 mm minimum, a 700 mm deep run opposite blocks it (as the swing arc does not reach that far), a 600 mm one does not', () => {
+    const inward: Enclosure = { ...e, door: { ...e.door, swing: 'IN', hinge: 'LEFT' } };
+    const wide = (d: number) => run('n', 'NORTH', 1700, 1, spec({ unitDepthMm: d }));
+    // the landing is 890..1860 wide and 900 deep; a run at s 1700.. clips only its far corner, outside the arc's reach
+    expect(codes(inward, [wide(700)], 900)).toContain('DOOR_PATH_BLOCKED');
+    expect(codes(inward, [wide(600)], 900)).not.toContain('DOOR_PATH_BLOCKED');
+  });
+  it('an OUTWARD door skips the landing check altogether, as the glass cabinet does (nothing to keep clear inside)', () => {
+    expect(codes(e, [run('n', 'NORTH', 890, 1, spec({ unitDepthMm: 700 }))], 900)).not.toContain('DOOR_PATH_BLOCKED');
+  });
+  it('with no minimum set the landing check is skipped too', () => {
+    const inward: Enclosure = { ...e, door: { ...e.door, swing: 'IN', hinge: 'LEFT' } };
+    expect(codes(inward, [run('n', 'NORTH', 1700, 1, spec({ unitDepthMm: 700 }))])).not.toContain('DOOR_PATH_BLOCKED');
   });
   it('an inward swing sweeps a quarter circle of 970 mm: only a run that reaches it is an error', () => {
     const inward: Enclosure = { ...e, door: { ...e.door, swing: 'IN', hinge: 'LEFT' } };
@@ -96,16 +106,34 @@ describe('overlap and walkway', () => {
     expect(codes(e, [run('n', 'NORTH', 0, 1), run('w', 'WEST', 0, 1)])).toContain('RUN_OVERLAP');
     expect(codes(e, [run('n', 'NORTH', 0, 1), run('w', 'WEST', 350, 1)])).not.toContain('RUN_OVERLAP');
   });
-  it('facing runs need the walkway between them: 350 + 350 leaves 865 mm of 1565, too narrow at 900, fine at 800', () => {
+  it('there is NO default walkway: with none set the check is skipped and one information note says so', () => {
     const pair = [run('n', 'NORTH', 0, 1), run('s', 'SOUTH', 0, 1)];
-    const w = analyseRacks(e, pair).issues.filter((i) => i.code === 'WALKWAY_TOO_NARROW');
+    const a = analyseRacks(e, pair);
+    expect(a.issues.map((i) => i.code)).not.toContain('WALKWAY_TOO_NARROW');
+    const note = a.issues.filter((i) => i.code === 'WALKWAY_NOT_SET');
+    expect(note).toHaveLength(1);
+    expect(note[0].severity).toBe('info');
+    expect(analyseRacks(e, [], {}).issues.map((i) => i.code)).not.toContain('WALKWAY_NOT_SET'); // nothing placed, nothing to say
+    expect(analyseRacks(e, pair, { walkwayMm: null }).issues.map((i) => i.code)).toContain('WALKWAY_NOT_SET');
+  });
+  it('facing runs: 350 + 350 leaves 865 mm of 1565; a 900 mm minimum WARNS (never an error), 800 does not', () => {
+    const pair = [run('n', 'NORTH', 0, 1), run('s', 'SOUTH', 0, 1)];
+    const w = analyseRacks(e, pair, { walkwayMm: 900 }).issues.filter((i) => i.code === 'WALKWAY_TOO_NARROW');
     expect(w).toHaveLength(1); // one report for the pair, not two
+    expect(w[0].severity).toBe('warning');
     expect(w[0].message).toMatch(/Only 865 mm is left to walk between these runs/);
     expect(codes(e, pair, 800)).not.toContain('WALKWAY_TOO_NARROW');
   });
-  it('a run with nothing opposite still needs room to walk in front of it', () => {
-    expect(codes(e, [run('n', 'NORTH', 0, 1, spec({ unitDepthMm: 800 }))])).toContain('WALKWAY_TOO_NARROW');
-    expect(codes(e, [run('n', 'NORTH', 0, 1)])).not.toContain('WALKWAY_TOO_NARROW');
+  it('the minimum is the project\'s own: a step-in cabinet designed to 600 mm is not flagged where a 900 mm room would be', () => {
+    const tight = [run('n', 'NORTH', 0, 1, spec({ unitDepthMm: 500 })), run('s', 'SOUTH', 0, 1, spec({ unitDepthMm: 500 }))]; // 1565 - 1000 = 565 left
+    expect(codes(e, tight, 600)).toContain('WALKWAY_TOO_NARROW');
+    expect(codes(e, tight, 500)).not.toContain('WALKWAY_TOO_NARROW');
+    expect(analyseRacks(e, tight, { walkwayMm: 900 }).issues.some((i) => i.severity === 'error' && i.code === 'WALKWAY_TOO_NARROW')).toBe(false);
+  });
+  it('a run with nothing opposite still needs room to walk in front of it, as a warning', () => {
+    const a = analyseRacks(e, [run('n', 'NORTH', 0, 1, spec({ unitDepthMm: 800 }))], { walkwayMm: 900 });
+    expect(a.issues.find((i) => i.code === 'WALKWAY_TOO_NARROW')?.severity).toBe('warning');
+    expect(codes(e, [run('n', 'NORTH', 0, 1)], 900)).not.toContain('WALKWAY_TOO_NARROW');
   });
   it('facing runs that do not overlap along the wall do not narrow each other', () => {
     expect(codes(e, [run('n', 'NORTH', 0, 1, spec({ unitDepthMm: 400 })), run('s', 'SOUTH', 1860, 1, spec({ unitDepthMm: 400 }))], 800)).not.toContain('WALKWAY_TOO_NARROW');
