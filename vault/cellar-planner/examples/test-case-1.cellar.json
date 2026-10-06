@@ -66,7 +66,8 @@
     "unitDepthMm": 350,
     "unitHeightMm": 2000,
     "rowPitchMm": 100,
-    "bottlesPerRow": 7,
+    "bottlesPerRow": null,
+    "bottlesPerRowLabelForward": null,
     "orientation": "NECK_OUT",
     "postsPerUnit": 2,
     "rowsPerUnit": null
@@ -110,7 +111,6 @@
     "unitDepthMm",
     "unitHeightMm",
     "rowPitchMm",
-    "bottlesPerRow",
     "orientation",
     "postsPerUnit"
   ]

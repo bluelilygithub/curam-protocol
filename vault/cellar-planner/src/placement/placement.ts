@@ -109,7 +109,11 @@ export function hitsDoorSwing(e: Enclosure, r: Rect): boolean {
 }
 
 export interface RunAnalysis { runId: string; footprint: Footprint; capacity: RackCapacity }
-export type TotalCapacity = { status: 'OK'; capacity: number } | { status: 'NOT_SET'; unsetRuns: number };
+/**
+ * The bottle total. `capacity` counts ONLY runs with no error: a run the tool itself says cannot be built (too tall, in the door's way, too shallow for
+ * the bottle) is never added into a clean-looking number. What was left out is in `uncounted`, present only when there is something to report.
+ */
+export type TotalCapacity = { status: 'OK'; capacity: number; uncounted?: { runs: number; bottles: number } } | { status: 'NOT_SET'; unsetRuns: number };
 export interface RackLayoutAnalysis { runs: RunAnalysis[]; issues: Issue[]; total: TotalCapacity }
 
 /**
@@ -123,7 +127,7 @@ export function analyseRacks(e: Enclosure, runs: RackRun[], opts: { walkwayMm?: 
   const walkway = opts.walkwayMm ?? null;
   const { widthMm: iw, depthMm: id, heightMm: ih } = internalSize(e);
   const issues: Issue[] = [];
-  const results: RunAnalysis[] = runs.map((run) => ({ runId: run.id, footprint: footprint(e, run), capacity: rackCapacity(run.spec, run.units) }));
+  const results: RunAnalysis[] = runs.map((run) => ({ runId: run.id, footprint: footprint(e, run), capacity: rackCapacity(run.spec, run.units, run.bottle) }));
 
   for (const run of runs) for (const i of checkRackSpec(run.spec, run.bottle)) issues.push({ ...i, where: run.id });
 
@@ -166,7 +170,13 @@ export function analyseRacks(e: Enclosure, runs: RackRun[], opts: { walkwayMm?: 
   }
 
   const unset = results.filter((r) => r.capacity.status === 'NOT_SET').length;
-  const total: TotalCapacity = unset ? { status: 'NOT_SET', unsetRuns: unset } : { status: 'OK', capacity: results.reduce((n, r) => n + (r.capacity.status === 'OK' ? r.capacity.capacity : 0), 0) };
+  const withError = new Set(issues.filter((i) => i.severity === 'error' && i.where).map((i) => i.where as string));
+  let counted = 0, leftOut = 0, leftOutRuns = 0;
+  for (const r of results) {
+    if (r.capacity.status !== 'OK') continue;
+    if (withError.has(r.runId)) { leftOut += r.capacity.capacity; leftOutRuns += 1; } else counted += r.capacity.capacity;
+  }
+  const total: TotalCapacity = unset ? { status: 'NOT_SET', unsetRuns: unset } : { status: 'OK', capacity: counted, ...(leftOutRuns ? { uncounted: { runs: leftOutRuns, bottles: leftOut } } : {}) };
   return { runs: results, issues, total };
 }
 

@@ -61,6 +61,12 @@ describe('the plan', () => {
     expect(rects(q).some((x) => x.tone === 'rack' || x.tone === 'rackIssue')).toBe(false);
     expect(texts(q)).toContain('b: size not set');
   });
+  it('a run with an error says it is not counted, instead of a bottle count', () => {
+    const tooMany = [run('n', 'NORTH', 0, 4)];
+    const an = analyseRacks(e, tooMany);
+    const r = rects(planView(e, tooMany, an, { badRuns: badRunIds(an.issues) })).find((x) => x.tone === 'rackIssue')!;
+    expect(r.label).toBe('n: 4 units, not counted (has an error)');
+  });
   it('a run with an error is drawn in the issue tone', () => {
     const tooMany = [run('n', 'NORTH', 0, 4)];
     const an = analyseRacks(e, tooMany);

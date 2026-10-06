@@ -3,8 +3,10 @@ import { useEffect, useState, type ReactNode } from 'react';
 // Small form controls. A number field keeps what is being typed until the person leaves it or presses Enter, then commits a whole number, or
 // clears to blank (only where blank is allowed: a blank is "not set", never 0).
 
-export function NumField({ label, value, onCommit, nullable = false, unit = 'mm', min = 0, hint, testid, estimated = false }: {
+export function NumField({ label, value, onCommit, nullable = false, unit = 'mm', min = 0, hint, testid, estimated = false, calculated = false, placeholder }: {
   label: string; value: number | null | undefined; onCommit(v: number | null): void; nullable?: boolean; unit?: string; min?: number; hint?: string; testid?: string; estimated?: boolean;
+  /** Blank, but the app has worked a value out (shown in the placeholder): not "not set". */
+  calculated?: boolean; placeholder?: string;
 }) {
   const shown = value === null || value === undefined ? '' : String(value);
   const [text, setText] = useState(shown);
@@ -21,12 +23,12 @@ export function NumField({ label, value, onCommit, nullable = false, unit = 'mm'
     if (r !== value || estimated) onCommit(r);
     else setText(String(r));
   };
-  const notSet = nullable && (value === null || value === undefined);
+  const notSet = nullable && (value === null || value === undefined) && !calculated;
   return (
     <label className={`field${bad ? ' bad' : ''}`} title={hint}>
-      <span className="field-label">{label}{notSet && <em className="notset"> not set</em>}{estimated && !notSet && <em className="estimated" data-testid={testid ? `${testid}-estimated` : undefined}> estimated</em>}</span>
+      <span className="field-label">{label}{notSet && <em className="notset"> not set</em>}{calculated && (value === null || value === undefined) && <em className="calculated" data-testid={testid ? `${testid}-calculated` : undefined}> calculated</em>}{estimated && !notSet && <em className="estimated" data-testid={testid ? `${testid}-estimated` : undefined}> estimated</em>}</span>
       <span className="field-input">
-        <input type="text" inputMode="numeric" value={text} placeholder={nullable ? 'not set' : ''} aria-label={label} data-testid={testid}
+        <input type="text" inputMode="numeric" value={text} placeholder={placeholder ?? (nullable ? 'not set' : '')} aria-label={label} data-testid={testid}
           onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
         {unit && <span className="unit">{unit}</span>}
       </span>

@@ -6,7 +6,7 @@ import type { AppStore } from '../app/store';
 import type { HeaderComponent, WallKind, WallSide } from '../enclosure';
 import { BOTTLE_PROFILES, type BottleProfileId } from '../engine';
 import { fillWall } from '../placement';
-import { missingFields, type RackOrientation, type RackSpec } from '../rack';
+import { effectiveBottlesPerRow, missingFields, type RackOrientation, type RackSpec } from '../rack';
 import { CheckField, NumField, Section, SelectField } from './fields';
 
 export const StoreContext = createContext<AppStore | null>(null);
@@ -85,7 +85,7 @@ export function EnclosurePanel() {
 
 const ORIENTATIONS: Array<[RackOrientation, string]> = [['NECK_OUT', 'Neck-out'], ['LABEL_FORWARD', 'Label-forward']];
 
-const FIELD_NAMES: Record<EstimateField, string> = { unitWidthMm: 'unit width', unitDepthMm: 'unit depth', unitHeightMm: 'unit height', rowPitchMm: 'row pitch', bottlesPerRow: 'bottles per row', orientation: 'bottle orientation', postsPerUnit: 'posts per unit' };
+const FIELD_NAMES: Record<EstimateField, string> = { unitWidthMm: 'unit width', unitDepthMm: 'unit depth', unitHeightMm: 'unit height', rowPitchMm: 'row pitch', orientation: 'bottle orientation', postsPerUnit: 'posts per unit' };
 
 export function RackPanel() {
   const p = useProject();
@@ -93,7 +93,9 @@ export function RackPanel() {
   const s = p.rackSpec;
   /** Change rack values. Each edited field stops being "estimated": the person has put their own number there. */
   const set = (patch: Partial<RackSpec>): void => edit((q) => ({ ...q, rackSpec: { ...q.rackSpec, ...patch }, ...(q.estimated?.length ? { estimated: q.estimated.filter((k) => !(k in patch)) } : {}) }));
-  const missing = missingFields(s);
+  const missing = missingFields(s, p.bottle);
+  const perRow = effectiveBottlesPerRow(s, p.bottle);
+  const calculated = s.orientation !== 'LABEL_FORWARD' && s.bottlesPerRow === null && perRow?.source === 'calculated';
   const est = (k: EstimateField): boolean => p.estimated?.includes(k) ?? false;
   const stillEstimated = (p.estimated ?? []).map((k) => FIELD_NAMES[k]);
   return (
@@ -116,8 +118,10 @@ export function RackPanel() {
       <NumField label="Unit height" nullable value={s.unitHeightMm} min={1} estimated={est('unitHeightMm')} hint="Height of one rack unit. It cannot be taller than the inside." onCommit={(v) => set({ unitHeightMm: v })} testid="rack-height" />
       <NumField label="Row pitch" nullable value={s.rowPitchMm} min={1} estimated={est('rowPitchMm')} hint="The vertical distance from one row of bottles to the next." onCommit={(v) => set({ rowPitchMm: v })} testid="rack-pitch" />
       <NumField label="Rows per unit (optional)" nullable unit="" value={s.rowsPerUnit ?? null} min={1} hint="If your fabricator states the number of rows, enter it. Then unit height and row pitch are not needed." onCommit={(v) => set({ rowsPerUnit: v })} testid="rack-rows" />
-      <NumField label="Bottles per row" nullable unit="" value={s.bottlesPerRow} min={1} estimated={est('bottlesPerRow')} hint="How many bottles one row of one unit holds." onCommit={(v) => set({ bottlesPerRow: v })} testid="rack-per-row" />
-      <SelectField label="Bottle orientation" value={s.orientation} blank="not set" options={ORIENTATIONS} estimated={est('orientation')} hint="Neck-out needs the bottle's length plus 15 mm of depth. Label-forward needs the inclined footprint (a joinery assumption until your fabricator confirms how their rods hold the bottle)." onChange={(v) => set({ orientation: v })} testid="rack-orientation" />
+      {s.orientation === 'LABEL_FORWARD'
+        ? <NumField label="Bottles per row (label-forward)" nullable unit="" value={s.bottlesPerRowLabelForward ?? null} min={1} hint="How many label-forward bottles one row holds. On a metal rack this may mean the bottle lies side-on and takes about its own length of width, so the neck-out figure does not carry over: it is never calculated. Ask your fabricator." onCommit={(v) => set({ bottlesPerRowLabelForward: v })} testid="rack-per-row-lf" />
+        : <NumField label="Bottles per row" nullable unit="" value={s.bottlesPerRow} min={1} calculated={calculated} placeholder={calculated && perRow ? `calculated: ${perRow.value}` : undefined} hint={`How many bottles side by side in one row. Left blank, it is calculated: the unit width divided by the bottle's pitch (${calculated && perRow && s.unitWidthMm ? `${s.unitWidthMm} \u00f7 ${Math.round(s.unitWidthMm / perRow.value)}, rounded down` : 'needs the unit width and a bottle'}), an estimate until your fabricator gives the real pin spacing. Type a number to override it.`} onCommit={(v) => set({ bottlesPerRow: v })} testid="rack-per-row" />}
+      <SelectField label="Bottle orientation" value={s.orientation} blank="not set" options={ORIENTATIONS} estimated={est('orientation')} hint="Neck-out needs the bottle's length plus 15 mm of depth. Label-forward needs the inclined footprint (a joinery assumption until your fabricator confirms how their rods hold the bottle) and has its own bottles-per-row, never calculated." onChange={(v) => set({ orientation: v })} testid="rack-orientation" />
       <NumField label="Posts per unit" nullable unit="" value={s.postsPerUnit} min={1} estimated={est('postsPerUnit')} hint="Posts in one unit, for the parts list. It does not change the bottle count." onCommit={(v) => set({ postsPerUnit: v })} testid="rack-posts" />
       <NumField label="Minimum walkway" nullable value={p.walkwayMm} min={1} hint="The least clear width you design to between racks. Blank: it is not checked. A step-in cabinet and a walk-in room need different minimums, so there is no default. It is only ever a warning." onCommit={(v) => edit((q) => ({ ...q, walkwayMm: v }))} testid="walkway" />
     </Section>
@@ -181,6 +185,8 @@ export function ChecksPanel() {
         <p className={`total${total.status === 'NOT_SET' ? ' notset-total' : ''}`} data-testid="total">
           {total.status === 'OK' ? `${total.capacity} bottles` : `not set (${total.unsetRuns} run${total.unsetRuns === 1 ? '' : 's'} without rack values)`}
         </p>
+        {total.status === 'OK' && total.uncounted && <p className="note uncounted" data-testid="uncounted"><b>Not counted:</b> {total.uncounted.bottles} bottles in {total.uncounted.runs} run{total.uncounted.runs === 1 ? '' : 's'} with errors (see Checks). Only runs that can be built are in the total.</p>}
+        {a.racks.runs.some((r) => r.capacity.status === 'OK' && r.capacity.bottlesPerRowSource === 'calculated') && <p className="note" data-testid="calculated-note">Bottles per row is calculated (unit width ÷ the bottle's pitch): an estimate until your fabricator gives the real figure.</p>}
         <p className="note">Inside {a.enclosure.internal.widthMm} x {a.enclosure.internal.depthMm} x {a.enclosure.internal.heightMm} mm. Glass {(a.enclosure.glassFraction * 100).toFixed(1)}% of the outer wall area.</p>
       </section>
       <section className="section" data-tour="cp-checks">

@@ -53,6 +53,9 @@ export function InfoModal({ ui }: { ui: UiStore }) {
           <ul>
             <li>A <b>run</b> is a line of rack units against one wall. Add one, or press <b>Fill</b> on a wall to fit as many whole units as the wall allows, leaving the door opening free.</li>
             <li>Bottles = rows × bottles per row × units. The rows come from the number you give, or from unit height divided by row pitch.</li>
+            <li><b>Bottles per row</b> is <b>calculated</b> if you leave it blank: the unit width divided by the bottle's pitch (a 600 mm unit holds 7 Bordeaux, 6 Burgundy, 5 Champagne, 4 Magnum). So changing the <b>Bottle</b> changes the count. It is an estimate; type your fabricator's real number to override it.</li>
+            <li><b>Label-forward</b> racks have their own bottles-per-row, never calculated and <b>not set</b> until you enter it, because on a metal rack the bottle may lie side-on and take far more width than a neck-out one.</li>
+            <li>The total <b>only counts runs that can be built</b>. A run with an error (too tall, too shallow for the bottle, off the end of the wall) is left out, and the panel says how many bottles that is, so the number you see is never one the tool itself says cannot be built.</li>
             <li>The <b>minimum walkway</b> is yours to set. Blank means it is not checked. A narrow walkway is only ever a warning, because a step-in cabinet and a walk-in room are designed to different minimums.</li>
           </ul>
 

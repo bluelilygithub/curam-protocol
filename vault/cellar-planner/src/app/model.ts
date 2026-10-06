@@ -11,7 +11,7 @@ export const APP_SCHEMA = 1;
 export interface RunPlacement { id: string; wall: WallSide; startMm: number; units: number }
 
 /** The rack specification fields a test case can fill with guesses. Each loses its "estimated" marker the moment the person edits it. */
-export const ESTIMATE_FIELDS = ['unitWidthMm', 'unitDepthMm', 'unitHeightMm', 'rowPitchMm', 'bottlesPerRow', 'orientation', 'postsPerUnit'] as const;
+export const ESTIMATE_FIELDS = ['unitWidthMm', 'unitDepthMm', 'unitHeightMm', 'rowPitchMm', 'orientation', 'postsPerUnit'] as const;
 export type EstimateField = (typeof ESTIMATE_FIELDS)[number];
 
 export interface AppProject {
@@ -33,11 +33,12 @@ export function sampleProject(): AppProject {
 
 /**
  * A ready-made test case: the sample enclosure with racks on every wall, filled with BEST-GUESS rack values so there are bottles to count. The
- * guesses are invented, not a supplier's: a 600 x 350 mm unit, 2000 mm tall, a 100 mm row pitch (the spacing on the sample drawing), 7 neck-out
- * bottles a row (600 mm at the 85 mm Bordeaux slot pitch), 2 posts. Every one is marked "estimated" until the person overwrites it. The minimum
+ * guesses are invented, not a supplier's: a 600 x 350 mm unit, 2000 mm tall, a 100 mm row pitch (the spacing on the sample drawing), neck-out,
+ * 2 posts. Bottles per row is calculated (600 / the 85 mm Bordeaux pitch = 7). Every guess is marked "estimated" until the person overwrites it. The minimum
  * walkway stays blank: it is the business's number, not a guess.
  */
-export const BEST_GUESS_RACK: RackSpec = { unitWidthMm: 600, unitDepthMm: 350, unitHeightMm: 2000, rowPitchMm: 100, bottlesPerRow: 7, orientation: 'NECK_OUT', postsPerUnit: 2, rowsPerUnit: null };
+/** Bottles per row is NOT a guess here: left blank it is calculated from the unit width and the chosen bottle's pitch, so changing the bottle changes the count. */
+export const BEST_GUESS_RACK: RackSpec = { unitWidthMm: 600, unitDepthMm: 350, unitHeightMm: 2000, rowPitchMm: 100, bottlesPerRow: null, bottlesPerRowLabelForward: null, orientation: 'NECK_OUT', postsPerUnit: 2, rowsPerUnit: null };
 
 /**
  * Put the best guesses into every rack field that is still BLANK, leaving anything the person has entered alone, and mark just those fields

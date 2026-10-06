@@ -32,6 +32,9 @@ The screens edit a simple model (`src/app/model.ts`: one enclosure, one rack spe
 
 ### The rules that matter
 
+- **The total only counts runs that can be built (D-18).** A run with an error (too tall for the inside, too shallow for the bottle, off the end of its wall, in the door's way, a bottle that cannot fit) is left out of the headline number; the panel says "Not counted: n bottles in m runs with errors" and the plan labels that run "not counted (has an error)". Warnings and notes do not remove a run. Example: Test case, Magnum bottle: headline 0, 640 bottles not counted in 5 runs.
+- **Bottles per row is calculated unless typed (D-19).** Blank, it is the unit width divided by the bottle's slot pitch (600 mm: Bordeaux 7, Burgundy 6, Champagne 5, Magnum 4), shown as "calculated" with a note that it is an estimate; a typed number is the fabricator's and wins. So the **Bottle** setting moves the count. A typed number that cannot fit across the unit (9 Bordeaux need 684 mm; a 600 mm unit holds 7) is `RACK_ROW_TOO_WIDE`. The Test case leaves it calculated.
+- **Label-forward has its own bottles-per-row (D-20),** never calculated and "not set" until typed: the neck-out figure never carries over, because on a metal rack label-forward may mean the bottle lies side-on and takes about its own length of width.
 - **Blank is "not set", never zero.** A blank rack field is shown as "not set"; a run with a blank unit width or depth has no footprint and is skipped by the geometry; the bottle total reads "not set (n runs without rack values)" until every run is complete; `RACK_SPEC_MISSING` names the missing values. There are no invented rack defaults.
 - **The walkway minimum has no default and is only ever a warning.** Blank = not checked (one information note says so). A step-in glass cabinet and a walk-in room are designed to different minimums (D-17).
 - **The floor-inside-the-door check applies only when the door swings in.** An inward door also gets the swing sweep tested as a true quarter circle.
@@ -54,14 +57,14 @@ Checked with **axe-core** (WCAG 2.1 A and AA) on the plan, the elevation and the
 
 ## Tests
 
-- `cd cellar-planner && npm test` runs **194** unit and property tests (`tests/`): the joinery engine and Golden Test Case #01; the enclosure and Golden Test Case #02; the rack spec; placement; the views; the app model and store; the help (tour hooks, guide content, tooltip coverage); the commands, store and library layer. `npm run typecheck` checks the types. **CI** (`.github/workflows/build-check.yml`, job "Cellar Planner engine") runs both on every push to `staging`, `version-7` and `main`.
+- `cd cellar-planner && npm test` runs **210** unit and property tests (`tests/`): the joinery engine and Golden Test Case #01; the enclosure and Golden Test Case #02; the rack spec; placement; the views; the app model and store; the help (tour hooks, guide content, tooltip coverage); the commands, store and library layer. `npm run typecheck` checks the types. **CI** (`.github/workflows/build-check.yml`, job "Cellar Planner engine") runs both on every push to `staging`, `version-7` and `main`.
 - `node scripts/cspCheck.mjs` (after `npm run build`) serves the production build under Vault's production Content Security Policy and opens the app, guide, tour and both drawings: **0 violations**. The dev server has no policy, so this is the check that matches the real site.
 - `npm run e2e` (dev server running first) drives the screens in real Chrome, including the Test case (1,120 bottles, markers, overwriting, undo, the file, the URL, the keyboard) and the axe-core scan: the sample, the blanks and "not set", the invented 160 and 480 bottle totals, fill a wall, the walkway warning, a run error, undo and redo, an inward door, bad numbers, save/open/draft, and the whole help flow (first-visit guide, tooltips, the 13-step tour, `?tour=1`, Esc). Not part of CI.
 - **All rack sizes in the tests are invented** to exercise the maths; none is a supplier's value. The golden cases are worked examples, **not real-job validation** (still pending, spec section 11).
 
 ## Open items
 
-1. **Rack values** from whoever fabricates the posts and rods: unit width, depth, height, row pitch, bottles per row, orientation, posts. This turns "not set" into real counts.
+1. **Rack values** from whoever fabricates the posts and rods: unit width, depth, height, row pitch, bottles per row (per bottle type), **what "label-forward" means on their racks**, posts. This turns "not set" and "calculated" into real counts. The full list of questions for that call is in `cellar-planner/specs/spec-v1.md` section 14.
 2. **Ceiling and floor build-up** (and so the inside height) from the authors of the sample drawings.
 3. **Minimum walkway** the business designs to (blank until set).
 4. **Saving to the Vault account** (a `cellar_projects` table and `/api/cellar-projects`, using the library binding already built in `src/state/library.ts`), and connecting the screens to the commands layer. Not built.
@@ -75,7 +78,7 @@ On staging: sign in, open **`/cellar-planner`**, and (admin) switch **Cellar Pla
 2. The compass starts the tour; step through all 13; **Finish** ends it; Esc ends it; `?tour=1` starts it. In Vault, **Settings → Cellar Planner Tour** (Take / Retake Tour) opens the page and runs it.
 3. Hover every control in the left panel: each shows a short explanation, and none runs off the screen.
 4. Load **Sample** and set it beside A101, A102 and A103. Report anything that differs: hinge side, door size, header, vents, the 940 | 970 | 940 split, the inside size.
-5. A first visit already shows the Test case: 1,120 bottles, a banner and an "estimated" word on seven rack fields. Type over them: the markers go and the total follows. Then **Blank sample**: every rack value says "not set"; try **Fill the blanks with best guesses** and **Undo**. Or enter your own rack numbers and press **Fill** on the north wall; blank one field and the total goes back to "not set".
+5. Change the **Bottle** in the rack panel: Burgundy 960, Champagne 800; Magnum shows 0 with the 640 "not counted" and red runs. Switch orientation to **label-forward**: the total goes to "not set" and asks for its own bottles-per-row. A first visit already shows the Test case: 1,120 bottles, a banner and an "estimated" word on seven rack fields. Type over them: the markers go and the total follows. Then **Blank sample**: every rack value says "not set"; try **Fill the blanks with best guesses** and **Undo**. Or enter your own rack numbers and press **Fill** on the north wall; blank one field and the total goes back to "not set".
 6. Set the door to swing in, set a minimum walkway, and place a run in front of it: the keep-clear zone and the warning appear.
 7. Elevation: check each wall, and that the door diagonal points to the handle side.
 8. **Save file**, change something, **Open file**: it comes back exactly.

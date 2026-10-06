@@ -74,3 +74,5 @@ body { background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans
 /* header parts: two columns so four-digit sizes (2179) are never cut off, at any panel width */
 .part { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .part .field-input { min-width: 0; } .part input[type=text] { min-width: 0; }
+.calculated { color: #1a5fb4; font-style: normal; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+.uncounted { color: #b42318; }

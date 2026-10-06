@@ -61,6 +61,9 @@ describe('the guide (the (i) modal)', () => {
   it('explains the core ideas in plain words', () => {
     for (const phrase of ['not set', 'outer faces', 'build-up', 'outside', 'Advisory guidance', 'sign-off', 'preliminary design only', 'Save file', 'minimum walkway']) expect(modal.toLowerCase(), phrase).toContain(phrase.toLowerCase());
   });
+  it('explains that bottles per row is calculated, label-forward is separate, and errored runs are not counted', () => {
+    for (const phrase of ['calculated', 'label-forward', 'only counts runs that can be built']) expect(modal.toLowerCase(), phrase).toContain(phrase.toLowerCase());
+  });
   it('explains the Test case and that its values are guesses to overwrite', () => {
     for (const phrase of ['Test case', 'best-guess', 'estimated', 'do not quote']) expect(modal.toLowerCase(), phrase).toContain(phrase.toLowerCase());
   });

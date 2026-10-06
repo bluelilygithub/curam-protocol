@@ -67,7 +67,7 @@ export function planView(e: Enclosure, runs: RackRun[], analysis?: RackLayoutAna
     const fp = analysis?.runs.find((x) => x.runId === run.id)?.footprint;
     if (fp?.status === 'OK') {
       const [x, y] = o(fp.rect.x0, fp.rect.y0);
-      out.push({ kind: 'rect', x, y, w: fp.rect.x1 - fp.rect.x0, h: fp.rect.y1 - fp.rect.y0, tone: opts.badRuns?.has(run.id) ? 'rackIssue' : 'rack', label: `${run.id}: ${run.units} units, ${bottleText(analysis, run.id)}` });
+      out.push({ kind: 'rect', x, y, w: fp.rect.x1 - fp.rect.x0, h: fp.rect.y1 - fp.rect.y0, tone: opts.badRuns?.has(run.id) ? 'rackIssue' : 'rack', label: `${run.id}: ${run.units} units, ${opts.badRuns?.has(run.id) ? 'not counted (has an error)' : bottleText(analysis, run.id)}` });
     } else if (fp?.status === 'NOT_SET') {
       const mid = wallPoint(e, run.wall, 0, 0);
       const [tx, ty] = o(mid.x, mid.y);

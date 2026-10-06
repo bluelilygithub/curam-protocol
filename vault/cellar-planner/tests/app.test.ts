@@ -113,7 +113,7 @@ describe('the test case (best-guess rack values, all marked estimated)', () => {
     expect(a.issues.map((i) => i.code)).toContain('WALKWAY_NOT_SET');
     expect(p.walkwayMm).toBeNull(); // the business's number, not a guess
   });
-  it('marks EVERY guessed value as estimated, and nothing else', () => {
+  it('marks EVERY guessed value as estimated (bottles per row is calculated, not a guess), and nothing else', () => {
     expect([...(p.estimated ?? [])].sort()).toEqual([...ESTIMATE_FIELDS].sort());
     for (const k of ESTIMATE_FIELDS) expect(p.rackSpec[k], k).not.toBeNull();
   });
@@ -121,11 +121,21 @@ describe('the test case (best-guess rack values, all marked estimated)', () => {
     expect(sampleProject().estimated).toBeUndefined();
     expect(sampleProject().rackSpec.unitWidthMm).toBeNull();
   });
-  it('overwriting works: change the bottles per row and the total follows', () => {
-    const changed = { ...p, rackSpec: { ...p.rackSpec, bottlesPerRow: 8 }, estimated: p.estimated?.filter((k) => k !== 'bottlesPerRow') };
-    expect(analyseApp(changed).racks.total).toEqual({ status: 'OK', capacity: 8 * 20 * 8 });
-    expect(changed.estimated).not.toContain('bottlesPerRow');
+  it('overwriting works: type a bottles-per-row and it wins over the calculated one', () => {
+    const changed = { ...p, rackSpec: { ...p.rackSpec, bottlesPerRow: 6 } };
+    expect(analyseApp(changed).racks.total).toEqual({ status: 'OK', capacity: 8 * 20 * 6 });
     expect(changed.estimated).toContain('unitWidthMm');
+  });
+  it('bottles per row is CALCULATED (unit width / the bottle\'s pitch), so the Bottle setting moves the count: Bordeaux 7, Burgundy 6, Champagne 5', () => {
+    expect(p.rackSpec.bottlesPerRow).toBeNull();
+    const total = (bottle: 'BORDEAUX' | 'BURGUNDY' | 'CHAMPAGNE') => analyseApp({ ...p, bottle }).racks.total;
+    expect(total('BORDEAUX')).toEqual({ status: 'OK', capacity: 8 * 20 * 7 });
+    expect(total('BURGUNDY')).toEqual({ status: 'OK', capacity: 8 * 20 * 6 });
+    expect(total('CHAMPAGNE')).toEqual({ status: 'OK', capacity: 8 * 20 * 5 });
+  });
+  it('a bottle the racks cannot hold (Magnum: too deep, pitch too small) puts every run in "not counted", never into the headline total', () => {
+    const t = analyseApp({ ...p, bottle: 'MAGNUM' }).racks.total;
+    expect(t).toEqual({ status: 'OK', capacity: 0, uncounted: { runs: 5, bottles: 8 * 20 * 4 } });
   });
   it('the estimated markers survive saving and opening; unknown markers are dropped', () => {
     expect(deserializeApp(serializeApp(p)).estimated).toEqual(p.estimated);

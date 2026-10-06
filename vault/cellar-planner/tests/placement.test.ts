@@ -140,6 +140,30 @@ describe('overlap and walkway', () => {
   });
 });
 
+describe('the total only counts runs that can be built', () => {
+  const e = goldenCase02();
+  it('error-free runs add up with nothing left out (no uncounted field at all)', () => {
+    expect(analyseRacks(e, [run('a', 'NORTH', 0, 2)]).total).toEqual({ status: 'OK', capacity: 20 * 8 * 2 });
+  });
+  it('a run too tall for the inside is NOT in the headline number; what was left out is reported', () => {
+    const a = analyseRacks(e, [run('tall', 'NORTH', 0, 2, spec({ unitHeightMm: 2300 }))]);
+    expect(a.total).toEqual({ status: 'OK', capacity: 0, uncounted: { runs: 1, bottles: 23 * 8 * 2 } });
+  });
+  it('a run that does not fit its wall, or a bottle that does not fit the unit, is left out the same way', () => {
+    expect(analyseRacks(e, [run('long', 'NORTH', 0, 4)]).total).toMatchObject({ capacity: 0, uncounted: { runs: 1, bottles: 20 * 8 * 4 } });
+    expect(analyseRacks(e, [run('shallow', 'NORTH', 0, 1, spec({ unitDepthMm: 300 }))]).total).toMatchObject({ capacity: 0, uncounted: { runs: 1 } });
+  });
+  it('with some good runs and some bad, only the good ones are counted', () => {
+    const a = analyseRacks(e, [run('good', 'NORTH', 0, 2), run('bad', 'NORTH', 1600, 3)]); // the second runs past the wall
+    expect(a.total).toEqual({ status: 'OK', capacity: 20 * 8 * 2, uncounted: { runs: 1, bottles: 20 * 8 * 3 } });
+  });
+  it('a warning or a note never takes a run out of the total (only errors do)', () => {
+    const a = analyseRacks(e, [run('n', 'NORTH', 0, 1), run('s', 'SOUTH', 0, 1)], { walkwayMm: 900 }); // a walkway WARNING
+    expect(a.issues.some((i) => i.severity === 'warning')).toBe(true);
+    expect(a.total).toEqual({ status: 'OK', capacity: 20 * 8 * 2 });
+  });
+});
+
 describe('capacity follows the runs, and stays "not set" with a blank spec', () => {
   const e = goldenCase02();
   it('adds up rows x bottles per row x units over every run', () => {

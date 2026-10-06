@@ -259,7 +259,7 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
   await p3.getByTestId('plan-canvas').waitFor();
 
   check('there is a visible Test case button, with an explanation', (await p3.getByTestId('testcase').isVisible()) && /best-guess/.test((await p3.getByTestId('testcase').getAttribute('title')) ?? ''));
-  check('a first visit already shows the filled Test case (1120 bottles, seven estimated fields)', (await total3()) === '1120 bottles' && (await est3()) === 7);
+  check('a first visit already shows the filled Test case (1120 bottles, six estimated fields, bottles per row calculated)', (await total3()) === '1120 bottles' && (await est3()) === 6 && (await p3.getByTestId('rack-per-row-calculated').count()) === 1);
   await p3.getByTestId('sample').click();
   check('Blank sample is blank: no guesses, every rack value "not set"', (await p3.getByTestId('total').innerText()).startsWith('0 bottles') && (await p3.getByTestId('rack-width').inputValue()) === '' && (await est3()) === 0 && (await p3.getByTestId('rack-missing').count()) === 1);
 
@@ -269,9 +269,9 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
   await p3.getByTestId('fill-guesses').click();
   await p3.waitForTimeout(200);
   const spec = await p3.evaluate(() => window.cellar.store.getState().project);
-  check('Fill the blanks with best guesses fills every blank field', spec.rackSpec.unitDepthMm === 350 && spec.rackSpec.bottlesPerRow === 7 && spec.rackSpec.orientation === 'NECK_OUT' && spec.rackSpec.postsPerUnit === 2, JSON.stringify(spec.rackSpec));
-  check('...but keeps the value that was typed (800), and does not mark it estimated', spec.rackSpec.unitWidthMm === 800 && !spec.estimated.includes('unitWidthMm') && spec.estimated.length === 6, JSON.stringify(spec.estimated));
-  check('the guesses are marked estimated and the banner changes to the best-guesses one', (await est3()) === 6 && (await p3.getByTestId('rack-estimated').count()) === 1 && (await p3.getByTestId('rack-missing').count()) === 0);
+  check('Fill the blanks with best guesses fills every blank field (bottles per row stays blank: it is calculated)', spec.rackSpec.unitDepthMm === 350 && spec.rackSpec.bottlesPerRow === null && spec.rackSpec.orientation === 'NECK_OUT' && spec.rackSpec.postsPerUnit === 2, JSON.stringify(spec.rackSpec));
+  check('...but keeps the value that was typed (800), and does not mark it estimated', spec.rackSpec.unitWidthMm === 800 && !spec.estimated.includes('unitWidthMm') && spec.estimated.length === 5, JSON.stringify(spec.estimated));
+  check('the guesses are marked estimated and the banner changes to the best-guesses one', (await est3()) === 5 && (await p3.getByTestId('rack-estimated').count()) === 1 && (await p3.getByTestId('rack-missing').count()) === 0);
   await p3.getByTestId('undo').click();
   const back = await p3.evaluate(() => window.cellar.store.getState().project);
   check('Undo takes all the guesses back and keeps the typed value', back.rackSpec.unitDepthMm === null && back.rackSpec.unitWidthMm === 800 && !back.estimated);
@@ -279,7 +279,7 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
   await p3.waitForTimeout(300);
   check('the Test case fills the racks: 1120 bottles', (await total3()) === '1120 bottles', await total3());
   check('a banner says these are best guesses, not supplier values, and not to quote from them', /Best guesses for testing, not supplier values/.test(await p3.getByTestId('rack-estimated').innerText()) && /Do not quote/.test(await p3.getByTestId('rack-estimated').innerText()));
-  check('all seven guessed fields carry a visible "estimated" word (not colour alone)', (await est3()) === 7, String(await est3()));
+  check('all six guessed fields carry a visible "estimated" word (not colour alone)', (await est3()) === 6, String(await est3()));
   check('the status line says so too', /best guesses/.test(await p3.getByTestId('status').innerText()));
   check('the test case has no errors', (await p3.evaluate(() => window.cellar.analyse().issues.filter((i) => i.severity === 'error').length)) === 0);
   await shot3('20-test-case-plan');
@@ -288,15 +288,46 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
   await p3.getByTestId('tab-plan').click();
 
   // overwrite the guesses
-  await p3.getByTestId('rack-per-row').fill('8');
+  // typing bottles per row overrides the calculated one (6 x 20 rows x 8 units = 960); the calculated badge goes, no estimated marker is involved
+  await p3.getByTestId('rack-per-row').fill('6');
   await p3.getByTestId('rack-per-row').press('Enter');
   await p3.waitForTimeout(200);
-  check('overwriting a value updates the total (8 units x 20 rows x 8 = 1280) and drops only that marker', (await total3()) === '1280 bottles' && (await est3()) === 6 && (await p3.getByTestId('rack-per-row-estimated').count()) === 0 && (await p3.getByTestId('rack-width-estimated').count()) === 1, `${await total3()} ${await est3()}`);
+  check('typing a bottles-per-row overrides the calculated one: total 960, the "calculated" word goes', (await total3()) === '960 bottles' && (await p3.getByTestId('rack-per-row-calculated').count()) === 0 && (await est3()) === 6, `${await total3()} ${await est3()}`);
   await p3.getByTestId('undo').click();
-  check('undo puts the guess and its marker back', (await total3()) === '1120 bottles' && (await est3()) === 7);
+  check('undo brings the calculated value back (1120, "calculated" word)', (await total3()) === '1120 bottles' && (await p3.getByTestId('rack-per-row-calculated').count()) === 1);
+
+  // the Bottle setting now moves the count, because bottles per row is calculated from the bottle's pitch
+  await p3.getByTestId('bottle').selectOption('BURGUNDY');
+  check('Burgundy: 600 / 100 = 6 a row, 960 bottles, no errors', (await total3()) === '960 bottles' && (await p3.getByTestId('uncounted').count()) === 0);
+  await p3.getByTestId('bottle').selectOption('CHAMPAGNE');
+  check('Champagne: 600 / 105 = 5 a row, 800 bottles, and the note says the figure is calculated', (await total3()) === '800 bottles' && /calculated/.test(await p3.getByTestId('calculated-note').innerText()));
+  await p3.getByTestId('bottle').selectOption('MAGNUM');
+  await p3.waitForTimeout(200);
+  check('Magnum cannot be built in these racks: the headline is 0 and the left-out bottles are named, not added in', (await total3()) === '0 bottles' && /Not counted: 640 bottles in 5 runs with errors/.test(await p3.getByTestId('uncounted').innerText()), `${await total3()}`);
+  check('the runs say they are not counted on the plan (the error tone)', (await p3.evaluate(() => window.cellar.analyse().racks.total.uncounted?.runs)) === 5);
+  await shot3('22-uncounted');
+  await p3.getByTestId('bottle').selectOption('BORDEAUX');
+  check('back to Bordeaux: 1120 and no "not counted" note', (await total3()) === '1120 bottles' && (await p3.getByTestId('uncounted').count()) === 0);
+
+  // label-forward does not inherit the neck-out figure
   await p3.getByTestId('rack-orientation').selectOption('LABEL_FORWARD');
-  check('changing a menu value clears its marker too', (await p3.getByTestId('rack-orientation-estimated').count()) === 0 && (await est3()) === 6);
-  for (const [id, v] of [['rack-width', '800'], ['rack-depth', '400'], ['rack-height', '2000'], ['rack-pitch', '110'], ['rack-posts', '3'], ['rack-per-row', '9']]) { await p3.getByTestId(id).fill(v); await p3.getByTestId(id).press('Enter'); }
+  await p3.waitForTimeout(200);
+  check('label-forward: the total is "not set" (no neck-out count carried over) and it asks for its own bottles-per-row', /^not set/.test(await total3()) && (await p3.getByTestId('rack-per-row-lf').count()) === 1 && (await p3.getByTestId('rack-per-row').count()) === 0);
+  check('the checks name the missing value', /bottles per row \(label-forward\)/.test(await p3.getByTestId('issue-RACK_SPEC_MISSING').first().innerText()));
+  await p3.getByTestId('rack-per-row-lf').fill('2');
+  await p3.getByTestId('rack-per-row-lf').press('Enter');
+  await p3.waitForTimeout(200);
+  check('once the label-forward figure is typed it is used (2 a row x 20 x 8 = 320)', (await total3()) === '320 bottles', await total3());
+  await p3.getByTestId('rack-orientation').selectOption('NECK_OUT');
+  await p3.waitForTimeout(200);
+  check('switching back to neck-out brings the calculated figure back', (await total3()) === '1120 bottles');
+  await p3.getByTestId('undo').click();
+  await p3.getByTestId('undo').click();
+  await p3.getByTestId('undo').click();
+  await p3.getByTestId('rack-orientation').selectOption('LABEL_FORWARD');
+  check('changing a menu value clears its marker too', (await p3.getByTestId('rack-orientation-estimated').count()) === 0 && (await est3()) === 5);
+  for (const [id, v] of [['rack-width', '800'], ['rack-depth', '400'], ['rack-height', '2000'], ['rack-pitch', '110'], ['rack-posts', '3']]) { await p3.getByTestId(id).fill(v); await p3.getByTestId(id).press('Enter'); }
+  await p3.getByTestId('rack-orientation').selectOption('NECK_OUT');
   await p3.waitForTimeout(200);
   check('once every guess is overwritten the banner goes and no marker is left', (await p3.getByTestId('rack-estimated').count()) === 0 && (await est3()) === 0);
   await shot3('21-test-case-overwritten');
@@ -310,7 +341,7 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
   check('Blank sample goes back to blank', (await total3()).startsWith('0 bottles') && (await est3()) === 0);
   await p3.setInputFiles('input[type=file]', join(import.meta.dirname, '..', 'examples', 'test-case-1.cellar.json'));
   await p3.waitForTimeout(300);
-  check('the example file opens to the same test case (1120 bottles, markers kept)', (await total3()) === '1120 bottles' && (await est3()) === 7);
+  check('the example file opens to the same test case (1120 bottles, markers kept)', (await total3()) === '1120 bottles' && (await est3()) === 6);
   await p3.getByTestId('sample').click();
   await p3.getByTestId('testcase').focus();
   await p3.keyboard.press('Enter');
