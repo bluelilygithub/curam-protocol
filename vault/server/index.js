@@ -43,7 +43,10 @@ app.use(helmet({
       // throws: "WebAssembly.instantiate() violates CSP script-src 'self'".
       // 'blob:' on script-src allows the Web Worker that react-pdf spawns.
       'script-src': ["'self'", "'wasm-unsafe-eval'", 'blob:'],
-      'img-src':    ["'self'", 'data:', 'blob:', 'https://i.ytimg.com'],
+      // Garden Planner plant photos (server/services/plantImages.js): iNaturalist, Wikimedia Commons (upload. and thumb. hosts) and the Atlas of Living Australia.
+      'img-src':    ["'self'", 'data:', 'blob:', 'https://i.ytimg.com',
+                     'https://inaturalist-open-data.s3.amazonaws.com', 'https://static.inaturalist.org',
+                     'https://upload.wikimedia.org', 'https://thumb.wikimedia.org', 'https://images.ala.org.au'],
       'media-src':  ["'self'", 'blob:', 'data:'],
       // 'data:' is required for pdfjs-dist (Translate agent's client-side PDF preflight),
       // which loads its WASM module via a data: URI fetch, not a blob: URL. Without it the
