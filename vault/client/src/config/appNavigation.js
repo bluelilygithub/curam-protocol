@@ -66,6 +66,7 @@ export const APP_NAV_GROUPS = [
       { id: 'videos', label: 'Video Tools', path: '/videos', icon: 'film', featureKey: 'videos' },
       { id: 'roomPlanner', label: 'Room Planner', path: '/room-planner', icon: 'armchair', featureKey: 'roomPlanner' },
       { id: 'gardenPlanner', label: 'Garden Planner', path: '/garden-planner', icon: 'sprout', featureKey: 'gardenPlanner' },
+      { id: 'cellarPlanner', label: 'Cellar Planner', path: '/cellar-planner', icon: 'wine', featureKey: 'cellarPlanner' },
     ],
   },
   {
