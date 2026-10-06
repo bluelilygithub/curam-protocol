@@ -28,6 +28,10 @@ const issueCodes = async () => (await analysis()).issues.map((i) => i.code);
 await page.goto(URL);
 await page.getByTestId('plan-canvas').waitFor();
 await page.waitForTimeout(500);
+// the first visit opens the ready-made Test case (never an empty screen); the main run below starts from the BLANK sample
+check('the first visit opens the Test case: racks filled, 1120 bottles, marked estimated', (await page.getByTestId('total').innerText()).startsWith('1120 bottles') && (await page.getByTestId('rack-width').inputValue()) === '600' && (await page.getByTestId('rack-estimated').count()) === 1);
+await page.getByTestId('sample').click();
+await page.waitForTimeout(300);
 
 // ---- the starting screen: the sample enclosure, nothing invented
 check('the plan draws the sample enclosure', (await prims('plan')) > 10, String(await prims('plan')));
@@ -255,7 +259,22 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
   await p3.getByTestId('plan-canvas').waitFor();
 
   check('there is a visible Test case button, with an explanation', (await p3.getByTestId('testcase').isVisible()) && /best-guess/.test((await p3.getByTestId('testcase').getAttribute('title')) ?? ''));
-  check('the Sample (and the default) stay blank: no guesses', (await p3.getByTestId('total').innerText()).startsWith('0 bottles') && (await p3.getByTestId('rack-width').inputValue()) === '' && (await est3()) === 0);
+  check('a first visit already shows the filled Test case (1120 bottles, seven estimated fields)', (await total3()) === '1120 bottles' && (await est3()) === 7);
+  await p3.getByTestId('sample').click();
+  check('Blank sample is blank: no guesses, every rack value "not set"', (await p3.getByTestId('total').innerText()).startsWith('0 bottles') && (await p3.getByTestId('rack-width').inputValue()) === '' && (await est3()) === 0 && (await p3.getByTestId('rack-missing').count()) === 1);
+
+  // the button in the "not set" banner: fills only the blanks, keeps what was typed, and is undoable
+  await p3.getByTestId('rack-width').fill('800');
+  await p3.getByTestId('rack-width').press('Enter');
+  await p3.getByTestId('fill-guesses').click();
+  await p3.waitForTimeout(200);
+  const spec = await p3.evaluate(() => window.cellar.store.getState().project);
+  check('Fill the blanks with best guesses fills every blank field', spec.rackSpec.unitDepthMm === 350 && spec.rackSpec.bottlesPerRow === 7 && spec.rackSpec.orientation === 'NECK_OUT' && spec.rackSpec.postsPerUnit === 2, JSON.stringify(spec.rackSpec));
+  check('...but keeps the value that was typed (800), and does not mark it estimated', spec.rackSpec.unitWidthMm === 800 && !spec.estimated.includes('unitWidthMm') && spec.estimated.length === 6, JSON.stringify(spec.estimated));
+  check('the guesses are marked estimated and the banner changes to the best-guesses one', (await est3()) === 6 && (await p3.getByTestId('rack-estimated').count()) === 1 && (await p3.getByTestId('rack-missing').count()) === 0);
+  await p3.getByTestId('undo').click();
+  const back = await p3.evaluate(() => window.cellar.store.getState().project);
+  check('Undo takes all the guesses back and keeps the typed value', back.rackSpec.unitDepthMm === null && back.rackSpec.unitWidthMm === 800 && !back.estimated);
   await p3.getByTestId('testcase').click();
   await p3.waitForTimeout(300);
   check('the Test case fills the racks: 1120 bottles', (await total3()) === '1120 bottles', await total3());
@@ -288,7 +307,7 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
   await p3.waitForTimeout(300);
   check('?testcase=1 opens it directly', (await total3()) === '1120 bottles');
   await p3.getByTestId('sample').click();
-  check('Sample goes back to blank', (await total3()).startsWith('0 bottles') && (await est3()) === 0);
+  check('Blank sample goes back to blank', (await total3()).startsWith('0 bottles') && (await est3()) === 0);
   await p3.setInputFiles('input[type=file]', join(import.meta.dirname, '..', 'examples', 'test-case-1.cellar.json'));
   await p3.waitForTimeout(300);
   check('the example file opens to the same test case (1120 bottles, markers kept)', (await total3()) === '1120 bottles' && (await est3()) === 7);

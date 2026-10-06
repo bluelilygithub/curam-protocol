@@ -70,3 +70,7 @@ body { background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans
 .issue.error .sev { color: var(--err); } .issue.warning .sev { color: var(--warn-text); }
 .modal-body:focus-visible { outline: 2px solid #1a5fb4; outline-offset: -2px; }
 .tab.on:hover, .btn.primary:hover { opacity: 1; background: #8f4426; border-color: #8f4426; } /* hover must not wash out white text */
+.banner p { margin: 0 0 6px; }
+/* header parts: two columns so four-digit sizes (2179) are never cut off, at any panel width */
+.part { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.part .field-input { min-width: 0; } .part input[type=text] { min-width: 0; }

@@ -94,7 +94,7 @@ describe('the store', () => {
 // ---------------------------------------------------------------- the ready-made test case
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ESTIMATE_FIELDS, testCaseProject } from '../src/app/model';
+import { BEST_GUESS_RACK, ESTIMATE_FIELDS, fillBlankRackWithGuesses, testCaseProject } from '../src/app/model';
 
 describe('the test case (best-guess rack values, all marked estimated)', () => {
   const p = testCaseProject();
@@ -136,5 +136,38 @@ describe('the test case (best-guess rack values, all marked estimated)', () => {
   it('the example file you can open is exactly the button\'s test case (run `npm run example` after changing it)', () => {
     const file = readFileSync(join(__dirname, '../examples/test-case-1.cellar.json'), 'utf8');
     expect(deserializeApp(file)).toEqual(p);
+  });
+});
+
+describe('filling only the blanks with best guesses', () => {
+  it('fills every blank rack field and marks just those estimated; rows per unit is left alone', () => {
+    const p = fillBlankRackWithGuesses(sampleProject());
+    for (const k of ESTIMATE_FIELDS) expect(p.rackSpec[k], k).toEqual(BEST_GUESS_RACK[k]);
+    expect([...(p.estimated ?? [])].sort()).toEqual([...ESTIMATE_FIELDS].sort());
+    expect(p.rackSpec.rowsPerUnit).toBeNull();
+  });
+  it('keeps anything the person has entered, and does not call it estimated', () => {
+    const start = { ...sampleProject(), rackSpec: { ...sampleProject().rackSpec, unitWidthMm: 800, bottlesPerRow: 9 } };
+    const p = fillBlankRackWithGuesses(start);
+    expect(p.rackSpec.unitWidthMm).toBe(800);
+    expect(p.rackSpec.bottlesPerRow).toBe(9);
+    expect(p.rackSpec.unitDepthMm).toBe(350);
+    expect(p.estimated).not.toContain('unitWidthMm');
+    expect(p.estimated).not.toContain('bottlesPerRow');
+    expect(p.estimated).toHaveLength(5);
+  });
+  it('does nothing (the same object) when nothing is blank, and is safe to repeat', () => {
+    const full = testCaseProject();
+    expect(fillBlankRackWithGuesses(full)).toBe(full);
+    const once = fillBlankRackWithGuesses(sampleProject());
+    expect(fillBlankRackWithGuesses(once)).toBe(once);
+  });
+  it('adds to existing estimated markers without duplicating them', () => {
+    const start = { ...sampleProject(), rackSpec: { ...BEST_GUESS_RACK, postsPerUnit: null }, estimated: ['unitWidthMm' as const] };
+    const p = fillBlankRackWithGuesses(start);
+    expect(p.estimated).toEqual(['unitWidthMm', 'postsPerUnit']);
+  });
+  it('the Test case uses the same guesses', () => {
+    expect(testCaseProject().rackSpec).toEqual(BEST_GUESS_RACK);
   });
 });

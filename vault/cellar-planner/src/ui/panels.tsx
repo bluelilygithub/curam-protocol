@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { createContext, useContext } from 'react';
 import { useStore } from 'zustand';
-import { analyseApp, sortIssues, type AppProject, type EstimateField } from '../app/model';
+import { analyseApp, fillBlankRackWithGuesses, sortIssues, type AppProject, type EstimateField } from '../app/model';
 import type { AppStore } from '../app/store';
 import type { HeaderComponent, WallKind, WallSide } from '../enclosure';
 import { BOTTLE_PROFILES, type BottleProfileId } from '../engine';
@@ -102,7 +102,12 @@ export function RackPanel() {
       note={stillEstimated.length
         ? <p className="banner estimate" role="note" data-testid="rack-estimated"><b>Best guesses for testing, not supplier values</b> (still estimated: {stillEstimated.join(', ')}). Type your supplier's or fabricator's number over each one; its "estimated" marker goes as you do. Do not quote from these.</p>
         : missing.length
-          ? <p className="banner" role="note" data-testid="rack-missing">Rack values are not set (missing: {missing.join(', ')}). Enter your supplier's or fabricator's values: until then bottles cannot be counted or quoted.</p>
+          ? (
+            <div className="banner" role="note" data-testid="rack-missing">
+              <p>Rack values are not set (missing: {missing.join(', ')}). Enter your supplier's or fabricator's values: until then bottles cannot be counted or quoted.</p>
+              <button type="button" className="btn small" title="Fill only the blank rack fields with best-guess values so there are bottles to count. Anything you have typed is kept. Each guess is marked estimated until you type over it, and Undo takes them all back." onClick={() => edit(fillBlankRackWithGuesses)} data-testid="fill-guesses">Fill the blanks with best guesses</button>
+            </div>
+          )
           : <p className="note">All rack values entered. Rows = the number of rows if given, otherwise height divided by row pitch.</p>}
     >
       <SelectField label="Bottle" value={p.bottle} options={Object.values(BOTTLE_PROFILES).map((b): [BottleProfileId, string] => [b.id, b.label])} hint="The bottle the racks are for. Its length sets how deep a unit must be (typical sizes, unverified)." onChange={(v) => edit((q) => ({ ...q, bottle: v as BottleProfileId }))} testid="bottle" />

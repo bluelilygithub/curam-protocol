@@ -34,8 +34,9 @@ export function InfoModal({ ui }: { ui: UiStore }) {
 
           <h3>Getting started</h3>
           <ul>
-            <li>The <b>Sample</b> button loads an enclosure read from the Carter Noir sample drawings (2850 × 1665 × 2200 mm), with the racks left blank. Change any number on the left and both drawings follow.</li>
-            <li>The <b>Test case</b> button loads the same enclosure with racks on every wall, filled with <b>best-guess rack values</b> so there are bottles to count (1,120 to begin with). Each guess is marked <b>estimated</b> until you type your own number over it. They are invented, not a supplier's: do not quote from them.</li>
+            <li>The first time you open it, you see the <b>Test case</b>: the sample enclosure (read from the Carter Noir drawings, 2850 × 1665 × 2200 mm) with racks on every wall. Change any number on the left and both drawings follow.</li>
+            <li><b>Blank sample</b> loads the same enclosure with the racks left blank, so every rack value says <b>not set</b>. In that banner, <b>Fill the blanks with best guesses</b> fills only the empty rack fields (it keeps anything you typed) and <b>Undo</b> takes them back.</li>
+            <li>The <b>Test case</b> button loads it again with racks on every wall, filled with <b>best-guess rack values</b> so there are bottles to count (1,120 to begin with). Each guess is marked <b>estimated</b> until you type your own number over it. They are invented, not a supplier's: do not quote from them.</li>
             <li>Sizes are to the <b>outer faces</b> of the walls. The <b>build-up</b> of each wall (a 50 mm panel, a 100 mm stud wall, a glass frame) is taken off to give the <b>inside size</b>, shown at the top right.</li>
             <li>Every change can be undone with <b>Undo</b>.</li>
           </ul>

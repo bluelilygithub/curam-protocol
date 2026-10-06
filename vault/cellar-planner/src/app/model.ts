@@ -37,9 +37,23 @@ export function sampleProject(): AppProject {
  * bottles a row (600 mm at the 85 mm Bordeaux slot pitch), 2 posts. Every one is marked "estimated" until the person overwrites it. The minimum
  * walkway stays blank: it is the business's number, not a guess.
  */
+export const BEST_GUESS_RACK: RackSpec = { unitWidthMm: 600, unitDepthMm: 350, unitHeightMm: 2000, rowPitchMm: 100, bottlesPerRow: 7, orientation: 'NECK_OUT', postsPerUnit: 2, rowsPerUnit: null };
+
+/**
+ * Put the best guesses into every rack field that is still BLANK, leaving anything the person has entered alone, and mark just those fields
+ * estimated. Pure: returns the same object when there is nothing to fill.
+ */
+export function fillBlankRackWithGuesses(p: AppProject): AppProject {
+  const blank = ESTIMATE_FIELDS.filter((k) => p.rackSpec[k] === null || p.rackSpec[k] === undefined);
+  if (!blank.length) return p;
+  const rackSpec = { ...p.rackSpec } as RackSpec;
+  for (const k of blank) (rackSpec as unknown as Record<string, unknown>)[k] = BEST_GUESS_RACK[k];
+  return { ...p, rackSpec, estimated: [...new Set([...(p.estimated ?? []), ...blank])] };
+}
+
 export function testCaseProject(): AppProject {
   const base = sampleProject();
-  const rackSpec: RackSpec = { unitWidthMm: 600, unitDepthMm: 350, unitHeightMm: 2000, rowPitchMm: 100, bottlesPerRow: 7, orientation: 'NECK_OUT', postsPerUnit: 2, rowsPerUnit: null };
+  const rackSpec: RackSpec = { ...BEST_GUESS_RACK };
   const strip = ({ id, wall, startMm, units }: RackRun): RunPlacement => ({ id, wall, startMm, units });
   const runs: RunPlacement[] = [];
   for (const wall of ['NORTH', 'SOUTH'] as const) {
