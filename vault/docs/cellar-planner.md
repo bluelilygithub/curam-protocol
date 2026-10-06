@@ -2,7 +2,7 @@
 
 Walk-in wine cellar configurator. **Glass enclosure with metal racking first**, then carcass joinery. Bespoke-first: everything is driven by dimensions in whole millimetres, not product codes. Code: `vault/cellar-planner/` (own Vite app on `planner-core`). Full specification and decisions log: `cellar-planner/specs/spec-v1.md` (v1.1).
 
-> **Status: standalone, not in Vault yet.** It runs with `npm run dev` inside `cellar-planner/` (port 5176, open `http://127.0.0.1:5176/cellar-planner-app/`, trailing slash included). It is **not** built by the root `npm run build`, has no nav item, feature flag, database table or API route, and is not on Railway. That integration is a later step, in its own commits, with the other planners' tests.
+> **Status: in Vault, switched off by default.** The page is at **`/cellar-planner`** (an iframe hosting the built app at `/cellar-planner-app/`, the same pattern as Garden Planner), with a nav item **Cellar Planner** (Content Creation), a Settings → **Cellar Planner Tour** card, and the feature flag **`cellarPlanner`**. The flag **defaults to off** (it is a work in progress with unverified values): an admin switches it on in **Settings → Feature Access**, which shows the nav item. The `/cellar-planner` page itself does not depend on the flag (as for the other planners), so the address works for any signed-in user. There is **no server route, table or API**: the planner saves to a `.cellar.json` file and a browser draft. It is built by the root `npm run build` (`scripts/buildCellarPlanner.js`, non-fatal: if it fails Vault still deploys and the page shows a "not available in this build" notice). It can also run alone with `npm run dev` inside `cellar-planner/` (port 5176, `http://127.0.0.1:5176/cellar-planner-app/`, trailing slash included).
 
 ## What is built
 
@@ -50,6 +50,7 @@ Same pattern as Room Planner and Garden Planner.
 ## Tests
 
 - `cd cellar-planner && npm test` runs **180** unit and property tests (`tests/`): the joinery engine and Golden Test Case #01; the enclosure and Golden Test Case #02; the rack spec; placement; the views; the app model and store; the help (tour hooks, guide content, tooltip coverage); the commands, store and library layer. `npm run typecheck` checks the types. **CI** (`.github/workflows/build-check.yml`, job "Cellar Planner engine") runs both on every push to `staging`, `version-7` and `main`.
+- `node scripts/cspCheck.mjs` (after `npm run build`) serves the production build under Vault's production Content Security Policy and opens the app, guide, tour and both drawings: **0 violations**. The dev server has no policy, so this is the check that matches the real site.
 - `npm run e2e` (dev server running first) drives the screens in real Chrome: the sample, the blanks and "not set", the invented 160 and 480 bottle totals, fill a wall, the walkway warning, a run error, undo and redo, an inward door, bad numbers, save/open/draft, and the whole help flow (first-visit guide, tooltips, the 13-step tour, `?tour=1`, Esc). Not part of CI.
 - **All rack sizes in the tests are invented** to exercise the maths; none is a supplier's value. The golden cases are worked examples, **not real-job validation** (still pending, spec section 11).
 
@@ -58,15 +59,15 @@ Same pattern as Room Planner and Garden Planner.
 1. **Rack values** from whoever fabricates the posts and rods: unit width, depth, height, row pitch, bottles per row, orientation, posts. This turns "not set" into real counts.
 2. **Ceiling and floor build-up** (and so the inside height) from the authors of the sample drawings.
 3. **Minimum walkway** the business designs to (blank until set).
-4. **Vault integration:** table, API route, feature flag, nav item, build step, Settings "Retake Tour". Shared files, so its own commits and the other planners' tests.
+4. **Saving to the Vault account** (a `cellar_projects` table and `/api/cellar-projects`, using the library binding already built in `src/state/library.ts`), and connecting the screens to the commands layer. Not built.
 5. A real past job (dimensions, cut list, bottle count) as the acceptance test for the joinery formulas.
 
 ## Staging checks (for you, by hand)
 
-Run `npm run dev` in `cellar-planner/`, open `http://127.0.0.1:5176/cellar-planner-app/` in a private window (so nothing is "already seen").
+On staging: sign in, open **`/cellar-planner`**, and (admin) switch **Cellar Planner** on in **Settings → Feature Access** to see it in the nav. Or locally: `npm run dev` in `cellar-planner/`, open `http://127.0.0.1:5176/cellar-planner-app/`. Use a private window so nothing is "already seen".
 
 1. The guide opens by itself; **Got it** closes it; refreshing does not reopen it; **(i)** does.
-2. The compass starts the tour; step through all 13; **Finish** ends it; Esc ends it; `?tour=1` starts it.
+2. The compass starts the tour; step through all 13; **Finish** ends it; Esc ends it; `?tour=1` starts it. In Vault, **Settings → Cellar Planner Tour** (Take / Retake Tour) opens the page and runs it.
 3. Hover every control in the left panel: each shows a short explanation, and none runs off the screen.
 4. Load **Sample** and set it beside A101, A102 and A103. Report anything that differs: hinge side, door size, header, vents, the 940 | 970 | 940 split, the inside size.
 5. Enter any rack numbers and press **Fill** on the north wall: bottles appear. Blank one field: the total goes back to "not set".
