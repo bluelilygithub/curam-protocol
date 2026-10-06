@@ -16,5 +16,5 @@
     "baseUrl": ".",
     "paths": { "@planner-core/*": ["../planner-core/src/*"], "zustand/*": ["./node_modules/zustand/*"], "react": ["./node_modules/@types/react"], "react/*": ["./node_modules/@types/react/*"] }
   },
-  "include": ["src", "tests", "vitest.config.ts", "vite.config.ts", "../planner-core/src/engine/history.ts", "../planner-core/src/library"]
+  "include": ["src", "tests", "vitest.config.ts", "vite.config.ts", "../planner-core/src/engine/history.ts", "../planner-core/src/library", "../planner-core/src/export"]
 }

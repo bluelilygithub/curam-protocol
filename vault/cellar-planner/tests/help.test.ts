@@ -98,7 +98,7 @@ describe('tooltips: every control explains itself', () => {
   };
 
   it('every form field passes a hint (it becomes its tooltip)', () => {
-    for (const f of ['NumField', 'SelectField', 'CheckField']) {
+    for (const f of ['NumField', 'SelectField', 'CheckField', 'TextField']) {
       for (const t of tags(f)) expect(t, `${f} without a hint: ${t.slice(0, 90)}`).toMatch(/hint=/);
     }
   });

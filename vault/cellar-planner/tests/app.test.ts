@@ -181,3 +181,25 @@ describe('filling only the blanks with best guesses', () => {
     expect(testCaseProject().rackSpec).toEqual(BEST_GUESS_RACK);
   });
 });
+
+describe('the drawing package title block, kept with the design', () => {
+  const details = { company: 'Carter Noir', client: 'Redkem Constructions', address: '243 Kemp St', projectNo: 'M0103', drawnBy: 'MS', checkedBy: 'BS' };
+  it('is saved and opened with the file', () => {
+    const p = { ...sampleProject(), drawing: details };
+    expect(deserializeApp(serializeApp(p)).drawing).toEqual(details);
+  });
+  it('is absent from a design that has none (so an old file still opens)', () => {
+    expect(deserializeApp(serializeApp(sampleProject())).drawing).toBeUndefined();
+  });
+  it('keeps only text, cut to 200 characters: a hand-edited file cannot put numbers or objects in the title block', () => {
+    const odd = JSON.parse(serializeApp({ ...sampleProject(), drawing: details }));
+    odd.drawing.client = 42;
+    odd.drawing.address = 'x'.repeat(500);
+    odd.drawing.drawnBy = { evil: true };
+    const back = deserializeApp(JSON.stringify(odd)).drawing!;
+    expect(back.client).toBe('');
+    expect(back.address).toHaveLength(200);
+    expect(back.drawnBy).toBe('');
+    expect(back.company).toBe('Carter Noir');
+  });
+});

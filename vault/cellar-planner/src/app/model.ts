@@ -24,6 +24,8 @@ export interface AppProject {
   walkwayMm: number | null;
   /** Rack fields whose values are BEST GUESSES (a test case), not supplier values. Empty or absent for a real design. */
   estimated?: EstimateField[];
+  /** Title-block details for the drawing package (kept with the design). The date is set when the package is made. */
+  drawing?: { company: string; client: string; address: string; projectNo: string; drawnBy: string; checkedBy: string };
 }
 
 /** The starting project: the Carter Noir sample enclosure as read (unverified), NO rack values, NO walkway minimum. */
@@ -88,6 +90,8 @@ export function sortIssues(issues: Issue[]): Issue[] {
   return issues.map((i, n) => ({ i, n })).sort((a, b) => rank[a.i.severity] - rank[b.i.severity] || a.n - b.n).map((x) => x.i);
 }
 
+const str = (v: unknown): string => (typeof v === 'string' ? v.slice(0, 200) : '');
+
 export class ParseError extends Error {}
 
 export const serializeApp = (p: AppProject): string => JSON.stringify(p, null, 2);
@@ -109,6 +113,7 @@ export function deserializeApp(text: string): AppProject {
     bottle: o.bottle ?? 'BORDEAUX',
     runs: Array.isArray(o.runs) ? o.runs : [],
     walkwayMm: typeof o.walkwayMm === 'number' ? o.walkwayMm : null,
+    ...(o.drawing && typeof o.drawing === 'object' ? { drawing: { company: str(o.drawing.company), client: str(o.drawing.client), address: str(o.drawing.address), projectNo: str(o.drawing.projectNo), drawnBy: str(o.drawing.drawnBy), checkedBy: str(o.drawing.checkedBy) } } : {}),
     ...(Array.isArray(o.estimated) ? { estimated: o.estimated.filter((k): k is EstimateField => (ESTIMATE_FIELDS as readonly string[]).includes(k)) } : {}),
   };
 }

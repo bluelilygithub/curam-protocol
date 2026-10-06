@@ -76,3 +76,5 @@ body { background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans
 .part .field-input { min-width: 0; } .part input[type=text] { min-width: 0; }
 .calculated { color: #1a5fb4; font-style: normal; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
 .uncounted { color: #b42318; }
+.modal-body .grid { margin-top: 4px; }
+.field input[type=date] { width: 100%; padding: 4px 6px; border: 1px solid var(--border); border-radius: 5px; background: #fff; font: inherit; }

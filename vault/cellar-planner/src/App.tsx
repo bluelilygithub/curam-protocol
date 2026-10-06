@@ -8,6 +8,7 @@ import type { WallSide } from './enclosure';
 import { badRunIds, bottlesOnWall, elevationView, planView, rackFaceView } from './views';
 import { DrawingView } from './ui/DrawingView';
 import { InfoModal } from './ui/InfoModal';
+import { PackageModal } from './ui/PackageModal';
 import { Icon } from './ui/icons';
 import { ChecksPanel, EnclosurePanel, RackPanel, RunsPanel, StoreContext } from './ui/panels';
 
@@ -83,6 +84,7 @@ export function App({ store, ui }: { store: AppStore; ui: UiStore }) {
             <button type="button" className="btn" title="Open a .cellar.json file saved earlier or sent to you. It replaces the design on screen." onClick={() => file.current?.click()} data-testid="open">Open file</button>
             <button type="button" className="btn" title="Load a ready-made test case: the sample enclosure with racks on every wall, filled with best-guess rack values so there are bottles to count. Every guess is marked estimated until you type your own number over it. It replaces the design on screen." onClick={() => { store.getState().load(testCaseProject()); setMsg('Loaded the test case: its rack values are best guesses.'); }} data-testid="testcase">Test case</button>
             <button type="button" className="btn" title="Load the sample enclosure, read from the Carter Noir drawings (values unverified), with the racks left blank. It replaces the design on screen. For one with racks filled in, use Test case." onClick={() => { store.getState().load(sampleProject()); setMsg('Loaded the sample enclosure.'); }} data-testid="sample">Blank sample</button>
+            <button type="button" className="btn" title="Make a PDF of A3 drawing sheets: the specification, the plan, the elevation and the racks on each wall, with a title block. Every sheet says preliminary design only." onClick={() => ui.getState().set({ packageOpen: true })} data-testid="package-open">Drawing package</button>
             <button type="button" className="btn icon" title="How this works: the plain-language guide." onClick={() => ui.getState().set({ infoOpen: true })} data-testid="info-open"><Icon name="info" /></button>
             <button type="button" className="btn icon" title="Take the guided tour." onClick={() => void startTour()} data-testid="tour-start"><Icon name="compass" /></button>
             <input ref={file} type="file" accept=".json,application/json" hidden aria-label="Open a design file" title="Open a design file" onChange={(e) => void open(e.target.files?.[0])} />
@@ -105,6 +107,7 @@ export function App({ store, ui }: { store: AppStore; ui: UiStore }) {
         <aside className="right"><ChecksPanel /></aside>
       </div>
       <InfoModal ui={ui} />
+      <PackageModal store={store} ui={ui} />
       <TooltipHost />
     </StoreContext.Provider>
   );

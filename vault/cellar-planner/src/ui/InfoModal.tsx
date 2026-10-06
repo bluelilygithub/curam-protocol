@@ -64,6 +64,9 @@ export function InfoModal({ ui }: { ui: UiStore }) {
           <p>The right-hand panel lists <b>errors</b> (something does not fit), <b>warnings</b> and <b>information</b>, each with a plain reason and a way to fix it. Runs with an error turn red on the plan.</p>
           <p><b>Advisory guidance</b> (insulation, glass, doors, heat sources) comes from a cellar-building guide. It is information only, it never blocks a design, and it always says it needs <b>mechanical engineer or HVAC sign-off</b>. Nothing here sizes cooling or insulation.</p>
 
+          <h3>Drawing package</h3>
+          <p>The <b>Drawing package</b> button makes a PDF of A3 sheets in the style of the Carter Noir drawings: a specification and schedule, the plan, the elevation of the door wall, and one sheet for each wall that has racks, with every bottle drawn at its true size. Fill in the title block (client, address, project number, who drew and checked it) and press <b>Download PDF</b>. Every sheet says <i>preliminary design only: final site measure required prior to fabrication</i>, and a line at the foot says whether the rack values are estimated, calculated or not set, so a test case can never be mistaken for a quote. Still to come: sections, isometric views, renders, a logo, and sheets for the other walls' elevations.</p>
+
           <h3>Saving</h3>
           <p>Use <b>Save file</b> to download the design as a <code>.cellar.json</code> file and <b>Open file</b> to load one, so you can send it to someone to look at. A draft is also kept in this browser. Saving to your Vault account is not built yet.</p>
 

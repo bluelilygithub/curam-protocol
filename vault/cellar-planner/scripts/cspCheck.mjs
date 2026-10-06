@@ -53,6 +53,12 @@ await page.waitForTimeout(300);
 report.elevationDrawn = Number(await page.getByTestId('elevation-canvas').getAttribute('data-prims')) > 10;
 // a save and a draft: both need only same-origin storage and a blob download
 await page.getByTestId('save').click();
+// the drawing package: pdf-lib loads as a separate chunk and the PDF is made in the browser from a blob, both of which a strict policy could block
+await page.getByTestId('package-open').click();
+const [pkg] = await Promise.all([page.waitForEvent('download', { timeout: 20000 }).catch(() => null), page.getByTestId('package-download').click()]);
+report.packageDownloaded = !!pkg && /drawing-package.pdf$/.test(pkg.suggestedFilename());
+await page.getByTestId('package-msg').waitFor({ timeout: 5000 }).catch(() => undefined);
+report.packageMessage = (await page.getByTestId('package-msg').count()) ? await page.getByTestId('package-msg').innerText() : '(none)';
 console.log(JSON.stringify(report, null, 1));
 console.log('CSP / console problems:', problems.length);
 for (const v of [...new Set(problems)]) console.log('  -', v);

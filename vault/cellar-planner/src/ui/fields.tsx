@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode, type Ref } from 'react';
 
 // Small form controls. A number field keeps what is being typed until the person leaves it or presses Enter, then commits a whole number, or
 // clears to blank (only where blank is allowed: a blank is "not set", never 0).
@@ -33,6 +33,15 @@ export function NumField({ label, value, onCommit, nullable = false, unit = 'mm'
         {unit && <span className="unit">{unit}</span>}
       </span>
       {bad && <span className="field-err">Enter a whole number of {min} or more{nullable ? ', or leave blank' : ''}.</span>}
+    </label>
+  );
+}
+
+export function TextField({ label, value, onChange, hint, testid, type = 'text', inputRef }: { label: string; value: string; onChange(v: string): void; hint: string; testid?: string; type?: 'text' | 'date'; inputRef?: Ref<HTMLInputElement> }) {
+  return (
+    <label className="field" title={hint}>
+      <span className="field-label">{label}</span>
+      <input ref={inputRef} type={type} value={value} aria-label={label} data-testid={testid} maxLength={200} onChange={(e) => onChange(e.target.value)} />
     </label>
   );
 }

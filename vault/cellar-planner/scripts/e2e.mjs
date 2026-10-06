@@ -393,6 +393,71 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
   await ctx3.close();
 }
 
+// ---- the drawing package: the form, a real download, and the PDF it makes
+{
+  const ctx4 = await browser.newContext({ viewport: { width: 1500, height: 900 }, acceptDownloads: true });
+  await ctx4.addInitScript(() => { try { localStorage.setItem('cellar-planner:info-seen:v1', '1'); } catch { /* ignore */ } });
+  const p4 = await ctx4.newPage();
+  const errs4 = [];
+  p4.on('pageerror', (e) => errs4.push(e.message));
+  p4.on('console', (m) => { if (m.type() === 'error') errs4.push(m.text()); });
+  await p4.goto(URL);
+  await p4.getByTestId('plan-canvas').waitFor();
+  check('there is a Drawing package button with an explanation', (await p4.getByTestId('package-open').isVisible()) && /A3 drawing sheets/.test((await p4.getByTestId('package-open').getAttribute('title')) ?? ''));
+  await p4.getByTestId('package-open').click();
+  await p4.getByTestId('package-modal').waitFor();
+  check('the form opens with focus in its first field', await p4.evaluate(() => document.activeElement?.getAttribute('data-testid') === 'pkg-company'));
+  check('every field has a label, and the date starts as today', (await p4.getByLabel('Client').count()) === 1 && (await p4.getByLabel('Address').count()) === 1 && (await p4.getByLabel('Project number').count()) === 1 && (await p4.getByLabel('Drawn by').count()) === 1 && (await p4.getByLabel('Checked by').count()) === 1 && (await p4.getByTestId('pkg-date').inputValue()) === new Date().toISOString().slice(0, 10));
+  await p4.getByTestId('pkg-company').fill('Carter Noir');
+  await p4.getByTestId('pkg-client').fill('Redkem Constructions');
+  await p4.getByTestId('pkg-address').fill('243 Kemp St New Farm QLD 4005');
+  await p4.getByTestId('pkg-project-no').fill('M0103');
+  await p4.getByTestId('pkg-drawn').fill('MS');
+  await p4.getByTestId('pkg-checked').fill('BS');
+  await p4.getByTestId('pkg-date').fill('2026-10-20');
+  if (out) await p4.screenshot({ path: join(out, '25-package-form.png') });
+
+  await p4.addScriptTag({ path: join(import.meta.dirname, '..', 'node_modules', 'axe-core', 'axe.min.js') });
+  const formScan = await p4.evaluate(async () => (await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } })).violations.map((v) => `${v.id} x${v.nodes.length}`));
+  check('accessibility scan, the drawing package form: no violations', formScan.length === 0, formScan.join(', '));
+
+  const [download] = await Promise.all([p4.waitForEvent('download'), p4.getByTestId('package-download').click()]);
+  const file = join(tmpdir(), 'cellar-package-e2e.pdf');
+  await download.saveAs(file);
+  check('it downloads a PDF named after the design', /^test-case-estimated-rack-values-drawing-package\.pdf$/.test(download.suggestedFilename()), download.suggestedFilename());
+  const { PDFDocument } = await import('pdf-lib');
+  const { readFileSync } = await import('node:fs');
+  const doc = await PDFDocument.load(readFileSync(file));
+  check('the PDF has 7 A3 landscape sheets and the preliminary subject', doc.getPageCount() === 7 && Math.abs(doc.getPage(0).getSize().width - 1190.55) < 0.1 && /Preliminary design only/.test(doc.getSubject() ?? ''), `${doc.getPageCount()}`);
+  await p4.getByTestId('package-msg').waitFor();
+  check('the form says what it made: 7 sheets, A100 to A106', /Downloaded 7 sheets: A100, A101, A102, A103, A104, A105, A106/.test(await p4.getByTestId('package-msg').innerText()), await p4.getByTestId('package-msg').innerText());
+  const kept = await p4.evaluate(() => window.cellar.store.getState().project.drawing);
+  check('the title block details are kept with the design, so the next package starts filled in', kept?.client === 'Redkem Constructions' && kept?.address === '243 Kemp St New Farm QLD 4005' && kept?.projectNo === 'M0103' && kept?.company === 'Carter Noir');
+  await p4.keyboard.press('Escape');
+  await p4.waitForTimeout(200);
+  check('Esc closes the form and puts focus back on the button that opened it', (await p4.getByTestId('package-modal').count()) === 0 && (await p4.evaluate(() => document.activeElement?.getAttribute('data-testid'))) === 'package-open');
+  await p4.getByTestId('package-open').click();
+  check('reopened, it starts with the details already filled in', (await p4.getByTestId('pkg-client').inputValue()) === 'Redkem Constructions');
+  await p4.getByTestId('package-close').click();
+  // the details survive saving and opening the file
+  const saved = await p4.evaluate(() => JSON.stringify(window.cellar.store.getState().project));
+  await p4.getByTestId('sample').click();
+  check('Blank sample has no details', !(await p4.evaluate(() => window.cellar.store.getState().project.drawing)));
+  const tmpSaved = join(tmpdir(), 'cellar-e2e-package.json');
+  writeFileSync(tmpSaved, saved);
+  await p4.setInputFiles('input[type=file]', tmpSaved);
+  await p4.waitForTimeout(300);
+  check('opening the saved file brings the title-block details back', (await p4.evaluate(() => window.cellar.store.getState().project.drawing?.client)) === 'Redkem Constructions');
+  // a design with no racks: just three sheets
+  await p4.getByTestId('sample').click();
+  await p4.getByTestId('package-open').click();
+  const [d2] = await Promise.all([p4.waitForEvent('download'), p4.getByTestId('package-download').click()]);
+  await d2.saveAs(file);
+  check('the blank sample (no racks) makes 3 sheets: specification, plan, elevation', (await PDFDocument.load(readFileSync(file))).getPageCount() === 3);
+  check('no page errors in the drawing-package flow', errs4.length === 0, errs4.join(' | '));
+  await ctx4.close();
+}
+
 check('no page errors', errors.length === 0, errors.join(' | '));
 await browser.close();
 console.log(failed ? `${failed} check(s) FAILED` : 'All checks passed');
