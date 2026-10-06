@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "strict": true,
@@ -11,7 +11,9 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["node"]
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": { "@planner-core/*": ["../planner-core/src/*"], "zustand/*": ["./node_modules/zustand/*"] }
   },
-  "include": ["src", "tests"]
+  "include": ["src", "tests", "vitest.config.ts", "../planner-core/src/engine/history.ts", "../planner-core/src/library"]
 }
