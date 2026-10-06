@@ -1,8 +1,10 @@
-# Cellar Planner: Specification v1
+# Cellar Planner: Specification v1.1
+
+*v1.1 amends v1 after the owner supplied three reference documents (section 13). Sections 1 to 12 are v1; sections 13 to 18 are new. Where they disagree, v1.1 wins.*
 
 Walk-in wine cellar and fridge configurator. A bespoke-first design tool: cabinets are driven by their dimensions, not by product codes, and the main output is an installer specification and cutting list for a cabinet maker.
 
-**Status:** Milestone 1 (the pure rule and maths engine, no UI) is built and tested in `src/engine/`. Everything below marked **DRAFT** is a typical default to be confirmed with a cabinet maker. **Real-job validation is pending** (section 11): nothing here has yet been checked against a real cut list.
+**Status (v1.1):** two product lines are live (section 13), so the joinery engine below is one of two. Milestone 2 is paused after M2a until the enclosure model is settled. Milestone 1 (the pure rule and maths engine, no UI) is built and tested in `src/engine/`. Everything below marked **DRAFT** is a typical default to be confirmed with a cabinet maker. **Real-job validation is pending** (section 11): nothing here has yet been checked against a real cut list.
 
 ## 1. Scope and users
 
@@ -134,6 +136,12 @@ Not yet in the cut list: site scribe pieces, hardware (LED channel, runners), do
 | D-07 | Proposed | `CASE_DRAWER` holds no counted bottles in V1. | |
 | D-08 | Proposed | An inclined display's depth need does not add the 15 mm clearance (its 20 mm lip is the front allowance). | With it, Bordeaux needs 345 inside. |
 | D-09 | Proposed | Cut-list part sizes follow section 9's typical rules and are indicative. | The cabinet maker's rules replace them. |
+| D-10 | **Confirmed** | Both product lines are live: glass enclosures with metal and timber racking, and carcass joinery. | v1 assumed joinery only. |
+| D-11 | **Confirmed** | Customers are not given drawings by default; they can request them with a quote. The drawing package is a staff-generated, on-request output. | Customers see a preview (3D view, bottle count, estimate). |
+| D-12 | Proposed | The racking is a plug-in (`CARCASS_JOINERY` = the M1 engine, untouched; `METAL_RACK` = new) on a shared enclosure and drawing core. No refactor of `src/engine/` until the product order is chosen. | Two separate apps (rejected: the room, door and sheets are common). |
+| D-13 | Proposed | Climate, insulation and glass guidance is advisory only and never an error. | The 50% glass guidance cannot block a design: free-standing glass cabinets are close to 100% glass. |
+| D-14 | **Open** | Which product line is built first. | Decided by sales volume. |
+| D-15 | Proposed | With no supplier spec sheet, metal-rack capacity comes from a user-editable rack-module table, marked unverified. | Wait for the supplier sheet. |
 
 ## 11. Golden Test Case #01 and validation
 
@@ -141,7 +149,7 @@ A straight 2450 mm wall in a 2400 mm room, two room-wall ends, three bays 360 de
 
 This is a **worked example, not a benchmark**: its numbers come from this specification. **Pending:** one real past job (room and bay dimensions, cut list, bottle count) as the acceptance test.
 
-## 12. Milestones
+## 12. Milestones (v1 plan; see section 18 for the v1.1 order)
 
 1. **M1 (built):** headless engine and tests: model, formulas, runs and corners, checks, cut list, golden case. `npm test` in `cellar-planner/`.
 2. M2: project store, undo, library saving, 2D plan renderer on `planner-core`.
@@ -149,3 +157,56 @@ This is a **worked example, not a benchmark**: its numbers come from this specif
 4. M4: 3D (instanced bottles, materials, lights, doors).
 5. Phase 2: layout generator, pricing and rate table, installer PDF and cut-list CSV, then the public front door.
 6. Phase 3: photo overlay.
+
+## 13. Reference documents (v1.1)
+
+Three documents were read as page images, so details in drawings may be misread; values taken from them are **unverified until confirmed**.
+
+- **Kings Winehaus, "Building a Wine Cellar"** (4 pages, the last blank): how a cellar room must be built (insulation, glass, doors, heat sources).
+- **Carter Noir, "built in room plan sample"** (3 sheets, project M0103, A101 plan, A102 elevation, A103 axonometric): a walk-in cabinet enclosure for a builder.
+- **Carter Noir, "copy customer plans and elevations"** (5 sheets): an 1800 x 1000 glass and aluminium walk-in with steel cantilever racking and timber shelves; plan, sections, elevations, isometrics and renders.
+
+None states a bottle count, a rack pitch or a cut list, so **none validates the formulas**. Real-job validation (section 11) is still pending.
+
+## 14. Product lines and rack systems
+
+Both lines share a core and differ in what is inside:
+
+| | Shared core | Racking inside |
+|---|---|---|
+| **Glass enclosure** | room or enclosure, door, per-wall build-up, header, conditioner, vents, sheets | `METAL_RACK`: steel posts and pins, timber shelves, drawers (to be specified) |
+| **Joinery** | room, door, sheets | `CARCASS_JOINERY`: the built M1 engine (sections 3 to 9) |
+
+A project has a `productType` (`ENCLOSURE_METAL_RACK` or `CARCASS_JOINERY`); the engine behind each is separate. The M1 engine is unchanged and remains the joinery engine.
+
+**Metal racking, interim.** There is no supplier sheet, so the rack module is a **user-editable table**, marked "unverified, enter from your supplier's sheet": post depth, pin spacing, bottle diameters accepted, bottles per pin row, rows, and posts per run. Capacity is rows x bottles per row from those entries. The formula is specified when real values exist. Nothing is inferred from the 1:20 drawings (the 100 mm and 300 mm dimensions on them are not rack data).
+
+## 15. Enclosure model (PROPOSED)
+
+- **Build-up is per wall:** each wall has a thickness (50 mm insulated panel, 100 mm stud wall, or a glass/frame section). Internal size = outer size minus the build-ups. Example, sheet A101: 2850 x 1665 mm to the outer faces of 50 mm panels gives **2750 x 1565 mm inside**, but only if panels run on all four sides; the door wall (glass, doors, vent panels, no stud return) differs and must be set separately.
+- **Components seen in the samples** (values as read, unverified): door 970 x 2120 (or 900 wide, swinging out) in a 2200 high enclosure; panel modules of 940 and 970 mm either side of the door; ceiling-mounted conditioner about 902 x 317 mm; vents 400 x 100 mm with dashed ducting zones; a ceiling header of 500 to 590 mm above the glass; a 2690 mm overall height on the larger job.
+- **Rules to carry over from the engine:** placement snapping, door swing clearance, no rack in a door's clearance.
+
+## 16. Advisory guidance (PROPOSED, never an error)
+
+Every item below is information only and is shown as: **Advisory only: requires mechanical engineer / HVAC sign-off.** None blocks a design, produces an error, or appears on a quote as a guarantee.
+
+- Insulation is critical to a cellar conditioner working; the guide recommends 50 to 80 mm polyurethane foam (EPS about double the thickness) on the face of studs, with brick and concrete lined, not left bare.
+- Glass: about 1.4 W/m2K or better (4 mm glass, 16 mm argon, 4 mm glass); glass adds heat load; the guide says at most 50% of cellar walls; free-standing glass cabinets exceed this, so it is a note only.
+- Glass doors and frames thermally broken; doors sealed on all four sides.
+- No heat source inside; slab heating at least 500 mm from the perimeter walls with a thermal break.
+- Typical conditioner set point 14 to 18 degrees C (preset 15).
+
+## 17. Drawing package (Phase 2, on request)
+
+Generated by staff when a customer asks for drawings with a quote; customers get a preview (3D view, bottle count, estimate) unless asked. Sheets as in the samples: plan (A101), elevation (A102), axonometric (A103), then sections, isometric front and back, and a sheet of renders. A3 landscape, scale 1:20, a title block (project, client, address, drawing title, drawing number, project number, date, scale, drawn by, checked by, a logo), tick-mark dimension lines, leader callouts (for example "50mm WALL PANEL"), and ducting and vents shown dashed. The `planner-core` drawing primitives cover plan and elevation; sections and axonometric projection are new work. Every sheet carries `PRELIMINARY DESIGN ONLY: FINAL SITE MEASURE REQUIRED PRIOR TO FABRICATION`.
+
+## 18. Milestones (v1.1)
+
+M1 (built) and M2a (built, product-agnostic: commands, undo, store, file format, library binding) stand. **M2 is paused.** Proposed order once D-14 is decided:
+
+1. **Enclosure and room model** (shared core): per-wall build-up, door, header, conditioner and vents, internal size, with tests.
+2. Vault integration (table, API, feature flag, page): product-agnostic, can go any time.
+3. 2D plan and wall elevation for the chosen product.
+4. The second product's racking engine.
+5. Drawing package and the quote request flow (Phase 2).
