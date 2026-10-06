@@ -66,8 +66,9 @@ export function Stage() {
       return () => { p.onHoverPlant = null; setHover(null); p.destroy(); plan.current = null; };
     }
     const g = new Garden3D(el, app);
+    g.onHoverPlant = setHover;
     three.current = g;
-    return () => { g.destroy(); three.current = null; };
+    return () => { g.onHoverPlant = null; setHover(null); g.destroy(); three.current = null; };
   }, [viewMode, hasProject, app]);
 
   useEffect(() => {
@@ -136,7 +137,7 @@ export function Stage() {
           if (!plan.current) return;
           plan.current.dropPlant(id, e.clientX, e.clientY, e.shiftKey);
         }} />
-      {viewMode === '2d' && hover && <PlantHoverCard hover={hover} />}
+      {hover && !draggingPlantId && <PlantHoverCard hover={hover} />}
       {viewMode === '3d' && dragAt && draggingPlantId && <PlantHoverCard hover={{ plantId: draggingPlantId, x: dragAt.x, y: dragAt.y }} />}
       {viewMode === '2d' && <p className="hint-banner">{mapAlign ? 'Drag the map until your house and plot line up with what you drew. Press Done moving (or Esc) when it fits.' : HINTS[tool]}</p>}
       {project && <MapAttribution project={project} />}
@@ -156,7 +157,7 @@ export function Stage() {
           <button type="button" title="Render photo: a realistic picture with the sun where the time slider puts it" data-testid="open-photo" onClick={() => app.ui.getState().set({ photoOpen: true })}>Render photo</button>
         </div>
       )}
-      {viewMode === '2d' && <SelectionBar />}
+      {!walking && !touring && <SelectionBar />}
       {viewMode === '3d' && walking && <p className="hint-banner walk-hint" data-testid="walk-hint">Walking at eye height. W A S D or the pad to walk, arrow keys or drag to look, hold Shift to run, Esc to stop. Fences, walls, structures and trunks are solid; gates let you through.</p>}
       {viewMode === '3d' && <WalkPad />}
       {viewMode === '3d' && touring && <p className="hint-banner walk-hint" data-testid="tour-hint">Fly-through. Space pauses and plays, Esc stops. The camera sweeps over the house and trees instead of through them.</p>}

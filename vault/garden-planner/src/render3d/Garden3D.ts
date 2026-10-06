@@ -16,6 +16,7 @@ import type { Tour } from '@planner-core/render3d/tour';
 import { buildGardenTour, buildTourWorld, countedIndex, countedStops, samplePose, TOUR_FOV } from '../walk/gardenTour';
 import { buildWalkWorld, NO_INPUT, nearestWalkable, stepWalk, TURN_RATE, walkPose, walkStart, type WalkInput, type WalkState, type WalkWorld } from '../walk/walk';
 import { FENCE_COLOUR, GRASS_COLOUR, MULCH_COLOUR, PATH_COLOUR, STRUCTURE_COLOUR } from '../render2d/theme';
+import type { ItemKind } from '../state/uiStore';
 
 const GROUND = '#9aa57a';
 const SKY = '#cfe3ee';
@@ -113,6 +114,8 @@ export class Garden3D {
     ro.observe(container);
     this.offs.push(() => ro.disconnect());
     this.offs.push(this.app.project.subscribe(() => this.rebuild()));
+    this.offs.push(this.app.ui.subscribe((s, p) => { if (s.selection !== p.selection) this.updateSelectionRing(); }));
+    this.attachPicking(renderer.domElement);
     this.offs.push(this.app.ui.subscribe((s, p) => {
       if (s.stage !== p.stage || s.month !== p.month) this.rebuild();
       else if (s.hour !== p.hour) this.updateSun();
@@ -243,6 +246,92 @@ export class Garden3D {
     const p = this.app.project.getState().project;
     if (p) { const b = this.bounds(p); if (Math.hypot(hit.x - b.cx, hit.z - b.cz) > b.r * 2.5 + 20) return null; }
     return { x: hit.x, y: -hit.z };
+  }
+
+  /** Called with the plant under the cursor (screen position within the view), or null: the page shows its card. */
+  onHoverPlant: ((h: { id: string; x: number; y: number } | null) => void) | null = null;
+  private hoverKey: string | null = null;
+  private selRing: THREE.Mesh | null = null;
+
+  /** The garden item (plant, bed, lawn, path, house, structure) under a screen point, nearest first; null for the ground, the map or the sky. */
+  itemAt(clientX: number, clientY: number): { kind: ItemKind; id: string } | null {
+    const el = this.renderer?.domElement;
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) return null;
+    const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -(((clientY - r.top) / r.height) * 2 - 1));
+    const ray = new THREE.Raycaster();
+    this.camera.updateMatrixWorld();
+    ray.setFromCamera(ndc, this.camera);
+    const hits = ray.intersectObjects(this.content.children, true);
+    for (const h of hits) {
+      if (h.object.type === 'Line' || (h.object as THREE.Mesh).geometry?.type === 'PlaneGeometry') continue; // ground and map are not items; rims are thin lines
+      let o: THREE.Object3D | null = h.object;
+      while (o) { if (o.userData.sel) return o.userData.sel as { kind: ItemKind; id: string }; o = o.parent; }
+      return null; // something solid but not an item (a fence): it hides what is behind it
+    }
+    return null;
+  }
+
+  /** Click an item in the 3D view to select it (the right-hand panel then shows it, as in 2D); click bare ground to clear. Resting on a plant shows its card. */
+  private attachPicking(el: HTMLElement): void {
+    let down: { x: number; y: number; t: number } | null = null;
+    const idle = (): boolean => !this.walk && !this.tourRun;
+    const pd = (e: PointerEvent): void => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; };
+    const pu = (e: PointerEvent): void => {
+      const d = down; down = null;
+      if (!d || !idle() || e.button !== 0 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 5 || performance.now() - d.t > 600) return;
+      const hit = this.itemAt(e.clientX, e.clientY);
+      const ui = this.app.ui.getState();
+      if (hit) ui.set({ selection: hit, tool: 'select', inspectorOpen: true, rightTab: 'details' });
+      else if (ui.selection) ui.set({ selection: null });
+    };
+    const pm = (e: PointerEvent): void => {
+      if (e.buttons || !idle()) { this.sendHover(null); return; }
+      const hit = this.itemAt(e.clientX, e.clientY);
+      el.style.cursor = hit ? 'pointer' : '';
+      if (hit?.kind === 'plant') { const r = el.getBoundingClientRect(); this.sendHover({ id: hit.id, x: e.clientX - r.left, y: e.clientY - r.top }); } else this.sendHover(null);
+    };
+    const pl = (): void => this.sendHover(null);
+    el.addEventListener('pointerdown', pd); el.addEventListener('pointerup', pu); el.addEventListener('pointermove', pm); el.addEventListener('pointerleave', pl);
+    this.offs.push(() => { el.removeEventListener('pointerdown', pd); el.removeEventListener('pointerup', pu); el.removeEventListener('pointermove', pm); el.removeEventListener('pointerleave', pl); });
+  }
+  private sendHover(h: { id: string; x: number; y: number } | null): void {
+    const key = h ? `${h.id}@${Math.round(h.x / 4)},${Math.round(h.y / 4)}` : null;
+    if (key === this.hoverKey) return;
+    this.hoverKey = key;
+    this.onHoverPlant?.(h);
+  }
+
+  /** A ring round the selected item on the ground (the 2D plan shows a dashed outline); gone when nothing is selected. */
+  private updateSelectionRing(): void {
+    const sel = this.app.ui.getState().selection;
+    let target: THREE.Object3D | null = null;
+    if (sel) for (const o of this.content.children) if (o.userData.sel && o.userData.sel.kind === sel.kind && o.userData.sel.id === sel.id) { target = o; break; }
+    if (!target) { if (this.selRing) this.selRing.visible = false; this.dirty = true; return; }
+    const box = new THREE.Box3().setFromObject(target);
+    const size = box.getSize(new THREE.Vector3()), mid = box.getCenter(new THREE.Vector3());
+    if (!this.selRing) {
+      this.selRing = new THREE.Mesh(new THREE.RingGeometry(0.94, 1, 64), new THREE.MeshBasicMaterial({ color: '#CC785C', transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthTest: false }));
+      this.selRing.rotation.x = -Math.PI / 2;
+      this.selRing.renderOrder = 9;
+      this.scene.add(this.selRing);
+    }
+    this.selRing.visible = true;
+    this.selRing.position.set(mid.x, 0.06, mid.z);
+    this.selRing.scale.setScalar(Math.max(0.4, Math.min(40, Math.hypot(size.x, size.z) / 2 + 0.15)));
+    this.dirty = true;
+  }
+
+  /** Where a point of the garden (plan metres, height above ground) appears on the screen, in client pixels; null if off-screen. Used by tests. */
+  screenOf(at: Vec2, height = 0.4): { x: number; y: number } | null {
+    const el = this.renderer?.domElement;
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    this.camera.updateMatrixWorld();
+    const v = new THREE.Vector3(at.x, height, -at.y).project(this.camera);
+    if (v.z > 1) return null;
+    return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };
   }
 
   private dropRing: THREE.Mesh | null = null;
@@ -569,32 +658,34 @@ export class Garden3D {
     // with the aerial photo on, flat fills let it show through (the same as the 2D plan)
     const soft = (m: THREE.Mesh): THREE.Mesh => { if (mapOn) { const x = m.material as THREE.MeshStandardMaterial; x.transparent = true; x.opacity = 0.55; } return m; };
 
-    for (const l of p.lawns) c.add(soft(shapeMesh(sampleShape(l.shape), GRASS_COLOUR[l.grass], 0.012)));
+    const tag = <T extends THREE.Object3D>(o: T, kind: ItemKind, id: string): T => { o.userData.sel = { kind, id }; return o; };
+    for (const l of p.lawns) c.add(tag(soft(shapeMesh(sampleShape(l.shape), GRASS_COLOUR[l.grass], 0.012)), 'lawn', l.id));
     for (const z of p.zones) void z; // zones are plan-only
     for (const b of p.beds) {
       const poly = sampleShape(b.shape);
       const bedMesh = shapeMesh(poly, MULCH_COLOUR[b.mulch], b.raised ? 0.35 : 0.02, b.raised ? 0.02 : 0);
-      c.add(b.raised ? bedMesh : soft(bedMesh));
+      c.add(tag(b.raised ? bedMesh : soft(bedMesh), 'bed', b.id));
       if (b.raised) c.add(this.rim(poly, 0.35, '#8a6a44'));
     }
-    for (const pa of p.paths) for (const q of pathSegments(pa.points, pa.width)) c.add(soft(shapeMesh(q, PATH_COLOUR[pa.material], 0.025)));
+    for (const pa of p.paths) for (const q of pathSegments(pa.points, pa.width)) c.add(tag(soft(shapeMesh(q, PATH_COLOUR[pa.material], 0.025)), 'path', pa.id));
     if (p.house) {
       const m = shapeMesh(p.house.vertices.map((v) => v.position), '#e8e2d6', 0, p.house.height);
-      c.add(m);
+      c.add(tag(m, 'house', p.house.id));
       const roof = shapeMesh(p.house.vertices.map((v) => v.position), '#8f8a80', p.house.height, 0.25);
       roof.castShadow = true;
-      c.add(roof);
+      c.add(tag(roof, 'house', p.house.id));
     }
     if (p.boundary) {
       const v = p.boundary.vertices;
       for (let i = 0; i < v.length; i++) c.add(this.fence(v[i].position, v[(i + 1) % v.length].position, p.boundary.segments[i]?.fence ?? 'open', p.boundary.segments[i]?.height));
     }
-    for (const s of p.structures) c.add(this.structure(s));
+    for (const s of p.structures) c.add(tag(this.structure(s), 'structure', s.id));
     for (const inst of p.plants) {
       const rec = plantById(inst.plantId);
       if (!rec) continue;
-      c.add(this.plant(plantParts(rec, ui.stage, ui.month, inst.id), inst.position, p.plants.length > 250));
+      c.add(tag(this.plant(plantParts(rec, ui.stage, ui.month, inst.id), inst.position, p.plants.length > 250), 'plant', inst.id));
     }
+    this.updateSelectionRing();
 
     this.updateSun();
     if (!this.framed) this.iso();

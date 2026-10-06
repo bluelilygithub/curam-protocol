@@ -1413,6 +1413,33 @@ check('no page errors or console errors', problems.length === 0, problems.slice(
   await wait(300);
   plants = await pg.evaluate(() => window.gardenPlanner.project.getState().project.plants);
   check('Ctrl+Z takes the dropped plant back out', plants.length === before, String(plants.length));
+  // clicking things in the 3D view selects them, like the plan
+  await pg.locator('.view3d-bar').getByRole('button', { name: 'Iso' }).click();
+  await wait(1200);
+  const lav = await pg.evaluate(() => window.gardenPlanner.project.getState().project.plants[0]);
+  const at3 = await pg.evaluate((pos) => window.gardenPlanner.view3d.current.screenOf(pos, 0.3), lav.position);
+  await pg.evaluate(() => window.gardenPlanner.ui.getState().set({ selection: null }));
+  await pg.mouse.move(at3.x, at3.y, { steps: 6 });
+  await pg.getByTestId('plant-hover').waitFor({ timeout: 4000 });
+  check('resting on a plant in 3D shows its card', /Lavender/i.test(await pg.getByTestId('plant-hover').innerText()));
+  await pg.mouse.click(at3.x, at3.y);
+  await wait(300);
+  const sel3 = await pg.evaluate(() => window.gardenPlanner.ui.getState().selection);
+  check('clicking a plant in 3D selects it', sel3?.kind === 'plant' && sel3.id === lav.id, JSON.stringify(sel3));
+  check('and the right panel shows it, as in 2D', /English lavender/i.test(await pg.locator('.panel-right').innerText()));
+  check('and the selection bar is there too', (await pg.getByTestId('selection-bar').count()) === 1);
+  if (out) await pg.screenshot({ path: join(out, '18-3d-select.png') });
+  // an orbit drag does not select or clear
+  await pg.mouse.move(box.x + 60, box.y + box.height - 60);
+  await pg.mouse.down(); await pg.mouse.move(box.x + 140, box.y + box.height - 90, { steps: 6 }); await pg.mouse.up();
+  await wait(200);
+  check('dragging to orbit keeps the selection', (await pg.evaluate(() => window.gardenPlanner.ui.getState().selection))?.id === lav.id);
+  await pg.locator('.view3d-bar').getByRole('button', { name: 'Iso' }).click();
+  await wait(1200);
+  const bare = await pg.evaluate(() => window.gardenPlanner.view3d.current.screenOf({ x: 15, y: 3 }, 0));
+  await pg.mouse.click(bare.x, bare.y);
+  await wait(300);
+  check('clicking bare ground clears the selection', (await pg.evaluate(() => window.gardenPlanner.ui.getState().selection)) === null);
   check('no page errors', errs.length === 0, errs.join(' | '));
   await ctxH.close();
 }
