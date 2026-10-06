@@ -217,6 +217,17 @@ M1 (built) and M2a (built, product-agnostic: commands, undo, store, file format,
 2. **Metal rack spec (built, `src/rack/`, 12 tests):** blank-by-default specification, "not set" capacity, `RACK_SPEC_MISSING`, depth by orientation, pitch and value checks. The numbers in its tests are invented to exercise the maths, not supplier values. Not yet: placing rack runs in the enclosure.
 3. **Enclosure model (built, `src/enclosure/`, 21 tests):** per-wall build-up, internal size, door layout and swing, glass fraction, header parts, checks, advisories, and Golden Test Case #02 (sample A101 to A103 as read: 2750 x 1565 mm inside, door wall 940 | 970 | 940). Not yet: metal racking, wall/floor/ceiling panel cut list, the room the enclosure stands in.
 4. Vault integration (table, API, feature flag, page): product-agnostic, can go any time.
-5. 2D plan and wall elevation for the glass enclosure.
+5. **2D plan and wall elevation for the glass enclosure (built, standalone; section 19).**
 6. Joinery in the same app (its engine is built).
 7. Drawing package and the quote request flow (Phase 2).
+
+## 19. The screens (built, standalone)
+
+Run with `npm run dev` inside `cellar-planner/` (port 5176); `npm run e2e` drives it in Chrome. **It is not yet wired into Vault's build, nav or feature flags**: that integration is later, in its own commits, with the other planners' tests.
+
+- **Plan** (from above) and **Elevation** (any wall, seen from outside) are drawn from pure primitives (`src/views/`), so the shapes are tested without a browser and can feed the drawing package later. Drag to pan, scroll to zoom, Fit to reset.
+- **Panels** edit the enclosure (outer size, ceiling and floor build-up, per-wall kind and build-up), the door, the header parts, the rack specification, the project's minimum walkway, and the rack runs (add, edit, fill a wall). Every edit is one undo step.
+- **Blank means not set, never zero**: rack fields and the walkway minimum start blank and say "not set"; the bottle total reads "not set (n runs without rack values)" until every run is complete; a required number cannot be blanked and a bad number is refused with a message.
+- **Checks** list errors, then warnings, then information, each with its fix. **Advisory guidance** is separate and always carries the sign-off wording. The foot of every drawing says `PRELIMINARY DESIGN ONLY: FINAL SITE MEASURE REQUIRED PRIOR TO FABRICATION`.
+- **Saving:** Save and Open a `.cellar.json` file (so the plan can be sent to someone to look at), plus a draft kept in the browser. Not yet: saving to the Vault account, dragging runs on the plan, free-standing runs, the drawing package PDF.
+- **Tests:** `tests/app.test.ts` (model, store, file format) and `scripts/e2e.mjs` (the screens, in Chrome: blanks and "not set", the 160 and 480 bottle totals from invented rack values, fill a wall, walkway warning, run error, undo and redo, inward door, bad numbers, save/open/draft).
