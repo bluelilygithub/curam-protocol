@@ -140,9 +140,9 @@ Not yet in the cut list: site scribe pieces, hardware (LED channel, runners), do
 | D-11 | **Confirmed** | Customers are not given drawings by default; they can request them with a quote. The drawing package is a staff-generated, on-request output. | Customers see a preview (3D view, bottle count, estimate). |
 | D-12 | Proposed | The racking is a plug-in (`CARCASS_JOINERY` = the M1 engine, untouched; `METAL_RACK` = new) on a shared enclosure and drawing core. No refactor of `src/engine/` until the product order is chosen. | Two separate apps (rejected: the room, door and sheets are common). |
 | D-13 | Proposed | Climate, insulation and glass guidance is advisory only and never an error. | The 50% glass guidance cannot block a design: free-standing glass cabinets are close to 100% glass. |
-| D-14 | **Confirmed** | The glass enclosure with metal racking is built first. | Joinery follows; its engine (M1) is already built. |
-| D-16 | Proposed | Enclosure defaults (50 mm panels, 50 mm ceiling build-up, 2120 mm door, 500 mm header, conditioner and vent sizes) are read from sample drawings A101 to A103 and are unverified. | Owner confirms or corrects. |
-| D-15 | Proposed | With no supplier spec sheet, metal-rack capacity comes from a user-editable rack-module table, marked unverified. | Wait for the supplier sheet. |
+| D-14 | **Confirmed** | The glass enclosure with metal racking is built first. Source: the owner's own answer ("glass enclosure") to the question of which product to build first, given in the design conversation. | Joinery follows; its engine (M1) is already built. |
+| D-16 | Proposed | Enclosure defaults are read from sample drawings A101 to A103 and are unverified. Checked against the drawings: the **2120 mm door** and **500 mm header** are consistent with A102. The **50 mm ceiling build-up and the 2150 mm inside height are NOT confirmed** (A103 says "reinforced ceiling panel" with no thickness; no drawing shows a floor build-up, which moves the inside height as much as the ceiling does): only the drawing's authors can confirm either. | Owner confirms or corrects. |
+| D-15 | **Confirmed** | With no supplier spec sheet, metal-rack capacity comes from a user-editable rack-module table whose fields start BLANK. Blank means "not set", never zero; `RACK_SPEC_MISSING` explains why. | Wait for the supplier sheet. |
 
 ## 11. Golden Test Case #01 and validation
 
@@ -180,12 +180,14 @@ Both lines share a core and differ in what is inside:
 
 A project has a `productType` (`ENCLOSURE_METAL_RACK` or `CARCASS_JOINERY`); the engine behind each is separate. The M1 engine is unchanged and remains the joinery engine.
 
-**Metal racking, interim.** There is no supplier sheet, so the rack module is a **user-editable table**, marked "unverified, enter from your supplier's sheet": post depth, pin spacing, bottle diameters accepted, bottles per pin row, rows, and posts per run. Capacity is rows x bottles per row from those entries. The formula is specified when real values exist. Nothing is inferred from the 1:20 drawings (the 100 mm and 300 mm dimensions on them are not rack data).
+**Metal racking, interim (built, `src/rack/`).** There is no supplier sheet, so the rack module is a **user-editable table whose fields start blank**. The same fields apply whether the values come from a supplier sheet or a fabricator's drawings: unit width, depth and height; row pitch; bottles per row; bottle orientation (neck-out or label-forward, which changes the depth needed); posts per unit; and optionally a stated number of rows. Capacity = rows x bottles per row x units, with rows = the stated number or floor(height / pitch) (the first row's offset is not modelled). **Blank is "not set", never 0**, and a rack with missing values raises `RACK_SPEC_MISSING` naming the fields, so it can never be counted or quoted as zero bottles. The quickest real numbers: one call to whoever fabricates the posts and rods for jobs like the 1800 x 1000 glass cabinet. Nothing is inferred from the 1:20 drawings (the 100 mm and 300 mm dimensions on them are not rack data).
 
 ## 15. Enclosure model (PROPOSED)
 
 - **Build-up is per wall:** each wall has a thickness (50 mm insulated panel, 100 mm stud wall, or a glass/frame section). Internal size = outer size minus the build-ups. Example, sheet A101: 2850 x 1665 mm to the outer faces of 50 mm panels gives **2750 x 1565 mm inside**, but only if panels run on all four sides; the door wall (glass, doors, vent panels, no stud return) differs and must be set separately.
 - **Components seen in the samples** (values as read, unverified): door 970 x 2120 (or 900 wide, swinging out) in a 2200 high enclosure; panel modules of 940 and 970 mm either side of the door; ceiling-mounted conditioner about 902 x 317 mm; vents 400 x 100 mm with dashed ducting zones; a ceiling header of 500 to 590 mm above the glass; a 2690 mm overall height on the larger job.
+- **The header is a bulkhead above the enclosure** (the motor sits on the roof), not space inside it, so it never reduces the inside height.
+- **Glass share:** a glazed 970 x 2120 door in four panel walls is 10.35% of the outer wall area (about 8 to 11% depending on how much of the door frame counts as glass). The glazed area of a door is smaller than its opening; the model does not yet take a glazed fraction.
 - **Rules to carry over from the engine:** placement snapping, door swing clearance, no rack in a door's clearance.
 
 ## 16. Advisory guidance (PROPOSED, never an error)
@@ -206,8 +208,9 @@ Generated by staff when a customer asks for drawings with a quote; customers get
 
 M1 (built) and M2a (built, product-agnostic: commands, undo, store, file format, library binding) stand. **M2 is paused.** D-14 is decided (glass enclosure first). Order:
 
-1. **Enclosure model (built, `src/enclosure/`, 21 tests):** per-wall build-up, internal size, door layout and swing, glass fraction, header parts, checks, advisories, and Golden Test Case #02 (sample A101 to A103 as read: 2750 x 1565 mm inside, door wall 940 | 970 | 940). Not yet: metal racking, wall/floor/ceiling panel cut list, the room the enclosure stands in.
-2. Vault integration (table, API, feature flag, page): product-agnostic, can go any time.
-3. 2D plan and wall elevation for the chosen product.
-4. The second product's racking engine.
-5. Drawing package and the quote request flow (Phase 2).
+1. **Metal rack spec (built, `src/rack/`, 12 tests):** blank-by-default specification, "not set" capacity, `RACK_SPEC_MISSING`, depth by orientation, pitch and value checks. The numbers in its tests are invented to exercise the maths, not supplier values. Not yet: placing rack runs in the enclosure.
+2. **Enclosure model (built, `src/enclosure/`, 21 tests):** per-wall build-up, internal size, door layout and swing, glass fraction, header parts, checks, advisories, and Golden Test Case #02 (sample A101 to A103 as read: 2750 x 1565 mm inside, door wall 940 | 970 | 940). Not yet: metal racking, wall/floor/ceiling panel cut list, the room the enclosure stands in.
+3. Vault integration (table, API, feature flag, page): product-agnostic, can go any time.
+4. 2D plan and wall elevation for the glass enclosure.
+5. Joinery in the same app (its engine is built).
+6. Drawing package and the quote request flow (Phase 2).

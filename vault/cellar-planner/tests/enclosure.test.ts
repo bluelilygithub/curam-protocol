@@ -26,7 +26,7 @@ describe('Golden Test Case #02 (sample A101 to A103, as read)', () => {
     expect(left.xMm + left.widthMm / 2 + (right.xMm + right.widthMm / 2)).toBe(e.outerWidthMm);
     expect(motor.xMm * 2 + motor.widthMm).toBe(e.outerWidthMm);
   });
-  it('a glazed door in four panel walls is about 6% glass: no glass advisory', () => {
+  it('a glazed door in four panel walls is about 10% glass (10.35%): no glass advisory', () => {
     expect(glassFraction(e)).toBeCloseTo((970 * 2120) / (2 * (2850 + 1665) * 2200), 6);
     expect(a.advisories.map((x) => x.code)).not.toContain('GLASS_AREA');
   });
