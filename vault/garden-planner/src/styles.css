@@ -336,3 +336,14 @@ textarea.vi-input { padding: 8px 34px 8px 10px; }
 .site-badge span { display: flex; flex-direction: column; min-width: 0; }
 .site-badge strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .site-badge small { font-size: 11px; color: var(--color-muted); }
+
+/* plant hover card (2D plan) */
+.plant-hover { position: absolute; z-index: 20; pointer-events: none; background: #1a1a1a; color: #fff; border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 3px; box-shadow: 0 4px 16px rgba(0,0,0,.3); font-size: 12px; }
+.plant-hover-photo { height: 120px; border-radius: 6px; overflow: hidden; background: #2b2b2b; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; }
+.plant-hover-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.plant-hover em { color: #d8d8d0; font-size: 11px; }
+.plant-hover dl { margin: 4px 0 0; display: flex; flex-direction: column; gap: 2px; }
+.plant-hover dl div { display: flex; gap: 6px; }
+.plant-hover dt { color: #a8a89f; min-width: 44px; }
+.plant-hover dd { margin: 0; }
+.plant-hover small { color: #a8a89f; font-size: 10px; }

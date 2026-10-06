@@ -1343,6 +1343,67 @@ check('no page errors or console errors', problems.length === 0, problems.slice(
   check('no page errors while starting from an address', errs.length === 0, errs.join(' | '));
   await ctxA.close();
 }
+// ---- hovering a plant on the plan shows a card with a photo; dragging a plant from the library works in 3D too
+{
+  const GIF1 = 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=';
+  const ctxH = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await ctxH.addInitScript(() => { try { localStorage.setItem('garden-planner:info-seen:v1', '1'); localStorage.setItem('vault-auth', JSON.stringify({ state: { token: 'test-token' }, version: 0 })); } catch { /* ignore */ } });
+  const pg = await ctxH.newPage();
+  const errs = [];
+  pg.on('pageerror', (e) => errs.push(e.message));
+  await pg.route('**/api/garden-projects**', (r) => r.abort('failed'));
+  await pg.route('**/api/plant-images/**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'ready', images: [
+    { id: '1', source: 'inaturalist', sourceLabel: 'iNaturalist', sourceUrl: 'https://www.inaturalist.org/observations/1', imageUrl: GIF1, thumbUrl: GIF1, creator: 'Sam Photographer', licenceCode: 'CC BY 4.0', licenceUrl: null, displayOnly: false, title: 't', role: 'plant', width: 10, height: 10, modified: false, credit: 'x', defaultFor: [] },
+  ] }) }));
+  await pg.goto(URL);
+  await pg.waitForSelector('.wizard');
+  await pg.evaluate(() => window.gardenPlanner.newProject({ meta: { name: 'Hover', location: { label: 'Brisbane QLD', lat: -27.47, lng: 153.03, state: 'QLD' }, climateZone: 'subtropical', frost: 'none', pets: false, northDeg: 0 }, plot: { kind: 'rect', width: 20, depth: 20 } }));
+  await pg.waitForSelector('.stage canvas');
+  await wait(400);
+  await pg.evaluate(() => { const a = window.gardenPlanner; a.addPlant('lavandula-angustifolia', { x: 6, y: 6 }); });
+  await wait(300);
+  const where = await pg.evaluate(() => { const a = window.gardenPlanner; const v = a.view.getState().view; const r = document.querySelector('.stage').getBoundingClientRect(); return { x: r.left + v.offsetX + 6 * v.scale, y: r.top + v.offsetY - 6 * v.scale }; });
+  check('no card until the cursor is on a plant', (await pg.getByTestId('plant-hover').count()) === 0);
+  await pg.mouse.move(where.x - 80, where.y - 80);
+  await pg.mouse.move(where.x, where.y, { steps: 5 });
+  await pg.getByTestId('plant-hover').waitFor({ timeout: 4000 });
+  const card = await pg.getByTestId('plant-hover').innerText();
+  check('the card names the plant, its size now and at maturity, and its sun', /Lavender/i.test(card) && /Now/.test(card) && /Mature/.test(card) && /Sun/.test(card), card);
+  await pg.locator('.plant-hover-photo img').waitFor({ timeout: 4000 });
+  check('the card shows a photo with its credit line', /Sam Photographer, CC BY 4\.0 via iNaturalist/.test(card + ' ' + (await pg.locator('.plant-hover-credit').innerText())));
+  check('the card does not block the mouse', (await pg.getByTestId('plant-hover').evaluate((el) => getComputedStyle(el).pointerEvents)) === 'none');
+  check('the card says the plant data is a draft', /Draft plant data, unverified/.test(card));
+  if (out) await pg.screenshot({ path: join(out, '16-plant-hover.png') });
+  await pg.mouse.move(where.x + 200, where.y + 150, { steps: 4 });
+  await wait(300);
+  check('the card goes away when the cursor leaves the plant', (await pg.getByTestId('plant-hover').count()) === 0);
+
+  // dragging from the library into the 3D view
+  const before = (await pg.evaluate(() => window.gardenPlanner.project.getState().project.plants.length));
+  await pg.getByRole('button', { name: '3D', exact: true }).click();
+  await pg.waitForSelector('.stage canvas');
+  await wait(1200);
+  const box = await pg.locator('.stage canvas').boundingBox();
+  await pg.dragAndDrop('.plant-head >> nth=1', '.stage', { targetPosition: { x: box.width / 2, y: box.height * 0.7 } });
+  await wait(400);
+  let plants = await pg.evaluate(() => window.gardenPlanner.project.getState().project.plants);
+  check('dropping a library plant on the 3D ground plants it', plants.length === before + 1, String(plants.length));
+  const dropped = plants[plants.length - 1];
+  check('it lands on the garden, near the plan, not at the origin by accident', Number.isFinite(dropped.position.x) && Number.isFinite(dropped.position.y) && Math.hypot(dropped.position.x, dropped.position.y) > 0.05, JSON.stringify(dropped.position));
+  // a drop on the sky does nothing
+  await pg.locator('.view3d-bar').getByRole('button', { name: 'Front' }).click();
+  await wait(1200);
+  await pg.dragAndDrop('.plant-head >> nth=2', '.stage', { targetPosition: { x: box.width / 2, y: 4 } });
+  await wait(300);
+  plants = await pg.evaluate(() => window.gardenPlanner.project.getState().project.plants);
+  check('a drop on the sky plants nothing', plants.length === before + 1, String(plants.length));
+  await pg.keyboard.press('Control+z');
+  await wait(300);
+  plants = await pg.evaluate(() => window.gardenPlanner.project.getState().project.plants);
+  check('Ctrl+Z takes the dropped plant back out', plants.length === before, String(plants.length));
+  check('no page errors', errs.length === 0, errs.join(' | '));
+  await ctxH.close();
+}
 await browser.close();
 console.log(failures ? `\n${failures} check(s) FAILED` : '\nAll checks passed');
 process.exit(failures ? 1 : 0);

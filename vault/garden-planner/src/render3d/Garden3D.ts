@@ -227,6 +227,40 @@ export class Garden3D {
     this.applyTourPose();
   }
 
+  /** The plan position (metres) on the ground under a screen point, or null if the point is not on the view or looks at the sky. */
+  groundAt(clientX: number, clientY: number): Vec2 | null {
+    const el = this.renderer?.domElement;
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height || clientX < r.left || clientX > r.right || clientY < r.top || clientY > r.bottom) return null;
+    const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -(((clientY - r.top) / r.height) * 2 - 1));
+    const ray = new THREE.Raycaster();
+    this.camera.updateMatrixWorld();
+    ray.setFromCamera(ndc, this.camera);
+    const hit = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
+    if (!hit || !Number.isFinite(hit.x) || !Number.isFinite(hit.z)) return null;
+    // a point near the horizon is the ground a long way off, not somewhere to plant: only accept the garden and its surroundings
+    const p = this.app.project.getState().project;
+    if (p) { const b = this.bounds(p); if (Math.hypot(hit.x - b.cx, hit.z - b.cz) > b.r * 2.5 + 20) return null; }
+    return { x: hit.x, y: -hit.z };
+  }
+
+  private dropRing: THREE.Mesh | null = null;
+  /** A ring on the ground showing where a plant dragged over the view would be planted (null removes it). */
+  showDropMarker(at: Vec2 | null, radius = 0.5): void {
+    if (!at) { if (this.dropRing) { this.dropRing.visible = false; this.dirty = true; } return; }
+    if (!this.dropRing) {
+      this.dropRing = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 48), new THREE.MeshBasicMaterial({ color: '#CC785C', transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthTest: false }));
+      this.dropRing.rotation.x = -Math.PI / 2;
+      this.dropRing.renderOrder = 10;
+      this.scene.add(this.dropRing);
+    }
+    this.dropRing.visible = true;
+    this.dropRing.position.set(at.x, 0.05, -at.y);
+    this.dropRing.scale.setScalar(Math.max(0.3, radius));
+    this.dirty = true;
+  }
+
   /** Move the camera to a saved view: a short glide, leaving walking or the tour first. */
   goTo(position: [number, number, number], target: [number, number, number]): void {
     this.stopTour(); this.stopWalk();

@@ -11,7 +11,7 @@ import { findItem, replaceItem, translated, vertexAt, vertexCount, withVertex } 
 import { nearestBoundaryEdge, pick, snapPoint } from '../domain/hit';
 import { pathSegments, polylineLength, sampleShape, shapeCentroid } from '../domain/shapes';
 import type { Boundary, GardenProject, Vec2 } from '../domain/types';
-import { botanicalLabel, plantById, plantLabel } from '../plants/plants';
+import { plantById } from '../plants/plants';
 import { canopyColour, isFlowering, leafFactor, plantSizeAt } from '../plants/growth';
 import type { ItemKind, Selection, Tool } from '../state/uiStore';
 import {
@@ -58,6 +58,9 @@ export class Plan2D {
   private drag: Drag | null = null;
   private override: { sel: Selection; item: unknown } | null = null;
   private cursorPx: Vec2 | null = null;
+  /** Called when the plant under the cursor changes or the cursor moves over it (null = none): the page shows a card with details and a photo. */
+  onHoverPlant: ((h: { id: string; x: number; y: number } | null) => void) | null = null;
+  private hoverSent: string | null = null;
   private snapped: { point: Vec2; kind: string } | null = null;
   private pointers = new Map<number, Vec2>();
   private pinch: { dist: number; view: View } | null = null;
@@ -664,24 +667,17 @@ export class Plan2D {
     if (sel && ui.tool === 'select') this.drawSelection(p, sel, v);
     this.drawIssueMarkers(p, v);
 
-    // hover info for plants
+    // hover info for plants: the page draws a card (details and a photo) beside the cursor
+    let hovered: { id: string; x: number; y: number } | null = null;
     if (this.cursorPx && !this.drag && ui.tool === 'select') {
       const hit = pick(p, this.toWorld(this.cursorPx), this.tolMetres(8), ui.stage);
       if (hit?.kind === 'plant') {
         const inst = p.plants.find((x) => x.id === hit.id);
-        const rec = inst && plantById(inst.plantId);
-        if (inst && rec) {
-          const s = plantSizeAt(rec, ui.stage);
-          const q = worldToCanvas(inst.position, v);
-          const line1 = plantLabel(rec), line2 = `${botanicalLabel(rec)}`, line3 = `${s.height.toFixed(1)} m high, ${s.spread.toFixed(1)} m wide`;
-          const w = Math.max(line1.length, line2.length, line3.length) * 6 + 16;
-          L.add(new Konva.Rect({ x: q.x + 12, y: q.y - 50, width: w, height: 44, fill: '#1A1A1A', cornerRadius: 6, opacity: 0.92 }));
-          text(line1, { x: q.x + 20, y: q.y - 45 }, { fill: '#fff', shadowBlur: 0, fontStyle: 'bold' });
-          text(line2, { x: q.x + 20, y: q.y - 32 }, { fill: '#d8d8d0', shadowBlur: 0, fontStyle: 'italic', fontSize: 10 });
-          text(line3, { x: q.x + 20, y: q.y - 19 }, { fill: '#fff', shadowBlur: 0, fontSize: 10 });
-        }
+        if (inst && plantById(inst.plantId)) { const q = worldToCanvas(inst.position, v); hovered = { id: inst.id, x: q.x, y: q.y }; }
       }
     }
+    const hoverKey = hovered ? `${hovered.id}@${Math.round(hovered.x)},${Math.round(hovered.y)}` : null;
+    if (hoverKey !== this.hoverSent) { this.hoverSent = hoverKey; this.onHoverPlant?.(hovered); }
 
     // hours of sun under the cursor (sun map on)
     if (ui.showSun && this.cursorPx && !this.drag && ui.tool === 'select') {
