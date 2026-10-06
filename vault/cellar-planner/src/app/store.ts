@@ -9,6 +9,8 @@ export interface AppState {
   /** Bumped on every change (drives the draft save). */
   revision: number;
   edit(fn: (p: AppProject) => AppProject): void;
+  /** Change the project without an undo step (typing the name, a rename from the library). Still bumps the revision so it is saved. */
+  updateSilently(fn: (p: AppProject) => AppProject): void;
   load(p: AppProject): void;
   undo(): boolean;
   redo(): boolean;
@@ -25,6 +27,12 @@ export function createAppStore(initial: AppProject = sampleProject()): AppStore 
       const next = fn(cur);
       if (next === cur) return;
       set({ project: next, past: [...get().past, cur].slice(-LIMIT), future: [], revision: get().revision + 1 });
+    },
+    updateSilently(fn) {
+      const cur = get().project;
+      const next = fn(cur);
+      if (next === cur) return;
+      set({ project: next, revision: get().revision + 1 });
     },
     load(p) { set({ project: p, past: [], future: [], revision: get().revision + 1 }); },
     undo() {

@@ -458,6 +458,106 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
   await ctx4.close();
 }
 
+// ---- saved designs: this browser, then the Vault account (the API is mocked in the browser)
+{
+  const ctx5 = await browser.newContext({ viewport: { width: 1500, height: 900 } });
+  await ctx5.addInitScript(() => { try { localStorage.setItem('cellar-planner:info-seen:v1', '1'); } catch { /* ignore */ } });
+  const p5 = await ctx5.newPage();
+  const errs5 = [];
+  p5.on('pageerror', (e) => errs5.push(e.message));
+  const status5 = (s, timeout = 8000) => p5.waitForFunction((x) => document.querySelector('[data-testid=save-status]')?.getAttribute('data-status') === x, s, { timeout });
+  await p5.goto(URL);
+  await p5.getByTestId('plan-canvas').waitFor();
+  await status5('saved');
+  check('signed out: the header says Saved, in this browser', /Saved.*this browser/.test(await p5.getByTestId('save-status').innerText()), await p5.getByTestId('save-status').innerText());
+  await p5.getByTestId('project-name').fill('Back cellar');
+  await status5('unsaved');
+  await status5('saved');
+  await p5.getByTestId('designs-open').click();
+  const firstItem = await p5.getByTestId('design-item').first().innerText();
+  check('Your designs lists the saved design by name, with its counts', /Back cellar/.test(firstItem) && /rack run/.test(firstItem), firstItem);
+  await p5.getByTestId('design-new').click();
+  await p5.waitForTimeout(500);
+  check('New design opens a blank one and the first stays saved', (await p5.evaluate(() => window.cellar.store.getState().project.runs.length)) === 0 && (await p5.evaluate(() => window.cellar.designs.library.getState().entries.length)) === 2);
+  await p5.reload();
+  await p5.getByTestId('plan-canvas').waitFor();
+  await p5.waitForFunction(() => window.cellar.designs.library.getState().ready);
+  check('a reload opens the design that was open (the new blank one)', (await p5.evaluate(() => window.cellar.store.getState().project.runs.length)) === 0);
+  await p5.getByTestId('designs-open').click();
+  await p5.getByTestId('design-item').filter({ hasText: 'Back cellar' }).locator('.plist-main').click();
+  await p5.waitForTimeout(500);
+  check('opening the first design brings back its name and racks', (await p5.evaluate(() => window.cellar.store.getState().project.name)) === 'Back cellar' && (await p5.evaluate(() => window.cellar.store.getState().project.runs.length)) > 0);
+  await p5.getByTestId('testcase').click();
+  await p5.waitForTimeout(500);
+  await p5.getByTestId('designs-open').click();
+  check('Test case adds a design; nothing was overwritten', (await p5.getByTestId('design-item').count()) === 3 && /Back cellar/.test(await p5.getByTestId('design-list').innerText()));
+  await p5.addScriptTag({ path: join(import.meta.dirname, '..', 'node_modules', 'axe-core', 'axe.min.js') });
+  const dScan = await p5.evaluate(async () => (await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } })).violations.map((v) => v.id + ' x' + v.nodes.length));
+  check('accessibility scan, Your designs: no violations', dScan.length === 0, dScan.join(', '));
+  await p5.getByTestId('design-item').first().getByTestId('design-delete').click();
+  await p5.getByTestId('design-delete-yes').click();
+  await p5.waitForTimeout(400);
+  check('delete asks first, then removes it', (await p5.getByTestId('design-item').count()) === 2);
+  await p5.keyboard.press('Escape');
+  check('no page errors saving to this browser', errs5.length === 0, errs5.join(' | '));
+  await ctx5.close();
+
+  // signed in: the same screens talk to /api/cellar-projects
+  const ctx6 = await browser.newContext({ viewport: { width: 1500, height: 900 } });
+  await ctx6.addInitScript(() => { try { localStorage.setItem('cellar-planner:info-seen:v1', '1'); localStorage.setItem('vault-auth', JSON.stringify({ state: { token: 'tok' } })); } catch { /* ignore */ } });
+  const rows = new Map();
+  let seq = 0;
+  let clock = Date.UTC(2026, 9, 20);
+  const wire = (id) => { const r = rows.get(id); return { id, name: r.name, runCount: r.data.runs.length, rackUnits: r.data.runs.reduce((a, x) => a + x.units, 0), estimated: (r.data.estimated?.length ?? 0) > 0, updatedAt: new Date(r.at).toISOString() }; };
+  await ctx6.route('**/api/cellar-projects**', async (route) => {
+    const req = route.request();
+    const m = req.method();
+    const id = Number(new globalThis.URL(req.url()).pathname.split('/').pop());
+    const body = req.postData() ? JSON.parse(req.postData()) : {};
+    const json = (status, o) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(o) });
+    if (m === 'GET' && Number.isNaN(id)) return json(200, { projects: [...rows.keys()].map(wire) });
+    if (m === 'GET') return rows.has(id) ? json(200, { project: { ...wire(id), data: rows.get(id).data } }) : json(404, { error: 'not found' });
+    if (m === 'POST') { const n = ++seq; rows.set(n, { name: body.name, data: body.data, at: (clock += 1000) }); return json(200, { project: wire(n) }); }
+    if (m === 'PUT') {
+      const r = rows.get(id);
+      if (!r) return json(404, { error: 'not found' });
+      if (body.expectedUpdatedAt && new Date(r.at).toISOString() !== body.expectedUpdatedAt) return json(409, { error: 'This design was changed in another window or tab.', current: wire(id) });
+      if (body.name) r.name = body.name;
+      if (body.data) r.data = body.data;
+      r.at = (clock += 1000);
+      return json(200, { project: wire(id) });
+    }
+    if (m === 'DELETE') { rows.delete(id); return json(200, { ok: true }); }
+    return json(500, {});
+  });
+  const p6 = await ctx6.newPage();
+  const errs6 = [];
+  p6.on('pageerror', (e) => errs6.push(e.message));
+  const status6 = (s, timeout = 8000) => p6.waitForFunction((x) => document.querySelector('[data-testid=save-status]')?.getAttribute('data-status') === x, s, { timeout });
+  await p6.goto(URL);
+  await p6.getByTestId('plan-canvas').waitFor();
+  await status6('saved');
+  const st6 = await p6.getByTestId('save-status').innerText();
+  check('signed in: the header says Saved with no "this browser", and the design is in the account', !/this browser/.test(st6) && rows.size === 1, st6);
+  await p6.getByTestId('project-name').fill('Wine room');
+  await status6('unsaved');
+  await status6('saved');
+  check('the rename reached the account', [...rows.values()][0].name === 'Wine room', [...rows.values()][0].name);
+  // another window saves it; this window's next save is refused and the choice appears
+  [...rows.values()][0].at += 5000;
+  await p6.getByTestId('project-name').fill('Wine room 2');
+  await p6.getByTestId('conflict').waitFor({ timeout: 8000 });
+  check('a change made elsewhere pauses saving and offers Keep mine / Use the saved one', (await p6.getByTestId('keep-mine').isVisible()) && (await p6.getByTestId('use-saved').isVisible()) && /Save paused/.test(await p6.getByTestId('save-status').innerText()));
+  await p6.addScriptTag({ path: join(import.meta.dirname, '..', 'node_modules', 'axe-core', 'axe.min.js') });
+  const cScan = await p6.evaluate(async () => (await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } })).violations.map((v) => v.id + ' x' + v.nodes.length));
+  check('accessibility scan, the save-conflict banner: no violations', cScan.length === 0, cScan.join(', '));
+  await p6.getByTestId('keep-mine').click();
+  await status6('saved');
+  check('Keep mine saves over the other version', [...rows.values()][0].name === 'Wine room 2');
+  check('no page errors saving to the account', errs6.length === 0, errs6.join(' | '));
+  await ctx6.close();
+}
+
 check('no page errors', errors.length === 0, errors.join(' | '));
 await browser.close();
 console.log(failed ? `${failed} check(s) FAILED` : 'All checks passed');

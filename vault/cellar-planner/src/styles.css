@@ -78,3 +78,15 @@ body { background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans
 .uncounted { color: #b42318; }
 .modal-body .grid { margin-top: 4px; }
 .field input[type=date] { width: 100%; padding: 4px 6px; border: 1px solid var(--border); border-radius: 5px; background: #fff; font: inherit; }
+
+/* saved designs: header save state, conflict choice, and the Your designs list */
+.save-state { font-size: 12px; color: var(--muted); white-space: nowrap; } .save-state.bad { color: var(--err); font-weight: 600; }
+.conflict { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; flex-basis: 100%; padding: 6px 10px; border: 1px solid var(--warn); border-radius: 8px; background: #fff7e0; color: #5c3b00; font-size: 12px; }
+.plist { list-style: none; padding: 0 !important; display: flex; flex-direction: column; gap: 6px; }
+.plist li { display: flex; gap: 6px; align-items: center; border: 1px solid var(--border); border-radius: 8px; padding: 4px; background: var(--surface); transition: background var(--duration); }
+.plist li.cur { border-color: var(--primary-dark); }
+.plist li.empty { color: var(--muted); padding: 10px; }
+.plist-main { flex: 1; text-align: left; background: none; border: 0; cursor: pointer; display: flex; flex-direction: column; gap: 2px; padding: 4px 6px; font: inherit; color: var(--text); }
+.plist-main span { color: var(--muted); font-size: 12px; }
+.plist .confirm { font-size: 12px; } .plist .link { background: none; border: 0; padding: 0 2px; font: inherit; color: var(--primary-dark); text-decoration: underline; cursor: pointer; }
+.modal-body .row { display: flex; gap: 8px; flex-wrap: wrap; }

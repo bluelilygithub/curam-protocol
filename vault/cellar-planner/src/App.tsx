@@ -1,26 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useStore } from 'zustand';
 import { TooltipHost } from '@planner-core/help/TooltipHost';
-import { analyseApp, deserializeApp, fullRuns, ParseError, sampleProject, serializeApp, testCaseProject, type AppProject } from './app/model';
+import { analyseApp, deserializeApp, fullRuns, ParseError, sampleProject, serializeApp, testCaseProject } from './app/model';
+import { DRAFT_KEY } from './app/designLibrary';
+import type { Designs } from './app/designs';
 import type { AppStore } from './app/store';
 import { INFO_KEY, type UiStore } from './app/uiStore';
 import type { WallSide } from './enclosure';
 import { badRunIds, bottlesOnWall, elevationView, planView, rackFaceView } from './views';
+import { DesignsPanel, SaveStatus } from './ui/DesignsPanel';
 import { DrawingView } from './ui/DrawingView';
 import { InfoModal } from './ui/InfoModal';
 import { PackageModal } from './ui/PackageModal';
 import { Icon } from './ui/icons';
 import { ChecksPanel, EnclosurePanel, RackPanel, RunsPanel, StoreContext } from './ui/panels';
 
-const DRAFT_KEY = 'cellar-planner:enclosure-draft:v1';
-
-export function loadDraft(): AppProject | null {
-  try { const t = localStorage.getItem(DRAFT_KEY); return t ? deserializeApp(t) : null; } catch { return null; }
-}
-
 const WALLS: Array<[WallSide, string]> = [['NORTH', 'North'], ['EAST', 'East'], ['SOUTH', 'South'], ['WEST', 'West']];
 
-export function App({ store, ui }: { store: AppStore; ui: UiStore }) {
+export function App({ store, ui, designs }: { store: AppStore; ui: UiStore; designs: Designs }) {
   const project = useStore(store, (s) => s.project);
   const revision = useStore(store, (s) => s.revision);
   const canUndo = useStore(store, (s) => s.past.length > 0);
@@ -28,7 +25,8 @@ export function App({ store, ui }: { store: AppStore; ui: UiStore }) {
   const tab = useStore(ui, (s) => s.tab);
   const wall = useStore(ui, (s) => s.wall);
   const rackWall = useStore(ui, (s) => s.rackWall);
-  const [msg, setMsg] = useState('');
+  const msg = useStore(ui, (s) => s.notice);
+  const setMsg = (notice: string): void => ui.getState().set({ notice });
   const file = useRef<HTMLInputElement>(null);
 
   // first visit: show the guide once. Vault's Settings page opens the planner with ?tour=1 to retake the tour.
@@ -36,7 +34,7 @@ export function App({ store, ui }: { store: AppStore; ui: UiStore }) {
     try { if (!localStorage.getItem(INFO_KEY)) ui.getState().set({ infoOpen: true }); } catch { /* storage blocked: skip the auto-open */ }
     if (new URLSearchParams(window.location.search).has('tour')) window.setTimeout(() => void startTour(), 400);
     // ?testcase=1 opens the ready-made test case (estimated rack values) instead of the saved draft
-    if (new URLSearchParams(window.location.search).has('testcase')) { store.getState().load(testCaseProject()); setMsg('Loaded the test case: its rack values are best guesses.'); }
+    if (new URLSearchParams(window.location.search).has('testcase')) void designs.whenReady().then(() => addDesign(testCaseProject(), 'Added the test case as a new design: its rack values are best guesses.'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   /** Shepherd is loaded on first use, so it stays out of the main bundle. */
@@ -65,9 +63,11 @@ export function App({ store, ui }: { store: AppStore; ui: UiStore }) {
     a.href = url; a.download = `${project.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'enclosure'}.cellar.json`;
     a.click(); URL.revokeObjectURL(url);
   };
+  /** A design from a file, the test case or the blank sample is ADDED to the saved designs and opened; the design that was open stays saved as it was. */
+  const addDesign = async (p: ReturnType<typeof testCaseProject>, message: string): Promise<void> => { await designs.controller.importProject(p); setMsg(message); };
   const open = async (f: File | undefined): Promise<void> => {
     if (!f) return;
-    try { store.getState().load(deserializeApp(await f.text())); setMsg(`Opened ${f.name}.`); } catch (e) { setMsg(e instanceof ParseError ? e.message : 'Could not open that file.'); }
+    try { await addDesign(deserializeApp(await f.text()), `Opened ${f.name} as a new design.`); } catch (e) { setMsg(e instanceof ParseError ? e.message : 'Could not open that file.'); }
     if (file.current) file.current.value = '';
   };
 
@@ -76,14 +76,16 @@ export function App({ store, ui }: { store: AppStore; ui: UiStore }) {
       <div className="app">
         <header className="top" data-tour="cp-project">
           <h1>Cellar Planner <small>glass enclosure</small></h1>
-          <input className="name" value={project.name} aria-label="Project name" title="The name of this design. It is used for the saved file's name." data-testid="project-name" onChange={(e) => store.getState().edit((p) => ({ ...p, name: e.target.value }))} />
+          <input className="name" value={project.name} aria-label="Project name" title="The name of this design. It is how it appears in Your designs and in the saved file's name." data-testid="project-name" onChange={(e) => store.getState().updateSilently((p) => ({ ...p, name: e.target.value }))} />
+          <SaveStatus designs={designs} />
           <div className="actions">
+            <button type="button" className="btn" title="Your saved designs: open one, start a new one, copy or delete. Designs save by themselves." onClick={() => ui.getState().set({ designsOpen: true })} data-testid="designs-open">Your designs</button>
             <button type="button" className="btn" disabled={!canUndo} title="Undo the last change (every change is one step)." onClick={() => store.getState().undo()} data-testid="undo">Undo</button>
             <button type="button" className="btn" disabled={!canRedo} title="Put back the change you just undid." onClick={() => store.getState().redo()} data-testid="redo">Redo</button>
             <button type="button" className="btn" title="Download this design as a .cellar.json file you can keep or send to someone." onClick={download} data-testid="save">Save file</button>
-            <button type="button" className="btn" title="Open a .cellar.json file saved earlier or sent to you. It replaces the design on screen." onClick={() => file.current?.click()} data-testid="open">Open file</button>
-            <button type="button" className="btn" title="Load a ready-made test case: the sample enclosure with racks on every wall, filled with best-guess rack values so there are bottles to count. Every guess is marked estimated until you type your own number over it. It replaces the design on screen." onClick={() => { store.getState().load(testCaseProject()); setMsg('Loaded the test case: its rack values are best guesses.'); }} data-testid="testcase">Test case</button>
-            <button type="button" className="btn" title="Load the sample enclosure, read from the Carter Noir drawings (values unverified), with the racks left blank. It replaces the design on screen. For one with racks filled in, use Test case." onClick={() => { store.getState().load(sampleProject()); setMsg('Loaded the sample enclosure.'); }} data-testid="sample">Blank sample</button>
+            <button type="button" className="btn" title="Open a .cellar.json file saved earlier or sent to you. It is added as a new saved design and opened; the design you have open stays as it is." onClick={() => file.current?.click()} data-testid="open">Open file</button>
+            <button type="button" className="btn" title="Load a ready-made test case: the sample enclosure with racks on every wall, filled with best-guess rack values so there are bottles to count. Every guess is marked estimated until you type your own number over it. It is added as a new saved design and opened." onClick={() => void addDesign(testCaseProject(), 'Added the test case as a new design: its rack values are best guesses.')} data-testid="testcase">Test case</button>
+            <button type="button" className="btn" title="Load the sample enclosure, read from the Carter Noir drawings (values unverified), with the racks left blank. It is added as a new saved design and opened. For one with racks filled in, use Test case." onClick={() => void addDesign(sampleProject(), 'Added the blank sample as a new design.')} data-testid="sample">Blank sample</button>
             <button type="button" className="btn" title="Make a PDF of A3 drawing sheets: the specification, the plan, the elevation and the racks on each wall, with a title block. Every sheet says preliminary design only." onClick={() => ui.getState().set({ packageOpen: true })} data-testid="package-open">Drawing package</button>
             <button type="button" className="btn icon" title="How this works: the plain-language guide." onClick={() => ui.getState().set({ infoOpen: true })} data-testid="info-open"><Icon name="info" /></button>
             <button type="button" className="btn icon" title="Take the guided tour." onClick={() => void startTour()} data-testid="tour-start"><Icon name="compass" /></button>
@@ -108,6 +110,7 @@ export function App({ store, ui }: { store: AppStore; ui: UiStore }) {
       </div>
       <InfoModal ui={ui} />
       <PackageModal store={store} ui={ui} />
+      <DesignsPanel ui={ui} designs={designs} onImportFile={(f) => void open(f)} />
       <TooltipHost />
     </StoreContext.Provider>
   );
