@@ -5,7 +5,7 @@ import { analyseApp, deserializeApp, fullRuns, ParseError, sampleProject, serial
 import type { AppStore } from './app/store';
 import { INFO_KEY, type UiStore } from './app/uiStore';
 import type { WallSide } from './enclosure';
-import { badRunIds, elevationView, planView } from './views';
+import { badRunIds, bottlesOnWall, elevationView, planView, rackFaceView } from './views';
 import { DrawingView } from './ui/DrawingView';
 import { InfoModal } from './ui/InfoModal';
 import { Icon } from './ui/icons';
@@ -26,6 +26,7 @@ export function App({ store, ui }: { store: AppStore; ui: UiStore }) {
   const canRedo = useStore(store, (s) => s.future.length > 0);
   const tab = useStore(ui, (s) => s.tab);
   const wall = useStore(ui, (s) => s.wall);
+  const rackWall = useStore(ui, (s) => s.rackWall);
   const [msg, setMsg] = useState('');
   const file = useRef<HTMLInputElement>(null);
 
@@ -49,10 +50,13 @@ export function App({ store, ui }: { store: AppStore; ui: UiStore }) {
   const analysis = useMemo(() => analyseApp(project), [project]);
   const plan = useMemo(() => planView(project.enclosure, fullRuns(project), analysis.racks, { walkwayMm: project.walkwayMm, badRuns: badRunIds(analysis.racks.issues) }), [project, analysis]);
   const elevation = useMemo(() => elevationView(project.enclosure, wall), [project.enclosure, wall]);
+  const racks = useMemo(() => rackFaceView(project.enclosure, fullRuns(project), analysis.racks, rackWall, project.bottle, { badRuns: badRunIds(analysis.racks.issues) }), [project, analysis, rackWall]);
   const e = project.enclosure;
   const bottles = analysis.racks.total.status === 'OK' ? `${analysis.racks.total.capacity} bottles` : 'bottles not set';
   const planText = `Plan of the enclosure from above: ${e.outerWidthMm} by ${e.outerDepthMm} millimetres outside, ${analysis.enclosure.internal.widthMm} by ${analysis.enclosure.internal.depthMm} inside, door on the ${e.door.wall.toLowerCase()} wall opening ${e.door.swing === 'OUT' ? 'outwards' : 'inwards'}, ${project.runs.length} rack run${project.runs.length === 1 ? '' : 's'}, ${bottles}.`;
   const elevText = `The ${wall.toLowerCase()} wall seen from outside: ${wall === e.door.wall ? `door ${e.door.widthMm} by ${e.door.heightMm} millimetres, ` : 'no door, '}wall height ${e.heightMm} millimetres, header ${e.headerHeightMm} millimetres.`;
+  const wallRuns = project.runs.filter((r) => r.wall === rackWall);
+  const rackText = `The inside face of the ${rackWall.toLowerCase()} wall seen from inside: ${wallRuns.reduce((n, r) => n + r.units, 0)} rack unit${wallRuns.reduce((n, r) => n + r.units, 0) === 1 ? '' : 's'}, each bottle drawn end-on at its true size, ${bottlesOnWall(analysis.racks, fullRuns(project), rackWall)} bottles on this wall.`;
 
   const download = (): void => {
     const url = URL.createObjectURL(new Blob([serializeApp(project)], { type: 'application/json' }));
@@ -90,10 +94,12 @@ export function App({ store, ui }: { store: AppStore; ui: UiStore }) {
           <div className="tabs" role="group" aria-label="Drawing" data-tour="cp-tabs">
             <button type="button" aria-pressed={tab === 'plan'} className={`tab${tab === 'plan' ? ' on' : ''}`} title="The enclosure from above: walls, door, racks and sizes." onClick={() => ui.getState().set({ tab: 'plan' })} data-testid="tab-plan">Plan</button>
             <button type="button" aria-pressed={tab === 'elevation'} className={`tab${tab === 'elevation' ? ' on' : ''}`} title="One wall seen from outside: door, header, conditioner, vents and sizes." onClick={() => ui.getState().set({ tab: 'elevation' })} data-testid="tab-elevation">Elevation</button>
+            <button type="button" aria-pressed={tab === 'racks'} className={`tab${tab === 'racks' ? ' on' : ''}`} title="The inside face of one wall with every bottle drawn at its true size and spacing, so you can see the rows and the count. Racks that cannot be built are red and not counted." onClick={() => ui.getState().set({ tab: 'racks' })} data-testid="tab-racks">Racks</button>
             {tab === 'elevation' && WALLS.map(([w, name]) => <button type="button" key={w} aria-pressed={wall === w} className={`tab small${wall === w ? ' on' : ''}`} title={`Show the ${name.toLowerCase()} wall as seen from outside.`} onClick={() => ui.getState().set({ wall: w })} data-testid={`wall-${w}`}>{name}</button>)}
-            <span className="hint">{tab === 'plan' ? 'From above. Drag to move, scroll to zoom.' : `The ${wall.toLowerCase()} wall seen from outside.`}</span>
+            {tab === 'racks' && WALLS.map(([w, name]) => <button type="button" key={w} aria-pressed={rackWall === w} className={`tab small${rackWall === w ? ' on' : ''}`} title={`Show the racks on the ${name.toLowerCase()} wall, seen from inside.`} onClick={() => ui.getState().set({ rackWall: w })} data-testid={`rackwall-${w}`}>{name}</button>)}
+            <span className="hint">{tab === 'plan' ? 'From above. Drag to move, scroll to zoom.' : tab === 'racks' ? `The ${rackWall.toLowerCase()} wall seen from inside, bottles end-on.` : `The ${wall.toLowerCase()} wall seen from outside.`}</span>
           </div>
-          {tab === 'plan' ? <DrawingView key="plan" prims={plan} testid="plan" description={planText} /> : <DrawingView key={`elev-${wall}`} prims={elevation} testid="elevation" description={elevText} />}
+          {tab === 'plan' ? <DrawingView key="plan" prims={plan} testid="plan" description={planText} /> : tab === 'racks' ? <DrawingView key={`racks-${rackWall}`} prims={racks} testid="racks" description={rackText} /> : <DrawingView key={`elev-${wall}`} prims={elevation} testid="elevation" description={elevText} />}
           <p className="foot">PRELIMINARY DESIGN ONLY: FINAL SITE MEASURE REQUIRED PRIOR TO FABRICATION</p>
         </main>
         <aside className="right"><ChecksPanel /></aside>

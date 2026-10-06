@@ -41,10 +41,11 @@ export function InfoModal({ ui }: { ui: UiStore }) {
             <li>Every change can be undone with <b>Undo</b>.</li>
           </ul>
 
-          <h3>The two drawings</h3>
+          <h3>The three drawings</h3>
           <ul>
             <li><b>Plan</b> is the enclosure from above: the walls in their build-up, the door opening with the open leaf and the arc it sweeps, the racks, and the dimensions. A door that opens in also shows the floor that must stay clear.</li>
             <li><b>Elevation</b> shows one wall as you see it from <b>outside</b>: the door, the header with the conditioner and vents, and the sizes. Pick the wall with the buttons beside the tabs.</li>
+            <li><b>Racks</b> shows the <b>inside face of one wall</b>, as you would see it standing in the enclosure, with <b>every bottle drawn at its true size and spacing</b>: end-on circles for neck-out racks (the bottle lies front to back), side-on shapes for label-forward. You see the rows, the columns and the count. Racks the tool says cannot be built are red and say "not counted". Pick the wall with the buttons beside the tabs.</li>
             <li>Scroll to zoom, drag to move, <b>Fit</b> to bring it all back. The <b>hinge</b> side is always as seen from outside, facing the door.</li>
           </ul>
 

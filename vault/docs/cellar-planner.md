@@ -12,7 +12,7 @@ Walk-in wine cellar configurator. **Glass enclosure with metal racking first**, 
 | Glass enclosure model (per-wall build-up, door, header parts, checks, advisories) | `src/enclosure/` | Built, tested |
 | Metal rack specification (blank by default; "not set", never 0) | `src/rack/` | Built, tested |
 | Rack placement in the enclosure (door opening and swing arc, landing, overlap, walkway, fill a wall) | `src/placement/` | Built, tested |
-| 2D plan and wall elevation as pure drawing primitives | `src/views/` | Built, tested |
+| 2D plan, wall elevation and the rack face (bottles) as pure drawing primitives | `src/views/` | Built, tested |
 | Project model layer (invertible commands, store, file format, library binding) | `src/domain/`, `src/state/` | Built, tested; **not used by the screens yet** (see below) |
 | Screens, guide, tour, tooltips | `src/App.tsx`, `src/ui/`, `src/app/`, `src/help/` | Built, tested in Chrome |
 | Saving to the Vault account, 3D view, pricing, drawing-package PDF, quote request, public front door | | **Not built** |
@@ -26,7 +26,7 @@ The screens edit a simple model (`src/app/model.ts`: one enclosure, one rack spe
 - **Enclosure panel:** outer sizes (to the outer faces), ceiling and floor build-up, header height. **Walls:** each wall's kind (insulated panel, framed glass, stud wall) and build-up; the build-ups are taken off to give the **inside size** (sample: 2750 x 1565 x 2150). **Door:** wall, size, swing, hinge as seen from outside, offset (blank = centred), glazed. **Header:** conditioner and vents, positioned from the header's left end.
 - **Rack specification:** unit width, depth, height; row pitch; bottles per row; orientation; posts; optional rows. **All start blank.** **Minimum walkway:** blank until you set it.
 - **Rack runs:** add a run on a wall, or **Fill** a wall with whole units (leaving the door opening free).
-- **Plan** (from above) and **Elevation** (any wall, seen from outside). Scroll to zoom, drag to pan, **Fit**.
+- **Plan** (from above), **Elevation** (any wall, seen from outside) and **Racks** (the inside face of any wall, seen from inside, with **every bottle drawn at its true size and spacing**: end-on circles for neck-out racks, side-on rectangles for label-forward; rows are one row pitch apart standing on the floor; the door's opening is shown on its wall; units still missing values are an outline only, never filled with guessed bottles; runs with an error are red and say "not counted", matching the total). Scroll to zoom, drag to pan, **Fit**.
 - **Checks** (errors, then warnings, then information, each with a fix) and **Advisory guidance** are on the right.
 - **Save file / Open file** (a `.cellar.json`), plus a draft kept in the browser. Undo and redo cover every edit.
 
@@ -57,7 +57,7 @@ Checked with **axe-core** (WCAG 2.1 A and AA) on the plan, the elevation and the
 
 ## Tests
 
-- `cd cellar-planner && npm test` runs **210** unit and property tests (`tests/`): the joinery engine and Golden Test Case #01; the enclosure and Golden Test Case #02; the rack spec; placement; the views; the app model and store; the help (tour hooks, guide content, tooltip coverage); the commands, store and library layer. `npm run typecheck` checks the types. **CI** (`.github/workflows/build-check.yml`, job "Cellar Planner engine") runs both on every push to `staging`, `version-7` and `main`.
+- `cd cellar-planner && npm test` runs **225** unit and property tests (`tests/`): the joinery engine and Golden Test Case #01; the enclosure and Golden Test Case #02; the rack spec; placement; the views; the app model and store; the help (tour hooks, guide content, tooltip coverage); the commands, store and library layer. `npm run typecheck` checks the types. **CI** (`.github/workflows/build-check.yml`, job "Cellar Planner engine") runs both on every push to `staging`, `version-7` and `main`.
 - `node scripts/cspCheck.mjs` (after `npm run build`) serves the production build under Vault's production Content Security Policy and opens the app, guide, tour and both drawings: **0 violations**. The dev server has no policy, so this is the check that matches the real site.
 - `npm run e2e` (dev server running first) drives the screens in real Chrome, including the Test case (1,120 bottles, markers, overwriting, undo, the file, the URL, the keyboard) and the axe-core scan: the sample, the blanks and "not set", the invented 160 and 480 bottle totals, fill a wall, the walkway warning, a run error, undo and redo, an inward door, bad numbers, save/open/draft, and the whole help flow (first-visit guide, tooltips, the 13-step tour, `?tour=1`, Esc). Not part of CI.
 - **All rack sizes in the tests are invented** to exercise the maths; none is a supplier's value. The golden cases are worked examples, **not real-job validation** (still pending, spec section 11).
@@ -80,6 +80,6 @@ On staging: sign in, open **`/cellar-planner`**, and (admin) switch **Cellar Pla
 4. Load **Sample** and set it beside A101, A102 and A103. Report anything that differs: hinge side, door size, header, vents, the 940 | 970 | 940 split, the inside size.
 5. Change the **Bottle** in the rack panel: Burgundy 960, Champagne 800; Magnum shows 0 with the 640 "not counted" and red runs. Switch orientation to **label-forward**: the total goes to "not set" and asks for its own bottles-per-row. A first visit already shows the Test case: 1,120 bottles, a banner and an "estimated" word on seven rack fields. Type over them: the markers go and the total follows. Then **Blank sample**: every rack value says "not set"; try **Fill the blanks with best guesses** and **Undo**. Or enter your own rack numbers and press **Fill** on the north wall; blank one field and the total goes back to "not set".
 6. Set the door to swing in, set a minimum walkway, and place a run in front of it: the keep-clear zone and the warning appear.
-7. Elevation: check each wall, and that the door diagonal points to the handle side.
+7. Elevation: check each wall, and that the door diagonal points to the handle side. **Racks:** step through North, East, South, West: every bottle is drawn, the count on screen matches the total (north 560, south 280 in the Test case), the door's gap on the south wall, and Magnum turns them red.
 8. **Save file**, change something, **Open file**: it comes back exactly.
 9. Anything the guide or a tooltip says that is wrong or confusing for a real customer or installer.

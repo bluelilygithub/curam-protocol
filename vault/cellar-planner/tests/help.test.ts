@@ -36,7 +36,7 @@ describe('guided tour', () => {
   });
 
   it('the steps that need a particular drawing say which', () => {
-    expect(TOUR_STEPS.find((s) => s.id === 'cp-tabs')?.tab).toBe('elevation');
+    expect(TOUR_STEPS.find((s) => s.id === 'cp-tabs')?.tab).toBe('racks');
     expect(TOUR_STEPS.find((s) => s.id === 'cp-drawing')?.tab).toBe('plan');
   });
 
@@ -60,6 +60,9 @@ describe('the guide (the (i) modal)', () => {
   const modal = read(join(uiDir, 'InfoModal.tsx'));
   it('explains the core ideas in plain words', () => {
     for (const phrase of ['not set', 'outer faces', 'build-up', 'outside', 'Advisory guidance', 'sign-off', 'preliminary design only', 'Save file', 'minimum walkway']) expect(modal.toLowerCase(), phrase).toContain(phrase.toLowerCase());
+  });
+  it('explains the Racks view: bottles at true size, inside face of a wall', () => {
+    for (const phrase of ['Racks', 'inside face', 'true size', 'not counted']) expect(modal, phrase).toContain(phrase);
   });
   it('explains that bottles per row is calculated, label-forward is separate, and errored runs are not counted', () => {
     for (const phrase of ['calculated', 'label-forward', 'only counts runs that can be built']) expect(modal.toLowerCase(), phrase).toContain(phrase.toLowerCase());

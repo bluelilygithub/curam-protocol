@@ -230,7 +230,7 @@ M1 (built) and M2a (built, product-agnostic: commands, undo, store, file format,
 
 Run with `npm run dev` inside `cellar-planner/` (port 5176); `npm run e2e` drives it in Chrome. **It is not yet wired into Vault's build, nav or feature flags**: that integration is later, in its own commits, with the other planners' tests.
 
-- **Plan** (from above) and **Elevation** (any wall, seen from outside) are drawn from pure primitives (`src/views/`), so the shapes are tested without a browser and can feed the drawing package later. Drag to pan, scroll to zoom, Fit to reset.
+- **Plan** (from above), **Elevation** (any wall, seen from outside) and **Racks** (the inside face of a wall with every bottle drawn at true size) are drawn from pure primitives (`src/views/`), so the shapes are tested without a browser and can feed the drawing package later. Drag to pan, scroll to zoom, Fit to reset.
 - **Panels** edit the enclosure (outer size, ceiling and floor build-up, per-wall kind and build-up), the door, the header parts, the rack specification, the project's minimum walkway, and the rack runs (add, edit, fill a wall). Every edit is one undo step.
 - **Blank means not set, never zero**: rack fields and the walkway minimum start blank and say "not set"; the bottle total reads "not set (n runs without rack values)" until every run is complete; a required number cannot be blanked and a bad number is refused with a message.
 - **Checks** list errors, then warnings, then information, each with its fix. **Advisory guidance** is separate and always carries the sign-off wording. The foot of every drawing says `PRELIMINARY DESIGN ONLY: FINAL SITE MEASURE REQUIRED PRIOR TO FABRICATION`.

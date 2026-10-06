@@ -4,8 +4,8 @@ import { boundsOf, fitView, type Prim, type Tone } from '../views';
 
 // Draws drawing primitives (millimetres, y down) with Konva. Fits the drawing until the person pans or zooms; "Fit" brings that back.
 
-const FILL: Record<Tone, string> = { panel: '#8d99a6', glass: '#bfe0f2', stud: '#cdb99a', inside: '#f6f3ec', door: '#ecd6a2', rack: 'rgba(204,120,92,0.45)', rackIssue: 'rgba(239,68,68,0.45)', zone: 'rgba(245,158,11,0.18)', header: '#e4e4e0', equipment: '#a9b4bf', ink: '#1a1a1a', muted: '#888888' };
-const STROKE: Record<Tone, string> = { panel: '#5c6670', glass: '#6aa6c8', stud: '#8c7752', inside: '#c9c4b8', door: '#b5832d', rack: '#cc785c', rackIssue: '#ef4444', zone: '#f59e0b', header: '#9a9a96', equipment: '#5c6670', ink: '#1a1a1a', muted: '#888888' };
+const FILL: Record<Tone, string> = { panel: '#8d99a6', glass: '#bfe0f2', stud: '#cdb99a', inside: '#f6f3ec', door: '#ecd6a2', rack: 'rgba(204,120,92,0.45)', rackIssue: 'rgba(239,68,68,0.45)', zone: 'rgba(245,158,11,0.18)', header: '#e4e4e0', equipment: '#a9b4bf', ink: '#1a1a1a', muted: '#888888', bottle: '#4b6b45' };
+const STROKE: Record<Tone, string> = { panel: '#5c6670', glass: '#6aa6c8', stud: '#8c7752', inside: '#c9c4b8', door: '#b5832d', rack: '#cc785c', rackIssue: '#ef4444', zone: '#f59e0b', header: '#9a9a96', equipment: '#5c6670', ink: '#1a1a1a', muted: '#888888', bottle: '#2e4a2a' };
 
 function draw(layer: Konva.Layer, prims: Prim[], v: { scale: number; ox: number; oy: number }): void {
   layer.destroyChildren();
@@ -15,6 +15,8 @@ function draw(layer: Konva.Layer, prims: Prim[], v: { scale: number; ox: number;
       const w = p.w * v.scale, h = p.h * v.scale;
       layer.add(new Konva.Rect({ x: X(p.x), y: Y(p.y), width: w, height: h, fill: FILL[p.tone], stroke: STROKE[p.tone], strokeWidth: 1, dash: p.dash ? [6, 4] : undefined }));
       if (p.label && Math.min(w, h) >= 14 && w > p.label.length * 5.5) layer.add(new Konva.Text({ x: X(p.x) + 4, y: Y(p.y) + 3, text: p.label, fontSize: 10, fontFamily: 'system-ui, sans-serif', fill: '#1a1a1a' }));
+    } else if (p.kind === 'circle') {
+      layer.add(new Konva.Circle({ x: X(p.cx), y: Y(p.cy), radius: Math.max(0.6, p.r * v.scale), fill: FILL[p.tone], stroke: STROKE[p.tone], strokeWidth: 0.6, listening: false }));
     } else if (p.kind === 'poly') {
       const pts = p.pts.map((n, i) => (i % 2 === 0 ? X(n) : Y(n)));
       layer.add(new Konva.Line({ points: pts, closed: p.closed, stroke: STROKE[p.tone], strokeWidth: 1.5, dash: p.dash ? [6, 4] : undefined, fill: p.closed ? FILL[p.tone] : undefined }));

@@ -14,7 +14,7 @@ export interface TourStep {
   target?: string;
   on?: 'top' | 'bottom' | 'left' | 'right';
   /** Which drawing must be showing for the step. */
-  tab?: 'plan' | 'elevation';
+  tab?: 'plan' | 'elevation' | 'racks';
 }
 
 /** The tour as data (pure, tested against the screen's data-tour hooks). */
@@ -26,7 +26,7 @@ export const TOUR_STEPS: TourStep[] = [
   { id: 'cp-header', title: 'The header: conditioner and vents', target: 'cp-header', on: 'right', text: 'The ceiling header sits above the enclosure and carries the conditioner and vents. Place each one from the left end of the header; the checks tell you if one does not fit or two overlap.' },
   { id: 'cp-rack', title: 'The rack specification', target: 'cp-rack', on: 'right', text: 'This starts blank on purpose. There is no supplier sheet yet, so every value says “not set” until you enter your supplier’s or fabricator’s numbers, and bottles are never counted as zero by mistake. The minimum walkway is yours to set; blank means it is not checked.' },
   { id: 'cp-runs', title: 'Rack runs', target: 'cp-runs', on: 'right', text: 'A run is a line of rack units against one wall. Add one and set where it starts and how many units, or press Fill to fit as many whole units as the wall allows, leaving the door opening free.' },
-  { id: 'cp-tabs', title: 'Plan and elevation', target: 'cp-tabs', on: 'bottom', tab: 'elevation', text: 'Plan is the enclosure from above. Elevation shows one wall as you see it from outside: the door, the header and the sizes. Pick the wall with the buttons beside the tabs.' },
+  { id: 'cp-tabs', title: 'Plan, elevation and racks', target: 'cp-tabs', on: 'bottom', tab: 'racks', text: 'Plan is the enclosure from above. Elevation shows one wall as you see it from outside: the door, the header and the sizes. Racks shows the inside face of a wall with every bottle drawn at its true size and spacing, so you can see the rows and the count. Pick the wall with the buttons beside the tabs.' },
   { id: 'cp-drawing', title: 'The drawing', target: 'cp-drawing', on: 'left', tab: 'plan', text: 'Scroll to zoom, drag to move, and press Fit to bring the whole drawing back. Racks turn red on the plan when they have an error, and the dimensions follow every change you make.' },
   { id: 'cp-total', title: 'Bottles', target: 'cp-total', on: 'left', text: 'The bottle count adds up every run that can be built. It says “not set” until every run has its rack values, and runs with an error are left out and named, never added in. Bottles per row is calculated from the unit width and the bottle, until you type the real figure.' },
   { id: 'cp-checks', title: 'Checks', target: 'cp-checks', on: 'left', text: 'Errors (something does not fit), warnings and information, each with a plain reason and a way to fix it. A narrow walkway is only ever a warning.' },

@@ -1,12 +1,14 @@
 // Drawing primitives shared by the 2D plan, the wall elevation and (later) the drawing package. Everything is in MILLIMETRES with y pointing DOWN
 // the page, so a renderer (Konva now, a PDF later) only maps millimetres to its own units. Tones are meanings, not colours.
 
-export type Tone = 'panel' | 'glass' | 'stud' | 'inside' | 'door' | 'rack' | 'rackIssue' | 'zone' | 'header' | 'equipment' | 'ink' | 'muted';
+export type Tone = 'panel' | 'glass' | 'stud' | 'inside' | 'door' | 'rack' | 'rackIssue' | 'zone' | 'header' | 'equipment' | 'ink' | 'muted' | 'bottle';
 
 export type Prim =
   | { kind: 'rect'; x: number; y: number; w: number; h: number; tone: Tone; dash?: boolean; label?: string }
   /** A line (open) or polygon (closed) through [x0, y0, x1, y1, ...]. */
   | { kind: 'poly'; pts: number[]; tone: Tone; closed?: boolean; dash?: boolean }
+  /** A circle (a bottle seen end-on): centre and radius in millimetres. */
+  | { kind: 'circle'; cx: number; cy: number; r: number; tone: Tone }
   /** Text anchored at a point; `size` is in screen pixels, not millimetres. */
   | { kind: 'text'; x: number; y: number; text: string; tone: Tone; size?: number; anchor?: 'start' | 'middle' | 'end' }
   /** A dimension line from (x1, y1) to (x2, y2), drawn `offset` mm to the side (positive = to the right of the direction of travel) with ticks. */
@@ -20,6 +22,7 @@ export function boundsOf(prims: Prim[]): Bounds {
   const add = (x: number, y: number): void => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); };
   for (const p of prims) {
     if (p.kind === 'rect') { add(p.x, p.y); add(p.x + p.w, p.y + p.h); }
+    else if (p.kind === 'circle') { add(p.cx - p.r, p.cy - p.r); add(p.cx + p.r, p.cy + p.r); }
     else if (p.kind === 'poly') for (let i = 0; i + 1 < p.pts.length; i += 2) add(p.pts[i], p.pts[i + 1]);
     else if (p.kind === 'text') add(p.x, p.y);
     else {

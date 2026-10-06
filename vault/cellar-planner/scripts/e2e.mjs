@@ -226,7 +226,7 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
     if (i === 3 || i === 9) await shot2('13-tour-step-' + i);
   }
   check('the tour has 13 steps in order, from "Your design" to the finish', titles.length === 13 && titles[1] === 'Your design' && titles[2] === 'The enclosure' && /set/.test(titles[12]), JSON.stringify(titles));
-  check('the plan-and-elevation step switches to the elevation, and the drawing step back to the plan', tabAt[8] === 'elevation' && tabAt[9] === 'plan', JSON.stringify(tabAt));
+  check('the plan, elevation and racks step switches to the Racks tab, and the drawing step back to the plan', tabAt[8] === 'racks' && tabAt[9] === 'plan', JSON.stringify(tabAt));
   check('a dimming overlay spotlights the target', await p2.evaluate(() => document.querySelector('.shepherd-modal-overlay-container') !== null));
   await next();
   await p2.waitForTimeout(400);
@@ -288,6 +288,22 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
   await p3.getByTestId('tab-plan').click();
 
   // overwrite the guesses
+  // the Racks tab: every bottle drawn on the inside face of a wall
+  await p3.getByTestId('tab-racks').click();
+  await p3.waitForTimeout(500);
+  const rackShapes = async () => Number(await p3.getByTestId('racks-canvas').getAttribute('data-prims'));
+  check('the Racks tab draws the north wall\'s bottles: 560 circles plus the frames and dimensions', (await rackShapes()) > 560 && (await rackShapes()) < 600, String(await rackShapes()));
+  check('it says which wall, and the wall buttons show the pressed one', /north wall seen from inside/.test(await p3.locator('.hint').innerText()) && (await p3.getByTestId('rackwall-NORTH').getAttribute('aria-pressed')) === 'true');
+  await shot3('23-racks-north');
+  await p3.getByTestId('rackwall-SOUTH').click();
+  await p3.waitForTimeout(400);
+  check('the south wall shows its two units either side of the door (280 bottles)', (await rackShapes()) > 280 && (await rackShapes()) < 320, String(await rackShapes()));
+  await shot3('24-racks-south');
+  check('the racks drawing has a text description for screen readers', /inside face of the south wall.*2 rack units.*280 bottles/.test((await p3.getByTestId('racks-canvas').getAttribute('aria-label')) ?? ''), await p3.getByTestId('racks-canvas').getAttribute('aria-label'));
+  await p3.getByTestId('rackwall-NORTH').click();
+  await p3.getByTestId('tab-plan').click();
+  await p3.waitForTimeout(200);
+
   // typing bottles per row overrides the calculated one (6 x 20 rows x 8 units = 960); the calculated badge goes, no estimated marker is involved
   await p3.getByTestId('rack-per-row').fill('6');
   await p3.getByTestId('rack-per-row').press('Enter');
@@ -361,6 +377,10 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
   await p3.waitForTimeout(300);
   const elevScan = await scan('elevation');
   check('accessibility scan, elevation screen: no violations', elevScan.length === 0, elevScan.map((v) => v.id).join(', '));
+  await p3.getByTestId('tab-racks').click();
+  await p3.waitForTimeout(400);
+  const racksScan = await scan('racks');
+  check('accessibility scan, racks screen: no violations', racksScan.length === 0, racksScan.map((v) => v.id).join(', '));
   await p3.getByTestId('tab-plan').click();
   await p3.getByTestId('info-open').click();
   const guideScan = await scan('guide');
