@@ -8,7 +8,7 @@ import { Icon } from './icons';
 import { PLANT_DRAG_TYPE } from './PlantLibrary';
 import { PlantHoverCard } from './PlantHoverCard';
 import { plantById, plantLabel } from '../plants/plants';
-import { mid } from '../plants/growth';
+import { mid, plantSizeAt } from '../plants/growth';
 import { findItem } from '../domain/edit';
 import { MapAttribution } from './MapSection';
 import { WalkPad } from './WalkPad';
@@ -52,6 +52,9 @@ export function Stage() {
   const progress = useUi((s) => s.tourProgress);
   const touring = tourState !== 'off';
   const [hover, setHover] = useState<{ id: string; x: number; y: number } | null>(null);
+  const draggingPlantId = useUi((s) => s.draggingPlantId);
+  const [dragAt, setDragAt] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => { if (!draggingPlantId) { setDragAt(null); three.current?.showDropMarker(null); } }, [draggingPlantId]);
 
   useEffect(() => {
     const el = ref.current;
@@ -107,18 +110,23 @@ export function Stage() {
           if (!e.dataTransfer.types.includes(PLANT_DRAG_TYPE)) return;
           if (viewMode === '3d') {
             const at = walking || touring ? null : three.current?.groundAt(e.clientX, e.clientY) ?? null;
-            three.current?.showDropMarker(at, 0.6);
+            const dragged = app.ui.getState().draggingPlantId;
+            const rec = dragged ? plantById(dragged) : undefined;
+            three.current?.showDropMarker(at, rec ? Math.max(0.3, plantSizeAt(rec, app.ui.getState().stage).canopyRadius) : 0.6);
+            const r = e.currentTarget.getBoundingClientRect();
+            setDragAt(dragged && at ? { x: e.clientX - r.left, y: e.clientY - r.top } : null);
             if (!at) { e.dataTransfer.dropEffect = 'none'; return; }
           }
           e.preventDefault(); e.dataTransfer.dropEffect = 'copy';
         }}
-        onDragLeave={(e) => { if (e.currentTarget === e.target) three.current?.showDropMarker(null); }}
+        onDragLeave={(e) => { if (e.currentTarget === e.target) { three.current?.showDropMarker(null); setDragAt(null); } }}
         onDrop={(e) => {
           const id = e.dataTransfer.getData(PLANT_DRAG_TYPE);
           if (!id) return;
           e.preventDefault();
           if (viewMode === '3d') {
             three.current?.showDropMarker(null);
+            setDragAt(null);
             if (walking || touring) { app.notify('Stop walking or the fly-through first, then drop the plant.', 'info'); return; }
             const at = three.current?.groundAt(e.clientX, e.clientY);
             if (!at) { app.notify('Drop the plant on the ground.', 'info'); return; }
@@ -129,6 +137,7 @@ export function Stage() {
           plan.current.dropPlant(id, e.clientX, e.clientY, e.shiftKey);
         }} />
       {viewMode === '2d' && hover && <PlantHoverCard hover={hover} />}
+      {viewMode === '3d' && dragAt && draggingPlantId && <PlantHoverCard hover={{ plantId: draggingPlantId, x: dragAt.x, y: dragAt.y }} />}
       {viewMode === '2d' && <p className="hint-banner">{mapAlign ? 'Drag the map until your house and plot line up with what you drew. Press Done moving (or Esc) when it fits.' : HINTS[tool]}</p>}
       {project && <MapAttribution project={project} />}
       {viewMode === '3d' && (

@@ -13,11 +13,11 @@ const SUN_TEXT: Record<string, string> = { full_sun: 'Full sun', part_shade: 'Pa
  * credit line (a photo is never shown without its credit). It ignores the mouse so it never gets in the way of dragging the plant. Until a
  * photo arrives, or if there is none, the colour swatch stands in.
  */
-export function PlantHoverCard({ hover }: { hover: { id: string; x: number; y: number } }) {
+export function PlantHoverCard({ hover }: { hover: { id?: string; plantId?: string; x: number; y: number } }) {
   const app = useApp();
-  const inst = useProject((s) => s.project?.plants.find((x) => x.id === hover.id));
+  const inst = useProject((s) => (hover.id ? s.project?.plants.find((x) => x.id === hover.id) : undefined));
   const stage = useUi((s) => s.stage);
-  const rec = inst ? plantById(inst.plantId) : undefined;
+  const rec = hover.plantId ? plantById(hover.plantId) : inst ? plantById(inst.plantId) : undefined;
   const [answer, setAnswer] = useState<PhotoAnswer | undefined>(() => (rec ? app.plantPhotos.peek(rec.id) : undefined));
   const [broken, setBroken] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -34,9 +34,9 @@ export function PlantHoverCard({ hover }: { hover: { id: string; x: number; y: n
   useLayoutEffect(() => {
     const p = ref.current?.offsetParent as HTMLElement | null;
     if (p) setBox({ w: p.clientWidth, h: p.clientHeight });
-  }, [hover.id]);
+  }, [hover.id, hover.plantId]);
 
-  if (!inst || !rec) return null;
+  if (!rec) return null;
   const s = plantSizeAt(rec, stage);
   const photo = broken ? undefined : answer?.images?.[0];
   // beside the plant, flipped to the other side or up near the edges of the plan
@@ -57,7 +57,7 @@ export function PlantHoverCard({ hover }: { hover: { id: string; x: number; y: n
         <div><dt>Sun</dt><dd>{rec.sun.map((x) => SUN_TEXT[x] ?? x).join(', ')}</dd></div>
       </dl>
       {photo && <small className="plant-hover-credit">Photo: {photo.creator}, {photo.licenceCode} via {photo.sourceLabel}</small>}
-      <small className="plant-hover-note">Draft plant data, unverified. Click to select.</small>
+      <small className="plant-hover-note">Draft plant data, unverified.{hover.plantId ? ' Drop it on the ground to plant it.' : ' Click to select.'}</small>
     </div>
   );
 }

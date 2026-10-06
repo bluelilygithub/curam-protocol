@@ -1384,7 +1384,19 @@ check('no page errors or console errors', problems.length === 0, problems.slice(
   await pg.waitForSelector('.stage canvas');
   await wait(1200);
   const box = await pg.locator('.stage canvas').boundingBox();
-  await pg.dragAndDrop('.plant-head >> nth=1', '.stage', { targetPosition: { x: box.width / 2, y: box.height * 0.7 } });
+  // a real drag by hand, so the card can be checked while the plant is still being held over the 3D view
+  const head = await pg.locator('.plant-head').nth(1).boundingBox();
+  await pg.mouse.move(head.x + 20, head.y + 10);
+  await pg.mouse.down();
+  await pg.mouse.move(head.x + 120, head.y + 60, { steps: 4 });
+  await pg.mouse.move(box.x + box.width / 2, box.y + box.height * 0.7, { steps: 10 });
+  await pg.getByTestId('plant-hover').waitFor({ timeout: 4000 });
+  const dragCard = await pg.getByTestId('plant-hover').innerText();
+  check('while dragging over 3D the same card shows (names, size, sun, drop hint)', /Now/.test(dragCard) && /Mature/.test(dragCard) && /Sun/.test(dragCard) && /Drop it on the ground/.test(dragCard), dragCard);
+  if (out) await pg.screenshot({ path: join(out, '17-3d-drag-card.png') });
+  await pg.mouse.up();
+  await wait(300);
+  check('the card goes when the plant is dropped', (await pg.getByTestId('plant-hover').count()) === 0);
   await wait(400);
   let plants = await pg.evaluate(() => window.gardenPlanner.project.getState().project.plants);
   check('dropping a library plant on the 3D ground plants it', plants.length === before + 1, String(plants.length));

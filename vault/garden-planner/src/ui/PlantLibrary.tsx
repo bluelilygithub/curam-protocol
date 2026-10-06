@@ -181,10 +181,17 @@ function SiteBadge() {
 export const PLANT_DRAG_TYPE = 'application/x-garden-plant';
 
 function PlantRow({ p, open, fav, pets, armed, onToggle, onFav }: { p: PlantRecord; open: boolean; fav: boolean; pets: boolean; armed: boolean; onToggle(): void; onFav(): void }) {
+  const app = useApp();
   return (
     <div className={`plant-row${open ? ' open' : ''}${armed ? ' armed' : ''}`}>
       <button type="button" className="plant-head" aria-expanded={open} onClick={onToggle} draggable title="Drag onto the plan to plant it"
-        onDragStart={(e) => { e.dataTransfer.setData(PLANT_DRAG_TYPE, p.id); e.dataTransfer.setData('text/plain', plantLabel(p)); e.dataTransfer.effectAllowed = 'copy'; }}>
+        onDragStart={(e) => {
+          e.dataTransfer.setData(PLANT_DRAG_TYPE, p.id); e.dataTransfer.setData('text/plain', plantLabel(p)); e.dataTransfer.effectAllowed = 'copy';
+          const ui = app.ui.getState();
+          if (ui.viewMode === '3d') { const blank = document.createElement('canvas'); blank.width = blank.height = 1; e.dataTransfer.setDragImage(blank, 0, 0); } // the 3D view shows the plant's card instead of the browser's icon
+          ui.set({ draggingPlantId: p.id });
+        }}
+        onDragEnd={() => app.ui.getState().set({ draggingPlantId: null })}>
         <PlantSwatch p={p} />
         <span className="plant-names"><strong>{plantLabel(p)}</strong><em>{botanicalLabel(p)}</em></span>
         {pets && p.cautions.includes('toxic_pets') && <span className="badge warn" title="Toxic to pets">Pets</span>}
