@@ -46,7 +46,7 @@
     "test:fonts-svg-export": "node client/src/pages/fonts/svgExport.test.mjs",
     "test:fonts-catalog": "node server/services/fontGoogleCatalog.test.js",
     "test:fonts-session": "node server/services/fontSessionCache.test.js",
-    "test:video-tools": "node server/services/videoTools.test.js"
+    "test:video-tools": "node client/src/pages/videos/slideshowLimits.test.mjs && node server/services/videoTools.test.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
