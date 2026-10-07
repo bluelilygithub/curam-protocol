@@ -11,6 +11,8 @@ import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import SlideshowPlanner from './videos/SlideshowPlanner';
 import JoinPlanner from './videos/JoinPlanner';
 import { describePlan } from './videos/JoinEffectsEditor';
+import LastFramePicker from './videos/LastFramePicker';
+import TakesGrid from './videos/TakesGrid';
 import { VoiceInput, VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 
 const VIDEO_GOOGLE_FONTS = [
@@ -867,6 +869,10 @@ export default function VideosPage() {
   const [aspect, setAspect] = useState('16:9');
   const [durationSec, setDurationSec] = useState(5);
   const [generateResult, setGenerateResult] = useState(null);
+  // Batch runs: several takes of the same clip, billed per take
+  const [batchCount, setBatchCount] = useState(1);
+  const [batchTakes, setBatchTakes] = useState([]);
+  const [batchChosen, setBatchChosen] = useState(null);
 
   // Reference image
   const [seedImageFile, setSeedImageFile] = useState(null);
@@ -1591,15 +1597,19 @@ export default function VideosPage() {
     reader.readAsDataURL(file);
   });
 
-  const hydrateRemoteVideo = useCallback(async (videoUrl) => {
+  const fetchRemoteVideoBlob = useCallback(async (videoUrl) => {
     const res = await api.post('/api/videos/playback', { url: videoUrl });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Could not load video for playback');
     }
-    const blob = await res.blob();
+    return res.blob();
+  }, []);
+
+  const hydrateRemoteVideo = useCallback(async (videoUrl) => {
+    const blob = await fetchRemoteVideoBlob(videoUrl);
     setResultFromBlob(blob, 'generated.mp4', 'generate');
-  }, [setResultFromBlob]);
+  }, [fetchRemoteVideoBlob, setResultFromBlob]);
 
   const handleLoadYoutube = async () => {
     if (!youtubeUrl.trim()) {
@@ -1645,6 +1655,90 @@ export default function VideosPage() {
     }
   };
 
+  const clearBatchTakes = () => {
+    setBatchTakes((prev) => { prev.forEach((t) => t.url && URL.revokeObjectURL(t.url)); return []; });
+    setBatchChosen(null);
+  };
+
+  const chooseTake = (i, takes = batchTakes) => {
+    const take = takes[i];
+    if (!take?.blob) return;
+    setBatchChosen(i);
+    setResultFromBlob(take.blob, `generated-take-${i + 1}.mp4`, 'generate');
+    if (take.meta) setGenerateResult(take.meta);
+  };
+
+  // Poll every take, then download the ones that finished and offer them side by side.
+  const runBatch = async (started) => {
+    const items = started.items;
+    const total = items.length;
+    if (started.errors?.length) {
+      addToast(`${started.errors.length} of ${started.requested} takes could not start: ${started.errors[0]}`, 'error');
+    }
+    setGenerateResult(items[0]);
+    const done = new Array(total).fill(null);
+    const failed = {};
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      const pending = items.map((_, i) => i).filter((i) => !done[i] && failed[i] == null);
+      if (!pending.length) break;
+      await Promise.all(pending.map(async (i) => {
+        try {
+          const r = await api.get(`/api/videos/generate/status?requestId=${encodeURIComponent(items[i].requestId)}`);
+          const d = await r.json();
+          if (!r.ok) throw new Error(d.error || 'Status check failed');
+          if (d.status === 'COMPLETED') done[i] = d;
+        } catch (e) {
+          failed[i] = e.message;
+        }
+      }));
+      const ready = done.filter(Boolean).length;
+      startProcessing(`Generating ${total} takes…`, `${ready} of ${total} ready — each take can take 1–3 minutes.`);
+    }
+    if (!done.some(Boolean)) throw new Error('None of the takes finished — try again in a moment');
+
+    startProcessing('Preparing playback…', 'Downloading your takes for in-browser preview.');
+    const takes = await Promise.all(items.map(async (it, i) => {
+      const label = `Take ${i + 1}`;
+      const d = done[i];
+      if (!d) return { requestId: it.requestId, label, error: failed[i] || 'Did not finish in time' };
+      try {
+        let blob;
+        if (d.inline?.base64) {
+          const bin = Uint8Array.from(atob(d.inline.base64), (c) => c.charCodeAt(0));
+          blob = new Blob([bin], { type: d.inline.contentType || 'video/mp4' });
+        } else {
+          blob = await fetchRemoteVideoBlob(d.videoUrl);
+        }
+        return { requestId: it.requestId, label, blob, url: URL.createObjectURL(blob), meta: d };
+      } catch (e) {
+        return { requestId: it.requestId, label, error: e.message };
+      }
+    }));
+
+    setBatchTakes((prev) => { prev.forEach((t) => t.url && URL.revokeObjectURL(t.url)); return takes; });
+    const first = takes.findIndex((t) => t.blob);
+    if (first < 0) throw new Error('The takes finished but could not be loaded for playback');
+    chooseTake(first, takes);
+    const okTakes = takes.filter((t) => t.meta);
+    const videoCost = okTakes.reduce((sum, t) => sum + (t.meta.usage?.videoCostUsd || 0), 0);
+    const promptCost = okTakes[0]?.meta.usage?.promptCostUsd || 0;
+    setLastTransaction({
+      tool: 'generate',
+      brief,
+      style,
+      aspect,
+      durationSec,
+      seedImageMode,
+      youtubeUrl: youtubeUrl.trim() || undefined,
+      video_prompt: okTakes[0].meta.video_prompt,
+      mode: okTakes[0].meta.mode,
+      provider: okTakes[0].meta.provider || started.items[0].provider,
+      takes: total,
+    });
+    addToast(`${okTakes.length} of ${total} takes ready — pick the best${videoCost ? ` (~$${(videoCost + promptCost).toFixed(2)} estimated)` : ''}`, 'success');
+  };
+
   const handleGenerate = async () => {
     const hasBrief = Boolean(brief.trim());
     const hasImage = Boolean(seedImageFile || seedImageUrl.trim());
@@ -1655,7 +1749,8 @@ export default function VideosPage() {
       return;
     }
 
-    startProcessing('Preparing clip…', 'Analysing references and submitting to the video model.');
+    startProcessing(batchCount > 1 ? `Preparing ${batchCount} takes…` : 'Preparing clip…', 'Analysing references and submitting to the video model.');
+    clearBatchTakes();
     try {
       let seedImageDataUrl = '';
       if (seedImageFile) {
@@ -1676,10 +1771,16 @@ export default function VideosPage() {
         youtubeUrl: youtubeUrl.trim() || undefined,
         useYoutubeThumbnailAsSeed,
         videoReferenceNotes: refVideoInfo?.notes || undefined,
+        takes: batchCount > 1 ? batchCount : undefined,
         provider: selectedProvider || undefined,
       });
       const started = await res.json();
       if (!res.ok) throw new Error(started.error || 'Generate failed');
+
+      if (started.batch) {
+        await runBatch(started);
+        return;
+      }
 
       setGenerateResult(started);
 
@@ -2181,6 +2282,27 @@ export default function VideosPage() {
                 </Tooltip>
               </label>
             </div>
+            <label className="block space-y-1 max-w-xs">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Takes</span>
+              <Tooltip text="Render the same clip several times and pick the best. Each take is a separate paid render, so 3 takes cost about 3 times as much as one.">
+                <select
+                  value={batchCount}
+                  onChange={(e) => setBatchCount(Number(e.target.value))}
+                  className="w-full px-2 py-2 rounded-xl border text-xs"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  <option value={1}>1 take</option>
+                  <option value={2}>2 takes</option>
+                  <option value={3}>3 takes</option>
+                  <option value={4}>4 takes</option>
+                </select>
+              </Tooltip>
+              {batchCount > 1 && (
+                <span className="block text-[10px]" style={{ color: '#b45309' }}>
+                  {batchCount} separate renders: about {batchCount}× the cost of one clip.
+                </span>
+              )}
+            </label>
             <Tooltip text="Submit the brief and references to the video model — rendering can take one to three minutes.">
               <button
                 type="button"
@@ -2189,7 +2311,7 @@ export default function VideosPage() {
                 className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
                 style={{ background: 'var(--color-primary)' }}
               >
-                Generate clip
+                {batchCount > 1 ? `Generate ${batchCount} takes` : 'Generate clip'}
               </button>
             </Tooltip>
             {generateResult?.video_prompt && (
@@ -2212,12 +2334,25 @@ export default function VideosPage() {
                 )}
               </div>
             )}
+            <TakesGrid takes={batchTakes} chosen={batchChosen} onChoose={(i) => chooseTake(i)} />
             {resultForTool === 'generate' && (
               <ResultVideo
                 blobUrl={resultBlob}
                 downloadName={resultName}
                 onUse={useResultAsSource}
                 {...resultSaveProps}
+              />
+            )}
+            {resultForTool === 'generate' && resultBlob && (
+              <LastFramePicker
+                videoUrl={resultBlob}
+                onUse={(file, t) => {
+                  setSeedImageFile(file);
+                  setSeedImageUrl('');
+                  setSeedImageMode('animate');
+                  addToast(`Frame at ${t.toFixed(1)} s is now the Reference image — the next clip will start from it`, 'success');
+                  window.scrollTo?.({ top: 0, behavior: 'smooth' });
+                }}
               />
             )}
           </section>

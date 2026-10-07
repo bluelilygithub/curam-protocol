@@ -12,7 +12,7 @@ const { getLogger } = require('../middleware/requestContext');
 const { captureIf, makeFingerprint } = require('../services/SuggestionService');
 const { saveAsset, listAssets, getAsset, deleteAsset, renameAsset, getUserUsageBytes } = require('../services/videoLibraryService');
 const {
-  startVideoGeneration, pollVideoGeneration, getVideoGenerateConfig, buildYoutubeContext, fetchPlaybackVideo,
+  startVideoGeneration, startVideoGenerationBatch, pollVideoGeneration, getVideoGenerateConfig, buildYoutubeContext, fetchPlaybackVideo,
   transcribeAudioWithGemini, isGeminiTranscribeAvailable, describeReferenceVideoFrames,
 } = require('../services/videoGenerateService');
 const {
@@ -499,10 +499,27 @@ router.post('/generate', async (req, res) => {
       youtubeUrl,
       useYoutubeThumbnailAsSeed,
       videoReferenceNotes,
+      takes,
       provider,
     } = req.body || {};
 
-    const started = await startVideoGeneration(req.user.id, {
+    const rememberStarted = (s) => rememberVideoJob(s.requestId, req.user.id, {
+      provider: s.provider,
+      model: s.model,
+      endpoint: s.endpoint,
+      pollUrl: s.pollUrl,
+      mode: s.mode,
+      video_prompt: s.video_prompt,
+      negative_prompt: s.negative_prompt,
+      aspect: s.aspect,
+      width: s.width,
+      height: s.height,
+      durationSec: s.durationSec,
+      references: s.references,
+      promptUsage: s.promptUsage,
+    });
+
+    const genOptions = {
       brief: brief?.trim() || '',
       style,
       aspect: aspect || '16:9',
@@ -513,24 +530,17 @@ router.post('/generate', async (req, res) => {
       useYoutubeThumbnailAsSeed: Boolean(useYoutubeThumbnailAsSeed),
       videoReferenceNotes: typeof videoReferenceNotes === 'string' ? videoReferenceNotes.trim().slice(0, 1500) : '',
       provider: provider === 'fal' || provider === 'replicate' ? provider : undefined,
-    });
+    };
 
-    rememberVideoJob(started.requestId, req.user.id, {
-      provider: started.provider,
-      model: started.model,
-      endpoint: started.endpoint,
-      pollUrl: started.pollUrl,
-      mode: started.mode,
-      video_prompt: started.video_prompt,
-      negative_prompt: started.negative_prompt,
-      aspect: started.aspect,
-      width: started.width,
-      height: started.height,
-      durationSec: started.durationSec,
-      references: started.references,
-      promptUsage: started.promptUsage,
-    });
+    // Several takes of the same clip: one provider job each, so the cost is per take.
+    if (Number(takes) > 1) {
+      const batch = await startVideoGenerationBatch(req.user.id, genOptions, takes);
+      batch.items.forEach(rememberStarted);
+      return res.json({ batch: true, ...batch });
+    }
 
+    const started = await startVideoGeneration(req.user.id, genOptions);
+    rememberStarted(started);
     res.json(started);
   } catch (err) {
     getLogger().error({ err }, '[videos/generate]');

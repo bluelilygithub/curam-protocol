@@ -623,6 +623,34 @@ async function buildGenerationPayload(userId, options) {
 async function startVideoGeneration(userId, options) {
   const provider = resolveVideoProvider(options.provider);
   const prepared = await buildGenerationPayload(userId, options);
+  return submitPrepared(provider, prepared, options);
+}
+
+// Batch runs bill one provider job per take, so the cap is deliberately low.
+const MAX_BATCH_TAKES = 4;
+
+/**
+ * Several takes of the same clip: references and prompt expansion are done (and paid for) once, then the
+ * same request is submitted `count` times. Takes differ because the provider picks a fresh random seed
+ * each time. Returns the takes that started; throws only if none did.
+ */
+async function startVideoGenerationBatch(userId, options, count) {
+  const takes = Math.min(MAX_BATCH_TAKES, Math.max(1, Math.floor(Number(count)) || 1));
+  const provider = resolveVideoProvider(options.provider);
+  const prepared = await buildGenerationPayload(userId, options);
+  const settled = await Promise.allSettled(
+    Array.from({ length: takes }, () => submitPrepared(provider, prepared, options)),
+  );
+  const items = settled.filter((s) => s.status === 'fulfilled').map((s) => s.value);
+  const errors = settled.filter((s) => s.status === 'rejected').map((s) => String(s.reason?.message || s.reason));
+  if (!items.length) {
+    const first = settled.find((s) => s.status === 'rejected');
+    throw first.reason instanceof Error ? first.reason : new Error(errors[0] || 'Video generation failed');
+  }
+  return { items, errors, requested: takes };
+}
+
+async function submitPrepared(provider, prepared, options) {
   const shared = {
     provider,
     mode: prepared.imageToVideo ? 'image-to-video' : 'text-to-video',
@@ -649,6 +677,7 @@ async function startVideoGeneration(userId, options) {
     return {
       ...shared,
       model,
+      estimatedVideoCostUsd: calculateVideoCost(model),
       requestId: pred.id,
       pollUrl: pred.urls?.get || null,
       queuePosition: null,
@@ -659,6 +688,7 @@ async function startVideoGeneration(userId, options) {
   return {
     ...shared,
     model: prepared.endpoint,
+    estimatedVideoCostUsd: calculateVideoCost(prepared.endpoint),
     endpoint: prepared.endpoint,
     requestId: queue.request_id,
     statusUrl: queue.status_url,
@@ -803,6 +833,8 @@ async function generateVideo(userId, options) {
 module.exports = {
   generateVideo,
   startVideoGeneration,
+  startVideoGenerationBatch,
+  MAX_BATCH_TAKES,
   pollVideoGeneration,
   getVideoGenerateConfig,
   resolveVideoProvider,
