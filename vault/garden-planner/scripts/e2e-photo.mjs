@@ -3,7 +3,7 @@
 import { mkdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { deflateSync } from 'node:zlib';
-import { chromium } from 'playwright-core';
+import { chromium } from './lib/chromium.mjs';
 
 const URL = process.env.GP_URL ?? 'http://127.0.0.1:5175/garden-planner-app/';
 const out = process.argv[2] ?? 'spike/out-photo';

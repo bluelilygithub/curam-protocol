@@ -1,6 +1,6 @@
 // Form controls for the Inspector and the wizard. Every text and number input has a mic button (spec 0.2). Edits commit when the field
 // loses focus, on Enter, or when speech finishes, so typing "12" is one undo step, not two.
-import { useEffect, useId, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useId, useState, type ReactNode } from 'react';
 import { VoiceInput } from '@planner-core/speech/VoiceInput';
 import { parseSpokenNumber } from '@vault-client/utils/units/numbers.mjs';
 
@@ -79,3 +79,33 @@ export function CheckField({ label, checked, onChange, hint }: { label: string; 
 
 export const labelOf = (s: string): string => s.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 export const optionsOf = <T extends string>(list: readonly T[]): Array<readonly [T, string]> => list.map((v) => [v, labelOf(v)] as const);
+
+// ---------------------------------------------------------------- collapsible blocks
+/** Inside an Accordion only one Section is open at a time (keyed by id, else title); on its own a Section opens and closes freely. */
+const AccordionContext = createContext<{ openId: string | null; setOpenId(id: string | null): void } | null>(null);
+
+export function Accordion({ children, initial = null }: { children: ReactNode; initial?: string | null }) {
+  const [openId, setOpenId] = useState<string | null>(initial);
+  return <AccordionContext.Provider value={{ openId, setOpenId }}>{children}</AccordionContext.Provider>;
+}
+
+/** A titled block that folds away. Its content stays mounted while closed, so half-typed values survive. */
+export function Section({ title, id, children, testid }: { title: string; id?: string; children: ReactNode; testid?: string }) {
+  const acc = useContext(AccordionContext);
+  const key = id ?? title;
+  const [ownOpen, setOwnOpen] = useState(true);
+  const open = acc ? acc.openId === key : ownOpen;
+  const toggle = (): void => { if (acc) acc.setOpenId(open ? null : key); else setOwnOpen(!open); };
+  return (
+    <section className={`gp-section${open ? '' : ' collapsed'}`} data-testid={testid}>
+      <h3>
+        <button type="button" className="gp-section-toggle" aria-expanded={open} title={open ? `Hide ${title}` : `Show ${title}`} onClick={toggle}>
+          <span className="chev" aria-hidden="true">▸</span>{title}
+        </button>
+      </h3>
+      <div className="gp-collapse" inert={!open} aria-hidden={!open}>
+        <div className="gp-collapse-inner">{children}</div>
+      </div>
+    </section>
+  );
+}

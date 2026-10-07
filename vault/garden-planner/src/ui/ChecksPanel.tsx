@@ -5,7 +5,7 @@ import { DRAFT_LABEL } from '../checks';
 import { weedFilterNote } from '../plants/weeds';
 import { countBySeverity } from '../state/checksStore';
 import { useApp, useUi } from './AppContext';
-import { NumField } from './fields';
+import { NumField, Section } from './fields';
 import { Icon } from './icons';
 
 const SEV_LABEL = { error: 'Fix', warning: 'Check', info: 'Note' } as const;
@@ -47,10 +47,11 @@ export function ChecksPanel() {
         </>
       )}
 
-      <h3>Settings</h3>
+<Section title="Settings">
       <NumField label="Narrowest path" unit="m" value={pathMin} min={0.3} max={3} step={0.1} onCommit={(v) => set({ pathMinWidth: v })} hint="Paths narrower than this are flagged. 0.9 m is comfortable to walk." />
       <NumField label="Mower width" unit="m" value={mower} min={0.3} max={3} step={0.1} onCommit={(v) => set({ mowerWidth: v })} hint="The mower has to reach every lawn through gates and gaps at least this wide." />
       <p className="note" data-testid="weed-note">{weedFilterNote()}</p>
+      </Section>
     </div>
   );
 }

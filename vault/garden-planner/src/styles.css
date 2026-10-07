@@ -347,3 +347,13 @@ textarea.vi-input { padding: 8px 34px 8px 10px; }
 .plant-hover dt { color: #a8a89f; min-width: 44px; }
 .plant-hover dd { margin: 0; }
 .plant-hover small { color: #a8a89f; font-size: 10px; }
+
+/* Collapsible Inspector blocks: one open at a time inside an Accordion; a slow, smooth 350 ms open and close. */
+.gp-section h3 { margin: 12px 0 6px; }
+.gp-section-toggle { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 6px; width: 100%; cursor: pointer; transition: opacity 350ms ease; }
+.gp-section-toggle:hover { opacity: .7; } .gp-section-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.gp-section-toggle .chev { display: inline-block; width: 10px; transition: transform 350ms ease; } .gp-section:not(.collapsed) .gp-section-toggle .chev { transform: rotate(90deg); }
+.gp-collapse { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 350ms ease, opacity 350ms ease; }
+.gp-collapse-inner { min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 8px; }
+.gp-section.collapsed .gp-collapse { grid-template-rows: 0fr; opacity: 0; visibility: hidden; transition: grid-template-rows 350ms ease, opacity 350ms ease, visibility 0s 350ms; }
+@media (prefers-reduced-motion: reduce) { .gp-collapse, .gp-section.collapsed .gp-collapse, .gp-section-toggle, .gp-section-toggle .chev { transition: none; } }
