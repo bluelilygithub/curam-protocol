@@ -9,6 +9,7 @@ import Tooltip from '../components/Tooltip';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import SlideshowPlanner from './videos/SlideshowPlanner';
+import { VoiceInput, VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 
 const VIDEO_GOOGLE_FONTS = [
   'Roboto',
@@ -1664,6 +1665,7 @@ export default function VideosPage() {
   };
 
   return (
+    <VoiceInputProvider lang="en-AU">
     <div className="flex flex-col sm:flex-row min-h-[calc(100dvh-3rem)]">
       <aside
         className="w-full sm:w-56 shrink-0 border-b sm:border-b-0 sm:border-r overflow-y-auto p-4 space-y-3"
@@ -1813,13 +1815,15 @@ export default function VideosPage() {
             <label className="block space-y-1">
               <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>What should happen on screen?</span>
               <Tooltip text="Describe the shot in plain language — the workspace's light model expands this into a full video prompt.">
-                <textarea
+                <VoiceInput
+                  type="textarea"
+                  append
                   value={brief}
-                  onChange={(e) => setBrief(e.target.value)}
+                  onChange={setBrief}
                   rows={4}
                   placeholder="A calm product shot of wireless earbuds rotating on a marble surface… (optional if you provide an image or YouTube example)"
-                  className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-y"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  label="What should happen on screen"
+                  className="resize-y"
                 />
               </Tooltip>
             </label>
@@ -2591,7 +2595,7 @@ export default function VideosPage() {
             <ToolHeader id="annotate" label="Annotate" onHelp={setHelpTool} getIcon={getIcon} />
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Burn a styled text label into the full clip. The preview below appears only after you apply.</p>
             <Tooltip text="The text that gets burned into the video frame.">
-              <input value={overlayText} onChange={(e) => setOverlayText(e.target.value)} placeholder="Label text" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              <VoiceInput value={overlayText} onChange={setOverlayText} placeholder="Label text" label="Label text" />
             </Tooltip>
             <PositionGrid value={textPosition} onChange={setTextPosition} label="Label position" />
             <TextStyleFields
@@ -3216,5 +3220,6 @@ export default function VideosPage() {
         </div>
       )}
     </div>
+    </VoiceInputProvider>
   );
 }
