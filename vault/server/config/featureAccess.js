@@ -18,6 +18,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   youtube: true,
   graphics: true,
   videos: true,
+  music: true,
   recipes: true,
   pdf: true,
   themeBuilder: true,

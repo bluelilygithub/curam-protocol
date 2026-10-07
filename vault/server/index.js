@@ -180,6 +180,9 @@ app.use('/api/map-tiles', requireFeature('gardenPlanner'), require('./routes/map
 app.use('/api/plant-images', requireFeature('gardenPlanner'), require('./routes/plantImages'));
 require('./services/fontGoogleCatalog').warmCatalog(); // background build — first real request shouldn't pay this cost
 app.use('/api/videos', requireFeature('videos'), aiLimiter, require('./routes/videos'));
+// aiLimiter is applied inside music.js to POST /jobs only — the client polls GET /jobs/:id every 2s,
+// which alone would exhaust the 30/min per-user limit.
+app.use('/api/music', requireFeature('music'), require('./routes/music'));
 app.use('/api/recipes', requireFeature('recipes'), require('./routes/recipes'));
 app.use('/api/domains', requireFeature('domains'), require('./routes/domains'));
 app.use('/api/product-scout', requireFeature('productScout'), aiLimiter, require('./routes/productScout'));
