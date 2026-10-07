@@ -183,3 +183,9 @@ Compose → **Slideshow** now has an optional description box. The user says wha
 - Verified by rendering every mood and every transition through real ffmpeg, plus a multipart call through the route. **Not verified:** the live LLM planning call (needs a model key + DB) and the UI in a browser.
 - **Bug found and fixed on the way:** `routes/videos.js` imported `getLogger` from `lib/logger` (which exports the bare logger), so every `getLogger().error(...)` in the route threw inside its own `catch` — any ffmpeg failure left the request hanging. It now imports from `middleware/requestContext`, like every other route. Also: raw ffmpeg stderr is no longer returned to the client on failure.
 - Not built: a per-image note box, so the planner can know what each photo shows (would improve captions/order); vision-based planning would need an image-capable model call.
+
+---
+
+## Voice input (2026-10-07)
+
+`VideosPage.jsx` is wrapped in `VoiceInputProvider` (one shared recogniser, same module as Measurements/CSS), and the free-text fields use `VoiceInput` with a built-in mic: **Create → "What should happen on screen"** (appends speech to existing text), **Slideshow → "Describe the video"** (appends) and each **slide caption** (replaces), and **Annotate → label text**. Unsupported browsers show a disabled mic with an explanation; typing always works. Fields that take URLs, numbers, or SRT text are deliberately left typed-only.
