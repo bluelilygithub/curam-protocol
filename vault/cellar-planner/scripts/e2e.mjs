@@ -10,11 +10,24 @@ if (out) mkdirSync(out, { recursive: true });
 let failed = 0;
 const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${ok ? '' : `  -> ${extra}`}`); if (!ok) failed++; };
 
+
+// The left sidebar is an accordion (one section open at a time). Before a test types into or clicks a control, open the section that holds it.
+const openSection = (id) => { const el = document.querySelector(`[data-testid="${id}"]`); const t = el?.closest('section.section.collapsed')?.querySelector('.section-toggle'); if (t) t.click(); };
+function autoOpen(pg) {
+  const orig = pg.getByTestId.bind(pg);
+  pg.getByTestId = (id) => {
+    const loc = orig(id);
+    for (const m of ['fill', 'click', 'selectOption', 'press', 'hover', 'check', 'uncheck']) { const f = loc[m]?.bind(loc); if (f) loc[m] = async (...a) => { await pg.evaluate(openSection, id); return f(...a); }; }
+    return loc;
+  };
+  return pg;
+}
+
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const ctx = await browser.newContext({ viewport: { width: 1500, height: 900 } });
 // the first-visit guide has its own checks below; the main run starts with it already seen
 await ctx.addInitScript(() => { try { localStorage.setItem('cellar-planner:info-seen:v1', '1'); } catch { /* ignore */ } });
-const page = await ctx.newPage();
+const page = autoOpen(await ctx.newPage());
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -155,7 +168,7 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
 // ---- the guide, tooltips and tour, in a fresh browser (nothing seen yet)
 {
   const ctx2 = await browser.newContext({ viewport: { width: 1500, height: 900 } });
-  const p2 = await ctx2.newPage();
+  const p2 = autoOpen(await ctx2.newPage());
   const errs2 = [];
   p2.on('pageerror', (e) => errs2.push(e.message));
   p2.on('console', (m) => { if (m.type() === 'error') errs2.push(m.text()); });
@@ -248,7 +261,7 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
 {
   const ctx3 = await browser.newContext({ viewport: { width: 1500, height: 900 } });
   await ctx3.addInitScript(() => { try { localStorage.setItem('cellar-planner:info-seen:v1', '1'); } catch { /* ignore */ } });
-  const p3 = await ctx3.newPage();
+  const p3 = autoOpen(await ctx3.newPage());
   const errs3 = [];
   p3.on('pageerror', (e) => errs3.push(e.message));
   p3.on('console', (m) => { if (m.type() === 'error') errs3.push(m.text()); });
@@ -397,7 +410,7 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
 {
   const ctx4 = await browser.newContext({ viewport: { width: 1500, height: 900 }, acceptDownloads: true });
   await ctx4.addInitScript(() => { try { localStorage.setItem('cellar-planner:info-seen:v1', '1'); } catch { /* ignore */ } });
-  const p4 = await ctx4.newPage();
+  const p4 = autoOpen(await ctx4.newPage());
   const errs4 = [];
   p4.on('pageerror', (e) => errs4.push(e.message));
   p4.on('console', (m) => { if (m.type() === 'error') errs4.push(m.text()); });
@@ -462,7 +475,7 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
 {
   const ctx5 = await browser.newContext({ viewport: { width: 1500, height: 900 } });
   await ctx5.addInitScript(() => { try { localStorage.setItem('cellar-planner:info-seen:v1', '1'); } catch { /* ignore */ } });
-  const p5 = await ctx5.newPage();
+  const p5 = autoOpen(await ctx5.newPage());
   const errs5 = [];
   p5.on('pageerror', (e) => errs5.push(e.message));
   const status5 = (s, timeout = 8000) => p5.waitForFunction((x) => document.querySelector('[data-testid=save-status]')?.getAttribute('data-status') === x, s, { timeout });
@@ -531,7 +544,7 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
     if (m === 'DELETE') { rows.delete(id); return json(200, { ok: true }); }
     return json(500, {});
   });
-  const p6 = await ctx6.newPage();
+  const p6 = autoOpen(await ctx6.newPage());
   const errs6 = [];
   p6.on('pageerror', (e) => errs6.push(e.message));
   const status6 = (s, timeout = 8000) => p6.waitForFunction((x) => document.querySelector('[data-testid=save-status]')?.getAttribute('data-status') === x, s, { timeout });
