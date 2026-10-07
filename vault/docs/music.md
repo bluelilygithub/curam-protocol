@@ -18,6 +18,7 @@ Files: `server/routes/music.js`, `server/services/music/` (`musicPrompts.js`, `m
 `musicProviders.js` defines the interface — `provider.generate({ prompt, durationS, seed }) → WAV bytes`, `provider.maxClipS`, `provider.describe()`:
 
 - **`replicate`** (default): Meta MusicGen on Replicate (`MUSIC_REPLICATE_MODEL`, default `meta/musicgen`; version `MUSIC_REPLICATE_MODEL_VERSION`, default `stereo-large`), uses `REPLICATE_API_TOKEN`. Billed per generation by Replicate; three per request. Works on Railway (no GPU/torch needed). Single clips are capped at 30 s (`MUSIC_MAX_CLIP_SECONDS`).
+- Runs by **version id** via `POST /v1/predictions` (the latest version of the model is looked up once per process; pin one with `MUSIC_REPLICATE_VERSION`). `meta/musicgen` is a community model, so the `/v1/models/{owner}/{name}/predictions` endpoint used for official models (e.g. the video model) answers `404 "The requested resource could not be found."` — that was the first-release bug. An unknown model name gives a clear "check MUSIC_REPLICATE_MODEL" message.
 - **`fake`** (`MUSIC_PROVIDER=fake`): synthesised chord pad via ffmpeg — dev/tests only, no network.
 - A local-Python MusicGen backend (the original spec) can be added as another provider without touching routes/UI; it would only work on a machine with torch + a GPU, not on Railway.
 

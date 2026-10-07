@@ -107,7 +107,7 @@ test('only Replicate https hosts are accepted as audio download URLs', () => {
 });
 
 (async () => {
-  const { createReplicateProvider } = require('./musicProviders');
+  const { createReplicateProvider, _clearVersionCache } = require('./musicProviders');
   const realFetch = global.fetch;
   const saved = process.env.REPLICATE_API_TOKEN;
   try {
@@ -120,23 +120,45 @@ test('only Replicate https hosts are accepted as audio download URLs', () => {
     process.env.REPLICATE_API_TOKEN = 'test-token';
     const calls = [];
     global.fetch = async (url, opts) => {
-      calls.push({ url: String(url), body: opts && opts.body ? JSON.parse(opts.body) : null });
-      if (String(url).includes('/predictions') && opts && opts.method === 'POST') {
+      calls.push({ url: String(url), method: (opts && opts.method) || 'GET', body: opts && opts.body ? JSON.parse(opts.body) : null });
+      if (String(url) === 'https://api.replicate.com/v1/models/meta/musicgen') {
+        return { ok: true, status: 200, json: async () => ({ latest_version: { id: 'ver123' } }) };
+      }
+      if (String(url) === 'https://api.replicate.com/v1/predictions' && opts && opts.method === 'POST') {
         return { ok: true, status: 201, json: async () => ({ id: 'abc', status: 'starting', urls: { get: 'https://api.replicate.com/v1/predictions/abc' } }) };
       }
       return { ok: true, status: 200, json: async () => ({ id: 'abc', status: 'failed', error: 'NSFW or model error' }) };
     };
     await assert.rejects(() => createReplicateProvider().generate({ prompt: 'calm piano', durationS: 99, seed: 7 }), /model error/);
-    const sent = calls[0].body.input;
+    // Community models must be run by version id via /v1/predictions — the /models/{owner}/{name}/predictions
+    // endpoint answers 404 "The requested resource could not be found." for them.
+    assert.ok(!calls.some((c) => /\/models\/[^/]+\/[^/]+\/predictions/.test(c.url)), 'must not use the official-models endpoint');
+    const post = calls.find((c) => c.method === 'POST');
+    assert.strictEqual(post.url, 'https://api.replicate.com/v1/predictions');
+    assert.strictEqual(post.body.version, 'ver123');
+    const sent = post.body.input;
     assert.strictEqual(sent.duration, 30, 'clip length is capped at what MusicGen handles');
     assert.strictEqual(sent.seed, 7);
     assert.strictEqual(sent.output_format, 'wav');
     assert.strictEqual(sent.prompt, 'calm piano');
     passed += 1; console.log('ok - replicate: sends capped duration/seed/wav and surfaces a failed prediction');
 
-    global.fetch = async () => ({ ok: false, status: 422, json: async () => ({ detail: 'Invalid input' }) });
+    // A second run reuses the looked-up version (no second model lookup).
+    calls.length = 0;
+    await assert.rejects(() => createReplicateProvider().generate({ prompt: 'x', durationS: 5, seed: 1 }), /model error/);
+    assert.ok(!calls.some((c) => c.method === 'GET' && c.url.endsWith('/models/meta/musicgen')), 'version is cached');
+
+    _clearVersionCache();
+    global.fetch = async (url) => (String(url).endsWith('/models/meta/musicgen')
+      ? { ok: true, status: 200, json: async () => ({ latest_version: { id: 'ver123' } }) }
+      : { ok: false, status: 422, json: async () => ({ detail: 'Invalid input' }) });
     await assert.rejects(() => createReplicateProvider().generate({ prompt: 'x', durationS: 5, seed: 1 }), /Invalid input/);
     passed += 1; console.log('ok - replicate: API errors are surfaced');
+
+    _clearVersionCache();
+    global.fetch = async () => ({ ok: false, status: 404, json: async () => ({ detail: 'The requested resource could not be found.' }) });
+    await assert.rejects(() => createReplicateProvider().generate({ prompt: 'x', durationS: 5, seed: 1 }), /was not found on Replicate — check MUSIC_REPLICATE_MODEL/);
+    passed += 1; console.log('ok - replicate: unknown model gives an actionable message, not the raw 404');
   } finally {
     global.fetch = realFetch;
     if (saved === undefined) delete process.env.REPLICATE_API_TOKEN; else process.env.REPLICATE_API_TOKEN = saved;
