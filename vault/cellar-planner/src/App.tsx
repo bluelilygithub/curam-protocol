@@ -13,6 +13,7 @@ import { DrawingView } from './ui/DrawingView';
 import { InfoModal } from './ui/InfoModal';
 import { PackageModal } from './ui/PackageModal';
 import { Icon } from './ui/icons';
+import { Accordion } from './ui/fields';
 import { ChecksPanel, EnclosurePanel, RackPanel, RunsPanel, StoreContext } from './ui/panels';
 
 const WALLS: Array<[WallSide, string]> = [['NORTH', 'North'], ['EAST', 'East'], ['SOUTH', 'South'], ['WEST', 'West']];
@@ -109,7 +110,7 @@ export function App({ store, ui, designs }: { store: AppStore; ui: UiStore; desi
           <ConflictBar designs={designs} />
           {msg && <p className="toolbar-note" role="status" data-testid="status">{msg}</p>}
         </header>
-        <aside className="left" data-testid="left"><EnclosurePanel /><RackPanel /><RunsPanel /></aside>
+        <aside className="left" data-testid="left"><Accordion initial="Enclosure"><EnclosurePanel /><RackPanel /><RunsPanel /></Accordion></aside>
         <main className="stage">
           <div className="tabs" role="group" aria-label="Drawing" data-tour="cp-tabs">
             <button type="button" aria-pressed={tab === 'plan'} className={`tab${tab === 'plan' ? ' on' : ''}`} title="The enclosure from above: walls, door, racks and sizes." onClick={() => ui.getState().set({ tab: 'plan' })} data-testid="tab-plan">Plan</button>

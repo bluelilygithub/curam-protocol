@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode, type Ref } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode, type Ref } from 'react';
 
 // Small form controls. A number field keeps what is being typed until the person leaves it or presses Enter, then commits a whole number, or
 // clears to blank (only where blank is allowed: a blank is "not set", never 0).
@@ -69,9 +69,20 @@ export function CheckField({ label, checked, onChange, testid, hint }: { label: 
   );
 }
 
+/** Inside an Accordion only one Section is open at a time (keyed by title); outside one, each Section toggles on its own. */
+const AccordionContext = createContext<{ openId: string | null; setOpenId(id: string | null): void } | null>(null);
+
+export function Accordion({ children, initial = null }: { children: ReactNode; initial?: string | null }) {
+  const [openId, setOpenId] = useState<string | null>(initial);
+  return <AccordionContext.Provider value={{ openId, setOpenId }}>{children}</AccordionContext.Provider>;
+}
+
 export function Section({ title, children, note, testid, tour }: { title: string; children: ReactNode; note?: ReactNode; testid?: string; tour?: string }) {
-  // Collapsible: open by default. Content stays mounted while closed so half-typed values and tour targets survive.
-  const [open, setOpen] = useState(true);
+  // Collapsible. Content stays mounted while closed so half-typed values survive.
+  const acc = useContext(AccordionContext);
+  const [ownOpen, setOwnOpen] = useState(true);
+  const open = acc ? acc.openId === title : ownOpen;
+  const setOpen = (fn: (o: boolean) => boolean): void => { if (acc) acc.setOpenId(fn(open) ? title : null); else setOwnOpen(fn); };
   return (
     <section className={`section${open ? '' : ' collapsed'}`} data-testid={testid} data-tour={tour}>
       <h2>
