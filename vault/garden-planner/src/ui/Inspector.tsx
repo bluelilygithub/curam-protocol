@@ -16,7 +16,7 @@ import { PLANTS, botanicalLabel, plantById, plantLabel } from '../plants/plants'
 import { unsuitableReasons, UNSUITABLE_TEXT } from '../plants/suitability';
 import type { Selection } from '../state/uiStore';
 import { useApp, useProject, useUi } from './AppContext';
-import { CheckField, NumField, SelectField, TextField, labelOf, optionsOf } from './fields';
+import { Accordion, CheckField, NumField, SelectField, Section, TextField, labelOf, optionsOf } from './fields';
 import { Icon } from './icons';
 import { MapSection } from './MapSection';
 import { AddressLookup } from './AddressLookup';
@@ -79,7 +79,7 @@ function ProjectPanel({ project }: { project: GardenProject }) {
   const bedArea = useMemo(() => project.beds.reduce((s, b) => s + shapeArea(b.shape), 0), [project.beds]);
   const lawnArea = useMemo(() => project.lawns.reduce((s, b) => s + shapeArea(b.shape), 0), [project.lawns]);
   return (
-    <>
+    <Accordion initial="where">
       <TextField label="Garden name" value={project.name} onCommit={(v) => app.renameProject(v)} />
       <p className="summary">
         {plotArea > 0 && <span>Plot {plotArea.toFixed(0)} m²</span>}
@@ -87,7 +87,7 @@ function ProjectPanel({ project }: { project: GardenProject }) {
         {lawnArea > 0 && <span>Lawn {lawnArea.toFixed(0)} m²</span>}
         <span>{project.plants.length} plant{project.plants.length === 1 ? '' : 's'}</span>
       </p>
-      <h3>Where and what the weather is like</h3>
+      <Section id="where" title="Where and what the weather is like">
       <AddressSection project={project} />
       <TextField label="Place name" value={project.location.label} onCommit={(v) => m({ location: { ...project.location, label: v } })} hint="The short name used on plans and file names, such as the suburb." />
       <SelectField label="State" value={project.location.state} options={AU_STATES.map((s) => [s, s] as const)} onChange={(v) => m({ location: { ...project.location, state: v } })} hint="Used for the weed check." />
@@ -98,15 +98,17 @@ function ProjectPanel({ project }: { project: GardenProject }) {
       <CheckField label="We have pets" checked={project.pets} onChange={(v) => m({ pets: v })} hint="Warns about plants that are toxic to pets." />
       <NumField label="North points" unit="degrees" value={project.northDeg} min={0} max={359} step={1} decimals={0} onCommit={(v) => m({ northDeg: v })} hint="0 = the top of the plan is north. You can also drag the north arrow on the plan." />
       <MapSection project={project} />
+      </Section>
       {project.underlay && (
         <>
-          <h3>Tracing picture</h3>
+          <Section id="tracing" title="Tracing picture">
           <NumField label="Opacity" unit="%" value={Math.round(project.underlay.opacity * 100)} min={10} max={100} step={5} decimals={0} onCommit={(v) => app.setUnderlay({ ...project.underlay!, opacity: v / 100 })} />
           <button type="button" className="btn" onClick={() => app.setUnderlay(null)}><Icon name="trash" size={15} /> Remove picture</button>
+          </Section>
         </>
       )}
       <p className="note">Click anything on the plan to edit it. Click empty space to come back here.</p>
-    </>
+    </Accordion>
   );
 }
 
@@ -144,18 +146,20 @@ function BoundaryPanel({ b, project, upd }: { b: Boundary; project: GardenProjec
   const area = shapeArea({ points: b.vertices.map((v) => v.position), smooth: false });
   void project;
   return (
-    <>
+    <Accordion key={seg ? 'edge' : 'all'} initial={seg ? 'edge' : 'all'}>
       <p className="summary"><span>{n} corners</span><span>{area.toFixed(0)} m²</span></p>
       {seg && edge !== null ? (
         <>
-          <h3>Edge {edge + 1}</h3>
+          <Section id="edge" title={`Edge ${edge + 1}`}>
           <SelectField label="Fence" value={seg.fence} options={optionsOf<FenceType>(FENCE_TYPES)} onChange={(v) => upd(setFence(b, edge, v), 'Change fence')} />
           <NumField label="Height" unit="m" value={seg.height} min={0} max={4} step={0.1} onCommit={(v) => upd({ ...b, segments: b.segments.map((s, i) => (i === edge ? { ...s, height: v } : s)) }, 'Change fence height')} />
+        </Section>
         </>
       ) : <p className="note">Click one edge of the boundary to set its fence.</p>}
-      <h3>All edges</h3>
+      <Section id="all" title="All edges">
       <SelectField label="Fence" value={(seg?.fence ?? b.segments[0]?.fence ?? 'timber_paling') as FenceType} options={optionsOf<FenceType>(FENCE_TYPES)} onChange={(v) => upd(setFence(b, 'all', v), 'Change all fences')} hint={`Standard heights: ${FENCE_TYPES.filter((f) => f !== 'open').map((f) => `${labelOf(f)} ${FENCE_HEIGHT[f]} m`).join(', ')}.`} />
-    </>
+      </Section>
+    </Accordion>
   );
 }
 
@@ -170,10 +174,10 @@ function HousePanel({ h, upd }: { h: House; upd(n: unknown, l: string): void }) 
     upd({ ...h, fixtures: [...h.fixtures, { id: `${type}-${h.fixtures.length + 1}-${Date.now().toString(36)}`, type, edge: e, offset: len / 2, width: Math.min(width, len * 0.8) }] }, `Add ${type}`);
   };
   return (
-    <>
+    <Accordion initial="doors">
       <NumField label="Height" unit="m" value={h.height} min={2} max={15} step={0.1} onCommit={(v) => upd({ ...h, height: v }, 'Change house height')} hint="Trees and shade checks use this." />
       <p className="summary"><span>{shapeArea({ points: h.vertices.map((v) => v.position), smooth: false }).toFixed(0)} m² footprint</span></p>
-      <h3>Doors and windows</h3>
+      <Section id="doors" title="Doors and windows">
       <p className="note">These give you viewpoints, like “from the back door”.</p>
       <NumField label="On wall number" value={edge} min={1} max={n} step={1} decimals={0} onCommit={setEdge} hint={`1 to ${n}. Wall 1 runs from the first corner you drew to the second.`} />
       <div className="row"><button type="button" className="btn" onClick={() => addFixture('door')}><Icon name="plus" size={14} /> Door</button><button type="button" className="btn" onClick={() => addFixture('window')}><Icon name="plus" size={14} /> Window</button></div>
@@ -185,7 +189,8 @@ function HousePanel({ h, upd }: { h: House; upd(n: unknown, l: string): void }) 
           </li>
         ))}
       </ul>
-    </>
+      </Section>
+    </Accordion>
   );
 }
 
@@ -207,21 +212,22 @@ function BedPanel({ b, project, upd }: { b: Bed; project: GardenProject; upd(n: 
   }, [project, b.shape, stage, month]);
   const rec = plantById(plantId);
   return (
-    <>
+    <Accordion initial="sun">
       <TextField label="Name" value={b.name} onCommit={(v) => upd({ ...b, name: v || b.name }, 'Rename bed')} />
       <SelectField label="Edging" value={b.edging} options={optionsOf<EdgingType>(['none', 'timber', 'steel', 'brick', 'stone'])} onChange={(v) => upd({ ...b, edging: v }, 'Change edging')} />
       <SelectField label="Mulch" value={b.mulch} options={optionsOf<MulchType>(['none', 'bark', 'sugarcane', 'gravel', 'pebbles'])} onChange={(v) => upd({ ...b, mulch: v }, 'Change mulch')} />
       <CheckField label="Raised bed" checked={b.raised} onChange={(v) => upd({ ...b, raised: v }, 'Change bed')} />
       <CheckField label="Curved edges" checked={b.shape.smooth} onChange={(v) => upd({ ...b, shape: { ...b.shape, smooth: v } }, 'Change edges')} />
       <Area shape={b.shape} />
-      <h3>Sun in this bed</h3>
+      <Section id="sun" title="Sun in this bed">
       <ul className="sunlines" data-testid="bed-sun">
         {sunLines.map(({ m, h }) => (
           <li key={m}>{MONTH_NAMES[m - 1]}: {h === null ? 'not mapped' : `${h.toFixed(1)} h, ${LEVEL_TEXT[sunLevelForHours(h, thresholds)]}`}</li>
         ))}
       </ul>
       <p className="note">Average over the bed, from the shadows of the house, fences, structures and plants at the current growth stage.</p>
-      <h3>Fill this bed</h3>
+      </Section>
+      <Section id="fill" title="Fill this bed">
       <label className="field"><span className="field-label">Plant</span>
         <select className="vi-input" value={plantId} onChange={(e) => setPlantId(e.target.value)} aria-label="Plant to fill the bed with">
           {choices.map((p) => <option key={p.id} value={p.id}>{plantLabel(p)}</option>)}
@@ -229,7 +235,8 @@ function BedPanel({ b, project, upd }: { b: Bed; project: GardenProject; upd(n: 
       </label>
       {rec && <p className="note">Spacing {recommendedSpacing(rec.id).toFixed(2)} m, a little under its {mid(rec.spread).toFixed(1)} m mature spread.</p>}
       <button type="button" className="btn primary" disabled={!rec} onClick={() => { const n = app.fillBed(b.id, plantId); if (n) app.notify(`Planted ${n} × ${rec ? plantLabel(rec) : 'plant'}.`); }}><Icon name="plant" size={15} /> Fill bed</button>
-    </>
+      </Section>
+    </Accordion>
   );
 }
 

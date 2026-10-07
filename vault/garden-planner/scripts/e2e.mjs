@@ -3,7 +3,7 @@
 import { mkdirSync, readFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
 import { join } from 'node:path';
-import { chromium } from 'playwright-core';
+import { chromium } from './lib/chromium.mjs';
 import { PDFDocument } from 'pdf-lib';
 
 const URL = process.env.GP_URL ?? 'http://127.0.0.1:5175/garden-planner-app/';
@@ -241,7 +241,7 @@ await page.getByRole('button', { name: 'Shadows' }).click();
 await page.getByRole('button', { name: 'Sun map' }).click();
 await ev(() => { const a = window.gardenPlanner; a.ui.getState().select({ kind: 'bed', id: a.project.getState().project.beds[0].id }); }); // (the bed is full of plants, so clicking it would pick a plant)
 await wait(700);
-const bedSun = await page.getByTestId('bed-sun').innerText();
+const bedSun = await page.getByTestId('bed-sun').textContent() ?? '';
 check('a selected bed reports its hours of sun for the month and the two extremes', /June: [\d.]+ h, (full sun|part shade|shade)/.test(bedSun) && /December: [\d.]+ h/.test(bedSun), bedSun);
 await ev(() => { window.gardenPlanner.ui.getState().set({ selection: null }); });
 
