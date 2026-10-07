@@ -8,6 +8,7 @@ import useProcessingStore from '../store/processingStore';
 import Tooltip from '../components/Tooltip';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
+import SlideshowPlanner from './videos/SlideshowPlanner';
 
 const VIDEO_GOOGLE_FONTS = [
   'Roboto',
@@ -913,6 +914,10 @@ export default function VideosPage() {
   const [slideSecondsPerSlide, setSlideSecondsPerSlide] = useState(3);
   const [slideAspect, setSlideAspect] = useState('9:16');
   const [slideCrossfade, setSlideCrossfade] = useState(false);
+  // AI plan from "Describe the video"; slide indices refer to slideImages order, so any change
+  // to the image list (add/remove/reorder) invalidates it.
+  const [slidePlan, setSlidePlan] = useState(null);
+  useEffect(() => { setSlidePlan(null); }, [slideImages]);
 
   // Reframe
   const [reframeAspect, setReframeAspect] = useState('9:16');
@@ -1359,15 +1364,19 @@ export default function VideosPage() {
     const fd = new FormData();
     slideImages.forEach((f) => fd.append('images', f));
     if (slideAudioFile) fd.append('audio', slideAudioFile);
-    fd.append('secondsPerSlide', String(slideSecondsPerSlide));
-    fd.append('aspect', slideAspect);
-    if (slideCrossfade) fd.append('crossfadeSec', '0.6');
+    if (slidePlan) {
+      fd.append('plan', JSON.stringify(slidePlan));
+    } else {
+      fd.append('secondsPerSlide', String(slideSecondsPerSlide));
+      fd.append('aspect', slideAspect);
+      if (slideCrossfade) fd.append('crossfadeSec', '0.6');
+    }
     runFormVideo('slideshow', fd, {
       label: 'Building slideshow…',
       resultFilename: 'slideshow.mp4',
       forTool: 'slideshow',
-    });
-  }, [slideImages, slideAudioFile, slideSecondsPerSlide, slideAspect, slideCrossfade, runFormVideo, addToast]);
+    }).catch(() => {});
+  }, [slideImages, slideAudioFile, slidePlan, slideSecondsPerSlide, slideAspect, slideCrossfade, runFormVideo, addToast]);
 
   const handleExportSocial = useCallback(async () => {
     if (!sourceFile) {
@@ -2759,6 +2768,9 @@ export default function VideosPage() {
               Turn product photos or other images into a promo video with background music — each image gets the same fitted aspect, one shared duration per slide.
             </p>
             <MultiImageUpload files={slideImages} onFiles={setSlideImages} />
+            <SlideshowPlanner files={slideImages} hasAudio={Boolean(slideAudioFile)} plan={slidePlan} onPlan={setSlidePlan} />
+            {!slidePlan && (
+            <>
             <div className="grid grid-cols-2 gap-3">
               <label className="block space-y-1">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Seconds per slide</span>
@@ -2784,6 +2796,8 @@ export default function VideosPage() {
                 Crossfade between slides
               </label>
             </Tooltip>
+            </>
+            )}
             <label className="block space-y-1">
               <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Background music (optional)</span>
               <Tooltip text="A music or voice track to play under the slideshow. Short tracks loop to fill the video; long tracks are trimmed to match.">

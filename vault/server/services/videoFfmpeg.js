@@ -403,8 +403,14 @@ async function overlayImage(inputPath, imagePath, outputPath, opts = {}) {
  * Join with optional crossfade between clips.
  * When crossfadeSec > 0, uses xfade + acrossfade after normalize.
  */
+// Allow-list: the name is interpolated into a filtergraph, so it must never come straight from a request.
+const XFADE_TRANSITIONS = new Set([
+  'fade', 'dissolve', 'fadeblack', 'wipeleft', 'wiperight', 'slideleft', 'slideright', 'circleopen', 'zoomin',
+]);
+
 async function joinVideosWithOptionalCrossfade(inputPaths, outputPath, opts = {}) {
   const crossfadeSec = Math.max(0, Number(opts.crossfadeSec) || 0);
+  const transition = XFADE_TRANSITIONS.has(opts.transition) ? opts.transition : 'fade';
   if (crossfadeSec <= 0) {
     return joinVideos(inputPaths, outputPath, opts);
   }
@@ -479,7 +485,7 @@ async function joinVideosWithOptionalCrossfade(inputPaths, outputPath, opts = {}
   for (let i = 1; i < n; i += 1) {
     const vOut = i === n - 1 ? '[vout]' : `[v${i}]`;
     const aOut = i === n - 1 ? '[aout]' : `[a${i}]`;
-    vParts.push(`${vPrev}[${i}:v]xfade=transition=fade:duration=${fade.toFixed(3)}:offset=${Math.max(0, offset).toFixed(3)}${vOut}`);
+    vParts.push(`${vPrev}[${i}:v]xfade=transition=${transition}:duration=${fade.toFixed(3)}:offset=${Math.max(0, offset).toFixed(3)}${vOut}`);
     aParts.push(`${aPrev}[${i}:a]acrossfade=d=${fade.toFixed(3)}${aOut}`);
     vPrev = vOut;
     aPrev = aOut;
@@ -575,24 +581,76 @@ const SLIDESHOW_DIMS = {
   '4:5': [864, 1080],
 };
 
-function slideVf(tw, th, mode) {
+const SLIDE_FPS = 30;
+const SLIDE_ZOOM = 0.15; // total zoom travel over one slide for Ken Burns moves
+
+// Colour grades, applied after any camera move. Plain ffmpeg filters — no LUT files needed.
+const MOOD_FILTERS = {
+  warm: 'colorbalance=rs=.08:gs=.02:bs=-.08:rm=.06:bm=-.05,eq=saturation=1.08',
+  cool: 'colorbalance=rs=-.06:bs=.08:rm=-.04:bm=.06',
+  vivid: 'eq=saturation=1.35:contrast=1.08',
+  mono: 'hue=s=0,eq=contrast=1.1',
+  vintage: 'curves=preset=vintage',
+  cinematic: 'eq=contrast=1.12:saturation=0.92,colorbalance=rs=-.04:bs=.05:rh=.05:bh=-.03,vignette=PI/5',
+};
+
+const MIXED_MOTION_CYCLE = ['zoom-in', 'pan-right', 'zoom-out', 'pan-left'];
+
+function slideBaseVf(w, h, mode) {
   if (mode === 'crop') {
-    return `scale=${tw}:${th}:force_original_aspect_ratio=increase,crop=${tw}:${th},setsar=1,format=yuv420p`;
+    return `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}`;
   }
-  return `scale=${tw}:${th}:force_original_aspect_ratio=decrease,pad=${tw}:${th}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p`;
+  return `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2`;
+}
+
+/** Ken Burns zoompan expression for one slide, or null for a static slide. Output frame is `on`. */
+function zoompanFor(motion, frames, tw, th) {
+  const t = `(on/${Math.max(1, frames - 1)})`;
+  const centre = { x: "'iw/2-(iw/zoom/2)'", y: "'ih/2-(ih/zoom/2)'" };
+  const zoom = 1 + SLIDE_ZOOM;
+  let z;
+  let x = centre.x;
+  let y = centre.y;
+  if (motion === 'zoom-in') z = `'1+${SLIDE_ZOOM}*${t}'`;
+  else if (motion === 'zoom-out') z = `'${zoom}-${SLIDE_ZOOM}*${t}'`;
+  else if (motion === 'pan-left') { z = `'${zoom}'`; x = `'(iw-iw/zoom)*(1-${t})'`; y = "'(ih-ih/zoom)/2'"; }
+  else if (motion === 'pan-right') { z = `'${zoom}'`; x = `'(iw-iw/zoom)*${t}'`; y = "'(ih-ih/zoom)/2'"; }
+  else return null;
+  return `zoompan=z=${z}:x=${x}:y=${y}:d=${frames}:s=${tw}x${th}:fps=${SLIDE_FPS}`;
+}
+
+/** Greedy word wrap — drawtext does not wrap, so long captions would run off the frame. */
+function wrapCaption(text, maxChars) {
+  const words = String(text || '').split(' ').filter(Boolean);
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    if (line && `${line} ${word}`.length > maxChars) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = line ? `${line} ${word}` : word;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.join('\n');
 }
 
 /**
- * Build a slideshow video from 2-20 still images, optional shared crossfade,
- * and an optional background audio track.
+ * Build a slideshow video from 2-20 still images with optional crossfade/transition, camera
+ * motion (Ken Burns), colour mood, per-slide captions and a background audio track.
  *
- * Audio behaviour: the track is always played with `-stream_loop -1` (loop
- * forever) then the whole output is cut to the slideshow's total duration
- * with `-t` — this loops short audio to fill the slideshow and trims long
- * audio to match, in a single ffmpeg pass, no branching needed.
+ * Two ways to drive it:
+ *  - legacy: `secondsPerSlide` + `crossfadeSec` (all slides in upload order, same duration);
+ *  - plan:   `slides` = [{ index, durationSec, caption }] in PLAY order (index = position in
+ *            `imagePaths`), plus `transition`, `transitionSec`, `motion`, `mood`, `captionPosition`.
+ *
+ * Audio behaviour: the track is always played with `-stream_loop -1` (loop forever) then the
+ * whole output is cut to the slideshow's total duration with `-t` — loops short audio and trims
+ * long audio in a single pass.
  *
  * @param {string[]} imagePaths
- * @param {{ secondsPerSlide?: number, aspect?: string, mode?: 'crop'|'pad', crossfadeSec?: number, audioPath?: string|null, crf?: number }} [opts]
+ * @param {object} [opts]
  */
 async function buildSlideshow(imagePaths, outputPath, opts = {}) {
   if (!Array.isArray(imagePaths) || imagePaths.length < 2) {
@@ -607,16 +665,60 @@ async function buildSlideshow(imagePaths, outputPath, opts = {}) {
   const [tw, th] = dims;
   const mode = opts.mode === 'crop' ? 'crop' : 'pad';
   const perSlide = Math.max(1, Math.min(30, Number(opts.secondsPerSlide) || 3));
-  const crossfadeSec = Math.max(0, Number(opts.crossfadeSec) || 0);
   const crf = Math.min(35, Math.max(18, Number(opts.crf) || 23));
   const dir = path.dirname(outputPath);
 
+  const slides = Array.isArray(opts.slides) && opts.slides.length
+    ? opts.slides.filter((sl) => Number.isInteger(sl.index) && imagePaths[sl.index])
+    : imagePaths.map((_, index) => ({ index, durationSec: perSlide, caption: '' }));
+  if (slides.length < 2) throw new Error('At least two slides are required');
+
+  const transition = opts.transition && opts.transition !== 'cut' ? opts.transition : 'fade';
+  const crossfadeSec = opts.transition === 'cut'
+    ? 0
+    : Math.max(0, Number(opts.transitionSec ?? opts.crossfadeSec) || 0);
+  const moodVf = MOOD_FILTERS[opts.mood] || null;
+  const needsCaptions = slides.some((sl) => sl.caption);
+  const fontSize = Math.max(24, Math.round(th / 24));
+  const captionPos = resolveDrawtextPosition(opts.captionPosition || 'bottom-center');
+  const fontfile = needsCaptions
+    ? escapeFilterPath(await resolveFontFilePath('Roboto', 'bold', dir))
+    : null;
+  const wrapAt = Math.max(12, Math.floor((tw * 0.84) / (fontSize * 0.55)));
+
   const slidePaths = [];
-  for (let i = 0; i < imagePaths.length; i += 1) {
+  for (let i = 0; i < slides.length; i += 1) {
+    const sl = slides[i];
+    const dur = Math.max(1, Math.min(30, Number(sl.durationSec) || perSlide));
+    const frames = Math.round(dur * SLIDE_FPS);
+    const motion = opts.motion === 'mixed' ? MIXED_MOTION_CYCLE[i % MIXED_MOTION_CYCLE.length] : opts.motion;
+    const pan = zoompanFor(motion, frames, tw, th);
+
+    // Camera moves work on a 2x frame so the sub-pixel crop steps stay smooth.
+    const chain = pan
+      ? [slideBaseVf(tw * 2, th * 2, mode), pan]
+      : [slideBaseVf(tw, th, mode), `fps=${SLIDE_FPS}`];
+    chain.push('setsar=1');
+    if (moodVf) chain.push(moodVf);
+    if (sl.caption) {
+      // textfile (not text=) sidesteps every drawtext escaping rule for user/model-supplied words.
+      const captionPath = path.join(dir, `caption_${i}.txt`);
+      await fs.writeFile(captionPath, wrapCaption(sl.caption, wrapAt), 'utf8');
+      chain.push(
+        `drawtext=fontfile='${fontfile}':textfile='${escapeFilterPath(captionPath)}':fontsize=${fontSize}`
+        + `:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=14:line_spacing=6:x=${captionPos.x}:y=${captionPos.y}`
+      );
+    }
+    chain.push('format=yuv420p');
+
     const slidePath = path.join(dir, `slide_${i}.mp4`);
+    const input = pan
+      ? ['-i', imagePaths[sl.index]]
+      : ['-loop', '1', '-t', String(dur), '-i', imagePaths[sl.index]];
     await execFileAsync(FFMPEG, [
-      '-y', '-loop', '1', '-t', String(perSlide), '-i', imagePaths[i],
-      '-vf', `${slideVf(tw, th, mode)},fps=30`,
+      '-y', ...input,
+      '-vf', chain.join(','),
+      '-frames:v', String(frames),
       '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf), '-pix_fmt', 'yuv420p',
       slidePath,
     ], 300000);
@@ -624,11 +726,11 @@ async function buildSlideshow(imagePaths, outputPath, opts = {}) {
   }
 
   const joinedPath = path.join(dir, 'slideshow_joined.mp4');
-  await joinVideosWithOptionalCrossfade(slidePaths, joinedPath, { maxWidth: tw, crf, crossfadeSec });
+  await joinVideosWithOptionalCrossfade(slidePaths, joinedPath, { maxWidth: tw, crf, crossfadeSec, transition });
 
   if (opts.audioPath) {
     const joinedProbe = await probeVideo(joinedPath);
-    const totalDur = joinedProbe.duration || perSlide * imagePaths.length;
+    const totalDur = joinedProbe.duration || slides.reduce((sum, sl) => sum + (Number(sl.durationSec) || perSlide), 0);
     await execFileAsync(FFMPEG, [
       '-y', '-i', joinedPath,
       '-stream_loop', '-1', '-i', opts.audioPath,
@@ -947,4 +1049,8 @@ module.exports = {
   buildSlideshow,
   escapeDrawtext,
   escapeFilterPath,
+  zoompanFor,
+  wrapCaption,
+  MOOD_FILTERS,
+  XFADE_TRANSITIONS,
 };

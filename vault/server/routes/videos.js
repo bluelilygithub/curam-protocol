@@ -8,7 +8,7 @@ const { createReadStream } = require('fs');
 const crypto = require('crypto');
 const archiver = require('archiver');
 const { runtimeConfig } = require('../config/runtime');
-const { getLogger } = require('../lib/logger');
+const { getLogger } = require('../middleware/requestContext');
 const { captureIf, makeFingerprint } = require('../services/SuggestionService');
 const { saveAsset, listAssets, getAsset, deleteAsset, getUserUsageBytes } = require('../services/videoLibraryService');
 const {
@@ -42,6 +42,7 @@ const {
 const { normalizeSrt } = require('../services/srtUtils');
 const { fetchLicensedVideo } = require('../services/videoUrlIntake');
 const { videoJobGate } = require('../services/videoJobGate');
+const { planSlideshow, normalizeSlideshowPlan } = require('../services/videoSlideshowPlan');
 
 const router = express.Router();
 
@@ -223,6 +224,10 @@ function ffmpegRoute(name, handler, { errorStatus = 500 } = {}) {
           context: `server/routes/videos.js /${name}`,
         }).catch(() => {});
         return res.status(504).json({ error: 'The video took too long to process — try a shorter or smaller file.' });
+      }
+      // execFile failures carry ffmpeg's raw stderr (banner, filter graph dumps) — never show that.
+      if (err.stderr !== undefined) {
+        return res.status(errorStatus).json({ error: 'ffmpeg could not process this file — check it is a valid, uncorrupted video/image/audio file.' });
       }
       return res.status(errorStatus).json({ error: err.message });
     }
@@ -906,6 +911,26 @@ router.post('/togif', upload.single('video'), ffmpegRoute('togif', async (req, r
   res.send(buffer);
 }));
 
+// "Describe the video" — turns a plain-English description into a reviewable slideshow plan
+// (order, per-slide timing/captions, transition, camera motion, colour mood). JSON in/out, no
+// ffmpeg and no uploads: the client sends only file NAMES, never the images themselves.
+router.post('/slideshow/plan', async (req, res) => {
+  try {
+    const { description, images, hasAudio } = req.body || {};
+    if (!Array.isArray(images)) return res.status(400).json({ error: 'images is required' });
+    const plan = await planSlideshow(req.user.id, {
+      description,
+      images: images.slice(0, 20).map((i) => ({ name: String(i?.name || '').slice(0, 80) })),
+      hasAudio: Boolean(hasAudio),
+    });
+    res.json(plan);
+  } catch (err) {
+    getLogger().error({ err }, '[videos/slideshow/plan]');
+    const userFacing = /Describe the video|at least two|Maximum|unreadable/i.test(err.message);
+    res.status(userFacing ? 400 : 500).json({ error: userFacing ? err.message : 'Could not plan the video — try again.' });
+  }
+});
+
 router.post('/slideshow', upload.fields([
   { name: 'images', maxCount: 20 },
   { name: 'audio', maxCount: 1 },
@@ -942,9 +967,12 @@ router.post('/slideshow', upload.fields([
     }
 
     const outputPath = path.join(dir, 'slideshow.mp4');
-    await buildSlideshow(imagePaths, outputPath, {
-      secondsPerSlide, aspect, mode, crossfadeSec, audioPath,
-    });
+    // A plan (from /slideshow/plan, possibly edited by the user) is untrusted input — re-validate.
+    const rawPlan = parseJsonBodyField(req.body?.plan);
+    const slideOpts = rawPlan
+      ? normalizeSlideshowPlan(rawPlan, images.length)
+      : { secondsPerSlide, aspect, mode, crossfadeSec };
+    await buildSlideshow(imagePaths, outputPath, { ...slideOpts, audioPath });
     return readOutputFile(outputPath);
   });
 

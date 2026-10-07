@@ -6,6 +6,8 @@ const assert = require('assert');
 const { escapeDrawtext, escapeFilterPath } = require('./videoFfmpeg');
 const { isBlockedPlatformHost } = require('./videoUrlIntake');
 const { createJobGate } = require('./videoJobGate');
+const { normalizeSlideshowPlan, buildPlannerPrompt } = require('./videoSlideshowPlan');
+const { zoompanFor, wrapCaption } = require('./videoFfmpeg');
 
 let passed = 0;
 async function test(name, fn) {
@@ -72,6 +74,67 @@ async function test(name, fn) {
     const gate = createJobGate({ maxConcurrent: 1, maxQueue: 1 });
     await assert.rejects(() => gate.run(async () => { throw new Error('boom'); }), /boom/);
     assert.strictEqual(await gate.run(async () => 'next'), 'next');
+  });
+
+  await test('plan: bad/missing input still yields a complete valid plan', () => {
+    const plan = normalizeSlideshowPlan(null, 3);
+    assert.deepStrictEqual(plan.slides.map((s) => s.index), [0, 1, 2]);
+    assert.strictEqual(plan.transition, 'cut');
+    assert.strictEqual(plan.transitionSec, 0);
+    assert.strictEqual(plan.aspect, '9:16');
+  });
+
+  await test('plan: drops invalid/duplicate indices, appends forgotten images, keeps order', () => {
+    const plan = normalizeSlideshowPlan({
+      slides: [{ index: 2 }, { index: 2 }, { index: 9 }, { index: -1 }, { index: 'x' }, { index: 0 }],
+    }, 4);
+    assert.deepStrictEqual(plan.slides.map((s) => s.index), [2, 0, 1, 3]);
+  });
+
+  await test('plan: clamps enums, durations, transition time and caption text', () => {
+    const plan = normalizeSlideshowPlan({
+      aspect: '21:9', mode: 'stretch', transition: 'rm -rf', transitionSec: 99, motion: 'spin', mood: 'neon',
+      captionPosition: 'left',
+      slides: [{ index: 0, durationSec: 500, caption: `a\u0000b\nc${'x'.repeat(200)}` }, { index: 1, durationSec: -4 }],
+    }, 2);
+    assert.strictEqual(plan.aspect, '9:16');
+    assert.strictEqual(plan.mode, 'pad');
+    assert.strictEqual(plan.transition, 'cut');
+    assert.strictEqual(plan.motion, 'none');
+    assert.strictEqual(plan.mood, 'none');
+    assert.strictEqual(plan.captionPosition, 'bottom-center');
+    assert.strictEqual(plan.slides[0].durationSec, 15);
+    assert.strictEqual(plan.slides[1].durationSec, 1);
+    assert.ok(plan.slides[0].caption.length <= 80);
+    assert.ok(!/[\u0000-\u001f]/.test(plan.slides[0].caption));
+    const fade = normalizeSlideshowPlan({ transition: 'fade', transitionSec: 99 }, 2);
+    assert.strictEqual(fade.transitionSec, 2);
+  });
+
+  await test('plan: total length is capped', () => {
+    const slides = Array.from({ length: 20 }, (_, index) => ({ index, durationSec: 15 }));
+    const plan = normalizeSlideshowPlan({ slides }, 20);
+    assert.ok(plan.slides.reduce((n, s) => n + s.durationSec, 0) <= 181);
+  });
+
+  await test('plan prompt lists every image by index and carries the description', () => {
+    const prompt = buildPlannerPrompt('calm and elegant', [{ name: 'a.jpg' }, { name: 'b.jpg' }], true);
+    assert.ok(prompt.includes('0: a.jpg') && prompt.includes('1: b.jpg'));
+    assert.ok(prompt.includes('calm and elegant'));
+  });
+
+  await test('zoompanFor: static for none, expression per move, no commas (filtergraph-safe)', () => {
+    assert.strictEqual(zoompanFor('none', 90, 720, 1280), null);
+    for (const m of ['zoom-in', 'zoom-out', 'pan-left', 'pan-right']) {
+      const z = zoompanFor(m, 90, 720, 1280);
+      assert.ok(z.startsWith('zoompan=') && z.includes('d=90') && z.includes('s=720x1280'), m);
+      assert.ok(!z.includes(','), m);
+    }
+  });
+
+  await test('wrapCaption wraps at word boundaries', () => {
+    assert.strictEqual(wrapCaption('one two three four', 9), 'one two\nthree\nfour');
+    assert.strictEqual(wrapCaption('', 10), '');
   });
 
   console.log(`\n${passed} passed`);
