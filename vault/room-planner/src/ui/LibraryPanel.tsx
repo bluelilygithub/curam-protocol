@@ -31,17 +31,17 @@ export function GlyphThumb({ id, w, l, box = { w: 60, h: 42 } }: { id: string; w
 /** 2.2 → "2.2", 1 → "1", 0.95 → "0.95" */
 const fmt = (n: number): string => String(Number(n.toFixed(2)));
 
-const OPEN_KEY = 'room-planner:library-open:v1';
+const OPEN_KEY = 'room-planner:library-open:v2';
 /** Groups, in the order shown; any other category goes after these. */
 const CATEGORY_ORDER = ['seating', 'tables', 'storage', 'bedroom', 'office', 'decor', 'lighting', 'rugs', 'wall art'];
-const DEFAULT_OPEN: Record<string, boolean> = { doors: true, seating: true, tables: true };
+const DEFAULT_OPEN = 'seating';
 const label = (c: string): string => c.charAt(0).toUpperCase() + c.slice(1);
 
-function loadOpen(): Record<string, boolean> {
-  try { const raw = window.localStorage.getItem(OPEN_KEY); return { ...DEFAULT_OPEN, ...(raw ? (JSON.parse(raw) as Record<string, boolean>) : {}) }; } catch { return { ...DEFAULT_OPEN }; }
+function loadOpen(): string | null {
+  try { const raw = window.localStorage.getItem(OPEN_KEY); return raw === null ? DEFAULT_OPEN : (JSON.parse(raw) as string | null); } catch { return DEFAULT_OPEN; }
 }
 
-/** The library: search, then collapsible groups (doors and windows, then each kind of furniture). Open groups are remembered per browser. */
+/** The library: search, then collapsible groups (doors and windows, then each kind of furniture). One group is open at a time (they share a `name`); it is remembered per browser. */
 export function LibraryPanel() {
   const app = useApp();
   const defs = useProject((s) => s.project?.furnitureDefinitions ?? []);
@@ -49,11 +49,12 @@ export function LibraryPanel() {
   const placing = useUi((s) => s.placing);
   const recents = useUi((s) => s.recents);
   const [query, setQuery] = useState('');
-  const [open, setOpenState] = useState<Record<string, boolean>>(loadOpen);
+  const [openId, setOpenId] = useState<string | null>(loadOpen);
+  /** A group opened or closed. Opening one makes the browser close the others, so only close if it is still the open one. */
   const setOpen = (id: string, on: boolean): void => {
-    setOpenState((prev) => {
-      if (!!prev[id] === on) return prev;
-      const next = { ...prev, [id]: on };
+    setOpenId((prev) => {
+      const next = on ? id : prev === id ? null : prev;
+      if (next === prev) return prev;
       try { window.localStorage.setItem(OPEN_KEY, JSON.stringify(next)); } catch { /* ignore */ }
       return next;
     });
@@ -79,9 +80,11 @@ export function LibraryPanel() {
   const active = (kind: string, id: string): boolean =>
     placing?.kind === kind && placing.definitionId === id && !(placing.kind === 'furniture' && placing.template);
   /** A search opens every group that has a match, whatever was remembered. */
-  const isOpen = (id: string): boolean => (q ? true : !!open[id]);
+  const isOpen = (id: string): boolean => (q ? true : openId === id);
+  /** While searching every matching group is open, so they must not share a name. */
+  const groupName = q ? undefined : 'library';
   const group = (id: string, title: string, count: number, children: React.ReactNode): React.ReactNode => (
-    <details key={id} className="lib-group" open={isOpen(id)} onToggle={(e) => { if (!q) setOpen(id, (e.currentTarget as HTMLDetailsElement).open); }}>
+    <details key={id} className="lib-group" name={groupName} open={isOpen(id)} onToggle={(e) => { if (!q) setOpen(id, (e.currentTarget as HTMLDetailsElement).open); }}>
       <summary>{title}<span className="count">{count}</span></summary>
       <div className="grid">{children}</div>
     </details>
@@ -107,7 +110,7 @@ export function LibraryPanel() {
         {!hasRoom && <p className="hint">Create a room first, then pick something to place.</p>}
 
         {recent.length > 0 && !q && (
-          <details className="lib-group" open={isOpen('recent')} onToggle={(e) => setOpen('recent', (e.currentTarget as HTMLDetailsElement).open)}>
+          <details className="lib-group" name={groupName} open={isOpen('recent')} onToggle={(e) => setOpen('recent', (e.currentTarget as HTMLDetailsElement).open)}>
             <summary>Recently used<span className="count">{recent.length}</span></summary>
             <div className="grid">{recent.map((d) => d && card(d, 'r-'))}</div>
           </details>

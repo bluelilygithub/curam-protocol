@@ -233,9 +233,9 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--co
 .section[open] summary::before { transform: rotate(90deg); }
 /* Slow, smooth open and close (Chrome/Edge animate the height; other browsers just switch). */
 :root { interpolate-size: allow-keywords; --toggle-ms: 350ms; }
-.section::details-content { height: 0; overflow: clip; opacity: 0; transition: height var(--toggle-ms) ease, opacity var(--toggle-ms) ease, content-visibility var(--toggle-ms) allow-discrete; }
-.section[open]::details-content { height: auto; opacity: 1; }
-@media (prefers-reduced-motion: reduce) { .section::details-content, .section summary::before { transition: none; } }
+.section::details-content, .lib-group::details-content { height: 0; overflow: clip; opacity: 0; transition: height var(--toggle-ms) ease, opacity var(--toggle-ms) ease, content-visibility var(--toggle-ms) allow-discrete; }
+.section[open]::details-content, .lib-group[open]::details-content { height: auto; opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .section::details-content, .lib-group::details-content, .section summary::before, .lib-group > summary::before { transition: none; } }
 .section-body { padding-bottom: 6px; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
 .field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; }
@@ -400,7 +400,7 @@ kbd { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--co
 .lib-group { border-top: 1px solid var(--color-border); margin-top: 10px; }
 .lib-group > summary { display: flex; align-items: center; gap: 4px; padding: 9px 0 7px; cursor: pointer; list-style: none; font: 600 11px var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--color-muted); min-height: var(--ctl); }
 .lib-group > summary::-webkit-details-marker { display: none; }
-.lib-group > summary::before { content: "▸"; display: inline-block; width: 14px; transition: transform var(--duration); }
+.lib-group > summary::before { content: "▸"; display: inline-block; width: 14px; transition: transform 350ms ease; }
 .lib-group[open] > summary::before { transform: rotate(90deg); }
 .lib-group > summary .count { margin-left: auto; font: 11px var(--font-mono); letter-spacing: 0; }
 .lib-group > summary:hover { opacity: .7; }
