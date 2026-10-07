@@ -882,7 +882,61 @@ export default function VideosPage() {
   const [refVideoFile, setRefVideoFile] = useState(null);
   const [refVideoInfo, setRefVideoInfo] = useState(null); // { notes, firstFrameDataUrl, duration, width, height }
   const [refVideoLoading, setRefVideoLoading] = useState(false);
-  const [useRefVideoFrameAsSeed, setUseRefVideoFrameAsSeed] = useState(false);
+  // Optional starting frame: grabbed in the browser from the chosen file at a time the user picks
+  // (so no re-upload, instant preview, and they can avoid a fade-to-black final frame).
+  const [refSeedOn, setRefSeedOn] = useState(false);
+  const [refSeedTime, setRefSeedTime] = useState(0);
+  const [refSeedFrame, setRefSeedFrame] = useState('');
+  const [refVideoObjUrl, setRefVideoObjUrl] = useState('');
+  const refVideoElRef = useRef(null);
+  const [refVideoElapsed, setRefVideoElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!refVideoFile) { setRefVideoObjUrl(''); return undefined; }
+    const url = URL.createObjectURL(refVideoFile);
+    setRefVideoObjUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [refVideoFile]);
+
+  useEffect(() => {
+    if (!refSeedOn || !refVideoObjUrl) { setRefSeedFrame(''); return undefined; }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const v = refVideoElRef.current;
+      if (!v) return;
+      try {
+        if (v.readyState < 1) {
+          await new Promise((resolve, reject) => {
+            v.addEventListener('loadedmetadata', resolve, { once: true });
+            v.addEventListener('error', () => reject(new Error('unsupported')), { once: true });
+          });
+        }
+        await new Promise((resolve) => {
+          v.addEventListener('seeked', resolve, { once: true });
+          v.currentTime = Math.max(0, refSeedTime);
+        });
+        if (cancelled) return;
+        const scale = Math.min(1, 768 / (v.videoWidth || 768));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(v.videoWidth * scale);
+        canvas.height = Math.round(v.videoHeight * scale);
+        canvas.getContext('2d').drawImage(v, 0, 0, canvas.width, canvas.height);
+        setRefSeedFrame(canvas.toDataURL('image/jpeg', 0.9));
+      } catch {
+        if (cancelled) return;
+        addToast("Your browser couldn't read a frame from this video — try an MP4 (H.264) file", 'error');
+        setRefSeedOn(false);
+      }
+    }, 150);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [refSeedOn, refSeedTime, refVideoObjUrl, addToast]);
+
+  useEffect(() => {
+    if (!refVideoLoading) { setRefVideoElapsed(0); return undefined; }
+    const started = Date.now();
+    const timer = setInterval(() => setRefVideoElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [refVideoLoading]);
 
   // Clip
   const [startSec, setStartSec] = useState(0);
@@ -1568,7 +1622,9 @@ export default function VideosPage() {
 
   const handleRefVideoFile = async (file) => {
     setRefVideoInfo(null);
-    setUseRefVideoFrameAsSeed(false);
+    setRefSeedOn(false);
+    setRefSeedTime(0);
+    setRefSeedFrame('');
     setRefVideoFile(file || null);
     if (!file) return;
     setRefVideoLoading(true);
@@ -1605,8 +1661,8 @@ export default function VideosPage() {
         seedImageDataUrl = await readFileAsDataUrl(seedImageFile);
       } else if (seedImageUrl.trim()) {
         seedImageDataUrl = seedImageUrl.trim();
-      } else if (useRefVideoFrameAsSeed && refVideoInfo?.firstFrameDataUrl) {
-        seedImageDataUrl = refVideoInfo.firstFrameDataUrl;
+      } else if (refSeedOn && refSeedFrame) {
+        seedImageDataUrl = refSeedFrame;
       }
 
       const res = await api.post('/api/videos/generate', {
@@ -1945,27 +2001,73 @@ export default function VideosPage() {
                 />
               </Tooltip>
               {refVideoLoading && (
-                <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>Analysing video…</p>
+                <div className="space-y-1" role="status" aria-live="polite">
+                  <style>{'@keyframes refvideo-slide{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}'}</style>
+                  <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
+                    <div className="h-full w-2/5 rounded-full" style={{ background: 'var(--color-primary)', animation: 'refvideo-slide 1.2s ease-in-out infinite' }} />
+                  </div>
+                  <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                    Uploading and analysing video… {refVideoElapsed}s — still working, this can take up to a minute for longer files.
+                  </p>
+                </div>
               )}
               {refVideoInfo && (
                 <div className="space-y-2">
-                  <div className="flex gap-3 items-start">
-                    <img src={refVideoInfo.firstFrameDataUrl} alt="" className="w-24 rounded-lg border shrink-0" style={{ borderColor: 'var(--color-border)' }} />
-                    <div className="min-w-0 space-y-1">
-                      <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{refVideoFile?.name || refVideoInfo.filename}</p>
-                      <p className="text-[10px] line-clamp-4" style={{ color: 'var(--color-muted)' }}>{refVideoInfo.notes}</p>
-                    </div>
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{refVideoFile?.name || refVideoInfo.filename}</p>
+                    <p className="text-[10px] line-clamp-4" style={{ color: 'var(--color-muted)' }}>{refVideoInfo.notes}</p>
                   </div>
-                  <Tooltip text="Animate from this video's first frame instead of generating from text alone.">
+                  <video ref={refVideoElRef} src={refVideoObjUrl} preload="auto" muted playsInline className="hidden" />
+                  <Tooltip text="Animate from a frame of this video instead of generating from text alone. Pick the moment yourself — the very last frame is often a fade to black.">
                     <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
-                      <input
-                        type="checkbox"
-                        checked={useRefVideoFrameAsSeed}
-                        onChange={(e) => setUseRefVideoFrameAsSeed(e.target.checked)}
-                      />
-                      Use first frame as starting frame
+                      <input type="checkbox" checked={refSeedOn} onChange={(e) => setRefSeedOn(e.target.checked)} />
+                      Start the new clip from a frame of this video
                     </label>
                   </Tooltip>
+                  {refSeedOn && (() => {
+                    const maxT = Math.max(0, (refVideoInfo.duration || 0) - 0.1);
+                    const setT = (t) => setRefSeedTime(Math.min(maxT, Math.max(0, Number(t) || 0)));
+                    return (
+                      <div className="space-y-2">
+                        <div className="flex gap-3 items-start">
+                          <div className="w-32 shrink-0 aspect-video rounded-lg border overflow-hidden flex items-center justify-center" style={{ borderColor: 'var(--color-primary)', background: 'var(--color-surface)' }}>
+                            {refSeedFrame
+                              ? <img src={refSeedFrame} alt={`Frame at ${refSeedTime.toFixed(1)} seconds`} className="w-full h-full object-contain" />
+                              : <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>Loading frame…</span>}
+                          </div>
+                          <div className="flex-1 min-w-0 space-y-2">
+                            <input
+                              type="range"
+                              min={0}
+                              max={maxT}
+                              step={0.1}
+                              value={Math.min(refSeedTime, maxT)}
+                              onChange={(e) => setT(e.target.value)}
+                              className="w-full"
+                              aria-label="Frame time in seconds"
+                            />
+                            <div className="flex flex-wrap items-center gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                              <input
+                                type="number"
+                                min={0}
+                                max={maxT}
+                                step={0.1}
+                                value={Number(refSeedTime.toFixed(1))}
+                                onChange={(e) => setT(e.target.value)}
+                                className="w-16 px-2 py-1 rounded-lg border text-xs"
+                                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                                aria-label="Frame time in seconds"
+                              />
+                              <span>of {(refVideoInfo.duration || 0).toFixed(1)} s</span>
+                              <button type="button" onClick={() => setT(0)} className="px-2 py-1 rounded-lg border transition-opacity hover:opacity-60" style={{ borderColor: 'var(--color-border)' }}>Start</button>
+                              <button type="button" onClick={() => setT(maxT - 0.9)} className="px-2 py-1 rounded-lg border transition-opacity hover:opacity-60" style={{ borderColor: 'var(--color-border)' }}>1 s before end</button>
+                              <button type="button" onClick={() => setT(maxT)} className="px-2 py-1 rounded-lg border transition-opacity hover:opacity-60" style={{ borderColor: 'var(--color-border)' }}>End</button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <button
                     type="button"
                     onClick={() => handleRefVideoFile(null)}
