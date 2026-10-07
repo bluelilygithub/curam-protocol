@@ -8,6 +8,7 @@ const { isBlockedPlatformHost } = require('./videoUrlIntake');
 const { createJobGate } = require('./videoJobGate');
 const { normalizeSlideshowPlan, buildPlannerPrompt } = require('./videoSlideshowPlan');
 const { zoompanFor, wrapCaption } = require('./videoFfmpeg');
+const { normalizeJoinPlan, buildJoinPrompt } = require('./videoJoinPlan');
 
 let passed = 0;
 async function test(name, fn) {
@@ -135,6 +136,25 @@ async function test(name, fn) {
   await test('wrapCaption wraps at word boundaries', () => {
     assert.strictEqual(wrapCaption('one two three four', 9), 'one two\nthree\nfour');
     assert.strictEqual(wrapCaption('', 10), '');
+  });
+
+  await test('join plan: order is always a permutation; bad input falls back to a safe cut', () => {
+    assert.deepStrictEqual(normalizeJoinPlan(null, 3).order, [0, 1, 2]);
+    const plan = normalizeJoinPlan({ order: [2, 2, 9, -1, 'x', 0], transition: 'fade', transitionSec: 99 }, 4);
+    assert.deepStrictEqual(plan.order, [2, 0, 1, 3]);
+    assert.strictEqual(plan.transitionSec, 2);
+    const junk = normalizeJoinPlan({ transition: 'rm -rf', transitionSec: 5 }, 2);
+    assert.strictEqual(junk.transition, 'cut');
+    assert.strictEqual(junk.transitionSec, 0);
+    assert.strictEqual(normalizeJoinPlan({ transition: 'wipeleft', transitionSec: 0 }, 2).transitionSec, 0.2);
+    assert.strictEqual(normalizeJoinPlan({ transition: 'wipeleft' }, 2).transitionSec, 0.6);
+    assert.strictEqual(normalizeJoinPlan({ order: [0, 1] }, 30).order.length, 12, 'capped at the 12-clip upload limit');
+  });
+
+  await test('join plan prompt lists every clip by index and carries the description', () => {
+    const prompt = buildJoinPrompt('calm and elegant', [{ name: 'outside-lights-off.mp4' }, { name: 'inside.mp4' }]);
+    assert.ok(prompt.includes('0: outside-lights-off.mp4') && prompt.includes('1: inside.mp4'));
+    assert.ok(prompt.includes('calm and elegant'));
   });
 
   console.log(`\n${passed} passed`);

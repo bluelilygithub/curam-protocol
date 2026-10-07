@@ -1,13 +1,23 @@
 import React, { useEffect, useRef } from 'react';
 import { SLIDESHOW_CAN, orderedLimits } from './slideshowLimits.mjs';
 
+const SLIDESHOW_FOOTNOTE = 'It only sees your description and the file names — not the pictures themselves.';
+
+// (Also used by Join videos' planner: pass `heading`, `can`, `limits` and `footnote` to reuse it.)
 // Shown when "Plan my video" is pressed, BEFORE anything is sent to the planner. Explains what the
 // Slideshow tool can't do (flagging the points the user's own description runs into) and how to get
 // the same result with other Video Tools. Nothing proceeds until the user confirms; Cancel / Esc
 // leaves everything as it was. Deliberately no click-outside dismiss — the choice must be explicit.
 
-export default function SlideshowLimitsModal({ description, onConfirm, onCancel }) {
-  const limits = orderedLimits(description);
+export default function SlideshowLimitsModal({
+  description, onConfirm, onCancel,
+  heading = "Before you plan: what the Slideshow can and can't do",
+  can = SLIDESHOW_CAN,
+  limits: limitList = null, // pre-ordered limits (with `triggered`); defaults to the Slideshow's
+  footnote = SLIDESHOW_FOOTNOTE,
+  confirmLabel = "Continue — plan what's possible",
+}) {
+  const limits = limitList || orderedLimits(description);
   const flagged = limits.filter((l) => l.triggered);
   const cancelRef = useRef(null);
 
@@ -32,7 +42,7 @@ export default function SlideshowLimitsModal({ description, onConfirm, onCancel 
       >
         <div className="px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-border)' }}>
           <h2 id="slideshow-limits-title" className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-            Before you plan: what the Slideshow can and can't do
+            {heading}
           </h2>
           <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
             {flagged.length
@@ -45,8 +55,8 @@ export default function SlideshowLimitsModal({ description, onConfirm, onCancel 
           <div className="space-y-1.5">
             <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>What it can do</p>
             <ul className="text-xs space-y-1 list-disc pl-4" style={{ color: 'var(--color-muted)' }}>
-              {SLIDESHOW_CAN.map((c) => <li key={c}>{c}</li>)}
-              <li>It only sees your description and the file names — not the pictures themselves.</li>
+              {can.map((c) => <li key={c}>{c}</li>)}
+              <li>{footnote}</li>
             </ul>
           </div>
 
@@ -85,7 +95,7 @@ export default function SlideshowLimitsModal({ description, onConfirm, onCancel 
             className="text-sm px-4 py-1.5 rounded-xl transition-opacity duration-200 hover:opacity-80"
             style={{ background: 'var(--color-primary)', color: '#fff' }}
           >
-            Continue — plan what's possible
+            {confirmLabel}
           </button>
         </div>
       </div>
