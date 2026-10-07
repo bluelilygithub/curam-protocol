@@ -54,17 +54,27 @@ export const SLIDESHOW_LIMITS = [
   },
 ];
 
-/** Ids of the limits the description's wording runs into (empty description = none). */
-export function detectLimits(description) {
+/** Ids of the given limits the description's wording runs into (empty description = none). */
+export function detectLimitsIn(limits, description) {
   const text = String(description || '');
   if (!text.trim()) return [];
-  return SLIDESHOW_LIMITS.filter((l) => l.pattern.test(text)).map((l) => l.id);
+  return limits.filter((l) => l.pattern.test(text)).map((l) => l.id);
 }
 
-/** All limits, the ones the description touches first (original order kept within each group). */
-export function orderedLimits(description) {
-  const hit = new Set(detectLimits(description));
-  const flagged = SLIDESHOW_LIMITS.filter((l) => hit.has(l.id)).map((l) => ({ ...l, triggered: true }));
-  const rest = SLIDESHOW_LIMITS.filter((l) => !hit.has(l.id)).map((l) => ({ ...l, triggered: false }));
+/** All of the given limits, the ones the description touches first (original order kept within each group). */
+export function orderLimits(limits, description) {
+  const hit = new Set(detectLimitsIn(limits, description));
+  const flagged = limits.filter((l) => hit.has(l.id)).map((l) => ({ ...l, triggered: true }));
+  const rest = limits.filter((l) => !hit.has(l.id)).map((l) => ({ ...l, triggered: false }));
   return [...flagged, ...rest];
+}
+
+/** Ids of the Slideshow limits the description's wording runs into. */
+export function detectLimits(description) {
+  return detectLimitsIn(SLIDESHOW_LIMITS, description);
+}
+
+/** All Slideshow limits, the ones the description touches first. */
+export function orderedLimits(description) {
+  return orderLimits(SLIDESHOW_LIMITS, description);
 }
