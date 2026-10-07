@@ -74,6 +74,27 @@ function downloadAudio(url) {
   });
 }
 
+// Community models (like meta/musicgen) cannot be run through /v1/models/{owner}/{name}/predictions —
+// that endpoint is for Replicate's "official" models only and answers 404 "The requested resource could
+// not be found." Run them by version id instead. The latest version is looked up once per process
+// (override with MUSIC_REPLICATE_VERSION to pin one).
+const versionCache = new Map();
+
+async function resolveModelVersion(model, token) {
+  if (process.env.MUSIC_REPLICATE_VERSION) return process.env.MUSIC_REPLICATE_VERSION;
+  if (versionCache.has(model)) return versionCache.get(model);
+  const res = await fetch(`https://api.replicate.com/v1/models/${model}`, { headers: { Authorization: `Bearer ${token}` } });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 404) {
+    throw new Error(`Music model "${model}" was not found on Replicate — check MUSIC_REPLICATE_MODEL.`);
+  }
+  if (!res.ok) throw new Error(data?.detail || `Could not look up the music model (${res.status})`);
+  const id = data?.latest_version?.id;
+  if (!id) throw new Error(`Music model "${model}" has no published version to run.`);
+  versionCache.set(model, id);
+  return id;
+}
+
 function createReplicateProvider() {
   const model = process.env.MUSIC_REPLICATE_MODEL || 'meta/musicgen';
   const modelVersion = process.env.MUSIC_REPLICATE_MODEL_VERSION || 'stereo-large';
@@ -105,13 +126,16 @@ function createReplicateProvider() {
         normalization_strategy: 'loudness',
         seed,
       };
-      const create = await fetch(`https://api.replicate.com/v1/models/${model}/predictions`, {
+      const version = await resolveModelVersion(model, token);
+      const create = await fetch('https://api.replicate.com/v1/predictions', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input }),
+        body: JSON.stringify({ version, input }),
       });
       let pred = await create.json().catch(() => ({}));
       if (!create.ok) {
+        // A pinned/cached version can go stale — forget it so the next attempt looks it up again.
+        if (create.status === 404 || create.status === 422) versionCache.delete(model);
         const detail = typeof pred?.detail === 'string' ? pred.detail : JSON.stringify(pred?.detail || pred?.error || '');
         throw new Error(detail || `Replicate request failed (${create.status})`);
       }
@@ -180,4 +204,4 @@ function getMusicProvider() {
   return cached;
 }
 
-module.exports = { getMusicProvider, createReplicateProvider, createFakeProvider, isReplicateAudioUrl };
+module.exports = { getMusicProvider, createReplicateProvider, createFakeProvider, isReplicateAudioUrl, _clearVersionCache: () => versionCache.clear() };
