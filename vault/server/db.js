@@ -911,6 +911,23 @@ async function initSchema() {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_garden_projects_user_updated ON garden_projects ("userId", "updatedAt" DESC)
     `);
+    // ── Cellar Planner design library (same shape as garden_projects; list extras are worked out from the design data on save) ─────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cellar_projects (
+        id            SERIAL PRIMARY KEY,
+        "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name          TEXT NOT NULL,
+        data          JSONB NOT NULL,
+        "runCount"    INTEGER NOT NULL DEFAULT 0,
+        "rackUnits"   INTEGER NOT NULL DEFAULT 0,
+        estimated     BOOLEAN NOT NULL DEFAULT FALSE,
+        "createdAt"   TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt"   TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_cellar_projects_user_updated ON cellar_projects ("userId", "updatedAt" DESC)
+    `);
     // Tracing pictures are stored apart from the garden design (a garden references one by underlay.imageId = 'srv-<id>')
     await client.query(`
       CREATE TABLE IF NOT EXISTS garden_images (

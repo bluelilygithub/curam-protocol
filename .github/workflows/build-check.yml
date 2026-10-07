@@ -8,9 +8,9 @@ name: Build Check
 
 on:
   push:
-    branches: [version-7, main]
+    branches: [version-7, main, staging]
   pull_request:
-    branches: [version-7, main]
+    branches: [version-7, main, staging]
 
 jobs:
   client-build:
@@ -64,3 +64,27 @@ jobs:
             echo "::endgroup::"
           done
           exit $status
+
+  cellar-planner-tests:
+    name: Cellar Planner engine (typecheck + tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: vault/cellar-planner/package-lock.json
+
+      - name: Install dependencies
+        working-directory: vault/cellar-planner
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: vault/cellar-planner
+        run: npm run typecheck
+
+      - name: Run tests
+        working-directory: vault/cellar-planner
+        run: npm test

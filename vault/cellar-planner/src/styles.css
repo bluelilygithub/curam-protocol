@@ -1,0 +1,119 @@
+:root { --bg: #f5f5f0; --surface: #eeeee8; --border: #d8d8d0; --primary: #cc785c; --text: #1a1a1a; --muted: #888; --warn: #f59e0b; --err: #ef4444; --duration: 200ms; }
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans-serif; }
+.app { display: grid; grid-template-columns: 330px 1fr 340px; grid-template-rows: auto 1fr; grid-template-areas: "top top top" "left stage right"; height: 100vh; height: 100dvh; }
+.top { grid-area: top; display: flex; gap: 12px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
+.top h1 { font-size: 15px; margin: 0; } .top h1 small { color: var(--muted); font-weight: 400; }
+.name { width: 260px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
+.actions { display: flex; gap: 6px; } .status { margin: 0; color: var(--muted); }
+.left, .right { overflow: auto; padding: 8px 12px; background: var(--surface); }
+.left { grid-area: left; border-right: 1px solid var(--border); } .right { grid-area: right; border-left: 1px solid var(--border); }
+.stage { grid-area: stage; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.tabs { display: flex; gap: 6px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.tab, .btn { padding: 5px 12px; border: 1px solid var(--border); border-radius: 6px; background: #fff; color: var(--text); cursor: pointer; font: inherit; transition: opacity var(--duration); }
+.tab:hover, .btn:hover { opacity: .7; } .btn:disabled { opacity: .4; cursor: default; }
+.tab.on { background: var(--primary); color: #fff; border-color: var(--primary); } .tab.small, .btn.small { padding: 3px 9px; font-size: 12px; }
+.hint { margin-left: auto; color: var(--muted); font-size: 12px; }
+.drawing { position: relative; flex: 1; min-height: 0; background: #fff; }
+.drawing-canvas { position: absolute; inset: 0; } .drawing .fit { position: absolute; right: 10px; top: 10px; }
+.foot { margin: 0; padding: 4px 10px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); background: var(--surface); text-align: center; letter-spacing: .02em; }
+.section { margin: 0 0 14px; } .section h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 8px 0 6px; font-weight: 600; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+.grid > .part, .grid > .run, .grid > .row, .grid > .note, .grid > .banner { grid-column: 1 / -1; }
+.pair { display: contents; }
+.field { display: flex; flex-direction: column; gap: 2px; } .field.check { flex-direction: row; align-items: center; gap: 6px; grid-column: 1 / -1; }
+.field-label { font-size: 11px; color: #555; } .notset { color: var(--warn); font-style: normal; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+.field-input { display: flex; align-items: center; gap: 4px; }
+.field input[type=text], .field select { width: 100%; padding: 4px 6px; border: 1px solid var(--border); border-radius: 5px; background: #fff; font: inherit; }
+.field.bad input { border-color: var(--err); } .field-err { color: var(--err); font-size: 11px; } .unit { color: var(--muted); font-size: 11px; }
+.part, .run { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px 8px; padding: 6px; border: 1px solid var(--border); border-radius: 6px; background: #fbfbf8; align-items: end; }
+.part strong, .run strong { grid-column: 1 / -1; font-size: 12px; } .part small { color: var(--muted); font-weight: 400; }
+.run { grid-template-columns: 1fr 1fr 1fr; }
+.row { display: flex; gap: 6px; align-items: end; flex-wrap: wrap; }
+.note { color: var(--muted); font-size: 12px; margin: 0; }
+.banner { margin: 0; padding: 8px 10px; border: 1px solid var(--warn); background: #fef6e4; border-radius: 6px; font-size: 12px; }
+.total { font-size: 22px; font-weight: 600; margin: 2px 0 4px; } .notset-total { color: var(--warn); font-size: 15px; }
+.count { color: var(--muted); font-weight: 400; text-transform: none; letter-spacing: 0; margin-left: 6px; }
+.issues { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 5px; }
+.issue { display: flex; gap: 8px; padding: 6px 8px; border-radius: 6px; background: #fff; border-left: 3px solid var(--border); font-size: 12px; }
+.issue small { display: block; color: #666; } .issue .sev { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; min-width: 52px; color: var(--muted); }
+.issue.error { border-left-color: var(--err); } .issue.error .sev { color: var(--err); } .issue.warning { border-left-color: var(--warn); } .issue.warning .sev { color: #b7791f; }
+.advisory h2 small { text-transform: none; letter-spacing: 0; font-weight: 400; }
+@media (max-width: 1100px) { .app { grid-template-columns: 280px 1fr; grid-template-areas: "top top" "left stage" "right right"; grid-template-rows: auto minmax(420px, 1fr) auto; height: auto; min-height: 100vh; } }
+
+/* ------------------------------------------------------------------ guide, tooltip, icons (same look as the other planners) */
+.btn.icon { display: inline-flex; align-items: center; padding: 5px 8px; }
+.icon-btn { display: inline-flex; border: 0; background: none; cursor: pointer; padding: 4px; border-radius: 6px; color: var(--text); transition: opacity var(--duration); } .icon-btn:hover { opacity: .6; }
+.modal-back { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.35); padding: 12px; }
+.modal { width: min(560px, 100%); max-height: 100%; display: flex; flex-direction: column; background: var(--bg); border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+.modal.wide { width: min(720px, 100%); max-height: calc(100vh - 24px); }
+.modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 6px; } .modal-head h2 { margin: 0; font-size: 16px; }
+.modal-body { padding: 8px 16px 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.modal-body h3 { margin: 10px 0 0; font-size: 13px; } .modal-body p, .modal-body ul { margin: 0; } .modal-body ul { padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.modal-foot { display: flex; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--border); } .grow { flex: 1; }
+.btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+.rp-tooltip { position: fixed; z-index: 70; pointer-events: none; max-width: 160px; /* the shared placement keeps the centre 80 px from the window edge, so the card must be no wider than 160 px */ width: max-content; padding: 6px 10px; border-radius: 8px; font-size: 11px; line-height: 1.4; background: var(--text); color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,.25); animation: tipin var(--duration) ease-out; }
+@keyframes tipin { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+:root[data-embedded] .top h1 { display: none; }
+.estimated { color: #8a5a00; font-style: normal; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+.banner.estimate { border-color: #b7791f; background: #fef6e4; }
+:focus-visible { outline: 2px solid #1a5fb4; outline-offset: 2px; }
+
+/* accessibility: text and button colours that meet WCAG AA contrast */
+:root { --muted: #595959; --primary-dark: #a5502f; --err: #b42318; --warn-text: #8a5a00; }
+.tab.on, .btn.primary { background: var(--primary-dark); border-color: var(--primary-dark); color: #fff; }
+.notset, .estimated { color: var(--warn-text); }
+.field-err { color: var(--err); }
+.issue.error .sev { color: var(--err); } .issue.warning .sev { color: var(--warn-text); }
+.modal-body:focus-visible { outline: 2px solid #1a5fb4; outline-offset: -2px; }
+.tab.on:hover, .btn.primary:hover { opacity: 1; background: #8f4426; border-color: #8f4426; } /* hover must not wash out white text */
+.banner p { margin: 0 0 6px; }
+/* header parts: two columns so four-digit sizes (2179) are never cut off, at any panel width */
+.part { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.part .field-input { min-width: 0; } .part input[type=text] { min-width: 0; }
+.calculated { color: #1a5fb4; font-style: normal; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+.uncounted { color: #b42318; }
+.modal-body .grid { margin-top: 4px; }
+.field input[type=date] { width: 100%; padding: 4px 6px; border: 1px solid var(--border); border-radius: 5px; background: #fff; font: inherit; }
+
+/* saved designs: header save state, conflict choice, and the Your designs list */
+.save-state { font-size: 12px; color: var(--muted); white-space: nowrap; } .save-state.bad { color: var(--err); font-weight: 600; }
+.conflict { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; flex-basis: 100%; padding: 6px 10px; border: 1px solid var(--warn); border-radius: 8px; background: #fff7e0; color: #5c3b00; font-size: 12px; }
+.plist { list-style: none; padding: 0 !important; display: flex; flex-direction: column; gap: 6px; }
+.plist li { display: flex; gap: 6px; align-items: center; border: 1px solid var(--border); border-radius: 8px; padding: 4px; background: var(--surface); transition: background var(--duration); }
+.plist li.cur { border-color: var(--primary-dark); }
+.plist li.empty { color: var(--muted); padding: 10px; }
+.plist-main { flex: 1; text-align: left; background: none; border: 0; cursor: pointer; display: flex; flex-direction: column; gap: 2px; padding: 4px 6px; font: inherit; color: var(--text); }
+.plist-main span { color: var(--muted); font-size: 12px; }
+.plist .confirm { font-size: 12px; } .plist .link { background: none; border: 0; padding: 0 2px; font: inherit; color: var(--primary-dark); text-decoration: underline; cursor: pointer; }
+.modal-body .row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* The title bar: the same look as Room Planner's (a brand with its help icons, then grouped controls, then the save state). Scoped to .toolbar so
+   the buttons in the panels and dialogs keep their own style. */
+:root { --paper: #fbfaf6; --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; --ctl: 36px; }
+@media (pointer: coarse) { :root { --ctl: 44px; } }
+.toolbar { grid-area: top; background: var(--surface); border-bottom: 1px solid var(--border); min-width: 0; }
+.toolbar-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; overflow-x: auto; scrollbar-width: none; }
+.toolbar-row::-webkit-scrollbar { display: none; }
+.toolbar .brand { display: flex; align-items: center; gap: 9px; padding-right: 10px; margin-right: 2px; border-right: 1px solid var(--border); height: 28px; flex: none; }
+.toolbar .brand-name { font-family: var(--font-display); font-size: 16px; letter-spacing: .02em; white-space: nowrap; }
+.title-help { display: inline-flex; align-items: center; gap: 6px; margin-left: 6px; }
+.title-help button { all: unset; cursor: pointer; display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: var(--muted); transition: color var(--duration), opacity var(--duration); }
+.title-help button:hover, .title-help button:focus-visible { color: var(--primary-dark); }
+.title-help button:focus-visible { outline: 2px solid #1a5fb4; outline-offset: 1px; }
+@media (pointer: coarse) { .title-help button { width: var(--ctl); height: var(--ctl); } }
+.toolbar .group { display: flex; align-items: center; gap: 2px; padding: 3px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; flex: none; }
+.toolbar .spacer { flex: 1; min-width: 8px; }
+.toolbar .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: var(--ctl); padding: 0 10px; background: transparent; border: 1px solid transparent; border-radius: 6px; white-space: nowrap; }
+.toolbar .btn.icon { min-width: var(--ctl); padding: 0 8px; }
+.toolbar .btn:hover:not(:disabled) { opacity: .7; }
+.toolbar .btn:focus-visible { outline: 2px solid #1a5fb4; outline-offset: 1px; }
+.toolbar .name { width: 280px; min-height: calc(var(--ctl) - 6px); border: 0; background: transparent; padding: 0 8px; font-weight: 600; }
+.toolbar .name:focus-visible { outline: 2px solid #1a5fb4; outline-offset: 1px; background: #fff; }
+.toolbar .save-state { margin: 0 2px; }
+.toolbar .conflict { margin: 0 12px 8px; }
+.toolbar-note { margin: 0; padding: 0 14px 8px; color: var(--muted); }
+.toolbar-row > .btn { background: var(--bg); border-color: var(--border); flex: none; }
