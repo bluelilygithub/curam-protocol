@@ -57,3 +57,7 @@ Scene-cut detection (PySceneDetect) to place changes on cuts; energy markers on 
 - **Tooltips** (`components/Tooltip`) on every control: choose video, the video preview, mood, BPM, the description box, Generate, volume, ducking, Update preview, both export buttons, and the header buttons.
 - **How Music Works** modal (`ToolInfoModal`, (i) in the header, opens once automatically — localStorage key `vault_music_info_seen`).
 - **Tour** (Shepherd, compass in the header, `client/src/utils/tours/musicTour.js`, key `vault_tour_music_completed`, 6 steps); retake from **Settings → Music Tour** (opens `/music?tour=1`). Steps whose target isn't on screen yet (the options appear only after generating) show centred.
+
+## Progress modal
+
+Generating opens the global **ProcessingModal** (the same blocking overlay as other slow Vault operations) with a live step list driven by the server's real per-option status — `client/src/pages/music/musicProgress.mjs` maps the job to steps: video uploaded → length read → *Composing option N…* → *Cutting option N to your video's length…* → *Option N is ready* (or *failed: reason*) → finishing. The bar fills as steps complete, the detail line shows elapsed time, and the modal closes by itself when the job finishes (success toast) or fails (error toast). **Cancel** stops waiting and deletes the job's files; the provider has usually already been asked to compose, so that spend can't be undone (the toast says so). Test: `node client/src/pages/music/musicProgress.test.mjs` (also in `npm run test:music`).

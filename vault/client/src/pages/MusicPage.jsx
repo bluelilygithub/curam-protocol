@@ -1,14 +1,16 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
+import useProcessingStore from '../store/processingStore';
 import Tooltip from '../components/Tooltip';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { VoiceInput, VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { startMusicTour, TOUR_KEY as MUSIC_TOUR_KEY } from '../utils/tours/musicTour';
+import { musicProgressSteps, formatElapsed } from './music/musicProgress.mjs';
 
 // Music (/music): pick a video, choose a mood (or describe the music), get 3 instrumental options
 // cut to the video's exact length, preview each against the video, then export the audio (WAV) or the
@@ -182,6 +184,7 @@ function MusicPageInner() {
   const getIcon = useIcon();
   const addToast = useToastStore((s) => s.addToast);
   const info = useToolInfoModal('vault_music_info_seen');
+  const { startProcessing, stopProcessing, setProcessingSteps, updateProcessingDetail } = useProcessingStore();
   const [searchParams] = useSearchParams();
 
   const [status, setStatus] = useState(null);
@@ -195,6 +198,8 @@ function MusicPageInner() {
   const [submitting, setSubmitting] = useState(false);
   const jobIdRef = useRef(null);
   const inputRef = useRef(null);
+  const startedAtRef = useRef(0);
+  const cancelledRef = useRef(false);
 
   useEffect(() => {
     api.get('/api/music/status').then((r) => r.json()).then(setStatus).catch(() => {});
@@ -225,19 +230,38 @@ function MusicPageInner() {
         const res = await api.get(`/api/music/jobs/${job.id}`);
         if (!res.ok) throw new Error('Lost track of that job — generate again.');
         const next = await res.json();
+        if (cancelledRef.current) return;
         setJob(next);
-        if (next.status === 'failed') addToast(next.error || 'Music generation failed', 'error');
+        if (next.status === 'running') {
+          setProcessingSteps(musicProgressSteps(next));
+        } else {
+          stopProcessing();
+          if (next.status === 'failed') addToast(next.error || 'Music generation failed', 'error');
+          else addToast('Your music options are ready', 'success');
+        }
       } catch (err) {
+        stopProcessing();
         addToast(err.message, 'error');
         setJob((j) => (j ? { ...j, status: 'failed', error: err.message } : j));
       }
     }, POLL_MS);
     return () => clearInterval(t);
-  }, [job, addToast]);
+  }, [job, addToast, setProcessingSteps, stopProcessing]);
+
+  // Elapsed time in the progress modal, ticking every second while a job runs.
+  useEffect(() => {
+    if (job?.status !== 'running') return undefined;
+    const tick = () => updateProcessingDetail(`Elapsed ${formatElapsed(Date.now() - startedAtRef.current)} · usually about a minute`);
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [job?.status, job?.id, updateProcessingDetail]);
 
   // Best-effort cleanup of the server's temp files when leaving the page.
   useEffect(() => () => {
+    stopProcessing();
     if (jobIdRef.current) api.delete(`/api/music/jobs/${jobIdRef.current}`).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const moods = status?.moods || [];
@@ -248,8 +272,26 @@ function MusicPageInner() {
   const canGenerate = Boolean(file) && providerOk && ffmpegOk && !submitting && job?.status !== 'running'
     && (mood !== 'custom' || customPrompt.trim()) && !tooLong;
 
+  // Cancel from the progress modal: stop waiting and delete the job. The modal itself closes after this.
+  // The provider has usually already been asked to compose, so that spend can't be undone.
+  const cancelGeneration = useCallback(() => {
+    cancelledRef.current = true;
+    if (jobIdRef.current) {
+      api.delete(`/api/music/jobs/${jobIdRef.current}`).catch(() => {});
+      jobIdRef.current = null;
+    }
+    setJob(null);
+    addToast('Cancelled. Anything already sent to the music provider may still be billed.', 'warn');
+  }, [addToast]);
+
   const generate = async () => {
     setSubmitting(true);
+    cancelledRef.current = false;
+    startedAtRef.current = Date.now();
+    startProcessing('Creating your music…', 'Uploading your video…', { onCancel: cancelGeneration });
+    setProcessingSteps(musicProgressSteps(null).map((st, i) => (i === 0
+      ? { ...st, label: 'Uploading your video…', status: 'active' }
+      : { ...st, status: 'pending' })));
     try {
       if (jobIdRef.current) api.delete(`/api/music/jobs/${jobIdRef.current}`).catch(() => {});
       setJob(null);
@@ -261,20 +303,21 @@ function MusicPageInner() {
       const res = await api.postForm('/api/music/jobs', fd);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Could not start generating');
+      if (cancelledRef.current) {
+        // Cancelled while the upload was still in flight: throw the job away.
+        api.delete(`/api/music/jobs/${data.id}`).catch(() => {});
+        return;
+      }
       jobIdRef.current = data.id;
       setJob(data);
+      setProcessingSteps(musicProgressSteps(data));
     } catch (err) {
+      stopProcessing();
       addToast(err.message, 'error');
     } finally {
       setSubmitting(false);
     }
   };
-
-  const progress = useMemo(() => {
-    if (!job) return null;
-    const done = job.options.filter((o) => o.status === 'ready' || o.status === 'failed').length;
-    return { done, total: job.options.length };
-  }, [job]);
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
@@ -423,13 +466,7 @@ function MusicPageInner() {
           <section className="space-y-3" data-tour="music-options">
             <div className="flex items-baseline justify-between gap-2">
               <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>3 · Your options · video is {formatDuration(job.durationS)}{job.hasAudio ? '' : ' · no sound of its own'}</p>
-              {job.status === 'running' && progress && <p className="text-xs" style={muted}>{job.stage}</p>}
             </div>
-            {job.status === 'running' && progress && (
-              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }} role="progressbar" aria-valuenow={progress.done} aria-valuemax={progress.total}>
-                <div className="h-full transition-all duration-200" style={{ width: `${Math.max(6, (progress.done / progress.total) * 100)}%`, background: 'var(--color-primary)' }} />
-              </div>
-            )}
             {job.status === 'failed' && <p className="text-xs" style={{ color: '#ef4444' }}>{job.error || 'Music generation failed.'}</p>}
             <div className="grid grid-cols-1 lg:grid-cols-1 gap-3">
               {job.options.map((o) => (
