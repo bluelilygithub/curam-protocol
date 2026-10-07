@@ -10,7 +10,7 @@ const archiver = require('archiver');
 const { runtimeConfig } = require('../config/runtime');
 const { getLogger } = require('../middleware/requestContext');
 const { captureIf, makeFingerprint } = require('../services/SuggestionService');
-const { saveAsset, listAssets, getAsset, deleteAsset, getUserUsageBytes } = require('../services/videoLibraryService');
+const { saveAsset, listAssets, getAsset, deleteAsset, renameAsset, getUserUsageBytes } = require('../services/videoLibraryService');
 const {
   startVideoGeneration, pollVideoGeneration, getVideoGenerateConfig, buildYoutubeContext, fetchPlaybackVideo,
   transcribeAudioWithGemini, isGeminiTranscribeAvailable,
@@ -427,6 +427,20 @@ router.post('/library/:id/captions', upload.fields([{ name: 'srt', maxCount: 1 }
 
   sendVideoBuffer(res, buffer, 'captioned.mp4');
 }));
+
+router.patch('/library/:id', async (req, res) => {
+  try {
+    const id = parseAssetId(req.params.id);
+    const title = String(req.body?.title ?? '').trim().slice(0, 200);
+    if (!title) return res.status(400).json({ error: 'title is required' });
+    const item = id && await renameAsset(req.user.id, id, title);
+    if (!item) return res.status(404).json({ error: 'Not found' });
+    res.json(item);
+  } catch (err) {
+    getLogger().error({ err }, '[videos/library PATCH]');
+    res.status(500).json({ error: err.message });
+  }
+});
 
 router.delete('/library/:id', async (req, res) => {
   try {
