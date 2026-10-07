@@ -3,6 +3,7 @@ import api from '../../utils/apiClient';
 import useToastStore from '../../store/toastStore';
 import useProcessingStore from '../../store/processingStore';
 import Tooltip from '../../components/Tooltip';
+import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 
 // "Describe the video" step for the Slideshow tool. The server turns a plain-English description
 // into a plan (order, per-slide timing/captions, transition, camera motion, colour mood); the
@@ -88,14 +89,15 @@ export default function SlideshowPlanner({ files, hasAudio, plan, onPlan }) {
           Say what you want it to feel like. The planner works from your words and the file names — it can't see the pictures, so check the plan before building.
         </p>
       </div>
-      <textarea
+      <VoiceInput
+        type="textarea"
+        append
         value={description}
-        onChange={(e) => setDescription(e.target.value)}
+        onChange={(v) => setDescription(v.slice(0, 1500))}
         rows={3}
-        maxLength={1500}
-        placeholder="e.g. A calm, elegant 20-second showcase for a boutique hotel. Slow zoom, warm tones, soft crossfades, with the hotel name on the first slide."
-        className="w-full px-3 py-2 rounded-xl border text-xs"
-        style={fieldStyle}
+        placeholder="e.g. A calm, elegant 20-second showcase for a boutique hotel. Slow zoom, warm tones, soft crossfades, with the hotel name on the first slide. (Tap the mic to say it instead.)"
+        label="Describe the video"
+        className="!text-xs"
       />
       <Tooltip text="Ask the AI to turn your description into a plan you can edit before building.">
         <button
@@ -147,10 +149,10 @@ export default function SlideshowPlanner({ files, hasAudio, plan, onPlan }) {
                 {files[s.index] && <SlideThumb file={files[s.index]} />}
                 <div className="flex-1 min-w-0 space-y-1">
                   <p className="text-xs truncate" style={{ color: 'var(--color-text)' }}>{i + 1}. {files[s.index]?.name}</p>
-                  <input
-                    type="text" maxLength={80} value={s.caption} placeholder="Caption (optional)"
-                    onChange={(e) => setSlide(i, { caption: e.target.value })}
-                    className="w-full px-2 py-1 rounded-lg border text-xs" style={fieldStyle}
+                  <VoiceInput
+                    value={s.caption} placeholder="Caption (optional)" label={`Caption for slide ${i + 1}`}
+                    onChange={(v) => setSlide(i, { caption: v.slice(0, 80) })}
+                    className="!py-1 !text-xs"
                   />
                 </div>
                 <Tooltip text="Seconds this slide stays on screen.">
