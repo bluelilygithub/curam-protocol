@@ -45,6 +45,8 @@ const { fetchLicensedVideo } = require('../services/videoUrlIntake');
 const { ffmpegRoute } = require('../middleware/ffmpegRoute');
 const { planSlideshow, normalizeSlideshowPlan } = require('../services/videoSlideshowPlan');
 const { planJoin, normalizeJoinPlan } = require('../services/videoJoinPlan');
+const { joinClips } = require('../services/videoJoin/joinClips');
+const { joinCapabilities } = require('../services/videoJoin/capabilities');
 
 const router = express.Router();
 
@@ -651,6 +653,10 @@ router.post('/convert', upload.single('video'), ffmpegRoute('convert', async (re
 
 // "Describe how to join" — plain-English description -> reviewable plan (play order + transition).
 // JSON in/out, no uploads: the client sends only the clip FILE NAMES, never the footage.
+router.get('/join/capabilities', (req, res) => {
+  res.json(joinCapabilities());
+});
+
 router.post('/join/plan', async (req, res) => {
   try {
     const { description, clips } = req.body || {};
@@ -698,12 +704,22 @@ router.post('/join', upload.array('videos', 12), ffmpegRoute('join', async (req,
     }
     const playOrder = plan ? plan.order.map((i) => inputPaths[i]) : inputPaths;
     const outputPath = path.join(dir, 'joined.mp4');
-    await joinVideosWithOptionalCrossfade(playOrder, outputPath, {
+    const joinOpts = {
       maxWidth: Number.isFinite(maxWidth) ? maxWidth : 1280,
       crf: Number.isFinite(crf) ? crf : 23,
-      crossfadeSec: Number.isFinite(crossfadeSec) ? Math.max(0, crossfadeSec) : 0,
-      transition: plan ? plan.transition : undefined,
-    });
+    };
+    if (plan) {
+      // Per-clip effects are indexed by upload position; reorder them to match play order.
+      await joinClips(playOrder, outputPath, {
+        clips: plan.order.map((i) => plan.clips[i]),
+        joins: plan.joins,
+      }, joinOpts);
+    } else {
+      await joinVideosWithOptionalCrossfade(playOrder, outputPath, {
+        ...joinOpts,
+        crossfadeSec: Number.isFinite(crossfadeSec) ? Math.max(0, crossfadeSec) : 0,
+      });
+    }
     return readOutputFile(outputPath);
   });
 

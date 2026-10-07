@@ -10,6 +10,7 @@ import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import SlideshowPlanner from './videos/SlideshowPlanner';
 import JoinPlanner from './videos/JoinPlanner';
+import { describePlan } from './videos/JoinEffectsEditor';
 import { VoiceInput, VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 
 const VIDEO_GOOGLE_FONTS = [
@@ -2915,7 +2916,7 @@ export default function VideosPage() {
           <section className="space-y-3">
             <ToolHeader id="join" label="Join videos" onHelp={setHelpTool} getIcon={getIcon} />
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              Concatenate two or more clips into one MP4. Clips are normalized to a common size and frame rate so mixed formats still join cleanly. Order in the list is the play order.
+              Join two or more clips into one MP4, with a transition between each pair (crossfade, dip to black or white, wipe, slide) and optional effects on each clip (trim, speed, brightness, colour look, fades, volume). Clips are normalized to a common size and frame rate so mixed formats still join cleanly. Order in the list is the play order.
             </p>
             <MultiVideoUpload files={joinFiles} onFiles={setJoinFiles} />
             <JoinPlanner files={joinFiles} plan={joinPlan} onPlan={setJoinPlan} />
@@ -2953,11 +2954,14 @@ export default function VideosPage() {
                   joinFiles.forEach((f) => fd.append('videos', f));
                   if (joinMaxWidth) fd.append('maxWidth', String(joinMaxWidth));
                   fd.append('crf', String(joinCrf));
-                  const xf = joinPlan ? joinPlan.transitionSec : (Number(joinCrossfade) || 0);
+                  const planned = joinPlan
+                    ? (joinPlan.joins || []).some((j) => j.type !== 'cut') || (joinPlan.clips || []).some((c) => c && Object.keys(c).length > 0)
+                    : false;
+                  const xf = joinPlan ? 0 : (Number(joinCrossfade) || 0);
                   if (joinPlan) fd.append('plan', JSON.stringify(joinPlan));
                   else if (xf > 0) fd.append('crossfadeSec', String(xf));
                   runFormVideo('join', fd, {
-                    label: xf > 0 ? 'Joining with crossfade…' : 'Joining videos…',
+                    label: planned ? 'Joining with your transitions and effects…' : xf > 0 ? 'Joining with crossfade…' : 'Joining videos…',
                     resultFilename: 'joined.mp4',
                     forTool: 'join',
                   });
@@ -2966,7 +2970,7 @@ export default function VideosPage() {
                 className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
                 style={{ background: 'var(--color-primary)' }}
               >
-                Join {joinFiles.length || 0} clips{joinPlan ? (joinPlan.transition === 'cut' ? ' · planned order, hard cuts' : ` · planned order, ${joinPlan.transitionSec}s ${joinPlan.transition}`) : (Number(joinCrossfade) > 0 ? ` · ${joinCrossfade}s fade` : '')}
+                Join {joinFiles.length || 0} clips{joinPlan ? ` · ${describePlan(joinPlan)}` : (Number(joinCrossfade) > 0 ? ` · ${joinCrossfade}s fade` : '')}
               </button>
             </Tooltip>
             {resultForTool === 'join' && (

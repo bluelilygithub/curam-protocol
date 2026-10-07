@@ -1075,4 +1075,5 @@ module.exports = {
   wrapCaption,
   MOOD_FILTERS,
   XFADE_TRANSITIONS,
+  buildAtempoChain,
 };

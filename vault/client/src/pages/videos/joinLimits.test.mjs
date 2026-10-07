@@ -7,15 +7,15 @@ function test(name, fn) { fn(); passed += 1; console.log(`ok - ${name}`); }
 
 test('a description Join can do trips nothing', () => {
   assert.deepStrictEqual(detectJoinLimits('Play the outside shots first, then the inside, with a slow dissolve between them.'), []);
+  assert.deepStrictEqual(detectJoinLimits('trim the first 3 seconds off each clip, make the last clip slow-mo and black and white'), []);
   assert.deepStrictEqual(detectJoinLimits(''), []);
   assert.deepStrictEqual(detectJoinLimits(null), []);
 });
 
 test('each limit is detected from natural wording', () => {
   assert.deepStrictEqual(detectJoinLimits('add some smooth chilled music'), ['music']);
-  assert.deepStrictEqual(detectJoinLimits('trim the first 3 seconds off each clip'), ['trim']);
   assert.deepStrictEqual(detectJoinLimits('put a title on the first clip'), ['text']);
-  assert.deepStrictEqual(detectJoinLimits('make the last clip slow-mo'), ['look']);
+  assert.deepStrictEqual(detectJoinLimits('apply a LUT to every clip'), ['look']);
   assert.deepStrictEqual(detectJoinLimits('generate a missing shot of the inside'), ['newfootage']);
   assert.deepStrictEqual(detectJoinLimits('one is portrait and the rest are landscape'), ['shape']);
 });

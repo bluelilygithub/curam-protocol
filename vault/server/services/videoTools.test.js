@@ -153,7 +153,8 @@ async function test(name, fn) {
 
   await test('join plan prompt lists every clip by index and carries the description', () => {
     const prompt = buildJoinPrompt('calm and elegant', [{ name: 'outside-lights-off.mp4' }, { name: 'inside.mp4' }]);
-    assert.ok(prompt.includes('0: outside-lights-off.mp4') && prompt.includes('1: inside.mp4'));
+    // Clips are numbered the way people say them (clip 1) with the JSON index alongside.
+    assert.ok(prompt.includes('Clip 1 (index 0): outside-lights-off.mp4') && prompt.includes('Clip 2 (index 1): inside.mp4'));
     assert.ok(prompt.includes('calm and elegant'));
   });
 

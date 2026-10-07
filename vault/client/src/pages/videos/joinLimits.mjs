@@ -1,15 +1,17 @@
 // What "Join videos" can and cannot do, shown before "Plan my join" runs (same idea as the Slideshow's
 // limits modal). Pure + dependency-free so it is unit-tested (node client/src/pages/videos/joinLimits.test.mjs).
 //
-// Join only concatenates the clips the user supplies: order, hard cut or a transition between them.
-// Anything that changes the footage itself, adds sound, or makes new footage is outside it.
+// Join plays the clips the user supplies in order, with a transition between each pair and simple effects on
+// each clip (trim, speed, brightness/contrast/saturation, black-and-white/warm/cool, fades, volume).
+// Anything beyond that, adds sound, or makes new footage is outside it.
 
 import { orderLimits, detectLimitsIn } from './slideshowLimits.mjs';
 
 export const JOIN_CAN = [
   'Play your clips in the order you choose (or the order the description implies from the file names)',
-  'A hard cut, or a blend between clips: crossfade, dissolve, fade through black, wipe, slide, circle or zoom',
-  'How long each blend lasts',
+  'A transition at each join: hard cut, crossfade, dip to black or white (with level, hold and fade shape), wipe or slide in any direction',
+  'How long each transition lasts, and a different one for each join',
+  'Per-clip effects: trim, slow motion or fast forward, brightness / contrast / saturation, black-and-white / warm / cool looks, fade in and out, volume or mute',
   'Clips of different sizes and frame rates — they are matched automatically',
 ];
 
@@ -22,13 +24,6 @@ export const JOIN_LIMITS = [
     pattern: /music|song|soundtrack|background (track|sound)|\bsound\b|audio|chill(ed)?|jazz|ambient|lo-?fi|melod|tune/i,
   },
   {
-    id: 'trim',
-    title: 'Trimming or cutting parts out of a clip',
-    why: 'Each clip is joined whole, start to finish.',
-    workaround: 'Trim each clip first with Transform → Clip / trim, then join the trimmed versions.',
-    pattern: /trim|cut (out|off|the)|shorten|remove (the )?(part|bit|start|end|section)|first \d+ ?s|last \d+ ?s|only (the )?(first|last)|snip/i,
-  },
-  {
     id: 'text',
     title: 'Titles, captions and on-screen text',
     why: "Join doesn't draw text over the video.",
@@ -37,10 +32,10 @@ export const JOIN_LIMITS = [
   },
   {
     id: 'look',
-    title: 'Changing speed, colour or the look of a clip',
-    why: 'Join does not change what is inside a clip — no slow motion, speed-ups or colour looks.',
-    workaround: 'Use Transform → Speed on a clip before joining. For a colour look across photos, the Slideshow tool has colour looks, but there is no colour grading for video clips.',
-    pattern: /slow[\s-]?mo|slow(er)? down|speed (up|ramp)|time[\s-]?lapse|fast(er)?|colou?r (grade|grading|look|correct)|black and white|sepia|filter|vintage|warm(er)? tones?/i,
+    title: 'Full colour grading, LUTs or custom filters',
+    why: 'Join has simple looks (black and white, warm, cool) plus brightness, contrast and saturation, but no LUT files, curves or other filters.',
+    workaround: 'Use the simple looks and the brightness / contrast / saturation controls on each clip for the nearest match.',
+    pattern: /\blut\b|colou?r (grade|grading|correct)|sepia|vintage|curves|vignette|blur|filter/i,
   },
   {
     id: 'newfootage',
