@@ -189,3 +189,9 @@ Compose → **Slideshow** now has an optional description box. The user says wha
 ## Voice input (2026-10-07)
 
 `VideosPage.jsx` is wrapped in `VoiceInputProvider` (one shared recogniser, same module as Measurements/CSS), and the free-text fields use `VoiceInput` with a built-in mic: **Create → "What should happen on screen"** (appends speech to existing text), **Slideshow → "Describe the video"** (appends) and each **slide caption** (replaces), and **Annotate → label text**. Unsupported browsers show a disabled mic with an explanation; typing always works. Fields that take URLs, numbers, or SRT text are deliberately left typed-only.
+
+---
+
+## Slideshow: limits modal (2026-10-07)
+
+After a real request (walk-around views, bottles added to empty racks, a person removing a bottle, lights on/off, generated music) produced just the photos joined together, **Plan my video** now opens a confirm modal first (`SlideshowLimitsModal.jsx`, content + wording detection in `slideshowLimits.mjs`, tested by `slideshowLimits.test.mjs` via `npm run test:video-tools`). It lists what the Slideshow can do and what it can't (new viewpoints, adding/changing things in a photo, people/actions, lighting changes, creating music), flags the ones the user's own description runs into, and gives the realistic workaround for each (Create → Generate clip with the photo as seed, edit the photo first, supply two photos and cross-fade, upload a track, film real footage and Join). Nothing is sent to the planner until the user clicks **Continue**; **Cancel**/Esc changes nothing, and click-outside deliberately does not dismiss it. Detection is keyword-based (no AI call, no cost) so it can miss unusual wording; the full list is always shown. A hint under the button also says the description is only used by Plan my video, not by Build alone.
