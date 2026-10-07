@@ -22,6 +22,16 @@ export function SaveStatus({ designs }: { designs: Designs }) {
       </span>
       <button type="button" className="btn" disabled={status === 'saving' || status === 'loading' || status === 'conflict'} title="Save this design now instead of waiting for the automatic save."
         onClick={() => void designs.controller.saveNow()} data-testid="save-now">Save now</button>
+    </>
+  );
+}
+
+/** The choice shown when the design was changed in another window: keep this screen's version or take the saved one. */
+export function ConflictBar({ designs }: { designs: Designs }) {
+  const status = useStore(designs.library, (s) => s.status);
+  const error = useStore(designs.library, (s) => s.error);
+  return (
+    <>
       {status === 'conflict' && (
         <div className="conflict" role="alert" data-testid="conflict">
           <span>{error ?? 'This design was changed in another window or tab.'}</span>

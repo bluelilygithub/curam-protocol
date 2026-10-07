@@ -90,3 +90,30 @@ body { background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans
 .plist-main span { color: var(--muted); font-size: 12px; }
 .plist .confirm { font-size: 12px; } .plist .link { background: none; border: 0; padding: 0 2px; font: inherit; color: var(--primary-dark); text-decoration: underline; cursor: pointer; }
 .modal-body .row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* The title bar: the same look as Room Planner's (a brand with its help icons, then grouped controls, then the save state). Scoped to .toolbar so
+   the buttons in the panels and dialogs keep their own style. */
+:root { --paper: #fbfaf6; --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; --ctl: 36px; }
+@media (pointer: coarse) { :root { --ctl: 44px; } }
+.toolbar { grid-area: top; background: var(--surface); border-bottom: 1px solid var(--border); min-width: 0; }
+.toolbar-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; overflow-x: auto; scrollbar-width: none; }
+.toolbar-row::-webkit-scrollbar { display: none; }
+.toolbar .brand { display: flex; align-items: center; gap: 9px; padding-right: 10px; margin-right: 2px; border-right: 1px solid var(--border); height: 28px; flex: none; }
+.toolbar .brand-name { font-family: var(--font-display); font-size: 16px; letter-spacing: .02em; white-space: nowrap; }
+.title-help { display: inline-flex; align-items: center; gap: 6px; margin-left: 6px; }
+.title-help button { all: unset; cursor: pointer; display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: var(--muted); transition: color var(--duration), opacity var(--duration); }
+.title-help button:hover, .title-help button:focus-visible { color: var(--primary-dark); }
+.title-help button:focus-visible { outline: 2px solid #1a5fb4; outline-offset: 1px; }
+@media (pointer: coarse) { .title-help button { width: var(--ctl); height: var(--ctl); } }
+.toolbar .group { display: flex; align-items: center; gap: 2px; padding: 3px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; flex: none; }
+.toolbar .spacer { flex: 1; min-width: 8px; }
+.toolbar .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: var(--ctl); padding: 0 10px; background: transparent; border: 1px solid transparent; border-radius: 6px; white-space: nowrap; }
+.toolbar .btn.icon { min-width: var(--ctl); padding: 0 8px; }
+.toolbar .btn:hover:not(:disabled) { opacity: .7; }
+.toolbar .btn:focus-visible { outline: 2px solid #1a5fb4; outline-offset: 1px; }
+.toolbar .name { width: 280px; min-height: calc(var(--ctl) - 6px); border: 0; background: transparent; padding: 0 8px; font-weight: 600; }
+.toolbar .name:focus-visible { outline: 2px solid #1a5fb4; outline-offset: 1px; background: #fff; }
+.toolbar .save-state { margin: 0 2px; }
+.toolbar .conflict { margin: 0 12px 8px; }
+.toolbar-note { margin: 0; padding: 0 14px 8px; color: var(--muted); }
+.toolbar-row > .btn { background: var(--bg); border-color: var(--border); flex: none; }

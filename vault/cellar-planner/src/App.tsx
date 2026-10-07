@@ -8,7 +8,7 @@ import type { AppStore } from './app/store';
 import { INFO_KEY, type UiStore } from './app/uiStore';
 import type { WallSide } from './enclosure';
 import { badRunIds, bottlesOnWall, elevationView, planView, rackFaceView } from './views';
-import { DesignsPanel, SaveStatus } from './ui/DesignsPanel';
+import { ConflictBar, DesignsPanel, SaveStatus } from './ui/DesignsPanel';
 import { DrawingView } from './ui/DrawingView';
 import { InfoModal } from './ui/InfoModal';
 import { PackageModal } from './ui/PackageModal';
@@ -74,24 +74,40 @@ export function App({ store, ui, designs }: { store: AppStore; ui: UiStore; desi
   return (
     <StoreContext.Provider value={store}>
       <div className="app">
-        <header className="top" data-tour="cp-project">
-          <h1>Cellar Planner <small>glass enclosure</small></h1>
-          <input className="name" value={project.name} aria-label="Project name" title="The name of this design. It is how it appears in Your designs and in the saved file's name." data-testid="project-name" onChange={(e) => store.getState().updateSilently((p) => ({ ...p, name: e.target.value }))} />
-          <SaveStatus designs={designs} />
-          <div className="actions">
-            <button type="button" className="btn" title="Your saved designs: open one, start a new one, copy or delete. Designs save by themselves." onClick={() => ui.getState().set({ designsOpen: true })} data-testid="designs-open">Your designs</button>
-            <button type="button" className="btn" disabled={!canUndo} title="Undo the last change (every change is one step)." onClick={() => store.getState().undo()} data-testid="undo">Undo</button>
-            <button type="button" className="btn" disabled={!canRedo} title="Put back the change you just undid." onClick={() => store.getState().redo()} data-testid="redo">Redo</button>
-            <button type="button" className="btn" title="Download a copy of this design to your computer as a .cellar.json file, to keep or send to someone. This is not the save: designs save by themselves (see the status next to the name)." onClick={download} data-testid="save">Download file</button>
-            <button type="button" className="btn" title="Upload a .cellar.json file you downloaded earlier or were sent. It is added as a new saved design and opened; the design you have open stays as it is." onClick={() => file.current?.click()} data-testid="open">Upload file</button>
-            <button type="button" className="btn" title="Load a ready-made test case: the sample enclosure with racks on every wall, filled with best-guess rack values so there are bottles to count. Every guess is marked estimated until you type your own number over it. It is added as a new saved design and opened." onClick={() => void addDesign(testCaseProject(), 'Added the test case as a new design: its rack values are best guesses.')} data-testid="testcase">Test case</button>
-            <button type="button" className="btn" title="Load the sample enclosure, read from the Carter Noir drawings (values unverified), with the racks left blank. It is added as a new saved design and opened. For one with racks filled in, use Test case." onClick={() => void addDesign(sampleProject(), 'Added the blank sample as a new design.')} data-testid="sample">Blank sample</button>
-            <button type="button" className="btn" title="Make a PDF of A3 drawing sheets: the specification, the plan, the elevation and the racks on each wall, with a title block. Every sheet says preliminary design only." onClick={() => ui.getState().set({ packageOpen: true })} data-testid="package-open">Drawing package</button>
-            <button type="button" className="btn icon" title="How this works: the plain-language guide." onClick={() => ui.getState().set({ infoOpen: true })} data-testid="info-open"><Icon name="info" /></button>
-            <button type="button" className="btn icon" title="Take the guided tour." onClick={() => void startTour()} data-testid="tour-start"><Icon name="compass" /></button>
+        <header className="toolbar" role="toolbar" aria-label="Main toolbar" data-tour="cp-project">
+          <div className="toolbar-row">
+            <div className="brand">
+              <span className="brand-name">Cellar Planner</span>
+              <span className="title-help">
+                <button type="button" aria-label="Take the guided tour" title="Take the guided tour." onClick={() => void startTour()} data-testid="tour-start"><Icon name="compass" /></button>
+                <button type="button" aria-label="How this works" title="How this works: the plain-language guide." onClick={() => ui.getState().set({ infoOpen: true })} data-testid="info-open"><Icon name="info" /></button>
+              </span>
+            </div>
+            <div className="group" role="group" aria-label="History">
+              <button type="button" className="btn icon" aria-label="Undo" disabled={!canUndo} title="Undo the last change (every change is one step)." onClick={() => store.getState().undo()} data-testid="undo"><Icon name="undo" /></button>
+              <button type="button" className="btn icon" aria-label="Redo" disabled={!canRedo} title="Put back the change you just undid." onClick={() => store.getState().redo()} data-testid="redo"><Icon name="redo" /></button>
+            </div>
+            <div className="group" role="group" aria-label="Design">
+              <input className="name" value={project.name} aria-label="Project name" title="The name of this design. It is how it appears in Your designs and in the saved file's name." data-testid="project-name" onChange={(e) => store.getState().updateSilently((p) => ({ ...p, name: e.target.value }))} />
+              <button type="button" className="btn" title="Your saved designs: open one, start a new one, copy or delete. Designs save by themselves." onClick={() => ui.getState().set({ designsOpen: true })} data-testid="designs-open"><Icon name="file" /><span className="label">Your designs</span></button>
+            </div>
+            <div className="group" role="group" aria-label="File">
+              <button type="button" className="btn" title="Download a copy of this design to your computer as a .cellar.json file, to keep or send to someone. This is not the save: designs save by themselves (see the status next to the name)." onClick={download} data-testid="save"><Icon name="download" /><span className="label">Download file</span></button>
+              <button type="button" className="btn" title="Upload a .cellar.json file you downloaded earlier or were sent. It is added as a new saved design and opened; the design you have open stays as it is." onClick={() => file.current?.click()} data-testid="open"><Icon name="upload" /><span className="label">Upload file</span></button>
+            </div>
+            <div className="group" role="group" aria-label="Examples">
+              <button type="button" className="btn" title="Load a ready-made test case: the sample enclosure with racks on every wall, filled with best-guess rack values so there are bottles to count. Every guess is marked estimated until you type your own number over it. It is added as a new saved design and opened." onClick={() => void addDesign(testCaseProject(), 'Added the test case as a new design: its rack values are best guesses.')} data-testid="testcase">Test case</button>
+              <button type="button" className="btn" title="Load the sample enclosure, read from the Carter Noir drawings (values unverified), with the racks left blank. It is added as a new saved design and opened. For one with racks filled in, use Test case." onClick={() => void addDesign(sampleProject(), 'Added the blank sample as a new design.')} data-testid="sample">Blank sample</button>
+            </div>
+            <div className="group" role="group" aria-label="Output">
+              <button type="button" className="btn" title="Make a PDF of A3 drawing sheets: the specification, the plan, the elevation and the racks on each wall, with a title block. Every sheet says preliminary design only." onClick={() => ui.getState().set({ packageOpen: true })} data-testid="package-open"><Icon name="list" /><span className="label">Drawing package</span></button>
+            </div>
+            <div className="spacer" />
+            <SaveStatus designs={designs} />
             <input ref={file} type="file" accept=".json,application/json" hidden aria-label="Upload a design file" title="Upload a design file" onChange={(e) => void open(e.target.files?.[0])} />
           </div>
-          {msg && <p className="status" role="status" data-testid="status">{msg}</p>}
+          <ConflictBar designs={designs} />
+          {msg && <p className="toolbar-note" role="status" data-testid="status">{msg}</p>}
         </header>
         <aside className="left" data-testid="left"><EnclosurePanel /><RackPanel /><RunsPanel /></aside>
         <main className="stage">

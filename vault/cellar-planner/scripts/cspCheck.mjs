@@ -41,7 +41,7 @@ report.marker = await page.locator('meta[name="cellar-planner-app"]').count();
 report.guideOpensFirstVisit = (await page.getByTestId('info-modal').count()) === 1;
 await page.getByTestId('info-got-it').click();
 report.canvasDrawn = Number(await page.getByTestId('plan-canvas').getAttribute('data-prims')) > 10;
-report.embeddedTitleHidden = !(await page.locator('.top h1').isVisible());
+report.brandAndHelpShownWhenEmbedded = (await page.locator('.brand-name').isVisible()) && (await page.locator('.title-help button').count()) === 2;
 await page.getByTestId('tour-start').click();
 await page.waitForSelector('.shepherd-element.vault-tour', { timeout: 8000 });
 report.tourOpens = true;
