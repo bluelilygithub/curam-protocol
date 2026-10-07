@@ -763,6 +763,27 @@ async function captureThumbnail(inputPath, outputPath, timeSec = 1) {
   ]);
 }
 
+// Evenly spaced downscaled JPEG frames (centre of each slice, so never a black first/last frame).
+async function extractFrames(inputPath, outDir, { count = 4, duration = null, maxWidth = 768 } = {}) {
+  const n = Math.max(1, Math.min(8, Math.floor(count) || 1));
+  const paths = [];
+  for (let i = 0; i < n; i += 1) {
+    const t = duration ? (duration * (i + 0.5)) / n : i;
+    const outPath = path.join(outDir, `frame-${i}.jpg`);
+    await execFileAsync(FFMPEG, [
+      '-y',
+      '-ss', String(Math.max(0, t).toFixed(2)),
+      '-i', inputPath,
+      '-frames:v', '1',
+      '-vf', `scale='min(${maxWidth},iw)':-2`,
+      '-q:v', '4',
+      outPath,
+    ]);
+    paths.push(outPath);
+  }
+  return paths;
+}
+
 const SYSTEM_FONT_FILES = {
   'dejavu-sans': '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
   'dejavu-sans-bold': '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
@@ -1036,6 +1057,7 @@ module.exports = {
   ASPECT_RATIOS,
   extractAudio,
   captureThumbnail,
+  extractFrames,
   annotateVideo,
   burnSubtitles,
   extractWav16k,
