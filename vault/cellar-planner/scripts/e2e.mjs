@@ -49,7 +49,7 @@ await page.waitForTimeout(300);
 // ---- the starting screen: the sample enclosure, nothing invented
 check('the plan draws the sample enclosure', (await prims('plan')) > 10, String(await prims('plan')));
 check('with no runs the total is a real zero', (await page.getByTestId('total').innerText()).startsWith('0 bottles'));
-check('the rack values start blank, with a banner saying so', (await page.getByTestId('rack-missing').count()) === 1 && /not set/.test(await page.getByTestId('rack-missing').innerText()));
+check('the rack values start blank, with a banner saying so', (await page.getByTestId('rack-missing').count()) === 1 && /not set/.test(await page.getByTestId('rack-missing').textContent()));
 check('the rack fields show "not set", not 0', (await page.getByTestId('rack-width').inputValue()) === '' && (await page.getByTestId('rack-width').getAttribute('placeholder')) === 'not set');
 check('no walkway minimum is set', (await page.getByTestId('walkway').inputValue()) === '');
 check('the inside size shown is 2750 x 1565 x 2150', /Inside 2750 x 1565 x 2150 mm/.test(await page.getByTestId('checks-panel').innerText()));

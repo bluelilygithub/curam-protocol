@@ -87,12 +87,14 @@ export function Section({ title, children, note, testid, tour }: { title: string
     <section className={`section${open ? '' : ' collapsed'}`} data-testid={testid} data-tour={tour}>
       <h2>
         <button type="button" className="section-toggle" aria-expanded={open} title={open ? `Hide ${title}` : `Show ${title}`} data-testid={testid ? `${testid}-toggle` : undefined} onClick={() => setOpen((o) => !o)}>
-          <span className="chev" aria-hidden="true">{open ? '▾' : '▸'}</span>{title}
+          <span className="chev" aria-hidden="true">▸</span>{title}
         </button>
       </h2>
-      <div hidden={!open}>
-        {note}
-        <div className="grid">{children}</div>
+      <div className="section-collapse" inert={!open} aria-hidden={!open}>
+        <div className="section-inner">
+          {note}
+          <div className="grid">{children}</div>
+        </div>
       </div>
     </section>
   );

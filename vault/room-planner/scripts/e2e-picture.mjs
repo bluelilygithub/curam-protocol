@@ -1,7 +1,7 @@
 // End-to-end: your own photo in a picture frame, the Lights button, the table lamp. `npm run dev` first, then `node scripts/e2e-picture.mjs [dir]`.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { chromium } from 'playwright-core';
+import { chromium } from './lib/chromium.mjs';
 
 const URL = process.env.RP_URL ?? 'http://127.0.0.1:5174/room-planner-app/';
 const out = process.argv[2] ?? 'spike/out-picture';
@@ -25,6 +25,7 @@ const viewMenu = async (fn) => {
 const openBox = async (title) => {
   const box = page.locator('.scene-settings details', { has: page.locator('summary', { hasText: new RegExp(`^${title}$`) }) });
   if ((await box.getAttribute('open')) === null) await box.locator('summary').click();
+  await page.waitForTimeout(450); // the block opens over 350 ms
   return box;
 };
 const wait = (ms) => page.waitForTimeout(ms);
@@ -118,6 +119,7 @@ check('Reset puts it back to the standard strength', (await ev(() => window.room
 
 // ---------------------------------------------------------------- undo and back to the built-in picture
 await ev(() => { window.roomPlanner.setViewMode('2d'); window.roomPlanner.ui.getState().select([{ kind: 'furniture', id: 't-photo-frame' }]); });
+await page.locator('details.section > summary', { hasText: /^Picture$/ }).evaluate((s) => s.parentElement.setAttribute('open', '')); // the Inspector blocks are an accordion
 await page.getByRole('button', { name: 'Use the built-in picture' }).click();
 await wait(300);
 check('Use the built-in picture clears the photo', (await ev(() => window.roomPlanner.project.getState().project.rooms[0].furniture.find((f) => f.id === 't-photo-frame').imageId ?? null)) === null);
