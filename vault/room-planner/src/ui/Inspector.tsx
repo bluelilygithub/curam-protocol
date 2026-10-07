@@ -76,9 +76,10 @@ function Field({ label, unit, committed, mixed, unavailable, preview, onCommit, 
   );
 }
 
-function Section({ title, children, open = true }: { title: string; children: ReactNode; open?: boolean }) {
+/** Inspector blocks form one accordion: they share a `name`, so the browser keeps only one open at a time (the scene boxes below join the same group). */
+function Section({ title, children, open = false }: { title: string; children: ReactNode; open?: boolean }) {
   return (
-    <details className="section" open={open}>
+    <details className="section" name="inspector" open={open}>
       <summary>{title}</summary>
       <div className="section-body">{children}</div>
     </details>
@@ -186,7 +187,7 @@ export function Inspector() {
             {locked.value === true ? Icons.lock : Icons.unlock}
           </button>
         </div>
-        <Section title="Transform">
+        <Section title="Transform" open>
           <div className="two">
             {num('x', 'X', 'm')}{num('y', 'Y', 'm')}
             {num('width', 'Width', 'm')}{num('length', 'Length', 'm')}
@@ -255,7 +256,7 @@ export function Inspector() {
               <p className="subject-sub">On wall {room.walls.findIndex((w) => w.id === fx.wallId) + 1} of {room.walls.length}</p>
             </div>
           </div>
-          <Section title="Size and position">
+          <Section title="Size and position" open>
             <div className="two">
               {row('width', 'Width', 'm')}{row('height', 'Height', 'm')}
               {row('elevation', 'Elevation', 'm')}{row('offsetAlongWall', 'Offset along wall', 'm')}
@@ -299,7 +300,7 @@ export function Inspector() {
               <p className="subject-sub">Inside length {Math.hypot(b.x - a.x, b.y - a.y).toFixed(3)} m</p>
             </div>
           </div>
-          <Section title="Length">
+          <Section title="Length" open>
             <Field label="Inside length" unit="m" committed={fmt(Math.hypot(b.x - a.x, b.y - a.y))} preview={(d) => previewWallLength(project, wall.id, d as FieldValue)} onCommit={commit} />
             <p className="hint">Typing a length moves this wall’s far corner along the wall. Use it to set the room’s size.</p>
           </Section>
@@ -322,7 +323,7 @@ export function Inspector() {
               <p className="subject-sub">Room corner · {room.vertices.length} in total</p>
             </div>
           </div>
-          <Section title="Position">
+          <Section title="Position" open>
             <div className="two">
               <Field label="X" unit="m" committed={fmt(vertex.position.x)} preview={(d) => previewVertexPosition(project, vertex.id, 'x', d as FieldValue)} onCommit={commit} />
               <Field label="Y" unit="m" committed={fmt(vertex.position.y)} preview={(d) => previewVertexPosition(project, vertex.id, 'y', d as FieldValue)} onCommit={commit} />
@@ -349,7 +350,7 @@ export function Inspector() {
         <p className="room-summary" data-testid="room-summary">
           {size.w.toFixed(2).replace(/\.?0+$/, '')} × {size.l.toFixed(2).replace(/\.?0+$/, '')} m · {area.toFixed(1).replace(/\.0$/, '')} m² · {room.furniture.length + room.fixtures.length} object{room.furniture.length + room.fixtures.length === 1 ? '' : 's'} · {issues === 0 ? 'no problems' : `${issues} to look at`}
         </p>
-        <Section title="Room details" open={false}>
+        <Section title="Room details">
           <dl className="facts">
             <dt>Size</dt><dd>{size.w.toFixed(2)} × {size.l.toFixed(2)} m</dd>
             <dt>Area</dt><dd>{area.toFixed(2)} m²</dd>

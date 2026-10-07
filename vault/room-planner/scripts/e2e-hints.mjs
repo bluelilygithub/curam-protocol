@@ -2,7 +2,7 @@
 // `npm run dev` first, then `node scripts/e2e-hints.mjs [dir]`.
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { chromium } from 'playwright-core';
+import { chromium } from './lib/chromium.mjs';
 
 const URL = process.env.RP_URL ?? 'http://127.0.0.1:5174/room-planner-app/';
 const out = process.argv[2];
@@ -127,6 +127,7 @@ check('the Home key does the same', (await page.getByTestId('recentre').count())
 await ev(() => window.roomPlanner.ui.getState().select([{ kind: 'furniture', id: 't-ceiling-light' }]));
 await wait(300);
 check('a light in the plan says where it can be seen', (await page.locator('.light-hint', { hasText: 'Realistic 3D look' }).count()) === 1);
+await page.locator('details.section > summary', { hasText: /^Light$/ }).evaluate((s) => s.parentElement.setAttribute('open', '')); // the Inspector blocks are an accordion
 await page.getByRole('button', { name: 'See it in 3D' }).click();
 await page.waitForSelector('[data-testid=stage3d] canvas', { timeout: 30000 });
 await wait(800);

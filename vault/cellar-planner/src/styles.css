@@ -19,6 +19,10 @@ body { background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans
 .drawing-canvas { position: absolute; inset: 0; } .drawing .fit { position: absolute; right: 10px; top: 10px; }
 .foot { margin: 0; padding: 4px 10px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); background: var(--surface); text-align: center; letter-spacing: .02em; }
 .section-toggle { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 6px; width: 100%; cursor: pointer; transition: opacity 200ms; } .section-toggle:hover { opacity: .7; } .section-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; } .section-toggle .chev { width: 10px; }
+.section-collapse { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 350ms ease, opacity 350ms ease; } .section-inner { min-height: 0; overflow: hidden; }
+.section.collapsed .section-collapse { grid-template-rows: 0fr; opacity: 0; visibility: hidden; transition: grid-template-rows 350ms ease, opacity 350ms ease, visibility 0s 350ms; }
+.section-toggle .chev { display: inline-block; transition: transform 350ms ease; } .section:not(.collapsed) .section-toggle .chev { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .section-collapse, .section.collapsed .section-collapse, .section-toggle .chev { transition: none; } }
 .section { margin: 0 0 14px; } .section h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 8px 0 6px; font-weight: 600; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
 .grid > .part, .grid > .run, .grid > .row, .grid > .note, .grid > .banner { grid-column: 1 / -1; }

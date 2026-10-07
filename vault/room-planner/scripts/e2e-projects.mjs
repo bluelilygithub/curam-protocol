@@ -3,7 +3,7 @@
 // `node scripts/e2e-projects.mjs [screenshotDir]` (set RP_URL if 127.0.0.1 does not answer). Exits non-zero if any check fails.
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { chromium } from 'playwright-core';
+import { chromium } from './lib/chromium.mjs';
 
 const URL = process.env.RP_URL ?? 'http://localhost:5174/room-planner-app/';
 const out = process.argv[2];

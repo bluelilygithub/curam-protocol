@@ -7,7 +7,7 @@ import { PalettePicker } from './PalettePicker';
 
 function Box({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <details className="section meta-box">
+    <details className="section meta-box" name="inspector">
       <summary>{title}</summary>
       <div className="section-body">{children}</div>
     </details>
