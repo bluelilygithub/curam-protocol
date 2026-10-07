@@ -969,6 +969,8 @@ export default function VideosPage() {
   const [saveTitle, setSaveTitle] = useState('');
   const [lastTransaction, setLastTransaction] = useState(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [renameId, setRenameId] = useState(null);
+  const [renameValue, setRenameValue] = useState('');
 
   // Caption studio
   const [captionLibraryId, setCaptionLibraryId] = useState('');
@@ -1146,6 +1148,25 @@ export default function VideosPage() {
       stopProcessing();
     }
   }, [resultName, tool, saveTitle, lastTransaction, startProcessing, stopProcessing, loadLibrary, addToast, resultBlob]);
+
+  const renameLibraryItem = useCallback(async (id, title) => {
+    const name = String(title || '').trim();
+    if (!name) {
+      addToast('Name cannot be empty', 'error');
+      return false;
+    }
+    try {
+      const res = await api.patch(`/api/videos/library/${id}`, { title: name });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Rename failed');
+      setLibraryItems((prev) => prev.map((i) => (i.id === id ? { ...i, title: data.title } : i)));
+      addToast('Renamed', 'success');
+      return true;
+    } catch (err) {
+      addToast(err.message, 'error');
+      return false;
+    }
+  }, [addToast]);
 
   const deleteLibraryItem = useCallback(async (id) => {
     try {
@@ -3018,7 +3039,29 @@ export default function VideosPage() {
                 >
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{item.title}</p>
+                      {renameId === item.id ? (
+                        <form
+                          className="flex items-center gap-1.5"
+                          onSubmit={async (e) => {
+                            e.preventDefault();
+                            if (await renameLibraryItem(item.id, renameValue)) setRenameId(null);
+                          }}
+                        >
+                          <input
+                            autoFocus
+                            value={renameValue}
+                            maxLength={200}
+                            onChange={(e) => setRenameValue(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Escape') setRenameId(null); }}
+                            className="text-sm rounded-lg border px-2 py-1 min-w-0"
+                            style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}
+                          />
+                          <button type="submit" className="text-xs font-medium transition-opacity hover:opacity-70" style={{ color: 'var(--color-primary)' }}>Save</button>
+                          <button type="button" onClick={() => setRenameId(null)} className="text-xs transition-opacity hover:opacity-70" style={{ color: 'var(--color-muted)' }}>Cancel</button>
+                        </form>
+                      ) : (
+                        <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{item.title}</p>
+                      )}
                       <p className="text-[10px] mt-0.5" style={{ color: 'var(--color-muted)' }}>
                         {item.tool || '—'} · {item.mediaType} · {formatBytes(item.fileSize)} · {item.createdAt ? new Date(item.createdAt).toLocaleString() : '—'}
                       </p>
@@ -3032,6 +3075,16 @@ export default function VideosPage() {
                           style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                         >
                           Preview
+                        </button>
+                      </Tooltip>
+                      <Tooltip text="Change this file's name.">
+                        <button
+                          type="button"
+                          onClick={() => { setRenameId(item.id); setRenameValue(item.title || ''); }}
+                          className="text-xs px-2.5 py-1 rounded-lg border transition-opacity hover:opacity-70"
+                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                        >
+                          Rename
                         </button>
                       </Tooltip>
                       {item.mediaType === 'video' && (
