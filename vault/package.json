@@ -46,6 +46,7 @@
     "test:fonts-svg-export": "node client/src/pages/fonts/svgExport.test.mjs",
     "test:fonts-catalog": "node server/services/fontGoogleCatalog.test.js",
     "test:fonts-session": "node server/services/fontSessionCache.test.js",
+    "test:music": "node server/services/music/music.test.js && node server/services/music/music.e2e.test.js",
     "test:video-tools": "node client/src/pages/videos/slideshowLimits.test.mjs && node server/services/videoTools.test.js"
   },
   "dependencies": {

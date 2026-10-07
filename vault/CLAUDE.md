@@ -64,6 +64,7 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `server/routes/videos.js` — Video Tools API (`/api/videos/*`): ffmpeg tools, generate queue, library CRUD + captioned burn
 - `server/services/videoFfmpeg.js` — ffmpeg/ffprobe helpers (probe, clip, convert, styled captions, thumbnail)
 - `server/services/videoGenerateService.js` — LLM brief expansion (`light`) + Replicate/FAL text-to-video
+- `server/routes/music.js` + `server/services/music/` + `client/src/pages/MusicPage.jsx` — **Music** (`/music`, flag `music`): upload a video, pick a mood → 3 instrumental options cut to the exact length (fade in/out), preview mixed, export WAV or MP4 with sidechain ducking and -14 LUFS. In-memory jobs + temp files (no DB), polled; backend behind `musicProviders.js` (default Replicate MusicGen, `MUSIC_PROVIDER=fake` for tests); long videos loop with crossfades. Shared `server/middleware/ffmpegRoute.js` (gate + errors) is used by Video Tools too. See **`docs/music.md`**; `npm run test:music`.
 - `server/services/videoSlideshowPlan.js` + `client/src/pages/videos/SlideshowPlanner.jsx` — Slideshow "Describe the video": description (+ file names only, not pixels) → `light`-tier plan (order, per-slide timing/captions, transition, Ken Burns motion, colour mood) → editable → `POST /api/videos/slideshow` with `plan`; plan re-validated server-side by `normalizeSlideshowPlan()`. See `docs/video-tools.md`.
 - `server/services/videoLibraryService.js` — saved videos/images on disk + `video_library` metadata
 - `client/src/pages/VideosPage.jsx` — grouped sidebar UI at `/videos` (mirrors Graphics layout)
@@ -457,6 +458,8 @@ Custom fonts on a *live* AcroForm field (`field.updateAppearances`) render as He
 | `VIDEO_REPLICATE_MODEL` | Replicate text-to-video model (default `minimax/hailuo-2.3`) |
 | `VIDEO_GENERATE_MODEL` | Video Tools — FAL model id (default `fal-ai/minimax/video-01-live`) |
 | `VIDEO_MAX_UPLOAD_MB` | Video Tools — upload cap for ffmpeg routes (default 80) |
+| `MUSIC_PROVIDER` / `MUSIC_REPLICATE_MODEL` / `MUSIC_REPLICATE_MODEL_VERSION` | Music — backend (default `replicate`; `fake` = test synth), Replicate model (default `meta/musicgen`) and its version (default `stereo-large`); uses `REPLICATE_API_TOKEN` |
+| `MUSIC_MAX_VIDEO_SEC` / `MUSIC_JOB_TTL_MIN` / `MUSIC_MAX_CLIP_SECONDS` | Music — longest video accepted (default 300), how long finished jobs/files are kept (default 90 min), longest single generated clip (default 30) |
 | `VIDEO_MAX_CONCURRENT_JOBS` / `VIDEO_MAX_QUEUED_JOBS` | Video Tools — global ffmpeg concurrency gate (defaults 2 running / 8 queued, then 503 "busy") — `server/services/videoJobGate.js` |
 | `VIDEO_FFMPEG_TIMEOUT_MS` | Video Tools — ffmpeg job timeout (default 480000) |
 | `VIDEO_LIBRARY_QUOTA_MB` | Video Tools — per-user saved-library cap (default 1000) |

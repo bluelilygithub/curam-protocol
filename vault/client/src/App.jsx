@@ -35,6 +35,7 @@ import YoutubePage from './pages/YoutubePage';
 import GraphicsPage from './pages/GraphicsPage';
 import FontsPage from './pages/FontsPage';
 import VideosPage from './pages/VideosPage';
+import MusicPage from './pages/MusicPage';
 import RecipesPage from './pages/RecipesPage';
 import MeasurementsPage from './pages/MeasurementsPage';
 import PdfPage from './pages/PdfPage';
@@ -175,6 +176,7 @@ function App() {
               <Route path="/graphics" element={<GraphicsPage />} />
               <Route path="/fonts" element={<FontsPage />} />
               <Route path="/videos" element={<VideosPage />} />
+              <Route path="/music" element={<MusicPage />} />
               <Route path="/recipes" element={<RecipesPage />} />
               <Route path="/measurements" element={<MeasurementsPage />} />
               <Route path="/pdf" element={<PdfPage />} />
