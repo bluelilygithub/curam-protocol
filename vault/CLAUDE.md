@@ -64,6 +64,7 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `server/routes/videos.js` — Video Tools API (`/api/videos/*`): ffmpeg tools, generate queue, library CRUD + captioned burn
 - `server/services/videoFfmpeg.js` — ffmpeg/ffprobe helpers (probe, clip, convert, styled captions, thumbnail)
 - `server/services/videoGenerateService.js` — LLM brief expansion (`light`) + Replicate/FAL text-to-video
+- `server/services/videoSlideshowPlan.js` + `client/src/pages/videos/SlideshowPlanner.jsx` — Slideshow "Describe the video": description (+ file names only, not pixels) → `light`-tier plan (order, per-slide timing/captions, transition, Ken Burns motion, colour mood) → editable → `POST /api/videos/slideshow` with `plan`; plan re-validated server-side by `normalizeSlideshowPlan()`. See `docs/video-tools.md`.
 - `server/services/videoLibraryService.js` — saved videos/images on disk + `video_library` metadata
 - `client/src/pages/VideosPage.jsx` — grouped sidebar UI at `/videos` (mirrors Graphics layout)
 - `server/routes/recipes.js` — Recipes API: suggest, expand, named tiers, grocery prices, image, library CRUD
