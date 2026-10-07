@@ -10,7 +10,10 @@ const FFMPEG = process.env.LOCAL_FFMPEG_COMMAND || 'ffmpeg';
 const FFPROBE = process.env.LOCAL_FFPROBE_COMMAND || 'ffprobe';
 const MAX_VIDEO_BYTES = Number(process.env.VIDEO_MAX_UPLOAD_MB || 80) * 1024 * 1024;
 
-function execFileAsync(cmd, args, timeout = 180000) {
+// Default covers a long join/convert of near-cap uploads; probes pass their own short timeout.
+const DEFAULT_EXEC_TIMEOUT_MS = Number(process.env.VIDEO_FFMPEG_TIMEOUT_MS) || 480000;
+
+function execFileAsync(cmd, args, timeout = DEFAULT_EXEC_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     execFile(cmd, args, { timeout, maxBuffer: 20 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (error) {
@@ -806,12 +809,14 @@ function buildSubtitleForceStyle({
 }
 
 function escapeDrawtext(text) {
+  // Truncate BEFORE escaping — slicing escaped output can cut an escape sequence in half
+  // and leave a dangling backslash that breaks the whole filter string.
   return String(text || '')
+    .slice(0, 120)
     .replace(/\\/g, '\\\\')
     .replace(/%/g, '\\%')
     .replace(/'/g, "'\\''")
-    .replace(/:/g, '\\:')
-    .slice(0, 120);
+    .replace(/:/g, '\\:');
 }
 
 function escapeFilterPath(filePath) {
@@ -940,4 +945,6 @@ module.exports = {
   videoToGif,
   SLIDESHOW_DIMS,
   buildSlideshow,
+  escapeDrawtext,
+  escapeFilterPath,
 };

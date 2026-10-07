@@ -445,10 +445,15 @@ function resolveVideoUrl(data) {
 }
 
 async function downloadVideoBuffer(url) {
+  const MAX_BYTES = 50 * 1024 * 1024;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to download generated video (${res.status})`);
+  // Check the declared size first so an oversized file is never pulled into memory.
+  if (Number(res.headers.get('content-length')) > MAX_BYTES) {
+    throw new Error('Generated video exceeds 50MB — use the provider URL directly');
+  }
   const buf = Buffer.from(await res.arrayBuffer());
-  if (buf.length > 50 * 1024 * 1024) {
+  if (buf.length > MAX_BYTES) {
     throw new Error('Generated video exceeds 50MB — use the provider URL directly');
   }
   return { buffer: buf, contentType: res.headers.get('content-type') || 'video/mp4' };
