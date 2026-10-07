@@ -168,3 +168,18 @@ POST /api/videos/library/:id/captions  `srtText` or `srt` file + style fields + 
 - Generated-video download checks `content-length` before buffering. `LOCAL_WHISPER_LANGUAGE` sets the local transcribe language (default `en`). `/generate` raises a Suggestions-inbox alert when no provider is configured.
 - Tests: `npm run test:video-tools` (`server/services/videoTools.test.js` — escape helpers, platform blocklist, job gate).
 - **Not done:** splitting the 3200-line `client/src/pages/VideosPage.jsx` into per-tool components — too risky to do without running the UI; do it as its own change.
+
+---
+
+## Slideshow: "Describe the video" (2026-10-07)
+
+Compose → **Slideshow** now has an optional description box. The user says what the video should feel like; `POST /api/videos/slideshow/plan` (`light` tier, JSON in/out, no uploads — only file **names** are sent) returns a plan, shown in an editable panel (`client/src/pages/videos/SlideshowPlanner.jsx`) before anything is rendered.
+
+- **The planner cannot see the pictures** (`callModel` is text-only) — it works from the description + file names, and the UI says so. It is told never to invent what a picture shows or add captions it has no words for.
+- **Plan shape** (`server/services/videoSlideshowPlan.js`): `aspect`, `mode` (crop/pad), `transition` (`cut` or an ffmpeg xfade: fade, dissolve, fadeblack, wipeleft/right, slideleft/right, circleopen, zoomin) + `transitionSec`, `motion` (none, zoom-in/out, pan-left/right, mixed), `mood` (none, warm, cool, vivid, mono, vintage, cinematic), `captionPosition`, and `slides: [{ index, durationSec, caption }]` in **play order** (index = position in the uploaded list). `summary` is the planner's one-line rationale.
+- **Untrusted at every hop**: `normalizeSlideshowPlan()` validates the model output, then again when the client sends the (edited) plan back with `POST /api/videos/slideshow` as the `plan` JSON field. Unknown enums fall back to defaults, bad/duplicate indices are dropped, forgotten images are appended, durations clamp to 1–15s, total capped at 180s, captions stripped of control characters and capped at 80 chars. Without a `plan` field the endpoint behaves exactly as before (`secondsPerSlide`/`aspect`/`crossfadeSec`).
+- **Rendering** (`buildSlideshow()` in `videoFfmpeg.js`): per-slide encode → Ken Burns via `zoompan` on a 2× frame (no commas in expressions, so no filtergraph escaping) → colour grade filter chain → caption via `drawtext` with `textfile=` (word-wrapped; sidesteps all drawtext escaping for user/model words) → joined with `xfade` using the chosen transition (name allow-listed in `XFADE_TRANSITIONS` before reaching the filtergraph).
+- Changing the image list (add/remove/reorder) discards the plan, since its indices would no longer line up.
+- Verified by rendering every mood and every transition through real ffmpeg, plus a multipart call through the route. **Not verified:** the live LLM planning call (needs a model key + DB) and the UI in a browser.
+- **Bug found and fixed on the way:** `routes/videos.js` imported `getLogger` from `lib/logger` (which exports the bare logger), so every `getLogger().error(...)` in the route threw inside its own `catch` — any ffmpeg failure left the request hanging. It now imports from `middleware/requestContext`, like every other route. Also: raw ffmpeg stderr is no longer returned to the client on failure.
+- Not built: a per-image note box, so the planner can know what each photo shows (would improve captions/order); vision-based planning would need an image-capable model call.
