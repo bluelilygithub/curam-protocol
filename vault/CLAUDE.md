@@ -455,6 +455,10 @@ Custom fonts on a *live* AcroForm field (`field.updateAppearances`) render as He
 | `VIDEO_REPLICATE_MODEL` | Replicate text-to-video model (default `minimax/hailuo-2.3`) |
 | `VIDEO_GENERATE_MODEL` | Video Tools — FAL model id (default `fal-ai/minimax/video-01-live`) |
 | `VIDEO_MAX_UPLOAD_MB` | Video Tools — upload cap for ffmpeg routes (default 80) |
+| `VIDEO_MAX_CONCURRENT_JOBS` / `VIDEO_MAX_QUEUED_JOBS` | Video Tools — global ffmpeg concurrency gate (defaults 2 running / 8 queued, then 503 "busy") — `server/services/videoJobGate.js` |
+| `VIDEO_FFMPEG_TIMEOUT_MS` | Video Tools — ffmpeg job timeout (default 480000) |
+| `VIDEO_LIBRARY_QUOTA_MB` | Video Tools — per-user saved-library cap (default 1000) |
+| `LOCAL_WHISPER_LANGUAGE` | Video Tools — local whisper-cli transcribe language (default `en`) |
 | `FONTS_PYTHON_BIN` | Font Customizer — Python binary for `server/services/fonts/` subprocess (default tries `python3` then `python`); needs `server/services/fonts/requirements.txt` installed |
 | `GITHUB_TOKEN` | Font Customizer — optional, raises the Google Fonts repo license-check lookup from 60/hr to 5000/hr |
 | `PAGESPEED_API_KEY` | HTML Lighthouse — PageSpeed Insights API (optional; anonymous quota is small) |

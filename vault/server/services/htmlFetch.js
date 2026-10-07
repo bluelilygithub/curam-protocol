@@ -43,7 +43,7 @@ function checkSsrf(hostname) {
     dns.lookup(hostname, (err, address) => {
       if (err) return reject(new Error('DNS lookup failed'));
       if (isPrivateIp(address)) return reject(new Error('URL resolves to a private or internal address'));
-      resolve();
+      resolve(address);
     });
   });
 }
