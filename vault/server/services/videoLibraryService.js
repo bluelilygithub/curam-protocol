@@ -120,6 +120,14 @@ async function getAsset(userId, id) {
   return { ...rowToItem(row), filePath: row.filePath, thumbPath: row.thumbPath };
 }
 
+async function getUserUsageBytes(userId) {
+  const { rows } = await pool.query(
+    `SELECT COALESCE(SUM("fileSize"), 0) AS total FROM video_library WHERE "userId"=$1`,
+    [userId]
+  );
+  return Number(rows[0]?.total) || 0;
+}
+
 async function deleteAsset(userId, id) {
   const asset = await getAsset(userId, id);
   if (!asset) return false;
@@ -139,5 +147,6 @@ module.exports = {
   listAssets,
   getAsset,
   deleteAsset,
+  getUserUsageBytes,
   rowToItem,
 };

@@ -42,7 +42,7 @@ function isBlockedPlatformHost(hostname) {
  * Streams a direct video file URL to destPath. Rejects platform page URLs, private/internal
  * addresses (SSRF), non-video responses, and anything over MAX_VIDEO_BYTES.
  */
-function fetchLicensedVideo(url, destPath) {
+function fetchLicensedVideo(url, destPath, redirectsLeft = 5) {
   return new Promise((resolve, reject) => {
     let parsed;
     try { parsed = new URL(url); } catch { return reject(new Error('Invalid URL')); }
@@ -56,20 +56,24 @@ function fetchLicensedVideo(url, destPath) {
     }
 
     checkSsrf(parsed.hostname)
-      .then(() => {
+      .then((resolvedAddress) => {
         const mod = parsed.protocol === 'https:' ? https : http;
         const req = mod.request({
-          hostname: parsed.hostname,
+          // Connect to the address just validated — re-resolving the hostname here
+          // would reopen the DNS-rebinding gap checkSsrf exists to close.
+          hostname: resolvedAddress,
+          servername: parsed.protocol === 'https:' ? parsed.hostname : undefined,
           port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
           path: parsed.pathname + parsed.search,
           method: 'GET',
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; CuramVault/1.0)' },
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; CuramVault/1.0)', Host: parsed.host },
           timeout: FETCH_TIMEOUT_MS,
         }, (res) => {
           if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
             res.resume();
+            if (redirectsLeft <= 0) return reject(new Error('Too many redirects'));
             const next = new URL(res.headers.location, url).toString();
-            return resolve(fetchLicensedVideo(next, destPath));
+            return resolve(fetchLicensedVideo(next, destPath, redirectsLeft - 1));
           }
           if (res.statusCode >= 400) {
             res.resume();
@@ -94,6 +98,7 @@ function fetchLicensedVideo(url, destPath) {
             if (bytes > MAX_VIDEO_BYTES) {
               req.destroy();
               out.destroy();
+              fs.unlink(destPath, () => {});
               return reject(new Error(`Video exceeded max size (${Math.round(MAX_VIDEO_BYTES / 1024 / 1024)}MB) while downloading`));
             }
           });

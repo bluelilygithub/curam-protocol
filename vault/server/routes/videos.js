@@ -4,12 +4,13 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs/promises');
+const { createReadStream } = require('fs');
 const crypto = require('crypto');
 const archiver = require('archiver');
 const { runtimeConfig } = require('../config/runtime');
 const { getLogger } = require('../lib/logger');
 const { captureIf, makeFingerprint } = require('../services/SuggestionService');
-const { saveAsset, listAssets, getAsset, deleteAsset } = require('../services/videoLibraryService');
+const { saveAsset, listAssets, getAsset, deleteAsset, getUserUsageBytes } = require('../services/videoLibraryService');
 const {
   startVideoGeneration, pollVideoGeneration, getVideoGenerateConfig, buildYoutubeContext, fetchPlaybackVideo,
   transcribeAudioWithGemini, isGeminiTranscribeAvailable,
@@ -40,6 +41,7 @@ const {
 } = require('../services/videoFfmpeg');
 const { normalizeSrt } = require('../services/srtUtils');
 const { fetchLicensedVideo } = require('../services/videoUrlIntake');
+const { videoJobGate } = require('../services/videoJobGate');
 
 const router = express.Router();
 
@@ -77,8 +79,24 @@ const SOCIAL_EXPORT_PRESETS = {
   landscape: { label: 'Landscape / YouTube', aspect: '16:9', maxDurationSec: null },
 };
 
+// Rendered buffers live in RAM, so cap the total — evict oldest first once over budget.
+const EXPORT_SOCIAL_MAX_BYTES = 400 * 1024 * 1024;
+
+function exportSocialBytes(entry) {
+  return entry.items.reduce((sum, i) => sum + (i.buffer?.length || 0), 0);
+}
+
 function rememberExportSocial(exportId, userId, items) {
+  pruneExportSocialCache();
   exportSocialCache.set(exportId, { userId, items, at: Date.now() });
+  let total = 0;
+  for (const entry of exportSocialCache.values()) total += exportSocialBytes(entry);
+  // Map iterates in insertion order = oldest first; never evict the entry just added.
+  for (const [id, entry] of exportSocialCache) {
+    if (total <= EXPORT_SOCIAL_MAX_BYTES || id === exportId) break;
+    total -= exportSocialBytes(entry);
+    exportSocialCache.delete(id);
+  }
 }
 
 function getExportSocial(exportId, userId) {
@@ -130,6 +148,9 @@ function captionStyleFromBody(body) {
   };
 }
 
+// Per-user cap on saved library files (disk is a shared Railway volume).
+const LIBRARY_QUOTA_BYTES = Number(process.env.VIDEO_LIBRARY_QUOTA_MB || 1000) * 1024 * 1024;
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_VIDEO_BYTES },
@@ -173,9 +194,39 @@ async function transcribeWav(wavPath) {
     '-m', modelPath,
     '-f', wavPath,
     '--no-timestamps',
-    '-l', 'en',
+    '-l', process.env.LOCAL_WHISPER_LANGUAGE || 'en',
   ]);
   return String(stdout || '').trim();
+}
+
+// Wraps every ffmpeg-backed route: 503 when ffmpeg is missing, a global concurrency gate
+// (see videoJobGate.js — heavy encodes otherwise stack up unbounded), uniform error logging,
+// and a Suggestions-inbox alert when ffmpeg is killed by its timeout.
+function ffmpegRoute(name, handler, { errorStatus = 500 } = {}) {
+  return async (req, res) => {
+    try {
+      const ffmpeg = await checkFfmpeg();
+      if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+      return await videoJobGate.run(() => handler(req, res));
+    } catch (err) {
+      getLogger().error({ err }, `[videos/${name}]`);
+      if (res.headersSent) return res.end();
+      if (err.code === 'VIDEO_BUSY') return res.status(503).json({ error: err.message });
+      if (err.killed || err.signal === 'SIGTERM') {
+        await captureIf(true, {
+          userId: req.user?.id,
+          source: 'videoTools',
+          category: 'alert',
+          fingerprint: makeFingerprint('videoTools', `ffmpeg-timeout:${name}`),
+          title: `Video Tools: ${name} timed out`,
+          body: 'An ffmpeg job was killed by its timeout. Raise VIDEO_FFMPEG_TIMEOUT_MS, lower VIDEO_MAX_UPLOAD_MB, or check the host CPU.',
+          context: `server/routes/videos.js /${name}`,
+        }).catch(() => {});
+        return res.status(504).json({ error: 'The video took too long to process — try a shorter or smaller file.' });
+      }
+      return res.status(errorStatus).json({ error: err.message });
+    }
+  };
 }
 
 function sendVideoBuffer(res, buffer, filename = 'output.mp4', contentType = 'video/mp4') {
@@ -273,6 +324,11 @@ router.post('/playback', async (req, res) => {
   }
 });
 
+function parseAssetId(raw) {
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
 router.get('/library', async (req, res) => {
   try {
     const items = await listAssets(req.user.id);
@@ -288,10 +344,20 @@ router.post('/library', upload.single('file'), async (req, res) => {
     const file = req.file;
     if (!file?.buffer?.length) return res.status(400).json({ error: 'file is required' });
 
+    const mediaType = req.body?.mediaType === 'image' ? 'image' : 'video';
+    // mimeType is echoed back as Content-Type by /stream — only accept real media types.
+    if (!String(file.mimetype || '').toLowerCase().startsWith(`${mediaType}/`)) {
+      return res.status(400).json({ error: `file must be ${mediaType === 'image' ? 'an image' : 'a video'}` });
+    }
+    const used = await getUserUsageBytes(req.user.id);
+    if (used + file.buffer.length > LIBRARY_QUOTA_BYTES) {
+      return res.status(413).json({ error: `Library is full (${Math.round(LIBRARY_QUOTA_BYTES / (1024 * 1024))}MB limit) — delete some saved items first` });
+    }
+
     const item = await saveAsset(req.user.id, file.buffer, {
       title: req.body?.title,
       tool: req.body?.tool,
-      mediaType: req.body?.mediaType === 'image' ? 'image' : 'video',
+      mediaType,
       mimeType: file.mimetype,
       transaction: parseJsonBodyField(req.body?.transaction),
       metadata: parseJsonBodyField(req.body?.metadata),
@@ -305,67 +371,95 @@ router.post('/library', upload.single('file'), async (req, res) => {
 
 router.get('/library/:id/stream', async (req, res) => {
   try {
-    const asset = await getAsset(req.user.id, Number(req.params.id));
+    const id = parseAssetId(req.params.id);
+    const asset = id && await getAsset(req.user.id, id);
     if (!asset) return res.status(404).json({ error: 'Not found' });
-    const buf = await fs.readFile(asset.filePath);
+
+    let size;
+    try {
+      size = (await fs.stat(asset.filePath)).size;
+    } catch {
+      return res.status(404).json({ error: 'File missing on disk' });
+    }
     res.setHeader('Content-Type', asset.mimeType || (asset.mediaType === 'image' ? 'image/jpeg' : 'video/mp4'));
     res.setHeader('Cache-Control', 'private, max-age=3600');
-    res.send(buf);
+    res.setHeader('Accept-Ranges', 'bytes');
+
+    // Range support so <video> can seek without pulling the whole file into memory.
+    const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || ''));
+    let start = 0;
+    let end = size - 1;
+    if (range && (range[1] !== '' || range[2] !== '')) {
+      if (range[1] === '') {
+        start = Math.max(0, size - Number(range[2]));
+      } else {
+        start = Number(range[1]);
+        if (range[2] !== '') end = Math.min(end, Number(range[2]));
+      }
+      if (start > end || start >= size) {
+        res.setHeader('Content-Range', `bytes */${size}`);
+        return res.status(416).end();
+      }
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${size}`);
+    }
+    res.setHeader('Content-Length', end - start + 1);
+    const stream = createReadStream(asset.filePath, { start, end });
+    stream.on('error', (err) => {
+      getLogger().error({ err }, '[videos/library/stream]');
+      res.destroy(err);
+    });
+    stream.pipe(res);
   } catch (err) {
     getLogger().error({ err }, '[videos/library/stream]');
-    res.status(500).json({ error: err.message });
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+    else res.end();
   }
 });
 
-router.post('/library/:id/captions', upload.fields([{ name: 'srt', maxCount: 1 }]), async (req, res) => {
-  try {
-    const ffmpeg = await checkFfmpeg();
-    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+router.post('/library/:id/captions', upload.fields([{ name: 'srt', maxCount: 1 }]), ffmpegRoute('library/captions', async (req, res) => {
+  const assetId = parseAssetId(req.params.id);
+  const asset = assetId && await getAsset(req.user.id, assetId);
+  if (!asset || asset.mediaType !== 'video') return res.status(404).json({ error: 'Video not found in library' });
 
-    const asset = await getAsset(req.user.id, Number(req.params.id));
-    if (!asset || asset.mediaType !== 'video') return res.status(404).json({ error: 'Video not found in library' });
+  const srtFile = req.files?.srt?.[0];
+  const srtText = req.body?.srtText;
+  if (!srtFile && !srtText?.trim()) return res.status(400).json({ error: 'srt file or srtText is required' });
 
-    const srtFile = req.files?.srt?.[0];
-    const srtText = req.body?.srtText;
-    if (!srtFile && !srtText?.trim()) return res.status(400).json({ error: 'srt file or srtText is required' });
+  const style = captionStyleFromBody(req.body);
+  const saveToLibrary = req.body?.saveToLibrary === 'true' || req.body?.saveToLibrary === true;
 
-    const style = captionStyleFromBody(req.body);
-    const saveToLibrary = req.body?.saveToLibrary === 'true' || req.body?.saveToLibrary === true;
-
-    const buffer = await withTempDir(async (dir) => {
-      const inputPath = asset.filePath;
-      const srtPath = path.join(dir, 'captions.srt');
-      if (srtFile) {
-        await fs.writeFile(srtPath, srtFile.buffer);
-      } else {
-        await fs.writeFile(srtPath, String(srtText), 'utf8');
-      }
-      const outputPath = path.join(dir, 'captioned.mp4');
-      await burnSubtitles(inputPath, srtPath, outputPath, style, dir);
-      return readOutputFile(outputPath);
-    });
-
-    if (saveToLibrary) {
-      await saveAsset(req.user.id, buffer, {
-        title: `${asset.title} (captioned)`,
-        tool: 'caption-studio',
-        mediaType: 'video',
-        mimeType: 'video/mp4',
-        transaction: { sourceLibraryId: asset.id, captionStyle: style },
-        metadata: { parentId: asset.id },
-      });
+  const buffer = await withTempDir(async (dir) => {
+    const inputPath = asset.filePath;
+    const srtPath = path.join(dir, 'captions.srt');
+    if (srtFile) {
+      await fs.writeFile(srtPath, srtFile.buffer);
+    } else {
+      await fs.writeFile(srtPath, String(srtText), 'utf8');
     }
+    const outputPath = path.join(dir, 'captioned.mp4');
+    await burnSubtitles(inputPath, srtPath, outputPath, style, dir);
+    return readOutputFile(outputPath);
+  });
 
-    sendVideoBuffer(res, buffer, 'captioned.mp4');
-  } catch (err) {
-    getLogger().error({ err }, '[videos/library/captions]');
-    res.status(500).json({ error: err.message });
+  if (saveToLibrary && (await getUserUsageBytes(req.user.id)) + buffer.length <= LIBRARY_QUOTA_BYTES) {
+    await saveAsset(req.user.id, buffer, {
+      title: `${asset.title} (captioned)`,
+      tool: 'caption-studio',
+      mediaType: 'video',
+      mimeType: 'video/mp4',
+      transaction: { sourceLibraryId: asset.id, captionStyle: style },
+      metadata: { parentId: asset.id },
+    });
   }
-});
+
+  sendVideoBuffer(res, buffer, 'captioned.mp4');
+}));
 
 router.delete('/library/:id', async (req, res) => {
   try {
-    const ok = await deleteAsset(req.user.id, Number(req.params.id));
+    const id = parseAssetId(req.params.id);
+    const ok = id && await deleteAsset(req.user.id, id);
     if (!ok) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });
   } catch (err) {
@@ -449,539 +543,413 @@ router.post('/generate', async (req, res) => {
     res.json(started);
   } catch (err) {
     getLogger().error({ err }, '[videos/generate]');
-    res.status(err.message.includes('not configured') ? 503 : 500).json({ error: err.message });
+    const notConfigured = err.message.includes('not configured');
+    await captureIf(notConfigured, {
+      userId: req.user.id,
+      source: 'videoTools',
+      category: 'alert',
+      fingerprint: makeFingerprint('videoTools', 'generate-not-configured'),
+      title: 'Video Tools: generation provider not configured',
+      body: `Generate failed: ${err.message}. Set REPLICATE_API_TOKEN or FAL_API_KEY on this deployment.`,
+      context: 'server/routes/videos.js /generate',
+    }).catch(() => {});
+    res.status(notConfigured ? 503 : 500).json({ error: err.message });
   }
 });
 
-router.post('/probe', upload.single('video'), async (req, res) => {
-  try {
-    const ffmpeg = await checkFfmpeg();
-    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+router.post('/probe', upload.single('video'), ffmpegRoute('probe', async (req, res) => {
+  const info = await withTempDir(async (dir) => {
+    const inputPath = await writeUpload(dir, req.file);
+    return probeVideo(inputPath);
+  });
 
-    const info = await withTempDir(async (dir) => {
-      const inputPath = await writeUpload(dir, req.file);
-      return probeVideo(inputPath);
-    });
+  res.json({
+    filename: req.file?.originalname || 'video',
+    mime: req.file?.mimetype,
+    uploadSize: req.file?.size,
+    ...info,
+  });
+}));
 
-    res.json({
-      filename: req.file?.originalname || 'video',
-      mime: req.file?.mimetype,
-      uploadSize: req.file?.size,
-      ...info,
-    });
-  } catch (err) {
-    getLogger().error({ err }, '[videos/probe]');
-    res.status(500).json({ error: err.message });
+router.post('/clip', upload.single('video'), ffmpegRoute('clip', async (req, res) => {
+  const startSec = Number(req.body?.startSec ?? 0);
+  const endSec = req.body?.endSec != null && req.body.endSec !== '' ? Number(req.body.endSec) : null;
+  if (!Number.isFinite(startSec) || startSec < 0) {
+    return res.status(400).json({ error: 'startSec must be a non-negative number' });
   }
-});
-
-router.post('/clip', upload.single('video'), async (req, res) => {
-  try {
-    const ffmpeg = await checkFfmpeg();
-    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
-
-    const startSec = Number(req.body?.startSec ?? 0);
-    const endSec = req.body?.endSec != null && req.body.endSec !== '' ? Number(req.body.endSec) : null;
-    if (!Number.isFinite(startSec) || startSec < 0) {
-      return res.status(400).json({ error: 'startSec must be a non-negative number' });
-    }
-    if (endSec != null && (!Number.isFinite(endSec) || endSec <= startSec)) {
-      return res.status(400).json({ error: 'endSec must be greater than startSec' });
-    }
-
-    const buffer = await withTempDir(async (dir) => {
-      const inputPath = await writeUpload(dir, req.file);
-      const outputPath = path.join(dir, 'clip.mp4');
-      await clipVideo(inputPath, outputPath, { startSec, endSec });
-      return readOutputFile(outputPath);
-    });
-
-    sendVideoBuffer(res, buffer, 'clip.mp4');
-  } catch (err) {
-    getLogger().error({ err }, '[videos/clip]');
-    res.status(500).json({ error: err.message });
+  if (endSec != null && (!Number.isFinite(endSec) || endSec <= startSec)) {
+    return res.status(400).json({ error: 'endSec must be greater than startSec' });
   }
-});
+
+  const buffer = await withTempDir(async (dir) => {
+    const inputPath = await writeUpload(dir, req.file);
+    const outputPath = path.join(dir, 'clip.mp4');
+    await clipVideo(inputPath, outputPath, { startSec, endSec });
+    return readOutputFile(outputPath);
+  });
+
+  sendVideoBuffer(res, buffer, 'clip.mp4');
+}));
 
 // "Clip a licensed video" — downloads a direct video file URL the user has rights to (their
 // own hosting, a stock-footage link, a CC direct-download link) and runs it through the same
 // clip pipeline as the upload-based /clip route above. Explicitly refuses YouTube/Vimeo/TikTok/
 // etc. page URLs — see server/services/videoUrlIntake.js for why and how that's enforced.
-router.post('/clip-from-url', async (req, res) => {
-  try {
-    const ffmpeg = await checkFfmpeg();
-    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+router.post('/clip-from-url', ffmpegRoute('clip-from-url', async (req, res) => {
+  const url = String(req.body?.url || '').trim();
+  if (!url) return res.status(400).json({ error: 'url is required' });
 
-    const url = String(req.body?.url || '').trim();
-    if (!url) return res.status(400).json({ error: 'url is required' });
+  const startSec = Number(req.body?.startSec ?? 0);
+  const endSec = req.body?.endSec != null && req.body.endSec !== '' ? Number(req.body.endSec) : null;
+  if (!Number.isFinite(startSec) || startSec < 0) {
+    return res.status(400).json({ error: 'startSec must be a non-negative number' });
+  }
+  if (endSec != null && (!Number.isFinite(endSec) || endSec <= startSec)) {
+    return res.status(400).json({ error: 'endSec must be greater than startSec' });
+  }
 
-    const startSec = Number(req.body?.startSec ?? 0);
-    const endSec = req.body?.endSec != null && req.body.endSec !== '' ? Number(req.body.endSec) : null;
-    if (!Number.isFinite(startSec) || startSec < 0) {
-      return res.status(400).json({ error: 'startSec must be a non-negative number' });
+  const buffer = await withTempDir(async (dir) => {
+    const inputPath = path.join(dir, 'source-download');
+    await fetchLicensedVideo(url, inputPath);
+    const outputPath = path.join(dir, 'clip.mp4');
+    await clipVideo(inputPath, outputPath, { startSec, endSec });
+    return readOutputFile(outputPath);
+  });
+
+  sendVideoBuffer(res, buffer, 'clip.mp4');
+}, { errorStatus: 400 }));
+
+router.post('/convert', upload.single('video'), ffmpegRoute('convert', async (req, res) => {
+  const crf = Number(req.body?.crf ?? 23);
+  const maxWidth = req.body?.maxWidth ? Number(req.body.maxWidth) : null;
+
+  const buffer = await withTempDir(async (dir) => {
+    const inputPath = await writeUpload(dir, req.file);
+    const outputPath = path.join(dir, 'converted.mp4');
+    await convertVideo(inputPath, outputPath, {
+      crf: Number.isFinite(crf) ? Math.min(35, Math.max(18, crf)) : 23,
+      maxWidth: maxWidth && Number.isFinite(maxWidth) ? maxWidth : null,
+    });
+    return readOutputFile(outputPath);
+  });
+
+  sendVideoBuffer(res, buffer, 'converted.mp4');
+}));
+
+router.post('/join', upload.array('videos', 12), ffmpegRoute('join', async (req, res) => {
+  const files = req.files || [];
+  if (files.length < 2) {
+    return res.status(400).json({ error: 'Upload at least two video files (field name: videos)' });
+  }
+  if (!enforceAggregateUploadSize(res, files)) return;
+
+  const maxWidth = req.body?.maxWidth ? Number(req.body.maxWidth) : 1280;
+  const crf = req.body?.crf != null && req.body.crf !== '' ? Number(req.body.crf) : 23;
+  const crossfadeSec = req.body?.crossfadeSec != null && req.body.crossfadeSec !== ''
+    ? Number(req.body.crossfadeSec)
+    : 0;
+
+  const buffer = await withTempDir(async (dir) => {
+    const inputPaths = [];
+    for (let i = 0; i < files.length; i += 1) {
+      const file = files[i];
+      if (!file?.buffer?.length) throw new Error(`Video file #${i + 1} is empty`);
+      const ext = extensionForMime(file.mimetype);
+      const inputPath = path.join(dir, `join_in_${i}${ext}`);
+      await fs.writeFile(inputPath, file.buffer);
+      inputPaths.push(inputPath);
     }
-    if (endSec != null && (!Number.isFinite(endSec) || endSec <= startSec)) {
-      return res.status(400).json({ error: 'endSec must be greater than startSec' });
-    }
-
-    const buffer = await withTempDir(async (dir) => {
-      const inputPath = path.join(dir, 'source-download');
-      await fetchLicensedVideo(url, inputPath);
-      const outputPath = path.join(dir, 'clip.mp4');
-      await clipVideo(inputPath, outputPath, { startSec, endSec });
-      return readOutputFile(outputPath);
+    const outputPath = path.join(dir, 'joined.mp4');
+    await joinVideosWithOptionalCrossfade(inputPaths, outputPath, {
+      maxWidth: Number.isFinite(maxWidth) ? maxWidth : 1280,
+      crf: Number.isFinite(crf) ? crf : 23,
+      crossfadeSec: Number.isFinite(crossfadeSec) ? Math.max(0, crossfadeSec) : 0,
     });
+    return readOutputFile(outputPath);
+  });
 
-    sendVideoBuffer(res, buffer, 'clip.mp4');
-  } catch (err) {
-    getLogger().error({ err }, '[videos/clip-from-url]');
-    res.status(400).json({ error: err.message });
-  }
-});
+  sendVideoBuffer(res, buffer, 'joined.mp4');
+}));
 
-router.post('/convert', upload.single('video'), async (req, res) => {
-  try {
-    const ffmpeg = await checkFfmpeg();
-    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+router.post('/reframe', upload.single('video'), ffmpegRoute('reframe', async (req, res) => {
+  const aspect = req.body?.aspect || '9:16';
+  const mode = req.body?.mode === 'pad' ? 'pad' : 'crop';
+  const focus = req.body?.focus || 'center';
+  const maxHeight = req.body?.maxHeight ? Number(req.body.maxHeight) : 1920;
 
-    const crf = Number(req.body?.crf ?? 23);
-    const maxWidth = req.body?.maxWidth ? Number(req.body.maxWidth) : null;
+  const buffer = await withTempDir(async (dir) => {
+    const inputPath = await writeUpload(dir, req.file);
+    const outputPath = path.join(dir, 'reframed.mp4');
+    await reframeVideo(inputPath, outputPath, { aspect, mode, focus, maxHeight });
+    return readOutputFile(outputPath);
+  });
 
-    const buffer = await withTempDir(async (dir) => {
-      const inputPath = await writeUpload(dir, req.file);
-      const outputPath = path.join(dir, 'converted.mp4');
-      await convertVideo(inputPath, outputPath, {
-        crf: Number.isFinite(crf) ? Math.min(35, Math.max(18, crf)) : 23,
-        maxWidth: maxWidth && Number.isFinite(maxWidth) ? maxWidth : null,
-      });
-      return readOutputFile(outputPath);
-    });
-
-    sendVideoBuffer(res, buffer, 'converted.mp4');
-  } catch (err) {
-    getLogger().error({ err }, '[videos/convert]');
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.post('/join', upload.array('videos', 12), async (req, res) => {
-  try {
-    const ffmpeg = await checkFfmpeg();
-    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
-
-    const files = req.files || [];
-    if (files.length < 2) {
-      return res.status(400).json({ error: 'Upload at least two video files (field name: videos)' });
-    }
-    if (!enforceAggregateUploadSize(res, files)) return;
-
-    const maxWidth = req.body?.maxWidth ? Number(req.body.maxWidth) : 1280;
-    const crf = req.body?.crf != null && req.body.crf !== '' ? Number(req.body.crf) : 23;
-    const crossfadeSec = req.body?.crossfadeSec != null && req.body.crossfadeSec !== ''
-      ? Number(req.body.crossfadeSec)
-      : 0;
-
-    const buffer = await withTempDir(async (dir) => {
-      const inputPaths = [];
-      for (let i = 0; i < files.length; i += 1) {
-        const file = files[i];
-        if (!file?.buffer?.length) throw new Error(`Video file #${i + 1} is empty`);
-        const ext = extensionForMime(file.mimetype);
-        const inputPath = path.join(dir, `join_in_${i}${ext}`);
-        await fs.writeFile(inputPath, file.buffer);
-        inputPaths.push(inputPath);
-      }
-      const outputPath = path.join(dir, 'joined.mp4');
-      await joinVideosWithOptionalCrossfade(inputPaths, outputPath, {
-        maxWidth: Number.isFinite(maxWidth) ? maxWidth : 1280,
-        crf: Number.isFinite(crf) ? crf : 23,
-        crossfadeSec: Number.isFinite(crossfadeSec) ? Math.max(0, crossfadeSec) : 0,
-      });
-      return readOutputFile(outputPath);
-    });
-
-    sendVideoBuffer(res, buffer, 'joined.mp4');
-  } catch (err) {
-    getLogger().error({ err }, '[videos/join]');
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.post('/reframe', upload.single('video'), async (req, res) => {
-  try {
-    const ffmpeg = await checkFfmpeg();
-    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
-
-    const aspect = req.body?.aspect || '9:16';
-    const mode = req.body?.mode === 'pad' ? 'pad' : 'crop';
-    const focus = req.body?.focus || 'center';
-    const maxHeight = req.body?.maxHeight ? Number(req.body.maxHeight) : 1920;
-
-    const buffer = await withTempDir(async (dir) => {
-      const inputPath = await writeUpload(dir, req.file);
-      const outputPath = path.join(dir, 'reframed.mp4');
-      await reframeVideo(inputPath, outputPath, { aspect, mode, focus, maxHeight });
-      return readOutputFile(outputPath);
-    });
-
-    sendVideoBuffer(res, buffer, 'reframed.mp4');
-  } catch (err) {
-    getLogger().error({ err }, '[videos/reframe]');
-    res.status(500).json({ error: err.message });
-  }
-});
+  sendVideoBuffer(res, buffer, 'reframed.mp4');
+}));
 
 router.post('/audio', upload.fields([
   { name: 'video', maxCount: 1 },
   { name: 'audio', maxCount: 1 },
-]), async (req, res) => {
-  try {
-    const ffmpeg = await checkFfmpeg();
-    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
-
-    const mode = req.body?.mode === 'replace' ? 'replace' : 'mute';
-    const videoFile = req.files?.video?.[0];
-    if (!videoFile) return res.status(400).json({ error: 'Video file is required' });
-    if (mode === 'replace' && !req.files?.audio?.[0]) {
-      return res.status(400).json({ error: 'Audio file is required for replace mode' });
-    }
-
-    const buffer = await withTempDir(async (dir) => {
-      const inputPath = await writeUpload(dir, videoFile);
-      let audioPath = null;
-      if (mode === 'replace') {
-        const af = req.files.audio[0];
-        const aext = af.mimetype?.includes('wav') ? '.wav'
-          : af.mimetype?.includes('mpeg') || af.mimetype?.includes('mp3') ? '.mp3'
-            : af.mimetype?.includes('mp4') || af.mimetype?.includes('m4a') ? '.m4a'
-              : '.mp3';
-        audioPath = path.join(dir, `audio_in${aext}`);
-        await fs.writeFile(audioPath, af.buffer);
-      }
-      const outputPath = path.join(dir, 'audio_out.mp4');
-      await muteOrReplaceAudio(inputPath, outputPath, { mode, audioPath });
-      return readOutputFile(outputPath);
-    });
-
-    sendVideoBuffer(res, buffer, mode === 'mute' ? 'muted.mp4' : 'audio-replaced.mp4');
-  } catch (err) {
-    getLogger().error({ err }, '[videos/audio]');
-    res.status(500).json({ error: err.message });
+]), ffmpegRoute('audio', async (req, res) => {
+  const mode = req.body?.mode === 'replace' ? 'replace' : 'mute';
+  const videoFile = req.files?.video?.[0];
+  if (!videoFile) return res.status(400).json({ error: 'Video file is required' });
+  if (mode === 'replace' && !req.files?.audio?.[0]) {
+    return res.status(400).json({ error: 'Audio file is required for replace mode' });
   }
-});
 
-router.post('/speed', upload.single('video'), async (req, res) => {
-  try {
-    const ffmpeg = await checkFfmpeg();
-    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
-
-    const speed = Number(req.body?.speed);
-    if (!Number.isFinite(speed) || speed < 0.25 || speed > 4) {
-      return res.status(400).json({ error: 'speed must be a number between 0.25 and 4' });
+  const buffer = await withTempDir(async (dir) => {
+    const inputPath = await writeUpload(dir, videoFile);
+    let audioPath = null;
+    if (mode === 'replace') {
+      const af = req.files.audio[0];
+      const aext = af.mimetype?.includes('wav') ? '.wav'
+        : af.mimetype?.includes('mpeg') || af.mimetype?.includes('mp3') ? '.mp3'
+          : af.mimetype?.includes('mp4') || af.mimetype?.includes('m4a') ? '.m4a'
+            : '.mp3';
+      audioPath = path.join(dir, `audio_in${aext}`);
+      await fs.writeFile(audioPath, af.buffer);
     }
+    const outputPath = path.join(dir, 'audio_out.mp4');
+    await muteOrReplaceAudio(inputPath, outputPath, { mode, audioPath });
+    return readOutputFile(outputPath);
+  });
 
-    const buffer = await withTempDir(async (dir) => {
-      const inputPath = await writeUpload(dir, req.file);
-      const outputPath = path.join(dir, 'speed.mp4');
-      await changeVideoSpeed(inputPath, outputPath, { speed });
-      return readOutputFile(outputPath);
-    });
+  sendVideoBuffer(res, buffer, mode === 'mute' ? 'muted.mp4' : 'audio-replaced.mp4');
+}));
 
-    sendVideoBuffer(res, buffer, 'speed.mp4');
-  } catch (err) {
-    getLogger().error({ err }, '[videos/speed]');
-    res.status(500).json({ error: err.message });
+router.post('/speed', upload.single('video'), ffmpegRoute('speed', async (req, res) => {
+  const speed = Number(req.body?.speed);
+  if (!Number.isFinite(speed) || speed < 0.25 || speed > 4) {
+    return res.status(400).json({ error: 'speed must be a number between 0.25 and 4' });
   }
-});
+
+  const buffer = await withTempDir(async (dir) => {
+    const inputPath = await writeUpload(dir, req.file);
+    const outputPath = path.join(dir, 'speed.mp4');
+    await changeVideoSpeed(inputPath, outputPath, { speed });
+    return readOutputFile(outputPath);
+  });
+
+  sendVideoBuffer(res, buffer, 'speed.mp4');
+}));
 
 router.post('/overlay', upload.fields([
   { name: 'video', maxCount: 1 },
   { name: 'image', maxCount: 1 },
-]), async (req, res) => {
-  try {
-    const ffmpeg = await checkFfmpeg();
-    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+]), ffmpegRoute('overlay', async (req, res) => {
+  const videoFile = req.files?.video?.[0];
+  const imageFile = req.files?.image?.[0];
+  if (!videoFile) return res.status(400).json({ error: 'Video file is required' });
+  if (!imageFile) return res.status(400).json({ error: 'Image file is required (logo/watermark)' });
 
-    const videoFile = req.files?.video?.[0];
-    const imageFile = req.files?.image?.[0];
-    if (!videoFile) return res.status(400).json({ error: 'Video file is required' });
-    if (!imageFile) return res.status(400).json({ error: 'Image file is required (logo/watermark)' });
+  const position = req.body?.position || 'bottom-right';
+  const scalePct = req.body?.scalePct != null ? Number(req.body.scalePct) : 20;
+  const opacity = req.body?.opacity != null ? Number(req.body.opacity) : 0.85;
 
-    const position = req.body?.position || 'bottom-right';
-    const scalePct = req.body?.scalePct != null ? Number(req.body.scalePct) : 20;
-    const opacity = req.body?.opacity != null ? Number(req.body.opacity) : 0.85;
+  const buffer = await withTempDir(async (dir) => {
+    const inputPath = await writeUpload(dir, videoFile);
+    const imgExt = imageFile.mimetype?.includes('png') ? '.png'
+      : imageFile.mimetype?.includes('webp') ? '.webp'
+        : '.jpg';
+    const imagePath = path.join(dir, `overlay${imgExt}`);
+    await fs.writeFile(imagePath, imageFile.buffer);
+    const outputPath = path.join(dir, 'overlay.mp4');
+    await overlayImage(inputPath, imagePath, outputPath, { position, scalePct, opacity });
+    return readOutputFile(outputPath);
+  });
 
-    const buffer = await withTempDir(async (dir) => {
-      const inputPath = await writeUpload(dir, videoFile);
-      const imgExt = imageFile.mimetype?.includes('png') ? '.png'
-        : imageFile.mimetype?.includes('webp') ? '.webp'
-          : '.jpg';
-      const imagePath = path.join(dir, `overlay${imgExt}`);
-      await fs.writeFile(imagePath, imageFile.buffer);
-      const outputPath = path.join(dir, 'overlay.mp4');
-      await overlayImage(inputPath, imagePath, outputPath, { position, scalePct, opacity });
-      return readOutputFile(outputPath);
-    });
+  sendVideoBuffer(res, buffer, 'overlay.mp4');
+}));
 
-    sendVideoBuffer(res, buffer, 'overlay.mp4');
-  } catch (err) {
-    getLogger().error({ err }, '[videos/overlay]');
-    res.status(500).json({ error: err.message });
-  }
-});
+router.post('/extract-audio', upload.single('video'), ffmpegRoute('extract-audio', async (req, res) => {
+  const format = req.body?.format === 'wav' ? 'wav' : 'mp3';
 
-router.post('/extract-audio', upload.single('video'), async (req, res) => {
-  try {
-    const ffmpeg = await checkFfmpeg();
-    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+  const buffer = await withTempDir(async (dir) => {
+    const inputPath = await writeUpload(dir, req.file);
+    const outputPath = path.join(dir, `audio.${format}`);
+    await extractAudio(inputPath, outputPath, format);
+    return readOutputFile(outputPath);
+  });
 
-    const format = req.body?.format === 'wav' ? 'wav' : 'mp3';
+  res.setHeader('Content-Type', format === 'wav' ? 'audio/wav' : 'audio/mpeg');
+  res.setHeader('Content-Disposition', `attachment; filename="audio.${format}"`);
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(buffer);
+}));
 
-    const buffer = await withTempDir(async (dir) => {
-      const inputPath = await writeUpload(dir, req.file);
-      const outputPath = path.join(dir, `audio.${format}`);
-      await extractAudio(inputPath, outputPath, format);
-      return readOutputFile(outputPath);
-    });
+router.post('/thumbnail', upload.single('video'), ffmpegRoute('thumbnail', async (req, res) => {
+  const timeSec = Number(req.body?.timeSec ?? 1);
 
-    res.setHeader('Content-Type', format === 'wav' ? 'audio/wav' : 'audio/mpeg');
-    res.setHeader('Content-Disposition', `attachment; filename="audio.${format}"`);
-    res.setHeader('Cache-Control', 'no-store');
-    res.send(buffer);
-  } catch (err) {
-    getLogger().error({ err }, '[videos/extract-audio]');
-    res.status(500).json({ error: err.message });
-  }
-});
+  const buffer = await withTempDir(async (dir) => {
+    const inputPath = await writeUpload(dir, req.file);
+    const outputPath = path.join(dir, 'thumb.jpg');
+    await captureThumbnail(inputPath, outputPath, timeSec);
+    return readOutputFile(outputPath);
+  });
 
-router.post('/thumbnail', upload.single('video'), async (req, res) => {
-  try {
-    const ffmpeg = await checkFfmpeg();
-    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+  sendImageBuffer(res, buffer);
+}));
 
-    const timeSec = Number(req.body?.timeSec ?? 1);
+router.post('/annotate', upload.single('video'), ffmpegRoute('annotate', async (req, res) => {
+  const text = String(req.body?.text || '').trim();
+  if (!text) return res.status(400).json({ error: 'text is required' });
 
-    const buffer = await withTempDir(async (dir) => {
-      const inputPath = await writeUpload(dir, req.file);
-      const outputPath = path.join(dir, 'thumb.jpg');
-      await captureThumbnail(inputPath, outputPath, timeSec);
-      return readOutputFile(outputPath);
-    });
+  const buffer = await withTempDir(async (dir) => {
+    const inputPath = await writeUpload(dir, req.file);
+    const outputPath = path.join(dir, 'annotated.mp4');
+    const style = captionStyleFromBody(req.body);
+    const fadeInSec = req.body?.fadeInSec != null && req.body.fadeInSec !== '' ? Number(req.body.fadeInSec) : 0;
+    const fadeOutSec = req.body?.fadeOutSec != null && req.body.fadeOutSec !== '' ? Number(req.body.fadeOutSec) : 0;
+    await annotateVideo(inputPath, outputPath, {
+      text,
+      position: style.position || req.body?.position || 'bottom-center',
+      fontSize: style.fontSize,
+      fontColor: style.fontColor,
+      fontFamily: style.fontFamily,
+      fontWeight: style.fontWeight,
+      backgroundColor: style.backgroundColor,
+      backgroundTransparent: style.backgroundTransparent,
+      fadeInSec: Number.isFinite(fadeInSec) ? Math.min(30, Math.max(0, fadeInSec)) : 0,
+      fadeOutSec: Number.isFinite(fadeOutSec) ? Math.min(30, Math.max(0, fadeOutSec)) : 0,
+    }, dir);
+    return readOutputFile(outputPath);
+  });
 
-    sendImageBuffer(res, buffer);
-  } catch (err) {
-    getLogger().error({ err }, '[videos/thumbnail]');
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.post('/annotate', upload.single('video'), async (req, res) => {
-  try {
-    const ffmpeg = await checkFfmpeg();
-    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
-
-    const text = String(req.body?.text || '').trim();
-    if (!text) return res.status(400).json({ error: 'text is required' });
-
-    const buffer = await withTempDir(async (dir) => {
-      const inputPath = await writeUpload(dir, req.file);
-      const outputPath = path.join(dir, 'annotated.mp4');
-      const style = captionStyleFromBody(req.body);
-      const fadeInSec = req.body?.fadeInSec != null && req.body.fadeInSec !== '' ? Number(req.body.fadeInSec) : 0;
-      const fadeOutSec = req.body?.fadeOutSec != null && req.body.fadeOutSec !== '' ? Number(req.body.fadeOutSec) : 0;
-      await annotateVideo(inputPath, outputPath, {
-        text,
-        position: style.position || req.body?.position || 'bottom-center',
-        fontSize: style.fontSize,
-        fontColor: style.fontColor,
-        fontFamily: style.fontFamily,
-        fontWeight: style.fontWeight,
-        backgroundColor: style.backgroundColor,
-        backgroundTransparent: style.backgroundTransparent,
-        fadeInSec: Number.isFinite(fadeInSec) ? Math.min(30, Math.max(0, fadeInSec)) : 0,
-        fadeOutSec: Number.isFinite(fadeOutSec) ? Math.min(30, Math.max(0, fadeOutSec)) : 0,
-      }, dir);
-      return readOutputFile(outputPath);
-    });
-
-    sendVideoBuffer(res, buffer, 'annotated.mp4');
-  } catch (err) {
-    getLogger().error({ err }, '[videos/annotate]');
-    res.status(500).json({ error: err.message });
-  }
-});
+  sendVideoBuffer(res, buffer, 'annotated.mp4');
+}));
 
 const MAX_GEMINI_AUDIO_BYTES = 18 * 1024 * 1024;
 
-router.post('/transcribe', upload.single('video'), async (req, res) => {
-  try {
-    const ffmpeg = await checkFfmpeg();
-    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available' });
+router.post('/transcribe', upload.single('video'), ffmpegRoute('transcribe', async (req, res) => {
+  if (runtimeConfig.isLocal) {
+    const text = await withTempDir(async (dir) => {
+      const inputPath = await writeUpload(dir, req.file);
+      const wavPath = path.join(dir, 'audio.wav');
+      await extractWav16k(inputPath, wavPath);
+      return transcribeWav(wavPath);
+    });
+    return res.json({ text, source: 'whisper-local' });
+  }
 
-    if (runtimeConfig.isLocal) {
-      const text = await withTempDir(async (dir) => {
-        const inputPath = await writeUpload(dir, req.file);
-        const wavPath = path.join(dir, 'audio.wav');
-        await extractWav16k(inputPath, wavPath);
-        return transcribeWav(wavPath);
-      });
-      return res.json({ text, source: 'whisper-local' });
+  // Hosted (e.g. Railway): no whisper-cli binary available — extract the
+  // audio track and use Gemini's audio understanding to return SRT directly.
+  const srt = await withTempDir(async (dir) => {
+    const inputPath = await writeUpload(dir, req.file);
+    const audioPath = path.join(dir, 'audio.mp3');
+    await extractAudio(inputPath, audioPath, 'mp3');
+    const buf = await fs.readFile(audioPath);
+    if (buf.length > MAX_GEMINI_AUDIO_BYTES) {
+      throw new Error('Video is too long for hosted transcription (audio track over ~18MB) — trim it first, or use local dev with whisper-cli.');
     }
+    const raw = await transcribeAudioWithGemini(req.user.id, buf.toString('base64'), 'audio/mp3');
+    return normalizeSrt(raw);
+  });
 
-    // Hosted (e.g. Railway): no whisper-cli binary available — extract the
-    // audio track and use Gemini's audio understanding to return SRT directly.
-    const srt = await withTempDir(async (dir) => {
-      const inputPath = await writeUpload(dir, req.file);
-      const audioPath = path.join(dir, 'audio.mp3');
-      await extractAudio(inputPath, audioPath, 'mp3');
-      const buf = await fs.readFile(audioPath);
-      if (buf.length > MAX_GEMINI_AUDIO_BYTES) {
-        throw new Error('Video is too long for hosted transcription (audio track over ~18MB) — trim it first, or use local dev with whisper-cli.');
-      }
-      const raw = await transcribeAudioWithGemini(req.user.id, buf.toString('base64'), 'audio/mp3');
-      return normalizeSrt(raw);
-    });
+  res.json({ srt, source: 'gemini' });
+}));
 
-    res.json({ srt, source: 'gemini' });
-  } catch (err) {
-    getLogger().error({ err }, '[videos/transcribe]');
-    res.status(500).json({ error: err.message });
-  }
-});
+router.post('/burn-captions', upload.fields([{ name: 'video', maxCount: 1 }, { name: 'srt', maxCount: 1 }]), ffmpegRoute('burn-captions', async (req, res) => {
+  const videoFile = req.files?.video?.[0];
+  const srtFile = req.files?.srt?.[0];
+  const srtText = req.body?.srtText;
+  if (!videoFile) return res.status(400).json({ error: 'video is required' });
+  if (!srtFile && !srtText?.trim()) return res.status(400).json({ error: 'srt file or srtText is required' });
 
-router.post('/burn-captions', upload.fields([{ name: 'video', maxCount: 1 }, { name: 'srt', maxCount: 1 }]), async (req, res) => {
-  try {
-    const ffmpeg = await checkFfmpeg();
-    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+  const style = captionStyleFromBody(req.body);
 
-    const videoFile = req.files?.video?.[0];
-    const srtFile = req.files?.srt?.[0];
-    const srtText = req.body?.srtText;
-    if (!videoFile) return res.status(400).json({ error: 'video is required' });
-    if (!srtFile && !srtText?.trim()) return res.status(400).json({ error: 'srt file or srtText is required' });
+  const buffer = await withTempDir(async (dir) => {
+    const inputPath = await writeUpload(dir, videoFile);
+    const srtPath = path.join(dir, 'captions.srt');
+    if (srtFile) {
+      await fs.writeFile(srtPath, srtFile.buffer);
+    } else {
+      await fs.writeFile(srtPath, String(srtText), 'utf8');
+    }
+    const outputPath = path.join(dir, 'captioned.mp4');
+    await burnSubtitles(inputPath, srtPath, outputPath, style, dir);
+    return readOutputFile(outputPath);
+  });
 
-    const style = captionStyleFromBody(req.body);
+  sendVideoBuffer(res, buffer, 'captioned.mp4');
+}));
 
-    const buffer = await withTempDir(async (dir) => {
-      const inputPath = await writeUpload(dir, videoFile);
-      const srtPath = path.join(dir, 'captions.srt');
-      if (srtFile) {
-        await fs.writeFile(srtPath, srtFile.buffer);
-      } else {
-        await fs.writeFile(srtPath, String(srtText), 'utf8');
-      }
-      const outputPath = path.join(dir, 'captioned.mp4');
-      await burnSubtitles(inputPath, srtPath, outputPath, style, dir);
-      return readOutputFile(outputPath);
-    });
+router.post('/normalize', upload.single('video'), ffmpegRoute('normalize', async (req, res) => {
+  const preset = ['quiet', 'normal', 'loud'].includes(req.body?.preset) ? req.body.preset : 'normal';
 
-    sendVideoBuffer(res, buffer, 'captioned.mp4');
-  } catch (err) {
-    getLogger().error({ err }, '[videos/burn-captions]');
-    res.status(500).json({ error: err.message });
-  }
-});
+  const buffer = await withTempDir(async (dir) => {
+    const inputPath = await writeUpload(dir, req.file);
+    const outputPath = path.join(dir, 'normalized.mp4');
+    await normalizeAudioLoudness(inputPath, outputPath, { preset });
+    return readOutputFile(outputPath);
+  });
 
-router.post('/normalize', upload.single('video'), async (req, res) => {
-  try {
-    const ffmpeg = await checkFfmpeg();
-    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+  sendVideoBuffer(res, buffer, 'normalized.mp4');
+}));
 
-    const preset = ['quiet', 'normal', 'loud'].includes(req.body?.preset) ? req.body.preset : 'normal';
+router.post('/togif', upload.single('video'), ffmpegRoute('togif', async (req, res) => {
+  const fps = req.body?.fps ? Number(req.body.fps) : 12;
+  const width = req.body?.width ? Number(req.body.width) : 480;
+  const startSec = req.body?.startSec != null && req.body.startSec !== '' ? Number(req.body.startSec) : 0;
+  const endSec = req.body?.endSec != null && req.body.endSec !== '' ? Number(req.body.endSec) : null;
 
-    const buffer = await withTempDir(async (dir) => {
-      const inputPath = await writeUpload(dir, req.file);
-      const outputPath = path.join(dir, 'normalized.mp4');
-      await normalizeAudioLoudness(inputPath, outputPath, { preset });
-      return readOutputFile(outputPath);
-    });
+  const buffer = await withTempDir(async (dir) => {
+    const inputPath = await writeUpload(dir, req.file);
+    const outputPath = path.join(dir, 'output.gif');
+    await videoToGif(inputPath, outputPath, { fps, width, startSec, endSec });
+    return readOutputFile(outputPath);
+  });
 
-    sendVideoBuffer(res, buffer, 'normalized.mp4');
-  } catch (err) {
-    getLogger().error({ err }, '[videos/normalize]');
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.post('/togif', upload.single('video'), async (req, res) => {
-  try {
-    const ffmpeg = await checkFfmpeg();
-    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
-
-    const fps = req.body?.fps ? Number(req.body.fps) : 12;
-    const width = req.body?.width ? Number(req.body.width) : 480;
-    const startSec = req.body?.startSec != null && req.body.startSec !== '' ? Number(req.body.startSec) : 0;
-    const endSec = req.body?.endSec != null && req.body.endSec !== '' ? Number(req.body.endSec) : null;
-
-    const buffer = await withTempDir(async (dir) => {
-      const inputPath = await writeUpload(dir, req.file);
-      const outputPath = path.join(dir, 'output.gif');
-      await videoToGif(inputPath, outputPath, { fps, width, startSec, endSec });
-      return readOutputFile(outputPath);
-    });
-
-    res.setHeader('Content-Type', 'image/gif');
-    res.setHeader('Content-Disposition', 'inline; filename="output.gif"');
-    res.setHeader('Cache-Control', 'no-store');
-    res.send(buffer);
-  } catch (err) {
-    getLogger().error({ err }, '[videos/togif]');
-    res.status(500).json({ error: err.message });
-  }
-});
+  res.setHeader('Content-Type', 'image/gif');
+  res.setHeader('Content-Disposition', 'inline; filename="output.gif"');
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(buffer);
+}));
 
 router.post('/slideshow', upload.fields([
   { name: 'images', maxCount: 20 },
   { name: 'audio', maxCount: 1 },
-]), async (req, res) => {
-  try {
-    const ffmpeg = await checkFfmpeg();
-    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+]), ffmpegRoute('slideshow', async (req, res) => {
+  const images = req.files?.images || [];
+  if (images.length < 2) return res.status(400).json({ error: 'Upload at least two images (field name: images)' });
+  if (images.length > 20) return res.status(400).json({ error: 'Maximum 20 images' });
+  if (!enforceAggregateUploadSize(res, [...images, ...(req.files?.audio || [])])) return;
 
-    const images = req.files?.images || [];
-    if (images.length < 2) return res.status(400).json({ error: 'Upload at least two images (field name: images)' });
-    if (images.length > 20) return res.status(400).json({ error: 'Maximum 20 images' });
-    if (!enforceAggregateUploadSize(res, [...images, ...(req.files?.audio || [])])) return;
+  const secondsPerSlide = req.body?.secondsPerSlide ? Number(req.body.secondsPerSlide) : 3;
+  const aspect = req.body?.aspect || '9:16';
+  const mode = req.body?.mode === 'crop' ? 'crop' : 'pad';
+  const crossfadeSec = req.body?.crossfadeSec != null && req.body.crossfadeSec !== '' ? Number(req.body.crossfadeSec) : 0;
+  const audioFile = req.files?.audio?.[0] || null;
 
-    const secondsPerSlide = req.body?.secondsPerSlide ? Number(req.body.secondsPerSlide) : 3;
-    const aspect = req.body?.aspect || '9:16';
-    const mode = req.body?.mode === 'crop' ? 'crop' : 'pad';
-    const crossfadeSec = req.body?.crossfadeSec != null && req.body.crossfadeSec !== '' ? Number(req.body.crossfadeSec) : 0;
-    const audioFile = req.files?.audio?.[0] || null;
+  const buffer = await withTempDir(async (dir) => {
+    const imagePaths = [];
+    for (let i = 0; i < images.length; i += 1) {
+      const f = images[i];
+      if (!f?.buffer?.length) throw new Error(`Image #${i + 1} is empty`);
+      const ext = f.mimetype?.includes('png') ? '.png' : f.mimetype?.includes('webp') ? '.webp' : '.jpg';
+      const imgPath = path.join(dir, `slide_src_${i}${ext}`);
+      await fs.writeFile(imgPath, f.buffer);
+      imagePaths.push(imgPath);
+    }
 
-    const buffer = await withTempDir(async (dir) => {
-      const imagePaths = [];
-      for (let i = 0; i < images.length; i += 1) {
-        const f = images[i];
-        if (!f?.buffer?.length) throw new Error(`Image #${i + 1} is empty`);
-        const ext = f.mimetype?.includes('png') ? '.png' : f.mimetype?.includes('webp') ? '.webp' : '.jpg';
-        const imgPath = path.join(dir, `slide_src_${i}${ext}`);
-        await fs.writeFile(imgPath, f.buffer);
-        imagePaths.push(imgPath);
-      }
+    let audioPath = null;
+    if (audioFile) {
+      const aext = audioFile.mimetype?.includes('wav') ? '.wav'
+        : audioFile.mimetype?.includes('mp4') || audioFile.mimetype?.includes('m4a') ? '.m4a'
+          : '.mp3';
+      audioPath = path.join(dir, `slideshow_audio${aext}`);
+      await fs.writeFile(audioPath, audioFile.buffer);
+    }
 
-      let audioPath = null;
-      if (audioFile) {
-        const aext = audioFile.mimetype?.includes('wav') ? '.wav'
-          : audioFile.mimetype?.includes('mp4') || audioFile.mimetype?.includes('m4a') ? '.m4a'
-            : '.mp3';
-        audioPath = path.join(dir, `slideshow_audio${aext}`);
-        await fs.writeFile(audioPath, audioFile.buffer);
-      }
-
-      const outputPath = path.join(dir, 'slideshow.mp4');
-      await buildSlideshow(imagePaths, outputPath, {
-        secondsPerSlide, aspect, mode, crossfadeSec, audioPath,
-      });
-      return readOutputFile(outputPath);
+    const outputPath = path.join(dir, 'slideshow.mp4');
+    await buildSlideshow(imagePaths, outputPath, {
+      secondsPerSlide, aspect, mode, crossfadeSec, audioPath,
     });
+    return readOutputFile(outputPath);
+  });
 
-    sendVideoBuffer(res, buffer, 'slideshow.mp4');
-  } catch (err) {
-    getLogger().error({ err }, '[videos/slideshow]');
-    res.status(500).json({ error: err.message });
-  }
-});
+  sendVideoBuffer(res, buffer, 'slideshow.mp4');
+}));
 
 // Export for Social — one video in, N social-preset MP4s out. Reuses
 // Reframe's aspect-crop logic for each preset and Clip's trim-from-start
@@ -989,86 +957,77 @@ router.post('/slideshow', upload.fields([
 // are cached server-side (short TTL) so the client can download individual
 // files or a zip without re-uploading — mirrors the videoJobCache pattern
 // used by Generate.
-router.post('/export-social', upload.single('video'), async (req, res) => {
+router.post('/export-social', upload.single('video'), ffmpegRoute('export-social', async (req, res) => {
+  const videoFile = req.file;
+  if (!videoFile?.buffer?.length) return res.status(400).json({ error: 'Video file is required' });
+
+  let presetIds = [];
   try {
-    const ffmpeg = await checkFfmpeg();
-    if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
-
-    const videoFile = req.file;
-    if (!videoFile?.buffer?.length) return res.status(400).json({ error: 'Video file is required' });
-
-    let presetIds = [];
-    try {
-      const parsed = JSON.parse(req.body?.presets || '[]');
-      if (Array.isArray(parsed)) presetIds = parsed.map((p) => String(p));
-    } catch {
-      presetIds = String(req.body?.presets || '').split(',').map((s) => s.trim()).filter(Boolean);
-    }
-    presetIds = [...new Set(presetIds)].filter((id) => SOCIAL_EXPORT_PRESETS[id]);
-    if (!presetIds.length) return res.status(400).json({ error: 'Select at least one preset to export' });
-
-    const focus = ['center', 'top', 'bottom', 'left', 'right'].includes(req.body?.focus) ? req.body.focus : 'center';
-
-    const items = await withTempDir(async (dir) => {
-      const inputPath = await writeUpload(dir, videoFile);
-      const probe = await probeVideo(inputPath);
-      const results = [];
-      for (let i = 0; i < presetIds.length; i += 1) {
-        const presetId = presetIds[i];
-        const preset = SOCIAL_EXPORT_PRESETS[presetId];
-
-        let workingPath = inputPath;
-        if (preset.maxDurationSec && probe.duration && probe.duration > preset.maxDurationSec) {
-          const trimmedPath = path.join(dir, `${presetId}_trimmed.mp4`);
-          // eslint-disable-next-line no-await-in-loop
-          await clipVideo(inputPath, trimmedPath, { startSec: 0, endSec: preset.maxDurationSec });
-          workingPath = trimmedPath;
-        }
-
-        const outPath = path.join(dir, `${presetId}.mp4`);
-        // eslint-disable-next-line no-await-in-loop
-        await reframeVideo(workingPath, outPath, { aspect: preset.aspect, mode: 'crop', focus });
-        // eslint-disable-next-line no-await-in-loop
-        const outProbe = await probeVideo(outPath);
-        // eslint-disable-next-line no-await-in-loop
-        const buffer = await readOutputFile(outPath);
-
-        const thumbPath = path.join(dir, `${presetId}_thumb.jpg`);
-        // eslint-disable-next-line no-await-in-loop
-        await captureThumbnail(outPath, thumbPath, Math.min(1, outProbe.duration || 0));
-        // eslint-disable-next-line no-await-in-loop
-        const thumbBuf = await readOutputFile(thumbPath);
-
-        results.push({
-          presetId,
-          label: preset.label,
-          aspect: preset.aspect,
-          width: outProbe.width,
-          height: outProbe.height,
-          durationSec: outProbe.duration,
-          bytes: buffer.length,
-          fileName: `${presetId}-${outProbe.width}x${outProbe.height}.mp4`,
-          buffer,
-          thumbnailDataUrl: `data:image/jpeg;base64,${thumbBuf.toString('base64')}`,
-        });
-      }
-      return results;
-    });
-
-    const exportId = crypto.randomBytes(8).toString('hex');
-    rememberExportSocial(exportId, req.user.id, items);
-    pruneExportSocialCache();
-
-    res.json({
-      exportId,
-      count: items.length,
-      items: items.map(({ buffer, ...rest }) => rest),
-    });
-  } catch (err) {
-    getLogger().error({ err }, '[videos/export-social]');
-    res.status(500).json({ error: err.message });
+    const parsed = JSON.parse(req.body?.presets || '[]');
+    if (Array.isArray(parsed)) presetIds = parsed.map((p) => String(p));
+  } catch {
+    presetIds = String(req.body?.presets || '').split(',').map((s) => s.trim()).filter(Boolean);
   }
-});
+  presetIds = [...new Set(presetIds)].filter((id) => SOCIAL_EXPORT_PRESETS[id]);
+  if (!presetIds.length) return res.status(400).json({ error: 'Select at least one preset to export' });
+
+  const focus = ['center', 'top', 'bottom', 'left', 'right'].includes(req.body?.focus) ? req.body.focus : 'center';
+
+  const items = await withTempDir(async (dir) => {
+    const inputPath = await writeUpload(dir, videoFile);
+    const probe = await probeVideo(inputPath);
+    const results = [];
+    for (let i = 0; i < presetIds.length; i += 1) {
+      const presetId = presetIds[i];
+      const preset = SOCIAL_EXPORT_PRESETS[presetId];
+
+      let workingPath = inputPath;
+      if (preset.maxDurationSec && probe.duration && probe.duration > preset.maxDurationSec) {
+        const trimmedPath = path.join(dir, `${presetId}_trimmed.mp4`);
+        // eslint-disable-next-line no-await-in-loop
+        await clipVideo(inputPath, trimmedPath, { startSec: 0, endSec: preset.maxDurationSec });
+        workingPath = trimmedPath;
+      }
+
+      const outPath = path.join(dir, `${presetId}.mp4`);
+      // eslint-disable-next-line no-await-in-loop
+      await reframeVideo(workingPath, outPath, { aspect: preset.aspect, mode: 'crop', focus });
+      // eslint-disable-next-line no-await-in-loop
+      const outProbe = await probeVideo(outPath);
+      // eslint-disable-next-line no-await-in-loop
+      const buffer = await readOutputFile(outPath);
+
+      const thumbPath = path.join(dir, `${presetId}_thumb.jpg`);
+      // eslint-disable-next-line no-await-in-loop
+      await captureThumbnail(outPath, thumbPath, Math.min(1, outProbe.duration || 0));
+      // eslint-disable-next-line no-await-in-loop
+      const thumbBuf = await readOutputFile(thumbPath);
+
+      results.push({
+        presetId,
+        label: preset.label,
+        aspect: preset.aspect,
+        width: outProbe.width,
+        height: outProbe.height,
+        durationSec: outProbe.duration,
+        bytes: buffer.length,
+        fileName: `${presetId}-${outProbe.width}x${outProbe.height}.mp4`,
+        buffer,
+        thumbnailDataUrl: `data:image/jpeg;base64,${thumbBuf.toString('base64')}`,
+      });
+    }
+    return results;
+  });
+
+  const exportId = crypto.randomBytes(8).toString('hex');
+  rememberExportSocial(exportId, req.user.id, items);
+
+  res.json({
+    exportId,
+    count: items.length,
+    items: items.map(({ buffer, ...rest }) => rest),
+  });
+}));
 
 router.get('/export-social/:exportId/file/:presetId', async (req, res) => {
   try {
