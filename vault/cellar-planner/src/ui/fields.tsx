@@ -70,11 +70,19 @@ export function CheckField({ label, checked, onChange, testid, hint }: { label: 
 }
 
 export function Section({ title, children, note, testid, tour }: { title: string; children: ReactNode; note?: ReactNode; testid?: string; tour?: string }) {
+  // Collapsible: open by default. Content stays mounted while closed so half-typed values and tour targets survive.
+  const [open, setOpen] = useState(true);
   return (
-    <section className="section" data-testid={testid} data-tour={tour}>
-      <h2>{title}</h2>
-      {note}
-      <div className="grid">{children}</div>
+    <section className={`section${open ? '' : ' collapsed'}`} data-testid={testid} data-tour={tour}>
+      <h2>
+        <button type="button" className="section-toggle" aria-expanded={open} title={open ? `Hide ${title}` : `Show ${title}`} data-testid={testid ? `${testid}-toggle` : undefined} onClick={() => setOpen((o) => !o)}>
+          <span className="chev" aria-hidden="true">{open ? '▾' : '▸'}</span>{title}
+        </button>
+      </h2>
+      <div hidden={!open}>
+        {note}
+        <div className="grid">{children}</div>
+      </div>
     </section>
   );
 }
