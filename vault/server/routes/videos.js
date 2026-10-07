@@ -43,6 +43,7 @@ const { normalizeSrt } = require('../services/srtUtils');
 const { fetchLicensedVideo } = require('../services/videoUrlIntake');
 const { ffmpegRoute } = require('../middleware/ffmpegRoute');
 const { planSlideshow, normalizeSlideshowPlan } = require('../services/videoSlideshowPlan');
+const { planJoin, normalizeJoinPlan } = require('../services/videoJoinPlan');
 
 const router = express.Router();
 
@@ -607,6 +608,24 @@ router.post('/convert', upload.single('video'), ffmpegRoute('convert', async (re
   sendVideoBuffer(res, buffer, 'converted.mp4');
 }));
 
+// "Describe how to join" — plain-English description -> reviewable plan (play order + transition).
+// JSON in/out, no uploads: the client sends only the clip FILE NAMES, never the footage.
+router.post('/join/plan', async (req, res) => {
+  try {
+    const { description, clips } = req.body || {};
+    if (!Array.isArray(clips)) return res.status(400).json({ error: 'clips is required' });
+    const plan = await planJoin(req.user.id, {
+      description,
+      clips: clips.slice(0, 12).map((c) => ({ name: String(c?.name || '').slice(0, 80) })),
+    });
+    res.json(plan);
+  } catch (err) {
+    getLogger().error({ err }, '[videos/join/plan]');
+    const userFacing = /Describe how|at least two|Maximum|unreadable/i.test(err.message);
+    res.status(userFacing ? 400 : 500).json({ error: userFacing ? err.message : 'Could not plan the join — try again.' });
+  }
+});
+
 router.post('/join', upload.array('videos', 12), ffmpegRoute('join', async (req, res) => {
   const files = req.files || [];
   if (files.length < 2) {
@@ -616,9 +635,15 @@ router.post('/join', upload.array('videos', 12), ffmpegRoute('join', async (req,
 
   const maxWidth = req.body?.maxWidth ? Number(req.body.maxWidth) : 1280;
   const crf = req.body?.crf != null && req.body.crf !== '' ? Number(req.body.crf) : 23;
-  const crossfadeSec = req.body?.crossfadeSec != null && req.body.crossfadeSec !== ''
+  let crossfadeSec = req.body?.crossfadeSec != null && req.body.crossfadeSec !== ''
     ? Number(req.body.crossfadeSec)
     : 0;
+
+  // A plan (from /join/plan, possibly edited by the user) is untrusted input — re-validate. It sets the
+  // play order and the transition; without one the endpoint behaves exactly as before.
+  const rawPlan = parseJsonBodyField(req.body?.plan);
+  const plan = rawPlan ? normalizeJoinPlan(rawPlan, files.length) : null;
+  if (plan) crossfadeSec = plan.transitionSec;
 
   const buffer = await withTempDir(async (dir) => {
     const inputPaths = [];
@@ -630,11 +655,13 @@ router.post('/join', upload.array('videos', 12), ffmpegRoute('join', async (req,
       await fs.writeFile(inputPath, file.buffer);
       inputPaths.push(inputPath);
     }
+    const playOrder = plan ? plan.order.map((i) => inputPaths[i]) : inputPaths;
     const outputPath = path.join(dir, 'joined.mp4');
-    await joinVideosWithOptionalCrossfade(inputPaths, outputPath, {
+    await joinVideosWithOptionalCrossfade(playOrder, outputPath, {
       maxWidth: Number.isFinite(maxWidth) ? maxWidth : 1280,
       crf: Number.isFinite(crf) ? crf : 23,
       crossfadeSec: Number.isFinite(crossfadeSec) ? Math.max(0, crossfadeSec) : 0,
+      transition: plan ? plan.transition : undefined,
     });
     return readOutputFile(outputPath);
   });

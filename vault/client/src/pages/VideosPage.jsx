@@ -9,6 +9,7 @@ import Tooltip from '../components/Tooltip';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import SlideshowPlanner from './videos/SlideshowPlanner';
+import JoinPlanner from './videos/JoinPlanner';
 import { VoiceInput, VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 
 const VIDEO_GOOGLE_FONTS = [
@@ -897,6 +898,10 @@ export default function VideosPage() {
   const [joinMaxWidth, setJoinMaxWidth] = useState('1280');
   const [joinCrf, setJoinCrf] = useState(23);
   const [joinCrossfade, setJoinCrossfade] = useState('0');
+  // AI plan from "Describe how to join them"; its order indices refer to joinFiles, so any change to
+  // the clip list (add/remove/reorder) invalidates it.
+  const [joinPlan, setJoinPlan] = useState(null);
+  useEffect(() => { setJoinPlan(null); }, [joinFiles]);
 
   // Normalize
   const [normalizePreset, setNormalizePreset] = useState('normal');
@@ -2712,6 +2717,7 @@ export default function VideosPage() {
               Concatenate two or more clips into one MP4. Clips are normalized to a common size and frame rate so mixed formats still join cleanly. Order in the list is the play order.
             </p>
             <MultiVideoUpload files={joinFiles} onFiles={setJoinFiles} />
+            <JoinPlanner files={joinFiles} plan={joinPlan} onPlan={setJoinPlan} />
             <div className="grid grid-cols-2 gap-3">
               <label className="block space-y-1">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Max width (output)</span>
@@ -2725,12 +2731,14 @@ export default function VideosPage() {
                   <input type="number" min={18} max={35} value={joinCrf} onChange={(e) => setJoinCrf(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
                 </Tooltip>
               </label>
+              {!joinPlan && (
               <label className="block space-y-1 col-span-2">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Crossfade (seconds) — 0 = hard cut</span>
                 <Tooltip text="Blend this many seconds between consecutive clips instead of cutting straight to the next one.">
                   <input type="number" min={0} max={5} step={0.1} value={joinCrossfade} onChange={(e) => setJoinCrossfade(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
                 </Tooltip>
               </label>
+              )}
             </div>
             <Tooltip text="Normalize and concatenate the clips in the order shown above into one MP4.">
               <button
@@ -2744,8 +2752,9 @@ export default function VideosPage() {
                   joinFiles.forEach((f) => fd.append('videos', f));
                   if (joinMaxWidth) fd.append('maxWidth', String(joinMaxWidth));
                   fd.append('crf', String(joinCrf));
-                  const xf = Number(joinCrossfade) || 0;
-                  if (xf > 0) fd.append('crossfadeSec', String(xf));
+                  const xf = joinPlan ? joinPlan.transitionSec : (Number(joinCrossfade) || 0);
+                  if (joinPlan) fd.append('plan', JSON.stringify(joinPlan));
+                  else if (xf > 0) fd.append('crossfadeSec', String(xf));
                   runFormVideo('join', fd, {
                     label: xf > 0 ? 'Joining with crossfade…' : 'Joining videos…',
                     resultFilename: 'joined.mp4',
@@ -2756,7 +2765,7 @@ export default function VideosPage() {
                 className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
                 style={{ background: 'var(--color-primary)' }}
               >
-                Join {joinFiles.length || 0} clips{Number(joinCrossfade) > 0 ? ` · ${joinCrossfade}s fade` : ''}
+                Join {joinFiles.length || 0} clips{joinPlan ? (joinPlan.transition === 'cut' ? ' · planned order, hard cuts' : ` · planned order, ${joinPlan.transitionSec}s ${joinPlan.transition}`) : (Number(joinCrossfade) > 0 ? ` · ${joinCrossfade}s fade` : '')}
               </button>
             </Tooltip>
             {resultForTool === 'join' && (
