@@ -315,10 +315,50 @@ async function describeReferenceImage(userId, imageDataUrl, purpose = 'suggestio
   return description;
 }
 
-async function expandVideoPrompt(userId, { brief, style, aspect, imageDescription, youtubeRef }) {
+/**
+ * Describe an uploaded reference video from a few evenly spaced frames (one Gemini call,
+ * all frames together so it can read motion/pacing across them). Returns plain-prose notes.
+ */
+async function describeReferenceVideoFrames(userId, frameDataUrls, { duration } = {}) {
+  const { gemini: modelId } = await getModelsForUser(userId);
+  if (!modelId) throw new Error('No Gemini model configured — add one in Settings to analyse reference videos');
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error('GEMINI_API_KEY is not configured — required to analyse reference videos');
+
+  const parts = [{
+    text: `These are ${frameDataUrls.length} frames in order from one video${duration ? ` (${Math.round(duration)}s long)` : ''}. Describe, for a new video brief: subject and setting, camera movement and framing, pacing/motion between frames, lighting, colour grade and overall mood. Max 90 words. Plain prose only.`,
+  }];
+  for (const url of frameDataUrls) {
+    const match = String(url).match(/^data:(image\/[^;]+);base64,(.+)$/i);
+    if (match) parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
+  }
+
+  const { GoogleGenerativeAI } = require('@google/generative-ai');
+  const gModel = new GoogleGenerativeAI(key).getGenerativeModel({
+    model: modelId,
+    generationConfig: { maxOutputTokens: 512 },
+  });
+  const result = await gModel.generateContent(parts);
+  let text = '';
+  try {
+    text = result.response.text().trim();
+  } catch {
+    const cand = result.response.candidates?.[0]?.content?.parts || [];
+    text = cand.map((p) => p.text || '').join('').trim();
+  }
+  if (!text) throw new Error('Vision model returned an empty description');
+  logUsage({ userId, model: modelId, inputTokens: 0, outputTokens: 0, feature: 'videos' });
+  return text;
+}
+
+async function expandVideoPrompt(userId, { brief, style, aspect, imageDescription, youtubeRef, videoReferenceNotes }) {
   const { light: modelId } = await getModelsForUser(userId);
 
   const refParts = [];
+  if (videoReferenceNotes) {
+    refParts.push(`Reference video (uploaded by the user) notes: ${videoReferenceNotes}`);
+    refParts.push('Match its pacing, camera feel and mood where appropriate, but do not copy branding or identifiable people.');
+  }
   if (imageDescription) {
     refParts.push(`Reference image notes: ${imageDescription}`);
   }
@@ -335,7 +375,9 @@ async function expandVideoPrompt(userId, { brief, style, aspect, imageDescriptio
 
   const userBrief = brief?.trim() || (youtubeRef
     ? `Short clip inspired by the reference YouTube video "${youtubeRef.title}"`
-    : 'Animate the reference image with subtle, natural motion');
+    : videoReferenceNotes
+      ? 'Short clip in the style of the reference video'
+      : 'Animate the reference image with subtle, natural motion');
 
   const prompt = `User brief: ${userBrief}
 Style: ${style || 'product b-roll'}
@@ -505,6 +547,7 @@ async function buildGenerationPayload(userId, options) {
     seedImageMode = 'animate',
     youtubeUrl,
     useYoutubeThumbnailAsSeed = false,
+    videoReferenceNotes = '',
   } = options;
 
   let seedImageDataUrl = seedImage ? await toImageDataUrl(seedImage) : null;
@@ -519,8 +562,8 @@ async function buildGenerationPayload(userId, options) {
     }
   }
 
-  if (!brief?.trim() && !youtubeRef && !seedImageDataUrl) {
-    throw new Error('Add a brief, reference image, or YouTube example');
+  if (!brief?.trim() && !youtubeRef && !seedImageDataUrl && !videoReferenceNotes) {
+    throw new Error('Add a brief, reference image, reference video, or YouTube example');
   }
 
   let imageDescription = null;
@@ -534,6 +577,7 @@ async function buildGenerationPayload(userId, options) {
     aspect,
     imageDescription,
     youtubeRef,
+    videoReferenceNotes,
   });
 
   const dims = ASPECT_MAP[aspect] || ASPECT_MAP['16:9'];
@@ -570,6 +614,7 @@ async function buildGenerationPayload(userId, options) {
         usedThumbnailAsSeed: Boolean(useYoutubeThumbnailAsSeed && effectiveSeedMode === 'animate' && seedImageDataUrl),
       } : null,
       imageDescription,
+      videoReferenceNotes: videoReferenceNotes || null,
       youtubeVisualNotes: youtubeRef?.visualNotes || null,
     },
   };
@@ -765,6 +810,7 @@ module.exports = {
   isAllowedPlaybackUrl,
   expandVideoPrompt,
   buildYoutubeContext,
+  describeReferenceVideoFrames,
   toImageDataUrl,
   transcribeAudioWithGemini,
   isGeminiTranscribeAvailable,

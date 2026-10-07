@@ -384,7 +384,7 @@ const TOOL_GROUPS = [
     id: 'create',
     label: 'Create',
     tools: [
-      { id: 'generate', label: 'Generate clip', desc: 'Brief + optional image seed or YouTube example' },
+      { id: 'generate', label: 'Generate clip', desc: 'Brief + optional image seed, reference video or YouTube example' },
     ],
   },
   {
@@ -877,6 +877,12 @@ export default function VideosPage() {
   const [youtubePreview, setYoutubePreview] = useState(null);
   const [useYoutubeThumbnailAsSeed, setUseYoutubeThumbnailAsSeed] = useState(false);
   const [youtubeLoading, setYoutubeLoading] = useState(false);
+
+  // Uploaded reference video (non-YouTube)
+  const [refVideoFile, setRefVideoFile] = useState(null);
+  const [refVideoInfo, setRefVideoInfo] = useState(null); // { notes, firstFrameDataUrl, duration, width, height }
+  const [refVideoLoading, setRefVideoLoading] = useState(false);
+  const [useRefVideoFrameAsSeed, setUseRefVideoFrameAsSeed] = useState(false);
 
   // Clip
   const [startSec, setStartSec] = useState(0);
@@ -1560,12 +1566,35 @@ export default function VideosPage() {
     }
   };
 
+  const handleRefVideoFile = async (file) => {
+    setRefVideoInfo(null);
+    setUseRefVideoFrameAsSeed(false);
+    setRefVideoFile(file || null);
+    if (!file) return;
+    setRefVideoLoading(true);
+    try {
+      const fd = new FormData();
+      fd.append('video', file);
+      const res = await api.postForm('/api/videos/reference-video', fd);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not analyse video');
+      setRefVideoInfo(data);
+      addToast('Reference video analysed', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+      setRefVideoFile(null);
+    } finally {
+      setRefVideoLoading(false);
+    }
+  };
+
   const handleGenerate = async () => {
     const hasBrief = Boolean(brief.trim());
     const hasImage = Boolean(seedImageFile || seedImageUrl.trim());
     const hasYoutube = Boolean(youtubeUrl.trim());
-    if (!hasBrief && !hasImage && !hasYoutube) {
-      addToast('Add a brief, reference image, or YouTube example', 'error');
+    const hasRefVideo = Boolean(refVideoInfo?.notes);
+    if (!hasBrief && !hasImage && !hasYoutube && !hasRefVideo) {
+      addToast('Add a brief, reference image, reference video, or YouTube example', 'error');
       return;
     }
 
@@ -1576,6 +1605,8 @@ export default function VideosPage() {
         seedImageDataUrl = await readFileAsDataUrl(seedImageFile);
       } else if (seedImageUrl.trim()) {
         seedImageDataUrl = seedImageUrl.trim();
+      } else if (useRefVideoFrameAsSeed && refVideoInfo?.firstFrameDataUrl) {
+        seedImageDataUrl = refVideoInfo.firstFrameDataUrl;
       }
 
       const res = await api.post('/api/videos/generate', {
@@ -1584,9 +1615,10 @@ export default function VideosPage() {
         aspect,
         durationSec,
         seedImageDataUrl: seedImageDataUrl || undefined,
-        seedImageMode,
+        seedImageMode: seedImageDataUrl && !seedImageFile && !seedImageUrl.trim() ? 'animate' : seedImageMode,
         youtubeUrl: youtubeUrl.trim() || undefined,
         useYoutubeThumbnailAsSeed,
+        videoReferenceNotes: refVideoInfo?.notes || undefined,
         provider: selectedProvider || undefined,
       });
       const started = await res.json();
@@ -1949,6 +1981,52 @@ export default function VideosPage() {
                       Use YouTube thumbnail as starting frame
                     </label>
                   </Tooltip>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+              <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Reference video (optional)</p>
+              <Tooltip text="Upload your own video. A few frames are analysed so the new clip can match its look, camera feel and pacing. The file is not stored or copied.">
+                <input
+                  type="file"
+                  accept="video/*"
+                  disabled={refVideoLoading}
+                  onChange={(e) => { handleRefVideoFile(e.target.files?.[0]); e.target.value = ''; }}
+                  className="block w-full text-xs"
+                  style={{ color: 'var(--color-muted)' }}
+                />
+              </Tooltip>
+              {refVideoLoading && (
+                <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>Analysing video…</p>
+              )}
+              {refVideoInfo && (
+                <div className="space-y-2">
+                  <div className="flex gap-3 items-start">
+                    <img src={refVideoInfo.firstFrameDataUrl} alt="" className="w-24 rounded-lg border shrink-0" style={{ borderColor: 'var(--color-border)' }} />
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{refVideoFile?.name || refVideoInfo.filename}</p>
+                      <p className="text-[10px] line-clamp-4" style={{ color: 'var(--color-muted)' }}>{refVideoInfo.notes}</p>
+                    </div>
+                  </div>
+                  <Tooltip text="Animate from this video's first frame instead of generating from text alone.">
+                    <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
+                      <input
+                        type="checkbox"
+                        checked={useRefVideoFrameAsSeed}
+                        onChange={(e) => setUseRefVideoFrameAsSeed(e.target.checked)}
+                      />
+                      Use first frame as starting frame
+                    </label>
+                  </Tooltip>
+                  <button
+                    type="button"
+                    onClick={() => handleRefVideoFile(null)}
+                    className="text-xs transition-opacity hover:opacity-60"
+                    style={{ color: 'var(--color-muted)' }}
+                  >
+                    Remove reference video
+                  </button>
                 </div>
               )}
             </div>

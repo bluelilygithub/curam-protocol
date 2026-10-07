@@ -13,7 +13,7 @@ const { captureIf, makeFingerprint } = require('../services/SuggestionService');
 const { saveAsset, listAssets, getAsset, deleteAsset, renameAsset, getUserUsageBytes } = require('../services/videoLibraryService');
 const {
   startVideoGeneration, pollVideoGeneration, getVideoGenerateConfig, buildYoutubeContext, fetchPlaybackVideo,
-  transcribeAudioWithGemini, isGeminiTranscribeAvailable,
+  transcribeAudioWithGemini, isGeminiTranscribeAvailable, describeReferenceVideoFrames,
 } = require('../services/videoGenerateService');
 const {
   checkFfmpeg,
@@ -29,6 +29,7 @@ const {
   overlayImage,
   extractAudio,
   captureThumbnail,
+  extractFrames,
   annotateVideo,
   burnSubtitles,
   extractWav16k,
@@ -495,6 +496,7 @@ router.post('/generate', async (req, res) => {
       seedImageMode,
       youtubeUrl,
       useYoutubeThumbnailAsSeed,
+      videoReferenceNotes,
       provider,
     } = req.body || {};
 
@@ -507,6 +509,7 @@ router.post('/generate', async (req, res) => {
       seedImageMode: seedImageMode === 'suggest' ? 'suggest' : 'animate',
       youtubeUrl: youtubeUrl?.trim() || '',
       useYoutubeThumbnailAsSeed: Boolean(useYoutubeThumbnailAsSeed),
+      videoReferenceNotes: typeof videoReferenceNotes === 'string' ? videoReferenceNotes.trim().slice(0, 1500) : '',
       provider: provider === 'fal' || provider === 'replicate' ? provider : undefined,
     });
 
@@ -542,6 +545,30 @@ router.post('/generate', async (req, res) => {
     res.status(notConfigured ? 503 : 500).json({ error: err.message });
   }
 });
+
+// Uploaded (non-YouTube) reference video for Generate: sample a few frames, have Gemini
+// describe them, return notes the client sends back with /generate. Nothing is stored.
+router.post('/reference-video', upload.single('video'), ffmpegRoute('reference-video', async (req, res) => {
+  const result = await withTempDir(async (dir) => {
+    const inputPath = await writeUpload(dir, req.file);
+    const info = await probeVideo(inputPath);
+    const framePaths = await extractFrames(inputPath, dir, { count: 4, duration: info.duration });
+    const frames = await Promise.all(
+      framePaths.map(async (p) => `data:image/jpeg;base64,${(await readOutputFile(p)).toString('base64')}`),
+    );
+    const notes = await describeReferenceVideoFrames(req.user.id, frames, { duration: info.duration });
+    return { notes, frames, info };
+  });
+
+  res.json({
+    filename: req.file?.originalname || 'video',
+    notes: result.notes,
+    firstFrameDataUrl: result.frames[0],
+    duration: result.info.duration,
+    width: result.info.width,
+    height: result.info.height,
+  });
+}));
 
 router.post('/probe', upload.single('video'), ffmpegRoute('probe', async (req, res) => {
   const info = await withTempDir(async (dir) => {
