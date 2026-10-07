@@ -189,7 +189,7 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
   await shot2('11-tooltip');
   await p2.mouse.move(5, 5);
   await p2.getByTestId('save').hover();
-  await p2.waitForFunction(() => /Download this design/.test(document.querySelector('.rp-tooltip')?.textContent ?? ''), null, { timeout: 3000 });
+  await p2.waitForFunction(() => /Download a copy of this design/.test(document.querySelector('.rp-tooltip')?.textContent ?? ''), null, { timeout: 3000 });
   check('hovering a button shows its explanation', true);
   await p2.mouse.move(5, 5);
   await p2.waitForTimeout(300);
@@ -469,10 +469,11 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
   await p5.goto(URL);
   await p5.getByTestId('plan-canvas').waitFor();
   await status5('saved');
-  check('signed out: the header says Saved, in this browser', /Saved.*this browser/.test(await p5.getByTestId('save-status').innerText()), await p5.getByTestId('save-status').innerText());
+  check('signed out: the header says Saved, in this browser', /Saved on this device only/.test(await p5.getByTestId('save-status').innerText()), await p5.getByTestId('save-status').innerText());
   await p5.getByTestId('project-name').fill('Back cellar');
   await status5('unsaved');
-  await status5('saved');
+  await p5.getByTestId('save-now').click(); // Save now saves at once, without waiting for the pause
+  await status5('saved', 1000);
   await p5.getByTestId('designs-open').click();
   const firstItem = await p5.getByTestId('design-item').first().innerText();
   check('Your designs lists the saved design by name, with its counts', /Back cellar/.test(firstItem) && /rack run/.test(firstItem), firstItem);
@@ -538,7 +539,7 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
   await p6.getByTestId('plan-canvas').waitFor();
   await status6('saved');
   const st6 = await p6.getByTestId('save-status').innerText();
-  check('signed in: the header says Saved with no "this browser", and the design is in the account', !/this browser/.test(st6) && rows.size === 1, st6);
+  check('signed in: the header says Saved to your Vault account, and the design is in the account', /Saved to your Vault account/.test(st6) && rows.size === 1, st6);
   await p6.getByTestId('project-name').fill('Wine room');
   await status6('unsaved');
   await status6('saved');

@@ -1,4 +1,4 @@
-// Writes examples/test-case-1.cellar.json from the app's own test case, so the file you can open with "Open file" never drifts from the button.
+// Writes examples/test-case-1.cellar.json from the app's own test case, so the file you can open with "Upload file" never drifts from the button.
 // Run with:  npx vite-node scripts/writeExample.mjs   (or `npm run example`)
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';

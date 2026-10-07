@@ -45,7 +45,7 @@ export const designCodec: ProjectCodec<AppProject, DesignEntry> = {
   cleanName,
   toText: serializeApp,
   fromText: deserializeApp,
-  // the same validated file format the Save file button writes, as an object
+  // the same validated file format the Download file button writes, as an object
   toData: (p) => JSON.parse(serializeApp(p)) as unknown,
   fromData: (d) => deserializeApp(JSON.stringify(d)),
   extra: (p) => ({ runCount: p.runs.length, rackUnits: rackUnitsOf(p), estimated: (p.estimated?.length ?? 0) > 0 }),

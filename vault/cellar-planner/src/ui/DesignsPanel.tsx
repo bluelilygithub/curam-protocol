@@ -13,12 +13,15 @@ export function SaveStatus({ designs }: { designs: Designs }) {
   const where = useStore(designs.library, (s) => s.kind);
   const error = useStore(designs.library, (s) => s.error);
   const bad = status === 'error' || status === 'conflict';
+  const text = status === 'saved' ? (where === 'server' ? 'Saved to your Vault account ✓' : 'Saved on this device only ✓') : SAVE[status];
   return (
     <>
-      <span className={`save-state${bad ? ' bad' : ''}`} role="status" aria-live="polite" data-testid="save-status" data-status={status}
-        title={bad && error ? error : where === 'server' ? 'Saved to your Vault account.' : 'Saved in this browser only. Open the planner from Vault while signed in to save to your account.'}>
-        {SAVE[status]}{where === 'local' && status !== 'loading' ? ' (this browser)' : ''}
+      <span className={`save-state${bad ? ' bad' : ''}`} role="status" aria-live="polite" data-testid="save-status" data-status={status} data-where={where ?? ''}
+        title={bad && error ? error : where === 'server' ? 'Saved to your Vault account. You can open it from any device.' : 'Saved in this browser on this device only. Open the planner from Vault while signed in to save to your account.'}>
+        {text}
       </span>
+      <button type="button" className="btn" disabled={status === 'saving' || status === 'loading' || status === 'conflict'} title="Save this design now instead of waiting for the automatic save."
+        onClick={() => void designs.controller.saveNow()} data-testid="save-now">Save now</button>
       {status === 'conflict' && (
         <div className="conflict" role="alert" data-testid="conflict">
           <span>{error ?? 'This design was changed in another window or tab.'}</span>
@@ -30,7 +33,7 @@ export function SaveStatus({ designs }: { designs: Designs }) {
   );
 }
 
-/** Your saved designs: open, new, duplicate, delete. Designs save by themselves; Save file / Open file still move a design in and out as a file. */
+/** Your saved designs: open, new, duplicate, delete. Designs save by themselves; Download file / Upload file still move a design in and out as a file. */
 export function DesignsPanel({ ui, designs, onImportFile }: { ui: UiStore; designs: Designs; onImportFile: (f: File) => void }) {
   const open = useStore(ui, (s) => s.designsOpen);
   const entries = useStore(designs.library, (s) => s.entries);
@@ -59,8 +62,8 @@ export function DesignsPanel({ ui, designs, onImportFile }: { ui: UiStore; desig
         <div className="modal-body" tabIndex={0} role="region" aria-label="Saved designs">
           <div className="row">
             <button ref={first} type="button" className="btn primary" title="Start a new design from the blank sample enclosure (racks left blank). The design you have open stays saved." onClick={() => { void designs.controller.newProject('New design'); close(); }} data-testid="design-new">New design</button>
-            <button type="button" className="btn" title="Add a .cellar.json file as a new saved design and open it. The design you have open stays as it is." onClick={() => file.current?.click()} data-testid="design-import">Open file</button>
-            <input ref={file} type="file" accept=".json,application/json" hidden aria-label="Open a design file" title="Open a design file" onChange={(e) => { const f = e.target.files?.[0]; if (f) { onImportFile(f); close(); } e.target.value = ''; }} />
+            <button type="button" className="btn" title="Add a .cellar.json file as a new saved design and open it. The design you have open stays as it is." onClick={() => file.current?.click()} data-testid="design-import">Upload file</button>
+            <input ref={file} type="file" accept=".json,application/json" hidden aria-label="Upload a design file" title="Upload a design file" onChange={(e) => { const f = e.target.files?.[0]; if (f) { onImportFile(f); close(); } e.target.value = ''; }} />
           </div>
           <ul className="plist" data-testid="design-list">
             {entries.map((e) => (
@@ -77,7 +80,7 @@ export function DesignsPanel({ ui, designs, onImportFile }: { ui: UiStore; desig
             ))}
             {entries.length === 0 && <li className="empty">No saved designs yet.</li>}
           </ul>
-          <p className="note">{note || 'Designs save automatically.'} Use Save file in the header to keep a copy on your computer or send one to someone.</p>
+          <p className="note">{note || 'Designs save automatically.'} Use Download file in the header to keep a copy on your computer or send one to someone.</p>
         </div>
       </div>
     </div>

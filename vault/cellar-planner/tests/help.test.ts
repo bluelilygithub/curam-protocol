@@ -59,7 +59,7 @@ describe('guided tour', () => {
 describe('the guide (the (i) modal)', () => {
   const modal = read(join(uiDir, 'InfoModal.tsx'));
   it('explains the core ideas in plain words', () => {
-    for (const phrase of ['not set', 'outer faces', 'build-up', 'outside', 'Advisory guidance', 'sign-off', 'preliminary design only', 'Save file', 'minimum walkway']) expect(modal.toLowerCase(), phrase).toContain(phrase.toLowerCase());
+    for (const phrase of ['not set', 'outer faces', 'build-up', 'outside', 'Advisory guidance', 'sign-off', 'preliminary design only', 'Download file', 'minimum walkway']) expect(modal.toLowerCase(), phrase).toContain(phrase.toLowerCase());
   });
   it('explains the Racks view: bottles at true size, inside face of a wall', () => {
     for (const phrase of ['Racks', 'inside face', 'true size', 'not counted']) expect(modal, phrase).toContain(phrase);
