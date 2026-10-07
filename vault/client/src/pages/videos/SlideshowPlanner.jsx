@@ -4,6 +4,7 @@ import useToastStore from '../../store/toastStore';
 import useProcessingStore from '../../store/processingStore';
 import Tooltip from '../../components/Tooltip';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
+import SlideshowLimitsModal from './SlideshowLimitsModal';
 
 // "Describe the video" step for the Slideshow tool. The server turns a plain-English description
 // into a plan (order, per-slide timing/captions, transition, camera motion, colour mood); the
@@ -49,10 +50,18 @@ export default function SlideshowPlanner({ files, hasAudio, plan, onPlan }) {
   const addToast = useToastStore((s) => s.addToast);
   const { startProcessing, stopProcessing } = useProcessingStore();
   const [description, setDescription] = useState('');
+  const [showLimits, setShowLimits] = useState(false);
 
-  const generate = async () => {
+  // Pressing the button only opens the "what can't be done" modal; nothing is planned until the
+  // user confirms there.
+  const askToPlan = () => {
     if (!description.trim()) { addToast('Describe the video you want first', 'error'); return; }
     if (files.length < 2) { addToast('Add at least two images first', 'error'); return; }
+    setShowLimits(true);
+  };
+
+  const generate = async () => {
+    setShowLimits(false);
     startProcessing('Planning your video…', 'Turning your description into order, timing, transitions and look.');
     try {
       const res = await api.post('/api/videos/slideshow/plan', {
@@ -102,7 +111,7 @@ export default function SlideshowPlanner({ files, hasAudio, plan, onPlan }) {
       <Tooltip text="Ask the AI to turn your description into a plan you can edit before building.">
         <button
           type="button"
-          onClick={generate}
+          onClick={askToPlan}
           disabled={files.length < 2 || !description.trim()}
           className="px-4 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70 disabled:opacity-40"
           style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
@@ -110,6 +119,15 @@ export default function SlideshowPlanner({ files, hasAudio, plan, onPlan }) {
           {plan ? 'Re-plan from description' : 'Plan my video'}
         </button>
       </Tooltip>
+      {!plan && description.trim() && (
+        <p className="text-xs" style={{ color: '#b45309' }}>
+          Your description is only used when you press Plan my video — pressing Build without a plan ignores it.
+        </p>
+      )}
+
+      {showLimits && (
+        <SlideshowLimitsModal description={description} onConfirm={generate} onCancel={() => setShowLimits(false)} />
+      )}
 
       {plan && (
         <div className="space-y-3 pt-1">
