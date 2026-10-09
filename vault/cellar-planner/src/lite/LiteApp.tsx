@@ -175,8 +175,8 @@ export function LiteApp() {
         </div>
         <div className="lite-canvas">
           {view === 'plan'
-            ? <DrawingView key="plan" prims={plan} testid="lite-plan" description={`Plan of the cellar from above: ${s.widthMm} by ${s.depthMm} millimetres inside, door on the ${s.doorWall.toLowerCase()} wall, about ${result.bottles} bottles.`} />
-            : <DrawingView key={`racks-${rackWall}`} prims={racks} testid="lite-racks" description={`The racks on the ${rackWall.toLowerCase()} wall seen from inside, with each bottle drawn end-on.`} />}
+            ? <DrawingView ctrlZoom key="plan" prims={plan} testid="lite-plan" description={`Plan of the cellar from above: ${s.widthMm} by ${s.depthMm} millimetres inside, door on the ${s.doorWall.toLowerCase()} wall, about ${result.bottles} bottles.`} />
+            : <DrawingView ctrlZoom key={`racks-${rackWall}`} prims={racks} testid="lite-racks" description={`The racks on the ${rackWall.toLowerCase()} wall seen from inside, with each bottle drawn end-on.`} />}
         </div>
         {view === 'racks' && <p className="lite-note lite-units" data-testid="lite-racks-summary" role="status"><strong>{rackWallSummary(analysis.racks, fullRuns(result.project), rackWall).text}</strong> Each circle in the picture is one bottle, so you can count them. The whole cellar is about {result.bottles}.</p>}
         <p className="lite-note lite-units" data-testid="lite-units">Built from standard-size rack units, about {LITE_UNIT_WIDTH_MM} mm wide, placed whole along the walls. A gap at the end of a wall is left-over space, not a mistake.</p>

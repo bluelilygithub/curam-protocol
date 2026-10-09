@@ -49,7 +49,8 @@ function draw(layer: Konva.Layer, prims: Prim[], v: { scale: number; ox: number;
   layer.batchDraw();
 }
 
-export function DrawingView({ prims, testid, description }: { prims: Prim[]; testid: string; description: string }) {
+// ctrlZoom: the mouse wheel scrolls the page and only Ctrl/Cmd + wheel zooms (for the drawing embedded in a web page, so it never traps page scrolling)
+export function DrawingView({ prims, testid, description, ctrlZoom = false }: { prims: Prim[]; testid: string; description: string; ctrlZoom?: boolean }) {
   const host = useRef<HTMLDivElement>(null);
   const stage = useRef<Konva.Stage | null>(null);
   const layer = useRef<Konva.Layer | null>(null);
@@ -58,7 +59,11 @@ export function DrawingView({ prims, testid, description }: { prims: Prim[]; tes
   const drag = useRef<{ x: number; y: number } | null>(null);
   const primsRef = useRef(prims);
   primsRef.current = prims;
+  const ctrlZoomRef = useRef(ctrlZoom);
+  ctrlZoomRef.current = ctrlZoom;
+  const hintTimer = useRef<number | undefined>(undefined);
   const [size, setSize] = useState({ w: 600, h: 400 });
+  const [hint, setHint] = useState(false);
 
   const redraw = (): void => {
     const el = host.current;
@@ -79,6 +84,13 @@ export function DrawingView({ prims, testid, description }: { prims: Prim[]; tes
     const ro = new ResizeObserver(() => { const w = el.clientWidth, h = el.clientHeight; if (w && h) { s.size({ width: w, height: h }); setSize({ w, h }); } });
     ro.observe(el);
     s.on('wheel', (ev) => {
+      if (ctrlZoomRef.current && !ev.evt.ctrlKey && !ev.evt.metaKey) {
+        // let the page scroll; remind how to zoom
+        setHint(true);
+        window.clearTimeout(hintTimer.current);
+        hintTimer.current = window.setTimeout(() => setHint(false), 1500);
+        return;
+      }
       ev.evt.preventDefault();
       const pos = s.getPointerPosition();
       if (!pos) return;
@@ -122,7 +134,7 @@ export function DrawingView({ prims, testid, description }: { prims: Prim[]; tes
       // one finger left after a pinch: carry on panning from where it is, without a jump
       if (ev.evt instanceof TouchEvent && ev.evt.touches.length === 1) { const r = s.container().getBoundingClientRect(), t = ev.evt.touches[0]; drag.current = { x: t.clientX - r.left, y: t.clientY - r.top }; }
     });
-    return () => { ro.disconnect(); s.destroy(); stage.current = null; layer.current = null; };
+    return () => { window.clearTimeout(hintTimer.current); ro.disconnect(); s.destroy(); stage.current = null; layer.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -131,6 +143,7 @@ export function DrawingView({ prims, testid, description }: { prims: Prim[]; tes
   return (
     <div className="drawing" data-testid={testid} data-tour="cp-drawing">
       <div ref={host} className="drawing-canvas" data-testid={`${testid}-canvas`} role="img" aria-label={description} />
+      {hint && <div className="drawing-hint" role="status">Hold Ctrl (Cmd on Mac) and scroll to zoom</div>}
       <button type="button" className="btn fit" title="Bring the whole drawing back into view." onClick={() => { touched.current = false; redraw(); }} data-testid={`${testid}-fit`}>Fit</button>
     </div>
   );

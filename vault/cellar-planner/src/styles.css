@@ -145,3 +145,4 @@ body { background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans
 @media (pointer: coarse) { .field:focus-within .field-hint { display: block; } }
 
 .racks-summary { margin: 0; padding: 6px 12px; font-size: 13px; background: var(--surface); border-top: 1px solid var(--border); } .racks-summary .muted { color: var(--muted); }
+.drawing-hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); background: rgba(26,26,26,0.85); color: #fff; font-size: 12px; padding: 5px 10px; border-radius: 6px; pointer-events: none; }
