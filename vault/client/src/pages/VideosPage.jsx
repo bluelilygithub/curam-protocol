@@ -466,7 +466,7 @@ function endCardFormData(file, c) {
 
 function appendEndCardFields(fd, c) {
   fd.append('endCard', 'true');
-  Object.entries(c).forEach(([k, v]) => fd.append(k, String(v)));
+  fd.append('endCardSpec', JSON.stringify(c));
 }
 
 function EndCardFields({ cta, setCta }) {
@@ -1112,6 +1112,8 @@ export default function VideosPage() {
   const [ctaOnGenerate, setCtaOnGenerate] = useState(false);
   const [ctaOnJoin, setCtaOnJoin] = useState(false);
   const [ctaOnSlideshow, setCtaOnSlideshow] = useState(false);
+  const [ctaOnAnnotate, setCtaOnAnnotate] = useState(false);
+  const [ctaOnOverlay, setCtaOnOverlay] = useState(false);
 
   // Export for Social
   const [exportPresets, setExportPresets] = useState(['reels', 'square', 'landscape']);
@@ -3204,8 +3206,15 @@ export default function VideosPage() {
                 </Tooltip>
               </label>
             </div>
+            <EndCardToggle
+              enabled={ctaOnAnnotate}
+              setEnabled={setCtaOnAnnotate}
+              cta={cta}
+              setCta={setCta}
+              tip="After the label is burned in, finish the video with a closing screen carrying your message and button."
+            />
             <Tooltip text="Burn the styled text label into the video permanently.">
-              <button type="button" onClick={() => { if (!requireFile() || !overlayText.trim()) return; const fd = new FormData(); fd.append('video', sourceFile); fd.append('text', overlayText); appendTextStyleFields(fd); if (Number(fadeInSec) > 0) fd.append('fadeInSec', String(fadeInSec)); if (Number(fadeOutSec) > 0) fd.append('fadeOutSec', String(fadeOutSec)); runFormVideo('annotate', fd, { label: 'Annotating…', resultFilename: 'annotated.mp4', forTool: 'annotate' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
+              <button type="button" onClick={() => { if (!requireFile() || !overlayText.trim()) return; if (ctaOnAnnotate && !ctaHasContent(cta)) { addToast('Add a headline, button text or web address for the call to action', 'error'); return; } const fd = new FormData(); fd.append('video', sourceFile); fd.append('text', overlayText); appendTextStyleFields(fd); if (Number(fadeInSec) > 0) fd.append('fadeInSec', String(fadeInSec)); if (Number(fadeOutSec) > 0) fd.append('fadeOutSec', String(fadeOutSec)); if (ctaOnAnnotate) appendEndCardFields(fd, cta); runFormVideo('annotate', fd, { label: ctaOnAnnotate ? 'Annotating and adding call to action…' : 'Annotating…', resultFilename: 'annotated.mp4', forTool: 'annotate' }); }} disabled={!ffmpegOk} className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)' }}>
                 Apply label
               </button>
             </Tooltip>
@@ -3280,6 +3289,13 @@ export default function VideosPage() {
                 </Tooltip>
               </label>
             </div>
+            <EndCardToggle
+              enabled={ctaOnOverlay}
+              setEnabled={setCtaOnOverlay}
+              cta={cta}
+              setCta={setCta}
+              tip="After the overlay is applied, finish the video with a closing screen carrying your message and button."
+            />
             <Tooltip text="Burn the overlay image onto the video at the chosen position, size, and opacity.">
               <button
                 type="button"
@@ -3295,7 +3311,11 @@ export default function VideosPage() {
                   fd.append('position', overlayPosition);
                   fd.append('scalePct', String(overlayScale));
                   fd.append('opacity', String(overlayOpacity));
-                  runFormVideo('overlay', fd, { label: 'Applying overlay…', resultFilename: 'overlay.mp4', forTool: 'overlay' });
+                  if (ctaOnOverlay) {
+                    if (!ctaHasContent(cta)) { addToast('Add a headline, button text or web address for the call to action', 'error'); return; }
+                    appendEndCardFields(fd, cta);
+                  }
+                  runFormVideo('overlay', fd, { label: ctaOnOverlay ? 'Applying overlay and adding call to action…' : 'Applying overlay…', resultFilename: 'overlay.mp4', forTool: 'overlay' });
                 }}
                 disabled={!ffmpegOk}
                 className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"

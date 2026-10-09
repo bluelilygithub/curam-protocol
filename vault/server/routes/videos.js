@@ -696,17 +696,22 @@ router.post('/join/plan', async (req, res) => {
   }
 });
 
-// Optional closing screen on tools that build a new video (join, slideshow). Opt-in via `endCard=true`
+// Optional closing screen on tools that build a new video (join, slideshow, annotate, overlay). Opt-in via `endCard=true`
 // plus the same fields as /end-card; returns null when not requested, or { error } when the card is empty.
+// The card travels as one JSON field (`endCardSpec`) because tools like Annotate already use
+// fontFamily/fontWeight for their own text; flat fields are accepted as a fallback.
+// Returns null (not requested), { error }, or { spec } (the raw spec to hand to appendEndCard).
 function endCardRequest(body) {
   if (!(body?.endCard === 'true' || body?.endCard === true)) return null;
-  return normalizeEndCard(body);
+  const spec = parseJsonBodyField(body.endCardSpec) || body;
+  const checked = normalizeEndCard(spec);
+  return checked.error ? { error: checked.error } : { spec };
 }
 
 // Re-encode `outputPath` with the end card appended and return the new path.
-async function withEndCardApplied(dir, outputPath, body) {
+async function withEndCardApplied(dir, outputPath, spec) {
   const cardPath = path.join(dir, 'with-end-card.mp4');
-  await appendEndCard(outputPath, cardPath, body, dir);
+  await appendEndCard(outputPath, cardPath, spec, dir);
   return cardPath;
 }
 
@@ -759,7 +764,7 @@ router.post('/join', upload.array('videos', 12), ffmpegRoute('join', async (req,
         crossfadeSec: Number.isFinite(crossfadeSec) ? Math.max(0, crossfadeSec) : 0,
       });
     }
-    return readOutputFile(endCard ? await withEndCardApplied(dir, outputPath, req.body) : outputPath);
+    return readOutputFile(endCard ? await withEndCardApplied(dir, outputPath, endCard.spec) : outputPath);
   });
 
   sendVideoBuffer(res, buffer, 'joined.mp4');
@@ -836,6 +841,8 @@ router.post('/overlay', upload.fields([
   const imageFile = req.files?.image?.[0];
   if (!videoFile) return res.status(400).json({ error: 'Video file is required' });
   if (!imageFile) return res.status(400).json({ error: 'Image file is required (logo/watermark)' });
+  const endCard = endCardRequest(req.body);
+  if (endCard?.error) return res.status(400).json({ error: endCard.error });
 
   const position = req.body?.position || 'bottom-right';
   const scalePct = req.body?.scalePct != null ? Number(req.body.scalePct) : 20;
@@ -850,7 +857,7 @@ router.post('/overlay', upload.fields([
     await fs.writeFile(imagePath, imageFile.buffer);
     const outputPath = path.join(dir, 'overlay.mp4');
     await overlayImage(inputPath, imagePath, outputPath, { position, scalePct, opacity });
-    return readOutputFile(outputPath);
+    return readOutputFile(endCard ? await withEndCardApplied(dir, outputPath, endCard.spec) : outputPath);
   });
 
   sendVideoBuffer(res, buffer, 'overlay.mp4');
@@ -888,6 +895,8 @@ router.post('/thumbnail', upload.single('video'), ffmpegRoute('thumbnail', async
 router.post('/annotate', upload.single('video'), ffmpegRoute('annotate', async (req, res) => {
   const text = String(req.body?.text || '').trim();
   if (!text) return res.status(400).json({ error: 'text is required' });
+  const endCard = endCardRequest(req.body);
+  if (endCard?.error) return res.status(400).json({ error: endCard.error });
 
   const buffer = await withTempDir(async (dir) => {
     const inputPath = await writeUpload(dir, req.file);
@@ -907,7 +916,7 @@ router.post('/annotate', upload.single('video'), ffmpegRoute('annotate', async (
       fadeInSec: Number.isFinite(fadeInSec) ? Math.min(30, Math.max(0, fadeInSec)) : 0,
       fadeOutSec: Number.isFinite(fadeOutSec) ? Math.min(30, Math.max(0, fadeOutSec)) : 0,
     }, dir);
-    return readOutputFile(outputPath);
+    return readOutputFile(endCard ? await withEndCardApplied(dir, outputPath, endCard.spec) : outputPath);
   });
 
   sendVideoBuffer(res, buffer, 'annotated.mp4');
@@ -1078,7 +1087,7 @@ router.post('/slideshow', upload.fields([
       ? normalizeSlideshowPlan(rawPlan, images.length)
       : { secondsPerSlide, aspect, mode, crossfadeSec };
     await buildSlideshow(imagePaths, outputPath, { ...slideOpts, audioPath });
-    return readOutputFile(endCard ? await withEndCardApplied(dir, outputPath, req.body) : outputPath);
+    return readOutputFile(endCard ? await withEndCardApplied(dir, outputPath, endCard.spec) : outputPath);
   });
 
   sendVideoBuffer(res, buffer, 'slideshow.mp4');
