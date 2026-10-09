@@ -464,6 +464,11 @@ function endCardFormData(file, c) {
   return fd;
 }
 
+function appendEndCardFields(fd, c) {
+  fd.append('endCard', 'true');
+  Object.entries(c).forEach(([k, v]) => fd.append(k, String(v)));
+}
+
 function EndCardFields({ cta, setCta }) {
   const set = (key) => (value) => setCta((prev) => ({ ...prev, [key]: value }));
   return (
@@ -498,6 +503,23 @@ function EndCardFields({ cta, setCta }) {
           </Tooltip>
         </label>
       </div>
+    </div>
+  );
+}
+
+function EndCardToggle({ enabled, setEnabled, cta, setCta, tip }) {
+  return (
+    <div className="rounded-xl border p-3 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+      <label className="flex items-center gap-2 text-xs font-medium" style={{ color: 'var(--color-text)' }}>
+        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+        <Tooltip text={tip}>
+          <span>End with a call to action</span>
+        </Tooltip>
+      </label>
+      {enabled && <EndCardFields cta={cta} setCta={setCta} />}
+      {enabled && !ctaHasContent(cta) && (
+        <p className="text-[10px]" style={{ color: '#b45309' }}>Add a headline, button text or web address first.</p>
+      )}
     </div>
   );
 }
@@ -1088,6 +1110,8 @@ export default function VideosPage() {
   // Call to action end card
   const [cta, setCta] = useState(CTA_DEFAULTS);
   const [ctaOnGenerate, setCtaOnGenerate] = useState(false);
+  const [ctaOnJoin, setCtaOnJoin] = useState(false);
+  const [ctaOnSlideshow, setCtaOnSlideshow] = useState(false);
 
   // Export for Social
   const [exportPresets, setExportPresets] = useState(['reels', 'square', 'landscape']);
@@ -1541,12 +1565,16 @@ export default function VideosPage() {
       fd.append('aspect', slideAspect);
       if (slideCrossfade) fd.append('crossfadeSec', '0.6');
     }
+    if (ctaOnSlideshow) {
+      if (!ctaHasContent(cta)) { addToast('Add a headline, button text or web address for the call to action', 'error'); return; }
+      appendEndCardFields(fd, cta);
+    }
     runFormVideo('slideshow', fd, {
-      label: 'Building slideshow…',
+      label: ctaOnSlideshow ? 'Building slideshow with call to action…' : 'Building slideshow…',
       resultFilename: 'slideshow.mp4',
       forTool: 'slideshow',
     }).catch(() => {});
-  }, [slideImages, slideAudioFile, slidePlan, slideSecondsPerSlide, slideAspect, slideCrossfade, runFormVideo, addToast]);
+  }, [slideImages, slideAudioFile, slidePlan, slideSecondsPerSlide, slideAspect, slideCrossfade, ctaOnSlideshow, cta, runFormVideo, addToast]);
 
   const handleExportSocial = useCallback(async () => {
     if (!sourceFile) {
@@ -2501,18 +2529,13 @@ export default function VideosPage() {
                 </span>
               )}
             </label>
-            <div className="rounded-xl border p-3 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-              <label className="flex items-center gap-2 text-xs font-medium" style={{ color: 'var(--color-text)' }}>
-                <input type="checkbox" checked={ctaOnGenerate} onChange={(e) => setCtaOnGenerate(e.target.checked)} />
-                <Tooltip text="After the clip renders, add a closing screen with your message and button. Done on the server, no extra render cost.">
-                  <span>End with a call to action</span>
-                </Tooltip>
-              </label>
-              {ctaOnGenerate && <EndCardFields cta={cta} setCta={setCta} />}
-              {ctaOnGenerate && !ctaHasContent(cta) && (
-                <p className="text-[10px]" style={{ color: '#b45309' }}>Add a headline, button text or web address, or the clip will be made without one.</p>
-              )}
-            </div>
+            <EndCardToggle
+              enabled={ctaOnGenerate}
+              setEnabled={setCtaOnGenerate}
+              cta={cta}
+              setCta={setCta}
+              tip="After the clip renders, add a closing screen with your message and button. Done on the server, no extra render cost."
+            />
             <Tooltip text="Submit the brief and references to the video model — rendering can take one to three minutes.">
               <button
                 type="button"
@@ -3317,6 +3340,13 @@ export default function VideosPage() {
               </label>
               )}
             </div>
+            <EndCardToggle
+              enabled={ctaOnJoin}
+              setEnabled={setCtaOnJoin}
+              cta={cta}
+              setCta={setCta}
+              tip="Finish the joined video with a closing screen carrying your message and button."
+            />
             <Tooltip text="Normalize and concatenate the clips in the order shown above into one MP4.">
               <button
                 type="button"
@@ -3335,8 +3365,12 @@ export default function VideosPage() {
                   const xf = joinPlan ? 0 : (Number(joinCrossfade) || 0);
                   if (joinPlan) fd.append('plan', JSON.stringify(joinPlan));
                   else if (xf > 0) fd.append('crossfadeSec', String(xf));
+                  if (ctaOnJoin) {
+                    if (!ctaHasContent(cta)) { addToast('Add a headline, button text or web address for the call to action', 'error'); return; }
+                    appendEndCardFields(fd, cta);
+                  }
                   runFormVideo('join', fd, {
-                    label: planned ? 'Joining with your transitions and effects…' : xf > 0 ? 'Joining with crossfade…' : 'Joining videos…',
+                    label: ctaOnJoin ? 'Joining and adding call to action…' : planned ? 'Joining with your transitions and effects…' : xf > 0 ? 'Joining with crossfade…' : 'Joining videos…',
                     resultFilename: 'joined.mp4',
                     forTool: 'join',
                   });
@@ -3404,6 +3438,13 @@ export default function VideosPage() {
               </Tooltip>
               {slideAudioFile && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{slideAudioFile.name} — loops if shorter than the slideshow, trims if longer.</span>}
             </label>
+            <EndCardToggle
+              enabled={ctaOnSlideshow}
+              setEnabled={setCtaOnSlideshow}
+              cta={cta}
+              setCta={setCta}
+              tip="Finish the slideshow with a closing screen carrying your message and button."
+            />
             <Tooltip text="Render all slides, apply the transition and music, and produce one MP4.">
               <button
                 type="button"

@@ -696,12 +696,28 @@ router.post('/join/plan', async (req, res) => {
   }
 });
 
+// Optional closing screen on tools that build a new video (join, slideshow). Opt-in via `endCard=true`
+// plus the same fields as /end-card; returns null when not requested, or { error } when the card is empty.
+function endCardRequest(body) {
+  if (!(body?.endCard === 'true' || body?.endCard === true)) return null;
+  return normalizeEndCard(body);
+}
+
+// Re-encode `outputPath` with the end card appended and return the new path.
+async function withEndCardApplied(dir, outputPath, body) {
+  const cardPath = path.join(dir, 'with-end-card.mp4');
+  await appendEndCard(outputPath, cardPath, body, dir);
+  return cardPath;
+}
+
 router.post('/join', upload.array('videos', 12), ffmpegRoute('join', async (req, res) => {
   const files = req.files || [];
   if (files.length < 2) {
     return res.status(400).json({ error: 'Upload at least two video files (field name: videos)' });
   }
   if (!enforceAggregateUploadSize(res, files)) return;
+  const endCard = endCardRequest(req.body);
+  if (endCard?.error) return res.status(400).json({ error: endCard.error });
 
   const maxWidth = req.body?.maxWidth ? Number(req.body.maxWidth) : 1280;
   const crf = req.body?.crf != null && req.body.crf !== '' ? Number(req.body.crf) : 23;
@@ -743,7 +759,7 @@ router.post('/join', upload.array('videos', 12), ffmpegRoute('join', async (req,
         crossfadeSec: Number.isFinite(crossfadeSec) ? Math.max(0, crossfadeSec) : 0,
       });
     }
-    return readOutputFile(outputPath);
+    return readOutputFile(endCard ? await withEndCardApplied(dir, outputPath, req.body) : outputPath);
   });
 
   sendVideoBuffer(res, buffer, 'joined.mp4');
@@ -1026,6 +1042,8 @@ router.post('/slideshow', upload.fields([
   if (images.length < 2) return res.status(400).json({ error: 'Upload at least two images (field name: images)' });
   if (images.length > 20) return res.status(400).json({ error: 'Maximum 20 images' });
   if (!enforceAggregateUploadSize(res, [...images, ...(req.files?.audio || [])])) return;
+  const endCard = endCardRequest(req.body);
+  if (endCard?.error) return res.status(400).json({ error: endCard.error });
 
   const secondsPerSlide = req.body?.secondsPerSlide ? Number(req.body.secondsPerSlide) : 3;
   const aspect = req.body?.aspect || '9:16';
@@ -1060,7 +1078,7 @@ router.post('/slideshow', upload.fields([
       ? normalizeSlideshowPlan(rawPlan, images.length)
       : { secondsPerSlide, aspect, mode, crossfadeSec };
     await buildSlideshow(imagePaths, outputPath, { ...slideOpts, audioPath });
-    return readOutputFile(outputPath);
+    return readOutputFile(endCard ? await withEndCardApplied(dir, outputPath, req.body) : outputPath);
   });
 
   sendVideoBuffer(res, buffer, 'slideshow.mp4');
