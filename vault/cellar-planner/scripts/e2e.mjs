@@ -130,6 +130,16 @@ await page.waitForTimeout(300);
 await shot('07-door-swings-in');
 check('an inward door with a minimum set adds the keep-clear zone to the plan (one more shape)', (await prims('plan')) === before + 1, `${before} -> ${await prims('plan')}`);
 await page.getByTestId('door-swing').selectOption('OUT');
+// single and double doors
+const prims0 = await prims('plan');
+await page.getByTestId('door-leaves').selectOption('DOUBLE');
+const dd = (await state()).enclosure.door;
+check('choosing a double door makes it two leaves and a wider opening', dd.leaves === 2 && dd.widthMm >= 1500, JSON.stringify(dd));
+check('a double door has no hinge setting (it is hinged at both edges)', (await page.getByTestId('door-hinge').count()) === 0);
+check('the plan draws a second leaf and arc for a double door (two more shapes)', (await prims('plan')) === prims0 + 2, `${prims0} -> ${await prims('plan')}`);
+await page.getByTestId('door-leaves').selectOption('SINGLE');
+const ds = (await state()).enclosure.door;
+check('going back to a single door restores one leaf and the hinge setting', ds.leaves === 1 && ds.widthMm <= 970 && (await page.getByTestId('door-hinge').count()) === 1, JSON.stringify(ds));
 await set('walkway', '');
 
 // ---- invalid input and blanks
@@ -307,6 +317,7 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
   const rackShapes = async () => Number(await p3.getByTestId('racks-canvas').getAttribute('data-prims'));
   check('the Racks tab draws the north wall\'s bottles: 560 circles plus the frames and dimensions', (await rackShapes()) > 560 && (await rackShapes()) < 600, String(await rackShapes()));
   check('it says which wall, and the wall buttons show the pressed one', /north wall seen from inside/.test(await p3.locator('.hint').innerText()) && (await p3.getByTestId('rackwall-NORTH').getAttribute('aria-pressed')) === 'true');
+  check('the Racks tab lists the bottles on the north wall in words: 560 in 4 units, 140 a unit, 20 rows of 7', /North wall: 560 bottles in 4 units \(140 a unit: 20 rows of 7\)/.test(await p3.getByTestId('racks-summary').innerText()), await p3.getByTestId('racks-summary').innerText());
   await shot3('23-racks-north');
   await p3.getByTestId('rackwall-SOUTH').click();
   await p3.waitForTimeout(400);

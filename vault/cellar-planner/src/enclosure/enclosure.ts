@@ -30,8 +30,13 @@ export function doorLayout(e: Enclosure): DoorLayout {
  * The floor a door's leaf sweeps when open: a quarter circle of radius = door width on the side it swings to, hinged at one end of the opening.
  * Outside the enclosure for OUT, inside for IN (so inside it is floor that racking must stay clear of).
  */
+/** 1 for a single door (also when unset), 2 for a double door. */
+export const doorLeafCount = (e: Enclosure): 1 | 2 => (e.door.leaves === 2 ? 2 : 1);
+/** Width of one leaf: the whole door for a single door, half the opening for a double door. */
+export const doorLeafWidthMm = (e: Enclosure): number => e.door.widthMm / doorLeafCount(e);
+
 export function doorSwing(e: Enclosure): { radiusMm: number; side: 'OUTSIDE' | 'INSIDE'; hinge: 'LEFT' | 'RIGHT'; wall: WallSide } {
-  return { radiusMm: e.door.widthMm, side: e.door.swing === 'OUT' ? 'OUTSIDE' : 'INSIDE', hinge: e.door.hinge, wall: e.door.wall };
+  return { radiusMm: doorLeafWidthMm(e), side: e.door.swing === 'OUT' ? 'OUTSIDE' : 'INSIDE', hinge: e.door.hinge, wall: e.door.wall };
 }
 
 /** Share of the enclosure's outer wall area that is glass: glass walls plus a glazed door (the door replaces wall area on its own wall). */
@@ -64,11 +69,14 @@ export function checkEnclosure(e: Enclosure): Issue[] {
   } else if (layout.beforeMm < 0 || layout.afterMm < 0) {
     out.push({ code: 'DOOR_OFF_WALL', severity: 'error', message: 'The door runs past the end of its wall.', fix: 'Move the door onto the wall.' });
   }
+  if (doorLeafCount(e) === 2 && e.door.widthMm < 800) {
+    out.push({ code: 'DOUBLE_DOOR_TOO_NARROW', severity: 'error', message: `A double door ${e.door.widthMm} mm wide has leaves only ${doorLeafWidthMm(e)} mm wide, too narrow to walk through.`, fix: 'Make the opening at least 800 mm, or use a single door.' });
+  }
   if (e.door.heightMm > inner.heightMm) {
     out.push({ code: 'DOOR_TOO_TALL', severity: 'error', message: `The door is ${e.door.heightMm} mm tall but the inside is ${inner.heightMm} mm.`, fix: `Make the door ${inner.heightMm} mm or less.` });
   }
   if (e.door.swing === 'IN') {
-    out.push({ code: 'DOOR_SWINGS_IN', severity: 'info', message: `The door swings in: keep a ${e.door.widthMm} mm radius of floor inside clear of racking.` });
+    out.push({ code: 'DOOR_SWINGS_IN', severity: 'info', message: doorLeafCount(e) === 2 ? `The double door swings in: keep a ${doorLeafWidthMm(e)} mm radius of floor inside clear of racking at each end of the opening.` : `The door swings in: keep a ${e.door.widthMm} mm radius of floor inside clear of racking.` });
   }
 
   const parts = e.header;

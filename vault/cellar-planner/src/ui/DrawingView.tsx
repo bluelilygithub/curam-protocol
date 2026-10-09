@@ -14,7 +14,9 @@ function draw(layer: Konva.Layer, prims: Prim[], v: { scale: number; ox: number;
     if (p.kind === 'rect') {
       const w = p.w * v.scale, h = p.h * v.scale;
       layer.add(new Konva.Rect({ x: X(p.x), y: Y(p.y), width: w, height: h, fill: FILL[p.tone], stroke: STROKE[p.tone], strokeWidth: 1, dash: p.dash ? [6, 4] : undefined }));
-      if (p.label && Math.min(w, h) >= 14 && w > p.label.length * 5.5) layer.add(new Konva.Text({ x: X(p.x) + 4, y: Y(p.y) + 3, text: p.label, fontSize: 10, fontFamily: 'system-ui, sans-serif', fill: '#1a1a1a' }));
+      // the full label if it fits, else the first shorter one that does, else none
+      const text = [p.label, ...(p.shortLabels ?? [])].find((t) => t && Math.min(w, h) >= 14 && w > t.length * 5.5);
+      if (text) layer.add(new Konva.Text({ x: X(p.x) + 4, y: Y(p.y) + 3, text, fontSize: 10, fontFamily: 'system-ui, sans-serif', fill: '#1a1a1a' }));
     } else if (p.kind === 'circle') {
       layer.add(new Konva.Circle({ x: X(p.cx), y: Y(p.cy), radius: Math.max(0.6, p.r * v.scale), fill: FILL[p.tone], stroke: STROKE[p.tone], strokeWidth: 0.6, listening: false }));
     } else if (p.kind === 'poly') {

@@ -151,7 +151,7 @@ function specLines(p: AppProject, a: Analysis, f: Fonts): Array<{ text: string; 
   for (const w of ['NORTH', 'EAST', 'SOUTH', 'WEST'] as const) row(`${w[0]}${w.slice(1).toLowerCase()} wall: ${e.walls[w].kind.toLowerCase()}, ${e.walls[w].buildUpMm} mm.`);
   row(`Glass is ${(a.enclosure.glassFraction * 100).toFixed(1)}% of the outer wall area.`);
   head('DOOR');
-  row(`${e.door.widthMm} x ${e.door.heightMm} mm on the ${e.door.wall.toLowerCase()} wall, swinging ${e.door.swing === 'OUT' ? 'out' : 'in'}, hinge ${e.door.hinge.toLowerCase()} seen from outside, ${e.door.glazed ? 'glazed' : 'solid'}.`);
+  row(`${e.door.leaves === 2 ? `Double door, two ${e.door.widthMm / 2} mm leaves, ` : ''}${e.door.widthMm} x ${e.door.heightMm} mm on the ${e.door.wall.toLowerCase()} wall, swinging ${e.door.swing === 'OUT' ? 'out' : 'in'}, ${e.door.leaves === 2 ? 'hinged at both outer edges' : `hinge ${e.door.hinge.toLowerCase()} seen from outside`}, ${e.door.glazed ? 'glazed' : 'solid'}.`);
   row(`The wall splits ${lay.beforeMm} | ${lay.doorMm} | ${lay.afterMm} mm.`);
   head('HEADER (above the enclosure)');
   row(`${e.headerHeightMm} mm high.`);

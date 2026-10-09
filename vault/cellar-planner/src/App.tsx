@@ -7,9 +7,10 @@ import type { Designs } from './app/designs';
 import type { AppStore } from './app/store';
 import { INFO_KEY, type UiStore } from './app/uiStore';
 import type { WallSide } from './enclosure';
-import { badRunIds, bottlesOnWall, elevationView, planView, rackFaceView } from './views';
+import { badRunIds, bottlesOnWall, elevationView, planView, rackFaceView, rackWallSummary } from './views';
 import { ConflictBar, DesignsPanel, SaveStatus } from './ui/DesignsPanel';
 import { DrawingView } from './ui/DrawingView';
+import { CodeModal, projectFromCode } from './ui/CodeModal';
 import { InfoModal } from './ui/InfoModal';
 import { PackageModal } from './ui/PackageModal';
 import { Icon } from './ui/icons';
@@ -37,6 +38,9 @@ export function App({ store, ui, designs }: { store: AppStore; ui: UiStore; desi
     if (new URLSearchParams(window.location.search).has('tour')) window.setTimeout(() => void startTour(), 400);
     // ?testcase=1 opens the ready-made test case (estimated rack values) instead of the saved draft
     if (new URLSearchParams(window.location.search).has('testcase')) void designs.whenReady().then(() => addDesign(testCaseProject(), 'Added the test case as a new design: its rack values are best guesses.'));
+    // ?d=<design code> (a link from the public planner) opens that design as a new one
+    const linked = new URLSearchParams(window.location.search).get('d');
+    if (linked) void designs.whenReady().then(() => { const r = projectFromCode(linked); if ('project' in r) return addDesign(r.project, 'Opened the design from the link as a new design: its rack values are best guesses.'); setMsg(r.error); return undefined; });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   /** Shepherd is loaded on first use, so it stays out of the main bundle. */
@@ -55,7 +59,7 @@ export function App({ store, ui, designs }: { store: AppStore; ui: UiStore; desi
   const e = project.enclosure;
   const bottles = analysis.racks.total.status === 'OK' ? `${analysis.racks.total.capacity} bottles` : 'bottles not set';
   const planText = `Plan of the enclosure from above: ${e.outerWidthMm} by ${e.outerDepthMm} millimetres outside, ${analysis.enclosure.internal.widthMm} by ${analysis.enclosure.internal.depthMm} inside, door on the ${e.door.wall.toLowerCase()} wall opening ${e.door.swing === 'OUT' ? 'outwards' : 'inwards'}, ${project.runs.length} rack run${project.runs.length === 1 ? '' : 's'}, ${bottles}.`;
-  const elevText = `The ${wall.toLowerCase()} wall seen from outside: ${wall === e.door.wall ? `door ${e.door.widthMm} by ${e.door.heightMm} millimetres, ` : 'no door, '}wall height ${e.heightMm} millimetres, header ${e.headerHeightMm} millimetres.`;
+  const elevText = `The ${wall.toLowerCase()} wall seen from outside: ${wall === e.door.wall ? `${e.door.leaves === 2 ? 'double door' : 'door'} ${e.door.widthMm} by ${e.door.heightMm} millimetres, ` : 'no door, '}wall height ${e.heightMm} millimetres, header ${e.headerHeightMm} millimetres.`;
   const wallRuns = project.runs.filter((r) => r.wall === rackWall);
   const rackText = `The inside face of the ${rackWall.toLowerCase()} wall seen from inside: ${wallRuns.reduce((n, r) => n + r.units, 0)} rack unit${wallRuns.reduce((n, r) => n + r.units, 0) === 1 ? '' : 's'}, each bottle drawn end-on at its true size, ${bottlesOnWall(analysis.racks, fullRuns(project), rackWall)} bottles on this wall.`;
 
@@ -100,6 +104,7 @@ export function App({ store, ui, designs }: { store: AppStore; ui: UiStore; desi
             <div className="group" role="group" aria-label="Examples">
               <button type="button" className="btn" title="Load a ready-made test case: the sample enclosure with racks on every wall, filled with best-guess rack values so there are bottles to count. Every guess is marked estimated until you type your own number over it. It is added as a new saved design and opened." onClick={() => void addDesign(testCaseProject(), 'Added the test case as a new design: its rack values are best guesses.')} data-testid="testcase">Test case</button>
               <button type="button" className="btn" title="Load the sample enclosure, read from the Carter Noir drawings (values unverified), with the racks left blank. It is added as a new saved design and opened. For one with racks filled in, use Test case." onClick={() => void addDesign(sampleProject(), 'Added the blank sample as a new design.')} data-testid="sample">Blank sample</button>
+              <button type="button" className="btn" title="Paste a design code from a visitor's enquiry (from the public planner). It is added as a new design with best-guess racks; your other designs are not changed." onClick={() => ui.getState().set({ codeOpen: true })} data-testid="code-open">From design code</button>
             </div>
             <div className="group" role="group" aria-label="Output">
               <button type="button" className="btn" title="Make a PDF of A3 drawing sheets: the specification, the plan, the elevation and the racks on each wall, with a title block. Every sheet says preliminary design only." onClick={() => ui.getState().set({ packageOpen: true })} data-testid="package-open"><Icon name="list" /><span className="label">Drawing package</span></button>
@@ -127,11 +132,13 @@ export function App({ store, ui, designs }: { store: AppStore; ui: UiStore; desi
             <span className="hint">{tab === 'plan' ? 'From above. Drag to move, scroll or pinch to zoom.' : tab === 'racks' ? `The ${rackWall.toLowerCase()} wall seen from inside, bottles end-on.` : `The ${wall.toLowerCase()} wall seen from outside.`}</span>
           </div>
           {tab === 'plan' ? <DrawingView key="plan" prims={plan} testid="plan" description={planText} /> : tab === 'racks' ? <DrawingView key={`racks-${rackWall}`} prims={racks} testid="racks" description={rackText} /> : <DrawingView key={`elev-${wall}`} prims={elevation} testid="elevation" description={elevText} />}
+          {tab === 'racks' && <p className="racks-summary" data-testid="racks-summary" role="status">{rackWallSummary(analysis.racks, fullRuns(project), rackWall).text} <span className="muted">Whole enclosure: {bottles}.</span></p>}
           <p className="foot">PRELIMINARY DESIGN ONLY: FINAL SITE MEASURE REQUIRED PRIOR TO FABRICATION</p>
         </main>
         <aside className="right"><ChecksPanel /></aside>
       </div>
       <InfoModal ui={ui} />
+      <CodeModal ui={ui} onOpen={(p) => void addDesign(p, 'Opened the design code as a new design: its rack values are best guesses.')} />
       <PackageModal store={store} ui={ui} />
       <DesignsPanel ui={ui} designs={designs} onImportFile={(f) => void open(f)} />
       <TooltipHost />

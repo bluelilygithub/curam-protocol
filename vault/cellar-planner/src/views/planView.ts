@@ -1,7 +1,7 @@
-import { doorLayout, internalSize } from '../enclosure/enclosure';
+import { doorLayout, doorLeafWidthMm, internalSize } from '../enclosure/enclosure';
 import type { Enclosure, WallKind, WallSide } from '../enclosure/types';
 import type { Issue } from '../engine/types';
-import { doorOpening, hingeAt, wallPoint, type RackLayoutAnalysis, type RackRun } from '../placement/placement';
+import { doorLeaves, doorOpening, wallPoint, type RackLayoutAnalysis, type RackRun } from '../placement/placement';
 import type { Prim, Tone } from './primitives';
 
 // The 2D plan: the enclosure from above, in outer-face millimetres (0, 0 is the outside north-west corner), y down. Pure: a list of drawing
@@ -14,6 +14,8 @@ export interface PlanOptions {
   walkwayMm?: number | null;
   /** Run ids with an error, drawn in the issue tone. */
   badRuns?: Set<string>;
+  /** Label each run with its bottle count only (no run id or unit count), for people who do not know what a run is. */
+  plainLabels?: boolean;
 }
 
 /** Number of bottles text for a run: the count, or "not set". */
@@ -45,15 +47,17 @@ export function planView(e: Enclosure, runs: RackRun[], analysis?: RackLayoutAna
   const [ax, ay] = corner(open.aMm, 0), [bx, by] = corner(open.bMm, -wallBuild);
   out.push({ kind: 'rect', x: Math.min(ax, bx), y: Math.min(ay, by), w: Math.abs(bx - ax) || wallBuild, h: Math.abs(by - ay) || wallBuild, tone: 'door', label: 'DOOR' });
   const inward = e.door.swing === 'IN';
-  const hinge = hingeAt(e);
-  const other = hinge === open.aMm ? open.bMm : open.aMm;
   const dc = inward ? 0 : -wallBuild; // the leaf turns on the inner face when it opens in, the outer face when it opens out
-  const along = Math.sign(other - hinge), perp = inward ? 1 : -1, r = e.door.widthMm;
-  const arc: number[] = [];
-  for (let i = 0; i <= 24; i++) { const t = (i / 24) * (Math.PI / 2); const p = corner(hinge + along * r * Math.cos(t), dc + perp * r * Math.sin(t)); arc.push(p[0], p[1]); }
-  out.push({ kind: 'poly', pts: arc, tone: 'door', dash: true });
-  const h0 = corner(hinge, dc), h1 = corner(hinge, dc + perp * r);
-  out.push({ kind: 'poly', pts: [h0[0], h0[1], h1[0], h1[1]], tone: 'door' });
+  const perp = inward ? 1 : -1;
+  // each leaf sweeps a quarter circle about its hinge: one for a single door, two (meeting in the middle) for a double door
+  for (const leaf of doorLeaves(e)) {
+    const along = Math.sign(leaf.otherMm - leaf.hingeMm), r = leaf.radiusMm;
+    const arc: number[] = [];
+    for (let i = 0; i <= 24; i++) { const t = (i / 24) * (Math.PI / 2); const p = corner(leaf.hingeMm + along * r * Math.cos(t), dc + perp * r * Math.sin(t)); arc.push(p[0], p[1]); }
+    out.push({ kind: 'poly', pts: arc, tone: 'door', dash: true });
+    const h0 = corner(leaf.hingeMm, dc), h1 = corner(leaf.hingeMm, dc + perp * r);
+    out.push({ kind: 'poly', pts: [h0[0], h0[1], h1[0], h1[1]], tone: 'door' });
+  }
 
   // the floor kept clear inside a door that opens in (only when a minimum walkway is set)
   if (inward && opts.walkwayMm) {
@@ -67,7 +71,13 @@ export function planView(e: Enclosure, runs: RackRun[], analysis?: RackLayoutAna
     const fp = analysis?.runs.find((x) => x.runId === run.id)?.footprint;
     if (fp?.status === 'OK') {
       const [x, y] = o(fp.rect.x0, fp.rect.y0);
-      out.push({ kind: 'rect', x, y, w: fp.rect.x1 - fp.rect.x0, h: fp.rect.y1 - fp.rect.y0, tone: opts.badRuns?.has(run.id) ? 'rackIssue' : 'rack', label: `${run.id}: ${run.units} units, ${opts.badRuns?.has(run.id) ? 'not counted (has an error)' : bottleText(analysis, run.id)}` });
+      const bad = opts.badRuns?.has(run.id);
+      const count = bottleText(analysis, run.id);
+      const n = count.replace(' bottles', '');
+      // the full label names the run; when a small run cannot fit it, the count alone is better than no label (the drawing says what it holds)
+      const label = opts.plainLabels ? (bad ? 'not counted' : count) : `${run.id}: ${run.units} ${run.units === 1 ? 'unit' : 'units'}, ${bad ? 'not counted (has an error)' : count}`;
+      const shortLabels = bad ? ['not counted', '!'] : opts.plainLabels ? [n] : [count, n];
+      out.push({ kind: 'rect', x, y, w: fp.rect.x1 - fp.rect.x0, h: fp.rect.y1 - fp.rect.y0, tone: bad ? 'rackIssue' : 'rack', label, shortLabels });
     } else if (fp?.status === 'NOT_SET') {
       const mid = wallPoint(e, run.wall, 0, 0);
       const [tx, ty] = o(mid.x, mid.y);
@@ -83,7 +93,7 @@ export function planView(e: Enclosure, runs: RackRun[], analysis?: RackLayoutAna
   const dirOfWall = side === 'NORTH' || side === 'SOUTH' ? [1, 0] : [0, 1];
   // on the outside of the door wall; beyond the swing arc when the door opens out. A positive offset is to the right of the direction of travel,
   // which for these west-to-east or north-to-south runs is outward on the south and west walls and inward on the north and east walls.
-  const away = inward ? 350 : e.door.widthMm + 250;
+  const away = inward ? 350 : doorLeafWidthMm(e) + 250;
   const outward = side === 'SOUTH' || side === 'WEST' ? 1 : -1;
   const seg = (from: number, len: number): void => {
     out.push({ kind: 'dim', x1: startOfWall[0] + dirOfWall[0] * from, y1: startOfWall[1] + dirOfWall[1] * from, x2: startOfWall[0] + dirOfWall[0] * (from + len), y2: startOfWall[1] + dirOfWall[1] * (from + len), offset: outward * away, text: `${len}` });

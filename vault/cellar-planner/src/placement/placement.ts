@@ -1,4 +1,4 @@
-import { doorLayout, internalSize } from '../enclosure/enclosure';
+import { doorLayout, doorLeafCount, doorLeafWidthMm, internalSize } from '../enclosure/enclosure';
 import type { Enclosure, WallSide } from '../enclosure/types';
 import type { BottleProfileId, Issue } from '../engine/types';
 import { checkRackSpec, rackCapacity, type RackCapacity, type RackSpec } from '../rack/rack';
@@ -94,18 +94,26 @@ export function hingeAt(e: Enclosure): number {
   return low ? o.aMm : o.bMm;
 }
 
-/** Does a rectangle meet the quarter circle an inward-swinging door sweeps (radius = door width, centred on the hinge)? */
+/** Each leaf of the door: where it is hinged along the wall, where its free edge is, and the radius it sweeps. One for a single door, two for a double. */
+export function doorLeaves(e: Enclosure): Array<{ hingeMm: number; otherMm: number; radiusMm: number }> {
+  const o = doorOpening(e);
+  if (doorLeafCount(e) === 1) { const h = hingeAt(e); return [{ hingeMm: h, otherMm: h === o.aMm ? o.bMm : o.aMm, radiusMm: e.door.widthMm }]; }
+  const mid = (o.aMm + o.bMm) / 2, r = e.door.widthMm / 2;
+  return [{ hingeMm: o.aMm, otherMm: mid, radiusMm: r }, { hingeMm: o.bMm, otherMm: mid, radiusMm: r }];
+}
+
+/** Does a rectangle meet the quarter circle an inward-swinging door leaf sweeps (radius = the leaf's width, centred on its hinge)? */
 export function hitsDoorSwing(e: Enclosure, r: Rect): boolean {
   if (e.door.swing !== 'IN') return false;
   const { widthMm: w, depthMm: d } = internalSize(e);
   const o = doorOpening(e);
   const f = toWallFrame(o.wall, r, w, d);
-  const radius = e.door.widthMm;
-  const s0 = Math.max(f.s0, o.aMm), s1 = Math.min(f.s1, o.bMm), d0 = Math.max(f.d0, 0), d1 = Math.min(f.d1, radius);
-  if (s0 >= s1 || d0 >= d1) return false;
-  const hs = hingeAt(e);
-  const nearestS = Math.min(Math.max(hs, s0), s1), nearestD = Math.min(Math.max(0, d0), d1);
-  return Math.hypot(nearestS - hs, nearestD) < radius;
+  return doorLeaves(e).some((leaf) => {
+    const s0 = Math.max(f.s0, Math.min(leaf.hingeMm, leaf.otherMm)), s1 = Math.min(f.s1, Math.max(leaf.hingeMm, leaf.otherMm)), d0 = Math.max(f.d0, 0), d1 = Math.min(f.d1, leaf.radiusMm);
+    if (s0 >= s1 || d0 >= d1) return false;
+    const nearestS = Math.min(Math.max(leaf.hingeMm, s0), s1), nearestD = Math.min(Math.max(0, d0), d1);
+    return Math.hypot(nearestS - leaf.hingeMm, nearestD) < leaf.radiusMm;
+  });
 }
 
 export interface RunAnalysis { runId: string; footprint: Footprint; capacity: RackCapacity }
@@ -148,7 +156,7 @@ export function analyseRacks(e: Enclosure, runs: RackRun[], opts: { walkwayMm?: 
     if (run.wall === opening.wall && run.startMm < opening.bMm && run.startMm + fp.lengthMm > opening.aMm) {
       issues.push({ code: 'RUN_ON_DOOR', severity: 'error', message: 'This run stands across the door opening.', fix: `Keep it to the free wall either side of the ${opening.aMm} to ${opening.bMm} mm opening.`, where: run.id });
     }
-    if (hitsDoorSwing(e, fp.rect)) issues.push({ code: 'RUN_IN_DOOR_SWING', severity: 'error', message: `The door swings in and sweeps a ${e.door.widthMm} mm radius that this run is in.`, fix: 'Shorten or move the run, or make the door swing out.', where: run.id });
+    if (hitsDoorSwing(e, fp.rect)) issues.push({ code: 'RUN_IN_DOOR_SWING', severity: 'error', message: `The door swings in and sweeps a ${doorLeafWidthMm(e)} mm radius that this run is in.`, fix: 'Shorten or move the run, or make the door swing out.', where: run.id });
     else if (landing && overlaps(fp.rect, landing)) issues.push({ code: 'DOOR_PATH_BLOCKED', severity: 'error', message: `This run is in the ${walkway} mm of floor inside the door that must stay clear (it swings in).`, fix: 'Move it back or make it shallower.', where: run.id });
   }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { analyseApp, fullRuns, sampleProject, testCaseProject, type AppProject } from '../src/app/model';
-import { badRunIds, boundsOf, bottlesOnWall, rackFaceView, type Prim } from '../src/views';
+import { BOTTLES, WALLS, defaultLite, liteToProject } from '../src/lite/settings';
+import { badRunIds, boundsOf, bottlesOnWall, rackFaceView, rackWallSummary, type Prim } from '../src/views';
 
 // The Test case's rack values are best guesses (invented). The enclosure is Golden #02 (2750 x 1565 x 2150 inside).
 const view = (p: AppProject, wall: Parameters<typeof rackFaceView>[3]) => {
@@ -102,5 +103,51 @@ describe('the racks seen from inside', () => {
     expect(ys).toHaveLength(10);
     expect(ys[0]).toBe(2150 - 100);
     expect(ys[1] - ys[0]).toBe(-200);
+  });
+});
+
+describe('the bottle count in words, and the picture agrees with it', () => {
+  const sum = (p: AppProject) => (['NORTH', 'EAST', 'SOUTH', 'WEST'] as const).map((w) => {
+    const { prims, a, runs } = view(p, w);
+    return { w, drawn: circles(prims).length, said: rackWallSummary(a.racks, runs, w) };
+  });
+  it('says the north wall in words: count, units, per unit, rows of', () => {
+    const { a, runs } = view(testCaseProject(), 'NORTH');
+    expect(rackWallSummary(a.racks, runs, 'NORTH').text).toBe('North wall: 560 bottles in 4 units (140 a unit: 20 rows of 7).');
+  });
+  it('uses the singular for one unit, and says plainly when a wall has no racks', () => {
+    const { a, runs } = view(testCaseProject(), 'EAST');
+    expect(rackWallSummary(a.racks, runs, 'EAST').text).toBe('East wall: 140 bottles in 1 unit (140 a unit: 20 rows of 7).');
+    const none = { ...testCaseProject(), runs: [] };
+    const v = view(none, 'EAST');
+    expect(rackWallSummary(v.a.racks, v.runs, 'EAST').text).toBe('East wall: no racks.');
+  });
+  it('for the Test case, the words and the circles agree on every wall and add up to the total', () => {
+    const rows = sum(testCaseProject());
+    for (const r of rows) expect(r.drawn, r.w).toBe(r.said.bottles);
+    expect(rows.reduce((n, r) => n + r.said.bottles, 0)).toBe(1120);
+  });
+  it('and for every bottle style, door wall and door type the lite tool can make (circles = words = total)', () => {
+    for (const bottle of BOTTLES) for (const doorWall of WALLS) for (const doorStyle of ['SINGLE', 'DOUBLE'] as const) {
+      const p = liteToProject({ ...defaultLite(), bottle, doorWall, doorStyle });
+      const rows = sum(p);
+      const total = analyseApp(p).racks.total;
+      const counted = rows.reduce((n, r) => n + r.said.bottles, 0);
+      for (const r of rows) expect(r.drawn, `${bottle} ${doorWall} ${doorStyle} ${r.w}`).toBe(r.said.bottles + r.said.uncountedBottles);
+      expect(counted, `${bottle} ${doorWall} ${doorStyle}`).toBe(total.status === 'OK' ? total.capacity : -1);
+    }
+  });
+  it('a run with an error is named as not counted, and its bottles are not in the count', () => {
+    const magnum = { ...testCaseProject(), bottle: 'MAGNUM' as const };
+    const { a, runs } = view(magnum, 'NORTH');
+    const s = rackWallSummary(a.racks, runs, 'NORTH');
+    expect(s.bottles).toBe(0);
+    expect(s.uncountedBottles).toBeGreaterThan(0);
+    expect(s.text).toMatch(/not counted/);
+  });
+  it('a unit with values missing says no bottles are counted for it', () => {
+    const missing = { ...sampleProject(), runs: [{ id: 'r1', wall: 'NORTH' as const, startMm: 0, units: 2 }], rackSpec: { ...sampleProject().rackSpec, unitWidthMm: 600, unitDepthMm: 350 } };
+    const { a, runs } = view(missing, 'NORTH');
+    expect(rackWallSummary(a.racks, runs, 'NORTH').text).toMatch(/2 units with rack values not set, so no bottles counted/);
   });
 });

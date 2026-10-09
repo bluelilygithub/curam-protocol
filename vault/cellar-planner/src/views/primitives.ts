@@ -4,7 +4,7 @@
 export type Tone = 'panel' | 'glass' | 'stud' | 'inside' | 'door' | 'rack' | 'rackIssue' | 'zone' | 'header' | 'equipment' | 'ink' | 'muted' | 'bottle';
 
 export type Prim =
-  | { kind: 'rect'; x: number; y: number; w: number; h: number; tone: Tone; dash?: boolean; label?: string }
+  | { kind: 'rect'; x: number; y: number; w: number; h: number; tone: Tone; dash?: boolean; label?: string; /** Shorter texts tried, in order, when the label is too wide for the shape. */ shortLabels?: string[] }
   /** A line (open) or polygon (closed) through [x0, y0, x1, y1, ...]. */
   | { kind: 'poly'; pts: number[]; tone: Tone; closed?: boolean; dash?: boolean }
   /** A circle (a bottle seen end-on): centre and radius in millimetres. */

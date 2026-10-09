@@ -16,7 +16,10 @@ export interface DoorSpec {
   widthMm: number;
   heightMm: number;
   swing: 'OUT' | 'IN';
+  /** The hinge side of a SINGLE door. A double door is hinged at both outer edges, so this is not used then. */
   hinge: 'LEFT' | 'RIGHT';
+  /** 1 (a single leaf, the default when absent) or 2 (a double door: two equal leaves that together fill `widthMm`, each hinged at an outer edge and meeting in the middle). */
+  leaves?: 1 | 2;
   glazed: boolean;
   /** Distance from the start of the wall (west or north end) to the door's near edge. Centred when absent. */
   offsetMm?: number;

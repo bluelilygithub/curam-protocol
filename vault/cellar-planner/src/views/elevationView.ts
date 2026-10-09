@@ -1,4 +1,4 @@
-import { doorLayout, wallLengthMm } from '../enclosure/enclosure';
+import { doorLayout, doorLeafCount, wallLengthMm } from '../enclosure/enclosure';
 import type { Enclosure, WallKind, WallSide } from '../enclosure/types';
 import type { Prim, Tone } from './primitives';
 
@@ -31,12 +31,22 @@ export function elevationView(e: Enclosure, side: WallSide): Prim[] {
   if (side === e.door.wall) {
     const lay = doorLayout(e);
     const dx = view(lay.beforeMm, lay.doorMm);
-    out.push({ kind: 'rect', x: dx, y: groundY - e.door.heightMm, w: lay.doorMm, h: e.door.heightMm, tone: e.door.glazed ? 'glass' : 'door', label: 'DOOR' });
-    // the leaf's diagonal, as on the sample drawings: its point is on the HANDLE side, opposite the hinge. The hinge side is already as the viewer
-    // sees it (the hinge is defined from outside), so left is the left edge of the drawn door on every wall.
-    const hingeX = e.door.hinge === 'LEFT' ? dx : dx + lay.doorMm;
-    const handleX = hingeX === dx ? dx + lay.doorMm : dx;
-    out.push({ kind: 'poly', pts: [hingeX, groundY - e.door.heightMm, handleX, groundY - e.door.heightMm / 2, hingeX, groundY], tone: 'door', dash: true });
+    const double = doorLeafCount(e) === 2;
+    out.push({ kind: 'rect', x: dx, y: groundY - e.door.heightMm, w: lay.doorMm, h: e.door.heightMm, tone: e.door.glazed ? 'glass' : 'door', label: double ? 'DOUBLE DOOR' : 'DOOR' });
+    const top = groundY - e.door.heightMm, mid = groundY - e.door.heightMm / 2;
+    if (double) {
+      // two leaves, hinged at the outer edges and meeting in the middle: a diagonal on each, its point on the handle side (the centre)
+      const cx = dx + lay.doorMm / 2;
+      out.push({ kind: 'poly', pts: [dx, top, cx, mid, dx, groundY], tone: 'door', dash: true });
+      out.push({ kind: 'poly', pts: [dx + lay.doorMm, top, cx, mid, dx + lay.doorMm, groundY], tone: 'door', dash: true });
+      out.push({ kind: 'poly', pts: [cx, top, cx, groundY], tone: 'door' });
+    } else {
+      // the leaf's diagonal, as on the sample drawings: its point is on the HANDLE side, opposite the hinge. The hinge side is already as the viewer
+      // sees it (the hinge is defined from outside), so left is the left edge of the drawn door on every wall.
+      const hingeX = e.door.hinge === 'LEFT' ? dx : dx + lay.doorMm;
+      const handleX = hingeX === dx ? dx + lay.doorMm : dx;
+      out.push({ kind: 'poly', pts: [hingeX, top, handleX, mid, hingeX, groundY], tone: 'door', dash: true });
+    }
     // the door wall split either side of the door, as on the sample drawings
     const a = view(0, lay.beforeMm), c = view(lay.beforeMm + lay.doorMm, lay.afterMm);
     const parts: Array<[number, number, number]> = [[a, lay.beforeMm, 0], [dx, lay.doorMm, 0], [c, lay.afterMm, 0]];

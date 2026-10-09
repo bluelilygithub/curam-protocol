@@ -83,3 +83,40 @@ export function bottlesOnWall(analysis: RackLayoutAnalysis, runs: RackRun[], wal
   for (const run of runs.filter((r) => r.wall === wall)) { const c = analysis.runs.find((x) => x.runId === run.id)?.capacity; if (c?.status === 'OK') n += c.capacity; }
   return n;
 }
+
+const NAMES: Record<WallSide, string> = { NORTH: 'North', EAST: 'East', SOUTH: 'South', WEST: 'West' };
+
+export interface WallRackSummary {
+  /** Bottles counted on this wall (exactly the number of bottle shapes in the view for runs without an error). */
+  bottles: number;
+  units: number;
+  /** Bottles in runs the tool says cannot be built: drawn in red, never counted. */
+  uncountedBottles: number;
+  uncountedUnits: number;
+  /** Units whose rack values are not all set: drawn as an outline, no bottles. */
+  notSetUnits: number;
+  /** One plain sentence: "North wall: 560 bottles in 4 units (140 a unit: 20 rows of 7)." */
+  text: string;
+}
+
+/** The bottle count for one wall, listed in words, from the same analysis that draws the bottles and fills the total (so the three always agree). */
+export function rackWallSummary(analysis: RackLayoutAnalysis, runs: RackRun[], wall: WallSide): WallRackSummary {
+  const withError = new Set(analysis.issues.filter((i) => i.severity === 'error' && i.where).map((i) => i.where as string));
+  let bottles = 0, units = 0, uncountedBottles = 0, uncountedUnits = 0, notSetUnits = 0;
+  const shapes = new Set<string>();
+  const mine = runs.filter((r) => r.wall === wall && r.units > 0);
+  for (const run of mine) {
+    const c = analysis.runs.find((x) => x.runId === run.id)?.capacity;
+    if (!c || c.status !== 'OK') { notSetUnits += run.units; continue; }
+    if (withError.has(run.id)) { uncountedBottles += c.capacity; uncountedUnits += run.units; continue; }
+    bottles += c.capacity; units += run.units; shapes.add(`${c.capacity / run.units}|${c.rowsPerUnit}|${c.bottlesPerRow}`);
+  }
+  const name = `${NAMES[wall]} wall`;
+  if (!mine.length) return { bottles: 0, units: 0, uncountedBottles: 0, uncountedUnits: 0, notSetUnits: 0, text: `${name}: no racks.` };
+  const u = (n: number): string => `${n} ${n === 1 ? 'unit' : 'units'}`;
+  let text = `${name}: ${bottles} bottles in ${u(units)}`;
+  if (units && shapes.size === 1) { const [per, rows, row] = [...shapes][0].split('|'); text += ` (${per} a unit: ${rows} rows of ${row})`; }
+  if (uncountedUnits) text += `; ${u(uncountedUnits)} with an error (${uncountedBottles} bottles) not counted`;
+  if (notSetUnits) text += `; ${u(notSetUnits)} with rack values not set, so no bottles counted`;
+  return { bottles, units, uncountedBottles, uncountedUnits, notSetUnits, text: `${text}.` };
+}

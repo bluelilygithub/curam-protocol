@@ -1,0 +1,30 @@
+/* The public lite tool. A single column that works from a 320px phone up; the drawing sits between the choices and the quote step. */
+html, body, #root { height: auto; min-height: 100%; }
+.lite { max-width: 880px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.lite-head h1 { font-size: 22px; margin: 0 0 4px; } .lite-head p { margin: 0; color: var(--muted); }
+.lite-controls { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+.lite-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 14px; }
+.lite .field input[type=text], .lite .field select, .lite .field textarea { min-height: 40px; font-size: 16px; /* 16px stops phones zooming the page when a field is focused */ }
+.lite .field textarea { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 5px; font: inherit; font-size: 14px; resize: vertical; }
+.lite-result { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
+.lite-total { margin: 0; font-size: 22px; } .lite-tag { font-size: 12px; color: var(--warn-text); text-transform: uppercase; letter-spacing: .04em; margin-left: 6px; }
+.lite-note { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+.lite-problem { margin: 0; color: var(--err); font-weight: 600; }
+.lite-drawing { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fff; display: flex; flex-direction: column; }
+.lite-drawing .tabs { flex-wrap: wrap; }
+.lite-canvas { position: relative; height: min(62vh, 520px); min-height: 280px; display: flex; flex-direction: column; }
+.lite-canvas .drawing { flex: 1; }
+.lite .tab, .lite .btn { min-height: 40px; }
+.lite-cta { width: 100%; font-size: 16px; }
+.lite-ask { padding-bottom: 24px; }
+.lite-sent { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.lite-sent p { margin: 0; }
+@media (max-width: 480px) { .lite { padding: 10px; } .lite-total { font-size: 19px; } .lite-canvas { height: 55vh; } }
+
+.lite-head-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.lite-help-btns { display: flex; gap: 6px; }
+/* on this page the explanations are always visible: a casual visitor should never have to hover to find out what a question means */
+.lite .field-hint { display: block; }
+.lite-sizes { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 14px; }
+
+.lite-units { padding: 6px 12px 0; margin: 0; }

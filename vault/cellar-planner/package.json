@@ -11,7 +11,9 @@
     "dev": "vite",
     "build": "vite build",
     "e2e": "node scripts/e2e.mjs",
-    "example": "vite-node scripts/writeExample.mjs"
+    "example": "vite-node scripts/writeExample.mjs",
+    "dev:lite": "vite --config vite.lite.config.ts",
+    "build:lite": "vite build --config vite.lite.config.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
