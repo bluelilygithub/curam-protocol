@@ -45,6 +45,7 @@ const { fetchLicensedVideo } = require('../services/videoUrlIntake');
 const { ffmpegRoute } = require('../middleware/ffmpegRoute');
 const { planSlideshow, normalizeSlideshowPlan } = require('../services/videoSlideshowPlan');
 const { planJoin, normalizeJoinPlan } = require('../services/videoJoinPlan');
+const { appendEndCard, normalizeEndCard } = require('../services/videoEndCard');
 const { joinClips } = require('../services/videoJoin/joinClips');
 const { joinCapabilities } = require('../services/videoJoin/capabilities');
 
@@ -500,6 +501,11 @@ router.post('/generate', async (req, res) => {
       useYoutubeThumbnailAsSeed,
       videoReferenceNotes,
       takes,
+      model,
+      endImageDataUrl,
+      seed,
+      cameraFixed,
+      promptOptimizer,
       provider,
     } = req.body || {};
 
@@ -517,6 +523,8 @@ router.post('/generate', async (req, res) => {
       durationSec: s.durationSec,
       references: s.references,
       promptUsage: s.promptUsage,
+      modelKey: s.modelKey,
+      seed: s.seed,
     });
 
     const genOptions = {
@@ -529,6 +537,11 @@ router.post('/generate', async (req, res) => {
       youtubeUrl: youtubeUrl?.trim() || '',
       useYoutubeThumbnailAsSeed: Boolean(useYoutubeThumbnailAsSeed),
       videoReferenceNotes: typeof videoReferenceNotes === 'string' ? videoReferenceNotes.trim().slice(0, 1500) : '',
+      model: typeof model === 'string' ? model : undefined,
+      endImage: typeof endImageDataUrl === 'string' && endImageDataUrl ? endImageDataUrl : undefined,
+      seed: seed === '' || seed == null ? undefined : seed,
+      cameraFixed: Boolean(cameraFixed),
+      promptOptimizer: promptOptimizer === false ? false : undefined,
       provider: provider === 'fal' || provider === 'replicate' ? provider : undefined,
     };
 
@@ -882,6 +895,20 @@ router.post('/annotate', upload.single('video'), ffmpegRoute('annotate', async (
   });
 
   sendVideoBuffer(res, buffer, 'annotated.mp4');
+}));
+
+router.post('/end-card', upload.single('video'), ffmpegRoute('end-card', async (req, res) => {
+  const spec = normalizeEndCard(req.body);
+  if (spec.error) return res.status(400).json({ error: spec.error });
+
+  const buffer = await withTempDir(async (dir) => {
+    const inputPath = await writeUpload(dir, req.file);
+    const outputPath = path.join(dir, 'end-card.mp4');
+    await appendEndCard(inputPath, outputPath, req.body, dir);
+    return readOutputFile(outputPath);
+  });
+
+  sendVideoBuffer(res, buffer, 'with-call-to-action.mp4');
 }));
 
 const MAX_GEMINI_AUDIO_BYTES = 18 * 1024 * 1024;

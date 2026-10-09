@@ -315,6 +315,16 @@ const TOOL_HELP = {
       'Optional fade in/out to ease the label on and off screen',
     ],
   },
+  'end-card': {
+    title: 'Call to action',
+    what: 'End a video with a closing screen that tells viewers what to do next.',
+    features: [
+      'Headline, supporting line, a button-style label and a web address',
+      'Choose the background, text and button colours and how long it stays up',
+      'Fades in after your video; original sound is kept and the card is silent',
+      'Matches the size and frame rate of your video, so it works for Reels, square or landscape',
+    ],
+  },
   overlay: {
     title: 'Overlay / watermark',
     what: 'Place a logo or image on top of a video for the full duration.',
@@ -416,6 +426,7 @@ const TOOL_GROUPS = [
     label: 'Compose',
     tools: [
       { id: 'annotate', label: 'Annotate', desc: 'Burn in a text label' },
+      { id: 'end-card', label: 'Call to action', desc: 'End the video with a closing message and button' },
       { id: 'overlay', label: 'Overlay / watermark', desc: 'Logo or image on top of video' },
       { id: 'join', label: 'Join videos', desc: 'Concatenate clips — hard cut or crossfade' },
       { id: 'slideshow', label: 'Slideshow', desc: 'Images + background music → promo video' },
@@ -438,6 +449,58 @@ const TOOL_GROUPS = [
     ],
   },
 ];
+
+const CTA_DEFAULTS = {
+  headline: '', subline: '', buttonText: '', url: '', durationSec: 4,
+  bgColor: '#111111', textColor: '#FFFFFF', buttonColor: '#CC785C',
+};
+
+const ctaHasContent = (c) => Boolean(c.headline.trim() || c.subline.trim() || c.buttonText.trim() || c.url.trim());
+
+function endCardFormData(file, c) {
+  const fd = new FormData();
+  fd.append('video', file);
+  Object.entries(c).forEach(([k, v]) => fd.append(k, String(v)));
+  return fd;
+}
+
+function EndCardFields({ cta, setCta }) {
+  const set = (key) => (value) => setCta((prev) => ({ ...prev, [key]: value }));
+  return (
+    <div className="space-y-3">
+      <Tooltip text="The main message, e.g. 'Book your free consult'.">
+        <VoiceInput value={cta.headline} onChange={set('headline')} placeholder="Headline" label="Headline" />
+      </Tooltip>
+      <Tooltip text="Optional smaller line under the headline.">
+        <VoiceInput value={cta.subline} onChange={set('subline')} placeholder="Supporting line (optional)" label="Supporting line" />
+      </Tooltip>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Tooltip text="Text shown on the button-style label, e.g. 'Call now' or 'Learn more'. The video itself is not clickable.">
+          <VoiceInput value={cta.buttonText} onChange={set('buttonText')} placeholder="Button text (optional)" label="Button text" />
+        </Tooltip>
+        <Tooltip text="Web address, phone number or handle shown at the bottom.">
+          <VoiceInput value={cta.url} onChange={set('url')} placeholder="Web address or phone (optional)" label="Web address or phone" />
+        </Tooltip>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[['Background', 'bgColor', 'Colour of the closing screen.'], ['Text', 'textColor', 'Colour of the headline and lines.'], ['Button', 'buttonColor', 'Colour behind the button text.']].map(([lbl, key, tip]) => (
+          <label key={key} className="block space-y-1">
+            <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{lbl}</span>
+            <Tooltip text={tip}>
+              <input type="color" value={cta[key]} onChange={(e) => set(key)(e.target.value)} className="w-full h-9 rounded-xl border cursor-pointer" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }} />
+            </Tooltip>
+          </label>
+        ))}
+        <label className="block space-y-1">
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Seconds on screen</span>
+          <Tooltip text="How long the closing screen stays up (1–15 seconds).">
+            <input type="number" min={1} max={15} step={0.5} value={cta.durationSec} onChange={(e) => set('durationSec')(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+          </Tooltip>
+        </label>
+      </div>
+    </div>
+  );
+}
 
 function TextStyleFields({
   fontFamily, setFontFamily, fontSize, setFontSize, fontColor, setFontColor,
@@ -873,6 +936,12 @@ export default function VideosPage() {
   const [batchCount, setBatchCount] = useState(1);
   const [batchTakes, setBatchTakes] = useState([]);
   const [batchChosen, setBatchChosen] = useState(null);
+  // Model choice (Hailuo stays the default). End frame / seed / camera-fixed only exist on Seedance.
+  const [videoModel, setVideoModel] = useState('hailuo');
+  const [promptOptimizer, setPromptOptimizer] = useState(true);
+  const [endImageFile, setEndImageFile] = useState(null);
+  const [seedValue, setSeedValue] = useState('');
+  const [cameraFixed, setCameraFixed] = useState(false);
 
   // Reference image
   const [seedImageFile, setSeedImageFile] = useState(null);
@@ -1016,6 +1085,10 @@ export default function VideosPage() {
   const [fadeInSec, setFadeInSec] = useState(0);
   const [fadeOutSec, setFadeOutSec] = useState(0);
 
+  // Call to action end card
+  const [cta, setCta] = useState(CTA_DEFAULTS);
+  const [ctaOnGenerate, setCtaOnGenerate] = useState(false);
+
   // Export for Social
   const [exportPresets, setExportPresets] = useState(['reels', 'square', 'landscape']);
   const [exportFocus, setExportFocus] = useState('center');
@@ -1060,6 +1133,9 @@ export default function VideosPage() {
     return youtubePreview?.thumbnailUrl || null;
   }, [seedImageFile, seedImageUrl, youtubePreview?.thumbnailUrl]);
 
+  const endImagePreview = useMemo(() => (endImageFile ? URL.createObjectURL(endImageFile) : null), [endImageFile]);
+  useEffect(() => () => { if (endImagePreview) URL.revokeObjectURL(endImagePreview); }, [endImagePreview]);
+
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     if (resultBlob) URL.revokeObjectURL(resultBlob);
@@ -1102,7 +1178,7 @@ export default function VideosPage() {
   }, []);
 
   useEffect(() => {
-    if (tool === 'annotate' || tool === 'caption-studio' || tool === 'join' || tool === 'overlay' || tool === 'slideshow') clearComposeResult();
+    if (tool === 'annotate' || tool === 'end-card' || tool === 'caption-studio' || tool === 'join' || tool === 'overlay' || tool === 'slideshow') clearComposeResult();
   }, [tool, clearComposeResult]);
 
   useEffect(() => {
@@ -1606,10 +1682,30 @@ export default function VideosPage() {
     return res.blob();
   }, []);
 
+  // Append the closing screen to a generated clip. Never throws: the clip has already been
+  // paid for, so on failure the caller keeps the plain clip and the user is told why.
+  const withEndCard = useCallback(async (blob) => {
+    if (!ctaOnGenerate || !ctaHasContent(cta)) return blob;
+    try {
+      const file = new File([blob], 'clip.mp4', { type: blob.type || 'video/mp4' });
+      const res = await api.postForm('/api/videos/end-card', endCardFormData(file, cta));
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Request failed');
+      }
+      return await res.blob();
+    } catch (err) {
+      addToast(`Call to action not added: ${err.message}. Showing the clip without it.`, 'error');
+      return blob;
+    }
+  }, [ctaOnGenerate, cta, addToast]);
+
   const hydrateRemoteVideo = useCallback(async (videoUrl) => {
-    const blob = await fetchRemoteVideoBlob(videoUrl);
+    let blob = await fetchRemoteVideoBlob(videoUrl);
+    if (ctaOnGenerate) startProcessing('Adding call to action…', 'Appending your closing screen.');
+    blob = await withEndCard(blob);
     setResultFromBlob(blob, 'generated.mp4', 'generate');
-  }, [fetchRemoteVideoBlob, setResultFromBlob]);
+  }, [fetchRemoteVideoBlob, setResultFromBlob, withEndCard, ctaOnGenerate, startProcessing]);
 
   const handleLoadYoutube = async () => {
     if (!youtubeUrl.trim()) {
@@ -1655,6 +1751,13 @@ export default function VideosPage() {
     }
   };
 
+  const generateProvider = (selectedProvider && status?.generate?.availableProviders?.[selectedProvider])
+    ? selectedProvider
+    : status?.generate?.provider;
+  const replicateActive = generateProvider === 'replicate';
+  const generateModels = (status?.generate?.videoModels || []).filter((m) => m.available);
+  const modelCaps = (replicateActive ? generateModels.find((m) => m.id === videoModel)?.capabilities : null) || {};
+
   const clearBatchTakes = () => {
     setBatchTakes((prev) => { prev.forEach((t) => t.url && URL.revokeObjectURL(t.url)); return []; });
     setBatchChosen(null);
@@ -1697,7 +1800,7 @@ export default function VideosPage() {
     }
     if (!done.some(Boolean)) throw new Error('None of the takes finished — try again in a moment');
 
-    startProcessing('Preparing playback…', 'Downloading your takes for in-browser preview.');
+    startProcessing('Preparing playback…', ctaOnGenerate ? 'Downloading your takes and adding the call to action.' : 'Downloading your takes for in-browser preview.');
     const takes = await Promise.all(items.map(async (it, i) => {
       const label = `Take ${i + 1}`;
       const d = done[i];
@@ -1710,6 +1813,7 @@ export default function VideosPage() {
         } else {
           blob = await fetchRemoteVideoBlob(d.videoUrl);
         }
+        blob = await withEndCard(blob);
         return { requestId: it.requestId, label, blob, url: URL.createObjectURL(blob), meta: d };
       } catch (e) {
         return { requestId: it.requestId, label, error: e.message };
@@ -1721,7 +1825,8 @@ export default function VideosPage() {
     if (first < 0) throw new Error('The takes finished but could not be loaded for playback');
     chooseTake(first, takes);
     const okTakes = takes.filter((t) => t.meta);
-    const videoCost = okTakes.reduce((sum, t) => sum + (t.meta.usage?.videoCostUsd || 0), 0);
+    const priced = okTakes.every((t) => t.meta.usage?.videoCostKnown !== false);
+    const videoCost = priced ? okTakes.reduce((sum, t) => sum + (t.meta.usage?.videoCostUsd || 0), 0) : 0;
     const promptCost = okTakes[0]?.meta.usage?.promptCostUsd || 0;
     setLastTransaction({
       tool: 'generate',
@@ -1772,6 +1877,12 @@ export default function VideosPage() {
         useYoutubeThumbnailAsSeed,
         videoReferenceNotes: refVideoInfo?.notes || undefined,
         takes: batchCount > 1 ? batchCount : undefined,
+        // Only send what the chosen model can do; the server rejects the rest.
+        model: replicateActive ? videoModel : undefined,
+        endImageDataUrl: modelCaps.endFrame && endImageFile ? await readFileAsDataUrl(endImageFile) : undefined,
+        seed: modelCaps.seed && seedValue.trim() !== '' ? seedValue.trim() : undefined,
+        cameraFixed: modelCaps.cameraFixed && cameraFixed ? true : undefined,
+        promptOptimizer: modelCaps.promptOptimizer && !promptOptimizer ? false : undefined,
         provider: selectedProvider || undefined,
       });
       const started = await res.json();
@@ -1812,7 +1923,10 @@ export default function VideosPage() {
       setGenerateResult(completed);
       if (completed.inline?.base64) {
         const bin = Uint8Array.from(atob(completed.inline.base64), (c) => c.charCodeAt(0));
-        setResultFromBlob(new Blob([bin], { type: completed.inline.contentType || 'video/mp4' }), 'generated.mp4', 'generate');
+        let inlineBlob = new Blob([bin], { type: completed.inline.contentType || 'video/mp4' });
+        if (ctaOnGenerate) startProcessing('Adding call to action…', 'Appending your closing screen.');
+        inlineBlob = await withEndCard(inlineBlob);
+        setResultFromBlob(inlineBlob, 'generated.mp4', 'generate');
       } else if (completed.videoUrl) {
         startProcessing('Preparing playback…', 'Downloading your clip for in-browser preview.');
         await hydrateRemoteVideo(completed.videoUrl);
@@ -1831,7 +1945,7 @@ export default function VideosPage() {
       });
       const usage = completed.usage;
       const usageSuffix = usage
-        ? ` — ${usage.promptTokens.toLocaleString()} tokens, ~$${usage.totalEstimatedCostUsd.toFixed(3)}`
+        ? ` — ${usage.promptTokens.toLocaleString()} tokens${usage.videoCostKnown === false ? '' : `, ~$${usage.totalEstimatedCostUsd.toFixed(3)}`}`
         : '';
       addToast((completed.mode === 'image-to-video' ? 'Clip generated from image' : 'Clip generated') + usageSuffix, 'success');
     } catch (err) {
@@ -2235,6 +2349,90 @@ export default function VideosPage() {
               )}
             </div>
 
+            {replicateActive && generateModels.length > 1 && (
+              <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <label className="block space-y-1 max-w-xs">
+                  <span className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Video model</span>
+                  <Tooltip text="Hailuo 2.3 is the default. Seedance 1 Pro adds an end frame, a seed and a locked camera. Run the same brief on both to compare quality and cost.">
+                    <select
+                      value={videoModel}
+                      onChange={(e) => setVideoModel(e.target.value)}
+                      className="w-full px-2 py-2 rounded-xl border text-xs"
+                      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                    >
+                      {generateModels.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                    </select>
+                  </Tooltip>
+                </label>
+
+                {modelCaps.promptOptimizer && (
+                  <Tooltip text="Hailuo rewrites your prompt before rendering. Great for loose ideas; turn it off when you need exact instructions kept, such as 'do not change the cabinet'.">
+                    <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
+                      <input type="checkbox" checked={promptOptimizer} onChange={(e) => setPromptOptimizer(e.target.checked)} />
+                      Let Hailuo rewrite my prompt (prompt optimizer)
+                    </label>
+                  </Tooltip>
+                )}
+
+                {modelCaps.endFrame && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>End frame (optional)</p>
+                    <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                      The clip finishes on this image. It needs a starting image too: add a Reference image above and set it to animate.
+                    </p>
+                    <ImageReferenceUpload
+                      file={endImageFile}
+                      previewUrl={endImagePreview}
+                      onFile={(f) => setEndImageFile(f)}
+                      onClear={() => setEndImageFile(null)}
+                    />
+                    {endImageFile && !(seedImageFile || seedImageUrl.trim()) && (
+                      <p className="text-xs" style={{ color: '#b45309' }}>Add a starting Reference image above, or the end frame can't be used.</p>
+                    )}
+                  </div>
+                )}
+
+                {(modelCaps.seed || modelCaps.cameraFixed) && (
+                  <div className="flex flex-wrap items-end gap-4">
+                    {modelCaps.seed && (
+                      <label className="block space-y-1">
+                        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Seed (optional)</span>
+                        <Tooltip text="Keep the same seed and change the prompt slightly to get a similar result. Leave blank for a fresh random result each time (and different takes).">
+                          <input
+                            type="number"
+                            min={0}
+                            max={2147483647}
+                            step={1}
+                            value={seedValue}
+                            onChange={(e) => setSeedValue(e.target.value)}
+                            placeholder="random"
+                            className="w-40 px-2 py-2 rounded-xl border text-xs"
+                            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                          />
+                        </Tooltip>
+                      </label>
+                    )}
+                    {modelCaps.cameraFixed && (
+                      <Tooltip text="Keep the camera still so only the subject, light or reflections move.">
+                        <label className="flex items-center gap-2 text-xs cursor-pointer pb-2" style={{ color: 'var(--color-muted)' }}>
+                          <input type="checkbox" checked={cameraFixed} onChange={(e) => setCameraFixed(e.target.checked)} />
+                          Camera fixed (no camera movement)
+                        </label>
+                      </Tooltip>
+                    )}
+                  </div>
+                )}
+                {modelCaps.seed && seedValue.trim() !== '' && batchCount > 1 && (
+                  <p className="text-xs" style={{ color: '#b45309' }}>With a fixed seed the takes will be near-identical. Clear the seed to get different takes.</p>
+                )}
+                {modelCaps.seed && (
+                  <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                    Seedance renders at 1080p by default, so a clip costs more than Hailuo. Check Replicate's pricing; no price is on file for it here.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="grid gap-3 sm:grid-cols-3">
               <label className="block space-y-1">
                 <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Style</span>
@@ -2272,8 +2470,8 @@ export default function VideosPage() {
                 <Tooltip text="How many seconds of video to generate — short clips render faster and more reliably.">
                   <input
                     type="number"
-                    min={3}
-                    max={10}
+                    min={modelCaps.seed ? 2 : 3}
+                    max={modelCaps.seed ? 12 : 10}
                     value={durationSec}
                     onChange={(e) => setDurationSec(Number(e.target.value))}
                     className="w-full px-2 py-2 rounded-xl border text-xs"
@@ -2303,6 +2501,18 @@ export default function VideosPage() {
                 </span>
               )}
             </label>
+            <div className="rounded-xl border p-3 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+              <label className="flex items-center gap-2 text-xs font-medium" style={{ color: 'var(--color-text)' }}>
+                <input type="checkbox" checked={ctaOnGenerate} onChange={(e) => setCtaOnGenerate(e.target.checked)} />
+                <Tooltip text="After the clip renders, add a closing screen with your message and button. Done on the server, no extra render cost.">
+                  <span>End with a call to action</span>
+                </Tooltip>
+              </label>
+              {ctaOnGenerate && <EndCardFields cta={cta} setCta={setCta} />}
+              {ctaOnGenerate && !ctaHasContent(cta) && (
+                <p className="text-[10px]" style={{ color: '#b45309' }}>Add a headline, button text or web address, or the clip will be made without one.</p>
+              )}
+            </div>
             <Tooltip text="Submit the brief and references to the video model — rendering can take one to three minutes.">
               <button
                 type="button"
@@ -2323,13 +2533,16 @@ export default function VideosPage() {
                 {generateResult.references?.imageDescription && (
                   <p style={{ color: 'var(--color-muted)' }}><span className="font-medium" style={{ color: 'var(--color-text)' }}>Image style:</span> {generateResult.references.imageDescription}</p>
                 )}
+                {generateResult.seedUsed != null && (
+                  <p style={{ color: 'var(--color-muted)' }}><span className="font-medium" style={{ color: 'var(--color-text)' }}>Seed used:</span> {generateResult.seedUsed}</p>
+                )}
                 {generateResult.references?.youtube && (
                   <p style={{ color: 'var(--color-muted)' }}><span className="font-medium" style={{ color: 'var(--color-text)' }}>YouTube ref:</span> {generateResult.references.youtube.title}</p>
                 )}
                 {generateResult.usage && (
                   <p style={{ color: 'var(--color-muted)' }}>
                     <span className="font-medium" style={{ color: 'var(--color-text)' }}>Usage:</span>{' '}
-                    {generateResult.usage.promptTokens.toLocaleString()} tokens (prompt) · ~${generateResult.usage.totalEstimatedCostUsd.toFixed(3)} estimated total
+                    {generateResult.usage.promptTokens.toLocaleString()} tokens (prompt){generateResult.usage.videoCostKnown === false ? ' · render cost not priced here (check Replicate)' : ` · ~$${generateResult.usage.totalEstimatedCostUsd.toFixed(3)} estimated total`}
                   </p>
                 )}
               </div>
@@ -2974,6 +3187,33 @@ export default function VideosPage() {
               </button>
             </Tooltip>
             {resultForTool === 'annotate' && (
+              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
+          </section>
+        )}
+
+        {tool === 'end-card' && (
+          <section className="space-y-3">
+            <ToolHeader id="end-card" label="Call to action" onHelp={setHelpTool} getIcon={getIcon} />
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Add a closing screen to the end of your video. The preview below appears only after you apply.</p>
+            <EndCardFields cta={cta} setCta={setCta} />
+            <Tooltip text="Append the closing screen to the end of the video.">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!requireFile()) return;
+                  if (!ctaHasContent(cta)) { addToast('Add a headline, button text or web address', 'error'); return; }
+                  const fd = endCardFormData(sourceFile, cta);
+                  runFormVideo('end-card', fd, { label: 'Adding call to action…', resultFilename: 'with-call-to-action.mp4', forTool: 'end-card' });
+                }}
+                disabled={!ffmpegOk}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Add call to action
+              </button>
+            </Tooltip>
+            {resultForTool === 'end-card' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
             )}
           </section>

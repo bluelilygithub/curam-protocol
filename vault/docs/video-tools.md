@@ -30,7 +30,7 @@ Upload cap: **`VIDEO_MAX_UPLOAD_MB`** (default **80**). Processed outputs return
 | **Create** | Generate clip |
 | **Optimise** | Convert / compress, Extract audio, Mute / replace audio, Normalize audio, Video → GIF, Export for Social |
 | **Transform** | Clip / trim, Crop / reframe, Speed |
-| **Compose** | Annotate, Overlay / watermark, Join videos, Slideshow, Caption studio |
+| **Compose** | Annotate, Call to action, Overlay / watermark, Join videos, Slideshow, Caption studio |
 | **Library** | Saved media |
 | **Analyse** | File info, Thumbnail |
 
@@ -69,6 +69,7 @@ Cross-cutting: **ProcessingModal** for operations >2 s; **Use in another tool** 
 
 ### Compose
 
+- **Call to action** — appends a closing end card to any video (`server/services/videoEndCard.js`, `POST /api/videos/end-card`): headline, supporting line, button-style label (drawn text, not clickable) and web address/phone on a solid background, centred and word-wrapped; 1–15s, fade-in. Card matches the source's resolution and fps; source audio is kept and followed by silence. Not yet run against real ffmpeg locally (no ffmpeg on dev machine) — layout/validation covered by `node server/services/videoEndCard.test.js`.
 - **Annotate** — burn a single text label (top / center / bottom) via ffmpeg `drawtext`. Google Fonts (20 curated), text/background colour, weight, size. Optional **fade in** / **fade out** (0–30s each, default 0 = old full-duration-static behaviour unchanged) drive the label's opacity via drawtext's `alpha` expression: `min(1, t/fadeIn)` ramps 0→1 over the fade-in window and `min(1, (duration-t)/fadeOut)` ramps 1→0 over the fade-out window, multiplied together when both are set — no `fade` filter chain needed, and the box/outline fade with the text since `alpha` scales the whole drawtext render. `POST /api/videos/annotate`.
 - **Overlay / watermark** — image on video; position grid, scale %, opacity. `POST /api/videos/overlay` (`video` + `image`).
 - **Join videos** — concatenate 2–12 clips into one MP4. Each clip is normalized (shared resolution, 30 fps, stereo AAC) then joined. Optional `crossfadeSec` (>0 uses xfade + acrossfade). Optional `maxWidth` (default 1280) and CRF. `POST /api/videos/join` with multipart field `videos` (repeated).

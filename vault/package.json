@@ -48,7 +48,8 @@
     "test:fonts-session": "node server/services/fontSessionCache.test.js",
     "test:music": "node client/src/pages/music/musicProgress.test.mjs && node server/services/music/music.test.js && node server/services/music/music.e2e.test.js",
     "test:video-tools": "node client/src/pages/videos/slideshowLimits.test.mjs && node client/src/pages/videos/joinLimits.test.mjs && node server/services/videoTools.test.js",
-    "test:video-join": "node server/services/videoJoin/videoJoin.test.js"
+    "test:video-join": "node server/services/videoJoin/videoJoin.test.js",
+    "test:video-generate": "node server/services/videoGenerateModels.test.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

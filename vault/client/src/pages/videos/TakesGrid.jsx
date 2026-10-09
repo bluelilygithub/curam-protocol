@@ -32,7 +32,10 @@ export default function TakesGrid({ takes, chosen, onChoose }) {
                 </div>
               )}
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>{take.label}</p>
+                <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>
+                  {take.label}
+                  {take.meta?.seedUsed != null && <span className="font-normal" style={{ color: 'var(--color-muted)' }}> · seed {take.meta.seedUsed}</span>}
+                </p>
                 {take.url && (
                   <Tooltip text={picked ? 'This take is the Result below.' : 'Make this take the Result below.'}>
                     <button

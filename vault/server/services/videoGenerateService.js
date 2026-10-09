@@ -6,7 +6,7 @@ const https = require('https');
 const { callModel } = require('./callModel');
 const { getModelsForUser } = require('./modelResolver');
 const { logUsage } = require('../utils/logUsage');
-const { calculateCost, calculateVideoCost } = require('./costCalculator');
+const { calculateCost, calculateVideoCost, hasVideoPricing } = require('./costCalculator');
 const { parseModelJson } = require('../utils/parseModelJson');
 const { fetchYoutubeReference } = require('./youtubeTranscript');
 
@@ -60,6 +60,7 @@ function getVideoGenerateConfig() {
         replicate: DEFAULT_REPLICATE_VIDEO_MODEL,
         fal: DEFAULT_VIDEO_MODEL,
       },
+      videoModels: listVideoModels(availableProviders),
     };
   } catch {
     return {
@@ -76,6 +77,16 @@ function getVideoGenerateConfig() {
   }
 }
 
+// Which selectable models the page can offer. Only Hailuo runs on FAL; everything else needs Replicate.
+function listVideoModels(availableProviders) {
+  return Object.entries(VIDEO_MODELS).map(([id, def]) => ({
+    id,
+    label: def.label,
+    capabilities: def.capabilities,
+    available: id === 'hailuo' ? true : Boolean(availableProviders.replicate),
+  }));
+}
+
 function replicateDuration(durationSec) {
   const n = Number(durationSec);
   if (Number.isFinite(n) && n >= 8) return 10;
@@ -86,11 +97,92 @@ function resolveReplicateModel(imageToVideo) {
   return imageToVideo ? DEFAULT_REPLICATE_VIDEO_I2V_MODEL : DEFAULT_REPLICATE_VIDEO_MODEL;
 }
 
-function buildReplicateInput({ expanded, imageToVideo, seedImageDataUrl, durationSec }) {
+// Selectable Replicate models. Hailuo stays the default. The capability flags drive both validation here
+// and which controls the page shows, so a model only offers what its API actually accepts.
+// Input names (from each model's Replicate API schema):
+//   minimax/hailuo-2.3         prompt, first_frame_image, duration (6, or 10 at 768p), resolution, prompt_optimizer
+//   bytedance/seedance-1-pro   prompt, image, last_frame_image (needs image), duration 2-12, resolution,
+//                              aspect_ratio (ignored when image is given), fps, seed, camera_fixed
+const DEFAULT_SEEDANCE_MODEL = process.env.VIDEO_SEEDANCE_MODEL || 'bytedance/seedance-1-pro';
+const VIDEO_MODELS = {
+  hailuo: {
+    label: 'Hailuo 2.3',
+    capabilities: { promptOptimizer: true, endFrame: false, seed: false, cameraFixed: false },
+  },
+  seedance: {
+    label: 'Seedance 1 Pro',
+    capabilities: { promptOptimizer: false, endFrame: true, seed: true, cameraFixed: true },
+  },
+};
+
+function resolveModelKey(raw) {
+  const key = String(raw || '').trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(VIDEO_MODELS, key) ? key : 'hailuo';
+}
+
+function seedanceDuration(durationSec) {
+  const n = Math.round(Number(durationSec));
+  return Math.min(12, Math.max(2, Number.isFinite(n) ? n : 5));
+}
+
+/** Seed from the request: a non-negative whole number, otherwise "let the provider choose". */
+function parseSeed(value) {
+  if (value === '' || value == null) return null;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 0 && n <= 2147483647 ? n : null;
+}
+
+/**
+ * Reject option combinations the chosen model/provider cannot honour — before any paid prompt or
+ * provider call. A control the model lacks is an error, never silently dropped.
+ */
+function assertModelOptions(provider, options) {
+  const key = resolveModelKey(options.model);
+  const caps = VIDEO_MODELS[key].capabilities;
+  if (key !== 'hailuo' && provider !== 'replicate') {
+    throw new Error(`${VIDEO_MODELS[key].label} runs on Replicate only — set REPLICATE_API_TOKEN or pick Hailuo`);
+  }
+  if (options.endImage && !caps.endFrame) {
+    throw new Error(`${VIDEO_MODELS[key].label} has no end-frame option — choose Seedance 1 Pro to set where the clip finishes`);
+  }
+  if (options.endImage && !options.seedImage) {
+    throw new Error('An end frame needs a starting image as well — add a reference image (animate it) first');
+  }
+  if (options.endImage && options.seedImageMode === 'suggest') {
+    throw new Error('An end frame needs the reference image set to "animate it", not "use as inspiration"');
+  }
+  if (parseSeed(options.seed) != null && !caps.seed) {
+    throw new Error(`${VIDEO_MODELS[key].label} has no seed option`);
+  }
+  if (options.cameraFixed && !caps.cameraFixed) {
+    throw new Error(`${VIDEO_MODELS[key].label} has no camera-fixed option`);
+  }
+  return key;
+}
+
+function buildReplicateInput({
+  modelKey = 'hailuo', expanded, imageToVideo, seedImageDataUrl, endImageDataUrl,
+  durationSec, aspect, seed, cameraFixed, promptOptimizer,
+}) {
+  if (modelKey === 'seedance') {
+    const input = { prompt: expanded.video_prompt, duration: seedanceDuration(durationSec) };
+    if (imageToVideo && seedImageDataUrl) {
+      input.image = seedImageDataUrl;
+      // Seedance ignores aspect_ratio when an image is given (the image decides), so only send it without one.
+      if (endImageDataUrl) input.last_frame_image = endImageDataUrl;
+    } else {
+      input.aspect_ratio = ['16:9', '9:16', '1:1'].includes(aspect) ? aspect : '16:9';
+    }
+    const s = parseSeed(seed);
+    if (s != null) input.seed = s;
+    if (cameraFixed) input.camera_fixed = true;
+    return input;
+  }
+
   const duration = replicateDuration(durationSec);
   const input = {
     prompt: expanded.video_prompt,
-    prompt_optimizer: true,
+    prompt_optimizer: promptOptimizer !== false,
     duration,
     resolution: '768p',
   };
@@ -98,6 +190,13 @@ function buildReplicateInput({ expanded, imageToVideo, seedImageDataUrl, duratio
     input.first_frame_image = seedImageDataUrl;
   }
   return input;
+}
+
+/** Best-effort: Replicate does not return the seed as a field, but many models print it in the logs. */
+function parseSeedFromLogs(logs) {
+  const text = Array.isArray(logs) ? logs.join('\n') : String(logs || '');
+  const m = text.match(/seed\D{0,12}(\d{1,10})/i);
+  return m ? Number(m[1]) : null;
 }
 
 const PROMPT_SYSTEM = `You write concise prompts for AI text-to-video models.
@@ -548,9 +647,11 @@ async function buildGenerationPayload(userId, options) {
     youtubeUrl,
     useYoutubeThumbnailAsSeed = false,
     videoReferenceNotes = '',
+    endImage,
   } = options;
 
   let seedImageDataUrl = seedImage ? await toImageDataUrl(seedImage) : null;
+  const endImageDataUrl = endImage ? await toImageDataUrl(endImage) : null;
   let effectiveSeedMode = seedImageMode === 'suggest' ? 'suggest' : 'animate';
   let youtubeRef = null;
 
@@ -601,12 +702,14 @@ async function buildGenerationPayload(userId, options) {
     body,
     imageToVideo,
     seedImageDataUrl,
+    endImageDataUrl,
     expanded,
     dims,
     durationSec: replicateDuration(durationSec || body.duration),
     promptUsage: expanded.promptUsage,
     references: {
       seedImageMode: seedImageDataUrl ? effectiveSeedMode : null,
+      endFrame: Boolean(endImageDataUrl),
       youtube: youtubeRef ? {
         title: youtubeRef.title,
         url: youtubeRef.url,
@@ -622,6 +725,7 @@ async function buildGenerationPayload(userId, options) {
 
 async function startVideoGeneration(userId, options) {
   const provider = resolveVideoProvider(options.provider);
+  assertModelOptions(provider, options);
   const prepared = await buildGenerationPayload(userId, options);
   return submitPrepared(provider, prepared, options);
 }
@@ -637,6 +741,7 @@ const MAX_BATCH_TAKES = 4;
 async function startVideoGenerationBatch(userId, options, count) {
   const takes = Math.min(MAX_BATCH_TAKES, Math.max(1, Math.floor(Number(count)) || 1));
   const provider = resolveVideoProvider(options.provider);
+  assertModelOptions(provider, options);
   const prepared = await buildGenerationPayload(userId, options);
   const settled = await Promise.allSettled(
     Array.from({ length: takes }, () => submitPrepared(provider, prepared, options)),
@@ -651,27 +756,37 @@ async function startVideoGenerationBatch(userId, options, count) {
 }
 
 async function submitPrepared(provider, prepared, options) {
+  const modelKey = provider === 'replicate' ? resolveModelKey(options.model) : 'hailuo';
+  const seed = modelKey === 'seedance' ? parseSeed(options.seed) : null;
   const shared = {
     provider,
+    modelKey,
+    seed,
     mode: prepared.imageToVideo ? 'image-to-video' : 'text-to-video',
     video_prompt: prepared.expanded.video_prompt,
     negative_prompt: prepared.expanded.negative_prompt,
     aspect: options.aspect,
     width: prepared.dims.width,
     height: prepared.dims.height,
-    durationSec: prepared.durationSec,
+    durationSec: modelKey === 'seedance' ? seedanceDuration(options.durationSec) : prepared.durationSec,
     references: prepared.references,
     promptUsage: prepared.promptUsage,
     status: 'IN_QUEUE',
   };
 
   if (provider === 'replicate') {
-    const model = resolveReplicateModel(prepared.imageToVideo);
+    const model = modelKey === 'seedance' ? DEFAULT_SEEDANCE_MODEL : resolveReplicateModel(prepared.imageToVideo);
     const input = buildReplicateInput({
+      modelKey,
       expanded: prepared.expanded,
       imageToVideo: prepared.imageToVideo,
       seedImageDataUrl: prepared.seedImageDataUrl,
-      durationSec: prepared.durationSec,
+      endImageDataUrl: prepared.endImageDataUrl,
+      durationSec: modelKey === 'seedance' ? options.durationSec : prepared.durationSec,
+      aspect: options.aspect,
+      seed,
+      cameraFixed: Boolean(options.cameraFixed),
+      promptOptimizer: options.promptOptimizer,
     });
     const pred = await submitReplicateVideoRequest(model, input);
     return {
@@ -707,6 +822,8 @@ function buildGenerationUsage(preparedMeta) {
     : 0;
   const videoCostUsd = calculateVideoCost(preparedMeta.model);
   return {
+    // False when we have no real price for the model: the figure is then only a placeholder.
+    videoCostKnown: hasVideoPricing(preparedMeta.model),
     promptModel: promptUsage.model || null,
     promptInputTokens,
     promptOutputTokens,
@@ -759,7 +876,8 @@ async function pollReplicateVideoGeneration({ requestId, pollUrl, meta = {} }) {
     const out = pred.output;
     const videoUrl = typeof out === 'string' ? out : (Array.isArray(out) ? out[0] : out?.url);
     if (!videoUrl) throw new Error('Replicate returned no video URL');
-    return finalizeVideoResult(meta, { video: { url: videoUrl } });
+    const seedUsed = pred.input?.seed ?? parseSeedFromLogs(pred.logs) ?? meta.seed ?? null;
+    return finalizeVideoResult({ ...meta, seedUsed }, { video: { url: videoUrl } });
   }
 
   const status = ['starting', 'processing'].includes(pred.status) ? 'IN_PROGRESS' : 'IN_QUEUE';
@@ -835,6 +953,13 @@ module.exports = {
   startVideoGeneration,
   startVideoGenerationBatch,
   MAX_BATCH_TAKES,
+  VIDEO_MODELS,
+  resolveModelKey,
+  assertModelOptions,
+  buildReplicateInput,
+  parseSeed,
+  parseSeedFromLogs,
+  seedanceDuration,
   pollVideoGeneration,
   getVideoGenerateConfig,
   resolveVideoProvider,

@@ -54,6 +54,12 @@ const VIDEO_PRICING = {
   'fal-ai/minimax/video-01-live/image-to-video': 0.50,
 };
 
+/** True only when we hold a real price for this model; unknown models get a generic placeholder figure. */
+function hasVideoPricing(modelId) {
+  const id = String(modelId || '').toLowerCase();
+  return VIDEO_PRICING[modelId] != null || id.includes('hailuo') || id.includes('minimax');
+}
+
 function lookupVideoBySubstring(modelId) {
   const id = String(modelId || '').toLowerCase();
   if (id.includes('hailuo')) return 0.20;
@@ -71,4 +77,4 @@ function calculateVideoCost(modelId) {
   return lookupVideoBySubstring(modelId);
 }
 
-module.exports = { calculateCost, calculateVideoCost };
+module.exports = { calculateCost, calculateVideoCost, hasVideoPricing };
