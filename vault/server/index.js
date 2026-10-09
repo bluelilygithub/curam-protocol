@@ -34,6 +34,14 @@ const { httpLogger } = require('./middleware/httpLogger');
 app.use(requestContext);
 app.use(httpLogger);
 
+// Cellar Planner LITE (public, static, embeddable in the business's own website): own headers, so it is mounted before helmet and requireAuth.
+// Files only, no login, no API, no database. See server/routes/cellarLiteRouter.js and docs/cellar-planner.md.
+{
+  const { createCellarLiteRouter, cellarLiteAvailable } = require('./routes/cellarLiteRouter');
+  const liteDir = path.join(__dirname, '../dist/cellar-lite');
+  if (cellarLiteAvailable(liteDir)) app.use('/cellar-lite', createCellarLiteRouter({ dir: liteDir, frameAncestors: process.env.CELLAR_LITE_FRAME_ANCESTORS, log: (m) => console.warn(m) }));
+}
+
 app.use(helmet({
   contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
     directives: {

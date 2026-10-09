@@ -26,6 +26,15 @@ try {
   if (!fs.existsSync(path.join(dir, 'node_modules', 'vite'))) run(['install', '--include=dev', '--no-audit', '--no-fund'], 'cellar-planner install');
   run(['run', 'build'], 'cellar-planner build');
   console.log('[cellar-planner] built into dist/cellar-planner-app');
+  // the public lite tool is a separate, smaller bundle served at /cellar-lite/; if only it fails, the full planner above still deploys
+  try {
+    run(['run', 'build:lite:vault'], 'cellar-planner lite build');
+    console.log('[cellar-planner] lite built into dist/cellar-lite');
+  } catch (e) {
+    console.warn(`
+[cellar-planner] WARNING: ${e.message}. /cellar-lite will not be served.
+`);
+  }
 } catch (e) {
   console.warn(`\n[cellar-planner] WARNING: ${e.message}. Vault build continues without Cellar Planner.\n`);
 }

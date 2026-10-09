@@ -13,7 +13,8 @@
     "e2e": "node scripts/e2e.mjs",
     "example": "vite-node scripts/writeExample.mjs",
     "dev:lite": "vite --config vite.lite.config.ts",
-    "build:lite": "vite build --config vite.lite.config.ts"
+    "build:lite": "vite build --config vite.lite.config.ts",
+    "build:lite:vault": "vite build --config vite.lite.config.ts --outDir ../dist/cellar-lite"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",

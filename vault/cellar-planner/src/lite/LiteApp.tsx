@@ -13,9 +13,16 @@ import { BOTTLES, LIMITS, WALLS, LITE_DOOR_WIDTH_MM, LITE_UNIT_WIDTH_MM, decodeD
 const WALL_NAMES: Record<WallSide, string> = { NORTH: 'North', EAST: 'East', SOUTH: 'South', WEST: 'West' };
 export const MESSAGE_TYPE = 'cellar-lite:design';
 
-/** Where to send the hand-off: the page that embeds us (its origin comes from the referrer). Null when not embedded, so nothing is ever broadcast. */
+/**
+ * Where to send the hand-off: the page that embeds us. The browser's own list of ancestor origins is used when it has one (Chrome, Safari), else
+ * the origin of the referrer (Firefox). Null when not embedded, so nothing is ever broadcast.
+ */
 export function parentOrigin(): string | null {
   if (typeof window === 'undefined' || window.parent === window) return null;
+  try {
+    const ancestor = (window.location as Location & { ancestorOrigins?: DOMStringList }).ancestorOrigins?.[0];
+    if (ancestor && ancestor !== 'null') return new URL(ancestor).origin;
+  } catch { /* fall through to the referrer */ }
   try { return new URL(document.referrer).origin; } catch { return null; }
 }
 
@@ -36,6 +43,7 @@ export function LiteApp() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [copied, setCopied] = useState<'' | 'done' | 'failed'>('');
   const codeBox = useRef<HTMLTextAreaElement>(null);
+  const sentBox = useRef<HTMLDivElement>(null);
 
   const result = useMemo(() => liteResult(s), [s]);
   const analysis = useMemo(() => analyseApp(result.project), [result]);
@@ -43,7 +51,6 @@ export function LiteApp() {
   const summary = useMemo(() => summaryLine(s, result.bottles), [s, result.bottles]);
   const e = result.project.enclosure;
   const plan = useMemo(() => planView(e, fullRuns(result.project), analysis.racks, { walkwayMm: null, badRuns: badRunIds(analysis.racks.issues), plainLabels: true }), [result, analysis, e]);
-  const sentBox = useRef<HTMLDivElement>(null);
   const racks = useMemo(() => rackFaceView(e, fullRuns(result.project), analysis.racks, rackWall, result.project.bottle, { badRuns: badRunIds(analysis.racks.issues) }), [result, analysis, e, rackWall]);
 
   // keep the address reopenable (?d=), and keep the page around us in step so its enquiry form is always current
@@ -53,13 +60,6 @@ export function LiteApp() {
     if (to) window.parent.postMessage({ type: MESSAGE_TYPE, version: 1, code, summary, bottles: result.bottles, requested: asked }, to);
   }, [code, summary, result.bottles, asked]);
 
-  // first visit: the guide opens once (the Help button reopens it); ?tour=1 starts the tour straight away
-  useEffect(() => {
-    try { if (!localStorage.getItem(LITE_HELP_KEY)) setHelpOpen(true); } catch { /* storage blocked: skip the auto-open */ }
-    if (new URLSearchParams(window.location.search).has('tour')) { setHelpOpen(false); window.setTimeout(() => void startTour(), 400); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const closeHelp = (): void => { try { localStorage.setItem(LITE_HELP_KEY, '1'); } catch { /* fine */ } setHelpOpen(false); };
   // After "Request a quote": when we are embedded, the page around us scrolls to its own enquiry form (cellar-lite-fill.js); on our own, bring the
   // revealed panel into view so the visitor does not have to hunt for it.
   useEffect(() => {
@@ -68,6 +68,13 @@ export function LiteApp() {
     sentBox.current?.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'center' });
   }, [asked]);
 
+  // first visit: the guide opens once (the Help button reopens it); ?tour=1 starts the tour straight away
+  useEffect(() => {
+    try { if (!localStorage.getItem(LITE_HELP_KEY)) setHelpOpen(true); } catch { /* storage blocked: skip the auto-open */ }
+    if (new URLSearchParams(window.location.search).has('tour')) { setHelpOpen(false); window.setTimeout(() => void startTour(), 400); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const closeHelp = (): void => { try { localStorage.setItem(LITE_HELP_KEY, '1'); } catch { /* fine */ } setHelpOpen(false); };
   /** Shepherd is loaded on first use, so it stays out of the page's first download. */
   const startTour = async (): Promise<void> => {
     const m = await import('./liteTour');

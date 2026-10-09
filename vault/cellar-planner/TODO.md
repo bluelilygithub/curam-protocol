@@ -20,6 +20,8 @@ Phone layout, pinch-zoom, touch pan, tap-friendly hints and the phone/tablet tes
 
 ## Lite version for the public website: remaining
 
+Hosting: either upload `dist-lite/` to SiteGround, or use Vault's `/cellar-lite/` on Railway (built in; set `CELLAR_LITE_FRAME_ANCESTORS` to the website's origin). Decide which, then try it on the real page.
+
 Built 2026-10-09 (see Done below and `docs/cellar-planner.md`, "Lite version for the public website"): the static bundle, the screen, the design code and `?d=` link, the postMessage hand-off with origin checks, the WordPress fill script, "From design code" in the full planner, the round-trip test and a phone-size browser test. What is left needs the real website or a real device.
 
 - [ ] **Try it on the real WordPress page**: upload `dist-lite/`, add the iframe and `lite-wordpress/cellar-lite-fill.js`, set `PLANNER_ORIGIN` and the two field selectors to match the actual enquiry form (Contact Form 7, WPForms or similar), send a test enquiry end to end.
@@ -65,3 +67,4 @@ Built 2026-10-09 (see Done below and `docs/cellar-planner.md`, "Lite version for
 - [x] 2026-10-09 Tests: `tests/lite.test.ts` (round trip into the full planner) and `scripts/e2e-lite.mjs` (phone size, hand-off, fill script, staff dialog, axe scan). How-to-update steps written in `docs/cellar-planner.md`.
 - [x] 2026-10-09 Lite help for casual visitors: plain-language guide (opens once on a first visit, Help button), nine-step tour (Take the tour, `?tour=1`), always-visible hint under every question; tests in `tests/lite.test.ts` and `scripts/e2e-lite.mjs`.
 - [x] 2026-10-09 Single and double doors in the full planner (model, plan, elevation, checks, panel, drawing package) and the lite tool (Door type question, design code, summary, help and tour). See `docs/cellar-planner.md`, "Single and double doors".
+- [x] 2026-10-09 Lite served by Vault on Railway at `/cellar-lite/` (public, static, own headers, embeddable only by `CELLAR_LITE_FRAME_ANCESTORS`); checked in Chrome with the real production headers: allowed site embeds it and receives the design, any other site is refused.
