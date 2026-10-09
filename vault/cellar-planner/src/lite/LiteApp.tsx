@@ -60,10 +60,10 @@ export function LiteApp() {
     if (to) window.parent.postMessage({ type: MESSAGE_TYPE, version: 1, code, summary, bottles: result.bottles, requested: asked }, to);
   }, [code, summary, result.bottles, asked]);
 
-  // After "Request a quote": when we are embedded, the page around us scrolls to its own enquiry form (cellar-lite-fill.js); on our own, bring the
-  // revealed panel into view so the visitor does not have to hunt for it.
+  // After "Request a quote": always bring the revealed panel into view so the visitor does not have to hunt for it. When embedded, the page around
+  // us then scrolls on to its own enquiry form (cellar-lite-fill.js), which wins because its scroll starts after this one.
   useEffect(() => {
-    if (!asked || parentOrigin()) return;
+    if (!asked) return;
     const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     sentBox.current?.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'center' });
   }, [asked]);
@@ -204,7 +204,7 @@ export function LiteApp() {
           <button type="button" className="btn primary lite-cta" data-tour="lt-quote" onClick={() => setAsked(true)} data-testid="lite-quote">Request a quote for this design <span aria-hidden="true">&rarr;</span></button>
         ) : (
           <div className="lite-sent" ref={sentBox} data-testid="lite-sent">
-            <p><strong>Your design is ready to send.</strong> {parentOrigin() ? 'It has been added to the enquiry form on this page; check your details there and send it.' : 'Copy it into your enquiry.'}</p>
+            <p><strong>Your design is ready to send.</strong> {parentOrigin() ? 'Taking you to the contact form with your design filled in. If nothing happens, copy it below and paste it into the form.' : 'Copy it into your enquiry.'}</p>
             <label className="field">
               <span className="field-label">Your design</span>
               <textarea ref={codeBox} readOnly rows={3} value={`${summary}\nDesign code: ${code}`} data-testid="lite-code" onFocus={(ev) => ev.target.select()} />
