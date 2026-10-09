@@ -7,8 +7,16 @@
 const FALLBACK_COUNT = 3;
 
 /** One row per option, driven by the server's real per-option status. */
-function optionStep(option) {
+function optionStep(option, source) {
   const n = option.n + 1;
+  if (source === 'upload') {
+    // The user's own track: one option, nothing is composed.
+    switch (option.status) {
+      case 'ready': return { id: `option-${option.n}`, label: 'Your track is fitted to the video', status: 'done' };
+      case 'failed': return { id: `option-${option.n}`, label: `Fitting your track failed${option.error ? `: ${String(option.error).slice(0, 90)}` : ''}`, status: 'error' };
+      default: return { id: `option-${option.n}`, label: "Fitting your track to the video's length…", status: 'active' };
+    }
+  }
   switch (option.status) {
     case 'ready': return { id: `option-${option.n}`, label: `Option ${n} is ready`, status: 'done' };
     case 'failed': return { id: `option-${option.n}`, label: `Option ${n} failed${option.error ? `: ${String(option.error).slice(0, 90)}` : ''}`, status: 'error' };
@@ -19,7 +27,7 @@ function optionStep(option) {
 }
 
 /**
- * @param {{ options?: Array<{n:number,status:string,error?:string}>, durationS?: number, hasAudio?: boolean } | null} job
+ * @param {{ source?: string, options?: Array<{n:number,status:string,error?:string}>, durationS?: number, hasAudio?: boolean } | null} job
  */
 export function musicProgressSteps(job) {
   const options = Array.isArray(job?.options) && job.options.length
@@ -31,7 +39,7 @@ export function musicProgressSteps(job) {
   return [
     { id: 'upload', label: 'Video uploaded', status: 'done' },
     { id: 'length', label: length ? `Video length read (${length})${job?.hasAudio ? '' : ' — no sound of its own'}` : 'Reading video length…', status: length ? 'done' : 'active' },
-    ...options.map(optionStep),
+    ...options.map((o) => optionStep(o, job?.source)),
     {
       id: 'finish',
       label: settled === options.length ? 'Finishing up' : 'Preparing previews',

@@ -10,7 +10,9 @@ const archiver = require('archiver');
 const { runtimeConfig } = require('../config/runtime');
 const { getLogger } = require('../middleware/requestContext');
 const { captureIf, makeFingerprint } = require('../services/SuggestionService');
-const { saveAsset, listAssets, getAsset, deleteAsset, renameAsset, getUserUsageBytes } = require('../services/videoLibraryService');
+const {
+  saveAsset, listAssets, getAsset, deleteAsset, renameAsset, getUserUsageBytes, LIBRARY_QUOTA_BYTES,
+} = require('../services/videoLibraryService');
 const {
   startVideoGeneration, startVideoGenerationBatch, pollVideoGeneration, getVideoGenerateConfig, buildYoutubeContext, fetchPlaybackVideo,
   transcribeAudioWithGemini, isGeminiTranscribeAvailable, describeReferenceVideoFrames,
@@ -154,8 +156,6 @@ function captionStyleFromBody(body) {
   };
 }
 
-// Per-user cap on saved library files (disk is a shared Railway volume).
-const LIBRARY_QUOTA_BYTES = Number(process.env.VIDEO_LIBRARY_QUOTA_MB || 1000) * 1024 * 1024;
 
 const upload = multer({
   storage: multer.memoryStorage(),

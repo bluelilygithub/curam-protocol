@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { setVideoHandoff } from '../utils/videoHandoff';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
@@ -431,6 +432,7 @@ const TOOL_GROUPS = [
       { id: 'join', label: 'Join videos', desc: 'Concatenate clips — hard cut or crossfade' },
       { id: 'slideshow', label: 'Slideshow', desc: 'Images + background music → promo video' },
       { id: 'caption-studio', label: 'Caption studio', desc: 'Upload or library video + styled SRT captions' },
+      { id: 'add-music', label: 'Add music', desc: 'Opens Music — generate or use your own track', link: '/music' },
     ],
   },
   {
@@ -837,7 +839,7 @@ function MultiImageUpload({ files, onFiles, label = 'Images (order = slide order
 }
 
 function ResultVideo({
-  blobUrl, downloadName, onUse, onSave, saveLabel = 'Save to library',
+  blobUrl, downloadName, onUse, onSave, onMusic, saveLabel = 'Save to library',
   saveTitle, onSaveTitleChange,
 }) {
   if (!blobUrl) return null;
@@ -885,6 +887,18 @@ function ResultVideo({
               style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
             >
               {saveLabel}
+            </button>
+          </Tooltip>
+        )}
+        {onMusic && (
+          <Tooltip text="Open Music with this video: generate background music or fit your own track, then save it back to Saved media.">
+            <button
+              type="button"
+              onClick={onMusic}
+              className="text-xs px-3 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+            >
+              Add music
             </button>
           </Tooltip>
         )}
@@ -1185,14 +1199,17 @@ export default function VideosPage() {
       .catch(() => {});
   }, [canUse]);
 
+  const musicOk = Boolean(user?.isAdmin) || featureAccess.music !== false;
+
   const filteredGroups = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return TOOL_GROUPS;
-    return TOOL_GROUPS.map((g) => ({
+    const visible = TOOL_GROUPS.map((g) => ({ ...g, tools: g.tools.filter((t) => t.id !== 'add-music' || musicOk) }));
+    if (!q) return visible;
+    return visible.map((g) => ({
       ...g,
       tools: g.tools.filter((t) => t.label.toLowerCase().includes(q) || t.desc.toLowerCase().includes(q)),
     })).filter((g) => g.tools.length > 0);
-  }, [search]);
+  }, [search, musicOk]);
 
   const clearComposeResult = useCallback(() => {
     setResultBlob((prev) => {
@@ -1990,6 +2007,20 @@ export default function VideosPage() {
     [libraryItems],
   );
 
+  const navigate = useNavigate();
+
+  // Hand a video to Music (no re-upload) and open it. Music saves finished videos to Saved media.
+  const openMusicWith = useCallback((file) => {
+    setVideoHandoff(file || null);
+    navigate('/music');
+  }, [navigate]);
+
+  const handleAddMusicFromResult = useCallback(() => {
+    const blob = resultBlobRef.current;
+    if (!blob) { addToast('Nothing to add music to yet', 'error'); return; }
+    openMusicWith(new File([blob], resultName || 'video.mp4', { type: blob.type || 'video/mp4' }));
+  }, [resultName, addToast, openMusicWith]);
+
   const handleSaveResult = useCallback(() => {
     saveToLibrary({ title: saveTitle });
   }, [saveToLibrary, saveTitle]);
@@ -2019,6 +2050,7 @@ export default function VideosPage() {
   const ffmpegOk = status?.ffmpeg;
   const generateOk = status?.generate?.available;
   const resultSaveProps = {
+    onMusic: musicOk ? handleAddMusicFromResult : undefined,
     onSave: handleSaveResult,
     saveTitle,
     onSaveTitleChange: setSaveTitle,
@@ -2090,7 +2122,7 @@ export default function VideosPage() {
                   <li key={t.id}>
                     <button
                       type="button"
-                      onClick={() => setTool(t.id)}
+                      onClick={() => (t.link ? openMusicWith(sourceFile) : setTool(t.id))}
                       className="w-full text-left px-2 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-70"
                       style={{
                         background: tool === t.id ? 'var(--color-bg)' : 'transparent',

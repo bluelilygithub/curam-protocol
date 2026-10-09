@@ -94,6 +94,31 @@ const s = app.listen(0, async () => {
       r = await fetch(`${base}/jobs/${job.id}`, { method: 'DELETE' }); check(`${label}: delete`, r.status === 200);
       r = await fetch(`${base}/jobs/${job.id}`); check(`${label}: gone after delete`, r.status === 404);
     }
+
+    // Own track: one option, no provider involved, fitted to the video's exact length (short track loops).
+    const track = path.join(dir, 'own_track.mp3');
+    execFileSync(FF, ['-y', '-f', 'lavfi', '-i', 'sine=f=440:d=4', '-c:a', 'libmp3lame', track], { stdio: 'ignore' });
+    const own = new FormData();
+    own.append('video', new Blob([fs.readFileSync(withAudio)], { type: 'video/mp4' }), 'v.mp4');
+    own.append('track', new Blob([fs.readFileSync(track)], { type: 'audio/mpeg' }), 'own_track.mp3');
+    r = await fetch(`${base}/jobs`, { method: 'POST', body: own });
+    const ownJob = await r.json();
+    check('own track: accepted, one option', r.status === 202 && ownJob.source === 'upload' && ownJob.options.length === 1, JSON.stringify(ownJob.options));
+    const ownDone = await waitDone(base, ownJob.id);
+    check('own track: ready and looped', ownDone.status === 'done' && ownDone.options[0].status === 'ready' && ownDone.options[0].loops > 1, JSON.stringify(ownDone.options));
+    r = await fetch(`${base}/jobs/${ownJob.id}/options/0/audio`);
+    const ownWav = path.join(dir, 'own_a.wav'); fs.writeFileSync(ownWav, Buffer.from(await r.arrayBuffer()));
+    const ownProbe = await probeVideo(ownWav);
+    check('own track: wav exact length', r.status === 200 && Math.abs(ownProbe.duration - ownDone.durationS) < 0.05, `${ownProbe.duration} vs ${ownDone.durationS}`);
+    r = await fetch(`${base}/jobs/${ownJob.id}/options/0/video?volume=0.7&ducking=light`);
+    check('own track: export mp4', r.status === 200);
+    await fetch(`${base}/jobs/${ownJob.id}`, { method: 'DELETE' });
+
+    const notAudio = new FormData();
+    notAudio.append('video', new Blob([fs.readFileSync(withAudio)], { type: 'video/mp4' }), 'v.mp4');
+    notAudio.append('track', new Blob(['not audio'], { type: 'audio/mpeg' }), 'bad.mp3');
+    r = await fetch(`${base}/jobs`, { method: 'POST', body: notAudio });
+    check('own track: unreadable file -> 400', r.status === 400, (await r.json()).error);
   } catch (e) { console.log('E2E ERROR', e.stack || e.message); results.push(false); }
   console.log(results.every(Boolean) ? 'ALL PASS' : 'SOME FAILED');
   fs.rmSync(dir, { recursive: true, force: true });

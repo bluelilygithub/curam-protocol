@@ -11,6 +11,7 @@ import { VoiceInput, VoiceInputProvider } from '../components/voiceInput/VoiceIn
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { startMusicTour, TOUR_KEY as MUSIC_TOUR_KEY } from '../utils/tours/musicTour';
 import { musicProgressSteps, formatElapsed } from './music/musicProgress.mjs';
+import { takeVideoHandoff } from '../utils/videoHandoff';
 
 // Music (/music): pick a video, choose a mood (or describe the music), get 3 instrumental options
 // cut to the video's exact length, preview each against the video, then export the audio (WAV) or the
@@ -34,12 +35,14 @@ function formatDuration(s) {
 
 const qs = (s) => `volume=${(s.volume / 100).toFixed(2)}&ducking=${s.ducking}`;
 
-function OptionCard({ jobId, option, hasAudio, durationS }) {
+function OptionCard({ jobId, option, hasAudio, durationS, source }) {
   const addToast = useToastStore((s) => s.addToast);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [rendered, setRendered] = useState(null); // settings the current preview was rendered with
   const [previewUrl, setPreviewUrl] = useState(null);
   const [rendering, setRendering] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const urlRef = useRef(null);
 
   const base = `/api/music/jobs/${jobId}/options/${option.n}`;
@@ -81,10 +84,28 @@ function OptionCard({ jobId, option, hasAudio, durationS }) {
     }
   };
 
+  const saveToLibrary = async () => {
+    setSaving(true);
+    try {
+      const res = await api.post(`${base}/save`, { volume: settings.volume / 100, ducking: settings.ducking });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not save the video');
+      setSaved(true);
+      addToast('Saved to Saved media (Video Tools)', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const ownTrack = source === 'upload';
+  const title = ownTrack ? 'Your track' : `Option ${option.n + 1}`;
+
   if (option.status === 'failed') {
     return (
       <div className="rounded-2xl border p-4" style={card}>
-        <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Option {option.n + 1}</p>
+        <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{title}</p>
         <p className="text-xs mt-1" style={{ color: '#ef4444' }}>This one failed: {option.error || 'unknown error'}</p>
       </div>
     );
@@ -92,7 +113,7 @@ function OptionCard({ jobId, option, hasAudio, durationS }) {
   if (option.status !== 'ready') {
     return (
       <div className="rounded-2xl border p-4" style={card}>
-        <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Option {option.n + 1}</p>
+        <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{title}</p>
         <p className="text-xs mt-1" style={muted}>
           {option.status === 'fitting' ? 'Cutting to your video length…' : 'Composing…'}
         </p>
@@ -103,7 +124,7 @@ function OptionCard({ jobId, option, hasAudio, durationS }) {
   return (
     <div className="rounded-2xl border p-4 space-y-3" style={card}>
       <div className="flex items-baseline justify-between gap-2">
-        <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Option {option.n + 1}</p>
+        <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{title}</p>
         <p className="text-xs" style={muted}>
           {formatDuration(durationS)}{option.loops > 1 ? ` · loops ${option.loops}× with crossfades` : ''}
         </p>
@@ -175,6 +196,15 @@ function OptionCard({ jobId, option, hasAudio, durationS }) {
             Export video (MP4)
           </button>
         </Tooltip>
+        <Tooltip text="Store this video with the music in Saved media, so you can caption, join or annotate it in Video Tools. Uses the volume and ducking above.">
+          <button
+            type="button" onClick={saveToLibrary} disabled={saving || saved}
+            className="px-3 py-1.5 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+            style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+          >
+            {saving ? 'Saving…' : saved ? 'Saved to Saved media' : 'Save to Saved media'}
+          </button>
+        </Tooltip>
       </div>
     </div>
   );
@@ -196,6 +226,9 @@ function MusicPageInner() {
   const [bpm, setBpm] = useState('');
   const [job, setJob] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [musicSource, setMusicSource] = useState('generate'); // 'generate' | 'upload'
+  const [trackFile, setTrackFile] = useState(null);
+  const trackInputRef = useRef(null);
   const jobIdRef = useRef(null);
   const inputRef = useRef(null);
   const startedAtRef = useRef(0);
@@ -203,6 +236,12 @@ function MusicPageInner() {
 
   useEffect(() => {
     api.get('/api/music/status').then((r) => r.json()).then(setStatus).catch(() => {});
+  }, []);
+
+  // A video sent over from Video Tools ("Add music").
+  useEffect(() => {
+    const handed = takeVideoHandoff();
+    if (handed) setFile(handed);
   }, []);
 
   // Settings → Music Tour opens /music?tour=1
@@ -266,11 +305,12 @@ function MusicPageInner() {
 
   const moods = status?.moods || [];
   const presetBpm = moods.find((m) => m.id === mood)?.defaultBpm;
-  const providerOk = status ? status.provider?.configured : true;
+  const ownTrackMode = musicSource === 'upload';
+  const providerOk = status ? (ownTrackMode || status.provider?.configured) : true;
   const ffmpegOk = status ? status.ffmpeg : true;
   const tooLong = status && clientDuration && clientDuration > status.maxVideoSec;
   const canGenerate = Boolean(file) && providerOk && ffmpegOk && !submitting && job?.status !== 'running'
-    && (mood !== 'custom' || customPrompt.trim()) && !tooLong;
+    && (ownTrackMode ? Boolean(trackFile) : (mood !== 'custom' || customPrompt.trim())) && !tooLong;
 
   // Cancel from the progress modal: stop waiting and delete the job. The modal itself closes after this.
   // The provider has usually already been asked to compose, so that spend can't be undone.
@@ -288,7 +328,7 @@ function MusicPageInner() {
     setSubmitting(true);
     cancelledRef.current = false;
     startedAtRef.current = Date.now();
-    startProcessing('Creating your music…', 'Uploading your video…', { onCancel: cancelGeneration });
+    startProcessing(ownTrackMode ? 'Fitting your track…' : 'Creating your music…', 'Uploading your video…', { onCancel: cancelGeneration });
     setProcessingSteps(musicProgressSteps(null).map((st, i) => (i === 0
       ? { ...st, label: 'Uploading your video…', status: 'active' }
       : { ...st, status: 'pending' })));
@@ -297,9 +337,13 @@ function MusicPageInner() {
       setJob(null);
       const fd = new FormData();
       fd.append('video', file);
-      fd.append('mood', mood);
-      if (customPrompt.trim()) fd.append('prompt', customPrompt.trim());
-      if (bpm) fd.append('bpm', String(bpm));
+      if (ownTrackMode) {
+        fd.append('track', trackFile);
+      } else {
+        fd.append('mood', mood);
+        if (customPrompt.trim()) fd.append('prompt', customPrompt.trim());
+        if (bpm) fd.append('bpm', String(bpm));
+      }
       const res = await api.postForm('/api/music/jobs', fd);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Could not start generating');
@@ -365,7 +409,8 @@ function MusicPageInner() {
               <p style={{ color: 'var(--color-text)' }}><strong>2 · The music</strong> — pick a mood (upbeat vlog, cinematic tension, calm corporate, travel montage, suspense, documentary, lo-fi chill) or write your own description, with an optional tempo. Always instrumental — no vocals. You can speak the description with the mic.</p>
               <p style={{ color: 'var(--color-text)' }}><strong>3 · Three options</strong> — three variations are made so you can compare. Each fades in over about half a second and fades out over the last two seconds, and is previewed against your video.</p>
               <p style={{ color: 'var(--color-text)' }}><strong>Volume and ducking</strong> — set how loud the music is, and let it dip while people are talking (light or strong). The final mix is levelled to about -14 LUFS. Ducking needs a video that has its own sound.</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Export</strong> — the music alone as a WAV, or your video with the music mixed in as an MP4.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Your own track</strong> — switch to "Use my own track" to fit music you already have instead: it is looped or trimmed to your video, faded, and mixed the same way. No generation cost. Use music you have the rights to.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Export or save</strong> — the music alone as a WAV, your video with the music as an MP4, or save the video to Saved media to keep editing it in Video Tools.</p>
             </div>
             <p className="text-sm" style={{ color: 'var(--color-text)' }}>
               Good to know: the music is created by an AI model through Replicate, so each generation has a small cost. Clips are about 30 seconds long, so for longer videos the music loops with smooth crossfades. Your video and the results are kept for about 90 minutes and then deleted — export what you want to keep.
@@ -417,6 +462,44 @@ function MusicPageInner() {
 
         <section className="rounded-2xl border p-4 space-y-3" style={card} data-tour="music-mood">
           <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>2 · The music</p>
+          <div className="flex gap-2">
+            {[['generate', 'Generate with AI'], ['upload', 'Use my own track']].map(([id, label]) => (
+              <Tooltip key={id} text={id === 'generate' ? 'Compose three instrumental options from a mood or your own description.' : 'Bring a track you already have (MP3, WAV, M4A). It is looped or trimmed to your video and faded — no generation, no cost.'}>
+                <button
+                  type="button" onClick={() => setMusicSource(id)}
+                  className="px-3 py-1.5 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
+                  style={{
+                    borderColor: musicSource === id ? 'var(--color-primary)' : 'var(--color-border)',
+                    color: musicSource === id ? 'var(--color-primary)' : 'var(--color-muted)',
+                  }}
+                >
+                  {label}
+                </button>
+              </Tooltip>
+            ))}
+          </div>
+          {ownTrackMode && (
+            <div className="space-y-2">
+              <input
+                ref={trackInputRef} type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac" className="hidden"
+                onChange={(e) => { setTrackFile(e.target.files?.[0] || null); e.target.value = ''; }}
+              />
+              <div className="flex flex-wrap items-center gap-3">
+                <Tooltip text="Choose a music file you have the rights to use. If it is shorter than the video it loops with smooth crossfades; if longer it is trimmed and faded out.">
+                  <button
+                    type="button" onClick={() => trackInputRef.current?.click()}
+                    className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    {trackFile ? 'Choose a different track' : 'Choose music file'}
+                  </button>
+                </Tooltip>
+                {trackFile && <span className="text-xs" style={muted}>{trackFile.name}</span>}
+              </div>
+              <p className="text-xs" style={muted}>Looped or trimmed to your video's exact length with a short fade in and a 2 second fade out. Use music you have the rights to.</p>
+            </div>
+          )}
+          {!ownTrackMode && (<>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="block space-y-1">
               <span className="text-xs" style={muted}>Mood</span>
@@ -451,13 +534,14 @@ function MusicPageInner() {
             </Tooltip>
           </label>
           <p className="text-xs" style={muted}>Always instrumental — no vocals. Three variations are generated so you can compare.</p>
-          <Tooltip text="Generate three instrumental options cut to your video's length. Takes about a minute and a small per-generation cost.">
+          </>)}
+          <Tooltip text={ownTrackMode ? "Fit your track to your video's length and preview it mixed in. Quick, and no generation cost." : "Generate three instrumental options cut to your video's length. Takes about a minute and a small per-generation cost."}>
             <button
               type="button" onClick={generate} disabled={!canGenerate} data-tour="music-generate"
               className="px-4 py-2 rounded-xl text-sm font-medium transition-opacity duration-200 hover:opacity-80 disabled:opacity-40"
               style={{ background: 'var(--color-primary)', color: '#fff' }}
             >
-              {submitting ? 'Starting…' : job?.status === 'running' ? 'Generating…' : job ? 'Generate again' : 'Generate 3 options'}
+              {submitting ? 'Starting…' : job?.status === 'running' ? (ownTrackMode ? 'Fitting…' : 'Generating…') : ownTrackMode ? 'Fit my track' : job ? 'Generate again' : 'Generate 3 options'}
             </button>
           </Tooltip>
         </section>
@@ -465,15 +549,15 @@ function MusicPageInner() {
         {job && (
           <section className="space-y-3" data-tour="music-options">
             <div className="flex items-baseline justify-between gap-2">
-              <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>3 · Your options · video is {formatDuration(job.durationS)}{job.hasAudio ? '' : ' · no sound of its own'}</p>
+              <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>3 · {job.source === 'upload' ? 'Your track' : 'Your options'} · video is {formatDuration(job.durationS)}{job.hasAudio ? '' : ' · no sound of its own'}</p>
             </div>
             {job.status === 'failed' && <p className="text-xs" style={{ color: '#ef4444' }}>{job.error || 'Music generation failed.'}</p>}
             <div className="grid grid-cols-1 lg:grid-cols-1 gap-3">
               {job.options.map((o) => (
-                <OptionCard key={`${job.id}-${o.n}`} jobId={job.id} option={o} hasAudio={job.hasAudio} durationS={job.durationS} />
+                <OptionCard key={`${job.id}-${o.n}`} jobId={job.id} option={o} hasAudio={job.hasAudio} durationS={job.durationS} source={job.source} />
               ))}
             </div>
-            <p className="text-xs" style={muted}>Options are kept for about 90 minutes, then deleted — export what you want to keep.</p>
+            <p className="text-xs" style={muted}>Results are kept for about 90 minutes, then deleted — export or save what you want to keep.</p>
           </section>
         )}
       </div>

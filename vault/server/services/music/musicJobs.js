@@ -31,6 +31,7 @@ function publicJob(job) {
     stage: job.stage,
     durationS: job.durationS,
     hasAudio: job.hasAudio,
+    source: job.source,
     prompt: job.prompt,
     mood: job.mood,
     bpm: job.bpm,
@@ -58,7 +59,11 @@ function activeJobsFor(userId) {
   return n;
 }
 
-async function createJob({ userId, videoFile, durationS, hasAudio, promptInfo, providerName }) {
+/**
+ * `trackFile` ({ buffer, ext }) = the user's own music: a single option is made from it and no
+ * provider is involved. Without it, OPTION_COUNT generated options are made from `promptInfo`.
+ */
+async function createJob({ userId, videoFile, durationS, hasAudio, promptInfo, providerName, trackFile = null }) {
   if (activeJobsFor(userId) >= MAX_ACTIVE_PER_USER) {
     const err = new Error('You already have music generating — wait for it to finish first.');
     err.code = 'MUSIC_BUSY';
@@ -75,7 +80,14 @@ async function createJob({ userId, videoFile, durationS, hasAudio, promptInfo, p
   const videoPath = path.join(dir, `source${videoFile.ext}`);
   await fs.writeFile(videoPath, videoFile.buffer);
 
+  let trackPath = null;
+  if (trackFile) {
+    trackPath = path.join(dir, `track${trackFile.ext || ''}`);
+    await fs.writeFile(trackPath, trackFile.buffer);
+  }
+
   const baseSeed = crypto.randomInt(1, 2 ** 30);
+  const optionCount = trackFile ? 1 : OPTION_COUNT;
   const job = {
     id,
     userId,
@@ -83,15 +95,17 @@ async function createJob({ userId, videoFile, durationS, hasAudio, promptInfo, p
     videoPath,
     durationS,
     hasAudio,
-    prompt: promptInfo.prompt,
-    mood: promptInfo.mood,
-    bpm: promptInfo.bpm,
+    source: trackFile ? 'upload' : 'generated',
+    trackPath,
+    prompt: promptInfo?.prompt || null,
+    mood: promptInfo?.mood || null,
+    bpm: promptInfo?.bpm || null,
     providerName,
     status: 'running',
     stage: 'Starting…',
     error: null,
     createdAt: Date.now(),
-    options: Array.from({ length: OPTION_COUNT }, (_, i) => ({
+    options: Array.from({ length: optionCount }, (_, i) => ({
       n: i,
       seed: baseSeed + i * 7919,
       status: 'pending',
@@ -142,6 +156,28 @@ async function runJob(job, provider) {
   job.stage = job.status === 'done' ? 'Ready' : 'Failed';
 }
 
+/** The user's own track: fit it to the video (loop with crossfades if short, trim + fade) as the one option. */
+async function runUploadedTrackJob(job) {
+  const opt = job.options[0];
+  job.stage = 'Fitting your track to the video…';
+  opt.status = 'fitting';
+  try {
+    const fitPath = path.join(job.dir, 'option_0.wav');
+    const fit = await videoJobGate.run(() => fitMusicToDuration(job.trackPath, fitPath, job.durationS));
+    opt.fitPath = fitPath;
+    opt.loops = fit.copies;
+    opt.status = 'ready';
+    job.status = 'done';
+    job.stage = 'Ready';
+  } catch (err) {
+    opt.status = 'failed';
+    opt.error = String(err.message || err).slice(0, 300);
+    job.status = 'failed';
+    job.error = opt.error;
+    job.stage = 'Failed';
+  }
+}
+
 function getJob(id, userId) {
   const job = jobs.get(String(id));
   if (!job || job.userId !== userId) return null;
@@ -168,5 +204,5 @@ timer.unref?.();
 sweep().catch(() => {});
 
 module.exports = {
-  OPTION_COUNT, JOB_TTL_MS, createJob, runJob, getJob, removeJob, publicJob, sweep, jobRoot,
+  OPTION_COUNT, JOB_TTL_MS, createJob, runJob, runUploadedTrackJob, getJob, removeJob, publicJob, sweep, jobRoot,
 };

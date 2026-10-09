@@ -45,6 +45,15 @@ test('percent is weighted by stage and bounded', () => {
   assert.strictEqual(musicProgressPercent(null), 0);
 });
 
+test('own-track job: single step, no composing wording', () => {
+  const steps = musicProgressSteps({ source: 'upload', durationS: 20, hasAudio: true, options: [{ n: 0, status: 'fitting' }] });
+  const track = steps.find((s) => s.id === 'option-0');
+  assert.strictEqual(track.status, 'active');
+  assert.ok(!/compos/i.test(track.label), track.label);
+  const done = musicProgressSteps({ source: 'upload', options: [{ n: 0, status: 'ready' }] }).find((s) => s.id === 'option-0');
+  assert.strictEqual(done.status, 'done');
+});
+
 test('elapsed formatting', () => {
   assert.strictEqual(formatElapsed(0), '0s');
   assert.strictEqual(formatElapsed(59000), '59s');

@@ -30,7 +30,7 @@ Upload cap: **`VIDEO_MAX_UPLOAD_MB`** (default **80**). Processed outputs return
 | **Create** | Generate clip |
 | **Optimise** | Convert / compress, Extract audio, Mute / replace audio, Normalize audio, Video → GIF, Export for Social |
 | **Transform** | Clip / trim, Crop / reframe, Speed |
-| **Compose** | Annotate, Call to action, Overlay / watermark, Join videos, Slideshow, Caption studio |
+| **Compose** | Add music (opens Music), Annotate, Call to action, Overlay / watermark, Join videos, Slideshow, Caption studio |
 | **Library** | Saved media |
 | **Analyse** | File info, Thumbnail |
 

@@ -48,6 +48,15 @@ If the video has its own audio, the music is mixed under it with ffmpeg `sidecha
 
 **Not verified:** a real MusicGen generation (needs a token — only the request shape and error paths are tested), how the output sounds, and the page in a browser.
 
+## Your own track
+
+Besides generating, the page has a **Use my own track** switch (step 2). Send a `track` file (MP3/WAV/M4A…) with the video to `POST /api/music/jobs`: no provider is involved (works even when `REPLICATE_API_TOKEN` is unset, costs nothing), one option is made — the track is looped with the same 2 s crossfades if shorter than the video, or trimmed, with the same fades, then previewed/mixed/exported exactly like a generated option (same volume, ducking, -14 LUFS). `job.source` is `upload` and the progress steps say "Your track…". The page does not check who owns the rights to the track — that is the user's responsibility (the UI says so).
+
+## Saved media and Video Tools
+
+- **Save to Saved media:** each option has a button that calls `POST /api/music/jobs/:id/options/:n/save` (`{ title?, volume?, ducking? }`). It renders (or reuses the cached) full-quality export, checks the per-user library quota (`LIBRARY_QUOTA_BYTES`, shared with Video Tools via `videoLibraryService`), and stores it with `tool: 'music'` and a transaction recording source/mood/prompt/volume/ducking. It then shows in Video Tools → Saved media for captioning, joining, annotating etc.
+- **From Video Tools:** the Compose group has **Add music** (opens `/music`, handing over the loaded source video), and every video result has an **Add music** button. The video travels in memory via `client/src/utils/videoHandoff.js` (consumed once; lost on reload) — no re-upload. Both are hidden when the `music` feature is off for the user.
+
 ## Possible next steps (not built)
 
 Scene-cut detection (PySceneDetect) to place changes on cuts; energy markers on a timeline; stem export; continuation as an alternative extension strategy; saving a chosen result to the Saved media library; a local MusicGen provider for dev machines.

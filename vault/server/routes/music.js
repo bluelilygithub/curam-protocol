@@ -3,6 +3,7 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs/promises');
 const { getLogger } = require('../middleware/requestContext');
 const { aiLimiter } = require('../middleware/aiRateLimit');
 const { ffmpegRoute } = require('../middleware/ffmpegRoute');
@@ -11,7 +12,8 @@ const { checkFfmpeg, MAX_VIDEO_BYTES, extensionForMime, probeVideo } = require('
 const { MOOD_PRESETS, CUSTOM_ID, buildMusicPrompt } = require('../services/music/musicPrompts');
 const { getMusicProvider } = require('../services/music/musicProviders');
 const { mixMusicWithVideo, normalizeMixSettings } = require('../services/music/musicFit');
-const { createJob, runJob, getJob, removeJob, publicJob } = require('../services/music/musicJobs');
+const { createJob, runJob, runUploadedTrackJob, getJob, removeJob, publicJob } = require('../services/music/musicJobs');
+const { saveAsset, getUserUsageBytes, LIBRARY_QUOTA_BYTES } = require('../services/videoLibraryService');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_VIDEO_BYTES } });
@@ -66,19 +68,29 @@ router.get('/status', async (req, res) => {
 
 // Upload the video, start generating 3 options in the background, answer straight away; the
 // client polls GET /jobs/:id. Generation takes tens of seconds per option, so it must not hold a request open.
-router.post('/jobs', aiLimiter, upload.single('video'), ffmpegRoute('jobs', async (req, res) => {
+// With a `track` file the user's own music is fitted instead of generating any (no provider, no cost).
+function audioExt(file) {
+  const ext = path.extname(String(file.originalname || '')).toLowerCase();
+  return /^\.[a-z0-9]{1,5}$/.test(ext) ? ext : '';
+}
+
+router.post('/jobs', aiLimiter, upload.fields([{ name: 'video', maxCount: 1 }, { name: 'track', maxCount: 1 }]), ffmpegRoute('jobs', async (req, res) => {
+  const file = req.files?.video?.[0];
+  const trackFile = req.files?.track?.[0] || null;
+  if (!file?.buffer?.length) return res.status(400).json({ error: 'Choose a video file first' });
+  if (trackFile && !trackFile.buffer?.length) return res.status(400).json({ error: 'That music file is empty' });
+
   const provider = getMusicProvider();
   const info = provider.describe();
-  if (!info.configured) return res.status(503).json({ error: info.note || 'Music generation is not set up on this server.' });
+  if (!trackFile && !info.configured) return res.status(503).json({ error: info.note || 'Music generation is not set up on this server.' });
 
-  const file = req.file;
-  if (!file?.buffer?.length) return res.status(400).json({ error: 'Choose a video file first' });
-
-  let promptInfo;
-  try {
-    promptInfo = buildMusicPrompt({ mood: req.body?.mood, custom: req.body?.prompt, bpm: req.body?.bpm });
-  } catch (err) {
-    return res.status(400).json({ error: err.message });
+  let promptInfo = null;
+  if (!trackFile) {
+    try {
+      promptInfo = buildMusicPrompt({ mood: req.body?.mood, custom: req.body?.prompt, bpm: req.body?.bpm });
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
   }
 
   let job;
@@ -89,7 +101,8 @@ router.post('/jobs', aiLimiter, upload.single('video'), ffmpegRoute('jobs', asyn
       durationS: 0,
       hasAudio: false,
       promptInfo,
-      providerName: info.name,
+      providerName: trackFile ? 'your own track' : info.name,
+      trackFile: trackFile ? { buffer: trackFile.buffer, ext: audioExt(trackFile) } : null,
     });
   } catch (err) {
     if (err.code === 'MUSIC_BUSY') return res.status(429).json({ error: err.message });
@@ -114,6 +127,27 @@ router.post('/jobs', aiLimiter, upload.single('video'), ffmpegRoute('jobs', asyn
   }
   job.durationS = probe.duration;
   job.hasAudio = probe.hasAudio;
+
+  if (trackFile) {
+    let trackProbe;
+    try {
+      trackProbe = await probeVideo(job.trackPath);
+    } catch {
+      await removeJob(job);
+      return res.status(400).json({ error: 'That music file could not be read. Try an MP3, WAV or M4A.' });
+    }
+    if (!trackProbe.hasAudio || !(trackProbe.duration > 0)) {
+      await removeJob(job);
+      return res.status(400).json({ error: 'That file has no audio in it.' });
+    }
+    runUploadedTrackJob(job).catch((err) => {
+      getLogger().error({ err }, '[music/jobs track]');
+      job.status = 'failed';
+      job.stage = 'Failed';
+      job.error = String(err.message || err).slice(0, 300);
+    });
+    return res.status(202).json(publicJob(job));
+  }
 
   runJob(job, provider).catch((err) => {
     getLogger().error({ err }, '[music/jobs run]');
@@ -146,36 +180,75 @@ router.get('/jobs/:id/options/:n/audio', (req, res) => {
 
 // Mixed video. `preview=1` renders a small fast copy for the browser; otherwise the full export.
 // Renders are cached per (option, volume, ducking, kind) inside the job's directory.
+// Render (or reuse) the mixed video for an option; returns the file path.
+async function ensureMixRender(job, opt, kind, query) {
+  const preview = kind === 'preview';
+  const settings = normalizeMixSettings({ volume: query.volume, ducking: query.ducking });
+  const outPath = path.join(job.dir, `${kind}_${opt.n}_${Math.round(settings.volume * 100)}_${settings.ducking}.mp4`);
+  const exists = await fs.access(outPath).then(() => true, () => false);
+  if (!exists) {
+    // Render to a temp name then rename, so two requests for the same render never read a half-written file.
+    const partPath = outPath.replace(/\.mp4$/, '.part.mp4');
+    await mixMusicWithVideo({
+      videoPath: job.videoPath,
+      musicPath: opt.fitPath,
+      outPath: partPath,
+      durationS: job.durationS,
+      hasAudio: job.hasAudio,
+      ...settings,
+      preview,
+    });
+    await fs.rename(partPath, outPath);
+  }
+  return { outPath, settings };
+}
+
 function mixedVideoRoute(kind) {
   const preview = kind === 'preview';
   return ffmpegRoute(`${kind}`, async (req, res) => {
     const found = findOption(req, res);
     if (!found) return;
     const { job, opt } = found;
-    const settings = normalizeMixSettings({ volume: req.query.volume, ducking: req.query.ducking });
-    const outPath = path.join(job.dir, `${kind}_${opt.n}_${Math.round(settings.volume * 100)}_${settings.ducking}.mp4`);
-
-    const fs = require('fs/promises');
-    const exists = await fs.access(outPath).then(() => true, () => false);
-    if (!exists) {
-      // Render to a temp name then rename, so two requests for the same render never read a half-written file.
-      const partPath = outPath.replace(/\.mp4$/, '.part.mp4');
-      await mixMusicWithVideo({
-        videoPath: job.videoPath,
-        musicPath: opt.fitPath,
-        outPath: partPath,
-        durationS: job.durationS,
-        hasAudio: job.hasAudio,
-        ...settings,
-        preview,
-      });
-      await fs.rename(partPath, outPath);
-    }
+    const { outPath } = await ensureMixRender(job, opt, kind, req.query);
     if (preview) return res.sendFile(outPath);
     return res.download(outPath, `video-with-music-${stamp()}-option${opt.n + 1}.mp4`);
   }, { source: 'music', routePrefix: 'music' });
 }
 router.get('/jobs/:id/options/:n/preview', mixedVideoRoute('preview'));
 router.get('/jobs/:id/options/:n/video', mixedVideoRoute('export'));
+
+// Save the full-quality mixed video to Saved media (Video Tools' library), so it can be captioned,
+// joined, annotated and so on. Body: { title?, volume?, ducking? } (same settings as the export).
+router.post('/jobs/:id/options/:n/save', ffmpegRoute('save', async (req, res) => {
+  const found = findOption(req, res);
+  if (!found) return;
+  const { job, opt } = found;
+  const { outPath, settings } = await ensureMixRender(job, opt, 'export', req.body || {});
+  const buffer = await fs.readFile(outPath);
+
+  const used = await getUserUsageBytes(req.user.id);
+  if (used + buffer.length > LIBRARY_QUOTA_BYTES) {
+    return res.status(413).json({ error: `Library is full (${Math.round(LIBRARY_QUOTA_BYTES / (1024 * 1024))}MB limit) — delete some saved items first` });
+  }
+  const own = job.source === 'upload';
+  const item = await saveAsset(req.user.id, buffer, {
+    title: String(req.body?.title || '').trim().slice(0, 120) || `Video with music ${stamp()}`,
+    tool: 'music',
+    mediaType: 'video',
+    mimeType: 'video/mp4',
+    transaction: {
+      tool: 'music',
+      source: job.source,
+      mood: own ? undefined : job.mood,
+      prompt: own ? undefined : job.prompt,
+      bpm: own ? undefined : job.bpm,
+      volume: settings.volume,
+      ducking: settings.ducking,
+      option: opt.n + 1,
+    },
+    metadata: { durationS: job.durationS },
+  });
+  res.status(201).json(item);
+}, { source: 'music', routePrefix: 'music' }));
 
 module.exports = router;

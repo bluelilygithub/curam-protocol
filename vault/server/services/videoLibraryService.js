@@ -150,7 +150,11 @@ async function deleteAsset(userId, id) {
   return Boolean(rows[0]);
 }
 
+// Per-user cap on saved library files (disk is a shared Railway volume).
+const LIBRARY_QUOTA_BYTES = Number(process.env.VIDEO_LIBRARY_QUOTA_MB || 1000) * 1024 * 1024;
+
 module.exports = {
+  LIBRARY_QUOTA_BYTES,
   saveAsset,
   listAssets,
   getAsset,
