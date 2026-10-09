@@ -11,12 +11,20 @@ const { captureIf, makeFingerprint } = require('../services/SuggestionService');
 const { checkFfmpeg, MAX_VIDEO_BYTES, extensionForMime, probeVideo } = require('../services/videoFfmpeg');
 const { MOOD_PRESETS, CUSTOM_ID, buildMusicPrompt } = require('../services/music/musicPrompts');
 const { getMusicProvider } = require('../services/music/musicProviders');
-const { mixMusicWithVideo, normalizeMixSettings } = require('../services/music/musicFit');
+const {
+  mixMusicWithVideo, normalizeMixSettings, normalizeVoiceSettings, prepareVoiceover,
+} = require('../services/music/musicFit');
+const {
+  VOICES, MAX_TEXT_CHARS, normalizeSpeech, getVoiceProvider,
+} = require('../services/music/voiceProviders');
+const { videoJobGate } = require('../services/videoJobGate');
 const { createJob, runJob, runUploadedTrackJob, getJob, removeJob, publicJob } = require('../services/music/musicJobs');
 const { saveAsset, getUserUsageBytes, LIBRARY_QUOTA_BYTES } = require('../services/videoLibraryService');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_VIDEO_BYTES } });
+const MAX_VOICE_BYTES = 40 * 1024 * 1024;
+const voiceUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_VOICE_BYTES } });
 
 // Long videos mean long WAVs on disk (3 options x 10 MB/min) — keep the default modest.
 const MAX_VIDEO_SEC = Number(process.env.MUSIC_MAX_VIDEO_SEC || 300);
@@ -39,6 +47,7 @@ function findOption(req, res, { needFit = true } = {}) {
 router.get('/status', async (req, res) => {
   const ffmpeg = await checkFfmpeg();
   const provider = getMusicProvider().describe();
+  const voiceProvider = getVoiceProvider().describe();
   await captureIf(!ffmpeg, {
     userId: req.user.id,
     source: 'music',
@@ -62,6 +71,7 @@ router.get('/status', async (req, res) => {
     provider,
     maxUploadMb: Math.round(MAX_VIDEO_BYTES / (1024 * 1024)),
     maxVideoSec: MAX_VIDEO_SEC,
+    voice: { provider: voiceProvider, voices: VOICES, maxChars: MAX_TEXT_CHARS, maxUploadMb: Math.round(MAX_VOICE_BYTES / (1024 * 1024)) },
     moods: [...MOOD_PRESETS.map((m) => ({ id: m.id, label: m.label, defaultBpm: m.defaultBpm })), { id: CUSTOM_ID, label: 'Custom prompt' }],
   });
 });
@@ -184,7 +194,10 @@ router.get('/jobs/:id/options/:n/audio', (req, res) => {
 async function ensureMixRender(job, opt, kind, query) {
   const preview = kind === 'preview';
   const settings = normalizeMixSettings({ volume: query.volume, ducking: query.ducking });
-  const outPath = path.join(job.dir, `${kind}_${opt.n}_${Math.round(settings.volume * 100)}_${settings.ducking}.mp4`);
+  // A voiceover changes the render, so its identity (rev), level and start are part of the cache name.
+  const voice = job.voice ? normalizeVoiceSettings({ voiceVolume: query.voiceVolume, voiceStartS: query.voiceStart }, job.durationS) : null;
+  const voiceTag = voice ? `_v${job.voice.rev}_${Math.round(voice.volume * 100)}_${Math.round(voice.startS * 10)}` : '';
+  const outPath = path.join(job.dir, `${kind}_${opt.n}_${Math.round(settings.volume * 100)}_${settings.ducking}${voiceTag}.mp4`);
   const exists = await fs.access(outPath).then(() => true, () => false);
   if (!exists) {
     // Render to a temp name then rename, so two requests for the same render never read a half-written file.
@@ -197,10 +210,12 @@ async function ensureMixRender(job, opt, kind, query) {
       hasAudio: job.hasAudio,
       ...settings,
       preview,
+      voicePath: voice ? job.voice.path : null,
+      voice,
     });
     await fs.rename(partPath, outPath);
   }
-  return { outPath, settings };
+  return { outPath, settings, voice };
 }
 
 function mixedVideoRoute(kind) {
@@ -214,6 +229,83 @@ function mixedVideoRoute(kind) {
     return res.download(outPath, `video-with-music-${stamp()}-option${opt.n + 1}.mp4`);
   }, { source: 'music', routePrefix: 'music' });
 }
+// Voiceover: either an uploaded recording (`voice` file) or a script read by an AI voice
+// (`text`, optional `voice` id and `speed`). One per job — adding another replaces it. It is converted to a
+// known WAV format here; level and start time are chosen at render time (voiceVolume / voiceStart).
+router.post('/jobs/:id/voiceover', aiLimiter, voiceUpload.single('voice'), ffmpegRoute('voiceover', async (req, res) => {
+  const job = getJob(req.params.id, req.user.id);
+  if (!job) return res.status(404).json({ error: 'That music job was not found or has expired — generate again.' });
+  if (job.status !== 'done') return res.status(409).json({ error: 'Wait for the music to finish first.' });
+
+  let srcBuffer;
+  let source;
+  let speech = null;
+  if (req.file?.buffer?.length) {
+    srcBuffer = req.file.buffer;
+    source = 'upload';
+  } else {
+    try {
+      speech = normalizeSpeech({ text: req.body?.text, voice: req.body?.voice, speed: req.body?.speed });
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    const provider = getVoiceProvider();
+    const info = provider.describe();
+    if (!info.configured) return res.status(503).json({ error: info.note || 'AI voices are not set up on this server.' });
+    try {
+      srcBuffer = await provider.speak(speech);
+    } catch (err) {
+      getLogger().error({ err }, '[music/voiceover speak]');
+      return res.status(502).json({ error: String(err.message || 'The voice could not be generated').slice(0, 300) });
+    }
+    source = 'tts';
+  }
+
+  job.voiceRev = (job.voiceRev || 0) + 1; // never reused, even after the voiceover is removed
+  const rev = job.voiceRev;
+  const srcPath = path.join(job.dir, `voice_src_${rev}${source === 'upload' ? audioExt(req.file) : '.audio'}`);
+  const outPath = path.join(job.dir, `voice_${rev}.wav`);
+  await fs.writeFile(srcPath, srcBuffer);
+  try {
+    await videoJobGate.run(() => prepareVoiceover(srcPath, outPath));
+  } catch {
+    await fs.rm(srcPath, { force: true }).catch(() => {});
+    return res.status(400).json({ error: source === 'upload' ? 'That voice file could not be read. Try an MP3, WAV or M4A.' : 'The generated voice could not be processed.' });
+  }
+  const probe = await probeVideo(outPath).catch(() => null);
+  await fs.rm(srcPath, { force: true }).catch(() => {});
+  if (!probe || !(probe.duration > 0.2)) {
+    await fs.rm(outPath, { force: true }).catch(() => {});
+    return res.status(400).json({ error: 'That voice recording has no audio in it.' });
+  }
+
+  if (job.voice?.path) await fs.rm(job.voice.path, { force: true }).catch(() => {});
+  job.voice = {
+    path: outPath,
+    rev,
+    source,
+    durationS: probe.duration,
+    text: speech?.text || null,
+    voiceId: speech?.voice || null,
+  };
+  res.status(201).json(publicJob(job));
+}, { source: 'music', routePrefix: 'music' }));
+
+router.delete('/jobs/:id/voiceover', async (req, res) => {
+  const job = getJob(req.params.id, req.user.id);
+  if (!job) return res.status(404).json({ error: 'That music job was not found or has expired — generate again.' });
+  if (job.voice?.path) await fs.rm(job.voice.path, { force: true }).catch(() => {});
+  job.voice = null;
+  res.json(publicJob(job));
+});
+
+// The voiceover on its own (as the mixer receives it), for a quick listen.
+router.get('/jobs/:id/voiceover/audio', (req, res) => {
+  const job = getJob(req.params.id, req.user.id);
+  if (!job?.voice) return res.status(404).json({ error: 'No voiceover on this job' });
+  res.sendFile(job.voice.path);
+});
+
 router.get('/jobs/:id/options/:n/preview', mixedVideoRoute('preview'));
 router.get('/jobs/:id/options/:n/video', mixedVideoRoute('export'));
 
@@ -223,7 +315,7 @@ router.post('/jobs/:id/options/:n/save', ffmpegRoute('save', async (req, res) =>
   const found = findOption(req, res);
   if (!found) return;
   const { job, opt } = found;
-  const { outPath, settings } = await ensureMixRender(job, opt, 'export', req.body || {});
+  const { outPath, settings, voice } = await ensureMixRender(job, opt, 'export', req.body || {});
   const buffer = await fs.readFile(outPath);
 
   const used = await getUserUsageBytes(req.user.id);
@@ -232,7 +324,7 @@ router.post('/jobs/:id/options/:n/save', ffmpegRoute('save', async (req, res) =>
   }
   const own = job.source === 'upload';
   const item = await saveAsset(req.user.id, buffer, {
-    title: String(req.body?.title || '').trim().slice(0, 120) || `Video with music ${stamp()}`,
+    title: String(req.body?.title || '').trim().slice(0, 120) || `Video with ${voice ? 'music and voiceover' : 'music'} ${stamp()}`,
     tool: 'music',
     mediaType: 'video',
     mimeType: 'video/mp4',
@@ -245,6 +337,13 @@ router.post('/jobs/:id/options/:n/save', ffmpegRoute('save', async (req, res) =>
       volume: settings.volume,
       ducking: settings.ducking,
       option: opt.n + 1,
+      voiceover: voice ? {
+        source: job.voice.source,
+        text: job.voice.text,
+        voice: job.voice.voiceId,
+        volume: voice.volume,
+        startS: voice.startS,
+      } : undefined,
     },
     metadata: { durationS: job.durationS },
   });

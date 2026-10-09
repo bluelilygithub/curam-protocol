@@ -112,6 +112,39 @@ const s = app.listen(0, async () => {
     check('own track: wav exact length', r.status === 200 && Math.abs(ownProbe.duration - ownDone.durationS) < 0.05, `${ownProbe.duration} vs ${ownDone.durationS}`);
     r = await fetch(`${base}/jobs/${ownJob.id}/options/0/video?volume=0.7&ducking=light`);
     check('own track: export mp4', r.status === 200);
+
+    // Voiceover (fake TTS here): script -> voice, mixed over music + the video's own sound; then an uploaded recording.
+    r = await fetch(`${base}/status`);
+    const st2 = await r.json();
+    check('voice: status lists voices', st2.voice?.voices?.length >= 3 && st2.voice.provider.configured);
+    r = await fetch(`${base}/jobs/${ownJob.id}/voiceover`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: '' }) });
+    check('voice: empty script -> 400', r.status === 400, (await r.json()).error);
+    r = await fetch(`${base}/jobs/${ownJob.id}/voiceover`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'Welcome to our summer sale, everything must go this weekend.', voice: 'am_adam' }) });
+    const withVoice = await r.json();
+    check('voice: script accepted', r.status === 201 && withVoice.voice?.source === 'tts' && withVoice.voice.durationS > 1, JSON.stringify(withVoice.voice));
+    r = await fetch(`${base}/jobs/${ownJob.id}/voiceover/audio`);
+    check('voice: audio playable', r.status === 200);
+    for (const [kind, url] of [['preview', 'preview?volume=0.6&ducking=strong&voiceVolume=1.2&voiceStart=1'], ['export', 'video?volume=0.8&ducking=light&voiceStart=0.5'], ['export-noduck', 'video?ducking=off']]) {
+      r = await fetch(`${base}/jobs/${ownJob.id}/options/0/${url}`);
+      const f = path.join(dir, `voice_${kind}.mp4`); fs.writeFileSync(f, Buffer.from(await r.arrayBuffer()));
+      const vp = await probeVideo(f);
+      check(`voice: ${kind} mp4`, r.status === 200 && Math.abs(vp.duration - ownDone.durationS) < 0.15 && vp.hasAudio, `status=${r.status} dur=${vp.duration} ${lufs(f)}`);
+    }
+    const rec = path.join(dir, 'rec.m4a');
+    execFileSync(FF, ['-y', '-f', 'lavfi', '-i', 'sine=f=220:d=2', '-c:a', 'aac', rec], { stdio: 'ignore' });
+    const recForm = new FormData();
+    recForm.append('voice', new Blob([fs.readFileSync(rec)], { type: 'audio/mp4' }), 'rec.m4a');
+    r = await fetch(`${base}/jobs/${ownJob.id}/voiceover`, { method: 'POST', body: recForm });
+    const withRec = await r.json();
+    check('voice: upload replaces script voice', r.status === 201 && withRec.voice?.source === 'upload' && withRec.voice.rev > withVoice.voice.rev, JSON.stringify(withRec.voice));
+    const badForm = new FormData();
+    badForm.append('voice', new Blob(['not audio'], { type: 'audio/mpeg' }), 'bad.mp3');
+    r = await fetch(`${base}/jobs/${ownJob.id}/voiceover`, { method: 'POST', body: badForm });
+    check('voice: unreadable upload -> 400, previous kept', r.status === 400 && (await (await fetch(`${base}/jobs/${ownJob.id}`)).json()).voice?.source === 'upload');
+    r = await fetch(`${base}/jobs/${ownJob.id}/voiceover`, { method: 'DELETE' });
+    check('voice: removed', r.status === 200 && (await r.json()).voice === null);
+    r = await fetch(`${base}/jobs/${ownJob.id}/voiceover/audio`);
+    check('voice: audio gone after remove', r.status === 404);
     await fetch(`${base}/jobs/${ownJob.id}`, { method: 'DELETE' });
 
     const notAudio = new FormData();

@@ -32,6 +32,13 @@ function publicJob(job) {
     durationS: job.durationS,
     hasAudio: job.hasAudio,
     source: job.source,
+    voice: job.voice ? {
+      source: job.voice.source,
+      durationS: job.voice.durationS,
+      text: job.voice.text || null,
+      voice: job.voice.voiceId || null,
+      rev: job.voice.rev,
+    } : null,
     prompt: job.prompt,
     mood: job.mood,
     bpm: job.bpm,
@@ -97,6 +104,7 @@ async function createJob({ userId, videoFile, durationS, hasAudio, promptInfo, p
     hasAudio,
     source: trackFile ? 'upload' : 'generated',
     trackPath,
+    voice: null, // { path, source, durationS, text?, voiceId?, rev } once a voiceover is added
     prompt: promptInfo?.prompt || null,
     mood: promptInfo?.mood || null,
     bpm: promptInfo?.bpm || null,

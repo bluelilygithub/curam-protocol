@@ -92,8 +92,60 @@ function normalizeMixSettings({ volume, ducking } = {}) {
   };
 }
 
+/** Voiceover level (1 = as recorded/generated) and where it starts in the video, in seconds. */
+function normalizeVoiceSettings({ voiceVolume, voiceStartS } = {}, durationS = Infinity) {
+  const start = Number.isFinite(Number(voiceStartS)) ? Number(voiceStartS) : 0;
+  const maxStart = Number.isFinite(durationS) ? Math.max(0, durationS - 0.5) : 3600;
+  return {
+    volume: clamp(Number.isFinite(Number(voiceVolume)) && voiceVolume !== '' && voiceVolume != null ? Number(voiceVolume) : 1, 0, 2),
+    startS: clamp(start, 0, maxStart),
+  };
+}
+
+/**
+ * Mix with a voiceover (third input, `[2:a]`). The voiceover is delayed to `voice.startS`, padded and
+ * cut to the video's length, and drives the ducking: the music dips under it AND under the video's own
+ * sound, and the video's own sound dips (lightly) under the voice so the narration stays clear.
+ */
+function buildVoiceMixFilter({ hasAudio, volume, ducking, voice, durationS }) {
+  const loud = `loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11`;
+  const total = Number(durationS).toFixed(3);
+  const delayMs = Math.round(voice.startS * 1000);
+  const vo = `[2:a]aformat=sample_rates=${SAMPLE_RATE}:channel_layouts=stereo,adelay=${delayMs}:all=1,`
+    + `volume=${voice.volume.toFixed(3)},apad=whole_dur=${total},atrim=0:${total},asetpts=PTS-STARTPTS[vo0]`;
+  const music = `[1:a]volume=${volume.toFixed(3)}[m]`;
+  const duck = DUCKING[ducking];
+  const sc = (src, key, d, out) => `[${src}][${key}]sidechaincompress=threshold=${d.threshold}:ratio=${d.ratio}:attack=${d.attack}:release=${d.release}:makeup=1[${out}]`;
+  const orig = `[0:a]aformat=sample_rates=${SAMPLE_RATE}:channel_layouts=stereo`;
+
+  if (!hasAudio) {
+    if (!duck) return `${vo};${music};[vo0][m]amix=inputs=2:duration=first:normalize=0[mixed];[mixed]${loud}[aout]`;
+    return `${vo};[vo0]asplit=2[vo][sc];${music};${sc('m', 'sc', duck, 'duck')};`
+      + `[vo][duck]amix=inputs=2:duration=first:normalize=0[mixed];[mixed]${loud}[aout]`;
+  }
+  if (!duck) {
+    return `${vo};${orig}[orig];${music};[vo0][orig][m]amix=inputs=3:duration=first:normalize=0[mixed];[mixed]${loud}[aout]`;
+  }
+  return `${vo};[vo0]asplit=3[vo][sc1][sc2];${orig},asplit=2[orig][osc];${music};`
+    + `[sc1][osc]amix=inputs=2:duration=longest:normalize=0[key];${sc('m', 'key', duck, 'duck')};`
+    + `${sc('orig', 'sc2', DUCKING.light, 'origd')};`
+    + `[vo][origd][duck]amix=inputs=3:duration=first:normalize=0[mixed];[mixed]${loud}[aout]`;
+}
+
+/** Convert any uploaded/generated speech file to 44.1 kHz stereo WAV so the mix filter sees a known format. */
+async function prepareVoiceover(inPath, outPath) {
+  await execFileAsync(FFMPEG, [
+    '-y', '-i', inPath, '-vn', '-map', '0:a:0', '-ac', '2', '-ar', String(SAMPLE_RATE), '-c:a', 'pcm_s16le', outPath,
+  ], 300000);
+}
+
 /** filter_complex for the final mix. `hasAudio` = the video already has a soundtrack to duck under. */
-function buildMixFilter({ hasAudio, volume, ducking }) {
+function buildMixFilter({ hasAudio, volume, ducking, voice = null, durationS }) {
+  if (voice) return buildVoiceMixFilter({ hasAudio, volume, ducking, voice, durationS });
+  return buildMusicOnlyMixFilter({ hasAudio, volume, ducking });
+}
+
+function buildMusicOnlyMixFilter({ hasAudio, volume, ducking }) {
   const loud = `loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11`;
   if (!hasAudio) return `[1:a]volume=${volume.toFixed(3)},${loud}[aout]`;
 
@@ -113,11 +165,12 @@ function buildMixFilter({ hasAudio, volume, ducking }) {
  * otherwise the picture is stream-copied (lossless, quick), falling back to a re-encode when the
  * source codec can't go into MP4 as-is.
  */
-async function mixMusicWithVideo({ videoPath, musicPath, outPath, durationS, hasAudio, volume, ducking, preview = false }) {
+async function mixMusicWithVideo({ videoPath, musicPath, outPath, durationS, hasAudio, volume, ducking, preview = false, voicePath = null, voice = null }) {
   const settings = normalizeMixSettings({ volume, ducking });
+  const withVoice = Boolean(voicePath && voice);
   const common = [
-    '-y', '-i', videoPath, '-i', musicPath,
-    '-filter_complex', buildMixFilter({ hasAudio, ...settings }),
+    '-y', '-i', videoPath, '-i', musicPath, ...(withVoice ? ['-i', voicePath] : []),
+    '-filter_complex', buildMixFilter({ hasAudio, ...settings, voice: withVoice ? voice : null, durationS }),
     '-map', '0:v:0', '-map', '[aout]',
     '-c:a', 'aac', '-b:a', '192k', '-ar', String(SAMPLE_RATE),
     '-t', durationS.toFixed(3), '-movflags', '+faststart',
@@ -136,6 +189,6 @@ async function mixMusicWithVideo({ videoPath, musicPath, outPath, durationS, has
 
 module.exports = {
   LOOP_CROSSFADE_S, FADE_IN_S, FADE_OUT_S, TARGET_LUFS, DUCKING,
-  planLoop, fadeTimes, buildFitFilter, buildMixFilter, normalizeMixSettings,
-  fitMusicToDuration, mixMusicWithVideo,
+  planLoop, fadeTimes, buildFitFilter, buildMixFilter, buildVoiceMixFilter, normalizeMixSettings, normalizeVoiceSettings,
+  fitMusicToDuration, prepareVoiceover, mixMusicWithVideo,
 };

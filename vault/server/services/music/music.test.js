@@ -4,7 +4,10 @@
 
 const assert = require('assert');
 const { MOOD_PRESETS, buildMusicPrompt, parseBpm, INSTRUMENTAL_SUFFIX } = require('./musicPrompts');
-const { planLoop, fadeTimes, buildFitFilter, buildMixFilter, normalizeMixSettings, DUCKING } = require('./musicFit');
+const {
+  planLoop, fadeTimes, buildFitFilter, buildMixFilter, normalizeMixSettings, normalizeVoiceSettings, DUCKING,
+} = require('./musicFit');
+const { normalizeSpeech, VOICES, MAX_TEXT_CHARS } = require('./voiceProviders');
 const { isReplicateAudioUrl } = require('./musicProviders');
 
 let passed = 0;
@@ -96,6 +99,34 @@ test('mix settings are clamped to safe values', () => {
   assert.deepStrictEqual(normalizeMixSettings({ volume: '9', ducking: 'rm -rf' }), { volume: 1.5, ducking: 'light' });
   assert.deepStrictEqual(normalizeMixSettings({ volume: -3, ducking: 'off' }), { volume: 0, ducking: 'off' });
   assert.strictEqual(normalizeMixSettings({ volume: 'abc' }).volume, 0.7);
+});
+
+test('voiceover mix filter: delayed, padded to length, drives the ducking', () => {
+  const voice = { volume: 1.2, startS: 2.5 };
+  const ducked = buildMixFilter({ hasAudio: true, volume: 0.7, ducking: 'strong', voice, durationS: 20 });
+  assert.ok(ducked.includes('[2:a]') && ducked.includes('adelay=2500:all=1') && ducked.includes('apad=whole_dur=20.000'));
+  assert.ok(ducked.includes('volume=1.200') && ducked.includes('loudnorm=I=-14'));
+  assert.strictEqual(ducked.match(/sidechaincompress/g).length, 2, 'music and the video sound both dip under the voice');
+  assert.ok(ducked.includes(`threshold=${DUCKING.strong.threshold}`) && ducked.includes(`threshold=${DUCKING.light.threshold}`));
+  const off = buildMixFilter({ hasAudio: true, volume: 0.7, ducking: 'off', voice, durationS: 20 });
+  assert.ok(!off.includes('sidechaincompress') && off.includes('amix=inputs=3'));
+  const silent = buildMixFilter({ hasAudio: false, volume: 0.7, ducking: 'light', voice, durationS: 20 });
+  assert.ok(!silent.includes('[0:a]') && silent.includes('sidechaincompress') && silent.includes('amix=inputs=2'));
+  // no voiceover: unchanged graph, no third input
+  assert.ok(!buildMixFilter({ hasAudio: true, volume: 0.7, ducking: 'light', durationS: 20 }).includes('[2:a]'));
+});
+
+test('voiceover settings and script are clamped to safe values', () => {
+  assert.deepStrictEqual(normalizeVoiceSettings({}, 30), { volume: 1, startS: 0 });
+  assert.deepStrictEqual(normalizeVoiceSettings({ voiceVolume: '9', voiceStartS: '999' }, 30), { volume: 2, startS: 29.5 });
+  assert.deepStrictEqual(normalizeVoiceSettings({ voiceVolume: -1, voiceStartS: -5 }, 30), { volume: 0, startS: 0 });
+  assert.strictEqual(normalizeVoiceSettings({ voiceVolume: 'abc' }, 30).volume, 1);
+  const ok = normalizeSpeech({ text: '  Hello   there \n world ', voice: 'bm_george', speed: '1.1' });
+  assert.deepStrictEqual(ok, { text: 'Hello there world', voice: 'bm_george', speed: 1.1 });
+  assert.strictEqual(normalizeSpeech({ text: 'x', voice: 'not-a-voice', speed: 9 }).voice, VOICES[0].id);
+  assert.strictEqual(normalizeSpeech({ text: 'x', speed: 9 }).speed, 1.3);
+  assert.throws(() => normalizeSpeech({ text: '   ' }), /what the voice should say/);
+  assert.throws(() => normalizeSpeech({ text: 'a'.repeat(MAX_TEXT_CHARS + 1) }), /under/);
 });
 
 test('only Replicate https hosts are accepted as audio download URLs', () => {

@@ -80,19 +80,58 @@ function downloadAudio(url) {
 // (override with MUSIC_REPLICATE_VERSION to pin one).
 const versionCache = new Map();
 
-async function resolveModelVersion(model, token) {
-  if (process.env.MUSIC_REPLICATE_VERSION) return process.env.MUSIC_REPLICATE_VERSION;
+async function resolveModelVersion(model, token, { pinned = '', envName = 'MUSIC_REPLICATE_MODEL', label = 'Music' } = {}) {
+  if (pinned) return pinned;
   if (versionCache.has(model)) return versionCache.get(model);
   const res = await fetch(`https://api.replicate.com/v1/models/${model}`, { headers: { Authorization: `Bearer ${token}` } });
   const data = await res.json().catch(() => ({}));
   if (res.status === 404) {
-    throw new Error(`Music model "${model}" was not found on Replicate — check MUSIC_REPLICATE_MODEL.`);
+    throw new Error(`${label} model "${model}" was not found on Replicate — check ${envName}.`);
   }
-  if (!res.ok) throw new Error(data?.detail || `Could not look up the music model (${res.status})`);
+  if (!res.ok) throw new Error(data?.detail || `Could not look up the ${label.toLowerCase()} model (${res.status})`);
   const id = data?.latest_version?.id;
-  if (!id) throw new Error(`Music model "${model}" has no published version to run.`);
+  if (!id) throw new Error(`${label} model "${model}" has no published version to run.`);
   versionCache.set(model, id);
   return id;
+}
+
+// Create a Replicate prediction for `model`, wait for it, and download the audio it returns.
+// Shared by music generation and text-to-speech (`label` only shapes error messages).
+async function runReplicatePrediction({ model, token, input, label, pinned = '', envName }) {
+  const version = await resolveModelVersion(model, token, { pinned, envName, label });
+  const create = await fetch('https://api.replicate.com/v1/predictions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ version, input }),
+  });
+  let pred = await create.json().catch(() => ({}));
+  if (!create.ok) {
+    // A pinned/cached version can go stale — forget it so the next attempt looks it up again.
+    if (create.status === 404 || create.status === 422) versionCache.delete(model);
+    const detail = typeof pred?.detail === 'string' ? pred.detail : JSON.stringify(pred?.detail || pred?.error || '');
+    throw new Error(detail || `Replicate request failed (${create.status})`);
+  }
+  const pollUrl = pred?.urls?.get || (pred?.id ? `https://api.replicate.com/v1/predictions/${pred.id}` : null);
+  if (!pollUrl || !String(pollUrl).startsWith('https://api.replicate.com/')) {
+    throw new Error('Replicate did not return a prediction to poll');
+  }
+
+  const deadline = Date.now() + POLL_TIMEOUT_MS;
+  while (pred.status !== 'succeeded') {
+    if (pred.status === 'failed' || pred.status === 'canceled') {
+      throw new Error(String(pred.error || `${label} generation ${pred.status}`).slice(0, 300));
+    }
+    if (Date.now() > deadline) throw new Error(`${label} generation timed out — try again`);
+    await sleep(POLL_INTERVAL_MS);
+    const res = await fetch(pollUrl, { headers: { Authorization: `Bearer ${token}` } });
+    const next = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(next?.detail || `Replicate status failed (${res.status})`);
+    pred = next;
+  }
+  const out = pred.output;
+  const url = typeof out === 'string' ? out : (Array.isArray(out) ? out[0] : out?.url);
+  if (!url) throw new Error('Replicate returned no audio');
+  return downloadAudio(url);
 }
 
 function createReplicateProvider() {
@@ -126,40 +165,10 @@ function createReplicateProvider() {
         normalization_strategy: 'loudness',
         seed,
       };
-      const version = await resolveModelVersion(model, token);
-      const create = await fetch('https://api.replicate.com/v1/predictions', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version, input }),
+      return runReplicatePrediction({
+        model, token, input, label: 'Music',
+        pinned: process.env.MUSIC_REPLICATE_VERSION, envName: 'MUSIC_REPLICATE_MODEL',
       });
-      let pred = await create.json().catch(() => ({}));
-      if (!create.ok) {
-        // A pinned/cached version can go stale — forget it so the next attempt looks it up again.
-        if (create.status === 404 || create.status === 422) versionCache.delete(model);
-        const detail = typeof pred?.detail === 'string' ? pred.detail : JSON.stringify(pred?.detail || pred?.error || '');
-        throw new Error(detail || `Replicate request failed (${create.status})`);
-      }
-      const pollUrl = pred?.urls?.get || (pred?.id ? `https://api.replicate.com/v1/predictions/${pred.id}` : null);
-      if (!pollUrl || !String(pollUrl).startsWith('https://api.replicate.com/')) {
-        throw new Error('Replicate did not return a prediction to poll');
-      }
-
-      const deadline = Date.now() + POLL_TIMEOUT_MS;
-      while (pred.status !== 'succeeded') {
-        if (pred.status === 'failed' || pred.status === 'canceled') {
-          throw new Error(String(pred.error || `Music generation ${pred.status}`).slice(0, 300));
-        }
-        if (Date.now() > deadline) throw new Error('Music generation timed out — try again');
-        await sleep(POLL_INTERVAL_MS);
-        const res = await fetch(pollUrl, { headers: { Authorization: `Bearer ${token}` } });
-        const next = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(next?.detail || `Replicate status failed (${res.status})`);
-        pred = next;
-      }
-      const out = pred.output;
-      const url = typeof out === 'string' ? out : (Array.isArray(out) ? out[0] : out?.url);
-      if (!url) throw new Error('Replicate returned no audio');
-      return downloadAudio(url);
     },
   };
 }
@@ -204,4 +213,4 @@ function getMusicProvider() {
   return cached;
 }
 
-module.exports = { getMusicProvider, createReplicateProvider, createFakeProvider, isReplicateAudioUrl, _clearVersionCache: () => versionCache.clear() };
+module.exports = { runReplicatePrediction, getMusicProvider, createReplicateProvider, createFakeProvider, isReplicateAudioUrl, _clearVersionCache: () => versionCache.clear() };

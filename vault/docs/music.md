@@ -57,6 +57,16 @@ Besides generating, the page has a **Use my own track** switch (step 2). Send a 
 - **Save to Saved media:** each option has a button that calls `POST /api/music/jobs/:id/options/:n/save` (`{ title?, volume?, ducking? }`). It renders (or reuses the cached) full-quality export, checks the per-user library quota (`LIBRARY_QUOTA_BYTES`, shared with Video Tools via `videoLibraryService`), and stores it with `tool: 'music'` and a transaction recording source/mood/prompt/volume/ducking. It then shows in Video Tools → Saved media for captioning, joining, annotating etc.
 - **From Video Tools:** the Compose group has **Add music** (opens `/music`, handing over the loaded source video), and every video result has an **Add music** button. The video travels in memory via `client/src/utils/videoHandoff.js` (consumed once; lost on reload) — no re-upload. Both are hidden when the `music` feature is off for the user.
 
+## Voiceover
+
+Once a job is `done`, a **Voiceover** panel appears above the options. One voiceover per job, mixed into every option's preview, export and save:
+
+- **Write a script** — `POST /api/music/jobs/:id/voiceover` `{ text, voice?, speed? }` (JSON). Text ≤ 1500 chars, speed 0.7–1.3, voice from `status.voice.voices`. Read by Kokoro-82M on Replicate (`server/services/music/voiceProviders.js`, same `REPLICATE_API_TOKEN`; per-run cost). English voices only (US/UK), no Australian accent. Env: `VOICE_PROVIDER` (`replicate`, or `fake` for tests — defaults to fake when `MUSIC_PROVIDER=fake`), `VOICE_REPLICATE_MODEL` (default `jaaari/kokoro-82m`; must accept `{text, voice, speed}` and return an audio URL), `VOICE_REPLICATE_VERSION` (optional pin).
+- **Upload a recording** — same route with a multipart `voice` file (≤ 40 MB, MP3/WAV/M4A…). Works without Replicate.
+- The voice is converted to 44.1 kHz stereo WAV. `DELETE` removes it; `GET .../voiceover/audio` returns it alone for listening.
+- **Mix** (`buildVoiceMixFilter` in `musicFit.js`): the voice is delayed to `voiceStart` (s), padded/cut to the video length, scaled by `voiceVolume` (0–2), and becomes the ducking key — the music dips under it and under the video's own sound, and the video's own sound dips lightly under the voice. Ducking "Off" mixes everything flat. Still levelled to -14 LUFS. Renders are cached by voice revision, level and start.
+- A voice that runs past the end of the video is cut off (the UI warns). Saved media items record the voiceover in their transaction.
+
 ## Possible next steps (not built)
 
 Scene-cut detection (PySceneDetect) to place changes on cuts; energy markers on a timeline; stem export; continuation as an alternative extension strategy; saving a chosen result to the Saved media library; a local MusicGen provider for dev machines.
