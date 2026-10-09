@@ -15,8 +15,13 @@ html, body, #root { height: auto; min-height: 100%; }
 .lite-canvas { position: relative; height: min(62vh, 520px); min-height: 280px; display: flex; flex-direction: column; }
 .lite-canvas .drawing { flex: 1; }
 .lite .tab, .lite .btn { min-height: 40px; }
-.lite-cta { width: 100%; font-size: 16px; }
-.lite-ask { padding-bottom: 24px; }
+.lite-ask { padding-bottom: 24px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.lite-ask .lite-sent { align-self: stretch; }
+/* a real button, not a banner: sized to its words, raised, with an arrow, and it presses down */
+.lite .lite-cta { width: auto; min-width: min(100%, 280px); min-height: 52px; padding: 0 28px; font-size: 17px; font-weight: 700; border-radius: 999px; box-shadow: 0 2px 0 rgba(0,0,0,.22), 0 4px 10px rgba(0,0,0,.14); transition: transform 200ms, box-shadow 200ms, background-color 200ms; }
+.lite .lite-cta:hover { transform: translateY(-1px); box-shadow: 0 3px 0 rgba(0,0,0,.22), 0 7px 14px rgba(0,0,0,.16); }
+.lite .lite-cta:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(0,0,0,.22), 0 1px 3px rgba(0,0,0,.2); }
+.lite .lite-cta:focus-visible { outline: 3px solid #1a5fb4; outline-offset: 3px; }
 .lite-sent { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .lite-sent p { margin: 0; }
 @media (max-width: 480px) { .lite { padding: 10px; } .lite-total { font-size: 19px; } .lite-canvas { height: 55vh; } }

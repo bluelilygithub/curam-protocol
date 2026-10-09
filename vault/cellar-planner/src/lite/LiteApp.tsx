@@ -43,6 +43,7 @@ export function LiteApp() {
   const summary = useMemo(() => summaryLine(s, result.bottles), [s, result.bottles]);
   const e = result.project.enclosure;
   const plan = useMemo(() => planView(e, fullRuns(result.project), analysis.racks, { walkwayMm: null, badRuns: badRunIds(analysis.racks.issues), plainLabels: true }), [result, analysis, e]);
+  const sentBox = useRef<HTMLDivElement>(null);
   const racks = useMemo(() => rackFaceView(e, fullRuns(result.project), analysis.racks, rackWall, result.project.bottle, { badRuns: badRunIds(analysis.racks.issues) }), [result, analysis, e, rackWall]);
 
   // keep the address reopenable (?d=), and keep the page around us in step so its enquiry form is always current
@@ -59,6 +60,14 @@ export function LiteApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const closeHelp = (): void => { try { localStorage.setItem(LITE_HELP_KEY, '1'); } catch { /* fine */ } setHelpOpen(false); };
+  // After "Request a quote": when we are embedded, the page around us scrolls to its own enquiry form (cellar-lite-fill.js); on our own, bring the
+  // revealed panel into view so the visitor does not have to hunt for it.
+  useEffect(() => {
+    if (!asked || parentOrigin()) return;
+    const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    sentBox.current?.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'center' });
+  }, [asked]);
+
   /** Shepherd is loaded on first use, so it stays out of the page's first download. */
   const startTour = async (): Promise<void> => {
     const m = await import('./liteTour');
@@ -185,9 +194,9 @@ export function LiteApp() {
 
       <section className="lite-ask" aria-label="Request a quote">
         {!asked ? (
-          <button type="button" className="btn primary lite-cta" data-tour="lt-quote" onClick={() => setAsked(true)} data-testid="lite-quote">Request a quote for this design</button>
+          <button type="button" className="btn primary lite-cta" data-tour="lt-quote" onClick={() => setAsked(true)} data-testid="lite-quote">Request a quote for this design <span aria-hidden="true">&rarr;</span></button>
         ) : (
-          <div className="lite-sent" data-testid="lite-sent">
+          <div className="lite-sent" ref={sentBox} data-testid="lite-sent">
             <p><strong>Your design is ready to send.</strong> {parentOrigin() ? 'It has been added to the enquiry form on this page; check your details there and send it.' : 'Copy it into your enquiry.'}</p>
             <label className="field">
               <span className="field-label">Your design</span>
