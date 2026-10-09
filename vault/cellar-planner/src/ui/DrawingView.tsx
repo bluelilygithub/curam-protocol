@@ -86,14 +86,40 @@ export function DrawingView({ prims, testid, description }: { prims: Prim[]; tes
       touched.current = true;
       redraw();
     });
-    s.on('mousedown touchstart', () => { drag.current = s.getPointerPosition(); });
-    s.on('mousemove touchmove', () => {
+    // one pointer pans; two touches pinch-zoom about their midpoint (and pan with it)
+    const pinch = { d: 0, cx: 0, cy: 0 };
+    const two = (ev: Konva.KonvaEventObject<TouchEvent>): { d: number; cx: number; cy: number } | null => {
+      const t = ev.evt.touches;
+      if (t.length < 2) return null;
+      const r = s.container().getBoundingClientRect();
+      return { d: Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY), cx: (t[0].clientX + t[1].clientX) / 2 - r.left, cy: (t[0].clientY + t[1].clientY) / 2 - r.top };
+    };
+    s.on('mousedown touchstart', (ev) => {
+      const p = two(ev as Konva.KonvaEventObject<TouchEvent>);
+      if (p) { Object.assign(pinch, p); drag.current = null; } else drag.current = s.getPointerPosition();
+    });
+    s.on('mousemove touchmove', (ev) => {
+      const p = ev.evt instanceof TouchEvent ? two(ev as Konva.KonvaEventObject<TouchEvent>) : null;
+      if (p) {
+        ev.evt.preventDefault();
+        if (pinch.d > 0) {
+          const v = view.current, scale = Math.min(5, Math.max(0.01, v.scale * (p.d / pinch.d)));
+          view.current = { scale, ox: p.cx - ((pinch.cx - v.ox) / v.scale) * scale, oy: p.cy - ((pinch.cy - v.oy) / v.scale) * scale };
+          touched.current = true; redraw();
+        }
+        Object.assign(pinch, p);
+        return;
+      }
       const pos = s.getPointerPosition();
       if (!drag.current || !pos) return;
       view.current = { ...view.current, ox: view.current.ox + pos.x - drag.current.x, oy: view.current.oy + pos.y - drag.current.y };
       drag.current = pos; touched.current = true; redraw();
     });
-    s.on('mouseup mouseleave touchend', () => { drag.current = null; });
+    s.on('mouseup mouseleave touchend touchcancel', (ev) => {
+      drag.current = null; pinch.d = 0;
+      // one finger left after a pinch: carry on panning from where it is, without a jump
+      if (ev.evt instanceof TouchEvent && ev.evt.touches.length === 1) { const r = s.container().getBoundingClientRect(), t = ev.evt.touches[0]; drag.current = { x: t.clientX - r.left, y: t.clientY - r.top }; }
+    });
     return () => { ro.disconnect(); s.destroy(); stage.current = null; layer.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

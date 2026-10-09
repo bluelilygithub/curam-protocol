@@ -7,6 +7,8 @@ export interface UiState {
   wall: WallSide;
   /** The wall whose racks the Racks tab shows (seen from inside). */
   rackWall: WallSide;
+  /** Phone layout only: which of the three panes shows (controls, drawing, checks). */
+  pane: 'controls' | 'drawing' | 'checks';
   infoOpen: boolean;
   /** The drawing package form (title block details and the PDF download). */
   packageOpen: boolean;
@@ -14,12 +16,12 @@ export interface UiState {
   designsOpen: boolean;
   /** The one-line message under the header (what just happened: opened, loaded, could not read). */
   notice: string;
-  set(patch: Partial<Pick<UiState, 'tab' | 'wall' | 'rackWall' | 'infoOpen' | 'packageOpen' | 'designsOpen' | 'notice'>>): void;
+  set(patch: Partial<Pick<UiState, 'pane' | 'tab' | 'wall' | 'rackWall' | 'infoOpen' | 'packageOpen' | 'designsOpen' | 'notice'>>): void;
 }
 export type UiStore = StoreApi<UiState>;
 
 export const INFO_KEY = 'cellar-planner:info-seen:v1';
 
 export function createUiStore(wall: WallSide = 'SOUTH'): UiStore {
-  return createStore<UiState>((set) => ({ tab: 'plan', wall, rackWall: 'NORTH', infoOpen: false, packageOpen: false, designsOpen: false, notice: '', set: (patch) => set(patch) }));
+  return createStore<UiState>((set) => ({ tab: 'plan', wall, rackWall: 'NORTH', pane: 'drawing', infoOpen: false, packageOpen: false, designsOpen: false, notice: '', set: (patch) => set(patch) }));
 }

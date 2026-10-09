@@ -32,6 +32,7 @@ export function NumField({ label, value, onCommit, nullable = false, unit = 'mm'
           onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
         {unit && <span className="unit">{unit}</span>}
       </span>
+      {hint && <small className="field-hint" aria-hidden="true">{hint}</small>}
       {bad && <span className="field-err">Enter a whole number of {min} or more{nullable ? ', or leave blank' : ''}.</span>}
     </label>
   );
@@ -42,6 +43,7 @@ export function TextField({ label, value, onChange, hint, testid, type = 'text',
     <label className="field" title={hint}>
       <span className="field-label">{label}</span>
       <input ref={inputRef} type={type} value={value} aria-label={label} data-testid={testid} maxLength={200} onChange={(e) => onChange(e.target.value)} />
+      {hint && <small className="field-hint" aria-hidden="true">{hint}</small>}
     </label>
   );
 }
@@ -56,6 +58,7 @@ export function SelectField<T extends string>({ label, value, options, onChange,
         {blank !== undefined && <option value="">{blank}</option>}
         {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
       </select>
+      {hint && <small className="field-hint" aria-hidden="true">{hint}</small>}
     </label>
   );
 }
@@ -65,6 +68,7 @@ export function CheckField({ label, checked, onChange, testid, hint }: { label: 
     <label className="field check" title={hint}>
       <input type="checkbox" checked={checked} data-testid={testid} onChange={(e) => onChange(e.target.checked)} />
       <span>{label}</span>
+      {hint && <small className="field-hint" aria-hidden="true">{hint}</small>}
     </label>
   );
 }

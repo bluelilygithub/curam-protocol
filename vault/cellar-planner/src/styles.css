@@ -16,7 +16,7 @@ body { background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans
 .tab.on { background: var(--primary); color: #fff; border-color: var(--primary); } .tab.small, .btn.small { padding: 3px 9px; font-size: 12px; }
 .hint { margin-left: auto; color: var(--muted); font-size: 12px; }
 .drawing { position: relative; flex: 1; min-height: 0; background: #fff; }
-.drawing-canvas { position: absolute; inset: 0; } .drawing .fit { position: absolute; right: 10px; top: 10px; }
+.drawing-canvas { position: absolute; inset: 0; touch-action: none; } .drawing .fit { position: absolute; right: 10px; top: 10px; }
 .foot { margin: 0; padding: 4px 10px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); background: var(--surface); text-align: center; letter-spacing: .02em; }
 .section-toggle { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 6px; width: 100%; cursor: pointer; transition: opacity 200ms; } .section-toggle:hover { opacity: .7; } .section-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; } .section-toggle .chev { width: 10px; }
 .section-collapse { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 350ms ease, opacity 350ms ease; } .section-inner { min-height: 0; overflow: hidden; }
@@ -122,3 +122,24 @@ body { background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans
 .toolbar .conflict { margin: 0 12px 8px; }
 .toolbar-note { margin: 0; padding: 0 14px 8px; color: var(--muted); }
 .toolbar-row > .btn { background: var(--bg); border-color: var(--border); flex: none; }
+
+/* Phone layout (under 700px): one pane at a time, chosen by the Controls / Drawing / Checks tabs. Wider screens never see the tabs. */
+.panes { display: none; }
+@media (max-width: 700px) {
+  .app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 0; }
+  .panes { display: flex; gap: 6px; padding: 6px 10px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .panes .tab { flex: 1; min-height: var(--ctl); }
+  .left, .right, .stage { flex: 1; min-height: 0; border: 0; width: 100%; }
+  .app[data-pane="controls"] .stage, .app[data-pane="controls"] .right,
+  .app[data-pane="drawing"] .left, .app[data-pane="drawing"] .right,
+  .app[data-pane="checks"] .left, .app[data-pane="checks"] .stage { display: none; }
+  .toolbar .name { width: 150px; }
+  .tabs { flex-wrap: wrap; } .tabs .hint { display: none; }
+  .grid { grid-template-columns: 1fr; }
+  .foot { font-size: 10px; }
+}
+
+/* Touch has no hover, so a field's explanation shows under the field you are in (the tooltip itself stays for mouse and keyboard). */
+.field-hint { display: none; color: var(--muted); font-size: 11px; line-height: 1.35; }
+.field.check { flex-wrap: wrap; } .field.check .field-hint { flex-basis: 100%; }
+@media (pointer: coarse) { .field:focus-within .field-hint { display: block; } }

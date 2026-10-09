@@ -572,6 +572,64 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
   await ctx6.close();
 }
 
+// phone and tablet: one pane at a time on a phone, no sideways scroll, touch pan and pinch on the drawing
+{
+  const axeRun = (pg) => pg.evaluate(async () => (await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } })).violations.map((v) => v.id + ' x' + v.nodes.length));
+  const ctx7 = await browser.newContext({ viewport: { width: 390, height: 800 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+  await ctx7.addInitScript(() => { try { localStorage.setItem('cellar-planner:info-seen:v1', '1'); } catch { /* ignore */ } });
+  const p7 = autoOpen(await ctx7.newPage());
+  const errs7 = [];
+  p7.on('pageerror', (e) => errs7.push(e.message));
+  await p7.goto(URL);
+  await p7.getByTestId('plan-canvas').waitFor();
+  await p7.waitForTimeout(500);
+  const overflow = () => p7.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  const shown = (id) => p7.evaluate((t) => { const el = document.querySelector(`[data-testid="${t}"]`); return !!el && el.getClientRects().length > 0; }, id);
+  check('phone: the Controls / Drawing / Checks tabs show, and the drawing is the first pane', (await shown('panes')) && (await shown('plan-canvas')) && !(await shown('left')));
+  check('phone: no sideways page scroll on the drawing pane', (await overflow()) <= 0, String(await overflow()));
+  const box = await p7.getByTestId('plan-canvas').boundingBox();
+  check('phone: the drawing is at least 300px wide', box.width >= 300, String(box.width));
+  // pinch with two touch points through the DevTools protocol
+  const cdp = await ctx7.newCDPSession(p7);
+  const touch = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+  const scale0 = Number(await p7.getByTestId('plan-canvas').getAttribute('data-scale'));
+  await touch('touchStart', [[cx - 40, cy], [cx + 40, cy]]);
+  for (let i = 1; i <= 6; i++) await touch('touchMove', [[cx - 40 - i * 12, cy], [cx + 40 + i * 12, cy]]);
+  await touch('touchEnd', []);
+  const scale1 = Number(await p7.getByTestId('plan-canvas').getAttribute('data-scale'));
+  check('phone: a two-finger spread zooms the drawing in', scale1 > scale0 * 1.5, `${scale0} -> ${scale1}`);
+  await touch('touchStart', [[cx, cy]]);
+  for (let i = 1; i <= 5; i++) await touch('touchMove', [[cx + i * 15, cy]]);
+  await touch('touchEnd', []);
+  check('phone: one finger pans the drawing without scrolling the page', (await p7.evaluate(() => window.scrollY)) === 0 && Number(await p7.getByTestId('plan-canvas').getAttribute('data-scale')) === scale1);
+  await p7.getByTestId('plan-fit').click();
+  check('phone: Fit brings the drawing back', Math.abs(Number(await p7.getByTestId('plan-canvas').getAttribute('data-scale')) - scale0) < 1e-6);
+  await p7.getByTestId('pane-controls').click();
+  check('phone: the Controls tab shows the controls and hides the drawing', (await shown('left')) && !(await shown('plan-canvas')) && (await overflow()) <= 0, String(await overflow()));
+  await p7.getByTestId('pane-checks').click();
+  check('phone: the Checks tab shows the checks', (await shown('total')) && !(await shown('left')));
+  await p7.getByTestId('pane-controls').click();
+  await p7.addScriptTag({ path: join(import.meta.dirname, '..', 'node_modules', 'axe-core', 'axe.min.js') });
+  const mScan = await axeRun(p7);
+  check('accessibility scan, phone size: no violations', mScan.length === 0, mScan.join(', '));
+  check('no page errors on the phone', errs7.length === 0, errs7.join(' | '));
+  await ctx7.close();
+
+  const ctx8 = await browser.newContext({ viewport: { width: 820, height: 1180 }, hasTouch: true, isMobile: true });
+  await ctx8.addInitScript(() => { try { localStorage.setItem('cellar-planner:info-seen:v1', '1'); } catch { /* ignore */ } });
+  const p8 = autoOpen(await ctx8.newPage());
+  await p8.goto(URL);
+  await p8.getByTestId('plan-canvas').waitFor();
+  await p8.waitForTimeout(500);
+  check('tablet: all three areas show together and the tabs do not', await p8.evaluate(() => { const v = (t) => document.querySelector(`[data-testid="${t}"]`)?.getClientRects().length > 0; return v('left') && v('plan-canvas') && v('total') && !v('panes'); }));
+  check('tablet: no sideways page scroll', (await p8.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)) <= 0);
+  await p8.addScriptTag({ path: join(import.meta.dirname, '..', 'node_modules', 'axe-core', 'axe.min.js') });
+  const tScan = await axeRun(p8);
+  check('accessibility scan, tablet size: no violations', tScan.length === 0, tScan.join(', '));
+  await ctx8.close();
+}
+
 check('no page errors', errors.length === 0, errors.join(' | '));
 await browser.close();
 console.log(failed ? `${failed} check(s) FAILED` : 'All checks passed');

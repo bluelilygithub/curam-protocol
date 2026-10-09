@@ -26,6 +26,7 @@ export function App({ store, ui, designs }: { store: AppStore; ui: UiStore; desi
   const tab = useStore(ui, (s) => s.tab);
   const wall = useStore(ui, (s) => s.wall);
   const rackWall = useStore(ui, (s) => s.rackWall);
+  const pane = useStore(ui, (s) => s.pane);
   const msg = useStore(ui, (s) => s.notice);
   const setMsg = (notice: string): void => ui.getState().set({ notice });
   const file = useRef<HTMLInputElement>(null);
@@ -74,7 +75,7 @@ export function App({ store, ui, designs }: { store: AppStore; ui: UiStore; desi
 
   return (
     <StoreContext.Provider value={store}>
-      <div className="app">
+      <div className="app" data-pane={pane}>
         <header className="toolbar" role="toolbar" aria-label="Main toolbar" data-tour="cp-project">
           <div className="toolbar-row">
             <div className="brand">
@@ -110,6 +111,11 @@ export function App({ store, ui, designs }: { store: AppStore; ui: UiStore; desi
           <ConflictBar designs={designs} />
           {msg && <p className="toolbar-note" role="status" data-testid="status">{msg}</p>}
         </header>
+        <nav className="panes" aria-label="Show" data-testid="panes">
+          {([['controls', 'Controls', 'The settings: enclosure, racks and runs.'], ['drawing', 'Drawing', 'The plan, elevation and racks drawings.'], ['checks', `Checks${analysis.racks.issues.length ? ` (${analysis.racks.issues.length})` : ''}`, 'What is wrong or worth a look, with the fix for each.']] as const).map(([k, label, tip]) => (
+            <button type="button" key={k} title={tip} aria-pressed={pane === k} className={`tab${pane === k ? ' on' : ''}`} onClick={() => ui.getState().set({ pane: k })} data-testid={`pane-${k}`}>{label}</button>
+          ))}
+        </nav>
         <aside className="left" data-testid="left"><Accordion initial="Enclosure"><EnclosurePanel /><RackPanel /><RunsPanel /></Accordion></aside>
         <main className="stage">
           <div className="tabs" role="group" aria-label="Drawing" data-tour="cp-tabs">
@@ -118,7 +124,7 @@ export function App({ store, ui, designs }: { store: AppStore; ui: UiStore; desi
             <button type="button" aria-pressed={tab === 'racks'} className={`tab${tab === 'racks' ? ' on' : ''}`} title="The inside face of one wall with every bottle drawn at its true size and spacing, so you can see the rows and the count. Racks that cannot be built are red and not counted." onClick={() => ui.getState().set({ tab: 'racks' })} data-testid="tab-racks">Racks</button>
             {tab === 'elevation' && WALLS.map(([w, name]) => <button type="button" key={w} aria-pressed={wall === w} className={`tab small${wall === w ? ' on' : ''}`} title={`Show the ${name.toLowerCase()} wall as seen from outside.`} onClick={() => ui.getState().set({ wall: w })} data-testid={`wall-${w}`}>{name}</button>)}
             {tab === 'racks' && WALLS.map(([w, name]) => <button type="button" key={w} aria-pressed={rackWall === w} className={`tab small${rackWall === w ? ' on' : ''}`} title={`Show the racks on the ${name.toLowerCase()} wall, seen from inside.`} onClick={() => ui.getState().set({ rackWall: w })} data-testid={`rackwall-${w}`}>{name}</button>)}
-            <span className="hint">{tab === 'plan' ? 'From above. Drag to move, scroll to zoom.' : tab === 'racks' ? `The ${rackWall.toLowerCase()} wall seen from inside, bottles end-on.` : `The ${wall.toLowerCase()} wall seen from outside.`}</span>
+            <span className="hint">{tab === 'plan' ? 'From above. Drag to move, scroll or pinch to zoom.' : tab === 'racks' ? `The ${rackWall.toLowerCase()} wall seen from inside, bottles end-on.` : `The ${wall.toLowerCase()} wall seen from outside.`}</span>
           </div>
           {tab === 'plan' ? <DrawingView key="plan" prims={plan} testid="plan" description={planText} /> : tab === 'racks' ? <DrawingView key={`racks-${rackWall}`} prims={racks} testid="racks" description={rackText} /> : <DrawingView key={`elev-${wall}`} prims={elevation} testid="elevation" description={elevText} />}
           <p className="foot">PRELIMINARY DESIGN ONLY: FINAL SITE MEASURE REQUIRED PRIOR TO FABRICATION</p>

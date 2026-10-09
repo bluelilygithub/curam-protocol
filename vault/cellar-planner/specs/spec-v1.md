@@ -243,13 +243,13 @@ M1 (built) and M2a (built, product-agnostic: commands, undo, store, file format,
 
 ## 19. The screens (built, standalone)
 
-Run with `npm run dev` inside `cellar-planner/` (port 5176); `npm run e2e` drives it in Chrome. **It is not yet wired into Vault's build, nav or feature flags**: that integration is later, in its own commits, with the other planners' tests.
+Run with `npm run dev` inside `cellar-planner/` (port 5176); `npm run e2e` drives it in Chrome. **It is wired into Vault** (root build via `scripts/buildCellarPlanner.js`, nav item, Settings tour card, feature flag `cellarPlanner`, default off); see `docs/cellar-planner.md`.
 
 - **Plan** (from above), **Elevation** (any wall, seen from outside) and **Racks** (the inside face of a wall with every bottle drawn at true size) are drawn from pure primitives (`src/views/`), so the shapes are tested without a browser and can feed the drawing package later. Drag to pan, scroll to zoom, Fit to reset.
 - **Panels** edit the enclosure (outer size, ceiling and floor build-up, per-wall kind and build-up), the door, the header parts, the rack specification, the project's minimum walkway, and the rack runs (add, edit, fill a wall). Every edit is one undo step.
 - **Blank means not set, never zero**: rack fields and the walkway minimum start blank and say "not set"; the bottle total reads "not set (n runs without rack values)" until every run is complete; a required number cannot be blanked and a bad number is refused with a message.
 - **Checks** list errors, then warnings, then information, each with its fix. **Advisory guidance** is separate and always carries the sign-off wording. The foot of every drawing says `PRELIMINARY DESIGN ONLY: FINAL SITE MEASURE REQUIRED PRIOR TO FABRICATION`.
-- **Saving:** Save and Open a `.cellar.json` file (so the plan can be sent to someone to look at), plus a draft kept in the browser. Not yet: saving to the Vault account, dragging runs on the plan, free-standing runs, the drawing package PDF.
+- **Saving:** Save and Open a `.cellar.json` file (so the plan can be sent to someone to look at), plus designs saved to the Vault account (`/api/cellar-projects`, with a browser fallback) and the drawing package PDF. Not yet: dragging runs on the plan, free-standing runs.
 - **Help:** a first-visit guide (the (i) modal), a 13-step Shepherd tour (the compass; `?tour=1`; key `vault_tour_cellar_planner_completed`) and a tooltip on every control, as in the other planners; see `docs/cellar-planner.md`.
 - **Tests:** `tests/app.test.ts` (model, store, file format), `tests/help.test.ts` (tour hooks, guide, tooltip coverage) and `scripts/e2e.mjs` (the screens, in Chrome: blanks and "not set", the 160 and 480 bottle totals from invented rack values, fill a wall, walkway warning, run error, undo and redo, inward door, bad numbers, save/open/draft).
 
