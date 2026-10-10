@@ -19,6 +19,8 @@ export interface RackType {
   bottlesPerRow: number | null; bottlesPerRowLabelForward: number | null; rowsPerUnit: number | null;
   pricePerUnit: number | null; confirmed: boolean;
 }
+/** Who the staff quote PDF is from and the owner's own terms (staff only: the public answer never carries them). */
+export interface QuoteSettings { businessName: string; details: string; terms: string; validityDays: number; gstNote: string }
 export interface LiteConfig {
   version: 1;
   promise: string;
@@ -35,6 +37,7 @@ export interface LiteConfig {
   rack: { unitWidthMm: number; unitHeightMm: number; unitDepthMm?: number; rowPitchMm?: number; postsPerUnit?: number; bottlesPerRow?: number; rowsPerUnit?: number };
   doors: { singleMm: number; doubleMm: number };
   pricing: LitePricing;
+  quote: QuoteSettings;
   presets: LitePreset[];
 }
 
@@ -55,6 +58,7 @@ export const DEFAULT_CONFIG: LiteConfig = {
     show: false, currency: '$', fixed: null, perUnit: null, doorSingle: null, doorDouble: null, rangePct: 15, roundTo: 100,
     note: 'A guide only. The final price depends on a site measure and the finishes you choose.',
   },
+  quote: { businessName: '', details: '', terms: '', validityDays: 30, gstNote: '' },
   presets: [
     { id: 'small', name: 'Small cellar', widthMm: 1800, depthMm: 1500, heightMm: 2400, doorStyle: 'SINGLE' },
     { id: 'walk-in', name: 'Walk-in cellar', widthMm: 2750, depthMm: 1565, heightMm: 2150, doorStyle: 'SINGLE' },
@@ -64,13 +68,16 @@ export const DEFAULT_CONFIG: LiteConfig = {
 
 const R = {
   unitWidthMm: [400, 1200], unitHeightMm: [1000, 3000], unitDepthMm: [150, 1000], rowPitchMm: [60, 300], postsPerUnit: [1, 6], bottlesPerRow: [1, 40], rowsPerUnit: [1, 60], doorSingleMm: [700, 1300], doorDoubleMm: [1200, 2400],
-  price: [0, 1000000], rangePct: [0, 50], roomWidthMm: [1000, 8000], roomDepthMm: [1000, 8000], roomHeightMm: [1800, 3200],
+  price: [0, 1000000], rangePct: [0, 50], roomWidthMm: [1000, 8000], roomDepthMm: [1000, 8000], roomHeightMm: [1800, 3200], quoteValidityDays: [1, 365],
 } as const;
 const ROUND_TO = [1, 10, 50, 100, 500, 1000];
 const MAX_RACK_TYPES = 8;
 
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown, max: number): string => String(v).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+/** Multi-line text: control characters other than line breaks are removed, each line tidied, blank runs collapsed. */
+const multiline = (v: unknown, max: number): string => String(v).replace(/\r\n?/g, '\n').replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, ' ')
+  .split('\n').map((l) => l.replace(/[ \t]+/g, ' ').trim()).join('\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, max);
 const int = (v: unknown, [lo, hi]: readonly [number, number], fallback: number): number => {
   if (v === undefined || v === null || v === '') return fallback;
   const n = Number(v);
@@ -118,6 +125,7 @@ export function normaliseConfig(raw: unknown): LiteConfig {
   const src = isObj(raw) ? raw : {};
   const doors = isObj(src.doors) ? src.doors : {};
   const p = isObj(src.pricing) ? src.pricing : {};
+  const q = isObj(src.quote) ? src.quote : {};
   const T0 = D.rackTypes[0]!;
   const slug = (t: unknown): string => text(t ?? '', 40).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
   const parseType = (t: unknown, n: number): RackType | null => {
@@ -183,6 +191,13 @@ export function normaliseConfig(raw: unknown): LiteConfig {
     rackTypes, defaultRackType, rack,
     doors: { singleMm: int(doors.singleMm, R.doorSingleMm, D.doors.singleMm), doubleMm: int(doors.doubleMm, R.doorDoubleMm, D.doors.doubleMm) },
     pricing,
+    quote: {
+      businessName: q.businessName === undefined ? D.quote.businessName : text(q.businessName, 80),
+      details: q.details === undefined ? D.quote.details : multiline(q.details, 300),
+      terms: q.terms === undefined ? D.quote.terms : multiline(q.terms, 1200),
+      validityDays: int(q.validityDays, R.quoteValidityDays, D.quote.validityDays),
+      gstNote: q.gstNote === undefined ? D.quote.gstNote : text(q.gstNote, 120),
+    },
     presets,
   };
 }

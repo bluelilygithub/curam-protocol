@@ -2,6 +2,7 @@
 // Planner's toolbar; `close` keeps its older 24-unit drawing.
 const G20 = {
   info: ['M3 10a7 7 0 1 0 14 0a7 7 0 1 0-14 0', 'M10 9v5m0-7.5h.01'],
+  calc: ['M5 2h10v16H5z', 'M7.5 5h5v2.5h-5z', 'M7.5 11h.01M10 11h.01M12.5 11h.01M7.5 14h.01M10 14h.01M12.5 14h.01'],
   compass: ['M3 10a7 7 0 1 0 14 0a7 7 0 1 0-14 0', 'M12.8 7.2l-1.6 4-4 1.6 1.6-4z'],
   undo: ['M7 4L3 8l4 4M3 8h8a5 5 0 010 10H8'],
   redo: ['M13 4l4 4-4 4m4-4H9a5 5 0 000 10h3'],

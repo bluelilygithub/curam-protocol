@@ -28,6 +28,8 @@ describe('the browser and the server agree on what a setting is', () => {
       { rackTypes: [{ name: 'A', unitWidthMm: 50, unitDepthMm: 100, rowPitchMm: 5, postsPerUnit: 0, bottlesPerRow: 99, rowsPerUnit: 0, orientation: 'sideways', pricePerUnit: -1, confirmed: 'yes' }] },
       { rackTypes: [{ name: 'A', unitDepthMm: '', rowPitchMm: null, bottlesPerRow: '' }, { name: 'A' }, { id: 'A B!', name: 'A' }], defaultRackType: 'nope' },
       { rackTypes: [{ unitWidthMm: 600 }, 'x', null, { name: 'Ok' }] },
+      { quote: { businessName: '  Acme\u0000 Wine ', details: '1 High St\r\n\r\n\r\nMelb  3000\u0007', terms: 'Line1\n\n\n\nLine2\t x', validityDays: '45', gstNote: 'Incl GST' } },
+      { quote: { validityDays: 9999, businessName: 5 } }, { quote: 'x' }, { quote: { terms: 'a'.repeat(2000), details: 'b'.repeat(500) } },
       { rackTypes: [] }, { rackTypes: 'x' }, { rackTypes: Array.from({ length: 12 }, (_, i) => ({ name: 'R' + i })) },
       { rack: { unitWidthMm: 750, unitHeightMm: 2200 }, pricing: { show: true, perUnit: 1200 } },
       { accent: '#1f3a5f' }, { accent: '#FFFFFF' }, { accent: 'red' }, { accent: '#4a5a2a;x' }, { accent: '#cc785c' }, { accent: 12 },

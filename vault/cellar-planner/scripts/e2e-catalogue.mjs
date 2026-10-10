@@ -161,6 +161,52 @@ const project = (page) => page.evaluate(() => window.cellar.store.getState().pro
   await page.context().close();
 }
 
+// ================================================================ the help: how the numbers are calculated
+{
+  const { page, errors, ctx } = await open();
+  const scan = async (label) => {
+    await page.addScriptTag({ path: join(import.meta.dirname, '..', 'node_modules', 'axe-core', 'axe.min.js') });
+    const v = await page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } })).violations.map((x) => `${x.id} x${x.nodes.length}: ${x.nodes[0].target.join(' ')}`));
+    check(`accessibility scan, ${label}: no violations`, v.length === 0, v.join(' | '));
+  };
+  await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new globalThis.URL(URL).origin });
+  await page.getByTestId('sample').click(); await page.waitForTimeout(300);
+  await (await reveal(page, 'rack-type')).selectOption('standard-600');
+  await (await reveal(page, 'fill-NORTH')).click(); await page.waitForTimeout(200);
+  await page.getByTestId('fill-SOUTH').click(); await page.waitForTimeout(300);
+  const onScreenBottles = await page.getByTestId('total').innerText();
+  const onScreenPrice = await (await reveal(page, 'price-total')).innerText();
+  check('the calculator button is in the header with a tooltip', /How the numbers are calculated/.test(await page.getByTestId('calc-open').getAttribute('title')));
+  await page.getByTestId('calc-open').click();
+  await page.getByTestId('calc-modal').waitFor();
+  const ids = await page.locator('[data-calc]').evaluateAll((els) => els.map((e) => e.getAttribute('data-calc')));
+  check('every section is there, in order', JSON.stringify(ids) === JSON.stringify(['inside', 'door', 'glass', 'capacity', 'depth', 'runs', 'price', 'trust']), JSON.stringify(ids));
+  const cap = await page.getByTestId('calc-capacity').innerText();
+  const bottleNum = onScreenBottles.match(/\d+/)[0];
+  check('the capacity section reaches the same bottle total as the Checks panel', new RegExp(`Total bottles[\\s\\S]*${bottleNum} bottles`).test(cap), `${onScreenBottles} / ${cap.slice(0, 300)}`);
+  check('and shows rows x bottles per row x units for a run', /20 × 7 × \d+/.test(cap), cap.slice(0, 400));
+  const price = await page.getByTestId('calc-price').innerText();
+  check('the price section reaches the same total as the Price panel', price.includes(onScreenPrice), `${onScreenPrice} / ${price.slice(0, 300)}`);
+  check('the inside size working uses this design\'s build-ups', /2850 − \d+ − \d+/.test(await page.getByTestId('calc-inside').innerText()));
+  if (out) { await page.screenshot({ path: join(out, 'calc-modal.png') }); }
+  await page.getByTestId('calc-jump-price').click();
+  check('a section button jumps to that section (it takes focus)', await page.evaluate(() => document.activeElement?.getAttribute('data-calc')) === 'price');
+  await scan('how the numbers are calculated');
+  await page.getByTestId('calc-copy').click();
+  await page.waitForTimeout(300);
+  const clip = await page.evaluate(() => navigator.clipboard.readText());
+  check('Copy as text puts the explanation on the clipboard, and says so', /How the numbers were calculated/.test(clip) && clip.includes(`= ${bottleNum} bottles`) && /Copied/.test(await page.getByTestId('calc-copied').innerText()), clip.slice(0, 200));
+  await page.keyboard.press('Escape');
+  check('Escape closes it', (await page.getByTestId('calc-modal').count()) === 0);
+  check('and focus returns to the calculator button', await page.evaluate(() => document.activeElement?.getAttribute('data-testid')) === 'calc-open');
+  // it follows the design: change the unit width and the explanation changes with it
+  await (await reveal(page, 'rack-width')).fill('650'); await page.getByTestId('rack-width').press('Enter'); await page.waitForTimeout(200);
+  await page.getByTestId('calc-open').click();
+  check('it follows the design: after editing the unit width the working uses the new number', /650 ÷ 85/.test(await page.getByTestId('calc-capacity').innerText()), (await page.getByTestId('calc-capacity').innerText()).slice(0, 300));
+  check('no script errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
 // ================================================================ Vault unreachable, but seen before: the remembered catalogue
 {
   const first = await open();

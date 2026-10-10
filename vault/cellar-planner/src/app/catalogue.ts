@@ -1,6 +1,6 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { readVaultToken, type ReadableStorage } from '@planner-core/library/library';
-import { normaliseConfig, type LitePricing, type RackType } from '../lite/config';
+import { normaliseConfig, type LitePricing, type QuoteSettings, type RackType } from '../lite/config';
 import type { RackSpec } from '../rack';
 import { ESTIMATE_FIELDS, type AppProject } from './model';
 
@@ -14,6 +14,8 @@ export interface Catalogue {
   defaultRackType: string;
   doors: { singleMm: number; doubleMm: number };
   pricing: LitePricing;
+  /** Who the staff quote is from and the owner's terms. */
+  quote: QuoteSettings;
 }
 
 export const CATALOGUE_URL = '/api/cellar-planner/catalogue';
@@ -24,8 +26,8 @@ export function parseCatalogue(raw: unknown): Catalogue | null {
   const o = raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
   const c = o && o.catalogue !== null && typeof o.catalogue === 'object' ? (o.catalogue as Record<string, unknown>) : o;
   if (!c || !Array.isArray(c.rackTypes) || c.rackTypes.length === 0) return null;
-  const cfg = normaliseConfig({ rackTypes: c.rackTypes, defaultRackType: c.defaultRackType, doors: c.doors, pricing: c.pricing });
-  return { rackTypes: cfg.rackTypes, defaultRackType: cfg.defaultRackType, doors: cfg.doors, pricing: cfg.pricing };
+  const cfg = normaliseConfig({ rackTypes: c.rackTypes, defaultRackType: c.defaultRackType, doors: c.doors, pricing: c.pricing, quote: c.quote });
+  return { rackTypes: cfg.rackTypes, defaultRackType: cfg.defaultRackType, doors: cfg.doors, pricing: cfg.pricing, quote: cfg.quote };
 }
 
 export const typeById = (c: Catalogue | null, id: string | undefined): RackType | null => (c && id ? c.rackTypes.find((r) => r.id === id) ?? null : null);

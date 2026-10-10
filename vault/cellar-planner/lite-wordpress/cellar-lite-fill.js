@@ -8,9 +8,12 @@
  *    bottle count, the guide price and a quote button while the planner is on screen, and (c) passes the planner's anonymous usage events to Google
  *    Tag Manager (window.dataLayer), if the site has it.
  *  - Contact page: it finds the design in the address, writes it into the form's message box, scrolls to the form and puts the cursor in the
- *    first field. The visitor still presses the form's own Send button; nothing is sent by this script.
+ *    first field. The visitor still presses the form's own Send button. When they do, and only when the message holds a planner design, this
+ *    script ALSO sends a copy of the enquiry (name, email, phone, message, the design) to the business's own Vault, which files it in the CRM.
+ *    That is an extra copy: the form's own email is untouched, and if Vault is unreachable nothing is lost or delayed. Set COPY_TO_VAULT to false
+ *    to switch the copy off.
  *
- * No personal data passes through here: the planner only knows the room size, door wall, bottle style and bottle count.
+ * The planner itself passes no personal data here: it only knows the room size, door wall, bottle style and bottle count.
  */
 (function () {
   'use strict';
@@ -26,6 +29,13 @@
   var FORM_SELECTOR = '#cw-contact-form';
   var MESSAGE_FIELD = '#cw-contact-message';
   var FIRST_FIELD = '#cw-contact-name';
+  // 3b. The copy of the enquiry to Vault. VAULT_ENQUIRY_URL is Vault's public address plus /api/cellar-lite/enquiry. The three field selectors are the
+  //     contact form's name, email and phone boxes (phone is optional: '' or a selector that matches nothing is fine; name and email are needed).
+  var COPY_TO_VAULT = true;
+  var VAULT_ENQUIRY_URL = 'https://curam-vault.up.railway.app/api/cellar-lite/enquiry';
+  var NAME_FIELD = '#cw-contact-name';
+  var EMAIL_FIELD = '#cw-contact-email';
+  var PHONE_FIELD = '#cw-contact-phone';
   // 4. Planner page extras. Switch any off by setting it to false.
   var AUTO_HEIGHT = true;       // size the planner's frame to its content (no scroll bar inside the page)
   var STICKY_BAR = true;        // phone-width screens: a quote bar at the bottom while the planner is on screen
@@ -198,6 +208,59 @@
     log('message box filled; scrolled to the form');
     // tidy the address so a refresh or a shared link does not carry the design along
     try { window.history.replaceState(null, '', window.location.pathname + '#cw-contact-form'); } catch (e) { /* fine */ }
+  }
+
+  // ---- contact page: a copy of the enquiry to Vault when the form is sent ----
+  var DESIGN_BLOCK_RE = /--- Cellar planner design ---\n([^\n]*)\nDesign code: (CL\d+\.[A-Za-z0-9_-]{1,200})\n[^\n]*\n---/;
+  var lastCopied = '';
+  function fieldValue(selector) {
+    var el = selector ? document.querySelector(selector) : null;
+    return el && typeof el.value === 'string' ? el.value.trim() : '';
+  }
+  /** Pure: what to send for this form content, or { skip: reason }. */
+  function buildEnquiry(message, name, email, phone) {
+    var m = DESIGN_BLOCK_RE.exec(message || '');
+    if (!m) return { skip: 'the message holds no planner design' };
+    if (!name) return { skip: 'no name found (NAME_FIELD ' + NAME_FIELD + ')' };
+    if (!/^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(email)) return { skip: 'no valid email found (EMAIL_FIELD ' + EMAIL_FIELD + ')' };
+    var summary = m[1];
+    var bottles = /about (\d{1,6}) bottles/.exec(summary);
+    var price = /Guide price shown: (.+?)\.?$/.exec(summary);
+    return {
+      payload: {
+        name: name, email: email, phone: phone, code: m[2], summary: summary.slice(0, 400),
+        bottles: bottles ? Number(bottles[1]) : null, priceText: price ? price[1].slice(0, 60) : '',
+        message: message.replace(DESIGN_BLOCK_RE, '').replace(/\n{3,}/g, '\n\n').trim()
+      }
+    };
+  }
+  function copyEnquiry(form) {
+    var message = fieldValue(MESSAGE_FIELD);
+    var built = buildEnquiry(message, fieldValue(NAME_FIELD), fieldValue(EMAIL_FIELD), fieldValue(PHONE_FIELD));
+    if (built.skip) { log('copy to Vault: skipped,', built.skip); return; }
+    var key = built.payload.email + '|' + built.payload.code;
+    if (key === lastCopied) { log('copy to Vault: already sent for this form, not sending again'); return; }
+    lastCopied = key;
+    var body = JSON.stringify(built.payload);
+    log('copy to Vault: sending to', VAULT_ENQUIRY_URL, '(the form itself is not touched)');
+    // text/plain is a "simple" request (no preflight). A keepalive fetch survives the page navigating away after the form is sent, and unlike
+    // sendBeacon it can leave cookies out, which the wildcard CORS answer needs. sendBeacon is only the fallback for a browser without keepalive.
+    if (typeof fetch === 'function') {
+      try {
+        fetch(VAULT_ENQUIRY_URL, { method: 'POST', body: body, headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, keepalive: true, credentials: 'omit' })
+          .then(function (r) { log('copy to Vault: Vault answered', r.status); })
+          .catch(function (e) { log('copy to Vault: could not reach Vault (the form email is unaffected):', e && e.message); });
+        return;
+      } catch (e) { log('copy to Vault: fetch failed, trying sendBeacon:', e && e.message); }
+    }
+    try { if (navigator.sendBeacon) log('copy to Vault: sendBeacon', navigator.sendBeacon(VAULT_ENQUIRY_URL, new Blob([body], { type: 'text/plain;charset=UTF-8' })) ? 'queued' : 'refused'); } catch (e) { log('copy to Vault: could not send:', e && e.message); }
+  }
+  if (COPY_TO_VAULT) {
+    document.addEventListener('submit', function (ev) {
+      var form = ev.target;
+      if (!form || !form.matches || !form.matches(FORM_SELECTOR)) return;
+      try { copyEnquiry(form); } catch (e) { log('copy to Vault: error, ignored:', e && e.message); }
+    }, true);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fillFromAddress);

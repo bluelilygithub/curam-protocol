@@ -25,6 +25,7 @@ const toForm = (c) => ({
   phone: c.phone ?? '',
   accent: c.accent ?? '#4a5a2a',
   rackTypes: (c.rackTypes || []).map(typeToForm), defaultRackType: c.defaultRackType,
+  qBusinessName: c.quote?.businessName ?? '', qDetails: c.quote?.details ?? '', qTerms: c.quote?.terms ?? '', qValidityDays: String(c.quote?.validityDays ?? 30), qGstNote: c.quote?.gstNote ?? '',
   singleMm: String(c.doors.singleMm), doubleMm: String(c.doors.doubleMm),
   show: !!c.pricing.show, currency: c.pricing.currency ?? '$',
   fixed: c.pricing.fixed ?? '', doorSingle: c.pricing.doorSingle ?? '', doorDouble: c.pricing.doorDouble ?? '',
@@ -38,6 +39,7 @@ const toConfig = (f) => ({
   phone: f.phone,
   accent: f.accent,
   rackTypes: f.rackTypes.map(typeToConfig), defaultRackType: f.defaultRackType,
+  quote: { businessName: f.qBusinessName, details: f.qDetails, terms: f.qTerms, validityDays: f.qValidityDays, gstNote: f.qGstNote },
   doors: { singleMm: f.singleMm, doubleMm: f.doubleMm },
   pricing: { show: f.show, currency: f.currency, fixed: f.fixed, doorSingle: f.doorSingle, doorDouble: f.doorDouble, rangePct: f.rangePct, roundTo: f.roundTo, note: f.note },
   presets: f.presets.map((p) => ({ id: p.id, name: p.name, widthMm: p.widthMm, depthMm: p.depthMm, heightMm: p.heightMm, doorStyle: p.doorStyle })),
@@ -298,6 +300,24 @@ export default function CellarLiteSettings({ onDirtyChange }) {
         </Field>
         <Field label="Line under the heading" tip="A short line shown under the planner's heading. Good for saying it's free and quick. Leave blank to show nothing." hint="Say it's free and quick. Leave blank to show nothing.">
           <textarea value={form.promise} rows={2} maxLength={200} onChange={(e) => set('promise', e.target.value)} className={INPUT} style={FIELD_STYLE} />
+        </Field>
+      </section>
+
+      <section className={CARD} style={CARD_STYLE} data-testid="cellar-lite-quote">
+        <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Quote details</h3>
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          Used on the customer quote PDF that staff make in the Cellar Planner. Visitors to the public planner never see these. A quote can't be made until the business name is filled in.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Business name" tip="Who the quote is from, printed large at the top of the quote. Required before a quote can be made." hint="Up to 80 characters."><input type="text" value={form.qBusinessName} maxLength={80} onChange={(e) => set('qBusinessName', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
+          <Field label="Quote valid for (days)" tip="How long a quote stays valid. The quote shows the date it is valid until, counted from the quote date." hint="1 to 365. Standard is 30."><input type="text" inputMode="numeric" value={form.qValidityDays} onChange={(e) => set('qValidityDays', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
+        </div>
+        <Field label="Address and contact lines" tip="Printed under the business name: your address, phone, email and ABN, one per line (up to six lines are shown)." hint="One item per line, such as the address, phone and ABN.">
+          <textarea value={form.qDetails} rows={4} maxLength={300} onChange={(e) => set('qDetails', e.target.value)} className={INPUT} style={FIELD_STYLE} />
+        </Field>
+        <Field label="GST note" tip="A short line printed under the total, for example All prices include GST. Leave blank to print nothing." hint="For example: All prices include GST."><input type="text" value={form.qGstNote} maxLength={120} onChange={(e) => set('qGstNote', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
+        <Field label="Terms" tip="Your terms and conditions, printed on every quote under the price: deposit, payment, warranty and so on. Leave blank to print none." hint="Up to 1200 characters. Line breaks are kept.">
+          <textarea value={form.qTerms} rows={6} maxLength={1200} onChange={(e) => set('qTerms', e.target.value)} className={INPUT} style={FIELD_STYLE} />
         </Field>
       </section>
 

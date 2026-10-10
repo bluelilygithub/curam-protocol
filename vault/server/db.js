@@ -1458,6 +1458,31 @@ async function initSchema() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_client_deals_client ON client_deals("clientId")`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_client_deals_user ON client_deals("userId")`);
 
+    // Cellar Planner enquiries from the website (server/routes/cellarLeadsRouter.js). After clients and client_deals because it references both.
+    // status: new -> opened (a staff member opened the design) -> quoted (a quote PDF was made). "ipHash" is a one-way hash, kept only to spot floods.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cellar_leads (
+        id           SERIAL PRIMARY KEY,
+        "userId"     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "clientId"   INTEGER REFERENCES clients(id) ON DELETE SET NULL,
+        "dealId"     INTEGER REFERENCES client_deals(id) ON DELETE SET NULL,
+        name         VARCHAR(100) NOT NULL,
+        email        VARCHAR(254) NOT NULL,
+        phone        VARCHAR(24),
+        message      TEXT,
+        "designCode" VARCHAR(220) NOT NULL,
+        summary      VARCHAR(400),
+        "priceText"  VARCHAR(60),
+        bottles      INTEGER,
+        status       VARCHAR(10) NOT NULL DEFAULT 'new' CHECK (status IN ('new','opened','quoted')),
+        "ipHash"     VARCHAR(24),
+        "createdAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_cellar_leads_user_created ON cellar_leads ("userId", "createdAt" DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_cellar_leads_dedupe ON cellar_leads ("userId", lower(email), "designCode")`);
+
     // client_interactions."dealId" FK — deferred to here since client_deals
     // didn't exist yet when that table was created above.
     await client.query(`

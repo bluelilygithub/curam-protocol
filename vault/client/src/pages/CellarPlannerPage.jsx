@@ -10,7 +10,12 @@ const APP_URL = '/cellar-planner-app/';
 
 export default function CellarPlannerPage() {
   // Settings → Cellar Planner Tour opens the page with ?tour=1; the planner (inside the frame) then runs its own tour
-  const wantsTour = new URLSearchParams(useLocation().search).has('tour');
+  const search = new URLSearchParams(useLocation().search);
+  const wantsTour = search.has('tour');
+  // A CRM deal made from a website enquiry links to /cellar-planner?lead=ID; the planner (inside the frame) opens that enquiry's design.
+  // Only a plain positive whole number is passed on.
+  const leadParam = search.get('lead');
+  const leadId = /^[1-9]\d{0,9}$/.test(leadParam || '') ? leadParam : null;
   // 'checking' | 'ok' | 'missing' — a failed cellar-planner build must show a clear notice, not Vault's own page inside the frame
   const [state, setState] = useState('checking');
 
@@ -42,7 +47,7 @@ export default function CellarPlannerPage() {
     <div className="flex flex-col h-full min-h-0" style={{ height: '100%' }}>
       {state === 'ok' && (
         <iframe
-          src={`${APP_URL}?embedded=1${wantsTour ? '&tour=1' : ''}`}
+          src={`${APP_URL}?embedded=1${wantsTour ? '&tour=1' : ''}${leadId ? `&lead=${leadId}` : ''}`}
           title="Cellar Planner"
           allow="fullscreen"
           allowFullScreen

@@ -46,6 +46,9 @@ app.use(httpLogger);
 // website, so this route is mounted before requireAuth. Read-only; unpublished prices are never sent. The admin side is mounted further down.
 const cellarLiteConfig = require('./routes/cellarLiteConfigRouter').createCellarLiteConfigRouters({ pool: require('./db').pool });
 app.use('/api/cellar-lite/config', cellarLiteConfig.publicRouter);
+// the website's contact page copies a planner enquiry into the CRM here: public, before requireAuth (it parses its own body). See server/routes/cellarLeadsRouter.js.
+const cellarLeads = require('./routes/cellarLeadsRouter').createCellarLeadsRouters({ pool: require('./db').pool, capture: require('./services/SuggestionService').capture });
+app.use('/api/cellar-lite/enquiry', cellarLeads.publicRouter);
 
 app.use(helmet({
   contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
@@ -191,6 +194,7 @@ app.use('/api/room-projects', requireFeature('roomPlanner'), require('./routes/r
 app.use('/api/garden-projects', requireFeature('gardenPlanner'), require('./routes/gardenProjects'));
 app.use('/api/cellar-projects', requireFeature('cellarPlanner'), require('./routes/cellarProjects'));
 app.use('/api/cellar-planner/catalogue', requireFeature('cellarPlanner'), cellarLiteConfig.staffRouter);
+app.use('/api/cellar-planner/leads', requireFeature('cellarPlanner'), cellarLeads.staffRouter);
 app.use('/api/geocode', requireFeature('gardenPlanner'), require('./routes/geocode'));
 app.use('/api/map-tiles', requireFeature('gardenPlanner'), require('./routes/mapTiles'));
 app.use('/api/plant-images', requireFeature('gardenPlanner'), require('./routes/plantImages'));

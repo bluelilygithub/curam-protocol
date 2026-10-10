@@ -16,6 +16,7 @@ const LIMITS = {
   doorSingleMm: [700, 1300], doorDoubleMm: [1200, 2400],
   price: [0, 1000000], rangePct: [0, 50],
   roomWidthMm: [1000, 8000], roomDepthMm: [1000, 8000], roomHeightMm: [1800, 3200],
+  quoteValidityDays: [1, 365],
 };
 const ROUND_TO = [1, 10, 50, 100, 500, 1000];
 const MAX_PRESETS = 6;
@@ -41,6 +42,8 @@ const DEFAULTS = Object.freeze({
     show: false, currency: '$', fixed: null, perUnit: null, doorSingle: null, doorDouble: null, rangePct: 15, roundTo: 100,
     note: 'A guide only. The final price depends on a site measure and the finishes you choose.',
   },
+  // the staff quote PDF: who it is from and the owner's own terms. Never sent to the public tool.
+  quote: { businessName: '', details: '', terms: '', validityDays: 30, gstNote: '' },
   presets: [
     { id: 'small', name: 'Small cellar', widthMm: 1800, depthMm: 1500, heightMm: 2400, doorStyle: 'SINGLE' },
     { id: 'walk-in', name: 'Walk-in cellar', widthMm: 2750, depthMm: 1565, heightMm: 2150, doorStyle: 'SINGLE' },
@@ -57,6 +60,9 @@ function contrastWithWhite(hex) {
 }
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+// multi-line text (terms, address lines): control characters other than line breaks are removed, each line is tidied, blank runs collapse
+const cleanMultiline = (v, max) => String(v).replace(/\r\n?/g, '\n').replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, ' ')
+  .split('\n').map((l) => l.replace(/[ \t]+/g, ' ').trim()).join('\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, max);
 // control characters are never wanted in text that ends up in a page or an email
 const cleanText = (v, max) => String(v).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 
@@ -199,6 +205,15 @@ function validateConfig(raw) {
     presets.push({ id, name, widthMm, depthMm, heightMm, doorStyle: pr.doorStyle === 'DOUBLE' ? 'DOUBLE' : 'SINGLE' });
   });
 
+  const q = isObj(src.quote) ? src.quote : {};
+  const quote = {
+    businessName: q.businessName === undefined ? D.quote.businessName : cleanText(q.businessName, 80),
+    details: q.details === undefined ? D.quote.details : cleanMultiline(q.details, 300),
+    terms: q.terms === undefined ? D.quote.terms : cleanMultiline(q.terms, 1200),
+    validityDays: int(q.validityDays, LIMITS.quoteValidityDays, D.quote.validityDays, 'The quote validity'),
+    gstNote: q.gstNote === undefined ? D.quote.gstNote : cleanText(q.gstNote, 120),
+  };
+
   const config = {
     version: 1,
     promise: src.promise === undefined ? D.promise : cleanText(src.promise, 200),
@@ -213,6 +228,7 @@ function validateConfig(raw) {
       doubleMm: int(doors.doubleMm, LIMITS.doorDoubleMm, D.doors.doubleMm, 'The double door width'),
     },
     pricing,
+    quote,
     presets,
   };
   return { config, errors };
@@ -220,6 +236,9 @@ function validateConfig(raw) {
 
 /** What the public endpoint may say. Unpublished prices are never sent: with `show` off the amounts are blanked. */
 function publicView(config) {
+  const { quote: _quote, ...open } = config; // the quote details are for staff only
+  void _quote;
+  config = open;
   if (config.pricing.show) return config;
   return {
     ...config,
@@ -230,7 +249,7 @@ function publicView(config) {
 
 /** What the signed-in staff app may read: the whole catalogue and the real prices (whether or not the public tool shows a price). */
 function staffView(config) {
-  return { rackTypes: config.rackTypes, defaultRackType: config.defaultRackType, doors: config.doors, pricing: config.pricing };
+  return { rackTypes: config.rackTypes, defaultRackType: config.defaultRackType, doors: config.doors, pricing: config.pricing, quote: config.quote };
 }
 
 module.exports = { contrastWithWhite, KEY, LIMITS, ROUND_TO, MAX_PRESETS, MAX_RACK_TYPES, DEFAULTS, validateConfig, publicView, staffView };

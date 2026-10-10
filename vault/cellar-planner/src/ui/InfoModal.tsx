@@ -32,6 +32,9 @@ export function InfoModal({ ui }: { ui: UiStore }) {
           <p>A planner for a free-standing <b>glass walk-in wine enclosure</b>: the walls, the door, the ceiling header with its conditioner and vents, and the racks inside. It draws the plan and the wall elevations, counts bottles, and checks the design. Every size is in whole millimetres.</p>
           <p><b>This is a design aid, not a drawing for building from.</b> Every drawing says <i>preliminary design only: final site measure required prior to fabrication</i>, and the sizes that came from sample drawings are marked as unverified.</p>
 
+          <h3>How the numbers are worked out</h3>
+          <p>Press the calculator button next to this (i) button for the formulas and the working behind every figure (inside size, the door split, bottles, depth, the checks and the price), using the design you have open. <b>Copy as text</b> there puts it in a ticket or an email.</p>
+
           <h3>Getting started</h3>
           <ul>
             <li>The first time you open it, you see the <b>Test case</b>: the sample enclosure (read from the Carter Noir drawings, 2850 × 1665 × 2200 mm) with racks on every wall. Change any number on the left and both drawings follow.</li>

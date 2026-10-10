@@ -16,11 +16,22 @@ import { PackageModal } from './ui/PackageModal';
 import { Icon } from './ui/icons';
 import { Accordion } from './ui/fields';
 import { CatalogueContext, ChecksPanel, EnclosurePanel, PricePanel, RackPanel, RunsPanel, StoreContext } from './ui/panels';
-import type { CatalogueStore } from './app/catalogue';
+import { createCatalogueStore, type CatalogueStore } from './app/catalogue';
+import { createLeadsStore, openLeadDesign, type FetchFn, type LeadsStore } from './app/leads';
+import { LeadsPanel } from './ui/LeadsPanel';
+import { QuoteModal } from './ui/QuoteModal';
+import { CalcModal } from './ui/CalcModal';
 
 const WALLS: Array<[WallSide, string]> = [['NORTH', 'North'], ['EAST', 'East'], ['SOUTH', 'South'], ['WEST', 'West']];
 
-export function App({ store, ui, designs, catalogue }: { store: AppStore; ui: UiStore; designs: Designs; catalogue?: CatalogueStore }) {
+export function App({ store, ui, designs, catalogue, leads, ready }: { store: AppStore; ui: UiStore; designs: Designs; catalogue?: CatalogueStore; leads?: LeadsStore; ready?: Promise<unknown> }) {
+  // the rack catalogue and the website enquiries come from Vault; without them (a test, or signed out) the planner still works
+  const fallbackCatalogue = useMemo(() => createCatalogueStore(), []);
+  const fallbackLeads = useMemo(() => createLeadsStore(), []);
+  const cat = catalogue ?? fallbackCatalogue;
+  const leadStore = leads ?? fallbackLeads;
+  const fetchFn: FetchFn | undefined = typeof fetch === 'function' ? (url, init) => fetch(url, init) : undefined;
+  const newLeads = useStore(leadStore, (s) => s.leads.filter((l) => l.status === 'new').length);
   const project = useStore(store, (s) => s.project);
   const revision = useStore(store, (s) => s.revision);
   const canUndo = useStore(store, (s) => s.past.length > 0);
@@ -42,6 +53,14 @@ export function App({ store, ui, designs, catalogue }: { store: AppStore; ui: Ui
     // ?d=<design code> (a link from the public planner) opens that design as a new one
     const linked = new URLSearchParams(window.location.search).get('d');
     if (linked) void designs.whenReady().then(() => { const r = projectFromCode(linked); if ('project' in r) return addDesign(r.project, 'Opened the design from the link as a new design: its rack values are best guesses.'); setMsg(r.error); return undefined; });
+    // ?lead=<number> (the link in a CRM deal made from a website enquiry) opens that enquiry's design as a new one, once Vault's catalogue has loaded
+    const lead = Number(new URLSearchParams(window.location.search).get('lead'));
+    if (Number.isInteger(lead) && lead > 0) {
+      void Promise.all([designs.whenReady(), ready ?? Promise.resolve()]).then(() => openEnquiry(lead)).then(() => {
+        try { const u = new URL(window.location.href); u.searchParams.delete('lead'); window.history.replaceState(null, '', u.toString()); } catch { /* fine */ }
+      });
+    }
+    void (ready ?? Promise.resolve()).then(() => leadStore.getState().load(fetchFn, localStorage));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   /** Shepherd is loaded on first use, so it stays out of the main bundle. */
@@ -72,6 +91,12 @@ export function App({ store, ui, designs, catalogue }: { store: AppStore; ui: Ui
   };
   /** A design from a file, the test case or the blank sample is ADDED to the saved designs and opened; the design that was open stays saved as it was. */
   const addDesign = async (p: ReturnType<typeof testCaseProject>, message: string): Promise<void> => { await designs.controller.importProject(p); setMsg(message); };
+  /** A website enquiry opens as a NEW design (the one open stays saved), with the catalogue's default rack type. */
+  const openEnquiry = async (id: number): Promise<void> => {
+    const r = await openLeadDesign({ id, fetchFn, storage: localStorage, catalogue: cat.getState().catalogue, importProject: (p) => designs.controller.importProject(p) });
+    setMsg(r.message);
+    if (r.ok) void leadStore.getState().load(fetchFn, localStorage);
+  };
   const open = async (f: File | undefined): Promise<void> => {
     if (!f) return;
     try { await addDesign(deserializeApp(await f.text()), `Opened ${f.name} as a new design.`); } catch (e) { setMsg(e instanceof ParseError ? e.message : 'Could not open that file.'); }
@@ -89,6 +114,7 @@ export function App({ store, ui, designs, catalogue }: { store: AppStore; ui: Ui
               <span className="title-help">
                 <button type="button" aria-label="Take the guided tour" title="Take the guided tour." onClick={() => void startTour()} data-testid="tour-start"><Icon name="compass" /></button>
                 <button type="button" aria-label="How this works" title="How this works: the plain-language guide." onClick={() => ui.getState().set({ infoOpen: true })} data-testid="info-open"><Icon name="info" /></button>
+                <button type="button" aria-label="How the numbers are calculated" title="How the numbers are calculated: the formulas and working for this design, step by step, for technicians." onClick={() => ui.getState().set({ calcOpen: true })} data-testid="calc-open"><Icon name="calc" /></button>
               </span>
             </div>
             <div className="group" role="group" aria-label="History">
@@ -98,6 +124,7 @@ export function App({ store, ui, designs, catalogue }: { store: AppStore; ui: Ui
             <div className="group" role="group" aria-label="Design">
               <input className="name" value={project.name} aria-label="Project name" title="The name of this design. It is how it appears in Your designs and in the saved file's name." data-testid="project-name" onChange={(e) => store.getState().updateSilently((p) => ({ ...p, name: e.target.value }))} />
               <button type="button" className="btn" title="Your saved designs: open one, start a new one, copy or delete. Designs save by themselves." onClick={() => ui.getState().set({ designsOpen: true })} data-testid="designs-open"><Icon name="file" /><span className="label">Your designs</span></button>
+              <button type="button" className="btn" title="People who sent your website's contact form with a design from the public planner. Open one to start from their design." onClick={() => ui.getState().set({ leadsOpen: true })} data-testid="leads-open"><Icon name="list" /><span className="label">Enquiries</span>{newLeads > 0 && <span className="badge" data-testid="leads-new-count" aria-label={`${newLeads} new`}>{newLeads}</span>}</button>
             </div>
             <div className="group" role="group" aria-label="File">
               <button type="button" className="btn" title="Download a copy of this design to your computer as a .cellar.json file, to keep or send to someone. This is not the save: designs save by themselves (see the status next to the name)." onClick={download} data-testid="save"><Icon name="download" /><span className="label">Download file</span></button>
@@ -110,6 +137,7 @@ export function App({ store, ui, designs, catalogue }: { store: AppStore; ui: Ui
             </div>
             <div className="group" role="group" aria-label="Output">
               <button type="button" className="btn" title="Make a PDF of A3 drawing sheets: the specification, the plan, the elevation and the racks on each wall, with a title block. Every sheet says preliminary design only." onClick={() => ui.getState().set({ packageOpen: true })} data-testid="package-open"><Icon name="list" /><span className="label">Drawing package</span></button>
+              <button type="button" className="btn" title="Make a quote PDF for the customer from the price breakdown. It is only available when the numbers behind it can be trusted: a confirmed rack type, no errors and a price." onClick={() => ui.getState().set({ quoteOpen: true })} data-testid="quote-open"><Icon name="download" /><span className="label">Quote</span></button>
             </div>
             <div className="spacer" />
             <SaveStatus designs={designs} />
@@ -142,6 +170,9 @@ export function App({ store, ui, designs, catalogue }: { store: AppStore; ui: Ui
       <InfoModal ui={ui} />
       <CodeModal ui={ui} onOpen={(p) => void addDesign(p, 'Opened the design code as a new design: its rack values are best guesses.')} />
       <PackageModal store={store} ui={ui} />
+      <CalcModal store={store} ui={ui} catalogue={cat} />
+      <QuoteModal store={store} ui={ui} catalogue={cat} fetchFn={fetchFn} storage={localStorage} />
+      <LeadsPanel ui={ui} leads={leadStore} reload={() => void leadStore.getState().load(fetchFn, localStorage)} onOpen={(id) => void openEnquiry(id)} />
       <DesignsPanel ui={ui} designs={designs} onImportFile={(f) => void open(f)} />
       <TooltipHost />
     </CatalogueContext.Provider>

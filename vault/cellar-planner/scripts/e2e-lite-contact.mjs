@@ -20,7 +20,7 @@ let script = readFileSync(join(ROOT, 'lite-wordpress/cellar-lite-fill.js'), 'utf
 
 const contact = `<!doctype html><html><body><div style="height:1500px">top of contact page</div>
 <form class="cw-form" id="cw-contact-form" action="/x" method="post">
-<input type="text" name="name" id="cw-contact-name"><input type="email" name="email" id="cw-contact-email">
+<input type="text" name="name" id="cw-contact-name"><input type="email" name="email" id="cw-contact-email"><input type="tel" name="phone" id="cw-contact-phone">
 <textarea name="message" id="cw-contact-message" rows="5"></textarea><button type="submit">Send message</button></form><div style="height:1500px">footer</div>
 <script src="/fill.js"></script></body></html>`;
 const planner = `<!doctype html><html><body><h1>Planner page</h1><iframe id="f" src="http://localhost:8802/index.html" style="width:100%;height:1100px;border:0"></iframe><script src="/fill.js"></script></body></html>`;
@@ -72,6 +72,75 @@ if (link) {
   const b = await p2.getByTestId('lite-bottles').innerText();
   check('opening that link shows the same room and bottle count', w === '2750' && dp === '1565' && h === '2150' && /1120/.test(b), `${w}x${dp}x${h} ${b}`);
 }
+
+// ---- the copy of the enquiry to Vault (the form's own submit is not touched)
+const ENQUIRY = 'https://curam-vault.up.railway.app/api/cellar-lite/enquiry';
+const sent = [];
+const onEnquiry = async (route) => { sent.push({ body: route.request().postData(), type: route.request().headers()['content-type'] }); await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: '{"ok":true}' }); };
+await page.route(ENQUIRY, onEnquiry);
+await ctx.route(ENQUIRY, onEnquiry);
+await page.locator('#cw-contact-name').fill('Sam Rivera');
+await page.locator('#cw-contact-email').fill('Sam@Example.com');
+await page.locator('#cw-contact-phone').fill('0412 345 678');
+await page.locator('#cw-contact-message').fill('Please call me after 5pm.\n\n' + msg);
+await page.locator('#cw-contact-form button').click();
+await page.waitForTimeout(1500);
+check('sending the form also posts one copy to Vault, as text/plain (no preflight)', sent.length === 1 && /^text\/plain/.test(sent[0].type || ''), JSON.stringify(sent.map((x) => x.type)));
+const copy = sent[0] ? JSON.parse(sent[0].body) : {};
+check('the copy carries name, email, phone, the design code and counts', copy.name === 'Sam Rivera' && copy.email === 'Sam@Example.com' && copy.phone === '0412 345 678' && /^CL1\./.test(copy.code) && copy.bottles === 1120, JSON.stringify(copy).slice(0, 300));
+check('the visitor\'s own words are sent without the design block', copy.message === 'Please call me after 5pm.', JSON.stringify(copy.message));
+check('and the summary line', /^Inside 2750 x 1565 x 2150 mm/.test(copy.summary || ''), copy.summary);
+
+// the negative cases on a fresh contact page, with the form's own submit cancelled so the page stays put
+const DESIGN = 'CL1.WzI3NTAsMTU2NSwyMTUwLDIsMCwwLDUwMCwwXQ';
+const SUMMARY = 'Inside 2750 x 1565 x 2150 mm, single door on the south wall, Bordeaux / Shiraz, about 840 bottles using standard rack units about 600 mm wide (estimate only, final site measure required) Guide price shown: $7,100 to $8,700.';
+const fresh = async (query) => {
+  const pg = await ctx.newPage();
+  await pg.goto('http://localhost:8801/contact.html' + (query ?? ''));
+  await pg.waitForTimeout(800);
+  await pg.evaluate(() => document.querySelector('#cw-contact-form').addEventListener('submit', (e) => e.preventDefault()));
+  return pg;
+};
+const submit = async (pg) => { await pg.evaluate(() => document.querySelector('#cw-contact-form').requestSubmit()); await pg.waitForTimeout(500); };
+const withDesign = `?cellar-design=${encodeURIComponent(DESIGN)}&cellar-summary=${encodeURIComponent(SUMMARY)}`;
+const before = () => sent.length;
+
+let n = before();
+let pg = await fresh();
+await pg.locator('#cw-contact-name').fill('Plain Person'); await pg.locator('#cw-contact-email').fill('p@example.com'); await pg.locator('#cw-contact-message').fill('Just a normal enquiry, no planner.');
+await submit(pg);
+check('a contact form with no planner design is NOT copied to Vault', sent.length === n);
+await pg.close();
+
+pg = await fresh(withDesign);
+await pg.locator('#cw-contact-email').fill('nobody@example.com');
+await submit(pg);
+check('a design but no name: not copied', sent.length === n);
+await pg.locator('#cw-contact-name').fill('Has Name'); await pg.locator('#cw-contact-email').fill('not-an-email');
+await submit(pg);
+check('a design but an invalid email: not copied', sent.length === n);
+await pg.locator('#cw-contact-email').fill('ok@example.com');
+await submit(pg);
+check('once name and email are good it is copied', sent.length === n + 1, String(sent.length - n));
+const c2 = JSON.parse(sent.at(-1).body);
+check('bottles and the guide price are read from the summary; phone left blank is sent blank', c2.bottles === 840 && c2.priceText === '$7,100 to $8,700' && c2.phone === '', JSON.stringify(c2));
+await submit(pg); await submit(pg);
+check('pressing Send again for the same enquiry does not copy it again', sent.length === n + 1, String(sent.length - n));
+await pg.close();
+
+// Vault unreachable: the form must still work normally
+const down = await ctx.newPage();
+await down.route(ENQUIRY, (r) => r.abort());
+const pageErrors = [];
+down.on('pageerror', (e) => pageErrors.push(e.message));
+await down.goto('http://localhost:8801/contact.html' + withDesign);
+await down.waitForTimeout(800);
+await down.evaluate(() => document.querySelector('#cw-contact-form').addEventListener('submit', (e) => { window.__formSubmitted = !e.defaultPrevented; e.preventDefault(); }));
+await down.locator('#cw-contact-name').fill('Offline Olly'); await down.locator('#cw-contact-email').fill('olly@example.com');
+await submit(down);
+check('with Vault unreachable the form\'s own submit still goes ahead and nothing throws', (await down.evaluate(() => window.__formSubmitted)) === true && pageErrors.length === 0, pageErrors.join(' | '));
+await down.close();
+
 check('no script errors', errors.length === 0, errors.join(' | '));
 console.log('message was:\n' + msg);
 await browser.close(); parent.close(); lite.close();
