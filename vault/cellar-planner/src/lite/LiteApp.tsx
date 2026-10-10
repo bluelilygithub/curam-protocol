@@ -109,6 +109,8 @@ export function LiteApp() {
     const next = { ...s, widthMm: p.widthMm, depthMm: p.depthMm, heightMm: p.heightMm, doorStyle: p.doorStyle };
     setS(next); setDraft(toDraft(next)); setAsked(false);
   };
+  /** A starting room counts as chosen while the size and door style still match it exactly; changing any of them un-highlights it. */
+  const isPreset = (p: LitePreset): boolean => s.widthMm === p.widthMm && s.depthMm === p.depthMm && s.heightMm === p.heightMm && s.doorStyle === p.doorStyle;
   /** The standalone planner's own address with this design's code: opens exactly these choices (the embedding page is left out). */
   const designLink = (): string => { const u = new URL(window.location.href); u.search = ''; u.hash = ''; u.searchParams.set('d', code); return u.toString(); };
   const copyLink = async (): Promise<void> => {
@@ -147,7 +149,7 @@ export function LiteApp() {
           <span className="lite-presets-label">Not sure where to start? Try a typical room:</span>
           <span className="lite-presets-row">
             {cfg.presets.map((p) => (
-              <button type="button" key={p.id} className="btn" onClick={() => startFrom(p)} data-testid={`lite-preset-${p.id}`} title={`${p.widthMm} x ${p.depthMm} x ${p.heightMm} mm`}>{p.name}</button>
+              <button type="button" key={p.id} className={`btn${isPreset(p) ? ' primary' : ''}`} aria-pressed={isPreset(p)} onClick={() => startFrom(p)} data-testid={`lite-preset-${p.id}`} title={`${p.widthMm} x ${p.depthMm} x ${p.heightMm} mm`}>{p.name}</button>
             ))}
           </span>
         </section>
