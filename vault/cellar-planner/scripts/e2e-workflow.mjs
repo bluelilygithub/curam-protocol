@@ -202,6 +202,68 @@ const scan = async (page, label) => {
   await ctx.close();
 }
 
+// ================================================================ the title bar is reachable at every width (a 24-inch screen at 125% scaling is ~1536 px)
+for (const w of [1920, 1536, 1440, 1366, 1100]) {
+  const { page, ctx, errors } = await open(w, 900);
+  await edit(page, (s) => s.edit((p) => ({ ...p, name: p.name + ' ' }))); // an unsaved change, so Save now shows
+  await page.waitForTimeout(300);
+  const r = await page.evaluate(() => {
+    const t = document.querySelector('.toolbar');
+    const btns = [...t.querySelectorAll('button, input')].filter((e) => e.offsetParent !== null);
+    const out = btns.map((e) => { const b = e.getBoundingClientRect(); return { id: e.getAttribute('data-testid') || (e.textContent || '').trim().slice(0, 14), right: b.right, left: b.left, top: b.top }; });
+    return { w: window.innerWidth, past: out.filter((x) => x.right > window.innerWidth + 0.5 || x.left < -0.5).map((x) => x.id), n: out.length, rows: new Set(out.map((x) => Math.round(x.top / 10))).size, scrollable: t.querySelector('.toolbar-row').scrollWidth > t.querySelector('.toolbar-row').clientWidth + 1 };
+  });
+  check(`${w}px wide: every title-bar button is on screen (${r.n} buttons, none cut off)`, r.past.length === 0, JSON.stringify(r.past));
+  check(`${w}px wide: the bar wraps instead of hiding a scroll`, !r.scrollable);
+  const sv = page.getByTestId('save-now');
+  check(`${w}px wide: Save now is visible`, await sv.isVisible());
+  await sv.click();
+  await page.waitForTimeout(500);
+  check(`${w}px wide: pressing Save now works and the status settles`, !(await page.getByTestId('save-now').isVisible().catch(() => false)) || /Saved|saved/.test(await page.getByTestId('save-status').innerText()), await page.getByTestId('save-status').innerText());
+  if (w === 1536 && out) await page.screenshot({ path: join(out, 'toolbar-1536.png'), clip: { x: 0, y: 0, width: 1536, height: 160 } });
+  check(`${w}px wide: no script errors`, errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
+// on a phone the bar stays ONE row that swipes sideways (so it does not eat the screen), with Save near the front
+{
+  const { page, ctx } = await open(390, 800);
+  await edit(page, (s) => s.edit((p) => ({ ...p, name: p.name + ' ' }))); await page.waitForTimeout(300);
+  const h = await page.evaluate(() => document.querySelector('.toolbar').getBoundingClientRect().height);
+  check('on a phone the title bar is one short row (not a tall wrapped block)', h < 90, String(h));
+  const sv = await page.getByTestId('save-now').boundingBox();
+  check('and Save now is within the first screen-width of it', !!sv && sv.x + sv.width <= 390, JSON.stringify(sv));
+  await ctx.close();
+}
+
+// ================================================================ the bottles/checks sidebar: close it, reveal it
+{
+  const { page, ctx, errors } = await open();
+  const right = page.getByTestId('checks-panel');
+  check('the sidebar has its own close button, with a tooltip', /Hide this panel/.test(await page.getByTestId('close-right').getAttribute('title')));
+  await page.getByTestId('close-right').click();
+  check('closing hides the bottles and checks sidebar', await right.isHidden());
+  check('a tab at the edge says how to bring it back', /Bottles and checks/.test(await page.getByTestId('reveal-right').innerText()));
+  check('the strip still shows the bottle count while it is closed', /\d+/.test(await page.getByTestId('strip-bottles').innerText()));
+  await page.reload(); await page.getByTestId('plan-canvas').waitFor(); await page.waitForTimeout(500);
+  check('it stays closed after a reload', await right.isHidden());
+  await page.getByTestId('reveal-right').click();
+  check('the edge tab reveals it again', (await right.isVisible()) && (await page.getByTestId('reveal-right').count()) === 0);
+  await page.getByTestId('toggle-left').click();
+  check('the controls panel has the same edge tab', /Controls/.test(await page.getByTestId('reveal-left').innerText()));
+  await page.getByTestId('reveal-left').click();
+  check('and it brings the controls back', await page.getByTestId('left').isVisible());
+  await page.getByTestId('toggle-focus').click();
+  check('in focus mode there are no edge tabs (Leave focus is on the strip)', (await page.getByTestId('reveal-right').count()) === 0 && (await page.getByTestId('reveal-left').count()) === 0);
+  await page.keyboard.press('Escape');
+  await page.getByTestId('close-right').click();
+  await scan(page, 'sidebar closed with its edge tab');
+  if (out) await page.screenshot({ path: join(out, 'sidebar-closed.png') });
+  await page.getByTestId('reveal-right').click();
+  check('no script errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
 // ================================================================ phone and tablet
 {
   const { page, ctx, errors } = await open(390, 800);

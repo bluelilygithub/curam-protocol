@@ -199,3 +199,21 @@ body { background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans
 @media (max-width: 1100px) { .app[data-left="hidden"] { grid-template-columns: 0 1fr; } .resizer { display: none; } .app { grid-template-columns: 280px 1fr; } .app[data-left="hidden"] { grid-template-columns: 0 1fr; } }
 @media (max-width: 700px) { .resizer { display: none; } .status-views { display: none; } }
 @media (pointer: coarse) { .fix-btn, .status-views .btn.small { min-height: var(--ctl); } }
+
+/* ---- the title bar wraps instead of scrolling out of sight, so every button (Save included) can always be reached */
+/* (on a phone it stays one row that swipes sideways, so it does not eat the screen; Save now sits near the front of it) */
+@media (min-width: 701px) { .toolbar-row { flex-wrap: wrap; overflow: visible; row-gap: 6px; } }
+.right { position: relative; }
+.panel-close { position: absolute; top: 6px; right: 8px; z-index: 2; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); cursor: pointer; transition: background var(--duration); }
+.panel-close:hover { background: rgba(0,0,0,.06); }
+.edge-tab { position: absolute; top: 50%; z-index: 7; padding: 10px 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; writing-mode: vertical-rl; transition: background var(--duration); }
+.edge-tab:hover { background: var(--bg); }
+.edge-right { right: 0; transform: translateY(-50%) rotate(180deg); border-radius: 0 8px 8px 0; }
+.edge-left { left: 0; transform: translateY(-50%); border-radius: 0 8px 8px 0; }
+@media (max-width: 1100px) { .edge-tab { display: none; } }
+/* phone: Save now comes right after the brand so it is on the first screen; the long save text stays for screen readers only */
+@media (max-width: 700px) {
+  .toolbar-row > .group { order: 3; }
+  .toolbar-row > [data-testid="save-now"] { order: 1; }
+  .toolbar .save-state { order: 2; position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; margin: 0; }
+}

@@ -194,6 +194,7 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
               <button type="button" className="btn" title="Your saved designs: open one, start a new one, copy or delete. Designs save by themselves." onClick={() => ui.getState().set({ designsOpen: true })} data-testid="designs-open"><Icon name="file" /><span className="label">Your designs</span></button>
               <button type="button" className="btn" title="People who sent your website's contact form with a design from the public planner. Open one to start from their design." onClick={() => ui.getState().set({ leadsOpen: true })} data-testid="leads-open"><Icon name="list" /><span className="label">Enquiries</span>{newLeads > 0 && <span className="badge" data-testid="leads-new-count" aria-label={`${newLeads} new`}>{newLeads}</span>}</button>
             </div>
+            <SaveStatus designs={designs} />
             <div className="group" role="group" aria-label="File">
               <button type="button" className="btn" title="Download a copy of this design to your computer as a .cellar.json file, to keep or send to someone. This is not the save: designs save by themselves (see the status next to the name)." onClick={download} data-testid="save"><Icon name="download" /><span className="label">Download file</span></button>
               <button type="button" className="btn" title="Upload a .cellar.json file you downloaded earlier or were sent. It is added as a new saved design and opened; the design you have open stays as it is." onClick={() => file.current?.click()} data-testid="open"><Icon name="upload" /><span className="label">Upload file</span></button>
@@ -207,8 +208,6 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
               <button type="button" className="btn" title="Make a PDF of A3 drawing sheets: the specification, the plan, the elevation and the racks on each wall, with a title block. Every sheet says preliminary design only." onClick={() => ui.getState().set({ packageOpen: true })} data-testid="package-open"><Icon name="list" /><span className="label">Drawing package</span></button>
               <button type="button" className="btn" title="Make a quote PDF for the customer from the price breakdown. It is only available when the numbers behind it can be trusted: a confirmed rack type, no errors and a price." onClick={() => ui.getState().set({ quoteOpen: true })} data-testid="quote-open"><Icon name="download" /><span className="label">Quote</span></button>
             </div>
-            <div className="spacer" />
-            <SaveStatus designs={designs} />
             <input ref={file} type="file" accept=".json,application/json" hidden aria-label="Upload a design file" title="Upload a design file" onChange={(e) => void open(e.target.files?.[0])} />
           </div>
           <ConflictBar designs={designs} />
@@ -235,7 +234,9 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
           {tab === 'racks' && <p className="racks-summary" data-testid="racks-summary" role="status">{rackWallSummary(analysis.racks, fullRuns(project), rackWall).text} <span className="muted">Whole enclosure: {bottles}.</span></p>}
           <p className="foot">PRELIMINARY DESIGN ONLY: FINAL SITE MEASURE REQUIRED PRIOR TO FABRICATION</p>
         </main>
-        <aside className="right"><ChecksPanel /></aside>
+        <aside className="right"><button type="button" className="panel-close" aria-label="Hide the bottles and checks panel" title="Hide this panel to give the drawing more room. The strip above the drawing still shows the bottle count and errors. Bring it back with the tab at the edge, or Show checks." onClick={strip.toggleRight} data-testid="close-right"><Icon name="close" /></button><ChecksPanel /></aside>
+        {rightHidden && !focus && <button type="button" className="edge-tab edge-right" title="Show the bottles and checks panel." onClick={strip.toggleRight} data-testid="reveal-right">◂ Bottles and checks</button>}
+        {leftHidden && !focus && <button type="button" className="edge-tab edge-left" title="Show the controls panel." onClick={strip.toggleLeft} data-testid="reveal-left">Controls ▸</button>}
       </div>
       <InfoModal ui={ui} />
       <CodeModal ui={ui} onOpen={(p) => void addDesign(p, 'Opened the design code as a new design: its rack values are best guesses.')} />
