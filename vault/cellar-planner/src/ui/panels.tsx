@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { createContext, useContext } from 'react';
 import { useStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import { analyseApp, fillBlankRackWithGuesses, sortIssues, type AppProject, type EstimateField } from '../app/model';
+import { applyRackType, matchesType, staffPrice, typeById, type CatalogueState, type CatalogueStore } from '../app/catalogue';
 import type { AppStore } from '../app/store';
 import type { HeaderComponent, WallKind, WallSide } from '../enclosure';
 import { BOTTLE_PROFILES, type BottleProfileId } from '../engine';
@@ -10,10 +12,15 @@ import { effectiveBottlesPerRow, missingFields, type RackOrientation, type RackS
 import { CheckField, NumField, Section, SelectField } from './fields';
 
 export const StoreContext = createContext<AppStore | null>(null);
+/** The rack catalogue from Vault (null in tests that do not need it). */
+export const CatalogueContext = createContext<CatalogueStore | null>(null);
+const NO_CATALOGUE: CatalogueState = { catalogue: null, status: 'idle', reason: '', load: async () => undefined };
+const useCatalogue = (): CatalogueState => { const s = useContext(CatalogueContext); return useStore(s ?? EMPTY_CATALOGUE_STORE, (x) => x); };
 const useAppStore = (): AppStore => { const s = useContext(StoreContext); if (!s) throw new Error('no store'); return s; };
 export const useProject = (): AppProject => useStore(useAppStore(), (s) => s.project);
 export const useEdit = (): AppStore['getState'] extends () => infer S ? (S extends { edit: infer E } ? E : never) : never => useAppStore().getState().edit;
 
+const EMPTY_CATALOGUE_STORE = createStore<CatalogueState>(() => NO_CATALOGUE);
 const WALLS: Array<[WallSide, string]> = [['NORTH', 'North'], ['EAST', 'East'], ['SOUTH', 'South'], ['WEST', 'West']];
 const KINDS: Array<[WallKind, string]> = [['PANEL', 'Insulated panel'], ['GLASS', 'Framed glass'], ['STUD', 'Stud wall']];
 
@@ -99,20 +106,45 @@ export function RackPanel() {
   const calculated = s.orientation !== 'LABEL_FORWARD' && s.bottlesPerRow === null && perRow?.source === 'calculated';
   const est = (k: EstimateField): boolean => p.estimated?.includes(k) ?? false;
   const stillEstimated = (p.estimated ?? []).map((k) => FIELD_NAMES[k]);
+  const cat = useCatalogue();
+  const chosen = typeById(cat.catalogue, p.rackType?.id);
+  const typeOptions: Array<[string, string]> = (cat.catalogue?.rackTypes ?? []).map((r): [string, string] => [r.id, r.confirmed ? r.name : `${r.name} (not confirmed)`]);
+  if (p.rackType && !chosen && cat.catalogue) typeOptions.push([p.rackType.id, `${p.rackType.name} (no longer in the catalogue)`]);
+  const typeNote = !cat.catalogue
+    ? <p className="note" data-testid="rack-catalogue-off">The rack catalogue is not available ({cat.status === 'loading' ? 'loading' : cat.reason || 'not loaded'}), so rack types cannot be chosen and prices are not shown. You can still type the values below.</p>
+    : p.rackType && chosen && !matchesType(p, chosen)
+      ? (
+        <div className="banner" role="note" data-testid="rack-type-edited">
+          <p>These values differ from the catalogue's "{chosen.name}" (you edited them, or the catalogue has changed since).</p>
+          <button type="button" className="btn small" title={`Replace the rack values in this design with the catalogue's current values for ${chosen.name}. Your runs and enclosure are not changed. Undo takes it back.`} onClick={() => edit((q) => applyRackType(q, chosen))} data-testid="rack-type-reapply">Use the catalogue's values again</button>
+        </div>
+      )
+      : null;
+  const fromCatalogue = !!p.rackType;
   return (
     <Section
       title="Rack specification" testid="rack-panel" tour="cp-rack"
-      note={stillEstimated.length
-        ? <p className="banner estimate" role="note" data-testid="rack-estimated"><b>Best guesses for testing, not supplier values</b> (still estimated: {stillEstimated.join(', ')}). Type your supplier's or fabricator's number over each one; its "estimated" marker goes as you do. Do not quote from these.</p>
-        : missing.length
+      note={<>{typeNote}{stillEstimated.length
+        ? (fromCatalogue
+          ? <p className="banner estimate" role="note" data-testid="rack-estimated"><b>"{p.rackType?.name}" is not confirmed by the supplier</b>, so its values are marked estimated (still estimated: {stillEstimated.join(', ')}). Type the supplier's number over each one, or tick "Confirmed by supplier" in Settings, Cellar Planner, once they are real and use the catalogue's values again. Do not quote from these.</p>
+          : <p className="banner estimate" role="note" data-testid="rack-estimated"><b>Best guesses for testing, not supplier values</b> (still estimated: {stillEstimated.join(', ')}). Type your supplier's or fabricator's number over each one; its "estimated" marker goes as you do. Do not quote from these.</p>)
+        : null}{missing.length
           ? (
             <div className="banner" role="note" data-testid="rack-missing">
               <p>Rack values are not set (missing: {missing.join(', ')}). Enter your supplier's or fabricator's values: until then bottles cannot be counted or quoted.</p>
               <button type="button" className="btn small" title="Fill only the blank rack fields with best-guess values so there are bottles to count. Anything you have typed is kept. Each guess is marked estimated until you type over it, and Undo takes them all back." onClick={() => edit(fillBlankRackWithGuesses)} data-testid="fill-guesses">Fill the blanks with best guesses</button>
             </div>
           )
-          : <p className="note">All rack values entered. Rows = the number of rows if given, otherwise height divided by row pitch.</p>}
+          : (stillEstimated.length ? null : <p className="note">All rack values entered. Rows = the number of rows if given, otherwise height divided by row pitch.</p>)}</>}
     >
+      {cat.catalogue && (
+        <SelectField label="Rack type" value={p.rackType?.id ?? null} blank="Custom (typed by hand)" options={typeOptions}
+          hint="A kind of rack from your catalogue (set in Settings, Cellar Planner). Choosing one fills in its sizes and marks them estimated until the supplier has confirmed them. Custom keeps whatever is typed below."
+          onChange={(v) => {
+            if (v === null) edit((q) => { const { rackType: _drop, ...rest } = q; void _drop; return rest; });
+            else { const t = typeById(cat.catalogue, v); if (t) edit((q) => applyRackType(q, t)); }
+          }} testid="rack-type" />
+      )}
       <SelectField label="Bottle" value={p.bottle} options={Object.values(BOTTLE_PROFILES).map((b): [BottleProfileId, string] => [b.id, b.label])} hint="The bottle the racks are for. Its length sets how deep a unit must be (typical sizes, unverified)." onChange={(v) => edit((q) => ({ ...q, bottle: v as BottleProfileId }))} testid="bottle" />
       <NumField label="Unit width" nullable value={s.unitWidthMm} min={1} estimated={est('unitWidthMm')} hint="Width of one rack unit along the wall. Blank means not set: it is never counted as zero." onCommit={(v) => set({ unitWidthMm: v })} testid="rack-width" />
       <NumField label="Unit depth" nullable value={s.unitDepthMm} min={1} estimated={est('unitDepthMm')} hint="How far one rack unit stands out from the wall." onCommit={(v) => set({ unitDepthMm: v })} testid="rack-depth" />
@@ -168,6 +200,37 @@ export function RunsPanel() {
         {WALLS.map(([side, name]) => <button type="button" key={side} className="btn small" title={`Fill the ${name.toLowerCase()} wall with as many whole units as fit, leaving the door opening free. It replaces any runs already on that wall and needs the unit width first.`} onClick={() => fill(side)} data-testid={`fill-${side}`}>Fill {name.toLowerCase()}</button>)}
       </div>
       {msg && <p className="note" role="status" data-testid="fill-msg">{msg}</p>}
+    </Section>
+  );
+}
+
+// ---------------------------------------------------------------- price
+
+/** The full price breakdown, for staff only (the public tool shows a range and no parts). Reads the live catalogue prices. */
+export function PricePanel() {
+  const p = useProject();
+  const cat = useCatalogue();
+  const a = analyseApp(p);
+  const errors = a.issues.filter((i) => i.severity === 'error').length;
+  const r = staffPrice(p, cat.catalogue, { errors });
+  const fmt = (n: number, c: string): string => `${c}${n.toLocaleString('en-AU')}`;
+  return (
+    <Section title="Price" testid="price-panel" tour="cp-price">
+      {r.status === 'UNAVAILABLE'
+        ? <p className="note" data-testid="price-unavailable">{r.reason}</p>
+        : (
+          <>
+            <table className="price-table" data-testid="price-lines">
+              <tbody>
+                {r.lines.map((l) => <tr key={l.label}><th scope="row">{l.label}{l.detail && <small> {l.detail}</small>}</th><td>{fmt(l.amount, r.currency)}</td></tr>)}
+                <tr className="price-total"><th scope="row">Total</th><td data-testid="price-total">{fmt(r.total, r.currency)}</td></tr>
+              </tbody>
+            </table>
+            <p className="note" data-testid="price-range" title="The range the same design would show a customer in the public planner, if prices are switched on there: the total either side by the percentage set in Settings, rounded.">Customer range: {r.text}</p>
+            {r.warnings.map((w) => <p className="banner" role="note" key={w} data-testid="price-warning">{w}</p>)}
+          </>
+        )}
+      <p className="note">An indicative guide from the amounts in Settings, Cellar Planner. Not a quote: a site measure and the finishes still decide the final price.</p>
     </Section>
   );
 }

@@ -10,6 +10,15 @@ export interface LitePricing {
   fixed: number | null; perUnit: number | null; doorSingle: number | null; doorDouble: number | null;
   rangePct: number; roundTo: number; note: string;
 }
+export type RackOrientationId = 'NECK_OUT' | 'LABEL_FORWARD';
+/** One kind of rack in the owner's catalogue. null = not set (never zero). `confirmed` = the numbers are the supplier's, not guesses. */
+export interface RackType {
+  id: string; name: string;
+  unitWidthMm: number; unitDepthMm: number | null; unitHeightMm: number; rowPitchMm: number | null;
+  orientation: RackOrientationId; postsPerUnit: number | null;
+  bottlesPerRow: number | null; bottlesPerRowLabelForward: number | null; rowsPerUnit: number | null;
+  pricePerUnit: number | null; confirmed: boolean;
+}
 export interface LiteConfig {
   version: 1;
   promise: string;
@@ -19,7 +28,11 @@ export interface LiteConfig {
   phone: string;
   /** Brand colour of buttons and highlights, #rrggbb (dark enough for white text). */
   accent: string;
-  rack: { unitWidthMm: number; unitHeightMm: number };
+  /** The catalogue (the staff planner uses all of it; this tool uses the default type) and which type is the default. */
+  rackTypes: RackType[];
+  defaultRackType: string;
+  /** The default type's sizes (kept in this shape for older pages). */
+  rack: { unitWidthMm: number; unitHeightMm: number; unitDepthMm?: number; rowPitchMm?: number; postsPerUnit?: number; bottlesPerRow?: number; rowsPerUnit?: number };
   doors: { singleMm: number; doubleMm: number };
   pricing: LitePricing;
   presets: LitePreset[];
@@ -31,6 +44,11 @@ export const DEFAULT_CONFIG: LiteConfig = {
   quoteNote: 'We usually reply within one business day.',
   phone: '',
   accent: '#4a5a2a',
+  rackTypes: [{
+    id: 'standard', name: 'Standard rack', unitWidthMm: 600, unitDepthMm: null, unitHeightMm: 2000, rowPitchMm: null, orientation: 'NECK_OUT', postsPerUnit: null,
+    bottlesPerRow: null, bottlesPerRowLabelForward: null, rowsPerUnit: null, pricePerUnit: null, confirmed: false,
+  }],
+  defaultRackType: 'standard',
   rack: { unitWidthMm: 600, unitHeightMm: 2000 },
   doors: { singleMm: 970, doubleMm: 1500 },
   pricing: {
@@ -45,10 +63,11 @@ export const DEFAULT_CONFIG: LiteConfig = {
 };
 
 const R = {
-  unitWidthMm: [400, 1200], unitHeightMm: [1000, 3000], doorSingleMm: [700, 1300], doorDoubleMm: [1200, 2400],
+  unitWidthMm: [400, 1200], unitHeightMm: [1000, 3000], unitDepthMm: [150, 1000], rowPitchMm: [60, 300], postsPerUnit: [1, 6], bottlesPerRow: [1, 40], rowsPerUnit: [1, 60], doorSingleMm: [700, 1300], doorDoubleMm: [1200, 2400],
   price: [0, 1000000], rangePct: [0, 50], roomWidthMm: [1000, 8000], roomDepthMm: [1000, 8000], roomHeightMm: [1800, 3200],
 } as const;
 const ROUND_TO = [1, 10, 50, 100, 500, 1000];
+const MAX_RACK_TYPES = 8;
 
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown, max: number): string => String(v).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -57,6 +76,7 @@ const int = (v: unknown, [lo, hi]: readonly [number, number], fallback: number):
   const n = Number(v);
   return Number.isFinite(n) && n >= lo && n <= hi ? Math.round(n) : fallback;
 };
+const optInt = (v: unknown, lim: readonly [number, number]): number | null => (v === undefined || v === null || v === '' ? null : int(v, lim, NaN) || null);
 const money = (v: unknown): number | null => {
   if (v === undefined || v === null || v === '') return null;
   const n = Number(v);
@@ -96,13 +116,49 @@ export const telHref = (phone: string): string => `tel:${(phone.trim().startsWit
 export function normaliseConfig(raw: unknown): LiteConfig {
   const D = DEFAULT_CONFIG;
   const src = isObj(raw) ? raw : {};
-  const rack = isObj(src.rack) ? src.rack : {};
   const doors = isObj(src.doors) ? src.doors : {};
   const p = isObj(src.pricing) ? src.pricing : {};
+  const T0 = D.rackTypes[0]!;
+  const slug = (t: unknown): string => text(t ?? '', 40).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+  const parseType = (t: unknown, n: number): RackType | null => {
+    if (!isObj(t)) return null;
+    const name = text(t.name ?? '', 40);
+    if (!name) return null;
+    const o = t.orientation === undefined || t.orientation === null || t.orientation === '' ? T0.orientation : t.orientation;
+    return {
+      id: slug(t.id) || slug(name) || `rack-${n}`, name,
+      unitWidthMm: int(t.unitWidthMm, R.unitWidthMm, T0.unitWidthMm), unitDepthMm: optInt(t.unitDepthMm, R.unitDepthMm),
+      unitHeightMm: int(t.unitHeightMm, R.unitHeightMm, T0.unitHeightMm), rowPitchMm: optInt(t.rowPitchMm, R.rowPitchMm),
+      orientation: o === 'NECK_OUT' || o === 'LABEL_FORWARD' ? o : T0.orientation, postsPerUnit: optInt(t.postsPerUnit, R.postsPerUnit),
+      bottlesPerRow: optInt(t.bottlesPerRow, R.bottlesPerRow), bottlesPerRowLabelForward: optInt(t.bottlesPerRowLabelForward, R.bottlesPerRow),
+      rowsPerUnit: optInt(t.rowsPerUnit, R.rowsPerUnit), pricePerUnit: money(t.pricePerUnit), confirmed: t.confirmed === true,
+    };
+  };
+  let rawTypes: unknown[];
+  if (src.rackTypes === undefined || src.rackTypes === null) {
+    const old = isObj(src.rack) ? src.rack : {};
+    rawTypes = [{ id: T0.id, name: T0.name, unitWidthMm: old.unitWidthMm, unitHeightMm: old.unitHeightMm, pricePerUnit: p.perUnit }];
+  } else rawTypes = Array.isArray(src.rackTypes) ? src.rackTypes : [];
+  const rackTypes: RackType[] = [];
+  rawTypes.slice(0, MAX_RACK_TYPES).forEach((t, i) => {
+    const rt = parseType(t, i + 1);
+    if (!rt) return;
+    while (rackTypes.some((x) => x.id === rt.id)) rt.id += '-x';
+    rackTypes.push(rt);
+  });
+  if (!rackTypes.length) rackTypes.push({ ...T0 });
+  const defaultRackType = typeof src.defaultRackType === 'string' && rackTypes.some((r) => r.id === src.defaultRackType) ? src.defaultRackType : rackTypes[0]!.id;
+  const def = rackTypes.find((r) => r.id === defaultRackType)!;
+  const rack: LiteConfig['rack'] = { unitWidthMm: def.unitWidthMm, unitHeightMm: def.unitHeightMm };
+  if (def.unitDepthMm !== null) rack.unitDepthMm = def.unitDepthMm;
+  if (def.rowPitchMm !== null) rack.rowPitchMm = def.rowPitchMm;
+  if (def.postsPerUnit !== null) rack.postsPerUnit = def.postsPerUnit;
+  if (def.bottlesPerRow !== null) rack.bottlesPerRow = def.bottlesPerRow;
+  if (def.rowsPerUnit !== null) rack.rowsPerUnit = def.rowsPerUnit;
   const pricing: LitePricing = {
     show: p.show === true,
     currency: p.currency === undefined ? D.pricing.currency : text(p.currency, 3) || D.pricing.currency,
-    fixed: money(p.fixed), perUnit: money(p.perUnit), doorSingle: money(p.doorSingle), doorDouble: money(p.doorDouble),
+    fixed: money(p.fixed), perUnit: def.pricePerUnit, doorSingle: money(p.doorSingle), doorDouble: money(p.doorDouble),
     rangePct: int(p.rangePct, R.rangePct, D.pricing.rangePct),
     roundTo: ROUND_TO.includes(Number(p.roundTo)) ? Number(p.roundTo) : D.pricing.roundTo,
     note: p.note === undefined ? D.pricing.note : text(p.note, 300),
@@ -114,7 +170,6 @@ export function normaliseConfig(raw: unknown): LiteConfig {
     const name = text(pr.name ?? '', 40);
     const widthMm = int(pr.widthMm, R.roomWidthMm, 0), depthMm = int(pr.depthMm, R.roomDepthMm, 0), heightMm = int(pr.heightMm, R.roomHeightMm, 0);
     if (!name || !widthMm || !depthMm || !heightMm) continue;
-    const slug = (t: unknown): string => text(t ?? '', 40).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
     let id = slug(pr.id) || slug(name) || `room-${presets.length + 1}`;
     while (presets.some((x) => x.id === id)) id += '-x';
     presets.push({ id, name, widthMm, depthMm, heightMm, doorStyle: pr.doorStyle === 'DOUBLE' ? 'DOUBLE' : 'SINGLE' });
@@ -125,7 +180,7 @@ export function normaliseConfig(raw: unknown): LiteConfig {
     quoteNote: src.quoteNote === undefined ? D.quoteNote : text(src.quoteNote, 200),
     phone: cleanPhone(src.phone),
     accent: cleanAccent(src.accent),
-    rack: { unitWidthMm: int(rack.unitWidthMm, R.unitWidthMm, D.rack.unitWidthMm), unitHeightMm: int(rack.unitHeightMm, R.unitHeightMm, D.rack.unitHeightMm) },
+    rackTypes, defaultRackType, rack,
     doors: { singleMm: int(doors.singleMm, R.doorSingleMm, D.doors.singleMm), doubleMm: int(doors.doubleMm, R.doorDoubleMm, D.doors.doubleMm) },
     pricing,
     presets,

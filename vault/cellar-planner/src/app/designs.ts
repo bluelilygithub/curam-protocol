@@ -7,6 +7,7 @@ import {
 import { cleanName } from '../domain/projectFactory';
 import { deserializeApp, sampleProject, testCaseProject, type AppProject } from './model';
 import type { AppStore } from './store';
+import { applyRackType, defaultType, type CatalogueStore } from './catalogue';
 
 /** The browser draft kept on every change, so a closed tab loses nothing even before the library has saved. */
 export function loadDraft(storage: ReadableStorage = localStorage): AppProject | null {
@@ -27,7 +28,7 @@ export interface Designs {
  * The first design of a brand-new library is the ready-made Test case; "New design" afterwards is the blank sample.
  */
 export function createDesigns(p: {
-  store: AppStore; storage: StorageLike & ReadableStorage; fetch: FetchLike | undefined; newId: () => string;
+  store: AppStore; /** The rack catalogue: a new blank design starts with its default rack type (when it has loaded). */ catalogue?: CatalogueStore; storage: StorageLike & ReadableStorage; fetch: FetchLike | undefined; newId: () => string;
   notify: (text: string, severity?: 'info' | 'warn' | 'error') => void;
   onLoaded?: () => void;
   schedule?: (fn: () => void, ms: number) => () => void;
@@ -52,7 +53,12 @@ export function createDesigns(p: {
       }
       return chosen;
     },
-    newEmpty: (name) => (name === FIRST_DESIGN_NAME ? testCaseProject() : { ...sampleProject(), name }),
+    newEmpty: (name) => {
+      if (name === FIRST_DESIGN_NAME) return testCaseProject();
+      const blank = { ...sampleProject(), name };
+      const t = defaultType(p.catalogue?.getState().catalogue ?? null);
+      return t ? applyRackType(blank, t) : blank;
+    },
     schedule: p.schedule ?? ((fn, ms) => { const t = setTimeout(fn, ms); return () => clearTimeout(t); }),
     notify: p.notify,
     ...(p.onLoaded ? { onLoaded: p.onLoaded } : {}),

@@ -2,8 +2,8 @@ import React, { cloneElement, useCallback, useEffect, useId, useMemo, useState }
 import api from '../utils/apiClient';
 import Tooltip from './Tooltip';
 
-// Settings -> Cellar Planner (admin). The owner's numbers for the PUBLIC lite planner: rack unit size, door widths, the price formula, a line of
-// text and the starting rooms. Saved to Vault (workspace_settings); the public tool fetches them when it opens. Rules live on the server
+// Settings -> Cellar Planner (admin). The owner's numbers, shared by the PUBLIC lite planner and the staff Cellar Planner: the rack types (sizes, bottle
+// counts, price per unit, "confirmed by the supplier"), door widths, the price formula, a line of text and the starting rooms. Saved to Vault (workspace_settings); the public tool fetches them when it opens. Rules live on the server
 // (server/config/cellarLiteConfig.js), which also sends back plain-language reasons when a value is refused. Docs: docs/cellar-planner.md.
 
 const FIELD_STYLE = { borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' };
@@ -12,16 +12,22 @@ const CARD = 'rounded-2xl border p-6 space-y-4';
 const CARD_STYLE = { borderColor: 'var(--color-border)', background: 'var(--color-surface)' };
 const ROUND_TO = [1, 10, 50, 100, 500, 1000];
 const MAX_PRESETS = 6;
+const MAX_RACK_TYPES = 8;
+const ORIENTATION_OPTIONS = [['NECK_OUT', 'Neck-out'], ['LABEL_FORWARD', 'Label-forward']];
+const RACK_NUM_KEYS = ['unitWidthMm', 'unitDepthMm', 'unitHeightMm', 'rowPitchMm', 'postsPerUnit', 'bottlesPerRow', 'bottlesPerRowLabelForward', 'rowsPerUnit', 'pricePerUnit'];
+const typeToForm = (r) => ({ id: r.id, name: r.name, orientation: r.orientation, confirmed: !!r.confirmed, ...Object.fromEntries(RACK_NUM_KEYS.map((k) => [k, r[k] === null || r[k] === undefined ? '' : String(r[k])])) });
+const typeToConfig = (r) => ({ id: r.id, name: r.name, orientation: r.orientation, confirmed: r.confirmed, ...Object.fromEntries(RACK_NUM_KEYS.map((k) => [k, r[k]])) });
+const slugOf = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
 
 const toForm = (c) => ({
   promise: c.promise ?? '',
   quoteNote: c.quoteNote ?? '',
   phone: c.phone ?? '',
   accent: c.accent ?? '#4a5a2a',
-  unitWidthMm: String(c.rack.unitWidthMm), unitHeightMm: String(c.rack.unitHeightMm),
+  rackTypes: (c.rackTypes || []).map(typeToForm), defaultRackType: c.defaultRackType,
   singleMm: String(c.doors.singleMm), doubleMm: String(c.doors.doubleMm),
   show: !!c.pricing.show, currency: c.pricing.currency ?? '$',
-  fixed: c.pricing.fixed ?? '', perUnit: c.pricing.perUnit ?? '', doorSingle: c.pricing.doorSingle ?? '', doorDouble: c.pricing.doorDouble ?? '',
+  fixed: c.pricing.fixed ?? '', doorSingle: c.pricing.doorSingle ?? '', doorDouble: c.pricing.doorDouble ?? '',
   rangePct: String(c.pricing.rangePct), roundTo: String(c.pricing.roundTo), note: c.pricing.note ?? '',
   presets: (c.presets || []).map((p) => ({ id: p.id, name: p.name, widthMm: String(p.widthMm), depthMm: String(p.depthMm), heightMm: String(p.heightMm), doorStyle: p.doorStyle })),
 });
@@ -31,9 +37,9 @@ const toConfig = (f) => ({
   quoteNote: f.quoteNote,
   phone: f.phone,
   accent: f.accent,
-  rack: { unitWidthMm: f.unitWidthMm, unitHeightMm: f.unitHeightMm },
+  rackTypes: f.rackTypes.map(typeToConfig), defaultRackType: f.defaultRackType,
   doors: { singleMm: f.singleMm, doubleMm: f.doubleMm },
-  pricing: { show: f.show, currency: f.currency, fixed: f.fixed, perUnit: f.perUnit, doorSingle: f.doorSingle, doorDouble: f.doorDouble, rangePct: f.rangePct, roundTo: f.roundTo, note: f.note },
+  pricing: { show: f.show, currency: f.currency, fixed: f.fixed, doorSingle: f.doorSingle, doorDouble: f.doorDouble, rangePct: f.rangePct, roundTo: f.roundTo, note: f.note },
   presets: f.presets.map((p) => ({ id: p.id, name: p.name, widthMm: p.widthMm, depthMm: p.depthMm, heightMm: p.heightMm, doorStyle: p.doorStyle })),
 });
 
@@ -81,6 +87,9 @@ export default function CellarLiteSettings({ onDirtyChange }) {
   const set = (key, value) => { setForm((f) => ({ ...f, [key]: value })); setSaved(false); setErrors([]); };
   const setPreset = (i, key, value) => { setForm((f) => ({ ...f, presets: f.presets.map((p, j) => (j === i ? { ...p, [key]: value } : p)) })); setSaved(false); setErrors([]); };
   const addPreset = () => { setForm((f) => ({ ...f, presets: [...f.presets, { id: '', name: '', widthMm: '2500', depthMm: '2000', heightMm: '2400', doorStyle: 'SINGLE' }] })); setSaved(false); };
+  const setType = (i, key, value) => { setForm((f) => ({ ...f, rackTypes: f.rackTypes.map((r, j) => (j === i ? { ...r, [key]: value } : r)) })); setSaved(false); setErrors([]); };
+  const addType = () => { setForm((f) => ({ ...f, rackTypes: [...f.rackTypes, typeToForm({ id: '', name: '', orientation: 'NECK_OUT', confirmed: false, unitWidthMm: 600, unitHeightMm: 2000 })] })); setSaved(false); };
+  const removeType = (i) => { setForm((f) => { const next = f.rackTypes.filter((_, j) => j !== i); const gone = f.rackTypes[i]; return { ...f, rackTypes: next, defaultRackType: gone.id === f.defaultRackType ? (next[0]?.id ?? '') : f.defaultRackType }; }); setSaved(false); };
   const removePreset = (i) => { setForm((f) => ({ ...f, presets: f.presets.filter((_, j) => j !== i) })); setSaved(false); };
 
   // the same arithmetic the public tool does, so the owner can see what a visitor would be shown
@@ -89,8 +98,9 @@ export default function CellarLiteSettings({ onDirtyChange }) {
     const n = (v) => (v === '' || v === null || !Number.isFinite(Number(v)) ? null : Number(v));
     const units = Number(exampleUnits);
     const door = n(form.doorSingle);
-    if (!(units > 0) || (n(form.fixed) === null && n(form.perUnit) === null && door === null)) return null;
-    const mid = (n(form.fixed) ?? 0) + (n(form.perUnit) ?? 0) * units + (door ?? 0);
+    const perUnit = n((form.rackTypes.find((r) => r.id === form.defaultRackType) || form.rackTypes[0] || {}).pricePerUnit);
+    if (!(units > 0) || (n(form.fixed) === null && perUnit === null && door === null)) return null;
+    const mid = (n(form.fixed) ?? 0) + (perUnit ?? 0) * units + (door ?? 0);
     const step = Number(form.roundTo) || 100, spread = (Number(form.rangePct) || 0) / 100;
     const round = (x) => Math.round(x / step) * step;
     const lo = Math.max(0, round(mid * (1 - spread))), hi = Math.max(lo, round(mid * (1 + spread)));
@@ -167,12 +177,47 @@ export default function CellarLiteSettings({ onDirtyChange }) {
         </div>
       )}
 
-      <section className={CARD} style={CARD_STYLE}>
-        <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Rack units</h3>
-        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Every estimate is built from whole rack units of this size. A wider unit holds more bottles per row; a taller one holds more rows. The unit is never taller than the room it stands in.</p>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Unit width (mm)" tip="How wide one standard rack unit is. Visitors' estimates are built from whole units this wide, so a wider unit holds more bottles per row but fewer fit along a wall." hint="400 to 1200. Standard is 600.">{numInput('unitWidthMm')}</Field>
-          <Field label="Unit height (mm)" tip="How tall one rack unit is. A taller unit holds more rows of bottles. A unit is never taller than the visitor's room." hint="1000 to 3000. Standard is 2000.">{numInput('unitHeightMm')}</Field>
+      <section className={CARD} style={CARD_STYLE} data-testid="cellar-lite-racktypes">
+        <div className="flex items-center gap-3">
+          <h3 className="text-base font-semibold flex-1" style={{ color: 'var(--color-text)' }}>Rack types</h3>
+          {form.rackTypes.length < MAX_RACK_TYPES && (
+            <Tooltip text="Add another kind of rack to the catalogue (up to eight)."><button onClick={addType} className="text-xs px-3 py-1 rounded-lg border font-medium hover:opacity-70 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'transparent' }} data-testid="cellar-lite-add-racktype">+ Add a rack type</button></Tooltip>
+          )}
+        </div>
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          The catalogue of racks you sell. The <strong>default</strong> type is what the public planner builds its estimates from (width, height and price per unit). Staff pick a type per design in the Cellar Planner. Leave a box blank if you don't know the value: it shows as "not set" and is never counted as zero. Tick <strong>Confirmed by supplier</strong> only when the numbers are the supplier's real values; until then the staff planner marks them as estimated.
+        </p>
+        <div className="space-y-3">
+          {form.rackTypes.map((r, i) => (
+            <div key={i} className="rounded-xl border p-4 space-y-3" style={{ borderColor: r.id === form.defaultRackType ? 'var(--color-primary)' : 'var(--color-border)', background: 'var(--color-bg)' }} data-testid="cellar-lite-racktype">
+              <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                <Field label="Name" tip="What this rack is called, for example Standard 600 or Wide display. Up to 40 characters."><input type="text" value={r.name} maxLength={40} onChange={(e) => setType(i, 'name', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
+                <Field label="Bottle orientation" tip="How the bottles lie. Neck-out needs the bottle's length plus 15 mm of depth; label-forward shows the labels but holds fewer bottles per row.">
+                  <select value={r.orientation} onChange={(e) => setType(i, 'orientation', e.target.value)} className={INPUT} style={FIELD_STYLE}>
+                    {ORIENTATION_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                </Field>
+              </div>
+              <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+                <Field label="Unit width (mm)" tip="How wide one rack unit is along the wall. A wider unit holds more bottles per row but fewer fit along a wall." hint="400 to 1200."><input type="text" inputMode="numeric" value={r.unitWidthMm} onChange={(e) => setType(i, 'unitWidthMm', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
+                <Field label="Unit height (mm)" tip="How tall one rack unit is. A taller unit holds more rows. A unit is never taller than the room." hint="1000 to 3000."><input type="text" inputMode="numeric" value={r.unitHeightMm} onChange={(e) => setType(i, 'unitHeightMm', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
+                <Field label="Unit depth (mm)" tip="How far one rack unit stands out from the wall. Blank means not set." hint="150 to 1000, or blank."><input type="text" inputMode="numeric" value={r.unitDepthMm} onChange={(e) => setType(i, 'unitDepthMm', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
+                <Field label="Row pitch (mm)" tip="The vertical distance from one row of bottles to the next. Blank means not set." hint="60 to 300, or blank."><input type="text" inputMode="numeric" value={r.rowPitchMm} onChange={(e) => setType(i, 'rowPitchMm', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
+                <Field label="Posts per unit" tip="How many posts one unit has, for the parts list. It does not change the bottle count. Blank means not set." hint="1 to 6, or blank."><input type="text" inputMode="numeric" value={r.postsPerUnit} onChange={(e) => setType(i, 'postsPerUnit', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
+                <Field label="Rows per unit" tip="How many rows of bottles one unit holds. Blank means it is worked out from the unit height and the row pitch." hint="1 to 60, or blank."><input type="text" inputMode="numeric" value={r.rowsPerUnit} onChange={(e) => setType(i, 'rowsPerUnit', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
+                <Field label="Bottles per row" tip="Bottles in one row of one unit, neck-out. Blank means it is worked out from the unit width and the bottle size." hint="1 to 40, or blank."><input type="text" inputMode="numeric" value={r.bottlesPerRow} onChange={(e) => setType(i, 'bottlesPerRow', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
+                <Field label="Bottles per row (labels forward)" tip="Bottles in one row when labels face forward. The supplier gives this figure; it is never worked out. Blank means not set." hint="1 to 40, or blank."><input type="text" inputMode="numeric" value={r.bottlesPerRowLabelForward} onChange={(e) => setType(i, 'bottlesPerRowLabelForward', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Price per rack unit" tip="Added once for each unit of this type in a design. Staff see it in the price breakdown; visitors see it only inside a guide price, and only if the guide price is shown. Blank means no price." hint="For each unit of this type."><input type="text" inputMode="decimal" value={r.pricePerUnit} onChange={(e) => setType(i, 'pricePerUnit', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
+                <div className="space-y-2 pt-5">
+                  <Tooltip text="Tick when these numbers are the supplier's or fabricator's real values. Until ticked, the staff planner marks this rack's values as estimated on screen and in the drawing package."><label className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text)' }}><input type="checkbox" checked={r.confirmed} onChange={(e) => setType(i, 'confirmed', e.target.checked)} />Confirmed by supplier</label></Tooltip>
+                  <Tooltip text="Make this the default type: the public planner builds its estimates from it, and new designs in the staff planner start with it."><label className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text)' }}><input type="radio" name="cellar-default-racktype" checked={(r.id || slugOf(r.name)) === form.defaultRackType} disabled={!r.id && !r.name.trim()} onChange={() => set('defaultRackType', r.id || slugOf(r.name))} />Default type</label></Tooltip>
+                </div>
+              </div>
+              {form.rackTypes.length > 1 && <Tooltip text="Remove this rack type. It stays until you press Save."><button onClick={() => removeType(i)} className="text-xs hover:opacity-70 transition-opacity" style={{ color: '#ef4444' }}>Remove this rack type</button></Tooltip>}
+            </div>
+          ))}
         </div>
       </section>
 
@@ -199,11 +244,10 @@ export default function CellarLiteSettings({ onDirtyChange }) {
           </Tooltip>
         </div>
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-          Price = fixed amount + (price per rack unit × number of units) + the door price. Visitors see a range around it. Leave any amount blank if it doesn't apply. While this is hidden, none of these amounts leave Vault.
+          Price = fixed amount + (the default rack type's price per unit × number of units) + the door price. Visitors see a range around it. Leave any amount blank if it doesn't apply. While this is hidden, none of these amounts leave Vault.
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Fixed amount" tip="An amount added to every guide price, for things every job has whatever its size. Leave blank if it doesn't apply." hint="Anything charged on every job (design, delivery, glass…).">{numInput('fixed')}</Field>
-          <Field label="Price per rack unit" tip="Added once for each whole rack unit in the visitor's design, so bigger cellars cost more. Leave blank if it doesn't apply." hint="For each whole rack unit in the design.">{numInput('perUnit')}</Field>
           <Field label="Single door price" tip="Added when the visitor chooses a single door. Leave blank if it doesn't apply.">{numInput('doorSingle')}</Field>
           <Field label="Double door price" tip="Added when the visitor chooses a double door. Leave blank if it doesn't apply.">{numInput('doorDouble')}</Field>
           <Field label="Range either side (%)" tip="Visitors see a range around the total, not one figure. At 15, a $10,000 total shows $8,500 to $11,500." hint="0 to 50. At 15, a $10,000 job shows $8,500 to $11,500.">{numInput('rangePct')}</Field>

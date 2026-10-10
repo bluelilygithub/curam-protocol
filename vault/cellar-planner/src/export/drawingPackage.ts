@@ -30,7 +30,8 @@ const today = (): string => new Date().toISOString().slice(0, 10);
 export function statusLine(p: AppProject, a: Analysis): string {
   const missing = missingFields(p.rackSpec, p.bottle);
   const bits: string[] = [];
-  if (p.estimated?.length) bits.push(`RACK VALUES ARE BEST GUESSES (estimated: ${p.estimated.length} of ${ESTIMATE_FIELDS.length} fields) - NOT FOR QUOTING OR FABRICATION`);
+  if (p.estimated?.length && p.rackType && !p.rackType.confirmed) bits.push(`RACK VALUES (${p.rackType.name}) NOT YET CONFIRMED BY THE SUPPLIER (estimated: ${p.estimated.length} of ${ESTIMATE_FIELDS.length} fields) - NOT FOR QUOTING OR FABRICATION`);
+  else if (p.estimated?.length) bits.push(`RACK VALUES ARE BEST GUESSES (estimated: ${p.estimated.length} of ${ESTIMATE_FIELDS.length} fields) - NOT FOR QUOTING OR FABRICATION`);
   else if (missing.length) bits.push(`RACK VALUES NOT SET (missing: ${missing.join(', ')}) - BOTTLES CANNOT BE COUNTED`);
   else bits.push('Rack values entered by the designer; confirm with the fabricator.');
   if (a.racks.runs.some((r) => r.capacity.status === 'OK' && r.capacity.bottlesPerRowSource === 'calculated')) bits.push('Bottles per row is calculated (unit width / bottle pitch): an estimate.');
@@ -159,6 +160,7 @@ function specLines(p: AppProject, a: Analysis, f: Fonts): Array<{ text: string; 
   head('RACK SPECIFICATION');
   const per = effectiveBottlesPerRow(s, p.bottle);
   const src = (k: (typeof ESTIMATE_FIELDS)[number]): string => (s[k] === null ? 'NOT SET' : p.estimated?.includes(k) ? 'ESTIMATED' : 'entered');
+  if (p.rackType) row(`Rack type: ${p.rackType.name} (${p.rackType.confirmed ? 'values confirmed by the supplier' : 'values NOT yet confirmed by the supplier'}).`);
   row(`Bottle: ${p.bottle.toLowerCase()}.`);
   row(`Unit width: ${s.unitWidthMm ?? '-'} mm [${src('unitWidthMm')}].`);
   row(`Unit depth: ${s.unitDepthMm ?? '-'} mm [${src('unitDepthMm')}].`);

@@ -8,7 +8,7 @@
 
 const express = require('express');
 const { getLogger } = require('../middleware/requestContext');
-const { KEY, DEFAULTS, validateConfig, publicView } = require('../config/cellarLiteConfig');
+const { KEY, DEFAULTS, validateConfig, publicView, staffView } = require('../config/cellarLiteConfig');
 
 const CACHE_MS = 30 * 1000; // the public endpoint is read on every visit to the planner; one database read per 30 s is plenty
 
@@ -81,7 +81,19 @@ function createCellarLiteConfigRouters({ pool, now = () => Date.now() }) {
     }
   });
 
-  return { publicRouter, adminRouter, load };
+  // the staff Cellar Planner's catalogue: every rack type and the real prices. Mounted behind requireAuth + requireFeature('cellarPlanner') in server/index.js.
+  const staffRouter = express.Router();
+  staffRouter.get('/', async (req, res) => {
+    try {
+      const { config, updatedAt } = await load();
+      res.set('Cache-Control', 'no-store').json({ catalogue: staffView(config), updatedAt });
+    } catch (err) {
+      getLogger().error({ err: err.message }, '[cellar-catalogue] staff read failed');
+      res.status(500).json({ error: 'Could not read the rack catalogue.' });
+    }
+  });
+
+  return { publicRouter, adminRouter, staffRouter, load };
 }
 
 module.exports = { createCellarLiteConfigRouters };

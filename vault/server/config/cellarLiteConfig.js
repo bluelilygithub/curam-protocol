@@ -1,7 +1,9 @@
 'use strict';
 
-// Cellar Planner LITE: the settings the business owner controls from Vault (Settings -> Cellar Planner): rack unit sizes, door widths, the price
-// formula and a few words on the page. Stored as one JSON value in workspace_settings under KEY. This file is the single place that says what a valid
+// Cellar Planner settings the business owner controls from Vault (Settings -> Cellar Planner): the RACK TYPES (sizes, bottle counts, price per unit,
+// "confirmed by the supplier"), door widths, the price formula and a few words on the public page. Shared: the public lite tool reads the default rack
+// type (as `rack` and `pricing.perUnit`, the same shape as before, so pages with an older copy keep working) and the staff Cellar Planner reads the
+// whole catalogue. Stored as one JSON value in workspace_settings under KEY. This file is the single place that says what a valid
 // setting is; the admin screen, the public endpoint and the tests all use it. The browser tool has its own copy of DEFAULTS
 // (cellar-planner/src/lite/config.ts) for when this endpoint cannot be reached; keep the two in step (a test compares them).
 
@@ -9,13 +11,16 @@ const KEY = 'cellar_lite_config';
 
 
 const LIMITS = {
-  unitWidthMm: [400, 1200], unitHeightMm: [1000, 3000],
+  unitWidthMm: [400, 1200], unitHeightMm: [1000, 3000], unitDepthMm: [150, 1000], rowPitchMm: [60, 300], postsPerUnit: [1, 6],
+  bottlesPerRow: [1, 40], rowsPerUnit: [1, 60],
   doorSingleMm: [700, 1300], doorDoubleMm: [1200, 2400],
   price: [0, 1000000], rangePct: [0, 50],
   roomWidthMm: [1000, 8000], roomDepthMm: [1000, 8000], roomHeightMm: [1800, 3200],
 };
 const ROUND_TO = [1, 10, 50, 100, 500, 1000];
 const MAX_PRESETS = 6;
+const MAX_RACK_TYPES = 8;
+const ORIENTATIONS = ['NECK_OUT', 'LABEL_FORWARD'];
 
 const DEFAULTS = Object.freeze({
   version: 1,
@@ -23,6 +28,13 @@ const DEFAULTS = Object.freeze({
   quoteNote: 'We usually reply within one business day.',
   phone: '',
   accent: '#4a5a2a',
+  // the catalogue of rack types; null = not set (the staff app then shows its best guess, marked estimated). `confirmed` = the values are the supplier's.
+  rackTypes: [{
+    id: 'standard', name: 'Standard rack', unitWidthMm: 600, unitDepthMm: null, unitHeightMm: 2000, rowPitchMm: null, orientation: 'NECK_OUT', postsPerUnit: null,
+    bottlesPerRow: null, bottlesPerRowLabelForward: null, rowsPerUnit: null, pricePerUnit: null, confirmed: false,
+  }],
+  defaultRackType: 'standard',
+  // derived from the default rack type (kept in this shape for the public tool and for older copies of it)
   rack: { unitWidthMm: 600, unitHeightMm: 2000 },
   doors: { singleMm: 970, doubleMm: 1500 },
   pricing: {
@@ -90,17 +102,70 @@ function validateConfig(raw) {
     return t;
   };
 
-  const rack = isObj(src.rack) ? src.rack : {};
   const doors = isObj(src.doors) ? src.doors : {};
   const p = isObj(src.pricing) ? src.pricing : {};
   const D = DEFAULTS;
   const D0 = DEFAULTS;
+  const T0 = D.rackTypes[0];
+
+  // ---- rack types. Settings saved before there were types had `rack` and `pricing.perUnit`: they become the one "Standard rack".
+  const optInt = (v, lim, label) => (v === undefined || v === null || v === '' ? null : int(v, lim, null, label));
+  const slug = (t) => cleanText(t ?? '', 40).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+  const parseType = (t, n) => {
+    if (!isObj(t)) { errors.push(`Rack type ${n} was not in the expected format.`); return null; }
+    const name = cleanText(t.name ?? '', 40);
+    if (!name) { errors.push(`Rack type ${n} needs a name.`); return null; }
+    const orientation = t.orientation === undefined || t.orientation === null || t.orientation === '' ? T0.orientation : t.orientation;
+    if (!ORIENTATIONS.includes(orientation)) errors.push(`${name}: the bottle orientation must be neck-out or label-forward.`);
+    return {
+      id: slug(t.id) || slug(name) || `rack-${n}`,
+      name,
+      unitWidthMm: int(t.unitWidthMm, LIMITS.unitWidthMm, T0.unitWidthMm, `${name}: unit width`),
+      unitDepthMm: optInt(t.unitDepthMm, LIMITS.unitDepthMm, `${name}: unit depth`),
+      unitHeightMm: int(t.unitHeightMm, LIMITS.unitHeightMm, T0.unitHeightMm, `${name}: unit height`),
+      rowPitchMm: optInt(t.rowPitchMm, LIMITS.rowPitchMm, `${name}: row pitch`),
+      orientation: ORIENTATIONS.includes(orientation) ? orientation : T0.orientation,
+      postsPerUnit: optInt(t.postsPerUnit, LIMITS.postsPerUnit, `${name}: posts per unit`),
+      bottlesPerRow: optInt(t.bottlesPerRow, LIMITS.bottlesPerRow, `${name}: bottles per row`),
+      bottlesPerRowLabelForward: optInt(t.bottlesPerRowLabelForward, LIMITS.bottlesPerRow, `${name}: bottles per row (label-forward)`),
+      rowsPerUnit: optInt(t.rowsPerUnit, LIMITS.rowsPerUnit, `${name}: rows per unit`),
+      pricePerUnit: money(t.pricePerUnit, `${name}: the price per rack unit`),
+      confirmed: t.confirmed === true,
+    };
+  };
+  let rawTypes;
+  if (src.rackTypes === undefined || src.rackTypes === null) {
+    const old = isObj(src.rack) ? src.rack : {};
+    rawTypes = [{ id: T0.id, name: T0.name, unitWidthMm: old.unitWidthMm, unitHeightMm: old.unitHeightMm, pricePerUnit: p.perUnit }];
+  } else if (!Array.isArray(src.rackTypes)) {
+    errors.push('The rack types were not in the expected format.');
+    rawTypes = [];
+  } else {
+    rawTypes = src.rackTypes;
+  }
+  if (rawTypes.length > MAX_RACK_TYPES) errors.push(`At most ${MAX_RACK_TYPES} rack types.`);
+  const rackTypes = [];
+  const usedIds = new Set();
+  rawTypes.slice(0, MAX_RACK_TYPES).forEach((t, i) => {
+    const rt = parseType(t, i + 1);
+    if (!rt) return;
+    while (usedIds.has(rt.id)) rt.id += '-x';
+    usedIds.add(rt.id);
+    rackTypes.push(rt);
+  });
+  if (!rackTypes.length) rackTypes.push({ ...T0 });
+  let defaultRackType = typeof src.defaultRackType === 'string' && rackTypes.some((r) => r.id === src.defaultRackType) ? src.defaultRackType : rackTypes[0].id;
+  if (src.defaultRackType !== undefined && src.defaultRackType !== null && src.defaultRackType !== '' && defaultRackType !== src.defaultRackType) errors.push('The default rack type must be one of the listed rack types.');
+  const def = rackTypes.find((r) => r.id === defaultRackType);
+  // what the public tool and older copies of it read: the default type's sizes (and its price per unit below)
+  const rack = { unitWidthMm: def.unitWidthMm, unitHeightMm: def.unitHeightMm };
+  for (const k of ['unitDepthMm', 'rowPitchMm', 'postsPerUnit', 'bottlesPerRow', 'rowsPerUnit']) if (def[k] !== null) rack[k] = def[k];
 
   const pricing = {
     show: p.show === true,
     currency: p.currency === undefined ? D.pricing.currency : cleanText(p.currency, 3) || D.pricing.currency,
     fixed: money(p.fixed, 'The fixed amount'),
-    perUnit: money(p.perUnit, 'The price per rack unit'),
+    perUnit: def.pricePerUnit,
     doorSingle: money(p.doorSingle, 'The single door price'),
     doorDouble: money(p.doorDouble, 'The double door price'),
     rangePct: int(p.rangePct, LIMITS.rangePct, D.pricing.rangePct, 'The price range'),
@@ -109,7 +174,7 @@ function validateConfig(raw) {
   };
   if (p.roundTo !== undefined && !ROUND_TO.includes(Number(p.roundTo))) errors.push(`Round prices to must be one of ${ROUND_TO.join(', ')}.`);
   if (pricing.show && pricing.fixed === null && pricing.perUnit === null && pricing.doorSingle === null && pricing.doorDouble === null) {
-    errors.push('To show a price, enter at least one amount (fixed, per rack unit or a door price).');
+    errors.push('To show a price, enter at least one amount (fixed, a rack type\'s price per unit, or a door price).');
     pricing.show = false;
   }
 
@@ -128,7 +193,6 @@ function validateConfig(raw) {
     const depthMm = int(pr.depthMm, LIMITS.roomDepthMm, null, `${name}: depth`);
     const heightMm = int(pr.heightMm, LIMITS.roomHeightMm, null, `${name}: height`);
     if (widthMm === null || depthMm === null || heightMm === null) { if (errors.length === before) errors.push(`${name} needs a width, depth and height.`); return; }
-    const slug = (t) => cleanText(t ?? '', 40).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
     let id = slug(pr.id) || slug(name) || `room-${n}`;
     while (seen.has(id)) id += '-x';
     seen.add(id);
@@ -141,10 +205,9 @@ function validateConfig(raw) {
     quoteNote: src.quoteNote === undefined ? D.quoteNote : cleanText(src.quoteNote, 200),
     phone: cleanPhone(src.phone),
     accent: cleanAccent(src.accent),
-    rack: {
-      unitWidthMm: int(rack.unitWidthMm, LIMITS.unitWidthMm, D.rack.unitWidthMm, 'The rack unit width'),
-      unitHeightMm: int(rack.unitHeightMm, LIMITS.unitHeightMm, D.rack.unitHeightMm, 'The rack unit height'),
-    },
+    rackTypes,
+    defaultRackType,
+    rack,
     doors: {
       singleMm: int(doors.singleMm, LIMITS.doorSingleMm, D.doors.singleMm, 'The single door width'),
       doubleMm: int(doors.doubleMm, LIMITS.doorDoubleMm, D.doors.doubleMm, 'The double door width'),
@@ -158,7 +221,16 @@ function validateConfig(raw) {
 /** What the public endpoint may say. Unpublished prices are never sent: with `show` off the amounts are blanked. */
 function publicView(config) {
   if (config.pricing.show) return config;
-  return { ...config, pricing: { ...config.pricing, fixed: null, perUnit: null, doorSingle: null, doorDouble: null } };
+  return {
+    ...config,
+    rackTypes: config.rackTypes.map((r) => ({ ...r, pricePerUnit: null })),
+    pricing: { ...config.pricing, fixed: null, perUnit: null, doorSingle: null, doorDouble: null },
+  };
 }
 
-module.exports = { contrastWithWhite, KEY, LIMITS, ROUND_TO, MAX_PRESETS, DEFAULTS, validateConfig, publicView };
+/** What the signed-in staff app may read: the whole catalogue and the real prices (whether or not the public tool shows a price). */
+function staffView(config) {
+  return { rackTypes: config.rackTypes, defaultRackType: config.defaultRackType, doors: config.doors, pricing: config.pricing };
+}
+
+module.exports = { contrastWithWhite, KEY, LIMITS, ROUND_TO, MAX_PRESETS, MAX_RACK_TYPES, DEFAULTS, validateConfig, publicView, staffView };

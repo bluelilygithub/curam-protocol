@@ -190,6 +190,7 @@ app.use('/api/restyle', requireFeature('restyle'), require('./routes/restyle'));
 app.use('/api/room-projects', requireFeature('roomPlanner'), require('./routes/roomProjects'));
 app.use('/api/garden-projects', requireFeature('gardenPlanner'), require('./routes/gardenProjects'));
 app.use('/api/cellar-projects', requireFeature('cellarPlanner'), require('./routes/cellarProjects'));
+app.use('/api/cellar-planner/catalogue', requireFeature('cellarPlanner'), cellarLiteConfig.staffRouter);
 app.use('/api/geocode', requireFeature('gardenPlanner'), require('./routes/geocode'));
 app.use('/api/map-tiles', requireFeature('gardenPlanner'), require('./routes/mapTiles'));
 app.use('/api/plant-images', requireFeature('gardenPlanner'), require('./routes/plantImages'));

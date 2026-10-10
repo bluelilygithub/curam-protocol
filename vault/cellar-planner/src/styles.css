@@ -38,7 +38,7 @@ body { background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans
 .row { display: flex; gap: 6px; align-items: end; flex-wrap: wrap; }
 .note { color: var(--muted); font-size: 12px; margin: 0; }
 .banner { margin: 0; padding: 8px 10px; border: 1px solid var(--warn); background: #fef6e4; border-radius: 6px; font-size: 12px; }
-.total { font-size: 22px; font-weight: 600; margin: 2px 0 4px; } .notset-total { color: var(--warn); font-size: 15px; }
+.total { font-size: 22px; font-weight: 600; margin: 2px 0 4px; } .notset-total { color: var(--warn-text); font-size: 15px; }
 .count { color: var(--muted); font-weight: 400; text-transform: none; letter-spacing: 0; margin-left: 6px; }
 .issues { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 5px; }
 .issue { display: flex; gap: 8px; padding: 6px 8px; border-radius: 6px; background: #fff; border-left: 3px solid var(--border); font-size: 12px; }
@@ -146,3 +146,11 @@ body { background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans
 
 .racks-summary { margin: 0; padding: 6px 12px; font-size: 13px; background: var(--surface); border-top: 1px solid var(--border); } .racks-summary .muted { color: var(--muted); }
 .drawing-hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); background: rgba(26,26,26,0.85); color: #fff; font-size: 12px; padding: 5px 10px; border-radius: 6px; pointer-events: none; }
+
+.price-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.price-table th, .price-table td { padding: 4px 0; border-bottom: 1px solid var(--line, #ddd); text-align: left; font-weight: 400; }
+.price-table td { text-align: right; font-variant-numeric: tabular-nums; }
+.price-table th small { color: var(--muted); }
+.price-total th, .price-total td { font-weight: 700; border-bottom: 0; }
+.grid > .price-table { grid-column: 1 / -1; }
+.grid > .banner, .grid > .note { grid-column: 1 / -1; }

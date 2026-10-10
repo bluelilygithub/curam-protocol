@@ -15,11 +15,12 @@ import { InfoModal } from './ui/InfoModal';
 import { PackageModal } from './ui/PackageModal';
 import { Icon } from './ui/icons';
 import { Accordion } from './ui/fields';
-import { ChecksPanel, EnclosurePanel, RackPanel, RunsPanel, StoreContext } from './ui/panels';
+import { CatalogueContext, ChecksPanel, EnclosurePanel, PricePanel, RackPanel, RunsPanel, StoreContext } from './ui/panels';
+import type { CatalogueStore } from './app/catalogue';
 
 const WALLS: Array<[WallSide, string]> = [['NORTH', 'North'], ['EAST', 'East'], ['SOUTH', 'South'], ['WEST', 'West']];
 
-export function App({ store, ui, designs }: { store: AppStore; ui: UiStore; designs: Designs }) {
+export function App({ store, ui, designs, catalogue }: { store: AppStore; ui: UiStore; designs: Designs; catalogue?: CatalogueStore }) {
   const project = useStore(store, (s) => s.project);
   const revision = useStore(store, (s) => s.revision);
   const canUndo = useStore(store, (s) => s.past.length > 0);
@@ -79,6 +80,7 @@ export function App({ store, ui, designs }: { store: AppStore; ui: UiStore; desi
 
   return (
     <StoreContext.Provider value={store}>
+    <CatalogueContext.Provider value={catalogue ?? null}>
       <div className="app" data-pane={pane}>
         <header className="toolbar" role="toolbar" aria-label="Main toolbar" data-tour="cp-project">
           <div className="toolbar-row">
@@ -121,7 +123,7 @@ export function App({ store, ui, designs }: { store: AppStore; ui: UiStore; desi
             <button type="button" key={k} title={tip} aria-pressed={pane === k} className={`tab${pane === k ? ' on' : ''}`} onClick={() => ui.getState().set({ pane: k })} data-testid={`pane-${k}`}>{label}</button>
           ))}
         </nav>
-        <aside className="left" data-testid="left"><Accordion initial="Enclosure"><EnclosurePanel /><RackPanel /><RunsPanel /></Accordion></aside>
+        <aside className="left" data-testid="left"><Accordion initial="Enclosure"><EnclosurePanel /><RackPanel /><RunsPanel /><PricePanel /></Accordion></aside>
         <main className="stage">
           <div className="tabs" role="group" aria-label="Drawing" data-tour="cp-tabs">
             <button type="button" aria-pressed={tab === 'plan'} className={`tab${tab === 'plan' ? ' on' : ''}`} title="The enclosure from above: walls, door, racks and sizes." onClick={() => ui.getState().set({ tab: 'plan' })} data-testid="tab-plan">Plan</button>
@@ -142,6 +144,7 @@ export function App({ store, ui, designs }: { store: AppStore; ui: UiStore; desi
       <PackageModal store={store} ui={ui} />
       <DesignsPanel ui={ui} designs={designs} onImportFile={(f) => void open(f)} />
       <TooltipHost />
+    </CatalogueContext.Provider>
     </StoreContext.Provider>
   );
 }
