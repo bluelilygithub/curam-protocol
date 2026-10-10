@@ -26,7 +26,7 @@ describe('lite design code', () => {
   });
   it('clamps out-of-range values instead of trusting them', () => {
     const n = normaliseLite({ ...defaultLite(), widthMm: 1, depthMm: 999999, heightMm: NaN, target: -5 });
-    expect(n.widthMm).toBe(1000); expect(n.depthMm).toBe(8000); expect(n.heightMm).toBe(2000); expect(n.target).toBe(1);
+    expect(n.widthMm).toBe(1000); expect(n.depthMm).toBe(8000); expect(n.heightMm).toBe(1800); expect(n.target).toBe(1);
   });
   it('trims whitespace around a pasted code', () => {
     expect(decodeDesign(`  ${encodeDesign(defaultLite())}\n`)).toEqual(defaultLite());
@@ -60,7 +60,7 @@ describe('lite design to project', () => {
     expect(liteResult({ ...defaultLite(), mode: 'TARGET', target: full + 500 }).bottles).toBe(full);
   });
   it('survives the smallest and the largest room', () => {
-    for (const [widthMm, depthMm, heightMm] of [[1000, 1000, 2000], [8000, 8000, 3200]]) {
+    for (const [widthMm, depthMm, heightMm] of [[1000, 1000, 1800], [8000, 8000, 3200]]) {
       const r = liteResult({ ...defaultLite(), widthMm, depthMm, heightMm });
       expect(Number.isFinite(r.bottles)).toBe(true);
     }

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import useSettingsStore from '../store/settingsStore';
 import useAuthStore from '../store/authStore';
@@ -200,6 +200,9 @@ function SettingsPage() {
   const [themeBuilderDesignMeta, setThemeBuilderDesignMeta] = useState(null);
   const [themeBuilderDesignSaved, setThemeBuilderDesignSaved] = useState(false);
 
+  const cellarLiteDirty = useRef(false);
+  const onCellarLiteDirty = useCallback((d) => { cellarLiteDirty.current = d; }, []);
+
   const TABS = user?.isAdmin
     ? [
         'Appearance',
@@ -225,6 +228,9 @@ function SettingsPage() {
     : ['Appearance', 'Profile', 'Tasks'];
 
   function selectTab(t) {
+    // the Cellar Planner tab only saves when its Save button is pressed: don't lose edits by switching tabs
+    if (t !== tab && cellarLiteDirty.current && !window.confirm('You have unsaved Cellar Planner changes. Leave without saving?')) return;
+    cellarLiteDirty.current = false;
     setTab(t);
     localStorage.setItem('settingsTab', t);
   }
@@ -3158,7 +3164,7 @@ function SettingsPage() {
       {/* Cellar Planner (admin) — the owner's numbers for the public lite planner */}
       {tab === 'Cellar Planner' && user?.isAdmin && (
         <section>
-          <CellarLiteSettings />
+          <CellarLiteSettings onDirtyChange={onCellarLiteDirty} />
         </section>
       )}
 

@@ -34,7 +34,7 @@ export interface LiteSettings {
 export const LITE_UNIT_WIDTH_MM = BEST_GUESS_RACK.unitWidthMm as number;
 
 export const LIMITS = {
-  widthMm: [1000, 8000], depthMm: [1000, 8000], heightMm: [2000, 3200], target: [1, 5000],
+  widthMm: [1000, 8000], depthMm: [1000, 8000], heightMm: [1800, 3200], target: [1, 5000],
 } as const;
 
 export const defaultLite = (): LiteSettings => ({ widthMm: 2750, depthMm: 1565, heightMm: 2150, doorWall: 'SOUTH', doorStyle: 'SINGLE', bottle: 'BORDEAUX', mode: 'FILL', target: 500 });
@@ -72,7 +72,8 @@ export function liteToProject(input: LiteSettings, cfg: LiteConfig = DEFAULT_CON
     outerWidthMm: outerW,
     outerDepthMm: outerD,
     heightMm: s.heightMm + g.ceilingBuildUpMm + g.floorBuildUpMm,
-    door: { ...g.door, wall: s.doorWall, widthMm: doorWidth(s, outerW, outerD, cfg), ...(s.doorStyle === 'DOUBLE' ? { leaves: 2 as const } : {}) },
+    // the sample's door is 2120 mm tall; in a lower room the door is simply made shorter (80 mm under the ceiling), as it would be in real life
+    door: { ...g.door, heightMm: Math.min(g.door.heightMm, s.heightMm - 80), wall: s.doorWall, widthMm: doorWidth(s, outerW, outerD, cfg), ...(s.doorStyle === 'DOUBLE' ? { leaves: 2 as const } : {}) },
     // the sample's conditioner and vents sit at positions measured for a 2850 mm header; drop any that no longer fit a narrower room
     header: g.header.filter((c) => c.xMm + c.widthMm <= outerW),
   };

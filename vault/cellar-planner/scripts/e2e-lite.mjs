@@ -14,8 +14,8 @@ const scan = (pg) => pg.evaluate(async () => (await window.axe.run(document, { r
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--disable-features=LocalNetworkAccessChecks,PrivateNetworkAccessSendPreflights,PrivateNetworkAccessRespectPreflightResults'] });
 const ctx = await browser.newContext({ viewport: { width: 390, height: 800 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
-// the first-visit guide has its own checks below; the main run starts with it already seen
-await ctx.addInitScript(() => { try { localStorage.setItem('cellar-lite:help-seen:v1', '1'); } catch { /* ignore */ } });
+// the main run measures in millimetres (the steps below type and read whole millimetres); metres and feet have their own checks in e2e-lite-ux.mjs
+await ctx.addInitScript(() => { try { localStorage.setItem('cellar-lite:unit:v1', 'mm'); } catch { /* ignore */ } });
 const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
@@ -27,6 +27,8 @@ const bottles = async () => Number((await page.getByTestId('lite-bottles').inner
 const first = await bottles();
 check('lite: opens with an estimate for the default room', first > 0 && /estimate only/i.test(await page.getByTestId('lite-result').innerText()));
 check('lite: no sideways scroll at phone width', (await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)) <= 0);
+check('lite: the opening picture is the inside view, and it draws racks', Number(await page.getByTestId('lite-inside-canvas').getAttribute('data-racks')) >= 3 && (await page.getByTestId('lite-tab-inside').getAttribute('aria-pressed')) === 'true');
+await page.getByTestId('lite-tab-plan').click();
 check('lite: the plan is drawn', Number(await page.getByTestId('lite-plan-canvas').getAttribute('data-prims')) > 10);
 
 check('lite: the screen says the estimate uses standard-size rack units', /standard-size rack units, about 600 mm wide/.test(await page.getByTestId('lite-units').innerText()));
@@ -42,7 +44,7 @@ check('lite: a magnum room still has no "cannot be built" message', (await page.
 await page.getByTestId('lite-bottle').selectOption('BORDEAUX');
 
 await page.getByTestId('lite-widthMm').fill('50');
-check('lite: an out-of-range size shows the allowed range', /Between 1000 and 8000/.test(await page.getByTestId('lite').innerText()));
+check('lite: an out-of-range size shows the allowed range', /Between 1000 mm and 8000 mm/.test(await page.getByTestId('lite').innerText()));
 await page.getByTestId('lite-widthMm').blur();
 check('lite: leaving the field snaps it into range', (await page.getByTestId('lite-widthMm').inputValue()) === '1000');
 await page.getByTestId('lite-widthMm').fill('3000');
@@ -98,24 +100,21 @@ for (const [id, title] of steps) {
   walked++;
   const noOverflow = (await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)) <= 0;
   if (!noOverflow) check(`tour: no sideways scroll on step ${id}`, false);
-  if (id === 'lt-drawing') check('tour: the drawings step shows the plan', (await page.getByTestId('lite-tab-plan').getAttribute('aria-pressed')) === 'true');
+  if (id === 'lt-drawing') check('tour: the drawings step shows the inside view', (await page.getByTestId('lite-tab-inside').getAttribute('aria-pressed')) === 'true');
   await page.locator(`${card} .shepherd-button:not(.vault-tour-btn-secondary)`).click();
 }
 check('tour: all nine steps show in order', walked === steps.length);
 await page.waitForTimeout(600);
 check('tour: finishing it is remembered', await page.evaluate(() => localStorage.getItem('cellar-lite:tour-done:v1') === '1'));
 
-// a first visit opens the guide by itself, once; "Take the tour" inside it starts the tour
+// a first visit shows the three-step strip, not a pop-up; the guide opens from the Help button, and "Take the tour" inside it starts the tour
 const fresh = await browser.newContext({ viewport: { width: 390, height: 800 }, hasTouch: true, isMobile: true });
 const fp = await fresh.newPage();
 await fp.goto(LITE);
-await fp.getByTestId('lite-help').waitFor();
-check('first visit: the guide opens by itself', true);
-await fp.getByTestId('lite-help-got-it').click();
-await fp.reload();
 await fp.getByTestId('lite-bottles').waitFor();
-check('first visit: it does not open again on the next visit', (await fp.getByTestId('lite-help').count()) === 0);
+check('first visit: no pop-up guide, the three steps are on the page', (await fp.getByTestId('lite-help').count()) === 0 && (await fp.getByTestId('lite-steps').locator('li').count()) === 3);
 await fp.getByTestId('lite-help-open').click();
+await fp.getByTestId('lite-help').waitFor();
 await fp.getByTestId('lite-help-tour').click();
 await fp.locator(`${card} .shepherd-title`, { hasText: 'Plan your wine cellar' }).waitFor({ timeout: 8000 });
 check('help: Take the tour inside the guide closes it and starts the tour', (await fp.getByTestId('lite-help').count()) === 0);
@@ -130,27 +129,34 @@ await host.frameLocator('#f').getByTestId('lite-bottles').waitFor();
 await host.frameLocator('#f').getByTestId('lite-widthMm').fill('3200');
 await host.waitForFunction(() => window.__msgs.some((m) => m.data && m.data.type === 'cellar-lite:design'));
 const msgs = await host.evaluate(() => window.__msgs);
-const last = msgs[msgs.length - 1];
+const last = msgs.filter((m) => m.data && m.data.type === 'cellar-lite:design').pop();
 check('embedded: the design is posted to the page around it, from the planner origin', last.origin === new globalThis.URL(LITE).origin && last.data.version === 1 && /^CL1\./.test(last.data.code) && /estimate only/.test(last.data.summary), JSON.stringify(last));
 await host.frameLocator('#f').getByTestId('lite-quote').click();
 await host.waitForFunction(() => window.__msgs.some((m) => m.data && m.data.requested === true));
 check('embedded: Request a quote marks the message as requested', true);
 await host.close();
 
-// the real fill script: accepts the planner origin, ignores any other, fills the form fields
-const fillSrc = await readFile(join(import.meta.dirname, '..', 'lite-wordpress', 'cellar-lite-fill.js'), 'utf8');
+// the real page script: only the planner's own origin can send the visitor to the contact page, and only with a well-formed code
+const fillSrc = await readFile(join(import.meta.dirname, '..', 'lite-wordpress', 'cellar-lite-fill.js'), 'utf8')
+  .then((t) => t.replace("'https://www.wiwc.com.au'", "'http://localhost:5177'").replace("'https://wiwc.com.au/contact/'", "'http://127.0.0.1:5178/contact'"));
 const wp = await ctx.newPage();
-await wp.route('http://127.0.0.1:5178/**', (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>wp</title><form><input name="design-code"><textarea name="design-summary"></textarea></form>' }));
+await wp.route('http://127.0.0.1:5178/**', (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>wp</title><p>page</p>' }));
 await wp.goto('http://127.0.0.1:5178/wp');
-await wp.addScriptTag({ content: fillSrc.replace('https://www.example.com.au', 'http://localhost:5177') });
+await wp.addScriptTag({ content: fillSrc });
 const code = sent.match(/CL1\.[A-Za-z0-9_-]+/)[0];
 const post = (origin, data) => wp.evaluate(([o, d]) => window.dispatchEvent(new MessageEvent('message', { origin: o, data: d })), [origin, data]);
-await post('http://evil.test', { type: 'cellar-lite:design', version: 1, code, summary: 'x' });
-check('fill script: a message from another origin is ignored', (await wp.locator('[name=design-code]').inputValue()) === '');
-await post('http://localhost:5177', { type: 'cellar-lite:design', version: 1, code: '<script>', summary: 'x' });
-check('fill script: a malformed code is refused', (await wp.locator('[name=design-code]').inputValue()) === '');
-await post('http://localhost:5177', { type: 'cellar-lite:design', version: 1, code, summary: 'Inside 3000 mm, about 400 bottles' });
-check('fill script: the right origin fills both form fields', (await wp.locator('[name=design-code]').inputValue()) === code && (await wp.locator('[name=design-summary]').inputValue()).includes(code));
+await post('http://evil.test', { type: 'cellar-lite:design', version: 1, code, summary: 'x', requested: true });
+await wp.waitForTimeout(400);
+check('page script: a message from another origin is ignored', /\/wp$/.test(wp.url()), wp.url());
+await post('http://localhost:5177', { type: 'cellar-lite:design', version: 1, code: '<script>', summary: 'x', requested: true });
+await wp.waitForTimeout(400);
+check('page script: a malformed code is refused', /\/wp$/.test(wp.url()), wp.url());
+await post('http://localhost:5177', { type: 'cellar-lite:design', version: 1, code, summary: 'Inside 3000 mm, about 400 bottles', requested: false });
+await wp.waitForTimeout(400);
+check('page script: a design update without the button pressed stays on the page', /\/wp$/.test(wp.url()), wp.url());
+await post('http://localhost:5177', { type: 'cellar-lite:design', version: 1, code, summary: 'Inside 3000 mm, about 400 bottles', requested: true });
+await wp.waitForURL(/contact\?cellar-design=CL1\./, { timeout: 5000 }).catch(() => {});
+check('page script: the planner\'s origin, with the button pressed, goes to the contact page carrying the design', /\/contact\?cellar-design=CL1\./.test(wp.url()), wp.url());
 await wp.close();
 
 // staff side: the full planner opens the code as a new design

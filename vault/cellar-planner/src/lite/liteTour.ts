@@ -13,7 +13,7 @@ export interface LiteTourStep {
   target?: string;
   on?: 'top' | 'bottom' | 'left' | 'right';
   /** Which drawing must be showing for the step. */
-  view?: 'plan' | 'racks';
+  view?: 'inside' | 'plan' | 'racks';
 }
 
 /** The tour as data (pure, tested against the screen's data-tour hooks). */
@@ -24,14 +24,14 @@ export const LITE_TOUR_STEPS: LiteTourStep[] = [
   { id: 'lt-bottle', title: '3. What do you mostly store?', target: 'lt-bottle', on: 'bottom', text: 'Bottles are different shapes. <b>Bordeaux</b> is the usual tall, straight-sided bottle (most reds, many whites). <b>Burgundy</b> is wider, <b>Champagne</b> wider again, and a <b>Magnum</b> holds 1.5 litres. Choose the one you have most of: wider bottles need more room, so fewer fit.' },
   { id: 'lt-mode', title: '4. How many bottles?', target: 'lt-mode', on: 'bottom', text: 'Choose <b>As many as fit</b> to fill every wall, or <b>A number I choose</b> and type how many you want. We then use only as much rack as that needs.' },
   { id: 'lt-result', title: 'Your estimate', target: 'lt-result', on: 'top', text: 'This is roughly how many bottles your choices hold. It is built from <b>standard-size rack units</b> (ready-made blocks about 600 mm wide), so it is an <b>estimate only, not a quote</b>. It updates as you change anything above, and tells you in plain words if a size cannot be built.' },
-  { id: 'lt-drawing', title: 'The drawings', target: 'lt-drawing', on: 'top', view: 'plan', text: '<b>Plan from above</b> shows the room as if you were looking down from the ceiling: the walls, the door, and the racks in orange. <b>Racks on a wall</b> shows the wall as you would see it standing inside, with every bottle drawn. Each orange block is one or more standard rack units placed whole, so the empty gaps you may see at the end of a wall are just left-over space. Drag to move the drawing, pinch or scroll to zoom, and press <b>Fit</b> to bring it all back.' },
+  { id: 'lt-drawing', title: 'The drawings', target: 'lt-drawing', on: 'top', view: 'inside', text: '<b>Inside view</b> shows what the cellar looks like from the door, with the racks full of bottles; drag to look around. <b>Plan from above</b> shows the room as if you were looking down from the ceiling: the walls, the door, and the racks in timber. <b>Racks on a wall</b> shows the wall as you would see it standing inside, with every bottle drawn. Each timber block is one or more standard rack units placed whole, so the empty gaps you may see at the end of a wall are just left-over space. Drag to move the drawing, pinch or scroll to zoom, and press <b>Fit</b> to bring it all back.' },
   { id: 'lt-quote', title: 'Happy with it?', target: 'lt-quote', on: 'top', text: 'Press <b>Request a quote</b> and your choices are added to the enquiry form on this page (or you can copy them into an email). Someone will check the sizes with you and give you a real price. Change anything and try again whenever you like.' },
   { id: 'lt-done', title: 'That is all', text: 'Play with the numbers: nothing is saved or sent until you ask for a quote. The <b>Help</b> button at the top explains everything again in plain words, and <b>Take the tour</b> shows this again.' },
 ];
 
 const selectorOf = (target: string): string => `[data-tour="${target}"]`;
 
-export function startLiteTour(opts: { setView(v: 'plan' | 'racks'): void; getView(): 'plan' | 'racks' }): InstanceType<typeof Shepherd.Tour> {
+export function startLiteTour(opts: { setView(v: 'inside' | 'plan' | 'racks'): void; getView(): 'inside' | 'plan' | 'racks' }): InstanceType<typeof Shepherd.Tour> {
   if (Shepherd.activeTour) Shepherd.activeTour.cancel();
   const before = opts.getView();
   const tour = new Shepherd.Tour({

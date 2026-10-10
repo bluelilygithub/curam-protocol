@@ -11,7 +11,7 @@ const LIMITS = {
   unitWidthMm: [400, 1200], unitHeightMm: [1000, 3000],
   doorSingleMm: [700, 1300], doorDoubleMm: [1200, 2400],
   price: [0, 1000000], rangePct: [0, 50],
-  roomWidthMm: [1000, 8000], roomDepthMm: [1000, 8000], roomHeightMm: [2000, 3200],
+  roomWidthMm: [1000, 8000], roomDepthMm: [1000, 8000], roomHeightMm: [1800, 3200],
 };
 const ROUND_TO = [1, 10, 50, 100, 500, 1000];
 const MAX_PRESETS = 6;
@@ -19,6 +19,7 @@ const MAX_PRESETS = 6;
 const DEFAULTS = Object.freeze({
   version: 1,
   promise: 'Free to use. No sign-up. Takes about two minutes. You only share your details if you ask for a quote.',
+  quoteNote: 'We usually reply within one business day.',
   rack: { unitWidthMm: 600, unitHeightMm: 2000 },
   doors: { singleMm: 970, doubleMm: 1500 },
   pricing: {
@@ -106,6 +107,7 @@ function validateConfig(raw) {
   const config = {
     version: 1,
     promise: src.promise === undefined ? D.promise : cleanText(src.promise, 200),
+    quoteNote: src.quoteNote === undefined ? D.quoteNote : cleanText(src.quoteNote, 200),
     rack: {
       unitWidthMm: int(rack.unitWidthMm, LIMITS.unitWidthMm, D.rack.unitWidthMm, 'The rack unit width'),
       unitHeightMm: int(rack.unitHeightMm, LIMITS.unitHeightMm, D.rack.unitHeightMm, 'The rack unit height'),

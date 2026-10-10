@@ -13,6 +13,8 @@ export interface LitePricing {
 export interface LiteConfig {
   version: 1;
   promise: string;
+  /** Shown once the visitor asks for a quote (when we will reply). */
+  quoteNote: string;
   rack: { unitWidthMm: number; unitHeightMm: number };
   doors: { singleMm: number; doubleMm: number };
   pricing: LitePricing;
@@ -22,6 +24,7 @@ export interface LiteConfig {
 export const DEFAULT_CONFIG: LiteConfig = {
   version: 1,
   promise: 'Free to use. No sign-up. Takes about two minutes. You only share your details if you ask for a quote.',
+  quoteNote: 'We usually reply within one business day.',
   rack: { unitWidthMm: 600, unitHeightMm: 2000 },
   doors: { singleMm: 970, doubleMm: 1500 },
   pricing: {
@@ -37,7 +40,7 @@ export const DEFAULT_CONFIG: LiteConfig = {
 
 const R = {
   unitWidthMm: [400, 1200], unitHeightMm: [1000, 3000], doorSingleMm: [700, 1300], doorDoubleMm: [1200, 2400],
-  price: [0, 1000000], rangePct: [0, 50], roomWidthMm: [1000, 8000], roomDepthMm: [1000, 8000], roomHeightMm: [2000, 3200],
+  price: [0, 1000000], rangePct: [0, 50], roomWidthMm: [1000, 8000], roomDepthMm: [1000, 8000], roomHeightMm: [1800, 3200],
 } as const;
 const ROUND_TO = [1, 10, 50, 100, 500, 1000];
 
@@ -84,6 +87,7 @@ export function normaliseConfig(raw: unknown): LiteConfig {
   return {
     version: 1,
     promise: src.promise === undefined ? D.promise : text(src.promise, 200),
+    quoteNote: src.quoteNote === undefined ? D.quoteNote : text(src.quoteNote, 200),
     rack: { unitWidthMm: int(rack.unitWidthMm, R.unitWidthMm, D.rack.unitWidthMm), unitHeightMm: int(rack.unitHeightMm, R.unitHeightMm, D.rack.unitHeightMm) },
     doors: { singleMm: int(doors.singleMm, R.doorSingleMm, D.doors.singleMm), doubleMm: int(doors.doubleMm, R.doorDoubleMm, D.doors.doubleMm) },
     pricing,

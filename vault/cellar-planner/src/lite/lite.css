@@ -42,3 +42,18 @@ html, body, #root { height: auto; min-height: 100%; }
 .lite-price { margin: 6px 0 0; font-size: 18px; }
 .lite-price-note { font-size: 13px; color: var(--muted); }
 .lite-share { margin: 8px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+
+.cellar-hint { position: absolute; left: 10px; bottom: 8px; font-size: 12px; color: var(--muted); pointer-events: none; }
+
+/* three-step strip, unit picker, welcome-back note, fix button, slider */
+.lite-steps { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 10px; }
+.lite-steps li { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); font-size: 14px; }
+.lite-steps li b { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--primary); color: #fff; font-size: 13px; }
+.lite-unitpick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 10px; }
+.lite-unitpick-label { color: var(--muted); font-size: 14px; }
+.lite-welcome { margin: 0; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 14px; }
+.linklike { background: none; border: 0; padding: 0; color: var(--primary-dark, var(--primary)); text-decoration: underline; cursor: pointer; font: inherit; transition: opacity 200ms; }
+.linklike:hover { opacity: .7; }
+.lite-fix { margin: 8px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.lite-slider { width: 100%; margin-top: 8px; accent-color: var(--primary); min-height: 28px; }
+@media (max-width: 480px) { .lite-steps { gap: 6px; } .lite-steps li { padding: 4px 10px 4px 4px; font-size: 13px; gap: 6px; } .lite-steps li b { width: 22px; height: 22px; font-size: 12px; } }

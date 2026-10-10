@@ -7,18 +7,49 @@ import { boundsOf, fitView, type Prim, type Tone } from '../views';
 const FILL: Record<Tone, string> = { panel: '#8d99a6', glass: '#bfe0f2', stud: '#cdb99a', inside: '#f6f3ec', door: '#ecd6a2', rack: 'rgba(204,120,92,0.45)', rackIssue: 'rgba(239,68,68,0.45)', zone: 'rgba(245,158,11,0.18)', header: '#e4e4e0', equipment: '#a9b4bf', ink: '#1a1a1a', muted: '#888888', bottle: '#4b6b45' };
 const STROKE: Record<Tone, string> = { panel: '#5c6670', glass: '#6aa6c8', stud: '#8c7752', inside: '#c9c4b8', door: '#b5832d', rack: '#cc785c', rackIssue: '#ef4444', zone: '#f59e0b', header: '#9a9a96', equipment: '#5c6670', ink: '#1a1a1a', muted: '#888888', bottle: '#2e4a2a' };
 
-function draw(layer: Konva.Layer, prims: Prim[], v: { scale: number; ox: number; oy: number }): void {
+/** The public tool's warmer look: a timber floor and racks, dark slate walls, bottles with a little shine. The staff app keeps the plain drafting look. */
+export type DrawingLook = 'plain' | 'warm' | 'warmWall';
+const WARM_FILL: Partial<Record<Tone, string>> = { panel: '#4b5159', glass: '#d6ebf5', stud: '#c8b698', inside: '#efe3cd', door: '#e6b95c', rack: '#b98550', rackIssue: 'rgba(239,68,68,0.55)', zone: 'rgba(245,158,11,0.18)', header: '#e4e4e0', equipment: '#a9b4bf' };
+const WARM_STROKE: Partial<Record<Tone, string>> = { panel: '#2f343a', glass: '#7ab3d1', stud: '#8c7752', inside: '#d7c7a6', door: '#b5832d', rack: '#6f4a28', rackIssue: '#ef4444', zone: '#f59e0b', header: '#9a9a96', equipment: '#5c6670' };
+
+function draw(layer: Konva.Layer, prims: Prim[], v: { scale: number; ox: number; oy: number }, look: DrawingLook = 'plain'): void {
   layer.destroyChildren();
   const X = (x: number): number => v.ox + x * v.scale, Y = (y: number): number => v.oy + y * v.scale;
   for (const p of prims) {
     if (p.kind === 'rect') {
       const w = p.w * v.scale, h = p.h * v.scale;
-      layer.add(new Konva.Rect({ x: X(p.x), y: Y(p.y), width: w, height: h, fill: FILL[p.tone], stroke: STROKE[p.tone], strokeWidth: 1, dash: p.dash ? [6, 4] : undefined }));
+      const warm = look !== 'plain';
+      const fill = (warm && WARM_FILL[p.tone]) || FILL[p.tone], stroke = (warm && WARM_STROKE[p.tone]) || STROKE[p.tone];
+      const rack = warm && (p.tone === 'rack');
+      layer.add(new Konva.Rect({
+        x: X(p.x), y: Y(p.y), width: w, height: h, fill, stroke, strokeWidth: rack ? 1.5 : 1, dash: p.dash ? [6, 4] : undefined, cornerRadius: warm && p.tone !== 'inside' ? 2 : 0,
+        ...(rack ? { fillLinearGradientStartPoint: { x: 0, y: 0 }, fillLinearGradientEndPoint: { x: 0, y: h }, fillLinearGradientColorStops: [0, '#c99560', 1, '#a2723f'], shadowColor: '#000', shadowBlur: 6, shadowOpacity: 0.28, shadowOffset: { x: 2, y: 3 } } : {}),
+      }));
+      if (look === 'warm' && p.tone === 'inside') {
+        // floor boards: faint lines along the longer side of the room
+        const along = p.w >= p.h, step = 140 * v.scale;
+        if (step >= 4) {
+          for (let k = 1; k * step < (along ? h : w); k++) {
+            layer.add(new Konva.Line({ points: along ? [X(p.x), Y(p.y) + k * step, X(p.x) + w, Y(p.y) + k * step] : [X(p.x) + k * step, Y(p.y), X(p.x) + k * step, Y(p.y) + h], stroke: 'rgba(120,90,50,0.10)', strokeWidth: 1, listening: false }));
+          }
+        }
+      }
       // the full label if it fits, else the first shorter one that does, else none
       const text = [p.label, ...(p.shortLabels ?? [])].find((t) => t && Math.min(w, h) >= 14 && w > t.length * 5.5);
       if (text) layer.add(new Konva.Text({ x: X(p.x) + 4, y: Y(p.y) + 3, text, fontSize: 10, fontFamily: 'system-ui, sans-serif', fill: '#1a1a1a' }));
     } else if (p.kind === 'circle') {
-      layer.add(new Konva.Circle({ x: X(p.cx), y: Y(p.cy), radius: Math.max(0.6, p.r * v.scale), fill: FILL[p.tone], stroke: STROKE[p.tone], strokeWidth: 0.6, listening: false }));
+      const r = Math.max(0.6, p.r * v.scale);
+      if (look !== 'plain' && p.tone === 'bottle') {
+        // a glass bottle seen end-on: dark glass, a lighter neck, a small highlight
+        const cx = X(p.cx), cy = Y(p.cy);
+        layer.add(new Konva.Circle({ x: cx, y: cy, radius: r, fillRadialGradientStartPoint: { x: -r * 0.3, y: -r * 0.3 }, fillRadialGradientStartRadius: 0, fillRadialGradientEndPoint: { x: 0, y: 0 }, fillRadialGradientEndRadius: r, fillRadialGradientColorStops: [0, '#4f8a5c', 0.7, '#2b5236', 1, '#16301e'], listening: false }));
+        if (r >= 3) {
+          layer.add(new Konva.Circle({ x: cx, y: cy, radius: r * 0.42, fill: 'rgba(224,190,110,0.85)', listening: false }));
+          layer.add(new Konva.Circle({ x: cx - r * 0.38, y: cy - r * 0.38, radius: r * 0.16, fill: 'rgba(255,255,255,0.7)', listening: false }));
+        }
+      } else {
+        layer.add(new Konva.Circle({ x: X(p.cx), y: Y(p.cy), radius: r, fill: FILL[p.tone], stroke: STROKE[p.tone], strokeWidth: 0.6, listening: false }));
+      }
     } else if (p.kind === 'poly') {
       const pts = p.pts.map((n, i) => (i % 2 === 0 ? X(n) : Y(n)));
       layer.add(new Konva.Line({ points: pts, closed: p.closed, stroke: STROKE[p.tone], strokeWidth: 1.5, dash: p.dash ? [6, 4] : undefined, fill: p.closed ? FILL[p.tone] : undefined }));
@@ -50,7 +81,7 @@ function draw(layer: Konva.Layer, prims: Prim[], v: { scale: number; ox: number;
 }
 
 // ctrlZoom: the mouse wheel scrolls the page and only Ctrl/Cmd + wheel zooms (for the drawing embedded in a web page, so it never traps page scrolling)
-export function DrawingView({ prims, testid, description, ctrlZoom = false }: { prims: Prim[]; testid: string; description: string; ctrlZoom?: boolean }) {
+export function DrawingView({ prims, testid, description, ctrlZoom = false, look = 'plain' }: { prims: Prim[]; testid: string; description: string; ctrlZoom?: boolean; look?: DrawingLook }) {
   const host = useRef<HTMLDivElement>(null);
   const stage = useRef<Konva.Stage | null>(null);
   const layer = useRef<Konva.Layer | null>(null);
@@ -69,7 +100,7 @@ export function DrawingView({ prims, testid, description, ctrlZoom = false }: { 
     const el = host.current;
     if (!el || !layer.current) return;
     if (!touched.current) view.current = fitView(boundsOf(primsRef.current), size.w, size.h, 56);
-    draw(layer.current, primsRef.current, view.current);
+    draw(layer.current, primsRef.current, view.current, look);
     el.dataset.prims = String(primsRef.current.length);
     el.dataset.scale = view.current.scale.toFixed(4);
   };
@@ -138,7 +169,7 @@ export function DrawingView({ prims, testid, description, ctrlZoom = false }: { 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => { redraw(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [prims, size]);
+  useEffect(() => { redraw(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [prims, size, look]);
 
   return (
     <div className="drawing" data-testid={testid} data-tour="cp-drawing">
