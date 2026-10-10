@@ -26,6 +26,22 @@ await page.getByTestId('lite-bottles').waitFor();
 const bottles = async () => Number((await page.getByTestId('lite-bottles').innerText()).match(/\d+/)[0]);
 const first = await bottles();
 check('lite: opens with an estimate for the default room', first > 0 && /estimate only/i.test(await page.getByTestId('lite-result').innerText()));
+// type and button sizes on a phone: modest, but inputs never below 16 px (iPhones zoom the page when a smaller field is tapped) and touch targets at least 44 px tall
+const sizes = await page.evaluate(() => {
+  const px = (el) => parseFloat(getComputedStyle(el).fontSize);
+  const h = (el) => el.getBoundingClientRect().height;
+  const q = (sel) => [...document.querySelectorAll(sel)].filter((e) => e.offsetParent !== null);
+  return {
+    inputs: q('.lite input[type=text], .lite select, .lite textarea').map((e) => ({ id: e.getAttribute('data-testid') || e.tagName, size: px(e), height: h(e) })),
+    nav: q('.lite-nav .btn, .lite .lite-cta').map((e) => ({ id: (e.textContent || '').trim().slice(0, 20), size: px(e), height: h(e) })),
+    seg: q('.seg-btn').map((e) => ({ size: px(e), height: h(e) })),
+    h1: px(document.querySelector('.lite-head h1')), title: px(document.querySelector('.lite-step-title')), base: px(document.querySelector('.lite')),
+  };
+});
+check('lite phone sizes: every input is at least 16 px (no iPhone zoom on tap) and at least 44 px tall', sizes.inputs.length > 0 && sizes.inputs.every((i) => i.size >= 16 && i.height >= 43.5), JSON.stringify(sizes.inputs));
+check('lite phone sizes: the main buttons are no bigger than 16 px and still at least 44 px tall', sizes.nav.length > 0 && sizes.nav.every((b) => b.size <= 16 && b.height >= 43.5), JSON.stringify(sizes.nav));
+check('lite phone sizes: choice buttons are 14 px and at least 44 px tall', sizes.seg.length > 0 && sizes.seg.every((b) => b.size <= 14 && b.height >= 43.5), JSON.stringify(sizes.seg));
+check('lite phone sizes: heading 26 px, step title 22 px, body 14 px', sizes.h1 === 26 && sizes.title === 22 && sizes.base === 14, JSON.stringify([sizes.h1, sizes.title, sizes.base]));
 check('lite: no sideways scroll at phone width', (await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)) <= 0);
 check('lite: the opening picture is the inside view, and it draws racks', Number(await page.getByTestId('lite-inside-canvas').getAttribute('data-racks')) >= 3 && (await page.getByTestId('lite-tab-inside').getAttribute('aria-pressed')) === 'true');
 await page.getByTestId('lite-tab-plan').click();

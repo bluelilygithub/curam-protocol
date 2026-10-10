@@ -163,3 +163,30 @@ body { background: #f1f1ee; }
 .lite-phone-notice-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .lite-phone-notice .btn { min-height: 44px; }
 .lite-phone-notice .lite-call { margin: 0; }
+
+/* ---- phone-sized screens: smaller type and buttons, so the planner is not shouting. Inputs stay at 16 px (anything smaller makes iPhones zoom the page
+   when a field is tapped) and touch targets stay at least 44 px tall. Same width the phone notice and the layout use. */
+@media (max-width: 700px) {
+  .lite { font-size: 14px; padding: 14px 12px 22px; gap: 14px; }
+  .lite-head h1 { font-size: 26px; }
+  .lite-sub { font-size: 15px; }
+  .lite-step-title { font-size: 22px; margin-bottom: 10px; }
+  .lite-visual-head h2 { font-size: 20px; }
+  .lite-group h3 { font-size: 15px; }
+  .lite .btn { font-size: 14px; }
+  .lite-nav .btn { min-height: 48px; font-size: 15px; }
+  .lite .lite-cta { min-height: 52px; font-size: 16px; padding: 0 16px; }
+  .lite-next-label { font-size: 15px; }
+  .lite-next-sub { font-size: 11px; }
+  .seg-btn { min-height: 44px; font-size: 14px; }
+  .lenfield-label { font-size: 14px; }
+  .lenfield-box input { font-size: 16px; min-height: 44px; }
+  .lenfield-step { width: 44px; min-height: 44px; font-size: 20px; }
+  .lenfield-unit { font-size: 13px; }
+  .lite-cell-label { font-size: 13px; }
+  .lite-cell-value { font-size: 20px; }
+  .stepper-btn { font-size: 14px; }
+  .doorpick-caption { font-size: 13px; }
+  .lite .field-hint { font-size: 12px; }
+  .lite-phone-notice { font-size: 14px; }
+}
