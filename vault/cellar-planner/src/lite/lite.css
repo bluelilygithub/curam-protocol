@@ -156,3 +156,10 @@ body { background: #f1f1ee; }
 .lite-next-sub { font-size: 12px; font-weight: 400; opacity: .9; letter-spacing: .03em; }
 .lite-backbtn { white-space: nowrap; }
 .lite-nav .btn { min-height: 56px; }
+
+/* ---- the "best on a computer or tablet" note, shown on phone-sized screens only */
+.lite-phone-notice { margin: 0 0 12px; padding: 14px 14px 12px; border: 1px solid var(--primary-dark); border-left-width: 6px; border-radius: 10px; background: var(--primary-soft); color: #1a1a1a; font-size: 15px; line-height: 1.45; }
+.lite-phone-notice p { margin: 0 0 10px; }
+.lite-phone-notice-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.lite-phone-notice .btn { min-height: 44px; }
+.lite-phone-notice .lite-call { margin: 0; }

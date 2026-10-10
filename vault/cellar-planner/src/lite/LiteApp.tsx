@@ -12,6 +12,7 @@ import { PriceHelp } from './PriceHelp';
 import { DoorPicker } from './DoorPicker';
 import { LengthField, Segmented, Stepper } from './controls';
 import { TooltipHost } from '@planner-core/help/TooltipHost';
+import { PhoneNotice } from './PhoneNotice';
 import { DEFAULT_CONFIG, accentColours, loadConfig, telHref, type LiteConfig, type LitePreset } from './config';
 import { FINISH_LOOK } from './finishes';
 import { priceRange } from './price';
@@ -244,6 +245,7 @@ export function LiteApp() {
 
   return (
     <div className="lite" data-testid="lite" style={{ '--primary': brand.main, '--primary-dark': brand.dark, '--primary-soft': brand.soft } as CSSProperties}>
+      <PhoneNotice show={cfg.mobileNotice.show} text={cfg.mobileNotice.text} phone={cfg.phone} onCall={() => say('call')} />
       <header className="lite-head">
         <div className="lite-head-row">
           <div>

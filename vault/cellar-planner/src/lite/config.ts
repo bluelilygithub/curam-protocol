@@ -32,6 +32,8 @@ export interface LiteConfig {
   phone: string;
   /** Brand colour of buttons and highlights, #rrggbb (dark enough for white text). */
   accent: string;
+  /** The notice on a phone-sized screen: the planner is made for a desktop computer or tablet. */
+  mobileNotice: { show: boolean; text: string };
   /** The catalogue (the staff planner uses all of it; this tool uses the default type) and which type is the default. */
   rackTypes: RackType[];
   defaultRackType: string;
@@ -50,6 +52,7 @@ export const DEFAULT_CONFIG: LiteConfig = {
   quoteNote: 'We usually reply within one business day.',
   phone: '',
   accent: '#4a5a2a',
+  mobileNotice: { show: true, text: 'This planner is made for a desktop computer or a tablet. On a phone the drawings are small and hard to use, so for the best result open this page on a larger screen. You are welcome to carry on here.' },
   rackTypes: [{
     id: 'standard', name: 'Standard rack', unitWidthMm: 600, unitDepthMm: null, unitHeightMm: 2000, rowPitchMm: null, orientation: 'NECK_OUT', postsPerUnit: null,
     bottlesPerRow: null, bottlesPerRowLabelForward: null, rowsPerUnit: null, pricePerUnit: null, confirmed: false,
@@ -199,6 +202,10 @@ export function normaliseConfig(raw: unknown): LiteConfig {
     quoteNote: src.quoteNote === undefined ? D.quoteNote : text(src.quoteNote, 200),
     phone: cleanPhone(src.phone),
     accent: cleanAccent(src.accent),
+    mobileNotice: {
+      show: isObj(src.mobileNotice) && src.mobileNotice.show !== undefined ? src.mobileNotice.show === true : D.mobileNotice.show,
+      text: isObj(src.mobileNotice) && src.mobileNotice.text !== undefined ? text(src.mobileNotice.text, 300) || D.mobileNotice.text : D.mobileNotice.text,
+    },
     rackTypes, defaultRackType, rack,
     doors: { singleMm: int(doors.singleMm, R.doorSingleMm, D.doors.singleMm), doubleMm: int(doors.doubleMm, R.doorDoubleMm, D.doors.doubleMm) },
     pricing,

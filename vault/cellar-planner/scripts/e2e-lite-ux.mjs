@@ -53,7 +53,7 @@ const withConfig = async (page) => page.route('https://curam-vault.up.railway.ap
   const r = await fetch('http://localhost:8803/api/cellar-lite/config');
   route.fulfill({ status: r.status, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' }, body: await r.text() });
 });
-const fresh = async (opts = {}) => { const ctx = await browser.newContext({ viewport: { width: 1000, height: 1100 }, acceptDownloads: true, permissions: ['clipboard-read', 'clipboard-write'], ...opts }); const page = await ctx.newPage(); await withConfig(page); const errors = []; page.on('pageerror', (e) => errors.push(e.message)); return { ctx, page, errors }; };
+const fresh = async ({ notice = false, ...opts } = {}) => { const ctx = await browser.newContext({ viewport: { width: 1000, height: 1100 }, acceptDownloads: true, permissions: ['clipboard-read', 'clipboard-write'], ...opts }); if (!notice) await ctx.addInitScript(() => { try { sessionStorage.setItem('cellar-lite:phone-notice:v1', '1'); } catch { /* ignore */ } }); const page = await ctx.newPage(); await withConfig(page); const errors = []; page.on('pageerror', (e) => errors.push(e.message)); return { ctx, page, errors }; };
 const frameDoorPick = async (page) => {
   await page.frameLocator('#f').getByTestId('lite-doorpick-NORTH').click();
   await page.waitForTimeout(500);
@@ -244,6 +244,58 @@ await page.goto('http://localhost:8802/index.html');
 await page.getByTestId('lite-call').waitFor({ timeout: 8000 }).catch(() => {});
 check('call button: shows the number the owner set, as a link that dials', (await page.getByTestId('lite-call').count()) === 1 && (await page.getByTestId('lite-call').getAttribute('href')) === 'tel:0391234567' && /Call 03 9123 4567/.test(await page.getByTestId('lite-call').innerText()), await page.getByTestId('lite-call').innerText().catch(() => ''));
 check('call button: big enough to tap, and has a tooltip', (await page.getByTestId('lite-call').boundingBox()).height >= 43 && /talk to someone/i.test(await page.getByTestId('lite-call').getAttribute('title')));
+await ctx.close();
+await adminPut(baseSettings);
+
+// ================= 1c. the "best on a computer or tablet" note on phone-sized screens
+await adminPut(baseSettings);
+({ ctx, page, errors } = await fresh({ notice: true, viewport: { width: 390, height: 800 }, isMobile: true, hasTouch: true }));
+await page.goto('http://localhost:8802/index.html');
+await page.getByTestId('lite-bottles').waitFor();
+const note = page.getByTestId('lite-phone-notice');
+check('phone notice: shown on a phone-sized screen', await note.isVisible());
+check('phone notice: says it is for a desktop computer or tablet', /Best on a computer or tablet/.test(await note.innerText()) && /desktop computer or a tablet/.test(await page.getByTestId('lite-phone-notice-text').innerText()), await note.innerText());
+check('phone notice: it is the first thing on the page, above the heading', (await note.boundingBox()).y < (await page.locator('h1').boundingBox()).y);
+check('phone notice: no call link when the owner has set no number', (await page.getByTestId('lite-phone-call').count()) === 0);
+check('phone notice: Continue is big enough to tap', (await page.getByTestId('lite-phone-continue').boundingBox()).height >= 43);
+check('phone notice: it does not cause sideways scrolling', (await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)) <= 0);
+await page.getByTestId('lite-phone-continue').click();
+check('phone notice: Continue hides it and the planner is there to use', (await note.count()) === 0 && (await page.getByTestId('lite-bottles').isVisible()));
+await page.reload(); await page.getByTestId('lite-bottles').waitFor();
+check('phone notice: it stays hidden for the rest of the visit (a reload in the same tab)', (await page.getByTestId('lite-phone-notice').count()) === 0);
+await ctx.close();
+({ ctx, page } = await fresh({ notice: true, viewport: { width: 390, height: 800 }, isMobile: true, hasTouch: true }));
+await page.goto('http://localhost:8802/index.html'); await page.getByTestId('lite-bottles').waitFor();
+check('phone notice: it comes back on a new visit', await page.getByTestId('lite-phone-notice').isVisible());
+// turning the phone: wide enough hides it, narrow again brings it back (it was not dismissed)
+await page.setViewportSize({ width: 1024, height: 768 }); await page.waitForTimeout(250);
+check('phone notice: a tablet-width screen (1024) does not show it', (await page.getByTestId('lite-phone-notice').count()) === 0);
+await page.setViewportSize({ width: 390, height: 800 }); await page.waitForTimeout(250);
+check('phone notice: back at phone width it returns', await page.getByTestId('lite-phone-notice').isVisible());
+await ctx.close();
+// the boundary: 700 px and under is a phone, 701 and over is not (the same width the layout treats as a phone)
+for (const [w, want] of [[320, 1], [390, 1], [600, 1], [700, 1], [701, 0], [768, 0], [1000, 0], [1440, 0]]) {
+  ({ ctx, page } = await fresh({ notice: true, viewport: { width: w, height: 800 } }));
+  await page.goto('http://localhost:8802/index.html'); await page.getByTestId('lite-bottles').waitFor();
+  check(`phone notice: at ${w} px wide it is ${want ? 'shown' : 'not shown'}`, (await page.getByTestId('lite-phone-notice').count()) === want);
+  await ctx.close();
+}
+// the owner's wording, the off switch, and the call link
+await adminPut({ ...baseSettings, mobileNotice: { show: true, text: 'Please use our desk app or a tablet.' }, phone: '03 9123 4567' });
+({ ctx, page } = await fresh({ notice: true, viewport: { width: 390, height: 800 }, isMobile: true, hasTouch: true }));
+await page.goto('http://localhost:8802/index.html'); await page.getByTestId('lite-phone-notice').waitFor();
+check('phone notice: shows the owner\'s own wording', (await page.getByTestId('lite-phone-notice-text').innerText()) === 'Please use our desk app or a tablet.');
+check('phone notice: offers to call when a number is set, as a link that dials, big enough to tap', (await page.getByTestId('lite-phone-call').getAttribute('href')) === 'tel:0391234567' && (await page.getByTestId('lite-phone-call').boundingBox()).height >= 43);
+await ctx.close();
+await adminPut({ ...baseSettings, mobileNotice: { show: true, text: '   ' } });
+({ ctx, page } = await fresh({ notice: true, viewport: { width: 390, height: 800 }, isMobile: true, hasTouch: true }));
+await page.goto('http://localhost:8802/index.html'); await page.getByTestId('lite-phone-notice').waitFor();
+check('phone notice: blank wording falls back to the standard wording', /desktop computer or a tablet/.test(await page.getByTestId('lite-phone-notice-text').innerText()));
+await ctx.close();
+await adminPut({ ...baseSettings, mobileNotice: { show: false } });
+({ ctx, page } = await fresh({ notice: true, viewport: { width: 390, height: 800 }, isMobile: true, hasTouch: true }));
+await page.goto('http://localhost:8802/index.html'); await page.getByTestId('lite-bottles').waitFor(); await page.waitForTimeout(400);
+check('phone notice: switched off by the owner, a phone sees no note', (await page.getByTestId('lite-phone-notice').count()) === 0);
 await ctx.close();
 await adminPut(baseSettings);
 

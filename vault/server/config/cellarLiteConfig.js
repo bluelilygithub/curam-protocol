@@ -30,6 +30,8 @@ const DEFAULTS = Object.freeze({
   quoteNote: 'We usually reply within one business day.',
   phone: '',
   accent: '#4a5a2a',
+  // the notice shown on a phone-sized screen: the planner is made for a desktop computer or tablet. Blank text means the standard wording.
+  mobileNotice: { show: true, text: 'This planner is made for a desktop computer or a tablet. On a phone the drawings are small and hard to use, so for the best result open this page on a larger screen. You are welcome to carry on here.' },
   // the catalogue of rack types; null = not set (the staff app then shows its best guess, marked estimated). `confirmed` = the values are the supplier's.
   rackTypes: [{
     id: 'standard', name: 'Standard rack', unitWidthMm: 600, unitDepthMm: null, unitHeightMm: 2000, rowPitchMm: null, orientation: 'NECK_OUT', postsPerUnit: null,
@@ -240,12 +242,19 @@ function validateConfig(raw) {
     ambientC: num(cl.ambientC, LIMITS.ambientC, D.cooling.ambientC, 'The hottest outside temperature'),
   };
 
+  const mn = isObj(src.mobileNotice) ? src.mobileNotice : {};
+  const mobileNotice = {
+    show: mn.show === undefined ? D.mobileNotice.show : mn.show === true,
+    text: mn.text === undefined ? D.mobileNotice.text : cleanText(mn.text, 300) || D.mobileNotice.text,
+  };
+
   const config = {
     version: 1,
     promise: src.promise === undefined ? D.promise : cleanText(src.promise, 200),
     quoteNote: src.quoteNote === undefined ? D.quoteNote : cleanText(src.quoteNote, 200),
     phone: cleanPhone(src.phone),
     accent: cleanAccent(src.accent),
+    mobileNotice,
     rackTypes,
     defaultRackType,
     rack,

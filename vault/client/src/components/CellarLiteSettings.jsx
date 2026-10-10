@@ -26,6 +26,7 @@ const toForm = (c) => ({
   accent: c.accent ?? '#4a5a2a',
   rackTypes: (c.rackTypes || []).map(typeToForm), defaultRackType: c.defaultRackType,
   clK: String(c.cooling?.panelConductivity ?? 0.025), clGlass: String(c.cooling?.glassU ?? 1.4), clFloor: String(c.cooling?.floorU ?? 1), clGains: String(c.cooling?.internalGainsW ?? 100), clMargin: String(c.cooling?.marginPct ?? 20), clTarget: String(c.cooling?.targetC ?? 14), clAmbient: String(c.cooling?.ambientC ?? 35),
+  mnShow: c.mobileNotice?.show !== false, mnText: c.mobileNotice?.text ?? '',
   qBusinessName: c.quote?.businessName ?? '', qDetails: c.quote?.details ?? '', qTerms: c.quote?.terms ?? '', qValidityDays: String(c.quote?.validityDays ?? 30), qGstNote: c.quote?.gstNote ?? '',
   singleMm: String(c.doors.singleMm), doubleMm: String(c.doors.doubleMm),
   show: !!c.pricing.show, currency: c.pricing.currency ?? '$',
@@ -41,6 +42,7 @@ const toConfig = (f) => ({
   accent: f.accent,
   rackTypes: f.rackTypes.map(typeToConfig), defaultRackType: f.defaultRackType,
   cooling: { panelConductivity: f.clK, glassU: f.clGlass, floorU: f.clFloor, internalGainsW: f.clGains, marginPct: f.clMargin, targetC: f.clTarget, ambientC: f.clAmbient },
+  mobileNotice: { show: f.mnShow, text: f.mnText },
   quote: { businessName: f.qBusinessName, details: f.qDetails, terms: f.qTerms, validityDays: f.qValidityDays, gstNote: f.qGstNote },
   doors: { singleMm: f.singleMm, doubleMm: f.doubleMm },
   pricing: { show: f.show, currency: f.currency, fixed: f.fixed, doorSingle: f.doorSingle, doorDouble: f.doorDouble, rangePct: f.rangePct, roundTo: f.roundTo, note: f.note },
@@ -302,6 +304,29 @@ export default function CellarLiteSettings({ onDirtyChange }) {
         </Field>
         <Field label="Line under the heading" tip="A short line shown under the planner's heading. Good for saying it's free and quick. Leave blank to show nothing." hint="Say it's free and quick. Leave blank to show nothing.">
           <textarea value={form.promise} rows={2} maxLength={200} onChange={(e) => set('promise', e.target.value)} className={INPUT} style={FIELD_STYLE} />
+        </Field>
+      </section>
+
+      <section className={CARD} style={CARD_STYLE} data-testid="cellar-lite-mobile">
+        <div className="flex items-center gap-3">
+          <h3 className="text-base font-semibold flex-1" style={{ color: 'var(--color-text)' }}>Message on phones</h3>
+          <Tooltip text={form.mnShow ? 'Visitors on a phone-sized screen see a note saying the planner is best on a computer or tablet. Click to switch it off (then press Save).' : 'The note is switched off. Click to show it to visitors on a phone-sized screen (then press Save).'}>
+            <button
+              onClick={() => set('mnShow', !form.mnShow)}
+              className="text-xs px-3 py-1 rounded-lg border font-medium transition-all hover:opacity-80"
+              style={{ borderColor: form.mnShow ? 'var(--color-primary)' : 'var(--color-border)', color: form.mnShow ? 'var(--color-primary)' : 'var(--color-muted)', background: 'transparent' }}
+              aria-pressed={form.mnShow}
+              data-testid="cellar-lite-mobile-toggle"
+            >
+              {form.mnShow ? 'Showing on phones' : 'Off'}
+            </button>
+          </Tooltip>
+        </div>
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          The public planner is made for a desktop computer or a tablet. On a phone-sized screen (under 700 pixels wide) visitors see this note first, with a button to carry on anyway and, if you have set a phone number, a link to call you instead. It never blocks them.
+        </p>
+        <Field label="Wording" tip="What visitors on a phone read, after the heading Best on a computer or tablet. Leave blank to use the standard wording." hint="Up to 300 characters. Blank uses the standard wording.">
+          <textarea value={form.mnText} rows={3} maxLength={300} onChange={(e) => set('mnText', e.target.value)} className={INPUT} style={FIELD_STYLE} />
         </Field>
       </section>
 

@@ -15,7 +15,7 @@ const scan = (pg) => pg.evaluate(async () => (await window.axe.run(document, { r
 const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--disable-features=LocalNetworkAccessChecks,PrivateNetworkAccessSendPreflights,PrivateNetworkAccessRespectPreflightResults'] });
 const ctx = await browser.newContext({ viewport: { width: 390, height: 800 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
 // the main run measures in millimetres (the steps below type and read whole millimetres); metres and feet have their own checks in e2e-lite-ux.mjs
-await ctx.addInitScript(() => { try { localStorage.setItem('cellar-lite:unit:v1', 'mm'); } catch { /* ignore */ } });
+await ctx.addInitScript(() => { try { localStorage.setItem('cellar-lite:unit:v1', 'mm'); sessionStorage.setItem('cellar-lite:phone-notice:v1', '1'); } catch { /* ignore */ } });
 const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
@@ -116,6 +116,11 @@ const fresh = await browser.newContext({ viewport: { width: 390, height: 800 }, 
 const fp = await fresh.newPage();
 await fp.goto(LITE);
 await fp.getByTestId('lite-bottles').waitFor();
+check('first visit on a phone: the note says the planner is best on a computer or tablet', /Best on a computer or tablet/.test(await fp.getByTestId('lite-phone-notice').innerText()));
+await fp.addScriptTag({ path: join(import.meta.dirname, '..', 'node_modules', 'axe-core', 'axe.min.js') });
+const noteScan = await fp.evaluate(async () => (await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } })).violations.map((v) => v.id + ' x' + v.nodes.length));
+check('first visit on a phone: accessibility scan with the note showing, no violations', noteScan.length === 0, noteScan.join(' | '));
+await fp.getByTestId('lite-phone-continue').click();
 check('first visit: no pop-up guide, the three steps are on the page', (await fp.getByTestId('lite-help').count()) === 0 && (await fp.getByTestId('lite-stepper').locator('li').count()) === 3);
 await fp.getByTestId('lite-help-open').click();
 await fp.getByTestId('lite-help').waitFor();

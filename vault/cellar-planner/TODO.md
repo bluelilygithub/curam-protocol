@@ -27,6 +27,7 @@ Built 2026-10-09 (see Done below and `docs/cellar-planner.md`, "Lite version for
 - [ ] **Try it on the real WordPress page**: upload `dist-lite/`, add the iframe and `lite-wordpress/cellar-lite-fill.js`, set `PLANNER_ORIGIN` and the two field selectors to match the actual enquiry form (Contact Form 7, WPForms or similar), send a test enquiry end to end.
 - [ ] Check the site's security plugin and any Content-Security-Policy allow the iframe and the fill script.
 - [ ] **Real-device check** of the lite page (iOS Safari, Android Chrome): typing in the fields (no page zoom), pinch-zoom, the quote step.
+- [x] 2026-10-11 A "best on a computer or tablet" note on phone-sized screens in the public planner (owner-editable wording, off switch, never blocks). Still to check on a real phone and to read for wording.
 - [ ] **Wording review**: every number on screen and in the enquiry says "estimate only, final site measure required". Owner to read the screen text (heading, intro, labels, hints, foot line, quote step) and the new guide and tour text (`src/lite/LiteHelp.tsx`, `src/lite/liteTour.ts`); try them on someone who knows nothing about cellars.
 - [ ] Decide the iframe height or auto-resize (the page is a single column; today the host sets a fixed height, about 1100px). Optional: the page posts its height to the host.
 - [ ] Add a lite check to the CSP script (`scripts/cspCheck.mjs`) if the site uses a strict policy.
