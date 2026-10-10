@@ -13,6 +13,7 @@
     "e2e": "node scripts/e2e.mjs",
     "e2e:catalogue": "node scripts/e2e-catalogue.mjs",
     "e2e:quote": "node scripts/e2e-quote.mjs",
+    "e2e:workflow": "node scripts/e2e-workflow.mjs",
     "e2e:lite-site": "node scripts/e2e-lite-ux.mjs && node scripts/e2e-lite-config.mjs && node scripts/e2e-lite-contact.mjs",
     "example": "vite-node scripts/writeExample.mjs",
     "dev:lite": "vite --config vite.lite.config.ts",

@@ -1,7 +1,7 @@
 import { doorLayout, doorLeafWidthMm, internalSize } from '../enclosure/enclosure';
 import type { Enclosure, WallKind, WallSide } from '../enclosure/types';
 import type { Issue } from '../engine/types';
-import { doorLeaves, doorOpening, wallPoint, type RackLayoutAnalysis, type RackRun } from '../placement/placement';
+import { doorLeaves, doorOpening, footprint, wallPoint, type RackLayoutAnalysis, type RackRun } from '../placement/placement';
 import type { Prim, Tone } from './primitives';
 
 // The 2D plan: the enclosure from above, in outer-face millimetres (0, 0 is the outside north-west corner), y down. Pure: a list of drawing
@@ -106,4 +106,55 @@ export function planView(e: Enclosure, runs: RackRun[], analysis?: RackLayoutAna
 /** Run ids that have at least one error, for the plan to draw in the issue tone. */
 export function badRunIds(issues: Issue[]): Set<string> {
   return new Set(issues.filter((i) => i.severity === 'error' && i.where).map((i) => i.where as string));
+}
+
+// ---------------------------------------------------------------- moving runs on the plan
+
+/** Where a run can be picked up on the plan: its rectangle in the plan's own millimetres, and what to say when the pointer rests on it. */
+export interface RunHit { id: string; wall: WallSide; x: number; y: number; w: number; h: number; tip: string }
+
+const wallName = (w: WallSide): string => w.charAt(0) + w.slice(1).toLowerCase();
+/** The end of a wall a run's start is measured from (west on north/south walls, north on east/west walls). */
+export const wallStartName = (w: WallSide): string => (w === 'NORTH' || w === 'SOUTH' ? 'west' : 'north');
+export const wallEndName = (w: WallSide): string => (w === 'NORTH' || w === 'SOUTH' ? 'east' : 'south');
+
+/** The pick-up areas of the runs that have a size, in the same millimetres as `planView`. Topmost (last drawn) first. */
+export function planRunHits(e: Enclosure, runs: RackRun[], analysis?: RackLayoutAnalysis, bad?: Set<string>): RunHit[] {
+  const wB = e.walls.WEST.buildUpMm, nB = e.walls.NORTH.buildUpMm;
+  const out: RunHit[] = [];
+  for (const run of runs) {
+    const fp = analysis?.runs.find((x) => x.runId === run.id)?.footprint;
+    if (fp?.status !== 'OK') continue;
+    const count = bottleText(analysis, run.id);
+    out.push({
+      id: run.id, wall: run.wall, x: fp.rect.x0 + wB, y: fp.rect.y0 + nB, w: fp.rect.x1 - fp.rect.x0, h: fp.rect.y1 - fp.rect.y0,
+      tip: `${run.id}: ${run.units} ${run.units === 1 ? 'unit' : 'units'}, ${bad?.has(run.id) ? 'not counted (has an error)' : count}. Starts ${run.startMm} mm from the ${wallStartName(run.wall)} end of the ${wallName(run.wall).toLowerCase()} wall. Drag it along the wall to move it.`,
+    });
+  }
+  return out.reverse();
+}
+
+/**
+ * The outline shown while a run is being dragged: the run where it would land (dashed; red when that place is not allowed), with how far it
+ * stands from each end of its wall and what it snaps to. `startMm` is the candidate start along the wall.
+ */
+export function dragGhost(e: Enclosure, run: RackRun, startMm: number, o: { ok: boolean; snap: string | null; reason?: string }): Prim[] {
+  const moved: RackRun = { ...run, startMm };
+  const fp = ((): ReturnType<typeof footprint> => footprint(e, moved))();
+  if (fp.status !== 'OK') return [];
+  const wB = e.walls.WEST.buildUpMm, nB = e.walls.NORTH.buildUpMm;
+  const iz = internalSize(e);
+  const len = run.wall === 'NORTH' || run.wall === 'SOUTH' ? iz.widthMm : iz.depthMm;
+  const x = fp.rect.x0 + wB, y = fp.rect.y0 + nB, w = fp.rect.x1 - fp.rect.x0, h = fp.rect.y1 - fp.rect.y0;
+  const gapEnd = Math.max(0, len - startMm - fp.lengthMm);
+  const text = [`${startMm} mm from the ${wallStartName(run.wall)} end`, `${gapEnd} mm to the ${wallEndName(run.wall)} end`, ...(o.snap ? [`snaps to ${o.snap}`] : []), ...(o.ok || !o.reason ? [] : [o.reason])].join(' · ');
+  // the caption sits on the room side of the run so it is never hidden by the wall
+  const tone = o.ok ? 'ink' : 'rackIssue';
+  const caption: Prim = run.wall === 'WEST' ? { kind: 'text', x: x + w + 80, y: y + h / 2, text, tone, size: 12, anchor: 'start' }
+    : run.wall === 'EAST' ? { kind: 'text', x: x - 80, y: y + h / 2, text, tone, size: 12, anchor: 'end' }
+    // along north and south walls the caption starts at the run's edge that has more room, so it never runs over a wall
+    : (startMm + fp.lengthMm / 2 < len / 2
+      ? { kind: 'text', x, y: run.wall === 'SOUTH' ? y - 70 : y + h + 150, text, tone, size: 12, anchor: 'start' }
+      : { kind: 'text', x: x + w, y: run.wall === 'SOUTH' ? y - 70 : y + h + 150, text, tone, size: 12, anchor: 'end' });
+  return [{ kind: 'rect', x, y, w, h, tone: o.ok ? 'rack' : 'rackIssue', dash: true }, caption];
 }

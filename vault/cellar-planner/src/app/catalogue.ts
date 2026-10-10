@@ -146,3 +146,23 @@ export function createCatalogueStore(): CatalogueStore {
     },
   }));
 }
+
+// ---------------------------------------------------------------- what choosing a rack type changed
+
+const SPEC_FIELD_NAMES: Array<[keyof RackSpec, string]> = [
+  ['unitWidthMm', 'unit width'], ['unitDepthMm', 'unit depth'], ['unitHeightMm', 'unit height'], ['rowPitchMm', 'row pitch'], ['rowsPerUnit', 'rows per unit'],
+  ['bottlesPerRow', 'bottles per row'], ['bottlesPerRowLabelForward', 'bottles per row (label-forward)'], ['orientation', 'bottle orientation'], ['postsPerUnit', 'posts per unit'],
+];
+const specValue = (v: unknown): string => (v === null || v === undefined ? 'not set' : v === 'NECK_OUT' ? 'neck-out' : v === 'LABEL_FORWARD' ? 'label-forward' : String(v));
+
+/** Plain words on what choosing a rack type changed in the design's rack values: each value that moved, from and to. */
+export function describeRackChange(before: AppProject, after: AppProject): string {
+  const name = after.rackType?.name ?? 'the rack type';
+  const moves: string[] = [];
+  for (const [k, label] of SPEC_FIELD_NAMES) {
+    const a = before.rackSpec[k] ?? null, b = after.rackSpec[k] ?? null;
+    if (a !== b) moves.push(`${label} ${specValue(a)} → ${specValue(b)}`);
+  }
+  const est = after.estimated?.length ? ` ${after.estimated.length} value${after.estimated.length === 1 ? ' is' : 's are'} marked estimated because it is not confirmed by the supplier.` : '';
+  return moves.length ? `Applied "${name}": ${moves.join(', ')}.${est} Undo takes it back.` : `Applied "${name}": the rack values were already the same.${est}`;
+}

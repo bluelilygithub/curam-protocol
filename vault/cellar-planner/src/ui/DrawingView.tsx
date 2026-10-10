@@ -1,6 +1,6 @@
 import Konva from 'konva';
 import { useEffect, useRef, useState } from 'react';
-import { boundsOf, fitView, type Prim, type Tone } from '../views';
+import { boundsOf, fitView, type Prim, type RunHit, type Tone } from '../views';
 import { FINISH_LOOK, type FinishKey } from '../lite/finishes';
 import { ZoomControls } from '../lite/ZoomControls';
 
@@ -84,8 +84,15 @@ function draw(layer: Konva.Layer, prims: Prim[], v: { scale: number; ox: number;
   layer.batchDraw();
 }
 
+/** A run being dragged on the plan: where the pointer has moved since the pick-up, in millimetres, and the zoom (pixels per mm) for pixel-sized snapping. */
+export interface RunDragEvent { id: string; phase: 'start' | 'move' | 'end'; dxMm: number; dyMm: number; pxPerMm: number }
+
 // ctrlZoom: the mouse wheel scrolls the page and only Ctrl/Cmd + wheel zooms (for the drawing embedded in a web page, so it never traps page scrolling)
-export function DrawingView({ prims, testid, description, ctrlZoom = false, look = 'plain', finish = 'OAK' }: { prims: Prim[]; testid: string; description: string; ctrlZoom?: boolean; look?: DrawingLook; finish?: FinishKey }) {
+export function DrawingView({ prims, testid, description, ctrlZoom = false, look = 'plain', finish = 'OAK', runHits, ghost, onRunDrag }: {
+  prims: Prim[]; testid: string; description: string; ctrlZoom?: boolean; look?: DrawingLook; finish?: FinishKey;
+  /** Plan only: the runs that can be picked up and dragged (millimetres, topmost first), what to draw while one is moving, and what to do about it. */
+  runHits?: RunHit[]; ghost?: Prim[]; onRunDrag?: (e: RunDragEvent) => void;
+}) {
   const host = useRef<HTMLDivElement>(null);
   const stage = useRef<Konva.Stage | null>(null);
   const layer = useRef<Konva.Layer | null>(null);
@@ -97,6 +104,14 @@ export function DrawingView({ prims, testid, description, ctrlZoom = false, look
   const ctrlZoomRef = useRef(ctrlZoom);
   ctrlZoomRef.current = ctrlZoom;
   const hintTimer = useRef<number | undefined>(undefined);
+  const hitsRef = useRef<RunHit[]>(runHits ?? []);
+  hitsRef.current = runHits ?? [];
+  const ghostRef = useRef<Prim[]>(ghost ?? []);
+  ghostRef.current = ghost ?? [];
+  const onDragRef = useRef(onRunDrag);
+  onDragRef.current = onRunDrag;
+  const runDrag = useRef<{ id: string; x0: number; y0: number; x: number; y: number } | null>(null);
+  const [tip, setTip] = useState<{ text: string; x: number; y: number } | null>(null);
   const [size, setSize] = useState({ w: 600, h: 400 });
   const [hint, setHint] = useState(false);
 
@@ -104,9 +119,11 @@ export function DrawingView({ prims, testid, description, ctrlZoom = false, look
     const el = host.current;
     if (!el || !layer.current) return;
     if (!touched.current) view.current = fitView(boundsOf(primsRef.current), size.w, size.h, 56);
-    draw(layer.current, primsRef.current, view.current, look, finish);
+    draw(layer.current, ghostRef.current.length ? [...primsRef.current, ...ghostRef.current] : primsRef.current, view.current, look, finish);
     el.dataset.prims = String(primsRef.current.length);
     el.dataset.scale = view.current.scale.toFixed(4);
+    el.dataset.ox = view.current.ox.toFixed(2); el.dataset.oy = view.current.oy.toFixed(2);
+    el.dataset.ghost = String(ghostRef.current.length);
   };
 
   useEffect(() => {
@@ -143,11 +160,42 @@ export function DrawingView({ prims, testid, description, ctrlZoom = false, look
       const r = s.container().getBoundingClientRect();
       return { d: Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY), cx: (t[0].clientX + t[1].clientX) / 2 - r.left, cy: (t[0].clientY + t[1].clientY) / 2 - r.top };
     };
+    /** The run under a pointer position (with a little slop, more for a finger), or null. */
+    const hitAt = (pos: { x: number; y: number }, touch: boolean): RunHit | null => {
+      const v = view.current, mx = (pos.x - v.ox) / v.scale, my = (pos.y - v.oy) / v.scale, slop = (touch ? 12 : 3) / v.scale;
+      return hitsRef.current.find((h) => mx >= h.x - slop && mx <= h.x + h.w + slop && my >= h.y - slop && my <= h.y + h.h + slop) ?? null;
+    };
+    const emitDrag = (phase: 'start' | 'move' | 'end', pos: { x: number; y: number }): void => {
+      const d = runDrag.current;
+      if (!d) return;
+      d.x = pos.x; d.y = pos.y;
+      onDragRef.current?.({ id: d.id, phase, dxMm: (pos.x - d.x0) / view.current.scale, dyMm: (pos.y - d.y0) / view.current.scale, pxPerMm: view.current.scale });
+    };
     s.on('mousedown touchstart', (ev) => {
-      const p = two(ev as Konva.KonvaEventObject<TouchEvent>);
-      if (p) { Object.assign(pinch, p); drag.current = null; } else { drag.current = s.getPointerPosition(); el.classList.add('dragging'); }
+      // only a touch has a list of fingers; asking a mouse event for it threw before anything could start
+      const p = ev.evt instanceof TouchEvent ? two(ev as Konva.KonvaEventObject<TouchEvent>) : null;
+      if (p) { Object.assign(pinch, p); drag.current = null; return; }
+      const pos = s.getPointerPosition();
+      const hit = pos && onDragRef.current ? hitAt(pos, ev.evt instanceof TouchEvent) : null;
+      if (hit && pos) {
+        // a run is picked up: this gesture moves it, it does not pan the drawing
+        runDrag.current = { id: hit.id, x0: pos.x, y0: pos.y, x: pos.x, y: pos.y };
+        el.classList.add('moving-run'); setTip(null);
+        emitDrag('start', pos);
+      } else { drag.current = pos; el.classList.add('dragging'); }
     });
     s.on('mousemove touchmove', (ev) => {
+      if (runDrag.current) {
+        const pos = s.getPointerPosition();
+        if (pos) { ev.evt.preventDefault(); emitDrag('move', pos); }
+        return;
+      }
+      if (!(ev.evt instanceof TouchEvent) && !drag.current && onDragRef.current) {
+        const pos = s.getPointerPosition();
+        const hit = pos ? hitAt(pos, false) : null;
+        el.classList.toggle('over-run', !!hit);
+        setTip(hit && pos ? { text: hit.tip, x: pos.x, y: pos.y } : null);
+      }
       const p = ev.evt instanceof TouchEvent ? two(ev as Konva.KonvaEventObject<TouchEvent>) : null;
       if (p) {
         ev.evt.preventDefault();
@@ -165,6 +213,8 @@ export function DrawingView({ prims, testid, description, ctrlZoom = false, look
       drag.current = pos; touched.current = true; redraw();
     });
     s.on('mouseup mouseleave touchend touchcancel', (ev) => {
+      if (runDrag.current) { emitDrag('end', { x: runDrag.current.x, y: runDrag.current.y }); runDrag.current = null; el.classList.remove('moving-run'); }
+      if (ev.type === 'mouseleave') { el.classList.remove('over-run'); setTip(null); }
       drag.current = null; pinch.d = 0; el.classList.remove('dragging');
       // one finger left after a pinch: carry on panning from where it is, without a jump
       if (ev.evt instanceof TouchEvent && ev.evt.touches.length === 1) { const r = s.container().getBoundingClientRect(), t = ev.evt.touches[0]; drag.current = { x: t.clientX - r.left, y: t.clientY - r.top }; }
@@ -173,7 +223,7 @@ export function DrawingView({ prims, testid, description, ctrlZoom = false, look
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => { redraw(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [prims, size, look, finish]);
+  useEffect(() => { redraw(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [prims, size, look, finish, ghost]);
 
   const fit = (): void => { touched.current = false; redraw(); };
   /** Zoom about the middle of the picture (the buttons; the wheel and pinch zoom about the pointer). */
@@ -187,6 +237,7 @@ export function DrawingView({ prims, testid, description, ctrlZoom = false, look
   return (
     <div className="drawing" data-testid={testid} data-tour="cp-drawing">
       <div ref={host} className="drawing-canvas" data-testid={`${testid}-canvas`} role="img" aria-label={description} />
+      {tip && <div className="run-tip" role="tooltip" style={{ left: Math.min(tip.x + 14, Math.max(0, size.w - 250)), top: tip.y + 16 }} data-testid="run-tip">{tip.text}</div>}
       {hint && <div className="drawing-hint" role="status">Hold Ctrl (Cmd on Mac) and scroll to zoom</div>}
       {look !== 'plain'
         ? <ZoomControls testid={testid} onIn={() => zoomBy(1.25)} onOut={() => zoomBy(0.8)} onReset={fit} canReset={touched.current} />

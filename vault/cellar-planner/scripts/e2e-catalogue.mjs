@@ -70,6 +70,7 @@ const project = (page) => page.evaluate(() => window.cellar.store.getState().pro
   await select.selectOption('standard-600');
   const p1 = await project(page);
   check('Standard 600 fills in the sizes', p1.rackSpec.unitWidthMm === 600 && p1.rackSpec.unitDepthMm === 350 && p1.rackSpec.rowPitchMm === 100 && p1.rackSpec.postsPerUnit === 2 && p1.rackSpec.orientation === 'NECK_OUT', JSON.stringify(p1.rackSpec));
+  check('applying a type says exactly which values changed, in the line under the header', /Applied "Standard 600": .*unit width not set → 600.*Undo takes it back\./.test(await page.getByTestId('status').innerText()), await page.getByTestId('status').innerText());
   check('and remembers which type it came from', p1.rackType?.id === 'standard-600' && p1.rackType.confirmed === true);
   check('confirmed: nothing is marked estimated, no "best guesses" banner', (p1.estimated ?? []).length === 0 && (await page.getByTestId('rack-estimated').count()) === 0);
   check('the visible fields show the catalogue numbers', (await page.getByTestId('rack-width').inputValue()) === '600' && (await page.getByTestId('rack-depth').inputValue()) === '350');

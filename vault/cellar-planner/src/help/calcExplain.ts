@@ -149,6 +149,7 @@ export function explainCalculations(p: AppProject, cat: Catalogue | null): CalcS
     lines: runLines.length ? runLines : [{ label: 'Rack runs', formula: '', working: 'none placed', result: 'no racks yet', value: null }],
     notes: [
       '"Fill" a wall: whole units that fit = rounded down (free length ÷ unit width). The door wall is filled either side of the opening, so it can have two runs.',
+      'Dragging a run on the plan snaps to: the start and end of its wall, the door opening\'s edges, the ends of other runs on the wall, and clear of runs on the end walls (the second run starts after the first one\'s depth). It only lands where the run has no more errors than it had.',
       'Checks that are errors: RUN_OUTSIDE (past the end of its wall), RUN_TOO_DEEP (deeper than the enclosure), RACK_TOO_TALL (taller than the inside), RUN_ON_DOOR (across the opening), RUN_IN_DOOR_SWING (inside an inward door\'s arc), DOOR_PATH_BLOCKED (inside the landing the walkway needs), RUN_OVERLAP (two runs share floor; at a corner the second starts after the first\'s depth).',
       `Walkway: the clear space in front of a run = across the enclosure − the run's depth − the depth of any run facing it. A gap smaller than the minimum walkway is only a WARNING. ${p.walkwayMm === null ? 'No minimum is set for this project, so the walkway is not checked.' : `The minimum for this project is ${p.walkwayMm} mm.`}`,
     ],

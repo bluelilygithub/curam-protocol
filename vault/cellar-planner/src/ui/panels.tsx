@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { createContext, useContext } from 'react';
+import type { Issue } from '../engine/types';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 import { analyseApp, fillBlankRackWithGuesses, sortIssues, type AppProject, type EstimateField } from '../app/model';
-import { applyRackType, matchesType, staffPrice, typeById, type CatalogueState, type CatalogueStore } from '../app/catalogue';
+import { applyRackType, describeRackChange, matchesType, staffPrice, typeById, type CatalogueState, type CatalogueStore } from '../app/catalogue';
+import { fixAll, suggestFix, type Fix } from '../app/fixes';
+import type { UiStore } from '../app/uiStore';
 import type { AppStore } from '../app/store';
 import type { HeaderComponent, WallKind, WallSide } from '../enclosure';
 import { BOTTLE_PROFILES, type BottleProfileId } from '../engine';
@@ -12,6 +15,8 @@ import { effectiveBottlesPerRow, missingFields, type RackOrientation, type RackS
 import { CheckField, NumField, Section, SelectField } from './fields';
 
 export const StoreContext = createContext<AppStore | null>(null);
+/** The screen state, so a panel can say what it just did in the line under the header (null in tests that do not need it). */
+export const UiContext = createContext<UiStore | null>(null);
 /** The rack catalogue from Vault (null in tests that do not need it). */
 export const CatalogueContext = createContext<CatalogueStore | null>(null);
 const NO_CATALOGUE: CatalogueState = { catalogue: null, status: 'idle', reason: '', load: async () => undefined };
@@ -106,6 +111,7 @@ export function RackPanel() {
   const calculated = s.orientation !== 'LABEL_FORWARD' && s.bottlesPerRow === null && perRow?.source === 'calculated';
   const est = (k: EstimateField): boolean => p.estimated?.includes(k) ?? false;
   const stillEstimated = (p.estimated ?? []).map((k) => FIELD_NAMES[k]);
+  const ui = useContext(UiContext);
   const cat = useCatalogue();
   const chosen = typeById(cat.catalogue, p.rackType?.id);
   const typeOptions: Array<[string, string]> = (cat.catalogue?.rackTypes ?? []).map((r): [string, string] => [r.id, r.confirmed ? r.name : `${r.name} (not confirmed)`]);
@@ -116,7 +122,7 @@ export function RackPanel() {
       ? (
         <div className="banner" role="note" data-testid="rack-type-edited">
           <p>These values differ from the catalogue's "{chosen.name}" (you edited them, or the catalogue has changed since).</p>
-          <button type="button" className="btn small" title={`Replace the rack values in this design with the catalogue's current values for ${chosen.name}. Your runs and enclosure are not changed. Undo takes it back.`} onClick={() => edit((q) => applyRackType(q, chosen))} data-testid="rack-type-reapply">Use the catalogue's values again</button>
+          <button type="button" className="btn small" title={`Replace the rack values in this design with the catalogue's current values for ${chosen.name}. Your runs and enclosure are not changed. Undo takes it back.`} onClick={() => { let note = ''; edit((q) => { const n = applyRackType(q, chosen); note = describeRackChange(q, n); return n; }); ui?.getState().set({ notice: note }); }} data-testid="rack-type-reapply">Use the catalogue's values again</button>
         </div>
       )
       : null;
@@ -142,7 +148,7 @@ export function RackPanel() {
           hint="A kind of rack from your catalogue (set in Settings, Cellar Planner). Choosing one fills in its sizes and marks them estimated until the supplier has confirmed them. Custom keeps whatever is typed below."
           onChange={(v) => {
             if (v === null) edit((q) => { const { rackType: _drop, ...rest } = q; void _drop; return rest; });
-            else { const t = typeById(cat.catalogue, v); if (t) edit((q) => applyRackType(q, t)); }
+            else { const t = typeById(cat.catalogue, v); if (t) { let note = ''; edit((q) => { const n = applyRackType(q, t); note = describeRackChange(q, n); return n; }); ui?.getState().set({ notice: note }); } }
           }} testid="rack-type" />
       )}
       <SelectField label="Bottle" value={p.bottle} options={Object.values(BOTTLE_PROFILES).map((b): [BottleProfileId, string] => [b.id, b.label])} hint="The bottle the racks are for. Its length sets how deep a unit must be (typical sizes, unverified)." onChange={(v) => edit((q) => ({ ...q, bottle: v as BottleProfileId }))} testid="bottle" />
@@ -239,8 +245,23 @@ export function PricePanel() {
 
 export function ChecksPanel() {
   const p = useProject();
-  const a = analyseApp(p);
+  const edit = useEdit();
+  const ui = useContext(UiContext);
+  const a = useMemo(() => analyseApp(p), [p]);
   const issues = sortIssues(a.issues);
+  // a one-click fix for each error that has one; each is tried on a copy first, so a button only appears when it really removes errors
+  const fixes = useMemo(() => {
+    const m = new Map<Issue, Fix>();
+    for (const i of a.issues) { const f = suggestFix(p, i); if (f) m.set(i, f); }
+    return m;
+  }, [p, a]);
+  const say = (notice: string): void => ui?.getState().set({ notice });
+  const apply = (f: Fix): void => { edit((q) => f.apply(q)); say(`Fixed: ${f.label}.`); };
+  const applyAll = (): void => {
+    let n = 0;
+    edit((q) => { const r = fixAll(q); n = r.applied.length; return r.project; });
+    say(n ? `Fixed ${n} problem${n === 1 ? '' : 's'}. Undo takes them all back.` : 'Nothing to fix automatically.');
+  };
   const total = a.racks.total;
   return (
     <div className="checks" data-testid="checks-panel">
@@ -255,12 +276,15 @@ export function ChecksPanel() {
       </section>
       <section className="section" data-tour="cp-checks">
         <h2 title="Problems with the design. Errors mean something does not fit; warnings and information are for you to judge.">Checks <span className="count" data-testid="issue-count">{issues.filter((i) => i.severity === 'error').length} errors, {issues.filter((i) => i.severity === 'warning').length} warnings</span></h2>
+        {fixes.size >= 2 && <button type="button" className="btn small" title="Apply every available fix, one after another. Each is checked, and one Undo takes them all back." onClick={applyAll} data-testid="fix-all">Fix all ({fixes.size})</button>}
         {issues.length === 0 && <p className="note">Nothing to report.</p>}
         <ul className="issues">
           {issues.map((i, n) => (
             <li key={`${i.code}-${i.where ?? ''}-${n}`} className={`issue ${i.severity}`} data-testid={`issue-${i.code}`}>
               <span className="sev">{i.severity}</span>
-              <span>{i.message}{i.fix && <small> {i.fix}</small>}{i.where && <small> ({i.where})</small>}</span>
+              <span>{i.message}{i.fix && <small> {i.fix}</small>}{i.where && <small> ({i.where})</small>}
+                {fixes.get(i) && <button type="button" className="btn small fix-btn" title={fixes.get(i)!.detail} onClick={() => apply(fixes.get(i)!)} data-testid={`fix-${i.code}`}>{fixes.get(i)!.label}</button>}
+              </span>
             </li>
           ))}
         </ul>

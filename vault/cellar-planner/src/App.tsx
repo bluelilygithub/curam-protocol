@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import { TooltipHost } from '@planner-core/help/TooltipHost';
 import { analyseApp, deserializeApp, fullRuns, ParseError, sampleProject, serializeApp, testCaseProject } from './app/model';
@@ -7,7 +7,9 @@ import type { Designs } from './app/designs';
 import type { AppStore } from './app/store';
 import { INFO_KEY, type UiStore } from './app/uiStore';
 import type { WallSide } from './enclosure';
-import { badRunIds, bottlesOnWall, elevationView, planView, rackFaceView, rackWallSummary } from './views';
+import { badRunIds, bottlesOnWall, dragGhost, elevationView, planRunHits, planView, rackFaceView, rackWallSummary, type Prim } from './views';
+import { placeRun, withRun, type PlaceResult } from './app/runMove';
+import type { RunDragEvent } from './ui/DrawingView';
 import { ConflictBar, DesignsPanel, SaveStatus } from './ui/DesignsPanel';
 import { DrawingView } from './ui/DrawingView';
 import { CodeModal, projectFromCode } from './ui/CodeModal';
@@ -15,12 +17,14 @@ import { InfoModal } from './ui/InfoModal';
 import { PackageModal } from './ui/PackageModal';
 import { Icon } from './ui/icons';
 import { Accordion } from './ui/fields';
-import { CatalogueContext, ChecksPanel, EnclosurePanel, PricePanel, RackPanel, RunsPanel, StoreContext } from './ui/panels';
+import { CatalogueContext, ChecksPanel, EnclosurePanel, PricePanel, RackPanel, RunsPanel, StoreContext, UiContext } from './ui/panels';
 import { createCatalogueStore, type CatalogueStore } from './app/catalogue';
 import { createLeadsStore, openLeadDesign, type FetchFn, type LeadsStore } from './app/leads';
 import { LeadsPanel } from './ui/LeadsPanel';
 import { QuoteModal } from './ui/QuoteModal';
 import { CalcModal } from './ui/CalcModal';
+import { StatusStrip } from './ui/StatusStrip';
+import { clampLeft, loadLayout, saveLayout, LEFT_MAX, LEFT_MIN } from './app/layoutPrefs';
 
 const WALLS: Array<[WallSide, string]> = [['NORTH', 'North'], ['EAST', 'East'], ['SOUTH', 'South'], ['WEST', 'West']];
 
@@ -73,6 +77,69 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
   }, [revision, project]);
 
   const analysis = useMemo(() => analyseApp(project), [project]);
+  const catState = useStore(cat, (s) => s.catalogue);
+
+  // ---- the screen layout: hide the side panels, resize the controls panel, or focus on the drawing. Remembered in this browser.
+  const [layout, setLayout] = useState(() => loadLayout(typeof localStorage === 'undefined' ? undefined : localStorage));
+  const [focus, setFocus] = useState(false);
+  useEffect(() => { saveLayout(typeof localStorage === 'undefined' ? undefined : localStorage, layout); }, [layout]);
+  useEffect(() => {
+    if (!focus) return undefined;
+    const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') setFocus(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [focus]);
+  const leftHidden = layout.leftHidden || focus, rightHidden = layout.rightHidden || focus;
+  const strip = {
+    leftHidden: layout.leftHidden, rightHidden: layout.rightHidden, focus,
+    toggleLeft: () => { setFocus(false); setLayout((l) => ({ ...l, leftHidden: focus ? false : !l.leftHidden })); },
+    toggleRight: () => { setFocus(false); setLayout((l) => ({ ...l, rightHidden: focus ? false : !l.rightHidden })); },
+    toggleFocus: () => setFocus((f) => !f),
+    // the error count: bring the checks into view (the right panel here, or the Checks pane on a phone)
+    showChecks: () => { setFocus(false); setLayout((l) => ({ ...l, rightHidden: false })); ui.getState().set({ pane: 'checks' }); },
+  };
+  const startResize = (ev: React.PointerEvent<HTMLDivElement>): void => {
+    const x0 = ev.clientX, w0 = layout.leftW;
+    const el = ev.currentTarget; el.setPointerCapture(ev.pointerId);
+    const move = (e: PointerEvent): void => setLayout((l) => ({ ...l, leftW: clampLeft(w0 + e.clientX - x0) }));
+    const up = (): void => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); };
+    el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  };
+
+  // ---- dragging a rack run along its wall on the plan: it snaps (wall ends, the door opening, other runs), shows where it would land, and only lands
+  // somewhere that adds no error for it; otherwise it springs back and says why. One drag = one undo step.
+  const [ghost, setGhost] = useState<Prim[]>([]);
+  const drag = useRef<{ id: string; orig: typeof project; startMm: number; last: PlaceResult | null } | null>(null);
+  const onRunDrag = (ev: RunDragEvent): void => {
+    if (ev.phase === 'start') {
+      const p = store.getState().project, r = p.runs.find((x) => x.id === ev.id);
+      drag.current = r ? { id: ev.id, orig: p, startMm: r.startMm, last: null } : null;
+      return;
+    }
+    const d = drag.current;
+    if (!d) return;
+    const run = d.orig.runs.find((x) => x.id === d.id);
+    if (!run) { drag.current = null; return; }
+    const delta = run.wall === 'NORTH' || run.wall === 'SOUTH' ? ev.dxMm : ev.dyMm; // along the wall: west to east, or north to south
+    const res = placeRun(d.orig, d.id, d.startMm + delta, 12 / ev.pxPerMm);
+    d.last = res;
+    if (ev.phase === 'move') {
+      const full = fullRuns(d.orig).find((x) => x.id === d.id);
+      setGhost(res && full ? dragGhost(d.orig.enclosure, full, res.startMm, { ok: res.ok, snap: res.snap, reason: res.errors[0]?.message }) : []);
+      return;
+    }
+    // released
+    setGhost([]);
+    drag.current = null;
+    if (!res || res.startMm === d.startMm) return;
+    if (res.ok) {
+      store.getState().edit((q) => withRun(q, d.id, { startMm: res.startMm }));
+      setMsg(`Moved ${d.id} to ${res.startMm} mm${res.snap ? ` (snapped to ${res.snap})` : ''}.`);
+    } else {
+      setMsg(`Can't put ${d.id} there: ${res.errors[0]?.message ?? 'it does not fit'} It went back to ${d.startMm} mm.`);
+    }
+  };
+  const runHits = useMemo(() => planRunHits(project.enclosure, fullRuns(project), analysis.racks, badRunIds(analysis.racks.issues)), [project, analysis]);
   const plan = useMemo(() => planView(project.enclosure, fullRuns(project), analysis.racks, { walkwayMm: project.walkwayMm, badRuns: badRunIds(analysis.racks.issues) }), [project, analysis]);
   const elevation = useMemo(() => elevationView(project.enclosure, wall), [project.enclosure, wall]);
   const racks = useMemo(() => rackFaceView(project.enclosure, fullRuns(project), analysis.racks, rackWall, project.bottle, { badRuns: badRunIds(analysis.racks.issues) }), [project, analysis, rackWall]);
@@ -106,7 +173,8 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
   return (
     <StoreContext.Provider value={store}>
     <CatalogueContext.Provider value={catalogue ?? null}>
-      <div className="app" data-pane={pane}>
+    <UiContext.Provider value={ui}>
+      <div className="app" data-pane={pane} data-left={leftHidden ? 'hidden' : 'shown'} data-right={rightHidden ? 'hidden' : 'shown'} data-focus={focus ? 'on' : 'off'} style={{ '--left-w': `${layout.leftW}px` } as React.CSSProperties}>
         <header className="toolbar" role="toolbar" aria-label="Main toolbar" data-tour="cp-project">
           <div className="toolbar-row">
             <div className="brand">
@@ -153,6 +221,8 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
         </nav>
         <aside className="left" data-testid="left"><Accordion initial="Enclosure"><EnclosurePanel /><RackPanel /><RunsPanel /><PricePanel /></Accordion></aside>
         <main className="stage">
+          {!leftHidden && <div className="resizer" role="separator" aria-orientation="vertical" aria-label="Resize the controls panel" aria-valuemin={LEFT_MIN} aria-valuemax={LEFT_MAX} aria-valuenow={layout.leftW} tabIndex={0} title="Drag to make the controls panel wider or narrower. With the keyboard, use the left and right arrow keys." onPointerDown={startResize} onKeyDown={(e) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); setLayout((l) => ({ ...l, leftW: clampLeft(l.leftW + (e.key === 'ArrowRight' ? 20 : -20)) })); } }} data-testid="resizer" />}
+          <StatusStrip project={project} analysis={analysis} cat={catState} layout={strip} />
           <div className="tabs" role="group" aria-label="Drawing" data-tour="cp-tabs">
             <button type="button" aria-pressed={tab === 'plan'} className={`tab${tab === 'plan' ? ' on' : ''}`} title="The enclosure from above: walls, door, racks and sizes." onClick={() => ui.getState().set({ tab: 'plan' })} data-testid="tab-plan">Plan</button>
             <button type="button" aria-pressed={tab === 'elevation'} className={`tab${tab === 'elevation' ? ' on' : ''}`} title="One wall seen from outside: door, header, conditioner, vents and sizes." onClick={() => ui.getState().set({ tab: 'elevation' })} data-testid="tab-elevation">Elevation</button>
@@ -161,7 +231,7 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
             {tab === 'racks' && WALLS.map(([w, name]) => <button type="button" key={w} aria-pressed={rackWall === w} className={`tab small${rackWall === w ? ' on' : ''}`} title={`Show the racks on the ${name.toLowerCase()} wall, seen from inside.`} onClick={() => ui.getState().set({ rackWall: w })} data-testid={`rackwall-${w}`}>{name}</button>)}
             <span className="hint">{tab === 'plan' ? 'From above. Drag to move, scroll or pinch to zoom.' : tab === 'racks' ? `The ${rackWall.toLowerCase()} wall seen from inside, bottles end-on.` : `The ${wall.toLowerCase()} wall seen from outside.`}</span>
           </div>
-          {tab === 'plan' ? <DrawingView key="plan" prims={plan} testid="plan" description={planText} /> : tab === 'racks' ? <DrawingView key={`racks-${rackWall}`} prims={racks} testid="racks" description={rackText} /> : <DrawingView key={`elev-${wall}`} prims={elevation} testid="elevation" description={elevText} />}
+          {tab === 'plan' ? <DrawingView key="plan" prims={plan} testid="plan" description={planText} runHits={runHits} ghost={ghost} onRunDrag={onRunDrag} /> : tab === 'racks' ? <DrawingView key={`racks-${rackWall}`} prims={racks} testid="racks" description={rackText} /> : <DrawingView key={`elev-${wall}`} prims={elevation} testid="elevation" description={elevText} />}
           {tab === 'racks' && <p className="racks-summary" data-testid="racks-summary" role="status">{rackWallSummary(analysis.racks, fullRuns(project), rackWall).text} <span className="muted">Whole enclosure: {bottles}.</span></p>}
           <p className="foot">PRELIMINARY DESIGN ONLY: FINAL SITE MEASURE REQUIRED PRIOR TO FABRICATION</p>
         </main>
@@ -175,6 +245,7 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
       <LeadsPanel ui={ui} leads={leadStore} reload={() => void leadStore.getState().load(fetchFn, localStorage)} onOpen={(id) => void openEnquiry(id)} />
       <DesignsPanel ui={ui} designs={designs} onImportFile={(f) => void open(f)} />
       <TooltipHost />
+    </UiContext.Provider>
     </CatalogueContext.Provider>
     </StoreContext.Provider>
   );
