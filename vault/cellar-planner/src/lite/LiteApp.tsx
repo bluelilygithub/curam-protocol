@@ -5,7 +5,9 @@ import { analyseApp, fullRuns } from '../app/model';
 import { badRunIds, planView, rackFaceView, rackWallSummary } from '../views';
 import { DrawingView } from '../ui/DrawingView';
 import { LiteHelp, LITE_HELP_KEY } from './LiteHelp';
-import { BOTTLES, LIMITS, WALLS, LITE_DOOR_WIDTH_MM, LITE_UNIT_WIDTH_MM, decodeDesign, defaultLite, encodeDesign, liteResult, summaryLine, type DoorStyle, type LiteMode, type LiteSettings } from './settings';
+import { DEFAULT_CONFIG, loadConfig, type LiteConfig, type LitePreset } from './config';
+import { priceRange } from './price';
+import { BOTTLES, LIMITS, WALLS, decodeDesign, defaultLite, encodeDesign, liteResult, rackUnitCount, summaryLine, type DoorStyle, type LiteMode, type LiteSettings } from './settings';
 
 // The public "lite" tool. Three or four choices, a plan and a racks picture, a bottle estimate, and a "request a quote" step that hands a design code
 // to the page around it (postMessage) or lets the visitor copy it. No login, no server, nothing stored.
@@ -42,13 +44,17 @@ export function LiteApp() {
   const [asked, setAsked] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [copied, setCopied] = useState<'' | 'done' | 'failed'>('');
+  const [linkCopied, setLinkCopied] = useState<'' | 'done' | 'failed'>('');
+  // the owner's settings (rack sizes, prices, starting rooms): the built-in defaults until the real ones arrive, and still if they never do
+  const [cfg, setCfg] = useState<LiteConfig>(DEFAULT_CONFIG);
   const codeBox = useRef<HTMLTextAreaElement>(null);
   const sentBox = useRef<HTMLDivElement>(null);
 
-  const result = useMemo(() => liteResult(s), [s]);
+  const result = useMemo(() => liteResult(s, cfg), [s, cfg]);
   const analysis = useMemo(() => analyseApp(result.project), [result]);
   const code = useMemo(() => encodeDesign(s), [s]);
-  const summary = useMemo(() => summaryLine(s, result.bottles), [s, result.bottles]);
+  const price = useMemo(() => priceRange(cfg, rackUnitCount(result.project), s.doorStyle, result.problems.length), [cfg, result, s.doorStyle]);
+  const summary = useMemo(() => summaryLine(s, result.bottles, cfg) + (price ? ` Guide price shown: ${price.text}.` : ''), [s, result.bottles, cfg, price]);
   const e = result.project.enclosure;
   const plan = useMemo(() => planView(e, fullRuns(result.project), analysis.racks, { walkwayMm: null, badRuns: badRunIds(analysis.racks.issues), plainLabels: true }), [result, analysis, e]);
   const racks = useMemo(() => rackFaceView(e, fullRuns(result.project), analysis.racks, rackWall, result.project.bottle, { badRuns: badRunIds(analysis.racks.issues) }), [result, analysis, e, rackWall]);
@@ -67,6 +73,8 @@ export function LiteApp() {
     const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     sentBox.current?.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'center' });
   }, [asked]);
+
+  useEffect(() => { void loadConfig().then((r) => setCfg(r.config)); }, []);
 
   // first visit: the guide opens once (the Help button reopens it); ?tour=1 starts the tour straight away
   useEffect(() => {
@@ -96,6 +104,17 @@ export function LiteApp() {
     return draft[key].trim() === '' || !Number.isFinite(n) || n < lo || n > hi ? `Between ${lo} and ${hi}${key === 'target' ? '' : ' mm'}.` : '';
   };
 
+  /** A starting room replaces the size (and door style) only; the wall, bottle and bottle-count choices stay as the visitor had them. */
+  const startFrom = (p: LitePreset): void => {
+    const next = { ...s, widthMm: p.widthMm, depthMm: p.depthMm, heightMm: p.heightMm, doorStyle: p.doorStyle };
+    setS(next); setDraft(toDraft(next)); setAsked(false);
+  };
+  /** The standalone planner's own address with this design's code: opens exactly these choices (the embedding page is left out). */
+  const designLink = (): string => { const u = new URL(window.location.href); u.search = ''; u.hash = ''; u.searchParams.set('d', code); return u.toString(); };
+  const copyLink = async (): Promise<void> => {
+    try { await navigator.clipboard.writeText(designLink()); setLinkCopied('done'); } catch { setLinkCopied('failed'); }
+  };
+
   const copy = async (): Promise<void> => {
     try { await navigator.clipboard.writeText(`${summary}\nDesign code: ${code}`); setCopied('done'); } catch { codeBox.current?.select(); setCopied('failed'); }
   };
@@ -120,7 +139,19 @@ export function LiteApp() {
           </span>
         </div>
         <p>Tell us the size of the room and how you store your wine. You will see a plan and an estimate of the bottles it holds.</p>
+        {cfg.promise && <p className="lite-promise" data-testid="lite-promise">{cfg.promise}</p>}
       </header>
+
+      {cfg.presets.length > 0 && (
+        <section className="lite-presets" aria-label="Start from a typical room" data-testid="lite-presets">
+          <span className="lite-presets-label">Not sure where to start? Try a typical room:</span>
+          <span className="lite-presets-row">
+            {cfg.presets.map((p) => (
+              <button type="button" key={p.id} className="btn" onClick={() => startFrom(p)} data-testid={`lite-preset-${p.id}`} title={`${p.widthMm} x ${p.depthMm} x ${p.heightMm} mm`}>{p.name}</button>
+            ))}
+          </span>
+        </section>
+      )}
 
       <section className="lite-controls" aria-label="Your cellar">
         <div className="lite-grid">
@@ -143,7 +174,7 @@ export function LiteApp() {
                 <option value="SINGLE">Single door (one)</option>
                 <option value="DOUBLE">Double door (a pair)</option>
               </select>
-              <small className="field-hint">{s.doorStyle === 'DOUBLE' ? `Two doors that open together, about ${LITE_DOOR_WIDTH_MM.DOUBLE} mm across: easier to carry things through, but it takes more wall.` : `One door, about ${LITE_DOOR_WIDTH_MM.SINGLE} mm wide.`}</small>
+              <small className="field-hint">{s.doorStyle === 'DOUBLE' ? `Two doors that open together, about ${cfg.doors.doubleMm} mm across: easier to carry things through, but it takes more wall.` : `One door, about ${cfg.doors.singleMm} mm wide.`}</small>
             </label>
           </div>
           <label className="field" data-tour="lt-bottle">
@@ -177,10 +208,16 @@ export function LiteApp() {
         ) : (
           <>
             <p className="lite-total"><strong data-testid="lite-bottles">About {result.bottles} bottles</strong> <span className="lite-tag">estimate only, not a quote</span></p>
+            {price && <p className="lite-price" data-testid="lite-price">Guide price: <strong>{price.text}</strong>{cfg.pricing.note && <span className="lite-price-note"> {cfg.pricing.note}</span>}</p>}
             {s.mode === 'TARGET' && result.maxBottles < s.target && <p className="lite-note" data-testid="lite-short">This room holds about {result.maxBottles} at most, fewer than the {s.target} you asked for. Try a bigger room or a smaller bottle style.</p>}
             {s.mode === 'TARGET' && result.maxBottles >= s.target && <p className="lite-note">The room could hold about {result.maxBottles} if every wall were full.</p>}
           </>
         )}
+        <p className="lite-share">
+          <button type="button" className="btn small" onClick={() => void copyLink()} data-testid="lite-share" title="Copies an address that opens this exact design, to keep or send to someone.">Copy a link to this design</button>
+          {linkCopied === 'done' && <span className="lite-note" role="status" data-testid="lite-share-done"> Link copied. Anyone you send it to sees these choices.</span>}
+          {linkCopied === 'failed' && <span className="lite-note" role="status"> Could not copy automatically. Use the Request a quote button instead: it shows your design to copy.</span>}
+        </p>
       </section>
 
       <section className="lite-drawing" data-tour="lt-drawing" aria-label="Drawings">
@@ -195,7 +232,7 @@ export function LiteApp() {
             : <DrawingView ctrlZoom key={`racks-${rackWall}`} prims={racks} testid="lite-racks" description={`The racks on the ${rackWall.toLowerCase()} wall seen from inside, with each bottle drawn end-on.`} />}
         </div>
         {view === 'racks' && <p className="lite-note lite-units" data-testid="lite-racks-summary" role="status"><strong>{rackWallSummary(analysis.racks, fullRuns(result.project), rackWall).text}</strong> Each circle in the picture is one bottle, so you can count them. The whole cellar is about {result.bottles}.</p>}
-        <p className="lite-note lite-units" data-testid="lite-units">Built from standard-size rack units, about {LITE_UNIT_WIDTH_MM} mm wide, placed whole along the walls. A gap at the end of a wall is left-over space, not a mistake.</p>
+        <p className="lite-note lite-units" data-testid="lite-units">Built from standard-size rack units, about {cfg.rack.unitWidthMm} mm wide, placed whole along the walls. A gap at the end of a wall is left-over space, not a mistake.</p>
         <p className="foot">ESTIMATE ONLY: FINAL SITE MEASURE REQUIRED. Rack unit sizes are typical values, not a quote.</p>
       </section>
 
@@ -218,7 +255,7 @@ export function LiteApp() {
           </div>
         )}
       </section>
-      <LiteHelp open={helpOpen} onClose={closeHelp} onTour={() => { closeHelp(); window.setTimeout(() => void startTour(), 250); }} />
+      <LiteHelp unitWidthMm={cfg.rack.unitWidthMm} open={helpOpen} onClose={closeHelp} onTour={() => { closeHelp(); window.setTimeout(() => void startTour(), 250); }} />
     </div>
   );
 }

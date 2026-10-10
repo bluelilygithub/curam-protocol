@@ -42,6 +42,11 @@ app.use(httpLogger);
   if (cellarLiteAvailable(liteDir)) app.use('/cellar-lite', createCellarLiteRouter({ dir: liteDir, frameAncestors: process.env.CELLAR_LITE_FRAME_ANCESTORS, log: (m) => console.warn(m) }));
 }
 
+// Cellar Planner LITE settings (price formula, rack unit sizes, starting rooms): the public tool reads them with no login, from the business's own
+// website, so this route is mounted before requireAuth. Read-only; unpublished prices are never sent. The admin side is mounted further down.
+const cellarLiteConfig = require('./routes/cellarLiteConfigRouter').createCellarLiteConfigRouters({ pool: require('./db').pool });
+app.use('/api/cellar-lite/config', cellarLiteConfig.publicRouter);
+
 app.use(helmet({
   contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
     directives: {
@@ -144,6 +149,7 @@ app.use('/api/pinned-urls', require('./routes/pinnedUrls'));
 app.use('/api/compare', requireFeature('compare'), aiLimiter, require('./routes/compare'));
 app.use('/api/debate', requireFeature('debate'), aiLimiter, require('./routes/debate'));
 app.use('/api/settings', require('./routes/settings'));
+app.use('/api/admin/cellar-lite/config', requireAdmin, cellarLiteConfig.adminRouter);
 app.use('/api/admin', requireAdmin, require('./routes/admin'));
 app.use('/api/local-audio', require('./routes/localAudio'));
 app.use('/api/tasks', require('./routes/tasks'));

@@ -3,6 +3,7 @@ import { BOTTLE_PROFILES } from '../engine/defaults';
 import type { BottleProfileId } from '../engine/types';
 import { ESTIMATE_FIELDS, APP_SCHEMA, BEST_GUESS_RACK, analyseApp, type AppProject, type RunPlacement } from '../app/model';
 import { fillWall, type RackRun } from '../placement';
+import { DEFAULT_CONFIG, type LiteConfig } from './config';
 
 // The public "lite" tool: a handful of choices that become a normal AppProject (the same one the full planner opens), plus a short design code
 // that carries those choices and nothing else (no personal data). Every figure it produces is an ESTIMATE from best-guess rack values.
@@ -53,15 +54,15 @@ export function normaliseLite(s: LiteSettings): LiteSettings {
 }
 
 /** The door's width: the typical width for its style, reduced (to an even number of mm for a double door) when the door wall is too short to hold it with a post either side. */
-function doorWidth(s: LiteSettings, outerW: number, outerD: number): number {
+function doorWidth(s: LiteSettings, outerW: number, outerD: number, cfg: LiteConfig): number {
   const wall = s.doorWall === 'NORTH' || s.doorWall === 'SOUTH' ? outerW : outerD;
   const room = wall - 200;
   const fit = s.doorStyle === 'DOUBLE' ? Math.floor(room / 2) * 2 : room;
-  return Math.max(0, Math.min(LITE_DOOR_WIDTH_MM[s.doorStyle], fit));
+  return Math.max(0, Math.min(s.doorStyle === 'DOUBLE' ? cfg.doors.doubleMm : cfg.doors.singleMm, fit));
 }
 
 /** Build the project: the Carter Noir sample enclosure resized to the chosen inside size, best-guess racks on every wall, trimmed to a target if asked. */
-export function liteToProject(input: LiteSettings): AppProject {
+export function liteToProject(input: LiteSettings, cfg: LiteConfig = DEFAULT_CONFIG): AppProject {
   const s = normaliseLite(input);
   const g = goldenCase02();
   const outerW = s.widthMm + g.walls.WEST.buildUpMm + g.walls.EAST.buildUpMm;
@@ -71,13 +72,14 @@ export function liteToProject(input: LiteSettings): AppProject {
     outerWidthMm: outerW,
     outerDepthMm: outerD,
     heightMm: s.heightMm + g.ceilingBuildUpMm + g.floorBuildUpMm,
-    door: { ...g.door, wall: s.doorWall, widthMm: doorWidth(s, outerW, outerD), ...(s.doorStyle === 'DOUBLE' ? { leaves: 2 as const } : {}) },
+    door: { ...g.door, wall: s.doorWall, widthMm: doorWidth(s, outerW, outerD, cfg), ...(s.doorStyle === 'DOUBLE' ? { leaves: 2 as const } : {}) },
     // the sample's conditioner and vents sit at positions measured for a 2850 mm header; drop any that no longer fit a narrower room
     header: g.header.filter((c) => c.xMm + c.widthMm <= outerW),
   };
   // best-guess racks, made deep and tall-pitched enough for the chosen bottle (a magnum does not fit the 350 x 100 mm guess)
   const prof = BOTTLE_PROFILES[s.bottle];
-  const spec = { ...BEST_GUESS_RACK, unitDepthMm: Math.max(350, Math.ceil((prof.lengthMm + 15) / 50) * 50), rowPitchMm: Math.max(100, prof.diameterMm + 5) };
+  // the owner's unit width and height; a unit can never be taller than the room it stands in
+  const spec = { ...BEST_GUESS_RACK, unitWidthMm: cfg.rack.unitWidthMm, unitHeightMm: Math.min(cfg.rack.unitHeightMm, s.heightMm), unitDepthMm: Math.max(350, Math.ceil((prof.lengthMm + 15) / 50) * 50), rowPitchMm: Math.max(100, prof.diameterMm + 5) };
   const unitW = spec.unitWidthMm as number, unitD = spec.unitDepthMm as number;
   const strip = ({ id, wall, startMm, units }: RackRun): RunPlacement => ({ id, wall, startMm, units });
   const inner = internalSize(enclosure);
@@ -117,12 +119,12 @@ export function trimToTarget(p: AppProject, target: number): AppProject {
 }
 
 /** What the person sees: the estimate, and anything plain-language that stops the design being built. */
-export function liteResult(s: LiteSettings): { project: AppProject; bottles: number; maxBottles: number; problems: string[] } {
+export function liteResult(s: LiteSettings, cfg: LiteConfig = DEFAULT_CONFIG): { project: AppProject; bottles: number; maxBottles: number; problems: string[] } {
   const ns = normaliseLite(s);
-  const project = liteToProject(ns);
+  const project = liteToProject(ns, cfg);
   const a = analyseApp(project);
   const problems = a.issues.filter((i) => i.severity === 'error').map((i) => i.message);
-  const maxBottles = ns.mode === 'TARGET' ? total(liteToProject({ ...ns, mode: 'FILL' })) : total(project);
+  const maxBottles = ns.mode === 'TARGET' ? total(liteToProject({ ...ns, mode: 'FILL' }, cfg)) : total(project);
   return { project, bottles: total(project), maxBottles, problems };
 }
 
@@ -149,8 +151,11 @@ export function decodeDesign(text: string): LiteSettings | null {
   } catch { return null; }
 }
 
+/** The number of whole rack units in a project (what the price is worked from). */
+export const rackUnitCount = (p: AppProject): number => p.runs.reduce((n, r) => n + r.units, 0);
+
 /** One plain line for the enquiry. */
-export function summaryLine(s: LiteSettings, bottles: number): string {
+export function summaryLine(s: LiteSettings, bottles: number, cfg: LiteConfig = DEFAULT_CONFIG): string {
   const n = normaliseLite(s);
-  return `Inside ${n.widthMm} x ${n.depthMm} x ${n.heightMm} mm, ${n.doorStyle === 'DOUBLE' ? 'double' : 'single'} door on the ${n.doorWall.toLowerCase()} wall, ${BOTTLE_PROFILES[n.bottle].label}, about ${bottles} bottles using standard rack units about ${LITE_UNIT_WIDTH_MM} mm wide (estimate only, final site measure required)`;
+  return `Inside ${n.widthMm} x ${n.depthMm} x ${n.heightMm} mm, ${n.doorStyle === 'DOUBLE' ? 'double' : 'single'} door on the ${n.doorWall.toLowerCase()} wall, ${BOTTLE_PROFILES[n.bottle].label}, about ${bottles} bottles using standard rack units about ${cfg.rack.unitWidthMm} mm wide (estimate only, final site measure required)`;
 }

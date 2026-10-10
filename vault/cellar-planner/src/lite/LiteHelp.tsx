@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react';
-import { LITE_UNIT_WIDTH_MM } from './settings';
 
 export const LITE_HELP_KEY = 'cellar-lite:help-seen:v1';
 
@@ -7,7 +6,7 @@ export const LITE_HELP_KEY = 'cellar-lite:help-seen:v1';
  * "How this works": the plain-language guide for someone who has never planned a cellar. Opens on the first visit and from the Help button.
  * No jargon: every term the screen uses is explained here.
  */
-export function LiteHelp({ open, onClose, onTour }: { open: boolean; onClose(): void; onTour(): void }) {
+export function LiteHelp({ open, onClose, onTour, unitWidthMm }: { open: boolean; onClose(): void; onTour(): void; unitWidthMm: number }) {
   const start = useRef<HTMLButtonElement>(null);
   const before = useRef<Element | null>(null);
   // focus goes into the guide when it opens, Esc closes it, and focus goes back to where it was
@@ -48,7 +47,7 @@ export function LiteHelp({ open, onClose, onTour }: { open: boolean; onClose(): 
           </ul>
 
           <h3>Standard rack units</h3>
-          <p>The estimate is built from <b>standard-size rack units</b>: ready-made blocks of racking, about <b>{LITE_UNIT_WIDTH_MM} mm wide</b> each, that stand against the walls. Every unit is the same size, so we can count bottles reliably and price them simply. Units are placed <b>whole</b> (we do not cut one down), so what is left over at the end of a wall, or beside the door, is shown as an empty gap. Those gaps are normal. The exact unit sizes are confirmed with the rack supplier, so the final count can differ a little. If a custom size would suit your space better, tell us when you ask for a quote.</p>
+          <p>The estimate is built from <b>standard-size rack units</b>: ready-made blocks of racking, about <b>{unitWidthMm} mm wide</b> each, that stand against the walls. Every unit is the same size, so we can count bottles reliably and price them simply. Units are placed <b>whole</b> (we do not cut one down), so what is left over at the end of a wall, or beside the door, is shown as an empty gap. Those gaps are normal. The exact unit sizes are confirmed with the rack supplier, so the final count can differ a little. If a custom size would suit your space better, tell us when you ask for a quote.</p>
 
           <h3>Asking for a quote</h3>
           <p>When you are happy, press <b>Request a quote for this design</b>. Your answers are added to the enquiry form on the page, or you can copy them into an email. Nothing is sent until <i>you</i> press the form&apos;s own Send button. Your answers are only the room size, door side, bottle style and bottle count: no personal details. You can also bookmark the page address: it remembers your answers.</p>

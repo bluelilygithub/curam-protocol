@@ -33,6 +33,7 @@ import { startRoomPlannerTour, TOUR_KEY as ROOM_PLANNER_TOUR_KEY } from '../util
 import { startGardenPlannerTour, TOUR_KEY as GARDEN_PLANNER_TOUR_KEY } from '../utils/tours/gardenPlannerTour';
 import { startCellarPlannerTour, TOUR_KEY as CELLAR_PLANNER_TOUR_KEY } from '../utils/tours/cellarPlannerTour';
 import ConfirmModal from '../components/ConfirmModal';
+import CellarLiteSettings from '../components/CellarLiteSettings';
 import UsersAdminPanel from '../components/UsersAdminPanel';
 import NavLayoutEditor from '../components/settings/NavLayoutEditor';
 import { DEFAULT_TILES, DEFAULT_NAV_ITEMS, mergeWithDefaults } from '../utils/mobileConfig';
@@ -210,6 +211,7 @@ function SettingsPage() {
         'Integrations',
         'Shares',
         'Amazon Search',
+        'Cellar Planner',
         'Mobile',
         'Navigation',
         'Members',
@@ -239,6 +241,7 @@ function SettingsPage() {
           'Integrations',
           'Shares',
           'Amazon Search',
+          'Cellar Planner',
           'Mobile',
           'Navigation',
           'Members',
@@ -3150,6 +3153,13 @@ function SettingsPage() {
           {mobileSaved ? 'Saved ✓' : 'Save Mobile Settings'}
         </button>
       </>
+      )}
+
+      {/* Cellar Planner (admin) — the owner's numbers for the public lite planner */}
+      {tab === 'Cellar Planner' && user?.isAdmin && (
+        <section>
+          <CellarLiteSettings />
+        </section>
       )}
 
       {/* Navigation (admin) — split the header Apps menu into two sets */}
