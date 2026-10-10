@@ -200,7 +200,7 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
             <div className="group" role="group" aria-label="Design">
               <input className="name" value={project.name} aria-label="Project name" title="The name of this design. It is how it appears in Your designs and in the saved file's name." data-testid="project-name" onChange={(e) => store.getState().updateSilently((p) => ({ ...p, name: e.target.value }))} />
               <button type="button" className="btn" title="Your saved designs: open one, start a new one, copy or delete. Designs save by themselves." onClick={() => ui.getState().set({ designsOpen: true })} data-testid="designs-open"><Icon name="file" /><span className="label">Your designs</span></button>
-              <button type="button" className="btn" title="People who sent your website's contact form with a design from the public planner. Open one to start from their design." onClick={() => ui.getState().set({ leadsOpen: true })} data-testid="leads-open"><Icon name="list" /><span className="label">Enquiries</span>{newLeads > 0 && <span className="badge" data-testid="leads-new-count" aria-label={`${newLeads} new`}>{newLeads}</span>}</button>
+              <button type="button" className="btn" title="People who sent your website's contact form with a design from the public planner. Open one to start from their design." onClick={() => ui.getState().set({ leadsOpen: true })} data-testid="leads-open" data-tour="cp-enquiries"><Icon name="list" /><span className="label">Enquiries</span>{newLeads > 0 && <span className="badge" data-testid="leads-new-count" aria-label={`${newLeads} new`}>{newLeads}</span>}</button>
             </div>
             <SaveStatus designs={designs} />
             <div className="group" role="group" aria-label="File">
@@ -214,7 +214,7 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
             </div>
             <div className="group" role="group" aria-label="Output">
               <button type="button" className="btn" title="Make a PDF of A3 drawing sheets: the specification, the plan, the elevation and the racks on each wall, with a title block. Every sheet says preliminary design only." onClick={() => ui.getState().set({ packageOpen: true })} data-testid="package-open"><Icon name="list" /><span className="label">Drawing package</span></button>
-              <button type="button" className="btn" title="Make a quote PDF for the customer from the price breakdown. It is only available when the numbers behind it can be trusted: a confirmed rack type, no errors and a price." onClick={() => ui.getState().set({ quoteOpen: true })} data-testid="quote-open"><Icon name="download" /><span className="label">Quote</span></button>
+              <button type="button" className="btn" title="Make a quote PDF for the customer from the price breakdown. It is only available when the numbers behind it can be trusted: a confirmed rack type, no errors and a price." onClick={() => ui.getState().set({ quoteOpen: true })} data-testid="quote-open" data-tour="cp-quote"><Icon name="download" /><span className="label">Quote</span></button>
             </div>
             <input ref={file} type="file" accept=".json,application/json" hidden aria-label="Upload a design file" title="Upload a design file" onChange={(e) => void open(e.target.files?.[0])} />
           </div>

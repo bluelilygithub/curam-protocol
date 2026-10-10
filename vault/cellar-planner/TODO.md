@@ -36,15 +36,20 @@ Built 2026-10-09 (see Done below and `docs/cellar-planner.md`, "Lite version for
 ## Features not built
 
 - [ ] **Double door extras:** one fixed leaf with one opening leaf, unequal leaves, and confirming the typical 1500 mm double opening (and which widths are offered) with the cabinet maker.
-- [ ] 3D view (spec M4; instanced bottles, materials, lights, doors).
-- [ ] Pricing and rate table; quote request flow; public front door.
+- [x] 2026-10-10 3D view in the staff planner (the public tool's inside view, finishes, in the drawing package and quote). Still open: header, conditioner and vents are not drawn in 3D; a full 3D editor (spec M4: materials, lights, doors) is not built.
+- [x] 2026-10-10 Pricing, rate table (the rack catalogue), the customer quote and the website enquiry flow. Still open: glass, cooling unit, lighting and installation prices, and a parts list.
 - [ ] **Lighting** (spec section 20): LED strips, post lights, spotlights as placed parts, advice, parts list, drawing symbols.
 - [ ] Drawing package extras: sections, isometric and axonometric views, renders, logo image, elevations of the other three walls, parts and hardware list, sending the package to a customer or installer.
-- [ ] Placement: free-standing runs, runs on the header side, dragging runs on the plan, glazed fraction for the door.
+- [x] 2026-10-10 Dragging runs on the plan (snapping, one-click fixes).
+- [ ] Placement: free-standing runs, runs on the header side, glazed fraction for the door. Mixed rack types in one design.
+- [ ] Rooms that are not rectangular (L-shaped and so on).
 - [ ] Enclosure: wall, floor and ceiling panel cut list; the room the enclosure stands in.
 - [ ] Joinery product line in the same app (its engine in `src/engine/` is built, the screens don't use it).
 - [ ] Connect the screens to the commands layer (`src/domain`, `src/state`); the old joinery library binding in `src/state/library.ts` is unused.
-- [ ] Admin-facing way to edit assumptions and rates.
+- [x] 2026-10-10 Admin-facing way to edit rack types, prices, quote details and cooling assumptions (Settings -> Cellar Planner).
+- [ ] Confirm the cooling assumptions with the suppliers or an HVAC person (the starting values are typical, not verified), and add a room-position input (a cellar inside a warm building is not at the outside temperature).
+- [ ] Cooling: per-design ambient allowance for a cellar inside a conditioned house; humidity.
+- [ ] Keyboard way to move a run on the plan (the Start field in Rack runs does it today).
 
 ## Housekeeping
 
@@ -53,6 +58,8 @@ Built 2026-10-09 (see Done below and `docs/cellar-planner.md`, "Lite version for
 - [ ] Screen-reader pass; the drawings give only headline numbers as text.
 
 ## Done
+
+- [x] 2026-10-10 Shared rack catalogue and staff price, customer quote, website enquiries to the CRM, technician calculation help, drag runs / one-click fixes / status strip / panel layout, indicative cooling estimate, 3D tab. Guide, tour and docs brought up to date.
 
 - [x] 2026-10-09 Docs: `docs/cellar-planner.md` status line and `specs/spec-v1.md` section 19 corrected (Vault wiring and saved designs exist).
 - [x] 2026-10-09 Pinch-zoom on the drawings; `touch-action: none` so one finger pans without scrolling the page.

@@ -32,7 +32,10 @@ describe('guided tour', () => {
     expect(at('cp-rack')).toBeLessThan(at('cp-runs'));
     expect(at('cp-runs')).toBeLessThan(at('cp-total'));
     expect(at('cp-checks')).toBeLessThan(at('cp-advisory'));
-    expect(TOUR_STEPS.length).toBe(13);
+    expect(TOUR_STEPS.length).toBe(17);
+    for (const id of ['cp-price', 'cp-cooling', 'cp-enquiries', 'cp-quote']) expect(ids).toContain(id);
+    expect(at('cp-runs')).toBeLessThan(at('cp-price')); expect(at('cp-price')).toBeLessThan(at('cp-cooling')); expect(at('cp-cooling')).toBeLessThan(at('cp-tabs'));
+    expect(at('cp-advisory')).toBeLessThan(at('cp-enquiries')); expect(at('cp-quote')).toBeLessThan(at('cp-done'));
   });
 
   it('the steps that need a particular drawing say which', () => {
@@ -46,6 +49,10 @@ describe('guided tour', () => {
     expect(text('cp-total')).toMatch(/not set/);
     expect(text('cp-advisory')).toMatch(/information only/);
     expect(text('cp-advisory')).toMatch(/sign-off/);
+    expect(text('cp-cooling')).toMatch(/sign-off/); expect(text('cp-cooling')).toMatch(/guide/);
+    expect(text('cp-price')).toMatch(/guide only/); expect(text('cp-price')).toMatch(/never counted as zero/);
+    expect(text('cp-quote')).toMatch(/refused/);
+    expect(text('cp-advisory')).not.toMatch(/Nothing here sizes cooling/);
     expect(text('cp-welcome')).toMatch(/final site measure/);
     expect(text('cp-done')).toMatch(/preliminary/);
   });
@@ -72,7 +79,15 @@ describe('the guide (the (i) modal)', () => {
   });
   it('is honest about what is not built', () => {
     expect(modal).toMatch(/What is not here yet/);
-    for (const phrase of ['pricing', '3D', 'joinery', 'supplier']) expect(modal.toLowerCase(), phrase).toContain(phrase.toLowerCase());
+    // what is still missing is named; things that are built are NOT listed as missing
+    const notHere = modal.slice(modal.indexOf('What is not here yet')).toLowerCase();
+    for (const phrase of ['mixed rack types', 'free-standing', 'rectangular', 'parts list', 'joinery', 'supplier']) expect(notHere, phrase).toContain(phrase);
+    for (const built of ['dragging racks', 'a 3d view', 'the quote request']) expect(notHere, built).not.toContain(built);
+  });
+  it('describes the newer features: rack types and price, cooling (a guide needing sign-off), the 3D view, enquiries and quotes', () => {
+    const m = modal.toLowerCase();
+    for (const phrase of ['rack types and price', 'catalogue', 'confirmed', 'a guide only', 'cooling', 'hvac sign-off', '3d', 'oak, walnut or black', 'enquiries and quotes', 'refused until the numbers can be trusted', 'calculator button']) expect(m, phrase).toContain(phrase);
+    expect(m).not.toContain('nothing here sizes cooling');
   });
   it('opens once, then stays closed (the store starts closed; the key is the one the app writes)', () => {
     expect(createUiStore().getState().infoOpen).toBe(false);

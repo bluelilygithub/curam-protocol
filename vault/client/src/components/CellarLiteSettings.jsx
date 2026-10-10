@@ -169,7 +169,7 @@ export default function CellarLiteSettings({ onDirtyChange }) {
       <div>
         <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>Cellar Planner (public tool)</h2>
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-          These numbers control the public planner on your website. Changes show to visitors within a minute of saving. If this page can't be reached, the planner uses its built-in values, so it never goes blank.{' '}
+          These settings are shared by the public planner on your website and by the staff Cellar Planner. The <strong>rack types</strong> (sizes, bottle counts, price per unit, confirmed by supplier), door widths, guide price and starting rooms control the public tool: changes show to visitors within a minute of saving, and if this page can't be reached the planner uses its built-in values, so it never goes blank. Staff also use the full rack catalogue, the <strong>quote details</strong> and the <strong>cooling assumptions</strong> below (staff only: visitors never see them).{' '}
           <Tooltip text="Opens the public planner as Vault hosts it, in a new tab. It reads the settings you have saved, so you can see the effect of a change."><a href="/cellar-lite/" target="_blank" rel="noreferrer" className="underline hover:opacity-70 transition-opacity">Preview the planner</a></Tooltip>
         </p>
       </div>
