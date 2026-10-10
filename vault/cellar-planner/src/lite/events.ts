@@ -2,7 +2,7 @@
 // anything typed, never the design: no personal data. Nothing is sent when the planner is not embedded.
 
 export const EVENT_TYPE = 'cellar-lite:event';
-export type EventName = 'start' | 'preset' | 'unit' | 'view' | 'quote' | 'link_copied' | 'plan_downloaded' | 'price_help' | 'fix' | 'welcome_back' | 'call' | 'door_pick';
+export type EventName = 'start' | 'preset' | 'unit' | 'view' | 'quote' | 'link_copied' | 'plan_downloaded' | 'price_help' | 'fix' | 'welcome_back' | 'call' | 'door_pick' | 'step' | 'finish' | 'photo';
 
 export function track(name: EventName, to: string | null, detail: Record<string, string | number | boolean> = {}): void {
   if (!to || typeof window === 'undefined' || window.parent === window) return;

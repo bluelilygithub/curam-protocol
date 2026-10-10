@@ -17,6 +17,10 @@ export interface LiteConfig {
   quoteNote: string;
   /** A number the visitor can tap to call; blank = no call button. */
   phone: string;
+  /** Brand colour of buttons and highlights, #rrggbb (dark enough for white text). */
+  accent: string;
+  /** The AI Photo tab: whether it is switched on (the limits are the server's business; they are here only so the shape matches). */
+  photo: { enabled: boolean; dailyLimit: number; perVisitorPerHour: number };
   rack: { unitWidthMm: number; unitHeightMm: number };
   doors: { singleMm: number; doubleMm: number };
   pricing: LitePricing;
@@ -28,6 +32,8 @@ export const DEFAULT_CONFIG: LiteConfig = {
   promise: 'Free to use. No sign-up. Takes about two minutes. You only share your details if you ask for a quote.',
   quoteNote: 'We usually reply within one business day.',
   phone: '',
+  accent: '#4a5a2a',
+  photo: { enabled: false, dailyLimit: 30, perVisitorPerHour: 3 },
   rack: { unitWidthMm: 600, unitHeightMm: 2000 },
   doors: { singleMm: 970, doubleMm: 1500 },
   pricing: {
@@ -59,6 +65,25 @@ const money = (v: unknown): number | null => {
   const n = Number(v);
   return Number.isFinite(n) && n >= R.price[0] && n <= R.price[1] ? Math.round(n * 100) / 100 : null;
 };
+
+/** WCAG contrast of white text on a #rrggbb colour. */
+export function contrastWithWhite(hex: string): number {
+  const lin = (c: number): number => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  const n = parseInt(hex.slice(1), 16);
+  const L = 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+  return 1.05 / (L + 0.05);
+}
+const cleanAccent = (v: unknown): string => {
+  const t = typeof v === 'string' ? v.trim().toLowerCase() : '';
+  return /^#[0-9a-f]{6}$/.test(t) && contrastWithWhite(t) >= 4.5 ? t : '#4a5a2a';
+};
+
+/** The three colours the page needs from the brand colour: itself, a darker one for pressed/hover and a very light tint for selected backgrounds. */
+export function accentColours(accent: string): { main: string; dark: string; soft: string } {
+  const n = parseInt(accent.slice(1), 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const hex = (x: number): string => Math.round(Math.max(0, Math.min(255, x))).toString(16).padStart(2, '0');
+  return { main: accent, dark: `#${hex(r * 0.78)}${hex(g * 0.78)}${hex(b * 0.78)}`, soft: `#${hex(r + (255 - r) * 0.88)}${hex(g + (255 - g) * 0.88)}${hex(b + (255 - b) * 0.88)}` };
+}
 
 const cleanPhone = (v: unknown): string => {
   if (v === undefined || v === null) return '';
@@ -102,6 +127,12 @@ export function normaliseConfig(raw: unknown): LiteConfig {
     promise: src.promise === undefined ? D.promise : text(src.promise, 200),
     quoteNote: src.quoteNote === undefined ? D.quoteNote : text(src.quoteNote, 200),
     phone: cleanPhone(src.phone),
+    accent: cleanAccent(src.accent),
+    photo: {
+      enabled: isObj(src.photo) && src.photo.enabled === true,
+      dailyLimit: int(isObj(src.photo) ? src.photo.dailyLimit : undefined, [0, 500], D.photo.dailyLimit),
+      perVisitorPerHour: int(isObj(src.photo) ? src.photo.perVisitorPerHour : undefined, [1, 30], D.photo.perVisitorPerHour),
+    },
     rack: { unitWidthMm: int(rack.unitWidthMm, R.unitWidthMm, D.rack.unitWidthMm), unitHeightMm: int(rack.unitHeightMm, R.unitHeightMm, D.rack.unitHeightMm) },
     doors: { singleMm: int(doors.singleMm, R.doorSingleMm, D.doors.singleMm), doubleMm: int(doors.doubleMm, R.doorDoubleMm, D.doors.doubleMm) },
     pricing,
@@ -116,8 +147,13 @@ export const VAULT_ORIGIN = 'https://curam-vault.up.railway.app';
 const SAVED_KEY = 'cellar-lite:config:v1';
 const TIMEOUT_MS = 4000;
 
+/** Where Vault's API lives for this page: its own address when Vault serves the tool, else Vault across the internet. */
+export function apiBase(loc: Pick<Location, 'origin' | 'hostname'> = window.location): string {
+  return new URL(VAULT_ORIGIN).hostname === loc.hostname ? loc.origin : VAULT_ORIGIN;
+}
+
 export function configUrl(loc: Pick<Location, 'origin' | 'hostname'> = window.location): string {
-  return `${new URL(VAULT_ORIGIN).hostname === loc.hostname ? loc.origin : VAULT_ORIGIN}/api/cellar-lite/config`;
+  return `${apiBase(loc)}/api/cellar-lite/config`;
 }
 
 export type ConfigSource = 'server' | 'saved' | 'default';

@@ -88,7 +88,7 @@ await page.getByTestId('lite-widthMm').fill('1600'); await page.getByTestId('lit
 check('changing the size by hand un-highlights it', !(await pressed('tiny')) && !(await isPrimary('tiny')));
 await page.getByTestId('lite-preset-huge').click();
 check('choosing another room moves the highlight', (await pressed('huge')) && !(await pressed('tiny')));
-check('a starting room can carry a double door', (await page.getByTestId('lite-door-style').inputValue()) === 'DOUBLE');
+check('a starting room can carry a double door', (await page.getByTestId('lite-doorstyle-DOUBLE').getAttribute('aria-checked')) === 'true');
 // price formula by hand: units on the current design
 const wanted = await page.evaluate(() => 0);
 check('console says where the settings came from', logs.some((l) => /\[cellar-lite\] settings loaded/.test(l)), logs.join(' | '));
@@ -98,22 +98,26 @@ check('console says where the settings came from', logs.some((l) => /\[cellar-li
 const untipped = await page.evaluate(() => [...document.querySelectorAll('button, input, select, textarea')]
   .filter((el) => el.offsetParent !== null && !el.hasAttribute('title') && !el.hasAttribute('data-tip')).map((el) => el.getAttribute('data-testid') || el.outerHTML.slice(0, 60)));
 check('every visible button, field and menu has a tooltip', untipped.length === 0, JSON.stringify(untipped));
-await page.getByTestId('lite-door-style').hover();
+// scroll first: tooltips hide themselves on scroll, and a hover that scrolls the page would hide its own tooltip
+await page.getByTestId('lite-doorpos-LEFT').scrollIntoViewIfNeeded();
+await page.waitForTimeout(300);
+await page.getByTestId('lite-doorpos-LEFT').hover();
 await page.waitForTimeout(700);
-check('hovering shows the themed tooltip', (await page.locator('[role="tooltip"]').count()) >= 1 && /pair of doors/.test(await page.locator('[role="tooltip"]').first().innerText()));
+check('hovering shows the themed tooltip', (await page.locator('[role="tooltip"]').allInnerTexts()).some((t) => /toward the left end/.test(t)), JSON.stringify(await page.locator('[role="tooltip"]').allInnerTexts()));
 await page.mouse.move(5, 5);
 
 // ---- "How is this price worked out?"
+await page.getByTestId('lite-step-3').click();
 await page.getByTestId('lite-price-help-open').waitFor({ timeout: 3000 });
 const helpBtnBox = await page.getByTestId('lite-price-help-open').boundingBox();
-const shareBox = await page.getByTestId('lite-share').boundingBox();
-check('the help button sits next to "Copy a link", on the same line', !!helpBtnBox && !!shareBox && Math.abs(helpBtnBox.y - shareBox.y) < 20, JSON.stringify([helpBtnBox, shareBox]));
+const shareBox = await page.getByTestId('lite-download').boundingBox();
+check('the price-help button sits beside "Download my plan", on the same line (Review step)', !!helpBtnBox && !!shareBox && Math.abs(helpBtnBox.y - shareBox.y) < 20, JSON.stringify([helpBtnBox, shareBox]));
 await page.getByTestId('lite-price-help-open').click();
 await page.getByTestId('lite-price-help').waitFor({ timeout: 3000 });
 const modalText = await page.getByTestId('lite-price-help').innerText();
 check('it opens as a modal and explains the parts that are in use', /rack unit/i.test(modalText) && /door/i.test(modalText) && /basics every cellar needs/i.test(modalText) && /range/i.test(modalText), modalText);
 check('it says what THIS design uses (units, door, room)', /rack units?: \d+/i.test(modalText) || /uses \d+ rack unit/i.test(modalText));
-check('it never states what any part costs (none of the owner\'s amounts appear)', !/(2,?000|1,?000|500|900|\$\s?\d)/.test(modalText.replace(/\d+ [×x] \d+ [×x] \d+ mm/, '').replace(/about \d+ bottles/g, '').replace(/rack units?: \d+/gi, '').replace(/uses \d+ rack units?/gi, '').replace(/Rack units: \d+/g, '')), modalText);
+check('it never states what any part costs (none of the owner\'s amounts appear)', !/(2,?000|1,?000|500|900|\$\s?\d)/.test(modalText.replace(/\d+\s[×x]\s\d+\s[×x]\s\d+\s*mm/, '').replace(/about \d+ bottles/g, '').replace(/rack units?: \d+/gi, '').replace(/uses \d+ rack units?/gi, '').replace(/Rack units: \d+/g, '')), modalText);
 await page.keyboard.press('Escape');
 await page.getByTestId('lite-price-help').waitFor({ state: 'detached', timeout: 3000 });
 check('Esc closes it and focus returns to the button', await page.evaluate(() => document.activeElement?.getAttribute('data-testid')) === 'lite-price-help-open');
@@ -122,12 +126,13 @@ await page.getByTestId('lite-share').click();
 await page.getByTestId('lite-share-done').waitFor({ timeout: 3000 }).catch(() => {});
 const link = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
 check('Copy a link puts a working link on the clipboard', /index\.html\?d=CL1\./.test(link) && !/#/.test(link), link);
+await page.getByTestId('lite-step-1').click();
 const widthNow = await page.getByTestId('lite-widthMm').inputValue();
 const p2 = await ctx.newPage();
 await p2.route('https://curam-vault.up.railway.app/api/cellar-lite/config', async (route) => { const r = await fetch('http://localhost:8803/api/cellar-lite/config'); route.fulfill({ status: 200, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' }, body: await r.text() }); });
 await p2.goto(link);
 await p2.getByTestId('lite-bottles').waitFor();
-check('opening that link shows the same room', (await p2.getByTestId('lite-widthMm').inputValue()) === widthNow && (await p2.getByTestId('lite-door-style').inputValue()) === 'DOUBLE', widthNow);
+check('opening that link shows the same room', (await p2.getByTestId('lite-widthMm').inputValue()) === widthNow && (await p2.getByTestId('lite-doorstyle-DOUBLE').getAttribute('aria-checked')) === 'true', widthNow);
 
 // the message sent to the contact form includes what the visitor saw
 const msg = await page.evaluate(() => new Promise((resolve) => {
@@ -144,6 +149,7 @@ await adminPut({ pricing: { show: true, perUnit: 1000 } });
 {
   const c2 = await openPage();
   await c2.page.goto('http://localhost:8802/index.html');
+  await c2.page.getByTestId('lite-step-3').click();
   await c2.page.getByTestId('lite-price-help-open').waitFor({ timeout: 8000 });
   await c2.page.getByTestId('lite-price-help-open').click();
   const t = await c2.page.getByTestId('lite-price-help').innerText();

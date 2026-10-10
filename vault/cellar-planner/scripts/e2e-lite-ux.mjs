@@ -71,7 +71,7 @@ let { ctx, page, errors } = await fresh();
 await page.goto('http://localhost:8802/index.html');
 await page.getByTestId('lite-bottles').waitFor();
 check('first visit: no pop-up guide in the way', (await page.getByTestId('lite-help').count()) === 0);
-check('first visit: a three-step strip is on the page', (await page.getByTestId('lite-steps').locator('li').count()) === 3 && /room size/i.test(await page.getByTestId('lite-steps').innerText()));
+check('first visit: a three-step strip is on the page', (await page.getByTestId('lite-stepper').locator('li').count()) === 3 && /Space/.test(await page.getByTestId('lite-stepper').innerText()) && /Review/.test(await page.getByTestId('lite-stepper').innerText()));
 check('first visit: sizes are in metres, no jargon', (await page.getByTestId('lite-widthMm').inputValue()) === '2.75' && (await page.getByTestId('lite-heightMm').inputValue()) === '2.15');
 check('first visit: no "welcome back" for a design they never made', (await page.getByTestId('lite-welcome').count()) === 0);
 const start = await bottles(page);
@@ -80,7 +80,7 @@ const start = await bottles(page);
 await page.getByTestId('lite-widthMm').fill('3.5'); await page.getByTestId('lite-widthMm').blur();
 check('typing metres changes the estimate', (await bottles(page)) !== start);
 await page.getByTestId('lite-widthMm').fill('20');
-check('a size that is out of range says so in the visitor\'s unit', /Between 1 m and 8 m\./.test(await page.getByTestId('lite-units-pick').locator('xpath=..').innerText()));
+check('a size that is out of range says so in the visitor\'s unit', /Between 1 m and 8 m\./.test(await page.getByTestId('lite-panel').innerText()));
 await page.getByTestId('lite-widthMm').fill('3.5'); await page.getByTestId('lite-widthMm').blur();
 await page.getByTestId('lite-unit-ft').click();
 const ftShown = await page.getByTestId('lite-widthMm').inputValue();
@@ -90,7 +90,7 @@ await page.getByTestId('lite-unit-mm').click();
 check('feet and inches typed are kept exactly (10\' 6" = 3200 mm)', (await page.getByTestId('lite-widthMm').inputValue()) === '3200', await page.getByTestId('lite-widthMm').inputValue());
 await page.getByTestId('lite-widthMm').fill('275cm'); await page.getByTestId('lite-widthMm').blur();
 check('a unit written out wins: 275cm = 2750 mm', (await page.getByTestId('lite-widthMm').inputValue()) === '2750');
-check('the door hint is in the chosen unit', /about 970 mm wide/.test(await page.getByTestId('lite-door-style').locator('xpath=..').innerText()));
+check('the door hint is in the chosen unit', /about 970 mm wide/.test(await page.getByTestId('lite-doorhint').innerText()));
 await page.getByTestId('lite-unit-m').click();
 check('the guide mentions the unit in use', true);
 
@@ -100,12 +100,13 @@ check('a 2.0 m ceiling builds (no "cannot be built" dead end)', (await page.getB
 await page.getByTestId('lite-heightMm').fill('1.8'); await page.getByTestId('lite-heightMm').blur();
 check('a 1.8 m ceiling builds too, with fewer bottles than a tall room', (await page.getByTestId('lite-problem').count()) === 0 && (await bottles(page)) > 0);
 await page.getByTestId('lite-heightMm').fill('1.5');
-check('lower than 1.8 m says so in the visitors unit', /Between 1\.8 m and 3\.2 m\./.test(await page.getByTestId('lite-units-pick').locator('xpath=..').innerText()));
+check('lower than 1.8 m says so in the visitors unit', /Between 1\.8 m and 3\.2 m\./.test(await page.getByTestId('lite-panel').innerText()));
 await page.getByTestId('lite-heightMm').blur();
 check('and leaving the box snaps it to 1.8 m', (await page.getByTestId('lite-heightMm').inputValue()) === '1.8', await page.getByTestId('lite-heightMm').inputValue());
 
 // ---- slider
-await page.getByTestId('lite-mode').selectOption('TARGET');
+await page.getByTestId('lite-step-2').click();
+await page.getByTestId('lite-mode-TARGET').click();
 await page.getByTestId('lite-target-slider').waitFor({ timeout: 3000 });
 await page.getByTestId('lite-target-slider').evaluate((el) => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(el, '300'); el.dispatchEvent(new Event('input', { bubbles: true })); });
 const sliderVal = await page.getByTestId('lite-target-slider').inputValue();
@@ -113,7 +114,8 @@ const targetVal = await page.getByTestId('lite-target').inputValue();
 check('the bottle slider sets the number wanted (to the nearest step it allows)', sliderVal === targetVal && Math.abs(Number(targetVal) - 300) <= 6, `slider ${sliderVal} text ${targetVal}`);
 
 // ---- download
-await page.getByTestId('lite-mode').selectOption('FILL');
+await page.getByTestId('lite-mode-FILL').click();
+await page.getByTestId('lite-step-3').click();
 const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 30000 }), page.getByTestId('lite-download').click()]);
 const dlPath = await dl.path();
 const bytes = readFileSync(dlPath);
@@ -130,30 +132,101 @@ await page.getByRole('button', { name: 'Keep editing' }).click();
 const untipped = await page.evaluate(() => [...document.querySelectorAll('button, input, select, textarea')].filter((el) => el.offsetParent !== null && !el.hasAttribute('title') && !el.hasAttribute('data-tip')).map((el) => el.getAttribute('data-testid') || el.outerHTML.slice(0, 70)));
 check('every visible control still has a tooltip (units, fix, slider, download...)', untipped.length === 0, JSON.stringify(untipped));
 
-// ---- tap-to-choose door wall
-await page.getByTestId('lite-door').selectOption('SOUTH');
+// ---- the three-step layout
+await page.getByTestId('lite-step-1').click();
+check('wizard: step 1 shows the space controls only (no bottle or finish controls yet)', (await page.getByTestId('lite-widthMm').count()) === 1 && (await page.getByTestId('lite-finish').count()) === 0 && (await page.getByTestId('lite-bottle').count()) === 0);
+await page.getByTestId('lite-next').click();
+check('wizard: Continue goes to step 2 (bottles and finish) and the heading takes focus', (await page.getByTestId('lite-finish').count()) === 1 && (await page.getByTestId('lite-widthMm').count()) === 0 && (await page.evaluate(() => document.activeElement?.tagName)) === 'H2');
+await page.getByTestId('lite-next').click();
+check('wizard: step 3 is the review, with a summary of the design', (await page.getByTestId('lite-review-room').count()) === 1 && /Review/.test(await page.getByTestId('lite-panel').innerText()));
+check('wizard: the step strip marks the current step and the finished ones', (await page.getByTestId('lite-step-3').getAttribute('aria-current')) === 'step' && (await page.getByTestId('lite-step-1').getAttribute('aria-current')) === null);
+await page.getByTestId('lite-back').click();
+check('wizard: Back goes to step 2', (await page.getByTestId('lite-finish').count()) === 1);
+await page.getByTestId('lite-step-1').click();
+check('wizard: the step strip jumps straight back to step 1', (await page.getByTestId('lite-widthMm').count()) === 1);
+
+// ---- sizes: minus and plus
+await page.getByTestId('lite-unit-mm').click();
+await page.getByTestId('lite-widthMm').fill('3000'); await page.getByTestId('lite-widthMm').blur();
+await page.getByTestId('lite-widthMm-plus').click();
+check('size buttons: plus adds 50 mm', (await page.getByTestId('lite-widthMm').inputValue()) === '3050', await page.getByTestId('lite-widthMm').inputValue());
+await page.getByTestId('lite-widthMm-minus').click(); await page.getByTestId('lite-widthMm-minus').click();
+check('size buttons: minus takes 50 mm off', (await page.getByTestId('lite-widthMm').inputValue()) === '2950');
+await page.getByTestId('lite-widthMm').fill('1000'); await page.getByTestId('lite-widthMm').blur();
+await page.getByTestId('lite-widthMm-minus').click();
+check('size buttons: they stop at the allowed minimum', (await page.getByTestId('lite-widthMm').inputValue()) === '1000');
+await page.getByTestId('lite-widthMm').fill('2750'); await page.getByTestId('lite-widthMm').blur();
+check('size buttons: have names for screen readers', /Smaller width/.test(await page.getByTestId('lite-widthMm-minus').getAttribute('aria-label')) && /Bigger width/.test(await page.getByTestId('lite-widthMm-plus').getAttribute('aria-label')));
+await page.getByTestId('lite-unit-m').click();
+
+// ---- tap-to-choose door wall, position along it, and type
+await page.getByTestId('lite-doorpick-SOUTH').click();
 const radios = page.getByTestId('lite-doorpick').getByRole('radio');
 check('door picture: four walls to tap, as radio buttons with names', (await radios.count()) === 4 && /Top wall \(North\)/.test(await page.getByTestId('lite-doorpick-NORTH').getAttribute('aria-label')));
 check('door picture: the current wall is the one marked', (await page.getByTestId('lite-doorpick-SOUTH').getAttribute('aria-checked')) === 'true' && (await page.getByTestId('lite-doorpick-NORTH').getAttribute('aria-checked')) === 'false');
 await page.getByTestId('lite-doorpick-EAST').click();
-check('door picture: tapping a wall moves the door (the menu follows)', (await page.getByTestId('lite-door').inputValue()) === 'EAST' && (await page.getByTestId('lite-doorpick-EAST').getAttribute('aria-checked')) === 'true' && (await page.getByTestId('lite-doorpick-SOUTH').getAttribute('aria-checked')) === 'false');
-await page.getByTestId('lite-door').selectOption('WEST');
-check('door picture: choosing from the menu moves the marked wall', (await page.getByTestId('lite-doorpick-WEST').getAttribute('aria-checked')) === 'true');
+check('door picture: tapping a wall moves the door', (await page.getByTestId('lite-doorpick-EAST').getAttribute('aria-checked')) === 'true' && (await page.getByTestId('lite-doorpick-SOUTH').getAttribute('aria-checked')) === 'false');
 await page.getByTestId('lite-doorpick-NORTH').focus();
 await page.keyboard.press('Enter');
-check('door picture: works from the keyboard (focus a wall, Enter)', (await page.getByTestId('lite-door').inputValue()) === 'NORTH');
+check('door picture: works from the keyboard (focus a wall, Enter)', (await page.getByTestId('lite-doorpick-NORTH').getAttribute('aria-checked')) === 'true');
 const dpSouth = await page.getByTestId('lite-doorpick-SOUTH').boundingBox();
 const dpWest = await page.getByTestId('lite-doorpick-WEST').boundingBox();
 check('door picture: every wall button is at least 44px tall to tap', dpSouth.height >= 43.5 && dpWest.height >= 43.5, JSON.stringify([dpSouth, dpWest]));
 await page.getByTestId('lite-doorpick-SOUTH').click();
-check('no call button when no number is set', (await page.getByTestId('lite-call').count()) === 0);
+await page.getByTestId('lite-tab-inside').click();
+await page.waitForTimeout(400);
+const doorXat = async () => Number(await page.getByTestId('lite-inside-canvas').getAttribute('data-doorx'));
+const xCentre = await doorXat();
+await page.getByTestId('lite-doorpos-LEFT').click(); await page.waitForTimeout(300);
+const xLeft = await doorXat();
+await page.getByTestId('lite-doorpos-RIGHT').click(); await page.waitForTimeout(300);
+const xRight = await doorXat();
+check('door position: Left / Right move the door to that side as seen from outside (the 3D door marker follows)', xLeft < xCentre && xRight > xCentre, `${xLeft} < ${xCentre} < ${xRight}`);
+check('door position: the choice is marked and shown in the summary', (await page.getByTestId('lite-doorpos-RIGHT').getAttribute('aria-checked')) === 'true' && /Right/.test(await page.getByTestId('lite-config').innerText()));
+await page.getByTestId('lite-doorpos-CENTRE').click();
+await page.getByTestId('lite-doorstyle-DOUBLE').click();
+check('door type: Double shows its hint and the summary says so', /Two doors that open together/.test(await page.getByTestId('lite-doorhint').innerText()) && /Double door/.test(await page.getByTestId('lite-config').innerText()));
+await page.getByTestId('lite-doorstyle-SINGLE').click();
+
+// ---- rack finish: recolours the pictures, not the count
+await page.getByTestId('lite-step-2').click();
+const countOak = await bottles(page);
+await page.getByTestId('lite-finish-WALNUT').click();
+await page.waitForTimeout(300);
+check('finish: choosing walnut marks it, recolours the 3D picture and shows in the summary', (await page.getByTestId('lite-finish-WALNUT').getAttribute('aria-checked')) === 'true' && (await page.getByTestId('lite-inside-canvas').getAttribute('data-finish')) === 'WALNUT' && /Walnut/.test(await page.getByTestId('lite-config').innerText()));
+await page.getByTestId('lite-finish-BLACK').click();
+check('finish: black too, and the bottle count never changes', (await page.getByTestId('lite-inside-canvas').getAttribute('data-finish')) === 'BLACK' && (await bottles(page)) === countOak);
+await page.getByTestId('lite-finish-OAK').click();
+
+// ---- the picture: sizes marked on it, zoom buttons
+check('3D picture: the three sizes are drawn on it', (await page.getByTestId('lite-inside-canvas').getAttribute('data-dims')) === '3');
+const z0 = Number(await page.getByTestId('lite-inside-canvas').getAttribute('data-zoom'));
+await page.getByTestId('lite-inside-zoom-in').click();
+const z1 = Number(await page.getByTestId('lite-inside-canvas').getAttribute('data-zoom'));
+await page.getByTestId('lite-inside-zoom-out').click(); await page.getByTestId('lite-inside-zoom-out').click();
+const z2 = Number(await page.getByTestId('lite-inside-canvas').getAttribute('data-zoom'));
+check('3D picture: + zooms in, - zooms out and stops at the whole room', z1 > z0 && z2 === 1, `${z0} ${z1} ${z2}`);
+await page.getByTestId('lite-inside-zoom-in').click();
+await page.getByTestId('lite-inside-reset').click();
+check('3D picture: the round arrow goes back to the starting view', Number(await page.getByTestId('lite-inside-canvas').getAttribute('data-zoom')) === 1);
+await page.getByTestId('lite-tab-plan').click();
+await page.waitForTimeout(400);
+const s0 = Number(await page.getByTestId('lite-plan-canvas').getAttribute('data-scale'));
+await page.getByTestId('lite-plan-zoom-in').click();
+const s1 = Number(await page.getByTestId('lite-plan-canvas').getAttribute('data-scale'));
+await page.getByTestId('lite-plan-reset').click();
+const s2 = Number(await page.getByTestId('lite-plan-canvas').getAttribute('data-scale'));
+check('plan: + zooms in and the round arrow brings it back', s1 > s0 && Math.abs(s2 - s0) < 1e-6, `${s0} ${s1} ${s2}`);
+await page.getByTestId('lite-tab-inside').click();
+check('the summary bar shows capacity, footprint and configuration', /bottles/.test(await page.getByTestId('lite-bottles').innerText()) && /×/.test(await page.getByTestId('lite-footprint').innerText()) && /door/i.test(await page.getByTestId('lite-config').innerText()));
+await page.getByTestId('lite-step-1').click();
 
 // ---- unit and design are remembered
 const widthBefore = await page.getByTestId('lite-widthMm').inputValue();
 await page.getByTestId('lite-unit-ft').click();
 await page.goto('http://localhost:8802/index.html');
 await page.getByTestId('lite-bottles').waitFor();
-check('next visit: "welcome back" is offered and the design is kept', (await page.getByTestId('lite-welcome').count()) === 1 && (await page.getByTestId('lite-door-style').count()) === 1);
+check('next visit: "welcome back" is offered and the design is kept', (await page.getByTestId('lite-welcome').count()) === 1 && (await page.getByTestId('lite-doorstyle-SINGLE').count()) === 1);
 check('next visit: the chosen unit (feet) is kept', /'/.test(await page.getByTestId('lite-widthMm').inputValue()), await page.getByTestId('lite-widthMm').inputValue());
 await page.getByTestId('lite-start-again').click();
 check('Start again returns to the standard room and hides the note', (await page.getByTestId('lite-welcome').count()) === 0 && /^9'/.test(await page.getByTestId('lite-widthMm').inputValue()));
@@ -170,7 +243,7 @@ await adminPut({ ...baseSettings, phone: '03 9123 4567' });
 await page.goto('http://localhost:8802/index.html');
 await page.getByTestId('lite-call').waitFor({ timeout: 8000 }).catch(() => {});
 check('call button: shows the number the owner set, as a link that dials', (await page.getByTestId('lite-call').count()) === 1 && (await page.getByTestId('lite-call').getAttribute('href')) === 'tel:0391234567' && /Call 03 9123 4567/.test(await page.getByTestId('lite-call').innerText()), await page.getByTestId('lite-call').innerText().catch(() => ''));
-check('call button: big enough to tap, and has a tooltip', (await page.getByTestId('lite-call').boundingBox()).height >= 38 && /talk to someone/i.test(await page.getByTestId('lite-call').getAttribute('title')));
+check('call button: big enough to tap, and has a tooltip', (await page.getByTestId('lite-call').boundingBox()).height >= 43 && /talk to someone/i.test(await page.getByTestId('lite-call').getAttribute('title')));
 await ctx.close();
 await adminPut(baseSettings);
 
@@ -231,27 +304,30 @@ await ctx.close();
 await page.goto('http://localhost:8801/planner.html');
 await page.frameLocator('#f').getByTestId('lite-bottles').waitFor();
 await page.waitForTimeout(1200);
-await page.evaluate(() => window.scrollTo(0, 400));
-await page.waitForTimeout(500);
+const toControls = async () => {
+  const fTop = await page.evaluate(() => document.getElementById('f').getBoundingClientRect().top + window.scrollY);
+  const panelY = await page.frameLocator('#f').locator('.lite-panel').evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
+  await page.evaluate((y) => window.scrollTo(0, y), fTop + panelY + 40);
+  await page.waitForTimeout(500);
+};
+await toControls();
 const barInfo = await page.evaluate(() => { const b = document.getElementById('cellar-lite-bar'); return b ? { display: getComputedStyle(b).display, text: b.innerText } : null; });
 check('phone width: the quote bar is shown while the planner is on screen, with bottles and price', !!barInfo && barInfo.display === 'flex' && /About \d+ bottles/.test(barInfo.text) && /\$/.test(barInfo.text), JSON.stringify(barInfo));
 await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 await page.waitForTimeout(600);
 check('and is hidden once the planner has scrolled out of view', (await page.evaluate(() => getComputedStyle(document.getElementById('cellar-lite-bar')).display)) === 'none');
-await page.evaluate(() => window.scrollTo(0, 400));
-await page.waitForTimeout(500);
+await toControls();
 // the little picture: shown in the bar while the big picture is off screen, hidden while it is on screen
 const thumbInfo = await page.evaluate(() => { const i = document.querySelector('#cellar-lite-bar img'); return i ? { display: getComputedStyle(i).display, src: i.src.slice(0, 23), w: i.naturalWidth, h: i.naturalHeight, len: i.src.length } : null; });
 check('phone bar: while editing, it shows a live picture of the cellar (a real JPEG)', !!thumbInfo && thumbInfo.display === 'block' && thumbInfo.src === 'data:image/jpeg;base64,' && thumbInfo.w === 180 && thumbInfo.h === 112 && thumbInfo.len < 40000, JSON.stringify(thumbInfo));
 await frameDoorPick(page);
 const picTop = await page.evaluate(() => { const f = document.getElementById('f').getBoundingClientRect(); return f.top + window.scrollY; });
-const picY = await page.frameLocator('#f').locator('.lite-drawing').evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
+const picY = await page.frameLocator('#f').locator('.lite-visual').evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
 await page.evaluate((y) => window.scrollTo(0, y), picTop + picY - 40);
 await page.waitForTimeout(700);
 const thumbHidden = await page.evaluate(() => { const i = document.querySelector('#cellar-lite-bar img'); const b = document.getElementById('cellar-lite-bar'); return { img: getComputedStyle(i).display, bar: getComputedStyle(b).display }; });
 check('phone bar: when the big picture is on screen the little one is hidden (never shown twice), the bar stays', thumbHidden.img === 'none' && thumbHidden.bar === 'flex', JSON.stringify(thumbHidden));
-await page.evaluate(() => window.scrollTo(0, 400));
-await page.waitForTimeout(500);
+await toControls();
 await page.locator('#cellar-lite-bar button').click();
 await page.waitForURL(/contact\.html/, { timeout: 6000 }).catch(() => {});
 await page.waitForTimeout(800);

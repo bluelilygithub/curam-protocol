@@ -7,11 +7,13 @@
 
 const KEY = 'cellar_lite_config';
 
+
 const LIMITS = {
   unitWidthMm: [400, 1200], unitHeightMm: [1000, 3000],
   doorSingleMm: [700, 1300], doorDoubleMm: [1200, 2400],
   price: [0, 1000000], rangePct: [0, 50],
   roomWidthMm: [1000, 8000], roomDepthMm: [1000, 8000], roomHeightMm: [1800, 3200],
+  photoDaily: [0, 500], photoPerVisitor: [1, 30],
 };
 const ROUND_TO = [1, 10, 50, 100, 500, 1000];
 const MAX_PRESETS = 6;
@@ -21,6 +23,9 @@ const DEFAULTS = Object.freeze({
   promise: 'Free to use. No sign-up. Takes about two minutes. You only share your details if you ask for a quote.',
   quoteNote: 'We usually reply within one business day.',
   phone: '',
+  accent: '#4a5a2a',
+  // the AI "Photo" tab: off until the owner switches it on; each new photo costs a few cents, so there is a daily cap and a per-visitor limit
+  photo: { enabled: false, dailyLimit: 30, perVisitorPerHour: 3 },
   rack: { unitWidthMm: 600, unitHeightMm: 2000 },
   doors: { singleMm: 970, doubleMm: 1500 },
   pricing: {
@@ -33,6 +38,14 @@ const DEFAULTS = Object.freeze({
     { id: 'large', name: 'Large cellar', widthMm: 4000, depthMm: 3000, heightMm: 2400, doorStyle: 'DOUBLE' },
   ],
 });
+
+/** WCAG contrast of white text on this #rrggbb colour (needs 4.5 or more to read comfortably). */
+function contrastWithWhite(hex) {
+  const lin = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  const n = parseInt(hex.slice(1), 16);
+  const L = 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+  return 1.05 / (L + 0.05);
+}
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 // control characters are never wanted in text that ends up in a page or an email
@@ -71,10 +84,20 @@ function validateConfig(raw) {
     return t;
   };
 
+  /** The brand colour of the buttons and highlights: #rrggbb, dark enough for white text on it. */
+  const cleanAccent = (v) => {
+    if (v === undefined || v === null || v === '') return D0.accent;
+    const t = String(v).trim().toLowerCase();
+    if (!/^#[0-9a-f]{6}$/.test(t)) { errors.push('The brand colour must be a hex colour such as #4a5a2a.'); return D0.accent; }
+    if (contrastWithWhite(t) < 4.5) { errors.push('That brand colour is too light for white text on buttons. Choose a darker one.'); return D0.accent; }
+    return t;
+  };
+
   const rack = isObj(src.rack) ? src.rack : {};
   const doors = isObj(src.doors) ? src.doors : {};
   const p = isObj(src.pricing) ? src.pricing : {};
   const D = DEFAULTS;
+  const D0 = DEFAULTS;
 
   const pricing = {
     show: p.show === true,
@@ -120,6 +143,12 @@ function validateConfig(raw) {
     promise: src.promise === undefined ? D.promise : cleanText(src.promise, 200),
     quoteNote: src.quoteNote === undefined ? D.quoteNote : cleanText(src.quoteNote, 200),
     phone: cleanPhone(src.phone),
+    accent: cleanAccent(src.accent),
+    photo: {
+      enabled: isObj(src.photo) && src.photo.enabled === true,
+      dailyLimit: int(isObj(src.photo) ? src.photo.dailyLimit : undefined, LIMITS.photoDaily, D.photo.dailyLimit, 'The daily photo limit'),
+      perVisitorPerHour: int(isObj(src.photo) ? src.photo.perVisitorPerHour : undefined, LIMITS.photoPerVisitor, D.photo.perVisitorPerHour, 'The photos per visitor per hour'),
+    },
     rack: {
       unitWidthMm: int(rack.unitWidthMm, LIMITS.unitWidthMm, D.rack.unitWidthMm, 'The rack unit width'),
       unitHeightMm: int(rack.unitHeightMm, LIMITS.unitHeightMm, D.rack.unitHeightMm, 'The rack unit height'),
@@ -134,10 +163,11 @@ function validateConfig(raw) {
   return { config, errors };
 }
 
-/** What the public endpoint may say. Unpublished prices are never sent: with `show` off the amounts are blanked. */
+/** What the public endpoint may say. Unpublished prices are never sent: with `show` off the amounts are blanked. The photo limits are the owner's business, not the visitor's: only on/off is sent. */
 function publicView(config) {
-  if (config.pricing.show) return config;
-  return { ...config, pricing: { ...config.pricing, fixed: null, perUnit: null, doorSingle: null, doorDouble: null } };
+  const out = { ...config, photo: { enabled: config.photo.enabled } };
+  if (config.pricing.show) return out;
+  return { ...out, pricing: { ...config.pricing, fixed: null, perUnit: null, doorSingle: null, doorDouble: null } };
 }
 
-module.exports = { KEY, LIMITS, ROUND_TO, MAX_PRESETS, DEFAULTS, validateConfig, publicView };
+module.exports = { contrastWithWhite, KEY, LIMITS, ROUND_TO, MAX_PRESETS, DEFAULTS, validateConfig, publicView };

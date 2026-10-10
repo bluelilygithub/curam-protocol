@@ -46,7 +46,10 @@ function createCellarLiteConfigRouters({ pool, now = () => Date.now() }) {
   adminRouter.get('/', async (req, res) => {
     try {
       const { config, updatedAt, errors } = await load();
-      res.json({ config, updatedAt, defaults: DEFAULTS, warnings: errors });
+      // how many AI photos were made today (UTC), and whether the server can make them at all
+      let photosToday = 0;
+      try { photosToday = Number((await pool.query(`SELECT COUNT(*)::int AS n FROM cellar_lite_photos WHERE "createdAt" >= date_trunc('day', NOW())`)).rows[0].n); } catch { /* table not there in a test: zero */ }
+      res.json({ config, updatedAt, defaults: DEFAULTS, warnings: errors, usage: { photosToday, photoReady: Boolean(process.env.FAL_API_KEY) } });
     } catch (err) {
       getLogger().error({ err: err.message }, '[cellar-lite] admin read failed');
       res.status(500).json({ error: 'Could not read the settings.' });
@@ -81,7 +84,7 @@ function createCellarLiteConfigRouters({ pool, now = () => Date.now() }) {
     }
   });
 
-  return { publicRouter, adminRouter };
+  return { publicRouter, adminRouter, load };
 }
 
 module.exports = { createCellarLiteConfigRouters };

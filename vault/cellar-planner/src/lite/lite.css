@@ -1,75 +1,173 @@
-/* The public lite tool. A single column that works from a 320px phone up; the drawing sits between the choices and the quote step. */
+/* The public lite tool: a three-step planner. On a desktop the controls sit in a panel on the left and the picture is large on the right, with the
+   capacity, footprint, configuration and quote button along the bottom. On a phone it is one column with the picture first, so it stays in view
+   while the controls beneath it are changed. The brand colour (--primary and its shades) is set from the owner settings by LiteApp. */
 html, body, #root { height: auto; min-height: 100%; }
-.lite { max-width: 880px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
-.lite-head h1 { font-size: 22px; margin: 0 0 4px; } .lite-head p { margin: 0; color: var(--muted); }
-.lite-controls { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
-.lite-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 14px; }
-.lite .field input[type=text], .lite .field select, .lite .field textarea { min-height: 40px; font-size: 16px; /* 16px stops phones zooming the page when a field is focused */ }
-.lite .field textarea { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 5px; font: inherit; font-size: 14px; resize: vertical; }
-.lite-result { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
-.lite-total { margin: 0; font-size: 22px; } .lite-tag { font-size: 12px; color: var(--warn-text); text-transform: uppercase; letter-spacing: .04em; margin-left: 6px; }
-.lite-note { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
-.lite-problem { margin: 0; color: var(--err); font-weight: 600; }
-.lite-drawing { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fff; display: flex; flex-direction: column; }
-.lite-drawing .tabs { flex-wrap: wrap; }
-.lite-canvas { position: relative; height: min(62vh, 520px); min-height: 280px; display: flex; flex-direction: column; }
-.lite-canvas .drawing { flex: 1; }
+body { background: #f1f1ee; }
+.lite {
+  --bg: #f1f1ee; --surface: #ffffff; --border: #d9d9d3; --text: #262a2c; --muted: #5d6468; --primary-dark: #3a4720; --primary-soft: #e7ecdc;
+  max-width: 1180px; margin: 0 auto; padding: 20px 16px 28px; display: flex; flex-direction: column; gap: 18px; font-size: 15px; color: var(--text);
+}
+.lite *:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .lite .tab, .lite .btn { min-height: 40px; }
-.lite-ask { padding-bottom: 24px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.lite-ask .lite-sent { align-self: stretch; }
-/* a real button, not a banner: sized to its words, raised, with an arrow, and it presses down */
-.lite .lite-cta { width: auto; min-width: min(100%, 280px); min-height: 52px; padding: 0 28px; font-size: 17px; font-weight: 700; border-radius: 999px; box-shadow: 0 2px 0 rgba(0,0,0,.22), 0 4px 10px rgba(0,0,0,.14); transition: transform 200ms, box-shadow 200ms, background-color 200ms; }
-.lite .lite-cta:hover { transform: translateY(-1px); box-shadow: 0 3px 0 rgba(0,0,0,.22), 0 7px 14px rgba(0,0,0,.16); }
-.lite .lite-cta:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(0,0,0,.22), 0 1px 3px rgba(0,0,0,.2); }
-.lite .lite-cta:focus-visible { outline: 3px solid #1a5fb4; outline-offset: 3px; }
-.lite-sent { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-.lite-sent p { margin: 0; }
-@media (max-width: 480px) { .lite { padding: 10px; } .lite-total { font-size: 19px; } .lite-canvas { height: 55vh; } }
 
-.lite-head-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-.lite-help-btns { display: flex; gap: 6px; }
-/* on this page the explanations are always visible: a casual visitor should never have to hover to find out what a question means */
-.lite .field-hint { display: block; }
-.lite-sizes { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 14px; }
+/* ---- buttons in the brand colour (the shared styles hard-code the old colour on hover) */
+.lite .btn.primary, .lite .tab.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.lite .btn.primary:hover, .lite .tab.on:hover { opacity: 1; background: var(--primary-dark); border-color: var(--primary-dark); }
 
-.lite-units { padding: 6px 12px 0; margin: 0; }
-
-/* the promise line, starting rooms, guide price and share link */
-.lite-promise { margin: 6px 0 0; font-weight: 600; color: var(--text); }
-.lite-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
-.lite-presets-label { color: var(--muted); font-size: 14px; }
-.lite-presets-row { display: flex; flex-wrap: wrap; gap: 8px; }
-.lite-price { margin: 6px 0 0; font-size: 18px; }
-.lite-price-note { font-size: 13px; color: var(--muted); }
-.lite-share { margin: 8px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
-
-.cellar-hint { position: absolute; left: 10px; bottom: 8px; font-size: 12px; color: var(--muted); pointer-events: none; }
-
-/* three-step strip, unit picker, welcome-back note, fix button, slider */
-.lite-steps { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 10px; }
-.lite-steps li { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); font-size: 14px; }
-.lite-steps li b { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--primary); color: #fff; font-size: 13px; }
-.lite-unitpick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 10px; }
-.lite-unitpick-label { color: var(--muted); font-size: 14px; }
-.lite-welcome { margin: 0; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 14px; }
-.linklike { background: none; border: 0; padding: 0; color: var(--primary-dark, var(--primary)); text-decoration: underline; cursor: pointer; font: inherit; transition: opacity 200ms; }
+/* ---- header and steps */
+.lite-head h1 { font-size: 34px; line-height: 1.1; margin: 0; letter-spacing: -.01em; }
+.lite-sub { margin: 4px 0 0; font-size: 18px; color: var(--muted); }
+.lite-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.lite-help-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.lite-promise { margin: 10px 0 0; font-weight: 600; }
+.stepper { list-style: none; margin: 18px 0 0; padding: 0; display: flex; justify-content: center; align-items: center; }
+.stepper-item { display: flex; align-items: center; }
+.stepper-item:not(:last-child)::after { content: ''; display: block; width: clamp(20px, 9vw, 160px); height: 2px; background: var(--border); margin: 0 10px; }
+.stepper-item.done:not(:last-child)::after { background: var(--primary); }
+.stepper-btn { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 4px 6px; background: none; border: 0; cursor: pointer; font: inherit; font-size: 16px; color: var(--muted); transition: opacity 200ms; }
+.stepper-btn:hover { opacity: .7; }
+.stepper-num { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; background: #e4e4de; color: var(--text); font-weight: 700; }
+.stepper-item.on .stepper-num, .stepper-item.done .stepper-num { background: var(--primary); color: #fff; }
+.stepper-item.on .stepper-name { color: var(--text); font-weight: 700; }
+/* a finished step shows a tick (the digit stays in the page text, so the button's name still contains what is shown) */
+.stepper-item.done .stepper-num { font-size: 0; } .stepper-item.done .stepper-num::after { content: '¹3'; font-size: 18px; }
+/* on a phone only the current step shows its name; the others keep it for screen readers and voice control */
+@media (max-width: 599px) { .stepper-item:not(.on) .stepper-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } .stepper-item:not(:last-child)::after { width: 28px; } }
+.lite-note { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+.lite-welcome { margin: 0; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: #fff; font-size: 14px; }
+.linklike { background: none; border: 0; padding: 0; color: var(--primary-dark); text-decoration: underline; cursor: pointer; font: inherit; transition: opacity 200ms; }
 .linklike:hover { opacity: .7; }
-.lite-fix { margin: 8px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+
+/* ---- the two columns (picture first on a phone, controls first on a desktop) */
+.lite-main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+.lite-visual { order: 1; } .lite-panel { order: 2; }
+@media (min-width: 900px) {
+  .lite-main { grid-template-columns: 390px minmax(0, 1fr); align-items: stretch; gap: 22px; }
+  .lite-visual, .lite-panel { order: 0; }
+}
+.lite-panel, .lite-visual { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+.lite-visual { background: #e9e9e4; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.lite-visual-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.lite-visual-head h2 { margin: 0; font-size: 24px; }
+.lite-visual .tabs { border: 0; padding: 0; background: none; flex-wrap: wrap; }
+.lite-walls { padding: 0; border: 0; }
+.lite-canvas { position: relative; height: 330px; display: flex; flex-direction: column; background: #fff; border-radius: 8px; overflow: hidden; }
+@media (min-width: 900px) { .lite-canvas { height: auto; min-height: 560px; flex: 1; } }
+.lite-canvas .drawing { flex: 1; }
+.lite-units { padding: 0; margin: 0; }
+
+/* ---- the controls panel */
+.lite-step-title { margin: 0 0 14px; font-size: 28px; line-height: 1.15; outline: none; }
+.lite-group { margin: 20px 0; }
+.lite-group h3 { margin: 0 0 10px; font-size: 16px; }
+.lite-sub-h { margin-top: 16px !important; }
+.lite-group-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.lite-group-head h3 { margin: 0; }
+.lite-unitpick { display: flex; flex-wrap: wrap; gap: 4px; }
+.lite .field-hint { display: block; margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+.lite select { width: 100%; min-height: 46px; padding: 6px 10px; font-size: 16px; border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--text); }
+.lite .field input[type=text], .lite .field textarea { min-height: 44px; font-size: 16px; }
+.lite .field textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font: inherit; font-size: 14px; resize: vertical; }
+.lite-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 0 6px; }
+.lite-presets-label { color: var(--muted); font-size: 14px; }
+.lite-presets-row { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.lenfield { display: grid; grid-template-columns: 62px minmax(0, 1fr) 46px; align-items: center; gap: 4px 10px; margin: 10px 0; }
+.lenfield-label { font-size: 15px; }
+.lenfield-box { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #fff; }
+.lenfield-step { width: 46px; min-height: 46px; border: 0; background: #f3f3ef; font-size: 24px; line-height: 1; color: var(--text); cursor: pointer; transition: opacity 200ms; }
+.lenfield-step:hover { opacity: .6; }
+.lenfield-box input { flex: 1; min-width: 0; border: 0; text-align: center; font: inherit; font-size: 17px; min-height: 46px; background: #fff; color: var(--text); }
+.lenfield-unit { color: var(--muted); font-size: 14px; }
+.lenfield-err { grid-column: 1 / -1; }
+
+.seg { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #fff; }
+.seg-btn { flex: 1; min-height: 46px; padding: 0 8px; background: #fff; border: 0; border-right: 1px solid var(--border); font: inherit; font-size: 15px; color: var(--text); cursor: pointer; transition: opacity 200ms; }
+.seg-btn:last-child { border-right: 0; }
+.seg-btn:hover { opacity: .7; }
+.seg-btn.on { background: var(--primary-soft); color: var(--primary-dark); font-weight: 700; box-shadow: inset 0 0 0 2px var(--primary); }
+.seg-btn.on:hover { opacity: 1; }
+.finish { display: flex; gap: 10px; }
+.finish-btn { flex: 1; min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 8px; background: #fff; border: 1px solid var(--border); border-radius: 10px; font: inherit; color: var(--text); cursor: pointer; transition: opacity 200ms; }
+.finish-btn:hover { opacity: .7; }
+.finish-btn.on { background: var(--primary-soft); box-shadow: inset 0 0 0 2px var(--primary); font-weight: 700; }
+.finish-btn.on:hover { opacity: 1; }
+.finish-swatch { width: 26px; height: 26px; border-radius: 50%; border: 1px solid rgba(0,0,0,.25); }
+.lite-target { margin-top: 12px; }
 .lite-slider { width: 100%; margin-top: 8px; accent-color: var(--primary); min-height: 28px; }
-@media (max-width: 480px) { .lite-steps { gap: 6px; } .lite-steps li { padding: 4px 10px 4px 4px; font-size: 13px; gap: 6px; } .lite-steps li b { width: 22px; height: 22px; font-size: 12px; } }
+.lite-nav { margin-top: 24px; display: flex; gap: 10px; }
+.lite-nav.two { justify-content: space-between; }
+.lite-nav .btn { min-height: 52px; font-size: 17px; }
+.lite-next { flex: 1; font-weight: 700; }
+.lite-nav .btn:not(.primary) { padding: 0 20px; }
+.lite-alert { border: 1px solid var(--err); background: #fff5f5; border-radius: 8px; padding: 10px 12px; margin: 0 0 14px; }
+.lite-problem { margin: 0; color: #b42318; font-weight: 600; }
+.lite-fix { margin: 8px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.lite-sent { margin: 0 0 16px; background: var(--primary-soft); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.lite-sent p { margin: 0; }
+.lite-review { margin: 0 0 14px; display: grid; gap: 0; }
+.lite-review > div { display: flex; justify-content: space-between; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.lite-review dt { color: var(--muted); } .lite-review dd { margin: 0; font-weight: 600; text-align: right; }
+.lite-share { margin: 12px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
 
-/* tap-to-choose door wall: a room outline with a button on each wall */
-.doorpick { display: grid; grid-template-columns: minmax(56px, 70px) minmax(120px, 1fr) minmax(56px, 70px); grid-template-rows: 44px minmax(110px, 1fr) 44px; gap: 6px; max-width: 340px; margin: 4px 0 8px; }
-.doorpick-btn { min-height: 44px; border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--text); font: inherit; font-size: 14px; cursor: pointer; transition: opacity 200ms, background-color 200ms; }
-.doorpick-btn:hover { opacity: .7; }
-.doorpick-btn.on { background: var(--primary-dark, var(--primary)); border-color: var(--primary-dark, var(--primary)); color: #fff; font-weight: 700; }
-.doorpick-btn.on:hover { opacity: 1; }
-.doorpick-n { grid-column: 2; grid-row: 1; } .doorpick-s { grid-column: 2; grid-row: 3; } .doorpick-w { grid-column: 1; grid-row: 2; } .doorpick-e { grid-column: 3; grid-row: 2; }
-.doorpick-room { grid-column: 2; grid-row: 2; display: flex; align-items: center; justify-content: center; }
-.doorpick-floor { position: relative; background: #efe3cd; border: 5px solid #4b5159; border-radius: 3px; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
-.doorpick-you { font-size: 12px; color: var(--muted); }
-.doorpick-door { position: absolute; background: #e6b95c; }
-.doorpick-door-north, .doorpick-door-south { left: 30%; width: 40%; height: 9px; } .doorpick-door-north { top: -9px; } .doorpick-door-south { bottom: -9px; }
-.doorpick-door-west, .doorpick-door-east { top: 30%; height: 40%; width: 9px; } .doorpick-door-west { left: -9px; } .doorpick-door-east { right: -9px; }
+/* ---- the summary bar along the bottom */
+.lite-summary { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px; display: flex; flex-wrap: wrap; align-items: center; gap: 16px 32px; }
+.lite-cell { flex: 1 1 150px; min-width: 0; }
+.lite-cell-label { display: block; font-size: 14px; color: var(--muted); }
+.lite-cell-value { display: block; font-size: 24px; line-height: 1.2; font-weight: 700; }
+.lite-cell-note { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+.lite-price-note { display: block; font-size: 12px; font-weight: 400; color: var(--muted); }
+.lite-cta-cell { flex: 1 1 320px; max-width: 420px; margin-left: auto; text-align: center; }
+.lite .lite-cta { width: 100%; min-height: 58px; padding: 0 22px; font-size: 18px; font-weight: 700; border-radius: 8px; transition: opacity 200ms, background-color 200ms; }
+.lite-call { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; margin-top: 4px; padding: 0 10px; color: var(--primary-dark); font-weight: 600; font-size: 15px; text-decoration: underline; }
+.lite-call:hover { opacity: .7; }
+@media (max-width: 899px) { .lite-cta-cell { max-width: none; flex-basis: 100%; } .lite-cell-value { font-size: 22px; } }
+.foot { margin: 0; text-align: center; font-size: 11px; color: var(--muted); letter-spacing: .02em; }
 
-.lite-call { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; text-align: center; }
+/* ---- door drawing: the room from above with its walls labelled and tappable, and the door drawn as an opening with its swing */
+.doorpick { max-width: 360px; margin: 6px 0 4px; }
+.doorpick-svg { display: block; width: 100%; height: auto; touch-action: manipulation; }
+.doorpick-floor { fill: #efe3cd; }
+.doorpick-you { font-size: 15px; fill: #6b6f73; }
+.doorpick-wall { fill: #4b5159; transition: fill 200ms; }
+.doorpick-wall.on { fill: var(--primary); }
+.doorpick-gap { fill: #f6d58a; stroke: #b5832d; stroke-width: 1; }
+.doorpick-leaf { stroke: #8a5f17; stroke-width: 3; stroke-linecap: round; }
+.doorpick-swing { fill: none; stroke: #b5832d; stroke-width: 1.5; stroke-dasharray: 5 4; }
+.doorpick-hit { cursor: pointer; outline: none; }
+.doorpick-hitbox { fill: transparent; stroke: transparent; stroke-width: 2; transition: fill 200ms; }
+.doorpick-hit:hover .doorpick-hitbox { fill: rgba(0, 0, 0, 0.06); }
+.doorpick-hit:focus-visible .doorpick-hitbox { stroke: var(--primary); fill: rgba(0, 0, 0, 0.04); }
+.doorpick-label { font-size: 16px; fill: #4b5159; }
+.doorpick-label.on { fill: var(--primary-dark); font-weight: 700; }
+.doorpick-caption { margin: 4px 0 0; font-size: 14px; font-weight: 600; color: var(--text); text-align: center; }
+
+/* ---- zoom buttons and hints on the pictures */
+.zoomctl { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 8px; z-index: 2; }
+.zoomctl-btn { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 8px; background: #fff; font-size: 22px; line-height: 1; color: var(--text); cursor: pointer; transition: opacity 200ms; }
+.zoomctl-btn:hover { opacity: .6; }
+.zoomctl-btn.lit { border-color: var(--primary); color: var(--primary-dark); }
+.cellar-hint { position: absolute; left: 12px; bottom: 10px; font-size: 12px; color: var(--muted); pointer-events: none; }
+
+/* ---- where you are in the process */
+.lite-eyebrow { margin: 0 0 2px; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--primary-dark); }
+.lite-next { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; line-height: 1.15; padding-top: 6px; padding-bottom: 6px; }
+.lite-next-label { font-size: 17px; font-weight: 700; }
+.lite-next-sub { font-size: 12px; font-weight: 400; opacity: .9; letter-spacing: .03em; }
+.lite-backbtn { white-space: nowrap; }
+.lite-nav .btn { min-height: 56px; }
+
+/* ---- the Photo tab */
+.photoview { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; overflow: auto; background: linear-gradient(#f6f2ea, #e3d9c6); }
+.photoview-center { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; max-width: 440px; font-size: 15px; }
+.photoview-center strong { font-size: 20px; }
+.photoview-center .btn { min-height: 52px; padding: 0 28px; font-size: 17px; font-weight: 700; }
+.photoview-figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; max-height: 100%; }
+.photoview-img { max-width: 100%; max-height: 440px; border-radius: 8px; box-shadow: 0 4px 18px rgba(0,0,0,.25); background: #ddd; }
+.photoview-figure figcaption { text-align: center; max-width: 560px; margin: 0; }
+.photoview-error { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; padding: 8px 12px; border: 1px solid var(--err); background: #fff5f5; border-radius: 8px; color: #b42318; font-weight: 600; max-width: 520px; }
+.photoview-actions { display: flex; gap: 8px; }
+.photoview-actions .btn { text-decoration: none; display: inline-flex; align-items: center; }
+.photoview-spinner { width: 38px; height: 38px; border: 4px solid rgba(0,0,0,.12); border-top-color: var(--primary); border-radius: 50%; animation: photospin 900ms linear infinite; }
+@keyframes photospin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .photoview-spinner { animation-duration: 3s; } }

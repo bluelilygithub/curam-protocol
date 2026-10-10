@@ -15,7 +15,10 @@ export type V3 = [number, number, number];
 export interface SceneFace { id: string; kind: 'floor' | 'wall' | 'glass' | 'rackTop' | 'rackEnd' | 'rackFront' | 'marker'; pts: Array<[number, number]>; shade: number; depth: number; wallKind?: WallKind }
 export interface SceneBottle { x: number; y: number; rx: number; ry: number; rotation: number; depth: number }
 export interface SceneLine { pts: Array<[number, number]>; depth: number; kind: 'plank' | 'mullion' }
+/** A measurement drawn on the picture: a line from a to b with its size at the middle. */
+export interface SceneDimension { kind: 'width' | 'depth' | 'height'; a: [number, number]; b: [number, number]; text: string }
 export interface Scene {
+  dimensions: SceneDimension[];
   faces: SceneFace[];
   bottles: SceneBottle[];
   lines: SceneLine[];
@@ -32,6 +35,8 @@ export interface SceneInput {
   analysis: RackLayoutAnalysis;
   /** Turn the camera left/right around the room's centre, in degrees (the visitor drags to do this). Limited to +/- 40. */
   yawDeg?: number;
+  /** The three inside sizes already written for the visitor (their unit). When given, they are drawn as measurements along the room's edges. */
+  dims?: { width: string; depth: string; height: string };
 }
 
 const QUARTERS: Record<WallSide, number> = { SOUTH: 0, EAST: 1, NORTH: 2, WEST: 3 };
@@ -193,8 +198,26 @@ export function buildScene(input: SceneInput): Scene {
     if (s) { door = { x: s.x, y: s.y }; grow(s.x, s.y); }
   } catch { /* no door marker */ }
 
+  // measurements along the front edge (width), the right edge (depth) and the front-left corner (height), pushed a little outside the room
+  const dimensions: SceneDimension[] = [];
+  if (input.dims) {
+    const gap = 320;
+    const add = (kind: SceneDimension['kind'], p: V3, q: V3, text: string): void => {
+      const a = cam(p), c = cam(q);
+      if (!a || !c) return;
+      dimensions.push({ kind, a: [a.x, a.y], b: [c.x, c.y], text });
+      grow(a.x, a.y); grow(c.x, c.y);
+      // room for the label beside the middle of the line
+      const mx = (a.x + c.x) / 2, my = (a.y + c.y) / 2;
+      grow(mx - 60, my - 14); grow(mx + 60, my + 14);
+    };
+    add('width', [0, D + gap, 0], [W, D + gap, 0], input.dims.width);
+    add('depth', [W + gap, D, 0], [W + gap, 0, 0], input.dims.depth);
+    add('height', [-gap, D, 0], [-gap, D, H], input.dims.height);
+  }
+
   faces.sort((a, c) => c.depth - a.depth);
   bottles.sort((a, c) => c.depth - a.depth);
   if (!Number.isFinite(b.x0)) { b.x0 = -1; b.y0 = -1; b.x1 = 1; b.y1 = 1; }
-  return { faces, bottles, lines, bounds: b, stats: { racks: rackCount, bottles: bottleCount }, door };
+  return { dimensions, faces, bottles, lines, bounds: b, stats: { racks: rackCount, bottles: bottleCount }, door };
 }

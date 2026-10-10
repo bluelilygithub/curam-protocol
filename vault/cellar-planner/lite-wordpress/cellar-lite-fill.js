@@ -39,7 +39,7 @@
   var CODE_RE = /^CL\d+\.[A-Za-z0-9_-]{1,200}$/;
   var START = '--- Cellar planner design ---';
   var END = '---';
-  var EVENTS = ['start', 'preset', 'unit', 'view', 'quote', 'link_copied', 'plan_downloaded', 'price_help', 'fix', 'welcome_back', 'call', 'door_pick'];
+  var EVENTS = ['start', 'preset', 'unit', 'view', 'quote', 'link_copied', 'plan_downloaded', 'price_help', 'fix', 'welcome_back', 'call', 'door_pick', 'step', 'finish', 'photo'];
   var wasRequested = false;
   var latest = null; // the newest valid design message { code, summary, bottles, priceText, thumb }
   var layout = null; // where the planner's big picture sits inside its frame { frame, top, bottom }
@@ -139,7 +139,7 @@
     if (d.type === 'cellar-lite:event') {
       if (!TRACK_EVENTS || EVENTS.indexOf(d.name) === -1) return;
       var push = { event: 'cellar_lite_' + d.name };
-      ['room', 'unit', 'view'].forEach(function (k) { if (typeof d[k] === 'string' && /^[a-z0-9-]{1,40}$/.test(d[k])) push['cellar_lite_' + k] = d[k]; });
+      ['room', 'unit', 'view', 'step', 'finish'].forEach(function (k) { if (typeof d[k] === 'string' && /^[a-z0-9-]{1,40}$/.test(d[k])) push['cellar_lite_' + k] = d[k]; });
       window.dataLayer = window.dataLayer || [];
       window.dataLayer.push(push);
       log('dataLayer.push', JSON.stringify(push));

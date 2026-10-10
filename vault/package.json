@@ -15,6 +15,7 @@
     "test:cellar-projects": "node server/routes/cellarProjects.test.js",
     "test:cellar-lite": "node server/routes/cellarLite.test.js",
     "test:cellar-lite-config": "node server/routes/cellarLiteConfig.test.js",
+    "test:cellar-lite-photo": "node server/routes/cellarLitePhoto.test.js",
     "test:garden-projects": "node server/routes/gardenProjects.test.js && node server/routes/gardenImages.test.js",
     "test:geocode": "node server/services/geocode.test.js",
     "test:map-tiles": "node server/routes/mapTiles.test.js",

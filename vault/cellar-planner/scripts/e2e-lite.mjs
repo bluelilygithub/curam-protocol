@@ -32,16 +32,18 @@ await page.getByTestId('lite-tab-plan').click();
 check('lite: the plan is drawn', Number(await page.getByTestId('lite-plan-canvas').getAttribute('data-prims')) > 10);
 
 check('lite: the screen says the estimate uses standard-size rack units', /standard-size rack units, about 600 mm wide/.test(await page.getByTestId('lite-units').innerText()));
-await page.getByTestId('lite-door-style').selectOption('DOUBLE');
+await page.getByTestId('lite-doorstyle-DOUBLE').click();
 check('lite: a double door builds with no "cannot be built" message and shows its hint', (await page.getByTestId('lite-problem').count()) === 0 && /Two doors that open together/.test(await page.getByTestId('lite').innerText()));
 check('lite: the double door is two arcs on the plan (the drawing is redrawn)', Number(await page.getByTestId('lite-plan-canvas').getAttribute('data-prims')) > 10);
-await page.getByTestId('lite-door-style').selectOption('SINGLE');
+await page.getByTestId('lite-doorstyle-SINGLE').click();
 await page.getByTestId('lite-widthMm').fill('3600');
 const wider = await bottles();
 check('lite: a wider room holds at least as many bottles', wider >= first, `${first} -> ${wider}`);
+await page.getByTestId('lite-step-2').click();
 await page.getByTestId('lite-bottle').selectOption('MAGNUM');
 check('lite: a magnum room still has no "cannot be built" message', (await page.getByTestId('lite-problem').count()) === 0);
 await page.getByTestId('lite-bottle').selectOption('BORDEAUX');
+await page.getByTestId('lite-step-1').click();
 
 await page.getByTestId('lite-widthMm').fill('50');
 check('lite: an out-of-range size shows the allowed range', /Between 1000 mm and 8000 mm/.test(await page.getByTestId('lite').innerText()));
@@ -50,13 +52,15 @@ check('lite: leaving the field snaps it into range', (await page.getByTestId('li
 await page.getByTestId('lite-widthMm').fill('3000');
 const full3000 = await bottles();
 
-await page.getByTestId('lite-mode').selectOption('TARGET');
+await page.getByTestId('lite-step-2').click();
+await page.getByTestId('lite-mode-TARGET').click();
 await page.getByTestId('lite-target').fill('200');
 const t = await bottles();
 check('lite: a target of 200 gives a layout of at least 200 and no more than the full room', t >= 200 && t <= full3000, `${t} vs ${full3000}`);
 await page.getByTestId('lite-target').fill('5000');
 check('lite: a target bigger than the room says so', (await page.getByTestId('lite-short').count()) === 1);
-await page.getByTestId('lite-mode').selectOption('FILL');
+await page.getByTestId('lite-mode-FILL').click();
+await page.getByTestId('lite-step-1').click();
 
 await page.getByTestId('lite-tab-racks').click();
 await page.getByTestId('lite-racks-canvas').waitFor();
@@ -92,7 +96,7 @@ check('help: accessibility scan with the guide open, no violations', aH.length =
 await page.keyboard.press('Escape');
 check('help: Esc closes the guide', (await page.getByTestId('lite-help').count()) === 0);
 await page.getByTestId('lite-tour').click();
-const steps = [['lt-welcome', 'Plan your wine cellar'], ['lt-size', '1. How big'], ['lt-door', '2. Where is the door'], ['lt-bottle', '3. What do you mostly'], ['lt-mode', '4. How many'], ['lt-result', 'Your estimate'], ['lt-drawing', 'The drawings'], ['lt-quote', 'Happy with it'], ['lt-done', 'That is all']];
+const steps = [['lt-welcome', 'Plan your wine cellar'], ['lt-size', '1. How big'], ['lt-door', '2. Where is the door'], ['lt-bottle', '3. What do you mostly'], ['lt-mode', '4. How many'], ['lt-finish', '5. Pick a finish'], ['lt-result', 'Your estimate'], ['lt-drawing', 'The pictures'], ['lt-quote', 'Happy with it'], ['lt-done', 'That is all']];
 const card = '.shepherd-element.vault-tour:not([hidden])';
 let walked = 0;
 for (const [id, title] of steps) {
@@ -103,7 +107,7 @@ for (const [id, title] of steps) {
   if (id === 'lt-drawing') check('tour: the drawings step shows the inside view', (await page.getByTestId('lite-tab-inside').getAttribute('aria-pressed')) === 'true');
   await page.locator(`${card} .shepherd-button:not(.vault-tour-btn-secondary)`).click();
 }
-check('tour: all nine steps show in order', walked === steps.length);
+check('tour: all ten steps show in order', walked === steps.length);
 await page.waitForTimeout(600);
 check('tour: finishing it is remembered', await page.evaluate(() => localStorage.getItem('cellar-lite:tour-done:v1') === '1'));
 
@@ -112,7 +116,7 @@ const fresh = await browser.newContext({ viewport: { width: 390, height: 800 }, 
 const fp = await fresh.newPage();
 await fp.goto(LITE);
 await fp.getByTestId('lite-bottles').waitFor();
-check('first visit: no pop-up guide, the three steps are on the page', (await fp.getByTestId('lite-help').count()) === 0 && (await fp.getByTestId('lite-steps').locator('li').count()) === 3);
+check('first visit: no pop-up guide, the three steps are on the page', (await fp.getByTestId('lite-help').count()) === 0 && (await fp.getByTestId('lite-stepper').locator('li').count()) === 3);
 await fp.getByTestId('lite-help-open').click();
 await fp.getByTestId('lite-help').waitFor();
 await fp.getByTestId('lite-help-tour').click();

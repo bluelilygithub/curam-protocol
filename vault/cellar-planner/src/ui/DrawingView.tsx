@@ -1,6 +1,8 @@
 import Konva from 'konva';
 import { useEffect, useRef, useState } from 'react';
 import { boundsOf, fitView, type Prim, type Tone } from '../views';
+import { FINISH_LOOK, type FinishKey } from '../lite/finishes';
+import { ZoomControls } from '../lite/ZoomControls';
 
 // Draws drawing primitives (millimetres, y down) with Konva. Fits the drawing until the person pans or zooms; "Fit" brings that back.
 
@@ -12,18 +14,20 @@ export type DrawingLook = 'plain' | 'warm' | 'warmWall';
 const WARM_FILL: Partial<Record<Tone, string>> = { panel: '#4b5159', glass: '#d6ebf5', stud: '#c8b698', inside: '#efe3cd', door: '#e6b95c', rack: '#b98550', rackIssue: 'rgba(239,68,68,0.55)', zone: 'rgba(245,158,11,0.18)', header: '#e4e4e0', equipment: '#a9b4bf' };
 const WARM_STROKE: Partial<Record<Tone, string>> = { panel: '#2f343a', glass: '#7ab3d1', stud: '#8c7752', inside: '#d7c7a6', door: '#b5832d', rack: '#6f4a28', rackIssue: '#ef4444', zone: '#f59e0b', header: '#9a9a96', equipment: '#5c6670' };
 
-function draw(layer: Konva.Layer, prims: Prim[], v: { scale: number; ox: number; oy: number }, look: DrawingLook = 'plain'): void {
+function draw(layer: Konva.Layer, prims: Prim[], v: { scale: number; ox: number; oy: number }, look: DrawingLook = 'plain', finish: FinishKey = 'OAK'): void {
+  const fl = FINISH_LOOK[finish];
   layer.destroyChildren();
   const X = (x: number): number => v.ox + x * v.scale, Y = (y: number): number => v.oy + y * v.scale;
   for (const p of prims) {
     if (p.kind === 'rect') {
       const w = p.w * v.scale, h = p.h * v.scale;
       const warm = look !== 'plain';
-      const fill = (warm && WARM_FILL[p.tone]) || FILL[p.tone], stroke = (warm && WARM_STROKE[p.tone]) || STROKE[p.tone];
+      const fill = (warm && WARM_FILL[p.tone]) || FILL[p.tone];
+      const stroke = p.tone === 'rack' && warm ? fl.planLine : (warm && WARM_STROKE[p.tone]) || STROKE[p.tone];
       const rack = warm && (p.tone === 'rack');
       layer.add(new Konva.Rect({
         x: X(p.x), y: Y(p.y), width: w, height: h, fill, stroke, strokeWidth: rack ? 1.5 : 1, dash: p.dash ? [6, 4] : undefined, cornerRadius: warm && p.tone !== 'inside' ? 2 : 0,
-        ...(rack ? { fillLinearGradientStartPoint: { x: 0, y: 0 }, fillLinearGradientEndPoint: { x: 0, y: h }, fillLinearGradientColorStops: [0, '#c99560', 1, '#a2723f'], shadowColor: '#000', shadowBlur: 6, shadowOpacity: 0.28, shadowOffset: { x: 2, y: 3 } } : {}),
+        ...(rack ? { fillLinearGradientStartPoint: { x: 0, y: 0 }, fillLinearGradientEndPoint: { x: 0, y: h }, fillLinearGradientColorStops: [0, fl.planFrom, 1, fl.planTo], shadowColor: '#000', shadowBlur: 6, shadowOpacity: 0.28, shadowOffset: { x: 2, y: 3 } } : {}),
       }));
       if (look === 'warm' && p.tone === 'inside') {
         // floor boards: faint lines along the longer side of the room
@@ -81,7 +85,7 @@ function draw(layer: Konva.Layer, prims: Prim[], v: { scale: number; ox: number;
 }
 
 // ctrlZoom: the mouse wheel scrolls the page and only Ctrl/Cmd + wheel zooms (for the drawing embedded in a web page, so it never traps page scrolling)
-export function DrawingView({ prims, testid, description, ctrlZoom = false, look = 'plain' }: { prims: Prim[]; testid: string; description: string; ctrlZoom?: boolean; look?: DrawingLook }) {
+export function DrawingView({ prims, testid, description, ctrlZoom = false, look = 'plain', finish = 'OAK' }: { prims: Prim[]; testid: string; description: string; ctrlZoom?: boolean; look?: DrawingLook; finish?: FinishKey }) {
   const host = useRef<HTMLDivElement>(null);
   const stage = useRef<Konva.Stage | null>(null);
   const layer = useRef<Konva.Layer | null>(null);
@@ -100,7 +104,7 @@ export function DrawingView({ prims, testid, description, ctrlZoom = false, look
     const el = host.current;
     if (!el || !layer.current) return;
     if (!touched.current) view.current = fitView(boundsOf(primsRef.current), size.w, size.h, 56);
-    draw(layer.current, primsRef.current, view.current, look);
+    draw(layer.current, primsRef.current, view.current, look, finish);
     el.dataset.prims = String(primsRef.current.length);
     el.dataset.scale = view.current.scale.toFixed(4);
   };
@@ -169,13 +173,24 @@ export function DrawingView({ prims, testid, description, ctrlZoom = false, look
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => { redraw(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [prims, size, look]);
+  useEffect(() => { redraw(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [prims, size, look, finish]);
 
+  const fit = (): void => { touched.current = false; redraw(); };
+  /** Zoom about the middle of the picture (the buttons; the wheel and pinch zoom about the pointer). */
+  const zoomBy = (f: number): void => {
+    const v = view.current, cx = size.w / 2, cy = size.h / 2;
+    const scale = Math.min(5, Math.max(0.01, v.scale * f));
+    view.current = { scale, ox: cx - ((cx - v.ox) / v.scale) * scale, oy: cy - ((cy - v.oy) / v.scale) * scale };
+    touched.current = true;
+    redraw();
+  };
   return (
     <div className="drawing" data-testid={testid} data-tour="cp-drawing">
       <div ref={host} className="drawing-canvas" data-testid={`${testid}-canvas`} role="img" aria-label={description} />
       {hint && <div className="drawing-hint" role="status">Hold Ctrl (Cmd on Mac) and scroll to zoom</div>}
-      <button type="button" className="btn fit" title="Bring the whole drawing back into view." onClick={() => { touched.current = false; redraw(); }} data-testid={`${testid}-fit`}>Fit</button>
+      {look !== 'plain'
+        ? <ZoomControls testid={testid} onIn={() => zoomBy(1.25)} onOut={() => zoomBy(0.8)} onReset={fit} canReset={touched.current} />
+        : <button type="button" className="btn fit" title="Bring the whole drawing back into view." onClick={fit} data-testid={`${testid}-fit`}>Fit</button>}
     </div>
   );
 }

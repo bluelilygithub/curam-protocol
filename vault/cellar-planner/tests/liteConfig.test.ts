@@ -1,12 +1,12 @@
 import { createRequire } from 'node:module';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { DEFAULT_CONFIG, configUrl, loadConfig, normaliseConfig, telHref, VAULT_ORIGIN, type LiteConfig } from '../src/lite/config';
+import { DEFAULT_CONFIG, accentColours, configUrl, contrastWithWhite, loadConfig, normaliseConfig, telHref, VAULT_ORIGIN, type LiteConfig } from '../src/lite/config';
 import { priceRange } from '../src/lite/price';
 import { defaultLite, liteResult, liteToProject, rackUnitCount, summaryLine } from '../src/lite/settings';
 
 const require = createRequire(import.meta.url);
 // the server's own rules (CommonJS); the browser copy must agree with them
-const server = require('../../server/config/cellarLiteConfig.js') as { DEFAULTS: unknown; validateConfig: (raw: unknown) => { config: LiteConfig; errors: string[] } };
+const server = require('../../server/config/cellarLiteConfig.js') as { DEFAULTS: unknown; contrastWithWhite: (hex: string) => number; validateConfig: (raw: unknown) => { config: LiteConfig; errors: string[] } };
 
 const withPrices = (over: Partial<LiteConfig['pricing']> = {}): LiteConfig => ({ ...DEFAULT_CONFIG, pricing: { ...DEFAULT_CONFIG.pricing, show: true, perUnit: 1000, fixed: 2000, doorSingle: 500, doorDouble: 900, rangePct: 10, roundTo: 100, ...over } });
 
@@ -24,12 +24,31 @@ describe('the browser and the server agree on what a setting is', () => {
       { pricing: { show: true, perUnit: -4, doorDouble: 'free' } },
       { promise: '  Hello\n world  ', presets: [{ name: 'A', widthMm: 2000, depthMm: 2000, heightMm: 2400, doorStyle: 'DOUBLE' }, { name: '', widthMm: 2000, depthMm: 2000, heightMm: 2400 }, { name: 'B', widthMm: 99, depthMm: 2000, heightMm: 2400 }] },
       { presets: [] },
+      { photo: { enabled: true, dailyLimit: '12', perVisitorPerHour: 5 } }, { photo: { enabled: true, dailyLimit: 9999, perVisitorPerHour: 0 } }, { photo: { enabled: 'yes' } }, { photo: 'on' }, { photo: { dailyLimit: 0 } },
+      { accent: '#1f3a5f' }, { accent: '#FFFFFF' }, { accent: 'red' }, { accent: '#4a5a2a;x' }, { accent: '#cc785c' }, { accent: 12 },
       { phone: '03 9123 4567' }, { phone: '+61 3 9123 4567' }, { phone: 'call me' }, { phone: '123' }, { phone: '' }, { phone: { a: 1 } }, { phone: '<b>1234567</b>' },
       { presets: new Array(9).fill({ name: 'x', widthMm: 2000, depthMm: 2000, heightMm: 2400, id: 'same' }) },
     ];
     for (const raw of inputs) {
       expect(normaliseConfig(raw), JSON.stringify(raw)).toEqual(server.validateConfig(raw).config);
     }
+  });
+});
+
+describe('the brand colour', () => {
+  it('the browser agrees with the server about contrast', () => {
+    expect(contrastWithWhite('#4a5a2a')).toBeCloseTo(server.contrastWithWhite('#4a5a2a'), 6);
+    expect(contrastWithWhite('#ffffff')).toBeCloseTo(1, 3);
+  });
+  it('derives a darker shade and a light tint for the page', () => {
+    const c = accentColours('#4a5a2a');
+    expect(c.main).toBe('#4a5a2a');
+    expect(c.dark).toMatch(/^#[0-9a-f]{6}$/); expect(c.soft).toMatch(/^#[0-9a-f]{6}$/);
+    expect(contrastWithWhite(c.dark)).toBeGreaterThan(contrastWithWhite('#4a5a2a'));
+    expect(parseInt(c.soft.slice(1), 16)).toBeGreaterThan(parseInt('e0e0e0', 16));
+  });
+  it('a hostile value can never reach the page: it falls back to the default', () => {
+    for (const bad of ['red;} body{display:none', 'url(javascript:1)', '#4a5a2a" onload="x', 12, null]) expect(normaliseConfig({ accent: bad }).accent).toBe('#4a5a2a');
   });
 });
 

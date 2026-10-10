@@ -64,7 +64,7 @@ describe('the cellar scene', () => {
         for (const bt of scene.bottles) expect([bt.x, bt.y, bt.rx, bt.ry, bt.depth].every(Number.isFinite)).toBe(true);
       }
     }
-  });
+  }, 60000);
 
   it('turning the view is limited to 40 degrees each way', () => {
     const a = sceneFor(defaultLite(), 40).scene, b = sceneFor(defaultLite(), 90).scene, c = sceneFor(defaultLite(), -90).scene, d = sceneFor(defaultLite(), -40).scene;

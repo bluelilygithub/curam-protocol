@@ -14,26 +14,30 @@ export interface LiteTourStep {
   on?: 'top' | 'bottom' | 'left' | 'right';
   /** Which drawing must be showing for the step. */
   view?: 'inside' | 'plan' | 'racks';
+  /** Which panel (1 space, 2 racking and finishes, 3 review) must be showing for the step. */
+  step?: 1 | 2 | 3;
 }
 
-/** The tour as data (pure, tested against the screen's data-tour hooks). */
+/** The tour as data (pure, tested against the screen's data-tour hooks). `step` is which of the three panels must be showing. */
 export const LITE_TOUR_STEPS: LiteTourStep[] = [
-  { id: 'lt-welcome', title: 'Plan your wine cellar', text: 'This takes about a minute. You tell us how big the room is and how you keep your wine, and you see a drawing and an estimate of how many bottles it holds. Nothing is final and nothing is sent anywhere until you ask for a quote.' },
-  { id: 'lt-size', title: '1. How big is the cellar?', target: 'lt-size', on: 'bottom', text: 'Enter the space <b>inside</b> the cellar, from wall to wall, in millimetres (1 metre is 1000 mm, so a 2.7 metre wall is 2700). <b>Width</b> is side to side on the drawing, <b>depth</b> is front to back, and <b>height</b> is floor to ceiling. Not measured yet? Use your best guess: we always confirm the real sizes on site.' },
-  { id: 'lt-door', title: '2. Where is the door, and what kind?', target: 'lt-door', on: 'bottom', text: 'Pick the side of the drawing the door is on. <b>South</b> is the bottom of the drawing, <b>North</b> the top, <b>West</b> the left and <b>East</b> the right. Then choose a <b>single door</b> (one door, about 970 mm wide) or a <b>double door</b> (a pair that open together, about 1500 mm across: easier to carry things through, but it takes more of the wall). The drawing shows the door and the way it swings open.' },
-  { id: 'lt-bottle', title: '3. What do you mostly store?', target: 'lt-bottle', on: 'bottom', text: 'Bottles are different shapes. <b>Bordeaux</b> is the usual tall, straight-sided bottle (most reds, many whites). <b>Burgundy</b> is wider, <b>Champagne</b> wider again, and a <b>Magnum</b> holds 1.5 litres. Choose the one you have most of: wider bottles need more room, so fewer fit.' },
-  { id: 'lt-mode', title: '4. How many bottles?', target: 'lt-mode', on: 'bottom', text: 'Choose <b>As many as fit</b> to fill every wall, or <b>A number I choose</b> and type how many you want. We then use only as much rack as that needs.' },
-  { id: 'lt-result', title: 'Your estimate', target: 'lt-result', on: 'top', text: 'This is roughly how many bottles your choices hold. It is built from <b>standard-size rack units</b> (ready-made blocks about 600 mm wide), so it is an <b>estimate only, not a quote</b>. It updates as you change anything above, and tells you in plain words if a size cannot be built.' },
-  { id: 'lt-drawing', title: 'The drawings', target: 'lt-drawing', on: 'top', view: 'inside', text: '<b>Inside view</b> shows what the cellar looks like from the door, with the racks full of bottles; drag to look around. <b>Plan from above</b> shows the room as if you were looking down from the ceiling: the walls, the door, and the racks in timber. <b>Racks on a wall</b> shows the wall as you would see it standing inside, with every bottle drawn. Each timber block is one or more standard rack units placed whole, so the empty gaps you may see at the end of a wall are just left-over space. Drag to move the drawing, pinch or scroll to zoom, and press <b>Fit</b> to bring it all back.' },
-  { id: 'lt-quote', title: 'Happy with it?', target: 'lt-quote', on: 'top', text: 'Press <b>Request a quote</b> and your choices are added to the enquiry form on this page (or you can copy them into an email). Someone will check the sizes with you and give you a real price. Change anything and try again whenever you like.' },
-  { id: 'lt-done', title: 'That is all', text: 'Play with the numbers: nothing is saved or sent until you ask for a quote. The <b>Help</b> button at the top explains everything again in plain words, and <b>Take the tour</b> shows this again.' },
+  { id: 'lt-welcome', title: 'Plan your wine cellar', step: 1, text: 'This takes about a minute, in three steps: your <b>space</b>, your <b>racking and finishes</b>, then a <b>review</b>. You see your cellar and an estimate of how many bottles it holds as you go. Nothing is final and nothing is sent anywhere until you ask for a quote.' },
+  { id: 'lt-size', title: '1. How big is the cellar?', target: 'lt-size', on: 'right', step: 1, text: 'Enter the space <b>inside</b> the cellar, wall to wall. Type it, or use the <b>minus</b> and <b>plus</b> buttons. Choose <b>metres</b>, <b>feet</b> or <b>millimetres</b> to suit you. Not measured yet? Try a <b>Quick start</b> room above and change it later.' },
+  { id: 'lt-door', title: '2. Where is the door?', target: 'lt-door', on: 'right', step: 1, text: 'Tap the wall the door is on in the little picture, then choose where along that wall it sits (<b>left, centre or right</b>, as you see it standing outside) and whether it is a <b>single</b> or <b>double</b> door.' },
+  { id: 'lt-bottle', title: '3. What do you mostly store?', target: 'lt-bottle', on: 'right', step: 2, text: 'Bottles are different shapes. <b>Bordeaux</b> is the usual tall, straight-sided bottle, <b>Burgundy</b> is wider, <b>Champagne</b> wider again, and a <b>Magnum</b> holds 1.5 litres. Choose the one you have most of: wider bottles mean fewer fit.' },
+  { id: 'lt-mode', title: '4. How many bottles?', target: 'lt-mode', on: 'right', step: 2, text: 'Choose <b>As many as fit</b> to fill every wall, or <b>A number I choose</b> and say how many you want. We then use only as much rack as that needs.' },
+  { id: 'lt-finish', title: '5. Pick a finish', target: 'lt-finish', on: 'right', step: 2, text: 'Choose <b>oak</b>, <b>walnut</b> or <b>black</b> racks and watch the picture change. The finish changes how the racks look, not how many bottles fit.' },
+  { id: 'lt-result', title: 'Your estimate', target: 'lt-result', on: 'top', step: 3, text: 'This is roughly how many bottles your choices hold, the floor space, and your setup in a few words. It is built from <b>standard-size rack units</b>, so it is an <b>estimate only, not a quote</b>. It updates as you change anything, and tells you in plain words if a size cannot be built.' },
+  { id: 'lt-drawing', title: 'The pictures', target: 'lt-drawing', on: 'left', view: 'inside', step: 3, text: '<b>3D</b> shows what the cellar looks like from the door, with the sizes marked: drag to look around and use the buttons to zoom. <b>Plan</b> looks down from the ceiling. <b>Racks</b> shows one wall with every bottle drawn. If you see a <b>Photo</b> button, it makes a realistic picture on request. In <b>Review</b> you can download your plan as a PDF.' },
+  { id: 'lt-quote', title: 'Happy with it?', target: 'lt-quote', on: 'top', step: 3, text: 'Press <b>Request a quote</b> and your choices are added to the enquiry form (or you can copy them into an email). Someone will check the sizes with you and give you a real price. Change anything and try again whenever you like.' },
+  { id: 'lt-done', title: 'That is all', step: 1, text: 'Play with the numbers: nothing is saved or sent until you ask for a quote. The <b>Help</b> button at the top explains everything again in plain words, <b>Save design</b> keeps a link to your design, and <b>Take the tour</b> shows this again.' },
 ];
 
 const selectorOf = (target: string): string => `[data-tour="${target}"]`;
 
-export function startLiteTour(opts: { setView(v: 'inside' | 'plan' | 'racks'): void; getView(): 'inside' | 'plan' | 'racks' }): InstanceType<typeof Shepherd.Tour> {
+export function startLiteTour(opts: { setView(v: 'inside' | 'plan' | 'racks'): void; getView(): 'inside' | 'plan' | 'racks'; setStep(n: number): void; getStep(): number }): InstanceType<typeof Shepherd.Tour> {
   if (Shepherd.activeTour) Shepherd.activeTour.cancel();
   const before = opts.getView();
+  const beforeStep = opts.getStep();
   const tour = new Shepherd.Tour({
     useModalOverlay: true, exitOnEsc: true, keyboardNavigation: true,
     defaultStepOptions: { scrollTo: { behavior: 'smooth', block: 'center' }, cancelIcon: { enabled: true }, classes: 'vault-tour' },
@@ -41,6 +45,7 @@ export function startLiteTour(opts: { setView(v: 'inside' | 'plan' | 'racks'): v
   const finish = (): void => {
     try { window.localStorage.setItem(LITE_TOUR_KEY, '1'); } catch { /* it will simply be offered again */ }
     opts.setView(before);
+    opts.setStep(beforeStep);
   };
   tour.on('complete', finish);
   tour.on('cancel', finish);
@@ -53,11 +58,13 @@ export function startLiteTour(opts: { setView(v: 'inside' | 'plan' | 'racks'): v
       ...(s.target ? { attachTo: { element: selectorOf(s.target), on: s.on ?? 'bottom' } } : {}),
       beforeShowPromise: () => new Promise<void>((resolve) => {
         if (s.view && opts.getView() !== s.view) opts.setView(s.view);
+        const stepChanged = !!s.step && opts.getStep() !== s.step;
+        if (s.step && stepChanged) opts.setStep(s.step);
         window.setTimeout(() => {
           // a step whose element is not on screen is shown as a centred card instead
           if (s.target && !document.querySelector(selectorOf(s.target))) { const step = tour.getById(s.id); if (step) step.options.attachTo = undefined; }
           resolve();
-        }, s.view ? 450 : 50);
+        }, s.view || stepChanged ? 450 : 50);
       }),
       when: { show() { injectStepCounter(i + 1, LITE_TOUR_STEPS.length); } },
       buttons: first

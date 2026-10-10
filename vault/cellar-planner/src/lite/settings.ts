@@ -13,6 +13,13 @@ export const WALLS: readonly WallSide[] = ['NORTH', 'EAST', 'SOUTH', 'WEST'];
 export const BOTTLES: readonly BottleProfileId[] = ['BORDEAUX', 'BURGUNDY', 'CHAMPAGNE', 'MAGNUM'];
 export type LiteMode = 'FILL' | 'TARGET';
 export type DoorStyle = 'SINGLE' | 'DOUBLE';
+/** Where along its wall the door sits, as seen standing outside facing it: toward the left end, the middle, or the right end. */
+export type DoorPosition = 'CENTRE' | 'LEFT' | 'RIGHT';
+export const DOOR_POSITIONS: readonly DoorPosition[] = ['CENTRE', 'LEFT', 'RIGHT'];
+/** The rack timber (or black) shown in the pictures and written into the enquiry. It does not change the bottle count. */
+export type Finish = 'OAK' | 'WALNUT' | 'BLACK';
+export const FINISHES: readonly Finish[] = ['OAK', 'WALNUT', 'BLACK'];
+export const FINISH_NAMES: Record<Finish, string> = { OAK: 'Oak', WALNUT: 'Walnut', BLACK: 'Black' };
 /** Typical opening widths (unconfirmed): one 970 mm leaf as on the sample drawings, or two leaves of 750 mm. */
 export const LITE_DOOR_WIDTH_MM: Record<DoorStyle, number> = { SINGLE: 970, DOUBLE: 1500 };
 
@@ -24,6 +31,8 @@ export interface LiteSettings {
   doorWall: WallSide;
   /** One door leaf or two. */
   doorStyle: DoorStyle;
+  doorPos: DoorPosition;
+  finish: Finish;
   bottle: BottleProfileId;
   mode: LiteMode;
   /** Bottles wanted (TARGET mode only). */
@@ -37,7 +46,7 @@ export const LIMITS = {
   widthMm: [1000, 8000], depthMm: [1000, 8000], heightMm: [1800, 3200], target: [1, 5000],
 } as const;
 
-export const defaultLite = (): LiteSettings => ({ widthMm: 2750, depthMm: 1565, heightMm: 2150, doorWall: 'SOUTH', doorStyle: 'SINGLE', bottle: 'BORDEAUX', mode: 'FILL', target: 500 });
+export const defaultLite = (): LiteSettings => ({ widthMm: 2750, depthMm: 1565, heightMm: 2150, doorWall: 'SOUTH', doorStyle: 'SINGLE', doorPos: 'CENTRE', finish: 'OAK', bottle: 'BORDEAUX', mode: 'FILL', target: 500 });
 
 const clamp = (n: number, [lo, hi]: readonly [number, number]): number => Math.min(hi, Math.max(lo, Math.round(Number.isFinite(n) ? n : lo)));
 
@@ -47,6 +56,8 @@ export function normaliseLite(s: LiteSettings): LiteSettings {
     widthMm: clamp(s.widthMm, LIMITS.widthMm), depthMm: clamp(s.depthMm, LIMITS.depthMm), heightMm: clamp(s.heightMm, LIMITS.heightMm),
     doorWall: WALLS.includes(s.doorWall) ? s.doorWall : 'SOUTH',
     doorStyle: s.doorStyle === 'DOUBLE' ? 'DOUBLE' : 'SINGLE',
+    doorPos: DOOR_POSITIONS.includes(s.doorPos) ? s.doorPos : 'CENTRE',
+    finish: FINISHES.includes(s.finish) ? s.finish : 'OAK',
     bottle: BOTTLES.includes(s.bottle) ? s.bottle : 'BORDEAUX',
     mode: s.mode === 'TARGET' ? 'TARGET' : 'FILL',
     target: clamp(s.target, LIMITS.target),
@@ -61,19 +72,35 @@ function doorWidth(s: LiteSettings, outerW: number, outerD: number, cfg: LiteCon
   return Math.max(0, Math.min(s.doorStyle === 'DOUBLE' ? cfg.doors.doubleMm : cfg.doors.singleMm, fit));
 }
 
+/**
+ * Where the door's near edge sits, measured from the north or west end of its wall (the engine's own measure), for "left / centre / right as seen
+ * from outside". Leaves 100 mm of fixed panel at the end it is pushed toward. Undefined = centred (the engine's default).
+ */
+function doorOffset(s: LiteSettings, wallLen: number, doorWidth: number): number | undefined {
+  if (s.doorPos === 'CENTRE') return undefined;
+  const free = wallLen - doorWidth, margin = Math.min(100, Math.floor(free / 2));
+  // standing outside facing the wall, your left hand is: south wall -> west end, west wall -> north end (both the START of the wall's measure);
+  // north wall -> east end, east wall -> south end (the other end)
+  const leftIsStart = s.doorWall === 'SOUTH' || s.doorWall === 'WEST';
+  const atStart = (s.doorPos === 'LEFT') === leftIsStart;
+  return atStart ? margin : free - margin;
+}
+
 /** Build the project: the Carter Noir sample enclosure resized to the chosen inside size, best-guess racks on every wall, trimmed to a target if asked. */
 export function liteToProject(input: LiteSettings, cfg: LiteConfig = DEFAULT_CONFIG): AppProject {
   const s = normaliseLite(input);
   const g = goldenCase02();
   const outerW = s.widthMm + g.walls.WEST.buildUpMm + g.walls.EAST.buildUpMm;
   const outerD = s.depthMm + g.walls.NORTH.buildUpMm + g.walls.SOUTH.buildUpMm;
+  const dw = doorWidth(s, outerW, outerD, cfg);
+  const offsetMm = doorOffset(s, s.doorWall === 'NORTH' || s.doorWall === 'SOUTH' ? outerW : outerD, dw);
   const enclosure = {
     ...g,
     outerWidthMm: outerW,
     outerDepthMm: outerD,
     heightMm: s.heightMm + g.ceilingBuildUpMm + g.floorBuildUpMm,
     // the sample's door is 2120 mm tall; in a lower room the door is simply made shorter (80 mm under the ceiling), as it would be in real life
-    door: { ...g.door, heightMm: Math.min(g.door.heightMm, s.heightMm - 80), wall: s.doorWall, widthMm: doorWidth(s, outerW, outerD, cfg), ...(s.doorStyle === 'DOUBLE' ? { leaves: 2 as const } : {}) },
+    door: { ...g.door, heightMm: Math.min(g.door.heightMm, s.heightMm - 80), wall: s.doorWall, widthMm: dw, ...(offsetMm !== undefined ? { offsetMm } : {}), ...(s.doorStyle === 'DOUBLE' ? { leaves: 2 as const } : {}) },
     // the sample's conditioner and vents sit at positions measured for a 2850 mm header; drop any that no longer fit a narrower room
     header: g.header.filter((c) => c.xMm + c.widthMm <= outerW),
   };
@@ -136,7 +163,10 @@ const unb64 = (t: string): string => atob(t.replace(/-/g, '+').replace(/_/g, '/'
 
 export function encodeDesign(input: LiteSettings): string {
   const s = normaliseLite(input);
-  return `CL${LITE_VERSION}.${b64(JSON.stringify([s.widthMm, s.depthMm, s.heightMm, WALLS.indexOf(s.doorWall), BOTTLES.indexOf(s.bottle), s.mode === 'TARGET' ? 1 : 0, s.target, s.doorStyle === 'DOUBLE' ? 1 : 0]))}`;
+  const a = [s.widthMm, s.depthMm, s.heightMm, WALLS.indexOf(s.doorWall), BOTTLES.indexOf(s.bottle), s.mode === 'TARGET' ? 1 : 0, s.target, s.doorStyle === 'DOUBLE' ? 1 : 0, DOOR_POSITIONS.indexOf(s.doorPos), FINISHES.indexOf(s.finish)];
+  // the door position and finish (9th and 10th values) are left off while they are the standard ones, so every design made before they existed keeps the exact same code
+  while (a.length > 8 && a[a.length - 1] === 0) a.pop();
+  return `CL${LITE_VERSION}.${b64(JSON.stringify(a))}`;
 }
 
 /** Null when the text is not a design code (or is from a newer version this build cannot read). Out-of-range values are clamped, never trusted. */
@@ -145,10 +175,10 @@ export function decodeDesign(text: string): LiteSettings | null {
   if (!m || Number(m[1]) !== LITE_VERSION) return null;
   try {
     const a: unknown = JSON.parse(unb64(m[2]));
-    if (!Array.isArray(a) || (a.length !== 7 && a.length !== 8) || !a.every((n) => typeof n === 'number')) return null;
-    // the eighth value (door style) is absent from codes made before double doors existed: those were single doors
-    const [widthMm, depthMm, heightMm, w, b, mode, target, door] = a as number[];
-    return normaliseLite({ widthMm, depthMm, heightMm, doorWall: WALLS[w] ?? 'SOUTH', doorStyle: door === 1 ? 'DOUBLE' : 'SINGLE', bottle: BOTTLES[b] ?? 'BORDEAUX', mode: mode === 1 ? 'TARGET' : 'FILL', target });
+    if (!Array.isArray(a) || a.length < 7 || a.length > 10 || !a.every((n) => typeof n === 'number')) return null;
+    // the eighth value (door style) is absent from codes made before double doors existed (those were single doors); the ninth and tenth (door position, finish) from codes made before them (standard ones)
+    const [widthMm, depthMm, heightMm, w, b, mode, target, door, pos, fin] = a as number[];
+    return normaliseLite({ widthMm, depthMm, heightMm, doorWall: WALLS[w] ?? 'SOUTH', doorStyle: door === 1 ? 'DOUBLE' : 'SINGLE', doorPos: DOOR_POSITIONS[pos] ?? 'CENTRE', finish: FINISHES[fin] ?? 'OAK', bottle: BOTTLES[b] ?? 'BORDEAUX', mode: mode === 1 ? 'TARGET' : 'FILL', target });
   } catch { return null; }
 }
 
@@ -158,5 +188,5 @@ export const rackUnitCount = (p: AppProject): number => p.runs.reduce((n, r) => 
 /** One plain line for the enquiry. */
 export function summaryLine(s: LiteSettings, bottles: number, cfg: LiteConfig = DEFAULT_CONFIG): string {
   const n = normaliseLite(s);
-  return `Inside ${n.widthMm} x ${n.depthMm} x ${n.heightMm} mm, ${n.doorStyle === 'DOUBLE' ? 'double' : 'single'} door on the ${n.doorWall.toLowerCase()} wall, ${BOTTLE_PROFILES[n.bottle].label}, about ${bottles} bottles using standard rack units about ${cfg.rack.unitWidthMm} mm wide (estimate only, final site measure required)`;
+  return `Inside ${n.widthMm} x ${n.depthMm} x ${n.heightMm} mm, ${n.doorStyle === 'DOUBLE' ? 'double' : 'single'} door on the ${n.doorWall.toLowerCase()} wall${n.doorPos === 'CENTRE' ? '' : `, toward the ${n.doorPos.toLowerCase()}`}, ${BOTTLE_PROFILES[n.bottle].label}${n.finish === 'OAK' ? '' : `, ${FINISH_NAMES[n.finish].toLowerCase()} racks`}, about ${bottles} bottles using standard rack units about ${cfg.rack.unitWidthMm} mm wide (estimate only, final site measure required)`;
 }
