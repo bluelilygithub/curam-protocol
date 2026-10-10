@@ -19,8 +19,6 @@ export interface LiteConfig {
   phone: string;
   /** Brand colour of buttons and highlights, #rrggbb (dark enough for white text). */
   accent: string;
-  /** The AI Photo tab: whether it is switched on (the limits are the server's business; they are here only so the shape matches). */
-  photo: { enabled: boolean; dailyLimit: number; perVisitorPerHour: number };
   rack: { unitWidthMm: number; unitHeightMm: number };
   doors: { singleMm: number; doubleMm: number };
   pricing: LitePricing;
@@ -33,7 +31,6 @@ export const DEFAULT_CONFIG: LiteConfig = {
   quoteNote: 'We usually reply within one business day.',
   phone: '',
   accent: '#4a5a2a',
-  photo: { enabled: false, dailyLimit: 30, perVisitorPerHour: 3 },
   rack: { unitWidthMm: 600, unitHeightMm: 2000 },
   doors: { singleMm: 970, doubleMm: 1500 },
   pricing: {
@@ -128,11 +125,6 @@ export function normaliseConfig(raw: unknown): LiteConfig {
     quoteNote: src.quoteNote === undefined ? D.quoteNote : text(src.quoteNote, 200),
     phone: cleanPhone(src.phone),
     accent: cleanAccent(src.accent),
-    photo: {
-      enabled: isObj(src.photo) && src.photo.enabled === true,
-      dailyLimit: int(isObj(src.photo) ? src.photo.dailyLimit : undefined, [0, 500], D.photo.dailyLimit),
-      perVisitorPerHour: int(isObj(src.photo) ? src.photo.perVisitorPerHour : undefined, [1, 30], D.photo.perVisitorPerHour),
-    },
     rack: { unitWidthMm: int(rack.unitWidthMm, R.unitWidthMm, D.rack.unitWidthMm), unitHeightMm: int(rack.unitHeightMm, R.unitHeightMm, D.rack.unitHeightMm) },
     doors: { singleMm: int(doors.singleMm, R.doorSingleMm, D.doors.singleMm), doubleMm: int(doors.doubleMm, R.doorDoubleMm, D.doors.doubleMm) },
     pricing,

@@ -586,16 +586,8 @@ async function initSchema() {
       )
     `);
 
-    // Cellar Planner lite "Photo" tab: the AI photos made so far (a key is a hash of the design and input picture, so a repeat costs nothing)
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS cellar_lite_photos (
-        key         TEXT PRIMARY KEY,
-        mime        TEXT NOT NULL,
-        data        BYTEA NOT NULL,
-        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `);
-    await client.query('CREATE INDEX IF NOT EXISTS idx_cellar_lite_photos_created ON cellar_lite_photos ("createdAt")');
+    // the Cellar Planner lite "Photo" tab was removed; its table (AI photos, nothing else) may exist from an earlier deploy
+    await client.query('DROP TABLE IF EXISTS cellar_lite_photos');
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS search_logs (

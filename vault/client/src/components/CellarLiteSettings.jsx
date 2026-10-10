@@ -18,7 +18,6 @@ const toForm = (c) => ({
   quoteNote: c.quoteNote ?? '',
   phone: c.phone ?? '',
   accent: c.accent ?? '#4a5a2a',
-  photoOn: !!c.photo?.enabled, photoDaily: String(c.photo?.dailyLimit ?? 30), photoPerVisitor: String(c.photo?.perVisitorPerHour ?? 3),
   unitWidthMm: String(c.rack.unitWidthMm), unitHeightMm: String(c.rack.unitHeightMm),
   singleMm: String(c.doors.singleMm), doubleMm: String(c.doors.doubleMm),
   show: !!c.pricing.show, currency: c.pricing.currency ?? '$',
@@ -32,7 +31,6 @@ const toConfig = (f) => ({
   quoteNote: f.quoteNote,
   phone: f.phone,
   accent: f.accent,
-  photo: { enabled: f.photoOn, dailyLimit: f.photoDaily, perVisitorPerHour: f.photoPerVisitor },
   rack: { unitWidthMm: f.unitWidthMm, unitHeightMm: f.unitHeightMm },
   doors: { singleMm: f.singleMm, doubleMm: f.doubleMm },
   pricing: { show: f.show, currency: f.currency, fixed: f.fixed, perUnit: f.perUnit, doorSingle: f.doorSingle, doorDouble: f.doorDouble, rangePct: f.rangePct, roundTo: f.roundTo, note: f.note },
@@ -63,7 +61,6 @@ export default function CellarLiteSettings({ onDirtyChange }) {
   const [saved, setSaved] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [exampleUnits, setExampleUnits] = useState('12');
-  const [usage, setUsage] = useState({ photosToday: 0, photoReady: false });
 
   const load = useCallback(async () => {
     setLoadError('');
@@ -74,7 +71,6 @@ export default function CellarLiteSettings({ onDirtyChange }) {
       setForm(toForm(data.config));
       setStored(JSON.stringify(toForm(data.config)));
       setDefaults(data.defaults);
-      if (data.usage) setUsage(data.usage);
       setWarnings(data.warnings || []);
     } catch (e) {
       setLoadError(e.message || 'Could not load the settings.');
@@ -259,32 +255,6 @@ export default function CellarLiteSettings({ onDirtyChange }) {
         <Field label="Line under the heading" tip="A short line shown under the planner's heading. Good for saying it's free and quick. Leave blank to show nothing." hint="Say it's free and quick. Leave blank to show nothing.">
           <textarea value={form.promise} rows={2} maxLength={200} onChange={(e) => set('promise', e.target.value)} className={INPUT} style={FIELD_STYLE} />
         </Field>
-      </section>
-
-      <section className={CARD} style={CARD_STYLE}>
-        <div className="flex items-center gap-3">
-          <h3 className="text-base font-semibold flex-1" style={{ color: 'var(--color-text)' }}>Photo view (AI)</h3>
-          <Tooltip text={form.photoOn ? 'The Photo tab is showing to visitors. Click to switch it off. Nothing is spent while it is off.' : 'The Photo tab is hidden and nothing is spent. Click to show it to visitors (then press Save).'}>
-            <button
-              onClick={() => set('photoOn', !form.photoOn)}
-              className="text-xs px-3 py-1 rounded-lg border font-medium transition-all hover:opacity-80"
-              style={{ borderColor: form.photoOn ? 'var(--color-primary)' : 'var(--color-border)', color: form.photoOn ? 'var(--color-primary)' : 'var(--color-muted)', background: 'transparent' }}
-              aria-pressed={form.photoOn}
-              data-testid="cellar-lite-photo-toggle"
-            >
-              {form.photoOn ? 'Showing to visitors' : 'Off'}
-            </button>
-          </Tooltip>
-        </div>
-        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-          Adds a <strong>Photo</strong> button beside 3D, Plan and Racks. When a visitor presses <em>Create my photo</em>, an AI image service turns their 3D picture into a realistic-looking photo. Each new photo costs a few cents; the same design is made once and then remembered. It is labelled as an artist's impression.
-        </p>
-        {!usage.photoReady && <p className="text-xs" style={{ color: '#f59e0b' }} role="status" data-testid="cellar-lite-photo-key">The server has no image-service key (FAL_API_KEY), so photos cannot be made yet. Add it in Railway first.</p>}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Most new photos per day" tip="The total number of new photos all visitors together can make each day (UTC). When it is used up, visitors are asked to try tomorrow. Set 0 to pause new photos. Repeats of a photo already made are free and don't count." hint="0 to 500. Resets each day (UTC).">{numInput('photoDaily')}</Field>
-          <Field label="Most photos per visitor per hour" tip="How many new photos one visitor (by network address) can make in an hour, so one person can't run up the cost." hint="1 to 30.">{numInput('photoPerVisitor')}</Field>
-        </div>
-        <p className="text-xs" style={{ color: 'var(--color-text)' }} data-testid="cellar-lite-photo-usage">New photos made today: <strong>{usage.photosToday}</strong> of {form.photoDaily || '—'}.</p>
       </section>
 
       <section className={CARD} style={CARD_STYLE}>

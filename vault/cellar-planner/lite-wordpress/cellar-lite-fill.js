@@ -39,7 +39,7 @@
   var CODE_RE = /^CL\d+\.[A-Za-z0-9_-]{1,200}$/;
   var START = '--- Cellar planner design ---';
   var END = '---';
-  var EVENTS = ['start', 'preset', 'unit', 'view', 'quote', 'link_copied', 'plan_downloaded', 'price_help', 'fix', 'welcome_back', 'call', 'door_pick', 'step', 'finish', 'photo'];
+  var EVENTS = ['start', 'preset', 'unit', 'view', 'quote', 'link_copied', 'plan_downloaded', 'price_help', 'fix', 'welcome_back', 'call', 'door_pick', 'step', 'finish'];
   var wasRequested = false;
   var latest = null; // the newest valid design message { code, summary, bottles, priceText, thumb }
   var layout = null; // where the planner's big picture sits inside its frame { frame, top, bottom }

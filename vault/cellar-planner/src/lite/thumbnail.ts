@@ -20,18 +20,3 @@ export function makeThumb(scene: Scene, finish?: FinishKey): string {
     stage.destroy();
   }
 }
-
-/** The picture the Photo tab sends to be turned into a photo: the 3D view without measurements, a little larger than the phone-bar thumbnail (about 60 to 110 KB). */
-export function makeRenderImage(scene: Scene, finish?: FinishKey): string {
-  const W = 800, H = 500;
-  const holder = document.createElement('div');
-  const stage = new Konva.Stage({ container: holder, width: W, height: H });
-  try {
-    const layer = new Konva.Layer();
-    stage.add(layer);
-    paint(layer, scene, W, H, { pad: 24, labels: false, finish });
-    return stage.toDataURL({ mimeType: 'image/jpeg', quality: 0.82, pixelRatio: 1 });
-  } finally {
-    stage.destroy();
-  }
-}

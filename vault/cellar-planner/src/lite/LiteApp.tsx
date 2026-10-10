@@ -5,7 +5,6 @@ import { analyseApp, fullRuns } from '../app/model';
 import { badRunIds, planView, rackFaceView, rackWallSummary } from '../views';
 import { DrawingView } from '../ui/DrawingView';
 import { CellarView } from './CellarView';
-import { PhotoView } from './PhotoView';
 import { buildScene } from './cellarScene';
 import { makeThumb } from './thumbnail';
 import { LiteHelp, LITE_HELP_KEY } from './LiteHelp';
@@ -69,7 +68,7 @@ export function LiteApp() {
   const [draft, setDraft] = useState<Draft>(() => toDraft(start.s, readUnit()));
   const [restored, setRestored] = useState(start.restored);
   const [step, setStep] = useState(1);
-  const [view, setView] = useState<'inside' | 'plan' | 'racks' | 'photo'>('inside');
+  const [view, setView] = useState<'inside' | 'plan' | 'racks'>('inside');
   const [rackWall, setRackWall] = useState<WallSide>('NORTH');
   const [asked, setAsked] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -154,7 +153,6 @@ export function LiteApp() {
   }, [asked]);
 
   useEffect(() => { void loadConfig().then((r) => setCfg(r.config)); }, []);
-  useEffect(() => { if (view === 'photo' && !cfg.photo.enabled) setView('inside'); }, [view, cfg.photo.enabled]);
   useEffect(() => { if (restored) say('welcome_back'); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   // moving to another step puts the reader at the top of it (screen readers hear the step's name)
@@ -172,7 +170,7 @@ export function LiteApp() {
   /** Shepherd is loaded on first use, so it stays out of the page's first download. */
   const startTour = async (): Promise<void> => {
     const m = await import('./liteTour');
-    m.startLiteTour({ setView: (v) => setView(v), getView: () => (viewRef.current === 'photo' ? 'inside' : viewRef.current), setStep: (n) => setStepTracked(n, false), getStep: () => stepRef.current });
+    m.startLiteTour({ setView, getView: () => viewRef.current, setStep: (n) => setStepTracked(n, false), getStep: () => stepRef.current });
   };
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -427,7 +425,6 @@ export function LiteApp() {
               <button type="button" className={`tab${view === 'inside' ? ' on' : ''}`} aria-pressed={view === 'inside'} onClick={() => { setView('inside'); say('view', { view: 'inside' }); }} title="What the cellar looks like inside, seen from the door. Drag to look around." data-testid="lite-tab-inside">3D</button>
               <button type="button" className={`tab${view === 'plan' ? ' on' : ''}`} aria-pressed={view === 'plan'} onClick={() => { setView('plan'); say('view', { view: 'plan' }); }} title="The cellar seen from above, with the door and the racks." data-testid="lite-tab-plan">Plan</button>
               <button type="button" className={`tab${view === 'racks' ? ' on' : ''}`} aria-pressed={view === 'racks'} onClick={() => { setView('racks'); say('view', { view: 'racks' }); }} title="One wall seen from inside the cellar, with every bottle drawn." data-testid="lite-tab-racks">Racks</button>
-              {cfg.photo.enabled && <button type="button" className={`tab${view === 'photo' ? ' on' : ''}`} aria-pressed={view === 'photo'} onClick={() => { setView('photo'); say('view', { view: 'photo' }); }} title="A realistic photo-style picture of your cellar, made on request by AI." data-testid="lite-tab-photo">Photo</button>}
             </div>
           </div>
           {view === 'racks' && (
@@ -438,14 +435,12 @@ export function LiteApp() {
           <div className="lite-canvas">
             {view === 'inside'
               ? <CellarView key="inside" input={insideInput} finish={s.finish} testid="lite-inside" description={`The inside of the cellar seen from the door: ${result.bottles} bottles on racks along the walls.`} />
-              : view === 'photo'
-              ? <PhotoView key="photo" input={insideInput} finish={s.finish} doorStyle={s.doorStyle} code={code} canMake={result.problems.length === 0} onMade={() => say('photo')} />
               : view === 'plan'
               ? <DrawingView look="warm" finish={s.finish} ctrlZoom key="plan" prims={plan} testid="lite-plan" description={`Plan of the cellar from above: ${roomText} inside, door on the ${s.doorWall.toLowerCase()} wall, about ${result.bottles} bottles.`} />
               : <DrawingView look="warmWall" finish={s.finish} ctrlZoom key={`racks-${rackWall}`} prims={racks} testid="lite-racks" description={`The racks on the ${rackWall.toLowerCase()} wall seen from inside, with each bottle drawn end-on.`} />}
           </div>
           {view === 'racks' && <p className="lite-note lite-units" data-testid="lite-racks-summary" role="status"><strong>{rackWallSummary(analysis.racks, fullRuns(result.project), rackWall).text}</strong> Each circle in the picture is one bottle, so you can count them. The whole cellar is about {result.bottles}.</p>}
-          {(view === 'plan' || view === 'racks') && <p className="lite-note lite-units">The numbers drawn around the edges are sizes in millimetres.</p>}
+          {view !== 'inside' && <p className="lite-note lite-units">The numbers drawn around the edges are sizes in millimetres.</p>}
           <p className="lite-note lite-units" data-testid="lite-units">Built from standard-size rack units, about {describeLength(cfg.rack.unitWidthMm, unit)} wide, placed whole along the walls. A gap at the end of a wall is left-over space, not a mistake.</p>
         </section>
       </div>

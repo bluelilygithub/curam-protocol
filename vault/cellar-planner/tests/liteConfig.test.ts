@@ -24,7 +24,6 @@ describe('the browser and the server agree on what a setting is', () => {
       { pricing: { show: true, perUnit: -4, doorDouble: 'free' } },
       { promise: '  Hello\n world  ', presets: [{ name: 'A', widthMm: 2000, depthMm: 2000, heightMm: 2400, doorStyle: 'DOUBLE' }, { name: '', widthMm: 2000, depthMm: 2000, heightMm: 2400 }, { name: 'B', widthMm: 99, depthMm: 2000, heightMm: 2400 }] },
       { presets: [] },
-      { photo: { enabled: true, dailyLimit: '12', perVisitorPerHour: 5 } }, { photo: { enabled: true, dailyLimit: 9999, perVisitorPerHour: 0 } }, { photo: { enabled: 'yes' } }, { photo: 'on' }, { photo: { dailyLimit: 0 } },
       { accent: '#1f3a5f' }, { accent: '#FFFFFF' }, { accent: 'red' }, { accent: '#4a5a2a;x' }, { accent: '#cc785c' }, { accent: 12 },
       { phone: '03 9123 4567' }, { phone: '+61 3 9123 4567' }, { phone: 'call me' }, { phone: '123' }, { phone: '' }, { phone: { a: 1 } }, { phone: '<b>1234567</b>' },
       { presets: new Array(9).fill({ name: 'x', widthMm: 2000, depthMm: 2000, heightMm: 2400, id: 'same' }) },

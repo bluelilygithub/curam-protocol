@@ -13,7 +13,6 @@ const LIMITS = {
   doorSingleMm: [700, 1300], doorDoubleMm: [1200, 2400],
   price: [0, 1000000], rangePct: [0, 50],
   roomWidthMm: [1000, 8000], roomDepthMm: [1000, 8000], roomHeightMm: [1800, 3200],
-  photoDaily: [0, 500], photoPerVisitor: [1, 30],
 };
 const ROUND_TO = [1, 10, 50, 100, 500, 1000];
 const MAX_PRESETS = 6;
@@ -24,8 +23,6 @@ const DEFAULTS = Object.freeze({
   quoteNote: 'We usually reply within one business day.',
   phone: '',
   accent: '#4a5a2a',
-  // the AI "Photo" tab: off until the owner switches it on; each new photo costs a few cents, so there is a daily cap and a per-visitor limit
-  photo: { enabled: false, dailyLimit: 30, perVisitorPerHour: 3 },
   rack: { unitWidthMm: 600, unitHeightMm: 2000 },
   doors: { singleMm: 970, doubleMm: 1500 },
   pricing: {
@@ -144,11 +141,6 @@ function validateConfig(raw) {
     quoteNote: src.quoteNote === undefined ? D.quoteNote : cleanText(src.quoteNote, 200),
     phone: cleanPhone(src.phone),
     accent: cleanAccent(src.accent),
-    photo: {
-      enabled: isObj(src.photo) && src.photo.enabled === true,
-      dailyLimit: int(isObj(src.photo) ? src.photo.dailyLimit : undefined, LIMITS.photoDaily, D.photo.dailyLimit, 'The daily photo limit'),
-      perVisitorPerHour: int(isObj(src.photo) ? src.photo.perVisitorPerHour : undefined, LIMITS.photoPerVisitor, D.photo.perVisitorPerHour, 'The photos per visitor per hour'),
-    },
     rack: {
       unitWidthMm: int(rack.unitWidthMm, LIMITS.unitWidthMm, D.rack.unitWidthMm, 'The rack unit width'),
       unitHeightMm: int(rack.unitHeightMm, LIMITS.unitHeightMm, D.rack.unitHeightMm, 'The rack unit height'),
@@ -163,11 +155,10 @@ function validateConfig(raw) {
   return { config, errors };
 }
 
-/** What the public endpoint may say. Unpublished prices are never sent: with `show` off the amounts are blanked. The photo limits are the owner's business, not the visitor's: only on/off is sent. */
+/** What the public endpoint may say. Unpublished prices are never sent: with `show` off the amounts are blanked. */
 function publicView(config) {
-  const out = { ...config, photo: { enabled: config.photo.enabled } };
-  if (config.pricing.show) return out;
-  return { ...out, pricing: { ...config.pricing, fixed: null, perUnit: null, doorSingle: null, doorDouble: null } };
+  if (config.pricing.show) return config;
+  return { ...config, pricing: { ...config.pricing, fixed: null, perUnit: null, doorSingle: null, doorDouble: null } };
 }
 
 module.exports = { contrastWithWhite, KEY, LIMITS, ROUND_TO, MAX_PRESETS, DEFAULTS, validateConfig, publicView };

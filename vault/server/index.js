@@ -116,19 +116,6 @@ app.use('/api/gmail', require('./routes/gmail'));
 app.use('/api/gsc', require('./routes/gsc'));
 app.use('/api/calendar', require('./routes/calendar'));
 
-// Cellar Planner LITE "Photo" tab (public, called from the business's own website; off until the owner switches it on, capped, rate limited).
-{
-  const { createCellarLitePhotoRouter } = require('./routes/cellarLitePhotoRouter');
-  const { capture } = require('./services/SuggestionService');
-  const report = async (title, body) => {
-    try {
-      const a = await pool.query('SELECT id FROM users WHERE "isAdmin" = TRUE ORDER BY id LIMIT 1');
-      if (!a.rows.length) return;
-      await capture({ userId: a.rows[0].id, source: 'cellarLitePhoto', category: 'alert', fingerprint: `cellarLitePhoto:${title}`, title, body, context: 'server/routes/cellarLitePhotoRouter.js' });
-    } catch { /* reporting must never break a visitor's request */ }
-  };
-  app.use('/api/cellar-lite/photo', createCellarLitePhotoRouter({ pool, loadConfig: async () => (await cellarLiteConfig.load()).config, report }));
-}
 const { requireAuth, requireAdmin, requireFeature } = require('./middleware/auth');
 app.use('/api', requireAuth);
 
