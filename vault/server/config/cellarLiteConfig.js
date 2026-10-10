@@ -17,6 +17,7 @@ const LIMITS = {
   price: [0, 1000000], rangePct: [0, 50],
   roomWidthMm: [1000, 8000], roomDepthMm: [1000, 8000], roomHeightMm: [1800, 3200],
   quoteValidityDays: [1, 365],
+  panelConductivity: [0.01, 0.1], glassU: [0.5, 6], floorU: [0.1, 6], internalGainsW: [0, 5000], marginPct: [0, 100], targetC: [0, 25], ambientC: [15, 50],
 };
 const ROUND_TO = [1, 10, 50, 100, 500, 1000];
 const MAX_PRESETS = 6;
@@ -44,7 +45,15 @@ const DEFAULTS = Object.freeze({
   },
   // the staff quote PDF: who it is from and the owner's own terms. Never sent to the public tool.
   quote: { businessName: '', details: '', terms: '', validityDays: 30, gstNote: '' },
+  // the staff planner's INDICATIVE cooling estimate: the assumptions behind it, owner-editable. Not engineering advice: HVAC sign-off is always needed.
+  //   panelConductivity: thermal conductivity of the insulation, W/m.K (polyurethane foam is about 0.025); wall U = conductivity / thickness in metres
+  //   glassU: U-value of the glass and glazed doors, W/m2.K (the Kings Winehaus guide the advisories quote asks for about 1.4)
+  //   floorU: U-value of a floor with no build-up entered (an uninsulated slab), W/m2.K
+  //   internalGainsW: heat from lights, people and new stock, watts. marginPct: safety margin on top, per cent.
+  //   targetC / ambientC: the cellar's target temperature and the hottest outside design temperature (each design may override them).
+  cooling: { panelConductivity: 0.025, glassU: 1.4, floorU: 1, internalGainsW: 100, marginPct: 20, targetC: 14, ambientC: 35 },
   presets: [
+
     { id: 'small', name: 'Small cellar', widthMm: 1800, depthMm: 1500, heightMm: 2400, doorStyle: 'SINGLE' },
     { id: 'walk-in', name: 'Walk-in cellar', widthMm: 2750, depthMm: 1565, heightMm: 2150, doorStyle: 'SINGLE' },
     { id: 'large', name: 'Large cellar', widthMm: 4000, depthMm: 3000, heightMm: 2400, doorStyle: 'DOUBLE' },
@@ -214,6 +223,23 @@ function validateConfig(raw) {
     gstNote: q.gstNote === undefined ? D.quote.gstNote : cleanText(q.gstNote, 120),
   };
 
+  const cl = isObj(src.cooling) ? src.cooling : {};
+  const num = (v, [lo, hi], fallback, label) => {
+    if (v === undefined || v === null || v === '') return fallback;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < lo || n > hi) { errors.push(`${label} must be between ${lo} and ${hi}.`); return fallback; }
+    return Math.round(n * 1000) / 1000;
+  };
+  const cooling = {
+    panelConductivity: num(cl.panelConductivity, LIMITS.panelConductivity, D.cooling.panelConductivity, 'The insulation conductivity'),
+    glassU: num(cl.glassU, LIMITS.glassU, D.cooling.glassU, 'The glass U-value'),
+    floorU: num(cl.floorU, LIMITS.floorU, D.cooling.floorU, 'The uninsulated floor U-value'),
+    internalGainsW: num(cl.internalGainsW, LIMITS.internalGainsW, D.cooling.internalGainsW, 'The internal heat gains'),
+    marginPct: num(cl.marginPct, LIMITS.marginPct, D.cooling.marginPct, 'The cooling safety margin'),
+    targetC: num(cl.targetC, LIMITS.targetC, D.cooling.targetC, 'The target temperature'),
+    ambientC: num(cl.ambientC, LIMITS.ambientC, D.cooling.ambientC, 'The hottest outside temperature'),
+  };
+
   const config = {
     version: 1,
     promise: src.promise === undefined ? D.promise : cleanText(src.promise, 200),
@@ -229,6 +255,7 @@ function validateConfig(raw) {
     },
     pricing,
     quote,
+    cooling,
     presets,
   };
   return { config, errors };
@@ -236,8 +263,8 @@ function validateConfig(raw) {
 
 /** What the public endpoint may say. Unpublished prices are never sent: with `show` off the amounts are blanked. */
 function publicView(config) {
-  const { quote: _quote, ...open } = config; // the quote details are for staff only
-  void _quote;
+  const { quote: _quote, cooling: _cooling, ...open } = config; // the quote details and cooling assumptions are for staff only
+  void _quote; void _cooling;
   config = open;
   if (config.pricing.show) return config;
   return {
@@ -249,7 +276,7 @@ function publicView(config) {
 
 /** What the signed-in staff app may read: the whole catalogue and the real prices (whether or not the public tool shows a price). */
 function staffView(config) {
-  return { rackTypes: config.rackTypes, defaultRackType: config.defaultRackType, doors: config.doors, pricing: config.pricing, quote: config.quote };
+  return { rackTypes: config.rackTypes, defaultRackType: config.defaultRackType, doors: config.doors, pricing: config.pricing, quote: config.quote, cooling: config.cooling };
 }
 
 module.exports = { contrastWithWhite, KEY, LIMITS, ROUND_TO, MAX_PRESETS, MAX_RACK_TYPES, DEFAULTS, validateConfig, publicView, staffView };

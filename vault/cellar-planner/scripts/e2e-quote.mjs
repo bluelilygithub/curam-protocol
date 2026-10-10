@@ -87,6 +87,7 @@ const download = async (page) => { const [d] = await Promise.all([page.waitForEv
   await scan(page, 'quote form ready');
   const file = await download(page);
   check('Download gives a PDF named from the reference', /^q\d{8}-quote\.pdf$/.test(file.name) && new TextDecoder().decode(file.bytes.slice(0, 5)) === '%PDF-', file.name);
+  check('the quote carries the 3D picture of the inside', new TextDecoder('latin1').decode(file.bytes).includes('/Subtype /Image'));
   const pdf = await PDFDocument.load(file.bytes);
   check('one A4 page, titled with the reference', pdf.getPageCount() === 1 && Math.round(pdf.getPage(0).getSize().width) === 595 && /^Quote Q\d{8}$/.test(pdf.getTitle() ?? ''), `${pdf.getPageCount()} ${pdf.getTitle()}`);
   const msg = await page.getByTestId('quote-msg').innerText();

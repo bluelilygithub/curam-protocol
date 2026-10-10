@@ -18,7 +18,9 @@ export interface DrawingMeta { company: string; client: string; address: string;
 export const blankMeta = (date: string): DrawingMeta => ({ company: '', client: '', address: '', projectNo: '', drawnBy: '', checkedBy: '', date });
 
 export interface Fonts { regular: PDFFont; bold: PDFFont; italic: PDFFont }
-export interface Sheet { id: string; title: string; scale: string; width: number; height: number; prims: PdfPrim[] }
+/** A picture placed on a sheet (a JPEG data address) in PDF points, y up. */
+export interface SheetImage { dataUrl: string; x: number; y: number; w: number; h: number }
+export interface Sheet { id: string; title: string; scale: string; width: number; height: number; prims: PdfPrim[]; image?: SheetImage }
 
 const INK: Rgb = [0.1, 0.1, 0.1], MUTED: Rgb = [0.4, 0.4, 0.4], RED: Rgb = [0.7, 0.14, 0.09];
 const FILL: Record<Tone, Rgb | undefined> = { panel: [0.55, 0.6, 0.65], glass: [0.75, 0.88, 0.95], stud: [0.8, 0.73, 0.6], inside: [0.96, 0.95, 0.92], door: [0.93, 0.84, 0.64], rack: [0.89, 0.72, 0.65], rackIssue: [0.95, 0.65, 0.65], zone: [0.98, 0.9, 0.7], header: [0.9, 0.9, 0.88], equipment: [0.66, 0.7, 0.75], ink: undefined, muted: undefined, bottle: [0.29, 0.42, 0.27] };
@@ -223,7 +225,16 @@ function specSheets(p: AppProject, a: Analysis, meta: DrawingMeta, f: Fonts): Sh
 // ---------------------------------------------------------------- the package
 
 /** All the sheets: specification, plan, door-wall elevation, then the inside face of every wall that has racks. */
-export function buildSheets(project: AppProject, meta: DrawingMeta, f: Fonts): Sheet[] {
+/** Place a picture of the given proportions in the middle of the sheet's drawing area. */
+export function placeImage(sheet: Sheet, dataUrl: string, aspect: number): void {
+  const { w: W, h: H } = A3_LANDSCAPE;
+  const area = { x: 40, y: 20 + 4 + 78 + 40, w: W - 80, h: H - (20 + 4 + 78 + 40) - 56 };
+  let w = area.w, h = w / aspect;
+  if (h > area.h) { h = area.h; w = h * aspect; }
+  sheet.image = { dataUrl, x: area.x + (area.w - w) / 2, y: area.y + (area.h - h) / 2, w, h };
+}
+
+export function buildSheets(project: AppProject, meta: DrawingMeta, f: Fonts, opts: { insideImage?: string; imageAspect?: number } = {}): Sheet[] {
   const a = analyseApp(project);
   const runs = fullRuns(project);
   const bad = badRunIds(a.racks.issues);
@@ -242,6 +253,12 @@ export function buildSheets(project: AppProject, meta: DrawingMeta, f: Fonts): S
     if (!runs.some((r) => r.wall === wall && r.spec.unitWidthMm !== null)) continue;
     const s = mk(`A10${n++}`, `RACKS - ${wall} WALL (INSIDE FACE)`);
     s.scale = placeView(s, rackFaceView(project.enclosure, runs, a.racks, wall, project.bottle, { badRuns: bad }), f);
+    sheets.push(s);
+  }
+  if (opts.insideImage) {
+    const s = mk(`A10${n++}`, '3D VIEW - INSIDE THE CELLAR');
+    s.scale = 'NOT TO SCALE';
+    placeImage(s, opts.insideImage, opts.imageAspect ?? 1200 / 760);
     sheets.push(s);
   }
   sheets.forEach((s, i) => frame(s, { ...meta, date: meta.date || today() }, project, status, f, i + 1, sheets.length));

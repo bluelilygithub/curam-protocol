@@ -17,12 +17,15 @@ import { InfoModal } from './ui/InfoModal';
 import { PackageModal } from './ui/PackageModal';
 import { Icon } from './ui/icons';
 import { Accordion } from './ui/fields';
-import { CatalogueContext, ChecksPanel, EnclosurePanel, PricePanel, RackPanel, RunsPanel, StoreContext, UiContext } from './ui/panels';
+import { CatalogueContext, ChecksPanel, CoolingPanel, EnclosurePanel, PricePanel, RackPanel, RunsPanel, StoreContext, UiContext } from './ui/panels';
 import { createCatalogueStore, type CatalogueStore } from './app/catalogue';
 import { createLeadsStore, openLeadDesign, type FetchFn, type LeadsStore } from './app/leads';
 import { LeadsPanel } from './ui/LeadsPanel';
 import { QuoteModal } from './ui/QuoteModal';
 import { CalcModal } from './ui/CalcModal';
+import { CellarView } from './lite/CellarView';
+import { FINISH_LOOK, type FinishKey } from './lite/finishes';
+import { FINISH_NAMES } from './lite/settings';
 import { StatusStrip } from './ui/StatusStrip';
 import { clampLeft, loadLayout, saveLayout, LEFT_MAX, LEFT_MIN } from './app/layoutPrefs';
 
@@ -78,6 +81,11 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
 
   const analysis = useMemo(() => analyseApp(project), [project]);
   const catState = useStore(cat, (s) => s.catalogue);
+  const finish: FinishKey = project.finish ?? 'OAK';
+  const insideInput = useMemo(() => {
+    const iz = analysis.enclosure.internal;
+    return { project, runs: fullRuns(project), analysis: analysis.racks, dims: { width: `${iz.widthMm} mm`, depth: `${iz.depthMm} mm`, height: `${iz.heightMm} mm` } };
+  }, [project, analysis]);
 
   // ---- the screen layout: hide the side panels, resize the controls panel, or focus on the drawing. Remembered in this browser.
   const [layout, setLayout] = useState(() => loadLayout(typeof localStorage === 'undefined' ? undefined : localStorage));
@@ -218,19 +226,23 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
             <button type="button" key={k} title={tip} aria-pressed={pane === k} className={`tab${pane === k ? ' on' : ''}`} onClick={() => ui.getState().set({ pane: k })} data-testid={`pane-${k}`}>{label}</button>
           ))}
         </nav>
-        <aside className="left" data-testid="left"><Accordion initial="Enclosure"><EnclosurePanel /><RackPanel /><RunsPanel /><PricePanel /></Accordion></aside>
+        <aside className="left" data-testid="left"><Accordion initial="Enclosure"><EnclosurePanel /><RackPanel /><RunsPanel /><PricePanel /><CoolingPanel /></Accordion></aside>
         <main className="stage">
           {!leftHidden && <div className="resizer" role="separator" aria-orientation="vertical" aria-label="Resize the controls panel" aria-valuemin={LEFT_MIN} aria-valuemax={LEFT_MAX} aria-valuenow={layout.leftW} tabIndex={0} title="Drag to make the controls panel wider or narrower. With the keyboard, use the left and right arrow keys." onPointerDown={startResize} onKeyDown={(e) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); setLayout((l) => ({ ...l, leftW: clampLeft(l.leftW + (e.key === 'ArrowRight' ? 20 : -20)) })); } }} data-testid="resizer" />}
           <StatusStrip project={project} analysis={analysis} cat={catState} layout={strip} />
           <div className="tabs" role="group" aria-label="Drawing" data-tour="cp-tabs">
             <button type="button" aria-pressed={tab === 'plan'} className={`tab${tab === 'plan' ? ' on' : ''}`} title="The enclosure from above: walls, door, racks and sizes." onClick={() => ui.getState().set({ tab: 'plan' })} data-testid="tab-plan">Plan</button>
             <button type="button" aria-pressed={tab === 'elevation'} className={`tab${tab === 'elevation' ? ' on' : ''}`} title="One wall seen from outside: door, header, conditioner, vents and sizes." onClick={() => ui.getState().set({ tab: 'elevation' })} data-testid="tab-elevation">Elevation</button>
+            <button type="button" aria-pressed={tab === 'inside'} className={`tab${tab === 'inside' ? ' on' : ''}`} title="The inside of the cellar seen from the door, with the racks and every bottle, in the rack finish you choose, with the inside measurements. Drag to look left or right. It is the picture that goes in the drawing package and the quote." onClick={() => ui.getState().set({ tab: 'inside' })} data-testid="tab-inside">3D</button>
             <button type="button" aria-pressed={tab === 'racks'} className={`tab${tab === 'racks' ? ' on' : ''}`} title="The inside face of one wall with every bottle drawn at its true size and spacing, so you can see the rows and the count. Racks that cannot be built are red and not counted." onClick={() => ui.getState().set({ tab: 'racks' })} data-testid="tab-racks">Racks</button>
             {tab === 'elevation' && WALLS.map(([w, name]) => <button type="button" key={w} aria-pressed={wall === w} className={`tab small${wall === w ? ' on' : ''}`} title={`Show the ${name.toLowerCase()} wall as seen from outside.`} onClick={() => ui.getState().set({ wall: w })} data-testid={`wall-${w}`}>{name}</button>)}
             {tab === 'racks' && WALLS.map(([w, name]) => <button type="button" key={w} aria-pressed={rackWall === w} className={`tab small${rackWall === w ? ' on' : ''}`} title={`Show the racks on the ${name.toLowerCase()} wall, seen from inside.`} onClick={() => ui.getState().set({ rackWall: w })} data-testid={`rackwall-${w}`}>{name}</button>)}
-            <span className="hint">{tab === 'plan' ? 'From above. Drag to move, scroll or pinch to zoom.' : tab === 'racks' ? `The ${rackWall.toLowerCase()} wall seen from inside, bottles end-on.` : `The ${wall.toLowerCase()} wall seen from outside.`}</span>
+            {tab === 'inside' && (['OAK', 'WALNUT', 'BLACK'] as FinishKey[]).map((k) => (
+              <button type="button" key={k} aria-pressed={finish === k} className={`tab small finish${finish === k ? ' on' : ''}`} title={`Show the racks in ${FINISH_NAMES[k].toLowerCase()}. This only changes the colour in the pictures, never a count.`} onClick={() => store.getState().edit((q) => ({ ...q, finish: k }))} data-testid={`finish-${k}`}><span className="swatch" style={{ background: FINISH_LOOK[k].swatch }} aria-hidden="true" />{FINISH_NAMES[k]}</button>
+            ))}
+            <span className="hint">{tab === 'inside' ? `The inside from the door. Drag to look left or right.${project.runs.some((r) => r.wall === project.enclosure.door.wall) ? ' Racks on the door wall are seen from behind, so their bottles are not shown.' : ''}` : tab === 'plan' ? 'From above. Drag to move, scroll or pinch to zoom.' : tab === 'racks' ? `The ${rackWall.toLowerCase()} wall seen from inside, bottles end-on.` : `The ${wall.toLowerCase()} wall seen from outside.`}</span>
           </div>
-          {tab === 'plan' ? <DrawingView key="plan" prims={plan} testid="plan" description={planText} runHits={runHits} ghost={ghost} onRunDrag={onRunDrag} /> : tab === 'racks' ? <DrawingView key={`racks-${rackWall}`} prims={racks} testid="racks" description={rackText} /> : <DrawingView key={`elev-${wall}`} prims={elevation} testid="elevation" description={elevText} />}
+          {tab === 'plan' ? <DrawingView key="plan" prims={plan} testid="plan" description={planText} runHits={runHits} ghost={ghost} onRunDrag={onRunDrag} /> : tab === 'inside' ? <CellarView key="inside" input={insideInput} finish={finish} testid="inside" description={`The inside of the cellar seen from the door: ${bottles} on racks along the walls, in ${FINISH_NAMES[finish].toLowerCase()}.`} /> : tab === 'racks' ? <DrawingView key={`racks-${rackWall}`} prims={racks} testid="racks" description={rackText} /> : <DrawingView key={`elev-${wall}`} prims={elevation} testid="elevation" description={elevText} />}
           {tab === 'racks' && <p className="racks-summary" data-testid="racks-summary" role="status">{rackWallSummary(analysis.racks, fullRuns(project), rackWall).text} <span className="muted">Whole enclosure: {bottles}.</span></p>}
           <p className="foot">PRELIMINARY DESIGN ONLY: FINAL SITE MEASURE REQUIRED PRIOR TO FABRICATION</p>
         </main>

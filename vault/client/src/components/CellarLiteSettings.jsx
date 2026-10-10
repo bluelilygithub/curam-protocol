@@ -25,6 +25,7 @@ const toForm = (c) => ({
   phone: c.phone ?? '',
   accent: c.accent ?? '#4a5a2a',
   rackTypes: (c.rackTypes || []).map(typeToForm), defaultRackType: c.defaultRackType,
+  clK: String(c.cooling?.panelConductivity ?? 0.025), clGlass: String(c.cooling?.glassU ?? 1.4), clFloor: String(c.cooling?.floorU ?? 1), clGains: String(c.cooling?.internalGainsW ?? 100), clMargin: String(c.cooling?.marginPct ?? 20), clTarget: String(c.cooling?.targetC ?? 14), clAmbient: String(c.cooling?.ambientC ?? 35),
   qBusinessName: c.quote?.businessName ?? '', qDetails: c.quote?.details ?? '', qTerms: c.quote?.terms ?? '', qValidityDays: String(c.quote?.validityDays ?? 30), qGstNote: c.quote?.gstNote ?? '',
   singleMm: String(c.doors.singleMm), doubleMm: String(c.doors.doubleMm),
   show: !!c.pricing.show, currency: c.pricing.currency ?? '$',
@@ -39,6 +40,7 @@ const toConfig = (f) => ({
   phone: f.phone,
   accent: f.accent,
   rackTypes: f.rackTypes.map(typeToConfig), defaultRackType: f.defaultRackType,
+  cooling: { panelConductivity: f.clK, glassU: f.clGlass, floorU: f.clFloor, internalGainsW: f.clGains, marginPct: f.clMargin, targetC: f.clTarget, ambientC: f.clAmbient },
   quote: { businessName: f.qBusinessName, details: f.qDetails, terms: f.qTerms, validityDays: f.qValidityDays, gstNote: f.qGstNote },
   doors: { singleMm: f.singleMm, doubleMm: f.doubleMm },
   pricing: { show: f.show, currency: f.currency, fixed: f.fixed, doorSingle: f.doorSingle, doorDouble: f.doorDouble, rangePct: f.rangePct, roundTo: f.roundTo, note: f.note },
@@ -301,6 +303,22 @@ export default function CellarLiteSettings({ onDirtyChange }) {
         <Field label="Line under the heading" tip="A short line shown under the planner's heading. Good for saying it's free and quick. Leave blank to show nothing." hint="Say it's free and quick. Leave blank to show nothing.">
           <textarea value={form.promise} rows={2} maxLength={200} onChange={(e) => set('promise', e.target.value)} className={INPUT} style={FIELD_STYLE} />
         </Field>
+      </section>
+
+      <section className={CARD} style={CARD_STYLE} data-testid="cellar-lite-cooling">
+        <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Cooling estimate assumptions</h3>
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          The staff Cellar Planner estimates how much cooling a cellar needs: heat through every wall, the ceiling, floor and door (U-value × area × temperature difference), plus lights, people and stock, plus a safety margin. These are the assumptions behind it, shown to staff in the working. It is a guide for choosing a conditioner, never a design: an HVAC engineer still signs off. Staff can set the two temperatures per design. The standard values below are typical; change them to match your supplier's data.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Insulation conductivity (W/m·K)" tip="How well the wall and ceiling insulation conducts heat. The wall's U-value is this divided by its thickness in metres. Polyurethane foam panels are about 0.025; use your panel supplier's figure." hint="0.01 to 0.1. Standard is 0.025.">{numInput('clK')}</Field>
+          <Field label="Glass U-value (W/m²·K)" tip="How much heat glass and glazed doors let through. The guide the advisory notes quote asks for about 1.4 (4 mm glass, 16 mm argon, 4 mm glass). Use your glazier's figure." hint="0.5 to 6. Standard is 1.4.">{numInput('clGlass')}</Field>
+          <Field label="Uninsulated floor U-value (W/m²·K)" tip="Used only for a floor with no build-up entered, which is treated as a bare slab. A lower number means better insulated." hint="0.1 to 6. Standard is 1.">{numInput('clFloor')}</Field>
+          <Field label="Lights, people and stock (W)" tip="Heat added inside the cellar by lighting, people and new bottles, in watts. LED lighting adds little." hint="0 to 5000. Standard is 100.">{numInput('clGains')}</Field>
+          <Field label="Safety margin (%)" tip="Added on top of the total to cover door openings and uncertainty." hint="0 to 100. Standard is 20.">{numInput('clMargin')}</Field>
+          <Field label="Target temperature (°C)" tip="The temperature the cellar is held at. Wine is usually kept at 12 to 15 °C. Staff can change it per design." hint="0 to 25. Standard is 14.">{numInput('clTarget')}</Field>
+          <Field label="Outside design temperature (°C)" tip="The hottest day to design for, where the cellar is. Staff can change it per design." hint="15 to 50. Standard is 35.">{numInput('clAmbient')}</Field>
+        </div>
       </section>
 
       <section className={CARD} style={CARD_STYLE} data-testid="cellar-lite-quote">

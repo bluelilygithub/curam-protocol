@@ -11,7 +11,7 @@ import type { Fonts } from './drawingPackage';
 export const A4_PORTRAIT = { w: 595.28, h: 841.89 };
 export const QUOTE_STATEMENT = 'Prices are based on the design shown and are subject to a final site measure and confirmation of the finishes.';
 
-export interface QuoteMeta { reference: string; date: string; customer: string; address: string; notes: string }
+export interface QuoteMeta { reference: string; date: string; customer: string; address: string; notes: string; /** The 3D picture of the inside (a JPEG data address), shown beside the cellar details. */ image?: string }
 
 const pad = (n: number): string => String(n).padStart(2, '0');
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -68,6 +68,7 @@ export interface QuoteDoc {
   cellar: Array<[string, string]>;
   lines: PriceLine[]; total: number; currency: string; gstNote: string;
   notes: string; terms: string; statement: string;
+  image?: string;
 }
 
 /** The quote's content, or the reasons it cannot be made. */
@@ -94,13 +95,14 @@ export function buildQuote(p: AppProject, cat: Catalogue | null, meta: QuoteMeta
       customer: meta.customer.trim(), address: meta.address.trim(), project: p.name,
       cellar, lines: price.lines, total: price.total, currency: price.currency, gstNote: cat.quote.gstNote,
       notes: meta.notes.trim(), terms: cat.quote.terms, statement: QUOTE_STATEMENT,
+      ...(meta.image ? { image: meta.image } : {}),
     },
   };
 }
 
 // ---------------------------------------------------------------- layout
 
-export interface QuotePage { width: number; height: number; prims: Prim[] }
+export interface QuotePage { width: number; height: number; prims: Prim[]; images?: Array<{ dataUrl: string; x: number; y: number; w: number; h: number }> }
 const INK: Rgb = [0.1, 0.1, 0.1], MUTED: Rgb = [0.4, 0.4, 0.4], RULE: Rgb = [0.78, 0.78, 0.74], BAND: Rgb = [0.93, 0.93, 0.9];
 const M = 48; // margin, points
 
@@ -146,14 +148,22 @@ export function layoutQuote(doc: QuoteDoc, f: Fonts): QuotePage[] {
   y -= 10;
 
   // the cellar
-  need(24 + doc.cellar.length * 16);
+  // the 3D picture of the inside sits to the right of the details (about 240 x 152 pt), so the details wrap in the space that is left
+  const PIC_W = 240, PIC_H = 152;
+  need(Math.max(24 + doc.cellar.length * 16, doc.image ? PIC_H + 20 : 0));
+  const sectionTop = y;
   text('Your cellar', M, 8.5, { bold: true, color: MUTED }); y -= 14;
+  const valueWidth = doc.image ? wide - 130 - PIC_W - 14 : wide - 130;
   for (const [k, v] of doc.cellar) {
     need(16);
     text(k, M, 10, { color: MUTED });
-    const lines = wrapText(f.regular, v, 10, wide - 130);
+    const lines = wrapText(f.regular, v, 10, valueWidth);
     lines.forEach((l, i) => { if (i) { y -= 13; need(14); } text(l, M + 130, 10); });
     y -= 16;
+  }
+  if (doc.image) {
+    (page.images ??= []).push({ dataUrl: doc.image, x: R - PIC_W, y: sectionTop - 10 - PIC_H, w: PIC_W, h: PIC_H });
+    y = Math.min(y, sectionTop - 10 - PIC_H - 6); // the table starts below the picture
   }
   y -= 8;
 

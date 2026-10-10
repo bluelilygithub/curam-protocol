@@ -24,6 +24,10 @@ export interface AppProject {
   walkwayMm: number | null;
   /** The catalogue rack type the rack values came from (Settings -> Cellar Planner). A copy: the numbers live in `rackSpec`, so a later catalogue change never alters this design. `confirmed` = the supplier's values at the time. */
   rackType?: { id: string; name: string; confirmed: boolean };
+  /** The rack finish shown in the 3D view and printed pictures (colour only: it never changes a count). */
+  finish?: 'OAK' | 'WALNUT' | 'BLACK';
+  /** This design's own temperatures for the cooling estimate (otherwise the Settings defaults are used). */
+  cooling?: { ambientC?: number; targetC?: number };
   /** The website enquiry this design was opened from (Vault CRM). Lets a quote be logged on the enquiry's deal. */
   lead?: { id: number; name: string };
   /** Rack fields whose values are BEST GUESSES (a test case), not supplier values. Empty or absent for a real design. */
@@ -118,6 +122,8 @@ export function deserializeApp(text: string): AppProject {
     runs: Array.isArray(o.runs) ? o.runs : [],
     walkwayMm: typeof o.walkwayMm === 'number' ? o.walkwayMm : null,
     ...(o.drawing && typeof o.drawing === 'object' ? { drawing: { company: str(o.drawing.company), client: str(o.drawing.client), address: str(o.drawing.address), projectNo: str(o.drawing.projectNo), drawnBy: str(o.drawing.drawnBy), checkedBy: str(o.drawing.checkedBy) } } : {}),
+    ...(o.cooling && typeof o.cooling === 'object' ? (() => { const c = o.cooling as Record<string, unknown>; const ok = (v: unknown, lo: number, hi: number): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? v : undefined); const ambientC = ok(c.ambientC, 15, 50), targetC = ok(c.targetC, 0, 25); return ambientC !== undefined || targetC !== undefined ? { cooling: { ...(ambientC !== undefined ? { ambientC } : {}), ...(targetC !== undefined ? { targetC } : {}) } } : {}; })() : {}),
+    ...(o.finish === 'OAK' || o.finish === 'WALNUT' || o.finish === 'BLACK' ? { finish: o.finish } : {}),
     ...(o.lead && typeof o.lead === 'object' && Number.isInteger(o.lead.id) && o.lead.id > 0 ? { lead: { id: o.lead.id, name: str(o.lead.name) } } : {}),
     ...(o.rackType && typeof o.rackType === 'object' && typeof o.rackType.id === 'string' && o.rackType.id ? { rackType: { id: str(o.rackType.id), name: str(o.rackType.name) || str(o.rackType.id), confirmed: o.rackType.confirmed === true } } : {}),
     ...(Array.isArray(o.estimated) ? { estimated: o.estimated.filter((k): k is EstimateField => (ESTIMATE_FIELDS as readonly string[]).includes(k)) } : {}),

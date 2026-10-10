@@ -7,11 +7,12 @@ import { footprint } from '../src/placement';
 import { rackDepthNeededMm } from '../src/rack';
 import { calcToText, explainCalculations, type CalcLine, type CalcSection } from '../src/help/calcExplain';
 import { DEFAULT_CONFIG, type RackType } from '../src/lite/config';
+import { coolingLoad, effectiveCooling } from '../src/enclosure/cooling';
 
 const T: RackType = { ...DEFAULT_CONFIG.rackTypes[0]!, id: 'std', name: 'Standard 600', unitDepthMm: 350, rowPitchMm: 100, postsPerUnit: 2, pricePerUnit: 900, confirmed: true };
 const cat = (types: RackType[] = [T]): Catalogue => ({
   rackTypes: types, defaultRackType: types[0]!.id, doors: { singleMm: 970, doubleMm: 1500 },
-  pricing: { ...DEFAULT_CONFIG.pricing, fixed: 2000, doorSingle: 500, doorDouble: 900, rangePct: 10, roundTo: 100 }, quote: { ...DEFAULT_CONFIG.quote },
+  pricing: { ...DEFAULT_CONFIG.pricing, fixed: 2000, doorSingle: 500, doorDouble: 900, rangePct: 10, roundTo: 100 }, quote: { ...DEFAULT_CONFIG.quote }, cooling: { ...DEFAULT_CONFIG.cooling },
 });
 
 const base = (): AppProject => testCaseProject();
@@ -40,7 +41,7 @@ describe.each(cases)('the explanation for %s', (_name, make, c) => {
   const secs = explainCalculations(p, c);
 
   it('has every section, in a fixed order', () => {
-    expect(secs.map((s) => s.id)).toEqual(['inside', 'door', 'glass', 'capacity', 'depth', 'runs', 'price', 'trust']);
+    expect(secs.map((s) => s.id)).toEqual(['inside', 'door', 'glass', 'capacity', 'depth', 'runs', 'price', 'cooling', 'trust']);
     for (const s of secs) { expect(s.title.length).toBeGreaterThan(3); expect(s.summary.length).toBeGreaterThan(20); }
   });
   it('never prints NaN, undefined, null or [object]', () => {
@@ -86,6 +87,14 @@ describe.each(cases)('the explanation for %s', (_name, make, c) => {
       const fp = footprint(p.enclosure, r);
       expect(line(s, new RegExp(`^Run ${r.id} `)).value, r.id).toBe(fp.status === 'OK' ? fp.lengthMm : null);
     }
+  });
+  it('the cooling needed and every surface equal the cooling estimate', () => {
+    const ca = effectiveCooling(c?.cooling, p.cooling), cl = coolingLoad(p.enclosure, ca), s = section(secs, 'cooling');
+    if (cl.status === 'OK') {
+      expect(line(s, 'Cooling needed').value).toBeCloseTo(cl.totalW, 9);
+      for (const l of cl.lines) expect(line(s, l.label).value, l.label).toBeCloseTo(l.watts, 9);
+      expect(line(s, 'Heat through the envelope').value).toBeCloseTo(cl.envelopeW, 9);
+    } else expect(s.lines[0]!.result).toBe(cl.reason);
   });
   it('the price total and every line equal the staff price', () => {
     const sp = staffPrice(p, c), s = section(secs, 'price');

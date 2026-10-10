@@ -34,6 +34,8 @@ export interface HeaderComponent {
   yMm: number;
   widthMm: number;
   heightMm: number;
+  /** A conditioner's rated cooling capacity in watts, from its data sheet. Blank = not entered (never counted as zero). */
+  capacityW?: number | null;
 }
 
 export interface Enclosure {

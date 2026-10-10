@@ -11,7 +11,7 @@ const T: RackType = { ...DEFAULT_CONFIG.rackTypes[0]!, id: 'std', name: 'Standar
 const QUOTE = { businessName: 'Acme Wine Cellars', details: '1 High St\nMelbourne VIC 3000\nABN 12 345 678 901', terms: 'A 30% deposit is due on acceptance.\n\nBalance on completion.', validityDays: 30, gstNote: 'All prices include GST.' };
 const cat = (over: Partial<Catalogue> = {}, types: RackType[] = [T]): Catalogue => ({
   rackTypes: types, defaultRackType: types[0]!.id, doors: { singleMm: 970, doubleMm: 1500 },
-  pricing: { ...DEFAULT_CONFIG.pricing, fixed: 2000, doorSingle: 500, doorDouble: 900, rangePct: 10, roundTo: 100 }, quote: { ...QUOTE }, ...over,
+  pricing: { ...DEFAULT_CONFIG.pricing, fixed: 2000, doorSingle: 500, doorDouble: 900, rangePct: 10, roundTo: 100 }, quote: { ...QUOTE }, cooling: { ...DEFAULT_CONFIG.cooling }, ...over,
 });
 const META: QuoteMeta = { reference: 'Q20261010-E7', date: '2026-10-10', customer: 'Sam Rivera', address: '5 Vine Rd\nTarneit VIC 3029', notes: 'Delivery in March.' };
 const good = (): AppProject => applyRackType(testCaseProject(), T);

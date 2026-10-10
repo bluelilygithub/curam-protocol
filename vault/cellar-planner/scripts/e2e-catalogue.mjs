@@ -181,7 +181,7 @@ const project = (page) => page.evaluate(() => window.cellar.store.getState().pro
   await page.getByTestId('calc-open').click();
   await page.getByTestId('calc-modal').waitFor();
   const ids = await page.locator('[data-calc]').evaluateAll((els) => els.map((e) => e.getAttribute('data-calc')));
-  check('every section is there, in order', JSON.stringify(ids) === JSON.stringify(['inside', 'door', 'glass', 'capacity', 'depth', 'runs', 'price', 'trust']), JSON.stringify(ids));
+  check('every section is there, in order', JSON.stringify(ids) === JSON.stringify(['inside', 'door', 'glass', 'capacity', 'depth', 'runs', 'price', 'cooling', 'trust']), JSON.stringify(ids));
   const cap = await page.getByTestId('calc-capacity').innerText();
   const bottleNum = onScreenBottles.match(/\d+/)[0];
   check('the capacity section reaches the same bottle total as the Checks panel', new RegExp(`Total bottles[\\s\\S]*${bottleNum} bottles`).test(cap), `${onScreenBottles} / ${cap.slice(0, 300)}`);

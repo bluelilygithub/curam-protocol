@@ -6,6 +6,7 @@ import { createStore } from 'zustand/vanilla';
 import { analyseApp, fillBlankRackWithGuesses, sortIssues, type AppProject, type EstimateField } from '../app/model';
 import { applyRackType, describeRackChange, matchesType, staffPrice, typeById, type CatalogueState, type CatalogueStore } from '../app/catalogue';
 import { fixAll, suggestFix, type Fix } from '../app/fixes';
+import { coolingFit, coolingLoad, effectiveCooling } from '../enclosure/cooling';
 import type { UiStore } from '../app/uiStore';
 import type { AppStore } from '../app/store';
 import type { HeaderComponent, WallKind, WallSide } from '../enclosure';
@@ -82,6 +83,7 @@ export function EnclosurePanel() {
             <NumField label="y" value={c.yMm} hint="Height of this part's bottom edge above the bottom of the header." onCommit={(v) => setPart(c.id, { yMm: v as number })} />
             <NumField label="w" value={c.widthMm} min={1} hint="Width of this part." onCommit={(v) => setPart(c.id, { widthMm: v as number })} />
             <NumField label="h" value={c.heightMm} min={1} hint="Height of this part." onCommit={(v) => setPart(c.id, { heightMm: v as number })} />
+            {c.kind === 'CONDITIONER' && <NumField label="Cooling capacity" nullable unit="W" value={c.capacityW ?? null} min={1} hint="The conditioner's rated cooling capacity in watts, from its data sheet (1 kW = 1000 W). The Cooling panel compares it with the cooling this cellar needs. Blank means not entered: it is never counted as zero." onCommit={(v) => setPart(c.id, { capacityW: v })} testid={`capacity-${c.id}`} />}
             <button type="button" className="btn small" title="Remove this part from the header." onClick={() => edit((q) => ({ ...q, enclosure: { ...q.enclosure, header: q.enclosure.header.filter((x) => x.id !== c.id) } }))}>Remove</button>
           </div>
         ))}
@@ -206,6 +208,51 @@ export function RunsPanel() {
         {WALLS.map(([side, name]) => <button type="button" key={side} className="btn small" title={`Fill the ${name.toLowerCase()} wall with as many whole units as fit, leaving the door opening free. It replaces any runs already on that wall and needs the unit width first.`} onClick={() => fill(side)} data-testid={`fill-${side}`}>Fill {name.toLowerCase()}</button>)}
       </div>
       {msg && <p className="note" role="status" data-testid="fill-msg">{msg}</p>}
+    </Section>
+  );
+}
+
+// ---------------------------------------------------------------- cooling
+
+const watts = (n: number): string => `${Math.round(n).toLocaleString('en-AU')} W`;
+
+/** An indicative cooling estimate for the enclosure, with every assumption shown. A guide for choosing a conditioner, never a design. */
+export function CoolingPanel() {
+  const p = useProject();
+  const edit = useEdit();
+  const cat = useCatalogue();
+  const base = effectiveCooling(cat.catalogue?.cooling);
+  const a = effectiveCooling(cat.catalogue?.cooling, p.cooling);
+  const load = useMemo(() => coolingLoad(p.enclosure, a), [p.enclosure, a.ambientC, a.targetC, a.panelConductivity, a.glassU, a.floorU, a.internalGainsW, a.marginPct]);
+  const own = !!(p.cooling && (p.cooling.ambientC !== undefined || p.cooling.targetC !== undefined));
+  const setTemp = (k: 'ambientC' | 'targetC', v: number | null): void => edit((q) => ({ ...q, cooling: { ...q.cooling, ...(v === null ? {} : { [k]: v }) } }));
+  const fit = load.status === 'OK' ? coolingFit(p.enclosure.header, load) : null;
+  return (
+    <Section title="Cooling" testid="cooling-panel" tour="cp-cooling">
+      <NumField label="Outside design temperature" unit="°C" value={a.ambientC} min={15} hint={`The hottest day to design for, in degrees C (15 to 50). Settings default: ${base.ambientC}.`} onCommit={(v) => setTemp('ambientC', v)} testid="cooling-ambient" />
+      <NumField label="Target temperature" unit="°C" value={a.targetC} min={0} hint={`The temperature to hold the cellar at (0 to 25). Wine is usually kept at 12 to 15. Settings default: ${base.targetC}.`} onCommit={(v) => setTemp('targetC', v)} testid="cooling-target" />
+      {own && <button type="button" className="btn small" title="Go back to the temperatures set in Settings, Cellar Planner." onClick={() => edit((q) => { const { cooling: _c, ...rest } = q; void _c; return rest; })} data-testid="cooling-reset">Use the Settings temperatures</button>}
+      {load.status === 'NOT_SET'
+        ? <p className="note" data-testid="cooling-unavailable">{load.reason}</p>
+        : (
+          <>
+            <p className="total" data-testid="cooling-total" title="The cooling the conditioner needs to deliver, including the safety margin.">{(load.totalW / 1000).toFixed(2)} kW <small>({watts(load.totalW)})</small></p>
+            <table className="price-table" data-testid="cooling-lines">
+              <tbody>
+                {load.lines.map((l) => <tr key={l.id}><th scope="row">{l.label}</th><td>{watts(l.watts)}</td></tr>)}
+                <tr><th scope="row">Lights, people and stock</th><td>{watts(load.gainsW)}</td></tr>
+                <tr><th scope="row">Safety margin ({a.marginPct}%)</th><td>{watts(load.marginW)}</td></tr>
+                <tr className="price-total"><th scope="row">Cooling needed</th><td>{watts(load.totalW)}</td></tr>
+              </tbody>
+            </table>
+            {fit?.status === 'NO_CONDITIONER' && <p className="banner" role="note" data-testid="cooling-fit">There is no conditioner in the header yet. Add one under Header, then enter its cooling capacity.</p>}
+            {fit?.status === 'UNRATED' && <p className="note" data-testid="cooling-fit">Enter the cooling capacity of {fit.unrated === 1 ? 'the conditioner' : `each of the ${fit.unrated} conditioners`} in the Header section to see whether it covers this.</p>}
+            {fit?.status === 'COVERED' && <p className="note" data-testid="cooling-fit">The header's conditioning ({watts(fit.capacityW)}) covers this, with {watts(fit.spareW)} ({fit.sparePct.toFixed(0)}%) to spare.</p>}
+            {fit?.status === 'SHORT' && <p className="banner" role="note" data-testid="cooling-fit"><b>The header's conditioning ({watts(fit.capacityW)}) is {watts(fit.shortW)} short</b> of what this cellar needs. Choose a larger conditioner or add another.</p>}
+            {load.notes.map((n) => <p className="note" key={n}>{n}</p>)}
+          </>
+        )}
+      <p className="note">Assumptions (set in Settings, Cellar Planner): insulation conductivity {a.panelConductivity} W/m·K, glass {a.glassU} W/m²·K, uninsulated floor {a.floorU} W/m²·K. The working is in How the numbers are calculated.</p>
     </Section>
   );
 }

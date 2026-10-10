@@ -30,6 +30,8 @@ describe('the browser and the server agree on what a setting is', () => {
       { rackTypes: [{ unitWidthMm: 600 }, 'x', null, { name: 'Ok' }] },
       { quote: { businessName: '  Acme\u0000 Wine ', details: '1 High St\r\n\r\n\r\nMelb  3000\u0007', terms: 'Line1\n\n\n\nLine2\t x', validityDays: '45', gstNote: 'Incl GST' } },
       { quote: { validityDays: 9999, businessName: 5 } }, { quote: 'x' }, { quote: { terms: 'a'.repeat(2000), details: 'b'.repeat(500) } },
+      { cooling: { panelConductivity: 0.03, glassU: '1.8', floorU: 0.8, internalGainsW: 250, marginPct: 30, targetC: 13, ambientC: 40 } },
+      { cooling: { panelConductivity: 5, glassU: 99, floorU: -1, internalGainsW: 1e6, marginPct: 500, targetC: 99, ambientC: 0 } }, { cooling: 'x' }, { cooling: { glassU: '' } },
       { rackTypes: [] }, { rackTypes: 'x' }, { rackTypes: Array.from({ length: 12 }, (_, i) => ({ name: 'R' + i })) },
       { rack: { unitWidthMm: 750, unitHeightMm: 2200 }, pricing: { show: true, perUnit: 1200 } },
       { accent: '#1f3a5f' }, { accent: '#FFFFFF' }, { accent: 'red' }, { accent: '#4a5a2a;x' }, { accent: '#cc785c' }, { accent: 12 },

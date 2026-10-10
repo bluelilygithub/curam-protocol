@@ -3,7 +3,7 @@ import type { WallSide } from '../enclosure';
 
 /** Screen state that is not part of the design (and so is not undoable or saved): which drawing is showing, and whether the guide is open. */
 export interface UiState {
-  tab: 'plan' | 'elevation' | 'racks';
+  tab: 'plan' | 'elevation' | 'racks' | 'inside';
   wall: WallSide;
   /** The wall whose racks the Racks tab shows (seen from inside). */
   rackWall: WallSide;

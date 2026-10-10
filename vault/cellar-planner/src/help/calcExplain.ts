@@ -2,6 +2,7 @@ import { staffPrice, typeById, matchesType, type Catalogue } from '../app/catalo
 import { analyseApp, fullRuns, type AppProject } from '../app/model';
 import { DEFAULT_RULES, profileOf } from '../engine/defaults';
 import { doorLayout, doorLeafCount, doorLeafWidthMm, glassFraction, internalSize, wallLengthMm } from '../enclosure/enclosure';
+import { coolingFit, coolingLoad, effectiveCooling } from '../enclosure/cooling';
 import { doorOpening, footprint } from '../placement';
 import { effectiveBottlesPerRow, rackCapacity, rackDepthNeededMm } from '../rack';
 
@@ -172,6 +173,34 @@ export function explainCalculations(p: AppProject, cat: Catalogue | null): CalcS
       'Units are the whole rack units across ALL runs. A blank amount is left out, never counted as zero, and the Price panel says so.',
       'The public planner shows only the rounded range, and only when the owner switches prices on. Staff always see the breakdown.',
       'This is an indicative guide, not a quote: a site measure and the finishes still decide the final price.',
+    ],
+  });
+
+  // ---------------------------------------------------------------- cooling
+  const ca = effectiveCooling(cat?.cooling, p.cooling);
+  const cl = coolingLoad(e, ca);
+  const coolLines: CalcLine[] = [];
+  if (cl.status === 'OK') {
+    coolLines.push({ label: 'Temperature difference', formula: 'outside design temperature − target temperature', working: `${ca.ambientC} − ${ca.targetC}`, result: `${cl.deltaC} K`, value: cl.deltaC });
+    for (const l of cl.lines) coolLines.push({ label: l.label, formula: l.formula, working: l.working, result: `${Math.round(l.watts)} W`, value: l.watts });
+    coolLines.push({ label: 'Heat through the envelope', formula: 'the surfaces added together', working: `${cl.lines.length} surfaces`, result: `${Math.round(cl.envelopeW)} W`, value: cl.envelopeW });
+    coolLines.push({ label: 'Lights, people and stock', formula: 'an allowance from Settings', working: `${ca.internalGainsW}`, result: `${Math.round(cl.gainsW)} W`, value: cl.gainsW });
+    coolLines.push({ label: 'Safety margin', formula: '(envelope + gains) × margin %', working: `(${Math.round(cl.envelopeW)} + ${Math.round(cl.gainsW)}) × ${ca.marginPct}%`, result: `${Math.round(cl.marginW)} W`, value: cl.marginW });
+    coolLines.push({ label: 'Cooling needed', formula: 'envelope + gains + margin', working: `${Math.round(cl.subtotalW)} + ${Math.round(cl.marginW)}`, result: `${(cl.totalW / 1000).toFixed(2)} kW (${Math.round(cl.totalW)} W)`, value: cl.totalW });
+    const fit = coolingFit(e.header, cl);
+    coolLines.push({ label: 'Header conditioning', formula: 'the rated capacities of the conditioners in the header, added together',
+      working: fit.status === 'NO_CONDITIONER' ? 'no conditioner placed' : fit.status === 'UNRATED' ? `${fit.unrated} without a rating` : `${Math.round(fit.capacityW)} W`,
+      result: fit.status === 'COVERED' ? `covers it, ${Math.round(fit.sparePct)}% to spare` : fit.status === 'SHORT' ? `${Math.round(fit.shortW)} W short` : fit.status === 'UNRATED' ? 'not rated (never counted as zero)' : 'none', value: fit.status === 'COVERED' || fit.status === 'SHORT' ? fit.capacityW : null });
+  } else coolLines.push({ label: 'Cooling needed', formula: 'envelope + gains + margin', working: '', result: cl.reason, value: null });
+  out.push({
+    id: 'cooling', title: 'Cooling needed (indicative)',
+    summary: 'The standard steady-state method: the heat that leaks in through each surface is U × area × temperature difference, plus internal gains and a safety margin. Areas are to the outer faces.',
+    lines: coolLines,
+    notes: [
+      `U-value of an insulated wall, ceiling or floor = conductivity ÷ thickness in metres (conductivity ${ca.panelConductivity} W/m·K from Settings). Glass and glazed doors use ${ca.glassU} W/m²·K. A floor with no build-up entered is treated as a bare slab (${ca.floorU} W/m²·K). A wall or ceiling with no thickness entered has no insulation to work from, so the estimate says "not set" rather than guess.`,
+      'The door takes its own area out of its wall. An opaque door is insulated like its wall; a glazed door uses the glass U-value.',
+      'Bigger cellars need more cooling because the surface area grows. Thicker insulation needs less. A hotter outside design day or a colder target needs more.',
+      'It is a guide for choosing a conditioner, never a design: mechanical engineer / HVAC sign-off is always needed, and the allowances come from Settings.',
     ],
   });
 

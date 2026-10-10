@@ -3,7 +3,9 @@
 //   node scripts/e2e-workflow.mjs [screenshot dir]
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
+import { PDFDocument } from 'pdf-lib';
 
 const URL = process.env.CELLAR_URL ?? 'http://localhost:5176/cellar-planner-app/';
 const out = process.argv[2];
@@ -198,6 +200,99 @@ const scan = async (page, label) => {
   check('Escape leaves focus and the panels come back', (await page.getByTestId('left').isVisible()) && (await page.getByTestId('checks-panel').isVisible()));
   await scan(page, 'status strip and panels');
   if (out) await page.screenshot({ path: join(out, 'strip.png') });
+  check('no script errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
+// ================================================================ the 3D view
+{
+  const { page, ctx, errors } = await open();
+  const total = (await page.getByTestId('total').innerText()).match(/\d+/)[0];
+  check('there is a 3D tab beside Plan, Elevation and Racks, with a tooltip', /inside of the cellar seen from the door/.test(await page.getByTestId('tab-inside').getAttribute('title')));
+  await page.getByTestId('tab-inside').click();
+  const c = page.getByTestId('inside-canvas');
+  await c.waitFor(); await page.waitForTimeout(400);
+  const attr = (n) => c.getAttribute(n);
+  // racks against the door wall are seen from behind (the near wall is cut away), so their bottles are not drawn: 2 x 140 in the test case
+  const doorWall = (await project(page)).enclosure.door.wall;
+  const behind = await page.evaluate((w) => window.cellar.analyse().racks.runs.filter((r) => window.cellar.store.getState().project.runs.find((x) => x.id === r.runId)?.wall === w).reduce((n, r) => n + (r.capacity.status === 'OK' ? r.capacity.capacity : 0), 0), doorWall);
+  check('the picture draws every bottle the Checks panel counts, except those on racks against the door wall (seen from behind)', Number(await attr('data-bottles')) === Number(total) - behind && behind > 0, `${await attr('data-bottles')} vs ${total} - ${behind}`);
+  check('and says so on screen', /Racks on the door wall are seen from behind/.test(await page.locator('.tabs .hint').innerText()));
+  check('and the three inside measurements', (await attr('data-dims')) === '3');
+  check('and every rack run', Number(await attr('data-racks')) === 5, String(await attr('data-racks')));
+  check('it starts in oak', (await attr('data-finish')) === 'OAK' && (await page.getByTestId('finish-OAK').getAttribute('aria-pressed')) === 'true');
+  await page.getByTestId('finish-WALNUT').click(); await page.waitForTimeout(250);
+  check('choosing walnut recolours the racks and is kept with the design', (await attr('data-finish')) === 'WALNUT' && (await project(page)).finish === 'WALNUT');
+  check('a finish never changes a count', Number(await attr('data-bottles')) === Number(total) - behind && (await page.getByTestId('total').innerText()).startsWith(total));
+  await page.evaluate(() => window.cellar.store.getState().undo());
+  check('Undo puts the finish back', (await project(page)).finish === undefined && (await attr('data-finish')) === 'OAK');
+  await page.getByTestId('finish-BLACK').click(); await page.waitForTimeout(250);
+  const box = await c.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down(); await page.mouse.move(box.x + box.width / 2 - 120, box.y + box.height / 2, { steps: 5 }); await page.mouse.up();
+  check('dragging turns the view to look left or right', Math.abs(Number(await attr('data-yaw'))) > 3, String(await attr('data-yaw')));
+  await page.getByTestId('inside-zoom-in').click(); await page.waitForTimeout(150);
+  check('the zoom button zooms in', Number(await attr('data-zoom')) > 1, String(await attr('data-zoom')));
+  await scan(page, '3D view');
+  if (out) { await page.waitForTimeout(400); await page.screenshot({ path: join(out, '3d.png') }); }
+  await page.reload(); await page.getByTestId('plan-canvas').waitFor(); await page.waitForTimeout(500);
+  check('the finish is remembered after a reload', (await project(page)).finish === 'BLACK');
+  await page.getByTestId('tab-inside').click(); await page.waitForTimeout(300);
+  check('and the 3D view opens in it', (await page.getByTestId('inside-canvas').getAttribute('data-finish')) === 'BLACK');
+  check('the plan is unchanged by the 3D tab (the plan, elevation and racks tabs still work)', await (async () => { await page.getByTestId('tab-plan').click().catch(() => page.getByRole('button', { name: 'Plan' }).click()); await page.waitForTimeout(200); return (await page.getByTestId('plan-canvas').count()) === 1; })());
+
+  // the drawing package gets a 3D sheet with the picture
+  await page.getByTestId('package-open').click();
+  const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 20000 }), page.getByTestId('package-download').click()]);
+  const bytes = readFileSync(await dl.path());
+  const pdf = await PDFDocument.load(bytes);
+  const pm = await page.getByTestId('package-msg').innerText();
+  check('the drawing package has a 3D VIEW sheet', /A10\d/.test(pm) && pdf.getPageCount() >= 5, pm);
+  check('and really contains the picture', new TextDecoder('latin1').decode(bytes).includes('/Subtype /Image'));
+  check('no script errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
+// ================================================================ the cooling estimate
+{
+  const { page, ctx, errors } = await open();
+  const reveal = async (id) => { await page.evaluate((i) => { const el = document.querySelector(`[data-testid="${i}"]`); const t = el?.closest('section.section.collapsed')?.querySelector('.section-toggle'); if (t) t.click(); }, id); await page.waitForTimeout(450); return page.getByTestId(id); };
+  const kw = async () => Number((await (await reveal('cooling-total')).innerText()).match(/([\d.]+) kW/)[1]);
+  const base = await kw();
+  check('the cooling panel shows a sensible requirement for the test cellar (a fraction of a kW to a couple of kW)', base > 0.2 && base < 2.5, String(base));
+  check('every surface is listed with its watts, plus gains, the margin and the total', (await page.getByTestId('cooling-lines').locator('tr').count()) >= 10 && /Safety margin \(20%\)/.test(await page.getByTestId('cooling-lines').innerText()));
+  await (await reveal('cooling-ambient')).fill('42'); await page.getByTestId('cooling-ambient').press('Enter');
+  const hot = await kw();
+  check('a hotter design day needs more cooling', hot > base, `${base} -> ${hot}`);
+  check('the project keeps its own temperature, and a reset button appears', (await project(page)).cooling?.ambientC === 42 && (await page.getByTestId('cooling-reset').count()) === 1);
+  await (await reveal('cooling-target')).fill('10'); await page.getByTestId('cooling-target').press('Enter');
+  check('a colder target needs more still', (await kw()) > hot);
+  await page.getByTestId('cooling-reset').click();
+  check('the reset goes back to the Settings temperatures and the original figure', Math.abs((await kw()) - base) < 0.005 && (await page.getByTestId('cooling-reset').count()) === 0);
+  await (await reveal('cooling-target')).fill('40'); await page.getByTestId('cooling-target').press('Enter');
+  check('a target above the outside temperature says why there is no estimate', /must be below the outside design temperature/.test(await (await reveal('cooling-unavailable')).innerText()));
+  await page.getByTestId('cooling-reset').click();
+
+  // does the header's conditioner cover it?
+  const cond = (await project(page)).enclosure.header.find((c) => c.kind === 'CONDITIONER');
+  check('the test cellar has a conditioner in its header', !!cond);
+  const fit0 = await (await reveal('cooling-fit')).innerText();
+  check('with no rating entered it asks for one (never counted as zero)', /Enter the cooling capacity/.test(fit0), fit0);
+  await (await reveal(`capacity-${cond.id}`)).fill('3000'); await page.getByTestId(`capacity-${cond.id}`).press('Enter');
+  const fit1 = await (await reveal('cooling-fit')).innerText();
+  check('a big enough conditioner covers it, with the spare', /covers this, with [\d,]+ W \([\d,]+%\) to spare/.test(fit1), fit1);
+  await (await reveal(`capacity-${cond.id}`)).fill('100'); await page.getByTestId(`capacity-${cond.id}`).press('Enter');
+  const fit2 = await (await reveal('cooling-fit')).innerText();
+  check('a conditioner that is too small says by how much', /is [\d,]+ W short/.test(fit2), fit2);
+  await page.mouse.move(5, 5); await page.waitForTimeout(500); // let any tooltip finish fading before the scan
+  await scan(page, 'cooling panel with a shortfall');
+  if (out) { await page.waitForTimeout(500); await page.screenshot({ path: join(out, 'cooling.png') }); }
+
+  // the technician help carries the working and agrees with the panel
+  await page.getByTestId('calc-open').click();
+  const help = await page.getByTestId('calc-cooling').innerText();
+  check('"How the numbers are calculated" has a Cooling section with the same total', help.includes(`${(await kw()).toFixed(2)} kW`), help.slice(0, 200));
+  check('and the temperature difference and each surface', /Temperature difference[\s\S]*21 K/.test(help) && /North wall/.test(help) && /Ceiling/.test(help));
+  await page.keyboard.press('Escape');
   check('no script errors', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }

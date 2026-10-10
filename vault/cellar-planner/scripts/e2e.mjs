@@ -452,9 +452,9 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
   const { PDFDocument } = await import('pdf-lib');
   const { readFileSync } = await import('node:fs');
   const doc = await PDFDocument.load(readFileSync(file));
-  check('the PDF has 7 A3 landscape sheets and the preliminary subject', doc.getPageCount() === 7 && Math.abs(doc.getPage(0).getSize().width - 1190.55) < 0.1 && /Preliminary design only/.test(doc.getSubject() ?? ''), `${doc.getPageCount()}`);
+  check('the PDF has 8 A3 landscape sheets (the 7 drawings and the 3D view) and the preliminary subject', doc.getPageCount() === 8 && Math.abs(doc.getPage(0).getSize().width - 1190.55) < 0.1 && /Preliminary design only/.test(doc.getSubject() ?? ''), `${doc.getPageCount()}`);
   await p4.getByTestId('package-msg').waitFor();
-  check('the form says what it made: 7 sheets, A100 to A106', /Downloaded 7 sheets: A100, A101, A102, A103, A104, A105, A106/.test(await p4.getByTestId('package-msg').innerText()), await p4.getByTestId('package-msg').innerText());
+  check('the form says what it made: 8 sheets, A100 to A107 (the last is the 3D view)', /Downloaded 8 sheets: A100, A101, A102, A103, A104, A105, A106, A107/.test(await p4.getByTestId('package-msg').innerText()), await p4.getByTestId('package-msg').innerText());
   const kept = await p4.evaluate(() => window.cellar.store.getState().project.drawing);
   check('the title block details are kept with the design, so the next package starts filled in', kept?.client === 'Redkem Constructions' && kept?.address === '243 Kemp St New Farm QLD 4005' && kept?.projectNo === 'M0103' && kept?.company === 'Carter Noir');
   await p4.keyboard.press('Escape');

@@ -7,6 +7,7 @@ import type { UiStore } from '../app/uiStore';
 import { defaultReference, quoteBlockers, quoteFileName } from '../export/quote';
 import { Icon } from './icons';
 import { TextField } from './fields';
+import { insidePicture } from '../export/insidePicture';
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
@@ -55,7 +56,9 @@ export function QuoteModal({ store, ui, catalogue, fetchFn, storage }: { store: 
       if (keep.client !== customer || keep.address !== address) store.getState().edit((p) => ({ ...p, drawing: { ...keep, client: customer, address } }));
       // pdf-lib is loaded only now, so it stays out of the main bundle
       const { makeQuotePdf } = await import('../export/quotePdf');
-      const r = await makeQuotePdf(store.getState().project, cat, { reference, date, customer, address, notes });
+      let image: string | undefined;
+      try { image = await insidePicture(store.getState().project); } catch { image = undefined; }
+      const r = await makeQuotePdf(store.getState().project, cat, { reference, date, customer, address, notes, ...(image ? { image } : {}) });
       if (!r.ok) { setMsg(r.blockers.join(' ')); setBusy(false); return; }
       const url = URL.createObjectURL(new Blob([r.bytes as BlobPart], { type: 'application/pdf' }));
       const a = document.createElement('a');

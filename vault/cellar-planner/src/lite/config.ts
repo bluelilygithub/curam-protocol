@@ -21,6 +21,8 @@ export interface RackType {
 }
 /** Who the staff quote PDF is from and the owner's own terms (staff only: the public answer never carries them). */
 export interface QuoteSettings { businessName: string; details: string; terms: string; validityDays: number; gstNote: string }
+/** The assumptions behind the staff planner's indicative cooling estimate (staff only). See server/config/cellarLiteConfig.js for what each means. */
+export interface CoolingSettings { panelConductivity: number; glassU: number; floorU: number; internalGainsW: number; marginPct: number; targetC: number; ambientC: number }
 export interface LiteConfig {
   version: 1;
   promise: string;
@@ -38,6 +40,7 @@ export interface LiteConfig {
   doors: { singleMm: number; doubleMm: number };
   pricing: LitePricing;
   quote: QuoteSettings;
+  cooling: CoolingSettings;
   presets: LitePreset[];
 }
 
@@ -59,6 +62,7 @@ export const DEFAULT_CONFIG: LiteConfig = {
     note: 'A guide only. The final price depends on a site measure and the finishes you choose.',
   },
   quote: { businessName: '', details: '', terms: '', validityDays: 30, gstNote: '' },
+  cooling: { panelConductivity: 0.025, glassU: 1.4, floorU: 1, internalGainsW: 100, marginPct: 20, targetC: 14, ambientC: 35 },
   presets: [
     { id: 'small', name: 'Small cellar', widthMm: 1800, depthMm: 1500, heightMm: 2400, doorStyle: 'SINGLE' },
     { id: 'walk-in', name: 'Walk-in cellar', widthMm: 2750, depthMm: 1565, heightMm: 2150, doorStyle: 'SINGLE' },
@@ -69,6 +73,7 @@ export const DEFAULT_CONFIG: LiteConfig = {
 const R = {
   unitWidthMm: [400, 1200], unitHeightMm: [1000, 3000], unitDepthMm: [150, 1000], rowPitchMm: [60, 300], postsPerUnit: [1, 6], bottlesPerRow: [1, 40], rowsPerUnit: [1, 60], doorSingleMm: [700, 1300], doorDoubleMm: [1200, 2400],
   price: [0, 1000000], rangePct: [0, 50], roomWidthMm: [1000, 8000], roomDepthMm: [1000, 8000], roomHeightMm: [1800, 3200], quoteValidityDays: [1, 365],
+  panelConductivity: [0.01, 0.1], glassU: [0.5, 6], floorU: [0.1, 6], internalGainsW: [0, 5000], marginPct: [0, 100], targetC: [0, 25], ambientC: [15, 50],
 } as const;
 const ROUND_TO = [1, 10, 50, 100, 500, 1000];
 const MAX_RACK_TYPES = 8;
@@ -84,6 +89,11 @@ const int = (v: unknown, [lo, hi]: readonly [number, number], fallback: number):
   return Number.isFinite(n) && n >= lo && n <= hi ? Math.round(n) : fallback;
 };
 const optInt = (v: unknown, lim: readonly [number, number]): number | null => (v === undefined || v === null || v === '' ? null : int(v, lim, NaN) || null);
+const decimal = (v: unknown, [lo, hi]: readonly [number, number], fallback: number): number => {
+  if (v === undefined || v === null || v === '') return fallback;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= lo && n <= hi ? Math.round(n * 1000) / 1000 : fallback;
+};
 const money = (v: unknown): number | null => {
   if (v === undefined || v === null || v === '') return null;
   const n = Number(v);
@@ -126,6 +136,7 @@ export function normaliseConfig(raw: unknown): LiteConfig {
   const doors = isObj(src.doors) ? src.doors : {};
   const p = isObj(src.pricing) ? src.pricing : {};
   const q = isObj(src.quote) ? src.quote : {};
+  const cl = isObj(src.cooling) ? src.cooling : {};
   const T0 = D.rackTypes[0]!;
   const slug = (t: unknown): string => text(t ?? '', 40).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
   const parseType = (t: unknown, n: number): RackType | null => {
@@ -197,6 +208,11 @@ export function normaliseConfig(raw: unknown): LiteConfig {
       terms: q.terms === undefined ? D.quote.terms : multiline(q.terms, 1200),
       validityDays: int(q.validityDays, R.quoteValidityDays, D.quote.validityDays),
       gstNote: q.gstNote === undefined ? D.quote.gstNote : text(q.gstNote, 120),
+    },
+    cooling: {
+      panelConductivity: decimal(cl.panelConductivity, R.panelConductivity, D.cooling.panelConductivity), glassU: decimal(cl.glassU, R.glassU, D.cooling.glassU),
+      floorU: decimal(cl.floorU, R.floorU, D.cooling.floorU), internalGainsW: decimal(cl.internalGainsW, R.internalGainsW, D.cooling.internalGainsW),
+      marginPct: decimal(cl.marginPct, R.marginPct, D.cooling.marginPct), targetC: decimal(cl.targetC, R.targetC, D.cooling.targetC), ambientC: decimal(cl.ambientC, R.ambientC, D.cooling.ambientC),
     },
     presets,
   };

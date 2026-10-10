@@ -5,6 +5,7 @@ import type { AppStore } from '../app/store';
 import type { UiStore } from '../app/uiStore';
 import { Icon } from './icons';
 import { TextField } from './fields';
+import { insidePicture } from '../export/insidePicture';
 
 type Details = NonNullable<AppProject['drawing']>;
 const EMPTY: Details = { company: '', client: '', address: '', projectNo: '', drawnBy: '', checkedBy: '' };
@@ -44,7 +45,12 @@ export function PackageModal({ store, ui }: { store: AppStore; ui: UiStore }) {
       if (JSON.stringify(project.drawing ?? EMPTY) !== JSON.stringify(d)) store.getState().edit((p) => ({ ...p, drawing: d }));
       // pdf-lib is loaded only now, so it stays out of the main bundle
       const { makePackagePdf, packageFileName } = await import('../export/packagePdf');
-      const { bytes, sheets } = await makePackagePdf(store.getState().project, { ...d, date });
+      const current = store.getState().project;
+      // the 3D picture of the inside goes in as its own sheet (skipped quietly if it cannot be drawn)
+      let insideImage: string | undefined;
+      // only when there are racks to show: a picture of an empty room adds nothing
+      try { insideImage = current.runs.length ? await insidePicture(current) : undefined; } catch { insideImage = undefined; }
+      const { bytes, sheets } = await makePackagePdf(current, { ...d, date }, insideImage ? { insideImage } : {});
       const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }));
       const a = document.createElement('a');
       a.href = url; a.download = packageFileName(project.name);

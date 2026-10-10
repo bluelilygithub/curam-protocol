@@ -9,7 +9,7 @@ const W: RackType = { ...T, id: 'wide', name: 'Wide display', unitWidthMm: 900, 
 const cat = (over: Partial<Catalogue['pricing']> = {}, types: RackType[] = [T, W]): Catalogue => ({
   rackTypes: types, defaultRackType: types[0]!.id, doors: { singleMm: 970, doubleMm: 1500 },
   pricing: { ...DEFAULT_CONFIG.pricing, fixed: 2000, doorSingle: 500, doorDouble: 900, rangePct: 10, roundTo: 100, ...over },
-  quote: { ...DEFAULT_CONFIG.quote },
+  quote: { ...DEFAULT_CONFIG.quote }, cooling: { ...DEFAULT_CONFIG.cooling },
 });
 const unitsOf = (p: ReturnType<typeof testCaseProject>): number => p.runs.reduce((n, r) => n + r.units, 0);
 
