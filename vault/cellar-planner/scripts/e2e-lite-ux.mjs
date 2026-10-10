@@ -284,7 +284,9 @@ for (const [w, want] of [[320, 1], [390, 1], [600, 1], [700, 1], [701, 0], [768,
 await adminPut({ ...baseSettings, mobileNotice: { show: true, text: 'Please use our desk app or a tablet.' }, phone: '03 9123 4567' });
 ({ ctx, page } = await fresh({ notice: true, viewport: { width: 390, height: 800 }, isMobile: true, hasTouch: true }));
 await page.goto('http://localhost:8802/index.html'); await page.getByTestId('lite-phone-notice').waitFor();
-check('phone notice: shows the owner\'s own wording', (await page.getByTestId('lite-phone-notice-text').innerText()) === 'Please use our desk app or a tablet.');
+// the notice appears at once with the standard wording and switches to the owner's as soon as the settings arrive, so wait for that
+await page.waitForFunction(() => document.querySelector('[data-testid="lite-phone-notice-text"]')?.textContent === 'Please use our desk app or a tablet.', null, { timeout: 8000 }).catch(() => {});
+check('phone notice: shows the owner\'s own wording', (await page.getByTestId('lite-phone-notice-text').innerText()) === 'Please use our desk app or a tablet.', await page.getByTestId('lite-phone-notice-text').innerText());
 check('phone notice: offers to call when a number is set, as a link that dials, big enough to tap', (await page.getByTestId('lite-phone-call').getAttribute('href')) === 'tel:0391234567' && (await page.getByTestId('lite-phone-call').boundingBox()).height >= 43);
 await ctx.close();
 await adminPut({ ...baseSettings, mobileNotice: { show: true, text: '   ' } });

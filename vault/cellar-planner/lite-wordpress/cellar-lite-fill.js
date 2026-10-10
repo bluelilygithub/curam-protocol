@@ -42,7 +42,7 @@
   var STICKY_MAX_WIDTH = 640;   // "phone width" in pixels
   var TRACK_EVENTS = true;      // push the planner's usage events to window.dataLayer
   // 5. Set to false once everything works. While true, each step is written to the browser Console (F12), every line starting "[cellar-lite]".
-  var DEBUG = true;
+  var DEBUG = false;
   function log() { if (DEBUG && window.console) console.log.apply(console, ['[cellar-lite]'].concat([].slice.call(arguments))); }
   log('script loaded on', window.location.href, '| expecting planner from', PLANNER_ORIGIN, '| contact page', CONTACT_URL);
 
