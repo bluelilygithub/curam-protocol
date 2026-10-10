@@ -5,10 +5,13 @@ import { analyseApp, fullRuns } from '../app/model';
 import { badRunIds, planView, rackFaceView, rackWallSummary } from '../views';
 import { DrawingView } from '../ui/DrawingView';
 import { CellarView } from './CellarView';
+import { buildScene } from './cellarScene';
+import { makeThumb } from './thumbnail';
 import { LiteHelp, LITE_HELP_KEY } from './LiteHelp';
 import { PriceHelp } from './PriceHelp';
+import { DoorPicker } from './DoorPicker';
 import { TooltipHost } from '@planner-core/help/TooltipHost';
-import { DEFAULT_CONFIG, loadConfig, type LiteConfig, type LitePreset } from './config';
+import { DEFAULT_CONFIG, loadConfig, telHref, type LiteConfig, type LitePreset } from './config';
 import { priceRange } from './price';
 import { suggestFix } from './fixes';
 import { track, type EventName } from './events';
@@ -66,6 +69,7 @@ export function LiteApp() {
   const [copied, setCopied] = useState<'' | 'done' | 'failed'>('');
   const [linkCopied, setLinkCopied] = useState<'' | 'done' | 'failed'>('');
   const [pdf, setPdf] = useState<'' | 'working' | 'done' | 'failed'>('');
+  const [thumb, setThumb] = useState('');
   // the owner's settings (rack sizes, prices, starting rooms): the built-in defaults until the real ones arrive, and still if they never do
   const [cfg, setCfg] = useState<LiteConfig>(DEFAULT_CONFIG);
   const codeBox = useRef<HTMLTextAreaElement>(null);
@@ -91,8 +95,16 @@ export function LiteApp() {
     // only a design the visitor has changed is worth remembering: the untouched standard room would just greet them as "welcome back" for nothing
     if (code === encodeDesign(defaultLite())) clearLastDesign(); else writeLastDesign(code);
     const to = parentOrigin();
-    if (to) window.parent.postMessage({ type: MESSAGE_TYPE, version: 1, code, summary, bottles: result.bottles, priceText: price?.text ?? '', requested: asked }, to);
-  }, [code, summary, result.bottles, price, asked]);
+    if (to) window.parent.postMessage({ type: MESSAGE_TYPE, version: 1, code, summary, bottles: result.bottles, priceText: price?.text ?? '', thumb, requested: asked }, to);
+  }, [code, summary, result.bottles, price, asked, thumb]);
+
+  // a small picture for the page's phone bar, redrawn a moment after the design stops changing (only when embedded: standalone nobody shows it)
+  useEffect(() => {
+    if (!embedded || result.problems.length) return undefined;
+    const t = window.setTimeout(() => { try { setThumb(makeThumb(buildScene({ ...insideInput, yawDeg: 0 }))); } catch { setThumb(''); } }, 350);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [insideInput, result.problems.length]);
 
   // the first change to the design counts as "started" (once)
   useEffect(() => {
@@ -105,11 +117,15 @@ export function LiteApp() {
   useEffect(() => {
     const to = parentOrigin();
     if (!to || typeof ResizeObserver === 'undefined') return undefined;
-    let raf = 0, last = 0;
+    let raf = 0, last = '';
     const send = (): void => {
       raf = 0;
       const h = Math.ceil(document.documentElement.scrollHeight);
-      if (h !== last) { last = h; window.parent.postMessage({ type: HEIGHT_TYPE, version: 1, height: h }, to); }
+      // where the big picture sits in the page, so the page around us knows when it is on screen
+      const pic = document.querySelector('.lite-drawing')?.getBoundingClientRect();
+      const top = pic ? Math.round(pic.top + window.scrollY) : 0, bottom = pic ? Math.round(pic.bottom + window.scrollY) : 0;
+      const key = `${h}/${top}/${bottom}`;
+      if (key !== last) { last = key; window.parent.postMessage({ type: HEIGHT_TYPE, version: 1, height: h, pictureTop: top, pictureBottom: bottom }, to); }
     };
     const ro = new ResizeObserver(() => { if (!raf) raf = requestAnimationFrame(send); });
     ro.observe(document.body);
@@ -249,13 +265,14 @@ export function LiteApp() {
             {numField('heightMm', 'Inside height', 'Floor to ceiling.')}
           </div>
           <div className="lite-sizes" data-tour="lt-door">
-            <label className="field">
-              <span className="field-label">Door on the</span>
-              <select value={s.doorWall} onChange={(ev) => setS({ ...s, doorWall: ev.target.value as WallSide })} title="Which wall of the drawing the door is on. South is the bottom, North the top, West the left, East the right." data-testid="lite-door">
+            <div className="field">
+              <span className="field-label" id="lite-doorwall-label">Door on the</span>
+              <DoorPicker wall={s.doorWall} widthMm={s.widthMm} depthMm={s.depthMm} onPick={(w) => { setS((cur) => ({ ...cur, doorWall: w })); say('door_pick'); }} />
+              <select aria-labelledby="lite-doorwall-label" value={s.doorWall} onChange={(ev) => setS({ ...s, doorWall: ev.target.value as WallSide })} title="Which wall of the drawing the door is on. South is the bottom, North the top, West the left, East the right." data-testid="lite-door">
                 {WALLS.map((w) => <option key={w} value={w}>{WALL_NAMES[w]} wall</option>)}
               </select>
-              <small className="field-hint">South is the bottom of the drawing, North the top, West the left, East the right.</small>
-            </label>
+              <small className="field-hint">Tap the wall in the picture, or choose it here. The top of the picture is North, the bottom South, the left West and the right East.</small>
+            </div>
             <label className="field">
               <span className="field-label">Door type</span>
               <select value={s.doorStyle} onChange={(ev) => setS({ ...s, doorStyle: ev.target.value as DoorStyle })} title="One door, or a pair of doors that open together. A pair takes more wall." data-testid="lite-door-style">
@@ -363,6 +380,9 @@ export function LiteApp() {
             {copied === 'done' && <p className="lite-note" role="status">Copied.</p>}
             {copied === 'failed' && <p className="lite-note" role="status">Could not copy automatically: the text above is selected, so copy it by hand.</p>}
           </div>
+        )}
+        {cfg.phone && (
+          <a className="btn lite-call" href={telHref(cfg.phone)} onClick={() => say('call')} title="Rather talk to someone? Tap to call. On a computer this opens your calling app, if you have one." data-testid="lite-call">Prefer to talk? Call {cfg.phone}</a>
         )}
       </section>
       <PriceHelp open={priceHelpOpen && !!price} onClose={() => setPriceHelpOpen(false)} cfg={cfg} facts={{ units: rackUnitCount(result.project), doorStyle: s.doorStyle, bottles: result.bottles, roomText, bottleLabel: BOTTLE_PROFILES[s.bottle].label }} />

@@ -54,9 +54,17 @@ const withConfig = async (page) => page.route('https://curam-vault.up.railway.ap
   route.fulfill({ status: r.status, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' }, body: await r.text() });
 });
 const fresh = async (opts = {}) => { const ctx = await browser.newContext({ viewport: { width: 1000, height: 1100 }, acceptDownloads: true, permissions: ['clipboard-read', 'clipboard-write'], ...opts }); const page = await ctx.newPage(); await withConfig(page); const errors = []; page.on('pageerror', (e) => errors.push(e.message)); return { ctx, page, errors }; };
+const frameDoorPick = async (page) => {
+  await page.frameLocator('#f').getByTestId('lite-doorpick-NORTH').click();
+  await page.waitForTimeout(500);
+  const ev = await page.evaluate(() => window.dataLayer.map((e) => JSON.stringify(e)));
+  check('events: tapping a door wall is counted (and nothing else is sent with it)', ev.some((e) => /cellar_lite_door_pick/.test(e)) && ev.every((e) => !/NORTH|CL1\./.test(e)), ev.join(' | '));
+};
 const bottles = async (page) => Number((await page.getByTestId('lite-bottles').innerText()).match(/\d+/)[0]);
 
-await adminPut({ quoteNote: 'We reply within a day.', pricing: { show: true, perUnit: 1000, fixed: 500, doorSingle: 200, doorDouble: 400 } });
+const baseSettings = { quoteNote: 'We reply within a day.', pricing: { show: true, perUnit: 1000, fixed: 500, doorSingle: 200, doorDouble: 400 } };
+// a save replaces the whole settings object, so each step below says everything it wants
+await adminPut(baseSettings);
 
 // ================= 1. a first-time visitor
 let { ctx, page, errors } = await fresh();
@@ -122,6 +130,24 @@ await page.getByRole('button', { name: 'Keep editing' }).click();
 const untipped = await page.evaluate(() => [...document.querySelectorAll('button, input, select, textarea')].filter((el) => el.offsetParent !== null && !el.hasAttribute('title') && !el.hasAttribute('data-tip')).map((el) => el.getAttribute('data-testid') || el.outerHTML.slice(0, 70)));
 check('every visible control still has a tooltip (units, fix, slider, download...)', untipped.length === 0, JSON.stringify(untipped));
 
+// ---- tap-to-choose door wall
+await page.getByTestId('lite-door').selectOption('SOUTH');
+const radios = page.getByTestId('lite-doorpick').getByRole('radio');
+check('door picture: four walls to tap, as radio buttons with names', (await radios.count()) === 4 && /Top wall \(North\)/.test(await page.getByTestId('lite-doorpick-NORTH').getAttribute('aria-label')));
+check('door picture: the current wall is the one marked', (await page.getByTestId('lite-doorpick-SOUTH').getAttribute('aria-checked')) === 'true' && (await page.getByTestId('lite-doorpick-NORTH').getAttribute('aria-checked')) === 'false');
+await page.getByTestId('lite-doorpick-EAST').click();
+check('door picture: tapping a wall moves the door (the menu follows)', (await page.getByTestId('lite-door').inputValue()) === 'EAST' && (await page.getByTestId('lite-doorpick-EAST').getAttribute('aria-checked')) === 'true' && (await page.getByTestId('lite-doorpick-SOUTH').getAttribute('aria-checked')) === 'false');
+await page.getByTestId('lite-door').selectOption('WEST');
+check('door picture: choosing from the menu moves the marked wall', (await page.getByTestId('lite-doorpick-WEST').getAttribute('aria-checked')) === 'true');
+await page.getByTestId('lite-doorpick-NORTH').focus();
+await page.keyboard.press('Enter');
+check('door picture: works from the keyboard (focus a wall, Enter)', (await page.getByTestId('lite-door').inputValue()) === 'NORTH');
+const dpSouth = await page.getByTestId('lite-doorpick-SOUTH').boundingBox();
+const dpWest = await page.getByTestId('lite-doorpick-WEST').boundingBox();
+check('door picture: every wall button is at least 44px tall to tap', dpSouth.height >= 43.5 && dpWest.height >= 43.5, JSON.stringify([dpSouth, dpWest]));
+await page.getByTestId('lite-doorpick-SOUTH').click();
+check('no call button when no number is set', (await page.getByTestId('lite-call').count()) === 0);
+
 // ---- unit and design are remembered
 const widthBefore = await page.getByTestId('lite-widthMm').inputValue();
 await page.getByTestId('lite-unit-ft').click();
@@ -138,14 +164,31 @@ check('a shared link does not say "welcome back"', await (async () => { await pa
 check('no script errors (standalone)', errors.length === 0, errors.join(' | '));
 await ctx.close();
 
+// ================= 1b. the call button
+await adminPut({ ...baseSettings, phone: '03 9123 4567' });
+({ ctx, page, errors } = await fresh());
+await page.goto('http://localhost:8802/index.html');
+await page.getByTestId('lite-call').waitFor({ timeout: 8000 }).catch(() => {});
+check('call button: shows the number the owner set, as a link that dials', (await page.getByTestId('lite-call').count()) === 1 && (await page.getByTestId('lite-call').getAttribute('href')) === 'tel:0391234567' && /Call 03 9123 4567/.test(await page.getByTestId('lite-call').innerText()), await page.getByTestId('lite-call').innerText().catch(() => ''));
+check('call button: big enough to tap, and has a tooltip', (await page.getByTestId('lite-call').boundingBox()).height >= 38 && /talk to someone/i.test(await page.getByTestId('lite-call').getAttribute('title')));
+await ctx.close();
+await adminPut(baseSettings);
+
 // ================= 2. drag direction of the inside view
 ({ ctx, page, errors } = await fresh());
 await page.goto('http://localhost:8802/index.html');
 await page.getByTestId('lite-inside-canvas').waitFor();
 await page.waitForTimeout(500);
 const doorX0 = Number(await page.getByTestId('lite-inside-canvas').getAttribute('data-doorx'));
+await page.getByTestId('lite-inside-canvas').scrollIntoViewIfNeeded();
+await page.waitForTimeout(300);
 const box = await page.getByTestId('lite-inside-canvas').boundingBox();
-await page.mouse.move(box.x + 300, box.y + 200); await page.mouse.down(); await page.mouse.move(box.x + 420, box.y + 200, { steps: 6 }); await page.mouse.up();
+const cursorOf = () => page.getByTestId('lite-inside-canvas').evaluate((el) => getComputedStyle(el.querySelector('.konvajs-content') || el).cursor);
+await page.mouse.move(box.x + 300, box.y + 200);
+check('the pointer is an open hand over the picture (it can be dragged)', (await cursorOf()) === 'grab', await cursorOf());
+await page.mouse.down();
+check('and a closed hand while dragging', (await cursorOf()) === 'grabbing', await cursorOf()); await page.mouse.move(box.x + 420, box.y + 200, { steps: 6 }); await page.mouse.up();
+check('and back to an open hand when let go', (await cursorOf()) === 'grab', await cursorOf());
 await page.waitForTimeout(400);
 const yaw = Number(await page.getByTestId('lite-inside-canvas').getAttribute('data-yaw'));
 check('dragging turns the inside view (and a Reset button appears)', Math.abs(yaw) > 3 && (await page.getByTestId('lite-inside-reset').count()) === 1, `yaw ${yaw}`);
@@ -154,6 +197,11 @@ check('dragging right moves the scene right (like grabbing it)', doorX1 > doorX0
 await page.getByTestId('lite-inside-reset').click();
 await page.waitForTimeout(300);
 check('Reset looks straight ahead again', Number(await page.getByTestId('lite-inside-canvas').getAttribute('data-yaw')) === 0);
+await page.getByTestId('lite-tab-plan').click();
+await page.waitForTimeout(300);
+const planCursor = await page.getByTestId('lite-plan-canvas').evaluate((el) => getComputedStyle(el.querySelector('.konvajs-content') || el).cursor);
+check('the plan (which pans) shows the open hand too', planCursor === 'grab', planCursor);
+
 await ctx.close();
 
 // ================= 3. embedded in the business's page, with the real script
@@ -190,6 +238,18 @@ check('phone width: the quote bar is shown while the planner is on screen, with 
 await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 await page.waitForTimeout(600);
 check('and is hidden once the planner has scrolled out of view', (await page.evaluate(() => getComputedStyle(document.getElementById('cellar-lite-bar')).display)) === 'none');
+await page.evaluate(() => window.scrollTo(0, 400));
+await page.waitForTimeout(500);
+// the little picture: shown in the bar while the big picture is off screen, hidden while it is on screen
+const thumbInfo = await page.evaluate(() => { const i = document.querySelector('#cellar-lite-bar img'); return i ? { display: getComputedStyle(i).display, src: i.src.slice(0, 23), w: i.naturalWidth, h: i.naturalHeight, len: i.src.length } : null; });
+check('phone bar: while editing, it shows a live picture of the cellar (a real JPEG)', !!thumbInfo && thumbInfo.display === 'block' && thumbInfo.src === 'data:image/jpeg;base64,' && thumbInfo.w === 180 && thumbInfo.h === 112 && thumbInfo.len < 40000, JSON.stringify(thumbInfo));
+await frameDoorPick(page);
+const picTop = await page.evaluate(() => { const f = document.getElementById('f').getBoundingClientRect(); return f.top + window.scrollY; });
+const picY = await page.frameLocator('#f').locator('.lite-drawing').evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
+await page.evaluate((y) => window.scrollTo(0, y), picTop + picY - 40);
+await page.waitForTimeout(700);
+const thumbHidden = await page.evaluate(() => { const i = document.querySelector('#cellar-lite-bar img'); const b = document.getElementById('cellar-lite-bar'); return { img: getComputedStyle(i).display, bar: getComputedStyle(b).display }; });
+check('phone bar: when the big picture is on screen the little one is hidden (never shown twice), the bar stays', thumbHidden.img === 'none' && thumbHidden.bar === 'flex', JSON.stringify(thumbHidden));
 await page.evaluate(() => window.scrollTo(0, 400));
 await page.waitForTimeout(500);
 await page.locator('#cellar-lite-bar button').click();

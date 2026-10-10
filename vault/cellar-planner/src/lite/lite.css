@@ -57,3 +57,19 @@ html, body, #root { height: auto; min-height: 100%; }
 .lite-fix { margin: 8px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .lite-slider { width: 100%; margin-top: 8px; accent-color: var(--primary); min-height: 28px; }
 @media (max-width: 480px) { .lite-steps { gap: 6px; } .lite-steps li { padding: 4px 10px 4px 4px; font-size: 13px; gap: 6px; } .lite-steps li b { width: 22px; height: 22px; font-size: 12px; } }
+
+/* tap-to-choose door wall: a room outline with a button on each wall */
+.doorpick { display: grid; grid-template-columns: minmax(56px, 70px) minmax(120px, 1fr) minmax(56px, 70px); grid-template-rows: 44px minmax(110px, 1fr) 44px; gap: 6px; max-width: 340px; margin: 4px 0 8px; }
+.doorpick-btn { min-height: 44px; border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--text); font: inherit; font-size: 14px; cursor: pointer; transition: opacity 200ms, background-color 200ms; }
+.doorpick-btn:hover { opacity: .7; }
+.doorpick-btn.on { background: var(--primary-dark, var(--primary)); border-color: var(--primary-dark, var(--primary)); color: #fff; font-weight: 700; }
+.doorpick-btn.on:hover { opacity: 1; }
+.doorpick-n { grid-column: 2; grid-row: 1; } .doorpick-s { grid-column: 2; grid-row: 3; } .doorpick-w { grid-column: 1; grid-row: 2; } .doorpick-e { grid-column: 3; grid-row: 2; }
+.doorpick-room { grid-column: 2; grid-row: 2; display: flex; align-items: center; justify-content: center; }
+.doorpick-floor { position: relative; background: #efe3cd; border: 5px solid #4b5159; border-radius: 3px; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+.doorpick-you { font-size: 12px; color: var(--muted); }
+.doorpick-door { position: absolute; background: #e6b95c; }
+.doorpick-door-north, .doorpick-door-south { left: 30%; width: 40%; height: 9px; } .doorpick-door-north { top: -9px; } .doorpick-door-south { bottom: -9px; }
+.doorpick-door-west, .doorpick-door-east { top: 30%; height: 40%; width: 9px; } .doorpick-door-west { left: -9px; } .doorpick-door-east { right: -9px; }
+
+.lite-call { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; text-align: center; }

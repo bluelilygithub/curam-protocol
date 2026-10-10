@@ -141,7 +141,7 @@ export function DrawingView({ prims, testid, description, ctrlZoom = false, look
     };
     s.on('mousedown touchstart', (ev) => {
       const p = two(ev as Konva.KonvaEventObject<TouchEvent>);
-      if (p) { Object.assign(pinch, p); drag.current = null; } else drag.current = s.getPointerPosition();
+      if (p) { Object.assign(pinch, p); drag.current = null; } else { drag.current = s.getPointerPosition(); el.classList.add('dragging'); }
     });
     s.on('mousemove touchmove', (ev) => {
       const p = ev.evt instanceof TouchEvent ? two(ev as Konva.KonvaEventObject<TouchEvent>) : null;
@@ -161,7 +161,7 @@ export function DrawingView({ prims, testid, description, ctrlZoom = false, look
       drag.current = pos; touched.current = true; redraw();
     });
     s.on('mouseup mouseleave touchend touchcancel', (ev) => {
-      drag.current = null; pinch.d = 0;
+      drag.current = null; pinch.d = 0; el.classList.remove('dragging');
       // one finger left after a pinch: carry on panning from where it is, without a jump
       if (ev.evt instanceof TouchEvent && ev.evt.touches.length === 1) { const r = s.container().getBoundingClientRect(), t = ev.evt.touches[0]; drag.current = { x: t.clientX - r.left, y: t.clientY - r.top }; }
     });

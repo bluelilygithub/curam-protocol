@@ -16,7 +16,7 @@ body { background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans
 .tab.on { background: var(--primary); color: #fff; border-color: var(--primary); } .tab.small, .btn.small { padding: 3px 9px; font-size: 12px; }
 .hint { margin-left: auto; color: var(--muted); font-size: 12px; }
 .drawing { position: relative; flex: 1; min-height: 0; background: #fff; }
-.drawing-canvas { position: absolute; inset: 0; touch-action: none; } .drawing .fit { position: absolute; right: 10px; top: 10px; }
+.drawing-canvas { position: absolute; inset: 0; touch-action: none; cursor: grab; } .drawing-canvas.dragging { cursor: grabbing; } .drawing .fit { position: absolute; right: 10px; top: 10px; }
 .foot { margin: 0; padding: 4px 10px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); background: var(--surface); text-align: center; letter-spacing: .02em; }
 .section-toggle { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 6px; width: 100%; cursor: pointer; transition: opacity 200ms; } .section-toggle:hover { opacity: .7; } .section-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; } .section-toggle .chev { width: 10px; }
 .section-collapse { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 350ms ease, opacity 350ms ease; } .section-inner { min-height: 0; overflow: hidden; }

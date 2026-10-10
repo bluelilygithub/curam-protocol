@@ -15,6 +15,7 @@
     "example": "vite-node scripts/writeExample.mjs",
     "dev:lite": "vite --config vite.lite.config.ts",
     "build:lite": "vite build --config vite.lite.config.ts",
+    "zip:lite": "vite build --config vite.lite.config.ts && node scripts/zipLite.mjs",
     "build:lite:vault": "vite build --config vite.lite.config.ts --outDir ../dist/cellar-lite"
   },
   "devDependencies": {

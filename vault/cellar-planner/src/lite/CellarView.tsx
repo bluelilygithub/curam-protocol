@@ -9,12 +9,12 @@ const BASE: Record<string, [number, number, number]> = {
 };
 const shade = ([r, g, b]: [number, number, number], k: number): string => `rgb(${Math.round(r * k)},${Math.round(g * k)},${Math.round(b * k)})`;
 
-function paint(layer: Konva.Layer, scene: Scene, w: number, h: number): void {
+export function paint(layer: Konva.Layer, scene: Scene, w: number, h: number, opts: { pad?: number; labels?: boolean } = {}): void {
   layer.destroyChildren();
   const bg = new Konva.Rect({ x: 0, y: 0, width: w, height: h, fillLinearGradientStartPoint: { x: 0, y: 0 }, fillLinearGradientEndPoint: { x: 0, y: h }, fillLinearGradientColorStops: [0, '#f6f2ea', 1, '#e3d9c6'], listening: false });
   layer.add(bg);
   const { bounds: b } = scene;
-  const pad = 28;
+  const pad = opts.pad ?? 28;
   const k = Math.min((w - pad * 2) / Math.max(1, b.x1 - b.x0), (h - pad * 2) / Math.max(1, b.y1 - b.y0));
   const ox = (w - (b.x1 - b.x0) * k) / 2 - b.x0 * k, oy = (h - (b.y1 - b.y0) * k) / 2 - b.y0 * k;
   const X = (x: number): number => ox + x * k, Y = (y: number): number => oy + y * k;
@@ -49,7 +49,7 @@ function paint(layer: Konva.Layer, scene: Scene, w: number, h: number): void {
     it.draw();
     if (items.indexOf(it) === 0) for (const l of scene.lines) layer.add(new Konva.Line({ points: flat(l.pts), stroke: 'rgba(110,80,40,0.16)', strokeWidth: 1, listening: false }));
   }
-  if (scene.door) {
+  if (scene.door && opts.labels !== false) {
     layer.add(new Konva.Text({ x: X(scene.door.x) - 20, y: Y(scene.door.y) + 6, text: 'Door ▲', fontSize: 12, fontFamily: 'system-ui, sans-serif', fill: '#7a5a1c', listening: false }));
   }
   layer.batchDraw();
@@ -74,14 +74,14 @@ export function CellarView({ input, testid, description }: { input: Omit<SceneIn
     const ro = new ResizeObserver(() => { const w = el.clientWidth, h = el.clientHeight; if (w && h) { s.size({ width: w, height: h }); setSize({ w, h }); } });
     ro.observe(el);
     // dragging turns the view a little to the left or right
-    s.on('mousedown touchstart', () => { drag.current = { x: s.getPointerPosition()?.x ?? 0, yaw: yawRef.current }; });
+    s.on('mousedown touchstart', () => { drag.current = { x: s.getPointerPosition()?.x ?? 0, yaw: yawRef.current }; el.classList.add('dragging'); });
     s.on('mousemove touchmove', () => {
       const p = s.getPointerPosition();
       if (!drag.current || !p) return;
       // dragging right slides the camera left, so the room appears to follow the hand
       setYaw(Math.max(-40, Math.min(40, drag.current.yaw - (p.x - drag.current.x) * 0.15)));
     });
-    s.on('mouseup mouseleave touchend touchcancel', () => { drag.current = null; });
+    s.on('mouseup mouseleave touchend touchcancel', () => { drag.current = null; el.classList.remove('dragging'); });
     return () => { ro.disconnect(); s.destroy(); stage.current = null; layer.current = null; };
   }, []);
   const yawRef = useRef(yaw);

@@ -20,6 +20,7 @@ const DEFAULTS = Object.freeze({
   version: 1,
   promise: 'Free to use. No sign-up. Takes about two minutes. You only share your details if you ask for a quote.',
   quoteNote: 'We usually reply within one business day.',
+  phone: '',
   rack: { unitWidthMm: 600, unitHeightMm: 2000 },
   doors: { singleMm: 970, doubleMm: 1500 },
   pricing: {
@@ -58,6 +59,16 @@ function validateConfig(raw) {
     const n = Number(v);
     if (!Number.isFinite(n) || n < LIMITS.price[0] || n > LIMITS.price[1]) { errors.push(`${label} must be a price between 0 and ${LIMITS.price[1].toLocaleString('en-AU')}, or left blank.`); return null; }
     return Math.round(n * 100) / 100;
+  };
+
+  /** A phone number the visitor can tap to call: digits with an optional leading +, and spaces, hyphens, dots or brackets for readability. Blank hides the button. */
+  const cleanPhone = (v) => {
+    if (v === undefined || v === null) return '';
+    const t = cleanText(v, 24);
+    if (!t) return '';
+    const digits = t.replace(/\D/g, '');
+    if (!/^\+?[\d\s().-]+$/.test(t) || digits.length < 6 || digits.length > 15) { errors.push('The phone number must have 6 to 15 digits (spaces, + - . and brackets are fine), or be left blank.'); return ''; }
+    return t;
   };
 
   const rack = isObj(src.rack) ? src.rack : {};
@@ -108,6 +119,7 @@ function validateConfig(raw) {
     version: 1,
     promise: src.promise === undefined ? D.promise : cleanText(src.promise, 200),
     quoteNote: src.quoteNote === undefined ? D.quoteNote : cleanText(src.quoteNote, 200),
+    phone: cleanPhone(src.phone),
     rack: {
       unitWidthMm: int(rack.unitWidthMm, LIMITS.unitWidthMm, D.rack.unitWidthMm, 'The rack unit width'),
       unitHeightMm: int(rack.unitHeightMm, LIMITS.unitHeightMm, D.rack.unitHeightMm, 'The rack unit height'),

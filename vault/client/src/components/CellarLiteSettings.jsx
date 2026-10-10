@@ -16,6 +16,7 @@ const MAX_PRESETS = 6;
 const toForm = (c) => ({
   promise: c.promise ?? '',
   quoteNote: c.quoteNote ?? '',
+  phone: c.phone ?? '',
   unitWidthMm: String(c.rack.unitWidthMm), unitHeightMm: String(c.rack.unitHeightMm),
   singleMm: String(c.doors.singleMm), doubleMm: String(c.doors.doubleMm),
   show: !!c.pricing.show, currency: c.pricing.currency ?? '$',
@@ -27,6 +28,7 @@ const toConfig = (f) => ({
   version: 1,
   promise: f.promise,
   quoteNote: f.quoteNote,
+  phone: f.phone,
   rack: { unitWidthMm: f.unitWidthMm, unitHeightMm: f.unitHeightMm },
   doors: { singleMm: f.singleMm, doubleMm: f.doubleMm },
   pricing: { show: f.show, currency: f.currency, fixed: f.fixed, perUnit: f.perUnit, doorSingle: f.doorSingle, doorDouble: f.doorDouble, rangePct: f.rangePct, roundTo: f.roundTo, note: f.note },
@@ -230,6 +232,9 @@ export default function CellarLiteSettings({ onDirtyChange }) {
 
       <section className={CARD} style={CARD_STYLE}>
         <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>On the page</h3>
+        <Field label="Phone number" tip="Shows a Call us button on the planner. On a phone, tapping it dials this number. Leave blank to hide the button." hint="For example: 03 9123 4567. Leave blank to show no call button.">
+          <input type="text" inputMode="tel" value={form.phone} maxLength={24} onChange={(e) => set('phone', e.target.value)} className={INPUT} style={FIELD_STYLE} />
+        </Field>
         <Field label="After a visitor asks for a quote" tip="A reassuring line shown once they press Request a quote, such as when you will reply. Leave blank to show nothing." hint="For example: We usually reply within one business day.">
           <textarea value={form.quoteNote} rows={2} maxLength={200} onChange={(e) => set('quoteNote', e.target.value)} className={INPUT} style={FIELD_STYLE} />
         </Field>

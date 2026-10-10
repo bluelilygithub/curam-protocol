@@ -15,6 +15,8 @@ export interface LiteConfig {
   promise: string;
   /** Shown once the visitor asks for a quote (when we will reply). */
   quoteNote: string;
+  /** A number the visitor can tap to call; blank = no call button. */
+  phone: string;
   rack: { unitWidthMm: number; unitHeightMm: number };
   doors: { singleMm: number; doubleMm: number };
   pricing: LitePricing;
@@ -25,6 +27,7 @@ export const DEFAULT_CONFIG: LiteConfig = {
   version: 1,
   promise: 'Free to use. No sign-up. Takes about two minutes. You only share your details if you ask for a quote.',
   quoteNote: 'We usually reply within one business day.',
+  phone: '',
   rack: { unitWidthMm: 600, unitHeightMm: 2000 },
   doors: { singleMm: 970, doubleMm: 1500 },
   pricing: {
@@ -57,6 +60,16 @@ const money = (v: unknown): number | null => {
   return Number.isFinite(n) && n >= R.price[0] && n <= R.price[1] ? Math.round(n * 100) / 100 : null;
 };
 
+const cleanPhone = (v: unknown): string => {
+  if (v === undefined || v === null) return '';
+  const t = text(v, 24);
+  const digits = t.replace(/\D/g, '');
+  return t && /^\+?[\d\s().-]+$/.test(t) && digits.length >= 6 && digits.length <= 15 ? t : '';
+};
+
+/** What to put after "tel:" so the phone dials it: digits with an optional leading +. */
+export const telHref = (phone: string): string => `tel:${(phone.trim().startsWith('+') ? '+' : '') + phone.replace(/\D/g, '')}`;
+
 /** Never trusts what came over the network: anything missing or out of range becomes the default, so the tool can always be built from the result. */
 export function normaliseConfig(raw: unknown): LiteConfig {
   const D = DEFAULT_CONFIG;
@@ -88,6 +101,7 @@ export function normaliseConfig(raw: unknown): LiteConfig {
     version: 1,
     promise: src.promise === undefined ? D.promise : text(src.promise, 200),
     quoteNote: src.quoteNote === undefined ? D.quoteNote : text(src.quoteNote, 200),
+    phone: cleanPhone(src.phone),
     rack: { unitWidthMm: int(rack.unitWidthMm, R.unitWidthMm, D.rack.unitWidthMm), unitHeightMm: int(rack.unitHeightMm, R.unitHeightMm, D.rack.unitHeightMm) },
     doors: { singleMm: int(doors.singleMm, R.doorSingleMm, D.doors.singleMm), doubleMm: int(doors.doubleMm, R.doorDoubleMm, D.doors.doubleMm) },
     pricing,

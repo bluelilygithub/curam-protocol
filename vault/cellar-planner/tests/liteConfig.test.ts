@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { DEFAULT_CONFIG, configUrl, loadConfig, normaliseConfig, VAULT_ORIGIN, type LiteConfig } from '../src/lite/config';
+import { DEFAULT_CONFIG, configUrl, loadConfig, normaliseConfig, telHref, VAULT_ORIGIN, type LiteConfig } from '../src/lite/config';
 import { priceRange } from '../src/lite/price';
 import { defaultLite, liteResult, liteToProject, rackUnitCount, summaryLine } from '../src/lite/settings';
 
@@ -24,11 +24,24 @@ describe('the browser and the server agree on what a setting is', () => {
       { pricing: { show: true, perUnit: -4, doorDouble: 'free' } },
       { promise: '  Hello\n world  ', presets: [{ name: 'A', widthMm: 2000, depthMm: 2000, heightMm: 2400, doorStyle: 'DOUBLE' }, { name: '', widthMm: 2000, depthMm: 2000, heightMm: 2400 }, { name: 'B', widthMm: 99, depthMm: 2000, heightMm: 2400 }] },
       { presets: [] },
+      { phone: '03 9123 4567' }, { phone: '+61 3 9123 4567' }, { phone: 'call me' }, { phone: '123' }, { phone: '' }, { phone: { a: 1 } }, { phone: '<b>1234567</b>' },
       { presets: new Array(9).fill({ name: 'x', widthMm: 2000, depthMm: 2000, heightMm: 2400, id: 'same' }) },
     ];
     for (const raw of inputs) {
       expect(normaliseConfig(raw), JSON.stringify(raw)).toEqual(server.validateConfig(raw).config);
     }
+  });
+});
+
+describe('the call button', () => {
+  it('dials the digits, keeping a leading +', () => {
+    expect(telHref('03 9123 4567')).toBe('tel:0391234567');
+    expect(telHref('+61 3 9123-4567')).toBe('tel:+61391234567');
+    expect(telHref('(03) 9123 4567')).toBe('tel:0391234567');
+  });
+  it('a bad number is dropped, so there is no button rather than a broken one', () => {
+    expect(normaliseConfig({ phone: 'call me' }).phone).toBe('');
+    expect(normaliseConfig({ phone: '03 9123 4567' }).phone).toBe('03 9123 4567');
   });
 });
 

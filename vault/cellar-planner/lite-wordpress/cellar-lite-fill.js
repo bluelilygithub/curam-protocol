@@ -39,9 +39,11 @@
   var CODE_RE = /^CL\d+\.[A-Za-z0-9_-]{1,200}$/;
   var START = '--- Cellar planner design ---';
   var END = '---';
-  var EVENTS = ['start', 'preset', 'unit', 'view', 'quote', 'link_copied', 'plan_downloaded', 'price_help', 'fix', 'welcome_back'];
+  var EVENTS = ['start', 'preset', 'unit', 'view', 'quote', 'link_copied', 'plan_downloaded', 'price_help', 'fix', 'welcome_back', 'call', 'door_pick'];
   var wasRequested = false;
-  var latest = null; // the newest valid design message { code, summary, bottles, priceText }
+  var latest = null; // the newest valid design message { code, summary, bottles, priceText, thumb }
+  var layout = null; // where the planner's big picture sits inside its frame { frame, top, bottom }
+  var THUMB_RE = /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/;
 
   // Same scheme, port and host, treating "www.example.com" and "example.com" as the same site.
   function sameSite(a, b) {
@@ -64,13 +66,14 @@
   }
 
   // ---- planner page: the phone bar ----
-  var bar = null, barText = null, frameVisible = false, observed = null;
+  var bar = null, barText = null, barImg = null, frameVisible = false, observed = null, ticking = false;
   function ensureBar() {
     if (bar) return;
     var css = document.createElement('style');
     css.textContent =
       '#cellar-lite-bar{position:fixed;left:0;right:0;bottom:0;z-index:99990;display:none;align-items:center;gap:12px;padding:10px 14px;background:#1f1f1f;color:#fff;font:600 15px/1.25 system-ui,sans-serif;box-shadow:0 -2px 12px rgba(0,0,0,.25)}' +
       '#cellar-lite-bar .t{flex:1;min-width:0}' +
+      '#cellar-lite-bar img{flex:none;width:90px;height:56px;border-radius:6px;object-fit:cover;background:#e9dfcc;display:none}' +
       '#cellar-lite-bar button{flex:none;min-height:44px;padding:0 18px;border:0;border-radius:999px;background:#cc785c;color:#fff;font:700 15px system-ui,sans-serif;cursor:pointer;transition:opacity 200ms}' +
       '#cellar-lite-bar button:hover{opacity:.8}';
     document.head.appendChild(css);
@@ -78,6 +81,8 @@
     bar.id = 'cellar-lite-bar';
     bar.setAttribute('role', 'region');
     bar.setAttribute('aria-label', 'Request a quote');
+    barImg = document.createElement('img');
+    barImg.alt = 'Your cellar';
     barText = document.createElement('span');
     barText.className = 't';
     var btn = document.createElement('button');
@@ -85,15 +90,27 @@
     btn.textContent = 'Request a quote';
     btn.setAttribute('title', 'Ask for a quote for the design you have made.');
     btn.addEventListener('click', function () { if (latest) goToContact(latest.code, latest.summary); });
-    bar.appendChild(barText); bar.appendChild(btn);
+    bar.appendChild(barImg); bar.appendChild(barText); bar.appendChild(btn);
     document.body.appendChild(bar);
-    if (window.addEventListener) window.addEventListener('resize', refreshBar);
+    window.addEventListener('resize', refreshBar);
+    // the little picture shows only while the big one is off screen, so it is never shown twice
+    window.addEventListener('scroll', function () { if (ticking) return; ticking = true; window.requestAnimationFrame(function () { ticking = false; refreshBar(); }); }, { passive: true });
   }
   function refreshBar() {
     if (!bar) return;
     var phone = window.matchMedia && window.matchMedia('(max-width: ' + STICKY_MAX_WIDTH + 'px)').matches;
     bar.style.display = phone && frameVisible && latest && !wasRequested ? 'flex' : 'none';
+    var showPic = bar.style.display === 'flex' && !!latest.thumb && !pictureOnScreen();
+    barImg.style.display = showPic ? 'block' : 'none';
     document.body.style.paddingBottom = bar.style.display === 'flex' ? bar.offsetHeight + 'px' : '';
+  }
+  /** True when most of the planner's big picture is inside the visible part of the screen. */
+  function pictureOnScreen() {
+    if (!layout || !layout.frame) return false;
+    var top = layout.frame.getBoundingClientRect().top;
+    var from = top + layout.top, to = top + layout.bottom;
+    var overlap = Math.min(to, window.innerHeight) - Math.max(from, 0);
+    return overlap >= Math.min(220, (to - from) * 0.6);
   }
   function watchFrame(frame) {
     if (observed === frame || typeof IntersectionObserver === 'undefined') return;
@@ -114,6 +131,8 @@
       var h = Number(d.height);
       var f = AUTO_HEIGHT && frameOf(ev.source);
       if (f && isFinite(h) && h >= 300 && h <= 8000) { f.style.height = Math.ceil(h) + 'px'; f.setAttribute('scrolling', 'no'); log('frame height set to', Math.ceil(h)); }
+      var pt = Number(d.pictureTop), pb = Number(d.pictureBottom);
+      if (f && isFinite(pt) && isFinite(pb) && pb > pt && pb <= 20000) { layout = { frame: f, top: pt, bottom: pb }; refreshBar(); }
       return;
     }
 
@@ -131,11 +150,13 @@
     if (typeof d.code !== 'string' || typeof d.summary !== 'string') { log('IGNORED: code or summary missing'); return; }
     // the code is base64url text and the summary one plain line; refuse anything else
     if (!CODE_RE.test(d.code) || d.summary.length > 400) { log('IGNORED: code or summary has an unexpected shape'); return; }
-    latest = { code: d.code, summary: d.summary, bottles: Number(d.bottles) || 0, priceText: typeof d.priceText === 'string' && d.priceText.length <= 60 ? d.priceText : '' };
+    latest = { code: d.code, summary: d.summary, bottles: Number(d.bottles) || 0, priceText: typeof d.priceText === 'string' && d.priceText.length <= 60 ? d.priceText : '',
+      thumb: typeof d.thumb === 'string' && d.thumb.length <= 40000 && THUMB_RE.test(d.thumb) ? d.thumb : '' };
 
     if (STICKY_BAR) {
       ensureBar();
       barText.textContent = 'About ' + latest.bottles + ' bottles' + (latest.priceText ? ' · ' + latest.priceText : '');
+      if (latest.thumb && barImg.getAttribute('src') !== latest.thumb) barImg.src = latest.thumb;
       var fr = frameOf(ev.source);
       if (fr) watchFrame(fr);
     }
