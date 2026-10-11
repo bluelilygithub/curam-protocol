@@ -54,6 +54,8 @@ await page.route('https://api.maptiler.com/tiles/terrain-rgb-v2/**', (r) => {
 const db = [];
 const planLog = [];
 const loopLog = [];
+const detourLog = [];
+let lastDirectM = 0;
 let planFail = null;
 let seq = 0;
 const rad = Math.PI / 180;
@@ -76,6 +78,25 @@ await page.route('**/api/route-tracks**', async (route) => {
     if (planFail) return route.fulfill({ status: 422, json: { error: planFail } });
     const mk = (bow) => { const mid = [(b.from[0] + b.to[0]) / 2 + bow * (b.to[1] - b.from[1]), (b.from[1] + b.to[1]) / 2 - bow * (b.to[0] - b.from[0])]; const coordinates = [b.from, [(b.from[0] + mid[0]) / 2, (b.from[1] + mid[1]) / 2], mid, [(mid[0] + b.to[0]) / 2, (mid[1] + b.to[1]) / 2], b.to]; return { distanceM: dist([coordinates]), durationS: dist([coordinates]) / 1.4, coordinates }; };
     return route.fulfill({ json: { routes: [mk(0), mk(0.25), mk(-0.4)], attribution: '(c) openrouteservice.org | (c) OpenStreetMap contributors', cached: false } });
+  }
+  if (m === 'POST' && path === '/detour') {
+    const b = req.postDataJSON();
+    detourLog.push(b);
+    const directC = [b.from, b.to]; const directM = dist([directC]) * 1.3; lastDirectM = directM;
+    const attribution = '(c) openrouteservice.org | (c) OpenStreetMap contributors';
+    if (b.lengthKm === undefined || b.lengthKm === null) return route.fulfill({ json: { routes: [{ distanceM: directM, durationS: directM / 1.4, coordinates: directC }], attribution, targetM: null, directM, cached: false } });
+    const T = b.lengthKm * 1000;
+    if (T < directM * 0.98) return route.fulfill({ status: 422, json: { error: 'The shortest route is already longer than that.', code: 'TARGET_TOO_SHORT', directM, targetM: T } });
+    if (T > directM * 4) return route.fulfill({ status: 422, json: { error: 'That is a lot longer than the direct route.', code: 'TARGET_TOO_LONG', directM, targetM: T, maxM: Math.floor((directM * 4) / 100) * 100 } });
+    const lat0 = ((b.from[1] + b.to[1]) / 2) * Math.PI / 180; const mx = 111320 * Math.cos(lat0);
+    const dx = (b.to[0] - b.from[0]) * mx; const dy = (b.to[1] - b.from[1]) * 111320; const len = Math.hypot(dx, dy);
+    const via = (side, t, h) => [b.from[0] + (b.to[0] - b.from[0]) * t + ((-dy / len) * side * h) / mx, b.from[1] + (b.to[1] - b.from[1]) * t + ((dx / len) * side * h) / 111320];
+    const mk = (side, t, off) => { // move the via point out until the pretend road (1.3x the straight line) is about T * (1 + off) long
+      let lo = 0; let hi = T; for (let i = 0; i < 40; i += 1) { const h = (lo + hi) / 2; if (dist([[b.from, via(side, t, h), b.to]]) * 1.3 < T * (1 + off)) lo = h; else hi = h; }
+      const coordinates = [b.from, via(side, t, lo), b.to]; const d = dist([coordinates]) * 1.3;
+      return { distanceM: d, durationS: d / 1.4, coordinates, offPct: Math.round(((d - T) / T) * 1000) / 10 };
+    };
+    return route.fulfill({ json: { routes: [mk(1, 0.5, 0.02), mk(-1, 0.5, -0.05), mk(1, 0.3, 0.09)], attribution, targetM: T, directM, cached: false } });
   }
   if (m === 'POST' && path === '/loop') {
     const b = req.postDataJSON();
@@ -594,6 +615,88 @@ await wait(300);
   check('the loop is saved as a planned route that ends where it began', lp.drawMode === 'route' && JSON.stringify(pts) === JSON.stringify(chosen) && pts[0][0] === pts.at(-1)[0] && pts[0][1] === pts.at(-1)[1], `${lp.drawMode} ${pts.length}`);
 }
 
+// ---- Plan route: a longer A to B (about X km between the same two points)
+{
+  await page.getByRole('button', { name: 'Plan route' }).click();
+  await page.getByTestId('planbar').waitFor();
+  await page.getByRole('button', { name: 'Longer A to B' }).click();
+  check('Longer A to B asks for the start first', /set the start \(A\)/.test((await page.getByTestId('plan-step').textContent()) ?? ''));
+  await tipsOk('plan route: longer A to B');
+  detourLog.length = 0;
+  await page.mouse.click(150, 250); await wait(300);
+  check('then the end', /set the end \(B\)/.test((await page.getByTestId('plan-step').textContent()) ?? ''));
+  await page.mouse.click(1000, 330);
+  await page.getByTestId('plan-route').first().waitFor({ timeout: 10000 });
+  check('with no length yet it asks for the direct route only', detourLog.length === 1 && detourLog[0].lengthKm === undefined, JSON.stringify(detourLog));
+  const directKm = lastDirectM / 1000;
+  const step = (await page.getByTestId('plan-step').textContent()) ?? '';
+  check('and says how long the direct route is, and that a longer length is needed', /The direct route is/.test(step) && /longer than that/.test(step), step);
+  check('the direct route is the one card, not offered as an option', (await page.getByTestId('plan-route').count()) === 1 && /Direct route/.test((await page.getByTestId('plan-route').first().textContent()) ?? ''));
+  check('Different routes waits for a length', await page.getByTestId('more-loops').isDisabled());
+  check('the direct route is long enough to test the limits (at least 2 km, and 4x under 100 km)', directKm > 2 && directKm * 4 < 99, directKm.toFixed(1));
+
+  // a length shorter than the direct route is explained, with the direct distance
+  const len = page.getByLabel(/^Length you want/);
+  detourLog.length = 0;
+  await len.fill(String(Math.round(directKm * 5) / 10)); await wait(1200);
+  let err = (await page.getByTestId('plan-error').textContent().catch(() => '')) ?? '';
+  check('a length shorter than the direct route is explained with its length', /The shortest route is already/.test(err) && /Choose a longer distance/.test(err) && err.includes(directKm.toFixed(2)), err);
+  check('and Use this route is off', await page.getByRole('button', { name: 'Use this route' }).isDisabled());
+  // far longer than the direct route
+  await len.fill(String(Math.floor(directKm * 4.5))); await wait(1200);
+  err = (await page.getByTestId('plan-error').textContent().catch(() => '')) ?? '';
+  check('a length far beyond the direct route says what the most is, and suggests Loop', /a lot longer than the direct route/.test(err) && /Choose up to/.test(err) && /Loop/.test(err), err);
+  // out of range is refused in the box without a request
+  detourLog.length = 0;
+  await len.fill('150'); await wait(1000);
+  check('a length outside 1 to 100 km is refused in the box, not sent', /between 1 and 100 km/.test((await page.getByRole('alert').first().textContent()) ?? '') && detourLog.length === 0);
+
+  // a good length: three options, each close to what was asked
+  const want = Math.round(directKm * 16) / 10;
+  detourLog.length = 0;
+  await len.fill(String(want)); await wait(1300);
+  const cards = page.getByTestId('plan-route');
+  await cards.first().waitFor({ timeout: 10000 });
+  const texts = await cards.allTextContents();
+  check('three options are offered, each saying how far it is from the length asked for', texts.length === 3 && texts.every((t) => /^Route \d/.test(t) && (/\([+−]\d+%\)/.test(t) || /on target/.test(t))), texts.join(' | '));
+  check('the request had both points, the length and round 0', detourLog.length === 1 && detourLog[0].lengthKm === want && detourLog[0].round === 0 && detourLog[0].to.length === 2 && detourLog[0].from.length === 2, JSON.stringify(detourLog[0]));
+  await wait(500);
+  await shot('detour');
+  check('all three are drawn, and both pins stay', (await page.evaluate(() => window.routeTracer.sent.plan.features.length)) === 3 && (await page.locator('.plan-pin-a').count()) === 1 && (await page.locator('.plan-pin-b').count()) === 1);
+  // different routes: the next round
+  detourLog.length = 0;
+  await page.getByTestId('more-loops').click(); await wait(1100);
+  check('Different routes asks for the next round of shapes', detourLog.length === 1 && detourLog[0].round === 1 && detourLog[0].lengthKm === want, JSON.stringify(detourLog));
+  // swap keeps the length
+  detourLog.length = 0;
+  await page.getByRole('button', { name: 'Swap A and B' }).click(); await wait(1100);
+  check('Swap A and B plans the reverse trip with the same length', detourLog.length === 1 && detourLog[0].lengthKm === want, JSON.stringify(detourLog));
+  await cards.first().waitFor({ timeout: 10000 });
+  // switching to A to B keeps both points; Loop drops B
+  await page.getByRole('button', { name: 'A to B', exact: true }).click(); await wait(900);
+  check('switching to plain A to B keeps both points', (await page.locator('.plan-pin-b').count()) === 1 && (await cards.count()) === 3);
+  detourLog.length = 0;
+  await page.getByRole('button', { name: 'Longer A to B' }).click(); await wait(1200);
+  check('and back to Longer A to B plans again with the length that was typed', detourLog.length === 1 && detourLog[0].lengthKm === want && (await page.locator('.plan-pin-b').count()) === 1, JSON.stringify(detourLog));
+  await page.getByRole('button', { name: 'Loop', exact: true }).click(); await wait(300);
+  check('Loop drops B', (await page.locator('.plan-pin-b').count()) === 0 && (await page.locator('.plan-pin-a').count()) === 1);
+  await page.getByRole('button', { name: 'Longer A to B' }).click(); await wait(300);
+  check('and B is not remembered when coming back from Loop', (await page.locator('.plan-pin-b').count()) === 0 && /set the end \(B\)/.test((await page.getByTestId('plan-step').textContent()) ?? ''));
+  await page.mouse.click(1000, 330); await wait(1500);
+  await cards.first().waitFor({ timeout: 10000 });
+  // use it: opens in Edit points and saves as a planned route that runs from A to B
+  const chosen = await page.evaluate(() => window.routeTracer.sent.plan.features[0].geometry.coordinates);
+  await page.getByRole('button', { name: 'Use this route' }).click();
+  await page.getByRole('region', { name: 'Drawing tools' }).waitFor();
+  check('the chosen detour opens in Edit points with its distance', (await page.getByRole('button', { name: 'Edit points', exact: true }).getAttribute('aria-pressed')) === 'true' && km(await readout()) > directKm);
+  await page.getByRole('button', { name: 'Finish' }).click();
+  await dlg.getByLabel('Name').press('Enter');
+  await page.getByLabel('Track detail').waitFor();
+  const saved = db.at(-1);
+  const sp = saved.geometry.coordinates[0];
+  check('saved as a planned route with the same points', saved.drawMode === 'route' && JSON.stringify(sp) === JSON.stringify(chosen), `${saved.drawMode} ${sp.length}`);
+}
+
 // ---- the guide and the tour
 {
   const fresh = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -625,8 +728,9 @@ await wait(300);
   await fp.goto(`${APP}?tour=1`);
   await fp.locator('.shepherd-element.vault-tour').first().waitFor({ timeout: 10000 });
   check('?tour=1 starts the tour', (await fp.locator('.vault-tour-step-count').first().textContent()) === 'Step 1 of 12');
-  await fp.keyboard.press('Escape'); await wait(400);
-  check('skipping marks it done', (await fp.evaluate(() => localStorage.getItem('vault_tour_route_tracer_completed'))) === '1');
+  await fp.keyboard.press('Escape');
+  const doneFlag = await fp.waitForFunction(() => localStorage.getItem('vault_tour_route_tracer_completed') === '1', undefined, { timeout: 4000 }).then(() => true, () => false);
+  check('skipping marks it done', doneFlag);
   await fresh.close();
 }
 {

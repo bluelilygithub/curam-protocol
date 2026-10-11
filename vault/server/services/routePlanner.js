@@ -6,6 +6,9 @@
 //   loop:   a round trip of about X km from one point. The service treats the length as a hint and can miss it by a lot, so three loops are
 //           asked for (three seeds = three directions), any that miss by more than 12% are asked again with a corrected length, and the
 //           results are returned closest-to-target first with how far off each one is.
+//   detour: A to B but about X km (longer than the direct route). No service does this in one call, so a "via" point is placed off to one
+//           side of the A-B line and moved in or out until the route A -> via -> B is about X km. Three shapes are tried (left, right and a
+//           lopsided one), each corrected once if it misses by more than 8%, and the results come back closest-to-target first.
 //   - answers are cached for an hour and cache hits cost no quota
 //   - per-user limits (calls a minute, calls a day) and a global per-minute cap, because the free key is shared by everyone; a call is one
 //     request to the service, so a loop costs three (and three more if it needs correcting)
@@ -22,13 +25,23 @@ const LOOP_MIN_KM = 1;
 const LOOP_MAX_KM = 50;
 const LOOP_TOLERANCE = 0.12; // a loop within 12% of the target is good enough
 const LOOP_POINTS = 5; // "larger values create more circular routes"
+const DETOUR_MIN_KM = 1;
+const DETOUR_MAX_KM = 100;
+const DETOUR_MAX_STRAIGHT_M = 50000; // A and B no more than this far apart (straight line)
+const DETOUR_SHORT = 0.98; // a target below 98% of the direct route cannot be met
+const DETOUR_SAME = 1.06; // within 6% above the direct route: the direct route will do
+const DETOUR_LONG = 4; // longer than 4x the direct route is not a detour any more
+const DETOUR_TOLERANCE = 0.08;
+// the shapes tried, per round: [side (+1 left of A to B, -1 right), how far along A to B the via point sits]
+const DETOUR_SHAPES = [[[1, 0.5], [-1, 0.5], [1, 0.3]], [[1, 0.7], [-1, 0.7], [-1, 0.3]], [[1, 0.4], [-1, 0.4], [1, 0.6]]];
 const TIMEOUT_MS = 15000;
 const CACHE_TTL_MS = 60 * 60 * 1000;
 const CACHE_MAX = 300;
 const ATTRIBUTION = '© openrouteservice.org | © OpenStreetMap contributors';
 
 class PlanError extends Error {
-  constructor(status, message, retryAfter) { super(message); this.status = status; this.retryAfter = retryAfter; }
+  /** `extra` is sent to the browser with the message (a code and distances the page can word in the person's units). */
+  constructor(status, message, retryAfter, extra) { super(message); this.status = status; this.retryAfter = retryAfter; this.extra = extra; }
 }
 
 const validPos = (p) => Array.isArray(p) && p.length === 2 && p.every((n) => typeof n === 'number' && Number.isFinite(n)) && Math.abs(p[0]) <= 180 && Math.abs(p[1]) <= 90;
@@ -132,6 +145,24 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
     return key;
   }
 
+  /** A route through the given points (2 or 3), plain errors thrown. `alternatives` only for exactly two points under about 100 km. */
+  async function route(key, profile, points, alternatives) {
+    let alt = alternatives;
+    for (;;) {
+      try {
+        const body = { coordinates: points, instructions: false, elevation: false };
+        if (alt) body.alternative_routes = { target_count: 3, weight_factor: 1.6, share_factor: 0.6 };
+        return toRoutes(await post(key, profile, body));
+      } catch (err) {
+        const u = err.upstream;
+        if (!u) throw err;
+        // a request the service will not do with alternatives still works as a single route
+        if (alt && (u.code === 2004 || (u.status === 400 && /alternative/i.test(u.message)))) { alt = false; continue; }
+        throw explain(u);
+      }
+    }
+  }
+
   /** { from: [lng, lat], to: [lng, lat], profile } -> { routes, attribution }. Throws PlanError with a plain message and an HTTP status. */
   async function plan(userId, { from, to, profile }) {
     const key = checkKey(profile);
@@ -145,23 +176,7 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
     if (hit) return hit;
 
     limit(userId);
-    let json;
-    let alternatives = direct < ALTERNATIVES_MAX_M;
-    for (;;) {
-      try {
-        const body = { coordinates: [from, to], instructions: false, elevation: false };
-        if (alternatives) body.alternative_routes = { target_count: 3, weight_factor: 1.6, share_factor: 0.6 };
-        json = await post(key, profile, body);
-        break;
-      } catch (err) {
-        const u = err.upstream;
-        if (!u) throw err;
-        // a request the service will not do with alternatives still works as a single route
-        if (alternatives && (u.code === 2004 || (u.status === 400 && /alternative/i.test(u.message)))) { alternatives = false; continue; }
-        throw explain(u);
-      }
-    }
-    const routes = toRoutes(json);
+    const routes = await route(key, profile, [from, to], direct < ALTERNATIVES_MAX_M);
     if (!routes.length) throw new PlanError(422, 'No route could be found between those points for this way of travelling.');
     const value = { routes, attribution: ATTRIBUTION };
     remember(ck, value);
@@ -245,7 +260,100 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
     return { ...value, cached: false };
   }
 
-  return { plan, loops };
+  // ---- detour: A to B, but about X km ------------------------------------------------------------------------------------------
+
+  /** Where the via point goes: `h` metres to the `side` of the point `t` of the way from A to B. */
+  function viaPoint(from, to, side, t, h) {
+    const lat0 = ((from[1] + to[1]) / 2) * Math.PI / 180;
+    const mx = 111320 * Math.cos(lat0);
+    const dx = (to[0] - from[0]) * mx;
+    const dy = (to[1] - from[1]) * 111320;
+    const len = Math.hypot(dx, dy) || 1;
+    const px = (-dy / len) * side * h;
+    const py = (dx / len) * side * h;
+    return [from[0] + (to[0] - from[0]) * t + px / mx, Math.max(-85, Math.min(85, from[1] + (to[1] - from[1]) * t + py / 111320))];
+  }
+
+  /** The `h` (metres off the A-B line) at which a road route A -> via -> B would be `targetM` long, if roads wind `w` times as much as a straight line. */
+  function solveOffset(straightM, t, w, targetM) {
+    const poly = (h) => Math.hypot(t * straightM, h) + Math.hypot((1 - t) * straightM, h);
+    if (w * poly(0) >= targetM) return 0.05 * straightM; // barely longer than direct: a small nudge
+    let lo = 0;
+    let hi = targetM;
+    for (let i = 0; i < 50; i += 1) { const mid = (lo + hi) / 2; if (w * poly(mid) < targetM) lo = mid; else hi = mid; }
+    return (lo + hi) / 2;
+  }
+
+  /**
+   * { from, to, profile, lengthKm?, round? } -> { routes, attribution, targetM, directM }.
+   * Without lengthKm: just the direct route and its length (so the page can say how long the direct way is).
+   * With it: up to three routes of about that length, closest first, each with `offPct`. A target shorter than the direct route, or more
+   * than four times as long, is refused with a code and the direct distance so the page can say so in the person's units.
+   */
+  async function detour(userId, { from, to, profile, lengthKm, round = 0 }) {
+    const key = checkKey(profile);
+    if (!validPos(from) || !validPos(to)) throw new PlanError(400, 'The start and end must be [longitude, latitude] points on the map.');
+    const straightM = geo.distanceM([[from, to]]);
+    if (straightM < MIN_M) throw new PlanError(422, 'The start and end are almost the same place. Pick points further apart.');
+    if (straightM > DETOUR_MAX_STRAIGHT_M) throw new PlanError(422, 'The start and end are too far apart for this. Pick points less than 50 km apart.');
+    const wantsLength = lengthKm !== undefined && lengthKm !== null;
+    if (wantsLength && (typeof lengthKm !== 'number' || !Number.isFinite(lengthKm) || lengthKm < DETOUR_MIN_KM || lengthKm > DETOUR_MAX_KM)) {
+      throw new PlanError(400, `Choose a length between ${DETOUR_MIN_KM} and ${DETOUR_MAX_KM} km.`);
+    }
+    const r0 = Number.isInteger(round) && round >= 0 && round < 30 ? round : 0;
+    const targetM = wantsLength ? Math.round(lengthKm * 10) * 100 : null;
+    const ck = `detour|${profile}|${round5(from[0])},${round5(from[1])}|${round5(to[0])},${round5(to[1])}|${targetM}|${r0}`;
+    const hit = fromCache(ck);
+    if (hit) return hit;
+
+    // the direct route first: it is the shortest there is, so it decides whether the target can be met and how much roads wind here
+    limit(userId, 1);
+    const directRoute = (await route(key, profile, [from, to], false))[0];
+    if (!directRoute) throw new PlanError(422, 'No route could be found between those points for this way of travelling.');
+    const directM = directRoute.distanceM;
+    const done = (routes) => { const value = { routes, attribution: ATTRIBUTION, targetM, directM }; remember(ck, value); return { ...value, cached: false }; };
+    if (!wantsLength) return done([directRoute]);
+    if (targetM < directM * DETOUR_SHORT) throw new PlanError(422, 'The shortest route is already longer than that.', undefined, { code: 'TARGET_TOO_SHORT', directM, targetM });
+    if (targetM > directM * DETOUR_LONG) throw new PlanError(422, 'That is a lot longer than the direct route.', undefined, { code: 'TARGET_TOO_LONG', directM, targetM, maxM: Math.floor(directM * DETOUR_LONG / 100) * 100 });
+    const off = (r) => Math.abs(r.distanceM - targetM) / targetM;
+    if (targetM <= directM * DETOUR_SAME) return done([{ ...directRoute, offPct: Math.round(((directM - targetM) / targetM) * 1000) / 10 }]);
+
+    const shapes = DETOUR_SHAPES[r0 % DETOUR_SHAPES.length];
+    limit(userId, shapes.length);
+    const winding = Math.max(1, directM / straightM);
+    const tryShape = async ([side, t]) => {
+      let w = winding;
+      let h = solveOffset(straightM, t, w, targetM);
+      let best = null;
+      for (let pass = 0; pass < 2; pass += 1) {
+        const via = viaPoint(from, to, side, t, h);
+        const r = (await route(key, profile, [from, via, to], false))[0];
+        if (!r) break;
+        if (!best || off(r) < off(best)) best = r;
+        if (off(r) <= DETOUR_TOLERANCE || pass === 1) break;
+        // it missed: learn how much the roads wind on this side, move the via point, and try once more (if the quota allows)
+        w = r.distanceM / (Math.hypot(t * straightM, h) + Math.hypot((1 - t) * straightM, h));
+        h = solveOffset(straightM, t, w, targetM);
+        try { limit(userId, 1); } catch (e) { if (e instanceof PlanError && e.status === 429) break; throw e; }
+      }
+      if (!best) throw new PlanError(422, 'No route could be found for that detour.');
+      return best;
+    };
+    const results = await Promise.allSettled(shapes.map(tryShape));
+    const found = results.filter((s) => s.status === 'fulfilled').map((s) => s.value);
+    if (!found.length) {
+      const why = results.find((s) => s.status === 'rejected').reason;
+      if (why instanceof PlanError && why.status !== 422) throw why; // busy, key rejected, no answer: say so
+      throw new PlanError(422, 'Could not build a detour of that length here: the points to the side of your route were not near roads or paths. Try a different length, or move A or B.');
+    }
+    const routes = found
+      .map((r) => ({ ...r, offPct: Math.round(((r.distanceM - targetM) / targetM) * 1000) / 10 }))
+      .sort((a, b) => Math.abs(a.offPct) - Math.abs(b.offPct))
+      .filter((r, i, all) => !all.slice(0, i).some((q) => Math.abs(q.distanceM - r.distanceM) < 5 && geo.distanceM([[q.coordinates[Math.floor(q.coordinates.length / 2)], r.coordinates[Math.floor(r.coordinates.length / 2)]]]) < 50));
+    return done(routes);
+  }
+
+  return { plan, loops, detour };
 }
 
-module.exports = { createPlanner, PlanError, PROFILES, ATTRIBUTION, ALTERNATIVES_MAX_M, LOOP_MIN_KM, LOOP_MAX_KM };
+module.exports = { createPlanner, PlanError, PROFILES, ATTRIBUTION, ALTERNATIVES_MAX_M, LOOP_MIN_KM, LOOP_MAX_KM, DETOUR_MIN_KM, DETOUR_MAX_KM };

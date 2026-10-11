@@ -320,6 +320,119 @@ async function planTests() {
     await rejects(perDay.loops(1, { from: [153.4, -27.1], lengthKm: 5, profile: 'walking' }), 429, /today/);
   }
 
+  // ---- detour: A to B but about X km. The pretend service winds roads 1.3x; with `viaWind` it winds more when asked to go through a via point.
+  {
+    const A = [153.0, -27.5];
+    const B = [153.03, -27.5]; // about 2.97 km apart
+    const dcalls = [];
+    const make = (viaWind = 1.3, fail = null) => createPlanner({
+      getKey: () => KEY,
+      fetchFn: async (url, init) => {
+        const body = JSON.parse(init.body);
+        dcalls.push(body);
+        if (fail) { const f = fail(body); if (f) return { ok: false, status: f.status, json: async () => f.json }; }
+        const pts = body.coordinates;
+        const len = require('../services/routeTracerGeo').distanceM([pts]) * (pts.length === 3 ? viaWind : 1.3);
+        return { ok: true, status: 200, json: async () => ({ features: [{ properties: { summary: { distance: len, duration: len / 1.4 } }, geometry: { type: 'LineString', coordinates: pts } }] }) };
+      },
+    });
+    const cross = (a, b, v) => (b[0] - a[0]) * (v[1] - a[1]) - (b[1] - a[1]) * (v[0] - a[0]); // > 0: v is to the left of A -> B
+    const detourBody = { from: A, to: B, profile: 'walking' };
+    const directKm = require('../services/routeTracerGeo').distanceM([[A, B]]) * 1.3 / 1000; // about 3.86
+
+    // no length: just the direct route and its length, with one call and no alternatives
+    let d = make();
+    let res = await d.detour(1, detourBody);
+    assert.strictEqual(dcalls.length, 1);
+    assert.strictEqual(dcalls[0].coordinates.length, 2);
+    assert.strictEqual(dcalls[0].alternative_routes, undefined);
+    assert.strictEqual(res.routes.length, 1);
+    assert.ok(Math.abs(res.directM / 1000 - directKm) < 0.001);
+    assert.strictEqual(res.targetM, null);
+
+    // a target shorter than the direct route cannot be met, and the answer carries the numbers for the page to word
+    dcalls.length = 0;
+    d = make();
+    try { await d.detour(1, { ...detourBody, lengthKm: 2 }); assert.fail('should refuse'); } catch (e) {
+      assert.ok(e instanceof PlanError); assert.strictEqual(e.status, 422);
+      assert.strictEqual(e.extra.code, 'TARGET_TOO_SHORT');
+      assert.ok(Math.abs(e.extra.directM / 1000 - directKm) < 0.001);
+      assert.strictEqual(e.extra.targetM, 2000);
+    }
+    assert.strictEqual(dcalls.length, 1, 'only the direct route was asked for');
+    // a target more than four times the direct route is refused too
+    try { await make().detour(1, { ...detourBody, lengthKm: 40 }); assert.fail('should refuse'); } catch (e) {
+      assert.strictEqual(e.extra.code, 'TARGET_TOO_LONG');
+      assert.ok(e.extra.maxM > 15000 && e.extra.maxM < 16000, String(e.extra.maxM));
+    }
+    // within 6% above the direct route: the direct route is the answer
+    dcalls.length = 0;
+    res = await make().detour(1, { ...detourBody, lengthKm: 4 });
+    assert.strictEqual(res.routes.length, 1);
+    assert.strictEqual(dcalls.length, 1);
+    assert.ok(Math.abs(res.routes[0].offPct) < 5);
+
+    // a real detour: 8 km. A, a via point, B; three shapes, sides and positions as designed; the length lands on the target
+    dcalls.length = 0;
+    d = make();
+    res = await d.detour(1, { ...detourBody, lengthKm: 8 });
+    assert.strictEqual(dcalls.length, 4, 'one direct call and one per shape (the first try is right when roads wind evenly)');
+    const via = dcalls.slice(1).map((c) => { assert.strictEqual(c.coordinates.length, 3); assert.deepStrictEqual(c.coordinates[0], A); assert.deepStrictEqual(c.coordinates[2], B); assert.strictEqual(c.alternative_routes, undefined); return c.coordinates[1]; });
+    assert.ok(cross(A, B, via[0]) > 0 && cross(A, B, via[1]) < 0 && cross(A, B, via[2]) > 0, 'left, right and left again');
+    assert.ok(Math.abs((via[0][0] - A[0]) / (B[0] - A[0]) - 0.5) < 0.01 && Math.abs((via[2][0] - A[0]) / (B[0] - A[0]) - 0.3) < 0.01, 'the via points sit 0.5 and 0.3 of the way along');
+    assert.strictEqual(res.routes.length, 3);
+    assert.ok(res.routes.every((r) => Math.abs(r.offPct) < 3), JSON.stringify(res.routes.map((r) => r.offPct)));
+    assert.deepStrictEqual(res.routes.map((r) => Math.abs(r.offPct)), res.routes.map((r) => Math.abs(r.offPct)).slice().sort((a, b) => a - b));
+    assert.strictEqual(res.targetM, 8000);
+    assert.ok(res.routes.every((r) => r.coordinates.length === 3 && r.coordinates[0][0] === A[0] && r.coordinates.at(-1)[0] === B[0]), 'each route runs from A to B');
+
+    // cached: the same request is free; a different round uses different shapes
+    const n = dcalls.length;
+    assert.strictEqual((await d.detour(1, { ...detourBody, lengthKm: 8.04 })).cached, true);
+    assert.strictEqual(dcalls.length, n);
+    dcalls.length = 0;
+    await d.detour(1, { ...detourBody, lengthKm: 8, round: 1 });
+    const via1 = dcalls.slice(1).map((c) => c.coordinates[1]);
+    assert.ok(Math.abs((via1[0][0] - A[0]) / (B[0] - A[0]) - 0.7) < 0.01, 'round 1 puts the via point 0.7 of the way along');
+
+    // roads that wind more through the via point than the direct estimate: each shape is corrected once and ends close to the target
+    dcalls.length = 0;
+    res = await make(1.7).detour(1, { ...detourBody, lengthKm: 8 });
+    assert.strictEqual(dcalls.length, 7, 'one direct, three first tries and three corrections');
+    assert.ok(res.routes.every((r) => Math.abs(r.offPct) <= 8), JSON.stringify(res.routes.map((r) => r.offPct)));
+
+    // out of quota for the corrections: the first tries stand, however far off, and the answer says how far
+    dcalls.length = 0;
+    const tight = createPlanner({ getKey: () => KEY, perUserPerMinute: 4, fetchFn: async (url, init) => {
+      const b = JSON.parse(init.body); dcalls.push(b);
+      const len = require('../services/routeTracerGeo').distanceM([b.coordinates]) * (b.coordinates.length === 3 ? 1.7 : 1.3);
+      return { ok: true, status: 200, json: async () => ({ features: [{ properties: { summary: { distance: len, duration: 1 } }, geometry: { type: 'LineString', coordinates: b.coordinates } }] }) };
+    } });
+    res = await tight.detour(1, { ...detourBody, lengthKm: 8 });
+    assert.strictEqual(dcalls.length, 4);
+    assert.ok(res.routes.length >= 1 && res.routes.some((r) => Math.abs(r.offPct) > 8), JSON.stringify(res.routes.map((r) => r.offPct)));
+
+    // validation and errors
+    await rejects(make().detour(1, { ...detourBody, lengthKm: 0.5 }), 400, /between 1 and 100/);
+    await rejects(make().detour(1, { ...detourBody, lengthKm: 101 }), 400, /between 1 and 100/);
+    await rejects(make().detour(1, { ...detourBody, lengthKm: 'x' }), 400);
+    await rejects(make().detour(1, { ...detourBody, from: [1] }), 400);
+    await rejects(make().detour(1, { ...detourBody, profile: 'flying' }), 400);
+    await rejects(make().detour(1, { ...detourBody, to: [153.0001, -27.5] }), 422, /almost the same/);
+    await rejects(make().detour(1, { ...detourBody, to: [154, -27.5] }), 422, /too far apart/);
+    await rejects(createPlanner({ getKey: () => null, fetchFn: async () => ({}) }).detour(1, detourBody), 503, /ORS_API_KEY/);
+    // the direct route itself fails: the plain reason
+    await rejects(make(1.3, () => ({ status: 404, json: { error: { code: 2010, message: 'Could not find routable point within a radius of 350.0 meters of specified coordinate 0: 1 2.' } } })).detour(1, { ...detourBody, lengthKm: 8 }), 422, /near the start/);
+    // the via points are not near roads (the direct route is fine): a friendly explanation of what to try
+    await rejects(make(1.3, (b) => (b.coordinates.length === 3 ? { status: 404, json: { error: { code: 2010, message: 'Could not find routable point within a radius of 350.0 meters of specified coordinate 1: 1 2.' } } } : null)).detour(1, { ...detourBody, lengthKm: 8 }), 422, /not near roads or paths/);
+    // some shapes fail and others work: the ones that worked are returned
+    res = await make(1.3, (b) => (b.coordinates.length === 3 && cross(A, B, b.coordinates[1]) < 0 ? { status: 404, json: { error: { code: 2010, message: 'coordinate 1' } } } : null)).detour(1, { ...detourBody, lengthKm: 8 });
+    assert.strictEqual(res.routes.length, 2);
+    // a busy or broken service is reported as that, not as "no roads"
+    await rejects(make(1.3, (b) => (b.coordinates.length === 3 ? { status: 500, json: {} } : null)).detour(1, { ...detourBody, lengthKm: 8 }), 502, /problem/);
+    await rejects(make(1.3, (b) => (b.coordinates.length === 3 ? { status: 429, json: {} } : null)).detour(1, { ...detourBody, lengthKm: 8 }), 429, /busy/);
+  }
+
   // limits: per user per minute, per day, and across everyone per minute; they reset
   let t = 5000000;
   const lim = createPlanner({ getKey: () => KEY, fetchFn: fakeFetch(() => ({ json: okJson })), now: () => t, perUserPerMinute: 3, perUserPerDay: 5, globalPerMinute: 4 });
@@ -384,6 +497,18 @@ async function planTests() {
     assert.ok(!lr.text.includes('ors-secret'));
     assert.strictEqual((await call(ls, 'POST', '/api/route-tracks/loop', { from: [153.028, -27.468], lengthKm: 500, profile: 'walking' })).status, 400);
     assert.strictEqual((await call(ls, 'POST', '/api/route-tracks/loop', {})).status, 400);
+    // /detour through the router: the error carries the code and distances for the page
+    const dr = await call(ls, 'POST', '/api/route-tracks/detour', { from: [153.028, -27.468], to: [153.045, -27.475], profile: 'walking' });
+    assert.strictEqual(dr.status, 200);
+    assert.strictEqual(dr.json.directM, 5000);
+    assert.strictEqual(dr.json.targetM, null);
+    const short = await call(ls, 'POST', '/api/route-tracks/detour', { from: [153.028, -27.468], to: [153.045, -27.475], profile: 'walking', lengthKm: 1 });
+    assert.strictEqual(short.status, 422);
+    assert.strictEqual(short.json.code, 'TARGET_TOO_SHORT');
+    assert.strictEqual(short.json.directM, 5000);
+    assert.ok(!short.text.includes('ors-secret'));
+    assert.strictEqual((await call(ls, 'POST', '/api/route-tracks/detour', {})).status, 400);
+    assert.deepStrictEqual((await call(ls, 'GET', '/api/route-tracks/config')).json.detourKm, { min: 1, max: 100 });
     ls.close();
     const off = build(fakePool(), 1, { getMapKey: () => 'K', getOrsKey: () => null }).listen(0);
     assert.strictEqual((await call(off, 'GET', '/api/route-tracks/config')).json.routePlanning, false);

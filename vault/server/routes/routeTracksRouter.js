@@ -8,7 +8,7 @@
 const express = require('express');
 const { getLogger } = require('../middleware/requestContext');
 const geo = require('../services/routeTracerGeo');
-const { createPlanner, PlanError, PROFILES, LOOP_MIN_KM, LOOP_MAX_KM } = require('../services/routePlanner');
+const { createPlanner, PlanError, PROFILES, LOOP_MIN_KM, LOOP_MAX_KM, DETOUR_MIN_KM, DETOUR_MAX_KM } = require('../services/routePlanner');
 
 const MAX_NAME = 120;
 const MAX_NOTES = 2000;
@@ -91,7 +91,7 @@ function createRouter(pool, {
   // (ROUTE_TRACER_MAPTILER_KEY); falls back to MAPTILER_API_KEY, which then becomes visible in the browser.
   router.get('/config', (req, res) => {
     res.set('Cache-Control', 'no-store');
-    res.json({ maptilerKey: getMapKey(), routePlanning: !!getOrsKey(), planProfiles: Object.keys(PROFILES), loopKm: { min: LOOP_MIN_KM, max: LOOP_MAX_KM } });
+    res.json({ maptilerKey: getMapKey(), routePlanning: !!getOrsKey(), planProfiles: Object.keys(PROFILES), loopKm: { min: LOOP_MIN_KM, max: LOOP_MAX_KM }, detourKm: { min: DETOUR_MIN_KM, max: DETOUR_MAX_KM } });
   });
 
   // GET /api/route-tracks?q=&limit=&cursor=: newest first, no geometry.
@@ -146,10 +146,27 @@ function createRouter(pool, {
     } catch (err) {
       if (err instanceof PlanError) {
         if (err.retryAfter) res.set('Retry-After', String(err.retryAfter));
-        return res.status(err.status).json({ error: err.message });
+        return res.status(err.status).json({ error: err.message, ...(err.extra || {}) });
       }
       getLogger().error({ err }, 'route plan failed');
       res.status(500).json({ error: 'Could not plan that route.' });
+    }
+  });
+
+  // POST /api/route-tracks/detour { from, to, lengthKm?, profile, round }: A to B but about lengthKm (longer than the direct route). Without lengthKm:
+  // just the direct route and how long it is. Up to three options, each with offPct (how far its length is from the target).
+  router.post('/detour', async (req, res) => {
+    try {
+      const r = await planner.detour(req.user.id, { from: req.body?.from, to: req.body?.to, profile: req.body?.profile, lengthKm: req.body?.lengthKm, round: req.body?.round ?? 0 });
+      res.set('Cache-Control', 'no-store');
+      res.json(r);
+    } catch (err) {
+      if (err instanceof PlanError) {
+        if (err.retryAfter) res.set('Retry-After', String(err.retryAfter));
+        return res.status(err.status).json({ error: err.message, ...(err.extra || {}) });
+      }
+      getLogger().error({ err }, 'route detour failed');
+      res.status(500).json({ error: 'Could not plan that detour.' });
     }
   });
 

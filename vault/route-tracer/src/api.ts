@@ -38,6 +38,8 @@ export interface GeocodeResult { label: string; lat: number; lng: number }
 
 export const api = {
   config: () => call<{ maptilerKey: string | null; routePlanning?: boolean }>('GET', '/api/route-tracks/config'),
+  detour: (input: { from: [number, number]; to: [number, number]; profile: PlanProfile; lengthKm?: number; round: number }) =>
+    call<{ routes: PlannedRoute[]; attribution: string; targetM: number | null; directM: number; cached: boolean }>('POST', '/api/route-tracks/detour', input),
   loop: (input: { from: [number, number]; lengthKm: number; profile: PlanProfile; round: number }) =>
     call<{ routes: PlannedRoute[]; attribution: string; targetM: number; cached: boolean }>('POST', '/api/route-tracks/loop', input),
   plan: (input: { from: [number, number]; to: [number, number]; profile: PlanProfile }) =>
