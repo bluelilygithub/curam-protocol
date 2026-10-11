@@ -133,7 +133,7 @@ function TopBar({ map }: { map: maplibregl.Map | null }) {
 }
 
 function DrawToolbar({ onFinish }: { onFinish: () => void }) {
-  const { draw, mode, setMode, apply, units, stopDrawing } = useStore();
+  const { draw, mode, setMode, apply, units, stopDrawing, selectedVertex, setSelectedVertex, deleteSelectedVertex, extendingId, setPanel } = useStore();
   const km = useMemo(() => totalKm(displayLines(draw)), [draw]);
   const [confirmClear, setConfirmClear] = useState(false);
   const work = hasWork(draw);
@@ -142,16 +142,21 @@ function DrawToolbar({ onFinish }: { onFinish: () => void }) {
     if (work && !window.confirm('Discard this drawing?')) return;
     clearDraft();
     stopDrawing();
+    if (extendingId) setPanel('detail'); // back to the track that was being edited
   }
   return (
     <section className="drawbar" aria-label="Drawing tools">
       <div className="readout" aria-live="polite" data-testid="distance">{formatDistance(km, units)}</div>
-      <div className="seg" role="group" aria-label="Draw mode">
+      <div className="seg three" role="group" aria-label="Draw mode">
         <button type="button" aria-pressed={mode === 'freehand'} onClick={() => setMode('freehand')}>Freehand</button>
         <button type="button" aria-pressed={mode === 'click'} onClick={() => setMode('click')}>Click</button>
+        <button type="button" aria-pressed={mode === 'edit'} onClick={() => setMode('edit')} disabled={!work}>Edit points</button>
       </div>
+      {mode === 'edit' && (
+        <button type="button" className="danger" onClick={deleteSelectedVertex} disabled={!selectedVertex}>Delete selected point</button>
+      )}
       <div className="row">
-        <button type="button" onClick={() => apply(undo)} disabled={!draw.history.length && !draw.active}>Undo</button>
+        <button type="button" onClick={() => { setSelectedVertex(null); apply(undo); }} disabled={!draw.history.length && !draw.active}>Undo</button>
         {confirmClear ? (
           <>
             <span>Clear all?</span>
@@ -164,7 +169,7 @@ function DrawToolbar({ onFinish }: { onFinish: () => void }) {
         <button type="button" className="primary" onClick={onFinish} disabled={!work}>Finish</button>
         <button type="button" onClick={cancel}>Cancel</button>
       </div>
-      <p className="hint">{mode === 'freehand' ? 'Drag to draw. Two fingers (or Space + drag) to move the map.' : 'Click to add points. Double-click to finish.'}</p>
+      <p className="hint">{mode === 'freehand' ? 'Drag to draw. Two fingers (or Space + drag) to move the map.' : mode === 'click' ? 'Click to add points. Double-click to finish.' : 'Drag a point to move it. Drag a small dot to add a point. Tap a point, then Delete selected point.'}</p>
     </section>
   );
 }

@@ -77,7 +77,7 @@ export function SaveDialog({ onSaved }: { onSaved: (t: Track) => void }) {
       const geometry = { type: 'MultiLineString' as const, coordinates: lines };
       const track = extendingId
         ? await api.update(extendingId, { name: name.trim(), notes: notes.trim() || null, color: drawColor, geometry })
-        : await api.create({ name: name.trim(), notes: notes.trim() || null, color: drawColor, geometry, drawMode: mode });
+        : await api.create({ name: name.trim(), notes: notes.trim() || null, color: drawColor, geometry, drawMode: mode === 'click' ? 'click' : 'freehand' });
       toast('ok', 'Saved');
       onSaved(track);
     } catch (err) { toast('error', errText(err)); setBusy(false); }
@@ -86,7 +86,7 @@ export function SaveDialog({ onSaved }: { onSaved: (t: Track) => void }) {
   return (
     <div className="modal-back" role="presentation">
       <form className="modal" role="dialog" aria-modal="true" aria-label="Save track" onSubmit={submit}>
-        <h2>{extendingId ? 'Save extended track' : 'Save track'}</h2>
+        <h2>{extendingId ? 'Save changes' : 'Save track'}</h2>
         <label>Name<input ref={first} value={name} maxLength={120} required onChange={(e) => setName(e.target.value)} /></label>
         <label>Notes (optional)<textarea value={notes} maxLength={2000} rows={3} onChange={(e) => setNotes(e.target.value)} /></label>
         <Swatches value={drawColor} onChange={setDrawColor} />
@@ -184,7 +184,7 @@ export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
 }
 
 function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | null; track: Track; onChanged: (t: Track) => void; onGone: () => void }) {
-  const { units, setPanel, startDrawing, setExtendingId, setDrawColor, select, toast } = useStore();
+  const { units, setPanel, startDrawing, setExtendingId, setDrawColor, setMode, select, toast } = useStore();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(track.name);
   const [notes, setNotes] = useState(track.notes ?? '');
@@ -207,10 +207,13 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
   async function exportGpx() {
     try { await api.downloadGpx(track.id, track.name); } catch (err) { toast('error', errText(err)); }
   }
-  function extend() {
+  /** Open the track in the drawing tools: Extend continues it, Edit points reshapes it. Saving writes back over the same track. */
+  function reopen(mode: 'extend' | 'edit') {
     startDrawing(fromLines(track.geometry.coordinates));
     setExtendingId(track.id);
     setDrawColor(track.color);
+    if (mode === 'edit') setMode('edit');
+    else if (useStore.getState().mode === 'edit') setMode('freehand');
     // keep `selected` so the save dialog can prefill; the map layer hides it while extending
     const last = track.geometry.coordinates.at(-1)?.at(-1);
     if (map && last) map.easeTo({ center: last, duration: 400 });
@@ -240,7 +243,8 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
           {track.notes && <p className="notes">{track.notes}</p>}
           <div className="stack">
             <button type="button" onClick={() => setEditing(true)}>Rename / edit</button>
-            <button type="button" onClick={extend}>Extend</button>
+            <button type="button" onClick={() => reopen('edit')}>Edit points</button>
+            <button type="button" onClick={() => reopen('extend')}>Extend</button>
             <button type="button" onClick={() => void exportGpx()}>Export GPX</button>
             {confirmDelete ? (
               <div className="row">
@@ -260,7 +264,7 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
 
 /** Offered on load when a drawing was left unsaved (autosaved to localStorage every 2 s while drawing). */
 const DRAFT_KEY = 'route-tracer:draft';
-interface Draft { lines: [number, number][][]; mode: 'freehand' | 'click'; extendingId: string | null; color: string }
+interface Draft { lines: [number, number][][]; mode: 'freehand' | 'click' | 'edit'; extendingId: string | null; color: string }
 
 export function useAutosave(): void {
   const { drawing, draw, mode, extendingId, drawColor } = useStore();

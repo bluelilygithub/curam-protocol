@@ -1,6 +1,6 @@
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { addLayers } from './mapLayers';
 import { useStore } from './store';
 
@@ -22,14 +22,14 @@ export default function MapView({ mapKey, onMap }: { mapKey: string; onMap: (m: 
   const box = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const styleId = useStore((s) => s.styleId);
-  const [first] = useState(styleId);
+  const applied = useRef(styleId); // the style currently on the map
 
   useEffect(() => {
     if (!box.current) return undefined;
     const v = savedView();
     const map = new maplibregl.Map({
       container: box.current,
-      style: styleUrl(first, mapKey),
+      style: styleUrl(applied.current, mapKey),
       center: v.center,
       zoom: v.zoom,
       attributionControl: { compact: true },
@@ -50,8 +50,11 @@ export default function MapView({ mapKey, onMap }: { mapKey: string; onMap: (m: 
 
   useEffect(() => {
     const m = mapRef.current;
-    if (m && styleId !== first) m.setStyle(styleUrl(styleId, mapKey));
-  }, [styleId, first, mapKey]);
+    if (m && styleId !== applied.current) {
+      applied.current = styleId;
+      m.setStyle(styleUrl(styleId, mapKey), { diff: false }); // different styles share nothing: reload fully, the track layers are re-added on style.load
+    }
+  }, [styleId, mapKey]);
 
   return <div ref={box} className="map" data-testid="map" />;
 }

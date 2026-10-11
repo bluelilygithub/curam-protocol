@@ -1,7 +1,8 @@
 import type maplibregl from 'maplibre-gl';
 import { useEffect } from 'react';
 import {
-  addVertex, cancelStroke, endStroke, extendStroke, JOIN_PX, MIN_POINT_PX, screenDist, startStroke,
+  addVertex, cancelStroke, displayLines, endStroke, extendStroke, HIT_PX, HIT_TOUCH_PX, hitTest, insertVertex, JOIN_PX, MIN_POINT_PX,
+  pushHistory, screenDist, setVertex, startStroke, TAP_PX, type VertexRef,
 } from './drawing';
 import { degreesPerPixel, type Pos } from './geo';
 import { scheduleDrawRender } from './mapLayers';
@@ -113,6 +114,68 @@ export function useDrawing(map: maplibregl.Map | null, onFinish: () => void): vo
         window.removeEventListener('keyup', onKeyUp);
         el.style.touchAction = prevTouch;
         apply(cancelStroke);
+      });
+    } else if (mode === 'edit') {
+      // Existing points: drag one to move it, drag a small dot (the middle of a segment) to add a point there, tap a point to pick it for
+      // Delete point. A press on nothing pans the map as usual; dragPan is off only while a point is being dragged.
+      const { setSelectedVertex, deleteSelectedVertex } = useStore.getState();
+      const pointers = new Set<number>();
+      let drag: (VertexRef & { id: number; moved: boolean; down: { x: number; y: number } }) | null = null;
+      map.dragPan.enable();
+      el.style.cursor = 'default';
+
+      const onDown = (e: PointerEvent) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        pointers.add(e.pointerId);
+        if (pointers.size > 1) { drag = null; map.dragPan.enable(); return; } // a second finger: pinch / pan
+        const p = xy(e);
+        const lines = displayLines(useStore.getState().draw);
+        const hit = hitTest(lines, (q) => map.project(q), p, e.pointerType === 'touch' ? HIT_TOUCH_PX : HIT_PX);
+        if (!hit) { setSelectedVertex(null); return; }
+        map.dragPan.disable();
+        try { el.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+        if (hit.kind === 'mid') {
+          apply((s) => insertVertex(s, hit, hit.pos)); // one undo step; a drag that follows only moves the new point
+          drag = { li: hit.li, vi: hit.vi, id: e.pointerId, moved: true, down: p };
+        } else drag = { li: hit.li, vi: hit.vi, id: e.pointerId, moved: false, down: p };
+        setSelectedVertex({ li: drag.li, vi: drag.vi });
+      };
+      const onMove = (e: PointerEvent) => {
+        if (!drag || drag.id !== e.pointerId) return;
+        const p = xy(e);
+        if (!drag.moved) {
+          if (screenDist(p, drag.down) < TAP_PX) return; // still a tap
+          apply(pushHistory);
+          drag.moved = true;
+        }
+        const ref = { li: drag.li, vi: drag.vi };
+        apply((s) => setVertex(s, ref, toPos(p)));
+      };
+      const onUp = (e: PointerEvent) => {
+        pointers.delete(e.pointerId);
+        if (drag?.id === e.pointerId) drag = null;
+        if (pointers.size === 0) map.dragPan.enable();
+      };
+      const onKeyDown = (e: KeyboardEvent) => {
+        if ((e.key !== 'Delete' && e.key !== 'Backspace') || /input|textarea|select/i.test((e.target as HTMLElement)?.tagName ?? '')) return;
+        e.preventDefault();
+        deleteSelectedVertex();
+      };
+      const onMoveEnd = () => rerender(); // which handles are on screen depends on the view
+      el.addEventListener('pointerdown', onDown);
+      el.addEventListener('pointermove', onMove);
+      el.addEventListener('pointerup', onUp);
+      el.addEventListener('pointercancel', onUp);
+      window.addEventListener('keydown', onKeyDown);
+      map.on('moveend', onMoveEnd);
+      cleanups.push(() => {
+        el.removeEventListener('pointerdown', onDown);
+        el.removeEventListener('pointermove', onMove);
+        el.removeEventListener('pointerup', onUp);
+        el.removeEventListener('pointercancel', onUp);
+        window.removeEventListener('keydown', onKeyDown);
+        map.off('moveend', onMoveEnd);
+        setSelectedVertex(null);
       });
     } else {
       map.dragPan.enable();

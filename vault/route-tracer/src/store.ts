@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { emptyDraw, type DrawMode, type DrawState } from './drawing';
+import { deleteVertex, emptyDraw, type DrawMode, type DrawState, type VertexRef } from './drawing';
 import type { Pos, Units } from './geo';
 import type { Track, TrackSummary } from './api';
 
@@ -32,6 +32,10 @@ interface State {
   /** Click mode rubber band end (desktop pointer position), never counted in the distance. */
   rubber: Pos | null;
   setRubber(p: Pos | null): void;
+  /** Edit mode: the point picked for Delete point. */
+  selectedVertex: VertexRef | null;
+  setSelectedVertex(v: VertexRef | null): void;
+  deleteSelectedVertex(): void;
   apply(fn: (s: DrawState) => DrawState): void;
   /** Open the toolbar. `from` seeds it (Extend). */
   startDrawing(from?: DrawState): void;
@@ -70,13 +74,23 @@ export const useStore = create<State>((set, get) => ({
 
   drawing: false,
   mode: read('route-tracer:mode') === 'click' ? 'click' : 'freehand',
-  setMode: (mode) => { write('route-tracer:mode', mode); set({ mode, rubber: null }); },
+  // the drawing style is remembered per browser; Edit is a one-off activity, never the default
+  setMode: (mode) => { if (mode !== 'edit') write('route-tracer:mode', mode); set({ mode, rubber: null, selectedVertex: null }); },
+  selectedVertex: null,
+  setSelectedVertex: (selectedVertex) => set({ selectedVertex }),
+  deleteSelectedVertex: () => {
+    const { selectedVertex, draw, toast } = get();
+    if (!selectedVertex) return;
+    const next = deleteVertex(draw, selectedVertex);
+    if (!next) return toast('error', 'A stroke needs at least two points.');
+    set({ draw: next, selectedVertex: null });
+  },
   draw: emptyDraw(),
   rubber: null,
   setRubber: (rubber) => set({ rubber }),
   apply: (fn) => set((s) => ({ draw: fn(s.draw) })),
-  startDrawing: (from) => set({ drawing: true, draw: from ?? emptyDraw(), rubber: null, panel: 'closed' }),
-  stopDrawing: () => set({ drawing: false, draw: emptyDraw(), rubber: null, extendingId: null, saving: false, drawColor: COLORS[0] }),
+  startDrawing: (from) => set({ drawing: true, draw: from ?? emptyDraw(), rubber: null, selectedVertex: null, panel: 'closed' }),
+  stopDrawing: () => set({ mode: get().mode === 'edit' ? (read('route-tracer:mode') === 'click' ? 'click' : 'freehand') : get().mode, drawing: false, draw: emptyDraw(), rubber: null, selectedVertex: null, extendingId: null, saving: false, drawColor: COLORS[0] }),
   extendingId: null,
   drawColor: COLORS[0],
   setDrawColor: (drawColor) => set({ drawColor }),

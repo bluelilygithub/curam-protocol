@@ -33,6 +33,7 @@ button[aria-pressed='true'] { background: var(--primary); color: var(--primary-t
 .drawbar { position: absolute; z-index: 5; left: 8px; right: 8px; bottom: 28px; margin: 0 auto; max-width: 440px; padding: 12px; display: grid; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2); }
 .readout { font-size: 2rem; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
 .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.seg.three { grid-template-columns: 1fr 1fr 1.3fr; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .row > button { flex: 1 1 auto; }
 .hint { margin: 0; font-size: 0.8rem; color: var(--muted); text-align: center; }

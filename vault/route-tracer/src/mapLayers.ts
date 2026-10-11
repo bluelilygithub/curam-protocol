@@ -1,5 +1,5 @@
 import type maplibregl from 'maplibre-gl';
-import { displayLines } from './drawing';
+import { displayLines, midOf, MIN_MID_PX, screenDist } from './drawing';
 import type { Lines } from './geo';
 import { useStore } from './store';
 
@@ -8,6 +8,7 @@ export interface SavedLine { id: string; color: string; lines: Lines }
 
 const EMPTY: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 let saved: SavedLine[] = [];
+const MAX_HANDLES = 2500;
 
 /** What was last handed to each source, readable by the end-to-end test (window.routeTracer.sent). */
 function sent(name: 'draw' | 'saved', data: GeoJSON.FeatureCollection): void {
@@ -25,7 +26,8 @@ export function addLayers(map: maplibregl.Map): void {
   map.addLayer({ id: 'draw-casing', type: 'line', source: 'draw', filter: ['==', ['get', 'kind'], 'line'], layout: join, paint: { 'line-color': '#fff', 'line-width': 6 } });
   map.addLayer({ id: 'draw-line', type: 'line', source: 'draw', filter: ['==', ['get', 'kind'], 'line'], layout: join, paint: { 'line-color': ['get', 'color'], 'line-width': 4 } });
   map.addLayer({ id: 'draw-rubber', type: 'line', source: 'draw', filter: ['==', ['get', 'kind'], 'rubber'], layout: join, paint: { 'line-color': ['get', 'color'], 'line-width': 3, 'line-dasharray': [1.5, 1.5] } });
-  map.addLayer({ id: 'draw-vertex', type: 'circle', source: 'draw', filter: ['==', ['get', 'kind'], 'vertex'], paint: { 'circle-radius': 5, 'circle-color': '#fff', 'circle-stroke-color': ['get', 'color'], 'circle-stroke-width': 3 } });
+  map.addLayer({ id: 'draw-mid', type: 'circle', source: 'draw', filter: ['==', ['get', 'kind'], 'mid'], paint: { 'circle-radius': 4, 'circle-color': '#fff', 'circle-opacity': 0.75, 'circle-stroke-color': ['get', 'color'], 'circle-stroke-width': 2, 'circle-stroke-opacity': 0.75 } });
+  map.addLayer({ id: 'draw-vertex', type: 'circle', source: 'draw', filter: ['==', ['get', 'kind'], 'vertex'], paint: { 'circle-radius': ['case', ['get', 'sel'], 9, 6], 'circle-color': ['case', ['get', 'sel'], ['get', 'color'], '#fff'], 'circle-stroke-color': ['case', ['get', 'sel'], '#fff', ['get', 'color']], 'circle-stroke-width': 3 } });
   pushSaved(map);
   renderDrawNow(map);
 }
@@ -50,7 +52,7 @@ export function setSaved(map: maplibregl.Map, tracks: SavedLine[]): void {
 function renderDrawNow(map: maplibregl.Map): void {
   const src = map.getSource('draw') as maplibregl.GeoJSONSource | undefined;
   if (!src) return;
-  const { draw, drawing, rubber, mode, drawColor } = useStore.getState();
+  const { draw, drawing, rubber, mode, drawColor, selectedVertex } = useStore.getState();
   if (!drawing) { sent('draw', EMPTY); src.setData(EMPTY); return; }
   const lines = displayLines(draw);
   const features: GeoJSON.Feature[] = lines.filter((l) => l.length >= 2).map((l) => ({
@@ -60,6 +62,28 @@ function renderDrawNow(map: maplibregl.Map): void {
   if (mode === 'click') {
     for (const l of lines) for (const p of l) features.push({ type: 'Feature', properties: { kind: 'vertex', color: drawColor }, geometry: { type: 'Point', coordinates: p } });
     if (rubber && last?.length) features.push({ type: 'Feature', properties: { kind: 'rubber', color: drawColor }, geometry: { type: 'LineString', coordinates: [last[last.length - 1], rubber] } });
+  }
+  if (mode === 'edit') {
+    // handles only for what is on screen (a long track can have thousands of points), capped
+    const b = map.getBounds();
+    const inView = (p: [number, number]) => p[0] >= b.getWest() && p[0] <= b.getEast() && p[1] >= b.getSouth() && p[1] <= b.getNorth();
+    let n = 0;
+    lines.forEach((l, li) => {
+      l.forEach((p, vi) => {
+        if (n >= MAX_HANDLES || !inView(p)) return;
+        n += 1;
+        const sel = selectedVertex?.li === li && selectedVertex.vi === vi;
+        features.push({ type: 'Feature', properties: { kind: 'vertex', color: drawColor, sel }, geometry: { type: 'Point', coordinates: p } });
+      });
+      for (let i = 1; i < l.length && n < MAX_HANDLES; i += 1) {
+        if (!inView(l[i]) && !inView(l[i - 1])) continue;
+        const a = map.project(l[i - 1]);
+        const c = map.project(l[i]);
+        if (screenDist(a, c) < MIN_MID_PX) continue;
+        n += 1;
+        features.push({ type: 'Feature', properties: { kind: 'mid', color: drawColor }, geometry: { type: 'Point', coordinates: midOf(l[i - 1], l[i]) } });
+      }
+    });
   }
   const data: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features };
   sent('draw', data);

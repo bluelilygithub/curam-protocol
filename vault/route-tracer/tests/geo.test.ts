@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  addVertex, cancelStroke, displayLines, emptyDraw, endStroke, extendStroke, finish, hasWork, startStroke, undo,
+  addVertex, cancelStroke, deleteVertex, displayLines, emptyDraw, endStroke, extendStroke, finish, fromLines, hasWork, hitTest, insertVertex,
+  midOf, pushHistory, setVertex, startStroke, undo,
 } from '../src/drawing';
 import { bboxOf, degreesPerPixel, formatDistance, lineKm, simplifyLine, toGpx, totalKm, validateLines, type Line } from '../src/geo';
 
@@ -123,5 +124,51 @@ describe('drawing state', () => {
   });
   it('finish drops a lone start marker', () => {
     expect(finish(addVertex(emptyDraw(), [0, 0]))).toHaveLength(0);
+  });
+});
+
+describe('edit mode', () => {
+  const base = () => fromLines([[[0, 0], [0.02, 0], [0.04, 0]]]);
+  // a flat projection: 1000 px per degree, so a 0.02 degree segment is 20 px
+  const project = ([x, y]: [number, number]) => ({ x: x * 1000, y: -y * 1000 });
+
+  it('setVertex moves one point and leaves the rest', () => {
+    const d = setVertex(base(), { li: 0, vi: 1 }, [0.02, 0.01]);
+    expect(d.lines[0]).toEqual([[0, 0], [0.02, 0.01], [0.04, 0]]);
+    expect(d.history).toHaveLength(0);
+  });
+  it('a drag is one undo step: pushHistory once, then many setVertex calls', () => {
+    let d = pushHistory(base());
+    for (const y of [0.001, 0.002, 0.003]) d = setVertex(d, { li: 0, vi: 1 }, [0.02, y]);
+    expect(undo(d).lines).toEqual(base().lines);
+  });
+  it('insertVertex adds a point between two others; undo removes exactly it', () => {
+    const d = insertVertex(base(), { li: 0, vi: 1 }, midOf([0, 0], [0.02, 0]));
+    expect(d.lines[0]).toEqual([[0, 0], [0.01, 0], [0.02, 0], [0.04, 0]]);
+    expect(undo(d).lines).toEqual(base().lines);
+  });
+  it('insertVertex refuses a position outside the line', () => {
+    expect(insertVertex(base(), { li: 0, vi: 0 }, [9, 9]).lines).toEqual(base().lines);
+    expect(insertVertex(base(), { li: 0, vi: 4 }, [9, 9]).lines).toEqual(base().lines);
+    expect(insertVertex(base(), { li: 3, vi: 1 }, [9, 9]).lines).toEqual(base().lines);
+  });
+  it('deleteVertex removes a point (one undo step) but never leaves a stroke under two points', () => {
+    const d = deleteVertex(base(), { li: 0, vi: 1 });
+    expect(d?.lines[0]).toEqual([[0, 0], [0.04, 0]]);
+    expect(undo(d!).lines).toEqual(base().lines);
+    expect(deleteVertex(d!, { li: 0, vi: 0 })).toBeNull();
+    expect(deleteVertex(base(), { li: 0, vi: 7 })).toBeNull();
+  });
+  it('hitTest prefers a point within reach, else a long-enough segment middle, else nothing', () => {
+    const lines = base().lines;
+    expect(hitTest(lines, project, { x: 21, y: 3 }, 14)).toEqual({ kind: 'vertex', li: 0, vi: 1 });
+    // the middle of the first segment is 10 px from both ends: the point wins when it is in reach
+    expect(hitTest(lines, project, { x: 10, y: 0 }, 14)?.kind).toBe('vertex');
+    // segments are 20 px long: below a 28 px minimum there is no middle handle
+    expect(hitTest(lines, project, { x: 30, y: 0 }, 4, 28)).toBeNull();
+    // zoomed in (segments 200 px long) the middle handle is offered and carries the new point's position
+    const zoomed = ([x, y]: [number, number]) => ({ x: x * 10000, y: -y * 10000 });
+    expect(hitTest(lines, zoomed, { x: 100, y: 2 }, 14)).toEqual({ kind: 'mid', li: 0, vi: 1, pos: [0.01, 0] });
+    expect(hitTest(lines, zoomed, { x: 100, y: 80 }, 14)).toBeNull();
   });
 });

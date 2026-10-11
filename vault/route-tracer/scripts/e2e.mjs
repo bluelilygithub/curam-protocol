@@ -23,7 +23,8 @@ page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resourc
 // ---- stubs
 const STYLE = { version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#dde6dd' } }] };
 const cors = { 'access-control-allow-origin': '*' };
-await page.route('https://api.maptiler.com/**', (r) => r.fulfill({ json: STYLE, headers: cors }));
+const styleHits = [];
+await page.route('https://api.maptiler.com/**', (r) => { styleHits.push(r.request().url().split('/maps/')[1]?.split('/')[0]); return r.fulfill({ json: STYLE, headers: cors }); });
 const db = [];
 let seq = 0;
 const rad = Math.PI / 180;
@@ -171,6 +172,65 @@ check('extend dialog is prefilled with the track name', (await dlg.getByLabel('N
 await dlg.getByLabel('Name').press('Enter');
 await page.getByLabel('Track detail').waitFor();
 check('extend saved over the same track', db.length === 1 && db[0].pointCount > 3, `n=${db.length} pts=${db[0]?.pointCount}`);
+
+// ---- edit points on the saved track: add (drag a middle dot), move, delete, undo, save
+await page.getByRole('button', { name: 'Edit points' }).first().click();
+await wait(900);
+const handles = (kind) => page.evaluate((k) => {
+  const map = window.routeTracer.map;
+  const r = map.getCanvasContainer().getBoundingClientRect();
+  return (window.routeTracer.sent.draw.features).filter((f) => f.properties.kind === k).map((f) => {
+    const p = map.project(f.geometry.coordinates);
+    return { x: r.left + p.x, y: r.top + p.y };
+  });
+}, kind);
+const dragFrom = async (a, dx, dy) => {
+  await page.mouse.move(a.x, a.y); await page.mouse.down();
+  await page.mouse.move(a.x + dx / 2, a.y + dy / 2, { steps: 4 }); await page.mouse.move(a.x + dx, a.y + dy, { steps: 4 });
+  await page.mouse.up(); await wait(250);
+};
+const geo0 = JSON.stringify(db[0].geometry);
+const pts0 = db[0].pointCount; // handles only cover what is on screen, so the saved count is the reference
+const nv0 = (await handles('vertex')).length;
+const mids = await handles('mid');
+check('edit mode shows point handles and add-a-point dots', nv0 >= 3 && mids.length >= 2, `vertices ${nv0}, mids ${mids.length}`);
+await shot('edit');
+await dragFrom(mids[0], 0, -60);
+const nv1 = (await handles('vertex')).length;
+check('dragging a middle dot adds a point', nv1 === nv0 + 1, `${nv0} -> ${nv1}`);
+const c2 = await center();
+await dragFrom((await handles('vertex'))[1], 40, 40);
+check('dragging a point moves it and does not pan the map', (await handles('vertex')).length === nv1 && (await center()).every((v, i) => Math.abs(v - c2[i]) < 1e-9));
+await page.getByRole('button', { name: 'Undo' }).click(); await wait(300);
+await page.getByRole('button', { name: 'Undo' }).click(); await wait(300);
+check('two undos take back the move and the added point', (await handles('vertex')).length === nv0, `${(await handles('vertex')).length} vs ${nv0}`);
+const delBtn = page.getByRole('button', { name: 'Delete selected point' });
+check('Delete selected point is off until a point is picked', await delBtn.isDisabled());
+const v0 = (await handles('vertex'))[1];
+await page.mouse.click(v0.x, v0.y); await wait(250);
+check('tapping a point picks it', await delBtn.isEnabled());
+await delBtn.click(); await wait(300);
+check('delete removes the picked point', (await handles('vertex')).length === nv0 - 1, `${(await handles('vertex')).length} vs ${nv0 - 1}`);
+await dragFrom((await handles('mid'))[0], 0, 50);
+await page.getByRole('button', { name: 'Finish' }).click();
+check('edit dialog is prefilled with the track name', (await dlg.getByLabel('Name').inputValue()) === 'Test loop');
+await dlg.getByLabel('Name').press('Enter');
+await page.getByLabel('Track detail').waitFor();
+// net: +1 add, undone; -1 delete; +1 add  => same count as before, different shape
+check('edited points were saved over the same track', db.length === 1 && db[0].pointCount === pts0 && JSON.stringify(db[0].geometry) !== geo0, `n=${db.length} pts=${db[0]?.pointCount} expected ${pts0}`);
+await page.getByRole('button', { name: 'Extend' }).click();
+check('after edit, Extend opens in a drawing mode, not Edit', await page.getByRole('button', { name: 'Freehand', exact: true }).getAttribute('aria-pressed') === 'true');
+page.once('dialog', (d) => d.accept());
+await page.getByRole('button', { name: 'Cancel' }).click();
+await page.getByLabel('Track detail').waitFor();
+check('cancelling a reopened track returns to its detail', true);
+
+// ---- map style: every option works, including going back to the one the map started with
+await page.getByLabel('Map style').selectOption('outdoor-v2'); await wait(500);
+await page.getByLabel('Map style').selectOption('hybrid'); await wait(500);
+await page.getByLabel('Map style').selectOption('streets-v2'); await wait(800);
+check('switching back to Streets loads the Streets style again', styleHits.filter((h) => h === 'streets-v2').length >= 2 && styleHits.includes('outdoor-v2') && styleHits.includes('hybrid'), JSON.stringify(styleHits));
+check('the saved track layer survives style switches', await page.evaluate(() => !!window.routeTracer.map.getLayer('saved-line')));
 
 // ---- delete
 await page.getByRole('button', { name: 'Delete', exact: true }).click();
