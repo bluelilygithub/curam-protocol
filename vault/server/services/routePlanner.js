@@ -9,6 +9,7 @@
 //   detour: A to B but about X km (longer than the direct route). No service does this in one call, so a "via" point is placed off to one
 //           side of the A-B line and moved in or out until the route A -> via -> B is about X km. Three shapes are tried (left, right and a
 //           lopsided one), each corrected once if it misses by more than 8%, and the results come back closest-to-target first.
+//   leg:    one route between two points, for the "Follow roads" switch in Click mode: each click asks for the road or path from the last click
 //   - answers are cached for an hour and cache hits cost no quota
 //   - per-user limits (calls a minute, calls a day) and a global per-minute cap, because the free key is shared by everyone; a call is one
 //     request to the service, so a loop costs three (and three more if it needs correcting)
@@ -34,6 +35,7 @@ const DETOUR_LONG = 4; // longer than 4x the direct route is not a detour any mo
 const DETOUR_TOLERANCE = 0.08;
 // the shapes tried, per round: [side (+1 left of A to B, -1 right), how far along A to B the via point sits]
 const DETOUR_SHAPES = [[[1, 0.5], [-1, 0.5], [1, 0.3]], [[1, 0.7], [-1, 0.7], [-1, 0.3]], [[1, 0.4], [-1, 0.4], [1, 0.6]]];
+const LEG_MIN_M = 5; // two clicks closer than this are the same place: no call, the segment is just the two points
 const TIMEOUT_MS = 15000;
 const CACHE_TTL_MS = 60 * 60 * 1000;
 const CACHE_MAX = 300;
@@ -60,7 +62,7 @@ function parseError(status, json) {
   return { status, code, message };
 }
 
-function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, perUserPerMinute = 12, perUserPerDay = 150, globalPerMinute = 30, log = () => {} } = {}) {
+function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, perUserPerMinute = 24, perUserPerDay = 150, globalPerMinute = 36, log = () => {} } = {}) {
   const cache = new Map(); // key -> { at, value }
   const userHits = new Map(); // userId -> timestamps (last 24 h), one per call to the service
   let globalHits = [];
@@ -260,6 +262,27 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
     return { ...value, cached: false };
   }
 
+  /**
+   * { from, to, profile } -> { route: { distanceM, durationS, coordinates }, attribution }: the road or path from one click to the next.
+   * One call (cache hits are free). Points under 5 m apart are the same place and answer with no call.
+   */
+  async function leg(userId, { from, to, profile }) {
+    const key = checkKey(profile);
+    if (!validPos(from) || !validPos(to)) throw new PlanError(400, 'The points must be [longitude, latitude] points on the map.');
+    const straight = geo.distanceM([[from, to]]);
+    if (straight < LEG_MIN_M) return { route: { distanceM: straight, durationS: null, coordinates: [from, to] }, attribution: ATTRIBUTION, cached: true };
+    if (straight > MAX_M) throw new PlanError(422, 'Those points are too far apart to follow roads between.');
+    const ck = `leg|${profile}|${round5(from[0])},${round5(from[1])}|${round5(to[0])},${round5(to[1])}`;
+    const hit = fromCache(ck);
+    if (hit) return hit;
+    limit(userId, 1);
+    const r = (await route(key, profile, [from, to], false))[0];
+    if (!r) throw new PlanError(422, 'No route could be found between those points for this way of travelling.');
+    const value = { route: r, attribution: ATTRIBUTION };
+    remember(ck, value);
+    return { ...value, cached: false };
+  }
+
   // ---- detour: A to B, but about X km ------------------------------------------------------------------------------------------
 
   /** Where the via point goes: `h` metres to the `side` of the point `t` of the way from A to B. */
@@ -353,7 +376,7 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
     return done(routes);
   }
 
-  return { plan, loops, detour };
+  return { plan, loops, detour, leg };
 }
 
 module.exports = { createPlanner, PlanError, PROFILES, ATTRIBUTION, ALTERNATIVES_MAX_M, LOOP_MIN_KM, LOOP_MAX_KM, DETOUR_MIN_KM, DETOUR_MAX_KM };

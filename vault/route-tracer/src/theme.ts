@@ -37,6 +37,7 @@ export function onColour(bg: string): string {
   return 1.05 / (luminance(bg) + 0.05) >= 3 ? '#ffffff' : '#1a1a1a';
 }
 
+// DM Sans (Vault's default) is linked in index.html: this app runs in a frame, and a frame does not get the fonts its parent page loaded
 const loadedFonts = new Set<string>([DEFAULT_FONT]);
 function loadFont(font: string): void {
   if (loadedFonts.has(font)) return;

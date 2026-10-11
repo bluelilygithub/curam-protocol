@@ -1,9 +1,10 @@
 import type maplibregl from 'maplibre-gl';
 import { useEffect } from 'react';
 import {
-  addVertex, cancelStroke, displayLines, endStroke, extendStroke, HIT_PX, HIT_TOUCH_PX, hitTest, insertVertex, JOIN_PX, MIN_POINT_PX,
-  pushHistory, screenDist, setVertex, startStroke, TAP_PX, type VertexRef,
+  addVertex, canSnap, cancelStroke, displayLines, endStroke, extendStroke, HIT_PX, HIT_TOUCH_PX, hitTest, insertVertex, JOIN_PX, MIN_POINT_PX,
+  pushHistory, screenDist, setVertex, snapClick, snapInsert, snapMove, snapRelease, startStroke, TAP_PX, type VertexRef,
 } from './drawing';
+import { hitTestSnap } from './snap';
 import { degreesPerPixel, type Pos } from './geo';
 import { scheduleDrawRender } from './mapLayers';
 import { useStore } from './store';
@@ -120,7 +121,7 @@ export function useDrawing(map: maplibregl.Map | null, onFinish: () => void): vo
       // Delete point. A press on nothing pans the map as usual; dragPan is off only while a point is being dragged.
       const { setSelectedVertex, deleteSelectedVertex } = useStore.getState();
       const pointers = new Set<number>();
-      let drag: (VertexRef & { id: number; moved: boolean; down: { x: number; y: number } }) | null = null;
+      let drag: (VertexRef & { id: number; moved: boolean; down: { x: number; y: number }; roads?: boolean }) | null = null;
       map.dragPan.enable();
       el.style.cursor = 'default';
 
@@ -129,8 +130,23 @@ export function useDrawing(map: maplibregl.Map | null, onFinish: () => void): vo
         pointers.add(e.pointerId);
         if (pointers.size > 1) { drag = null; map.dragPan.enable(); return; } // a second finger: pinch / pan
         const p = xy(e);
-        const lines = displayLines(useStore.getState().draw);
-        const hit = hitTest(lines, (q) => map.project(q), p, e.pointerType === 'touch' ? HIT_TOUCH_PX : HIT_PX);
+        const draw = useStore.getState().draw;
+        const hitPx = e.pointerType === 'touch' ? HIT_TOUCH_PX : HIT_PX;
+        if (draw.snap) {
+          // a route that follows roads: the handles are the points that were clicked (and a dot on each road between them), not every point of the road
+          const h = hitTestSnap(draw.snap, (q) => map.project(q), p, hitPx);
+          if (!h) { setSelectedVertex(null); return; }
+          map.dragPan.disable();
+          try { el.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+          if (h.kind === 'mid') {
+            apply((s) => snapInsert(s, h.li, h.pos, true)); // one undo step; the roads wait for the pointer to be released, as the point is dragged on from here
+            drag = { li: 0, vi: h.li + 1, id: e.pointerId, moved: true, down: p, roads: true };
+          } else drag = { li: 0, vi: h.wi, id: e.pointerId, moved: false, down: p, roads: true };
+          setSelectedVertex({ li: 0, vi: drag.vi });
+          return;
+        }
+        const lines = displayLines(draw);
+        const hit = hitTest(lines, (q) => map.project(q), p, hitPx);
         if (!hit) { setSelectedVertex(null); return; }
         map.dragPan.disable();
         try { el.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
@@ -149,11 +165,12 @@ export function useDrawing(map: maplibregl.Map | null, onFinish: () => void): vo
           drag.moved = true;
         }
         const ref = { li: drag.li, vi: drag.vi };
-        apply((s) => setVertex(s, ref, toPos(p)));
+        if (drag.roads) apply((s) => snapMove(s, ref.vi, toPos(p)));
+        else apply((s) => setVertex(s, ref, toPos(p)));
       };
       const onUp = (e: PointerEvent) => {
         pointers.delete(e.pointerId);
-        if (drag?.id === e.pointerId) drag = null;
+        if (drag?.id === e.pointerId) { if (drag.roads && drag.moved) apply(snapRelease); drag = null; } // let go: the roads on either side are found again
         if (pointers.size === 0) map.dragPan.enable();
       };
       const onKeyDown = (e: KeyboardEvent) => {
@@ -183,7 +200,7 @@ export function useDrawing(map: maplibregl.Map | null, onFinish: () => void): vo
       el.style.cursor = 'crosshair';
       let lastAt = 0;
       let lastPt = { x: -99, y: -99 };
-      let grabbed: (VertexRef & { id: number; moved: boolean; down: { x: number; y: number } }) | null = null;
+      let grabbed: (VertexRef & { id: number; moved: boolean; down: { x: number; y: number }; roads?: boolean }) | null = null;
       let justGrabbed = false;
       const onClick = (e: maplibregl.MapMouseEvent) => {
         if (justGrabbed) return; // the release of a point that was being dragged (or tapped) is not a new point
@@ -192,7 +209,11 @@ export function useDrawing(map: maplibregl.Map | null, onFinish: () => void): vo
         if (now - lastAt < 350 && screenDist(e.point, lastPt) < 6) return;
         lastAt = now;
         lastPt = e.point;
-        apply((s) => addVertex(s, [e.lngLat.lng, e.lngLat.lat]));
+        const pos: Pos = [e.lngLat.lng, e.lngLat.lat];
+        const { followRoads, followProfile } = useStore.getState();
+        // Follow roads on (from an empty drawing or a road-following route): the click is a waypoint and the road from the last one is looked for.
+        // Off, on a road-following route: a waypoint joined by a straight leg. Otherwise a plain point, as ever.
+        apply((s) => ((followRoads && canSnap(s)) || s.snap ? snapClick(s, pos, followRoads ? followProfile : null) : addVertex(s, pos)));
       };
       const onDbl = () => onFinish();
       const onMouseMove = (e: maplibregl.MapMouseEvent) => setRubber([e.lngLat.lng, e.lngLat.lat]); // mouse only: touch has no hover
@@ -201,7 +222,18 @@ export function useDrawing(map: maplibregl.Map | null, onFinish: () => void): vo
       const onGrab = (e: PointerEvent) => {
         if ((e.pointerType === 'mouse' && e.button !== 0) || grabbed) return;
         const p = xy(e);
-        const hit = hitTest(displayLines(useStore.getState().draw), (q) => map.project(q), p, e.pointerType === 'touch' ? HIT_TOUCH_PX : HIT_PX, Infinity);
+        const draw = useStore.getState().draw;
+        const hitPx = e.pointerType === 'touch' ? HIT_TOUCH_PX : HIT_PX;
+        if (draw.snap) {
+          const h = hitTestSnap(draw.snap, (q) => map.project(q), p, hitPx, undefined, false);
+          if (!h || h.kind !== 'vertex') return;
+          map.dragPan.disable();
+          try { el.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+          grabbed = { li: 0, vi: h.wi, id: e.pointerId, moved: false, down: p, roads: true };
+          justGrabbed = true;
+          return;
+        }
+        const hit = hitTest(displayLines(draw), (q) => map.project(q), p, hitPx, Infinity);
         if (!hit || hit.kind !== 'vertex') return;
         map.dragPan.disable();
         try { el.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
@@ -217,10 +249,12 @@ export function useDrawing(map: maplibregl.Map | null, onFinish: () => void): vo
           grabbed.moved = true;
         }
         const ref = { li: grabbed.li, vi: grabbed.vi };
-        apply((s) => setVertex(s, ref, toPos(p)));
+        if (grabbed.roads) apply((s) => snapMove(s, ref.vi, toPos(p)));
+        else apply((s) => setVertex(s, ref, toPos(p)));
       };
       const onGrabEnd = (e: PointerEvent) => {
         if (!grabbed || grabbed.id !== e.pointerId) return;
+        if (grabbed.roads && grabbed.moved) apply(snapRelease); // let go: the roads on either side of the point are found again
         grabbed = null;
         map.dragPan.enable();
         window.setTimeout(() => { justGrabbed = false; }, 60); // after the click that follows this release has been ignored

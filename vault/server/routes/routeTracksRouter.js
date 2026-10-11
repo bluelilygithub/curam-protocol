@@ -153,6 +153,22 @@ function createRouter(pool, {
     }
   });
 
+  // POST /api/route-tracks/leg { from, to, profile }: the road or path between two clicks (Click mode with Follow roads on).
+  router.post('/leg', async (req, res) => {
+    try {
+      const out = await planner.leg(req.user.id, { from: req.body?.from, to: req.body?.to, profile: req.body?.profile });
+      res.set('Cache-Control', 'no-store');
+      res.json(out);
+    } catch (err) {
+      if (err instanceof PlanError) {
+        if (err.retryAfter) res.set('Retry-After', String(err.retryAfter));
+        return res.status(err.status).json({ error: err.message, ...(err.extra || {}) });
+      }
+      getLogger().error({ err }, 'route leg failed');
+      res.status(500).json({ error: 'Could not follow roads there.' });
+    }
+  });
+
   // POST /api/route-tracks/detour { from, to, lengthKm?, profile, round }: A to B but about lengthKm (longer than the direct route). Without lengthKm:
   // just the direct route and how long it is. Up to three options, each with offPct (how far its length is from the target).
   router.post('/detour', async (req, res) => {

@@ -38,6 +38,9 @@ export interface GeocodeResult { label: string; lat: number; lng: number }
 
 export const api = {
   config: () => call<{ maptilerKey: string | null; routePlanning?: boolean }>('GET', '/api/route-tracks/config'),
+  /** The road or path between two clicks (Click mode with Follow roads on): one route, not alternatives. */
+  leg: (input: { from: [number, number]; to: [number, number]; profile: PlanProfile }) =>
+    call<{ route: PlannedRoute; cached: boolean }>('POST', '/api/route-tracks/leg', input),
   detour: (input: { from: [number, number]; to: [number, number]; profile: PlanProfile; lengthKm?: number; round: number }) =>
     call<{ routes: PlannedRoute[]; attribution: string; targetM: number | null; directM: number; cached: boolean }>('POST', '/api/route-tracks/detour', input),
   loop: (input: { from: [number, number]; lengthKm: number; profile: PlanProfile; round: number }) =>

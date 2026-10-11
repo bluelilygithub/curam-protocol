@@ -6,6 +6,7 @@ import { displayLines, finish, fromLines } from './drawing';
 import { bboxOf, formatDistance, totalKm, type BBox } from './geo';
 import { setSaved, type SavedLine } from './mapLayers';
 import { ElevationChart } from './ElevationChart';
+import { fitToLimit } from './gpx';
 import { fitPadding } from './layout';
 import { usePlan } from './Plan';
 import { COLORS, useStore } from './store';
@@ -52,7 +53,7 @@ export function useSavedLayer(map: maplibregl.Map | null): void {
 
 export function SaveDialog({ onSaved }: { onSaved: (t: Track) => void }) {
   const { draw, mode, units, extendingId, drawColor, setDrawColor, setSaving, toast } = useStore();
-  const lines = useMemo(() => finish(draw), [draw]);
+  const lines = useMemo(() => fitToLimit(finish(draw)).lines, [draw]); // a long road-following route can have more points than a track holds: thinned only if so
   const existing = useStore((s) => (s.extendingId ? s.selected : null));
   const imported = useStore((s) => s.imported);
   const planned = useStore((s) => s.planned);
@@ -78,7 +79,7 @@ export function SaveDialog({ onSaved }: { onSaved: (t: Track) => void }) {
       const geometry = { type: 'MultiLineString' as const, coordinates: lines };
       const track = extendingId
         ? await api.update(extendingId, { name: name.trim(), notes: notes.trim() || null, color: drawColor, geometry })
-        : await api.create({ name: name.trim(), notes: notes.trim() || null, color: drawColor, geometry, drawMode: imported ? 'import' : planned ? 'route' : mode === 'click' ? 'click' : 'freehand' });
+        : await api.create({ name: name.trim(), notes: notes.trim() || null, color: drawColor, geometry, drawMode: imported ? 'import' : planned ? 'route' : mode === 'click' || draw.snap ? 'click' : 'freehand' });
       toast('ok', 'Saved');
       onSaved(track);
     } catch (err) { toast('error', errText(err)); setBusy(false); }

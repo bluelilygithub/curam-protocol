@@ -61,6 +61,10 @@ const db = [];
 const planLog = [];
 let planOrder = 'sorted';
 const loopLog = [];
+const legLog = [];
+const legMetres = [];
+let legFail = false;
+let legDelay = 0;
 const detourLog = [];
 let lastDirectM = 0;
 let planFail = null;
@@ -85,6 +89,17 @@ await page.route('**/api/route-tracks**', async (route) => {
     if (planFail) return route.fulfill({ status: 422, json: { error: planFail } });
     const mk = (bow) => { const mid = [(b.from[0] + b.to[0]) / 2 + bow * (b.to[1] - b.from[1]), (b.from[1] + b.to[1]) / 2 - bow * (b.to[0] - b.from[0])]; const coordinates = [b.from, [(b.from[0] + mid[0]) / 2, (b.from[1] + mid[1]) / 2], mid, [(mid[0] + b.to[0]) / 2, (mid[1] + b.to[1]) / 2], b.to]; return { distanceM: dist([coordinates]), durationS: dist([coordinates]) / 1.4, coordinates }; };
     return route.fulfill({ json: { routes: planOrder === 'shuffled' ? [mk(-0.4), mk(0), mk(0.25)] : [mk(0), mk(0.25), mk(-0.4)], attribution: '(c) openrouteservice.org | (c) OpenStreetMap contributors', cached: false } });
+  }
+  if (m === 'POST' && path === '/leg') {
+    const b = req.postDataJSON();
+    legLog.push(b);
+    if (legDelay) await new Promise((r) => setTimeout(r, legDelay));
+    if (legFail) return route.fulfill({ status: 422, json: { error: 'No road or path was found near the end. Move it closer to a road or footpath.' } });
+    const bend = [(b.from[0] + b.to[0]) / 2, (b.from[1] + b.to[1]) / 2 + 0.0004]; // a road that is not the straight line
+    const coordinates = [b.from, bend, b.to];
+    const d = dist([coordinates]);
+    legMetres.push(d);
+    return route.fulfill({ json: { route: { distanceM: d, durationS: d / 1.4, coordinates }, cached: false } });
   }
   if (m === 'POST' && path === '/detour') {
     const b = req.postDataJSON();
@@ -787,6 +802,7 @@ await wait(300);
 {
   const cssVar = (pg, name) => pg.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);
   const bgOf = (pg, sel) => pg.evaluate((q) => getComputedStyle(document.querySelector(q)).backgroundColor, sel);
+  check('DM Sans (Vault\'s default font) is linked in this page: a frame does not share the fonts of the page around it', await page.evaluate(() => [...document.querySelectorAll('link[rel=stylesheet]')].some((l) => l.href.includes('family=DM+Sans'))));
   check('with nothing saved it wears Vault\'s default, Warm Sand', (await cssVar(page, '--color-primary')).toLowerCase() === '#cc785c' && (await bgOf(page, 'body')) === 'rgb(245, 245, 240)', `${await cssVar(page, '--color-primary')} ${await bgOf(page, 'body')}`);
   const themed = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   await themed.addInitScript(() => {
@@ -819,6 +835,140 @@ await wait(300);
   await themed.close();
 }
 
+// ---- Click mode with Follow roads: each click finds the road from the last one
+{
+  await home();
+  await page.getByRole('button', { name: 'Draw', exact: true }).click();
+  await page.getByRole('button', { name: 'Click', exact: true }).click();
+  const follow = page.getByRole('button', { name: 'Follow roads', exact: true });
+  const feats = () => page.evaluate(() => (window.routeTracer.sent.draw?.features ?? []).map((f) => ({ kind: f.properties.kind, n: f.geometry.type === 'LineString' ? f.geometry.coordinates.length : 1, c: f.geometry.coordinates })));
+  const kinds = async (k) => (await feats()).filter((f) => f.kind === k);
+  const screenOf = (idx) => page.evaluate((i) => {
+    const map = window.routeTracer.map; const r = map.getCanvasContainer().getBoundingClientRect();
+    const v = window.routeTracer.sent.draw.features.filter((f) => f.properties.kind === 'vertex')[i]; const p = map.project(v.geometry.coordinates);
+    return { x: r.left + p.x, y: r.top + p.y };
+  }, idx);
+  const clickAt = async (x, y) => { await page.mouse.click(MX + x, MY + y); await wait(500); };
+  const waitIdle = () => page.waitForFunction(() => !document.querySelector('[data-testid=snap-status]'), undefined, { timeout: 8000 });
+
+  check('the Follow roads switch is there in Click mode, and off to begin with', (await follow.getAttribute('aria-pressed')) === 'false' && await follow.isEnabled());
+  // the switch cannot be turned on over a plain line
+  await page.getByRole('button', { name: 'Click', exact: true }).click();
+  await clickAt(250, 300); await clickAt(400, 330);
+  check('with a plain line already drawn it cannot be turned on, and says why', await follow.isDisabled() && /Clear this drawing/.test((await follow.getAttribute('title')) ?? ''));
+  await page.getByRole('button', { name: 'Clear' }).click(); await page.getByRole('button', { name: 'Yes', exact: true }).click(); await wait(300);
+  check('Clear makes it available again', await follow.isEnabled());
+
+  await follow.click();
+  check('turning it on shows the way of travelling', (await follow.getAttribute('aria-pressed')) === 'true' && (await page.getByRole('group', { name: 'Follow roads for' }).getByRole('button').count()) === 4);
+  await tipsOk('follow roads');
+  const profile = ((await page.evaluate(() => document.querySelector('[role=group][aria-label="Follow roads for"] button[aria-pressed=true]')?.getAttribute('aria-label') ?? '')).replace('Follow roads for ', ''));
+  legLog.length = 0; legMetres.length = 0;
+  await clickAt(250, 300); await clickAt(450, 360); await clickAt(650, 320);
+  await waitIdle().catch(() => undefined); await wait(400);
+  check('the first click asks for nothing; each later click asks for the road from the last one, in the chosen way of travelling', legLog.length === 2 && legLog.every((l) => l.profile === profile) && JSON.stringify(legLog[0].to) === JSON.stringify(legLog[1].from), JSON.stringify(legLog.map((l) => [l.profile, l.from.map((n) => +n.toFixed(4)), l.to.map((n) => +n.toFixed(4))])));
+  const v3 = await kinds('vertex');
+  const roads = await kinds('line');
+  check('the handles are the three points clicked, and the route is drawn along the roads (two legs of three points)', v3.length === 3 && roads.length === 2 && roads.every((r) => r.n === 3), `${v3.length} handles, ${roads.map((r) => r.n)}`);
+  const sum = legMetres.reduce((a, b) => a + b, 0) / 1000;
+  check('the distance is the length of the roads, not of the straight lines', Math.abs(km(await readout()) - sum) < 0.03 && sum > 0, `${await readout()} vs ${sum.toFixed(2)} km`);
+
+  // undo takes back one click: the point and its road
+  await page.getByRole('button', { name: 'Undo' }).click(); await wait(400);
+  check('Undo takes back the last point and its road together, without asking for anything', (await kinds('vertex')).length === 2 && legLog.length === 2 && Math.abs(km(await readout()) - legMetres[0] / 1000) < 0.03);
+  await clickAt(650, 320); await waitIdle().catch(() => undefined); await wait(300);
+  check('clicking the same place again is answered from what was learned (no new request)', legLog.length === 2 || legLog.length === 3, String(legLog.length));
+
+  // dragging a point: nothing is asked for while dragging; on release the two roads beside it are found again
+  const before = legLog.length;
+  const centreBefore = await center();
+  const wp = await screenOf(1);
+  await page.mouse.move(wp.x, wp.y); await page.mouse.down();
+  await page.mouse.move(wp.x + 15, wp.y + 25, { steps: 4 }); await page.mouse.move(wp.x + 40, wp.y + 60, { steps: 4 });
+  await wait(600);
+  check('while a point is being dragged nothing is asked for, and the legs beside it are straight', legLog.length === before && (await kinds('rawleg')).length === 2);
+  await page.mouse.up(); await wait(900);
+  check('on release the two roads beside the point are found again, and the map did not move', legLog.length === before + 2 && (await center()).every((v, i) => Math.abs(v - centreBefore[i]) < 1e-9) && (await kinds('rawleg')).length === 0, `${legLog.length - before} new, ${(await kinds('rawleg')).length} raw`);
+  await page.getByRole('button', { name: 'Undo' }).click(); await wait(400);
+  check('one Undo puts the dragged point and its roads back', (await kinds('vertex')).length === 3 && (await kinds('rawleg')).length === 0);
+
+  // a click where no road can be found: kept as a straight line, said once, and Try again
+  legFail = true;
+  const failFrom = legLog.length;
+  await clickAt(300, 450); await wait(900);
+  const status = page.getByTestId('snap-status');
+  check('where no road can be found the section stays a straight line and says so', /could not follow a road/.test((await status.textContent()) ?? '') && (await kinds('rawleg')).length === 1 && legLog.length === failFrom + 1);
+  check('and the person is told why', (await page.getByText(/No road or path was found near the end/).count()) >= 1);
+  legFail = false;
+  await page.getByRole('button', { name: 'Try again' }).click(); await wait(1000);
+  check('Try again finds it', legLog.length === failFrom + 2 && (await kinds('rawleg')).length === 0 && (await status.count()) === 0);
+
+  // Finish waits for roads that are still being found
+  legDelay = 1500;
+  await clickAt(500, 480);
+  const finishBtn = page.getByRole('button', { name: 'Finish' });
+  check('Finish waits while a road is being found', await finishBtn.isDisabled() && /Waiting for the roads/.test((await finishBtn.getAttribute('title')) ?? ''));
+  await page.waitForFunction(() => !document.querySelector('[data-testid=snap-status]'), undefined, { timeout: 8000 });
+  legDelay = 0;
+  check('and is available once they are found', await finishBtn.isEnabled());
+
+  // return to start and out and back
+  const nLegs = (await kinds('line')).length + (await kinds('rawleg')).length;
+  const beforeLoop = legLog.length;
+  await page.getByRole('button', { name: 'Return to start' }).click(); await wait(900);
+  const afterLoop = await kinds('line');
+  check('Return to start finds a road back to the first point', legLog.length === beforeLoop + 1 && afterLoop.length === nLegs + 1 && JSON.stringify(legLog.at(-1).to) === JSON.stringify(legLog[0].from), `${legLog.length - beforeLoop} new`);
+  const dLoop = km(await readout());
+  const beforeOB = legLog.length;
+  await page.getByRole('button', { name: 'Out and back' }).click(); await wait(500);
+  check('Out and back doubles the distance along the same roads without asking for any', legLog.length === beforeOB && Math.abs(km(await readout()) - 2 * dLoop) < 0.05, `${dLoop} -> ${await readout()}`);
+  await page.getByRole('button', { name: 'Undo' }).click(); await wait(300);
+
+  // Edit points on a road-following route: the handles are the points clicked and a dot on each road
+  await page.getByRole('button', { name: 'Edit points', exact: true }).click(); await wait(500);
+  const wpCount = (await kinds('vertex')).length;
+  const midCount = (await kinds('mid')).length;
+  check('Edit points shows only the points that were clicked, with a dot in the middle of each road (not every point of the road)', wpCount <= 8 && wpCount >= 5 && midCount >= 3 && midCount <= wpCount, `${wpCount} points, ${midCount} dots`);
+  await shot('follow-edit');
+  const dot = await page.evaluate(() => {
+    const map = window.routeTracer.map; const r = map.getCanvasContainer().getBoundingClientRect();
+    const f = window.routeTracer.sent.draw.features.filter((x) => x.properties.kind === 'mid')[0]; const p = map.project(f.geometry.coordinates);
+    return { x: r.left + p.x, y: r.top + p.y };
+  });
+  const beforeIns = legLog.length;
+  await page.mouse.move(dot.x, dot.y); await page.mouse.down();
+  await page.mouse.move(dot.x + 10, dot.y - 20, { steps: 4 }); await page.mouse.move(dot.x + 20, dot.y - 50, { steps: 4 });
+  await page.mouse.up(); await wait(1000);
+  check('dragging a dot adds a point there and finds the two roads either side of it', (await kinds('vertex')).length === wpCount + 1 && legLog.length === beforeIns + 2, `${(await kinds('vertex')).length} points, ${legLog.length - beforeIns} requests`);
+  const pick = await screenOf(2);
+  await page.mouse.click(pick.x, pick.y); await wait(300);
+  const delBtn = page.getByRole('button', { name: 'Delete selected point' });
+  check('a tapped point can be deleted', await delBtn.isEnabled());
+  const beforeDel = legLog.length;
+  await delBtn.click(); await wait(1000);
+  check('deleting a point joins the two roads beside it into one, found again', (await kinds('vertex')).length === wpCount && legLog.length === beforeDel + 1, `${(await kinds('vertex')).length} points, ${legLog.length - beforeDel} requests`);
+
+  // Follow roads off: the next click is a straight leg, asked for nothing
+  await page.getByRole('button', { name: 'Click', exact: true }).click(); await wait(200);
+  await follow.click();
+  check('turning Follow roads off keeps the route and adds straight lines from then on', (await follow.getAttribute('aria-pressed')) === 'false');
+  const beforeStraight = legLog.length;
+  await clickAt(200, 200); await wait(400);
+  const last = (await kinds('line')).at(-1);
+  check('a click with it off adds a straight leg and asks for nothing', legLog.length === beforeStraight && last.n === 2);
+
+  // saved as an ordinary track, with the roads as its geometry
+  const nWps = (await kinds('vertex')).length;
+  await page.getByRole('button', { name: 'Finish' }).click();
+  await dlg.getByLabel('Name').fill('Road route');
+  await dlg.getByLabel('Name').press('Enter');
+  await page.getByLabel('Track detail').waitFor();
+  const roadTrack = db.at(-1);
+  check('saved as a click-mode track whose geometry is the roads (many more points than clicks)', roadTrack.name === 'Road route' && roadTrack.drawMode === 'click' && roadTrack.geometry.coordinates.length === 1 && roadTrack.pointCount > nWps + 3, `${roadTrack.pointCount} points for ${nWps} clicks`);
+  await shot('follow-saved');
+  // leave Follow roads off for the rest of the run
+}
+
 // ---- the guide and the tour
 {
   const fresh = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -837,6 +987,11 @@ await wait(300);
   check('guide buttons have tooltips too', noTips === 0);
   await fp.keyboard.press('Escape'); await wait(300);
   check('Plan route is greyed out, with a reason, when the server has no routing key', await fp.getByRole('button', { name: 'Plan route' }).isDisabled() && /not set up/.test((await fp.getByRole('button', { name: 'Plan route' }).getAttribute('title')) ?? '') );
+  await fp.keyboard.press('Escape'); await wait(150);
+  await fp.getByRole('button', { name: 'Draw', exact: true }).click();
+  await fp.getByRole('button', { name: 'Click', exact: true }).click();
+  { const f = fp.getByRole('button', { name: 'Follow roads', exact: true }); check('without a routing key Follow roads is off and says why', (await f.isDisabled()) && /not set up/.test((await f.getAttribute('title')) ?? '')); }
+  await fp.getByRole('button', { name: 'Cancel' }).click();
   check('Escape closes the guide', (await fp.getByTestId('info-modal').count()) === 0);
   await fp.reload();
   await fp.waitForFunction(() => window.routeTracer?.map?.isStyleLoaded());

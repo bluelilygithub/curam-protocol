@@ -1,5 +1,6 @@
 import type maplibregl from 'maplibre-gl';
 import { displayLines, midOf, MIN_MID_PX, screenDist } from './drawing';
+import { anchorOf, legLine, midOfLine } from './snap';
 import type { Lines } from './geo';
 import { useStore } from './store';
 
@@ -33,6 +34,7 @@ export function addLayers(map: maplibregl.Map): void {
   map.addLayer({ id: 'plan-line', type: 'line', source: 'plan', layout: join, paint: { 'line-color': ['get', 'color'], 'line-width': ['case', ['get', 'sel'], 6, 4], 'line-opacity': ['case', ['get', 'sel'], 1, 0.6] } });
   map.addLayer({ id: 'draw-casing', type: 'line', source: 'draw', filter: ['==', ['get', 'kind'], 'line'], layout: join, paint: { 'line-color': '#fff', 'line-width': 6 } });
   map.addLayer({ id: 'draw-line', type: 'line', source: 'draw', filter: ['==', ['get', 'kind'], 'line'], layout: join, paint: { 'line-color': ['get', 'color'], 'line-width': 4 } });
+  map.addLayer({ id: 'draw-rawleg', type: 'line', source: 'draw', filter: ['==', ['get', 'kind'], 'rawleg'], layout: join, paint: { 'line-color': ['get', 'color'], 'line-width': 3, 'line-dasharray': [1, 1.5] } });
   map.addLayer({ id: 'draw-rubber', type: 'line', source: 'draw', filter: ['==', ['get', 'kind'], 'rubber'], layout: join, paint: { 'line-color': ['get', 'color'], 'line-width': 3, 'line-dasharray': [1.5, 1.5] } });
   map.addLayer({ id: 'draw-mid', type: 'circle', source: 'draw', filter: ['==', ['get', 'kind'], 'mid'], paint: { 'circle-radius': 4, 'circle-color': '#fff', 'circle-opacity': 0.75, 'circle-stroke-color': ['get', 'color'], 'circle-stroke-width': 2, 'circle-stroke-opacity': 0.75 } });
   map.addLayer({ id: 'draw-vertex', type: 'circle', source: 'draw', filter: ['==', ['get', 'kind'], 'vertex'], paint: { 'circle-radius': ['case', ['get', 'sel'], 9, 6], 'circle-color': ['case', ['get', 'sel'], ['get', 'color'], '#fff'], 'circle-stroke-color': ['case', ['get', 'sel'], '#fff', ['get', 'color']], 'circle-stroke-width': 3 } });
@@ -78,6 +80,34 @@ function renderDrawNow(map: maplibregl.Map): void {
   if (!src) return;
   const { draw, drawing, rubber, mode, drawColor, selectedVertex } = useStore.getState();
   if (!drawing) { sent('draw', EMPTY); src.setData(EMPTY); return; }
+  if (draw.snap) {
+    // a route that follows roads: each leg is drawn as it is (the road once found; dashed while it waits or if no road could be found),
+    // the handles are the points that were clicked, and in Edit points a dot in the middle of each leg
+    const r = draw.snap;
+    const feats: GeoJSON.Feature[] = [];
+    r.legs.forEach((leg, i) => {
+      const line = legLine(r, i);
+      if (line.length < 2) return;
+      const done = leg.state === 'routed' || leg.state === 'straight';
+      feats.push({ type: 'Feature', properties: { kind: done ? 'line' : 'rawleg', color: drawColor }, geometry: { type: 'LineString', coordinates: line } });
+    });
+    if (mode === 'click' || mode === 'edit') {
+      r.wps.forEach((_, i) => feats.push({ type: 'Feature', properties: { kind: 'vertex', color: drawColor, sel: mode === 'edit' && selectedVertex?.vi === i }, geometry: { type: 'Point', coordinates: anchorOf(r, i) } }));
+    }
+    if (mode === 'edit') {
+      r.legs.forEach((_, i) => {
+        const a = map.project(anchorOf(r, i));
+        const c = map.project(anchorOf(r, i + 1));
+        if (screenDist(a, c) < MIN_MID_PX) return;
+        feats.push({ type: 'Feature', properties: { kind: 'mid', color: drawColor }, geometry: { type: 'Point', coordinates: midOfLine(legLine(r, i)) } });
+      });
+    }
+    if (mode === 'click' && rubber && r.wps.length) feats.push({ type: 'Feature', properties: { kind: 'rubber', color: drawColor }, geometry: { type: 'LineString', coordinates: [anchorOf(r, r.wps.length - 1), rubber] } });
+    const out: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: feats };
+    sent('draw', out);
+    src.setData(out);
+    return;
+  }
   const lines = displayLines(draw);
   const features: GeoJSON.Feature[] = lines.filter((l) => l.length >= 2).map((l) => ({
     type: 'Feature', properties: { kind: 'line', color: drawColor }, geometry: { type: 'LineString', coordinates: l },

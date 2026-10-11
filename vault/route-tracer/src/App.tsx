@@ -15,6 +15,7 @@ import { ProbeReadout, useDistanceProbe } from './Probe';
 import { Header, MapControls } from './Shell';
 import { useStore } from './store';
 import { useDrawing } from './useDrawing';
+import { useSnapRouting } from './snapRouting';
 
 const DEV_KEY = (import.meta.env.VITE_MAPTILER_KEY as string | undefined) || null;
 
@@ -56,6 +57,7 @@ function Shell({ mapKey, map, onMap }: { mapKey: string; map: maplibregl.Map | n
   useDistanceMarkers(map);
   useDistanceProbe(map);
   usePlanning(map);
+  useSnapRouting();
   useAutosave();
 
   const onSaved = useCallback((t: Track) => {

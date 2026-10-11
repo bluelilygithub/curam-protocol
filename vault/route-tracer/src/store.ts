@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import { closeLoop as closeLoopFn, deleteVertex, emptyDraw, outAndBack as outAndBackFn, type Shaped, type DrawMode, type DrawState, type VertexRef } from './drawing';
+import { closeLoop as closeLoopFn, deleteVertex, emptyDraw, outAndBack as outAndBackFn, snapDelete, type Shaped, type DrawMode, type DrawState, type VertexRef } from './drawing';
 import type { Pos, Units } from './geo';
-import type { Track, TrackSummary } from './api';
+import type { PlanProfile, Track, TrackSummary } from './api';
 
 export const STYLES = [
   { id: 'streets-v2', label: 'Streets' },
@@ -50,6 +50,12 @@ interface State {
   rubber: Pos | null;
   setRubber(p: Pos | null): void;
   /** Edit mode: the point picked for Delete point. */
+  /** Follow roads (Click mode): each click finds the road from the last one. Remembered on this device. */
+  followRoads: boolean;
+  setFollowRoads(v: boolean): void;
+  /** The way of travelling Follow roads uses. */
+  followProfile: PlanProfile;
+  setFollowProfile(p: PlanProfile): void;
   selectedVertex: VertexRef | null;
   setSelectedVertex(v: VertexRef | null): void;
   deleteSelectedVertex(): void;
@@ -121,15 +127,19 @@ export const useStore = create<State>((set, get) => {
   mode: read('route-tracer:mode') === 'click' ? 'click' : 'freehand',
   // the drawing style is remembered per browser; Edit is a one-off activity, never the default
   setMode: (mode) => { if (mode !== 'edit') write('route-tracer:mode', mode); set({ mode, rubber: null, selectedVertex: null }); },
+  followRoads: read('route-tracer:follow') === 'on',
+  setFollowRoads: (followRoads) => { write('route-tracer:follow', followRoads ? 'on' : 'off'); set({ followRoads }); },
+  followProfile: (['walking', 'hiking', 'cycling', 'driving'].find((p) => p === (read('route-tracer:follow-profile') ?? read('route-tracer:plan-profile'))) ?? 'walking') as PlanProfile,
+  setFollowProfile: (followProfile) => { write('route-tracer:follow-profile', followProfile); set({ followProfile }); },
   selectedVertex: null,
   setSelectedVertex: (selectedVertex) => set({ selectedVertex }),
-  closeLoop: () => applyShape(closeLoopFn),
+  closeLoop: () => applyShape((d) => closeLoopFn(d, get().followRoads ? get().followProfile : null)),
   outAndBack: () => applyShape(outAndBackFn),
   deleteSelectedVertex: () => {
     const { selectedVertex, draw, toast } = get();
     if (!selectedVertex) return;
-    const next = deleteVertex(draw, selectedVertex);
-    if (!next) return toast('error', 'A stroke needs at least two points.');
+    const next = draw.snap ? snapDelete(draw, selectedVertex.vi) : deleteVertex(draw, selectedVertex); // on a road-following route a point is a waypoint
+    if (!next) return toast('error', draw.snap ? 'A route needs at least two points.' : 'A stroke needs at least two points.');
     set({ draw: next, selectedVertex: null });
   },
   draw: emptyDraw(),

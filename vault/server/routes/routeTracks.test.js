@@ -433,6 +433,64 @@ async function planTests() {
     await rejects(make(1.3, (b) => (b.coordinates.length === 3 ? { status: 429, json: {} } : null)).detour(1, { ...detourBody, lengthKm: 8 }), 429, /busy/);
   }
 
+  // ---- leg: one road or path between two clicks (Follow roads in Click mode)
+  {
+    const A = [153.0, -27.5];
+    const B = [153.004, -27.5]; // about 400 m
+    const lcalls = [];
+    const road = (b) => [b.coordinates[0], [(b.coordinates[0][0] + b.coordinates[1][0]) / 2, b.coordinates[0][1] + 0.0008], b.coordinates[1]];
+    const mkLeg = (extra = {}, fail = null) => createPlanner({
+      getKey: () => KEY,
+      fetchFn: async (url, init) => {
+        const body = JSON.parse(init.body); lcalls.push({ url, body });
+        if (fail) { const f = fail(body); if (f) return { ok: false, status: f.status, json: async () => f.json }; }
+        const pts = road(body); const len = require('../services/routeTracerGeo').distanceM([pts]);
+        return { ok: true, status: 200, json: async () => ({ features: [{ properties: { summary: { distance: len, duration: len / 1.4 } }, geometry: { type: 'LineString', coordinates: pts } }] }) };
+      },
+      ...extra,
+    });
+    const g = mkLeg();
+    const a = await g.leg(1, { from: A, to: B, profile: 'cycling' });
+    assert.strictEqual(lcalls.length, 1);
+    assert.strictEqual(lcalls[0].url, 'https://api.openrouteservice.org/v2/directions/cycling-regular/geojson');
+    assert.deepStrictEqual(lcalls[0].body.coordinates, [A, B], 'two points, in order');
+    assert.strictEqual(lcalls[0].body.alternative_routes, undefined, 'one route, no alternatives');
+    assert.strictEqual(a.route.coordinates.length, 3, 'the road geometry, not just the two clicks');
+    assert.ok(a.route.distanceM > 400);
+    assert.strictEqual(a.cached, false);
+    // the same two clicks again (to about a metre): free
+    const b = await g.leg(1, { from: [A[0] + 0.000001, A[1]], to: B, profile: 'cycling' });
+    assert.strictEqual(b.cached, true);
+    assert.strictEqual(lcalls.length, 1);
+    // a different way of travelling is a different road
+    await g.leg(1, { from: A, to: B, profile: 'driving' });
+    assert.strictEqual(lcalls.length, 2);
+    // two clicks on the same spot: no call at all
+    const same = await g.leg(1, { from: A, to: [A[0] + 0.00001, A[1]], profile: 'walking' });
+    assert.strictEqual(lcalls.length, 2);
+    assert.strictEqual(same.route.coordinates.length, 2);
+    // validation and errors
+    await rejects(g.leg(1, { from: [1], to: B, profile: 'walking' }), 400);
+    await rejects(g.leg(1, { from: A, to: B, profile: 'flying' }), 400);
+    await rejects(g.leg(1, { from: A, to: [153.0, -90.5], profile: 'walking' }), 400);
+    await rejects(g.leg(1, { from: [0, 0], to: [90, 0], profile: 'walking' }), 422, /too far apart/);
+    await rejects(createPlanner({ getKey: () => null, fetchFn: async () => ({}) }).leg(1, { from: A, to: B, profile: 'walking' }), 503, /ORS_API_KEY/);
+    await rejects(mkLeg({}, () => ({ status: 404, json: { error: { code: 2010, message: 'Could not find routable point within a radius of 350.0 meters of specified coordinate 1: 1 2.' } } })).leg(1, { from: A, to: B, profile: 'walking' }), 422, /near the end/);
+    await rejects(mkLeg({}, () => ({ status: 404, json: { error: { code: 2009, message: 'Route could not be found' } } })).leg(1, { from: A, to: B, profile: 'walking' }), 422, /No route could be found/);
+    await rejects(mkLeg({}, () => ({ status: 429, json: {} })).leg(1, { from: A, to: B, profile: 'walking' }), 429, /busy/);
+    await rejects(mkLeg({}, () => ({ status: 500, json: {} })).leg(1, { from: A, to: B, profile: 'walking' }), 502, /problem/);
+    // each leg is one call against the user's allowance; a click-heavy minute is allowed up to the limit, then it says so
+    let tt = 7000000;
+    const lim = mkLeg({ now: () => tt, perUserPerMinute: 3 });
+    for (let i = 0; i < 3; i += 1) await lim.leg(1, { from: [153 + i * 0.01, -27.5], to: [153 + i * 0.01 + 0.004, -27.5], profile: 'walking' });
+    await rejects(lim.leg(1, { from: [153.5, -27.5], to: [153.504, -27.5], profile: 'walking' }), 429, /minute/);
+    tt += 61000;
+    await lim.leg(1, { from: [153.5, -27.5], to: [153.504, -27.5], profile: 'walking' });
+    // the defaults are generous enough for a person building a route
+    const def = createPlanner({ getKey: () => KEY, fetchFn: async (u, i) => ({ ok: true, status: 200, json: async () => ({ features: [{ properties: { summary: { distance: 1, duration: 1 } }, geometry: { type: 'LineString', coordinates: JSON.parse(i.body).coordinates } }] }) }) });
+    for (let i = 0; i < 20; i += 1) await def.leg(1, { from: [153 + i * 0.01, -27.5], to: [153 + i * 0.01 + 0.004, -27.5], profile: 'walking' });
+  }
+
   // limits: per user per minute, per day, and across everyone per minute; they reset
   let t = 5000000;
   const lim = createPlanner({ getKey: () => KEY, fetchFn: fakeFetch(() => ({ json: okJson })), now: () => t, perUserPerMinute: 3, perUserPerDay: 5, globalPerMinute: 4 });
@@ -497,6 +555,12 @@ async function planTests() {
     assert.ok(!lr.text.includes('ors-secret'));
     assert.strictEqual((await call(ls, 'POST', '/api/route-tracks/loop', { from: [153.028, -27.468], lengthKm: 500, profile: 'walking' })).status, 400);
     assert.strictEqual((await call(ls, 'POST', '/api/route-tracks/loop', {})).status, 400);
+    // /leg through the router
+    const legRes = await call(ls, 'POST', '/api/route-tracks/leg', { from: [153.028, -27.468], to: [153.03, -27.469], profile: 'walking' });
+    assert.strictEqual(legRes.status, 200);
+    assert.ok(Array.isArray(legRes.json.route.coordinates) && legRes.json.route.coordinates.length >= 2);
+    assert.ok(!legRes.text.includes('ors-secret'));
+    assert.strictEqual((await call(ls, 'POST', '/api/route-tracks/leg', { from: [1], to: [2], profile: 'walking' })).status, 400);
     // /detour through the router: the error carries the code and distances for the page
     const dr = await call(ls, 'POST', '/api/route-tracks/detour', { from: [153.028, -27.468], to: [153.045, -27.475], profile: 'walking' });
     assert.strictEqual(dr.status, 200);
