@@ -233,6 +233,93 @@ async function planTests() {
   await c.plan(1, { from, to, profile: 'walking' }); // past an hour: asked again
   assert.strictEqual(calls.length, 4 - 1);
 
+  // ---- loops: one start point, a length, three seeds; the service misses the length, so the app asks again with a corrected one
+  {
+    const lcalls = [];
+    const KEYS = { current: 'round_trip' };
+    // a pretend service: the loop it returns is `bias` times as long as asked for, where bias depends on the seed; it only knows the option under KEYS.current
+    const BIAS = { 1: 1.5, 2: 1.0, 3: 0.55, 4: 1.1, 5: 0.9, 6: 1.02 };
+    const loopFetch = (url, init) => {
+      const body = JSON.parse(init.body);
+      lcalls.push({ url, body });
+      const opt = body.options && body.options[KEYS.current];
+      if (!opt) return Promise.resolve({ ok: false, status: 400, json: async () => ({ error: { code: 2003, message: 'Unknown option' } }) });
+      const len = opt.length * (BIAS[opt.seed] ?? 1);
+      const out = len / 111320 / 2; // an out-and-back of that length; the seed picks the direction (north, east or west), as the real service does
+      const far = opt.seed % 3 === 1 ? [from[0], from[1] + out] : opt.seed % 3 === 2 ? [from[0] + out, from[1]] : [from[0] - out, from[1]];
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ features: [{ properties: { summary: { distance: len, duration: len / 1.4 } }, geometry: { type: 'LineString', coordinates: [from, far, from] } }] }) });
+    };
+    const mkLoop = (extra = {}) => createPlanner({ getKey: () => KEY, fetchFn: loopFetch, ...extra });
+
+    const lp = mkLoop();
+    const res = await lp.loops(1, { from, lengthKm: 5, profile: 'walking', round: 0 });
+    const first = lcalls.slice(0, 3);
+    assert.ok(first.every((c) => c.url === 'https://api.openrouteservice.org/v2/directions/foot-walking/geojson'));
+    assert.ok(first.every((c) => c.body.coordinates.length === 1 && c.body.coordinates[0][0] === from[0]), 'one start point only');
+    assert.deepStrictEqual(first.map((c) => c.body.options.round_trip.seed), [1, 2, 3], 'three different seeds');
+    assert.ok(first.every((c) => c.body.options.round_trip.length === 5000 && c.body.options.round_trip.points === 5));
+    assert.ok(first.every((c) => c.body.alternative_routes === undefined), 'no alternatives with a round trip');
+    // seed 1 (1.5x) and seed 3 (0.55x) missed by more than 12%, so they were asked again with the length scaled by how far they missed
+    assert.strictEqual(lcalls.length, 5);
+    const redo = lcalls.slice(3).map((c) => c.body.options.round_trip);
+    assert.deepStrictEqual(redo.map((r) => r.seed).sort(), [1, 3]);
+    assert.strictEqual(redo.find((r) => r.seed === 1).length, Math.round(5000 * (5000 / 7500)));
+    assert.strictEqual(redo.find((r) => r.seed === 3).length, Math.round(5000 * (5000 / 2750)));
+    // after correction every loop is within a few per cent, closest first, and each says how far off it is
+    assert.strictEqual(res.routes.length, 3);
+    assert.ok(res.routes.every((r) => Math.abs(r.offPct) < 12), JSON.stringify(res.routes.map((r) => r.offPct)));
+    assert.deepStrictEqual(res.routes.map((r) => Math.abs(r.offPct)), res.routes.map((r) => Math.abs(r.offPct)).slice().sort((a, b) => a - b), 'closest to the target first');
+    assert.strictEqual(res.targetM, 5000);
+    assert.ok(/openstreetmap/i.test(res.attribution));
+    assert.strictEqual(res.cached, false);
+
+    // cached: the same loop request is free; a different round asks for different seeds
+    const n = lcalls.length;
+    assert.strictEqual((await lp.loops(1, { from, lengthKm: 5.04, profile: 'walking', round: 0 })).cached, true, 'a typed 5.04 is the same loop as 5');
+    assert.strictEqual(lcalls.length, n);
+    await lp.loops(1, { from, lengthKm: 5, profile: 'walking', round: 1 });
+    assert.deepStrictEqual(lcalls.slice(n, n + 3).map((c) => c.body.options.round_trip.seed), [4, 5, 6]);
+
+    // validation
+    await rejects(lp.loops(1, { from, lengthKm: 0.5, profile: 'walking' }), 400, /between 1 and 50/);
+    await rejects(lp.loops(1, { from, lengthKm: 51, profile: 'walking' }), 400, /between 1 and 50/);
+    await rejects(lp.loops(1, { from, lengthKm: 'five', profile: 'walking' }), 400);
+    await rejects(lp.loops(1, { from, lengthKm: NaN, profile: 'walking' }), 400);
+    await rejects(lp.loops(1, { from: [1], lengthKm: 5, profile: 'walking' }), 400);
+    await rejects(lp.loops(1, { from, lengthKm: 5, profile: 'flying' }), 400);
+    await rejects(createPlanner({ getKey: () => null, fetchFn: loopFetch }).loops(1, { from, lengthKm: 5, profile: 'walking' }), 503, /ORS_API_KEY/);
+
+    // the other spelling of the option is tried when the service rejects the first, and remembered
+    KEYS.current = 'round-trip';
+    lcalls.length = 0;
+    const alt = mkLoop();
+    const altRes = await alt.loops(1, { from, lengthKm: 5, profile: 'cycling' });
+    assert.ok(altRes.routes.length >= 1);
+    assert.ok(lcalls.some((c) => c.body.options['round-trip']), 'tried round-trip');
+    const before = lcalls.length;
+    await alt.loops(1, { from: [153.1, -27.2], lengthKm: 5, profile: 'cycling' });
+    assert.ok(lcalls.slice(before, before + 3).every((c) => c.body.options['round-trip']), 'then keeps using the one that worked');
+    KEYS.current = 'round_trip';
+
+    // errors: nothing near the start; every seed failing; a partial result is still returned
+    const noRoad = createPlanner({ getKey: () => KEY, fetchFn: async () => ({ ok: false, status: 404, json: async () => ({ error: { code: 2010, message: 'Could not find routable point within a radius of 350.0 meters of specified coordinate 0: 1 2.' } }) }) });
+    await rejects(noRoad.loops(1, { from, lengthKm: 5, profile: 'walking' }), 422, /near the start/);
+    const flaky = createPlanner({ getKey: () => KEY, fetchFn: (url, init) => { const b = JSON.parse(init.body); return b.options.round_trip.seed === 2 ? Promise.resolve({ ok: false, status: 500, json: async () => ({}) }) : loopFetch(url, init); } });
+    const part = await flaky.loops(1, { from, lengthKm: 5, profile: 'walking' });
+    assert.strictEqual(part.routes.length, 2, 'the loops that worked are returned');
+    await rejects(createPlanner({ getKey: () => KEY, fetchFn: async () => { throw new Error('boom'); } }).loops(1, { from, lengthKm: 5, profile: 'walking' }), 502, /did not answer/);
+
+    // quota: a loop costs three calls; running out during the correction keeps the first answers
+    let tt = 9000000;
+    const quota = createPlanner({ getKey: () => KEY, fetchFn: loopFetch, now: () => tt, perUserPerMinute: 4 });
+    const q1 = await quota.loops(1, { from, lengthKm: 5, profile: 'walking' }); // 3 calls, correction (2 more) does not fit in 4: first answers stand
+    assert.strictEqual(q1.routes.length, 3);
+    await rejects(quota.loops(1, { from: [153.2, -27.3], lengthKm: 5, profile: 'walking' }), 429, /minute/);
+    const perDay = createPlanner({ getKey: () => KEY, fetchFn: loopFetch, now: () => tt, perUserPerDay: 5 });
+    await perDay.loops(1, { from: [153.3, -27.1], lengthKm: 5, profile: 'walking' });
+    await rejects(perDay.loops(1, { from: [153.4, -27.1], lengthKm: 5, profile: 'walking' }), 429, /today/);
+  }
+
   // limits: per user per minute, per day, and across everyone per minute; they reset
   let t = 5000000;
   const lim = createPlanner({ getKey: () => KEY, fetchFn: fakeFetch(() => ({ json: okJson })), now: () => t, perUserPerMinute: 3, perUserPerDay: 5, globalPerMinute: 4 });
@@ -284,6 +371,20 @@ async function planTests() {
     assert.ok(bad.json.error);
     assert.strictEqual((await call(ps, 'POST', '/api/route-tracks/plan', {})).status, 400);
     ps.close();
+    // /loop through the router
+    const loopCalls = [];
+    const loopFetch2 = async (url, init) => { loopCalls.push(JSON.parse(init.body)); return { ok: true, status: 200, json: async () => ({ features: [{ properties: { summary: { distance: 5000, duration: 3600 } }, geometry: { type: 'LineString', coordinates: [[153.028, -27.468], [153.03, -27.47], [153.028, -27.468]] } }] }) }; };
+    const ls = build(fakePool(), 1, { getMapKey: () => 'K', getOrsKey: () => 'ors-secret', fetchFn: loopFetch2 }).listen(0);
+    const lc = await call(ls, 'GET', '/api/route-tracks/config');
+    assert.deepStrictEqual(lc.json.loopKm, { min: 1, max: 50 });
+    const lr = await call(ls, 'POST', '/api/route-tracks/loop', { from: [153.028, -27.468], lengthKm: 5, profile: 'walking' });
+    assert.strictEqual(lr.status, 200);
+    assert.strictEqual(lr.json.routes[0].distanceM, 5000);
+    assert.strictEqual(lr.json.routes[0].offPct, 0);
+    assert.ok(!lr.text.includes('ors-secret'));
+    assert.strictEqual((await call(ls, 'POST', '/api/route-tracks/loop', { from: [153.028, -27.468], lengthKm: 500, profile: 'walking' })).status, 400);
+    assert.strictEqual((await call(ls, 'POST', '/api/route-tracks/loop', {})).status, 400);
+    ls.close();
     const off = build(fakePool(), 1, { getMapKey: () => 'K', getOrsKey: () => null }).listen(0);
     assert.strictEqual((await call(off, 'GET', '/api/route-tracks/config')).json.routePlanning, false);
     const r503 = await call(off, 'POST', '/api/route-tracks/plan', { from: [153.028, -27.468], to: [153.045, -27.475], profile: 'walking' });

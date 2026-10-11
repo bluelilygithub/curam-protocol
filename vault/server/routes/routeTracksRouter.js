@@ -8,7 +8,7 @@
 const express = require('express');
 const { getLogger } = require('../middleware/requestContext');
 const geo = require('../services/routeTracerGeo');
-const { createPlanner, PlanError, PROFILES } = require('../services/routePlanner');
+const { createPlanner, PlanError, PROFILES, LOOP_MIN_KM, LOOP_MAX_KM } = require('../services/routePlanner');
 
 const MAX_NAME = 120;
 const MAX_NOTES = 2000;
@@ -91,7 +91,7 @@ function createRouter(pool, {
   // (ROUTE_TRACER_MAPTILER_KEY); falls back to MAPTILER_API_KEY, which then becomes visible in the browser.
   router.get('/config', (req, res) => {
     res.set('Cache-Control', 'no-store');
-    res.json({ maptilerKey: getMapKey(), routePlanning: !!getOrsKey(), planProfiles: Object.keys(PROFILES) });
+    res.json({ maptilerKey: getMapKey(), routePlanning: !!getOrsKey(), planProfiles: Object.keys(PROFILES), loopKm: { min: LOOP_MIN_KM, max: LOOP_MAX_KM } });
   });
 
   // GET /api/route-tracks?q=&limit=&cursor=: newest first, no geometry.
@@ -150,6 +150,22 @@ function createRouter(pool, {
       }
       getLogger().error({ err }, 'route plan failed');
       res.status(500).json({ error: 'Could not plan that route.' });
+    }
+  });
+
+  // POST /api/route-tracks/loop { from: [lng, lat], lengthKm, profile, round }: up to three loops of about that length starting and ending at `from`.
+  router.post('/loop', async (req, res) => {
+    try {
+      const r = await planner.loops(req.user.id, { from: req.body?.from, lengthKm: req.body?.lengthKm, profile: req.body?.profile, round: req.body?.round ?? 0 });
+      res.set('Cache-Control', 'no-store');
+      res.json(r);
+    } catch (err) {
+      if (err instanceof PlanError) {
+        if (err.retryAfter) res.set('Retry-After', String(err.retryAfter));
+        return res.status(err.status).json({ error: err.message });
+      }
+      getLogger().error({ err }, 'route loop failed');
+      res.status(500).json({ error: 'Could not plan that loop.' });
     }
   });
 

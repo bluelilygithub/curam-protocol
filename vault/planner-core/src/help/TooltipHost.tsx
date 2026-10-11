@@ -22,7 +22,9 @@ export function TooltipHost() {
       if (el instanceof HTMLElement && el.hasAttribute('title')) {
         const t = el.getAttribute('title') ?? '';
         // an icon-only control is named by its title; keep a name while the title is out of the way
-        if (!el.hasAttribute('aria-label') && !(el.textContent ?? '').trim()) el.setAttribute('aria-label', t);
+        // (a box or menu that already has a visible <label> keeps its own name: the tooltip text must not replace it)
+        const labelled = ((el as HTMLInputElement).labels?.length ?? 0) > 0 || el.hasAttribute('aria-labelledby');
+        if (!el.hasAttribute('aria-label') && !labelled && !(el.textContent ?? '').trim()) el.setAttribute('aria-label', t);
         el.dataset.tip = t; el.dataset.tipFromTitle = '1'; el.removeAttribute('title');
       }
       const text = tipOf(el);

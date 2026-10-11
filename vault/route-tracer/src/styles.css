@@ -60,6 +60,8 @@ button[aria-pressed='true'] { background: var(--primary); color: var(--primary-t
 .modal-body h3 { margin: 14px 0 4px; font-size: 1rem; }
 .modal-body ul { margin: 4px 0; padding-left: 20px; }
 .modal-body li { margin: 4px 0; }
+.plan-length { display: grid; gap: 4px; font-size: 0.9rem; }
+.plan-length input[aria-invalid='true'] { border-color: var(--danger); }
 .plan-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .plan-step { text-align: left; }
 .plan-error { margin: 0; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--danger); color: var(--danger); font-size: 0.9rem; }

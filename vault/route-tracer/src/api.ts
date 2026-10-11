@@ -33,11 +33,13 @@ export interface TrackSummary {
 export interface Track extends TrackSummary { notes: string | null; geometry: { type: 'MultiLineString'; coordinates: Lines }; updatedAt: string }
 export interface TrackInput { name: string; notes?: string | null; color?: string; geometry: { type: 'MultiLineString'; coordinates: Lines }; drawMode: 'freehand' | 'click' | 'import' | 'route' }
 export type PlanProfile = 'walking' | 'hiking' | 'cycling' | 'driving';
-export interface PlannedRoute { distanceM: number; durationS: number | null; coordinates: Line }
+export interface PlannedRoute { distanceM: number; durationS: number | null; coordinates: Line; /** Loops only: how far the length is from the target, in per cent (+8 = 8% too long). */ offPct?: number }
 export interface GeocodeResult { label: string; lat: number; lng: number }
 
 export const api = {
   config: () => call<{ maptilerKey: string | null; routePlanning?: boolean }>('GET', '/api/route-tracks/config'),
+  loop: (input: { from: [number, number]; lengthKm: number; profile: PlanProfile; round: number }) =>
+    call<{ routes: PlannedRoute[]; attribution: string; targetM: number; cached: boolean }>('POST', '/api/route-tracks/loop', input),
   plan: (input: { from: [number, number]; to: [number, number]; profile: PlanProfile }) =>
     call<{ routes: PlannedRoute[]; attribution: string; cached: boolean }>('POST', '/api/route-tracks/plan', input),
   geocode: (q: string) => call<{ results: GeocodeResult[] }>('POST', '/api/geocode', { q }),

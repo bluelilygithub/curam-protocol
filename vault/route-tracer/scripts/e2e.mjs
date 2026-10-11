@@ -53,6 +53,7 @@ await page.route('https://api.maptiler.com/tiles/terrain-rgb-v2/**', (r) => {
 });
 const db = [];
 const planLog = [];
+const loopLog = [];
 let planFail = null;
 let seq = 0;
 const rad = Math.PI / 180;
@@ -75,6 +76,20 @@ await page.route('**/api/route-tracks**', async (route) => {
     if (planFail) return route.fulfill({ status: 422, json: { error: planFail } });
     const mk = (bow) => { const mid = [(b.from[0] + b.to[0]) / 2 + bow * (b.to[1] - b.from[1]), (b.from[1] + b.to[1]) / 2 - bow * (b.to[0] - b.from[0])]; const coordinates = [b.from, [(b.from[0] + mid[0]) / 2, (b.from[1] + mid[1]) / 2], mid, [(mid[0] + b.to[0]) / 2, (mid[1] + b.to[1]) / 2], b.to]; return { distanceM: dist([coordinates]), durationS: dist([coordinates]) / 1.4, coordinates }; };
     return route.fulfill({ json: { routes: [mk(0), mk(0.25), mk(-0.4)], attribution: '(c) openrouteservice.org | (c) OpenStreetMap contributors', cached: false } });
+  }
+  if (m === 'POST' && path === '/loop') {
+    const b = req.postDataJSON();
+    loopLog.push(b);
+    const target = b.lengthKm * 1000;
+    const mk = (k, off) => { // a loop of about target*(1+off) metres: a circle through the start, heading a different way for each
+      const R = (target * (1 + off)) / (2 * Math.PI); const th = (k * 2 * Math.PI) / 3; const lat0 = b.from[1] * Math.PI / 180;
+      const dLat = R / 111320; const dLng = R / (111320 * Math.cos(lat0));
+      const c = [b.from[0] - dLng * Math.cos(th), b.from[1] - dLat * Math.sin(th)];
+      const coordinates = [b.from]; for (let i = 1; i < 24; i += 1) { const a = th + (i * 2 * Math.PI) / 24; coordinates.push([c[0] + dLng * Math.cos(a), c[1] + dLat * Math.sin(a)]); } coordinates.push(b.from);
+      const d = dist([coordinates]);
+      return { distanceM: d, durationS: d / 1.4, coordinates, offPct: Math.round(((d - target) / target) * 1000) / 10 };
+    };
+    return route.fulfill({ json: { routes: [mk(0, 0.03), mk(1, -0.06), mk(2, 0.12)].sort((a, c) => Math.abs(a.offPct) - Math.abs(c.offPct)), attribution: '(c) openrouteservice.org | (c) OpenStreetMap contributors', targetM: target, cached: false } });
   }
   if (m === 'POST' && path === '/delete') {
     const ids = req.postDataJSON().ids;
@@ -232,6 +247,7 @@ await shot('click');
 await page.getByRole('button', { name: 'Finish' }).click();
 const dlg = page.getByRole('dialog', { name: 'Save track' });
 await tipsOk('save dialog');
+check('a labelled box keeps its own name when its tooltip shows (the tooltip must not replace the label)', (await dlg.getByLabel('Name').getAttribute('aria-label')) === null && (await dlg.getByLabel('Notes (optional)').getAttribute('aria-label')) === null);
 const defName = await dlg.getByLabel('Name').inputValue();
 check('finish opens the save dialog with a default name', /^Track – \d/.test(defName), defName);
 await page.keyboard.press('Escape');
@@ -517,6 +533,65 @@ await wait(300);
   await page.mouse.click(300, 300); await wait(200);
   await page.getByRole('button', { name: 'Cancel' }).click(); await wait(300);
   check('Cancel clears the pins and routes', (await page.locator('.plan-pin').count()) === 0 && !(await bar.isVisible()));
+}
+
+// ---- Plan route: a loop of about X km from one point
+{
+  await page.getByRole('button', { name: 'Plan route' }).click();
+  await page.getByTestId('planbar').waitFor();
+  await page.getByRole('button', { name: 'Loop', exact: true }).click();
+  check('Loop asks for just a start', /set the start\. The loop begins and ends there/.test((await page.getByTestId('plan-step').textContent()) ?? ''));
+  await tipsOk('plan route: loop');
+  loopLog.length = 0;
+  await page.mouse.click(500, 300);
+  await page.getByTestId('plan-route').first().waitFor({ timeout: 10000 });
+  const cards = page.getByTestId('plan-route');
+  const texts = await cards.allTextContents();
+  await wait(800); await shot('loop');
+  check('three loops are offered, each saying how far it is from the target', texts.length === 3 && texts.every((t) => /^Loop \d/.test(t) && (/\([+−]\d+%\)/.test(t) || /on target/.test(t)) && /min|h/.test(t)), texts.join(' | '));
+  const profileNow = await page.getByLabel('Travel by').inputValue();
+  check('the request has the start, 5 km (the default), the profile and round 0', loopLog.length === 1 && loopLog[0].lengthKm === 5 && loopLog[0].round === 0 && loopLog[0].profile === profileNow && loopLog[0].from.length === 2, JSON.stringify(loopLog[0]));
+  check('only the start pin is on the map (a loop has no end)', (await page.locator('.plan-pin-a').count()) === 1 && (await page.locator('.plan-pin-b').count()) === 0);
+  await wait(500);
+  check('the loops are drawn, the first chosen', (await page.evaluate(() => window.routeTracer.sent.plan.features.length)) === 3);
+  // a different length plans again; an out-of-range one is refused in the box, with no request
+  loopLog.length = 0;
+  const len = page.getByLabel(/^Length/);
+  await len.fill('8'); await wait(1200);
+  check('typing a new length plans again with it', loopLog.length === 1 && loopLog[0].lengthKm === 8, JSON.stringify(loopLog));
+  loopLog.length = 0;
+  await len.fill('0.4'); await wait(1200);
+  check('a length that is too short is explained and not sent', /between 1 and 50 km/.test((await page.getByRole('alert').first().textContent()) ?? '') && loopLog.length === 0);
+  await len.fill('80'); await wait(1000);
+  check('and so is one that is too long', /between 1 and 50 km/.test((await page.getByRole('alert').first().textContent()) ?? '') && loopLog.length === 0);
+  await len.fill('8'); await wait(1200);
+  check('going back to the same length keeps the loops on screen without asking again', loopLog.length === 0 && (await cards.count()) === 3);
+  await page.getByRole('button', { name: 'Loop', exact: true }).click(); await wait(300);
+  check('choosing Loop again when it is already chosen changes nothing', (await cards.count()) === 3 && (await page.locator('.plan-pin-a').count()) === 1);
+  await len.fill('9'); await wait(1200);
+  check('a different valid length plans again', loopLog.length === 1 && loopLog[0].lengthKm === 9, JSON.stringify(loopLog));
+  // different loops
+  loopLog.length = 0;
+  await page.getByTestId('more-loops').click(); await wait(1000);
+  check('Different loops asks for the next round', loopLog.length === 1 && loopLog[0].round === 1 && loopLog[0].lengthKm === 9, JSON.stringify(loopLog));
+  // units: the box follows km / mi
+  await page.getByLabel('Units').selectOption('mi'); await wait(300);
+  check('in miles the box shows the same length in miles', (await len.inputValue()) === '5.6' && /Length \(mi\)/.test((await page.getByText(/^Length \(/).first().textContent()) ?? ''), await len.inputValue());
+  loopLog.length = 0;
+  await len.fill('3'); await wait(1200);
+  check('a length typed in miles is sent in km', loopLog.length === 1 && Math.abs(loopLog[0].lengthKm - 3 * 1.609344) < 0.001, JSON.stringify(loopLog));
+  await page.getByLabel('Units').selectOption('km'); await wait(300);
+  await cards.first().waitFor({ timeout: 10000 });
+  // use the first loop: opens in Edit points and is saved as a planned route that ends where it began
+  const chosen = await page.evaluate(() => window.routeTracer.sent.plan.features[0].geometry.coordinates);
+  await page.getByRole('button', { name: 'Use this loop' }).click();
+  await page.getByRole('region', { name: 'Drawing tools' }).waitFor();
+  await page.getByRole('button', { name: 'Finish' }).click();
+  await dlg.getByLabel('Name').press('Enter');
+  await page.getByLabel('Track detail').waitFor();
+  const lp = db.at(-1);
+  const pts = lp.geometry.coordinates[0];
+  check('the loop is saved as a planned route that ends where it began', lp.drawMode === 'route' && JSON.stringify(pts) === JSON.stringify(chosen) && pts[0][0] === pts.at(-1)[0] && pts[0][1] === pts.at(-1)[1], `${lp.drawMode} ${pts.length}`);
 }
 
 // ---- the guide and the tour
