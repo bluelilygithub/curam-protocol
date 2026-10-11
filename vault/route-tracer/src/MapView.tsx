@@ -34,7 +34,6 @@ export default function MapView({ mapKey, onMap }: { mapKey: string; onMap: (m: 
       zoom: v.zoom,
       attributionControl: { compact: true },
     });
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
     map.addControl(new maplibregl.ScaleControl({}), 'bottom-left');
     map.on('style.load', () => addLayers(map));
     map.on('moveend', () => {

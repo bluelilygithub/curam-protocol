@@ -1,19 +1,21 @@
+import { ArrowRight, ArrowUpDown, Bike, Car, Footprints, Mountain, Search } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
 import { useEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
-import { api, ApiError, type PlannedRoute, type PlanProfile } from './api';
+import { api, ApiError, type GeocodeResult, type PlannedRoute, type PlanProfile } from './api';
 import { fromLines } from './drawing';
 import { bboxOf, formatDistance, nearestOnLines, type Pos } from './geo';
 import { fitToLimit } from './gpx';
+import { fitPadding } from './layout';
 import { setPlanned } from './mapLayers';
 import { useStore } from './store';
 
 export const PLAN_COLORS = ['#E4572E', '#1D6FA5', '#2E7D32'];
-export const PROFILES: { id: PlanProfile; label: string; tip: string }[] = [
-  { id: 'walking', label: 'Walking', tip: 'Footpaths, shared paths and quiet roads' },
-  { id: 'hiking', label: 'Hiking', tip: 'Prefers trails and tracks' },
-  { id: 'cycling', label: 'Cycling', tip: 'Bike paths and bike-friendly roads' },
-  { id: 'driving', label: 'Driving', tip: 'Roads a car can use' },
+export const PROFILES: { id: PlanProfile; label: string; tip: string; Icon: typeof Footprints }[] = [
+  { id: 'walking', label: 'Walking', tip: 'Footpaths, shared paths and quiet roads', Icon: Footprints },
+  { id: 'hiking', label: 'Hiking', tip: 'Prefers trails and tracks', Icon: Mountain },
+  { id: 'cycling', label: 'Cycling', tip: 'Bike paths and bike-friendly roads', Icon: Bike },
+  { id: 'driving', label: 'Driving', tip: 'Roads a car can use', Icon: Car },
 ];
 const PROFILE_KEY = 'route-tracer:plan-profile';
 const LOOP_KEY = 'route-tracer:loop-km';
@@ -54,6 +56,9 @@ interface PlanState {
   active: boolean;
   from: Pos | null;
   to: Pos | null;
+  /** The place name shown in the A and B fields; null while it is being looked up. */
+  fromName: string | null;
+  toName: string | null;
   profile: PlanProfile;
   busy: boolean;
   error: string | null;
@@ -62,8 +67,10 @@ interface PlanState {
   attribution: string | null;
   start(): void;
   cancel(): void;
-  setFrom(p: Pos | null): void;
-  setTo(p: Pos | null): void;
+  setFrom(p: Pos | null, name?: string | null): void;
+  setTo(p: Pos | null, name?: string | null): void;
+  /** The looked-up name for a point; ignored if the point has moved on since. */
+  nameFor(which: 'from' | 'to', p: Pos, name: string): void;
   setProfile(p: PlanProfile): void;
   swap(): void;
   reset(): void;
@@ -73,7 +80,7 @@ interface PlanState {
   setError(e: string | null, directM?: number | null): void;
 }
 
-const blank = { from: null, to: null, busy: false, error: null, routes: [] as PlannedRoute[], selected: 0, attribution: null, round: 0, directM: null as number | null };
+const blank = { from: null, to: null, fromName: null as string | null, toName: null as string | null, busy: false, error: null, routes: [] as PlannedRoute[], selected: 0, attribution: null, round: 0, directM: null as number | null };
 const fresh = { routes: [] as PlannedRoute[], error: null, selected: 0, round: 0, directM: null as number | null };
 
 /** Plan route mode: points, a way of travelling, and up to three routes along real roads and paths. */
@@ -92,10 +99,11 @@ export const usePlan = create<PlanState>((set, get) => ({
   start: () => set({ active: true, ...blank }),
   cancel: () => set({ active: false, ...blank }),
   // a new point means the old answers no longer apply
-  setFrom: (from) => set({ from, ...fresh }),
-  setTo: (to) => set({ to, ...fresh }),
+  setFrom: (from, name = null) => set({ from, fromName: name, ...fresh }),
+  setTo: (to, name = null) => set({ to, toName: name, ...fresh }),
+  nameFor: (which, p, name) => { const st = get(); if ((which === 'from' ? st.from : st.to) === p) set(which === 'from' ? { fromName: name } : { toName: name }); },
   setProfile: (profile) => { try { localStorage.setItem(PROFILE_KEY, profile); } catch { /* private window */ } set({ profile, ...fresh }); },
-  swap: () => { const { from, to } = get(); set({ from: to, to: from, ...fresh }); },
+  swap: () => { const { from, to, fromName, toName } = get(); set({ from: to, to: from, fromName: toName, toName: fromName, ...fresh }); },
   reset: () => set({ ...blank }),
   select: (selected) => set({ selected }),
   setResult: (routes, attribution, directM = null) => set({ routes, attribution, directM, selected: 0, busy: false, error: null }),
@@ -108,6 +116,11 @@ export function formatDuration(seconds: number | null): string {
   const min = Math.max(1, Math.round(seconds / 60));
   if (min < 60) return `${min} min`;
   return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min`;
+}
+
+/** A point written out when no place name is known: 27.4684° S, 153.0281° E. */
+export function coordLabel(p: Pos): string {
+  return `${Math.abs(p[1]).toFixed(4)}° ${p[1] < 0 ? 'S' : 'N'}, ${Math.abs(p[0]).toFixed(4)}° ${p[0] < 0 ? 'W' : 'E'}`;
 }
 
 function pin(label: string, kind: 'a' | 'b'): HTMLDivElement {
@@ -136,6 +149,8 @@ function numberedError(e: ApiError, targetKm: number | null): { message: string;
 /** The map side of planning: taps place the start and end, the pins can be dragged, the routes are asked for and drawn, a tap chooses one. */
 export function usePlanning(map: maplibregl.Map | null): void {
   const active = usePlan((s) => s.active);
+  const fromName = usePlan((s) => s.fromName);
+  const toName = usePlan((s) => s.toName);
   const from = usePlan((s) => s.from);
   const to = usePlan((s) => s.to);
   const profile = usePlan((s) => s.profile);
@@ -198,6 +213,20 @@ export function usePlanning(map: maplibregl.Map | null): void {
   }, [map, active, from, to]);
   useEffect(() => () => { markers.current.a?.remove(); markers.current.b?.remove(); markers.current = {}; }, []);
 
+  // the name of a place that was tapped or dragged to: one deliberate lookup each (the server spaces them), the coordinates if there is no name
+  useEffect(() => {
+    if (!active || !from || fromName !== null) return undefined;
+    let dead = false;
+    api.reverse(from[1], from[0]).then((r) => { if (!dead) usePlan.getState().nameFor('from', from, r.result?.label ?? coordLabel(from)); }).catch(() => { if (!dead) usePlan.getState().nameFor('from', from, coordLabel(from)); });
+    return () => { dead = true; };
+  }, [active, from, fromName]);
+  useEffect(() => {
+    if (!active || !to || toName !== null) return undefined;
+    let dead = false;
+    api.reverse(to[1], to[0]).then((r) => { if (!dead) usePlan.getState().nameFor('to', to, r.result?.label ?? coordLabel(to)); }).catch(() => { if (!dead) usePlan.getState().nameFor('to', to, coordLabel(to)); });
+    return () => { dead = true; };
+  }, [active, to, toName]);
+
   useEffect(() => { if (!active || (!from && !to)) fitted.current = false; }, [active, from, to]);
   useEffect(() => { fitted.current = false; }, [kind]);
 
@@ -220,8 +249,7 @@ export function usePlanning(map: maplibregl.Map | null): void {
           const box = bboxOf(r.routes.map((x) => x.coordinates));
           if (box && !fitted.current) {
             fitted.current = true;
-            const phone = window.matchMedia('(max-width: 767px)').matches;
-            map.fitBounds([[box[0], box[1]], [box[2], box[3]]], { padding: { top: 90, left: 60, right: 60, bottom: phone ? Math.round(window.innerHeight * 0.55) : 430 }, maxZoom: 17, duration: 600 });
+            map.fitBounds([[box[0], box[1]], [box[2], box[3]]], { padding: fitPadding(), maxZoom: 17, duration: 600 });
           }
         })
         .catch((e: unknown) => {
@@ -243,7 +271,59 @@ export function usePlanning(map: maplibregl.Map | null): void {
 
 const KIND_WORD: Record<PlanKind, string> = { direct: 'route', loop: 'loop', detour: 'route' };
 
-export function PlanBar({ map }: { map: maplibregl.Map | null }) {
+/** One of the two place fields: type a place and press Enter (a deliberate search, never type-ahead), or tap the map and the name fills in. */
+function PlaceRow({ which, map }: { which: 'from' | 'to'; map: maplibregl.Map | null }) {
+  const point = usePlan((s) => (which === 'from' ? s.from : s.to));
+  const name = usePlan((s) => (which === 'from' ? s.fromName : s.toName));
+  const [text, setText] = useState('');
+  const [results, setResults] = useState<GeocodeResult[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState('');
+  const typing = useRef(false);
+  const label = which === 'from' ? 'A' : 'B';
+  const shown = point ? (name ?? 'Finding the place…') : '';
+  useEffect(() => { if (!typing.current) setText(shown); }, [shown]);
+
+  async function search(e: React.FormEvent) {
+    e.preventDefault();
+    const q = text.trim();
+    if (q.length < 3) { setNote('Type at least 3 letters, then press Enter.'); return; }
+    setBusy(true); setNote('');
+    try {
+      const r = await api.geocode(q);
+      setResults(r.results);
+      if (!r.results.length) setNote('No places found. Try another name, or tap the map.');
+    } catch (err) { setNote(err instanceof Error ? err.message : 'Search failed.'); } finally { setBusy(false); }
+  }
+  function choose(r: GeocodeResult): void {
+    typing.current = false;
+    setResults([]); setNote('');
+    const p: Pos = [r.lng, r.lat];
+    if (which === 'from') usePlan.getState().setFrom(p, r.label); else usePlan.getState().setTo(p, r.label);
+    map?.flyTo({ center: p, zoom: Math.max(map.getZoom(), 14) });
+  }
+  return (
+    <form className="field-row" onSubmit={search}>
+      <span className={`field-dot ${which}`} aria-hidden="true">{label}</span>
+      <input
+        aria-label={which === 'from' ? 'Start (A)' : 'End (B)'} value={text} placeholder={which === 'from' ? 'Search a place, or tap the map' : 'Search a place, or tap the map again'}
+        onChange={(e) => { typing.current = true; setText(e.target.value); setNote(''); }}
+        onBlur={() => { typing.current = false; setText(shown); setResults([]); }}
+        title={which === 'from' ? 'The start (A). Type a place and press Enter, or tap the map. You can also drag the A pin.' : 'The end (B). Type a place and press Enter, or tap the map. You can also drag the B pin.'}
+      />
+      <button type="submit" className="field-go" disabled={busy} aria-label={`Search for ${label}`} title={`Search for this place and set ${label} there`}><Search size={16} aria-hidden="true" /></button>
+      {(results.length > 0 || note) && (
+        <div className="field-pop" role="listbox" aria-label="Places found">
+          {results.map((r, i) => <button key={i} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => choose(r)} title={`Set ${label} here`}>{r.label}</button>)}
+          {note && <p className="hint">{note}</p>}
+        </div>
+      )}
+    </form>
+  );
+}
+
+/** The sidebar while planning: where from and to, how you are travelling, what kind of route, and the routes found. */
+export function PlanPanel({ map }: { map: maplibregl.Map | null }) {
   const { active, kind, from, to, profile, busy, error, routes, selected, attribution, lengthKm, detourKm, directM, round, cancel, setKind, setLengthKm, setDetourKm, moreLoops, setProfile, swap, reset, select } = usePlan();
   const units = useStore((s) => s.units);
   const unit = units === 'mi' ? 'mi' : 'km';
@@ -265,7 +345,7 @@ export function PlanBar({ map }: { map: maplibregl.Map | null }) {
   const typed = Number(text);
   const empty = text.trim() === '';
   const valueOk = !empty && Number.isFinite(typed) && typed >= minU && typed <= maxU;
-  const lengthOk = detour ? empty || valueOk : valueOk; // a detour with no length yet just shows the direct route
+  const lengthOk = detour ? empty || valueOk : valueOk; // a longer-route with no length yet just shows the direct route
   function onLength(v: string): void {
     typing.current = true;
     setText(v);
@@ -298,67 +378,78 @@ export function PlanBar({ map }: { map: maplibregl.Map | null }) {
           : error ? ''
             : directOnly && directM ? `The direct route is ${formatDistance(directM / 1000, units)}. Type how long you want it to be (longer than that) for a detour.`
               : routes.length ? `Tap a ${word} below, or a line on the map, to choose it.` : '';
-  const shortest = kind === 'direct' && routes.length > 1 ? routes.reduce((m, r, i) => (r.distanceM < routes[m].distanceM ? i : m), 0) : -1;
+  // A to B lists the shortest first (the others in order of length); the map colours and the service's own first choice ("Suggested") stay with each route
+  const order = routes.map((_, i) => i);
+  if (kind === 'direct' && routes.length > 1) order.sort((a, b) => routes[a].distanceM - routes[b].distanceM);
   const offText = (pct?: number): string => (pct === undefined ? '' : Math.abs(pct) < 1 ? ' (on target)' : ` (${pct > 0 ? '+' : '−'}${Math.abs(Math.round(pct))}%)`);
-  const name = (i: number): string => (loop ? `Loop ${i + 1}` : detour ? (directOnly ? 'Direct route' : `Route ${i + 1}`) : `Route ${i + 1}${i === shortest ? ' · shortest' : ''}`);
+  const name = (idx: number, pos: number): string => (loop ? `Loop ${pos + 1}` : detour ? (directOnly ? 'Direct route' : `Route ${pos + 1}`) : routes.length === 1 ? 'Route' : pos === 0 ? 'Shortest' : `Option ${pos + 1}`);
   const different = loop ? 'Different loops' : 'Different routes';
   return (
-    <section className="drawbar planbar" aria-label="Plan a route" data-testid="planbar">
-      <div className="plan-head">
-        <b>Plan a route</b>
-        <select
-          aria-label="Travel by" value={profile} onChange={(e) => setProfile(e.target.value as PlanProfile)}
-          title="How you are travelling: Walking uses footpaths and quiet roads, Hiking prefers trails, Cycling uses bike paths and roads, Driving uses roads a car can take"
-        >
-          {PROFILES.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-        </select>
-      </div>
-      <div className="seg three" role="group" aria-label="Kind of route">
-        <button type="button" aria-pressed={kind === 'direct'} onClick={() => setKind('direct')} title="A to B: the best routes from a start (A) to an end (B)">A to B</button>
-        <button type="button" aria-pressed={loop} onClick={() => setKind('loop')} title="Loop: a circular route of about the length you choose, starting and ending at one point">Loop</button>
-        <button type="button" aria-pressed={detour} onClick={() => setKind('detour')} title="Longer A to B: from A to B, but a route of about the length you choose (longer than the direct way), for a longer walk, ride or drive between the same two places">Longer A to B</button>
-      </div>
-      {hasLength && (
-        <label className="plan-length">{loop ? 'Length' : 'Length you want'} ({unit})
-          <input
-            type="number" inputMode="decimal" min={minU} max={maxU} step="0.5" value={text} aria-invalid={!lengthOk} placeholder={detour ? 'longer than direct' : undefined}
-            onChange={(e) => onLength(e.target.value)} onBlur={() => { typing.current = false; setText(shown(detour ? detourKm : lengthKm)); }}
-            title={loop
-              ? `How long the loop should be, from ${minU} to ${maxU} ${unit}. The planner treats it as a target: each loop shows how far it is from what you asked for.`
-              : `How long the whole route from A to B should be, from ${minU} to ${maxU} ${unit}. It must be longer than the direct route, which is shown once A and B are set. Each option shows how far it is from what you asked for.`}
-          />
-        </label>
-      )}
-      {hasLength && !lengthOk && <p className="plan-error" role="alert">Choose a length between {minU} and {maxU} {unit}.</p>}
-      {step && <p className="hint plan-step" data-testid="plan-step">{step}</p>}
-      {error && <p className="plan-error" role="alert" data-testid="plan-error">{error}</p>}
-      {routes.length > 0 && (
-        <ul className="plan-routes" aria-label={loop ? 'Loops found' : 'Routes found'}>
-          {routes.map((r, i) => (
-            <li key={i}>
-              <button
-                type="button" aria-pressed={i === selected} onClick={() => select(i)} data-testid="plan-route"
-                title={`Show this ${word} on the map. You can also tap its line on the map.`}
-              >
-                <span className="dot" style={{ background: PLAN_COLORS[i % PLAN_COLORS.length] }} />
-                <span className="plan-name">{name(i)}</span>
-                <span className="plan-meta">{formatDistance(r.distanceM / 1000, units)}{hasLength && !directOnly ? offText(r.offPct) : ''}{r.durationS ? ` · ${formatDuration(r.durationS)}` : ''}</span>
-              </button>
-            </li>
+    <section className="side-view" aria-label="Plan a route" data-testid="planbar">
+      <div className="side-head">
+        <h2>Plan a route</h2>
+        <div className="plan-fields" data-tour="rt-fields">
+          <div className="plan-fields-rows">
+            <PlaceRow which="from" map={map} />
+            {!loop && <PlaceRow which="to" map={map} />}
+          </div>
+          {!loop && <button type="button" className="swap-btn" onClick={swap} disabled={!from || !to} aria-label="Swap A and B" title="Swap the start and the end and plan again"><ArrowUpDown size={18} aria-hidden="true" /></button>}
+        </div>
+        <div className="seg four" role="group" aria-label="Travel by">
+          {PROFILES.map(({ id, label, tip, Icon }) => (
+            <button key={id} type="button" aria-pressed={profile === id} aria-label={label} onClick={() => setProfile(id)} title={`${label}: ${tip}`}><Icon size={18} aria-hidden="true" /></button>
           ))}
-        </ul>
-      )}
-      <div className="row">
-        {!loop && <button type="button" onClick={swap} disabled={!from || !to} title="Swap the start and the end and plan again">Swap A and B</button>}
+        </div>
+        <div className="seg three" role="group" aria-label="Kind of route">
+          <button type="button" aria-pressed={kind === 'direct'} onClick={() => setKind('direct')} title="A to B: the best routes from a start (A) to an end (B)">A to B</button>
+          <button type="button" aria-pressed={loop} onClick={() => setKind('loop')} title="Loop: a circular route of about the length you choose, starting and ending at one point">Loop</button>
+          <button type="button" aria-pressed={detour} onClick={() => setKind('detour')} title="Longer route: from A to B, but a route of about the length you choose (longer than the direct way), for a longer walk, ride or drive between the same two places">Longer route</button>
+        </div>
+        {hasLength && (
+          <label className="plan-length">{loop ? 'Length' : 'Length you want'} ({unit})
+            <input
+              type="number" inputMode="decimal" min={minU} max={maxU} step="0.5" value={text} aria-invalid={!lengthOk} placeholder={detour ? 'longer than direct' : undefined}
+              onChange={(e) => onLength(e.target.value)} onBlur={() => { typing.current = false; setText(shown(detour ? detourKm : lengthKm)); }}
+              title={loop
+                ? `How long the loop should be, from ${minU} to ${maxU} ${unit}. The planner treats it as a target: each loop shows how far it is from what you asked for.`
+                : `How long the whole route from A to B should be, from ${minU} to ${maxU} ${unit}. It must be longer than the direct route, which is shown once A and B are set. Each option shows how far it is from what you asked for.`}
+            />
+          </label>
+        )}
+      </div>
+      <div className="side-body">
+        {hasLength && !lengthOk && <p className="plan-error" role="alert">Choose a length between {minU} and {maxU} {unit}.</p>}
+        {step && <p className="hint plan-step" data-testid="plan-step">{step}</p>}
+        {error && <p className="plan-error" role="alert" data-testid="plan-error">{error}</p>}
+        {routes.length > 0 && (
+          <>
+            <h3 className="plan-sub">Choose your {word}</h3>
+            <ul className="plan-routes" aria-label={loop ? 'Loops found' : 'Routes found'}>
+              {order.map((i, pos) => { const r = routes[i]; return (
+                <li key={i}>
+                  <button
+                    type="button" className="route-card" aria-pressed={i === selected} onClick={() => select(i)} data-testid="plan-route"
+                    title={`Show this ${word} on the map. You can also tap its line on the map.`}
+                  >
+                    <span className="rc-top"><span className="dot" style={{ background: PLAN_COLORS[i % PLAN_COLORS.length] }} /><span className="plan-name">{name(i, pos)}</span>{i === 0 && routes.length > 1 && !hasLength ? <span className="rc-tag">Suggested</span> : null}</span>
+                    <span className="plan-meta">{formatDistance(r.distanceM / 1000, units)}{hasLength && !directOnly ? offText(r.offPct) : ''}{r.durationS ? ` · ${formatDuration(r.durationS)}` : ''}</span>
+                  </button>
+                </li>
+              ); })}
+            </ul>
+          </>
+        )}
         {hasLength && <button type="button" onClick={moreLoops} disabled={!from || (detour && (!to || directOnly)) || !lengthOk || busy || round >= 9} title={loop ? 'Ask for different loops of the same length, heading in other directions' : 'Ask for different routes of the same length, bending the other way or at another point'} data-testid="more-loops">{different}</button>}
-        <button type="button" onClick={reset} disabled={!from && !to} title="Clear the points and start again">Reset</button>
+        <p className="hint plan-credit">Routes © <a href="https://openrouteservice.org" target="_blank" rel="noopener noreferrer" title="openrouteservice.org">openrouteservice.org</a> · © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" title="OpenStreetMap copyright and licence">OpenStreetMap contributors</a></p>
+        {attribution ? <span className="sr-only">{attribution}</span> : null}
       </div>
-      <div className="row">
-        <button type="button" className="primary" onClick={chooseRoute} disabled={!routes.length} title={`Open the chosen ${word} in the drawing tools, where you can adjust its points, see its elevation and save it as a track`}>Use this {word}</button>
-        <button type="button" onClick={cancel} title="Stop planning without keeping anything">Cancel</button>
+      <div className="side-foot">
+        <button type="button" className="primary wide" onClick={chooseRoute} disabled={!routes.length} title={`Open the chosen ${word} in the drawing tools, where you can adjust its points, see its elevation and save it as a track`}>Use selected {word} <ArrowRight size={18} aria-hidden="true" /></button>
+        <div className="link-row">
+          <button type="button" className="link" onClick={reset} disabled={!from && !to} title="Clear the points and start again">Reset</button>
+          <button type="button" className="link" onClick={cancel} title="Stop planning without keeping anything">Cancel</button>
+        </div>
       </div>
-      <p className="hint plan-credit">Routes © <a href="https://openrouteservice.org" target="_blank" rel="noopener noreferrer" title="openrouteservice.org">openrouteservice.org</a> · © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" title="OpenStreetMap copyright and licence">OpenStreetMap contributors</a></p>
-      {attribution ? <span className="sr-only">{attribution}</span> : null}
     </section>
   );
 }

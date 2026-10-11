@@ -15,7 +15,7 @@ process.env.LOG_LEVEL = process.env.LOG_LEVEL || 'silent';
 const assert = require('assert');
 const http = require('http');
 const express = require('express');
-const { createGeocoder, normalizeQuery, isAddressQuery, mapResults, userAgent, MIN_GAP_MS, MAX_PENDING, ATTRIBUTION } = require('./geocode');
+const { createGeocoder, normalizeQuery, isAddressQuery, mapResults, mapReverse, userAgent, MIN_GAP_MS, MAX_PENDING, ATTRIBUTION } = require('./geocode');
 const { createRouter } = require('../routes/geocodeRouter');
 
 const ROW = (name, lat, lon, state, code = 'au', postcode = '4064') => ({ display_name: `${name}, Brisbane, ${state}, Australia`, lat: String(lat), lon: String(lon), address: { state, postcode, country_code: code } });
@@ -383,6 +383,154 @@ test('error traces are scrubbed too: lookup text is removed from Sentry events, 
   assert.strictEqual(ev.request.url, 'https://vault.example/api/geocode');
   assert.strictEqual(ev.spans[1].data['http.url'], 'https://vault.example/api/other?x=1', 'other endpoints are left alone');
   assert.strictEqual(scrubEvent(null), null);
+});
+
+// ---------------------------------------------------------------- reverse lookups (a point -> the name of the place)
+const REV = (extra = {}) => ({ lat: '-27.4698', lon: '153.0251', name: '', display_name: '12, Smith Street, Morningside, Brisbane, Queensland, Australia', address: { house_number: '12', road: 'Smith Street', suburb: 'Morningside', state: 'Queensland', country_code: 'au' }, ...extra });
+
+function revRig(opts = {}) {
+  let t = 1_000_000;
+  const calls = [];
+  const rg = {
+    calls, advance: (ms) => { t += ms; },
+    fetchFn: async (url, init) => {
+      calls.push({ at: t, url, ua: init.headers['User-Agent'] });
+      if (opts.fail) return { ok: false, status: opts.fail, json: async () => ({}) };
+      const isReverse = new URL(url).pathname.endsWith('/reverse');
+      return { ok: true, status: 200, json: async () => (isReverse ? (opts.row ?? REV()) : [ROW('Paddington', -27.46, 153.0, 'Queensland')]) };
+    },
+  };
+  rg.geocoder = createGeocoder({ fetchFn: rg.fetchFn, now: () => t, sleep: async (ms) => { t += ms; }, store: opts.store, userAgent: 'CuramVault-GardenPlanner/1.0 (+https://example.test)' });
+  return rg;
+}
+
+test('reverse: a named place wins, else the street with its number, then the suburb', () => {
+  assert.deepStrictEqual(mapReverse(REV({ name: 'Hawthorne Park', address: { road: 'Riverview Tce', suburb: 'Hawthorne', country_code: 'au' } })), { label: 'Hawthorne Park, Hawthorne', lat: -27.4698, lng: 153.0251 });
+  assert.strictEqual(mapReverse(REV()).label, '12 Smith Street, Morningside');
+  assert.strictEqual(mapReverse(REV({ name: '12' })).label, '12 Smith Street, Morningside', 'a name that is only a number is the house number, not a place');
+  assert.strictEqual(mapReverse(REV({ address: { road: 'Smith Street', town: 'Samford Village' } })).label, 'Smith Street, Samford Village');
+  assert.strictEqual(mapReverse(REV({ address: { footway: 'River Walk', suburb: 'Bulimba' } })).label, 'River Walk, Bulimba');
+  assert.strictEqual(mapReverse(REV({ address: {}, display_name: 'Somewhere Rd, Hamlet, Queensland, Australia' })).label, 'Somewhere Rd, Hamlet');
+});
+
+test('reverse: nothing known, an error row, junk and no coordinates all give null', () => {
+  assert.strictEqual(mapReverse({ error: 'Unable to geocode' }), null);
+  assert.strictEqual(mapReverse(null), null);
+  assert.strictEqual(mapReverse('x'), null);
+  assert.strictEqual(mapReverse({ lat: 'a', lon: 'b', display_name: 'x' }), null);
+  assert.strictEqual(mapReverse({ lat: '1', lon: '2', address: {}, display_name: '' }), null);
+});
+
+test('reverse: asks the reverse endpoint for one point, with the identifying agent, and carries the attribution', async () => {
+  const r = revRig();
+  const a = await r.geocoder.reverse(-27.4698, 153.0251);
+  assert.strictEqual(a.result.label, '12 Smith Street, Morningside');
+  assert.strictEqual(a.cached, false);
+  assert.strictEqual(a.attribution, ATTRIBUTION);
+  const u = new URL(r.calls[0].url);
+  assert.ok(u.pathname.endsWith('/reverse'));
+  assert.strictEqual(u.searchParams.get('lat'), '-27.4698');
+  assert.strictEqual(u.searchParams.get('lon'), '153.0251');
+  assert.strictEqual(u.searchParams.get('format'), 'jsonv2');
+  assert.ok(r.calls[0].ua.startsWith('CuramVault-GardenPlanner/1.0'));
+});
+
+test('reverse: shares the one-a-second queue with searches', async () => {
+  const r = revRig();
+  await Promise.all([r.geocoder.search('toowong'), r.geocoder.reverse(-27.47, 153.03), r.geocoder.reverse(-27.5, 153.1)]);
+  assert.strictEqual(r.calls.length, 3);
+  assert.ok(r.calls[1].at - r.calls[0].at >= MIN_GAP_MS - 100 && r.calls[2].at - r.calls[1].at >= MIN_GAP_MS - 100, JSON.stringify(r.calls.map((c) => c.at)));
+});
+
+test('reverse: the same spot (to about 11 m) is one upstream call, remembered in MEMORY ONLY for about 15 minutes', async () => {
+  const writes = [], reads = [];
+  const store = { get: async (k) => { reads.push(k); return null; }, set: async (k) => { writes.push(k); } };
+  const r = revRig({ store });
+  await r.geocoder.reverse(-27.46981, 153.02512);
+  const b = await r.geocoder.reverse(-27.46984, 153.02514);
+  assert.strictEqual(b.cached, true);
+  assert.strictEqual(r.calls.length, 1);
+  assert.deepStrictEqual(writes, [], 'never written to the table');
+  assert.deepStrictEqual(reads, [], 'and the table is never asked');
+  r.advance(14 * 60 * 1000);
+  assert.strictEqual((await r.geocoder.reverse(-27.4698, 153.0251)).cached, true);
+  r.advance(2 * 60 * 1000);
+  assert.strictEqual((await r.geocoder.reverse(-27.4698, 153.0251)).cached, false);
+  assert.strictEqual(r.calls.length, 2);
+});
+
+test('reverse: nothing known at a spot is a null result (and is remembered), not an error', async () => {
+  const r = revRig({ row: { error: 'Unable to geocode' } });
+  const a = await r.geocoder.reverse(-10, 100);
+  assert.strictEqual(a.result, null);
+  assert.strictEqual((await r.geocoder.reverse(-10, 100)).cached, true);
+});
+
+test('reverse: bad points never reach Nominatim', async () => {
+  const r = revRig();
+  for (const [lat, lng] of [['a', 1], [1, 'b'], [NaN, 1], [1, Infinity], [91, 0], [0, 181], [null, null], [undefined, 5]]) {
+    await assert.rejects(r.geocoder.reverse(lat, lng), (e) => e.code === 'invalid', `${lat},${lng}`);
+  }
+  assert.strictEqual(r.calls.length, 0);
+});
+
+test('reverse: upstream trouble is "busy" or "unavailable", is not cached, and the queue keeps working', async () => {
+  let fail = 429;
+  let t = 1_000_000;
+  const g = createGeocoder({ fetchFn: async () => (fail ? { ok: false, status: fail, json: async () => ({}) } : { ok: true, status: 200, json: async () => REV() }), now: () => t, sleep: async (ms) => { t += ms; } });
+  await assert.rejects(g.reverse(-27.4, 153.0), (e) => e.code === 'busy');
+  fail = 500;
+  await assert.rejects(g.reverse(-27.4, 153.0), (e) => e.code === 'unavailable');
+  fail = 0;
+  assert.strictEqual((await g.reverse(-27.4, 153.0)).result.label, '12 Smith Street, Morningside');
+});
+
+async function withReverse(geocoder, opts, fn) {
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => { req.user = { id: Number(req.get('x-test-user') || 1) }; next(); });
+  app.use('/api/geocode', createRouter(geocoder, opts));
+  const server = http.createServer(app);
+  await new Promise((r) => server.listen(0, r));
+  const post = async (body, user = 1) => {
+    const res = await fetch(`http://127.0.0.1:${server.address().port}/api/geocode/reverse`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-test-user': String(user) }, body: JSON.stringify(body) });
+    return { status: res.status, json: await res.json().catch(() => null), headers: res.headers };
+  };
+  try { await fn(post); } finally { await new Promise((r) => server.close(r)); }
+}
+
+test('route /reverse: returns the place and the attribution; bad points are 400 and never reach upstream', async () => {
+  const r = revRig();
+  await withReverse(r.geocoder, {}, async (post) => {
+    const ok = await post({ lat: -27.4698, lng: 153.0251 });
+    assert.strictEqual(ok.status, 200);
+    assert.strictEqual(ok.json.result.label, '12 Smith Street, Morningside');
+    assert.strictEqual(ok.json.attribution, ATTRIBUTION);
+    assert.strictEqual(ok.headers.get('cache-control'), 'no-store');
+    assert.strictEqual((await post({ lat: 'x', lng: 1 })).status, 400);
+    assert.strictEqual((await post({})).status, 400);
+    assert.strictEqual(r.calls.length, 1);
+  });
+});
+
+test('route /reverse: 20 a minute per user, another user unaffected, and upstream trouble is a plain message', async () => {
+  const r = revRig();
+  let t = 5_000_000;
+  await withReverse(r.geocoder, { now: () => t }, async (post) => {
+    for (let i = 0; i < 20; i += 1) assert.strictEqual((await post({ lat: -27 - i * 0.01, lng: 153 })).status, 200);
+    const limited = await post({ lat: -28, lng: 153 });
+    assert.strictEqual(limited.status, 429);
+    assert.ok(limited.headers.get('retry-after'));
+    assert.strictEqual((await post({ lat: -28, lng: 153 }, 2)).status, 200, 'another user');
+    t += 61000;
+    assert.strictEqual((await post({ lat: -28.1, lng: 153 })).status, 200, 'the minute passes');
+  });
+  const bad = revRig({ fail: 500 });
+  await withReverse(bad.geocoder, {}, async (post) => {
+    const x = await post({ lat: -27, lng: 153 });
+    assert.strictEqual(x.status, 502);
+    assert.ok(/could not answer|reached/i.test(x.json.error) && !/500/.test(x.json.error));
+  });
 });
 
 (async () => {

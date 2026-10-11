@@ -45,6 +45,8 @@ export const api = {
   plan: (input: { from: [number, number]; to: [number, number]; profile: PlanProfile }) =>
     call<{ routes: PlannedRoute[]; attribution: string; cached: boolean }>('POST', '/api/route-tracks/plan', input),
   geocode: (q: string) => call<{ results: GeocodeResult[] }>('POST', '/api/geocode', { q }),
+  /** The name of the place at a point (one deliberate lookup after a tap or a pin drop), or null if nothing is known there. */
+  reverse: (lat: number, lng: number) => call<{ result: GeocodeResult | null }>('POST', '/api/geocode/reverse', { lat, lng }),
   list: (opts: { q?: string; cursor?: string | null; limit?: number } = {}) => {
     const p = new URLSearchParams();
     if (opts.q) p.set('q', opts.q);

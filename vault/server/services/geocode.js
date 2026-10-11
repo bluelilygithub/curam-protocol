@@ -11,6 +11,9 @@
 //   - not bulk, not resold: a person looking up their own garden's location, one query at a time
 // Street ADDRESSES (Garden Planner's wizard asks for one) are more personal than a suburb. They are answered and cached in MEMORY ONLY, for a
 // short time: never written to the geocode_cache table, never logged. A suburb or postcode query is cached in the table as before.
+// REVERSE lookups (a point -> the name of the place, for Route Tracer's start and end fields) follow the same rules: the same one-per-second
+// queue, a deliberate action only (a tap or a pin drop, never a stream of points), memory-only caching for a short time (a point on the map is
+// as personal as an address: never written to the table, never logged), attribution with every answer.
 // Override the endpoint with NOMINATIM_URL to point at a self-hosted Nominatim or another provider with the same API.
 
 const MIN_GAP_MS = 1100; // policy says 1 per second; the extra margin covers timer jitter
@@ -54,6 +57,21 @@ function userAgent(env = process.env) {
   return `CuramVault-GardenPlanner/1.0${app || contact ? ` (${[app && `+${app}`, contact].filter(Boolean).join('; ')})` : ''}`;
 }
 
+/** A reverse lookup row -> a short name for the spot: a park or shop by name, else "12 Smith St", then the suburb. Null if Nominatim knew nothing there. */
+function mapReverse(row) {
+  if (!row || typeof row !== 'object' || row.error) return null;
+  const lat = Number(row.lat), lng = Number(row.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const a = row.address ?? {};
+  const suburb = [a.suburb, a.city_district, a.town, a.village, a.hamlet, a.locality, a.city, a.municipality].find(Boolean) ?? null;
+  const road = [a.road, a.pedestrian, a.footway, a.path, a.residential, a.cycleway].find(Boolean) ?? null;
+  const number = a.house_number ? String(a.house_number) : null;
+  const named = typeof row.name === 'string' && row.name.trim() && !/^\d/.test(row.name.trim()) ? row.name.trim() : null;
+  const street = road ? (number ? `${number} ` : '') + road : null;
+  const label = [named ?? street, suburb].filter(Boolean).join(', ') || String(row.display_name ?? '').split(',').slice(0, 2).join(',').trim();
+  return label ? { label, lat, lng } : null;
+}
+
 /** Nominatim rows -> what the app needs. Rows outside Australia or without usable coordinates are dropped. */
 function mapResults(rows) {
   const out = [];
@@ -95,6 +113,7 @@ function createGeocoder(o = {}) {
   const sleep = o.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   const baseUrl = o.baseUrl ?? process.env.NOMINATIM_URL ?? 'https://nominatim.openstreetmap.org/search';
   const ua = o.userAgent ?? userAgent();
+  const reverseUrl = o.reverseUrl ?? process.env.NOMINATIM_REVERSE_URL ?? baseUrl.replace(/\/search\/?$/, '/reverse');
   const memory = new Map(); // key -> { at, results }
   let lastUpstreamAt = 0;
   let chain = Promise.resolve();
@@ -134,8 +153,49 @@ function createGeocoder(o = {}) {
     return mapResults(rows);
   }
 
+  /** Nominatim's answer for one point, through the same one-a-second queue as searches. */
+  async function reverseUpstream(lat, lng) {
+    const wait = lastUpstreamAt + MIN_GAP_MS - now();
+    if (wait > 0) await sleep(wait);
+    lastUpstreamAt = now();
+    stats.upstream += 1;
+    const url = `${reverseUrl}?${new URLSearchParams({ format: 'jsonv2', lat: String(lat), lon: String(lng), zoom: '18', addressdetails: '1' })}`;
+    let res;
+    try {
+      res = await fetchFn(url, { headers: { 'User-Agent': ua, Accept: 'application/json', 'Accept-Language': 'en-AU' }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+    } catch {
+      throw new GeocodeError('unavailable', 'The place lookup service could not be reached.');
+    }
+    if (res.status === 429 || res.status === 403) throw new GeocodeError('busy', 'The place lookup service is busy. Try again in a minute.');
+    if (!res.ok) throw new GeocodeError('unavailable', 'The place lookup service could not answer that.');
+    let row;
+    try { row = await res.json(); } catch { throw new GeocodeError('unavailable', 'The place lookup service sent something unreadable.'); }
+    return mapReverse(row);
+  }
+
   return {
     stats, attribution: ATTRIBUTION,
+    /** The name of the place at a point (a deliberate tap or pin drop). `result` is null when nothing is known there. Memory-only cache. */
+    async reverse(lat, lng) {
+      if (typeof lat !== 'number' || typeof lng !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+        throw new GeocodeError('invalid', 'That is not a point on the map.');
+      }
+      const key = `rev:${lat.toFixed(4)},${lng.toFixed(4)}`; // about 11 m: the same spot twice is one lookup
+      const m = memory.get(key);
+      if (m && now() - m.at < ADDRESS_TTL_MS) { stats.cacheHits += 1; return { result: m.results, cached: true, attribution: ATTRIBUTION }; }
+      if (pending >= MAX_PENDING) throw new GeocodeError('busy', 'Lots of people are looking places up right now. Try again in a few seconds.');
+      pending += 1;
+      const run = chain.then(async () => {
+        const again = memory.get(key);
+        if (again && now() - again.at < ADDRESS_TTL_MS) { stats.cacheHits += 1; return { result: again.results, cached: true, attribution: ATTRIBUTION }; }
+        const result = await reverseUpstream(lat, lng);
+        memory.set(key, { at: now(), results: result });
+        if (memory.size > MAX_MEMORY) { for (const k of memory.keys()) { memory.delete(k); if (memory.size <= MAX_MEMORY * 0.8) break; } }
+        return { result, cached: false, attribution: ATTRIBUTION };
+      });
+      chain = run.then(() => undefined, () => undefined);
+      try { return await run; } finally { pending -= 1; }
+    },
     /** Answer one deliberate search. `cached: true` when it did not touch Nominatim. */
     async search(q) {
       const key = normalizeQuery(q);
@@ -178,4 +238,4 @@ function pgStore(pool) {
   };
 }
 
-module.exports = { createGeocoder, pgStore, normalizeQuery, isAddressQuery, mapResults, userAgent, GeocodeError, MIN_GAP_MS, MAX_PENDING, ATTRIBUTION, CACHE_TTL_MS };
+module.exports = { createGeocoder, pgStore, normalizeQuery, isAddressQuery, mapResults, mapReverse, userAgent, GeocodeError, MIN_GAP_MS, MAX_PENDING, ATTRIBUTION, CACHE_TTL_MS };

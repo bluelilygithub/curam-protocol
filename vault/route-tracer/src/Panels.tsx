@@ -1,3 +1,4 @@
+import { ChevronLeft, MapPinned, PencilLine } from 'lucide-react';
 import type maplibregl from 'maplibre-gl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type Track, type TrackSummary } from './api';
@@ -5,19 +6,16 @@ import { displayLines, finish, fromLines } from './drawing';
 import { bboxOf, formatDistance, totalKm, type BBox } from './geo';
 import { setSaved, type SavedLine } from './mapLayers';
 import { ElevationChart } from './ElevationChart';
+import { fitPadding } from './layout';
+import { usePlan } from './Plan';
 import { COLORS, useStore } from './store';
 
 const fmtDate = (iso: string): string => new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
 const errText = (e: unknown): string => (e instanceof Error ? e.message : 'That did not work.');
 
-/** Fit the map to a track, leaving room for the side panel (desktop) or bottom sheet (phone). */
+/** Fit the map to a track (the sidebar is beside the map on a computer; on a phone it is a sheet over the bottom, and room is left for it). */
 export function fitTo(map: maplibregl.Map, bbox: BBox): void {
-  const phone = window.matchMedia('(max-width: 767px)').matches;
-  map.fitBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]], {
-    padding: phone ? { top: 80, left: 40, right: 40, bottom: Math.round(window.innerHeight * 0.45) + 40 } : { top: 80, left: 40, bottom: 40, right: 380 + 40 },
-    maxZoom: 17,
-    duration: 600,
-  });
+  map.fitBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]], { padding: fitPadding(), maxZoom: 17, duration: 600 });
 }
 
 /** Which tracks are drawn on the map: the open one, or all of them. Nothing while drawing (the drawing is the focus). */
@@ -115,7 +113,7 @@ function Swatches({ value, onChange }: { value: string; onChange: (c: string) =>
 }
 
 export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
-  const { panel, setPanel, tracks, setTracks, selected, select, showAll, setShowAll, units, toast } = useStore();
+  const { panel, setPanel, tracks, setTracks, selected, select, showAll, setShowAll, units, toast, startDrawing, routePlanning } = useStore();
   const [q, setQ] = useState('');
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -139,10 +137,9 @@ export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
   }, [setTracks, toast]);
 
   useEffect(() => {
-    if (panel === 'closed') return undefined;
     const t = setTimeout(() => { void load(q, null); }, q ? 300 : 0);
     return () => clearTimeout(t);
-  }, [panel === 'closed', q, load]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [q, load]);
 
   useEffect(() => {
     const el = sentinel.current;
@@ -150,7 +147,7 @@ export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
     const io = new IntersectionObserver((es) => { if (es[0]?.isIntersecting) void load(q, cursor); }, { rootMargin: '200px' });
     io.observe(el);
     return () => io.disconnect();
-  }, [cursor, loading, q, load, panel]);
+  }, [cursor, loading, q, load]);
 
   async function open(t: TrackSummary) {
     try {
@@ -176,52 +173,56 @@ export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
     } catch (e) { toast('error', errText(e)); } finally { setDeleting(false); setConfirming(false); }
   }
 
-  if (panel === 'closed') return null;
   if (panel === 'detail' && selected) return <TrackDetail map={map} track={selected} onChanged={(t) => { select(t); void load(q, null); }} onGone={() => { select(null); setPanel('tracks'); void load(q, null); }} />;
 
   return (
-    <aside className="panel" aria-label="Tracks" data-tour="rt-panel">
-      <div className="panel-head">
-        <h2>Tracks</h2>
-        <button type="button" onClick={() => setPanel('closed')} aria-label="Close tracks" title="Close the tracks list">✕</button>
-      </div>
-      <input type="search" aria-label="Search tracks" title="Type part of a track name to filter the list" placeholder="Search by name" value={q} onChange={(e) => setQ(e.target.value)} />
-      <label className="check" title="Draw every saved track on the map at once, not just the open one"><input type="checkbox" title="Draw every saved track on the map at once" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} /> Show all on map</label>
-      {tracks.length > 0 && (
-        <div className="row">
-          <button type="button" onClick={() => { setConfirming(false); setPicked(allPicked ? new Set() : new Set(tracks.map((t) => t.id))); }} title="Tick or untick every track in the list">{allPicked ? 'Deselect all' : 'Select all'}</button>
-          {confirming ? (
-            <>
-              <span>Delete {picked.size} {picked.size === 1 ? 'track' : 'tracks'}?</span>
-              <button type="button" className="danger" disabled={deleting} onClick={() => void deletePicked()} title="Yes, delete the ticked tracks for good">Yes</button>
-              <button type="button" onClick={() => setConfirming(false)} title="No, keep them">No</button>
-            </>
-          ) : (
-            <button type="button" className="danger" disabled={!picked.size} onClick={() => setConfirming(true)} title="Delete the ticked tracks (asks first)">Delete{picked.size ? ` (${picked.size})` : ''}</button>
-          )}
+    <section className="side-view" role="complementary" aria-label="Tracks" data-tour="rt-panel">
+      <div className="side-head">
+        <div className="home-actions">
+          <button type="button" className="primary wide" onClick={() => startDrawing()} title="Start tracing a new route on the map" data-tour="rt-draw"><PencilLine size={18} aria-hidden="true" /> Draw</button>
+          <button type="button" className="wide" onClick={() => usePlan.getState().start()} disabled={!routePlanning} title={routePlanning ? 'Plan a route: set a start and an end and get up to three routes along real roads and paths, for walking, hiking, cycling or driving' : 'Route planning is not set up on this server yet (it needs an OpenRouteService key, ORS_API_KEY)'} data-tour="rt-plan"><MapPinned size={18} aria-hidden="true" /> Plan route</button>
         </div>
-      )}
-      <ul className="tracklist">
-        {tracks.map((t) => (
-          <li key={t.id} className={picked.has(t.id) ? 'picked' : ''}>
-            <label className="pick"><input type="checkbox" aria-label={`Select ${t.name}`} title="Tick to select this track for deleting" checked={picked.has(t.id)} onChange={() => togglePicked(t.id)} /></label>
-            <button type="button" onClick={() => void open(t)} title="Open this track: show it on the map with its details">
-              <span className="dot" style={{ background: t.color }} />
-              <span className="tname">{t.name}</span>
-              <span className="tmeta">{formatDistance(t.distanceM / 1000, units)} · {fmtDate(t.createdAt)}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-      {loaded && !tracks.length && <p className="hint">{q ? 'No tracks match.' : 'No saved tracks yet. Tap Draw to trace one.'}</p>}
-      {loading && <p className="hint">Loading…</p>}
-      <div ref={sentinel} style={{ height: 1 }} />
-    </aside>
+        <h2>Your tracks</h2>
+        <input type="search" aria-label="Search tracks" title="Type part of a track name to filter the list" placeholder="Search by name" value={q} onChange={(e) => setQ(e.target.value)} />
+      </div>
+      <div className="side-body">
+        <label className="check" title="Draw every saved track on the map at once, not just the open one"><input type="checkbox" title="Draw every saved track on the map at once" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} /> Show all on map</label>
+        {tracks.length > 0 && (
+          <div className="row">
+            <button type="button" onClick={() => { setConfirming(false); setPicked(allPicked ? new Set() : new Set(tracks.map((t) => t.id))); }} title="Tick or untick every track in the list">{allPicked ? 'Deselect all' : 'Select all'}</button>
+            {confirming ? (
+              <>
+                <span>Delete {picked.size} {picked.size === 1 ? 'track' : 'tracks'}?</span>
+                <button type="button" className="danger" disabled={deleting} onClick={() => void deletePicked()} title="Yes, delete the ticked tracks for good">Yes</button>
+                <button type="button" onClick={() => setConfirming(false)} title="No, keep them">No</button>
+              </>
+            ) : (
+              <button type="button" className="danger" disabled={!picked.size} onClick={() => setConfirming(true)} title="Delete the ticked tracks (asks first)">Delete{picked.size ? ` (${picked.size})` : ''}</button>
+            )}
+          </div>
+        )}
+        <ul className="tracklist">
+          {tracks.map((t) => (
+            <li key={t.id} className={picked.has(t.id) ? 'picked' : ''}>
+              <label className="pick"><input type="checkbox" aria-label={`Select ${t.name}`} title="Tick to select this track for deleting" checked={picked.has(t.id)} onChange={() => togglePicked(t.id)} /></label>
+              <button type="button" onClick={() => void open(t)} title="Open this track: show it on the map with its details">
+                <span className="dot" style={{ background: t.color }} />
+                <span className="tname">{t.name}</span>
+                <span className="tmeta">{formatDistance(t.distanceM / 1000, units)} · {fmtDate(t.createdAt)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        {loaded && !tracks.length && <p className="hint">{q ? 'No tracks match.' : 'No saved tracks yet. Press Draw to trace one, or Plan route to find one.'}</p>}
+        {loading && <p className="hint">Loading…</p>}
+        <div ref={sentinel} style={{ height: 1 }} />
+      </div>
+    </section>
   );
 }
 
 function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | null; track: Track; onChanged: (t: Track) => void; onGone: () => void }) {
-  const { units, setPanel, startDrawing, setExtendingId, setDrawColor, setMode, select, toast } = useStore();
+  const { units, startDrawing, setExtendingId, setDrawColor, setMode, select, toast } = useStore();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(track.name);
   const [notes, setNotes] = useState(track.notes ?? '');
@@ -253,50 +254,52 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
     else if (useStore.getState().mode === 'edit') setMode('freehand');
     // keep `selected` so the save dialog can prefill; the map layer hides it while extending
     const last = track.geometry.coordinates.at(-1)?.at(-1);
-    if (map && last) map.easeTo({ center: last, duration: 400 });
+    if (map && mode === 'edit') fitTo(map, track.bbox); // all of it in view, so every point can be reached
+    else if (map && last) map.easeTo({ center: last, duration: 400 });
   }
 
   return (
-    <aside className="panel" aria-label="Track detail" data-tour="rt-panel">
-      <div className="panel-head">
-        <button type="button" onClick={() => select(null)} title="Back to the list of tracks">← Tracks</button>
-        <button type="button" onClick={() => { select(null); setPanel('closed'); }} aria-label="Close" title="Close this track">✕</button>
+    <section className="side-view" role="complementary" aria-label="Track detail" data-tour="rt-panel">
+      <div className="side-head">
+        <button type="button" className="back" onClick={() => select(null)} title="Back to the list of tracks"><ChevronLeft size={18} aria-hidden="true" /> Tracks</button>
       </div>
-      {editing ? (
-        <form className="stack" onSubmit={save}>
-          <label>Name<input title="The track's name, up to 120 characters" value={name} maxLength={120} required onChange={(e) => setName(e.target.value)} /></label>
-          <label>Notes<textarea title="Notes about this route" value={notes} rows={4} maxLength={2000} onChange={(e) => setNotes(e.target.value)} /></label>
-          <Swatches value={color} onChange={setColor} />
-          <div className="row">
-            <button type="button" onClick={() => setEditing(false)} title="Discard these changes">Cancel</button>
-            <button type="submit" className="primary" disabled={busy || !name.trim()} title="Save the new name, notes and colour">Save</button>
-          </div>
-        </form>
-      ) : (
-        <>
-          <h2 className="tdetail-name"><span className="dot" style={{ background: track.color }} /> {track.name}</h2>
-          <p className="big">{formatDistance(track.distanceM / 1000, units)}</p>
-          <p className="hint">{fmtDate(track.createdAt)} · {track.pointCount} points</p>
-          {track.notes && <p className="notes">{track.notes}</p>}
-          <ElevationChart lines={track.geometry.coordinates} color={track.color} name={track.name} />
-          <div className="stack">
-            <button type="button" onClick={() => setEditing(true)} title="Change this track's name, notes or colour">Rename / edit</button>
-            <button type="button" onClick={() => reopen('edit')} title="Reshape the route: move points, add points or delete them">Edit points</button>
-            <button type="button" onClick={() => reopen('extend')} title="Carry on drawing from the end of this route">Extend</button>
-            <button type="button" onClick={() => void exportGpx()} title="Download this track as a GPX file for Strava, Garmin or gpx.studio">Export GPX</button>
-            {confirmDelete ? (
-              <div className="row">
-                <span>Delete this track?</span>
-                <button type="button" className="danger" disabled={busy} onClick={() => void remove()} title="Yes, delete this track for good">Yes</button>
-                <button type="button" onClick={() => setConfirmDelete(false)} title="No, keep it">No</button>
-              </div>
-            ) : (
-              <button type="button" className="danger" onClick={() => setConfirmDelete(true)} title="Delete this track (asks first)">Delete</button>
-            )}
-          </div>
-        </>
-      )}
-    </aside>
+      <div className="side-body">
+        {editing ? (
+          <form className="stack" onSubmit={save}>
+            <label>Name<input title="The track's name, up to 120 characters" value={name} maxLength={120} required onChange={(e) => setName(e.target.value)} /></label>
+            <label>Notes<textarea title="Notes about this route" value={notes} rows={4} maxLength={2000} onChange={(e) => setNotes(e.target.value)} /></label>
+            <Swatches value={color} onChange={setColor} />
+            <div className="row">
+              <button type="button" onClick={() => setEditing(false)} title="Discard these changes">Cancel</button>
+              <button type="submit" className="primary" disabled={busy || !name.trim()} title="Save the new name, notes and colour">Save</button>
+            </div>
+          </form>
+        ) : (
+          <>
+            <h2 className="tdetail-name"><span className="dot" style={{ background: track.color }} /> {track.name}</h2>
+            <p className="big">{formatDistance(track.distanceM / 1000, units)}</p>
+            <p className="hint">{fmtDate(track.createdAt)} · {track.pointCount} points</p>
+            {track.notes && <p className="notes">{track.notes}</p>}
+            <ElevationChart lines={track.geometry.coordinates} color={track.color} name={track.name} />
+            <div className="stack">
+              <button type="button" onClick={() => setEditing(true)} title="Change this track's name, notes or colour">Rename / edit</button>
+              <button type="button" onClick={() => reopen('edit')} title="Reshape the route: move points, add points or delete them">Edit points</button>
+              <button type="button" onClick={() => reopen('extend')} title="Carry on drawing from the end of this route">Extend</button>
+              <button type="button" onClick={() => void exportGpx()} title="Download this track as a GPX file for Strava, Garmin or gpx.studio">Export GPX</button>
+              {confirmDelete ? (
+                <div className="row">
+                  <span>Delete this track?</span>
+                  <button type="button" className="danger" disabled={busy} onClick={() => void remove()} title="Yes, delete this track for good">Yes</button>
+                  <button type="button" onClick={() => setConfirmDelete(false)} title="No, keep it">No</button>
+                </div>
+              ) : (
+                <button type="button" className="danger" onClick={() => setConfirmDelete(true)} title="Delete this track (asks first)">Delete</button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </section>
   );
 }
 

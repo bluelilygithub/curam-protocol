@@ -46,12 +46,12 @@ export function InfoModal() {
 
           <h3>Plan a route (directions)</h3>
           <ul>
-            <li>Press <b>Plan route</b>, tap the map to set the <b>start (A)</b>, then tap again for the <b>end (B)</b>. Choose <b>Walking, Hiking, Cycling or Driving</b> and the app finds up to three routes between them along real roads and paths, each with its distance and estimated time. The shortest is marked.</li>
-            <li>Tap a route in the list, or tap its line on the map, to choose it. Drag the A or B pin to move it and the routes are found again. <b>Swap A and B</b> reverses the trip; <b>Reset</b> clears both points.</li>
-            <li><b>Use this route</b> opens the chosen route in the drawing tools in <b>Edit points</b> mode. From there you can drag points to adjust it, see its elevation, add a return leg, and press <b>Finish</b> to save it as a track like any other.</li>
+            <li>Press <b>Plan route</b> in the sidebar. Set the <b>start (A)</b> and the <b>end (B)</b> by tapping the map, or by typing a place in the field and pressing <b>Enter</b> (the field fills in the place name when you tap the map). Choose how you are travelling: <b>walking, hiking, cycling or driving</b>. The app finds up to three routes between them along real roads and paths, each with its distance and estimated time. The shortest is listed first.</li>
+            <li>Choose a route in the list, or tap its line on the map. Drag the A or B pin to move it and the routes are found again. The arrows between the fields swap A and B; <b>Reset</b> clears both points.</li>
+            <li><b>Use selected route</b> opens the chosen route in the drawing tools in <b>Edit points</b> mode. From there you can drag points to adjust it, see its elevation, add a return leg, and press <b>Finish</b> to save it as a track like any other.</li>
             <li>Routes come from OpenRouteService using OpenStreetMap data, so they are only as good as the map: a path that is missing from OpenStreetMap cannot be used. If a point is not near a road or footpath you are told which one to move. The free service has daily limits, so the same request is remembered for an hour and each person has a fair share per minute and per day.</li>
-            <li><b>Loops:</b> switch the card from <b>A to B</b> to <b>Loop</b>, tap one start point, and type a length (1 to 50 km, or the same in miles). You get up to three circular routes that start and end at that point, each showing how far it is from the length you asked for, for example <i>(+4%)</i>. The planner treats the length as a target and can miss it, so the app asks again for any loop that is far off. In a built-up cul-de-sac or somewhere with few paths, a loop may come out longer or shorter than you wanted. <b>Different loops</b> asks for loops that head off in other directions.</li>
-            <li><b>Longer A to B:</b> the same two places, but a longer way between them (a longer walk, ride or drive that still ends at B). Set A and B and the card shows how long the direct route is. Then type how long you want the whole trip to be, which must be longer than that, and you get up to three routes that bend off to one side or the other to reach about that length, each showing how far it is from what you asked for. No routing service does this in one step, so the app moves a point out to the side of your line and checks the result, a few times. If the area has few paths on that side it may fall short, and it tells you if you ask for less than the direct route (it is already longer) or more than four times as long. <b>Different routes</b> tries other shapes.</li>
+            <li><b>Loops:</b> switch from <b>A to B</b> to <b>Loop</b>, tap one start point, and type a length (1 to 50 km, or the same in miles). You get up to three circular routes that start and end at that point, each showing how far it is from the length you asked for, for example <i>(+4%)</i>. The planner treats the length as a target and can miss it, so the app asks again for any loop that is far off. In a built-up cul-de-sac or somewhere with few paths, a loop may come out longer or shorter than you wanted. <b>Different loops</b> asks for loops that head off in other directions.</li>
+            <li><b>Longer route:</b> the same two places, but a longer way between them (a longer walk, ride or drive that still ends at B). Set A and B and the sidebar shows how long the direct route is. Then type how long you want the whole trip to be, which must be longer than that, and you get up to three routes that bend off to one side or the other to reach about that length, each showing how far it is from what you asked for. No routing service does this in one step, so the app moves a point out to the side of your line and checks the result, a few times. If the area has few paths on that side it may fall short, and it tells you if you ask for less than the direct route (it is already longer) or more than four times as long. <b>Different routes</b> tries other shapes.</li>
             <li>If <b>Plan route</b> is greyed out, route planning has not been set up on this server yet.</li>
           </ul>
 
@@ -72,34 +72,34 @@ export function InfoModal() {
           <h3>Saving and your tracks</h3>
           <ul>
             <li><b>Finish</b> asks for a name, optional notes and a colour. <b>Escape</b> goes back to drawing without losing anything.</li>
-            <li><b>Tracks</b> lists everything you saved, newest first. Search by name. Tick tracks and press <b>Delete</b> to remove several at once (it asks first). <b>Show all on map</b> draws them all.</li>
+            <li>The sidebar lists everything you saved under <b>Your tracks</b>, newest first. Search by name. Tick tracks and press <b>Delete</b> to remove several at once (it asks first). <b>Show all on map</b> draws them all.</li>
             <li>Open a track to <b>rename or recolour</b> it, <b>edit its points</b>, <b>extend</b> it (carry on drawing from its end), <b>export GPX</b> or <b>delete</b> it.</li>
           </ul>
 
           <h3>Measuring along a track</h3>
           <ul>
-            <li><b>Markers</b> are numbered dots every 1 km (every 1 mi in miles). Zoomed out they thin to every 5th, 10th and so on so they never pile up. The Markers button hides them.</li>
+            <li><b>Distance markers</b> are numbered dots every 1 km (every 1 mi in miles). Zoomed out they thin to every 5th, 10th and so on so they never pile up. Turn them off in the gear menu.</li>
             <li>With a track open, <b>tap or click its line</b>: a pin lands on it with how far that is from the start and how far is left. Tap away, or press Escape, to clear it. This does not work while drawing or editing, because a tap already means something there.</li>
           </ul>
 
           <h3>GPX files</h3>
           <ul>
-            <li><b>Import GPX</b> opens a file from Strava, Garmin or a friend. It appears in Edit points mode with its distance, ready to check and press Finish to save. Waypoints, times and heart rate are ignored; only the path is kept. A recording with more points than a track can hold (20,000) is simplified, and you are told by how much.</li>
+            <li><b>Import GPX</b> (in the gear menu) opens a file from Strava, Garmin or a friend. It appears in Edit points mode with its distance, ready to check and press Finish to save. Waypoints, times and heart rate are ignored; only the path is kept. A recording with more points than a track can hold (20,000) is simplified, and you are told by how much.</li>
             <li><b>Export GPX</b> on a saved track downloads a standard file that Strava, Garmin and gpx.studio open.</li>
           </ul>
 
           <h3>Map controls</h3>
           <ul>
-            <li>The search box finds a place or address. ◎ centres the map on you.</li>
-            <li><b>Streets</b> shows roads and addresses, <b>Outdoor</b> shows trails and contours, <b>Satellite</b> shows the aerial photo.</li>
-            <li><b>km / mi</b> switches the units everywhere. Style, units, markers and your last map position are remembered on this device.</li>
+            <li>The search box at the top finds a place or address. The buttons down the right edge of the map zoom, centre the map on you, turn north to the top, and switch the map style.</li>
+            <li>In the <b>layers</b> button: <b>Streets</b> shows roads and addresses, <b>Outdoor</b> shows trails and contours, <b>Satellite</b> shows the aerial photo.</li>
+            <li>The <b>gear</b> menu holds <b>Units</b> (kilometres or miles, used everywhere), distance markers, Import GPX and the tour. Style, units, markers and your last map position are remembered on this device.</li>
           </ul>
 
           <h3>Good to know</h3>
           <ul>
             <li>Distance is measured along the line you draw, as a great-circle distance, so it is only as good as the line. A freehand line cuts corners; click along the road for more accuracy.</li>
             <li>What you draw is not snapped to roads. To follow roads, use <b>Plan route</b>, or click along the road in <b>Click</b> mode. There is no GPS recording or sharing in this version.</li>
-            <li>Hover any button or box for a short explanation. The <b>Tour</b> button walks through the screen in about two minutes.</li>
+            <li>Hover any button or box for a short explanation. <b>Take the tour</b> in the gear menu walks through the screen in about two minutes.</li>
           </ul>
         </div>
         <div className="row"><button ref={gotIt} type="button" className="primary" onClick={close} title="Close the guide. You can open it again with the ⓘ button.">Got it</button></div>
