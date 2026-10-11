@@ -44,6 +44,15 @@ export function InfoModal() {
             <li>Your drawing is also kept on this device every two seconds. If the page closes by accident, you are offered it back next time.</li>
           </ul>
 
+          <h3>Plan a route (directions)</h3>
+          <ul>
+            <li>Press <b>Plan route</b>, tap the map to set the <b>start (A)</b>, then tap again for the <b>end (B)</b>. Choose <b>Walking, Hiking, Cycling or Driving</b> and the app finds up to three routes between them along real roads and paths, each with its distance and estimated time. The shortest is marked.</li>
+            <li>Tap a route in the list, or tap its line on the map, to choose it. Drag the A or B pin to move it and the routes are found again. <b>Swap A and B</b> reverses the trip; <b>Reset</b> clears both points.</li>
+            <li><b>Use this route</b> opens the chosen route in the drawing tools in <b>Edit points</b> mode. From there you can drag points to adjust it, see its elevation, add a return leg, and press <b>Finish</b> to save it as a track like any other.</li>
+            <li>Routes come from OpenRouteService using OpenStreetMap data, so they are only as good as the map: a path that is missing from OpenStreetMap cannot be used. If a point is not near a road or footpath you are told which one to move. The free service has daily limits, so the same request is remembered for an hour and each person has a fair share per minute and per day.</li>
+            <li>If <b>Plan route</b> is greyed out, route planning has not been set up on this server yet.</li>
+          </ul>
+
           <h3>Loops and out-and-back</h3>
           <ul>
             <li><b>Return to start</b> adds a straight line from the end of the route back to its first point. It is a straight line, not a road route, so on a road route follow the roads back yourself instead.</li>
@@ -87,7 +96,7 @@ export function InfoModal() {
           <h3>Good to know</h3>
           <ul>
             <li>Distance is measured along the line you draw, as a great-circle distance, so it is only as good as the line. A freehand line cuts corners; click along the road for more accuracy.</li>
-            <li>There is no road snapping, GPS recording or sharing in this version.</li>
+            <li>What you draw is not snapped to roads. To follow roads, use <b>Plan route</b>, or click along the road in <b>Click</b> mode. There is no GPS recording or sharing in this version.</li>
             <li>Hover any button or box for a short explanation. The <b>Tour</b> button walks through the screen in about two minutes.</li>
           </ul>
         </div>

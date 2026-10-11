@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { formatElevation } from './ElevationChart';
 import { formatDistance, nearestOnLines } from './geo';
 import { getSavedLines } from './mapLayers';
+import { usePlan } from './Plan';
 import { useStore } from './store';
 
 const TAP_PX = 22; // how close to a line a tap must land (a finger is not a pixel)
@@ -14,10 +15,11 @@ const TAP_PX = 22; // how close to a line a tap must land (a finger is not a pix
  */
 export function useDistanceProbe(map: maplibregl.Map | null): void {
   const { drawing, selected, showAll, probe } = useStore();
+  const planning = usePlan((s) => s.active);
   const pin = useRef<maplibregl.Marker | null>(null);
 
   useEffect(() => {
-    if (!map || drawing) return undefined;
+    if (!map || drawing || planning) return undefined; // a tap already means something while drawing or planning
     const onClick = (e: maplibregl.MapMouseEvent) => {
       const tracks = getSavedLines();
       let best: { hit: NonNullable<ReturnType<typeof nearestOnLines>>; name: string; color: string } | null = null;
@@ -31,7 +33,7 @@ export function useDistanceProbe(map: maplibregl.Map | null): void {
     map.on('click', onClick);
     window.addEventListener('keydown', onKey);
     return () => { map.off('click', onClick); window.removeEventListener('keydown', onKey); };
-  }, [map, drawing]);
+  }, [map, drawing, planning]);
 
   // a different track, Show all toggled or drawing started: the old reading no longer means anything
   useEffect(() => { useStore.getState().setProbe(null); }, [selected?.id, showAll, drawing]);

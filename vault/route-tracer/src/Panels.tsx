@@ -57,6 +57,7 @@ export function SaveDialog({ onSaved }: { onSaved: (t: Track) => void }) {
   const lines = useMemo(() => finish(draw), [draw]);
   const existing = useStore((s) => (s.extendingId ? s.selected : null));
   const imported = useStore((s) => s.imported);
+  const planned = useStore((s) => s.planned);
   const [name, setName] = useState(existing?.name ?? imported?.name ?? `Track – ${new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`);
   const [notes, setNotes] = useState(existing?.notes ?? imported?.notes ?? '');
   const [busy, setBusy] = useState(false);
@@ -79,7 +80,7 @@ export function SaveDialog({ onSaved }: { onSaved: (t: Track) => void }) {
       const geometry = { type: 'MultiLineString' as const, coordinates: lines };
       const track = extendingId
         ? await api.update(extendingId, { name: name.trim(), notes: notes.trim() || null, color: drawColor, geometry })
-        : await api.create({ name: name.trim(), notes: notes.trim() || null, color: drawColor, geometry, drawMode: imported ? 'import' : mode === 'click' ? 'click' : 'freehand' });
+        : await api.create({ name: name.trim(), notes: notes.trim() || null, color: drawColor, geometry, drawMode: imported ? 'import' : planned ? 'route' : mode === 'click' ? 'click' : 'freehand' });
       toast('ok', 'Saved');
       onSaved(track);
     } catch (err) { toast('error', errText(err)); setBusy(false); }

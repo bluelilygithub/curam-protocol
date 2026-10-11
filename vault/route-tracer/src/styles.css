@@ -60,6 +60,19 @@ button[aria-pressed='true'] { background: var(--primary); color: var(--primary-t
 .modal-body h3 { margin: 14px 0 4px; font-size: 1rem; }
 .modal-body ul { margin: 4px 0; padding-left: 20px; }
 .modal-body li { margin: 4px 0; }
+.plan-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.plan-step { text-align: left; }
+.plan-error { margin: 0; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--danger); color: var(--danger); font-size: 0.9rem; }
+.plan-routes { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.plan-routes button { width: 100%; display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 8px; text-align: left; padding: 6px 10px; }
+.plan-name { font-weight: 600; }
+.plan-meta { font-variant-numeric: tabular-nums; color: var(--muted); }
+.plan-routes button[aria-pressed='true'] .plan-meta { color: inherit; }
+.plan-credit a { color: inherit; }
+.plan-pin { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: #fff; font: 700 13px/1 system-ui, sans-serif; border: 3px solid #fff; box-shadow: 0 0 0 2px #1a1a1a, 0 2px 6px rgba(0, 0, 0, 0.4); cursor: grab; }
+.plan-pin-a { background: #2e7d32; }
+.plan-pin-b { background: #b3261e; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .toasts { position: absolute; z-index: 20; top: 64px; left: 0; right: 0; display: grid; justify-items: center; gap: 6px; pointer-events: none; }
 .toast { padding: 10px 14px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); }
 .toast.error { color: var(--danger); }

@@ -52,6 +52,8 @@ await page.route('https://api.maptiler.com/tiles/terrain-rgb-v2/**', (r) => {
   return r.fulfill({ body: terrainPng(+m[1], +m[2], +m[3]), contentType: 'image/png', headers: cors });
 });
 const db = [];
+const planLog = [];
+let planFail = null;
 let seq = 0;
 const rad = Math.PI / 180;
 const dist = (lines) => lines.reduce((m, l) => m + l.slice(1).reduce((a, p, i) => {
@@ -65,8 +67,15 @@ await page.route('**/api/route-tracks**', async (route) => {
   const req = route.request();
   const path = new URL(req.url()).pathname.replace('/api/route-tracks', '');
   const m = req.method();
-  if (m === 'GET' && path === '/config') return route.fulfill({ json: { maptilerKey: 'test' } });
+  if (m === 'GET' && path === '/config') return route.fulfill({ json: { maptilerKey: 'test', routePlanning: true } });
   if (m === 'GET' && path === '') return route.fulfill({ json: { tracks: [...db].reverse().map(summary), nextCursor: null } });
+  if (m === 'POST' && path === '/plan') {
+    const b = req.postDataJSON();
+    planLog.push(b);
+    if (planFail) return route.fulfill({ status: 422, json: { error: planFail } });
+    const mk = (bow) => { const mid = [(b.from[0] + b.to[0]) / 2 + bow * (b.to[1] - b.from[1]), (b.from[1] + b.to[1]) / 2 - bow * (b.to[0] - b.from[0])]; const coordinates = [b.from, [(b.from[0] + mid[0]) / 2, (b.from[1] + mid[1]) / 2], mid, [(mid[0] + b.to[0]) / 2, (mid[1] + b.to[1]) / 2], b.to]; return { distanceM: dist([coordinates]), durationS: dist([coordinates]) / 1.4, coordinates }; };
+    return route.fulfill({ json: { routes: [mk(0), mk(0.25), mk(-0.4)], attribution: '(c) openrouteservice.org | (c) OpenStreetMap contributors', cached: false } });
+  }
   if (m === 'POST' && path === '/delete') {
     const ids = req.postDataJSON().ids;
     let n = 0;
@@ -432,6 +441,84 @@ page.once('dialog', (d) => d.accept());
 await page.getByRole('button', { name: 'Cancel' }).click();
 await wait(300);
 
+// ---- Plan route: A and B, three routes, choose one, drag a pin, change how you travel, errors, use it as a track
+{
+  const planButton = page.getByRole('button', { name: 'Plan route' });
+  check('Plan route is on when the server has a routing key', await planButton.isEnabled());
+  await planButton.click();
+  const bar = page.getByTestId('planbar');
+  await bar.waitFor();
+  check('planning asks for the start first', /set the start/.test((await page.getByTestId('plan-step').textContent()) ?? ''));
+  await tipsOk('plan route');
+  planLog.length = 0;
+  await page.mouse.click(300, 300); await wait(300);
+  check('then the end', /set the end/.test((await page.getByTestId('plan-step').textContent()) ?? '') && (await page.locator('.plan-pin-a').count()) === 1);
+  await page.mouse.click(760, 360); await wait(300);
+  await page.getByTestId('plan-route').first().waitFor({ timeout: 10000 });
+  const cards = page.getByTestId('plan-route');
+  await wait(800); await shot('plan');
+  check('three routes are offered with distance and time', (await cards.count()) === 3 && /km|m/.test((await cards.first().textContent()) ?? '') && /min|h/.test((await cards.first().textContent()) ?? ''), (await cards.allTextContents()).join(' | '));
+  check('the request had the points in [lng, lat] order and the walking profile', planLog.length === 1 && planLog[0].profile === 'walking' && planLog[0].from.length === 2 && Math.abs(planLog[0].from[1]) < Math.abs(planLog[0].from[0]), JSON.stringify(planLog[0]));
+  await wait(500);
+  const sel = () => page.evaluate(() => (window.routeTracer.sent.plan?.features ?? []).map((f) => !!f.properties.sel));
+  check('all three are drawn on the map, the first chosen', JSON.stringify(await sel()) === '[true,false,false]', JSON.stringify(await sel()));
+  check('the shortest is marked', (await cards.allTextContents()).filter((t) => /shortest/.test(t)).length === 1);
+  await cards.nth(1).click(); await wait(300);
+  check('choosing a route in the list highlights it on the map', JSON.stringify(await sel()) === '[false,true,false]');
+  // tapping a route's line on the map chooses it too
+  const onLine = await page.evaluate(() => {
+    const map = window.routeTracer.map; const r = map.getCanvasContainer().getBoundingClientRect();
+    const c = window.routeTracer.sent.plan.features[2].geometry.coordinates; const p = map.project(c[2]);
+    return { x: r.left + p.x, y: r.top + p.y };
+  });
+  await page.mouse.click(onLine.x, onLine.y); await wait(300);
+  check('tapping a route line on the map chooses it', JSON.stringify(await sel()) === '[false,false,true]', JSON.stringify(await sel()));
+  // dragging the B pin plans again, and the map stays still
+  const c0 = await center();
+  const pinB = await page.locator('.plan-pin-b').boundingBox();
+  check('the pins are not hidden under the planning card', await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.classList.contains('plan-pin'), [pinB.x + pinB.width / 2, pinB.y + pinB.height / 2]));
+  planLog.length = 0;
+  await page.mouse.move(pinB.x + pinB.width / 2, pinB.y + pinB.height / 2); await page.mouse.down();
+  await page.mouse.move(pinB.x + 20, pinB.y + 30, { steps: 4 }); await page.mouse.move(pinB.x - 30, pinB.y + 70, { steps: 4 });
+  await page.mouse.up(); await wait(900);
+  check('dragging the B pin asks for new routes', planLog.length >= 1 && (await cards.count()) === 3, `requests ${planLog.length}`);
+  check('and the map does not pan while the pin is dragged', (await center()).every((v, i) => Math.abs(v - c0[i]) < 1e-9));
+  // another way of travelling
+  planLog.length = 0;
+  await page.getByLabel('Travel by').selectOption('cycling'); await wait(900);
+  check('choosing Cycling plans again with the cycling profile', planLog.length === 1 && planLog[0].profile === 'cycling', JSON.stringify(planLog));
+  // swap
+  const aBefore = planLog[0].from;
+  planLog.length = 0;
+  await page.getByRole('button', { name: 'Swap A and B' }).click(); await wait(900);
+  check('Swap A and B plans the reverse trip', planLog.length === 1 && JSON.stringify(planLog[0].to) === JSON.stringify(aBefore), JSON.stringify(planLog));
+  // an error is explained, and Reset clears it
+  planFail = 'No road or path was found near the end. Move it closer to a road or footpath.';
+  await page.getByRole('button', { name: 'Swap A and B' }).click(); await wait(900);
+  check('a routing problem is explained in plain words', /near the end/.test((await page.getByTestId('plan-error').textContent().catch(() => '')) ?? '') && (await cards.count()) === 0);
+  check('and Use this route is off until there is one', await page.getByRole('button', { name: 'Use this route' }).isDisabled());
+  planFail = null;
+  await page.getByRole('button', { name: 'Swap A and B' }).click(); await wait(900);
+  await cards.first().waitFor({ timeout: 10000 });
+  // use it: opens in Edit points, saves as a planned route
+  await cards.nth(1).click(); await wait(200);
+  const chosen = await page.evaluate(() => window.routeTracer.sent.plan.features[1].geometry.coordinates);
+  await page.getByRole('button', { name: 'Use this route' }).click();
+  await page.getByRole('region', { name: 'Drawing tools' }).waitFor();
+  check('the chosen route opens in Edit points with its distance', (await page.getByRole('button', { name: 'Edit points', exact: true }).getAttribute('aria-pressed')) === 'true' && km(await readout()) > 0);
+  check('and planning is over (no routes or pins left)', !(await bar.isVisible()) && (await page.locator('.plan-pin').count()) === 0 && (await page.evaluate(() => window.routeTracer.sent.plan.features.length)) === 0);
+  await page.getByRole('button', { name: 'Finish' }).click();
+  await dlg.getByLabel('Name').press('Enter');
+  await page.getByLabel('Track detail').waitFor();
+  const planned = db.at(-1);
+  check('saved as a planned route with the same points', planned.drawMode === 'route' && JSON.stringify(planned.geometry.coordinates[0]) === JSON.stringify(chosen), `${planned.drawMode} ${planned.geometry.coordinates[0].length} vs ${chosen.length}`);
+  // cancel leaves nothing behind
+  await page.getByRole('button', { name: 'Plan route' }).click();
+  await page.mouse.click(300, 300); await wait(200);
+  await page.getByRole('button', { name: 'Cancel' }).click(); await wait(300);
+  check('Cancel clears the pins and routes', (await page.locator('.plan-pin').count()) === 0 && !(await bar.isVisible()));
+}
+
 // ---- the guide and the tour
 {
   const fresh = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -449,6 +536,7 @@ await wait(300);
   const noTips = await fp.evaluate(() => [...document.querySelectorAll('[data-testid=info-modal] button')].filter((b) => !(b.getAttribute('title') || b.getAttribute('data-tip') || '').trim()).length); // a focused button has its title moved to data-tip by the tooltip host
   check('guide buttons have tooltips too', noTips === 0);
   await fp.keyboard.press('Escape'); await wait(300);
+  check('Plan route is greyed out, with a reason, when the server has no routing key', await fp.getByRole('button', { name: 'Plan route' }).isDisabled() && /not set up/.test((await fp.getByRole('button', { name: 'Plan route' }).getAttribute('title')) ?? '') );
   check('Escape closes the guide', (await fp.getByTestId('info-modal').count()) === 0);
   await fp.reload();
   await fp.waitForFunction(() => window.routeTracer?.map?.isStyleLoaded());
@@ -461,7 +549,7 @@ await wait(300);
   // ?tour=1 (Vault's Settings page) runs the tour on its own
   await fp.goto(`${APP}?tour=1`);
   await fp.locator('.shepherd-element.vault-tour').first().waitFor({ timeout: 10000 });
-  check('?tour=1 starts the tour', (await fp.locator('.vault-tour-step-count').first().textContent()) === 'Step 1 of 11');
+  check('?tour=1 starts the tour', (await fp.locator('.vault-tour-step-count').first().textContent()) === 'Step 1 of 12');
   await fp.keyboard.press('Escape'); await wait(400);
   check('skipping marks it done', (await fp.evaluate(() => localStorage.getItem('vault_tour_route_tracer_completed'))) === '1');
   await fresh.close();
@@ -472,19 +560,19 @@ await wait(300);
   await card().waitFor({ timeout: 10000 });
   const seen = [];
   const attached = [];
-  for (let i = 1; i <= 11; i += 1) {
-    await page.waitForFunction((n) => [...document.querySelectorAll('.vault-tour-step-count')].some((e) => e.textContent === `Step ${n} of 11` && e.closest('.shepherd-element:not([hidden])')), i, { timeout: 10000 });
+  for (let i = 1; i <= 12; i += 1) {
+    await page.waitForFunction((n) => [...document.querySelectorAll('.vault-tour-step-count')].some((e) => e.textContent === `Step ${n} of 12` && e.closest('.shepherd-element:not([hidden])')), i, { timeout: 10000 });
     await wait(550);
     seen.push((await card().locator('.shepherd-title').textContent())?.trim());
     attached.push(!!(await card().getAttribute('data-popper-placement')));
-    if (i === 5) await shot('tour');
-    if (i === 5) check('the tour opens the drawing tools for the drawing steps', await page.getByRole('region', { name: 'Drawing tools' }).isVisible());
-    if (i === 8) check('and the tracks list for its step', await page.getByRole('complementary', { name: 'Tracks' }).isVisible() && !(await page.getByRole('region', { name: 'Drawing tools' }).isVisible()));
+    if (i === 6) await shot('tour');
+    if (i === 6) check('the tour opens the drawing tools for the drawing steps', await page.getByRole('region', { name: 'Drawing tools' }).isVisible());
+    if (i === 9) check('and the tracks list for its step', await page.getByRole('complementary', { name: 'Tracks' }).isVisible() && !(await page.getByRole('region', { name: 'Drawing tools' }).isVisible()));
     const next = card().getByRole('button', { name: /Next|Start Tour|Finish/ });
     await next.click();
   }
   await wait(500);
-  check('the tour has 11 steps with titles', seen.length === 11 && seen.every(Boolean) && new Set(seen).size === 11, seen.join(' | '));
+  check('the tour has 12 steps with titles', seen.length === 12 && seen.every(Boolean) && new Set(seen).size === 12, seen.join(' | '));
   check('every step that points at something is attached to it', [1, 2, 3, 4, 5, 6, 7, 8, 9].every((i) => attached[i]), JSON.stringify(attached));
   check('finishing the tour marks it done', (await page.evaluate(() => localStorage.getItem('vault_tour_route_tracer_completed'))) === '1');
   check('and puts the screen back as it was', !(await page.getByRole('region', { name: 'Drawing tools' }).isVisible()) && !(await page.getByRole('complementary', { name: 'Tracks' }).isVisible()));

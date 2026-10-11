@@ -1,4 +1,4 @@
-import type { BBox, Lines } from './geo';
+import type { BBox, Line, Lines } from './geo';
 
 /** Vault's token lives in localStorage['vault-auth'] (same origin as this app). */
 export function token(): string | null {
@@ -28,14 +28,18 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 }
 
 export interface TrackSummary {
-  id: string; name: string; color: string; distanceM: number; pointCount: number; bbox: BBox; drawMode: 'freehand' | 'click' | 'import'; createdAt: string;
+  id: string; name: string; color: string; distanceM: number; pointCount: number; bbox: BBox; drawMode: 'freehand' | 'click' | 'import' | 'route'; createdAt: string;
 }
 export interface Track extends TrackSummary { notes: string | null; geometry: { type: 'MultiLineString'; coordinates: Lines }; updatedAt: string }
-export interface TrackInput { name: string; notes?: string | null; color?: string; geometry: { type: 'MultiLineString'; coordinates: Lines }; drawMode: 'freehand' | 'click' | 'import' }
+export interface TrackInput { name: string; notes?: string | null; color?: string; geometry: { type: 'MultiLineString'; coordinates: Lines }; drawMode: 'freehand' | 'click' | 'import' | 'route' }
+export type PlanProfile = 'walking' | 'hiking' | 'cycling' | 'driving';
+export interface PlannedRoute { distanceM: number; durationS: number | null; coordinates: Line }
 export interface GeocodeResult { label: string; lat: number; lng: number }
 
 export const api = {
-  config: () => call<{ maptilerKey: string | null }>('GET', '/api/route-tracks/config'),
+  config: () => call<{ maptilerKey: string | null; routePlanning?: boolean }>('GET', '/api/route-tracks/config'),
+  plan: (input: { from: [number, number]; to: [number, number]; profile: PlanProfile }) =>
+    call<{ routes: PlannedRoute[]; attribution: string; cached: boolean }>('POST', '/api/route-tracks/plan', input),
   geocode: (q: string) => call<{ results: GeocodeResult[] }>('POST', '/api/geocode', { q }),
   list: (opts: { q?: string; cursor?: string | null; limit?: number } = {}) => {
     const p = new URLSearchParams();

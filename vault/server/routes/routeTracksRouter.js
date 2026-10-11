@@ -8,6 +8,7 @@
 const express = require('express');
 const { getLogger } = require('../middleware/requestContext');
 const geo = require('../services/routeTracerGeo');
+const { createPlanner, PlanError, PROFILES } = require('../services/routePlanner');
 
 const MAX_NAME = 120;
 const MAX_NOTES = 2000;
@@ -57,7 +58,7 @@ function parseFields(body, { create }) {
     v.color = b.color.toUpperCase();
   } else if (create) v.color = DEFAULT_COLOR;
   if (create || b.drawMode !== undefined) {
-    if (b.drawMode !== 'freehand' && b.drawMode !== 'click' && b.drawMode !== 'import') return { error: 'The draw mode must be freehand, click or import.' };
+    if (!['freehand', 'click', 'import', 'route'].includes(b.drawMode)) return { error: 'The draw mode must be freehand, click, import or route.' };
     v.drawMode = b.drawMode;
   }
   if (create || b.geometry !== undefined) {
@@ -78,14 +79,19 @@ function decodeCursor(c) {
   } catch { return null; }
 }
 
-function createRouter(pool, { getMapKey = () => process.env.ROUTE_TRACER_MAPTILER_KEY || process.env.MAPTILER_API_KEY || null } = {}) {
+function createRouter(pool, {
+  getMapKey = () => process.env.ROUTE_TRACER_MAPTILER_KEY || process.env.MAPTILER_API_KEY || null,
+  getOrsKey = () => process.env.ORS_API_KEY || null,
+  fetchFn, now, planLimits = {},
+} = {}) {
   const router = express.Router();
+  const planner = createPlanner({ getKey: getOrsKey, fetchFn, now, log: (m, d) => getLogger().warn({ detail: d }, m), ...planLimits });
 
   // GET /api/route-tracks/config: the browser-side MapTiler key. Prefer a separate key restricted by referrer to the Vault domain and localhost
   // (ROUTE_TRACER_MAPTILER_KEY); falls back to MAPTILER_API_KEY, which then becomes visible in the browser.
   router.get('/config', (req, res) => {
     res.set('Cache-Control', 'no-store');
-    res.json({ maptilerKey: getMapKey() });
+    res.json({ maptilerKey: getMapKey(), routePlanning: !!getOrsKey(), planProfiles: Object.keys(PROFILES) });
   });
 
   // GET /api/route-tracks?q=&limit=&cursor=: newest first, no geometry.
@@ -128,6 +134,22 @@ function createRouter(pool, { getMapKey = () => process.env.ROUTE_TRACER_MAPTILE
     } catch (err) {
       getLogger().error({ err }, 'route tracks bulk delete failed');
       res.status(500).json({ error: 'Could not delete those tracks.' });
+    }
+  });
+
+  // POST /api/route-tracks/plan { from: [lng, lat], to: [lng, lat], profile }: up to three routes between two points along real roads and paths.
+  router.post('/plan', async (req, res) => {
+    try {
+      const r = await planner.plan(req.user.id, { from: req.body?.from, to: req.body?.to, profile: req.body?.profile });
+      res.set('Cache-Control', 'no-store');
+      res.json(r);
+    } catch (err) {
+      if (err instanceof PlanError) {
+        if (err.retryAfter) res.set('Retry-After', String(err.retryAfter));
+        return res.status(err.status).json({ error: err.message });
+      }
+      getLogger().error({ err }, 'route plan failed');
+      res.status(500).json({ error: 'Could not plan that route.' });
     }
   });
 

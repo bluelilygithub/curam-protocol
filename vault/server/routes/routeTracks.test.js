@@ -139,8 +139,121 @@ async function call(server, method, path, body, headers = {}) {
 const line = (n, lat0 = 0) => Array.from({ length: n }, (_, i) => [153 + i * 0.001, lat0 + i * 0.0005]);
 const input = (extra = {}) => ({ name: 'Morning loop', geometry: { type: 'MultiLineString', coordinates: [line(5)] }, drawMode: 'freehand', ...extra });
 
+// ---------------------------------------------------------------- route planner (OpenRouteService behind the proxy)
+async function planTests() {
+  const { createPlanner, PlanError } = require('../services/routePlanner');
+  const KEY = 'ors-secret-key-123';
+  const from = [153.028, -27.468];
+  const to = [153.045, -27.475]; // about 2 km
+  const feature = (coords, distance, duration) => ({ type: 'Feature', properties: { summary: { distance, duration } }, geometry: { type: 'LineString', coordinates: coords } });
+  const mid = (b) => [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2 + b];
+  const okJson = { type: 'FeatureCollection', features: [feature([from, mid(0.001), to], 2100, 1500), feature([from, mid(-0.003), to], 2500, 1800), feature([from, mid(0.004), to], 2900, 2100)] };
+  const calls = [];
+  const fakeFetch = (impl) => async (url, init) => {
+    calls.push({ url, init, body: JSON.parse(init.body) });
+    const r = impl(calls.length);
+    return { ok: r.status === undefined || r.status < 400, status: r.status ?? 200, json: async () => r.json };
+  };
+  const mk = (impl, extra = {}) => createPlanner({ getKey: () => KEY, fetchFn: fakeFetch(impl), ...extra });
+  const rejects = async (p, status, re) => { try { await p; assert.fail('should have thrown'); } catch (e) { assert.ok(e instanceof PlanError, String(e)); assert.strictEqual(e.status, status, e.message); if (re) assert.match(e.message, re); assert.ok(!e.message.includes(KEY), 'key never in a message'); } };
+
+  // the request: right URL, key in Authorization, [lng, lat] order, alternatives asked for, no key in the body
+  let p = mk(() => ({ json: okJson }));
+  const r = await p.plan(1, { from, to, profile: 'walking' });
+  assert.strictEqual(calls[0].url, 'https://api.openrouteservice.org/v2/directions/foot-walking/geojson');
+  assert.strictEqual(calls[0].init.headers.Authorization, KEY);
+  assert.deepStrictEqual(calls[0].body.coordinates, [from, to]);
+  assert.strictEqual(calls[0].body.alternative_routes.target_count, 3);
+  assert.ok(!JSON.stringify(calls[0].body).includes(KEY));
+  assert.strictEqual(r.routes.length, 3);
+  assert.deepStrictEqual(r.routes[0], { distanceM: 2100, durationS: 1500, coordinates: [from, mid(0.001), to] });
+  assert.ok(/openstreetmap/i.test(r.attribution) && /openrouteservice/i.test(r.attribution));
+
+  // profiles map to the service's profile names
+  for (const [name, ors] of Object.entries({ walking: 'foot-walking', hiking: 'foot-hiking', cycling: 'cycling-regular', driving: 'driving-car' })) {
+    calls.length = 0;
+    await mk(() => ({ json: okJson })).plan(1, { from, to, profile: name });
+    assert.ok(calls[0].url.endsWith(`/${ors}/geojson`), name);
+  }
+
+  // a third coordinate (elevation) is dropped; extra routes beyond three are ignored; junk features are skipped
+  calls.length = 0;
+  const messy = { features: [feature([[1, 2, 99], [3, 4, 99]], 10, 5), { geometry: { type: 'Point', coordinates: [1, 2] } }, feature([[1, 2]], 1, 1), feature([[1, 2], [999, 4]], 1, 1), feature([[1, 2], [3, 4]], 11, 6), feature([[1, 2], [5, 6]], 12, 7), feature([[1, 2], [7, 8]], 13, 8)] };
+  const m = await mk(() => ({ json: messy })).plan(1, { from, to, profile: 'walking' });
+  assert.deepStrictEqual(m.routes[0].coordinates, [[1, 2], [3, 4]]);
+  assert.strictEqual(m.routes.length, 3);
+
+  // validation
+  const q = mk(() => ({ json: okJson }));
+  await rejects(q.plan(1, { from, to, profile: 'flying' }), 400);
+  await rejects(q.plan(1, { from: [1], to, profile: 'walking' }), 400);
+  await rejects(q.plan(1, { from: [181, 0], to, profile: 'walking' }), 400);
+  await rejects(q.plan(1, { from: ['a', 'b'], to, profile: 'walking' }), 400);
+  await rejects(q.plan(1, { from, to: [153.02801, -27.46801], profile: 'walking' }), 422, /almost the same/);
+  await rejects(q.plan(1, { from: [0, 0], to: [90, 0], profile: 'walking' }), 422, /too far apart/);
+  await rejects(createPlanner({ getKey: () => null, fetchFn: fakeFetch(() => ({ json: okJson })) }).plan(1, { from, to, profile: 'walking' }), 503, /ORS_API_KEY/);
+
+  // over 100 km: no alternatives requested
+  calls.length = 0;
+  await mk(() => ({ json: okJson })).plan(1, { from: [153, -27], to: [153, -28.5], profile: 'driving' });
+  assert.strictEqual(calls[0].body.alternative_routes, undefined);
+
+  // the service refuses alternatives (2004): retried once as a single route
+  calls.length = 0;
+  const retry = await mk((n) => (n === 1 ? { status: 400, json: { error: { code: 2004, message: 'Request parameters exceed the server configuration limits.' } } } : { json: okJson })).plan(1, { from, to, profile: 'walking' });
+  assert.strictEqual(calls.length, 2);
+  assert.strictEqual(calls[1].body.alternative_routes, undefined);
+  assert.strictEqual(retry.routes.length, 3);
+
+  // plain messages for the service's errors, nothing internal leaks
+  const err = (status, code, message) => mk(() => ({ status, json: { error: { code, message } } }));
+  await rejects(err(404, 2010, 'Could not find routable point within a radius of 350.0 meters of specified coordinate 0: 153 -27.').plan(1, { from, to, profile: 'walking' }), 422, /near the start/);
+  await rejects(err(404, 2010, 'Could not find routable point within a radius of 350.0 meters of specified coordinate 1: 153 -27.').plan(1, { from, to, profile: 'walking' }), 422, /near the end/);
+  await rejects(err(404, 2009, 'Route could not be found').plan(1, { from, to, profile: 'walking' }), 422, /No route could be found/);
+  await rejects(err(400, 2004, 'too far').plan(1, { from: [153, -27], to: [153, -28.5], profile: 'walking' }), 422, /too far apart/);
+  await rejects(err(429, 0, 'Rate limit exceeded').plan(1, { from, to, profile: 'walking' }), 429, /busy/);
+  await rejects(err(403, 0, 'Access to this API has been disallowed').plan(1, { from, to, profile: 'walking' }), 502, /key was rejected/);
+  await rejects(err(500, 2099, 'secret internal stack').plan(1, { from, to, profile: 'walking' }), 502, /problem/);
+  await rejects(mk(() => { throw new Error('connect ECONNREFUSED 10.0.0.1'); }).plan(1, { from, to, profile: 'walking' }), 502, /did not answer/);
+  await rejects(mk(() => ({ json: { features: [] } })).plan(1, { from, to, profile: 'walking' }), 422, /No route could be found/);
+
+  // cache: the same request (even a metre off) is answered without another call and without using quota
+  calls.length = 0;
+  let clock = 1000000;
+  const c = mk(() => ({ json: okJson }), { now: () => clock, perUserPerMinute: 2 });
+  const a1 = await c.plan(1, { from, to, profile: 'walking' });
+  const a2 = await c.plan(1, { from: [from[0] + 0.000001, from[1]], to, profile: 'walking' });
+  assert.strictEqual(calls.length, 1);
+  assert.strictEqual(a1.cached, false);
+  assert.strictEqual(a2.cached, true);
+  assert.deepStrictEqual(a2.routes, a1.routes);
+  await c.plan(1, { from, to, profile: 'cycling' }); // another profile is a new call
+  assert.strictEqual(calls.length, 2);
+  clock += 60 * 60 * 1000 + 1;
+  await c.plan(1, { from, to, profile: 'walking' }); // past an hour: asked again
+  assert.strictEqual(calls.length, 4 - 1);
+
+  // limits: per user per minute, per day, and across everyone per minute; they reset
+  let t = 5000000;
+  const lim = createPlanner({ getKey: () => KEY, fetchFn: fakeFetch(() => ({ json: okJson })), now: () => t, perUserPerMinute: 3, perUserPerDay: 5, globalPerMinute: 4 });
+  const far = (i) => ({ from: [153 + i * 0.01, -27], to: [153 + i * 0.01, -27.02], profile: 'walking' });
+  for (let i = 0; i < 3; i += 1) await lim.plan(1, far(i));
+  await rejects(lim.plan(1, far(3)), 429, /minute/);
+  await lim.plan(2, far(4)); // another user, still within the global cap (4th call this minute)
+  await rejects(lim.plan(3, far(5)), 429, /busy/); // global cap reached
+  t += 61000;
+  await lim.plan(1, far(6)); // minute over: allowed (user 1's 4th call today)
+  await lim.plan(1, far(7)); // 5th today
+  await rejects(lim.plan(1, far(8)), 429, /today/);
+  t += 86400000 + 1000;
+  await lim.plan(1, far(9)); // a new day
+}
+
 (async () => {
+  await planTests();
+
   // ---- config
+
   {
     const s = build(fakePool(), 1, { getMapKey: () => 'KEY123' }).listen(0);
     const r = await call(s, 'GET', '/api/route-tracks/config');
@@ -153,6 +266,37 @@ const input = (extra = {}) => ({ name: 'Morning loop', geometry: { type: 'MultiL
     const s = build(fakePool(), 1, { getMapKey: () => null }).listen(0);
     assert.strictEqual((await call(s, 'GET', '/api/route-tracks/config')).json.maptilerKey, null);
     s.close();
+  }
+
+  // ---- /plan through the router: signed-in user's id for the limits, errors become JSON with the right status, the key stays out
+  {
+    const calls = [];
+    const orsFetch = async (url, init) => { calls.push({ url, init }); return { ok: true, status: 200, json: async () => ({ features: [{ properties: { summary: { distance: 2100, duration: 1500 } }, geometry: { type: 'LineString', coordinates: [[153.028, -27.468], [153.045, -27.475]] } }] }) }; };
+    const ps = build(fakePool(), 1, { getMapKey: () => 'K', getOrsKey: () => 'ors-secret', fetchFn: orsFetch }).listen(0);
+    assert.strictEqual((await call(ps, 'GET', '/api/route-tracks/config')).json.routePlanning, true);
+    const ok = await call(ps, 'POST', '/api/route-tracks/plan', { from: [153.028, -27.468], to: [153.045, -27.475], profile: 'walking' });
+    assert.strictEqual(ok.status, 200);
+    assert.strictEqual(ok.json.routes[0].distanceM, 2100);
+    assert.ok(!ok.text.includes('ors-secret'), 'the key never reaches the browser');
+    assert.strictEqual(calls[0].init.headers.Authorization, 'ors-secret');
+    const bad = await call(ps, 'POST', '/api/route-tracks/plan', { from: [153.028, -27.468], to: [153.045, -27.475], profile: 'teleport' });
+    assert.strictEqual(bad.status, 400);
+    assert.ok(bad.json.error);
+    assert.strictEqual((await call(ps, 'POST', '/api/route-tracks/plan', {})).status, 400);
+    ps.close();
+    const off = build(fakePool(), 1, { getMapKey: () => 'K', getOrsKey: () => null }).listen(0);
+    assert.strictEqual((await call(off, 'GET', '/api/route-tracks/config')).json.routePlanning, false);
+    const r503 = await call(off, 'POST', '/api/route-tracks/plan', { from: [153.028, -27.468], to: [153.045, -27.475], profile: 'walking' });
+    assert.strictEqual(r503.status, 503);
+    assert.match(r503.json.error, /ORS_API_KEY/);
+    off.close();
+    const slow = build(fakePool(), 1, { getOrsKey: () => 'k', fetchFn: orsFetch, planLimits: { perUserPerMinute: 1 } }).listen(0);
+    const one = { from: [153.028, -27.468], to: [153.045, -27.475], profile: 'walking' };
+    assert.strictEqual((await call(slow, 'POST', '/api/route-tracks/plan', one)).status, 200);
+    const two = await call(slow, 'POST', '/api/route-tracks/plan', { ...one, to: [153.05, -27.48] });
+    assert.strictEqual(two.status, 429);
+    assert.ok(two.headers.get('retry-after'));
+    slow.close();
   }
 
   // ---- create ignores client-sent numbers and recomputes them
@@ -168,6 +312,7 @@ const input = (extra = {}) => ({ name: 'Morning loop', geometry: { type: 'MultiL
   assert.strictEqual(t.color, '#1D6FA5');
   assert.strictEqual((await call(s, 'POST', '/api/route-tracks', input({ color: undefined }))).json.track.color, '#E4572E', 'default colour');
   assert.strictEqual((await call(s, 'POST', '/api/route-tracks', input({ drawMode: 'import' }))).json.track.drawMode, 'import', 'imported tracks say so');
+  assert.strictEqual((await call(s, 'POST', '/api/route-tracks', input({ drawMode: 'route' }))).json.track.drawMode, 'route', 'planned routes say so');
 
   // ---- validation
   for (const bad of [
@@ -187,7 +332,7 @@ const input = (extra = {}) => ({ name: 'Morning loop', geometry: { type: 'MultiL
     const r = await call(s, 'POST', '/api/route-tracks', huge);
     assert.strictEqual(r.status, 413);
   }
-  assert.strictEqual(pool.rows.length, 3, 'refused requests stored nothing');
+  assert.strictEqual(pool.rows.length, 4, 'refused requests stored nothing');
 
   // ---- get / ownership
   const id = t.id;
@@ -220,7 +365,7 @@ const input = (extra = {}) => ({ name: 'Morning loop', geometry: { type: 'MultiL
   // ---- list: newest first, search, paging
   for (let i = 0; i < 5; i += 1) await call(s, 'POST', '/api/route-tracks', input({ name: `Run ${i}` }));
   let list = await call(s, 'GET', '/api/route-tracks');
-  assert.strictEqual(list.json.tracks.length, 8);
+  assert.strictEqual(list.json.tracks.length, 9);
   assert.strictEqual(list.json.tracks[0].name, 'Run 4', 'newest first');
   assert.ok(!('geometry' in list.json.tracks[0]), 'summaries carry no geometry');
   assert.strictEqual(list.json.nextCursor, null);
@@ -232,7 +377,7 @@ const input = (extra = {}) => ({ name: 'Morning loop', geometry: { type: 'MultiL
     seen.push(...p.json.tracks.map((x) => x.id));
     cursor = p.json.nextCursor;
   } while (cursor);
-  assert.strictEqual(new Set(seen).size, 8, 'paging visits each track once');
+  assert.strictEqual(new Set(seen).size, 9, 'paging visits each track once');
   assert.deepStrictEqual(seen, list.json.tracks.map((x) => x.id), 'paging keeps the order');
   assert.strictEqual((await call(s, 'GET', '/api/route-tracks?q=run%203')).json.tracks.length, 1);
   assert.strictEqual((await call(s, 'GET', '/api/route-tracks?q=%25')).json.tracks.length, 0, '% is not a wildcard');

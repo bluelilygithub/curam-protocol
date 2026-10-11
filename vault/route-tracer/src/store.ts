@@ -60,6 +60,12 @@ interface State {
   /** Open the toolbar. `from` seeds it (Extend). */
   startDrawing(from?: DrawState): void;
   stopDrawing(): void;
+  /** The route in the drawing tools came from Plan route: it is saved as a planned route. */
+  planned: boolean;
+  setPlanned(v: boolean): void;
+  /** The server has an OpenRouteService key (Plan route works). */
+  routePlanning: boolean;
+  setRoutePlanning(v: boolean): void;
   /** The track being extended (PATCH on save), or null for a new one. */
   extendingId: string | null;
   setExtendingId(id: string | null): void;
@@ -131,7 +137,7 @@ export const useStore = create<State>((set, get) => {
   setRubber: (rubber) => set({ rubber }),
   apply: (fn) => set((s) => ({ draw: fn(s.draw) })),
   startDrawing: (from) => set({ probe: null, drawing: true, draw: from ?? emptyDraw(), rubber: null, selectedVertex: null, panel: 'closed' }),
-  stopDrawing: () => set({ elevationOpen: false, imported: null, mode: get().mode === 'edit' ? (read('route-tracer:mode') === 'click' ? 'click' : 'freehand') : get().mode, drawing: false, draw: emptyDraw(), rubber: null, selectedVertex: null, extendingId: null, saving: false, drawColor: COLORS[0] }),
+  stopDrawing: () => set({ elevationOpen: false, planned: false, imported: null, mode: get().mode === 'edit' ? (read('route-tracer:mode') === 'click' ? 'click' : 'freehand') : get().mode, drawing: false, draw: emptyDraw(), rubber: null, selectedVertex: null, extendingId: null, saving: false, drawColor: COLORS[0] }),
   extendingId: null,
   drawColor: COLORS[0],
   setDrawColor: (drawColor) => set({ drawColor }),
@@ -146,6 +152,10 @@ export const useStore = create<State>((set, get) => {
   showAll: false,
   setShowAll: (showAll) => set({ showAll }),
   setExtendingId: (extendingId) => set({ extendingId }),
+  planned: false,
+  setPlanned: (planned) => set({ planned }),
+  routePlanning: false,
+  setRoutePlanning: (routePlanning) => set({ routePlanning }),
   imported: null,
   setImported: (imported) => set({ imported }),
 

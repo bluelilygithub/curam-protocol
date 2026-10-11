@@ -10,6 +10,7 @@ import { INFO_KEY, startTour } from './help/tour';
 import { InfoModal } from './InfoModal';
 import MapView from './MapView';
 import { useDistanceMarkers } from './Markers';
+import { PlanBar, usePlan, usePlanning } from './Plan';
 import { ProbeReadout, useDistanceProbe } from './Probe';
 import { clearDraft, fitTo, RecoveryBanner, SaveDialog, TracksPanel, useAutosave, useSavedLayer } from './Panels';
 import { STYLES, useStore } from './store';
@@ -27,6 +28,7 @@ export default function App() {
   useEffect(() => {
     const ready = (key: string) => { useStore.getState().setMapKey(key); setBoot({ state: 'ready', key }); };
     api.config()
+      .then((c) => { useStore.getState().setRoutePlanning(!!c.routePlanning); return c; })
       .then((c) => (c.maptilerKey ? ready(c.maptilerKey) : DEV_KEY ? ready(DEV_KEY) : setBoot({ state: 'error', message: 'The map key is not set up on the server (ROUTE_TRACER_MAPTILER_KEY).' })))
       .catch((e: unknown) => {
         if (DEV_KEY && !(e instanceof ApiError && e.status === 403)) return ready(DEV_KEY);
@@ -47,6 +49,7 @@ export default function App() {
 function Overlays({ map }: { map: maplibregl.Map | null }) {
   const drawing = useStore((s) => s.drawing);
   const saving = useStore((s) => s.saving);
+  const planning = usePlan((s) => s.active);
   const onFinish = useCallback(() => {
     const { draw, toast, setSaving } = useStore.getState();
     if (!finish(draw).length) return toast('error', 'Draw at least two points first.');
@@ -56,6 +59,7 @@ function Overlays({ map }: { map: maplibregl.Map | null }) {
   useSavedLayer(map);
   useDistanceMarkers(map);
   useDistanceProbe(map);
+  usePlanning(map);
   useAutosave();
 
   const onSaved = useCallback((t: Track) => {
@@ -89,7 +93,8 @@ function Overlays({ map }: { map: maplibregl.Map | null }) {
     <>
       <TopBar map={map} />
       {drawing && !saving && <DrawToolbar onFinish={onFinish} />}
-      {!drawing && <TracksPanel map={map} />}
+      {!drawing && !planning && <TracksPanel map={map} />}
+      <PlanBar map={map} />
       {saving && <SaveDialog onSaved={onSaved} />}
       <RecoveryBanner />
       <ProbeReadout />
@@ -101,7 +106,9 @@ function Overlays({ map }: { map: maplibregl.Map | null }) {
 }
 
 function TopBar({ map }: { map: maplibregl.Map | null }) {
-  const { drawing, styleId, setStyle, units, setUnits, startDrawing, panel, setPanel, markersOn, setMarkersOn, setInfoOpen } = useStore();
+  const { drawing, styleId, setStyle, units, setUnits, startDrawing, panel, setPanel, markersOn, setMarkersOn, setInfoOpen, routePlanning } = useStore();
+  const planning = usePlan((s) => s.active);
+  const idle = !drawing && !planning;
   const [q, setQ] = useState('');
   const [results, setResults] = useState<GeocodeResult[]>([]);
   const [busy, setBusy] = useState(false);
@@ -180,10 +187,11 @@ function TopBar({ map }: { map: maplibregl.Map | null }) {
         </select>
         <button type="button" onClick={() => setMarkersOn(!markersOn)} aria-pressed={markersOn} title={`Show or hide the numbered distance markers along the line (every 1 ${units}; zoomed out they thin to every 5th, 10th and so on)`}>Markers</button>
       </div>
-      {!drawing && <button type="button" onClick={() => fileInput.current?.click()} title="Open a GPX file from Strava, Garmin or a friend, see it on the map and save it as a track" data-tour="rt-import">Import GPX</button>}
+      {idle && <button type="button" onClick={() => fileInput.current?.click()} title="Open a GPX file from Strava, Garmin or a friend, see it on the map and save it as a track" data-tour="rt-import">Import GPX</button>}
       <input ref={fileInput} type="file" accept=".gpx,.xml,application/gpx+xml,text/xml" hidden aria-label="GPX file" title="Choose a GPX file to import" onChange={(e) => void importGpx(e)} />
-      {!drawing && <button type="button" onClick={() => setPanel(panel === 'closed' ? 'tracks' : 'closed')} aria-pressed={panel !== 'closed'} title="Your saved tracks: search, open, select and delete" data-tour="rt-tracks">Tracks</button>}
-      {!drawing && <button type="button" className="primary" onClick={() => startDrawing()} title="Start tracing a new route on the map" data-tour="rt-draw">Draw</button>}
+      {idle && <button type="button" onClick={() => setPanel(panel === 'closed' ? 'tracks' : 'closed')} aria-pressed={panel !== 'closed'} title="Your saved tracks: search, open, select and delete" data-tour="rt-tracks">Tracks</button>}
+      {idle && <button type="button" className="primary" onClick={() => startDrawing()} title="Start tracing a new route on the map" data-tour="rt-draw">Draw</button>}
+      {idle && <button type="button" onClick={() => { setPanel('closed'); usePlan.getState().start(); }} disabled={!routePlanning} title={routePlanning ? 'Plan a route: tap a start and an end and get up to three routes along real roads and paths, for walking, hiking, cycling or driving' : 'Route planning is not set up on this server yet (it needs an OpenRouteService key, ORS_API_KEY)'} data-tour="rt-plan">Plan route</button>}
       <div className="group" data-tour="rt-help">
         <button type="button" onClick={() => setInfoOpen(true)} aria-label="How this works" title="How Route Tracer works: a plain guide to every feature">ⓘ</button>
         <button type="button" onClick={() => startTour()} aria-label="Take the guided tour" title="Take the guided tour (about two minutes)">Tour</button>

@@ -2819,7 +2819,7 @@ function SettingsPage() {
             <div>
               <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Route Tracer Tour</p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                11-step tour — finding a place, the three drawing modes, loops and elevation, saving and managing tracks, GPX import, and measuring along a track
+                12-step tour — finding a place, planning a route, the three drawing modes, loops and elevation, saving and managing tracks, GPX import, and measuring along a track
               </p>
             </div>
             <button
