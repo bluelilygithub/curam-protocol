@@ -11,7 +11,11 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     // the tooltip host and tour look shared with the other planners (see planner-core/README.md)
-    alias: { '@planner-core': path.resolve(here, '../planner-core/src') },
+    alias: {
+      '@planner-core': path.resolve(here, '../planner-core/src'),
+      // Vault's own theme and font table (client/src/themes.js): the look is read from Vault's settings, see src/theme.ts
+      '@vault-client': path.resolve(here, '../client/src'),
+    },
     dedupe: ['react', 'react-dom', 'zustand'],
   },
   // `npm run dev` here; point /api at a running Vault server (default local port 3001, override with VAULT_API)

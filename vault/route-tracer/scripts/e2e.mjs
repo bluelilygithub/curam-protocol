@@ -783,6 +783,42 @@ await wait(300);
   check('saved as a planned route with the same points', saved.drawMode === 'route' && JSON.stringify(sp) === JSON.stringify(chosen), `${saved.drawMode} ${sp.length}`);
 }
 
+// ---- Vault's look: the theme and font chosen in Vault's Settings (localStorage 'vault-settings') are used, and follow a change
+{
+  const cssVar = (pg, name) => pg.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);
+  const bgOf = (pg, sel) => pg.evaluate((q) => getComputedStyle(document.querySelector(q)).backgroundColor, sel);
+  check('with nothing saved it wears Vault\'s default, Warm Sand', (await cssVar(page, '--color-primary')).toLowerCase() === '#cc785c' && (await bgOf(page, 'body')) === 'rgb(245, 245, 240)', `${await cssVar(page, '--color-primary')} ${await bgOf(page, 'body')}`);
+  const themed = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await themed.addInitScript(() => {
+    localStorage.setItem('vault-auth', JSON.stringify({ state: { token: 'test-token', user: { id: 1 } } }));
+    localStorage.setItem('route-tracer:info-seen:v1', '1');
+    localStorage.setItem('vault-settings', JSON.stringify({ state: { theme: 'dark-slate', font: 'Lato' }, version: 0 }));
+  });
+  const tp2 = await themed.newPage();
+  await tp2.route('https://api.maptiler.com/**', (r) => r.fulfill({ json: STYLE, headers: cors }));
+  await tp2.route('https://fonts.googleapis.com/**', (r) => r.fulfill({ body: '', contentType: 'text/css' }));
+  await tp2.route('**/api/route-tracks/config', (r) => r.fulfill({ json: { maptilerKey: 'test', routePlanning: true } }));
+  await tp2.route('**/api/route-tracks?**', (r) => r.fulfill({ json: { tracks: [], nextCursor: null } }));
+  await tp2.goto(APP);
+  await tp2.waitForFunction(() => window.routeTracer?.map?.isStyleLoaded());
+  check('the chosen theme colours are used (Dark Slate)', (await cssVar(tp2, '--color-primary')).toLowerCase() === '#7c8cf8' && (await bgOf(tp2, 'body')) === 'rgb(15, 17, 23)' && (await bgOf(tp2, '[data-testid=sidebar]')) === 'rgb(26, 29, 39)', `${await cssVar(tp2, '--color-primary')} ${await bgOf(tp2, 'body')} ${await bgOf(tp2, '[data-testid=sidebar]')}`);
+  check('the chosen font is used (Lato), and fetched like Vault does', (await tp2.evaluate(() => getComputedStyle(document.body).fontFamily)).includes('Lato') && (await tp2.evaluate(() => [...document.querySelectorAll('link[rel=stylesheet]')].some((l) => l.href.includes('family=Lato')))));
+  check('a primary button is the theme colour with readable text', (await bgOf(tp2, 'button.primary')) === 'rgb(124, 140, 248)' && (await tp2.evaluate(() => getComputedStyle(document.querySelector('button.primary')).color)) === 'rgb(255, 255, 255)');
+  check('a dark theme tells the browser, so its own controls follow', (await tp2.evaluate(() => getComputedStyle(document.documentElement).colorScheme)) === 'dark');
+  // Vault's Settings changed in another tab: the theme follows without a reload
+  await tp2.evaluate(() => {
+    const v = JSON.stringify({ state: { theme: 'forest', font: 'Inter' }, version: 0 });
+    localStorage.setItem('vault-settings', v);
+    window.dispatchEvent(new StorageEvent('storage', { key: 'vault-settings', newValue: v }));
+  });
+  await wait(300);
+  check('and a change in Vault\'s settings is picked up live', (await cssVar(tp2, '--color-primary')).toLowerCase() === '#3d7a5e' && (await bgOf(tp2, 'body')) === 'rgb(240, 244, 240)' && (await tp2.evaluate(() => getComputedStyle(document.body).fontFamily)).includes('Inter'));
+  await tp2.evaluate(() => { localStorage.setItem('vault-settings', '{broken'); window.dispatchEvent(new StorageEvent('storage', { key: 'vault-settings' })); });
+  await wait(200);
+  check('unreadable settings fall back to Vault\'s default, not a broken page', (await cssVar(tp2, '--color-primary')).toLowerCase() === '#cc785c');
+  await themed.close();
+}
+
 // ---- the guide and the tour
 {
   const fresh = await browser.newContext({ viewport: { width: 1280, height: 800 } });
