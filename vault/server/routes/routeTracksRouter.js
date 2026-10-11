@@ -77,10 +77,11 @@ function decodeCursor(c) {
   } catch { return null; }
 }
 
-function createRouter(pool, { getMapKey = () => process.env.ROUTE_TRACER_MAPTILER_KEY || null } = {}) {
+function createRouter(pool, { getMapKey = () => process.env.ROUTE_TRACER_MAPTILER_KEY || process.env.MAPTILER_API_KEY || null } = {}) {
   const router = express.Router();
 
-  // GET /api/route-tracks/config: the browser-side MapTiler key (a separate key, restricted to the Vault domain and localhost).
+  // GET /api/route-tracks/config: the browser-side MapTiler key. Prefer a separate key restricted by referrer to the Vault domain and localhost
+  // (ROUTE_TRACER_MAPTILER_KEY); falls back to MAPTILER_API_KEY, which then becomes visible in the browser.
   router.get('/config', (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json({ maptilerKey: getMapKey() });
