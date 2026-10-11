@@ -1,8 +1,9 @@
 import type maplibregl from 'maplibre-gl';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError, type GeocodeResult, type Track } from './api';
-import { displayLines, finish, hasWork, undo } from './drawing';
-import { formatDistance, totalKm, type BBox } from './geo';
+import { fitToLimit, MAX_FILE_BYTES, parseGpx } from './gpx';
+import { displayLines, finish, fromLines, hasWork, undo } from './drawing';
+import { bboxOf, formatDistance, totalKm, type BBox } from './geo';
 import MapView from './MapView';
 import { useDistanceMarkers } from './Markers';
 import { ProbeReadout, useDistanceProbe } from './Probe';
@@ -91,6 +92,34 @@ function TopBar({ map }: { map: maplibregl.Map | null }) {
   const [results, setResults] = useState<GeocodeResult[]>([]);
   const [busy, setBusy] = useState(false);
   const toast = useStore((s) => s.toast);
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  /** Open a GPX file in the drawing tools (Edit points mode, so a stray touch cannot draw): see it, measure it, fix it, Finish to save. */
+  async function importGpx(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // the same file can be chosen again
+    if (!file) return;
+    if (file.size > MAX_FILE_BYTES) return toast('error', 'That file is larger than 15 MB.');
+    let source: string;
+    try { source = await file.text(); } catch { return toast('error', 'Could not read that file.'); }
+    const parsed = parseGpx(source);
+    if (!parsed.ok) return toast('error', parsed.error);
+    const { gpx } = parsed;
+    const fit = fitToLimit(gpx.lines);
+    const s = useStore.getState();
+    s.startDrawing(fromLines(fit.lines));
+    s.setMode('edit');
+    s.setImported({ name: gpx.name, notes: gpx.notes });
+    const box = bboxOf(fit.lines);
+    if (map && box) fitTo(map, box);
+    const notes = [
+      `Imported ${formatDistance(totalKm(fit.lines), s.units)}.`,
+      fit.after < fit.before ? `Simplified from ${fit.before.toLocaleString()} to ${fit.after.toLocaleString()} points to fit.` : '',
+      gpx.skipped ? `${gpx.skipped} points with bad coordinates were left out.` : '',
+      'Press Finish to save it.',
+    ].filter(Boolean);
+    toast('ok', notes.join(' '), 7000);
+  }
 
   async function search(e: React.FormEvent) {
     e.preventDefault();
@@ -132,6 +161,8 @@ function TopBar({ map }: { map: maplibregl.Map | null }) {
         <option value="mi">mi</option>
       </select>
       <button type="button" onClick={() => setMarkersOn(!markersOn)} aria-pressed={markersOn} title={`Distance markers every 1 ${units}`}>Markers</button>
+      {!drawing && <button type="button" onClick={() => fileInput.current?.click()} title="Open a GPX file from Strava, Garmin or a friend">Import GPX</button>}
+      <input ref={fileInput} type="file" accept=".gpx,.xml,application/gpx+xml,text/xml" hidden aria-label="GPX file" onChange={(e) => void importGpx(e)} />
       {!drawing && <button type="button" onClick={() => setPanel(panel === 'closed' ? 'tracks' : 'closed')} aria-pressed={panel !== 'closed'}>Tracks</button>}
       {!drawing && <button type="button" className="primary" onClick={() => startDrawing()}>Draw</button>}
     </header>

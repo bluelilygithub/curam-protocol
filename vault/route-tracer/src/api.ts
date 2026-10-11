@@ -28,10 +28,10 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 }
 
 export interface TrackSummary {
-  id: string; name: string; color: string; distanceM: number; pointCount: number; bbox: BBox; drawMode: 'freehand' | 'click'; createdAt: string;
+  id: string; name: string; color: string; distanceM: number; pointCount: number; bbox: BBox; drawMode: 'freehand' | 'click' | 'import'; createdAt: string;
 }
 export interface Track extends TrackSummary { notes: string | null; geometry: { type: 'MultiLineString'; coordinates: Lines }; updatedAt: string }
-export interface TrackInput { name: string; notes?: string | null; color?: string; geometry: { type: 'MultiLineString'; coordinates: Lines }; drawMode: 'freehand' | 'click' }
+export interface TrackInput { name: string; notes?: string | null; color?: string; geometry: { type: 'MultiLineString'; coordinates: Lines }; drawMode: 'freehand' | 'click' | 'import' }
 export interface GeocodeResult { label: string; lat: number; lng: number }
 
 export const api = {

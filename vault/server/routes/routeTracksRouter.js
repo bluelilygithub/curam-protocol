@@ -57,7 +57,7 @@ function parseFields(body, { create }) {
     v.color = b.color.toUpperCase();
   } else if (create) v.color = DEFAULT_COLOR;
   if (create || b.drawMode !== undefined) {
-    if (b.drawMode !== 'freehand' && b.drawMode !== 'click') return { error: 'The draw mode must be freehand or click.' };
+    if (b.drawMode !== 'freehand' && b.drawMode !== 'click' && b.drawMode !== 'import') return { error: 'The draw mode must be freehand, click or import.' };
     v.drawMode = b.drawMode;
   }
   if (create || b.geometry !== undefined) {

@@ -320,6 +320,32 @@ await page.getByRole('button', { name: 'Yes', exact: true }).click();
 await wait(500);
 check('select all + delete empties the list', db.length === 0 && await page.getByText(/No saved tracks yet/).isVisible());
 
+// ---- GPX import: bad file, good file (opens in Edit points, saves as imported), a recording too long to save as is
+const gpxFile = (name, trkpts, trkName = 'Coast run') => ({ name, mimeType: 'application/gpx+xml', buffer: Buffer.from(`<?xml version="1.0"?><gpx version="1.1" creator="t" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>${trkName}</name><trkseg>${trkpts.map(([lat, lon]) => `<trkpt lat="${lat}" lon="${lon}"><ele>5</ele></trkpt>`).join('')}</trkseg></trk></gpx>`) });
+const picker = page.locator('input[aria-label="GPX file"]');
+await picker.setInputFiles({ name: 'notes.gpx', mimeType: 'text/plain', buffer: Buffer.from('this is not xml') });
+await wait(400);
+check('a file that is not GPX is refused with a message', (await page.getByText('not a GPX file').count()) >= 1 && !(await page.getByRole('region', { name: 'Drawing tools' }).isVisible()));
+const coast = [[-27.468, 153.028], [-27.7, 153.2], [-28.002, 153.43]];
+await picker.setInputFiles(gpxFile('coast.gpx', coast));
+await page.getByRole('region', { name: 'Drawing tools' }).waitFor();
+const expectKm = coast.slice(1).reduce((a, p, i) => { const [y1, x1] = coast[i]; const [y2, x2] = p; const h = Math.sin((y2 - y1) * rad / 2) ** 2 + Math.cos(y1 * rad) * Math.cos(y2 * rad) * Math.sin((x2 - x1) * rad / 2) ** 2; return a + 2 * 6371.0088 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h)); }, 0);
+check('the imported route opens with its distance', Math.abs(km(await readout()) - expectKm) < 0.05, `${await readout()} vs ${expectKm.toFixed(2)} km`);
+check('and opens in Edit points, so a touch cannot draw on it', (await page.getByRole('button', { name: 'Edit points', exact: true }).getAttribute('aria-pressed')) === 'true');
+await page.getByRole('button', { name: 'Finish' }).click();
+check('the save dialog is prefilled from the file', (await dlg.getByLabel('Name').inputValue()) === 'Coast run');
+await dlg.getByLabel('Name').press('Enter');
+await page.getByLabel('Track detail').waitFor();
+const imp = db.at(-1);
+check('saved as an imported track with the same points', imp.drawMode === 'import' && imp.name === 'Coast run' && JSON.stringify(imp.geometry.coordinates) === JSON.stringify([coast.map(([lat, lon]) => [lon, lat])]), JSON.stringify(imp));
+const big = Array.from({ length: 30000 }, (_, i) => [-27 + Math.sin(i / 300) * 0.05 + (i % 2) * 0.0000015, 153 + i * 0.00002]);
+await picker.setInputFiles(gpxFile('long.gpx', big, 'Long recording'));
+await page.getByRole('region', { name: 'Drawing tools' }).waitFor({ timeout: 20000 });
+check('a recording over the point limit is simplified to fit, and says so', (await page.getByText(/Simplified from 30,?000/).count()) >= 1);
+page.once('dialog', (d) => d.accept());
+await page.getByRole('button', { name: 'Cancel' }).click();
+await wait(300);
+
 // ---- units
 await page.getByLabel('Units').selectOption('mi');
 await page.getByRole('button', { name: 'Draw', exact: true }).click();

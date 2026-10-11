@@ -167,6 +167,7 @@ const input = (extra = {}) => ({ name: 'Morning loop', geometry: { type: 'MultiL
   assert.strictEqual(t.notes, 'hello');
   assert.strictEqual(t.color, '#1D6FA5');
   assert.strictEqual((await call(s, 'POST', '/api/route-tracks', input({ color: undefined }))).json.track.color, '#E4572E', 'default colour');
+  assert.strictEqual((await call(s, 'POST', '/api/route-tracks', input({ drawMode: 'import' }))).json.track.drawMode, 'import', 'imported tracks say so');
 
   // ---- validation
   for (const bad of [
@@ -186,7 +187,7 @@ const input = (extra = {}) => ({ name: 'Morning loop', geometry: { type: 'MultiL
     const r = await call(s, 'POST', '/api/route-tracks', huge);
     assert.strictEqual(r.status, 413);
   }
-  assert.strictEqual(pool.rows.length, 2, 'refused requests stored nothing');
+  assert.strictEqual(pool.rows.length, 3, 'refused requests stored nothing');
 
   // ---- get / ownership
   const id = t.id;
@@ -219,7 +220,7 @@ const input = (extra = {}) => ({ name: 'Morning loop', geometry: { type: 'MultiL
   // ---- list: newest first, search, paging
   for (let i = 0; i < 5; i += 1) await call(s, 'POST', '/api/route-tracks', input({ name: `Run ${i}` }));
   let list = await call(s, 'GET', '/api/route-tracks');
-  assert.strictEqual(list.json.tracks.length, 7);
+  assert.strictEqual(list.json.tracks.length, 8);
   assert.strictEqual(list.json.tracks[0].name, 'Run 4', 'newest first');
   assert.ok(!('geometry' in list.json.tracks[0]), 'summaries carry no geometry');
   assert.strictEqual(list.json.nextCursor, null);
@@ -231,7 +232,7 @@ const input = (extra = {}) => ({ name: 'Morning loop', geometry: { type: 'MultiL
     seen.push(...p.json.tracks.map((x) => x.id));
     cursor = p.json.nextCursor;
   } while (cursor);
-  assert.strictEqual(new Set(seen).size, 7, 'paging visits each track once');
+  assert.strictEqual(new Set(seen).size, 8, 'paging visits each track once');
   assert.deepStrictEqual(seen, list.json.tracks.map((x) => x.id), 'paging keeps the order');
   assert.strictEqual((await call(s, 'GET', '/api/route-tracks?q=run%203')).json.tracks.length, 1);
   assert.strictEqual((await call(s, 'GET', '/api/route-tracks?q=%25')).json.tracks.length, 0, '% is not a wildcard');

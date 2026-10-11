@@ -54,6 +54,9 @@ interface State {
   /** The track being extended (PATCH on save), or null for a new one. */
   extendingId: string | null;
   setExtendingId(id: string | null): void;
+  /** An imported GPX is open in the drawing tools: its name and notes pre-fill the save dialog and the track is saved as imported. */
+  imported: { name: string | null; notes: string | null } | null;
+  setImported(v: { name: string | null; notes: string | null } | null): void;
 
   /** Colour of the line being drawn (the track's own colour when extending). */
   drawColor: string;
@@ -73,7 +76,7 @@ interface State {
   setShowAll(v: boolean): void;
 
   toasts: Toast[];
-  toast(kind: Toast['kind'], text: string): void;
+  toast(kind: Toast['kind'], text: string, ms?: number): void;
   dismissToast(id: number): void;
 }
 
@@ -113,7 +116,7 @@ export const useStore = create<State>((set, get) => {
   setRubber: (rubber) => set({ rubber }),
   apply: (fn) => set((s) => ({ draw: fn(s.draw) })),
   startDrawing: (from) => set({ probe: null, drawing: true, draw: from ?? emptyDraw(), rubber: null, selectedVertex: null, panel: 'closed' }),
-  stopDrawing: () => set({ mode: get().mode === 'edit' ? (read('route-tracer:mode') === 'click' ? 'click' : 'freehand') : get().mode, drawing: false, draw: emptyDraw(), rubber: null, selectedVertex: null, extendingId: null, saving: false, drawColor: COLORS[0] }),
+  stopDrawing: () => set({ imported: null, mode: get().mode === 'edit' ? (read('route-tracer:mode') === 'click' ? 'click' : 'freehand') : get().mode, drawing: false, draw: emptyDraw(), rubber: null, selectedVertex: null, extendingId: null, saving: false, drawColor: COLORS[0] }),
   extendingId: null,
   drawColor: COLORS[0],
   setDrawColor: (drawColor) => set({ drawColor }),
@@ -128,12 +131,14 @@ export const useStore = create<State>((set, get) => {
   showAll: false,
   setShowAll: (showAll) => set({ showAll }),
   setExtendingId: (extendingId) => set({ extendingId }),
+  imported: null,
+  setImported: (imported) => set({ imported }),
 
   toasts: [],
-  toast: (kind, text) => {
+  toast: (kind, text, ms = 3000) => {
     const id = ++toastSeq;
     set({ toasts: [...get().toasts, { id, kind, text }] });
-    setTimeout(() => get().dismissToast(id), 3000);
+    setTimeout(() => get().dismissToast(id), ms);
   },
   dismissToast: (id) => set({ toasts: get().toasts.filter((t) => t.id !== id) }),
 };
