@@ -8,7 +8,41 @@ export const DEFAULT_TILES = [
   { id: 'history',  label: 'Chat History', enabled: true },
   { id: 'notes',    label: 'Notes',        enabled: true },
   { id: 'student',  label: 'Student',      enabled: true },
+  { id: 'pdf',           label: 'PDF Tools',        enabled: true },
+  { id: 'fonts',         label: 'Font Customizer',  enabled: true },
+  { id: 'music',         label: 'Music',            enabled: true },
+  { id: 'roomPlanner',   label: 'Room Planner',     enabled: true },
+  { id: 'gardenPlanner', label: 'Garden Planner',   enabled: true },
+  { id: 'routeTracer',   label: 'Route Tracer',     enabled: true },
+  { id: 'cellarPlanner', label: 'Cellar Planner',   enabled: true },
+  { id: 'browserAgent',  label: 'Browser Agent',    enabled: true },
+  { id: 'documentRedaction', label: 'Redaction',       enabled: true },
+  { id: 'contractReview',    label: 'Contract Review', enabled: true },
+  { id: 'measurements',  label: 'Measurements',     enabled: true },
+  { id: 'productScout',  label: 'Amazon Search',    enabled: true },
+  { id: 'translate',     label: 'Translate',        enabled: true },
+  { id: 'guitar',        label: 'Guitar',           enabled: true },
+  { id: 'propertyScenario', label: 'Property',      enabled: true },
 ];
+
+// Launcher-only tiles (no data of their own) rendered by AppLaunchTile.
+export const APP_TILES = {
+  pdf:           { path: '/pdf',           icon: 'file-text',      description: 'Merge, split, fill and stamp PDFs' },
+  fonts:         { path: '/fonts',         icon: 'type',           description: 'Adjust a Google Font and download it' },
+  music:         { path: '/music',         icon: 'music',          description: 'Add music to a video' },
+  roomPlanner:   { path: '/room-planner',  icon: 'armchair',       description: 'Plan a room in 2D and 3D' },
+  gardenPlanner: { path: '/garden-planner', icon: 'sprout',        description: 'Design an Australian garden' },
+  routeTracer:   { path: '/route-tracer',  icon: 'route',          description: 'Trace and plan routes' },
+  cellarPlanner: { path: '/cellar-planner', icon: 'wine',          description: 'Wine cellar designs and quotes' },
+  browserAgent:  { path: '/browser-agent', icon: 'mouse-pointer',  description: 'Fill web forms for you to review' },
+  documentRedaction: { path: '/document-redaction', icon: 'file-pen', description: 'Redact documents safely' },
+  contractReview:    { path: '/contract-review', icon: 'clipboard-list', description: 'Review a contract' },
+  measurements:  { path: '/measurements',  icon: 'ruler',          description: 'Convert units and scan measurements' },
+  productScout:  { path: '/product-scout', icon: 'productScout',   description: 'Compare Amazon products' },
+  translate:     { path: '/translate',     icon: 'languages',      description: 'Translate text and pages' },
+  guitar:        { path: '/guitar',        icon: 'guitar',         description: 'Guitar tools' },
+  propertyScenario: { path: '/property-scenario', icon: 'home',    description: 'Mortgage and property scenarios' },
+};
 
 export const FEATURE_BY_TILE_ID = {
   finance: 'finance',
@@ -27,6 +61,21 @@ export const FEATURE_BY_TILE_ID = {
   wellbeing: 'wellbeing',
   student: 'student',
   youtube: 'youtube',
+  pdf: 'pdf',
+  fonts: 'fonts',
+  music: 'music',
+  roomPlanner: 'roomPlanner',
+  gardenPlanner: 'gardenPlanner',
+  routeTracer: 'routeTracer',
+  cellarPlanner: 'cellarPlanner',
+  browserAgent: 'browserAgent',
+  documentRedaction: 'documentRedaction',
+  contractReview: 'contractReview',
+  measurements: 'measurements',
+  productScout: 'productScout',
+  translate: 'translate',
+  guitar: 'guitar',
+  propertyScenario: 'propertyScenario',
 };
 
 export const DEFAULT_NAV_ITEMS = [

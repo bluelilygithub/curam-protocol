@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import api from '../utils/apiClient';
 import useAuthStore from '../store/authStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
-import { DEFAULT_TILES, FEATURE_BY_TILE_ID, mergeWithDefaults } from '../utils/mobileConfig';
+import { DEFAULT_TILES, APP_TILES, FEATURE_BY_TILE_ID, mergeWithDefaults } from '../utils/mobileConfig';
+import AppLaunchTile from '../components/mobile/AppLaunchTile';
 import TasksTile from '../components/mobile/TasksTile';
 import FinanceTile from '../components/mobile/FinanceTile';
 import ChatHistoryTile from '../components/mobile/ChatHistoryTile';
@@ -59,8 +60,10 @@ export default function MobileDashboard() {
     <div className="px-4 pt-4 pb-24 space-y-4">
       {visible.map(tile => {
         const TileComponent = TILE_MAP[tile.id];
-        if (!TileComponent) return null;
-        return <TileComponent key={tile.id} />;
+        if (TileComponent) return <TileComponent key={tile.id} />;
+        const app = APP_TILES[tile.id];
+        if (!app) return null;
+        return <AppLaunchTile key={tile.id} label={tile.label} {...app} />;
       })}
     </div>
   );
