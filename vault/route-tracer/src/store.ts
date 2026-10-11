@@ -21,6 +21,9 @@ let toastSeq = 0;
 interface State {
   units: Units;
   setUnits(u: Units): void;
+  /** Distance markers on the line (every 1 km / 1 mi). */
+  markersOn: boolean;
+  setMarkersOn(v: boolean): void;
   styleId: StyleId;
   setStyle(s: StyleId): void;
 
@@ -69,6 +72,8 @@ interface State {
 export const useStore = create<State>((set, get) => ({
   units: read('route-tracer:units') === 'mi' ? 'mi' : 'km',
   setUnits: (units) => { write('route-tracer:units', units); set({ units }); },
+  markersOn: read('route-tracer:markers') !== 'off',
+  setMarkersOn: (markersOn) => { write('route-tracer:markers', markersOn ? 'on' : 'off'); set({ markersOn }); },
   styleId: (STYLES.find((s) => s.id === read('route-tracer:style'))?.id ?? 'streets-v2') as StyleId,
   setStyle: (styleId) => { write('route-tracer:style', styleId); set({ styleId }); },
 

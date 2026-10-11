@@ -76,3 +76,57 @@ export function toGpx(name: string, notes: string | null, lines: Lines): string 
   const desc = notes ? `\n    <desc>${esc(notes)}</desc>` : '';
   return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Route Tracer" xmlns="http://www.topografix.com/GPX/1/1">\n  <trk>\n    <name>${esc(name)}</name>${desc}\n${segs}\n  </trk>\n</gpx>\n`;
 }
+
+// ---- distance markers ----------------------------------------------------------------------------------------------------------
+
+const EARTH_KM = 6371.0088; // the radius turf (and the server) use, so markers agree with the readout
+const rad = (d: number): number => (d * Math.PI) / 180;
+
+/** Great-circle length of one segment in km. */
+export function segmentKm(a: Pos, b: Pos): number {
+  const h = Math.sin(rad(b[1] - a[1]) / 2) ** 2 + Math.cos(rad(a[1])) * Math.cos(rad(b[1])) * Math.sin(rad(b[0] - a[0]) / 2) ** 2;
+  return 2 * EARTH_KM * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+export const KM_PER_MILE = KM_PER_MI;
+/** The marker spacing for the chosen units: every 1 km, or every 1 mi. */
+export const stepKmFor = (units: Units): number => (units === 'mi' ? KM_PER_MI : 1);
+
+export interface DistanceMarker { pos: Pos; /** 1 = first step (1 km), 2 = second ... */ n: number }
+
+const MAX_MARKERS = 5000;
+
+/**
+ * A marker at every `stepKm` of drawn distance. The distance carries on across strokes (the gap between two strokes is not counted,
+ * same as the readout), so marker 5 is where the readout would say 5 km. Positions are interpolated along the segment.
+ */
+export function markersAlong(lines: Lines, stepKm: number): DistanceMarker[] {
+  if (!(stepKm > 0) || totalKm(lines) / stepKm > MAX_MARKERS) return [];
+  const out: DistanceMarker[] = [];
+  let done = 0; // km covered before the current segment
+  let next = stepKm;
+  for (const line of lines) {
+    for (let i = 1; i < line.length; i += 1) {
+      const a = line[i - 1];
+      const b = line[i];
+      const len = segmentKm(a, b);
+      while (len > 0 && next <= done + len + 1e-9) {
+        const t = Math.min(1, Math.max(0, (next - done) / len));
+        out.push({ pos: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], n: Math.round(next / stepKm) });
+        next += stepKm;
+      }
+      done += len;
+    }
+  }
+  return out;
+}
+
+/** Ground metres per CSS pixel at a MapLibre zoom (512 px tiles) and latitude. */
+export const metersPerPixel = (zoom: number, lat: number): number => (78271.516964 * Math.cos(rad(lat))) / 2 ** zoom;
+
+const THIN = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+/** Show every Nth marker so labels do not pile up: the smallest N giving at least `minPx` between shown markers and at most `maxCount`. */
+export function thinFactor(pxPerStep: number, count: number, minPx = 44, maxCount = 300): number {
+  for (const n of THIN) if (pxPerStep * n >= minPx && count / n <= maxCount) return n;
+  return THIN[THIN.length - 1];
+}

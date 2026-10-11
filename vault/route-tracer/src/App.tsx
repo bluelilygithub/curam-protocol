@@ -4,6 +4,7 @@ import { api, ApiError, type GeocodeResult, type Track } from './api';
 import { displayLines, finish, hasWork, undo } from './drawing';
 import { formatDistance, totalKm, type BBox } from './geo';
 import MapView from './MapView';
+import { useDistanceMarkers } from './Markers';
 import { clearDraft, fitTo, RecoveryBanner, SaveDialog, TracksPanel, useAutosave, useSavedLayer } from './Panels';
 import { STYLES, useStore } from './store';
 import { useDrawing } from './useDrawing';
@@ -46,6 +47,7 @@ function Overlays({ map }: { map: maplibregl.Map | null }) {
   }, []);
   useDrawing(map, onFinish);
   useSavedLayer(map);
+  useDistanceMarkers(map);
   useAutosave();
 
   const onSaved = useCallback((t: Track) => {
@@ -81,7 +83,7 @@ function Overlays({ map }: { map: maplibregl.Map | null }) {
 }
 
 function TopBar({ map }: { map: maplibregl.Map | null }) {
-  const { drawing, styleId, setStyle, units, setUnits, startDrawing, panel, setPanel } = useStore();
+  const { drawing, styleId, setStyle, units, setUnits, startDrawing, panel, setPanel, markersOn, setMarkersOn } = useStore();
   const [q, setQ] = useState('');
   const [results, setResults] = useState<GeocodeResult[]>([]);
   const [busy, setBusy] = useState(false);
@@ -126,6 +128,7 @@ function TopBar({ map }: { map: maplibregl.Map | null }) {
         <option value="km">km</option>
         <option value="mi">mi</option>
       </select>
+      <button type="button" onClick={() => setMarkersOn(!markersOn)} aria-pressed={markersOn} title={`Distance markers every 1 ${units}`}>Markers</button>
       {!drawing && <button type="button" onClick={() => setPanel(panel === 'closed' ? 'tracks' : 'closed')} aria-pressed={panel !== 'closed'}>Tracks</button>}
       {!drawing && <button type="button" className="primary" onClick={() => startDrawing()}>Draw</button>}
     </header>

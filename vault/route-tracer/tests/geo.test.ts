@@ -3,7 +3,10 @@ import {
   addVertex, cancelStroke, deleteVertex, displayLines, emptyDraw, endStroke, extendStroke, finish, fromLines, hasWork, hitTest, insertVertex,
   midOf, pushHistory, setVertex, startStroke, undo,
 } from '../src/drawing';
-import { bboxOf, degreesPerPixel, formatDistance, lineKm, simplifyLine, toGpx, totalKm, validateLines, type Line } from '../src/geo';
+import {
+  bboxOf, degreesPerPixel, formatDistance, lineKm, markersAlong, metersPerPixel, segmentKm, simplifyLine, stepKmFor, thinFactor, toGpx, totalKm, validateLines,
+  type Line,
+} from '../src/geo';
 
 const within = (actual: number, expected: number, pct: number) => expect(Math.abs(actual - expected) / expected).toBeLessThan(pct / 100);
 
@@ -170,5 +173,61 @@ describe('edit mode', () => {
     const zoomed = ([x, y]: [number, number]) => ({ x: x * 10000, y: -y * 10000 });
     expect(hitTest(lines, zoomed, { x: 100, y: 2 }, 14)).toEqual({ kind: 'mid', li: 0, vi: 1, pos: [0.01, 0] });
     expect(hitTest(lines, zoomed, { x: 100, y: 80 }, 14)).toBeNull();
+  });
+});
+
+describe('distance markers', () => {
+  const meridian: Line = [[0, 0], [0, 0.1]]; // about 11.12 km
+  it('segmentKm agrees with the readout maths', () => {
+    expect(segmentKm([0, 0], [0, 0.1])).toBeCloseTo(lineKm(meridian), 9);
+    expect(segmentKm([5, 5], [5, 5])).toBe(0);
+  });
+  it('puts a marker at every km, numbered 1..11, each at the right distance along the line', () => {
+    const ms = markersAlong([meridian], 1);
+    expect(ms.map((m) => m.n)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    for (const m of ms) expect(lineKm([[0, 0], m.pos])).toBeCloseTo(m.n, 2);
+  });
+  it('no marker before the first km, and none on empty or single-point lines', () => {
+    expect(markersAlong([[[0, 0], [0, 0.005]]], 1)).toEqual([]);
+    expect(markersAlong([], 1)).toEqual([]);
+    expect(markersAlong([[[0, 0]]], 1)).toEqual([]);
+    expect(markersAlong([[[0, 0], [0, 0]]], 1)).toEqual([]);
+  });
+  it('a marker lands exactly on a line that is a whole number of steps long', () => {
+    const km2: Line = [[0, 0], [0, 2 / 111.19492664455873]];
+    expect(markersAlong([km2], 1).map((m) => m.n)).toEqual([1, 2]);
+  });
+  it('distance carries on across strokes without counting the gap', () => {
+    const a: Line = [[0, 0], [0, 0.0045]]; // about 0.5 km
+    const b: Line = [[1, 0], [1, 0.0135]]; // about 1.5 km, far away
+    const ms = markersAlong([a, b], 1);
+    expect(ms.map((m) => m.n)).toEqual([1, 2]);
+    expect(ms[0].pos[0]).toBe(1); // marker 1 is on the second stroke, 0.5 km into it
+    expect(lineKm([[1, 0], ms[0].pos])).toBeCloseTo(0.5, 2);
+  });
+  it('follows the corners of a bent line', () => {
+    const bent: Line = [[0, 0], [0, 0.0135], [0.0135, 0.0135]]; // about 1.5 km north then 1.5 km east
+    const ms = markersAlong([bent], 1);
+    expect(ms).toHaveLength(3); // the two legs are each about 1.5 km, so 3 km in all
+    expect(ms[0].pos[0]).toBe(0); // marker 1 is still on the northward leg
+    expect(ms[1].pos[0]).toBeGreaterThan(0); // marker 2 is on the eastward leg
+    expect(ms[1].pos[1]).toBeCloseTo(0.0135, 5);
+  });
+  it('miles: every 1.609344 km, numbered in miles', () => {
+    expect(stepKmFor('km')).toBe(1);
+    expect(stepKmFor('mi')).toBeCloseTo(1.609344, 9);
+    expect(markersAlong([meridian], stepKmFor('mi')).map((m) => m.n)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+  it('gives up rather than build thousands of markers', () => {
+    expect(markersAlong([[[0, 0], [0, 80]]], 0.01)).toEqual([]);
+    expect(markersAlong([meridian], 0)).toEqual([]);
+  });
+  it('thinning: every marker when there is room, every Nth when zoomed out, capped in number', () => {
+    expect(thinFactor(200, 10)).toBe(1);
+    expect(thinFactor(15, 10)).toBe(5); // 15 px per km -> every 5th is 75 px apart
+    expect(thinFactor(1, 10)).toBe(50);
+    expect(thinFactor(200, 1000)).toBe(5); // 1000 markers: at most 300 shown
+    expect(thinFactor(0.0001, 10)).toBe(1000);
+    expect(metersPerPixel(10, 0)).toBeCloseTo(76.44, 1);
   });
 });

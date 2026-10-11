@@ -72,6 +72,7 @@ const km = (s) => (s.endsWith(' km') ? parseFloat(s) : parseFloat(s) / 1000);
 const shot = async (n) => { if (out) await page.screenshot({ path: join(out, `${n}.png`) }); };
 const lineCount = () => page.evaluate(() => (window.routeTracer.sent?.draw?.features ?? []).filter((f) => f.properties.kind === 'line').length);
 const center = () => page.evaluate(() => window.routeTracer.map.getCenter().toArray());
+const labels = async () => (await page.locator('.km-marker').allTextContents()).map(Number);
 const ready = (p) => p.waitForFunction(() => window.routeTracer?.map?.isStyleLoaded());
 
 async function stroke(points) {
@@ -99,7 +100,14 @@ check('stroke 2 adds distance as a separate line', km(d2) > km(d1) && (await lin
 await page.getByRole('button', { name: 'Undo' }).click();
 await wait(300); // React and the next animation frame catch up
 check('undo removes exactly one stroke', (await readout()) === d1 && (await lineCount()) === 1, `${await readout()} / ${await lineCount()}`);
+await wait(300);
+const ml = await labels();
+check('distance markers appear along the line', ml.length >= 1 && ml.every((n, i) => Number.isInteger(n) && (i === 0 || n > ml[i - 1])) && ml.at(-1) <= Math.floor(km(d1)), `labels ${ml} for ${d1}`);
 await shot('freehand');
+await page.getByRole('button', { name: 'Markers' }).click(); await wait(300);
+check('the Markers button hides them', (await labels()).length === 0);
+await page.getByRole('button', { name: 'Markers' }).click(); await wait(300);
+check('and shows them again', (await labels()).length === ml.length);
 
 // ---- Space + drag pans and draws nothing; wheel zooms
 const c0 = await center();
@@ -155,6 +163,7 @@ await page.getByRole('button', { name: /Test loop/ }).click();
 await page.getByRole('heading', { name: /Test loop/ }).waitFor({ timeout: 5000 }).catch(() => undefined);
 check('after reload the track opens from the list', await page.getByRole('heading', { name: /Test loop/ }).isVisible());
 await wait(1000);
+check('the open track shows distance markers too', (await labels()).length >= 1, `labels ${await labels()}`);
 check('the saved track is drawn on the map', await page.evaluate(() => window.routeTracer.sent?.saved?.features.length === 1));
 
 // ---- extend

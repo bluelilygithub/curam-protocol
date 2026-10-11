@@ -38,6 +38,7 @@ button[aria-pressed='true'] { background: var(--primary); color: var(--primary-t
 .row > button { flex: 1 1 auto; }
 .hint { margin: 0; font-size: 0.8rem; color: var(--muted); text-align: center; }
 
+.km-marker { min-width: 22px; height: 22px; padding: 0 4px; display: grid; place-items: center; border-radius: 11px; border: 2px solid var(--primary); background: #fff; color: #1a1a1a; font: 700 11px/1 system-ui, sans-serif; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); pointer-events: none; }
 .toasts { position: absolute; z-index: 20; top: 64px; left: 0; right: 0; display: grid; justify-items: center; gap: 6px; pointer-events: none; }
 .toast { padding: 10px 14px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); }
 .toast.error { color: var(--danger); }
