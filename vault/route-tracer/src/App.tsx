@@ -11,6 +11,7 @@ import MapView from './MapView';
 import { useDistanceMarkers } from './Markers';
 import { clearDraft, fitTo, RecoveryBanner, SaveDialog, TracksPanel, useAutosave, useSavedLayer } from './Panels';
 import { PlanPanel, usePlan, usePlanning } from './Plan';
+import { PlacesPanel, usePlacesLayer } from './Places';
 import { ProbeReadout, useDistanceProbe } from './Probe';
 import { Header, MapControls } from './Shell';
 import { useStore } from './store';
@@ -55,6 +56,7 @@ function Shell({ mapKey, map, onMap }: { mapKey: string; map: maplibregl.Map | n
   useDrawing(map, onFinish);
   useSavedLayer(map);
   useDistanceMarkers(map);
+  usePlacesLayer(map);
   useDistanceProbe(map);
   usePlanning(map);
   useSnapRouting();
@@ -97,6 +99,7 @@ function Shell({ mapKey, map, onMap }: { mapKey: string; map: maplibregl.Map | n
         <div className="mapwrap">
           <MapView mapKey={mapKey} onMap={onMap} />
           <MapControls map={map} />
+          <PlacesPanel map={map} />
           <RecoveryBanner />
           <ProbeReadout />
           <Toasts />

@@ -101,6 +101,9 @@ function createRouter(pool, {
   },
   needsAiFn = (text) => require('../services/routeIntent').needsAi(text),
   askLimits = {},
+  // places near a route (OpenStreetMap through Overpass): { near({ line, radiusKm }) }
+  placesService = require('../services/routePlaces').createPlacesService(),
+  placesLimits = {},
 } = {}) {
   const router = express.Router();
   const planner = createPlanner({ getKey: getOrsKey, fetchFn, now, log: (m, d) => getLogger().warn({ detail: d }, m), ...planLimits });
@@ -120,6 +123,12 @@ function createRouter(pool, {
   const askNow = askLimits.now ?? Date.now;
   const askPerHour = askLimits.perHour ?? 20;
   const askPerDay = askLimits.perDay ?? 100;
+
+  // ---- places near a route: one Overpass question per route and distance (cached), so each person gets a modest allowance of NEW questions.
+  const placesHits = new Map();
+  const placesNow = placesLimits.now ?? Date.now;
+  const placesPerHour = placesLimits.perHour ?? 20;
+  const placesPerDay = placesLimits.perDay ?? 80;
 
   // GET /api/route-tracks/config: the browser-side MapTiler key. Prefer a separate key restricted by referrer to the Vault domain and localhost
   // (ROUTE_TRACER_MAPTILER_KEY); falls back to MAPTILER_API_KEY, which then becomes visible in the browser.
@@ -186,6 +195,24 @@ function createRouter(pool, {
       }
       getLogger().error({ err }, 'route plan failed');
       res.status(500).json({ error: 'Could not plan that route.' });
+    }
+  });
+
+  // POST /api/route-tracks/places { line: [[lng, lat], ...], radiusKm }: notable buildings, landmarks and venues within radiusKm of any point on the line.
+  router.post('/places', async (req, res) => {
+    const t = placesNow();
+    const mine = (placesHits.get(req.user.id) || []).filter((x) => t - x < 86400000);
+    if (mine.length >= placesPerDay) { res.set('Retry-After', '3600'); return res.status(429).json({ error: 'That is enough place searches for today. Try again tomorrow.' }); }
+    if (mine.filter((x) => t - x < 3600000).length >= placesPerHour) { res.set('Retry-After', '600'); return res.status(429).json({ error: 'That is a lot of place searches in an hour. Wait a while and try again.' }); }
+    try {
+      const out = await placesService.near({ line: req.body?.line, radiusKm: req.body?.radiusKm });
+      if (!out.cached) { mine.push(t); placesHits.set(req.user.id, mine); }
+      getLogger().info({ places: out.places.length, routeKm: out.routeKm, radiusKm: out.radiusKm, cached: out.cached }, 'places near a route'); // never the route
+      res.json({ places: out.places, counts: out.counts, truncated: out.truncated, radiusKm: out.radiusKm, routeKm: out.routeKm, categories: require('../services/routePlaces').CATEGORIES, attribution: '(c) OpenStreetMap contributors' });
+    } catch (err) {
+      if (err && typeof err.status === 'number' && err.name !== 'TypeError') return res.status(err.status).json({ error: err.message });
+      getLogger().error({ err }, 'places near a route failed');
+      res.status(502).json({ error: 'Places could not be found just now. Try again in a minute.' });
     }
   });
 

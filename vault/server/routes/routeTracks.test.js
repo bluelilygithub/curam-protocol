@@ -697,6 +697,76 @@ async function planTests() {
       bad.close();
     }
 
+    // /places through the router
+    {
+      const { PlacesError } = require('../services/routePlaces');
+      const asked = [];
+      const sample = { places: [{ id: 'n1', name: 'Near Museum', category: 'museums', lat: -27.5, lng: 153.05, distKm: 0.1, notable: false }], counts: { museums: 1 }, truncated: false, radiusKm: 2, routeKm: 9.9, cached: false };
+      const mkPlaces = (svc, limits) => {
+        const app = express();
+        app.use(express.json({ limit: '30mb' }));
+        app.use((req, res, next) => { req.user = { id: 1, email: 'me@example.com' }; next(); });
+        app.use('/api/route-tracks', createRouter(fakePool(), { getMapKey: () => 'K', emailConfigured: async () => false, placesService: svc, placesLimits: limits }));
+        return http.createServer(app).listen(0);
+      };
+      const ps = mkPlaces({ near: async (a) => { asked.push(a); return sample; } });
+      const line = [[153, -27.5], [153.05, -27.5]];
+      const ok = await call(ps, 'POST', '/api/route-tracks/places', { line, radiusKm: 2 });
+      assert.strictEqual(ok.status, 200);
+      assert.deepStrictEqual(ok.json.places, sample.places);
+      assert.deepStrictEqual(ok.json.counts, { museums: 1 });
+      assert.strictEqual(ok.json.categories.length, 9, 'the categories come from the server: one list of labels and colours');
+      assert.ok(ok.json.categories.every((c) => c.id && c.label && /^#[0-9a-f]{6}$/i.test(c.color)));
+      assert.match(ok.json.attribution, /OpenStreetMap/);
+      assert.deepStrictEqual(asked[0], { line, radiusKm: 2 });
+      assert.ok(!('cached' in ok.json));
+      ps.close();
+      // what the service refuses is passed on in plain words with its status; anything else is a plain 502 with no internals
+      for (const [status, msg] of [[400, 'Choose a route first.'], [422, 'Too much ground.'], [503, 'Busy.']]) {
+        const bad = mkPlaces({ near: async () => { throw new PlacesError(status, msg); } });
+        const r = await call(bad, 'POST', '/api/route-tracks/places', { line, radiusKm: 2 });
+        assert.strictEqual(r.status, status);
+        assert.strictEqual(r.json.error, msg);
+        bad.close();
+      }
+      const broken = mkPlaces({ near: async () => { throw new Error('connect ECONNREFUSED 10.0.0.1 secret-internal'); } });
+      const br = await call(broken, 'POST', '/api/route-tracks/places', { line, radiusKm: 2 });
+      assert.strictEqual(br.status, 502);
+      assert.ok(!/ECONNREFUSED|secret|10\.0/.test(br.text));
+      broken.close();
+      const typeBug = mkPlaces({ near: async () => { null.x; } });
+      assert.strictEqual((await call(typeBug, 'POST', '/api/route-tracks/places', { line, radiusKm: 2 })).status, 502);
+      typeBug.close();
+      // the real service validates the body (no body, no line, no distance)
+      const real = mkPlaces(undefined);
+      for (const body of [undefined, {}, { line }, { radiusKm: 2 }, { line: 'x', radiusKm: 2 }, { line, radiusKm: '2' }, { line, radiusKm: 50 }, { line: [[1, 1]], radiusKm: 2 }]) {
+        const r = await call(real, 'POST', '/api/route-tracks/places', body);
+        assert.ok(r.status === 400, `${JSON.stringify(body)} -> ${r.status}`);
+      }
+      real.close();
+      // allowance: only NEW questions count (a cached answer is free); per hour and per day; a failed one counts nothing
+      let tt = 9000000; let n = 0; let cached = false; let failing = false;
+      const lim = mkPlaces({ near: async () => { n += 1; if (failing) throw new PlacesError(503, 'Busy.'); return { ...sample, cached }; } }, { now: () => tt, perHour: 2, perDay: 3 });
+      for (let i = 0; i < 2; i += 1) assert.strictEqual((await call(lim, 'POST', '/api/route-tracks/places', { line, radiusKm: 2 })).status, 200);
+      const hr = await call(lim, 'POST', '/api/route-tracks/places', { line, radiusKm: 2 });
+      assert.strictEqual(hr.status, 429);
+      assert.ok(hr.headers.get('retry-after'));
+      assert.strictEqual(n, 2, 'the service was not asked once the allowance was used');
+      tt += 3600001;
+      failing = true;
+      assert.strictEqual((await call(lim, 'POST', '/api/route-tracks/places', { line, radiusKm: 2 })).status, 503);
+      failing = false; cached = true;
+      for (let i = 0; i < 5; i += 1) assert.strictEqual((await call(lim, 'POST', '/api/route-tracks/places', { line, radiusKm: 2 })).status, 200, 'cached answers are free');
+      cached = false;
+      assert.strictEqual((await call(lim, 'POST', '/api/route-tracks/places', { line, radiusKm: 2 })).status, 200);
+      const day = await call(lim, 'POST', '/api/route-tracks/places', { line, radiusKm: 2 });
+      assert.strictEqual(day.status, 429);
+      assert.match(day.json.error, /today/);
+      tt += 86400001;
+      assert.strictEqual((await call(lim, 'POST', '/api/route-tracks/places', { line, radiusKm: 2 })).status, 200);
+      lim.close();
+    }
+
     // /leg through the router
     const legRes = await call(ls, 'POST', '/api/route-tracks/leg', { from: [153.028, -27.468], to: [153.03, -27.469], profile: 'walking' });
     assert.strictEqual(legRes.status, 200);

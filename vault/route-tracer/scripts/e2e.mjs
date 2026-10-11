@@ -110,6 +110,9 @@ const bbox = (lines) => { const xs = lines.flat().map((p) => p[0]); const ys = l
 const summary = (t) => { const { geometry, notes, updatedAt, ...s } = t; return s; };
 const emailLog = [];
 const askLog = [];
+const placesLog = [];
+const placesStub = { fail: 0, failText: 'x' };
+const PLACE_CATS = [['landmarks', 'Landmarks and attractions', '#d9480f'], ['museums', 'Museums and galleries', '#7048e8'], ['shows', 'Theatres and cinemas', '#c2255c'], ['sport', 'Stadiums and arenas', '#2b8a3e'], ['fun', 'Zoos and theme parks', '#e8590c'], ['nightlife', 'Nightclubs and casinos', '#9c36b5'], ['worship', 'Notable places of worship', '#5f3dc4'], ['civic', 'Civic buildings and libraries', '#1971c2'], ['campus', 'Universities and hospitals', '#0b7285']];
 const askStub = { fail: 0, failText: 'x', intent: null };
 const emailStub = { enabled: true, fail: 0, failText: 'The email could not be sent. Try again in a moment.' };
 await page.route('**/api/route-tracks**', async (route) => {
@@ -124,6 +127,22 @@ await page.route('**/api/route-tracks**', async (route) => {
     return route.fulfill({ json: { ok: true, copied: b.copyToMe === true } });
   }
   if (m === 'GET' && path === '') return route.fulfill({ json: { tracks: [...db].reverse().map(summary), nextCursor: null } });
+  if (m === 'POST' && path === '/places') {
+    const b = req.postDataJSON();
+    placesLog.push(b);
+    if (placesStub.fail) return route.fulfill({ status: placesStub.fail, json: { error: placesStub.failText } });
+    const mid = b.line[Math.floor(b.line.length / 2)];
+    const at = (dx, dy) => ({ lat: mid[1] + dy, lng: mid[0] + dx });
+    const places = [
+      { id: 'n1', name: 'City Museum', category: 'museums', ...at(0, 0.0008), distKm: 0.09, notable: true },
+      { id: 'n2', name: 'Grand Theatre', category: 'shows', ...at(0.003, 0.0012), distKm: 0.4, notable: false },
+      { id: 'n3', name: 'Old Cathedral', category: 'worship', ...at(0.006, 0.0016), distKm: 0.9, notable: true },
+      { id: 'n4', name: 'Riverside Stadium', category: 'sport', ...at(0.009, 0.0018), distKm: 1.2, notable: true },
+      { id: 'n5', name: 'Harbour Landmark', category: 'landmarks', ...at(0.012, 0.002), distKm: b.radiusKm >= 4 ? 3.6 : 1.8, notable: false },
+    ].filter((pl) => pl.distKm <= b.radiusKm);
+    const counts = Object.fromEntries(PLACE_CATS.map(([id]) => [id, places.filter((pl) => pl.category === id).length]));
+    return route.fulfill({ json: { places, counts, truncated: false, radiusKm: b.radiusKm, routeKm: 9.9, categories: PLACE_CATS.map(([id, label, color]) => ({ id, label, color })), attribution: '(c) OpenStreetMap contributors' } });
+  }
   if (m === 'POST' && path === '/ask') {
     const b = req.postDataJSON();
     askLog.push(b.text);
@@ -524,6 +543,133 @@ check('the saved track is drawn on the map', await page.evaluate(() => window.ro
   emailStub.enabled = true;
   check('making the PDF raised no errors in the page', problems.length === errsBefore, problems.slice(errsBefore).join(' | '));
   await page.reload(); await ready(page);
+  await page.getByRole('button', { name: /Test loop/ }).click();
+  await page.getByRole('heading', { name: /Test loop/ }).waitFor({ timeout: 5000 });
+}
+
+// ---- Places near the route: buildings, landmarks and venues within X km of any point on the open route, by kind
+{
+  const features = () => page.evaluate(() => window.routeTracer.sent?.places?.features.map((f) => f.properties.name) ?? []);
+  const panel = page.getByTestId('places-panel');
+  const button = page.getByRole('button', { name: 'Places near the route', exact: true });
+  const stateOf = async (name) => (await panel.getByLabel(name, { exact: false }).isChecked());
+  await page.evaluate(() => { try { localStorage.removeItem('route-tracer:places-radius'); localStorage.removeItem('route-tracer:places-cats'); } catch { /* none */ } });
+  await page.reload(); await ready(page);
+
+  // no route yet: it says so and cannot search
+  await button.click();
+  check('with no route open the panel says to choose one, and cannot search', /No route yet/.test((await page.getByTestId('places-route').textContent()) ?? '') && await page.getByTestId('places-search').isDisabled());
+  await tipsOk('places panel: no route');
+  await page.getByRole('button', { name: 'Close places' }).click();
+
+  // with a track open: the route is named, the distance and kinds are offered
+  await page.getByRole('button', { name: /Test loop/ }).click();
+  await page.getByRole('heading', { name: /Test loop/ }).waitFor({ timeout: 5000 });
+  await button.click();
+  check('the open track is the route', /Route: Test loop/.test((await page.getByTestId('places-route').textContent()) ?? ''));
+  check('five distances are offered, 2 km chosen to begin with', (await panel.getByRole('group', { name: 'Distance from the route' }).getByRole('button').count()) === 5 && (await panel.getByRole('button', { name: '2 km', exact: true }).getAttribute('aria-pressed')) === 'true');
+  check('the kinds of place start as buildings, landmarks and venues (not worship, universities, hospitals)', (await stateOf('Museums and galleries')) && (await stateOf('Theatres and cinemas')) && !(await stateOf('Notable places of worship')) && !(await stateOf('Universities and hospitals')));
+  await tipsOk('places panel: with a route');
+
+  // search: the route and distance go to the server; the places listed and shown on the map are the kinds switched on
+  placesLog.length = 0;
+  await page.getByTestId('places-search').click();
+  await page.getByTestId('places-list').waitFor({ timeout: 8000 });
+  const sentLine = placesLog[0]?.line;
+  check('the route and the distance were sent', placesLog.length === 1 && placesLog[0].radiusKm === 2 && Array.isArray(sentLine) && sentLine.length >= 2 && sentLine.every((p) => p.length === 2), JSON.stringify(placesLog[0])?.slice(0, 160));
+  let names = (await page.getByTestId('places-list').locator('.places-name').allTextContents());
+  check('the list shows the kinds that are on, nearest first, with distances', JSON.stringify(names) === JSON.stringify(['City Museum', 'Grand Theatre', 'Riverside Stadium', 'Harbour Landmark']), JSON.stringify(names));
+  check('each kind shows how many were found, including the ones switched off', /1 found/.test((await panel.getByLabel('1 found').first().getAttribute('aria-label')) ?? '') && (await panel.locator('.places-n').count()) === 9);
+  check('and the same places are on the map', JSON.stringify(await features()) === JSON.stringify(names), JSON.stringify(await features()));
+  check('the summary says how many and how far', /4 shown, within 2(\.00)? km of the route/.test((await page.getByTestId('places-summary').textContent()) ?? ''), (await page.getByTestId('places-summary').textContent()) ?? '');
+  await shot('places');
+
+  // switching a kind on or off is instant and asks nothing new
+  placesLog.length = 0;
+  await panel.getByLabel('Notable places of worship').check();
+  await wait(200);
+  check('switching a kind on adds its places at once, without another search', (await features()).includes('Old Cathedral') && placesLog.length === 0);
+  await panel.getByLabel('Museums and galleries').uncheck();
+  check('switching one off removes it from the list and the map', !(await features()).includes('City Museum') && !(await page.getByTestId('places-list').textContent())?.includes('City Museum'));
+  await panel.getByRole('button', { name: 'None', exact: true }).click(); await wait(150);
+  check('None hides every kind and says so', (await features()).length === 0 && /None of the kinds you have switched on/.test((await page.getByTestId('places-none').textContent()) ?? ''));
+  await panel.getByRole('button', { name: 'All', exact: true }).click(); await wait(150);
+  check('All shows every kind', (await features()).length === 5);
+
+  // a different distance needs a new search, and says so; the new answer replaces the old
+  await panel.getByRole('button', { name: '1 km', exact: true }).click();
+  check('changing the distance says the results are for the old one', /distance has changed/.test((await page.getByTestId('places-stale').textContent()) ?? ''));
+  placesLog.length = 0;
+  await page.getByTestId('places-search').click(); await wait(500);
+  check('Search again asks for the new distance and fewer places are within it', placesLog.length === 1 && placesLog[0].radiusKm === 1 && (await features()).length === 3, `${JSON.stringify(placesLog.map((b) => b.radiusKm))} ${(await features()).length}`);
+  await panel.getByRole('button', { name: '5 km', exact: true }).click();
+  placesLog.length = 0;
+  await page.getByTestId('places-search').click(); await wait(500);
+  check('a larger distance finds the farther places too', placesLog[0]?.radiusKm === 5 && (await features()).length === 5);
+
+  // the choices are remembered
+  await page.reload(); await ready(page);
+  await page.getByRole('button', { name: /Test loop/ }).click();
+  await page.getByRole('heading', { name: /Test loop/ }).waitFor({ timeout: 5000 });
+  await button.click();
+  check('the distance and the kinds are remembered next time', (await panel.getByRole('button', { name: '5 km', exact: true }).getAttribute('aria-pressed')) === 'true' && (await stateOf('Notable places of worship')) && (await stateOf('Museums and galleries')));
+  check('but the places themselves are not kept: a new search is needed', (await features()).length === 0 && (await page.getByTestId('places-list').count()) === 0);
+
+  // a refusal is shown as the server said it
+  placesStub.fail = 429; placesStub.failText = 'That is a lot of place searches in an hour. Wait a while and try again.';
+  await page.getByTestId('places-search').click();
+  await page.getByTestId('places-error').waitFor({ timeout: 5000 });
+  check('a refused search says why, and shows nothing', /lot of place searches/.test((await page.getByTestId('places-error').textContent()) ?? '') && (await features()).length === 0);
+  placesStub.fail = 0;
+
+  // tapping a place on the map shows what it is and how far from the route
+  await page.getByTestId('places-search').click();
+  await page.getByTestId('places-list').waitFor({ timeout: 8000 });
+  await wait(600);
+  const dot = await page.evaluate(() => {
+    const f = window.routeTracer.sent.places.features.find((x) => x.properties.name === 'Grand Theatre');
+    const map = window.routeTracer.map; map.jumpTo({ center: f.geometry.coordinates, zoom: 15 });
+    return new Promise((res) => map.once('idle', () => { const q = map.project(f.geometry.coordinates); const r = map.getCanvasContainer().getBoundingClientRect(); res({ x: r.left + q.x, y: r.top + q.y }); }));
+  });
+  await wait(400);
+  await page.mouse.click(dot.x, dot.y); await wait(500);
+  const card = (await page.locator('.place-card').textContent().catch(() => '')) ?? '';
+  check('tapping a place shows its name, kind and distance from the route', /Grand Theatre/.test(card) && /Theatres and cinemas/.test(card) && /0\.4 km from the route|400 m from the route/.test(card), card);
+  // a list item flies the map there
+  await page.getByTestId('places-list').getByRole('button', { name: /Riverside Stadium/ }).click(); await wait(900);
+  const near = await page.evaluate(() => { const f = window.routeTracer.sent.places.features.find((x) => x.properties.name === 'Riverside Stadium'); const c = window.routeTracer.map.getCenter(); return Math.hypot(c.lng - f.geometry.coordinates[0], c.lat - f.geometry.coordinates[1]) < 0.002; });
+  check('choosing a place in the list flies the map to it', near);
+  await page.getByRole('button', { name: 'Show all' }).click(); await wait(900);
+  // Clear takes them off
+  await page.getByRole('button', { name: 'Clear', exact: true }).click(); await wait(200);
+  check('Clear takes the places off the map and out of the list', (await features()).length === 0 && (await page.getByTestId('places-list').count()) === 0);
+
+  // a change of map style keeps them
+  await page.getByTestId('places-search').click();
+  await page.getByTestId('places-list').waitFor({ timeout: 8000 });
+  await page.getByRole('button', { name: 'Map style' }).click();
+  await page.getByRole('button', { name: 'Satellite' }).click(); await wait(1500);
+  check('the places are still on the map after the style changes', await page.evaluate(() => !!window.routeTracer.map.getLayer('places-dot') && window.routeTracer.map.getSource('places') !== undefined));
+  await page.getByRole('button', { name: 'Map style' }).click();
+  await page.getByRole('button', { name: 'Streets' }).click(); await wait(1200);
+
+  // a planned route is searched near too, and the label says so
+  await page.getByRole('button', { name: 'Close places' }).click();
+  await page.getByRole('button', { name: 'Tracks', exact: true }).click().catch(() => undefined);
+  await page.getByRole('button', { name: 'Plan route' }).click();
+  await page.getByTestId('planbar').waitFor();
+  await page.getByRole('button', { name: 'A to B', exact: true }).click();
+  await page.mouse.click(MX + 300, MY + 300); await wait(400);
+  await page.mouse.click(MX + 760, MY + 360);
+  await page.getByTestId('plan-route').first().waitFor({ timeout: 10000 });
+  await button.click();
+  check('with a planned route showing, that is the route searched near', /Route: The planned route/.test((await page.getByTestId('places-route').textContent()) ?? ''), (await page.getByTestId('places-route').textContent()) ?? '');
+  check('and it says the earlier results are for another route', /route has changed/.test((await page.getByTestId('places-stale').textContent().catch(() => '')) ?? ''));
+  await page.getByRole('button', { name: 'Close places' }).click();
+  await page.getByRole('button', { name: 'Cancel' }).click(); await wait(300);
+  await page.getByRole('button', { name: 'Places near the route', exact: true }).click(); await page.getByRole('button', { name: 'Clear', exact: true }).click().catch(() => undefined);
+  await page.getByRole('button', { name: 'Close places' }).click().catch(() => undefined);
+  await home();
   await page.getByRole('button', { name: /Test loop/ }).click();
   await page.getByRole('heading', { name: /Test loop/ }).waitFor({ timeout: 5000 });
 }
@@ -1301,6 +1447,7 @@ await wait(300);
   check('the guide opens by itself on the first visit', true);
   if (out) await fp.screenshot({ path: join(out, 'info.png') });
   const guide = (await fp.getByTestId('info-modal').textContent()) ?? '';
+  check('and explains Places near the route', /Places near the route/.test(guide) && /OpenStreetMap/.test(guide));
   check('and explains Map as PDF, downloading and emailing', /Map as PDF: download or email/.test(guide) && /Email PDF/.test(guide));
   check('and covers drawing, elevation, GPX and tracks', /Freehand/.test(guide) && /Elevation and climb/.test(guide) && /GPX files/.test(guide) && /Saving and your tracks/.test(guide));
   const noTips = await fp.evaluate(() => [...document.querySelectorAll('[data-testid=info-modal] button')].filter((b) => !(b.getAttribute('title') || b.getAttribute('data-tip') || '').trim()).length); // a focused button has its title moved to data-tip by the tooltip host

@@ -8,6 +8,7 @@ import { bboxOf, formatDistance, totalKm } from './geo';
 import { fitToLimit, MAX_FILE_BYTES, parseGpx } from './gpx';
 import { startTour } from './help/tour';
 import { Mic } from './Mic';
+import { PlacesButton } from './Places';
 import { fitTo } from './Panels';
 import { fitPadding } from './layout';
 import { usePlan } from './Plan';
@@ -195,6 +196,7 @@ export function MapControls({ map }: { map: maplibregl.Map | null }) {
       <div className="mapctl-group">
         <button type="button" onClick={() => map?.easeTo({ bearing: 0, pitch: 0, duration: 300 })} aria-label="Point north" title="Turn the map so north is at the top"><Compass size={20} /></button>
       </div>
+      <PlacesButton />
       <div className="mapctl-group layers-wrap">
         <button type="button" onClick={() => setLayers(!layers)} aria-label="Map style" aria-expanded={layers} aria-haspopup="true" title="Map style: Streets for roads and addresses, Outdoor for trails and contours, Satellite for the aerial photo"><Layers size={20} /></button>
         {layers && (

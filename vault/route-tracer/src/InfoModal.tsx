@@ -89,6 +89,14 @@ export function InfoModal() {
             <li><b>Export GPX</b> on a saved track downloads a standard file that Strava, Garmin and gpx.studio open.</li>
           </ul>
 
+          <h3>Places near the route</h3>
+          <ul>
+            <li>The <b>landmark button</b> on the right edge of the map finds notable buildings, landmarks and entertainment venues within a distance of a route: the track you have open, the route you have planned, or the line you are drawing. It looks at <b>any point along the whole route</b>, not just what is on screen.</li>
+            <li>Choose how far (0.5, 1, 2, 5 or 10 km, or quarter of a mile up to 5 miles), then press <b>Find places</b>. The kinds are: landmarks and attractions, museums and galleries, theatres and cinemas, stadiums and arenas, zoos and theme parks, nightclubs and casinos, notable places of worship, civic buildings and libraries, and universities and hospitals. Tick the ones you want: it changes the map and the list straight away. Each kind shows how many were found.</li>
+            <li>Tap a place on the map for its name and how far it is from the route, or tap it in the list to fly there. <b>Show all</b> fits them all on screen and <b>Clear</b> takes them off. If you change the route or the distance, press <b>Search again</b>.</li>
+            <li>The places come from OpenStreetMap, so coverage varies: a place missing here may be missing there. Only the shape of the route and the distance are sent (through Vault, not from your device). To keep the list useful only the best-known places of each kind are kept, and places of worship need a Wikipedia or Wikidata entry. There is a limit of 20 new searches an hour; a repeat of the same search is free.</li>
+          </ul>
+
           <h3>Map as PDF: download or email</h3>
           <ul>
             <li>Open a saved track and press <b>Map as PDF</b>. After a few seconds you have one A4 page: the route on a map of the area it covers, the start (A) and finish (B), distance markers, a scale bar and north arrow, the distance, climb and descent, your notes, and the elevation profile. It uses the map style you are looking at (Streets, Outdoor or Satellite).</li>

@@ -160,7 +160,7 @@ export async function buildMapPdf(input: MapPdfInput): Promise<Uint8Array> {
   const notes = (input.notes ?? '').trim();
   if (notes) {
     const room = Math.max(0, Math.floor((ty - (MARGIN - 6)) / 11));
-    const wrapped = wrapText(safe(notes), textW - 8, (s) => reg.widthOfTextAtSize(s, 8.5), Math.min(room, profile ? 3 : 5));
+    const wrapped = wrapText(safe(notes.slice(0, 1500)), textW - 8, (s) => reg.widthOfTextAtSize(s, 8.5), Math.min(room, profile ? 3 : 5));
     for (const l of wrapped) { page.drawText(l, { x: MARGIN, y: ty, size: 8.5, font: reg, color: ink }); ty -= 11; }
   }
 

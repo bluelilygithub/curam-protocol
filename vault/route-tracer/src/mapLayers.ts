@@ -14,10 +14,11 @@ export const getSavedLines = (): SavedLine[] => saved;
 const EMPTY: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 let saved: SavedLine[] = [];
 let planned: PlannedLine[] = [];
+let placeData: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 const MAX_HANDLES = 2500;
 
 /** What was last handed to each source, readable by the end-to-end test (window.routeTracer.sent). */
-function sent(name: 'draw' | 'saved' | 'plan', data: GeoJSON.FeatureCollection): void {
+function sent(name: 'draw' | 'saved' | 'plan' | 'places', data: GeoJSON.FeatureCollection): void {
   const rt = (window as unknown as { routeTracer?: { sent?: Record<string, GeoJSON.FeatureCollection> } }).routeTracer;
   if (rt) (rt.sent ??= {})[name] = data;
 }
@@ -41,6 +42,7 @@ export function addLayers(map: maplibregl.Map): void {
   pushSaved(map);
   pushPlanned(map);
   renderDrawNow(map);
+  addPlaceLayers(map);
 }
 
 function pushSaved(map: maplibregl.Map): void {
@@ -65,6 +67,26 @@ function pushPlanned(map: maplibregl.Map): void {
 }
 
 /** The routes Plan route found: the chosen one thick and solid, the others thin and faded. Re-added after a style change. */
+/** Dots for the places near a route, above the route lines, with their names from zoom 12. The font is borrowed from the map style's own labels. */
+function addPlaceLayers(map: maplibregl.Map): void {
+  if (map.getSource('places')) return;
+  map.addSource('places', { type: 'geojson', data: placeData });
+  let font: string[] = ['Noto Sans Regular'];
+  for (const l of map.getStyle().layers ?? []) {
+    const f = l.type === 'symbol' ? (l.layout as { 'text-font'?: unknown } | undefined)?.['text-font'] : undefined;
+    if (Array.isArray(f) && f.length && f.every((x) => typeof x === 'string')) { font = f as string[]; break; }
+  }
+  map.addLayer({ id: 'places-dot', type: 'circle', source: 'places', paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 4, 15, 8], 'circle-color': ['get', 'color'], 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2 } });
+  map.addLayer({ id: 'places-label', type: 'symbol', source: 'places', minzoom: 12, layout: { 'text-field': ['get', 'name'], 'text-font': font, 'text-size': 12, 'text-offset': [0, 1.1], 'text-anchor': 'top', 'text-optional': true, 'text-max-width': 9 }, paint: { 'text-color': '#222222', 'text-halo-color': '#ffffff', 'text-halo-width': 1.6 } });
+}
+
+export function setPlaces(map: maplibregl.Map, data: GeoJSON.FeatureCollection): void {
+  placeData = data;
+  sent('places', data);
+  const src = map.getSource('places') as maplibregl.GeoJSONSource | undefined;
+  if (src) src.setData(data);
+}
+
 export function setPlanned(map: maplibregl.Map, lines: PlannedLine[]): void {
   planned = lines;
   if (map.getSource('plan')) pushPlanned(map);

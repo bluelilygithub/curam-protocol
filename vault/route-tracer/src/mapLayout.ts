@@ -80,8 +80,9 @@ export function wrapText(text: string, maxWidth: number, measure: (s: string) =>
     const push = (l: string): boolean => { if (lines.length >= maxLines) { cut = true; return false; } lines.push(l); return true; };
     for (let word of para.split(/\s+/).filter(Boolean)) {
       while (measure(word) > maxWidth) { // a word wider than the line: cut it
-        let n = word.length - 1;
-        while (n > 1 && measure(word.slice(0, n)) > maxWidth) n -= 1;
+        let lo = 1; let hi = word.length - 1; // the longest start of the word that fits (binary search: a very long word is not measured letter by letter)
+        while (lo < hi) { const mid = Math.ceil((lo + hi) / 2); if (measure(word.slice(0, mid)) > maxWidth) hi = mid - 1; else lo = mid; }
+        const n = lo;
         if (cur) { if (!push(cur)) break outer; cur = ''; }
         if (!push(word.slice(0, n))) break outer;
         word = word.slice(n);

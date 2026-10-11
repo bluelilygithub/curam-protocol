@@ -64,7 +64,7 @@ h2 { margin: 0; font-size: 1.15rem; }
 .mapctl-group button:last-child { border-radius: 0 0 10px 10px; }
 .mapctl-group button:only-child { border-radius: 10px; }
 .layers-wrap { position: relative; }
-.layers-pop { position: absolute; top: 0; right: 52px; width: 130px; padding: 6px; display: grid; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2); }
+.layers-pop { z-index: 30; position: absolute; top: 0; right: 52px; width: 130px; padding: 6px; display: grid; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2); }
 .layers-pop button { width: 100%; height: auto; min-height: 40px; border: 1px solid transparent; border-radius: 8px; text-align: left; padding: 0 10px; display: block; }
 .layers-pop button + button { border-top: 1px solid transparent; }
 .layers-pop button[aria-pressed='true'] { background: var(--primary-soft); color: var(--text); border-color: var(--primary); }
@@ -212,3 +212,25 @@ h2 { margin: 0; font-size: 1.15rem; }
 .field-row .vwrap { grid-column: 2; }
 .lbl { display: grid; gap: 4px; font-size: 0.9rem; min-width: 0; }
 .lbl.plan-length { gap: 4px; }
+
+/* ---- places near the route */
+.places-wrap { position: relative; }
+.places-pop { position: absolute; top: 12px; right: 68px; width: 330px; max-height: calc(100% - 24px); overflow: auto; padding: 12px; display: grid; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2); z-index: 4; }
+.places-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.places-head h2 { margin: 0; font-size: 1rem; }
+.places-radius { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 0.9rem; }
+.places-radius button { min-height: 36px; padding: 0 10px; }
+.places-cats { display: grid; gap: 2px; border: 0; padding: 0; margin: 0; }
+.places-cats legend { font-weight: 600; font-size: 0.9rem; padding: 0; margin-bottom: 4px; }
+.places-cats .row button { min-height: 32px; padding: 0 10px; }
+.places-cat { min-height: 36px; font-size: 0.9rem; }
+.places-dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35); flex: none; display: inline-block; }
+.places-label { flex: 1; }
+.places-n { color: var(--muted); font-variant-numeric: tabular-nums; }
+.places-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.places-list button { width: 100%; min-height: 36px; display: flex; align-items: center; gap: 8px; text-align: left; border-color: transparent; background: transparent; padding: 0 6px; }
+.places-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.places-dist { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
+.linklike { min-height: 0; padding: 0; border: 0; background: none; color: var(--primary); text-decoration: underline; cursor: pointer; font-size: inherit; }
+.place-card { font-family: inherit; font-size: 0.9rem; line-height: 1.35; color: #222; }
+@media (max-width: 640px) { .places-pop { top: 8px; right: 64px; width: min(330px, calc(100% - 72px)); max-height: calc(100% - 16px); } }
