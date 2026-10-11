@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { deleteVertex, emptyDraw, type DrawMode, type DrawState, type VertexRef } from './drawing';
+import { closeLoop as closeLoopFn, deleteVertex, emptyDraw, outAndBack as outAndBackFn, type Shaped, type DrawMode, type DrawState, type VertexRef } from './drawing';
 import type { Pos, Units } from './geo';
 import type { Track, TrackSummary } from './api';
 
@@ -44,6 +44,9 @@ interface State {
   selectedVertex: VertexRef | null;
   setSelectedVertex(v: VertexRef | null): void;
   deleteSelectedVertex(): void;
+  /** Route shapes: both are one undo step, and say why when they cannot be done. */
+  closeLoop(): void;
+  outAndBack(): void;
   apply(fn: (s: DrawState) => DrawState): void;
   /** Open the toolbar. `from` seeds it (Extend). */
   startDrawing(from?: DrawState): void;
@@ -74,7 +77,13 @@ interface State {
   dismissToast(id: number): void;
 }
 
-export const useStore = create<State>((set, get) => ({
+export const useStore = create<State>((set, get) => {
+  const applyShape = (fn: (s: DrawState) => Shaped): void => {
+    const r = fn(get().draw);
+    if (!r.ok) return get().toast('error', r.reason);
+    set({ draw: r.state, selectedVertex: null }); // point numbers changed: nothing stays picked
+  };
+  return {
   units: read('route-tracer:units') === 'mi' ? 'mi' : 'km',
   setUnits: (units) => { write('route-tracer:units', units); set({ units }); },
   probe: null,
@@ -90,6 +99,8 @@ export const useStore = create<State>((set, get) => ({
   setMode: (mode) => { if (mode !== 'edit') write('route-tracer:mode', mode); set({ mode, rubber: null, selectedVertex: null }); },
   selectedVertex: null,
   setSelectedVertex: (selectedVertex) => set({ selectedVertex }),
+  closeLoop: () => applyShape(closeLoopFn),
+  outAndBack: () => applyShape(outAndBackFn),
   deleteSelectedVertex: () => {
     const { selectedVertex, draw, toast } = get();
     if (!selectedVertex) return;
@@ -125,4 +136,5 @@ export const useStore = create<State>((set, get) => ({
     setTimeout(() => get().dismissToast(id), 3000);
   },
   dismissToast: (id) => set({ toasts: get().toasts.filter((t) => t.id !== id) }),
-}));
+};
+});

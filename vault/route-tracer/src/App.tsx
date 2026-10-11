@@ -139,7 +139,7 @@ function TopBar({ map }: { map: maplibregl.Map | null }) {
 }
 
 function DrawToolbar({ onFinish }: { onFinish: () => void }) {
-  const { draw, mode, setMode, apply, units, stopDrawing, selectedVertex, setSelectedVertex, deleteSelectedVertex, extendingId, setPanel } = useStore();
+  const { draw, mode, setMode, apply, units, stopDrawing, selectedVertex, setSelectedVertex, deleteSelectedVertex, extendingId, setPanel, closeLoop, outAndBack } = useStore();
   const km = useMemo(() => totalKm(displayLines(draw)), [draw]);
   const [confirmClear, setConfirmClear] = useState(false);
   const work = hasWork(draw);
@@ -161,6 +161,10 @@ function DrawToolbar({ onFinish }: { onFinish: () => void }) {
       {mode === 'edit' && (
         <button type="button" className="danger" onClick={deleteSelectedVertex} disabled={!selectedVertex}>Delete selected point</button>
       )}
+      <div className="row" role="group" aria-label="Route shape">
+        <button type="button" onClick={closeLoop} disabled={!work} title="Add a straight line from the end back to the start">Return to start</button>
+        <button type="button" onClick={outAndBack} disabled={!work} title="Retrace the route in reverse, doubling the distance">Out and back</button>
+      </div>
       <div className="row">
         <button type="button" onClick={() => { setSelectedVertex(null); apply(undo); }} disabled={!draw.history.length && !draw.active}>Undo</button>
         {confirmClear ? (

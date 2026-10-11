@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  addVertex, cancelStroke, deleteVertex, displayLines, emptyDraw, endStroke, extendStroke, finish, fromLines, hasWork, hitTest, insertVertex,
-  midOf, pushHistory, setVertex, startStroke, undo,
+  addVertex, cancelStroke, closeLoop, deleteVertex, displayLines, emptyDraw, endStroke, extendStroke, finish, fromLines, hasWork, hitTest, insertVertex,
+  midOf, outAndBack, pushHistory, setVertex, startStroke, undo,
 } from '../src/drawing';
 import {
   bboxOf, degreesPerPixel, formatDistance, lineKm, markersAlong, metersPerPixel, nearestOnLines, segmentKm, simplifyLine, stepKmFor, thinFactor, toGpx, totalKm, validateLines,
@@ -269,5 +269,79 @@ describe('tap a track', () => {
     const r = nearestOnLines([[[0, 0], [0.02, 0]], [[0, 0.003], [0.02, 0.003]]], flat, { x: 10, y: -2 }, 22)!;
     expect(r.px).toBeCloseTo(1, 9); // the second line, 3 px up, is closer to a tap 2 px up
     expect(r.pos[1]).toBeCloseTo(0.003, 9);
+  });
+});
+
+describe('loop and out-and-back', () => {
+  const route = () => fromLines([[[153, -27], [153.01, -27.005], [153.02, -27]]]);
+  const km = (d: ReturnType<typeof emptyDraw>) => totalKm(d.lines);
+
+  it('return to start adds one straight segment back to the first point', () => {
+    const r = closeLoop(route());
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.lines[0]).toHaveLength(4);
+    expect(r.state.lines[0][3]).toEqual([153, -27]);
+    expect(km(r.state)).toBeCloseTo(km(route()) + lineKm([[153.02, -27], [153, -27]]), 9);
+  });
+  it('return to start is one undo step', () => {
+    const r = closeLoop(route());
+    expect(r.ok && undo(r.state).lines).toEqual(route().lines);
+  });
+  it('return to start with several strokes closes from the last end to the very first point', () => {
+    const d = fromLines([[[0, 0], [0, 0.01]], [[1, 1], [1.01, 1]]]);
+    const r = closeLoop(d);
+    expect(r.ok && r.state.lines[1].at(-1)).toEqual([0, 0]);
+    expect(r.ok && r.state.lines[0]).toEqual(d.lines[0]);
+  });
+  it('return to start refuses when there is nothing to close or it is already closed', () => {
+    expect(closeLoop(emptyDraw()).ok).toBe(false);
+    expect(closeLoop(fromLines([[[0, 0]]])).ok).toBe(false);
+    const closed = closeLoop(route());
+    expect(closed.ok && closeLoop(closed.state).ok).toBe(false);
+  });
+  it('return to start refuses past the point limit', () => {
+    const big = fromLines([Array.from({ length: 20000 }, (_, i) => [i * 1e-4, 0] as [number, number])]);
+    expect(closeLoop(big).ok).toBe(false);
+  });
+
+  it('out and back doubles the distance and ends where it began', () => {
+    const r = outAndBack(route());
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(km(r.state)).toBeCloseTo(km(route()) * 2, 9);
+    expect(r.state.lines).toHaveLength(1);
+    expect(r.state.lines[0]).toHaveLength(5); // the turnaround point is shared
+    expect(r.state.lines[0].at(-1)).toEqual([153, -27]);
+    expect(r.state.lines[0][2]).toEqual([153.02, -27]);
+  });
+  it('out and back mirrors the path point for point', () => {
+    const r = outAndBack(route());
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const l = r.state.lines[0];
+    expect(l.slice(0, 3)).toEqual(l.slice(2).reverse());
+  });
+  it('out and back with several strokes retraces each in reverse order; the gaps stay gaps', () => {
+    const d = fromLines([[[0, 0], [0, 0.01]], [[1, 1], [1.01, 1]]]);
+    const r = outAndBack(d);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.lines).toHaveLength(3);
+    expect(r.state.lines[1]).toEqual([[1, 1], [1.01, 1], [1, 1]]);
+    expect(r.state.lines[2]).toEqual([[0, 0.01], [0, 0]]);
+    expect(km(r.state)).toBeCloseTo(km(d) * 2, 9);
+  });
+  it('out and back is one undo step, and can be done again', () => {
+    const r = outAndBack(route());
+    expect(r.ok && undo(r.state).lines).toEqual(route().lines);
+    const twice = r.ok ? outAndBack(r.state) : r;
+    expect(twice.ok && km(twice.state)).toBeCloseTo(km(route()) * 4, 9);
+  });
+  it('out and back refuses with nothing drawn or past the point limit', () => {
+    expect(outAndBack(emptyDraw()).ok).toBe(false);
+    expect(outAndBack(fromLines([[[0, 0]]])).ok).toBe(false);
+    const big = fromLines([Array.from({ length: 10001 }, (_, i) => [i * 1e-4, 0] as [number, number])]);
+    expect(outAndBack(big).ok).toBe(false);
   });
 });

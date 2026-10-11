@@ -124,6 +124,24 @@ for (let i = 0; i < 3; i += 1) { await page.mouse.wheel(0, -240); await wait(120
 const zoomed = await page.waitForFunction((z) => window.routeTracer.map.getZoom() !== z, z0, { timeout: 4000 }).then(() => true, () => false);
 check('scroll wheel zooms', zoomed);
 
+// ---- route shapes: return to start, out and back
+const drawnLine = () => page.evaluate(() => (window.routeTracer.sent.draw.features.find((f) => f.properties.kind === 'line')?.geometry.coordinates) ?? null);
+const before1 = await drawnLine();
+await page.getByRole('button', { name: 'Return to start' }).click(); await wait(300);
+const closed = await drawnLine();
+check('Return to start closes the loop back to the first point', closed.length === before1.length + 1 && closed.at(-1)[0] === closed[0][0] && closed.at(-1)[1] === closed[0][1] && km(await readout()) > km(d1));
+await page.getByRole('button', { name: 'Return to start' }).click(); await wait(200);
+check('and refuses to close an already closed route', (await page.getByText('already ends at its start').count()) >= 1);
+await page.getByRole('button', { name: 'Undo' }).click(); await wait(300);
+check('undo takes the closing line back', (await readout()) === d1);
+await page.getByRole('button', { name: 'Out and back' }).click(); await wait(300);
+const doubled = km(await readout());
+check('Out and back doubles the distance', Math.abs(doubled - 2 * km(d1)) < 0.03, `${d1} -> ${await readout()}`);
+const ob = await drawnLine();
+check('and ends where it began', ob.at(-1)[0] === ob[0][0] && ob.at(-1)[1] === ob[0][1]);
+await page.getByRole('button', { name: 'Undo' }).click(); await wait(300);
+check('undo takes the return leg back', (await readout()) === d1);
+
 // ---- click mode: one undo = one point
 await page.getByRole('button', { name: 'Clear' }).click();
 await page.getByRole('button', { name: 'Yes' }).click();

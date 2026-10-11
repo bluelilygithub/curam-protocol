@@ -1,5 +1,5 @@
 import type { Line, Lines, Pos } from './geo';
-import { simplifyLine } from './geo';
+import { MAX_POINTS, pointCount, segmentKm, simplifyLine } from './geo';
 
 /** Pure drawing state. The pointer handling in useDrawing.ts only feeds these functions, so the rules are unit-tested. */
 export type DrawMode = 'freehand' | 'click' | 'edit';
@@ -146,4 +146,41 @@ export function hitTest(
     }
   });
   return best;
+}
+
+// ---- route shapes: loop and out-and-back ------------------------------------------------------------------------------------
+
+export type Shaped = { ok: true; state: DrawState } | { ok: false; reason: string };
+
+const CLOSED_KM = 0.001; // the end is already within a metre of the start
+
+/** "Return to start": one straight segment from the end of the route back to its first point. One undo step. */
+export function closeLoop(s: DrawState): Shaped {
+  const lines = s.lines.filter((l) => l.length > 0);
+  const first = lines[0]?.[0];
+  const lastLine = lines[lines.length - 1];
+  const last = lastLine?.[lastLine.length - 1];
+  if (!first || !last || pointCount(lines) < 2) return { ok: false, reason: 'Draw at least two points first.' };
+  if (segmentKm(last, first) < CLOSED_KM) return { ok: false, reason: 'The route already ends at its start.' };
+  if (pointCount(s.lines) + 1 > MAX_POINTS) return { ok: false, reason: `A track can have at most ${MAX_POINTS} points.` };
+  const li = s.lines.lastIndexOf(lastLine);
+  return { ok: true, state: { ...s, lines: s.lines.map((l, i) => (i === li ? [...l, first] : l)), history: [...s.history, s.lines] } };
+}
+
+/**
+ * "Out and back": the route retraced in reverse from its end to its start, so the distance doubles. With several strokes the last
+ * stroke carries on straight back and the earlier ones follow, each reversed, in reverse order (the gaps between strokes stay gaps).
+ */
+export function outAndBack(s: DrawState): Shaped {
+  const lines = s.lines.filter((l) => l.length >= 2);
+  if (!lines.length) return { ok: false, reason: 'Draw at least two points first.' };
+  const back = (l: Line): Line => l.slice().reverse();
+  const last = lines[lines.length - 1];
+  const out: Lines = [
+    ...lines.slice(0, -1),
+    [...last, ...back(last).slice(1)], // the turnaround point is shared, not repeated
+    ...lines.slice(0, -1).reverse().map(back),
+  ];
+  if (pointCount(out) > MAX_POINTS) return { ok: false, reason: `That would make more than ${MAX_POINTS} points. Remove some first.` };
+  return { ok: true, state: { ...s, lines: out, history: [...s.history, s.lines] } };
 }
