@@ -210,7 +210,7 @@ function DrawToolbar({ onFinish }: { onFinish: () => void }) {
       <div className="readout" aria-live="polite" data-testid="distance" title="Total distance of the route so far">{formatDistance(km, units)}</div>
       <div className="seg three" role="group" aria-label="Draw mode" data-tour="rt-modes">
         <button type="button" aria-pressed={mode === 'freehand'} onClick={() => setMode('freehand')} title="Freehand: press and drag to draw a line that follows your finger or mouse. Two fingers, or Space + drag, move the map.">Freehand</button>
-        <button type="button" aria-pressed={mode === 'click'} onClick={() => setMode('click')} title="Click: each click or tap adds a point joined by a straight line. Best for following roads precisely. Double-click to finish.">Click</button>
+        <button type="button" aria-pressed={mode === 'click'} onClick={() => setMode('click')} title="Click: each click or tap adds a point joined by a straight line. Best for following roads precisely. Drag a point to move it. Double-click to finish.">Click</button>
         <button type="button" aria-pressed={mode === 'edit'} onClick={() => setMode('edit')} disabled={!work} title="Edit points: drag a point to move it, drag a small dot to add a point, tap a point to pick it for deleting">Edit points</button>
       </div>
       {mode === 'edit' && (
@@ -236,7 +236,7 @@ function DrawToolbar({ onFinish }: { onFinish: () => void }) {
         <button type="button" className="primary" onClick={onFinish} disabled={!work} title="Finish drawing and save it as a named track">Finish</button>
         <button type="button" onClick={cancel} title="Stop drawing and discard it (asks first)">Cancel</button>
       </div>
-      <p className="hint">{mode === 'freehand' ? 'Drag to draw. Two fingers (or Space + drag) to move the map.' : mode === 'click' ? 'Click to add points. Double-click to finish.' : 'Drag a point to move it. Drag a small dot to add a point. Tap a point, then Delete selected point.'}</p>
+      <p className="hint">{mode === 'freehand' ? 'Drag to draw. Two fingers (or Space + drag) to move the map.' : mode === 'click' ? 'Click to add points. Drag a point to move it. Double-click to finish.' : 'Drag a point to move it. Drag a small dot to add a point. Tap a point, then Delete selected point.'}</p>
     </section>
   );
 }

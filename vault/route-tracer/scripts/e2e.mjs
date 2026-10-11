@@ -199,6 +199,24 @@ await page.getByRole('button', { name: 'Undo' }).click();
 await wait(300); // React and the next animation frame catch up
 check('undo removes exactly one point', km(await readout()) > 0 && km(await readout()) < km(clickD), `${clickD} -> ${await readout()}`);
 await page.mouse.click(700, 300); await wait(450);
+{ // a point added in Click mode can be dragged, and the map stays where it is
+  const pts = () => page.evaluate(() => {
+    const map = window.routeTracer.map; const r = map.getCanvasContainer().getBoundingClientRect();
+    return window.routeTracer.sent.draw.features.filter((f) => f.properties.kind === 'vertex').map((f) => { const p = map.project(f.geometry.coordinates); return { x: r.left + p.x, y: r.top + p.y, c: f.geometry.coordinates }; });
+  });
+  const before = await pts(); const c0 = await center(); const dBefore = await readout();
+  await page.mouse.move(before[1].x, before[1].y); await page.mouse.down();
+  await page.mouse.move(before[1].x + 10, before[1].y + 30, { steps: 4 }); await page.mouse.move(before[1].x + 20, before[1].y + 70, { steps: 4 });
+  await page.mouse.up(); await wait(500);
+  const after = await pts();
+  check('Click mode: dragging a point moves it', after.length === before.length && Math.hypot(after[1].x - before[1].x, after[1].y - before[1].y) > 40, JSON.stringify([before[1], after[1]]));
+  check('the map does not move, and no extra point is added', (await center()).every((v, i) => Math.abs(v - c0[i]) < 1e-9) && after.length === 3);
+  check('the distance follows the moved point', (await readout()) !== dBefore);
+  await page.getByRole('button', { name: 'Undo' }).click(); await wait(400);
+  check('and Undo puts the point back', (await readout()) === dBefore && (await pts()).length === 3);
+  await page.mouse.click(before[1].x, before[1].y); await wait(500);
+  check('tapping an existing point does not add another on top of it', (await pts()).length === 3);
+}
 await shot('click');
 
 // ---- save

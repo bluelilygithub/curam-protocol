@@ -183,7 +183,10 @@ export function useDrawing(map: maplibregl.Map | null, onFinish: () => void): vo
       el.style.cursor = 'crosshair';
       let lastAt = 0;
       let lastPt = { x: -99, y: -99 };
+      let grabbed: (VertexRef & { id: number; moved: boolean; down: { x: number; y: number } }) | null = null;
+      let justGrabbed = false;
       const onClick = (e: maplibregl.MapMouseEvent) => {
+        if (justGrabbed) return; // the release of a point that was being dragged (or tapped) is not a new point
         // a double-click delivers two clicks at one spot: keep one vertex
         const now = performance.now();
         if (now - lastAt < 350 && screenDist(e.point, lastPt) < 6) return;
@@ -194,12 +197,48 @@ export function useDrawing(map: maplibregl.Map | null, onFinish: () => void): vo
       const onDbl = () => onFinish();
       const onMouseMove = (e: maplibregl.MapMouseEvent) => setRubber([e.lngLat.lng, e.lngLat.lat]); // mouse only: touch has no hover
       const onLeave = () => setRubber(null);
+      // Points already placed can be dragged: a press on one moves it (the map stays still); a press anywhere else pans / clicks as before.
+      const onGrab = (e: PointerEvent) => {
+        if ((e.pointerType === 'mouse' && e.button !== 0) || grabbed) return;
+        const p = xy(e);
+        const hit = hitTest(displayLines(useStore.getState().draw), (q) => map.project(q), p, e.pointerType === 'touch' ? HIT_TOUCH_PX : HIT_PX, Infinity);
+        if (!hit || hit.kind !== 'vertex') return;
+        map.dragPan.disable();
+        try { el.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+        grabbed = { li: hit.li, vi: hit.vi, id: e.pointerId, moved: false, down: p };
+        justGrabbed = true;
+      };
+      const onGrabMove = (e: PointerEvent) => {
+        if (!grabbed || grabbed.id !== e.pointerId) return;
+        const p = xy(e);
+        if (!grabbed.moved) {
+          if (screenDist(p, grabbed.down) < TAP_PX) return; // still a tap
+          apply(pushHistory);
+          grabbed.moved = true;
+        }
+        const ref = { li: grabbed.li, vi: grabbed.vi };
+        apply((s) => setVertex(s, ref, toPos(p)));
+      };
+      const onGrabEnd = (e: PointerEvent) => {
+        if (!grabbed || grabbed.id !== e.pointerId) return;
+        grabbed = null;
+        map.dragPan.enable();
+        window.setTimeout(() => { justGrabbed = false; }, 60); // after the click that follows this release has been ignored
+      };
+      el.addEventListener('pointerdown', onGrab, true); // capture phase: before the map's own handlers see the press
+      el.addEventListener('pointermove', onGrabMove);
+      el.addEventListener('pointerup', onGrabEnd);
+      el.addEventListener('pointercancel', onGrabEnd);
       map.on('click', onClick);
       map.on('dblclick', onDbl);
       map.on('mousemove', onMouseMove);
       el.addEventListener('mouseleave', onLeave);
       cleanups.push(() => {
         map.off('click', onClick);
+        el.removeEventListener('pointerdown', onGrab, true);
+        el.removeEventListener('pointermove', onGrabMove);
+        el.removeEventListener('pointerup', onGrabEnd);
+        el.removeEventListener('pointercancel', onGrabEnd);
         map.off('dblclick', onDbl);
         map.off('mousemove', onMouseMove);
         el.removeEventListener('mouseleave', onLeave);
