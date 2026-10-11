@@ -51,6 +51,18 @@ await page.route('https://api.maptiler.com/tiles/terrain-rgb-v2/**', (r) => {
   terrainHits += 1;
   return r.fulfill({ body: terrainPng(+m[1], +m[2], +m[3]), contentType: 'image/png', headers: cors });
 });
+const suggestLog = [];
+let suggestAnswer = [];
+let suggestFail = 0;
+let suggestDelay = () => 0;
+await page.route('https://api.maptiler.com/geocoding/**', async (r) => {
+  const url = new URL(r.request().url());
+  suggestLog.push({ q: decodeURIComponent(url.pathname.replace('/geocoding/', '').replace(/\.json$/, '')), params: Object.fromEntries(url.searchParams) });
+  const wait = suggestDelay(suggestLog.at(-1).q);
+  if (wait) await new Promise((res) => setTimeout(res, wait));
+  if (suggestFail) return r.fulfill({ status: suggestFail, json: { message: 'no' }, headers: cors });
+  return r.fulfill({ json: { type: 'FeatureCollection', query: [], attribution: 'x', features: suggestAnswer.map((a) => ({ place_name: a.name, center: [a.lng, a.lat], geometry: { type: 'Point', coordinates: [a.lng, a.lat] } })) }, headers: cors });
+});
 let reverseSeq = 0;
 const reverseLog = [];
 const geocodeLog = [];
@@ -608,20 +620,74 @@ await wait(300);
   check('one place lookup per point, with its latitude and longitude', reverseLog.length === 2 && reverseLog.every((b) => typeof b.lat === 'number' && typeof b.lng === 'number' && Math.abs(b.lat) < 90), JSON.stringify(reverseLog));
   check('and a labelled box keeps its own name when its tooltip shows', (await fieldA.getAttribute('aria-label')) === 'Start (A)');
 
-  // typing is not a search: nothing is sent until Enter
-  geocodeLog.length = 0;
-  await fieldB.click();
-  await fieldB.fill('Paddingto'); await wait(1300);
-  check('typing in a field sends nothing (no search-as-you-type)', geocodeLog.length === 0);
-  await fieldB.fill('ab'); await fieldB.press('Enter'); await wait(300);
-  check('fewer than 3 letters is explained and not sent', geocodeLog.length === 0 && /at least 3 letters/.test((await page.getByRole('listbox', { name: 'Places found' }).textContent().catch(() => '')) ?? ''));
+  // suggestions as you type: after a pause, from 3 letters, one request however fast the typing, from MapTiler, near where the map is looking
   const c = await center();
-  geocodeAnswer = [{ label: 'Test Park, Testville', lat: c[1] - 0.01, lng: c[0] + 0.02 }, { label: 'Test Street, Elsewhere', lat: c[1], lng: c[0] }];
-  await fieldB.fill('Test Park'); await fieldB.press('Enter'); await wait(500);
-  check('Enter sends one search, and the places are listed', geocodeLog.length === 1 && geocodeLog[0].q === 'Test Park' && (await page.getByRole('listbox', { name: 'Places found' }).getByRole('button').count()) === 2);
+  suggestAnswer = [{ name: 'Test Park, Testville, Testshire, Australia', lat: c[1] - 0.01, lng: c[0] + 0.02 }, { name: 'Test Street, Elsewhere', lat: c[1], lng: c[0] }];
+  geocodeLog.length = 0; suggestLog.length = 0;
+  await fieldB.click();
+  await fieldB.fill('Te'); await wait(700);
+  check('under 3 letters nothing is asked for', suggestLog.length === 0 && geocodeLog.length === 0);
+  await fieldB.fill(''); await fieldB.pressSequentially('Test Pa', { delay: 70 });
+  check('nothing is asked for in the middle of typing', suggestLog.length === 0);
+  await wait(900);
+  check('after a pause in typing, one request goes to MapTiler (not one per letter), and not to Vault\'s private search', suggestLog.length === 1 && suggestLog[0].q === 'Test Pa' && geocodeLog.length === 0, JSON.stringify(suggestLog.map((x) => x.q)));
+  check('it asks for autocomplete, a few places, and biases towards where the map is looking', suggestLog[0].params.autocomplete === 'true' && suggestLog[0].params.limit === '5' && /^-?[\d.]+,-?[\d.]+$/.test(suggestLog[0].params.proximity ?? '') && !!suggestLog[0].params.key, JSON.stringify(suggestLog[0].params));
+  const list = page.getByRole('listbox', { name: 'Places found' });
+  check('the suggestions are listed, shortened to what fits, with the attribution', (await list.getByRole('option').count()) === 2 && (await list.getByRole('option').first().textContent()) === 'Test Park, Testville, Testshire' && /MapTiler/.test((await list.textContent()) ?? ''), (await list.textContent()) ?? '');
+  await tipsOk('place suggestions');
+
+  // keyboard: arrows and Enter pick one, Escape closes
+  await fieldB.press('Escape'); await wait(150);
+  check('Escape closes the list', (await list.count()) === 0);
+  await fieldB.fill('Test Par'); await wait(900);
+  await fieldB.press('ArrowDown'); await fieldB.press('ArrowDown');
+  check('the arrow keys move through the suggestions', (await list.getByRole('option').nth(1).getAttribute('aria-selected')) === 'true');
+  await fieldB.press('ArrowUp');
+  check('and back up', (await list.getByRole('option').first().getAttribute('aria-selected')) === 'true');
   reverseLog.length = 0; planLog.length = 0;
-  await page.getByRole('listbox', { name: 'Places found' }).getByRole('button', { name: 'Test Park, Testville' }).click(); await wait(1500);
-  check('choosing a place sets B there, with its name, and plans again', (await fieldB.inputValue()) === 'Test Park, Testville' && planLog.length >= 1 && Math.abs(planLog.at(-1).to[0] - (c[0] + 0.02)) < 1e-9, `${await fieldB.inputValue()} ${JSON.stringify(planLog.at(-1))}`);
+  await fieldB.press('Enter'); await wait(1500);
+  check('Enter picks the highlighted suggestion: B moves there with its name, and plans again', (await fieldB.inputValue()) === 'Test Park, Testville, Testshire' && planLog.length >= 1 && Math.abs(planLog.at(-1).to[0] - (c[0] + 0.02)) < 1e-9, `${await fieldB.inputValue()} ${JSON.stringify(planLog.at(-1))}`);
+  check('without looking the name up again', reverseLog.length === 0 && (await list.count()) === 0);
+
+  // Enter with nothing highlighted searches at once, no pause
+  suggestLog.length = 0;
+  await fieldB.fill('Test Str'); await fieldB.press('Enter'); await wait(250);
+  check('Enter searches straight away (no waiting for a pause)', suggestLog.length === 1 && suggestLog[0].q === 'Test Str' && (await list.getByRole('option').count()) === 2);
+  await wait(800);
+  check('and the pause that follows does not ask again', suggestLog.length === 1);
+  await fieldB.press('Escape');
+  await fieldB.fill('ab'); await fieldB.press('Enter'); await wait(300);
+  check('Enter under 3 letters is explained and sends nothing', suggestLog.length === 1 && /at least 3 letters/.test((await list.textContent().catch(() => '')) ?? ''));
+
+  // a slow answer for an older keystroke never replaces the newer one
+  suggestLog.length = 0;
+  suggestDelay = (q) => (q === 'Slow Fir' ? 1200 : 0);
+  suggestAnswer = [{ name: 'Answer for the later words', lat: c[1], lng: c[0] }];
+  await fieldB.fill('Slow Fir'); await wait(450);   // the pause passes: a slow request goes out
+  await fieldB.fill('Slow First'); await wait(2000); // typed on, and answered faster
+  check('an answer that arrives late for older typing is not shown over the newer one', suggestLog.length === 2 && (await list.getByRole('option').count()) === 1 && /later words/.test((await list.textContent()) ?? ''), JSON.stringify(suggestLog.map((x) => x.q)));
+  suggestDelay = () => 0;
+
+  // the same words again are remembered
+  await fieldB.fill('Test Par'); await wait(900); suggestLog.length = 0;
+  await fieldB.fill('Slow First'); await wait(900);
+  check('words asked a moment ago are answered from memory', suggestLog.length === 0);
+
+  // MapTiler cannot answer: typing says so, Enter falls back to Vault's private search
+  suggestFail = 403;
+  geocodeAnswer = [{ label: 'Private Park, Fallback', lat: c[1] - 0.01, lng: c[0] + 0.02 }];
+  suggestLog.length = 0; geocodeLog.length = 0;
+  await fieldB.fill('Fallback Park'); await wait(900);
+  check('when suggestions are not available, typing says so and does not use the private search behind your back', /not available right now/.test((await list.textContent().catch(() => '')) ?? '') && geocodeLog.length === 0);
+  await fieldB.press('Enter'); await wait(500);
+  check('Enter then uses Vault\'s private search instead', geocodeLog.length === 1 && geocodeLog[0].q === 'Fallback Park' && (await list.getByRole('option').count()) === 1 && !/MapTiler/.test((await list.textContent()) ?? ''));
+  suggestFail = 0;
+  await fieldB.press('Escape');
+  suggestAnswer = [{ name: 'Test Park, Testville, Testshire, Australia', lat: c[1] - 0.01, lng: c[0] + 0.02 }, { name: 'Test Street, Elsewhere', lat: c[1], lng: c[0] }];
+  await fieldB.fill('Test Park'); await wait(900);
+  reverseLog.length = 0; planLog.length = 0;
+  await list.getByRole('option').first().click(); await wait(1500);
+  check('choosing a place sets B there, with its name, and plans again', (await fieldB.inputValue()) === 'Test Park, Testville, Testshire' && planLog.length >= 1, `${await fieldB.inputValue()} ${planLog.length}`);
   check('and does not look the name up again', reverseLog.length === 0);
 
   // dragging a pin names the new spot

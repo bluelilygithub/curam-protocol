@@ -8,6 +8,7 @@ import { bboxOf, formatDistance, nearestOnLines, type Pos } from './geo';
 import { fitToLimit } from './gpx';
 import { fitPadding } from './layout';
 import { setPlanned } from './mapLayers';
+import { MIN_LETTERS, suggestPlaces } from './placeSearch';
 import { useStore } from './store';
 
 export const PLAN_COLORS = ['#E4572E', '#1D6FA5', '#2E7D32'];
@@ -271,51 +272,106 @@ export function usePlanning(map: maplibregl.Map | null): void {
 
 const KIND_WORD: Record<PlanKind, string> = { direct: 'route', loop: 'loop', detour: 'route' };
 
-/** One of the two place fields: type a place and press Enter (a deliberate search, never type-ahead), or tap the map and the name fills in. */
+const TYPE_PAUSE_MS = 300; // suggestions are asked for once typing pauses this long, not on every keystroke
+
+/**
+ * One of the two place fields. Suggestions appear as you type (after a short pause, from 3 letters) from MapTiler; Enter searches straight
+ * away; the arrow keys and Enter pick a suggestion, Escape closes the list. An answer to an older keystroke is never shown over a newer one.
+ * If MapTiler cannot answer, Enter falls back to Vault's own private place search. Tapping the map or dragging a pin fills in the name.
+ */
 function PlaceRow({ which, map }: { which: 'from' | 'to'; map: maplibregl.Map | null }) {
   const point = usePlan((s) => (which === 'from' ? s.from : s.to));
   const name = usePlan((s) => (which === 'from' ? s.fromName : s.toName));
+  const mapKey = useStore((s) => s.mapKey);
   const [text, setText] = useState('');
   const [results, setResults] = useState<GeocodeResult[]>([]);
+  const [active, setActive] = useState(-1);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
+  const [fromMapTiler, setFromMapTiler] = useState(true);
   const typing = useRef(false);
+  const timer = useRef<number | undefined>(undefined);
+  const ctl = useRef<AbortController | null>(null);
+  const seq = useRef(0);
   const label = which === 'from' ? 'A' : 'B';
   const shown = point ? (name ?? 'Finding the place…') : '';
   useEffect(() => { if (!typing.current) setText(shown); }, [shown]);
+  useEffect(() => () => { window.clearTimeout(timer.current); ctl.current?.abort(); }, []);
 
-  async function search(e: React.FormEvent) {
-    e.preventDefault();
-    const q = text.trim();
-    if (q.length < 3) { setNote('Type at least 3 letters, then press Enter.'); return; }
+  function stop(): void { window.clearTimeout(timer.current); ctl.current?.abort(); seq.current += 1; setBusy(false); }
+
+  /** Ask for places for `q`: `now` is Enter (no pause, and the private search if MapTiler cannot answer). */
+  async function ask(q: string, now: boolean): Promise<void> {
+    const id = ++seq.current;
+    ctl.current = new AbortController();
     setBusy(true); setNote('');
+    const c = map?.getCenter();
     try {
-      const r = await api.geocode(q);
-      setResults(r.results);
-      if (!r.results.length) setNote('No places found. Try another name, or tap the map.');
-    } catch (err) { setNote(err instanceof Error ? err.message : 'Search failed.'); } finally { setBusy(false); }
+      const r = await suggestPlaces(q, mapKey, c ? [c.lng, c.lat] : null, ctl.current.signal);
+      if (id !== seq.current) return;
+      setResults(r); setActive(-1); setFromMapTiler(true);
+      if (!r.length) setNote('No places found. Try another name, or tap the map.');
+    } catch (e) {
+      if (id !== seq.current || (e as { name?: string })?.name === 'AbortError') return;
+      if (!now) { setResults([]); setNote('Suggestions are not available right now. Press Enter to search.'); return; }
+      try { // Enter: the private search through Vault instead
+        const r = await api.geocode(q);
+        if (id !== seq.current) return;
+        setResults(r.results); setActive(-1); setFromMapTiler(false);
+        if (!r.results.length) setNote('No places found. Try another name, or tap the map.');
+      } catch (err) { if (id === seq.current) { setResults([]); setNote(err instanceof Error ? err.message : 'Search failed.'); } }
+    } finally { if (id === seq.current) setBusy(false); }
+  }
+
+  function typed(v: string): void {
+    typing.current = true;
+    setText(v); setNote(''); setActive(-1);
+    stop();
+    if (v.trim().length < MIN_LETTERS) { setResults([]); return; }
+    timer.current = window.setTimeout(() => { void ask(v.trim(), false); }, TYPE_PAUSE_MS);
+  }
+  function search(e: React.FormEvent): void {
+    e.preventDefault();
+    if (active >= 0 && results[active]) { choose(results[active]); return; }
+    stop();
+    const q = text.trim();
+    if (q.length < MIN_LETTERS) { setResults([]); setNote('Type at least 3 letters, then press Enter.'); return; }
+    void ask(q, true);
   }
   function choose(r: GeocodeResult): void {
+    stop();
     typing.current = false;
-    setResults([]); setNote('');
+    setText(r.label); // even if this is the place the field already had, the typed words give way to its name
+    setResults([]); setNote(''); setActive(-1);
     const p: Pos = [r.lng, r.lat];
     if (which === 'from') usePlan.getState().setFrom(p, r.label); else usePlan.getState().setTo(p, r.label);
     map?.flyTo({ center: p, zoom: Math.max(map.getZoom(), 14) });
   }
+  function onKey(e: React.KeyboardEvent<HTMLInputElement>): void {
+    if (e.key === 'ArrowDown' && results.length) { e.preventDefault(); setActive((i) => (i + 1) % results.length); }
+    else if (e.key === 'ArrowUp' && results.length) { e.preventDefault(); setActive((i) => (i <= 0 ? results.length - 1 : i - 1)); }
+    else if (e.key === 'Escape' && (results.length || note)) { e.stopPropagation(); stop(); setResults([]); setNote(''); setActive(-1); }
+  }
+  const open = results.length > 0 || !!note || (busy && text.trim().length >= MIN_LETTERS);
   return (
     <form className="field-row" onSubmit={search}>
       <span className={`field-dot ${which}`} aria-hidden="true">{label}</span>
       <input
         aria-label={which === 'from' ? 'Start (A)' : 'End (B)'} value={text} placeholder={which === 'from' ? 'Search a place, or tap the map' : 'Search a place, or tap the map again'}
-        onChange={(e) => { typing.current = true; setText(e.target.value); setNote(''); }}
-        onBlur={() => { typing.current = false; setText(shown); setResults([]); }}
-        title={which === 'from' ? 'The start (A). Type a place and press Enter, or tap the map. You can also drag the A pin.' : 'The end (B). Type a place and press Enter, or tap the map. You can also drag the B pin.'}
+        autoComplete="off" aria-autocomplete="list" aria-expanded={open}
+        onChange={(e) => typed(e.target.value)} onKeyDown={onKey}
+        onBlur={() => { typing.current = false; stop(); setText(shown); setResults([]); setNote(''); }}
+        title={which === 'from' ? 'The start (A). Start typing a place and pick a suggestion (arrow keys and Enter work), or tap the map. You can also drag the A pin.' : 'The end (B). Start typing a place and pick a suggestion (arrow keys and Enter work), or tap the map. You can also drag the B pin.'}
       />
-      <button type="submit" className="field-go" disabled={busy} aria-label={`Search for ${label}`} title={`Search for this place and set ${label} there`}><Search size={16} aria-hidden="true" /></button>
-      {(results.length > 0 || note) && (
-        <div className="field-pop" role="listbox" aria-label="Places found">
-          {results.map((r, i) => <button key={i} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => choose(r)} title={`Set ${label} here`}>{r.label}</button>)}
+      <button type="submit" className="field-go" aria-label={`Search for ${label}`} title={`Search for this place now and set ${label} there`}><Search size={16} aria-hidden="true" /></button>
+      {open && (
+        <div className="field-pop" role="listbox" aria-label="Places found" aria-live="polite">
+          {busy && results.length === 0 && <p className="hint">Searching…</p>}
+          {results.map((r, i) => (
+            <button key={i} type="button" role="option" aria-selected={i === active} className={i === active ? 'on' : ''} onMouseDown={(e) => e.preventDefault()} onClick={() => choose(r)} title={`Set ${label} here`}>{r.label}</button>
+          ))}
           {note && <p className="hint">{note}</p>}
+          {results.length > 0 && <p className="hint pop-credit">{fromMapTiler ? '© MapTiler © OpenStreetMap contributors' : '© OpenStreetMap contributors'}</p>}
         </div>
       )}
     </form>

@@ -122,6 +122,8 @@ h2 { margin: 0; font-size: 1.15rem; }
 .field-go { width: 40px; padding: 0; display: grid; place-items: center; }
 .field-pop { position: absolute; z-index: 15; top: 48px; left: 34px; right: 0; padding: 4px; display: grid; gap: 2px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2); max-height: 260px; overflow: auto; }
 .field-pop button { text-align: left; border: 0; }
+.field-pop button.on { background: var(--primary-soft); }
+.pop-credit { padding: 2px 8px 4px; }
 .swap-btn { width: 40px; height: 44px; padding: 0; display: grid; place-items: center; }
 .plan-length { display: grid; gap: 4px; font-size: 0.9rem; }
 .plan-length input[aria-invalid='true'] { border-color: var(--danger); }
