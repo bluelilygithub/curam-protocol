@@ -4,6 +4,7 @@ import { api, type Track, type TrackSummary } from './api';
 import { displayLines, finish, fromLines } from './drawing';
 import { bboxOf, formatDistance, totalKm, type BBox } from './geo';
 import { setSaved, type SavedLine } from './mapLayers';
+import { ElevationChart } from './ElevationChart';
 import { COLORS, useStore } from './store';
 
 const fmtDate = (iso: string): string => new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -88,13 +89,13 @@ export function SaveDialog({ onSaved }: { onSaved: (t: Track) => void }) {
     <div className="modal-back" role="presentation">
       <form className="modal" role="dialog" aria-modal="true" aria-label="Save track" onSubmit={submit}>
         <h2>{extendingId ? 'Save changes' : 'Save track'}</h2>
-        <label>Name<input ref={first} value={name} maxLength={120} required onChange={(e) => setName(e.target.value)} /></label>
-        <label>Notes (optional)<textarea value={notes} maxLength={2000} rows={3} onChange={(e) => setNotes(e.target.value)} /></label>
+        <label>Name<input ref={first} title="A short name for this track, up to 120 characters" value={name} maxLength={120} required onChange={(e) => setName(e.target.value)} /></label>
+        <label>Notes (optional)<textarea title="Anything worth remembering about this route: surface, parking, turnaround points" value={notes} maxLength={2000} rows={3} onChange={(e) => setNotes(e.target.value)} /></label>
         <Swatches value={drawColor} onChange={setDrawColor} />
         <p className="stats">{formatDistance(km, units)} · {points} points</p>
         <div className="row">
-          <button type="button" onClick={() => setSaving(false)}>Keep drawing</button>
-          <button type="submit" className="primary" disabled={busy || !name.trim()}>{busy ? 'Saving…' : 'Save'}</button>
+          <button type="button" onClick={() => setSaving(false)} title="Go back to the drawing without saving (Escape does the same)">Keep drawing</button>
+          <button type="submit" className="primary" disabled={busy || !name.trim()} title="Save this track to your Vault account">{busy ? 'Saving…' : 'Save'}</button>
         </div>
       </form>
     </div>
@@ -106,7 +107,7 @@ function Swatches({ value, onChange }: { value: string; onChange: (c: string) =>
     <fieldset className="swatches">
       <legend>Colour</legend>
       {COLORS.map((c) => (
-        <button key={c} type="button" className="swatch" style={{ background: c }} aria-label={`Colour ${c}`} aria-pressed={value.toUpperCase() === c} onClick={() => onChange(c)} />
+        <button key={c} type="button" className="swatch" style={{ background: c }} aria-label={`Colour ${c}`} title={`Colour the line ${c}`} aria-pressed={value.toUpperCase() === c} onClick={() => onChange(c)} />
       ))}
     </fieldset>
   );
@@ -178,32 +179,32 @@ export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
   if (panel === 'detail' && selected) return <TrackDetail map={map} track={selected} onChanged={(t) => { select(t); void load(q, null); }} onGone={() => { select(null); setPanel('tracks'); void load(q, null); }} />;
 
   return (
-    <aside className="panel" aria-label="Tracks">
+    <aside className="panel" aria-label="Tracks" data-tour="rt-panel">
       <div className="panel-head">
         <h2>Tracks</h2>
-        <button type="button" onClick={() => setPanel('closed')} aria-label="Close tracks">✕</button>
+        <button type="button" onClick={() => setPanel('closed')} aria-label="Close tracks" title="Close the tracks list">✕</button>
       </div>
-      <input type="search" aria-label="Search tracks" placeholder="Search by name" value={q} onChange={(e) => setQ(e.target.value)} />
-      <label className="check"><input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} /> Show all on map</label>
+      <input type="search" aria-label="Search tracks" title="Type part of a track name to filter the list" placeholder="Search by name" value={q} onChange={(e) => setQ(e.target.value)} />
+      <label className="check" title="Draw every saved track on the map at once, not just the open one"><input type="checkbox" title="Draw every saved track on the map at once" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} /> Show all on map</label>
       {tracks.length > 0 && (
         <div className="row">
-          <button type="button" onClick={() => { setConfirming(false); setPicked(allPicked ? new Set() : new Set(tracks.map((t) => t.id))); }}>{allPicked ? 'Deselect all' : 'Select all'}</button>
+          <button type="button" onClick={() => { setConfirming(false); setPicked(allPicked ? new Set() : new Set(tracks.map((t) => t.id))); }} title="Tick or untick every track in the list">{allPicked ? 'Deselect all' : 'Select all'}</button>
           {confirming ? (
             <>
               <span>Delete {picked.size} {picked.size === 1 ? 'track' : 'tracks'}?</span>
-              <button type="button" className="danger" disabled={deleting} onClick={() => void deletePicked()}>Yes</button>
-              <button type="button" onClick={() => setConfirming(false)}>No</button>
+              <button type="button" className="danger" disabled={deleting} onClick={() => void deletePicked()} title="Yes, delete the ticked tracks for good">Yes</button>
+              <button type="button" onClick={() => setConfirming(false)} title="No, keep them">No</button>
             </>
           ) : (
-            <button type="button" className="danger" disabled={!picked.size} onClick={() => setConfirming(true)}>Delete{picked.size ? ` (${picked.size})` : ''}</button>
+            <button type="button" className="danger" disabled={!picked.size} onClick={() => setConfirming(true)} title="Delete the ticked tracks (asks first)">Delete{picked.size ? ` (${picked.size})` : ''}</button>
           )}
         </div>
       )}
       <ul className="tracklist">
         {tracks.map((t) => (
           <li key={t.id} className={picked.has(t.id) ? 'picked' : ''}>
-            <label className="pick"><input type="checkbox" aria-label={`Select ${t.name}`} checked={picked.has(t.id)} onChange={() => togglePicked(t.id)} /></label>
-            <button type="button" onClick={() => void open(t)}>
+            <label className="pick"><input type="checkbox" aria-label={`Select ${t.name}`} title="Tick to select this track for deleting" checked={picked.has(t.id)} onChange={() => togglePicked(t.id)} /></label>
+            <button type="button" onClick={() => void open(t)} title="Open this track: show it on the map with its details">
               <span className="dot" style={{ background: t.color }} />
               <span className="tname">{t.name}</span>
               <span className="tmeta">{formatDistance(t.distanceM / 1000, units)} · {fmtDate(t.createdAt)}</span>
@@ -255,19 +256,19 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
   }
 
   return (
-    <aside className="panel" aria-label="Track detail">
+    <aside className="panel" aria-label="Track detail" data-tour="rt-panel">
       <div className="panel-head">
-        <button type="button" onClick={() => select(null)}>← Tracks</button>
-        <button type="button" onClick={() => { select(null); setPanel('closed'); }} aria-label="Close">✕</button>
+        <button type="button" onClick={() => select(null)} title="Back to the list of tracks">← Tracks</button>
+        <button type="button" onClick={() => { select(null); setPanel('closed'); }} aria-label="Close" title="Close this track">✕</button>
       </div>
       {editing ? (
         <form className="stack" onSubmit={save}>
-          <label>Name<input value={name} maxLength={120} required onChange={(e) => setName(e.target.value)} /></label>
-          <label>Notes<textarea value={notes} rows={4} maxLength={2000} onChange={(e) => setNotes(e.target.value)} /></label>
+          <label>Name<input title="The track's name, up to 120 characters" value={name} maxLength={120} required onChange={(e) => setName(e.target.value)} /></label>
+          <label>Notes<textarea title="Notes about this route" value={notes} rows={4} maxLength={2000} onChange={(e) => setNotes(e.target.value)} /></label>
           <Swatches value={color} onChange={setColor} />
           <div className="row">
-            <button type="button" onClick={() => setEditing(false)}>Cancel</button>
-            <button type="submit" className="primary" disabled={busy || !name.trim()}>Save</button>
+            <button type="button" onClick={() => setEditing(false)} title="Discard these changes">Cancel</button>
+            <button type="submit" className="primary" disabled={busy || !name.trim()} title="Save the new name, notes and colour">Save</button>
           </div>
         </form>
       ) : (
@@ -276,19 +277,20 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
           <p className="big">{formatDistance(track.distanceM / 1000, units)}</p>
           <p className="hint">{fmtDate(track.createdAt)} · {track.pointCount} points</p>
           {track.notes && <p className="notes">{track.notes}</p>}
+          <ElevationChart lines={track.geometry.coordinates} color={track.color} name={track.name} />
           <div className="stack">
-            <button type="button" onClick={() => setEditing(true)}>Rename / edit</button>
-            <button type="button" onClick={() => reopen('edit')}>Edit points</button>
-            <button type="button" onClick={() => reopen('extend')}>Extend</button>
-            <button type="button" onClick={() => void exportGpx()}>Export GPX</button>
+            <button type="button" onClick={() => setEditing(true)} title="Change this track's name, notes or colour">Rename / edit</button>
+            <button type="button" onClick={() => reopen('edit')} title="Reshape the route: move points, add points or delete them">Edit points</button>
+            <button type="button" onClick={() => reopen('extend')} title="Carry on drawing from the end of this route">Extend</button>
+            <button type="button" onClick={() => void exportGpx()} title="Download this track as a GPX file for Strava, Garmin or gpx.studio">Export GPX</button>
             {confirmDelete ? (
               <div className="row">
                 <span>Delete this track?</span>
-                <button type="button" className="danger" disabled={busy} onClick={() => void remove()}>Yes</button>
-                <button type="button" onClick={() => setConfirmDelete(false)}>No</button>
+                <button type="button" className="danger" disabled={busy} onClick={() => void remove()} title="Yes, delete this track for good">Yes</button>
+                <button type="button" onClick={() => setConfirmDelete(false)} title="No, keep it">No</button>
               </div>
             ) : (
-              <button type="button" className="danger" onClick={() => setConfirmDelete(true)}>Delete</button>
+              <button type="button" className="danger" onClick={() => setConfirmDelete(true)} title="Delete this track (asks first)">Delete</button>
             )}
           </div>
         </>
@@ -342,8 +344,8 @@ export function RecoveryBanner() {
         const b = bboxOf(draft.lines);
         if (b) window.dispatchEvent(new CustomEvent('route-tracer:fit', { detail: b }));
         setDraft(null);
-      }}>Restore</button>
-      <button type="button" onClick={() => { clearDraft(); setDraft(null); }}>Discard</button>
+      }} title="Reopen the drawing that was not saved">Restore</button>
+      <button type="button" onClick={() => { clearDraft(); setDraft(null); }} title="Throw the unsaved drawing away">Discard</button>
     </div>
   );
 }

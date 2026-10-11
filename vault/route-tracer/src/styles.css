@@ -30,7 +30,7 @@ button[aria-pressed='true'] { background: var(--primary); color: var(--primary-t
 .results { position: absolute; top: 48px; left: 0; right: 0; margin: 0; padding: 4px; list-style: none; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; max-height: 50vh; overflow: auto; }
 .results button { width: 100%; text-align: left; border: 0; min-height: 44px; }
 
-.drawbar { position: absolute; z-index: 5; left: 8px; right: 8px; bottom: 28px; margin: 0 auto; max-width: 440px; padding: 12px; display: grid; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2); }
+.drawbar { max-height: calc(100dvh - 130px); overflow: auto; position: absolute; z-index: 5; left: 8px; right: 8px; bottom: 28px; margin: 0 auto; max-width: 440px; padding: 12px; display: grid; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2); }
 .readout { font-size: 2rem; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
 .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
 .seg.three { grid-template-columns: 1fr 1fr 1.3fr; }
@@ -45,6 +45,21 @@ button[aria-pressed='true'] { background: var(--primary); color: var(--primary-t
 .probe-main { font-size: 1.1rem; font-variant-numeric: tabular-nums; }
 .probe-sub { font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .probe-close { position: absolute; top: 0; right: 0; width: 44px; border: 0; background: transparent; }
+.group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.rp-tooltip { position: fixed; z-index: 70; pointer-events: none; max-width: 240px; padding: 6px 10px; border-radius: 8px; font-size: 11px; line-height: 1.4; background: var(--text); color: var(--bg); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25); animation: tipin 200ms ease-out; }
+@keyframes tipin { from { opacity: 0; } }
+.ele { display: grid; gap: 4px; }
+.ele-stats { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.ele-svg { width: 100%; height: auto; touch-action: none; cursor: crosshair; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
+.ele-axis { stroke: var(--border); stroke-width: 1; }
+.ele-cursor { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.ele-label { font-size: 9px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+.modal.help { max-width: 640px; max-height: 90%; grid-template-rows: auto 1fr auto; }
+.modal-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.modal-body { overflow: auto; padding-right: 4px; line-height: 1.55; font-size: 0.92rem; }
+.modal-body h3 { margin: 14px 0 4px; font-size: 1rem; }
+.modal-body ul { margin: 4px 0; padding-left: 20px; }
+.modal-body li { margin: 4px 0; }
 .toasts { position: absolute; z-index: 20; top: 64px; left: 0; right: 0; display: grid; justify-items: center; gap: 6px; pointer-events: none; }
 .toast { padding: 10px 14px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); }
 .toast.error { color: var(--danger); }

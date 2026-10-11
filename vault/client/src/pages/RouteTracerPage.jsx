@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 
 /**
  * Route Tracer lives in its own app (vault/route-tracer/, Vite + React 19 + MapLibre GL) and is built into
@@ -8,6 +9,8 @@ import React, { useEffect, useState } from 'react';
 const APP_URL = '/route-tracer-app/';
 
 export default function RouteTracerPage() {
+  // Settings → Route Tracer Tour opens the page with ?tour=1; the app (inside the frame) then runs its own tour
+  const wantsTour = new URLSearchParams(useLocation().search).has('tour');
   // 'checking' | 'ok' | 'missing' — a failed route-tracer build must show a clear notice, not Vault's own page inside the frame
   const [state, setState] = useState('checking');
 
@@ -39,7 +42,7 @@ export default function RouteTracerPage() {
     <div className="flex flex-col h-full min-h-0" style={{ height: '100%' }}>
       {state === 'ok' && (
         <iframe
-          src={`${APP_URL}?embedded=1`}
+          src={`${APP_URL}?embedded=1${wantsTour ? '&tour=1' : ''}`}
           title="Route Tracer"
           allow="geolocation; fullscreen"
           allowFullScreen

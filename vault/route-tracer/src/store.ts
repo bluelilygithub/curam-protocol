@@ -15,7 +15,7 @@ export const COLORS = ['#E4572E', '#1D6FA5', '#2E7D32', '#8E44AD', '#B7791F', '#
 const read = (key: string): string | null => { try { return localStorage.getItem(key); } catch { return null; } };
 const write = (key: string, v: string): void => { try { localStorage.setItem(key, v); } catch { /* private window */ } };
 
-export interface Probe { pos: Pos; km: number; totalKm: number; name: string; color: string; several: boolean }
+export interface Probe { pos: Pos; km: number; totalKm: number; name: string; color: string; several: boolean; /** Terrain height at the spot, metres (set from the elevation chart). */ ele?: number | null }
 
 export interface Toast { id: number; kind: 'ok' | 'error'; text: string }
 let toastSeq = 0;
@@ -23,6 +23,15 @@ let toastSeq = 0;
 interface State {
   units: Units;
   setUnits(u: Units): void;
+  /** The MapTiler key the map uses; the elevation chart reads terrain tiles with it. */
+  mapKey: string | null;
+  setMapKey(k: string | null): void;
+  /** Elevation chart open in the drawing tools. */
+  elevationOpen: boolean;
+  setElevationOpen(v: boolean): void;
+  /** The "How this works" guide. */
+  infoOpen: boolean;
+  setInfoOpen(v: boolean): void;
   /** A tapped point on a saved track: where, how far from the start, and of which track. */
   probe: Probe | null;
   setProbe(p: Probe | null): void;
@@ -89,6 +98,12 @@ export const useStore = create<State>((set, get) => {
   return {
   units: read('route-tracer:units') === 'mi' ? 'mi' : 'km',
   setUnits: (units) => { write('route-tracer:units', units); set({ units }); },
+  mapKey: null,
+  setMapKey: (mapKey) => set({ mapKey }),
+  elevationOpen: false,
+  setElevationOpen: (elevationOpen) => set({ elevationOpen }),
+  infoOpen: false,
+  setInfoOpen: (infoOpen) => set({ infoOpen }),
   probe: null,
   setProbe: (probe) => set({ probe }),
   markersOn: read('route-tracer:markers') !== 'off',
@@ -116,7 +131,7 @@ export const useStore = create<State>((set, get) => {
   setRubber: (rubber) => set({ rubber }),
   apply: (fn) => set((s) => ({ draw: fn(s.draw) })),
   startDrawing: (from) => set({ probe: null, drawing: true, draw: from ?? emptyDraw(), rubber: null, selectedVertex: null, panel: 'closed' }),
-  stopDrawing: () => set({ imported: null, mode: get().mode === 'edit' ? (read('route-tracer:mode') === 'click' ? 'click' : 'freehand') : get().mode, drawing: false, draw: emptyDraw(), rubber: null, selectedVertex: null, extendingId: null, saving: false, drawColor: COLORS[0] }),
+  stopDrawing: () => set({ elevationOpen: false, imported: null, mode: get().mode === 'edit' ? (read('route-tracer:mode') === 'click' ? 'click' : 'freehand') : get().mode, drawing: false, draw: emptyDraw(), rubber: null, selectedVertex: null, extendingId: null, saving: false, drawColor: COLORS[0] }),
   extendingId: null,
   drawColor: COLORS[0],
   setDrawColor: (drawColor) => set({ drawColor }),

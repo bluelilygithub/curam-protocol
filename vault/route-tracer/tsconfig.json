@@ -10,7 +10,9 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["node", "vite/client"]
+    "types": ["node", "vite/client"],
+    "baseUrl": ".",
+    "paths": { "@planner-core/*": ["../planner-core/src/*"], "react": ["./node_modules/@types/react"], "react/*": ["./node_modules/@types/react/*"], "zustand": ["./node_modules/zustand"] }
   },
   "include": ["src", "tests", "vite.config.ts"]
 }

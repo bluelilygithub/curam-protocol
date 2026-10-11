@@ -1,9 +1,13 @@
 import type maplibregl from 'maplibre-gl';
+import { TooltipHost } from '@planner-core/help/TooltipHost';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError, type GeocodeResult, type Track } from './api';
 import { fitToLimit, MAX_FILE_BYTES, parseGpx } from './gpx';
 import { displayLines, finish, fromLines, hasWork, undo } from './drawing';
+import { ElevationChart } from './ElevationChart';
 import { bboxOf, formatDistance, totalKm, type BBox } from './geo';
+import { INFO_KEY, startTour } from './help/tour';
+import { InfoModal } from './InfoModal';
 import MapView from './MapView';
 import { useDistanceMarkers } from './Markers';
 import { ProbeReadout, useDistanceProbe } from './Probe';
@@ -21,10 +25,11 @@ export default function App() {
   const onMap = useCallback((m: maplibregl.Map) => setMap(m), []);
 
   useEffect(() => {
+    const ready = (key: string) => { useStore.getState().setMapKey(key); setBoot({ state: 'ready', key }); };
     api.config()
-      .then((c) => setBoot(c.maptilerKey ? { state: 'ready', key: c.maptilerKey } : DEV_KEY ? { state: 'ready', key: DEV_KEY } : { state: 'error', message: 'The map key is not set up on the server (ROUTE_TRACER_MAPTILER_KEY).' }))
+      .then((c) => (c.maptilerKey ? ready(c.maptilerKey) : DEV_KEY ? ready(DEV_KEY) : setBoot({ state: 'error', message: 'The map key is not set up on the server (ROUTE_TRACER_MAPTILER_KEY).' })))
       .catch((e: unknown) => {
-        if (DEV_KEY && !(e instanceof ApiError && e.status === 403)) return setBoot({ state: 'ready', key: DEV_KEY });
+        if (DEV_KEY && !(e instanceof ApiError && e.status === 403)) return ready(DEV_KEY);
         setBoot({ state: 'error', message: e instanceof Error ? e.message : 'Could not start.' });
       });
   }, []);
@@ -73,6 +78,13 @@ function Overlays({ map }: { map: maplibregl.Map | null }) {
     return () => window.removeEventListener('beforeunload', warn);
   }, []);
 
+  // First visit: the guide opens once. Vault's Settings page opens the app with ?tour=1 to run the tour instead.
+  useEffect(() => {
+    if (!map) return;
+    if (new URLSearchParams(window.location.search).has('tour')) { setTimeout(() => startTour(), 400); return; }
+    try { if (!localStorage.getItem(INFO_KEY)) useStore.getState().setInfoOpen(true); } catch { /* the guide is one click away */ }
+  }, [map]);
+
   return (
     <>
       <TopBar map={map} />
@@ -82,12 +94,14 @@ function Overlays({ map }: { map: maplibregl.Map | null }) {
       <RecoveryBanner />
       <ProbeReadout />
       <Toasts />
+      <InfoModal />
+      <TooltipHost />
     </>
   );
 }
 
 function TopBar({ map }: { map: maplibregl.Map | null }) {
-  const { drawing, styleId, setStyle, units, setUnits, startDrawing, panel, setPanel, markersOn, setMarkersOn } = useStore();
+  const { drawing, styleId, setStyle, units, setUnits, startDrawing, panel, setPanel, markersOn, setMarkersOn, setInfoOpen } = useStore();
   const [q, setQ] = useState('');
   const [results, setResults] = useState<GeocodeResult[]>([]);
   const [busy, setBusy] = useState(false);
@@ -143,35 +157,45 @@ function TopBar({ map }: { map: maplibregl.Map | null }) {
 
   return (
     <header className="topbar">
-      <form className="search" onSubmit={search} role="search">
-        <input aria-label="Search a place" placeholder="Search a place or address" value={q} disabled={drawing} onChange={(e) => setQ(e.target.value)} />
-        <button type="submit" disabled={drawing || busy || !q.trim()}>{busy ? '…' : 'Go'}</button>
+      <form className="search" onSubmit={search} role="search" data-tour="rt-search">
+        <input
+          aria-label="Search a place" placeholder="Search a place or address" value={q} disabled={drawing} onChange={(e) => setQ(e.target.value)}
+          title={drawing ? 'Search is off while you draw. Finish or cancel the drawing first.' : 'Type a suburb, address or landmark, then press Go (or Enter). The map flies to the one you pick.'}
+        />
+        <button type="submit" disabled={drawing || busy || !q.trim()} title="Search for this place">{busy ? '…' : 'Go'}</button>
         {results.length > 0 && (
           <ul className="results" role="listbox">
-            {results.map((r, i) => <li key={i}><button type="button" onClick={() => go(r)}>{r.label}</button></li>)}
+            {results.map((r, i) => <li key={i}><button type="button" title="Fly the map to this place" onClick={() => go(r)}>{r.label}</button></li>)}
           </ul>
         )}
       </form>
-      <button type="button" onClick={locate} aria-label="Centre on my location" title="My location">◎</button>
-      <select aria-label="Map style" value={styleId} onChange={(e) => setStyle(e.target.value as typeof styleId)}>
-        {STYLES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-      </select>
-      <select aria-label="Units" value={units} onChange={(e) => setUnits(e.target.value as 'km' | 'mi')}>
-        <option value="km">km</option>
-        <option value="mi">mi</option>
-      </select>
-      <button type="button" onClick={() => setMarkersOn(!markersOn)} aria-pressed={markersOn} title={`Distance markers every 1 ${units}`}>Markers</button>
-      {!drawing && <button type="button" onClick={() => fileInput.current?.click()} title="Open a GPX file from Strava, Garmin or a friend">Import GPX</button>}
-      <input ref={fileInput} type="file" accept=".gpx,.xml,application/gpx+xml,text/xml" hidden aria-label="GPX file" onChange={(e) => void importGpx(e)} />
-      {!drawing && <button type="button" onClick={() => setPanel(panel === 'closed' ? 'tracks' : 'closed')} aria-pressed={panel !== 'closed'}>Tracks</button>}
-      {!drawing && <button type="button" className="primary" onClick={() => startDrawing()}>Draw</button>}
+      <button type="button" onClick={locate} aria-label="Centre on my location" title="Centre the map on where you are (your browser asks permission the first time)" data-tour="rt-locate">◎</button>
+      <div className="group" data-tour="rt-view">
+        <select aria-label="Map style" value={styleId} onChange={(e) => setStyle(e.target.value as typeof styleId)} title="Map style: Streets for roads and addresses, Outdoor for trails and contours, Satellite for the aerial photo">
+          {STYLES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+        </select>
+        <select aria-label="Units" value={units} onChange={(e) => setUnits(e.target.value as 'km' | 'mi')} title="Show distances in kilometres or miles. Markers follow: every 1 km or every 1 mi. Remembered on this device.">
+          <option value="km">km</option>
+          <option value="mi">mi</option>
+        </select>
+        <button type="button" onClick={() => setMarkersOn(!markersOn)} aria-pressed={markersOn} title={`Show or hide the numbered distance markers along the line (every 1 ${units}; zoomed out they thin to every 5th, 10th and so on)`}>Markers</button>
+      </div>
+      {!drawing && <button type="button" onClick={() => fileInput.current?.click()} title="Open a GPX file from Strava, Garmin or a friend, see it on the map and save it as a track" data-tour="rt-import">Import GPX</button>}
+      <input ref={fileInput} type="file" accept=".gpx,.xml,application/gpx+xml,text/xml" hidden aria-label="GPX file" title="Choose a GPX file to import" onChange={(e) => void importGpx(e)} />
+      {!drawing && <button type="button" onClick={() => setPanel(panel === 'closed' ? 'tracks' : 'closed')} aria-pressed={panel !== 'closed'} title="Your saved tracks: search, open, select and delete" data-tour="rt-tracks">Tracks</button>}
+      {!drawing && <button type="button" className="primary" onClick={() => startDrawing()} title="Start tracing a new route on the map" data-tour="rt-draw">Draw</button>}
+      <div className="group" data-tour="rt-help">
+        <button type="button" onClick={() => setInfoOpen(true)} aria-label="How this works" title="How Route Tracer works: a plain guide to every feature">ⓘ</button>
+        <button type="button" onClick={() => startTour()} aria-label="Take the guided tour" title="Take the guided tour (about two minutes)">Tour</button>
+      </div>
     </header>
   );
 }
 
 function DrawToolbar({ onFinish }: { onFinish: () => void }) {
-  const { draw, mode, setMode, apply, units, stopDrawing, selectedVertex, setSelectedVertex, deleteSelectedVertex, extendingId, setPanel, closeLoop, outAndBack } = useStore();
-  const km = useMemo(() => totalKm(displayLines(draw)), [draw]);
+  const { draw, mode, setMode, apply, units, stopDrawing, selectedVertex, setSelectedVertex, deleteSelectedVertex, extendingId, setPanel, closeLoop, outAndBack, elevationOpen, setElevationOpen, drawColor, imported } = useStore();
+  const lines = useMemo(() => displayLines(draw), [draw]);
+  const km = useMemo(() => totalKm(lines), [lines]);
   const [confirmClear, setConfirmClear] = useState(false);
   const work = hasWork(draw);
 
@@ -183,32 +207,34 @@ function DrawToolbar({ onFinish }: { onFinish: () => void }) {
   }
   return (
     <section className="drawbar" aria-label="Drawing tools">
-      <div className="readout" aria-live="polite" data-testid="distance">{formatDistance(km, units)}</div>
-      <div className="seg three" role="group" aria-label="Draw mode">
-        <button type="button" aria-pressed={mode === 'freehand'} onClick={() => setMode('freehand')}>Freehand</button>
-        <button type="button" aria-pressed={mode === 'click'} onClick={() => setMode('click')}>Click</button>
-        <button type="button" aria-pressed={mode === 'edit'} onClick={() => setMode('edit')} disabled={!work}>Edit points</button>
+      <div className="readout" aria-live="polite" data-testid="distance" title="Total distance of the route so far">{formatDistance(km, units)}</div>
+      <div className="seg three" role="group" aria-label="Draw mode" data-tour="rt-modes">
+        <button type="button" aria-pressed={mode === 'freehand'} onClick={() => setMode('freehand')} title="Freehand: press and drag to draw a line that follows your finger or mouse. Two fingers, or Space + drag, move the map.">Freehand</button>
+        <button type="button" aria-pressed={mode === 'click'} onClick={() => setMode('click')} title="Click: each click or tap adds a point joined by a straight line. Best for following roads precisely. Double-click to finish.">Click</button>
+        <button type="button" aria-pressed={mode === 'edit'} onClick={() => setMode('edit')} disabled={!work} title="Edit points: drag a point to move it, drag a small dot to add a point, tap a point to pick it for deleting">Edit points</button>
       </div>
       {mode === 'edit' && (
-        <button type="button" className="danger" onClick={deleteSelectedVertex} disabled={!selectedVertex}>Delete selected point</button>
+        <button type="button" className="danger" onClick={deleteSelectedVertex} disabled={!selectedVertex} title="Delete the point you tapped (or press Delete). A stroke always keeps at least two points.">Delete selected point</button>
       )}
-      <div className="row" role="group" aria-label="Route shape">
-        <button type="button" onClick={closeLoop} disabled={!work} title="Add a straight line from the end back to the start">Return to start</button>
-        <button type="button" onClick={outAndBack} disabled={!work} title="Retrace the route in reverse, doubling the distance">Out and back</button>
+      <div className="row" role="group" aria-label="Route shape" data-tour="rt-shape">
+        <button type="button" onClick={closeLoop} disabled={!work} title="Add a straight line from the end of the route back to its start, making a loop">Return to start</button>
+        <button type="button" onClick={outAndBack} disabled={!work} title="Retrace the route in reverse so you finish where you began. The distance doubles.">Out and back</button>
+        <button type="button" onClick={() => setElevationOpen(!elevationOpen)} aria-pressed={elevationOpen} disabled={!work} title="Show the elevation profile and total climb for this route, from terrain data" data-tour="rt-elev">Elevation</button>
       </div>
-      <div className="row">
-        <button type="button" onClick={() => { setSelectedVertex(null); apply(undo); }} disabled={!draw.history.length && !draw.active}>Undo</button>
+      {elevationOpen && work && <ElevationChart lines={lines} color={drawColor} name={imported?.name ?? 'Drawing'} />}
+      <div className="row" data-tour="rt-actions">
+        <button type="button" onClick={() => { setSelectedVertex(null); apply(undo); }} disabled={!draw.history.length && !draw.active} title="Undo the last stroke, point, move or route shape (one step at a time)">Undo</button>
         {confirmClear ? (
           <>
             <span>Clear all?</span>
-            <button type="button" onClick={() => { apply((s) => ({ ...s, lines: [], history: [], active: null })); setConfirmClear(false); }}>Yes</button>
-            <button type="button" onClick={() => setConfirmClear(false)}>No</button>
+            <button type="button" onClick={() => { apply((s) => ({ ...s, lines: [], history: [], active: null })); setConfirmClear(false); }} title="Yes, remove everything drawn">Yes</button>
+            <button type="button" onClick={() => setConfirmClear(false)} title="No, keep the drawing">No</button>
           </>
         ) : (
-          <button type="button" onClick={() => setConfirmClear(true)} disabled={!work}>Clear</button>
+          <button type="button" onClick={() => setConfirmClear(true)} disabled={!work} title="Remove everything you have drawn (asks first)">Clear</button>
         )}
-        <button type="button" className="primary" onClick={onFinish} disabled={!work}>Finish</button>
-        <button type="button" onClick={cancel}>Cancel</button>
+        <button type="button" className="primary" onClick={onFinish} disabled={!work} title="Finish drawing and save it as a named track">Finish</button>
+        <button type="button" onClick={cancel} title="Stop drawing and discard it (asks first)">Cancel</button>
       </div>
       <p className="hint">{mode === 'freehand' ? 'Drag to draw. Two fingers (or Space + drag) to move the map.' : mode === 'click' ? 'Click to add points. Double-click to finish.' : 'Drag a point to move it. Drag a small dot to add a point. Tap a point, then Delete selected point.'}</p>
     </section>

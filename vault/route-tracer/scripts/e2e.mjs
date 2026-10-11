@@ -3,6 +3,7 @@
 // Start `npm run dev` first (port 5177), then `node scripts/e2e.mjs [screenshotDir]`. Exits non-zero if any check fails.
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { deflateSync } from 'node:zlib';
 import { chromium } from 'playwright';
 
 const APP = process.env.RT_URL ?? 'http://127.0.0.1:5177/route-tracer-app/';
@@ -12,7 +13,7 @@ let failures = 0;
 const check = (name, ok, extra = '') => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${ok || !extra ? '' : `  -> ${extra}`}`); if (!ok) failures++; };
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-const AUTH = () => { try { localStorage.setItem('vault-auth', JSON.stringify({ state: { token: 'test-token', user: { id: 1 } } })); } catch { /* none */ } };
+const AUTH = () => { try { localStorage.setItem('vault-auth', JSON.stringify({ state: { token: 'test-token', user: { id: 1 } } })); localStorage.setItem('route-tracer:info-seen:v1', '1'); } catch { /* none */ } };
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, permissions: ['geolocation'], geolocation: { latitude: -27.47, longitude: 153.03 } });
 await ctx.addInitScript(AUTH);
 const page = await ctx.newPage();
@@ -24,7 +25,32 @@ page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resourc
 const STYLE = { version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#dde6dd' } }] };
 const cors = { 'access-control-allow-origin': '*' };
 const styleHits = [];
-await page.route('https://api.maptiler.com/**', (r) => { styleHits.push(r.request().url().split('/maps/')[1]?.split('/')[0]); return r.fulfill({ json: STYLE, headers: cors }); });
+await page.route('https://api.maptiler.com/**', (r) => { if (r.request().url().includes('/maps/')) styleHits.push(r.request().url().split('/maps/')[1]?.split('/')[0]); return r.fulfill({ json: STYLE, headers: cors }); });
+// ---- terrain: MapTiler terrain-rgb tiles as PNGs of a known slope (100 m per 0.1 degree east), so the profile can be checked against the ground
+const CRC = (() => { const t = new Int32Array(256); for (let n = 0; n < 256; n += 1) { let c = n; for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c; } return t; })();
+const crc32 = (buf) => { let c = -1; for (const b of buf) c = CRC[(c ^ b) & 255] ^ (c >>> 8); return (c ^ -1) >>> 0; };
+const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const td = Buffer.concat([Buffer.from(type), data]); const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(td)); return Buffer.concat([len, td, crc]); };
+const terrainHeight = (lng) => 100 + (lng - 153) * 1000;
+const terrainPng = (z, x, y, size = 64) => {
+  const n = 2 ** z; const raw = Buffer.alloc(size * (size * 4 + 1));
+  for (let py = 0; py < size; py += 1) {
+    raw[py * (size * 4 + 1)] = 0;
+    for (let px = 0; px < size; px += 1) {
+      const lng = ((x + (px + 0.5) / size) / n) * 360 - 180;
+      const v = Math.round((terrainHeight(lng) + 10000) / 0.1);
+      const o = py * (size * 4 + 1) + 1 + px * 4;
+      raw[o] = (v >> 16) & 255; raw[o + 1] = (v >> 8) & 255; raw[o + 2] = v & 255; raw[o + 3] = 255;
+    }
+  }
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(size, 0); ihdr.writeUInt32BE(size, 4); ihdr[8] = 8; ihdr[9] = 6;
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+};
+let terrainHits = 0;
+await page.route('https://api.maptiler.com/tiles/terrain-rgb-v2/**', (r) => {
+  const m = /terrain-rgb-v2\/(\d+)\/(\d+)\/(\d+)\./.exec(r.request().url());
+  terrainHits += 1;
+  return r.fulfill({ body: terrainPng(+m[1], +m[2], +m[3]), contentType: 'image/png', headers: cors });
+});
 const db = [];
 let seq = 0;
 const rad = Math.PI / 180;
@@ -72,6 +98,12 @@ const km = (s) => (s.endsWith(' km') ? parseFloat(s) : parseFloat(s) / 1000);
 const shot = async (n) => { if (out) await page.screenshot({ path: join(out, `${n}.png`) }); };
 const lineCount = () => page.evaluate(() => (window.routeTracer.sent?.draw?.features ?? []).filter((f) => f.properties.kind === 'line').length);
 const center = () => page.evaluate(() => window.routeTracer.map.getCenter().toArray());
+/** Every visible button, box and menu must explain itself (a title, or data-tip) in the same way as the other Vault apps. */
+const untitled = () => page.evaluate(() => [...document.querySelectorAll('button, input, select, textarea')]
+  .filter((el) => !el.closest('.maplibregl-ctrl, .shepherd-element') && !el.hidden && el.getClientRects().length > 0)
+  .filter((el) => !(el.getAttribute('title') || el.getAttribute('data-tip') || '').trim())
+  .map((el) => `${el.tagName.toLowerCase()}${el.type ? `[${el.type}]` : ''} "${(el.getAttribute('aria-label') || el.textContent || el.placeholder || '').trim().slice(0, 30)}"`));
+const tipsOk = async (where) => { const bad = await untitled(); check(`every control has a tooltip: ${where}`, bad.length === 0, bad.join(', ')); };
 const labels = async () => (await page.locator('.km-marker').allTextContents()).map(Number);
 const ready = (p) => p.waitForFunction(() => window.routeTracer?.map?.isStyleLoaded());
 
@@ -86,6 +118,7 @@ async function stroke(points) {
 await page.goto(APP);
 await ready(page);
 check('map loads with the key from /config', true);
+await tipsOk('top bar');
 
 // ---- freehand
 await page.getByRole('button', { name: 'Draw', exact: true }).click();
@@ -104,6 +137,18 @@ await wait(300);
 const ml = await labels();
 check('distance markers appear along the line', ml.length >= 1 && ml.every((n, i) => Number.isInteger(n) && (i === 0 || n > ml[i - 1])) && ml.at(-1) <= Math.floor(km(d1)), `labels ${ml} for ${d1}`);
 await shot('freehand');
+await tipsOk('drawing tools');
+{ // elevation while drawing: the chart appears for the stroke, reads the stubbed slope, and hides again
+  await page.getByRole('button', { name: 'Elevation', exact: true }).click();
+  await page.getByTestId('ele-stats').waitFor({ timeout: 10000 });
+  const t = (await page.getByTestId('ele-stats').textContent()) ?? '';
+  const up = Number((/↑\s*([\d,]+)\s*m/.exec(t) ?? [])[1]?.replace(',', ''));
+  const down = Number((/↓\s*([\d,]+)\s*m/.exec(t) ?? [])[1]?.replace(',', ''));
+  check('elevation shows climb for the stroke, from terrain tiles', up > 0 && down <= 1 && terrainHits > 0, `${t} (tiles ${terrainHits})`);
+  await tipsOk('drawing tools with the elevation chart');
+  await page.getByRole('button', { name: 'Elevation', exact: true }).click(); await wait(200);
+  check('and the chart hides again', (await page.getByTestId('elevation').count()) === 0);
+}
 await page.getByRole('button', { name: 'Markers' }).click(); await wait(300);
 check('the Markers button hides them', (await labels()).length === 0);
 await page.getByRole('button', { name: 'Markers' }).click(); await wait(300);
@@ -159,6 +204,7 @@ await shot('click');
 // ---- save
 await page.getByRole('button', { name: 'Finish' }).click();
 const dlg = page.getByRole('dialog', { name: 'Save track' });
+await tipsOk('save dialog');
 const defName = await dlg.getByLabel('Name').inputValue();
 check('finish opens the save dialog with a default name', /^Track – \d/.test(defName), defName);
 await page.keyboard.press('Escape');
@@ -204,6 +250,26 @@ check('the open track shows distance markers too', (await labels()).length >= 1,
   await page.keyboard.press('Escape'); await wait(200);
   check('Escape clears it', !(await probe.isVisible()));
 }
+await page.getByTestId('ele-stats').waitFor({ timeout: 10000 });
+{
+  const g = db[0].geometry.coordinates[0];
+  const expect = (g.at(-1)[0] - g[0][0]) * 1000; // the slope is 1000 m per degree east and the track runs west to east
+  const t = (await page.getByTestId('ele-stats').textContent()) ?? '';
+  const up = Number((/↑\s*([\d,]+)\s*m/.exec(t) ?? [])[1]?.replace(',', ''));
+  check('the open track shows its climb, matching the ground', Math.abs(up - expect) <= 5, `${t} vs ${expect.toFixed(1)} m`);
+  const svg = page.getByTestId('ele-svg');
+  const box = await svg.boundingBox();
+  await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.5); await wait(300);
+  const he = (await page.getByTestId('probe-ele').textContent().catch(() => '')) ?? '';
+  check('moving across the chart puts a pin on the map and reads the height there', /Height [\d,]+ m/.test(he) && (await page.locator('.probe-pin').count()) === 1, he);
+  await page.mouse.move(10, 10); await wait(200);
+  check('leaving the chart clears the pin', (await page.locator('.probe-pin').count()) === 0);
+}
+await shot('detail');
+await tipsOk('open track');
+await page.getByRole('button', { name: 'Rename / edit' }).click();
+await tipsOk('rename / edit form');
+await page.getByRole('button', { name: 'Cancel' }).click();
 check('the saved track is drawn on the map', await page.evaluate(() => window.routeTracer.sent?.saved?.features.length === 1));
 
 // ---- extend
@@ -250,6 +316,7 @@ const nv0 = (await handles('vertex')).length;
 const mids = await handles('mid');
 check('edit mode shows point handles and add-a-point dots', nv0 >= 3 && mids.length >= 2, `vertices ${nv0}, mids ${mids.length}`);
 await shot('edit');
+await tipsOk('edit points mode');
 await dragFrom(mids[0], 0, -60);
 const nv1 = (await handles('vertex')).length;
 check('dragging a middle dot adds a point', nv1 === nv0 + 1, `${nv0} -> ${nv1}`);
@@ -300,6 +367,7 @@ await page.reload();
 await ready(page);
 await page.getByRole('button', { name: 'Tracks', exact: true }).click();
 await page.getByRole('button', { name: /Alpha/ }).waitFor();
+await tipsOk('tracks list');
 const del = page.getByRole('button', { name: /^Delete/ });
 check('Delete is off until something is ticked', await del.isDisabled());
 await page.getByLabel('Select Alpha').check();
@@ -345,6 +413,65 @@ check('a recording over the point limit is simplified to fit, and says so', (awa
 page.once('dialog', (d) => d.accept());
 await page.getByRole('button', { name: 'Cancel' }).click();
 await wait(300);
+
+// ---- the guide and the tour
+{
+  const fresh = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await fresh.addInitScript(() => { try { localStorage.setItem('vault-auth', JSON.stringify({ state: { token: 'test-token', user: { id: 1 } } })); } catch { /* none */ } });
+  const fp = await fresh.newPage();
+  await fp.route('https://api.maptiler.com/**', (r) => r.fulfill({ json: STYLE, headers: cors }));
+  await fp.route('**/api/route-tracks/config', (r) => r.fulfill({ json: { maptilerKey: 'test' } }));
+  await fp.route('**/api/route-tracks?**', (r) => r.fulfill({ json: { tracks: [], nextCursor: null } }));
+  await fp.goto(APP);
+  await fp.getByTestId('info-modal').waitFor({ timeout: 10000 });
+  check('the guide opens by itself on the first visit', true);
+  if (out) await fp.screenshot({ path: join(out, 'info.png') });
+  const guide = (await fp.getByTestId('info-modal').textContent()) ?? '';
+  check('and covers drawing, elevation, GPX and tracks', /Freehand/.test(guide) && /Elevation and climb/.test(guide) && /GPX files/.test(guide) && /Saving and your tracks/.test(guide));
+  const noTips = await fp.evaluate(() => [...document.querySelectorAll('[data-testid=info-modal] button')].filter((b) => !(b.getAttribute('title') || b.getAttribute('data-tip') || '').trim()).length); // a focused button has its title moved to data-tip by the tooltip host
+  check('guide buttons have tooltips too', noTips === 0);
+  await fp.keyboard.press('Escape'); await wait(300);
+  check('Escape closes the guide', (await fp.getByTestId('info-modal').count()) === 0);
+  await fp.reload();
+  await fp.waitForFunction(() => window.routeTracer?.map?.isStyleLoaded());
+  await wait(500);
+  check('it does not open again on the next visit', (await fp.getByTestId('info-modal').count()) === 0);
+  await fp.getByRole('button', { name: 'How this works' }).click();
+  check('but the (i) button opens it any time', (await fp.getByTestId('info-modal').count()) === 1);
+  await fp.getByRole('button', { name: 'Got it' }).click();
+
+  // ?tour=1 (Vault's Settings page) runs the tour on its own
+  await fp.goto(`${APP}?tour=1`);
+  await fp.locator('.shepherd-element.vault-tour').first().waitFor({ timeout: 10000 });
+  check('?tour=1 starts the tour', (await fp.locator('.vault-tour-step-count').first().textContent()) === 'Step 1 of 11');
+  await fp.keyboard.press('Escape'); await wait(400);
+  check('skipping marks it done', (await fp.evaluate(() => localStorage.getItem('vault_tour_route_tracer_completed'))) === '1');
+  await fresh.close();
+}
+{
+  await page.getByRole('button', { name: 'Take the guided tour' }).click();
+  const card = () => page.locator('.shepherd-element.vault-tour:not([hidden])').last();
+  await card().waitFor({ timeout: 10000 });
+  const seen = [];
+  const attached = [];
+  for (let i = 1; i <= 11; i += 1) {
+    await page.waitForFunction((n) => [...document.querySelectorAll('.vault-tour-step-count')].some((e) => e.textContent === `Step ${n} of 11` && e.closest('.shepherd-element:not([hidden])')), i, { timeout: 10000 });
+    await wait(550);
+    seen.push((await card().locator('.shepherd-title').textContent())?.trim());
+    attached.push(!!(await card().getAttribute('data-popper-placement')));
+    if (i === 5) await shot('tour');
+    if (i === 5) check('the tour opens the drawing tools for the drawing steps', await page.getByRole('region', { name: 'Drawing tools' }).isVisible());
+    if (i === 8) check('and the tracks list for its step', await page.getByRole('complementary', { name: 'Tracks' }).isVisible() && !(await page.getByRole('region', { name: 'Drawing tools' }).isVisible()));
+    const next = card().getByRole('button', { name: /Next|Start Tour|Finish/ });
+    await next.click();
+  }
+  await wait(500);
+  check('the tour has 11 steps with titles', seen.length === 11 && seen.every(Boolean) && new Set(seen).size === 11, seen.join(' | '));
+  check('every step that points at something is attached to it', [1, 2, 3, 4, 5, 6, 7, 8, 9].every((i) => attached[i]), JSON.stringify(attached));
+  check('finishing the tour marks it done', (await page.evaluate(() => localStorage.getItem('vault_tour_route_tracer_completed'))) === '1');
+  check('and puts the screen back as it was', !(await page.getByRole('region', { name: 'Drawing tools' }).isVisible()) && !(await page.getByRole('complementary', { name: 'Tracks' }).isVisible()));
+  await tipsOk('after the tour');
+}
 
 // ---- units
 await page.getByLabel('Units').selectOption('mi');

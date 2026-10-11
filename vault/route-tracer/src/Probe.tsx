@@ -1,5 +1,6 @@
 import maplibregl from 'maplibre-gl';
 import { useEffect, useRef } from 'react';
+import { formatElevation } from './ElevationChart';
 import { formatDistance, nearestOnLines } from './geo';
 import { getSavedLines } from './mapLayers';
 import { useStore } from './store';
@@ -60,7 +61,8 @@ export function ProbeReadout() {
       {probe.several && <div className="probe-name">{probe.name}</div>}
       <div className="probe-main"><strong>{formatDistance(probe.km, units)}</strong> from start</div>
       <div className="probe-sub">{formatDistance(toGo, units)} to go</div>
-      <button type="button" className="probe-close" aria-label="Clear distance reading" onClick={() => setProbe(null)}>✕</button>
+      {probe.ele != null && <div className="probe-sub" data-testid="probe-ele">Height {formatElevation(probe.ele, units)}</div>}
+      <button type="button" className="probe-close" aria-label="Clear distance reading" title="Clear this reading and remove the pin" onClick={() => setProbe(null)}>✕</button>
     </div>
   );
 }
