@@ -5,6 +5,7 @@ import { displayLines, finish, hasWork, undo } from './drawing';
 import { formatDistance, totalKm, type BBox } from './geo';
 import MapView from './MapView';
 import { useDistanceMarkers } from './Markers';
+import { ProbeReadout, useDistanceProbe } from './Probe';
 import { clearDraft, fitTo, RecoveryBanner, SaveDialog, TracksPanel, useAutosave, useSavedLayer } from './Panels';
 import { STYLES, useStore } from './store';
 import { useDrawing } from './useDrawing';
@@ -48,6 +49,7 @@ function Overlays({ map }: { map: maplibregl.Map | null }) {
   useDrawing(map, onFinish);
   useSavedLayer(map);
   useDistanceMarkers(map);
+  useDistanceProbe(map);
   useAutosave();
 
   const onSaved = useCallback((t: Track) => {
@@ -77,6 +79,7 @@ function Overlays({ map }: { map: maplibregl.Map | null }) {
       {!drawing && <TracksPanel map={map} />}
       {saving && <SaveDialog onSaved={onSaved} />}
       <RecoveryBanner />
+      <ProbeReadout />
       <Toasts />
     </>
   );

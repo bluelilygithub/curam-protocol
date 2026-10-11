@@ -4,7 +4,7 @@ import {
   midOf, pushHistory, setVertex, startStroke, undo,
 } from '../src/drawing';
 import {
-  bboxOf, degreesPerPixel, formatDistance, lineKm, markersAlong, metersPerPixel, segmentKm, simplifyLine, stepKmFor, thinFactor, toGpx, totalKm, validateLines,
+  bboxOf, degreesPerPixel, formatDistance, lineKm, markersAlong, metersPerPixel, nearestOnLines, segmentKm, simplifyLine, stepKmFor, thinFactor, toGpx, totalKm, validateLines,
   type Line,
 } from '../src/geo';
 
@@ -229,5 +229,45 @@ describe('distance markers', () => {
     expect(thinFactor(200, 1000)).toBe(5); // 1000 markers: at most 300 shown
     expect(thinFactor(0.0001, 10)).toBe(1000);
     expect(metersPerPixel(10, 0)).toBeCloseTo(76.44, 1);
+  });
+});
+
+describe('tap a track', () => {
+  const flat = ([x, y]: [number, number]) => ({ x: x * 1000, y: -y * 1000 }); // 1000 px per degree
+  const track: Line[] = [[[0, 0], [0.02, 0]]]; // about 2.22 km, 20 px long
+  const total = lineKm(track[0]);
+
+  it('snaps to the nearest point and says how far along it is', () => {
+    const r = nearestOnLines(track, flat, { x: 10, y: 4 }, 22)!;
+    expect(r.pos[0]).toBeCloseTo(0.01, 9);
+    expect(r.pos[1]).toBeCloseTo(0, 9);
+    expect(r.km).toBeCloseTo(total / 2, 6);
+    expect(r.totalKm).toBeCloseTo(total, 9);
+    expect(r.px).toBeCloseTo(4, 9);
+  });
+  it('a tap beyond the ends snaps to the start or the end', () => {
+    expect(nearestOnLines(track, flat, { x: -8, y: 0 }, 22)!.km).toBe(0);
+    expect(nearestOnLines(track, flat, { x: 27, y: 0 }, 22)!.km).toBeCloseTo(total, 9);
+  });
+  it('a tap too far from the line finds nothing', () => {
+    expect(nearestOnLines(track, flat, { x: 10, y: 40 }, 22)).toBeNull();
+    expect(nearestOnLines([], flat, { x: 0, y: 0 }, 22)).toBeNull();
+  });
+  it('follows corners: distance is along the line, not as the crow flies', () => {
+    const bent: Line[] = [[[0, 0], [0, 0.02], [0.02, 0.02]]]; // north 20 px then east 20 px
+    const r = nearestOnLines(bent, flat, { x: 20, y: -20 }, 5)!; // the far end, 40 px of line away
+    expect(r.km).toBeCloseTo(lineKm(bent[0]), 6);
+    expect(r.km).toBeGreaterThan(lineKm([[0, 0], [0.02, 0.02]]));
+  });
+  it('strokes join up without counting the gap, like the readout', () => {
+    const two: Line[] = [[[0, 0], [0.02, 0]], [[0.5, 0.5], [0.52, 0.5]]];
+    const r = nearestOnLines(two, flat, { x: 510, y: -500 }, 22)!; // halfway along the second stroke
+    expect(r.km).toBeCloseTo(lineKm(two[0]) + lineKm(two[1]) / 2, 6);
+    expect(r.totalKm).toBeCloseTo(totalKm(two), 9);
+  });
+  it('picks the nearer of two overlapping segments', () => {
+    const r = nearestOnLines([[[0, 0], [0.02, 0]], [[0, 0.003], [0.02, 0.003]]], flat, { x: 10, y: -2 }, 22)!;
+    expect(r.px).toBeCloseTo(1, 9); // the second line, 3 px up, is closer to a tap 2 px up
+    expect(r.pos[1]).toBeCloseTo(0.003, 9);
   });
 });

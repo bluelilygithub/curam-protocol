@@ -15,12 +15,17 @@ export const COLORS = ['#E4572E', '#1D6FA5', '#2E7D32', '#8E44AD', '#B7791F', '#
 const read = (key: string): string | null => { try { return localStorage.getItem(key); } catch { return null; } };
 const write = (key: string, v: string): void => { try { localStorage.setItem(key, v); } catch { /* private window */ } };
 
+export interface Probe { pos: Pos; km: number; totalKm: number; name: string; color: string; several: boolean }
+
 export interface Toast { id: number; kind: 'ok' | 'error'; text: string }
 let toastSeq = 0;
 
 interface State {
   units: Units;
   setUnits(u: Units): void;
+  /** A tapped point on a saved track: where, how far from the start, and of which track. */
+  probe: Probe | null;
+  setProbe(p: Probe | null): void;
   /** Distance markers on the line (every 1 km / 1 mi). */
   markersOn: boolean;
   setMarkersOn(v: boolean): void;
@@ -72,6 +77,8 @@ interface State {
 export const useStore = create<State>((set, get) => ({
   units: read('route-tracer:units') === 'mi' ? 'mi' : 'km',
   setUnits: (units) => { write('route-tracer:units', units); set({ units }); },
+  probe: null,
+  setProbe: (probe) => set({ probe }),
   markersOn: read('route-tracer:markers') !== 'off',
   setMarkersOn: (markersOn) => { write('route-tracer:markers', markersOn ? 'on' : 'off'); set({ markersOn }); },
   styleId: (STYLES.find((s) => s.id === read('route-tracer:style'))?.id ?? 'streets-v2') as StyleId,
@@ -94,7 +101,7 @@ export const useStore = create<State>((set, get) => ({
   rubber: null,
   setRubber: (rubber) => set({ rubber }),
   apply: (fn) => set((s) => ({ draw: fn(s.draw) })),
-  startDrawing: (from) => set({ drawing: true, draw: from ?? emptyDraw(), rubber: null, selectedVertex: null, panel: 'closed' }),
+  startDrawing: (from) => set({ probe: null, drawing: true, draw: from ?? emptyDraw(), rubber: null, selectedVertex: null, panel: 'closed' }),
   stopDrawing: () => set({ mode: get().mode === 'edit' ? (read('route-tracer:mode') === 'click' ? 'click' : 'freehand') : get().mode, drawing: false, draw: emptyDraw(), rubber: null, selectedVertex: null, extendingId: null, saving: false, drawColor: COLORS[0] }),
   extendingId: null,
   drawColor: COLORS[0],

@@ -42,8 +42,8 @@ export function useSavedLayer(map: maplibregl.Map | null): void {
     if (!map) return;
     let list: SavedLine[] = [];
     if (!drawing || !extendingId) {
-      if (showAll && !drawing) list = [...cache.current.values()].filter((t) => tracks.some((x) => x.id === t.id)).map((t) => ({ id: t.id, color: t.color, lines: t.geometry.coordinates }));
-      if (selected && !drawing && !list.some((l) => l.id === selected.id)) list.push({ id: selected.id, color: selected.color, lines: selected.geometry.coordinates });
+      if (showAll && !drawing) list = [...cache.current.values()].filter((t) => tracks.some((x) => x.id === t.id)).map((t) => ({ id: t.id, name: t.name, color: t.color, lines: t.geometry.coordinates }));
+      if (selected && !drawing && !list.some((l) => l.id === selected.id)) list.push({ id: selected.id, name: selected.name, color: selected.color, lines: selected.geometry.coordinates });
       if (selected && !showAll && !drawing) list = list.filter((l) => l.id === selected.id);
     }
     if (map.isStyleLoaded() || map.getSource('saved')) setSaved(map, list);

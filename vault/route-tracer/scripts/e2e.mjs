@@ -164,6 +164,28 @@ await page.getByRole('heading', { name: /Test loop/ }).waitFor({ timeout: 5000 }
 check('after reload the track opens from the list', await page.getByRole('heading', { name: /Test loop/ }).isVisible());
 await wait(1000);
 check('the open track shows distance markers too', (await labels()).length >= 1, `labels ${await labels()}`);
+{ // tap the open track: pin + "from start" / "to go" that add up to the track's distance
+  const mid = await page.evaluate(() => {
+    const map = window.routeTracer.map;
+    const g = window.routeTracer.sent.saved.features[0].geometry.coordinates[0];
+    const a = map.project(g[0]); const b = map.project(g[1]);
+    const r = map.getCanvasContainer().getBoundingClientRect();
+    return { x: r.left + (a.x + b.x) / 2 + 3, y: r.top + (a.y + b.y) / 2 + 3 };
+  });
+  await page.mouse.click(mid.x, mid.y); await wait(400);
+  const probe = page.getByTestId('probe');
+  const text = (await probe.textContent()) ?? '';
+  const num = (re) => { const m = re.exec(text); return m ? (m[2] === 'km' ? parseFloat(m[1]) : parseFloat(m[1]) / 1000) : NaN; };
+  const from = num(/([\d.]+) (km|m)\s*from start/); const toGo = num(/start([\d.]+) (km|m)\s*to go/);
+  const whole = km((await page.locator('.big').textContent()) ?? '');
+  check('tapping the track reads the distance from the start', from > 0 && toGo > 0 && Math.abs(from + toGo - whole) < 0.03, `${text} vs ${whole} km`);
+  check('and drops a pin on the line', (await page.locator('.probe-pin').count()) === 1);
+  await page.mouse.click(mid.x, mid.y + 150); await wait(300);
+  check('tapping away from the line clears it', !(await probe.isVisible()) && (await page.locator('.probe-pin').count()) === 0);
+  await page.mouse.click(mid.x, mid.y); await wait(300);
+  await page.keyboard.press('Escape'); await wait(200);
+  check('Escape clears it', !(await probe.isVisible()));
+}
 check('the saved track is drawn on the map', await page.evaluate(() => window.routeTracer.sent?.saved?.features.length === 1));
 
 // ---- extend

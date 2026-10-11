@@ -4,7 +4,10 @@ import type { Lines } from './geo';
 import { useStore } from './store';
 
 /** Sources and layers for the line being drawn ('draw') and saved tracks ('saved'). Re-added after every style change. */
-export interface SavedLine { id: string; color: string; lines: Lines }
+export interface SavedLine { id: string; name: string; color: string; lines: Lines }
+
+/** The saved tracks currently drawn on the map (the tap-a-track readout reads these). */
+export const getSavedLines = (): SavedLine[] => saved;
 
 const EMPTY: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 let saved: SavedLine[] = [];

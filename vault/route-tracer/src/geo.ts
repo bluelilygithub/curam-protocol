@@ -130,3 +130,44 @@ export function thinFactor(pxPerStep: number, count: number, minPx = 44, maxCoun
   for (const n of THIN) if (pxPerStep * n >= minPx && count / n <= maxCount) return n;
   return THIN[THIN.length - 1];
 }
+
+// ---- tap a track: how far along is this point? -------------------------------------------------------------------------------
+
+export interface OnTrack {
+  /** The point on the line nearest the tap. */
+  pos: Pos;
+  /** Distance from the start of the track to `pos`, along the line (km). Strokes join up without counting the gap, as in the readout. */
+  km: number;
+  totalKm: number;
+  /** How far the tap was from the line on screen (px). */
+  px: number;
+}
+
+/**
+ * The point on a track nearest to a screen position, if within maxPx. `project` turns lng/lat into screen px (map.project).
+ * The foot of the perpendicular is found on screen and mapped back along the segment, so it matches the line as drawn.
+ */
+export function nearestOnLines(lines: Lines, project: (p: Pos) => { x: number; y: number }, at: { x: number; y: number }, maxPx: number): OnTrack | null {
+  let best: { pos: Pos; km: number; px: number } | null = null;
+  let done = 0;
+  for (const line of lines) {
+    for (let i = 1; i < line.length; i += 1) {
+      const a = line[i - 1];
+      const b = line[i];
+      const len = segmentKm(a, b);
+      const pa = project(a);
+      const pb = project(b);
+      const dx = pb.x - pa.x;
+      const dy = pb.y - pa.y;
+      const l2 = dx * dx + dy * dy;
+      const t = l2 === 0 ? 0 : Math.min(1, Math.max(0, ((at.x - pa.x) * dx + (at.y - pa.y) * dy) / l2));
+      const px = Math.hypot(pa.x + dx * t - at.x, pa.y + dy * t - at.y);
+      if (px <= maxPx && (!best || px < best.px)) {
+        const pos: Pos = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+        best = { pos, km: done + len * t, px };
+      }
+      done += len;
+    }
+  }
+  return best ? { ...best, totalKm: done } : null;
+}
