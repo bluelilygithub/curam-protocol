@@ -1,0 +1,23 @@
+# Route Tracer
+
+Trace a path on a map with mouse or finger, see the distance live, save it as a named track. Own Vite app in `route-tracer/`, built into `dist/route-tracer-app/` by `scripts/buildRouteTracer.js` (part of `npm run build`, non-fatal), shown in Vault at `/route-tracer` through an iframe (`client/src/pages/RouteTracerPage.jsx`, which sets `allow="geolocation; fullscreen"` so the locate-me button works). Nav item "Route Tracer" (Content Creation, `route` icon), feature flag `routeTracer` (default on).
+
+## Server
+- `server/routes/routeTracksRouter.js` (pool injected; `npm run test:route-tracks`) mounted at `/api/route-tracks` behind `requireFeature('routeTracer')`.
+- Table `route_tracks` (`server/db.js`): uuid id, `"userId"` (every query filters on it), name (1-120), notes (2000), color (`#RRGGBB`), `geometry` JSONB (GeoJSON MultiLineString, one line per stroke, `[lng, lat]`), `"distanceM"`, `"pointCount"`, `bbox`, `"drawMode"`, timestamps (millisecond precision, so the `(createdAt, id)` paging cursor is exact).
+- The server recomputes distance, point count and bbox from the geometry (`server/services/routeTracerGeo.js`, haversine with turf's earth radius, so it matches the live readout) and ignores client-sent values. Refused: over 20,000 points, over 2,000 strokes, a stroke under 2 points, any coordinate outside lng ±180 / lat ±90, a body over 1 MB (413; the global JSON limit is 30 MB, so this route checks `Content-Length` itself), more than 1,000 tracks per user.
+- `GET /config` returns `{ maptilerKey }` (the browser key). `GET /` lists newest first, `?q=` name search, `?limit=` (max 100), `?cursor=`. `GET /:id/gpx` returns GPX 1.1, one `<trkseg>` per stroke. Named routes come before `/:id`.
+- `/api/geocode` (place search) is shared with Garden Planner: it now sits behind `requireAnyFeature('gardenPlanner', 'routeTracer')` (`server/middleware/auth.js`).
+
+## Map key
+`ROUTE_TRACER_MAPTILER_KEY` is a **second** MapTiler key, used in the browser (MapLibre fetches style JSON, tiles, sprites and glyphs from `api.maptiler.com`, each with the key in its URL). In the MapTiler dashboard restrict it by HTTP referrer to the Vault domain and `localhost`. It is separate from `MAPTILER_API_KEY` (server side, Garden Planner satellite proxy). Production CSP allows `https://api.maptiler.com` in `connect-src` and `img-src`. For `npm run dev` inside `route-tracer/` without a server, `VITE_MAPTILER_KEY` is an optional fallback.
+
+## Client (`route-tracer/`)
+- `src/geo.ts` (distance, simplify, bbox, formatting, GPX, validation) and `src/drawing.ts` (pure drawing state: strokes, undo, continue-a-stroke) are unit tested (`npm test`). `src/useDrawing.ts` only turns pointer events into those functions.
+- Freehand: Pointer Events with pointer capture, a point is kept when 4 px from the last, a press within 24 px of the last stroke's end continues that line, strokes are simplified at about 1 px on release. A second finger cancels the stroke and hands over to the map (pinch / two-finger pan); Space + drag pans with a mouse. Click mode: each click adds a vertex, rubber band, double-click finishes.
+- Autosave of the drawing to `localStorage` every 2 s with a Restore / Discard banner on next load; `beforeunload` warning while there is unsaved work. Units and map style are remembered per browser.
+- GPX is fetched with the auth header and saved from a Blob link (a plain link or `window.open` would be unauthenticated and, in the iframe, unreliable).
+- `npm run e2e` (needs `npm run dev` running, Chrome installed) draws, undoes, pans, zooms, saves, reloads, extends, deletes and tries touch, with MapTiler and the API stubbed in the browser.
+
+## Not built (out of scope for v1)
+GPS live recording, snap to roads, elevation, sharing, offline. `GOOGLE_MAPS_API_KEY` is unused.

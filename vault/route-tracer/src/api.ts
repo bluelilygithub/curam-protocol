@@ -1,0 +1,67 @@
+import type { BBox, Lines } from './geo';
+
+/** Vault's token lives in localStorage['vault-auth'] (same origin as this app). */
+export function token(): string | null {
+  try {
+    const raw = localStorage.getItem('vault-auth');
+    return raw ? ((JSON.parse(raw) as { state?: { token?: string } }).state?.token ?? null) : null;
+  } catch { return null; }
+}
+
+export class ApiError extends Error {
+  constructor(public status: number, message: string, public body?: unknown) { super(message); }
+}
+
+async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const t = token();
+  if (!t) throw new ApiError(401, 'Sign in to Vault to use Route Tracer.');
+  const headers: Record<string, string> = { Authorization: `Bearer ${t}` };
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  let res: Response;
+  try {
+    res = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  } catch { throw new ApiError(0, 'Could not reach Vault.'); }
+  if (res.status === 204) return undefined as T;
+  const json = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) throw new ApiError(res.status, json.error ?? 'That did not work.', json);
+  return json as T;
+}
+
+export interface TrackSummary {
+  id: string; name: string; color: string; distanceM: number; pointCount: number; bbox: BBox; drawMode: 'freehand' | 'click'; createdAt: string;
+}
+export interface Track extends TrackSummary { notes: string | null; geometry: { type: 'MultiLineString'; coordinates: Lines }; updatedAt: string }
+export interface TrackInput { name: string; notes?: string | null; color?: string; geometry: { type: 'MultiLineString'; coordinates: Lines }; drawMode: 'freehand' | 'click' }
+export interface GeocodeResult { label: string; lat: number; lng: number }
+
+export const api = {
+  config: () => call<{ maptilerKey: string | null }>('GET', '/api/route-tracks/config'),
+  geocode: (q: string) => call<{ results: GeocodeResult[] }>('POST', '/api/geocode', { q }),
+  list: (opts: { q?: string; cursor?: string | null; limit?: number } = {}) => {
+    const p = new URLSearchParams();
+    if (opts.q) p.set('q', opts.q);
+    if (opts.cursor) p.set('cursor', opts.cursor);
+    p.set('limit', String(opts.limit ?? 50));
+    return call<{ tracks: TrackSummary[]; nextCursor: string | null }>('GET', `/api/route-tracks?${p}`);
+  },
+  get: (id: string) => call<{ track: Track }>('GET', `/api/route-tracks/${id}`).then((r) => r.track),
+  create: (input: TrackInput) => call<{ track: Track }>('POST', '/api/route-tracks', input).then((r) => r.track),
+  update: (id: string, patch: Partial<Pick<TrackInput, 'name' | 'notes' | 'color' | 'geometry'>>) =>
+    call<{ track: Track }>('PATCH', `/api/route-tracks/${id}`, patch).then((r) => r.track),
+  remove: (id: string) => call<void>('DELETE', `/api/route-tracks/${id}`),
+  /** The GPX comes through fetch (the token is a header), then saves from a Blob link: a plain link or window.open would be unauthenticated. */
+  async downloadGpx(id: string, fileName: string): Promise<void> {
+    const t = token();
+    if (!t) throw new ApiError(401, 'Sign in to Vault to use Route Tracer.');
+    const res = await fetch(`/api/route-tracks/${id}/gpx`, { headers: { Authorization: `Bearer ${t}` } });
+    if (!res.ok) throw new ApiError(res.status, 'Could not export this track.');
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName.replace(/[^\w\- .]+/g, '_') + '.gpx';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  },
+};

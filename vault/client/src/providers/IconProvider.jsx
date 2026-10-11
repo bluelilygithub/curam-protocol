@@ -147,6 +147,7 @@ const semanticMap = {
   utensils: { lucide: 'UtensilsCrossed' },
   armchair: { lucide: 'Armchair' },
   sprout: { lucide: 'Sprout' },
+  route: { lucide: 'Route' },
   wine: { lucide: 'Wine' },
   languages: { lucide: 'Languages' },
   guitar: { lucide: 'Guitar' },

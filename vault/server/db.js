@@ -931,6 +931,26 @@ async function initSchema() {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_cellar_projects_user_updated ON cellar_projects ("userId", "updatedAt" DESC)
     `);
+    // ── Route Tracer saved tracks (geometry = GeoJSON MultiLineString, one line per stroke; distance etc. computed server side) ─────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS route_tracks (
+        id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name          TEXT NOT NULL,
+        notes         TEXT,
+        color         TEXT NOT NULL DEFAULT '#E4572E',
+        geometry      JSONB NOT NULL,
+        "distanceM"   DOUBLE PRECISION NOT NULL,
+        "pointCount"  INTEGER NOT NULL,
+        bbox          DOUBLE PRECISION[] NOT NULL,
+        "drawMode"    TEXT NOT NULL,
+        "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_route_tracks_user_created ON route_tracks ("userId", "createdAt" DESC, id DESC)
+    `);
     // Tracing pictures are stored apart from the garden design (a garden references one by underlay.imageId = 'srv-<id>')
     await client.query(`
       CREATE TABLE IF NOT EXISTS garden_images (

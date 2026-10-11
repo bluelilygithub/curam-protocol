@@ -72,4 +72,20 @@ function requireFeature(featureKey) {
   };
 }
 
-module.exports = { requireAuth, requireAdmin, requireFeature, loadFeatureAccess };
+/** Passes when ANY of the given features is on for the caller (a shared service used by several tools, e.g. place lookup). */
+function requireAnyFeature(...featureKeys) {
+  return async function anyFeatureGuard(req, res, next) {
+    try {
+      if (req.user?.isAdmin) return next();
+      const access = await loadFeatureAccess(req.user?.id);
+      if (featureKeys.every((k) => FEATURE_ACCESS_KEYS.includes(k) && access[k] === false)) {
+        return res.status(403).json({ error: 'Feature disabled for member accounts' });
+      }
+      return next();
+    } catch (err) {
+      return next(err);
+    }
+  };
+}
+
+module.exports = { requireAuth, requireAdmin, requireFeature, requireAnyFeature, loadFeatureAccess };

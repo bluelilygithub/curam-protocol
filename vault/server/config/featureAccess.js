@@ -39,6 +39,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   browserAgent: true,
   roomPlanner: true,
   gardenPlanner: true,
+  routeTracer: true,
   // a work in progress with unverified values: off until an admin switches it on (Settings -> Feature Access)
   cellarPlanner: false,
   measurements: true,

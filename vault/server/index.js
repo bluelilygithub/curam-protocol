@@ -62,12 +62,14 @@ app.use(helmet({
       // Garden Planner plant photos (server/services/plantImages.js): iNaturalist, Wikimedia Commons (upload. and thumb. hosts) and the Atlas of Living Australia.
       'img-src':    ["'self'", 'data:', 'blob:', 'https://i.ytimg.com',
                      'https://inaturalist-open-data.s3.amazonaws.com', 'https://static.inaturalist.org',
-                     'https://upload.wikimedia.org', 'https://thumb.wikimedia.org', 'https://images.ala.org.au'],
+                     'https://upload.wikimedia.org', 'https://thumb.wikimedia.org', 'https://images.ala.org.au',
+                     'https://api.maptiler.com'],
       'media-src':  ["'self'", 'blob:', 'data:'],
       // 'data:' is required for pdfjs-dist (Translate agent's client-side PDF preflight),
       // which loads its WASM module via a data: URI fetch, not a blob: URL. Without it the
       // browser blocks the fetch and the PDF preflight silently fails (nothing gets uploaded).
-      'connect-src':["'self'", 'blob:', 'data:'],
+      // Route Tracer (MapLibre) loads style JSON, vector/raster tiles, sprites and glyphs straight from MapTiler with a referrer-restricted browser key
+      'connect-src':["'self'", 'blob:', 'data:', 'https://api.maptiler.com'],
       // 'blob:' is required for Finance's receipt/invoice preview, which loads a downloaded
       // file into an <iframe src="blob:..."> (see FinancePage.jsx openViewReceipt) — without
       // it the browser blocks the frame with a CSP violation even though the blob was created
@@ -119,7 +121,7 @@ app.use('/api/gmail', require('./routes/gmail'));
 app.use('/api/gsc', require('./routes/gsc'));
 app.use('/api/calendar', require('./routes/calendar'));
 
-const { requireAuth, requireAdmin, requireFeature } = require('./middleware/auth');
+const { requireAuth, requireAdmin, requireFeature, requireAnyFeature } = require('./middleware/auth');
 app.use('/api', requireAuth);
 
 // Per-user cap on AI-cost endpoints — chat streams and generation calls hit
@@ -195,7 +197,8 @@ app.use('/api/garden-projects', requireFeature('gardenPlanner'), require('./rout
 app.use('/api/cellar-projects', requireFeature('cellarPlanner'), require('./routes/cellarProjects'));
 app.use('/api/cellar-planner/catalogue', requireFeature('cellarPlanner'), cellarLiteConfig.staffRouter);
 app.use('/api/cellar-planner/leads', requireFeature('cellarPlanner'), cellarLeads.staffRouter);
-app.use('/api/geocode', requireFeature('gardenPlanner'), require('./routes/geocode'));
+app.use('/api/geocode', requireAnyFeature('gardenPlanner', 'routeTracer'), require('./routes/geocode'));
+app.use('/api/route-tracks', requireFeature('routeTracer'), require('./routes/routeTracks'));
 app.use('/api/map-tiles', requireFeature('gardenPlanner'), require('./routes/mapTiles'));
 app.use('/api/plant-images', requireFeature('gardenPlanner'), require('./routes/plantImages'));
 require('./services/fontGoogleCatalog').warmCatalog(); // background build — first real request shouldn't pay this cost
