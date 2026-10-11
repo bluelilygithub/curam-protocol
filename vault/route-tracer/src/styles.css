@@ -183,7 +183,11 @@ h2 { margin: 0; font-size: 1.15rem; }
   .brand span { display: none; }
   .header-search { max-width: none; margin: 0; }
   .body { grid-template-columns: minmax(0, 1fr); }
-  .sidebar { position: absolute; left: 0; right: 0; bottom: 0; max-height: 52%; border-right: 0; border-top: 1px solid var(--border); border-radius: 14px 14px 0 0; box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.18); }
+  .sidebar { position: absolute; left: 0; right: 0; bottom: 0; max-height: 52%; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; border-right: 0; border-top: 1px solid var(--border); border-radius: 14px 14px 0 0; box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.18); }
+  /* whole sheet scrolls (head + routes + foot), not just a squeezed middle strip */
+  .side-view { flex: none; min-height: auto; }
+  .side-body { flex: none; min-height: auto; overflow: visible; }
+  .side-foot { position: sticky; bottom: 0; z-index: 1; }
   .mapctl { top: 8px; right: 8px; }
   .probe { bottom: calc(52% + 8px); }
   .toasts { right: 56px; }
