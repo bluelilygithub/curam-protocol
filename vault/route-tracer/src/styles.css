@@ -50,6 +50,11 @@ button[aria-pressed='true'] { background: var(--primary); color: var(--primary-t
 .check { display: flex; gap: 8px; align-items: center; min-height: 44px; }
 .check input { min-height: 0; width: 20px; height: 20px; }
 .tracklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.tracklist li { display: flex; align-items: stretch; gap: 4px; }
+.tracklist li.picked button { border-color: var(--primary); }
+.pick { display: grid; place-items: center; width: 44px; flex: none; }
+.pick input { min-height: 0; width: 20px; height: 20px; }
+.tracklist li > button { flex: 1; min-width: 0; }
 .tracklist button { width: 100%; display: grid; grid-template-columns: 14px 1fr; grid-template-areas: 'dot name' '. meta'; column-gap: 8px; text-align: left; padding: 6px 10px; }
 .tracklist .dot { grid-area: dot; align-self: center; }
 .tname { grid-area: name; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

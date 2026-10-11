@@ -13,6 +13,7 @@ const MAX_NAME = 120;
 const MAX_NOTES = 2000;
 const MAX_BODY_BYTES = 1024 * 1024; // the global JSON limit is far higher; long freehand tracks are still bounded here
 const MAX_TRACKS_PER_USER = 1000;
+const MAX_BULK_DELETE = 200;
 const DEFAULT_COLOR = '#E4572E';
 const SUMMARY = `id, name, color, "distanceM", "pointCount", bbox, "drawMode", "createdAt"`;
 const FULL = `${SUMMARY}, notes, geometry, "updatedAt"`;
@@ -112,6 +113,21 @@ function createRouter(pool, { getMapKey = () => process.env.ROUTE_TRACER_MAPTILE
     } catch (err) {
       getLogger().error({ err }, 'route tracks list failed');
       res.status(500).json({ error: 'Could not load your tracks.' });
+    }
+  });
+
+  // POST /api/route-tracks/delete { ids }: the list's multi-select. Only the caller's own tracks match; answers how many were deleted.
+  router.post('/delete', async (req, res) => {
+    const raw = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    if (!raw.length) return res.status(400).json({ error: 'Pick at least one track.' });
+    if (raw.length > MAX_BULK_DELETE) return res.status(400).json({ error: `Delete at most ${MAX_BULK_DELETE} tracks at a time.` });
+    if (!raw.every((id) => typeof id === 'string' && UUID.test(id))) return res.status(400).json({ error: 'A track id is not valid.' });
+    try {
+      const { rowCount } = await pool.query(`DELETE FROM route_tracks WHERE id = ANY($1::uuid[]) AND "userId" = $2`, [[...new Set(raw)], req.user.id]);
+      res.json({ ok: true, deleted: rowCount });
+    } catch (err) {
+      getLogger().error({ err }, 'route tracks bulk delete failed');
+      res.status(500).json({ error: 'Could not delete those tracks.' });
     }
   });
 

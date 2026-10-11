@@ -101,6 +101,11 @@ function fakePool() {
         r.updatedAt = new Date((clock += 1000));
         return { rows: [r] };
       }
+      if (/^DELETE FROM route_tracks WHERE id = ANY/.test(s)) {
+        const before = rows.length;
+        for (let i = rows.length - 1; i >= 0; i -= 1) if (params[0].includes(rows[i].id) && rows[i].userId === params[1]) rows.splice(i, 1);
+        return { rowCount: before - rows.length };
+      }
       if (/^DELETE FROM route_tracks/.test(s)) {
         const i = rows.findIndex((x) => x.id === params[0] && x.userId === params[1]);
         if (i >= 0) rows.splice(i, 1);
@@ -238,6 +243,25 @@ const input = (extra = {}) => ({ name: 'Morning loop', geometry: { type: 'MultiL
   assert.ok(g.headers.get('content-type').startsWith('application/gpx+xml'));
   assert.ok(/attachment; filename="Renamed\.gpx"/.test(g.headers.get('content-disposition')));
   assert.strictEqual((g.text.match(/<trkseg>/g) || []).length, 2);
+
+  // ---- bulk delete: own tracks only, validated, counted
+  {
+    const keep = (await call(s, 'GET', '/api/route-tracks?limit=100')).json.tracks.map((x) => x.id);
+    const mine = keep.slice(0, 3);
+    const stranger = crypto.randomUUID();
+    pool.rows.push({ id: stranger, userId: 2, name: 'not yours' });
+    assert.strictEqual((await call(s, 'POST', '/api/route-tracks/delete', {})).status, 400, 'no ids');
+    assert.strictEqual((await call(s, 'POST', '/api/route-tracks/delete', { ids: [] })).status, 400);
+    assert.strictEqual((await call(s, 'POST', '/api/route-tracks/delete', { ids: ['nope'] })).status, 400, 'bad id');
+    assert.strictEqual((await call(s, 'POST', '/api/route-tracks/delete', { ids: Array.from({ length: 201 }, () => crypto.randomUUID()) })).status, 400, 'too many');
+    assert.strictEqual(pool.rows.length, keep.length + 1, 'refused requests deleted nothing');
+    const r = await call(s, 'POST', '/api/route-tracks/delete', { ids: [...mine, mine[0], stranger] });
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.json.deleted, 3, 'deletes only the caller\'s own, once each');
+    assert.ok(pool.rows.some((x) => x.id === stranger), 'another user\'s track is untouched');
+    assert.strictEqual((await call(s, 'GET', '/api/route-tracks?limit=100')).json.tracks.length, keep.length - 3);
+    pool.rows.splice(pool.rows.findIndex((x) => x.id === stranger), 1);
+  }
 
   // ---- delete
   assert.strictEqual((await call(s, 'DELETE', `/api/route-tracks/${id}`)).status, 204);

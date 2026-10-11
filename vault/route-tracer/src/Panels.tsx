@@ -42,7 +42,7 @@ export function useSavedLayer(map: maplibregl.Map | null): void {
     if (!map) return;
     let list: SavedLine[] = [];
     if (!drawing || !extendingId) {
-      if (showAll && !drawing) list = [...cache.current.values()].map((t) => ({ id: t.id, color: t.color, lines: t.geometry.coordinates }));
+      if (showAll && !drawing) list = [...cache.current.values()].filter((t) => tracks.some((x) => x.id === t.id)).map((t) => ({ id: t.id, color: t.color, lines: t.geometry.coordinates }));
       if (selected && !drawing && !list.some((l) => l.id === selected.id)) list.push({ id: selected.id, color: selected.color, lines: selected.geometry.coordinates });
       if (selected && !showAll && !drawing) list = list.filter((l) => l.id === selected.id);
     }
@@ -117,6 +117,9 @@ export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(() => new Set());
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const sentinel = useRef<HTMLDivElement>(null);
   const reqId = useRef(0);
 
@@ -154,6 +157,22 @@ export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
     } catch (e) { toast('error', errText(e)); }
   }
 
+  const togglePicked = (id: string) => { setConfirming(false); setPicked((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; }); };
+  const allPicked = tracks.length > 0 && picked.size === tracks.length;
+  async function deletePicked() {
+    if (!picked.size || deleting) return;
+    setDeleting(true);
+    try {
+      const ids = [...picked];
+      const r = await api.removeMany(ids);
+      const gone = new Set(ids);
+      setTracks(useStore.getState().tracks.filter((t) => !gone.has(t.id)));
+      if (useStore.getState().selected && gone.has(useStore.getState().selected!.id)) useStore.getState().select(null);
+      setPicked(new Set());
+      toast('ok', r.deleted === 1 ? 'Deleted 1 track' : `Deleted ${r.deleted} tracks`);
+    } catch (e) { toast('error', errText(e)); } finally { setDeleting(false); setConfirming(false); }
+  }
+
   if (panel === 'closed') return null;
   if (panel === 'detail' && selected) return <TrackDetail map={map} track={selected} onChanged={(t) => { select(t); void load(q, null); }} onGone={() => { select(null); setPanel('tracks'); void load(q, null); }} />;
 
@@ -165,9 +184,24 @@ export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
       </div>
       <input type="search" aria-label="Search tracks" placeholder="Search by name" value={q} onChange={(e) => setQ(e.target.value)} />
       <label className="check"><input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} /> Show all on map</label>
+      {tracks.length > 0 && (
+        <div className="row">
+          <button type="button" onClick={() => { setConfirming(false); setPicked(allPicked ? new Set() : new Set(tracks.map((t) => t.id))); }}>{allPicked ? 'Deselect all' : 'Select all'}</button>
+          {confirming ? (
+            <>
+              <span>Delete {picked.size} {picked.size === 1 ? 'track' : 'tracks'}?</span>
+              <button type="button" className="danger" disabled={deleting} onClick={() => void deletePicked()}>Yes</button>
+              <button type="button" onClick={() => setConfirming(false)}>No</button>
+            </>
+          ) : (
+            <button type="button" className="danger" disabled={!picked.size} onClick={() => setConfirming(true)}>Delete{picked.size ? ` (${picked.size})` : ''}</button>
+          )}
+        </div>
+      )}
       <ul className="tracklist">
         {tracks.map((t) => (
-          <li key={t.id}>
+          <li key={t.id} className={picked.has(t.id) ? 'picked' : ''}>
+            <label className="pick"><input type="checkbox" aria-label={`Select ${t.name}`} checked={picked.has(t.id)} onChange={() => togglePicked(t.id)} /></label>
             <button type="button" onClick={() => void open(t)}>
               <span className="dot" style={{ background: t.color }} />
               <span className="tname">{t.name}</span>

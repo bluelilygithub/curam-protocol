@@ -41,6 +41,12 @@ await page.route('**/api/route-tracks**', async (route) => {
   const m = req.method();
   if (m === 'GET' && path === '/config') return route.fulfill({ json: { maptilerKey: 'test' } });
   if (m === 'GET' && path === '') return route.fulfill({ json: { tracks: [...db].reverse().map(summary), nextCursor: null } });
+  if (m === 'POST' && path === '/delete') {
+    const ids = req.postDataJSON().ids;
+    let n = 0;
+    for (const id of ids) { const i = db.findIndex((x) => x.id === id); if (i >= 0) { db.splice(i, 1); n += 1; } }
+    return route.fulfill({ json: { ok: true, deleted: n } });
+  }
   if (m === 'POST' && path === '') {
     const b = req.postDataJSON();
     const lines = b.geometry.coordinates;
@@ -237,6 +243,33 @@ await page.getByRole('button', { name: 'Delete', exact: true }).click();
 await page.getByRole('button', { name: 'Yes' }).click();
 await wait(500);
 check('delete removes it', db.length === 0);
+
+// ---- selective delete from the list: tick some, Delete (N), inline Yes / No, select all
+const seed = (name) => { const g = { type: 'MultiLineString', coordinates: [[[153.0, -27.5], [153.05, -27.45]]] }; db.push({ id: `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`, name, notes: null, color: '#E4572E', geometry: g, distanceM: dist(g.coordinates), pointCount: 2, bbox: bbox(g.coordinates), drawMode: 'click', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); };
+['Alpha', 'Bravo', 'Charlie'].forEach(seed);
+await page.reload();
+await ready(page);
+await page.getByRole('button', { name: 'Tracks', exact: true }).click();
+await page.getByRole('button', { name: /Alpha/ }).waitFor();
+const del = page.getByRole('button', { name: /^Delete/ });
+check('Delete is off until something is ticked', await del.isDisabled());
+await page.getByLabel('Select Alpha').check();
+await page.getByLabel('Select Charlie').check();
+check('Delete shows how many are ticked', (await del.textContent()) === 'Delete (2)');
+await del.click();
+check('delete asks inline first', await page.getByText('Delete 2 tracks?').isVisible() && db.length === 3);
+await page.getByRole('button', { name: 'No', exact: true }).click();
+check('No keeps everything', db.length === 3 && await page.getByLabel('Select Alpha').isChecked());
+await page.getByRole('button', { name: /^Delete/ }).click();
+await page.getByRole('button', { name: 'Yes', exact: true }).click();
+await wait(500);
+check('Yes deletes only the ticked tracks', db.length === 1 && db[0].name === 'Bravo', db.map((x) => x.name).join());
+check('the list drops them without a reload', !(await page.getByRole('button', { name: /Alpha/ }).count()) && (await page.getByRole('button', { name: /Bravo/ }).count()) === 1);
+await page.getByRole('button', { name: 'Select all' }).click();
+await page.getByRole('button', { name: /^Delete/ }).click();
+await page.getByRole('button', { name: 'Yes', exact: true }).click();
+await wait(500);
+check('select all + delete empties the list', db.length === 0 && await page.getByText(/No saved tracks yet/).isVisible());
 
 // ---- units
 await page.getByLabel('Units').selectOption('mi');

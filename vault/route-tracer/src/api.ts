@@ -49,6 +49,7 @@ export const api = {
   update: (id: string, patch: Partial<Pick<TrackInput, 'name' | 'notes' | 'color' | 'geometry'>>) =>
     call<{ track: Track }>('PATCH', `/api/route-tracks/${id}`, patch).then((r) => r.track),
   remove: (id: string) => call<void>('DELETE', `/api/route-tracks/${id}`),
+  removeMany: (ids: string[]) => call<{ deleted: number }>('POST', '/api/route-tracks/delete', { ids }),
   /** The GPX comes through fetch (the token is a header), then saves from a Blob link: a plain link or window.open would be unauthenticated. */
   async downloadGpx(id: string, fileName: string): Promise<void> {
     const t = token();
