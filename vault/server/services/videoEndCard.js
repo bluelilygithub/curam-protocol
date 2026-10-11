@@ -10,6 +10,9 @@ const { writeFontToDir } = require('./googleFonts');
 const MIN_DURATION_SEC = 1;
 const MAX_DURATION_SEC = 15;
 const AUDIO_RATE = 48000;
+// 'after' = separate closing screen appended after the video; 'last-frame' = freeze the last frame and put
+// the message over it (video gets longer); 'over-end' = message over the final seconds of the video (same length).
+const PLACEMENTS = ['after', 'last-frame', 'over-end'];
 
 function cleanHex(value, fallback) {
   const h = String(value || '').trim().replace(/^#/, '');
@@ -55,6 +58,7 @@ function normalizeEndCard(input = {}) {
     buttonTextColor: readableOn(buttonColor),
     fontFamily: String(input.fontFamily || 'Roboto'),
     fontWeight: input.fontWeight === 'normal' ? 'normal' : 'bold',
+    placement: PLACEMENTS.includes(input.placement) ? input.placement : 'after',
   };
 }
 
@@ -109,6 +113,15 @@ async function appendEndCard(inputPath, outputPath, rawSpec, workDir) {
   const fontPath = await writeFontToDir(spec.fontFamily, spec.fontWeight, workDir);
   const fontfile = escapeFilterPath(fontPath);
 
+  const overlay = spec.placement !== 'after';
+  // Overlay modes: the message appears at `startAt` seconds on the (possibly frozen-extended) video.
+  const srcDur = probe.duration || 0;
+  const D = overlay && spec.placement === 'over-end' ? Math.min(spec.durationSec, Math.max(0.5, srcDur)) : spec.durationSec;
+  const startAt = spec.placement === 'last-frame' ? srcDur : Math.max(0, srcDur - D);
+  const fadeSec = Math.min(spec.fadeSec, D / 2);
+  const enable = overlay ? `:enable='gte(t,${startAt.toFixed(3)})'` : '';
+  const alphaExpr = overlay && fadeSec > 0 ? `:alpha='min(1,max(0,(t-${startAt.toFixed(3)})/${fadeSec}))'` : '';
+
   const draws = [];
   const blocks = layoutEndCard(spec, w, h);
   for (let i = 0; i < blocks.length; i += 1) {
@@ -116,17 +129,36 @@ async function appendEndCard(inputPath, outputPath, rawSpec, workDir) {
     const textPath = path.join(workDir, `endcard-${i}.txt`);
     await fs.writeFile(textPath, b.text, 'utf8');
     const color = b.kind === 'button' ? spec.buttonTextColor : spec.textColor;
-    const alpha = b.kind === 'url' ? '@0.85' : '';
+    const colorAlpha = b.kind === 'url' && !alphaExpr ? '@0.85' : '';
     let d = `drawtext=fontfile=${fontfile}:textfile=${escapeFilterPath(textPath)}:expansion=none`
-      + `:fontsize=${b.size}:fontcolor=0x${color}${alpha}:line_spacing=${Math.round(b.size * 0.25)}`
-      + `:x=(w-text_w)/2:y=${b.y}`;
+      + `:fontsize=${b.size}:fontcolor=0x${color}${colorAlpha}:line_spacing=${Math.round(b.size * 0.25)}`
+      + `:x=(w-text_w)/2:y=${b.y}${enable}${alphaExpr}`;
     if (b.kind === 'button') {
       d += `:box=1:boxcolor=0x${spec.buttonColor}:boxborderw=${b.pad}`;
     }
     draws.push(d);
   }
 
-  const D = spec.durationSec;
+  if (overlay) {
+    // Dim the picture behind the text so it stays readable, then draw the text on top.
+    const dim = `drawbox=x=0:y=0:w=iw:h=ih:color=0x${spec.bgColor}@0.6:t=fill${enable}`;
+    const pad = spec.placement === 'last-frame' ? `,tpad=stop_mode=clone:stop_duration=${D}` : '';
+    const vf = `[0:v]scale=${w}:${h},setsar=1,fps=${fps}${pad},${dim},${draws.join(',')},format=yuv420p[v]`;
+    const oargs = ['-y', '-i', inputPath];
+    let filterO = vf;
+    if (probe.hasAudio && spec.placement === 'last-frame') {
+      filterO += `;[0:a]aresample=${AUDIO_RATE},aformat=channel_layouts=stereo,apad=pad_dur=${D}[a]`;
+    }
+    oargs.push('-filter_complex', filterO, '-map', '[v]');
+    if (probe.hasAudio) {
+      oargs.push('-map', spec.placement === 'last-frame' ? '[a]' : '0:a', '-c:a', 'aac', '-b:a', '160k');
+    }
+    if (spec.placement === 'last-frame' && srcDur) oargs.push('-t', String(srcDur + D));
+    oargs.push('-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outputPath);
+    await execFileAsync(FFMPEG, oargs);
+    return;
+  }
+
   const fadeIn = spec.fadeSec > 0 ? `,fade=t=in:st=0:d=${spec.fadeSec}` : '';
   const cardV = `color=c=0x${spec.bgColor}:s=${w}x${h}:r=${fps}:d=${D},${draws.join(',')}${fadeIn},format=yuv420p,setsar=1`;
 
@@ -147,5 +179,5 @@ async function appendEndCard(inputPath, outputPath, rawSpec, workDir) {
 }
 
 module.exports = {
-  appendEndCard, normalizeEndCard, layoutEndCard, MIN_DURATION_SEC, MAX_DURATION_SEC,
+  appendEndCard, normalizeEndCard, layoutEndCard, PLACEMENTS, MIN_DURATION_SEC, MAX_DURATION_SEC,
 };

@@ -454,7 +454,7 @@ const TOOL_GROUPS = [
 
 const CTA_DEFAULTS = {
   headline: '', subline: '', buttonText: '', url: '', durationSec: 4,
-  bgColor: '#111111', textColor: '#FFFFFF', buttonColor: '#CC785C',
+  bgColor: '#111111', textColor: '#FFFFFF', buttonColor: '#CC785C', placement: 'after',
 };
 
 const ctaHasContent = (c) => Boolean(c.headline.trim() || c.subline.trim() || c.buttonText.trim() || c.url.trim());
@@ -489,8 +489,18 @@ function EndCardFields({ cta, setCta }) {
           <VoiceInput value={cta.url} onChange={set('url')} placeholder="Web address or phone (optional)" label="Web address or phone" />
         </Tooltip>
       </div>
+      <label className="block space-y-1">
+        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Where it appears</span>
+        <Tooltip text="Separate closing screen after the video, over a frozen last frame (video gets longer), or over the final seconds of the video (same length).">
+          <select value={cta.placement || 'after'} onChange={(e) => set('placement')(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+            <option value="after">Closing screen after the video</option>
+            <option value="last-frame">Over a frozen last frame</option>
+            <option value="over-end">Over the end of the video</option>
+          </select>
+        </Tooltip>
+      </label>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[['Background', 'bgColor', 'Colour of the closing screen.'], ['Text', 'textColor', 'Colour of the headline and lines.'], ['Button', 'buttonColor', 'Colour behind the button text.']].map(([lbl, key, tip]) => (
+        {[['Background', 'bgColor', 'Closing screen colour (or the tint dimming the picture when shown over the video).'], ['Text', 'textColor', 'Colour of the headline and lines.'], ['Button', 'buttonColor', 'Colour behind the button text.']].map(([lbl, key, tip]) => (
           <label key={key} className="block space-y-1">
             <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{lbl}</span>
             <Tooltip text={tip}>
