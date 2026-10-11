@@ -37,7 +37,7 @@ export interface PlannedRoute { distanceM: number; durationS: number | null; coo
 export interface GeocodeResult { label: string; lat: number; lng: number }
 
 export const api = {
-  config: () => call<{ maptilerKey: string | null; routePlanning?: boolean }>('GET', '/api/route-tracks/config'),
+  config: () => call<{ maptilerKey: string | null; routePlanning?: boolean; emailEnabled?: boolean }>('GET', '/api/route-tracks/config'),
   /** The road or path between two clicks (Click mode with Follow roads on): one route, not alternatives. */
   leg: (input: { from: [number, number]; to: [number, number]; profile: PlanProfile }) =>
     call<{ route: PlannedRoute; cached: boolean }>('POST', '/api/route-tracks/leg', input),
@@ -50,6 +50,9 @@ export const api = {
   geocode: (q: string) => call<{ results: GeocodeResult[] }>('POST', '/api/geocode', { q }),
   /** The name of the place at a point (one deliberate lookup after a tap or a pin drop), or null if nothing is known there. */
   reverse: (lat: number, lng: number) => call<{ result: GeocodeResult | null }>('POST', '/api/geocode/reverse', { lat, lng }),
+  /** Email a map PDF (made in the browser) to one address. `pdf` is base64. */
+  emailMap: (input: { to: string; subject: string; message: string; copyToMe: boolean; filename: string; pdf: string }) =>
+    call<{ ok: true; copied: boolean }>('POST', '/api/route-tracks/email', input),
   list: (opts: { q?: string; cursor?: string | null; limit?: number } = {}) => {
     const p = new URLSearchParams();
     if (opts.q) p.set('q', opts.q);

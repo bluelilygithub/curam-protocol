@@ -89,11 +89,19 @@ const dist = (lines) => lines.reduce((m, l) => m + l.slice(1).reduce((a, p, i) =
 }, 0), 0);
 const bbox = (lines) => { const xs = lines.flat().map((p) => p[0]); const ys = lines.flat().map((p) => p[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; };
 const summary = (t) => { const { geometry, notes, updatedAt, ...s } = t; return s; };
+const emailLog = [];
+const emailStub = { enabled: true, fail: 0, failText: 'The email could not be sent. Try again in a moment.' };
 await page.route('**/api/route-tracks**', async (route) => {
   const req = route.request();
   const path = new URL(req.url()).pathname.replace('/api/route-tracks', '');
   const m = req.method();
-  if (m === 'GET' && path === '/config') return route.fulfill({ json: { maptilerKey: 'test', routePlanning: true } });
+  if (m === 'GET' && path === '/config') return route.fulfill({ json: { maptilerKey: 'test', routePlanning: true, emailEnabled: emailStub.enabled } });
+  if (m === 'POST' && path === '/email') {
+    const b = req.postDataJSON();
+    emailLog.push(b);
+    if (emailStub.fail) return route.fulfill({ status: emailStub.fail, json: { error: emailStub.failText } });
+    return route.fulfill({ json: { ok: true, copied: b.copyToMe === true } });
+  }
   if (m === 'GET' && path === '') return route.fulfill({ json: { tracks: [...db].reverse().map(summary), nextCursor: null } });
   if (m === 'POST' && path === '/plan') {
     const b = req.postDataJSON();
@@ -382,6 +390,83 @@ await page.getByRole('button', { name: 'Rename / edit' }).click();
 await tipsOk('rename / edit form');
 await page.getByRole('button', { name: 'Cancel' }).click();
 check('the saved track is drawn on the map', await page.evaluate(() => window.routeTracer.sent?.saved?.features.length === 1));
+
+// ---- Map as PDF: made in the browser from a hidden map, downloaded or emailed
+{
+  const errsBefore = problems.length;
+  await page.getByRole('button', { name: 'Map as PDF' }).click();
+  const dlg = page.getByTestId('pdf-dialog');
+  await dlg.waitFor({ timeout: 5000 });
+  check('Map as PDF opens a window that says it is working', (await page.getByTestId('pdf-making').count()) === 1 || (await page.getByTestId('pdf-ready').count()) === 1);
+  { // the PDF draws the route itself, so its projection must be exactly a MapLibre map's own: a hidden map built the way captureMap builds it
+    const diffs = await page.evaluate(async () => {
+      const { makeProjector, captureSize } = await import('/route-tracer-app/src/mapPdf.ts');
+      const MapCtor = window.routeTracer.map.constructor;
+      const out = [];
+      for (const [bbox, o] of [[[153.0, -27.52, 153.2, -27.48], 'landscape'], [[153.0, -27.6, 153.02, -27.4], 'portrait'], [[153.0, -27.5, 153.0005, -27.5004], 'landscape']]) {
+        const { width, height } = captureSize(o);
+        const host = document.createElement('div'); host.style.cssText = `position:fixed;left:-30000px;top:0;width:${width}px;height:${height}px`; document.body.appendChild(host);
+        const m = new MapCtor({ container: host, style: { version: 8, sources: {}, layers: [] }, bounds: bbox, fitBoundsOptions: { padding: 70, maxZoom: 17 }, interactive: false, attributionControl: false, pixelRatio: 2, fadeDuration: 0 });
+        await new Promise((r) => (m.loaded() ? r() : m.once('load', r)));
+        const c = m.unproject([width / 2, height / 2]);
+        const pr = makeProjector([c.lng, c.lat], m.getZoom(), width, height);
+        for (const p of [[bbox[0], bbox[1]], [bbox[2], bbox[3]], [c.lng + 0.003, c.lat - 0.002]]) { const a = m.project(p); const b = pr(p); out.push(Math.hypot(a.x - b.x, a.y - b.y)); }
+        m.remove(); host.remove();
+      }
+      return out;
+    });
+    check('the PDF projects places onto its picture exactly as a map of that size does', diffs.length === 9 && diffs.every((d) => d < 0.01), JSON.stringify(diffs));
+  }
+  await page.getByTestId('pdf-ready').waitFor({ timeout: 60000 });
+  check('and finishes with one A4 page', /one A4 page, [\d,]+ KB/.test((await page.getByTestId('pdf-ready').textContent()) ?? ''), (await page.getByTestId('pdf-ready').textContent()) ?? '');
+  check('the hidden map used to make it is gone again', (await page.locator('body > div[aria-hidden="true"] canvas').count()) === 0);
+  await tipsOk('map as PDF window');
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByTestId('pdf-download').click()]);
+  check('Download saves a .pdf named after the track', /^Test loop\.pdf$/.test(dl.suggestedFilename()), dl.suggestedFilename());
+  const file = await dl.path();
+  const head = (await import('node:fs')).readFileSync(file).subarray(0, 5).toString('latin1');
+  check('and it is a real PDF', head === '%PDF-');
+  if (out) (await import('node:fs')).copyFileSync(file, join(out, 'map.pdf'));
+
+  // email
+  const toBox = dlg.getByLabel('To');
+  check('Email PDF waits for an address', await dlg.getByRole('button', { name: 'Email PDF' }).isDisabled());
+  await toBox.fill('friend@example.com');
+  await dlg.getByLabel('Message (optional)').fill('Here is the route.');
+  emailLog.length = 0;
+  await dlg.getByRole('button', { name: 'Email PDF' }).click();
+  await page.getByTestId('pdf-email-sent').waitFor({ timeout: 5000 });
+  const sentBody = emailLog[0];
+  check('Email PDF sends one address, the message, a copy to me by default, and the same PDF as base64', emailLog.length === 1 && sentBody.to === 'friend@example.com' && sentBody.message === 'Here is the route.' && sentBody.copyToMe === true && /^Test loop$/.test(sentBody.filename) && /Test loop/.test(sentBody.subject) && Buffer.from(sentBody.pdf, 'base64').subarray(0, 5).toString('latin1') === '%PDF-', JSON.stringify({ ...sentBody, pdf: sentBody.pdf?.length }));
+  check('and says who it went to', /friend@example.com/.test((await page.getByTestId('pdf-email-sent').textContent()) ?? ''));
+  await dlg.getByLabel('Send me a copy').uncheck();
+  emailLog.length = 0;
+  await dlg.getByRole('button', { name: 'Email PDF' }).click(); await wait(400);
+  check('"Send me a copy" off is sent as off', emailLog.length === 1 && emailLog[0].copyToMe === false);
+  // a refusal from the server is shown plainly and nothing says sent
+  emailStub.fail = 429; emailStub.failText = 'That is a lot of emails in an hour. Wait a while and try again.';
+  await dlg.getByRole('button', { name: 'Email PDF' }).click();
+  await page.getByTestId('pdf-email-error').waitFor({ timeout: 5000 });
+  check('a refused email shows the server\'s plain reason', /lot of emails/.test((await page.getByTestId('pdf-email-error').textContent()) ?? '') && (await page.getByTestId('pdf-email-sent').count()) === 0);
+  emailStub.fail = 0;
+  await page.keyboard.press('Escape'); await wait(200);
+  check('Escape closes the window', (await dlg.count()) === 0);
+
+  // email not set up on the server: Download still works, the form says why and cannot be used
+  emailStub.enabled = false;
+  await page.reload(); await ready(page);
+  await page.getByRole('button', { name: /Test loop/ }).click();
+  await page.getByRole('button', { name: 'Map as PDF' }).click();
+  await page.getByTestId('pdf-ready').waitFor({ timeout: 60000 });
+  check('with email not set up the window says so and the form is switched off', (await page.getByTestId('pdf-email-off').count()) === 1 && await page.getByRole('dialog', { name: 'Map as PDF' }).getByRole('button', { name: 'Email PDF' }).isDisabled() && await page.getByRole('dialog', { name: 'Map as PDF' }).getByLabel('To').isDisabled());
+  check('but Download is still there', await page.getByTestId('pdf-download').isEnabled());
+  await page.getByRole('button', { name: 'Close', exact: true }).click(); await wait(200);
+  emailStub.enabled = true;
+  check('making the PDF raised no errors in the page', problems.length === errsBefore, problems.slice(errsBefore).join(' | '));
+  await page.reload(); await ready(page);
+  await page.getByRole('button', { name: /Test loop/ }).click();
+  await page.getByRole('heading', { name: /Test loop/ }).waitFor({ timeout: 5000 });
+}
 
 // ---- extend
 await page.getByRole('button', { name: 'Extend' }).click();
@@ -1048,6 +1133,7 @@ await wait(300);
   check('the guide opens by itself on the first visit', true);
   if (out) await fp.screenshot({ path: join(out, 'info.png') });
   const guide = (await fp.getByTestId('info-modal').textContent()) ?? '';
+  check('and explains Map as PDF, downloading and emailing', /Map as PDF: download or email/.test(guide) && /Email PDF/.test(guide));
   check('and covers drawing, elevation, GPX and tracks', /Freehand/.test(guide) && /Elevation and climb/.test(guide) && /GPX files/.test(guide) && /Saving and your tracks/.test(guide));
   const noTips = await fp.evaluate(() => [...document.querySelectorAll('[data-testid=info-modal] button')].filter((b) => !(b.getAttribute('title') || b.getAttribute('data-tip') || '').trim()).length); // a focused button has its title moved to data-tip by the tooltip host
   check('guide buttons have tooltips too', noTips === 0);

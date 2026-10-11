@@ -121,7 +121,7 @@ function build(pool, userId = 1, opts) {
   const app = express();
   app.use(express.json({ limit: '30mb' }));
   app.use((req, res, next) => { req.user = { id: userId }; next(); });
-  app.use('/api/route-tracks', createRouter(pool, opts));
+  app.use('/api/route-tracks', createRouter(pool, { emailConfigured: async () => false, ...opts })); // never the real mail check (it would reach for the database)
   return http.createServer(app);
 }
 
@@ -555,6 +555,95 @@ async function planTests() {
     assert.ok(!lr.text.includes('ors-secret'));
     assert.strictEqual((await call(ls, 'POST', '/api/route-tracks/loop', { from: [153.028, -27.468], lengthKm: 500, profile: 'walking' })).status, 400);
     assert.strictEqual((await call(ls, 'POST', '/api/route-tracks/loop', {})).status, 400);
+    // /email through the router
+    {
+      const sent = [];
+      const pdfB64 = Buffer.from('%PDF-1.7\n' + 'x'.repeat(300)).toString('base64');
+      const mkEmail = (opts = {}, user = 1, userEmail = 'me@example.com') => {
+        const app = express();
+        app.use(express.json({ limit: '30mb' }));
+        app.use((req, res, next) => { req.user = { id: user, email: userEmail }; next(); });
+        app.use('/api/route-tracks', createRouter(fakePool(), { getMapKey: () => 'K', sendEmailFn: async (m) => { sent.push(m); return { ok: true, provider: 'test' }; }, emailConfigured: async () => true, ...opts }));
+        return http.createServer(app).listen(0);
+      };
+      const es = mkEmail();
+      const body = { to: 'friend@example.com', message: 'Here is the route <b>now</b> & more', subject: 'Morning loop\r\nBcc: evil@example.com', filename: '../Morning loop?.pdf', pdf: pdfB64, copyToMe: true };
+      const ok = await call(es, 'POST', '/api/route-tracks/email', body);
+      assert.strictEqual(ok.status, 200);
+      assert.deepStrictEqual(ok.json, { ok: true, copied: true });
+      const m = sent[0];
+      assert.strictEqual(m.to, 'friend@example.com');
+      assert.strictEqual(m.cc, 'me@example.com', 'a copy to the sender when asked');
+      assert.strictEqual(m.replyTo, 'me@example.com', 'replies go to the sender');
+      assert.ok(!/[\r\n]/.test(m.subject) && m.subject.startsWith('Morning loop'), 'the subject cannot carry a header');
+      assert.ok(!/<b>/.test(m.html) && /&lt;b&gt;now&lt;\/b&gt; &amp; more/.test(m.html), 'the message is escaped: plain text only');
+      assert.strictEqual(m.attachments.length, 1);
+      assert.strictEqual(m.attachments[0].contentType, 'application/pdf');
+      assert.ok(/^[\w\-. ]+\.pdf$/.test(m.attachments[0].filename) && !m.attachments[0].filename.includes('/') && !m.attachments[0].filename.includes('..'.repeat(2)), m.attachments[0].filename);
+      assert.strictEqual(m.attachments[0].content.subarray(0, 5).toString('latin1'), '%PDF-');
+      // no copy unless asked, and none to the same address
+      sent.length = 0;
+      await call(es, 'POST', '/api/route-tracks/email', { ...body, copyToMe: false });
+      assert.strictEqual(sent[0].cc, undefined);
+      await call(es, 'POST', '/api/route-tracks/email', { ...body, to: 'ME@example.com' });
+      assert.strictEqual(sent[1].cc, undefined);
+      // one recipient only, a real address
+      sent.length = 0;
+      for (const to of ['', 'nobody', 'a@b', 'a@b.com, c@d.com', 'a@b.com;c@d.com', 'a@b.com\nBcc: c@d.com', '<a@b.com>', 'x'.repeat(300) + '@b.com', 'a b@c.com', undefined, 5, ['a@b.com']]) {
+        assert.strictEqual((await call(es, 'POST', '/api/route-tracks/email', { ...body, to })).status, 400, JSON.stringify(to));
+      }
+      // the attachment must be a PDF, not too big, and base64
+      for (const pdf of ['', undefined, 'not base64!!', Buffer.from('hello world, this is not a pdf '.repeat(10)).toString('base64'), Buffer.from('%PDF-').toString('base64'), 123]) {
+        assert.strictEqual((await call(es, 'POST', '/api/route-tracks/email', { ...body, pdf })).status, 400, String(pdf).slice(0, 20));
+      }
+      const huge = Buffer.alloc(8 * 1024 * 1024 + 10, 65); huge.write('%PDF-', 0, 'latin1');
+      assert.strictEqual((await call(es, 'POST', '/api/route-tracks/email', { ...body, pdf: huge.toString('base64') })).status, 413);
+      assert.strictEqual((await call(es, 'POST', '/api/route-tracks/email', { ...body, message: 'x'.repeat(2001) })).status, 400);
+      assert.strictEqual(sent.length, 0, 'nothing was sent for any refused request');
+      // the data-url form a browser might send
+      assert.strictEqual((await call(es, 'POST', '/api/route-tracks/email', { ...body, pdf: `data:application/pdf;base64,${pdfB64}` })).status, 200);
+      es.close();
+      // allowances: per hour and per day, per person; they reset
+      let tt = 1000000;
+      const lim = mkEmail({ emailLimits: { now: () => tt, perHour: 2, perDay: 3 } });
+      for (let i = 0; i < 2; i += 1) assert.strictEqual((await call(lim, 'POST', '/api/route-tracks/email', body)).status, 200);
+      const hr = await call(lim, 'POST', '/api/route-tracks/email', body);
+      assert.strictEqual(hr.status, 429);
+      assert.ok(hr.headers.get('retry-after'));
+      tt += 3600001;
+      assert.strictEqual((await call(lim, 'POST', '/api/route-tracks/email', body)).status, 200);
+      const day = await call(lim, 'POST', '/api/route-tracks/email', body);
+      assert.strictEqual(day.status, 429);
+      assert.match(day.json.error, /today/);
+      tt += 86400001;
+      assert.strictEqual((await call(lim, 'POST', '/api/route-tracks/email', body)).status, 200);
+      lim.close();
+      // a failed send does not use an allowance, says plainly why, and never leaks the provider text
+      const bad = mkEmail({ sendEmailFn: async () => { throw new Error('MailChannels error 401: secret-key-leak'); } });
+      const f = await call(bad, 'POST', '/api/route-tracks/email', body);
+      assert.strictEqual(f.status, 502);
+      assert.ok(!/secret-key-leak|MailChannels/.test(f.text));
+      bad.close();
+      const notSet = mkEmail({ sendEmailFn: async () => { throw new Error('Email delivery is not configured. Set MAIL_CHANNEL_API_KEY'); } });
+      const n = await call(notSet, 'POST', '/api/route-tracks/email', body);
+      assert.strictEqual(n.status, 503);
+      assert.match(n.json.error, /not set up/);
+      notSet.close();
+      const off = mkEmail({ sendEmailFn: async () => ({ ok: false, skipped: true }) });
+      assert.strictEqual((await call(off, 'POST', '/api/route-tracks/email', body)).status, 503);
+      off.close();
+      // /config says whether email is set up
+      const withMail = mkEmail();
+      assert.strictEqual((await call(withMail, 'GET', '/api/route-tracks/config')).json.emailEnabled, true);
+      withMail.close();
+      const noMail = mkEmail({ emailConfigured: async () => false });
+      assert.strictEqual((await call(noMail, 'GET', '/api/route-tracks/config')).json.emailEnabled, false);
+      noMail.close();
+      const brokenCheck = mkEmail({ emailConfigured: async () => { throw new Error('db down'); } });
+      assert.strictEqual((await call(brokenCheck, 'GET', '/api/route-tracks/config')).json.emailEnabled, false);
+      brokenCheck.close();
+    }
+
     // /leg through the router
     const legRes = await call(ls, 'POST', '/api/route-tracks/leg', { from: [153.028, -27.468], to: [153.03, -27.469], profile: 'walking' });
     assert.strictEqual(legRes.status, 200);

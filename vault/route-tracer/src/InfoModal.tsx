@@ -89,6 +89,13 @@ export function InfoModal() {
             <li><b>Export GPX</b> on a saved track downloads a standard file that Strava, Garmin and gpx.studio open.</li>
           </ul>
 
+          <h3>Map as PDF: download or email</h3>
+          <ul>
+            <li>Open a saved track and press <b>Map as PDF</b>. After a few seconds you have one A4 page: the route on a map of the area it covers, the start (A) and finish (B), distance markers, a scale bar and north arrow, the distance, climb and descent, your notes, and the elevation profile. It uses the map style you are looking at (Streets, Outdoor or Satellite).</li>
+            <li><b>Download PDF</b> saves it to your device to print. <b>Email PDF</b> sends the same file as an attachment to one address, with an optional message, and can send you a copy. The email comes from Vault with your address as the reply-to.</li>
+            <li>If the server cannot send email yet, the form says so and Download still works. Emails are limited to 10 an hour and 30 a day each, so this cannot be used to send bulk mail.</li>
+          </ul>
+
           <h3>Map controls</h3>
           <ul>
             <li>The search box at the top finds a place or address. The buttons down the right edge of the map zoom, centre the map on you, turn north to the top, and switch the map style.</li>

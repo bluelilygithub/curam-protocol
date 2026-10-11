@@ -6,6 +6,7 @@ import { displayLines, finish, fromLines } from './drawing';
 import { bboxOf, formatDistance, totalKm, type BBox } from './geo';
 import { setSaved, type SavedLine } from './mapLayers';
 import { ElevationChart } from './ElevationChart';
+import { ExportPdf } from './ExportPdf';
 import { fitToLimit } from './gpx';
 import { fitPadding } from './layout';
 import { usePlan } from './Plan';
@@ -230,8 +231,9 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
   const [color, setColor] = useState(track.color);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [pdfOpen, setPdfOpen] = useState(false);
 
-  useEffect(() => { setName(track.name); setNotes(track.notes ?? ''); setColor(track.color); setEditing(false); setConfirmDelete(false); }, [track.id, track.updatedAt, track.name, track.notes, track.color]);
+  useEffect(() => { setPdfOpen(false); setName(track.name); setNotes(track.notes ?? ''); setColor(track.color); setEditing(false); setConfirmDelete(false); }, [track.id, track.updatedAt, track.name, track.notes, track.color]);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -287,6 +289,7 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
               <button type="button" onClick={() => reopen('edit')} title="Reshape the route: move points, add points or delete them">Edit points</button>
               <button type="button" onClick={() => reopen('extend')} title="Carry on drawing from the end of this route">Extend</button>
               <button type="button" onClick={() => void exportGpx()} title="Download this track as a GPX file for Strava, Garmin or gpx.studio">Export GPX</button>
+              <button type="button" onClick={() => setPdfOpen(true)} title="Make a printable A4 map of this route as a PDF, to download or email" data-tour="rt-pdf">Map as PDF</button>
               {confirmDelete ? (
                 <div className="row">
                   <span>Delete this track?</span>
@@ -300,6 +303,7 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
           </>
         )}
       </div>
+      {pdfOpen && <ExportPdf track={track} onClose={() => setPdfOpen(false)} />}
     </section>
   );
 }

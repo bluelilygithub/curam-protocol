@@ -78,9 +78,9 @@ function smtpConfig() {
 
 /**
  * Send an email via MailChannels (if key configured) or SMTP nodemailer.
- * @param {{ to: string, subject: string, html: string, from?: string, cc?: string, attachments?: Array<{filename: string, content: Buffer, contentType: string}> }} opts
+ * @param {{ to: string, subject: string, html: string, from?: string, cc?: string, replyTo?: string, attachments?: Array<{filename: string, content: Buffer, contentType: string}> }} opts
  */
-async function sendEmail({ to, subject, html, from, cc, attachments }) {
+async function sendEmail({ to, subject, html, from, cc, replyTo, attachments }) {
   if (runtimeConfig.disableEmail) {
     const reason = `Email disabled by DISABLE_EMAIL; skipped "${subject}" to ${to}`;
     console.log(`[runtime] ${reason}`);
@@ -96,6 +96,7 @@ async function sendEmail({ to, subject, html, from, cc, attachments }) {
     const payload = JSON.stringify({
       personalizations: [personalization],
       from: { email: defaultFromAddress(from) },
+      ...(replyTo ? { reply_to: { email: replyTo } } : {}),
       subject,
       content: [{ type: 'text/html', value: html }],
       ...(attachments && attachments.length ? {
@@ -150,6 +151,7 @@ async function sendEmail({ to, subject, html, from, cc, attachments }) {
     from: defaultFromAddress(from),
     to,
     cc: cc || undefined,
+    replyTo: replyTo || undefined,
     subject,
     html,
     attachments: attachments && attachments.length
@@ -158,5 +160,11 @@ async function sendEmail({ to, subject, html, from, cc, attachments }) {
   });
   return { ok: true, provider: 'smtp', messageId: info?.messageId || null };
 }
+
+/** Is email set up on this server (a MailChannels key or SMTP settings, and not switched off)? For screens that offer to send something. */
+sendEmail.isConfigured = async function isConfigured() {
+  if (runtimeConfig.disableEmail) return false;
+  return !!((await getMailChannelKey()) || smtpConfig());
+};
 
 module.exports = sendEmail;

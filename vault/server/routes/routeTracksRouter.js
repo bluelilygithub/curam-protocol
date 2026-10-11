@@ -13,6 +13,9 @@ const { createPlanner, PlanError, PROFILES, LOOP_MIN_KM, LOOP_MAX_KM, DETOUR_MIN
 const MAX_NAME = 120;
 const MAX_NOTES = 2000;
 const MAX_BODY_BYTES = 1024 * 1024; // the global JSON limit is far higher; long freehand tracks are still bounded here
+const MAX_PDF_BYTES = 8 * 1024 * 1024; // an emailed map PDF
+const MAX_EMAIL_BODY_BYTES = 12 * 1024 * 1024; // the PDF as base64 plus the rest
+const EMAIL_RE = /^[^\s@,;<>()\[\]"'\\]{1,64}@[^\s@,;<>()\[\]"'\\]{1,200}\.[^\s@,;<>()\[\]"'\\]{2,}$/;
 const MAX_TRACKS_PER_USER = 1000;
 const MAX_BULK_DELETE = 200;
 const DEFAULT_COLOR = '#E4572E';
@@ -83,15 +86,29 @@ function createRouter(pool, {
   getMapKey = () => process.env.ROUTE_TRACER_MAPTILER_KEY || process.env.MAPTILER_API_KEY || null,
   getOrsKey = () => process.env.ORS_API_KEY || null,
   fetchFn, now, planLimits = {},
+  sendEmailFn = (...a) => require('../utils/sendEmail')(...a),
+  emailConfigured = () => require('../utils/sendEmail').isConfigured(),
+  emailLimits = {},
 } = {}) {
   const router = express.Router();
   const planner = createPlanner({ getKey: getOrsKey, fetchFn, now, log: (m, d) => getLogger().warn({ detail: d }, m), ...planLimits });
 
+  // ---- emailing a map PDF. The PDF is made in the browser (only it has the map picture); the server's part is to send it, and to make sure this
+  // cannot be used to send just anything to anyone: signed-in users only, ONE recipient, the attachment must really be a PDF under 8 MB, the
+  // message is plain text (escaped), the subject and file name are cleaned, and each person has an hourly and a daily allowance.
+  const emailHits = new Map(); // userId -> timestamps
+  const emailNow = emailLimits.now ?? Date.now;
+  const perHour = emailLimits.perHour ?? 10;
+  const perDay = emailLimits.perDay ?? 30;
+  const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
   // GET /api/route-tracks/config: the browser-side MapTiler key. Prefer a separate key restricted by referrer to the Vault domain and localhost
   // (ROUTE_TRACER_MAPTILER_KEY); falls back to MAPTILER_API_KEY, which then becomes visible in the browser.
-  router.get('/config', (req, res) => {
+  router.get('/config', async (req, res) => {
     res.set('Cache-Control', 'no-store');
-    res.json({ maptilerKey: getMapKey(), routePlanning: !!getOrsKey(), planProfiles: Object.keys(PROFILES), loopKm: { min: LOOP_MIN_KM, max: LOOP_MAX_KM }, detourKm: { min: DETOUR_MIN_KM, max: DETOUR_MAX_KM } });
+    let emailEnabled = false;
+    try { emailEnabled = !!(await emailConfigured()); } catch { emailEnabled = false; }
+    res.json({ maptilerKey: getMapKey(), routePlanning: !!getOrsKey(), emailEnabled, planProfiles: Object.keys(PROFILES), loopKm: { min: LOOP_MIN_KM, max: LOOP_MAX_KM }, detourKm: { min: DETOUR_MIN_KM, max: DETOUR_MAX_KM } });
   });
 
   // GET /api/route-tracks?q=&limit=&cursor=: newest first, no geometry.
@@ -150,6 +167,43 @@ function createRouter(pool, {
       }
       getLogger().error({ err }, 'route plan failed');
       res.status(500).json({ error: 'Could not plan that route.' });
+    }
+  });
+
+  // POST /api/route-tracks/email { to, subject?, message?, copyToMe?, filename, pdf (base64) }: email a map PDF made in the browser.
+  router.post('/email', async (req, res) => {
+    if (Number(req.headers['content-length'] || 0) > MAX_EMAIL_BODY_BYTES) return res.status(413).json({ error: 'That PDF is too large to email (over 8 MB).' });
+    const b = req.body && typeof req.body === 'object' ? req.body : {};
+    const to = typeof b.to === 'string' ? b.to.trim() : '';
+    if (!to || to.length > 254 || !EMAIL_RE.test(to)) return res.status(400).json({ error: 'Enter one email address to send it to.' });
+    const subject = (typeof b.subject === 'string' && b.subject.trim() ? b.subject : 'Route map').replace(/[\r\n\t]+/g, ' ').trim().slice(0, 150);
+    const message = typeof b.message === 'string' ? b.message.replace(/\r\n?/g, '\n').trim() : '';
+    if (message.length > 2000) return res.status(400).json({ error: 'The message can be at most 2,000 characters.' });
+    const base = (typeof b.filename === 'string' ? b.filename : 'route-map').replace(/\.pdf$/i, '').replace(/[^\w\-. ]+/g, '_').trim().slice(0, 80) || 'route-map';
+    const raw = typeof b.pdf === 'string' ? b.pdf.replace(/^data:application\/pdf;base64,/, '') : '';
+    if (!raw || !/^[A-Za-z0-9+/]+={0,2}$/.test(raw)) return res.status(400).json({ error: 'The PDF is missing or damaged. Make it again.' });
+    const pdf = Buffer.from(raw, 'base64');
+    if (pdf.length > MAX_PDF_BYTES) return res.status(413).json({ error: 'That PDF is too large to email (over 8 MB).' });
+    if (pdf.length < 100 || pdf.subarray(0, 5).toString('latin1') !== '%PDF-') return res.status(400).json({ error: 'That is not a PDF. Make it again.' });
+
+    const t = emailNow();
+    const mine = (emailHits.get(req.user.id) || []).filter((x) => t - x < 86400000);
+    if (mine.length >= perDay) { res.set('Retry-After', '3600'); return res.status(429).json({ error: 'You have emailed enough maps today. Try again tomorrow.' }); }
+    if (mine.filter((x) => t - x < 3600000).length >= perHour) { res.set('Retry-After', '600'); return res.status(429).json({ error: 'That is a lot of emails in an hour. Wait a while and try again.' }); }
+
+    const cc = b.copyToMe === true && req.user.email && EMAIL_RE.test(req.user.email) && req.user.email.toLowerCase() !== to.toLowerCase() ? req.user.email : undefined;
+    const html = `<div style="font-family:system-ui,Arial,sans-serif;font-size:14px;color:#1a1a1a;line-height:1.5">${message ? `<p>${esc(message).replace(/\n/g, '<br>')}</p>` : '<p>A route map is attached.</p>'}<p style="color:#666;font-size:12px">Sent from Route Tracer in Vault${req.user.email ? ` by ${esc(req.user.email)}` : ''}. The map is attached as a PDF. Map data \u00a9 OpenStreetMap contributors, \u00a9 MapTiler.</p></div>`;
+    try {
+      const out = await sendEmailFn({ to, cc, replyTo: req.user.email || undefined, subject, html, attachments: [{ filename: `${base}.pdf`, content: pdf, contentType: 'application/pdf' }] });
+      if (out && out.skipped) return res.status(503).json({ error: 'Email is switched off on this server.' });
+      mine.push(t);
+      emailHits.set(req.user.id, mine);
+      getLogger().info({ bytes: pdf.length, copied: !!cc }, 'route map emailed'); // never the address or the words
+      res.json({ ok: true, copied: !!cc });
+    } catch (err) {
+      if (/not configured/i.test(String(err && err.message))) return res.status(503).json({ error: 'Email is not set up on this server yet.' });
+      getLogger().error({ err }, 'route map email failed');
+      res.status(502).json({ error: 'The email could not be sent. Try again in a moment.' });
     }
   });
 
