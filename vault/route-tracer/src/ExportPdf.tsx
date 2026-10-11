@@ -4,8 +4,10 @@ import { api, type Track } from './api';
 import { buildProfile, maptilerTiles } from './elevation';
 import { bboxOf, formatDistance } from './geo';
 import { captureMap } from './mapCapture';
+import { Field, Mic } from './Mic';
 import { captureSize, chooseOrientation } from './mapLayout';
 import { useStore } from './store';
+import { spokenEmail } from './voice';
 
 type State = { status: 'making'; step: string } | { status: 'error'; message: string } | { status: 'ready'; blob: Blob; kb: number; noHeights: boolean };
 
@@ -122,8 +124,8 @@ export function ExportPdf({ track, onClose }: { track: Track; onClose: () => voi
             <form className="stack" onSubmit={(e) => void send(e)} data-testid="pdf-email">
               <h3 className="sub">Email it</h3>
               {!emailEnabled && <p className="hint" data-testid="pdf-email-off">Email is not set up on this server yet, so only Download works for now.</p>}
-              <label>To<input type="email" required maxLength={254} autoComplete="email" disabled={!emailEnabled || sending} value={to} onChange={(e) => setTo(e.target.value)} placeholder="name@example.com" title="One email address to send the PDF to" /></label>
-              <label>Message (optional)<textarea rows={3} maxLength={2000} disabled={!emailEnabled || sending} value={message} onChange={(e) => setMessage(e.target.value)} title="Added above the attachment. Plain text, up to 2,000 characters." /></label>
+              <Field label="To">{(id) => <span className="vwrap"><input id={id} type="email" required maxLength={254} autoComplete="email" disabled={!emailEnabled || sending} value={to} onChange={(e) => setTo(e.target.value)} placeholder="name@example.com" title="One email address to send the PDF to" /><Mic label="Say the address, for example: michael at example dot com" onDone={(t) => { setTo(spokenEmail(t).slice(0, 254)); }} /></span>}</Field>
+              <Field label="Message (optional)">{(id) => <span className="vwrap vwrap-area"><textarea id={id} rows={3} maxLength={2000} disabled={!emailEnabled || sending} value={message} onChange={(e) => setMessage(e.target.value)} title="Added above the attachment. Plain text, up to 2,000 characters." /><Mic area label="Speak the message, added to the end" onDone={(t) => { setMessage((m) => `${m.trim() ? `${m.trim()} ` : ''}${t.trim()}`.slice(0, 2000)); }} /></span>}</Field>
               <label className="check"><input type="checkbox" checked={copy} disabled={!emailEnabled || sending} onChange={(e) => setCopy(e.target.checked)} title="Also send a copy to your own Vault email address" /> Send me a copy</label>
               {problem && <p role="alert" className="hint err" data-testid="pdf-email-error">{problem}</p>}
               {sent && <p role="status" className="hint ok" data-testid="pdf-email-sent">Sent to {sent}.</p>}

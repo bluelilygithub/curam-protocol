@@ -16,6 +16,24 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true, args:
 const AUTH = () => { try { localStorage.setItem('vault-auth', JSON.stringify({ state: { token: 'test-token', user: { id: 1 } } })); localStorage.setItem('route-tracer:info-seen:v1', '1'); } catch { /* none */ } };
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, permissions: ['geolocation'], geolocation: { latitude: -27.47, longitude: 153.03 } });
 await ctx.addInitScript(AUTH);
+await ctx.addInitScript(() => {
+  window.__speech = { next: 'hello', fail: null, started: 0 };
+  class FakeRecognition {
+    start() {
+      window.__speech.started += 1;
+      setTimeout(() => {
+        this.onstart?.();
+        if (window.__speech.fail) { this.onerror?.({ error: window.__speech.fail }); this.onend?.(); return; }
+        const r = [{ transcript: window.__speech.next }]; r.isFinal = true;
+        this.onresult?.({ resultIndex: 0, results: [r] });
+        this.onend?.();
+      }, 30);
+    }
+    stop() {}
+    abort() {}
+  }
+  window.SpeechRecognition = FakeRecognition; window.webkitSpeechRecognition = FakeRecognition;
+});
 const page = await ctx.newPage();
 const problems = [];
 page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
@@ -54,6 +72,7 @@ await page.route('https://api.maptiler.com/tiles/terrain-rgb-v2/**', (r) => {
 const suggestLog = [];
 let suggestAnswer = [];
 let suggestFail = 0;
+const suggestNamed = {};
 let suggestDelay = () => 0;
 await page.route('https://api.maptiler.com/geocoding/**', async (r) => {
   const url = new URL(r.request().url());
@@ -61,7 +80,7 @@ await page.route('https://api.maptiler.com/geocoding/**', async (r) => {
   const wait = suggestDelay(suggestLog.at(-1).q);
   if (wait) await new Promise((res) => setTimeout(res, wait));
   if (suggestFail) return r.fulfill({ status: suggestFail, json: { message: 'no' }, headers: cors });
-  return r.fulfill({ json: { type: 'FeatureCollection', query: [], attribution: 'x', features: suggestAnswer.map((a) => ({ place_name: a.name, center: [a.lng, a.lat], geometry: { type: 'Point', coordinates: [a.lng, a.lat] } })) }, headers: cors });
+  return r.fulfill({ json: { type: 'FeatureCollection', query: [], attribution: 'x', features: (Object.hasOwn(suggestNamed, suggestLog.at(-1).q) ? (suggestNamed[suggestLog.at(-1).q] ? [suggestNamed[suggestLog.at(-1).q]] : []) : suggestAnswer).map((a) => ({ place_name: a.name, center: [a.lng, a.lat], geometry: { type: 'Point', coordinates: [a.lng, a.lat] } })) }, headers: cors });
 });
 let reverseSeq = 0;
 const reverseLog = [];
@@ -90,6 +109,8 @@ const dist = (lines) => lines.reduce((m, l) => m + l.slice(1).reduce((a, p, i) =
 const bbox = (lines) => { const xs = lines.flat().map((p) => p[0]); const ys = lines.flat().map((p) => p[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; };
 const summary = (t) => { const { geometry, notes, updatedAt, ...s } = t; return s; };
 const emailLog = [];
+const askLog = [];
+const askStub = { fail: 0, failText: 'x', intent: null };
 const emailStub = { enabled: true, fail: 0, failText: 'The email could not be sent. Try again in a moment.' };
 await page.route('**/api/route-tracks**', async (route) => {
   const req = route.request();
@@ -103,6 +124,21 @@ await page.route('**/api/route-tracks**', async (route) => {
     return route.fulfill({ json: { ok: true, copied: b.copyToMe === true } });
   }
   if (m === 'GET' && path === '') return route.fulfill({ json: { tracks: [...db].reverse().map(summary), nextCursor: null } });
+  if (m === 'POST' && path === '/ask') {
+    const b = req.postDataJSON();
+    askLog.push(b.text);
+    if (askStub.fail) return route.fulfill({ status: askStub.fail, json: { error: askStub.failText } });
+    if (askStub.intent) return route.fulfill({ json: { intent: askStub.intent, via: 'local' } });
+    const t = b.text;
+    const km = /(\d+(?:\.\d+)?)\s*km/i.exec(t)?.[1];
+    const profile = /cycl|bike/i.test(t) ? 'cycling' : /walk/i.test(t) ? 'walking' : null;
+    let intent = { kind: 'none', from: null, to: null, lengthKm: null, profile: null };
+    const loop = /loop from (\w+)/i.exec(t);
+    const ab = /from (\w+) to (\w+)/i.exec(t);
+    if (loop) intent = { kind: 'loop', from: loop[1], to: null, lengthKm: km ? Number(km) : null, profile };
+    else if (ab) intent = { kind: km ? 'detour' : 'direct', from: ab[1], to: ab[2], lengthKm: km ? Number(km) : null, profile };
+    return route.fulfill({ json: { intent, via: 'local' } });
+  }
   if (m === 'POST' && path === '/plan') {
     const b = req.postDataJSON();
     planLog.push(b);
@@ -191,6 +227,7 @@ const untitled = () => page.evaluate(() => [...document.querySelectorAll('button
   .filter((el) => !el.closest('.maplibregl-ctrl, .shepherd-element') && !el.hidden && el.getClientRects().length > 0)
   .filter((el) => !(el.getAttribute('title') || el.getAttribute('data-tip') || '').trim())
   .map((el) => `${el.tagName.toLowerCase()}${el.type ? `[${el.type}]` : ''} "${(el.getAttribute('aria-label') || el.textContent || el.placeholder || '').trim().slice(0, 30)}"`));
+const until = async (cond, ms = 12000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (await cond()) return true; await page.waitForTimeout(150); } return false; };
 const tipsOk = async (where) => { const bad = await untitled(); check(`every control has a tooltip: ${where}`, bad.length === 0, bad.join(', ')); };
 /** Back to the tracks list (a track that is open replaces it, and the Draw and Plan route buttons live there). */
 const home = async () => { const b = page.getByRole('button', { name: 'Tracks', exact: true }); if (await b.count()) await b.click(); };
@@ -388,6 +425,20 @@ await shot('detail');
 await tipsOk('open track');
 await page.getByRole('button', { name: 'Rename / edit' }).click();
 await tipsOk('rename / edit form');
+{
+  const sayNow = (text) => page.evaluate((t) => { window.__speech.next = t; window.__speech.fail = null; }, text);
+  const form = page.locator('form.stack').filter({ has: page.getByRole('button', { name: 'Save', exact: true }) });
+  await sayNow('Evening loop.');
+  await form.getByRole('button', { name: 'Speak instead of typing' }).click(); await wait(400);
+  check('speaking a name replaces it (no full stop)', (await form.getByLabel('Name', { exact: true }).inputValue()) === 'Evening loop');
+  await sayNow('Park at the gate.');
+  await form.getByRole('button', { name: /Speak a note/ }).click(); await wait(400);
+  const first = await form.getByLabel('Notes', { exact: true }).inputValue();
+  await sayNow('Water at the cafe.');
+  await form.getByRole('button', { name: /Speak a note/ }).click(); await wait(400);
+  const both = await form.getByLabel('Notes', { exact: true }).inputValue();
+  check('speaking a note adds to the end of the notes', first.endsWith('Park at the gate.') && both === `${first} Water at the cafe.`, `${first} | ${both}`);
+}
 await page.getByRole('button', { name: 'Cancel' }).click();
 check('the saved track is drawn on the map', await page.evaluate(() => window.routeTracer.sent?.saved?.features.length === 1));
 
@@ -429,7 +480,16 @@ check('the saved track is drawn on the map', await page.evaluate(() => window.ro
   if (out) (await import('node:fs')).copyFileSync(file, join(out, 'map.pdf'));
 
   // email
-  const toBox = dlg.getByLabel('To');
+  const toBox = dlg.getByLabel('To', { exact: true });
+  await page.evaluate(() => { window.__speech.next = 'michael at example dot com'; window.__speech.fail = null; });
+  await dlg.getByRole('button', { name: /Say the address/ }).click(); await wait(400);
+  check('a spoken email address is turned into an address', (await toBox.inputValue()) === 'michael@example.com', await toBox.inputValue());
+  await page.evaluate(() => { window.__speech.next = 'Here you go.'; });
+  await dlg.getByRole('button', { name: /Speak the message/ }).click(); await wait(300);
+  await dlg.getByRole('button', { name: /Speak the message/ }).click(); await wait(300);
+  check('a spoken message is added to the end, each time', (await dlg.getByLabel('Message (optional)').inputValue()) === 'Here you go. Here you go.', await dlg.getByLabel('Message (optional)').inputValue());
+  await dlg.getByLabel('Message (optional)').fill('');
+  await toBox.fill('');
   check('Email PDF waits for an address', await dlg.getByRole('button', { name: 'Email PDF' }).isDisabled());
   await toBox.fill('friend@example.com');
   await dlg.getByLabel('Message (optional)').fill('Here is the route.');
@@ -458,7 +518,7 @@ check('the saved track is drawn on the map', await page.evaluate(() => window.ro
   await page.getByRole('button', { name: /Test loop/ }).click();
   await page.getByRole('button', { name: 'Map as PDF' }).click();
   await page.getByTestId('pdf-ready').waitFor({ timeout: 60000 });
-  check('with email not set up the window says so and the form is switched off', (await page.getByTestId('pdf-email-off').count()) === 1 && await page.getByRole('dialog', { name: 'Map as PDF' }).getByRole('button', { name: 'Email PDF' }).isDisabled() && await page.getByRole('dialog', { name: 'Map as PDF' }).getByLabel('To').isDisabled());
+  check('with email not set up the window says so and the form is switched off', (await page.getByTestId('pdf-email-off').count()) === 1 && await page.getByRole('dialog', { name: 'Map as PDF' }).getByRole('button', { name: 'Email PDF' }).isDisabled() && await page.getByRole('dialog', { name: 'Map as PDF' }).getByLabel('To', { exact: true }).isDisabled());
   check('but Download is still there', await page.getByTestId('pdf-download').isEnabled());
   await page.getByRole('button', { name: 'Close', exact: true }).click(); await wait(200);
   emailStub.enabled = true;
@@ -947,6 +1007,114 @@ await wait(300);
   const saved = db.at(-1);
   const sp = saved.geometry.coordinates[0];
   check('saved as a planned route with the same points', saved.drawMode === 'route' && JSON.stringify(sp) === JSON.stringify(chosen), `${saved.drawMode} ${sp.length}`);
+}
+
+
+// ---- the top box: plain-English route requests, and the microphone on the text fields
+{
+  const say = (text, fail = null) => page.evaluate(([t, f]) => { window.__speech.next = t; window.__speech.fail = f; }, [text, fail]);
+  const header = page.getByLabel('Search a place or ask for a route');
+  const c = await center();
+  Object.assign(suggestNamed, {
+    Morningside: { name: 'Morningside, Testville, Testshire', lat: c[1] - 0.01, lng: c[0] - 0.02 },
+    Carindale: { name: 'Carindale, Testville, Testshire', lat: c[1] + 0.01, lng: c[0] + 0.03 },
+    Bulimba: { name: 'Bulimba, Testville, Testshire', lat: c[1] + 0.02, lng: c[0] - 0.01 },
+    Nowhereville: null,
+  });
+  const fieldA = page.getByLabel('Start (A)');
+  const fieldB = page.getByLabel('End (B)');
+  const toastText = async () => (await page.locator('.toast').allTextContents()).join(' | ');
+  await home();
+  check('the top box says it takes requests as well as places', /ask: route from/i.test((await header.getAttribute('placeholder')) ?? '') && /plain words/.test((await header.getAttribute('title')) ?? ''));
+  await tipsOk('the top box with its microphone');
+
+  // a request in plain words sets Plan route up, with the places named so they can be checked and changed
+  askLog.length = 0; planLog.length = 0; geocodeLog.length = 0;
+  await header.fill('give me a route from Morningside to Carindale'); await header.press('Enter');
+  await page.getByTestId('planbar').waitFor({ timeout: 8000 });
+  await page.getByTestId('plan-route').first().waitFor({ timeout: 10000 });
+  check('the request goes to the server as typed', askLog.length === 1 && askLog[0] === 'give me a route from Morningside to Carindale', JSON.stringify(askLog));
+  check('A and B are filled in with the places found, near where the map was looking', (await fieldA.inputValue()) === 'Morningside, Testville, Testshire' && (await fieldB.inputValue()) === 'Carindale, Testville, Testshire', `${await fieldA.inputValue()} | ${await fieldB.inputValue()}`);
+  const last = planLog.at(-1);
+  check('and the route is planned between those two points', !!last && Math.abs(last.from[0] - (c[0] - 0.02)) < 1e-9 && Math.abs(last.to[0] - (c[0] + 0.03)) < 1e-9, JSON.stringify(last));
+  check('it says what it is doing, and A to B is the chosen kind', /Planning a route from Morningside, Testville, Testshire to Carindale/.test(await toastText()) && (await page.getByRole('button', { name: 'A to B', exact: true }).getAttribute('aria-pressed')) === 'true', await toastText());
+  check('the private place search was not used for the two places (they came from MapTiler)', geocodeLog.length === 0);
+  await shot('ask-route');
+
+  // a way of travelling and a length: a longer route by bike
+  askLog.length = 0; detourLog.length = 0;
+  await header.fill('cycle from Morningside to Carindale about 12 km'); await header.press('Enter');
+  await until(() => detourLog.some((b) => b.lengthKm === 12)); await wait(300);
+  check('"about 12 km" makes it a longer route of 12 km, and "cycle" chooses cycling', (await page.getByRole('button', { name: 'Longer route', exact: true }).getAttribute('aria-pressed')) === 'true' && (await page.getByLabel(/Length you want/).inputValue()) === '12' && (await page.getByRole('button', { name: 'Cycling' }).getAttribute('aria-pressed')) === 'true' && detourLog.some((b) => b.lengthKm === 12 && b.profile === 'cycling'), JSON.stringify(detourLog.at(-1)));
+
+  // a loop
+  loopLog.length = 0;
+  await header.fill('a 10 km loop from Bulimba'); await header.press('Enter');
+  await until(() => loopLog.length > 0); await wait(300);
+  check('a loop asks for no end, and takes its length', (await page.getByRole('button', { name: 'Loop', exact: true }).getAttribute('aria-pressed')) === 'true' && (await fieldA.inputValue()) === 'Bulimba, Testville, Testshire' && (await page.getByLabel(/^Length/).inputValue()) === '10' && loopLog.some((b) => b.lengthKm === 10), `${await fieldA.inputValue()} ${JSON.stringify(loopLog.at(-1))}`);
+
+  // a place by itself is still a place search; and what is not a route falls back to it too
+  askLog.length = 0; geocodeLog.length = 0;
+  geocodeAnswer = [{ label: 'Carindale, Private result', lat: c[1], lng: c[0] }];
+  await header.fill('Carindale'); await header.press('Enter');
+  await page.getByRole('listbox').first().waitFor({ timeout: 5000 });
+  check('a bare place name is searched for, and is never sent to be understood', askLog.length === 0 && geocodeLog.length === 1);
+  await header.press('Escape');
+  await header.fill('how do I get to the moon on a Tuesday'); await header.press('Enter');
+  await wait(900);
+  check('something that turns out not to be a route is searched for as a place', askLog.length === 1 && geocodeLog.length === 2);
+
+  // problems are said plainly and change nothing
+  const before = await fieldA.inputValue();
+  askStub.intent = { kind: 'direct', from: 'Nowhereville', to: 'Carindale', lengthKm: null, profile: null };
+  geocodeAnswer = [];
+  await header.fill('route from Nowhereville to Carindale'); await header.press('Enter'); await wait(900);
+  check('a place that cannot be found is named, and Plan route is left as it was', /could not find "Nowhereville"/.test(await toastText()) && (await fieldA.inputValue()) === before, `${await toastText()} | ${await fieldA.inputValue()}`);
+  askStub.intent = null;
+  askStub.fail = 429; askStub.failText = 'That is a lot of questions in an hour. Wait a while, or use "route from A to B".';
+  geocodeLog.length = 0;
+  await header.fill('route from Morningside to Carindale'); await header.press('Enter'); await wait(700);
+  check('a refusal from the server is shown as it was said, with no place search behind it', /lot of questions/.test(await toastText()) && geocodeLog.length === 0, await toastText());
+  askStub.fail = 0;
+
+  // the microphone: the same request, spoken
+  await home();
+  askLog.length = 0; planLog.length = 0;
+  await say('Route from Morningside to Carindale.');
+  await page.getByRole('button', { name: 'Speak a place or a route request' }).click();
+  await until(() => planLog.length > 0); await wait(300);
+  check('speaking a request does the same as typing it (the full stop is dropped)', askLog.length === 1 && askLog[0] === 'Route from Morningside to Carindale' && (await header.inputValue()) === 'Route from Morningside to Carindale' && (await fieldB.inputValue()) === 'Carindale, Testville, Testshire', `${JSON.stringify(askLog)} | ${await header.inputValue()}`);
+  await say('hello', 'not-allowed');
+  await page.getByRole('button', { name: 'Speak a place or a route request' }).click(); await wait(400);
+  check('a blocked microphone is explained under the box', /Microphone permission is blocked/.test((await page.locator('.vi-hint').first().textContent().catch(() => '')) ?? ''));
+  await say('hello', null);
+
+  // the microphone in the A and B fields: what is said is searched for at once
+  suggestLog.length = 0; geocodeLog.length = 0;
+  suggestAnswer = [{ name: 'Test Park, Testville, Testshire, Australia', lat: c[1] - 0.01, lng: c[0] + 0.02 }, { name: 'Test Street, Elsewhere', lat: c[1], lng: c[0] }];
+  await say('Voice Spot');
+  await page.getByRole('button', { name: /Speak the end place/ }).click();
+  await page.getByRole('listbox', { name: 'Places found' }).waitFor({ timeout: 5000 });
+  check('speaking into B shows it in the field and lists the places for it', (await fieldB.inputValue()) === 'Voice Spot' && suggestLog.at(-1)?.q === 'Voice Spot' && (await page.getByRole('listbox', { name: 'Places found' }).getByRole('option').count()) === 2, `${await fieldB.inputValue()} ${JSON.stringify(suggestLog.at(-1))}`);
+  await fieldB.press('Escape');
+
+  // the loop length takes a spoken number, and says so when it is not one
+  await page.getByRole('button', { name: 'Loop', exact: true }).click();
+  await say('twelve');
+  await page.getByRole('button', { name: 'Say the length' }).click(); await wait(500);
+  check('a spoken number sets the length', (await page.getByLabel(/^Length/).inputValue()) === '12');
+  await say('blue');
+  await page.getByRole('button', { name: 'Say the length' }).click(); await wait(500);
+  check('a word that is not a number is explained and changes nothing', /not a number/.test((await page.locator('.plan-length .vi-hint').textContent().catch(() => '')) ?? '') && (await page.getByLabel(/^Length/).inputValue()) === '12');
+  await say('hello');
+  await page.getByRole('button', { name: /Cancel|Close plan|Done/ }).first().click().catch(() => undefined);
+
+  // the track list filter
+  await home();
+  await say('loop');
+  await page.getByRole('button', { name: 'Speak part of a track name' }).click(); await wait(500);
+  check('speaking into the track filter fills it in', (await page.getByLabel('Search tracks').inputValue()) === 'loop');
+  await page.getByLabel('Search tracks').fill('');
 }
 
 // ---- Vault's look: the theme and font chosen in Vault's Settings (localStorage 'vault-settings') are used, and follow a change

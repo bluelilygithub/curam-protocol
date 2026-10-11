@@ -8,7 +8,10 @@ import { bboxOf, formatDistance, nearestOnLines, type Pos } from './geo';
 import { fitToLimit } from './gpx';
 import { fitPadding } from './layout';
 import { setPlanned } from './mapLayers';
+import { Field, Mic } from './Mic';
 import { MIN_LETTERS, suggestPlaces } from './placeSearch';
+import { tidySpoken } from './voice';
+import { parseSpokenNumber } from '@vault-client/utils/units/numbers.mjs';
 import { useStore } from './store';
 
 export const PLAN_COLORS = ['#E4572E', '#1D6FA5', '#2E7D32'];
@@ -356,13 +359,16 @@ function PlaceRow({ which, map }: { which: 'from' | 'to'; map: maplibregl.Map | 
   return (
     <form className="field-row" onSubmit={search}>
       <span className={`field-dot ${which}`} aria-hidden="true">{label}</span>
-      <input
-        aria-label={which === 'from' ? 'Start (A)' : 'End (B)'} value={text} placeholder={which === 'from' ? 'Search a place, or tap the map' : 'Search a place, or tap the map again'}
-        autoComplete="off" aria-autocomplete="list" aria-expanded={open}
-        onChange={(e) => typed(e.target.value)} onKeyDown={onKey}
-        onBlur={() => { typing.current = false; stop(); setText(shown); setResults([]); setNote(''); }}
-        title={which === 'from' ? 'The start (A). Start typing a place and pick a suggestion (arrow keys and Enter work), or tap the map. You can also drag the A pin.' : 'The end (B). Start typing a place and pick a suggestion (arrow keys and Enter work), or tap the map. You can also drag the B pin.'}
-      />
+      <span className="vwrap">
+        <input
+          aria-label={which === 'from' ? 'Start (A)' : 'End (B)'} value={text} placeholder={which === 'from' ? 'Search a place, or tap the map' : 'Search a place, or tap the map again'}
+          autoComplete="off" aria-autocomplete="list" aria-expanded={open}
+          onChange={(e) => typed(e.target.value)} onKeyDown={onKey}
+          onBlur={() => { typing.current = false; stop(); setText(shown); setResults([]); setNote(''); }}
+          title={which === 'from' ? 'The start (A). Start typing a place and pick a suggestion (arrow keys and Enter work), or tap the map. You can also drag the A pin.' : 'The end (B). Start typing a place and pick a suggestion (arrow keys and Enter work), or tap the map. You can also drag the B pin.'}
+        />
+        <Mic label={`Speak the ${which === 'from' ? 'start' : 'end'} place`} onText={(t) => { typing.current = true; setText(t); }} onDone={(t) => { const w = tidySpoken(t); typing.current = true; setText(w); stop(); if (w.length < MIN_LETTERS) { setNote('Say at least 3 letters of a place name.'); return; } void ask(w, true); }} />
+      </span>
       <button type="submit" className="field-go" aria-label={`Search for ${label}`} title={`Search for this place now and set ${label} there`}><Search size={16} aria-hidden="true" /></button>
       {open && (
         <div className="field-pop" role="listbox" aria-label="Places found" aria-live="polite">
@@ -462,15 +468,19 @@ export function PlanPanel({ map }: { map: maplibregl.Map | null }) {
           <button type="button" aria-pressed={detour} onClick={() => setKind('detour')} title="Longer route: from A to B, but a route of about the length you choose (longer than the direct way), for a longer walk, ride or drive between the same two places">Longer route</button>
         </div>
         {hasLength && (
-          <label className="plan-length">{loop ? 'Length' : 'Length you want'} ({unit})
-            <input
-              type="number" inputMode="decimal" min={minU} max={maxU} step="0.5" value={text} aria-invalid={!lengthOk} placeholder={detour ? 'longer than direct' : undefined}
-              onChange={(e) => onLength(e.target.value)} onBlur={() => { typing.current = false; setText(shown(detour ? detourKm : lengthKm)); }}
-              title={loop
-                ? `How long the loop should be, from ${minU} to ${maxU} ${unit}. The planner treats it as a target: each loop shows how far it is from what you asked for.`
-                : `How long the whole route from A to B should be, from ${minU} to ${maxU} ${unit}. It must be longer than the direct route, which is shown once A and B are set. Each option shows how far it is from what you asked for.`}
-            />
-          </label>
+          <Field className="plan-length" label={<>{loop ? 'Length' : 'Length you want'} ({unit})</>}>{(id) => (
+            <span className="vwrap">
+              <input
+                id={id}
+                type="number" inputMode="decimal" min={minU} max={maxU} step="0.5" value={text} aria-invalid={!lengthOk} placeholder={detour ? 'longer than direct' : undefined}
+                onChange={(e) => onLength(e.target.value)} onBlur={() => { typing.current = false; setText(shown(detour ? detourKm : lengthKm)); }}
+                title={loop
+                  ? `How long the loop should be, from ${minU} to ${maxU} ${unit}. The planner treats it as a target: each loop shows how far it is from what you asked for.`
+                  : `How long the whole route from A to B should be, from ${minU} to ${maxU} ${unit}. It must be longer than the direct route, which is shown once A and B are set. Each option shows how far it is from what you asked for.`}
+              />
+              <Mic label="Say the length" onDone={(t) => { const n = parseSpokenNumber(t); if (n === null || !Number.isFinite(n)) return `Heard "${t}", which is not a number. Try again.`; onLength(String(n)); return undefined; }} />
+            </span>
+          )}</Field>
         )}
       </div>
       <div className="side-body">

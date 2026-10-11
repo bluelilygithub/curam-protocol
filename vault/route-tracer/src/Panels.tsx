@@ -9,7 +9,9 @@ import { ElevationChart } from './ElevationChart';
 import { ExportPdf } from './ExportPdf';
 import { fitToLimit } from './gpx';
 import { fitPadding } from './layout';
+import { Field, Mic } from './Mic';
 import { usePlan } from './Plan';
+import { tidySpoken } from './voice';
 import { COLORS, useStore } from './store';
 
 const fmtDate = (iso: string): string => new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -90,8 +92,8 @@ export function SaveDialog({ onSaved }: { onSaved: (t: Track) => void }) {
     <div className="modal-back" role="presentation">
       <form className="modal" role="dialog" aria-modal="true" aria-label="Save track" onSubmit={submit}>
         <h2>{extendingId ? 'Save changes' : 'Save track'}</h2>
-        <label>Name<input ref={first} title="A short name for this track, up to 120 characters" value={name} maxLength={120} required onChange={(e) => setName(e.target.value)} /></label>
-        <label>Notes (optional)<textarea title="Anything worth remembering about this route: surface, parking, turnaround points" value={notes} maxLength={2000} rows={3} onChange={(e) => setNotes(e.target.value)} /></label>
+        <Field label="Name">{(id) => <span className="vwrap"><input id={id} ref={first} title="A short name for this track, up to 120 characters" value={name} maxLength={120} required onChange={(e) => setName(e.target.value)} /><Mic onText={(t) => setName(t.slice(0, 120))} onDone={(t) => { setName(tidySpoken(t).slice(0, 120)); }} /></span>}</Field>
+        <Field label="Notes (optional)">{(id) => <span className="vwrap vwrap-area"><textarea id={id} title="Anything worth remembering about this route: surface, parking, turnaround points" value={notes} maxLength={2000} rows={3} onChange={(e) => setNotes(e.target.value)} /><Mic area label="Speak a note, added to the end" onDone={(t) => { setNotes((n) => `${n.trim() ? `${n.trim()} ` : ''}${t.trim()}`.slice(0, 2000)); }} /></span>}</Field>
         <Swatches value={drawColor} onChange={setDrawColor} />
         <p className="stats">{formatDistance(km, units)} · {points} points</p>
         <div className="row">
@@ -185,7 +187,7 @@ export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
           <button type="button" className="wide" onClick={() => usePlan.getState().start()} disabled={!routePlanning} title={routePlanning ? 'Plan a route: set a start and an end and get up to three routes along real roads and paths, for walking, hiking, cycling or driving' : 'Route planning is not set up on this server yet (it needs an OpenRouteService key, ORS_API_KEY)'} data-tour="rt-plan"><MapPinned size={18} aria-hidden="true" /> Plan route</button>
         </div>
         <h2>Your tracks</h2>
-        <input type="search" aria-label="Search tracks" title="Type part of a track name to filter the list" placeholder="Search by name" value={q} onChange={(e) => setQ(e.target.value)} />
+        <span className="vwrap"><input type="search" aria-label="Search tracks" title="Type part of a track name to filter the list" placeholder="Search by name" value={q} onChange={(e) => setQ(e.target.value)} /><Mic label="Speak part of a track name" onText={setQ} onDone={(t) => { setQ(tidySpoken(t)); }} /></span>
       </div>
       <div className="side-body">
         <label className="check" title="Draw every saved track on the map at once, not just the open one"><input type="checkbox" title="Draw every saved track on the map at once" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} /> Show all on map</label>
@@ -269,8 +271,8 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
       <div className="side-body">
         {editing ? (
           <form className="stack" onSubmit={save}>
-            <label>Name<input title="The track's name, up to 120 characters" value={name} maxLength={120} required onChange={(e) => setName(e.target.value)} /></label>
-            <label>Notes<textarea title="Notes about this route" value={notes} rows={4} maxLength={2000} onChange={(e) => setNotes(e.target.value)} /></label>
+            <Field label="Name">{(id) => <span className="vwrap"><input id={id} title="The track's name, up to 120 characters" value={name} maxLength={120} required onChange={(e) => setName(e.target.value)} /><Mic onText={(t) => setName(t.slice(0, 120))} onDone={(t) => { setName(tidySpoken(t).slice(0, 120)); }} /></span>}</Field>
+            <Field label="Notes">{(id) => <span className="vwrap vwrap-area"><textarea id={id} title="Notes about this route" value={notes} rows={4} maxLength={2000} onChange={(e) => setNotes(e.target.value)} /><Mic area label="Speak a note, added to the end" onDone={(t) => { setNotes((n) => `${n.trim() ? `${n.trim()} ` : ''}${t.trim()}`.slice(0, 2000)); }} /></span>}</Field>
             <Swatches value={color} onChange={setColor} />
             <div className="row">
               <button type="button" onClick={() => setEditing(false)} title="Discard these changes">Cancel</button>

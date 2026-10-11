@@ -44,7 +44,7 @@ export default function RouteTracerPage() {
         <iframe
           src={`${APP_URL}?embedded=1${wantsTour ? '&tour=1' : ''}`}
           title="Route Tracer"
-          allow="geolocation; fullscreen"
+          allow="geolocation; microphone; fullscreen"
           allowFullScreen
           className="flex-1 w-full border-0 min-h-0"
           style={{ flex: 1, minHeight: 0, height: '100%', background: 'var(--color-bg)' }}

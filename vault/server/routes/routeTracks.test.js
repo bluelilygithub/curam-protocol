@@ -644,6 +644,59 @@ async function planTests() {
       brokenCheck.close();
     }
 
+    // /ask through the router
+    {
+      const asked = [];
+      const mkAsk = (opts = {}) => {
+        const app = express();
+        app.use(express.json({ limit: '30mb' }));
+        app.use((req, res, next) => { req.user = { id: 1, email: 'me@example.com' }; next(); });
+        app.use('/api/route-tracks', createRouter(fakePool(), { getMapKey: () => 'K', emailConfigured: async () => false, ...opts }));
+        return http.createServer(app).listen(0);
+      };
+      const aiAnswer = { intent: { kind: 'direct', from: 'A Town', to: 'B Town', lengthKm: null, profile: 'cycling' }, via: 'ai' };
+      const as = mkAsk({ understandFn: async (text, user) => { asked.push({ text, user }); return /unclear/.test(text) ? aiAnswer : { intent: { kind: 'direct', from: 'Morningside', to: 'Carindale', lengthKm: null, profile: null }, via: 'local' }; }, needsAiFn: (text) => /unclear/.test(text) });
+      const good = await call(as, 'POST', '/api/route-tracks/ask', { text: '  give me a route   from Morningside to Carindale ' });
+      assert.strictEqual(good.status, 200);
+      assert.deepStrictEqual(good.json, { intent: { kind: 'direct', from: 'Morningside', to: 'Carindale', lengthKm: null, profile: null }, via: 'local' });
+      assert.strictEqual(asked[0].text, 'give me a route from Morningside to Carindale', 'spaces tidied');
+      assert.strictEqual(asked[0].user.id, 1);
+      // text must be a sentence
+      asked.length = 0;
+      for (const text of ['', '   ', undefined, null, 5, {}, ['route from a to b']]) assert.strictEqual((await call(as, 'POST', '/api/route-tracks/ask', { text })).status, 400, JSON.stringify(text));
+      assert.strictEqual((await call(as, 'POST', '/api/route-tracks/ask', { text: 'x'.repeat(301) })).status, 400);
+      assert.strictEqual((await call(as, 'POST', '/api/route-tracks/ask', undefined)).status, 400);
+      assert.strictEqual(asked.length, 0, 'nothing understood for a refused request');
+      as.close();
+      // allowance counts only the requests that used the AI
+      let tt = 5000000;
+      const lim = mkAsk({ askLimits: { now: () => tt, perHour: 2, perDay: 3 }, understandFn: async (text) => (/unclear/.test(text) ? aiAnswer : { intent: { kind: 'none' }, via: 'local' }), needsAiFn: (text) => /unclear/.test(text) });
+      for (let i = 0; i < 10; i += 1) assert.strictEqual((await call(lim, 'POST', '/api/route-tracks/ask', { text: 'route from a to b' })).status, 200, 'pattern requests are free');
+      for (let i = 0; i < 2; i += 1) assert.strictEqual((await call(lim, 'POST', '/api/route-tracks/ask', { text: 'something unclear' })).status, 200);
+      const hr = await call(lim, 'POST', '/api/route-tracks/ask', { text: 'something unclear' });
+      assert.strictEqual(hr.status, 429);
+      assert.ok(hr.headers.get('retry-after'));
+      assert.strictEqual((await call(lim, 'POST', '/api/route-tracks/ask', { text: 'route from a to b' })).status, 200, 'and pattern requests still work when the AI allowance is used up');
+      tt += 3600001;
+      assert.strictEqual((await call(lim, 'POST', '/api/route-tracks/ask', { text: 'something unclear' })).status, 200);
+      const day = await call(lim, 'POST', '/api/route-tracks/ask', { text: 'something unclear' });
+      assert.strictEqual(day.status, 429);
+      assert.match(day.json.error, /today/);
+      tt += 86400001;
+      assert.strictEqual((await call(lim, 'POST', '/api/route-tracks/ask', { text: 'something unclear' })).status, 200);
+      lim.close();
+      // a failing model is a plain message, never its own text, and uses no allowance
+      let fails = 0;
+      const bad = mkAsk({ askLimits: { perHour: 1, perDay: 1 }, understandFn: async () => { fails += 1; throw new Error('Anthropic 401 secret-key-leak'); }, needsAiFn: () => true });
+      for (let i = 0; i < 3; i += 1) {
+        const f = await call(bad, 'POST', '/api/route-tracks/ask', { text: 'something unclear' });
+        assert.strictEqual(f.status, 502);
+        assert.ok(!/secret-key-leak|Anthropic/.test(f.text));
+      }
+      assert.strictEqual(fails, 3);
+      bad.close();
+    }
+
     // /leg through the router
     const legRes = await call(ls, 'POST', '/api/route-tracks/leg', { from: [153.028, -27.468], to: [153.03, -27.469], profile: 'walking' });
     assert.strictEqual(legRes.status, 200);

@@ -2,12 +2,17 @@ import { Compass, CircleHelp, Layers, LocateFixed, Minus, Plus, Route as RouteIc
 import type maplibregl from 'maplibre-gl';
 import { useEffect, useRef, useState } from 'react';
 import { api, type GeocodeResult } from './api';
+import { looksLikeRequest, planFromIntent } from './ask';
 import { fromLines } from './drawing';
 import { bboxOf, formatDistance, totalKm } from './geo';
 import { fitToLimit, MAX_FILE_BYTES, parseGpx } from './gpx';
 import { startTour } from './help/tour';
+import { Mic } from './Mic';
 import { fitTo } from './Panels';
+import { fitPadding } from './layout';
 import { usePlan } from './Plan';
+import { suggestPlaces } from './placeSearch';
+import { tidySpoken } from './voice';
 import { STYLES, useStore } from './store';
 
 /** Close a popover on a press outside it or on Escape. */
@@ -32,16 +37,48 @@ export function Header({ map }: { map: maplibregl.Map | null }) {
   const box = useRef<HTMLFormElement>(null);
   useDismiss(results.length > 0, () => setResults([]), box);
 
-  async function search(e: React.FormEvent) {
-    e.preventDefault();
-    if (!q.trim()) return;
+  async function placeSearch(text: string) {
     setBusy(true);
     try {
-      const r = await api.geocode(q.trim());
+      const r = await api.geocode(text);
       setResults(r.results);
       if (!r.results.length) toast('error', 'No places found.');
     } catch (err) { toast('error', err instanceof Error ? err.message : 'Search failed.'); } finally { setBusy(false); }
   }
+
+  /** A plain-English request: the server works out what is wanted, the places are found, and Plan route is set up as if filled in by hand. Returns false if it was not a route request after all. */
+  async function askRoute(text: string): Promise<boolean> {
+    const st = useStore.getState();
+    if (!st.routePlanning) { toast('error', 'Route planning is not set up on this server yet, so I can only look for places.'); return false; }
+    if (st.drawing) { toast('error', 'Finish or discard your drawing first, then ask for a route.'); return true; }
+    setBusy(true);
+    try {
+      const { intent } = await api.ask(text);
+      if (intent.kind === 'none') return false;
+      const c = map?.getCenter();
+      const find = async (name: string): Promise<GeocodeResult | null> => { // nearest to where the map is looking; MapTiler first, Vault's own search if it cannot answer
+        try { const r = await suggestPlaces(name, st.mapKey, c ? [c.lng, c.lat] : null); if (r[0]) return r[0]; } catch { /* fall back */ }
+        try { return (await api.geocode(name)).results[0] ?? null; } catch { return null; }
+      };
+      const done = await planFromIntent(intent, find, usePlan.getState());
+      if (!done.ok) { toast('error', done.message); return true; }
+      toast('ok', done.summary);
+      if (map) {
+        if (done.points.length > 1) map.fitBounds([done.points[0], done.points[1]], { padding: fitPadding(), maxZoom: 15, duration: 600 });
+        else map.flyTo({ center: done.points[0], zoom: 14 });
+      }
+      return true;
+    } catch (err) { toast('error', err instanceof Error ? err.message : 'That did not work.'); return true; } finally { setBusy(false); }
+  }
+
+  async function run(text: string) {
+    const t = text.trim();
+    if (!t) return;
+    setResults([]);
+    if (looksLikeRequest(t) && (await askRoute(t))) return;
+    await placeSearch(t);
+  }
+  function search(e: React.FormEvent) { e.preventDefault(); void run(q); }
   const go = (r: GeocodeResult) => { map?.flyTo({ center: [r.lng, r.lat], zoom: 14 }); setResults([]); };
 
   return (
@@ -49,10 +86,13 @@ export function Header({ map }: { map: maplibregl.Map | null }) {
       <div className="brand" title="Route Tracer"><RouteIcon size={22} aria-hidden="true" /><span>Route Tracer</span></div>
       <form ref={box} className="header-search" onSubmit={search} role="search" data-tour="rt-search">
         <Search size={16} className="search-icon" aria-hidden="true" />
-        <input
-          aria-label="Search a place" placeholder="Search a place or address" value={q} onChange={(e) => setQ(e.target.value)}
-          title="Type a suburb, address or landmark and press Enter. The map flies to the one you pick."
-        />
+        <span className="vwrap">
+          <input
+            aria-label="Search a place or ask for a route" placeholder="Search a place, or ask: route from Morningside to Carindale" value={q} onChange={(e) => setQ(e.target.value)}
+            title="Type a suburb, address or landmark and press Enter: the map flies to the one you pick. Or ask for a route in plain words, such as: route from Morningside to Carindale, a 10 km loop from Bulimba, or a cycle ride from Toowong to the city. Plan route is then set up for you to check and change."
+          />
+          <Mic label="Speak a place or a route request" onText={setQ} onDone={(t) => { const s = tidySpoken(t); setQ(s); void run(s); }} />
+        </span>
         {busy && <span className="search-busy" aria-hidden="true">…</span>}
         {results.length > 0 && (
           <ul className="results" role="listbox">

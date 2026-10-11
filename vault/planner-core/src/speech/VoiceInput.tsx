@@ -33,6 +33,7 @@ export function MicButton({ onInterim, onFinal, onError, label = 'Speak instead 
     if (!supported) return;
     if (listening) { rec.current?.stop(); return; }
     active?.stop();
+    let failed = false; // browsers fire "end" after an error too: that must not replace the error's own message with "No speech detected"
     const r = createRecognizer({ lang, continuous: false }, {
       onStart: () => setListening(true),
       onInterim: (t) => handlers.current.onInterim?.(t),
@@ -40,9 +41,10 @@ export function MicButton({ onInterim, onFinal, onError, label = 'Speak instead 
         setListening(false);
         if (active === self.current) active = null;
         if (finalText.trim()) handlers.current.onFinal(finalText.trim());
-        else handlers.current.onError?.('No speech detected. Try again, or type instead.');
+        else if (!failed) handlers.current.onError?.('No speech detected. Try again, or type instead.');
       },
       onError: (_code, message, finalText) => {
+        failed = true;
         setListening(false);
         if (active === self.current) active = null;
         if (finalText.trim()) handlers.current.onFinal(finalText.trim());

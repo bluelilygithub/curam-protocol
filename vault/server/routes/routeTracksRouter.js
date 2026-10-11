@@ -89,6 +89,18 @@ function createRouter(pool, {
   sendEmailFn = (...a) => require('../utils/sendEmail')(...a),
   emailConfigured = () => require('../utils/sendEmail').isConfigured(),
   emailLimits = {},
+  // the plain-English ask box: (text, user) -> { intent, via }. The default uses the pattern parser and, only when that cannot, Vault's light model.
+  understandFn = async (text, user) => {
+    const intent = require('../services/routeIntent');
+    return intent.understand(text, async (prompt, system) => {
+      const { getModelsForUser } = require('../services/modelResolver');
+      const { callModel } = require('../services/callModel');
+      const { light } = await getModelsForUser(user.id);
+      return callModel(light, prompt, { system, maxTokens: 200, timeoutMs: 20000 });
+    });
+  },
+  needsAiFn = (text) => require('../services/routeIntent').needsAi(text),
+  askLimits = {},
 } = {}) {
   const router = express.Router();
   const planner = createPlanner({ getKey: getOrsKey, fetchFn, now, log: (m, d) => getLogger().warn({ detail: d }, m), ...planLimits });
@@ -101,6 +113,13 @@ function createRouter(pool, {
   const perHour = emailLimits.perHour ?? 10;
   const perDay = emailLimits.perDay ?? 30;
   const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+  // ---- the ask box: "route from Morningside to Carindale" -> { kind, from, to, lengthKm, profile }. Only NAMES and numbers come back; the browser looks
+  // the places up. A clear request is understood by pattern for free; only the rest uses the AI, and only those count against the allowance.
+  const askHits = new Map();
+  const askNow = askLimits.now ?? Date.now;
+  const askPerHour = askLimits.perHour ?? 20;
+  const askPerDay = askLimits.perDay ?? 100;
 
   // GET /api/route-tracks/config: the browser-side MapTiler key. Prefer a separate key restricted by referrer to the Vault domain and localhost
   // (ROUTE_TRACER_MAPTILER_KEY); falls back to MAPTILER_API_KEY, which then becomes visible in the browser.
@@ -167,6 +186,29 @@ function createRouter(pool, {
       }
       getLogger().error({ err }, 'route plan failed');
       res.status(500).json({ error: 'Could not plan that route.' });
+    }
+  });
+
+  // POST /api/route-tracks/ask { text }: understand one plain-English request for a route.
+  router.post('/ask', async (req, res) => {
+    const text = typeof req.body?.text === 'string' ? req.body.text.replace(/\s+/g, ' ').trim() : '';
+    if (!text) return res.status(400).json({ error: 'Say or type what route you want, for example: route from Morningside to Carindale.' });
+    if (text.length > 300) return res.status(400).json({ error: 'That is a bit long. Keep it to a sentence, at most 300 characters.' });
+    const t = askNow();
+    const mine = (askHits.get(req.user.id) || []).filter((x) => t - x < 86400000);
+    const usesAi = needsAiFn(text);
+    if (usesAi) {
+      if (mine.length >= askPerDay) { res.set('Retry-After', '3600'); return res.status(429).json({ error: 'That is enough questions for today. Try again tomorrow, or use "route from A to B".' }); }
+      if (mine.filter((x) => t - x < 3600000).length >= askPerHour) { res.set('Retry-After', '600'); return res.status(429).json({ error: 'That is a lot of questions in an hour. Wait a while, or use "route from A to B".' }); }
+    }
+    try {
+      const out = await understandFn(text, req.user);
+      if (out.via === 'ai') { mine.push(t); askHits.set(req.user.id, mine); }
+      getLogger().info({ via: out.via, kind: out.intent.kind }, 'route request understood'); // never the words
+      res.json({ intent: out.intent, via: out.via });
+    } catch (err) {
+      getLogger().error({ err }, 'route request failed');
+      res.status(502).json({ error: 'Could not work that out just now. Try "route from A to B", or use Plan route.' });
     }
   });
 

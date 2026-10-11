@@ -195,3 +195,20 @@ h2 { margin: 0; font-size: 1.15rem; }
 .modal .sub { margin: 0; font-size: 1rem; }
 .hint.err { color: var(--danger); }
 .hint.ok { color: var(--ok); }
+
+/* ---- microphone on text fields (the shared planner-core MicButton) */
+.vwrap { position: relative; display: block; min-width: 0; width: 100%; }
+.vwrap > input, .vwrap > textarea { width: 100%; padding-right: 42px; }
+.vwrap > input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
+.vwrap > input[type='number']::-webkit-inner-spin-button, .vwrap > input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.vi-mic { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; min-height: 0; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 8px; background: transparent; color: var(--muted); transition: opacity 0.2s; }
+.vi-mic:hover:not(:disabled) { opacity: 0.6; }
+.vi-mic:disabled { opacity: 0.35; }
+.vi-mic-area { top: 6px; transform: none; }
+.vi-mic-on, .vi-mic-on[aria-pressed='true'] { background: var(--danger); color: #fff; animation: vi-pulse 1.2s ease-in-out infinite; }
+@keyframes vi-pulse { 50% { opacity: 0.65; } }
+.vi-hint { position: absolute; left: 0; top: 100%; z-index: 40; margin: 2px 0 0; padding: 4px 8px; border-radius: 6px; background: var(--surface); border: 1px solid #f59e0b; font-size: 0.75rem; max-width: 100%; }
+.header-search .search-busy { right: 48px; }
+.field-row .vwrap { grid-column: 2; }
+.lbl { display: grid; gap: 4px; font-size: 0.9rem; min-width: 0; }
+.lbl.plan-length { gap: 4px; }

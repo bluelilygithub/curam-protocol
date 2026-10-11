@@ -1,3 +1,4 @@
+import type { Intent } from './ask';
 import type { BBox, Line, Lines } from './geo';
 
 /** Vault's token lives in localStorage['vault-auth'] (same origin as this app). */
@@ -50,6 +51,8 @@ export const api = {
   geocode: (q: string) => call<{ results: GeocodeResult[] }>('POST', '/api/geocode', { q }),
   /** The name of the place at a point (one deliberate lookup after a tap or a pin drop), or null if nothing is known there. */
   reverse: (lat: number, lng: number) => call<{ result: GeocodeResult | null }>('POST', '/api/geocode/reverse', { lat, lng }),
+  /** One plain-English request for a route, worked out by the server: which kind of plan, which two place names, how long, how travelled. */
+  ask: (text: string) => call<{ intent: Intent; via: 'local' | 'ai' }>('POST', '/api/route-tracks/ask', { text }),
   /** Email a map PDF (made in the browser) to one address. `pdf` is base64. */
   emailMap: (input: { to: string; subject: string; message: string; copyToMe: boolean; filename: string; pdf: string }) =>
     call<{ ok: true; copied: boolean }>('POST', '/api/route-tracks/email', input),
