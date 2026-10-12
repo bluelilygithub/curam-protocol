@@ -217,7 +217,7 @@ export default function UsersAdminPanel({ title = 'Members' }) {
           <table className="w-full text-xs min-w-[640px]" style={{ borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
-                {['User', 'Role', 'Created', 'Last login', 'Actions'].map((h) => (
+                {['User', 'Role', 'Created', 'Last login', 'Last active', 'Actions'].map((h) => (
                   <th key={h} className="px-3 py-2.5 text-left font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>{h}</th>
                 ))}
               </tr>
@@ -247,6 +247,9 @@ export default function UsersAdminPanel({ title = 'Members' }) {
                   </td>
                   <td className="px-3 py-2.5" style={{ color: 'var(--color-muted)' }}>
                     {user.lastLoginAt ? relativeTime(user.lastLoginAt) : 'Never'}
+                  </td>
+                  <td className="px-3 py-2.5" style={{ color: 'var(--color-muted)' }}>
+                    {user.lastActiveAt ? relativeTime(user.lastActiveAt) : 'Never'}
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-2 flex-wrap">

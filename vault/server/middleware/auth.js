@@ -29,6 +29,13 @@ async function requireAuth(req, res, next) {
     const user = users[0];
     if (!user) return res.status(401).json({ error: 'User not found' });
 
+    // Throttled "last active" stamp (at most once per 5 min per user); never blocks the request
+    pool.query(
+      `UPDATE users SET "lastActiveAt"=NOW()
+       WHERE id=$1 AND ("lastActiveAt" IS NULL OR "lastActiveAt" < NOW() - INTERVAL '5 minutes')`,
+      [user.id]
+    ).catch(() => {});
+
     req.user = user;
     attachUserToLogContext(user.id);
     next();

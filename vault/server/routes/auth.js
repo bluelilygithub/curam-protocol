@@ -70,6 +70,7 @@ router.post('/register', registerLimiter, async (req, res) => {
       'INSERT INTO auth_sessions (token, "userId", "expiresAt") VALUES ($1, $2, $3)',
       [token, userId, makeExpiry()]
     );
+    await pool.query('UPDATE users SET "lastLoginAt"=NOW(), "lastActiveAt"=NOW() WHERE id=$1', [userId]);
     res.status(201).json({ token, user: { id: userId, email: userRow.email, isAdmin: !!userRow.isAdmin } });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -102,6 +103,7 @@ router.post('/login', loginLimiter, async (req, res) => {
       'INSERT INTO auth_sessions (token, "userId", "expiresAt") VALUES ($1, $2, $3)',
       [token, user.id, makeExpiry()]
     );
+    await pool.query('UPDATE users SET "lastLoginAt"=NOW(), "lastActiveAt"=NOW() WHERE id=$1', [user.id]);
     res.json({ token, user: { id: user.id, email: user.email, isAdmin: !!user.isAdmin } });
   } catch (err) {
     res.status(500).json({ error: err.message });

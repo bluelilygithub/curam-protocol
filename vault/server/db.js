@@ -1762,6 +1762,14 @@ async function initSchema() {
   // Per-user narrowing of workspace feature access. NULL/empty = inherit workspace defaults fully.
   // Keys present here can only turn a feature OFF for this user — never grant one the workspace has disabled.
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS "featureOverrides" JSONB`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS "lastLoginAt" TIMESTAMPTZ`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS "lastActiveAt" TIMESTAMPTZ`);
+  // One-off-safe backfill from surviving sessions (only fills blanks)
+  await pool.query(`
+    UPDATE users u SET "lastLoginAt" = s.m
+    FROM (SELECT "userId", MAX("createdAt") AS m FROM auth_sessions GROUP BY "userId") s
+    WHERE s."userId" = u.id AND u."lastLoginAt" IS NULL
+  `);
   await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
   await pool.query(`ALTER TABLE folders ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
   await pool.query(`ALTER TABLE personas ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);

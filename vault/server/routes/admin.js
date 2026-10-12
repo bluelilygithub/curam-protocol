@@ -167,7 +167,8 @@ router.get('/users', async (_req, res) => {
         u.email,
         u."isAdmin",
         u."createdAt",
-        MAX(s."createdAt") AS "lastLoginAt",
+        u."lastLoginAt",
+        u."lastActiveAt",
         COUNT(*) FILTER (WHERE s."expiresAt" > NOW())::INT AS "activeSessions"
       FROM users u
       LEFT JOIN auth_sessions s ON s."userId" = u.id
