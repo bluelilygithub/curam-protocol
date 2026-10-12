@@ -264,7 +264,7 @@ const { startFinanceRemindersCron } = require('./cron/financeRemindersCron');
 const { startRecurringCron }        = require('./cron/recurringCron');
 const { startExpenseReviewCron }    = require('./cron/expenseReviewCron');
 const { startWeeklyDigestCron }     = require('./cron/weeklyDigestCron');
-const { startFitnessCron }          = require('./cron/fitnessCron');
+const { startFitnessCron, startFitnessTasksSync } = require('./cron/fitnessCron');
 
 // Poll until schema is ready, then seed and start listening
 async function start() {
@@ -284,6 +284,8 @@ async function start() {
   await initThemeBuilder().catch(err => console.warn('[theme-builder] init:', err.message));
   const { runStartupChecks } = require('./services/SuggestionService');
   runStartupChecks().catch(err => console.warn('[startup] suggestion checks:', err.message));
+
+  startFitnessTasksSync(); // sends nothing, so it runs on staging too
 
   if (runtimeConfig.disableExternalCron) {
     console.log('[runtime] External cron jobs disabled by DISABLE_EXTERNAL_CRON');
