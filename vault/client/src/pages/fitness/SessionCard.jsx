@@ -2,36 +2,32 @@ import React, { useState } from 'react';
 import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
 import { FIELD, SecondaryButton, PrimaryButton } from './ui';
+import { ExerciseTile, TileGroup, PATTERN_LABELS, LEVEL_LABELS, BLOCK_LABELS } from './ExerciseTile';
 import { DAY_NAMES, SLOTS } from './useWeek';
 
-const BLOCK_LABELS = { warmup: 'Warm-up', main: 'Main', cooldown: 'Cool-down' };
-
-/** Exercise list for a session, grouped warm-up / main / cool-down. Every exercise opens its library page. */
-export function ExerciseList({ session, onOpenExercise }) {
+/** Exercises for a session as tiles, grouped warm-up / main work / cool-down. Every tile opens its exercise page. */
+export function ExerciseList({ session, onOpenExercise, compact = false }) {
   const blocks = ['warmup', 'main', 'cooldown'].map((b) => ({ b, list: session.exercises.filter((e) => e.block === b) })).filter((x) => x.list.length);
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {blocks.map(({ b, list }) => (
-        <div key={b}>
-          <p className="text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>
-            {BLOCK_LABELS[b]}{b !== 'main' ? ` (about ${b === 'warmup' ? session.warmupMin : session.cooldownMin} min)` : ''}
-          </p>
-          <ul className="space-y-1">
-            {list.map((e) => (
-              <li key={`${e.block}-${e.position}`} className="text-sm flex flex-wrap items-baseline gap-x-2">
-                <button
-                  type="button"
-                  onClick={() => onOpenExercise?.(e.slug)}
-                  className="underline text-left hover:opacity-60 transition-opacity duration-200"
-                  style={{ color: 'var(--color-text)' }}
-                >
-                  {e.name}
-                </button>
-                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{e.prescription}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <TileGroup
+          key={b}
+          title={BLOCK_LABELS[b]}
+          hint={b !== 'main' ? `about ${b === 'warmup' ? session.warmupMin : session.cooldownMin} min` : `${session.plannedMinutes} min`}
+          columns={compact ? '' : 'sm:grid-cols-2 lg:grid-cols-3'}
+        >
+          {list.map((e) => (
+            <ExerciseTile
+              key={`${e.block}-${e.position}`}
+              name={e.name}
+              detail={e.prescription}
+              meta={[PATTERN_LABELS[e.movement], LEVEL_LABELS[e.level]].filter(Boolean).join(' · ')}
+              compact={compact}
+              onOpen={() => onOpenExercise?.(e.slug)}
+            />
+          ))}
+        </TileGroup>
       ))}
     </div>
   );
@@ -129,7 +125,7 @@ export default function SessionCard({ session, expanded = false, draggable = fal
           </button>
           {open && (
             <div className="mt-2 space-y-3">
-              <ExerciseList session={session} onOpenExercise={onOpenExercise} />
+              <ExerciseList session={session} onOpenExercise={onOpenExercise} compact={!expanded} />
               {session.safety?.length > 0 && (
                 <ul className="space-y-0.5 text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }} aria-label="Safety">
                   {session.safety.map((l) => <li key={l}>{l}</li>)}

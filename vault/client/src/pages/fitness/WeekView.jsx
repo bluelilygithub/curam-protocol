@@ -6,15 +6,27 @@ import { TIPS } from './tips';
 import SessionCard from './SessionCard';
 import useWeek, { DAY_NAMES, DAY_SHORT, SLOTS, dayLabel } from './useWeek';
 
+/** The week's targets as four tiles: what is planned against what the week asks for. */
 function Summary({ week, sessions }) {
-  const minutes = sessions.filter((s) => s.status !== 'rest').flatMap((s) => s.components).filter((c) => c.domain === 'cardio').reduce((n, c) => n + c.minutes, 0);
-  const days = (domain) => new Set(sessions.filter((s) => s.status !== 'rest' && s.components.some((c) => c.domain === domain)).map((s) => s.day)).size;
+  const live = sessions.filter((s) => s.status !== 'rest');
+  const minutes = live.flatMap((s) => s.components).filter((c) => c.domain === 'cardio').reduce((n, c) => n + c.minutes, 0);
+  const days = (domain) => new Set(live.filter((s) => s.components.some((c) => c.domain === domain)).map((s) => s.day)).size;
   const t = week.targets;
+  const tiles = [
+    { label: 'Aerobic', value: minutes, of: t.aerobicMinutes, unit: 'min' },
+    { label: 'Strength', value: days('strength'), of: t.strengthDays, unit: 'days' },
+    { label: 'Balance', value: days('balance'), of: t.balanceDays, unit: 'days' },
+    { label: 'Mobility', value: days('flexibility'), of: t.mobilityDays, unit: 'days' },
+  ];
   return (
-    <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>
-      Aerobic <strong>{minutes}</strong> of {t.aerobicMinutes} min · Strength <strong>{days('strength')}</strong> of {t.strengthDays} days ·
-      Balance <strong>{days('balance')}</strong> of {t.balanceDays} · Mobility <strong>{days('flexibility')}</strong> of {t.mobilityDays}
-    </p>
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5" role="list" aria-label="This week's targets">
+      {tiles.map((t2) => (
+        <div key={t2.label} role="listitem" className="rounded-xl border p-3" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{t2.label}</p>
+          <p className="text-lg font-semibold leading-tight tabular-nums">{t2.value}<span className="text-sm font-normal" style={{ color: 'var(--color-muted)' }}> of {t2.of} {t2.unit}</span></p>
+        </div>
+      ))}
+    </div>
   );
 }
 

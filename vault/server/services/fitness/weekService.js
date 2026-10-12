@@ -45,7 +45,8 @@ async function loadSessions(weekId, userId) {
   const bySession = new Map();
   for (const e of ex) {
     if (!bySession.has(e.sessionId)) bySession.set(e.sessionId, []);
-    bySession.get(e.sessionId).push({ ...e, name: lib.get(e.slug)?.name || e.slug });
+    const item = lib.get(e.slug);
+    bySession.get(e.sessionId).push({ ...e, name: item?.name || e.slug, movement: item?.pattern || null, level: item?.level || null });
   }
   const order = { morning: 0, midday: 1, evening: 2 };
   return sess

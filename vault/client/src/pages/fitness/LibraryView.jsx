@@ -4,6 +4,7 @@ import { useIcon } from '../../providers/IconProvider';
 import useToastStore from '../../store/toastStore';
 import Tooltip from '../../components/Tooltip';
 import { Card, Chip, FIELD, InfoTip, inputCls, Notice, SecondaryButton } from './ui';
+import { ExerciseTile, TileGroup, PATTERN_LABELS as PATTERNS_SHARED, LEVEL_LABELS as LEVELS_SHARED } from './ExerciseTile';
 import { TIPS } from './tips';
 
 const PATTERN_LABELS = {
@@ -196,21 +197,25 @@ export default function LibraryView({ slug, onOpen, onBack, backLabel = 'All exe
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{list.length} exercise{list.length === 1 ? '' : 's'}</p>
       </Card>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        {list.map((e) => (
-          <button
-            key={e.slug}
-            type="button"
-            onClick={() => onOpen(e.slug)}
-            className="rounded-2xl border p-4 text-left hover:opacity-70 transition-all duration-200"
-            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-          >
-            <span className="block text-sm font-medium">{e.name}</span>
-            <span className="block text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-              {PATTERN_LABELS[e.pattern]} · {LEVEL_LABELS[e.level]} · {e.equipment}{e.hidden ? ' · hidden' : ''}
-            </span>
-          </button>
-        ))}
+      <div className="space-y-6">
+        {data.patterns.map((p) => {
+          const group = list.filter((e) => e.pattern === p);
+          if (!group.length) return null;
+          return (
+            <TileGroup key={p} title={PATTERNS_SHARED[p]} hint={`${group.length}`}>
+              {group.map((e) => (
+                <ExerciseTile
+                  key={e.slug}
+                  name={e.name}
+                  detail={e.equipment}
+                  meta={[LEVELS_SHARED[e.level], e.hidden ? 'hidden' : null, !e.available ? 'needs equipment you did not list' : null].filter(Boolean).join(' · ')}
+                  dim={e.hidden || !e.available}
+                  onOpen={() => onOpen(e.slug)}
+                />
+              ))}
+            </TileGroup>
+          );
+        })}
       </div>
       {!list.length && <Notice>Nothing matches. Try clearing the filters{mineOnly ? ' or untick the equipment box' : ''}.</Notice>}
       {(q || pattern || setting) && <SecondaryButton onClick={() => { setQ(''); setPattern(''); setSetting(''); }}>Clear filters</SecondaryButton>}
