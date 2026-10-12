@@ -162,6 +162,16 @@
     if (d.version !== 1) { log('IGNORED: unknown version', d.version); return; }
     if (d.type === 'cellar-lite:height' || d.type === 'cellar-lite:design') follow(frameOf(ev.source), ev.origin);
 
+    // moving to another step: bring the top of the steps (and the picture) into view, as the planner asks
+    if (d.type === 'cellar-lite:scroll') {
+      var sf = frameOf(ev.source), st = Number(d.top);
+      if (sf && isFinite(st) && st >= 0 && st <= 20000) {
+        var calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        window.scrollTo({ top: Math.max(0, sf.getBoundingClientRect().top + window.pageYOffset + st - STICKY_TOP), behavior: calm ? 'auto' : 'smooth' });
+      }
+      return;
+    }
+
     if (d.type === 'cellar-lite:height') {
       var h = Number(d.height);
       var f = AUTO_HEIGHT && frameOf(ev.source);

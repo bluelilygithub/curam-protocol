@@ -343,6 +343,26 @@ check('the plan (which pans) shows the open hand too', planCursor === 'grab', pl
 
 await ctx.close();
 
+// ---- moving between steps: the step strip is brought into view, and finished steps show a tick (not stray characters)
+{
+  const { ctx: c0, page: p0 } = await fresh();
+  await p0.goto('http://localhost:8802/index.html');
+  await p0.getByTestId('lite-step-3').click();
+  await p0.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await p0.waitForTimeout(400);
+  await p0.getByTestId('lite-next').click(); // Features -> Review
+  await p0.waitForTimeout(500);
+  await p0.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await p0.getByTestId('lite-back').click(); // Review -> Features
+  await p0.waitForTimeout(1200);
+  const stripTop = await p0.getByTestId('lite-stepper').evaluate((el) => el.getBoundingClientRect().top);
+  const picTop = await p0.locator('.lite-visual').evaluate((el) => el.getBoundingClientRect().top);
+  check('going back to the Features step shows the top of the step (the step strip and the picture), not its empty bottom', stripTop > -10 && stripTop < 120 && picTop > -10 && picTop < 700, JSON.stringify({ stripTop, picTop }));
+  const tick = await p0.locator('.stepper-item.done .stepper-num').first().evaluate((el) => getComputedStyle(el, '::after').content);
+  check('finished steps show a tick mark', tick === '"\u2713"', tick);
+  await c0.close();
+}
+
 // ================= 3. embedded in the business's page, with the real script
 ({ ctx, page, errors } = await fresh());
 const consoleLines = [];
@@ -411,6 +431,8 @@ await ctx.close();
   await fr.getByTestId('lite-bottles').waitFor();
   await fr.getByTestId('lite-step-3').click(); // the long Features step
   await p.waitForTimeout(900);
+  await p.evaluate(() => window.scrollTo(0, 0)); // the step change scrolled the page to the step strip: start from the top
+  await p.waitForTimeout(900);
   const place = async () => (await fr.locator('.lite-visual').evaluate((el) => el.getBoundingClientRect().top)) + (await p.evaluate(() => document.getElementById('f').getBoundingClientRect().top));
   const startTop = await place();
   await p.evaluate(() => window.scrollTo(0, 900));
@@ -421,6 +443,17 @@ await ctx.close();
   await p.evaluate(() => window.scrollTo(0, 0));
   await p.waitForTimeout(600);
   check('embedded: scrolling back up puts it back beside the top of the controls', Math.abs((await place()) - startTop) < 6, String(await place()));
+  // changing step asks the page to scroll to the top of the steps
+  await p.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await p.waitForTimeout(500);
+  await fr.getByTestId('lite-next').click();
+  await p.waitForTimeout(500);
+  await p.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await p.waitForTimeout(400);
+  await fr.getByTestId('lite-back').click();
+  await p.waitForTimeout(1500);
+  const stripY = (await fr.getByTestId('lite-stepper').evaluate((el) => el.getBoundingClientRect().top)) + (await p.evaluate(() => document.getElementById('f').getBoundingClientRect().top));
+  check('embedded: moving back a step scrolls the page so the step strip is in view', stripY > -10 && stripY < 160, String(stripY));
   await c.close();
 }
 

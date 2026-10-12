@@ -36,6 +36,8 @@ export const MESSAGE_TYPE = 'cellar-lite:design';
 export const HEIGHT_TYPE = 'cellar-lite:height';
 /** The page around us tells us where its window is relative to our frame, so the picture can stay in view while the page scrolls. */
 export const VIEWPORT_TYPE = 'cellar-lite:viewport';
+/** Asks the page around us to scroll so the top of the steps (and the picture beside them) is in view. */
+export const SCROLL_TYPE = 'cellar-lite:scroll';
 
 /**
  * Where to send the hand-off: the page that embeds us. The browser's own list of ancestor origins is used when it has one (Chrome, Safari), else
@@ -87,6 +89,7 @@ export function LiteApp() {
   const panelTitle = useRef<HTMLHeadingElement>(null);
   const started = useRef(false);
   const stepSeen = useRef(false);
+  const quietStep = useRef(false);
 
   // the feature options: what is chosen for this room, the extras that add to the price, and the picture changes they ask for
   const resolved = useMemo(() => resolveFeatures(cfg.features, s.features, { widthMm: s.widthMm, depthMm: s.depthMm }), [cfg.features, s.features, s.widthMm, s.depthMm]);
@@ -193,10 +196,18 @@ export function LiteApp() {
   useEffect(() => { void loadConfig().then((r) => setCfg(r.config)); }, []);
   useEffect(() => { if (restored) say('welcome_back'); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
-  // moving to another step puts the reader at the top of it (screen readers hear the step's name)
+  // moving to another step puts the reader at the top of it: the heading takes focus (screen readers hear the step's name) and the page scrolls to the
+  // step strip, so the picture is in view (coming back from the long Features step used to leave you at its empty bottom). Embedded, the page around us
+  // does the scrolling (the frame is as tall as the planner): we tell it where the strip is. The tour moves steps itself and scrolls on its own.
   useEffect(() => {
     if (!stepSeen.current) { stepSeen.current = true; return; }
     panelTitle.current?.focus({ preventScroll: true });
+    if (quietStep.current) { quietStep.current = false; return; }
+    const strip = document.querySelector<HTMLElement>('[data-testid="lite-stepper"]');
+    if (!strip) return;
+    const to = parentOrigin();
+    if (to) window.parent.postMessage({ type: SCROLL_TYPE, version: 1, top: Math.max(0, Math.round(strip.getBoundingClientRect().top + window.scrollY - 8)) }, to);
+    else strip.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
   }, [key]);
 
   // ?tour=1 starts the tour straight away; the guide opens only from the Help button (a pop-up on arrival is closed unread by most visitors)
@@ -215,7 +226,7 @@ export function LiteApp() {
   const keyRef = useRef(key);
   keyRef.current = key;
 
-  const setStepTracked = (k: StepKey, count = true): void => { setStepKey(k); if (count) say('step', { step: k }); };
+  const setStepTracked = (k: StepKey, count = true): void => { if (!count && k !== keyRef.current) quietStep.current = true; setStepKey(k); if (count) say('step', { step: k }); };
 
   /** Put a whole design on screen: the settings and the boxes that show them. */
   const show = (next: LiteSettings, u: LengthUnit = unit): void => { setS(next); setDraft(toDraft(next, u)); setAsked(false); };

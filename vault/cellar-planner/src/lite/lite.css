@@ -30,7 +30,7 @@ body { background: #f1f1ee; }
 .stepper-item.on .stepper-num, .stepper-item.done .stepper-num { background: var(--primary); color: #fff; }
 .stepper-item.on .stepper-name { color: var(--text); font-weight: 700; }
 /* a finished step shows a tick (the digit stays in the page text, so the button's name still contains what is shown) */
-.stepper-item.done .stepper-num { font-size: 0; } .stepper-item.done .stepper-num::after { content: '¹3'; font-size: 18px; }
+.stepper-item.done .stepper-num { font-size: 0; } .stepper-item.done .stepper-num::after { content: '\2713'; font-size: 18px; }
 /* on a phone only the current step shows its name; the others keep it for screen readers and voice control */
 @media (max-width: 599px) { .stepper-item:not(.on) .stepper-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } .stepper-item:not(:last-child)::after { width: 28px; } }
 .lite-note { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
