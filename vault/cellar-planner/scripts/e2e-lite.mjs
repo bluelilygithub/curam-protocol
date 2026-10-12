@@ -97,8 +97,8 @@ await p2.close();
 
 // request a quote: copy fallback (not embedded, so nothing is posted anywhere)
 await page.getByTestId('lite-quote').click();
-const sent = await page.getByTestId('lite-code').inputValue();
-check('lite: the quote step shows the summary and the design code', /estimate only/.test(sent) && /Design code: CL1\./.test(sent));
+const sent = await page.getByTestId('lite-quote-note').innerText();
+check('lite: asking for a quote on its own says the design was copied (or how to keep it), with no "ready to send" block', /copied|Could not copy/.test(sent) && (await page.getByTestId('lite-sent').count()) === 0);
 await page.addScriptTag({ path: axe });
 const a1 = await scan(page);
 check('lite: accessibility scan at phone size, no violations', a1.length === 0, a1.join(' | '));

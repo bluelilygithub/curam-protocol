@@ -84,8 +84,6 @@ export function LiteApp() {
   const [thumb, setThumb] = useState('');
   // the owner's settings (rack sizes, prices, brand colour, starting rooms): the built-in defaults until the real ones arrive, and still if they never do
   const [cfg, setCfg] = useState<LiteConfig>(DEFAULT_CONFIG);
-  const codeBox = useRef<HTMLTextAreaElement>(null);
-  const sentBox = useRef<HTMLDivElement>(null);
   const panelTitle = useRef<HTMLHeadingElement>(null);
   const started = useRef(false);
   const stepSeen = useRef(false);
@@ -185,12 +183,11 @@ export function LiteApp() {
     return () => window.removeEventListener('message', onMessage);
   }, []);
 
-  // After "Request a quote": always bring the revealed panel into view so the visitor does not have to hunt for it. When embedded, the page around
-  // us then scrolls on to its own enquiry form (cellar-lite-fill.js), which wins because its scroll starts after this one.
+  // After "Request a quote" the flag drops back after a moment, so the page script sees a fresh press the next time (it acts once per press)
   useEffect(() => {
-    if (!asked) return;
-    const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    sentBox.current?.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'center' });
+    if (!asked) return undefined;
+    const t = window.setTimeout(() => setAsked(false), 1200);
+    return () => window.clearTimeout(t);
   }, [asked]);
 
   useEffect(() => { void loadConfig().then((r) => setCfg(r.config)); }, []);
@@ -275,10 +272,12 @@ export function LiteApp() {
     try { const { downloadPlan } = await import('./planPdf'); await downloadPlan(result.project, code); setPdf('done'); say('plan_downloaded'); } catch { setPdf('failed'); }
   };
   const copy = async (): Promise<void> => {
-    try { await navigator.clipboard.writeText(`${summary}\nDesign code: ${code}`); setCopied('done'); } catch { codeBox.current?.select(); setCopied('failed'); }
+    try { await navigator.clipboard.writeText(`${summary}\nDesign code: ${code}`); setCopied('done'); } catch { setCopied('failed'); }
   };
   const startAgain = (): void => { clearLastDesign(); setRestored(false); show(defaultLite()); setStepKey('space'); };
-  const ask = (): void => { setAsked(true); say('quote'); };
+  // Request a quote: embedded, the page script takes the visitor to the contact form with the design filled in (it sees `requested`). On its own the design is
+  // copied for pasting. `asked` drops back after a moment, so pressing the button again works.
+  const ask = (): void => { setAsked(true); setCopied(''); say('quote'); if (!embedded) void copy(); };
 
   // a non-breaking space before the unit, so "m" never wraps onto a line of its own
   const withUnit = (t: string): string => (unit === 'ft' ? t : `${t} ${unit}`);
@@ -304,10 +303,19 @@ export function LiteApp() {
             <button type="button" className="btn" title="A guided walk through the screen, one step at a time." onClick={() => void startTour()} data-testid="lite-tour">Take the tour</button>
             <button type="button" className="btn" title="The plain-language guide: what each question means." onClick={() => setHelpOpen(true)} data-testid="lite-help-open">Help</button>
             <button type="button" className="btn" onClick={() => void copyLink()} data-testid="lite-share" title="Saves a link to this exact design. Paste it anywhere to come back to it, or send it to someone.">Save design</button>
+            <button type="button" className="btn" disabled={result.problems.length > 0 || pdf === 'working'} onClick={() => void download()} data-testid="lite-download" title="Saves your plan as a PDF to keep or show someone. It is a preliminary design, not a quote.">{pdf === 'working' ? 'Preparing…' : 'Download my plan (PDF)'}</button>
+            {price && <button type="button" className="btn" onClick={() => { setPriceHelpOpen(true); say('price_help'); }} title="A short outline of how the guide price follows from your choices." data-testid="lite-price-help-open">How is this price worked out?</button>}
           </span>
         </div>
+        {pdf === 'done' && <p className="lite-note" role="status" data-testid="lite-download-done">Your plan has been saved.</p>}
+        {pdf === 'failed' && <p className="lite-note" role="alert">Could not make the PDF. Please try again.</p>}
+        {asked && !embedded && (
+          <p className="lite-note" role="status" data-testid="lite-quote-note">
+            {copied === 'done' ? 'Your design has been copied: paste it into your enquiry. ' : copied === 'failed' ? 'Could not copy your design automatically: use Save design to get a link to it. ' : ''}{cfg.quoteNote}
+          </p>
+        )}
         {linkCopied === 'done' && <p className="lite-note" role="status" data-testid="lite-share-done">Link copied. Anyone you send it to sees these choices.</p>}
-        {linkCopied === 'failed' && <p className="lite-note" role="status">Could not copy automatically. Use the Request a quote button instead: it shows your design to copy.</p>}
+        {linkCopied === 'failed' && <p className="lite-note" role="status">Could not copy the link automatically. Copy the address from your browser's address bar instead: it holds your design.</p>}
         {cfg.promise && <p className="lite-promise" data-testid="lite-promise">{cfg.promise}</p>}
         <Stepper step={step} steps={keys.map((k) => STEP_TITLES[k])} onGo={(n) => setStepTracked(keys[n - 1] ?? 'space')} />
       </header>
@@ -327,23 +335,6 @@ export function LiteApp() {
               {fix
                 ? <p className="lite-fix"><button type="button" className="btn primary small" onClick={() => { show(fix.settings); say('fix'); }} title="Apply this one change to your design. You can change it back." data-testid="lite-fix">{fix.text}</button> <span className="lite-note">One change that makes it work.</span></p>
                 : <p className="lite-note" data-testid="lite-nofix">Try a bigger room or a smaller bottle style.</p>}
-            </div>
-          )}
-
-          {asked && (
-            <div className="lite-sent" ref={sentBox} data-testid="lite-sent">
-              <p><strong>Your design is ready to send.</strong> {embedded ? 'Taking you to the contact form with your design filled in. If nothing happens, copy it below and paste it into the form.' : 'Copy it into your enquiry.'}</p>
-              {cfg.quoteNote && <p className="lite-note" data-testid="lite-quote-note">{cfg.quoteNote}</p>}
-              <label className="field">
-                <span className="field-label">Your design</span>
-                <textarea ref={codeBox} readOnly rows={3} value={`${summary}\nDesign code: ${code}`} title="Your design as text, ready to copy." data-testid="lite-code" onFocus={(ev) => ev.target.select()} />
-              </label>
-              <div className="row">
-                <button type="button" className="btn" onClick={() => void copy()} title="Copies your design so you can paste it into the enquiry form." data-testid="lite-copy">Copy my design</button>
-                <button type="button" className="btn" onClick={() => { setAsked(false); setCopied(''); }} title="Go back and change the design.">Keep editing</button>
-              </div>
-              {copied === 'done' && <p className="lite-note" role="status">Copied.</p>}
-              {copied === 'failed' && <p className="lite-note" role="status">Could not copy automatically: the text above is selected, so copy it by hand.</p>}
             </div>
           )}
 
@@ -495,12 +486,6 @@ export function LiteApp() {
                 <div><dt>Racks</dt><dd>{FINISH_NAMES[s.finish]}, {rackUnitCount(result.project)} standard units</dd></div>
                 {hasFeatures && <div><dt>Features</dt><dd data-testid="lite-review-features">{resolved.extras.length ? resolved.extras.map((o) => o.name).join(', ') : 'Standard options only'}</dd></div>}
               </dl>
-              <p className="lite-share">
-                <button type="button" className="btn small" disabled={result.problems.length > 0 || pdf === 'working'} onClick={() => void download()} data-testid="lite-download" title="Saves your plan as a PDF to keep or show someone. It is a preliminary design, not a quote.">{pdf === 'working' ? 'Preparing…' : 'Download my plan (PDF)'}</button>
-                {price && <button type="button" className="btn small" onClick={() => { setPriceHelpOpen(true); say('price_help'); }} title="A short outline of how the guide price follows from your choices." data-testid="lite-price-help-open">How is this price worked out?</button>}
-                {pdf === 'done' && <span className="lite-note" role="status" data-testid="lite-download-done"> Your plan has been saved.</span>}
-                {pdf === 'failed' && <span className="lite-note" role="alert"> Could not make the PDF. Please try again.</span>}
-              </p>
               <p className="lite-note">This is an estimate to help you plan. Rack unit sizes are typical values, and we always measure on site before anything is made.</p>
               <div className="lite-nav two">
                 <button type="button" className="btn lite-backbtn" onClick={() => setStepTracked(hasFeatures ? 'features' : 'racking')} title={hasFeatures ? 'Back to the finishing touches.' : 'Back to the bottles and finish.'} data-testid="lite-back"><span aria-hidden="true">&larr;</span> {hasFeatures ? 'Features' : 'Racking'}</button>

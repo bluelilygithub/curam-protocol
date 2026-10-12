@@ -111,7 +111,7 @@ await page.getByTestId('lite-step-4').click(); // Review
 await page.getByTestId('lite-price-help-open').waitFor({ timeout: 3000 });
 const helpBtnBox = await page.getByTestId('lite-price-help-open').boundingBox();
 const shareBox = await page.getByTestId('lite-download').boundingBox();
-check('the price-help button sits beside "Download my plan", on the same line (Review step)', !!helpBtnBox && !!shareBox && Math.abs(helpBtnBox.y - shareBox.y) < 20, JSON.stringify([helpBtnBox, shareBox]));
+check('the price-help button sits beside "Download my plan" in the top row of buttons', !!helpBtnBox && !!shareBox && Math.abs(helpBtnBox.y - shareBox.y) < 20 && await page.getByTestId('lite-price-help-open').evaluate((el) => el.closest('.lite-help-btns') !== null), JSON.stringify([helpBtnBox, shareBox]));
 await page.getByTestId('lite-price-help-open').click();
 await page.getByTestId('lite-price-help').waitFor({ timeout: 3000 });
 const modalText = await page.getByTestId('lite-price-help').innerText();
