@@ -56,6 +56,16 @@ export function Field({ label, hint, children }) {
  * Calm, non-alarming notice, theme colours only. Tone 'care' (health prompts) adds an icon and a thicker left bar
  * so it stands out without leaning on a status colour. Never red.
  */
+/** "Why this week looks like this": shown only when the plan stepped up or eased; a steady week says nothing. */
+export function AdaptationNote({ adaptation }) {
+  if (!adaptation || !adaptation.message || adaptation.decision === 'hold') return null;
+  return (
+    <p className="text-xs leading-relaxed rounded-xl border px-3 py-2" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+      <span className="font-medium" style={{ color: 'var(--color-text)' }}>Why this week looks like this: </span>{adaptation.message}
+    </p>
+  );
+}
+
 export function Notice({ tone = 'info', children }) {
   const getIcon = useIcon();
   const care = tone === 'care';

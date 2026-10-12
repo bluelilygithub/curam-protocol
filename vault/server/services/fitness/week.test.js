@@ -465,13 +465,14 @@ const goal = makeGoal();
   };
   await test('continuous jogging is gated behind run/walk weeks, unless there is a running history', async () => {
     assert.ok(!(await everSeen({})).has('easy-jog'), 'closed with no run/walk history');
-    assert.ok(!(await everSeen({ exposure: new Map([['run-walk-intervals', 1]]) })).has('easy-jog'), 'one week is not enough');
-    assert.ok((await everSeen({ exposure: new Map([['run-walk-intervals', 2]]) })).has('easy-jog'), 'open after two weeks');
+    assert.ok(!(await everSeen({ exposure: new Map([['run-walk-intervals', 5]]) })).has('easy-jog'), 'planned weeks alone no longer open it: it must be logged as comfortable');
+    assert.ok(!(await everSeen({ comfortExposure: new Map([['run-walk-intervals', 1]]) })).has('easy-jog'), 'one comfortable week is not enough');
+    assert.ok((await everSeen({ comfortExposure: new Map([['run-walk-intervals', 2]]) })).has('easy-jog'), 'open after two comfortable logged weeks');
     assert.ok((await everSeen({ runningHistory: true })).has('easy-jog'), 'a running history skips the wait');
   });
   await test('the 90-minute rule still applies even with a running history', async () => {
     const light = { ...bigWeek, targets: { ...bigWeek.targets, aerobicMinutes: 60 } };
-    assert.ok(!(await everSeen({ runningHistory: true, exposure: new Map([['run-walk-intervals', 5]]) }, light)).has('easy-jog'));
+    assert.ok(!(await everSeen({ runningHistory: true, comfortExposure: new Map([['run-walk-intervals', 5]]) }, light)).has('easy-jog'));
   });
   await test('single-leg RDL needs the hinge and a steady single-leg stand; the supported version is the step between', async () => {
     const hinge = new Map([['dumbbell-romanian-deadlift', 3]]);
@@ -484,6 +485,15 @@ const goal = makeGoal();
     const both = new Map([['single-leg-stand', 2], ['supported-single-leg-rdl', 2]]);
     assert.ok((await everSeen({ exposure: both })).has('single-leg-rdl'), 'opens once the supported step and the stand are established');
     assert.ok((await everSeen({ exposure: new Map([['single-leg-stand', 2], ['dumbbell-romanian-deadlift', 2]]) })).has('single-leg-rdl'), 'or the dumbbell RDL and the stand');
+  });
+  await test('a gate marked comfortable reads only the comfortable-weeks map; other gates keep reading planned weeks', () => {
+    const jog = L.getLibrary().bySlug.get('easy-jog');
+    assert.deepStrictEqual(jog.gate.comfortable, { maxEffort: 6 });
+    assert.strictEqual(L.gateOpen(jog, new Map([['run-walk-intervals', 9]]), {}, new Map()), false);
+    assert.strictEqual(L.gateOpen(jog, new Map(), {}, new Map([['run-walk-intervals', 2]])), true);
+    assert.strictEqual(L.gateOpen(jog, new Map(), { 'running-history': true }, new Map()), true, 'a running history still skips the wait');
+    const slrdl = L.getLibrary().bySlug.get('supported-single-leg-rdl');
+    assert.strictEqual(L.gateOpen(slrdl, new Map([['single-leg-stand', 2]]), {}, new Map()), true, 'planned weeks still open this one');
   });
   await test('gateOpen: groups are all-of, members are any-of', () => {
     const ex = { gate: { after: [['a', 'b'], ['c']], weeks: 2 } };

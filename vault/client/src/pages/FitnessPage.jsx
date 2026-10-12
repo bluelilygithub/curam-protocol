@@ -102,12 +102,13 @@ export default function FitnessPage() {
   const [settingGoal, setSettingGoal] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmDemo, setConfirmDemo] = useState(false);
+  const [demoScenario, setDemoScenario] = useState('mixed');
 
   const runDemoSeed = async () => {
     setConfirmDemo(false);
     startProcessing('Setting up the demo user…', 'Planning four past weeks and adding mixed logs.');
     try {
-      const r = await api.post('/api/fitness/admin/demo-seed', {});
+      const r = await api.post('/api/fitness/admin/demo-seed', { scenario: demoScenario });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Could not set up the demo user');
       const c = d.counts || {};
@@ -297,7 +298,16 @@ export default function FitnessPage() {
         <ConfirmModal
           title="Create or reset the demo user?"
           confirmLabel="Reset demo data"
-          message="This creates the demo user if needed, or wipes their fitness data and rebuilds it: four past weeks of plans with mixed logs (done, partly done, rest, a missed day, a swap, an extra walk, weights, and a note about knee pain). Only the demo user is touched."
+          message={(
+            <div className="space-y-2">
+              <p>This creates the demo user if needed, or wipes their fitness data and rebuilds it. Only the demo user is touched.</p>
+              <select className="w-full rounded-lg border px-2 py-1.5 text-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} value={demoScenario} onChange={(e) => setDemoScenario(e.target.value)} aria-label="Demo scenario">
+                <option value="mixed">Mixed: four weeks of every outcome (done, partly, rest, a swap, an extra, a knee note)</option>
+                <option value="easy">Easy streak: seven comfortable weeks, so this week steps up</option>
+                <option value="tough">Tough fortnight: two hard building weeks, so this week is lighter</option>
+              </select>
+            </div>
+          )}
           onConfirm={runDemoSeed}
           onCancel={() => setConfirmDemo(false)}
         />

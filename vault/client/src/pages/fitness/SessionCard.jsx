@@ -95,6 +95,7 @@ export default function SessionCard({
   const [saving, setSaving] = useState(false);
   const [tips, setTips] = useState(null);
   const [tipsBusy, setTipsBusy] = useState(false);
+  const [tipsNote, setTipsNote] = useState(null);
   const askedFor = useRef('');
   const note = statusText(session);
   const rest = session.status === 'rest';
@@ -104,14 +105,14 @@ export default function SessionCard({
   // Short tips for what was just logged. Asked once per version of the log, kept on the log so they come back when reopened.
   useEffect(() => {
     if (!logging || !log || !['done', 'partial', 'swapped'].includes(log.status)) { setTips(null); return; }
-    if (log.tips) { setTips(log.tips); return; }
+    if (log.tips) { setTips(log.tips); setTipsNote(log.tipsSource === 'fallback' ? log.tipsNote : null); return; }
     const key = `${log.id}:${log.status}:${log.effort}:${log.actualMinutes}:${log.note || ""}`;
     if (askedFor.current === key) return;
     askedFor.current = key;
     setTipsBusy(true);
     api.post(`/api/fitness/sessions/${session.id}/tips`, {})
       .then((r) => r.json())
-      .then((d) => setTips(d.tips || []))
+      .then((d) => { setTips(d.tips || []); setTipsNote(d.source === 'fallback' ? d.note : null); })
       .catch(() => setTips([]))
       .finally(() => setTipsBusy(false));
   }, [logging, log?.id, log?.status, log?.effort, log?.actualMinutes, log?.note, log?.tips]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -209,6 +210,7 @@ export default function SessionCard({
               {(tips || []).map((t) => (
                 <div key={t} className="rounded-xl border p-2.5 text-sm leading-snug" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>{t}</div>
               ))}
+              {tipsNote && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{tipsNote}</p>}
             </div>
           )}
           {logging && askEffort && log.status === 'done' && (

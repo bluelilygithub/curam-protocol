@@ -190,7 +190,9 @@ test('effort 9 or 10 suggests the easier version, by name, and a sensible target
 });
 test('a manageable weight gets a small step up; a hard one is left alone', () => {
   const easy = CO.ruleTips({ status: 'done', effort: 4, exercises: [ex('goblet-squat', { weightKg: 6 })] });
-  assert.ok(easy.some((x) => /6 kg felt manageable/.test(x) && /7 to 8 kg/.test(x)), easy.join(' | '));
+  assert.ok(easy.some((x) => /6 kg felt manageable/.test(x) && /try the next weight up\.$/.test(x)), easy.join(' | '));
+  const owned = CO.ruleTips({ status: 'done', effort: 4, exercises: [ex('goblet-squat', { weightKg: 6 })], steps: [2, 4, 6, 8, 10] });
+  assert.ok(owned.some((x) => /try the next weight up \(8 kg\)\./.test(x)), 'names the weight only when the person listed the weights they own');
   const hard = CO.ruleTips({ status: 'done', effort: 8, exercises: [ex('goblet-squat', { weightKg: 8 })] });
   assert.ok(hard.some((x) => /stay at 8 kg/.test(x)), hard.join(' | '));
   const middle = CO.ruleTips({ status: 'done', effort: 6, exercises: [ex('goblet-squat', { weightKg: 8 })] });
@@ -199,6 +201,12 @@ test('a manageable weight gets a small step up; a hard one is left alone', () =>
 test('an easy session says the plan steps up by itself; a partly done one says part still counts', () => {
   assert.ok(CO.ruleTips({ status: 'done', effort: 3, exercises: [] }).some((x) => /plan steps up a little by itself/.test(x)));
   assert.ok(CO.ruleTips({ status: 'partial', effort: 5, exercises: [] }).some((x) => /Part of a session still counts/.test(x)));
+});
+test('the form cue puts the fix first and reads as a sentence, not a quotation', () => {
+  const t = CO.ruleTips({ status: 'done', effort: 6, exercises: [ex('incline-push-up')] }, 0);
+  assert.ok(/^A form cue for Incline push-up: Use something fixed/.test(t[0]), t[0]);
+  assert.ok(/\(A common slip: the surface slides or tilts\.\)$/.test(t[0]), t[0]);
+  assert.ok(!/"/.test(t[0]), 'no clumsy quote marks');
 });
 test('a form cue comes from the library and varies with the seed; never more than two tips', () => {
   const exs = [ex('goblet-squat'), ex('push-up'), ex('dead-bug'), ex('supported-dumbbell-row')];
@@ -295,7 +303,7 @@ test('the demo history mixes every kind of outcome across the four weeks, howeve
     for (let w = 0; w < DS.WEEKS; w += 1) for (const x of DS.assignWeek(sessions, w)) seen.add(x.status);
     for (const status of ['done', 'partial', 'swapped', 'rest', 'skipped']) assert.ok(seen.has(status), `${status} with ${sessions.length} sessions`);
   }
-  assert.ok(DS.EXTRAS.length >= 1 && DS.WEIGHTS.length === DS.WEEKS);
+  assert.ok(DS.EXTRAS.length >= 1 && DS.WEIGHTS.length >= Math.max(...Object.values(DS.WEEKS_BY_SCENARIO)));
   assert.ok(DS.EXTRAS.every(([w, d]) => w >= 0 && w < DS.WEEKS && d >= 0 && d <= 6));
 });
 test('week one is all done; week three has the knee note on a done STRENGTH session, a swim swap for a cardio session, and a miss', () => {

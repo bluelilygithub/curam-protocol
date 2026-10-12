@@ -65,6 +65,7 @@ function validateLibrary(data = SEED) {
     if (e.setup && (!Array.isArray(e.setup) || e.setup.length < 3 || e.setup.length > 4)) at('setup needs 3-4 cues');
     if (e.gate) {
       if (!Array.isArray(e.gate.after) || !e.gate.after.length || !Number.isInteger(e.gate.weeks)) at('bad gate');
+      if (e.gate.comfortable && !(e.gate.comfortable.maxEffort >= 1 && e.gate.comfortable.maxEffort <= 10)) at('bad comfortable gate');
       for (const group of e.gate.after || []) for (const g of group) if (!slugs.has(g)) at(`gate refers to unknown exercise ${g}`);
     }
   }
@@ -102,11 +103,12 @@ function isAvailable(exercise, equipment) {
  * enough weeks. A `waivedBy` reason (for example a running history) skips the wait; the weekly-minutes rule still applies.
  * Stage 3 adds "rated comfortable" from logged effort.
  */
-function gateOpen(exercise, exposure, waivers = {}) {
+function gateOpen(exercise, exposure, waivers = {}, comfort = null) {
   const g = exercise.gate;
   if (!g) return true;
   if (g.waivedBy && waivers[g.waivedBy]) return true;
-  const seen = exposure || new Map();
+  // a gate marked `comfortable` counts only weeks where the exercise was LOGGED at or under the comfortable effort
+  const seen = (g.comfortable ? comfort : exposure) || new Map();
   return g.after.every((group) => group.some((slug) => (seen.get(slug) || 0) >= g.weeks));
 }
 

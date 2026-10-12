@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
-import { BackButton, Card, InfoTip, Notice, SecondaryButton, TimeOfDay } from './ui';
+import { AdaptationNote, BackButton, Card, InfoTip, Notice, SecondaryButton, TimeOfDay } from './ui';
 import { TIPS } from './tips';
 import { DOMAIN_ICON } from './icons';
 import { DayBadge, dayStyle } from './dayColors';
@@ -267,6 +267,7 @@ export default function WeekView({ onOpenExercise, offset: offsetProp, onOffsetC
           </p>
         </Tooltip>
         {week.weekNote && <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{week.weekNote}</p>}
+        <AdaptationNote adaptation={week.adaptation} />
         <Summary week={week} done={done} />
         <p className="text-xs" style={{ color: 'var(--color-muted)' }} data-tour="fitness-rest">
           Rest: {week.restDays.filter((r) => r.kind === 'planned').length} planned days, plus {week.restBudget} flexible

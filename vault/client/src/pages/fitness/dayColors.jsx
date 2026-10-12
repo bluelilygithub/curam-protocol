@@ -3,7 +3,7 @@ import { useIcon } from '../../providers/IconProvider';
 
 /**
  * How a day looks once things are logged. These are the planner's status colours (outside the theme, like warning colours):
- * green = done, amber = some done, calm blue = rest, teal = something extra, neutral grey = planned / not logged / "didn't do it".
+ * green = done, amber = some done, calm blue = rest, violet = something extra, neutral grey = planned / not logged / "didn't do it".
  * Colour never stands alone: every state also has an icon and a word.
  */
 export const DAY_STATES = {
@@ -12,7 +12,7 @@ export const DAY_STATES = {
   planned: { label: 'Planned', icon: 'clock', color: null },
   skipped: { label: "Didn't do it", icon: 'circle-dashed', color: null },
   rest: { label: 'Rest', icon: 'moon', color: '#3b82f6' },
-  extra: { label: 'Something extra', icon: 'plus', color: '#0d9488' },
+  extra: { label: 'Something extra', icon: 'plus', color: '#8b5cf6' },
   none: { label: '', icon: null, color: null },
 };
 

@@ -35,7 +35,9 @@ async function wipe(userId) {
   await pool.query(`UPDATE fitness_profiles SET "easeWeek"=NULL, prefs='{}' WHERE "userId"=$1`, [userId]);
 }
 
-async function seedDemoUser() {
+async function seedDemoUser(scenario = 'mixed') {
+  if (!DS.SCENARIOS.includes(scenario)) scenario = 'mixed';
+  const weeksBack = DS.WEEKS_BY_SCENARIO[scenario];
   const cfg = await C.loadConfig(pool);
 
   let created = false;
@@ -53,7 +55,7 @@ async function seedDemoUser() {
   const { timezone } = await require('./timezone').resolveUserTimezone(userId);
   const today = T.todayInZone(timezone);
   const dob = new Date(Date.parse(`${T.addYears(today, -60)}T00:00:00Z`) - 60 * 86400000).toISOString().slice(0, 10);
-  const startsOn = Ph.addDays(Ph.mondayOf(today), -7 * DS.WEEKS);
+  const startsOn = Ph.addDays(Ph.mondayOf(today), -7 * weeksBack);
 
   await P.saveProfile(userId, {
     dob, sex: 'male', heightCm: 178, weightKg: 86,
@@ -87,14 +89,14 @@ async function seedDemoUser() {
   // four past weeks of plans, then a mixed set of logs
   await wipe(userId);
   const counts = { weeks: 0, sessions: 0, done: 0, partial: 0, swapped: 0, rest: 0, skipped: 0, extras: 0, kneeNote: 0 };
-  for (let i = 0; i < DS.WEEKS; i += 1) {
+  for (let i = 0; i < weeksBack; i += 1) {
     const start = Ph.addDays(startsOn, 7 * i);
     await W.ensureWeek(userId, { start, allowPast: true, useAi: false });
     counts.weeks += 1;
     const week = await W.getWeek(userId, start);
     const sessions = [...week.sessions].sort((a, b) => a.day - b.day || a.id - b.id);
 
-    const scripts = DS.assignWeek(sessions, i);
+    const scripts = DS.assignWeek(sessions, i, scenario);
     const planned = sessions.map((s, idx) => ({ s, script: scripts[idx] }));
     for (const { s, script } of planned) {
       const body = bodyFor(script, s, i);
@@ -104,7 +106,7 @@ async function seedDemoUser() {
       if (body.note && /knee/i.test(body.note)) counts.kneeNote += 1;
     }
   }
-  for (const [weekIdx, dayOffset, title, minutes, effort, domain] of DS.EXTRAS) {
+  for (const [weekIdx, dayOffset, title, minutes, effort, domain] of (scenario === 'mixed' ? DS.EXTRAS : [])) {
     const date = Ph.addDays(startsOn, 7 * weekIdx + dayOffset);
     if (date >= today) continue;
     await LS.logExtra(userId, { title, actualMinutes: minutes, effort, domain, date }, { skipWindow: true });
@@ -113,7 +115,7 @@ async function seedDemoUser() {
 
   // weigh-ins: the Sunday of each of the four weeks
   await pool.query(`DELETE FROM health_weight_log WHERE "userId"=$1 AND source='fitness-demo'`, [userId]);
-  for (let i = 0; i < DS.WEEKS; i += 1) {
+  for (let i = 0; i < weeksBack; i += 1) {
     const on = Ph.addDays(startsOn, 7 * i + 6);
     if (on >= today) continue;
     await pool.query(
@@ -122,16 +124,21 @@ async function seedDemoUser() {
     );
   }
 
+  // make the current week now (rule-based), so what the plan decided from these weeks is visible straight away
+  const current = await W.ensureWeek(userId, { useAi: false });
+
   return {
     ok: true,
+    scenario,
+    currentWeek: { phase: current.week.phase.label, blockWeek: current.week.blockWeek, isDeload: current.week.isDeload, adaptation: current.week.adaptation, aerobicMinutes: current.week.targets.aerobicMinutes },
     created,
     email: DEMO_EMAIL,
     password, // shown once, on creation only
     startsOn,
     counts,
     note: created
-      ? 'Demo user created with four past weeks of mixed logs. Save the password now; it is not shown again.'
-      : 'Demo data reset: four past weeks of plans and mixed logs. The password is unchanged.',
+      ? `Demo user created (${scenario}). Save the password now; it is not shown again.`
+      : `Demo data reset (${scenario}). The password is unchanged.`,
     stage: 'done',
   };
 }

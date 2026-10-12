@@ -13,7 +13,7 @@ export function emptyDraft() {
     weeklyMinutes: '',
     equipment: [], smoking: 'none', alcohol: 'light', dietQuality: 3,
     timeFlexibility: { mode: 'flexible', twiceDaily: false, notes: '' },
-    workAround: '', otherNotes: '', easeRequested: false,
+    workAround: '', otherNotes: '', easeRequested: false, dumbbellKg: '',
   };
 }
 
@@ -37,6 +37,7 @@ export function draftFromState(state) {
     d.workAround = l.workAround || '';
     d.otherNotes = l.otherNotes || '';
     d.easeRequested = !!l.easeRequested;
+    d.dumbbellKg = (l.dumbbellKg || []).join(', ');
   }
   if (state.rating) {
     d.scores = { ...state.rating.scores };
@@ -53,6 +54,7 @@ export function profilePayload(d) {
     equipment: d.equipment, smoking: d.smoking, alcohol: d.alcohol, dietQuality: d.dietQuality,
     timeFlexibility: d.timeFlexibility, workAround: d.workAround, otherNotes: d.otherNotes,
     easeRequested: d.easeRequested, timezone: d.timezone || '',
+    dumbbellKg: String(d.dumbbellKg || '').split(/[,;\s]+/).filter(Boolean),
   };
 }
 
@@ -220,6 +222,10 @@ export function LifestyleSection({ meta, draft, set }) {
         <div className="flex flex-wrap gap-2 mt-1">
           {meta.equipment.map((e) => <Chip key={e.id} active={draft.equipment.includes(e.id)} onClick={() => toggleEquip(e.id)}>{e.label}</Chip>)}
         </div>
+      </Field>
+      <Field label="My dumbbell weights, in kg (optional)">
+        <input className={inputCls} value={draft.dumbbellKg || ''} onChange={(e) => set('dumbbellKg', e.target.value)} placeholder="For example: 2, 4, 6, 8, 10" aria-label="My dumbbell weights in kilograms" />
+        <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>If you list them, tips can name the next weight up. If not, they just say "the next weight up".</p>
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Smoking"><Segmented label="Smoking" options={meta.smoking} value={draft.smoking} onChange={(v) => set('smoking', v)} /></Field>

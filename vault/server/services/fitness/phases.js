@@ -7,6 +7,7 @@
  */
 
 const P = require('./progression');
+const Ad = require('./adaptation');
 const { DEFAULTS } = require('./config');
 
 const DAY_MS = 86400000;
@@ -75,7 +76,7 @@ function blockInfo(goal, weekStart) {
  * @param {boolean} p.easeRequested          person confirmed gentler first weeks
  * @param {number} p.currentMinutes          entered weekly minutes (0 if unknown)
  */
-function targetsForWeek({ goal, weekStart, prevBuildMinutes = null, easeRequested = false, easeWeek = null, currentMinutes = 0 }, cfg = DEFAULTS) {
+function targetsForWeek({ goal, weekStart, prevBuildMinutes = null, easeRequested = false, easeWeek = null, currentMinutes = 0, adapt = null }, cfg = DEFAULTS) {
   void cfg;
   const info = blockInfo(goal, weekStart);
   const ms = milestoneAt(goal, weekStart);
@@ -90,6 +91,11 @@ function targetsForWeek({ goal, weekStart, prevBuildMinutes = null, easeRequeste
     firstWeekFloor: currentMinutes,
     eased,
   });
+  // Fitting the plan to how things are going. Only building weeks, and never a week the person made gentler for safety:
+  // those are already as light as they should be.
+  const adapted = !!adapt && adapt.decision !== 'hold' && aerobic.isBuild && !eased;
+  const ceiling = Math.max(...goal.milestones.map((m) => m.weekly.aerobicModerateMin));
+  const minutes = adapted ? Ad.adjustAerobic(aerobic.minutes, adapt, { prevBuildMinutes, ceiling }) : aerobic.minutes;
   const days = ms.weekly;
   const strengthDays = info.isDeload && days.strengthDays >= 3 ? days.strengthDays - 1 : days.strengthDays;
   return {
@@ -99,12 +105,14 @@ function targetsForWeek({ goal, weekStart, prevBuildMinutes = null, easeRequeste
     phase: ms.phase || { id: 'build', label: 'Build', focus: '' },
     goalYear: ms.year,
     targets: {
-      aerobicMinutes: aerobic.minutes,
+      aerobicMinutes: minutes,
       strengthDays,
       balanceDays: days.balanceDays,
       mobilityDays: days.mobilityDays,
     },
     isBuild: aerobic.isBuild,
+    levelDelta: adapted ? adapt.levelDelta : 0,
+    adaptation: adapted ? { decision: adapt.decision, reason: adapt.reason, message: adapt.message } : null,
   };
 }
 

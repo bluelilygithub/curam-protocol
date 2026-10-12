@@ -14,6 +14,8 @@ const { generateWeekPlan } = require('./weekGenerator');
 const { sessionSafetyLines } = require('./safety');
 const LG = require('./logging');
 const { dayState, weekDone } = require('./dayStatus');
+const Ad = require('./adaptation');
+const C = require('./config');
 
 const { ValidationError } = P;
 const EDITABLE = new Set(['planned', 'moved']);
@@ -24,7 +26,7 @@ const sumMinutes = (components) => components.reduce((n, c) => n + c.minutes, 0)
 async function loadWeekRow(userId, weekStart) {
   const { rows } = await pool.query(
     `SELECT id, "goalId", to_char("weekStart",'YYYY-MM-DD') AS "weekStart", "blockIndex", "blockWeek", phase, "isDeload", eased,
-            targets, "restBudget", "restDays", "weekNote", notes, "generatedBy", model, generation
+            targets, "restBudget", "restDays", "weekNote", notes, "generatedBy", model, generation, adaptation
        FROM fitness_weeks WHERE "userId"=$1 AND "weekStart"=$2`,
     [userId, weekStart],
   );
@@ -48,7 +50,7 @@ async function loadSessions(weekId, userId) {
   // What was actually done: the log for each session, its exercise rows, and the last weight lifted for each exercise.
   const ids = sess.map((s) => s.id);
   const { rows: logRows } = await pool.query(
-    `SELECT id, "plannedSessionId" AS "sessionId", status, "actualMinutes", effort, note, activity, safety, tips,
+    `SELECT id, "plannedSessionId" AS "sessionId", status, "actualMinutes", effort, note, activity, safety, tips, "tipsSource", "tipsNote",
             to_char("loggedOn",'YYYY-MM-DD') AS "loggedOn"
        FROM fitness_session_logs WHERE "userId"=$1 AND "plannedSessionId" = ANY($2::int[])`,
     [userId, ids],
@@ -66,7 +68,7 @@ async function loadSessions(weekId, userId) {
   const lastWeight = new Map(lastW.map((r) => [r.slug, r.w]));
   const logBySession = new Map(logRows.map((l) => [l.sessionId, {
     id: l.id, status: l.status, actualMinutes: l.actualMinutes, effort: l.effort, note: l.note, activity: l.activity,
-    safety: parse(l.safety, null), tips: parse(l.tips, null), loggedOn: l.loggedOn,
+    safety: parse(l.safety, null), tips: parse(l.tips, null), tipsSource: l.tipsSource, tipsNote: l.tipsNote, loggedOn: l.loggedOn,
     exercises: exLogRows.filter((r) => r.sessionLogId === l.id).map(({ sessionLogId, ...rest }) => rest),
   }]));
 
@@ -182,6 +184,7 @@ function shapeWeek(row, sessions, state) {
       restBudgetUsed: spent,
       restDays,
       weekNote: row.weekNote,
+      adaptation: parse(row.adaptation, null),
       generatedBy: row.generatedBy,
       notes: parse(row.notes, []),
     },
@@ -226,6 +229,62 @@ async function loadHistory(userId, weekStart) {
   return { weeks };
 }
 
+/**
+ * The finished weeks before this one, each with how it went, for the plan to fit itself to (adaptation.js).
+ * A week only counts once it is over, so making next week early never judges a week that is still going.
+ */
+async function loadAdaptationWeeks(userId, weekStart, today) {
+  const { rows } = await pool.query(
+    `SELECT w.id, to_char(w."weekStart",'YYYY-MM-DD') AS "weekStart", w."isDeload", w.adaptation, s.status, l.effort
+       FROM fitness_weeks w
+       LEFT JOIN fitness_planned_sessions s ON s."weekId" = w.id
+       LEFT JOIN fitness_session_logs l ON l."plannedSessionId" = s.id
+      WHERE w."userId"=$1 AND w."weekStart" >= $2 AND w."weekStart" < $3 ORDER BY w."weekStart", s.id`,
+    [userId, Ph.addDays(weekStart, -56), weekStart],
+  );
+  const byWeek = new Map();
+  for (const r of rows) {
+    if (!byWeek.has(r.id)) byWeek.set(r.id, { weekStart: r.weekStart, isDeload: r.isDeload, decision: parse(r.adaptation, null)?.decision || null, sessions: [] });
+    if (r.status) byWeek.get(r.id).sessions.push({ status: r.status, effort: r.effort });
+  }
+  return [...byWeek.values()].filter((w) => Ph.addDays(w.weekStart, 6) < today);
+}
+
+/** Weeks in which each exercise was LOGGED as done or partly done at a comfortable effort (for gates marked comfortable). */
+async function loadComfortExposure(userId, weekStart) {
+  const max = L.getLibrary().list.find((e) => e.gate?.comfortable)?.gate.comfortable.maxEffort ?? 6;
+  const { rows } = await pool.query(
+    `SELECT e.slug, COUNT(DISTINCT s."weekId")::int AS weeks
+       FROM fitness_planned_exercises e
+       JOIN fitness_planned_sessions s ON s.id = e."sessionId"
+       JOIN fitness_session_logs l ON l."plannedSessionId" = s.id
+       JOIN fitness_weeks w ON w.id = s."weekId"
+      WHERE e."userId"=$1 AND e.block='main' AND l.status IN ('done','partial') AND l.effort IS NOT NULL AND l.effort <= $3 AND w."weekStart" < $2
+      GROUP BY e.slug`,
+    [userId, weekStart, max],
+  );
+  return new Map(rows.map((r) => [r.slug, r.weeks]));
+}
+
+/** The last two logged weights (and how hard they felt) for each exercise that has been lifted, newest first. */
+async function loadLastLoads(userId) {
+  const { rows } = await pool.query(
+    `SELECT slug, kg, effort FROM (
+       SELECT e.slug, e."weightKg"::float AS kg, l.effort,
+              ROW_NUMBER() OVER (PARTITION BY e.slug ORDER BY l."loggedOn" DESC, l.id DESC) AS rn
+         FROM fitness_exercise_logs e JOIN fitness_session_logs l ON l.id = e."sessionLogId"
+        WHERE e."userId"=$1 AND e."weightKg" IS NOT NULL AND l.status IN ('done','partial')
+     ) t WHERE rn <= 2 ORDER BY slug, rn`,
+    [userId],
+  );
+  const out = new Map();
+  for (const r of rows) {
+    if (!out.has(r.slug)) out.set(r.slug, []);
+    out.get(r.slug).push({ kg: r.kg, effort: r.effort });
+  }
+  return out;
+}
+
 async function previousBuildMinutes(userId, weekStart) {
   const { rows } = await pool.query(
     `SELECT targets FROM fitness_weeks WHERE "userId"=$1 AND "weekStart" < $2 AND "isDeload"=FALSE ORDER BY "weekStart" DESC LIMIT 1`,
@@ -251,8 +310,11 @@ async function ensureWeek(userId, { start, refresh = false, allowPast = false, u
     if (acted) throw new ValidationError('This week already has activity, so it is kept as it is.');
   }
 
+  // fit the plan to how the weeks before went (finished weeks only)
+  const cfg = await C.loadConfig(pool);
+  const adapt = Ad.decide({ weeks: await loadAdaptationWeeks(userId, weekStart, state.today), isDeload: Ph.blockInfo(goal, weekStart).isDeload }, cfg.adaptation);
   const info = Ph.targetsForWeek({
-    goal, weekStart,
+    goal, weekStart, adapt,
     prevBuildMinutes: await previousBuildMinutes(userId, weekStart),
     easeRequested: !!state.lifestyle?.easeRequested,
     easeWeek: state.lifestyle?.easeWeek || null,
@@ -269,6 +331,9 @@ async function ensureWeek(userId, { start, refresh = false, allowPast = false, u
       workAround: inp.profile.workAround || null,
       currentMinutes: state.lifestyle?.weeklyMinutes ?? null,
       hidden: await loadHidden(userId),
+      comfortExposure: await loadComfortExposure(userId, weekStart),
+      lastLoads: await loadLastLoads(userId),
+      dumbbellKg: state.lifestyle?.dumbbellKg || [],
       exposure: await loadExposure(userId, weekStart),
       // an earlier, higher cardio rating stands in for "has run before" until we ask about running directly
       runningHistory: (state.rating.previousScores?.cardio ?? 0) >= 4,
@@ -283,18 +348,20 @@ async function ensureWeek(userId, { start, refresh = false, allowPast = false, u
       await client.query('DELETE FROM fitness_planned_sessions WHERE "weekId"=$1 AND "userId"=$2', [existing.id, userId]);
       await client.query(
         `UPDATE fitness_weeks SET "goalId"=$3, "blockIndex"=$4, "blockWeek"=$5, phase=$6, "isDeload"=$7, eased=$8, targets=$9,
-                "restDays"=$10, "weekNote"=$11, notes=$12, "generatedBy"=$13, model=$14, generation=$15, "updatedAt"=NOW()
+                "restDays"=$10, "weekNote"=$11, notes=$12, "generatedBy"=$13, model=$14, generation=$15, adaptation=$16, "updatedAt"=NOW()
           WHERE id=$1 AND "userId"=$2`,
         [existing.id, userId, goal.id, info.blockIndex, info.blockWeek, JSON.stringify(info.phase), info.isDeload, info.eased,
-          JSON.stringify(info.targets), JSON.stringify(plan.restDays), plan.weekNote, JSON.stringify(plan.notes), plan.generatedBy, plan.model, generation],
+          JSON.stringify(info.targets), JSON.stringify(plan.restDays), plan.weekNote, JSON.stringify(plan.notes), plan.generatedBy, plan.model, generation,
+          JSON.stringify(info.adaptation || { decision: 'hold', reason: adapt.reason })],
       );
       weekId = existing.id;
     } else {
       const ins = await client.query(
-        `INSERT INTO fitness_weeks ("userId","goalId","weekStart","blockIndex","blockWeek",phase,"isDeload",eased,targets,"restDays","weekNote",notes,"generatedBy",model,generation)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
+        `INSERT INTO fitness_weeks ("userId","goalId","weekStart","blockIndex","blockWeek",phase,"isDeload",eased,targets,"restDays","weekNote",notes,"generatedBy",model,generation,adaptation)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`,
         [userId, goal.id, weekStart, info.blockIndex, info.blockWeek, JSON.stringify(info.phase), info.isDeload, info.eased,
-          JSON.stringify(info.targets), JSON.stringify(plan.restDays), plan.weekNote, JSON.stringify(plan.notes), plan.generatedBy, plan.model, generation],
+          JSON.stringify(info.targets), JSON.stringify(plan.restDays), plan.weekNote, JSON.stringify(plan.notes), plan.generatedBy, plan.model, generation,
+          JSON.stringify(info.adaptation || { decision: 'hold', reason: adapt.reason })],
       );
       weekId = ins.rows[0].id;
     }

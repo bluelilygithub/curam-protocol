@@ -20,14 +20,14 @@ const TIP_TIMEOUT_MS = 15000;
 /** Tips for one logged session. Stored on the log, so they appear again whenever the session is opened. */
 async function tipsForSession(userId, sessionId) {
   const { rows } = await pool.query(
-    `SELECT l.id, l.status, l.effort, l."actualMinutes", l."plannedMinutes", l.note, l.tips
+    `SELECT l.id, l.status, l.effort, l."actualMinutes", l."plannedMinutes", l.note, l.tips, l."tipsSource", l."tipsNote"
        FROM fitness_session_logs l WHERE l."plannedSessionId"=$1 AND l."userId"=$2`,
     [sessionId, userId],
   );
   const log = rows[0];
   if (!log) throw new ValidationError('Log the session first');
   if (!C.TIP_STATUSES.has(log.status)) return { tips: [], source: 'none' };
-  if (log.tips) return { tips: parse(log.tips, []), source: 'stored' };
+  if (log.tips) return { tips: parse(log.tips, []), source: log.tipsSource || 'stored', note: log.tipsNote || null };
 
   const { rows: ex } = await pool.query(
     `SELECT e.slug, e.block, e.sets, e.reps, e."weightKg"::float AS "weightKg"
@@ -51,7 +51,8 @@ async function tipsForSession(userId, sessionId) {
     exercises = planned.map((p) => ({ slug: p.slug, block: 'main', weightKg: null, prevWeightKg: null, sets: null, reps: null }));
   }
 
-  const ctx = { status: log.status, effort: log.effort, exercises };
+  const state = await P.getState(userId);
+  const ctx = { status: log.status, effort: log.effort, exercises, steps: state.lifestyle?.dumbbellKg || [] };
   const facts = C.tipFacts(ctx);
   const input = {
     kind: 'session-tips',
@@ -68,8 +69,12 @@ async function tipsForSession(userId, sessionId) {
     fallback: () => ({ tips: C.ruleTips(ctx, log.id) }), tier: 'light', maxTokens: 500, timeoutMs: TIP_TIMEOUT_MS,
   });
   const tips = res.value.tips;
-  await pool.query('UPDATE fitness_session_logs SET tips=$3 WHERE id=$1 AND "userId"=$2', [log.id, userId, JSON.stringify(tips)]);
-  return { tips, source: res.source };
+  // keep why a tip is plain (no model set, or the model's reply was not usable) so the screen can say so
+  await pool.query(
+    'UPDATE fitness_session_logs SET tips=$3, "tipsSource"=$4, "tipsNote"=$5 WHERE id=$1 AND "userId"=$2',
+    [log.id, userId, JSON.stringify(tips), res.source, res.note || null],
+  );
+  return { tips, source: res.source, note: res.note || null };
 }
 
 /** A short look back at a finished week. Null when nothing was logged in it. */

@@ -7,13 +7,12 @@
  */
 
 const L = require('./library');
+const LD = require('./loads');
 
 // Words that must never appear in what the app says back to someone.
 const BANNED = /\b(fail(ed|ure|ing)?|lazy|should have|missed|skipp(ed|ing)|behind|guilt\w*|slack\w*|excuse\w*|bad week|poor(ly)?|weak|pathetic|disappoint\w*)\b/i;
 
 const TIP_STATUSES = new Set(['done', 'partial', 'swapped']);
-
-const round05 = (n) => Math.round(n * 2) / 2;
 
 /** The exercises worth talking about: the main work, with the library facts the model may use. */
 function tipFacts(ctx) {
@@ -57,7 +56,11 @@ function ruleTips(ctx, seed = 0) {
   const lifted = facts.find((f) => f.weightKg != null && f.weightKg > 0);
   if (lifted && effort != null) {
     const w = lifted.weightKg;
-    if (effort <= 5) tips.push(`${lifted.name}: ${w} kg felt manageable. If your form held to the last rep, try ${round05(w + 1)} to ${round05(w + 2)} kg next time.`);
+    if (effort <= 5) {
+      // never assume every kilogram exists: name a weight only if the person listed the ones they own
+      const up = LD.nextUp(w, ctx.steps);
+      tips.push(`${lifted.name}: ${w} kg felt manageable. If your form held to the last rep, try the next weight up${up != null ? ` (${up} kg)` : ''}.`);
+    }
     else if (effort >= 8) tips.push(`${lifted.name}: stay at ${w} kg until it feels easier. There is no rush.`);
   }
 
@@ -72,7 +75,9 @@ function ruleTips(ctx, seed = 0) {
     const withCue = facts.filter((f) => f.commonMistake);
     if (withCue.length) {
       const f = withCue[Math.abs(seed) % withCue.length];
-      tips.push(`A form cue for ${f.name}: watch for "${f.commonMistake.mistake.toLowerCase()}". ${f.commonMistake.fix}`);
+      // the fix first (it is the useful part), then the common slip it prevents
+      const slip = f.commonMistake.mistake.replace(/\.$/, '');
+      tips.push(`A form cue for ${f.name}: ${f.commonMistake.fix} (A common slip: ${slip.charAt(0).toLowerCase()}${slip.slice(1)}.)`);
     }
   }
   return tips.slice(0, 2);

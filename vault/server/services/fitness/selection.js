@@ -77,6 +77,8 @@ function rankedCandidates(slot, ctx) {
   const lib = L.getLibrary().list;
   const role = slot.role || 'main';
   let cap = L.levelCap(levelFor(slot.pattern, ctx.ratings), ctx.easier);
+  // the plan fitting itself to how things are going: one rung up or down. The caps below always win.
+  if (slot.block === 'main' && ctx.levelDelta) cap = Math.max(1, Math.min(4, cap + ctx.levelDelta));
   // Cardio level also follows how much cardio the week holds: jogging and hard intervals are not where someone starts
   // from a few easy sessions, whatever they once could do.
   if (slot.pattern === 'cardio' && ctx.cardioLimit) cap = Math.min(cap, ctx.cardioLimit);
@@ -86,7 +88,7 @@ function rankedCandidates(slot, ctx) {
     if (ctx.usedInSession.has(e.slug)) return false;
     if (ctx.hidden && ctx.hidden.has(e.slug)) return false; // "not for me"
     if (!L.isAvailable(e, ctx.equipment)) return false;
-    if (!L.gateOpen(e, ctx.exposure, ctx.waivers)) return false;
+    if (!L.gateOpen(e, ctx.exposure, ctx.waivers, ctx.comfort)) return false;
     return e.level <= (slot.block === 'main' ? cap : 4);
   });
   // Warm-ups and cool-downs: variety across mobility and balance, gentle ones first.

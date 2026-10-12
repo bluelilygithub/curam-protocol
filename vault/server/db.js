@@ -1115,6 +1115,11 @@ async function initSchema() {
     await client.query(`ALTER TABLE fitness_session_logs ADD COLUMN IF NOT EXISTS tips JSONB`);
     await client.query(`ALTER TABLE fitness_weeks ADD COLUMN IF NOT EXISTS reflection TEXT`);
     await client.query(`ALTER TABLE fitness_weeks ADD COLUMN IF NOT EXISTS "reflectionHash" TEXT`);
+    // Stage 3 step 3: what the plan decided from how things went, the dumbbell weights a person owns, and why a tip is plain.
+    await client.query(`ALTER TABLE fitness_weeks ADD COLUMN IF NOT EXISTS adaptation JSONB`);
+    await client.query(`ALTER TABLE fitness_profiles ADD COLUMN IF NOT EXISTS "dumbbellKg" JSONB NOT NULL DEFAULT '[]'`);
+    await client.query(`ALTER TABLE fitness_session_logs ADD COLUMN IF NOT EXISTS "tipsSource" TEXT`);
+    await client.query(`ALTER TABLE fitness_session_logs ADD COLUMN IF NOT EXISTS "tipsNote" TEXT`);
     // "Not for me": exercises a person has hidden; the week generator never picks them.
     await client.query(`
       CREATE TABLE IF NOT EXISTS fitness_hidden_exercises (

@@ -315,7 +315,7 @@ router.patch('/prefs', async (req, res) => {
 
 // Staging helper: create/refresh the worked-example demo user (admin only). Returns the password once, on creation.
 router.post('/admin/demo-seed', requireAdmin, async (req, res) => {
-  try { res.json(await seedDemoUser()); } catch (err) { fail(res, err, 'demo seed'); }
+  try { res.json(await seedDemoUser(String(req.body?.scenario || 'mixed'))); } catch (err) { fail(res, err, 'demo seed'); }
 });
 
 module.exports = router;

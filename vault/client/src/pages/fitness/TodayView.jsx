@@ -1,7 +1,7 @@
 import React from 'react';
 import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
-import { Card, InfoTip, Notice, SecondaryButton } from './ui';
+import { AdaptationNote, Card, InfoTip, Notice, SecondaryButton } from './ui';
 import { TIPS } from './tips';
 import SessionCard from './SessionCard';
 import { WeighInTile } from './LogView';
@@ -39,6 +39,7 @@ export default function TodayView({ onOpenExercise, goTo, meta, state, onPrefs, 
           {week.phase.label} · week {week.blockWeek} of {week.blockWeeks}{week.isDeload ? ' · a lighter week' : ''}
         </p>
         {week.weekNote && <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{week.weekNote}</p>}
+        <AdaptationNote adaptation={week.adaptation} />
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
           <InfoTip tip={TIPS.move} trigger="text" />
           <InfoTip tip={TIPS.timeOfDay} trigger="text" />

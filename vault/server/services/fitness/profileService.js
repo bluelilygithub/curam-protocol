@@ -11,6 +11,7 @@ const C = require('./config');
 const T = require('./targets');
 const { checkNotes } = require('./safety');
 const { cleanFreeText } = require('./text');
+const LD = require('./loads');
 const { resolveUserTimezone, isValidTimezone } = require('./timezone');
 
 class ValidationError extends Error {
@@ -78,6 +79,7 @@ function validateLifestyle(body) {
     },
     workAround: cleanFreeText(body.workAround, 1000),
     otherNotes: cleanFreeText(body.otherNotes, 1000),
+    dumbbellKg: LD.cleanSteps(body.dumbbellKg), // the weights they own, so suggestions name a weight that exists
     weeklyMinutes: validateMinutes(body.weeklyMinutes),
   };
 }
@@ -115,13 +117,13 @@ async function getLatestWeight(userId) {
 async function getFitnessRow(userId) {
   const { rows } = await pool.query(
     `SELECT equipment, smoking, alcohol, "dietQuality", "timeFlexibility", "workAround", "otherNotes",
-            "currentWeeklyMinutes" AS "weeklyMinutes", "templateBand", "easeRequested", prefs, to_char("easeWeek",'YYYY-MM-DD') AS "easeWeek", to_char("onboardedAt",'YYYY-MM-DD') AS "onboardedOn"
+            "currentWeeklyMinutes" AS "weeklyMinutes", "dumbbellKg", "templateBand", "easeRequested", prefs, to_char("easeWeek",'YYYY-MM-DD') AS "easeWeek", to_char("onboardedAt",'YYYY-MM-DD') AS "onboardedOn"
        FROM fitness_profiles WHERE "userId"=$1`,
     [userId],
   );
   const r = rows[0];
   if (!r) return null;
-  return { ...r, equipment: parseJson(r.equipment, []), prefs: parseJson(r.prefs, {}), timeFlexibility: parseJson(r.timeFlexibility, { mode: 'flexible', twiceDaily: false }) };
+  return { ...r, equipment: parseJson(r.equipment, []), prefs: parseJson(r.prefs, {}), dumbbellKg: parseJson(r.dumbbellKg, []), timeFlexibility: parseJson(r.timeFlexibility, { mode: 'flexible', twiceDaily: false }) };
 }
 
 async function getLatestRating(userId) {
@@ -204,7 +206,7 @@ async function getState(userId) {
     } : null,
     lifestyle: fit ? {
       equipment: fit.equipment, smoking: fit.smoking, alcohol: fit.alcohol, dietQuality: fit.dietQuality,
-      weeklyMinutes: fit.weeklyMinutes ?? null, timeFlexibility: fit.timeFlexibility, workAround: cleanFreeText(fit.workAround, 1000), otherNotes: cleanFreeText(fit.otherNotes, 1000),
+      weeklyMinutes: fit.weeklyMinutes ?? null, dumbbellKg: fit.dumbbellKg || [], timeFlexibility: fit.timeFlexibility, workAround: cleanFreeText(fit.workAround, 1000), otherNotes: cleanFreeText(fit.otherNotes, 1000),
       templateBand: fit.templateBand, easeRequested: !!fit.easeRequested, easeWeek: fit.easeWeek || null,
     } : null,
     rating,
@@ -245,14 +247,14 @@ async function saveProfile(userId, body) {
     const safety = checkNotes(life.workAround, life.otherNotes);
     const easeRequested = safety.offerEase ? !!body.easeRequested : false;
     await client.query(
-      `INSERT INTO fitness_profiles ("userId", equipment, smoking, alcohol, "dietQuality", "timeFlexibility", "workAround", "otherNotes", "templateBand", "easeRequested", "currentWeeklyMinutes")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      `INSERT INTO fitness_profiles ("userId", equipment, smoking, alcohol, "dietQuality", "timeFlexibility", "workAround", "otherNotes", "templateBand", "easeRequested", "currentWeeklyMinutes", "dumbbellKg")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        ON CONFLICT ("userId") DO UPDATE SET equipment=EXCLUDED.equipment, smoking=EXCLUDED.smoking, alcohol=EXCLUDED.alcohol,
          "dietQuality"=EXCLUDED."dietQuality", "timeFlexibility"=EXCLUDED."timeFlexibility", "workAround"=EXCLUDED."workAround",
          "otherNotes"=EXCLUDED."otherNotes", "templateBand"=EXCLUDED."templateBand", "easeRequested"=EXCLUDED."easeRequested",
-         "currentWeeklyMinutes"=EXCLUDED."currentWeeklyMinutes", "updatedAt"=NOW()`,
+         "currentWeeklyMinutes"=EXCLUDED."currentWeeklyMinutes", "dumbbellKg"=EXCLUDED."dumbbellKg", "updatedAt"=NOW()`,
       [userId, JSON.stringify(life.equipment), life.smoking, life.alcohol, life.dietQuality, JSON.stringify(life.timeFlexibility),
-        life.workAround, life.otherNotes, band?.id || null, easeRequested, life.weeklyMinutes],
+        life.workAround, life.otherNotes, band?.id || null, easeRequested, life.weeklyMinutes, JSON.stringify(life.dumbbellKg)],
     );
     await client.query('COMMIT');
   } catch (err) {

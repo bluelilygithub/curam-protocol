@@ -191,8 +191,16 @@ function deepMerge(base, over) {
   return out;
 }
 
+// How the plan fits itself to how things are going (adaptation.js). Editable through fitness_config_override.
+const ADAPTATION = {
+  minCoverage: 0.5,
+  nudge: { weeks: 3, minDone: 0.8, maxEffort: 4, minEffortCoverage: 0.5, quietWeeksAfterEase: 3, volumeFactor: 1.1, levelDelta: 1 },
+  ease: { weeks: 2, minEffort: 8, maxDone: 0.5, volumeFactor: 0.85, floorOfLastBuild: 0.6, levelDelta: -1 },
+};
+
 const DEFAULTS = {
   version: CONFIG_VERSION,
+  adaptation: ADAPTATION,
   bandTargets: BAND_TARGETS,
   healthyRange: HEALTHY_RANGE,
   cardioRatingToMinutes: CARDIO_RATING_TO_MINUTES,

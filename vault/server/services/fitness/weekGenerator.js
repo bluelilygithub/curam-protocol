@@ -10,6 +10,7 @@ const L = require('./library');
 const S = require('./schedule');
 const Sel = require('./selection');
 const { runJson, str, GUARDRAILS } = require('./ai');
+const LD = require('./loads');
 
 const LEVEL_DOWN = { advanced: 'intermediate', intermediate: 'beginner', beginner: 'beginner' };
 
@@ -20,7 +21,12 @@ function prescriptionFor(exercise, session, ctx) {
   }
   let level = Sel.levelFor(exercise.pattern, ctx.ratings);
   if (ctx.easier) level = LEVEL_DOWN[level];
-  const base = exercise.dosage[level];
+  let base = exercise.dosage[level];
+  // Loaded exercises: say what to do from what was actually lifted last time (the next weight up, not a made-up number).
+  if (exercise.loadGuide && ctx.lastLoads) {
+    const suggestion = LD.loadSuggestion(ctx.lastLoads.get(exercise.slug), ctx.steps);
+    if (suggestion) base = `${base}. ${suggestion}`;
+  }
   // Balance work is always done beside something to hold on to.
   return exercise.pattern === 'balance' ? `${base}. Stand beside a wall or bench for support.` : base;
 }
@@ -111,7 +117,7 @@ async function generateWeekPlan({ userId, weekStart, info, person, history, gene
     for (const slot of slots) {
       nth[slot.pattern] = (nth[slot.pattern] ?? 0) + (slot.block === 'main' ? 1 : 0);
       const ctx = {
-        equipment: person.equipment, ratings: person.ratings, easier, lastUse, usedThisWeek, usedInSession, rng, cardioLimit, starterLimit,
+        equipment: person.equipment, ratings: person.ratings, easier, lastUse, usedThisWeek, usedInSession, rng, cardioLimit, starterLimit, levelDelta: info.levelDelta || 0, comfort: person.comfortExposure,
         hidden: person.hidden, exposure: person.exposure, waivers: { 'running-history': !!person.runningHistory },
       };
       let candidates = Sel.rankedCandidates(slot, ctx);
@@ -205,7 +211,7 @@ async function generateWeekPlan({ userId, weekStart, info, person, history, gene
   }
 
   // ── assemble ──
-  const ctxRx = { ratings: person.ratings, easier };
+  const ctxRx = { ratings: person.ratings, easier, lastLoads: person.lastLoads, steps: person.dumbbellKg };
   const out = planned.map((p) => {
     const exercises = [];
     let position = 0;

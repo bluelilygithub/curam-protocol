@@ -55,6 +55,18 @@ All working screens (Today, Week, a single day, Month, Log, Library) share Today
 
 **Starter rule.** In the first five weeks of a goal, someone who does under 60 minutes of exercise a week (or has not said) gets main work at Gentle or Moderate only: nothing marked Challenging or Advanced, whatever they rated themselves (`selection.STARTER_*`, tested in `week.test.js`: no goblet squat in week one). Week one for the worked example: bodyweight squat, incline push-up, lat pulldown, bird dog; Thursday dumbbell RDL, lateral lunge, wall push-up, dead bug; Saturday a 45 minute easy ride.
 
+## Stage 3: the plan fits itself to you (step 3)
+
+`adaptation.js` (pure, thresholds in `config.js` `adaptation`, editable via `fitness_config_override`) looks at finished weeks before the one being made. Only LOGGED sessions count (done 1, partly 0.5, swapped 1, didn't do it 0); rest and unlogged sessions never count; a week needs at least half its sessions logged; deload weeks are skipped and never adapted. **Nudge up:** last 3 building weeks each at least 80% done, average effort 4 or less, effort recorded on at least half the logged sessions, no ease in the last 3 weeks: volume +10% (the weekly step cap and the age-band ceiling still win) and main-work levels +1 (starter and light-cardio caps still win). **Ease:** last 2 building weeks with average effort 8 or more, or under 50% done: volume about 15% lighter (never below 60% of the last build week) and levels -1. **Hold says nothing.** Decision stored in `fitness_weeks.adaptation`; Today and Week show "Why this week looks like this" for nudge and ease only. Only weeks not yet made are affected; messages are about fitting the plan to life and never mention skipping.
+
+*Comfortable-jog gate:* `easy-jog` now needs two weeks where run/walk was LOGGED done or partly done at effort 6 or less (no effort does not count); planned weeks alone no longer open it. Running history and the 90-minute rule are unchanged. Jogging therefore stays closed until the person logs.
+
+*Load suggestions* (`loads.js`): from the last logged weight and effort: 5 or less, "try the next weight up"; 6-7 stay; 8+ stay until easier; two sessions at 9+ at the same weight, "next weight down". A number is named only if the person listed their dumbbell weights (Profile, `fitness_profiles."dumbbellKg"`); otherwise it just says "the next weight up". With no logged weight the library's "start light" guide remains.
+
+*Tips:* a plain tip now records why (`tipsSource`, `tipsNote`) and the card says so; the form cue puts the fix first.
+
+*Demo:* the admin "Reset demo data" offers three scenarios: mixed (4 weeks), easy streak (7 weeks, shows the nudge) and tough fortnight (7 weeks, shows the ease).
+
 ## Stage 3: tips, reflection, gentle week (step 2)
 
 **Tips after a session** (`coaching.js` rules, `coachService.tipsForSession`). One or two short tips for a session that was done, partly done or swapped (none for rest or "didn't do it"). The model (Settings, `light` tier) rewords them from the same facts (exercise names, easier version, common mistake from the library, effort, kilograms); a reply that is empty, badly shaped, or uses a banned tone word (`BANNED`: fail, lazy, missed, skipped, behind, guilt, ...) is replaced by the rule-based tips. Rules: effort 9-10 -> the easier version by name; a lifted weight with effort <= 5 -> a small step up, effort >= 8 -> stay put, 6-7 -> no weight advice; effort <= 3 -> the plan steps up by itself; partly done -> part still counts; otherwise a form cue from the library that rotates with the log. Stored on the log (`fitness_session_logs.tips`), cleared when the log is edited, requested by the day card once per version of the log.
