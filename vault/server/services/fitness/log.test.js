@@ -3,6 +3,7 @@
 // Stage 3 tests: the pure logging rules. No database. Run: node server/services/fitness/log.test.js
 const assert = require('assert');
 const LG = require('./logging');
+const { dayState, weekDone } = require('./dayStatus');
 
 let passed = 0;
 function test(name, fn) {
@@ -119,6 +120,57 @@ test('prescription text becomes starting values: sets and the low end of reps, l
   assert.deepStrictEqual(LG.parsePrescription('45 minutes'), { kind: 'cardio', sets: null, reps: null, seconds: null, minutes: 45 });
   assert.strictEqual(LG.parsePrescription('').kind, 'rounds');
   assert.strictEqual(LG.parsePrescription(null).sets, null);
+});
+
+
+// ── day colours and what has been done so far ──
+const sess = (status, extra = {}) => ({ status, day: 0, components: [{ domain: 'strength', minutes: 30 }], ...extra });
+test('a day with everything logged as done (or done another way) is done', () => {
+  assert.strictEqual(dayState({ sessions: [sess('done')] }), 'done');
+  assert.strictEqual(dayState({ sessions: [sess('done'), sess('swapped')] }), 'done');
+});
+test('a day with nothing logged yet is planned (neutral), and a day half logged is partial', () => {
+  assert.strictEqual(dayState({ sessions: [sess('planned')] }), 'planned');
+  assert.strictEqual(dayState({ sessions: [sess('moved')] }), 'planned');
+  assert.strictEqual(dayState({ sessions: [sess('done'), sess('planned')] }), 'partial');
+});
+test('partly done, or a mix of done and "didn\'t do it", is partial; all "didn\'t do it" is a neutral skipped, not a failure', () => {
+  assert.strictEqual(dayState({ sessions: [sess('partial')] }), 'partial');
+  assert.strictEqual(dayState({ sessions: [sess('done'), sess('skipped')] }), 'partial');
+  assert.strictEqual(dayState({ sessions: [sess('skipped')] }), 'skipped');
+});
+test('rest days (planned, flexible, or sessions logged as rest) are rest, and rest never looks like skipped', () => {
+  assert.strictEqual(dayState({ sessions: [], restInfo: { day: 3, kind: 'planned' } }), 'rest');
+  assert.strictEqual(dayState({ sessions: [sess('rest')] }), 'rest');
+  assert.strictEqual(dayState({ sessions: [sess('rest'), sess('planned')] }), 'planned');
+  assert.notStrictEqual(dayState({ sessions: [sess('rest')] }), dayState({ sessions: [sess('skipped')] }));
+});
+test('nothing planned: an extra makes it an extra day, otherwise none', () => {
+  assert.strictEqual(dayState({ sessions: [], extras: [{ minutes: 30 }] }), 'extra');
+  assert.strictEqual(dayState({ sessions: [] }), 'none');
+});
+
+test('week progress counts what was done in the same units as the targets', () => {
+  const sessions = [
+    { status: 'done', day: 0, components: [{ domain: 'strength', minutes: 30 }, { domain: 'balance', minutes: 8 }] },
+    { status: 'done', day: 1, components: [{ domain: 'cardio', minutes: 40 }, { domain: 'flexibility', minutes: 8 }] },
+    { status: 'partial', day: 3, components: [{ domain: 'strength', minutes: 30 }] },
+    { status: 'planned', day: 4, components: [{ domain: 'cardio', minutes: 50 }] },
+    { status: 'skipped', day: 5, components: [{ domain: 'cardio', minutes: 50 }] },
+    { status: 'rest', day: 6, components: [{ domain: 'cardio', minutes: 50 }] },
+  ];
+  assert.deepStrictEqual(weekDone(sessions, []), { aerobicMinutes: 40, strengthDays: 1.5, balanceDays: 1, mobilityDays: 1 });
+});
+test('swapped counts for what was planned; partly done is half the minutes; extras count for their kind', () => {
+  const d = weekDone(
+    [{ status: 'swapped', day: 0, components: [{ domain: 'cardio', minutes: 40 }] }, { status: 'partial', day: 2, components: [{ domain: 'cardio', minutes: 40 }] }],
+    [{ domain: 'cardio', minutes: 30, date: '2026-10-21' }, { domain: 'balance', minutes: 15, date: '2026-10-22' }],
+  );
+  assert.strictEqual(d.aerobicMinutes, 40 + 20 + 30);
+  assert.strictEqual(d.balanceDays, 1);
+});
+test('nothing logged means nothing done', () => {
+  assert.deepStrictEqual(weekDone([{ status: 'planned', day: 0, components: [{ domain: 'cardio', minutes: 30 }] }], []), { aerobicMinutes: 0, strengthDays: 0, balanceDays: 0, mobilityDays: 0 });
 });
 
 console.log(`fitness logging: ${passed} tests passed${process.exitCode ? ' (with failures)' : ''}`);

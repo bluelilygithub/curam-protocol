@@ -135,6 +135,7 @@ const semanticMap = {
   'circle-dot': { lucide: 'CircleDot' },
   'circle-dashed': { lucide: 'CircleDashed' },
   repeat: { lucide: 'Repeat' },
+  'calendar-days': { lucide: 'CalendarDays' },
   'circle-help': { lucide: 'CircleHelp' },
   flame: { lucide: 'Flame' },
   snowflake: { lucide: 'Snowflake' },

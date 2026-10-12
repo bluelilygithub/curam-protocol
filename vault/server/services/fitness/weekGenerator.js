@@ -34,10 +34,18 @@ function validatePicks(obj) {
   return { ok: true, value: { weekNote: str(obj.weekNote, 300), picks } };
 }
 
+// Plain words for what each phase means for the week. No numbers: the page already shows the targets.
+const PHASE_WORDS = {
+  base: 'You are rebuilding a base, so the work is easy, regular and steady.',
+  build: 'You are building up gradually, a little more over time.',
+  consolidate: 'You are making it a habit, so this is about keeping a steady rhythm.',
+  maintain: 'You are keeping what you have built.',
+};
+
 function fallbackNote({ phase, isDeload, eased }) {
-  if (isDeload) return `${phase.label}: an easier week on purpose. Lighter sessions and gentler variations let everything you have built settle in.`;
-  if (eased) return 'A gentle start: shorter sessions and easier versions while you settle in.';
-  return `${phase.label}: ${String(phase.focus || 'steady and regular').toLowerCase()}. The targets are the same each week and the exercises change, so it stays fresh.`;
+  if (isDeload) return 'A lighter week on purpose. Easier sessions give your body time to absorb the work you have done, so it is fine to go gently.';
+  if (eased) return 'A gentle start: shorter sessions and easier versions while you settle in. There is no need to push.';
+  return `${PHASE_WORDS[phase?.id] || 'A steady week.'} Keep the effort comfortable; doing it regularly matters more than doing it hard.`;
 }
 
 /**
@@ -128,6 +136,7 @@ async function generateWeekPlan({ userId, weekStart, info, person, history, gene
   // ── the model chooses among shortlists and writes the week note ──
   const open = planned.flatMap((p) => p.slots.filter((s) => s.shortlist.length > 1));
   const input = {
+    noteVersion: 2,
     weekStart,
     generation,
     phase: info.phase.label,
@@ -151,7 +160,7 @@ async function generateWeekPlan({ userId, weekStart, info, person, history, gene
   let model = null;
   let note = null;
   if (open.length) {
-    const system = `${GUARDRAILS}\nYou are choosing exercises for one week of a personal program. For each slot id, pick exactly one slug from that slot's options and no other. Prefer variety across the week and avoid choosing the same exercise in two slots. If thingsToWorkAround names a limit and an option clearly conflicts with it, pick another option when one is offered. Write weekNote as 1-2 warm sentences about this week's focus.`;
+    const system = `${GUARDRAILS}\nYou are choosing exercises for one week of a personal program. For each slot id, pick exactly one slug from that slot's options and no other. Prefer variety across the week and avoid choosing the same exercise in two slots. If thingsToWorkAround names a limit and an option clearly conflicts with it, pick another option when one is offered. Write weekNote as 1-2 plain, warm sentences about the character of this week and one thing to focus on. Do not list the targets or repeat numbers: the page already shows them. Strength, balance and mobility are counted in DAYS and can share one session, so never call them separate sessions.`;
     const prompt = `Choose the exercises.\n\nDATA:\n${JSON.stringify(input)}\n\nReturn JSON:\n{"weekNote": string (max 280 chars), "picks": {"<slot id>": "<slug from that slot's options>"}}`;
     const res = await runJson({
       userId, kind: 'week', input, system, prompt, validate: validatePicks,

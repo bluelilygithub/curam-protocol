@@ -210,6 +210,11 @@ router.get('/today', async (req, res) => {
   try { res.json(await W.getToday(req.user.id)); } catch (err) { fail(res, err, 'today'); }
 });
 
+// A month as a calendar grid (?month=YYYY-MM).
+router.get('/month', async (req, res) => {
+  try { res.json(await W.getMonth(req.user.id, String(req.query.month || ''))); } catch (err) { fail(res, err, 'month'); }
+});
+
 router.post('/week/rest-day', async (req, res) => {
   try { res.json(await W.takeRestDay(req.user.id, { weekStart: req.body?.weekStart, day: req.body?.day })); } catch (err) { fail(res, err, 'rest day'); }
 });

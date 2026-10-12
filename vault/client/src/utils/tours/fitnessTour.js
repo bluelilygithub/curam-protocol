@@ -40,7 +40,12 @@ const STEPS = [
   {
     id: 'fitness-week-grid', group: 'done', view: 'week', since: 2, selector: '[data-tour="fitness-week-grid"]', on: 'top',
     title: 'Your week',
-    text: 'Your week at a glance, one small card per session. Click a day to open it, log a session and see its exercises. Drag a card to another day or time; the three places to drop appear as you drag. If two strength sessions end up less than 48 hours apart you get a gentle note, never a block. The ? at the top explains how the week works.',
+    text: 'One block per day with a small card for each session. A day changes colour once you have logged it (green done, amber some done, blue rest), always with an icon too. Click a day, a card or its pencil to open the day and log or edit. Drag a card to another day or time; the places to drop appear as you drag. The numbers at the top show what you have done against what the plan asks for. The ? explains the rest.',
+  },
+  {
+    id: 'fitness-month', group: 'done', view: 'month', since: 3, selector: '[data-tour="fitness-month"]', on: 'top',
+    title: 'The month',
+    text: 'A calendar of the month with each day coloured by how it went, plus an icon and a word so colour is never the only clue. Click a day to open it in the Week. Days from weeks that were never made have no plan to open.',
   },
   {
     id: 'fitness-rest', group: 'done', view: 'week', since: 2, selector: '[data-tour="fitness-rest"]', on: 'bottom',

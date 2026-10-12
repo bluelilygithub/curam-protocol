@@ -13,6 +13,7 @@ const P = require('./profileService');
 const { generateWeekPlan } = require('./weekGenerator');
 const { sessionSafetyLines } = require('./safety');
 const LG = require('./logging');
+const { dayState, weekDone } = require('./dayStatus');
 
 const { ValidationError } = P;
 const EDITABLE = new Set(['planned', 'moved']);
@@ -120,6 +121,34 @@ async function loadExposure(userId, weekStart) {
   return new Map(rows.map((r) => [r.slug, r.weeks]));
 }
 
+async function loadExtras(userId, weekStart) {
+  const { rows } = await pool.query(
+    `SELECT id, title, domain, "actualMinutes" AS minutes, effort, to_char("loggedOn",'YYYY-MM-DD') AS date
+       FROM fitness_session_logs
+      WHERE "userId"=$1 AND "plannedSessionId" IS NULL AND "loggedOn" >= $2 AND "loggedOn" <= $3 ORDER BY "loggedOn", id`,
+    [userId, weekStart, Ph.addDays(weekStart, 6)],
+  );
+  return rows;
+}
+
+/** The week with its sessions, extras, what has been done so far, and each day's state (for colours). */
+async function buildWeek(userId, row, state, weekId = row.id) {
+  const sessions = await loadSessions(weekId, userId);
+  const extras = await loadExtras(userId, row.weekStart);
+  const out = shapeWeek(row, sessions, state);
+  const restByDay = new Map(out.week.restDays.map((r) => [r.day, r]));
+  out.extras = extras;
+  out.done = weekDone(sessions, extras);
+  out.days = [0, 1, 2, 3, 4, 5, 6].map((day) => {
+    const date = Ph.addDays(row.weekStart, day);
+    return {
+      day, date,
+      state: dayState({ sessions: sessions.filter((s) => s.day === day), restInfo: restByDay.get(day), extras: extras.filter((x) => x.date === date) }),
+    };
+  });
+  return out;
+}
+
 function shapeWeek(row, sessions, state) {
   const restDays = parse(row.restDays, []);
   const spent = restDays.filter((r) => r.kind === 'budget').length;
@@ -172,7 +201,7 @@ async function getWeek(userId, start) {
   if (!row) {
     return { exists: false, weekStart, today: state.today, currentWeekStart: current, canGenerate: weekStart === current || weekStart === Ph.addDays(current, 7) };
   }
-  return shapeWeek(row, await loadSessions(row.id, userId), state);
+  return buildWeek(userId, row, state);
 }
 
 /** Last two weeks' exercises, for rotation. */
@@ -216,7 +245,7 @@ async function ensureWeek(userId, { start, refresh = false } = {}) {
   if (weekStart !== current && weekStart !== Ph.addDays(current, 7)) throw new ValidationError('Weeks are created for this week and next week only');
 
   const existing = await loadWeekRow(userId, weekStart);
-  if (existing && !refresh) return shapeWeek(existing, await loadSessions(existing.id, userId), state);
+  if (existing && !refresh) return buildWeek(userId, existing, state);
   if (existing) {
     const acted = (await loadSessions(existing.id, userId)).some((s) => !EDITABLE.has(s.status));
     if (acted) throw new ValidationError('This week already has activity, so it is kept as it is.');
@@ -290,7 +319,7 @@ async function ensureWeek(userId, { start, refresh = false } = {}) {
   }
 
   const row = await loadWeekRow(userId, weekStart);
-  const out = shapeWeek(row, await loadSessions(weekId, userId), state);
+  const out = await buildWeek(userId, row, state, weekId);
   out.aiNote = plan.aiNote;
   return out;
 }
@@ -398,4 +427,55 @@ async function getToday(userId) {
   };
 }
 
-module.exports = { getWeek, ensureWeek, moveSession, takeRestDay, undoRestDay, getToday, loadHistory, loadHidden, setHidden, loadExposure };
+/**
+ * A month as a calendar grid (Monday first). Each day carries its state and a light list of that day's sessions; days whose week
+ * was never made are marked as having no plan. Past weeks only exist if they were made.
+ */
+async function getMonth(userId, month) {
+  const state = await P.getState(userId);
+  const m = /^\d{4}-\d{2}$/.test(month || '') ? month : state.today.slice(0, 7);
+  const first = `${m}-01`;
+  const next = new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 1)).toISOString().slice(0, 10);
+  const last = Ph.addDays(next, -1);
+  const gridStart = Ph.mondayOf(first);
+  const gridEnd = Ph.addDays(Ph.mondayOf(last), 6);
+
+  const { rows: weekRows } = await pool.query(
+    `SELECT id, to_char("weekStart",'YYYY-MM-DD') AS "weekStart", "restDays" FROM fitness_weeks
+      WHERE "userId"=$1 AND "weekStart" >= $2 AND "weekStart" <= $3 ORDER BY "weekStart"`,
+    [userId, gridStart, gridEnd],
+  );
+  const byStart = new Map();
+  for (const w of weekRows) byStart.set(w.weekStart, { ...w, sessions: await loadSessions(w.id, userId) });
+  const { rows: extraRows } = await pool.query(
+    `SELECT id, title, domain, "actualMinutes" AS minutes, to_char("loggedOn",'YYYY-MM-DD') AS date
+       FROM fitness_session_logs WHERE "userId"=$1 AND "plannedSessionId" IS NULL AND "loggedOn" >= $2 AND "loggedOn" <= $3 ORDER BY "loggedOn", id`,
+    [userId, gridStart, gridEnd],
+  );
+
+  const days = [];
+  let doneSessions = 0;
+  let doneMinutes = 0;
+  for (let d = gridStart; d <= gridEnd; d = Ph.addDays(d, 1)) {
+    const weekStart = Ph.mondayOf(d);
+    const w = byStart.get(weekStart);
+    const idx = Ph.dayOfWeek(d);
+    const sessions = w ? w.sessions.filter((s) => s.day === idx) : [];
+    const restInfo = w ? parse(w.restDays, []).find((r) => r.day === idx) : null;
+    const extras = extraRows.filter((x) => x.date === d);
+    const inMonth = d >= first && d <= last;
+    if (inMonth) {
+      for (const s of sessions) if (s.status === 'done' || s.status === 'swapped' || s.status === 'partial') { doneSessions += 1; doneMinutes += s.log?.actualMinutes ?? 0; }
+      for (const x of extras) { doneSessions += 1; doneMinutes += x.minutes || 0; }
+    }
+    days.push({
+      date: d, inMonth, weekStart, dayIndex: idx, hasWeek: !!w,
+      state: dayState({ sessions, restInfo, extras }),
+      sessions: sessions.map((s) => ({ id: s.id, title: s.title, slot: s.slot, status: s.status, totalMinutes: s.totalMinutes, components: s.components })),
+      extras: extras.map((x) => ({ id: x.id, title: x.title, minutes: x.minutes })),
+    });
+  }
+  return { month: m, today: state.today, currentWeekStart: Ph.mondayOf(state.today), days, totals: { sessionsDone: doneSessions, minutesDone: doneMinutes } };
+}
+
+module.exports = { getMonth, getWeek, ensureWeek, moveSession, takeRestDay, undoRestDay, getToday, loadHistory, loadHidden, setHidden, loadExposure };

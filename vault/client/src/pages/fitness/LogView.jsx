@@ -246,12 +246,12 @@ export default function LogView({ meta, state, prefs, onPrefs, onWeighIn }) {
 
   const today = state.today;
   return (
-    <div className="max-w-5xl mx-auto w-full space-y-6" data-tour="fitness-log">
+    <div className="max-w-3xl mx-auto w-full space-y-6" data-tour="fitness-log">
       {error && <Notice>{error}</Notice>}
 
       <WeighInTile last={state.weighIn} onSaved={onWeighIn} />
 
-      <TileGroup title="Catch up" icon="clipboard-list" hint={catchUp ? `${catchUp.sessions.length} waiting` : ''} columns="lg:grid-cols-2">
+      <TileGroup title="Catch up" icon="clipboard-list" hint={catchUp ? `${catchUp.sessions.length} waiting` : ''} columns="">
         {!catchUp && <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>}
         {catchUp && !catchUp.sessions.length && (
           <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Nothing waiting. Sessions from the last {meta.backfillDays} days show up here until you note them, and it is fine to leave some unlogged.</p>
@@ -283,7 +283,7 @@ export default function LogView({ meta, state, prefs, onPrefs, onWeighIn }) {
         <ExtraForm meta={meta} today={today} onSaved={load} />
       </section>
 
-      <TileGroup title="Recent" icon="clock" columns="lg:grid-cols-2">
+      <TileGroup title="Recent" icon="clock" columns="">
         {logs && !logs.length && <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Nothing logged yet.</p>}
         {logs?.map((l) => (
           <div key={l.id} className="rounded-xl border p-3 flex items-start gap-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>

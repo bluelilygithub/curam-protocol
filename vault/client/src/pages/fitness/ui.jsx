@@ -301,3 +301,20 @@ export function BackButton({ children, onClick }) {
     </button>
   );
 }
+
+/** A small but obvious button: border, icon and a word (never a tiny underlined link). */
+export function SmallButton({ icon, children, onClick, disabled, title }) {
+  const getIcon = useIcon();
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm hover:opacity-70 transition-all duration-200 disabled:opacity-40"
+      style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}
+    >
+      {icon && getIcon(icon, { size: 14 })}{children}
+    </button>
+  );
+}

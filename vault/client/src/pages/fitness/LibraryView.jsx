@@ -3,7 +3,7 @@ import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
 import useToastStore from '../../store/toastStore';
 import Tooltip from '../../components/Tooltip';
-import { BackButton, Card, Chip, FIELD, InfoTip, inputCls, Notice, SecondaryButton } from './ui';
+import { Card, Chip, FIELD, InfoTip, inputCls, Notice, SecondaryButton } from './ui';
 import { ExerciseTile, TileGroup, PATTERN_LABELS as PATTERNS_SHARED, LEVEL_LABELS as LEVELS_SHARED } from './ExerciseTile';
 import { PATTERN_ICON } from './icons';
 import { TIPS } from './tips';
@@ -15,7 +15,7 @@ const PATTERN_LABELS = {
 const SETTING_LABELS = { gym: 'Gym', pool: 'Pool', outdoor: 'Outdoors', home: 'Home' };
 const LEVEL_LABELS = ['', 'Gentle', 'Moderate', 'Challenging', 'Advanced'];
 
-function Detail({ slug, onOpen, onBack, backLabel }) {
+export function ExerciseDetail({ slug, onOpen, onHiddenChange }) {
   const getIcon = useIcon();
   const addToast = useToastStore((s) => s.addToast);
   const [ex, setEx] = useState(null);
@@ -29,6 +29,7 @@ function Detail({ slug, onOpen, onBack, backLabel }) {
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Could not save that');
       setEx((cur) => ({ ...cur, hidden: d.hidden }));
+      onHiddenChange?.();
       addToast(d.hidden ? 'Hidden. It will not appear in future weeks. Use "make a different version" on the Week tab to refresh the current week.' : 'It can appear in your weeks again.', 'success', 8000);
     } catch (err) {
       addToast(err.message, 'error');
@@ -50,8 +51,7 @@ function Detail({ slug, onOpen, onBack, backLabel }) {
   if (!ex) return <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
 
   return (
-    <div className="max-w-3xl mx-auto w-full space-y-4">
-      <BackButton onClick={onBack}>{backLabel}</BackButton>
+    <div className="w-full space-y-4">
       <Card>
         <div>
           <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{ex.name}</h2>
@@ -136,13 +136,12 @@ function Detail({ slug, onOpen, onBack, backLabel }) {
           Stop and rest if something hurts, you feel dizzy, or you notice chest symptoms. See your GP if it does not settle.
         </p>
       </Card>
-      <BackButton onClick={onBack}>{backLabel}</BackButton>
     </div>
   );
 }
 
 /** Browse every exercise. Defaults to what you can do with the equipment you listed. */
-export default function LibraryView({ slug, onOpen, onBack, backLabel = 'All exercises' }) {
+export default function LibraryView({ onOpen, refreshKey = 0 }) {
   const [data, setData] = useState(null);
   const [q, setQ] = useState('');
   const [pattern, setPattern] = useState('');
@@ -153,7 +152,7 @@ export default function LibraryView({ slug, onOpen, onBack, backLabel = 'All exe
 
   useEffect(() => {
     api.get('/api/fitness/library').then(async (r) => { const d = await r.json(); if (!r.ok) throw new Error(d.error); setData(d); }).catch((e) => setError(e.message));
-  }, []);
+  }, [refreshKey]);
 
   const list = useMemo(() => {
     if (!data) return [];
@@ -166,12 +165,11 @@ export default function LibraryView({ slug, onOpen, onBack, backLabel = 'All exe
       .filter((e) => showHidden || !e.hidden);
   }, [data, q, pattern, setting, mineOnly, showHidden]);
 
-  if (slug) return <Detail slug={slug} onOpen={onOpen} onBack={onBack} backLabel={backLabel} />;
   if (error) return <Notice>{error}</Notice>;
   if (!data) return <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
 
   return (
-    <div className="max-w-4xl mx-auto w-full space-y-4" data-tour="fitness-library-list">
+    <div className="max-w-3xl mx-auto w-full space-y-4" data-tour="fitness-library-list">
       <Card title="Exercise library" hint="Every exercise in your program comes from here, with how to do it properly and why form matters.">
         <div className="grid gap-3 sm:grid-cols-3">
           <input className={inputCls} style={FIELD} placeholder="Search" aria-label="Search exercises" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -202,7 +200,7 @@ export default function LibraryView({ slug, onOpen, onBack, backLabel = 'All exe
           const group = list.filter((e) => e.pattern === p);
           if (!group.length) return null;
           return (
-            <TileGroup key={p} title={PATTERNS_SHARED[p]} hint={`${group.length}`} icon={PATTERN_ICON[p]}>
+            <TileGroup key={p} title={PATTERNS_SHARED[p]} hint={`${group.length}`} icon={PATTERN_ICON[p]} columns="sm:grid-cols-2">
               {group.map((e) => (
                 <ExerciseTile
                   key={e.slug}

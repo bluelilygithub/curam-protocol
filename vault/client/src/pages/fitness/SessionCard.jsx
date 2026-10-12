@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
-import { FIELD, Notice, SecondaryButton, PrimaryButton, TimeOfDay } from './ui';
+import { FIELD, Notice, SecondaryButton, PrimaryButton, SmallButton, TimeOfDay } from './ui';
 import EffortPicker from './EffortPicker';
 import LogPanel, { StatusChip } from './LogPanel';
 import { ExerciseTile, TileGroup, PATTERN_LABELS, LEVEL_LABELS, BLOCK_LABELS } from './ExerciseTile';
@@ -19,7 +19,7 @@ export function ExerciseList({ session, onOpenExercise, compact = false }) {
           title={BLOCK_LABELS[b]}
           icon={BLOCK_ICON[b]}
           hint={b !== 'main' ? `about ${b === 'warmup' ? session.warmupMin : session.cooldownMin} min` : `${session.plannedMinutes} min`}
-          columns={compact ? '' : 'sm:grid-cols-2 lg:grid-cols-3'}
+          columns={compact ? '' : 'sm:grid-cols-2'}
         >
           {list.map((e) => (
             <ExerciseTile
@@ -175,8 +175,8 @@ export default function SessionCard({
             {logSummary(log) && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{logSummary(log)}</span>}
             {logging && (
               <>
-                <button type="button" onClick={() => setForm(log.status)} className="text-xs underline hover:opacity-60 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }}>Edit</button>
-                <button type="button" onClick={() => onUndo?.(session.id)} className="text-xs underline hover:opacity-60 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }}>Clear this log</button>
+                <SmallButton icon="edit" onClick={() => setForm(log.status)}>Edit log</SmallButton>
+                <SmallButton icon="rotate-ccw" onClick={() => onUndo?.(session.id)}>Clear log</SmallButton>
               </>
             )}
           </div>
@@ -269,6 +269,17 @@ export function CompactSessionCard({ session, draggable = false, onOpen, onDragS
           {getIcon(sessionIcon(session), { size: 13 })}
         </span>
         <p className="flex-1 min-w-0 text-sm font-medium leading-snug truncate">{session.title}</p>
+        <Tooltip text="Open this day to log, edit or move this session">
+          <button
+            type="button"
+            aria-label={`Edit ${session.title}: open this day`}
+            onClick={(e) => { e.stopPropagation(); onOpen?.(); }}
+            className="flex-shrink-0 hover:opacity-60 transition-opacity duration-200"
+            style={{ color: 'var(--color-muted)' }}
+          >
+            {getIcon('edit', { size: 13 })}
+          </button>
+        </Tooltip>
         {moved && (
           <Tooltip text={`Moved from ${DAY_NAMES[session.movedFrom.day]} ${session.movedFrom.slot}`}>
             <span className="flex-shrink-0" style={{ color: 'var(--color-muted)' }} aria-label={`Moved from ${DAY_NAMES[session.movedFrom.day]}`}>{getIcon('move', { size: 12 })}</span>

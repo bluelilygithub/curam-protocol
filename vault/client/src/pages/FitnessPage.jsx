@@ -19,6 +19,8 @@ import Overview from './fitness/Overview';
 import TodayView from './fitness/TodayView';
 import WeekView from './fitness/WeekView';
 import LibraryView from './fitness/LibraryView';
+import MonthView from './fitness/MonthView';
+import ExerciseModal from './fitness/ExerciseModal';
 import LogView from './fitness/LogView';
 import ProfileTab from './fitness/ProfileTab';
 import FitnessInfoBody, { INFO_KEY } from './fitness/FitnessInfo';
@@ -26,6 +28,7 @@ import FitnessInfoBody, { INFO_KEY } from './fitness/FitnessInfo';
 const VIEWS = [
   { mode: 'today', icon: 'sun', label: 'Today' },
   { mode: 'week', icon: 'calendar', label: 'Week' },
+  { mode: 'month', icon: 'calendar-days', label: 'Month' },
   { mode: 'log', icon: 'edit', label: 'Log' },
   { mode: 'library', icon: 'book', label: 'Library' },
   { mode: 'overview', icon: 'home', label: 'Overview' },
@@ -67,6 +70,14 @@ function StartOverModal({ onConfirm, onCancel }) {
   );
 }
 
+// Monday of the week a date falls in (weeks start on Monday).
+function weekStartOf(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7));
+  return dt.toISOString().slice(0, 10);
+}
+
 export default function FitnessPage() {
   const getIcon = useIcon();
   const { user } = useAuthStore();
@@ -81,9 +92,10 @@ export default function FitnessPage() {
   const [meta, setMeta] = useState(null);
   const [state, setState] = useState(null);
   const [view, setView] = useState('today');
-  const [libSlug, setLibSlug] = useState(null);
-  const [returnTo, setReturnTo] = useState(null); // the screen an exercise was opened from, so Back can return there
+  const [modalSlug, setModalSlug] = useState(null); // the exercise shown in a window over the current screen
+  const [libVersion, setLibVersion] = useState(0); // bumps when an exercise is hidden or shown, so the Library list refreshes
   const [weekOffset, setWeekOffset] = useState(0);
+  const [weekStartDay, setWeekStartDay] = useState(null); // opening a day from the Month lands on that day in the Week
   const [focusRerate, setFocusRerate] = useState(false);
   const [settingGoal, setSettingGoal] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -116,23 +128,19 @@ export default function FitnessPage() {
 
   const goTo = useCallback((mode, opts = {}) => {
     setFocusRerate(!!opts.rerate);
-    if (mode !== 'library' || !opts.keepSlug) setLibSlug(null);
-    setReturnTo(null);
     setView(mode);
   }, []);
 
-  // Any exercise name in Today or Week opens its library page.
-  const openExercise = (slug) => {
-    if (view !== 'library') setReturnTo(view);
-    setLibSlug(slug);
-    setView('library');
-  };
+  // Any exercise name opens a window over the current screen, so closing it leaves you exactly where you were.
+  const openExercise = useCallback((slug) => setModalSlug(slug), []);
 
-  const backFromExercise = () => {
-    setLibSlug(null);
-    if (returnTo) { setView(returnTo); setReturnTo(null); }
-  };
-  const BACK_LABELS = { today: 'Back to Today', week: 'Back to the Week', overview: 'Back to Overview', goal: 'Back to Goal', profile: 'Back to Profile' };
+  // The Month opens a day in the Week: work out how many weeks away it is from this week.
+  const openMonthDay = useCallback((d, currentWeekStart) => {
+    const ms = (iso) => Date.parse(`${iso}T00:00:00Z`);
+    setWeekOffset(Math.round((ms(d.weekStart) - ms(currentWeekStart)) / (7 * 86400000)));
+    setWeekStartDay(d.dayIndex);
+    setView('week');
+  }, []);
 
   const runTour = useCallback(() => {
     if (!state) return;
@@ -188,11 +196,13 @@ export default function FitnessPage() {
     } else if (view === 'today') {
       body = <TodayView onOpenExercise={openExercise} goTo={goTo} meta={meta} state={state} onPrefs={savePrefs} onWeighIn={(w) => setState((s) => ({ ...s, weighIn: w }))} />;
     } else if (view === 'week') {
-      body = <WeekView onOpenExercise={openExercise} offset={weekOffset} onOffsetChange={setWeekOffset} meta={meta} prefs={state.prefs || {}} onPrefs={savePrefs} />;
+      body = <WeekView onOpenExercise={openExercise} offset={weekOffset} onOffsetChange={setWeekOffset} meta={meta} prefs={state.prefs || {}} onPrefs={savePrefs} startDay={weekStartDay} onStartDayUsed={() => setWeekStartDay(null)} />;
+    } else if (view === 'month') {
+      body = <MonthView onOpenDay={(d) => openMonthDay(d, state.today ? weekStartOf(state.today) : d.weekStart)} />;
     } else if (view === 'log') {
       body = <LogView meta={meta} state={state} prefs={state.prefs || {}} onPrefs={savePrefs} onWeighIn={(w) => setState((s) => ({ ...s, weighIn: w }))} />;
     } else if (view === 'library') {
-      body = <LibraryView slug={libSlug} onOpen={openExercise} onBack={backFromExercise} backLabel={returnTo ? BACK_LABELS[returnTo] : 'All exercises'} />;
+      body = <LibraryView onOpen={openExercise} refreshKey={libVersion} />;
     } else if (view === 'overview') {
       body = <Overview meta={meta} state={state} goTo={goTo} />;
     } else if (view === 'goal') {
@@ -262,6 +272,9 @@ export default function FitnessPage() {
         <ToolInfoModal title="How the Fitness Planner works" onClose={info.close}>
           <FitnessInfoBody disclaimer={meta?.disclaimer} />
         </ToolInfoModal>
+      )}
+      {modalSlug && (
+        <ExerciseModal slug={modalSlug} onClose={() => setModalSlug(null)} onOpen={setModalSlug} onHiddenChange={() => setLibVersion((v) => v + 1)} />
       )}
       {confirmReset && <StartOverModal onConfirm={startOver} onCancel={() => setConfirmReset(false)} />}
     </div>
