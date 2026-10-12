@@ -21,6 +21,7 @@ import WeekView from './fitness/WeekView';
 import LibraryView from './fitness/LibraryView';
 import MonthView from './fitness/MonthView';
 import ExerciseModal from './fitness/ExerciseModal';
+import FitnessNav from './fitness/FitnessNav';
 import LogView from './fitness/LogView';
 import ProfileTab from './fitness/ProfileTab';
 import FitnessInfoBody, { INFO_KEY } from './fitness/FitnessInfo';
@@ -95,6 +96,7 @@ export default function FitnessPage() {
   const [modalSlug, setModalSlug] = useState(null); // the exercise shown in a window over the current screen
   const [libVersion, setLibVersion] = useState(0); // bumps when an exercise is hidden or shown, so the Library list refreshes
   const [weekOffset, setWeekOffset] = useState(0);
+  const [libHint, setLibHint] = useState(null); // arriving in the Library from the safety notice shows how to hide an exercise
   const [weekStartDay, setWeekStartDay] = useState(null); // opening a day from the Month lands on that day in the Week
   const [focusRerate, setFocusRerate] = useState(false);
   const [settingGoal, setSettingGoal] = useState(false);
@@ -128,6 +130,7 @@ export default function FitnessPage() {
 
   const goTo = useCallback((mode, opts = {}) => {
     setFocusRerate(!!opts.rerate);
+    setLibHint(opts.hint || null);
     setView(mode);
   }, []);
 
@@ -202,7 +205,7 @@ export default function FitnessPage() {
     } else if (view === 'log') {
       body = <LogView meta={meta} state={state} prefs={state.prefs || {}} onPrefs={savePrefs} onWeighIn={(w) => setState((s) => ({ ...s, weighIn: w }))} />;
     } else if (view === 'library') {
-      body = <LibraryView onOpen={openExercise} refreshKey={libVersion} />;
+      body = <LibraryView onOpen={openExercise} refreshKey={libVersion} hint={libHint} />;
     } else if (view === 'overview') {
       body = <Overview meta={meta} state={state} goTo={goTo} />;
     } else if (view === 'goal') {
@@ -236,6 +239,7 @@ export default function FitnessPage() {
   ];
 
   return (
+    <FitnessNav.Provider value={{ goTo }}>
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden" style={{ background: 'var(--color-bg)' }}>
       <PageToolbar
         title="Fitness"
@@ -278,5 +282,6 @@ export default function FitnessPage() {
       )}
       {confirmReset && <StartOverModal onConfirm={startOver} onCancel={() => setConfirmReset(false)} />}
     </div>
+    </FitnessNav.Provider>
   );
 }

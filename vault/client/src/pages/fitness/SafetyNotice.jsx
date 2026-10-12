@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
 import api from '../../utils/apiClient';
 import useToastStore from '../../store/toastStore';
 import { Notice, PrimaryButton, SecondaryButton } from './ui';
+import FitnessNav from './FitnessNav';
 
 /**
  * A calm notice after a note that mentions pain, dizziness or chest symptoms. It offers a gentler next week, and only
@@ -9,6 +10,7 @@ import { Notice, PrimaryButton, SecondaryButton } from './ui';
  */
 export default function SafetyNotice({ safety }) {
   const addToast = useToastStore((s) => s.addToast);
+  const nav = useContext(FitnessNav);
   const [state, setState] = useState('ask'); // ask | saving | done | declined
   if (!safety?.message) return null;
 
@@ -38,6 +40,19 @@ export default function SafetyNotice({ safety }) {
               <SecondaryButton onClick={() => setState('declined')} disabled={state === 'saving'}>No thanks</SecondaryButton>
             </div>
           )
+      )}
+      {safety.offerEase && (
+        <p className="mt-3 text-sm">
+          A gentler week does not remove specific exercises.{' '}
+          <button
+            type="button"
+            onClick={() => nav.goTo('library', { hint: 'hide' })}
+            className="underline font-medium hover:opacity-60 transition-opacity duration-200"
+          >
+            Hide any exercises that bother it
+          </button>
+          {' '}and your program will skip them.
+        </p>
       )}
     </Notice>
   );

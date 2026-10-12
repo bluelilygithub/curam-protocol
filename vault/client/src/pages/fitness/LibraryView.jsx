@@ -141,7 +141,7 @@ export function ExerciseDetail({ slug, onOpen, onHiddenChange }) {
 }
 
 /** Browse every exercise. Defaults to what you can do with the equipment you listed. */
-export default function LibraryView({ onOpen, refreshKey = 0 }) {
+export default function LibraryView({ onOpen, refreshKey = 0, hint = null }) {
   const [data, setData] = useState(null);
   const [q, setQ] = useState('');
   const [pattern, setPattern] = useState('');
@@ -170,6 +170,12 @@ export default function LibraryView({ onOpen, refreshKey = 0 }) {
 
   return (
     <div className="max-w-3xl mx-auto w-full space-y-4" data-tour="fitness-library-list">
+      {hint === 'hide' && (
+        <Notice tone="care">
+          Open any exercise that bothers you and choose <strong>Not for me, hide this exercise</strong>. Your program will skip it from the next week it makes;
+          use "Make a different version of this week" on the Week tab to refresh the current one.
+        </Notice>
+      )}
       <Card title="Exercise library" hint="Every exercise in your program comes from here, with how to do it properly and why form matters.">
         <div className="grid gap-3 sm:grid-cols-3">
           <input className={inputCls} style={FIELD} placeholder="Search" aria-label="Search exercises" value={q} onChange={(e) => setQ(e.target.value)} />
