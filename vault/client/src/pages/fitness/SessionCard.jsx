@@ -241,3 +241,45 @@ export default function SessionCard({
     </div>
   );
 }
+
+/**
+ * The small version used in the week: icon, title, when, how long, and its state. Click (or Enter) opens the day.
+ * A marker shows when a session has been moved. Dragging moves it.
+ */
+export function CompactSessionCard({ session, draggable = false, onOpen, onDragStart, onDragEnd }) {
+  const getIcon = useIcon();
+  const rest = session.status === 'rest';
+  const moved = session.status === 'moved' && session.movedFrom;
+  const canDrag = draggable && (session.status === 'planned' || session.status === 'moved');
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      draggable={canDrag}
+      onClick={onOpen}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen?.(); } }}
+      onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(session.id)); e.dataTransfer.effectAllowed = 'move'; onDragStart?.(session.id); }}
+      onDragEnd={() => onDragEnd?.()}
+      aria-label={`${session.title}, ${session.slot}, ${session.totalMinutes} minutes. Open this day.`}
+      className="rounded-xl border p-2.5 text-left hover:opacity-70 transition-all duration-200 cursor-pointer"
+      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', opacity: rest ? 0.6 : 1 }}
+    >
+      <div className="flex items-center gap-2">
+        <span className="flex-shrink-0 w-6 h-6 rounded-md flex items-center justify-center" style={{ background: 'var(--color-surface)', color: 'var(--color-muted)' }} aria-hidden="true">
+          {getIcon(sessionIcon(session), { size: 13 })}
+        </span>
+        <p className="flex-1 min-w-0 text-sm font-medium leading-snug truncate">{session.title}</p>
+        {moved && (
+          <Tooltip text={`Moved from ${DAY_NAMES[session.movedFrom.day]} ${session.movedFrom.slot}`}>
+            <span className="flex-shrink-0" style={{ color: 'var(--color-muted)' }} aria-label={`Moved from ${DAY_NAMES[session.movedFrom.day]}`}>{getIcon('move', { size: 12 })}</span>
+          </Tooltip>
+        )}
+      </div>
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+        <TimeOfDay slot={session.slot} size={11} />
+        <span>{session.totalMinutes} min</span>
+      </p>
+      {(session.log || rest) && <p className="mt-1"><StatusChip status={session.log?.status || session.status} /></p>}
+    </div>
+  );
+}

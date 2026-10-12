@@ -187,7 +187,7 @@ export function formatDate(iso) {
  * and a phone. Closes on Escape or a click elsewhere. `trigger="text"` shows the question itself as the control.
  *   <InfoTip tip={TIPS.move} />   <InfoTip tip={TIPS.timeOfDay} trigger="text" />
  */
-export function InfoTip({ tip, trigger = 'icon' }) {
+export function InfoTip({ tip, trigger = 'icon', icon = 'info' }) {
   const getIcon = useIcon();
   const btn = useRef(null);
   const pop = useRef(null);
@@ -200,7 +200,7 @@ export function InfoTip({ tip, trigger = 'icon' }) {
   useLayoutEffect(() => {
     if (!open || !btn.current) { setPos(null); return; }
     const r = btn.current.getBoundingClientRect();
-    const width = Math.min(320, window.innerWidth - 16);
+    const width = Math.min(tip.sections ? 380 : 320, window.innerWidth - 16);
     const left = Math.min(Math.max(r.left + r.width / 2 - width / 2, 8), window.innerWidth - width - 8);
     const below = r.bottom + 8;
     const h = pop.current ? pop.current.offsetHeight : 160;
@@ -234,7 +234,7 @@ export function InfoTip({ tip, trigger = 'icon' }) {
         style={{ color: 'var(--color-muted)' }}
       >
         {trigger === 'text' ? tip.title : null}
-        {getIcon('info', { size: trigger === 'text' ? 12 : 14 })}
+        {getIcon(icon, { size: trigger === 'text' ? 12 : 16 })}
       </button>
       {open && createPortal(
         <div
@@ -249,8 +249,17 @@ export function InfoTip({ tip, trigger = 'icon' }) {
           onMouseEnter={() => setHover(true)}
           onMouseLeave={() => setHover(false)}
         >
-          <p className="font-semibold mb-1">{tip.title}</p>
-          <p style={{ color: 'var(--color-muted)' }}>{tip.body}</p>
+          <div className="max-h-[70vh] overflow-y-auto">
+            <p className="font-semibold mb-1">{tip.title}</p>
+            {tip.sections
+              ? tip.sections.map((s) => (
+                <div key={s.title} className="mt-2">
+                  <p className="font-medium text-xs uppercase tracking-wide">{s.title}</p>
+                  <p style={{ color: 'var(--color-muted)' }}>{s.body}</p>
+                </div>
+              ))
+              : <p style={{ color: 'var(--color-muted)' }}>{tip.body}</p>}
+          </div>
         </div>,
         document.body,
       )}

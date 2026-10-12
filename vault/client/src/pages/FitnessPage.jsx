@@ -188,7 +188,7 @@ export default function FitnessPage() {
     } else if (view === 'today') {
       body = <TodayView onOpenExercise={openExercise} goTo={goTo} meta={meta} state={state} onPrefs={savePrefs} onWeighIn={(w) => setState((s) => ({ ...s, weighIn: w }))} />;
     } else if (view === 'week') {
-      body = <WeekView onOpenExercise={openExercise} offset={weekOffset} onOffsetChange={setWeekOffset} />;
+      body = <WeekView onOpenExercise={openExercise} offset={weekOffset} onOffsetChange={setWeekOffset} meta={meta} prefs={state.prefs || {}} onPrefs={savePrefs} />;
     } else if (view === 'log') {
       body = <LogView meta={meta} state={state} prefs={state.prefs || {}} onPrefs={savePrefs} onWeighIn={(w) => setState((s) => ({ ...s, weighIn: w }))} />;
     } else if (view === 'library') {

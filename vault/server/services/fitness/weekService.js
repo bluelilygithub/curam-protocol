@@ -237,6 +237,7 @@ async function ensureWeek(userId, { start, refresh = false } = {}) {
       equipment: state.lifestyle.equipment,
       twiceDaily: !!state.lifestyle.timeFlexibility?.twiceDaily,
       workAround: inp.profile.workAround || null,
+      currentMinutes: state.lifestyle?.weeklyMinutes ?? null,
       hidden: await loadHidden(userId),
       exposure: await loadExposure(userId, weekStart),
       // an earlier, higher cardio rating stands in for "has run before" until we ask about running directly

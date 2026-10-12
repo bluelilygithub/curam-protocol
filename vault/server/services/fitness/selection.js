@@ -80,6 +80,7 @@ function rankedCandidates(slot, ctx) {
   // Cardio level also follows how much cardio the week holds: jogging and hard intervals are not where someone starts
   // from a few easy sessions, whatever they once could do.
   if (slot.pattern === 'cardio' && ctx.cardioLimit) cap = Math.min(cap, ctx.cardioLimit);
+  if (slot.block === 'main' && ctx.starterLimit) cap = Math.min(cap, ctx.starterLimit);
   let pool = lib.filter((e) => {
     if (slot.block === 'main') { if (e.pattern !== slot.pattern || !e.roles.includes('main')) return false; } else if (!e.roles.includes(role)) return false;
     if (ctx.usedInSession.has(e.slug)) return false;
@@ -109,11 +110,18 @@ function signature(slugs) {
   return [...slugs].sort().join('|');
 }
 
+// A starter is someone in their first five weeks of the goal who does under an hour of exercise a week (or has not said).
+// Their main work stays at "Gentle" or "Moderate": no exercise marked Challenging or Advanced, whatever they rated themselves.
+const STARTER_WEEKS = 5;
+const STARTER_BELOW_MINUTES = 60;
+const STARTER_LEVEL_LIMIT = 2;
+
 // Below this many aerobic minutes a week, cardio stays at the gentler end (walking, easy riding, swimming, run/walk).
 const GENTLE_CARDIO_BELOW = 90;
 const GENTLE_CARDIO_LEVEL = 2;
 
 module.exports = {
+  STARTER_WEEKS, STARTER_BELOW_MINUTES, STARTER_LEVEL_LIMIT,
   GENTLE_CARDIO_BELOW, GENTLE_CARDIO_LEVEL,
   STRENGTH_PLANS, SHORTLIST, DOMAIN_OF_PATTERN,
   hashString, rngFrom, isOutdoor, buildSlots, levelFor, rankedCandidates, isKeeperSlot, signature,

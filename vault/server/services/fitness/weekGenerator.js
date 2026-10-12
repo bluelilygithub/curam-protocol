@@ -81,6 +81,9 @@ async function generateWeekPlan({ userId, weekStart, info, person, history, gene
   const lib = L.getLibrary().bySlug;
   const usedThisWeek = new Set();
   const cardioLimit = info.targets.aerobicMinutes < Sel.GENTLE_CARDIO_BELOW ? Sel.GENTLE_CARDIO_LEVEL : 0;
+  // Starter weeks: nothing marked Challenging for someone who is starting from (near) zero.
+  const starter = info.weeksSinceStart < Sel.STARTER_WEEKS && (person.currentMinutes == null || person.currentMinutes < Sel.STARTER_BELOW_MINUTES);
+  const starterLimit = starter ? Sel.STARTER_LEVEL_LIMIT : 0;
   const counters = { strength: 0, aerobic: 0, mixed: 0 };
   const planned = [];
 
@@ -100,7 +103,7 @@ async function generateWeekPlan({ userId, weekStart, info, person, history, gene
     for (const slot of slots) {
       nth[slot.pattern] = (nth[slot.pattern] ?? 0) + (slot.block === 'main' ? 1 : 0);
       const ctx = {
-        equipment: person.equipment, ratings: person.ratings, easier, lastUse, usedThisWeek, usedInSession, rng, cardioLimit,
+        equipment: person.equipment, ratings: person.ratings, easier, lastUse, usedThisWeek, usedInSession, rng, cardioLimit, starterLimit,
         hidden: person.hidden, exposure: person.exposure, waivers: { 'running-history': !!person.runningHistory },
       };
       let candidates = Sel.rankedCandidates(slot, ctx);

@@ -286,7 +286,7 @@ const goal = makeGoal();
   });
 
   // ── generator ──
-  const person = { ratings: RATINGS, equipment: FULL, twiceDaily: true, workAround: null };
+  const person = { ratings: RATINGS, equipment: FULL, twiceDaily: true, workAround: null, currentMinutes: 120 }; // not a starter
   const infoFor = (weekStart, prevBuildMinutes = null) => Ph.targetsForWeek({ goal, weekStart, prevBuildMinutes, currentMinutes: 30 });
   const mainSlugs = (plan) => plan.sessions.flatMap((s) => s.exercises.filter((e) => e.block === 'main').map((e) => e.slug));
   const lib = L.getLibrary().bySlug;
@@ -347,6 +347,38 @@ const goal = makeGoal();
       const cardio = plan.sessions.flatMap((s) => s.exercises).filter((e) => lib.get(e.slug).pattern === 'cardio' && e.block === 'main').map((e) => e.slug);
       assert.strictEqual(new Set(cardio).size, cardio.length, cardio.join());
     }
+  });
+  await test('week one for someone starting from near zero has nothing marked Challenging (no goblet squat), main work or cardio', async () => {
+    const starterInfo = infoFor('2026-10-12');
+    assert.strictEqual(starterInfo.weeksSinceStart, 0);
+    for (const currentMinutes of [0, 30, null]) {
+      for (let g = 0; g < 12; g += 1) {
+        const plan = await generateWeekPlan({
+          userId: 31, weekStart: '2026-10-12', info: starterInfo, person: { ...person, ratings: { cardio: 3, strength: 3, flexibility: 2, balance: 3 }, currentMinutes },
+          history: { weeks: [] }, generation: g, timezone: 'Australia/Brisbane',
+        });
+        for (const e of plan.sessions.flatMap((s) => s.exercises).filter((x) => x.block === 'main')) {
+          assert.ok(lib.get(e.slug).level <= 2, `${e.slug} is level ${lib.get(e.slug).level} for a starter (currentMinutes ${currentMinutes})`);
+          assert.notStrictEqual(e.slug, 'goblet-squat');
+        }
+      }
+    }
+  });
+  await test('the starter limit ends after five weeks, and does not apply to someone already active', async () => {
+    const later = infoFor('2026-12-07'); // 8 weeks in, a building week
+    assert.ok(later.weeksSinceStart >= 5);
+    const seen = new Set();
+    for (let g = 0; g < 14; g += 1) {
+      const plan = await generateWeekPlan({ userId: 32, weekStart: '2026-12-07', info: later, person: { ...person, currentMinutes: 0 }, history: { weeks: [] }, generation: g, timezone: 'Australia/Brisbane' });
+      for (const e of plan.sessions.flatMap((s) => s.exercises)) seen.add(lib.get(e.slug).level);
+    }
+    assert.ok([...seen].some((l) => l >= 3), 'level 3 is available again after the starter weeks');
+    const active = new Set();
+    for (let g = 0; g < 14; g += 1) {
+      const plan = await generateWeekPlan({ userId: 33, weekStart: '2026-10-12', info: infoFor('2026-10-12'), person: { ...person, currentMinutes: 150 }, history: { weeks: [] }, generation: g, timezone: 'Australia/Brisbane' });
+      for (const e of plan.sessions.flatMap((s) => s.exercises)) active.add(lib.get(e.slug).level);
+    }
+    assert.ok([...active].some((l) => l >= 3), 'someone already active is not held back in week one');
   });
   await test('deterministic for the same week and generation; regenerating changes things', async () => {
     const a = await generateWeekPlan({ userId: 1, weekStart: '2026-10-12', info: infoFor('2026-10-12'), person, history: { weeks: [] }, generation: 0, timezone: 'Australia/Brisbane' });

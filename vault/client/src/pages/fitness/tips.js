@@ -4,6 +4,16 @@
  */
 
 export const TIPS = {
+  weekGuide: {
+    title: 'How the week works',
+    sections: [
+      { title: 'Moving a session', body: 'Sessions are suggestions, not appointments. Drag one to another day or time, or open a day and press Move. The week keeps the same targets wherever it lands.' },
+      { title: 'Does morning or afternoon matter?', body: 'Mostly no. Pick the time you will actually keep. Leave about 48 hours between strength sessions so your muscles recover (you get a gentle note, never a block), and in hot weather do outdoor sessions in the early morning or evening.' },
+      { title: 'Rest days', body: 'Two planned rest days plus one flexible day to use whenever you need it. Taking a day off moves its session to a free slot later in the week if there is room, otherwise it is let go. Nothing is piled onto other days.' },
+      { title: 'Training blocks', body: 'Weeks come in blocks of five: four building weeks, then a lighter one on purpose so your body can absorb the work.' },
+      { title: 'A different version', body: 'Same targets, different exercises. Only possible before you have logged anything this week.' },
+    ],
+  },
   move: {
     title: 'Why move a session?',
     body: 'Sessions are suggestions, not appointments. Move one to a day and time that fits your life: drag it, or press Move on the card. The week keeps the same targets wherever it lands.',
