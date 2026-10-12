@@ -216,6 +216,7 @@ async function getWeek(userId, start) {
   if (!row) {
     return { exists: false, weekStart, today: state.today, currentWeekStart: current, canGenerate: weekStart === current || weekStart === Ph.addDays(current, 7) };
   }
+  require('./fitnessTasks').syncSoon(userId, { force: false });
   return buildWeek(userId, row, state);
 }
 

@@ -33,6 +33,10 @@ function startFitnessCron() {
     }).catch((err) => console.error('[fitness-cron] error:', err.message));
   });
   console.log('[fitness-cron] Cron scheduled: hourly at :05 (reminder emails, plan tasks)');
+  // once, shortly after boot: programs that existed before Tasks linking appear straight away
+  setTimeout(() => {
+    runFitnessCron().then((r) => console.log(`[fitness-cron] startup sync: ${JSON.stringify(r)}`)).catch((err) => console.warn('[fitness-cron] startup sync failed:', err.message));
+  }, 20000);
 }
 
 module.exports = { startFitnessCron, runFitnessCron };
