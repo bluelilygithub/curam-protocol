@@ -9,12 +9,30 @@ Spec: "Fitness Planner App: Spec for Claude Code" (2026-10-12). Built in stages;
 | Stage | Scope | State |
 |---|---|---|
 | 1 | Profile, age templates, self-ratings, AI baseline, 5-year goal with ambition dial, goal revisit, re-rate form, safety check, demo user | built |
-| 2 | Exercise library (~40, variation chains), phases, varied weekly program, week/day views, rest budget | next |
+| 2 | Exercise library (45, variation chains), 5-week blocks, varied weekly program, Today/Week/Library views, movable sessions, rest budget | built, awaiting library review and staging check |
 | 3 | Logging, back-fill, extras, post-log tips, weekly adaptation, pain-note prompt to ease next week, demo-user logs | planned |
 | 4 | Dashboard charts, colour system, rating-history chart, re-rate banner on the dashboard | planned |
 | 5 | Morning plan + catch-up reminders (email, `fitnessCron.js`), installable mobile Today view, re-rate email nudge | planned |
 
 Where the approved extras land: re-rate form + revisit-goal + ambition dial are in Stage 1; the soft "time to re-rate" banner is in Stage 1 (Overview), its chart in Stage 4 and its email in Stage 5. The pain/dizzy/chest keyword check runs on the profile notes in Stage 1 and on session notes in Stage 3. Demo user: profile, ratings, goal and a weight series in Stage 1; weeks of mixed logs in Stage 3.
+
+## Stage 2: library, blocks, weekly program
+
+**Library** (`server/seeds/fitnessExercises.v1.json`, 45 exercises; `library.js`). The file is the source of truth; `fitness_exercises` mirrors it on boot (upsert by slug) for later joins. Each exercise: pattern, domains, settings, `requires` (any-of equipment, empty = needs nothing), level 1-4, steps, mistakes with fixes, why form matters, dosage by level, easier/harder links (two-way, level never goes down), roles (main / warmup / cooldown), optional safety note. Video and image fields are `null`; a link is only valid with `linksReviewedBy`, so the AI can never introduce one (`validateLibrary()` fails otherwise). Review sheet: `node scripts/fitnessLibraryReviewSheet.js` -> `docs/fitness-library-review.md`.
+
+**Blocks** (`phases.js`, `progression.js`). 5 weeks: weeks 1-4 build, week 5 is a deload (70% of the last build week's aerobic minutes, easier variations). There is no separate phases table: block, phase and targets are computed from the goal by date and each generated week stores a snapshot (`fitness_weeks`). Aerobic minutes rise at most ~10% a week (or 15 minutes, whichever is larger) measured against the last build week, never the deload. Early blocks never sit below a gentle 60-minute starter week; the very first week adds at most 30 minutes to what the person already does (45 minimum). "Ease my first weeks" (confirmed in Stage 1) runs the first two weeks at 80%, easier variations.
+
+**Week** (`schedule.js`, `selection.js`, `weekGenerator.js`, `weekService.js`). Code decides: planned rest days (2, Sunday and Thursday/Wednesday first, never on a strength day), strength sessions at least 48 hours apart, balance and mobility on distinct days (and they can share a session with strength or cardio), 25-75 minute aerobic sessions, at most one session a day unless the person is happy to train twice daily. Every session has ~5 minute warm-up and cool-down (two exercises each, from mobility and balance; not counted toward weekly targets). Exercises: movement patterns are the same every week; variation rotates along the easier/harder links; never the exact same session within two weeks; about a third of slots are kept from last week (not in one-exercise sessions); only equipment the person listed; level capped by rating (one lower when easing or in a deload); cardio capped at gentle (level 2) when the week holds under 90 aerobic minutes, whatever the rating. The model (Settings) only picks among the shortlist code builds and writes the week note; anything outside the shortlist is ignored; a bad or missing reply falls back to the rule-based picks. One retry at double the token budget if a reply is cut off. Weeks are created on demand for this week and next (`POST /week/generate`, idempotent); "make a different version" is refused once anything in the week has been acted on.
+
+**Rest and skipped are recorded separately.** Session `status`: `planned | moved | done | partial | swapped | skipped | rest`. `rest` is intentional rest (including spending the flexible rest budget); `skipped` (Stage 3 logging) is a session that was planned and not done. They look the same to the person (neutral, no red) but Stage 4's planned-versus-done charts can tell them apart. Rest days live in `fitness_weeks."restDays"` as `{ day, kind: 'planned' | 'budget' }`. Taking a rest day moves each session on it to a free slot on a later day if one suits (not a rest day, room for it, 48 hours from other strength), otherwise the session is let go (`rest`). It never adds work anywhere else. Undo restores it.
+
+**Soft notes, never blocks.** Strength sessions under 48 hours apart; an outdoor session at midday in the hot months (Nov-Mar for southern-hemisphere time zones, Jun-Aug elsewhere); more than two sessions in a day; a weekly aerobic shortfall; a movement pattern with no exercise for the equipment listed.
+
+**API additions:** `GET /library`, `GET /library/:slug`, `GET /week`, `POST /week/generate`, `GET /today`, `PATCH /sessions/:id` (move), `POST /week/rest-day`, `POST /week/rest-day/undo`.
+
+**Tables:** `fitness_exercises`, `fitness_weeks`, `fitness_planned_sessions`, `fitness_planned_exercises`.
+
+**Known limits.** "Things to work around" reaches the model as a constraint but code cannot parse it, so an exercise that conflicts can still be offered; a per-exercise swap arrives with logging. People who list no dumbbells or gym get no pulling exercise. No bodyweight pull is in the library yet.
 
 ## Help, tour and starting over
 
@@ -61,7 +79,7 @@ Admin override without a deploy: `workspace_settings` key `fitness_config_overri
 
 ## API (`server/routes/fitness.js`, `/api/fitness`, behind `requireFeature('fitness')`)
 
-`GET /meta` · `GET /template?dob=` · `GET /me` · `PUT /profile` · `POST /safety-check` · `POST /ratings` (`kind: onboarding|rerate`) · `GET /ratings/history` · `POST /baseline` (AI, cached, `refresh`) · `POST /goal/preview` (AI, nothing saved) · `POST /goal` (accept; older goal becomes `superseded`) · `GET /goal/history` · `POST /reset` · `POST /admin/demo-seed` (admin).
+`GET /meta` · `GET /template?dob=` · `GET /me` · `PUT /profile` · `POST /safety-check` · `POST /ratings` (`kind: onboarding|rerate`) · `GET /ratings/history` · `POST /baseline` (AI, cached, `refresh`) · `POST /goal/preview` (AI, nothing saved) · `POST /goal` (accept; older goal becomes `superseded`) · `GET /goal/history` · `POST /reset` · library and week routes (see Stage 2) · `POST /admin/demo-seed` (admin).
 
 AI routes use `aiLimiter`. Responses are cached in `fitness_ai_cache` keyed by the exact input, so revisiting is free and a changed rating regenerates.
 
@@ -72,7 +90,7 @@ Stage 1 tables (idempotent DDL in `server/db.js`), all `"userId"`-scoped:
 - `health_profiles` (dob, sex, heightCm), `health_weight_log` (time series, `source`): **shared**, deliberately not fitness-owned, so the future diet app reads and writes the same profile and weight.
 - `fitness_profiles` (equipment, smoking, alcohol, dietQuality, timeFlexibility, workAround, otherNotes, templateBand, easeRequested), `fitness_ratings` (dated; onboarding + re-rates), `fitness_goals` (ambition, milestones, summary; one `active`), `fitness_ai_cache`.
 
-Planned (Stage 2+): `fitness_exercises` + `fitness_exercise_variations` (seeded from versioned `data/fitnessExercises.v1.json`, upsert by slug), `fitness_phases`, `fitness_weeks`, `fitness_planned_sessions`, `fitness_planned_exercises`, `fitness_session_logs`, `fitness_exercise_logs`, `fitness_reminder_settings`, `fitness_signals`.
+Planned (Stage 3+): `fitness_session_logs`, `fitness_exercise_logs`, `fitness_reminder_settings`, `fitness_signals` (diet-app signals). The Stage 2 tables (`fitness_exercises`, `fitness_weeks`, `fitness_planned_sessions`, `fitness_planned_exercises`) exist; there is no separate `fitness_phases` table (see Stage 2).
 
 Diet app link: `getActivitySummary(userId, range)` service (weekly minutes, estimated energy, training days) and inbound `fitness_signals` (e.g. low energy intake -> ease intensity). Internal service, no HTTP API until the diet app exists.
 

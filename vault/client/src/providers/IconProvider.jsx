@@ -127,6 +127,8 @@ const semanticMap = {
   inbox: { lucide: 'Inbox' },
   scissors: { lucide: 'Scissors' },
   dumbbell: { lucide: 'Dumbbell' },
+  moon: { lucide: 'Moon' },
+  sun: { lucide: 'Sun' },
   crop: { lucide: 'Crop' },
   shield: { lucide: 'Shield' },
   grid: { lucide: 'LayoutGrid' },

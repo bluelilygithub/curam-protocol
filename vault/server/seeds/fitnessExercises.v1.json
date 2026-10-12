@@ -1,0 +1,2209 @@
+{
+  "version": "v1",
+  "exercises": [
+    {
+      "slug": "sit-to-stand",
+      "name": "Sit-to-stand",
+      "domains": [
+        "strength"
+      ],
+      "pattern": "squat",
+      "settings": [
+        "home"
+      ],
+      "requires": [],
+      "equipment": "Chair",
+      "level": 1,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Sit toward the front of a sturdy chair with your feet hip-width apart and slightly behind your knees.",
+        "Lean your chest forward from the hips until your nose is over your toes.",
+        "Press through your whole foot and stand tall, squeezing your glutes at the top.",
+        "Reach your hips back and lower slowly over about three seconds until you lightly touch the seat.",
+        "Pause briefly, then go again without bouncing off the seat."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Knees drift inwards",
+          "fix": "Press your knees out so they track over your second toe."
+        },
+        {
+          "mistake": "Pushing off with your hands",
+          "fix": "Cross your arms, or use a higher seat until you can stand without help."
+        }
+      ],
+      "whyFormMatters": "This is the movement you use to get out of any chair. Leaning forward and keeping your knees tracking over your toes loads your thighs and glutes instead of your knees and lower back.",
+      "safety": null,
+      "easier": [],
+      "harder": [
+        "bodyweight-squat"
+      ],
+      "dosage": {
+        "beginner": "2 sets of 6-8 reps",
+        "intermediate": "3 sets of 8-10 reps",
+        "advanced": "3 sets of 10-12 slow reps"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "bodyweight-squat",
+      "name": "Bodyweight squat",
+      "domains": [
+        "strength"
+      ],
+      "pattern": "squat",
+      "settings": [
+        "home",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Bodyweight",
+      "level": 2,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Stand with your feet shoulder-width apart and toes turned out slightly.",
+        "Keep your chest up and your tummy gently braced, arms out in front for balance.",
+        "Sit your hips back and down as if lowering into a chair, knees tracking over your toes.",
+        "Lower until your thighs are close to parallel, or as far as you can while keeping your heels down.",
+        "Press through the whole foot to stand tall."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Heels lift off the floor",
+          "fix": "Shift your weight to mid-foot and shorten the depth until it feels steady."
+        },
+        {
+          "mistake": "Lower back rounds at the bottom",
+          "fix": "Keep your chest proud and stop higher; depth only counts if your back stays neutral."
+        }
+      ],
+      "whyFormMatters": "Controlled depth with a neutral spine builds your thighs and glutes. Dropping fast or rounding your back moves the load onto your knees and spine.",
+      "safety": null,
+      "easier": [
+        "sit-to-stand"
+      ],
+      "harder": [
+        "goblet-squat",
+        "leg-press"
+      ],
+      "dosage": {
+        "beginner": "2 sets of 8-10 reps",
+        "intermediate": "3 sets of 10-12 reps",
+        "advanced": "3 sets of 12-15 slow reps"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "goblet-squat",
+      "name": "Goblet squat",
+      "domains": [
+        "strength"
+      ],
+      "pattern": "squat",
+      "settings": [
+        "gym",
+        "home"
+      ],
+      "requires": [
+        "dumbbells",
+        "gym"
+      ],
+      "equipment": "Dumbbell",
+      "level": 3,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Hold one dumbbell upright against your chest with both hands cupped under the top end.",
+        "Set your feet slightly wider than shoulder-width with toes turned out a little.",
+        "Keep your elbows pointing down and the weight close to your chest as you sit down between your knees.",
+        "Go as deep as you can with your heels flat and your back straight.",
+        "Drive through your whole foot to stand, breathing out as you rise."
+      ],
+      "mistakes": [
+        {
+          "mistake": "The weight drifts away from your chest",
+          "fix": "Tuck your elbows in and hold the dumbbell against your breastbone."
+        },
+        {
+          "mistake": "You fold forward at the bottom",
+          "fix": "Use a lighter weight or lower less deeply until you can stay tall."
+        }
+      ],
+      "whyFormMatters": "Holding the weight in front helps you stay upright, which keeps the load on your legs. Folding forward turns it into a lower-back exercise.",
+      "safety": null,
+      "easier": [
+        "bodyweight-squat"
+      ],
+      "harder": [],
+      "dosage": {
+        "beginner": "2 sets of 8-10 reps, light weight",
+        "intermediate": "3 sets of 8-12 reps",
+        "advanced": "3 sets of 10-12 reps, heavier weight"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "leg-press",
+      "name": "Leg press (machine)",
+      "domains": [
+        "strength"
+      ],
+      "pattern": "squat",
+      "settings": [
+        "gym"
+      ],
+      "requires": [
+        "gym"
+      ],
+      "equipment": "Leg press machine",
+      "level": 3,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Adjust the seat so your knees bend to about 90 degrees at the bottom, with your feet shoulder-width apart in the middle of the platform.",
+        "Keep your head, back and hips pressed against the seat.",
+        "Press the platform away until your legs are nearly straight, stopping short of locking your knees.",
+        "Lower slowly over about three seconds until your knees reach about 90 degrees.",
+        "Breathe out as you press and in as you lower."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Locking your knees at the top",
+          "fix": "Stop just short of straight so the muscles, not the joint, hold the weight."
+        },
+        {
+          "mistake": "Hips lift or round off the seat at the bottom",
+          "fix": "Shorten the range and lower the weight; your hips should stay flat."
+        }
+      ],
+      "whyFormMatters": "A machine supports your back, but the knees still take load. A controlled range with unlocked knees protects the joints while you build strength.",
+      "safety": "Start light and ask a gym staff member to set up the machine the first time.",
+      "easier": [
+        "bodyweight-squat"
+      ],
+      "harder": [],
+      "dosage": {
+        "beginner": "2 sets of 10-12 reps, light",
+        "intermediate": "3 sets of 8-12 reps",
+        "advanced": "3 sets of 8-10 reps, heavier"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "glute-bridge",
+      "name": "Glute bridge",
+      "domains": [
+        "strength"
+      ],
+      "pattern": "hinge",
+      "settings": [
+        "home",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Bodyweight",
+      "level": 1,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Lie on your back with your knees bent and feet flat, hip-width apart, heels under your knees.",
+        "Gently draw your ribs down and tighten your tummy so your lower back is not arched.",
+        "Press through your heels and lift your hips until your body makes a straight line from shoulders to knees.",
+        "Squeeze your glutes for one to two seconds at the top.",
+        "Lower slowly, one bone at a time."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Lower back arches at the top",
+          "fix": "Stop when your body is in a straight line and keep your ribs down."
+        },
+        {
+          "mistake": "Hamstrings cramp",
+          "fix": "Move your feet closer to your hips and push through your heels, not your toes."
+        }
+      ],
+      "whyFormMatters": "The glutes are your main hip extensors, and this teaches the hip hinge in a safe position. Arching your back lets the lower back do the work instead.",
+      "safety": null,
+      "easier": [],
+      "harder": [
+        "dumbbell-romanian-deadlift"
+      ],
+      "dosage": {
+        "beginner": "2 sets of 8-10 reps",
+        "intermediate": "3 sets of 10-12 reps",
+        "advanced": "3 sets of 12-15 reps with a 2 second hold"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "dumbbell-romanian-deadlift",
+      "name": "Dumbbell Romanian deadlift",
+      "domains": [
+        "strength"
+      ],
+      "pattern": "hinge",
+      "settings": [
+        "gym",
+        "home"
+      ],
+      "requires": [
+        "dumbbells",
+        "gym"
+      ],
+      "equipment": "Dumbbells",
+      "level": 2,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Stand tall with a dumbbell in each hand in front of your thighs, feet hip-width apart, knees soft.",
+        "Push your hips straight back, as if closing a car door with your bottom, letting the dumbbells slide down your thighs.",
+        "Keep your back flat and your shoulders back and down.",
+        "Lower until you feel a stretch behind your thighs, usually just below the knee.",
+        "Drive your hips forward to stand tall and squeeze your glutes."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Your back rounds",
+          "fix": "Use a lighter weight and shorten the range; stop where you can keep a flat back."
+        },
+        {
+          "mistake": "You squat down instead of hinging",
+          "fix": "Keep your shins near vertical and think of pushing the hips back, not the knees forward."
+        }
+      ],
+      "whyFormMatters": "The hinge strengthens the whole back of your body and protects your spine when you lift things in daily life. A rounded back puts that load on your discs instead.",
+      "safety": null,
+      "easier": [
+        "glute-bridge"
+      ],
+      "harder": [
+        "single-leg-rdl"
+      ],
+      "dosage": {
+        "beginner": "2 sets of 8-10 reps, light weights",
+        "intermediate": "3 sets of 8-12 reps",
+        "advanced": "3 sets of 8-10 reps, heavier weights"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "single-leg-rdl",
+      "name": "Single-leg Romanian deadlift",
+      "domains": [
+        "strength",
+        "balance"
+      ],
+      "pattern": "hinge",
+      "settings": [
+        "home",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Bodyweight (dumbbell optional)",
+      "level": 3,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Stand next to a wall or sturdy chair so you can touch it if you wobble.",
+        "Balance on one leg with a soft knee and your hips square to the front.",
+        "Hinge forward from the hip, letting your free leg float back behind you, back flat.",
+        "Go down until your body is roughly parallel to the floor or you feel a stretch behind the standing leg.",
+        "Drive your hip forward to return. Finish all reps on one side, then swap."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Hips twist open",
+          "fix": "Keep both hip bones pointing at the floor; lift the back leg less if needed."
+        },
+        {
+          "mistake": "Standing knee locks straight",
+          "fix": "Keep a slight bend throughout."
+        }
+      ],
+      "whyFormMatters": "It trains the glutes and hamstrings and also challenges balance, which matters for staying steady as you get older. Twisting or locking the knee puts stress on the joint.",
+      "safety": "Keep a wall or chair within reach.",
+      "easier": [
+        "dumbbell-romanian-deadlift"
+      ],
+      "harder": [],
+      "dosage": {
+        "beginner": "2 sets of 5-6 reps each side, hand on support",
+        "intermediate": "3 sets of 6-8 reps each side",
+        "advanced": "3 sets of 8-10 reps each side, light dumbbell"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "split-squat",
+      "name": "Split squat",
+      "domains": [
+        "strength"
+      ],
+      "pattern": "lunge",
+      "settings": [
+        "home",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Bodyweight",
+      "level": 1,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Take a long step forward so your feet are in a staggered stance, hip-width apart as if on train tracks.",
+        "Lift your back heel and keep your torso upright; rest a hand on a wall or chair if you need to.",
+        "Lower straight down until your front thigh is close to parallel and your back knee heads toward the floor.",
+        "Keep your front knee over your ankle.",
+        "Press through the front foot to rise. Finish one side, then swap."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Stance is too short, so the front knee shoots forward",
+          "fix": "Step further so your front shin stays close to vertical."
+        },
+        {
+          "mistake": "Front heel lifts",
+          "fix": "Shift weight to mid-foot and lengthen the step."
+        }
+      ],
+      "whyFormMatters": "A stable, long stance shares the load between hip and knee. A short stance loads the front knee and makes you wobble.",
+      "safety": null,
+      "easier": [],
+      "harder": [
+        "reverse-lunge",
+        "lateral-lunge"
+      ],
+      "dosage": {
+        "beginner": "2 sets of 6-8 reps each side, using support",
+        "intermediate": "3 sets of 8-10 reps each side",
+        "advanced": "3 sets of 10-12 reps each side"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "reverse-lunge",
+      "name": "Reverse lunge",
+      "domains": [
+        "strength"
+      ],
+      "pattern": "lunge",
+      "settings": [
+        "home",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Bodyweight",
+      "level": 2,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Stand tall with your feet hip-width apart and hands on your hips.",
+        "Step one foot back, landing on the ball of the foot.",
+        "Lower both knees to about 90 degrees: front knee over the ankle, back knee hovering just above the floor.",
+        "Keep your torso upright.",
+        "Push through the front foot to return to standing, then repeat on the other side."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Front knee collapses inward",
+          "fix": "Push the front knee gently out so it lines up over your second toe."
+        },
+        {
+          "mistake": "Stepping back on a tightrope",
+          "fix": "Keep your feet in two lanes, hip-width apart, for stability."
+        }
+      ],
+      "whyFormMatters": "Stepping back keeps your weight over the front leg, which is gentler on the knee than stepping forward. Narrow feet make it a balance test instead of a strength exercise.",
+      "safety": null,
+      "easier": [
+        "split-squat"
+      ],
+      "harder": [
+        "walking-lunge"
+      ],
+      "dosage": {
+        "beginner": "2 sets of 6-8 reps each side",
+        "intermediate": "3 sets of 8-10 reps each side",
+        "advanced": "3 sets of 10-12 reps each side, holding dumbbells"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "walking-lunge",
+      "name": "Walking lunge",
+      "domains": [
+        "strength"
+      ],
+      "pattern": "lunge",
+      "settings": [
+        "home",
+        "gym",
+        "outdoor"
+      ],
+      "requires": [],
+      "equipment": "Bodyweight (dumbbells optional)",
+      "level": 3,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Find about 6 to 8 metres of clear space.",
+        "Take a long step forward and lower until both knees are around 90 degrees.",
+        "Push off the front foot and bring your back foot through into the next step.",
+        "Keep your torso upright and your steps long enough that your front shin stays near vertical.",
+        "Walk to the end, turn and walk back."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Steps are too short and the front knee goes far over the toes",
+          "fix": "Take longer steps."
+        },
+        {
+          "mistake": "Rushing so you lose control",
+          "fix": "Slow down and pause briefly at the bottom of each step."
+        }
+      ],
+      "whyFormMatters": "The extra steps add a coordination and balance challenge. Rushing sends the body forward over the front knee and wastes the strength benefit.",
+      "safety": null,
+      "easier": [
+        "reverse-lunge"
+      ],
+      "harder": [],
+      "dosage": {
+        "beginner": "2 rounds of 6 steps each leg",
+        "intermediate": "3 rounds of 8 steps each leg",
+        "advanced": "3 rounds of 10 steps each leg, holding dumbbells"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "lateral-lunge",
+      "name": "Lateral lunge",
+      "domains": [
+        "strength"
+      ],
+      "pattern": "lunge",
+      "settings": [
+        "home",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Bodyweight",
+      "level": 2,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Stand with your feet together and your toes pointing forward.",
+        "Step one foot out wide to the side.",
+        "Sit your hips back and bend that knee, keeping the other leg straight and both feet flat.",
+        "Keep your chest up and your knee over your toes.",
+        "Push through the bent leg to return to standing, then repeat to the other side."
+      ],
+      "mistakes": [
+        {
+          "mistake": "The bent knee falls inwards",
+          "fix": "Track it over your second toe."
+        },
+        {
+          "mistake": "Rounding your back as you sit",
+          "fix": "Keep your chest up and reduce the step width."
+        }
+      ],
+      "whyFormMatters": "Side-to-side strength in the hips and inner thighs is often neglected, and it protects you when you step sideways or catch your balance.",
+      "safety": null,
+      "easier": [
+        "split-squat"
+      ],
+      "harder": [],
+      "dosage": {
+        "beginner": "2 sets of 5-6 reps each side",
+        "intermediate": "3 sets of 6-8 reps each side",
+        "advanced": "3 sets of 8-10 reps each side"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "wall-push-up",
+      "name": "Wall push-up",
+      "domains": [
+        "strength"
+      ],
+      "pattern": "push",
+      "settings": [
+        "home",
+        "gym",
+        "outdoor"
+      ],
+      "requires": [],
+      "equipment": "Wall",
+      "level": 1,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Stand an arm's length from a wall with your hands on it at shoulder height, slightly wider than your shoulders.",
+        "Keep your body in a straight line from head to heels.",
+        "Bend your elbows to about 45 degrees from your body and bring your chest toward the wall.",
+        "Press away until your arms are straight.",
+        "Keep your neck long and breathe steadily."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Hips sag or stick out",
+          "fix": "Squeeze your glutes and gently tighten your tummy."
+        },
+        {
+          "mistake": "Elbows flare out wide",
+          "fix": "Tuck them to about 45 degrees; this protects your shoulders."
+        }
+      ],
+      "whyFormMatters": "The right elbow angle loads the chest and arms while keeping the shoulder joint safe. Flared elbows pinch the shoulder.",
+      "safety": null,
+      "easier": [],
+      "harder": [
+        "incline-push-up"
+      ],
+      "dosage": {
+        "beginner": "2 sets of 8-10 reps",
+        "intermediate": "3 sets of 10-12 reps",
+        "advanced": "3 sets of 12-15 reps"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "incline-push-up",
+      "name": "Incline push-up",
+      "domains": [
+        "strength"
+      ],
+      "pattern": "push",
+      "settings": [
+        "home",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Bench, counter or sturdy stairs",
+      "level": 2,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Place your hands on a sturdy bench, counter or stair, slightly wider than your shoulders.",
+        "Walk your feet back until your body is in a straight line.",
+        "Lower your chest toward the edge, with elbows at about 45 degrees.",
+        "Press back up without letting your hips sag.",
+        "The lower the surface, the harder it gets."
+      ],
+      "mistakes": [
+        {
+          "mistake": "The surface slides or tilts",
+          "fix": "Use something fixed, like a countertop pushed against a wall."
+        },
+        {
+          "mistake": "Head drops forward",
+          "fix": "Keep your neck in line with your spine and look at the floor a little ahead of your hands."
+        }
+      ],
+      "whyFormMatters": "A raised surface lets you practise the full push-up pattern at a load you can control. Sagging hips turn it into a back exercise.",
+      "safety": null,
+      "easier": [
+        "wall-push-up"
+      ],
+      "harder": [
+        "push-up"
+      ],
+      "dosage": {
+        "beginner": "2 sets of 6-8 reps",
+        "intermediate": "3 sets of 8-12 reps",
+        "advanced": "3 sets of 12-15 reps"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "push-up",
+      "name": "Push-up",
+      "domains": [
+        "strength"
+      ],
+      "pattern": "push",
+      "settings": [
+        "home",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Bodyweight",
+      "level": 3,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Place your hands under your shoulders or slightly wider, with your body in a straight line from head to heels. Knees can stay down if needed.",
+        "Squeeze your glutes and gently tighten your tummy.",
+        "Lower as one piece until your chest is close to the floor, elbows at about 45 degrees.",
+        "Press the floor away until your arms are straight.",
+        "Breathe in on the way down and out as you press."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Hips sag or pike up",
+          "fix": "Keep a straight line; drop to your knees if you cannot hold it."
+        },
+        {
+          "mistake": "Only moving the head and shoulders",
+          "fix": "Lower the whole body together."
+        }
+      ],
+      "whyFormMatters": "A full push-up trains the chest, shoulders, arms and trunk together. Sagging hips or half reps cut the benefit and strain the lower back.",
+      "safety": null,
+      "easier": [
+        "incline-push-up"
+      ],
+      "harder": [
+        "slow-tempo-push-up"
+      ],
+      "dosage": {
+        "beginner": "2 sets of 4-6 reps (knees down if needed)",
+        "intermediate": "3 sets of 6-10 reps",
+        "advanced": "3 sets of 10-15 reps"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "slow-tempo-push-up",
+      "name": "Slow-tempo push-up",
+      "domains": [
+        "strength"
+      ],
+      "pattern": "push",
+      "settings": [
+        "home",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Bodyweight",
+      "level": 4,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Set up as for a normal push-up with a straight body line.",
+        "Lower for a slow count of three.",
+        "Pause for one second just above the floor.",
+        "Press up smoothly and strongly.",
+        "Stop the set when you can no longer keep the tempo or your body line."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Speeding up on the way down",
+          "fix": "Count out loud: one, two, three."
+        },
+        {
+          "mistake": "Hips sag as you tire",
+          "fix": "End the set there; quality beats extra reps."
+        }
+      ],
+      "whyFormMatters": "Slowing the lowering phase makes the muscles work longer for the same number of reps, building strength without needing weights.",
+      "safety": null,
+      "easier": [
+        "push-up"
+      ],
+      "harder": [],
+      "dosage": {
+        "beginner": "2 sets of 3-5 reps",
+        "intermediate": "3 sets of 5-8 reps",
+        "advanced": "3 sets of 8-10 reps"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "supported-dumbbell-row",
+      "name": "Supported dumbbell row",
+      "domains": [
+        "strength"
+      ],
+      "pattern": "pull",
+      "settings": [
+        "gym",
+        "home"
+      ],
+      "requires": [
+        "dumbbells",
+        "gym"
+      ],
+      "equipment": "Dumbbell, bench or chair",
+      "level": 1,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Place one hand and the same-side knee on a bench, or one hand on a sturdy chair with the other foot back.",
+        "Keep your back flat and let the dumbbell hang below your shoulder.",
+        "Pull your elbow toward your hip, squeezing your shoulder blade toward your spine.",
+        "Lower slowly until your arm is straight.",
+        "Finish all reps on one side, then swap."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Twisting your torso to lift the weight",
+          "fix": "Keep your shoulders square to the floor and use a lighter dumbbell."
+        },
+        {
+          "mistake": "Shrugging toward your ear",
+          "fix": "Keep your shoulder down and away from your ear."
+        }
+      ],
+      "whyFormMatters": "Rows strengthen the muscles between your shoulder blades that hold your posture and balance all the pushing you do. Twisting moves the work away from them.",
+      "safety": null,
+      "easier": [],
+      "harder": [
+        "bent-over-dumbbell-row",
+        "lat-pulldown"
+      ],
+      "dosage": {
+        "beginner": "2 sets of 8-10 reps each side, light",
+        "intermediate": "3 sets of 8-12 reps each side",
+        "advanced": "3 sets of 10-12 reps each side, heavier"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "bent-over-dumbbell-row",
+      "name": "Bent-over dumbbell row",
+      "domains": [
+        "strength"
+      ],
+      "pattern": "pull",
+      "settings": [
+        "gym",
+        "home"
+      ],
+      "requires": [
+        "dumbbells",
+        "gym"
+      ],
+      "equipment": "Dumbbells",
+      "level": 2,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Stand with your feet hip-width apart, a dumbbell in each hand.",
+        "Hinge forward from the hips to about 45 degrees, back flat, knees soft.",
+        "Let the dumbbells hang below your shoulders.",
+        "Row your elbows back toward your ribs, squeezing your shoulder blades together.",
+        "Lower under control."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Your back rounds",
+          "fix": "Use lighter weights and hinge less; your back should stay flat like a table."
+        },
+        {
+          "mistake": "Jerking the weights up",
+          "fix": "Slow down. Lift for one second, lower for two."
+        }
+      ],
+      "whyFormMatters": "A held hinge position builds back endurance at the same time. A rounded or swinging back puts strain on the spine.",
+      "safety": null,
+      "easier": [
+        "supported-dumbbell-row"
+      ],
+      "harder": [],
+      "dosage": {
+        "beginner": "2 sets of 8-10 reps, light",
+        "intermediate": "3 sets of 8-12 reps",
+        "advanced": "3 sets of 10-12 reps, heavier"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "lat-pulldown",
+      "name": "Lat pulldown (machine)",
+      "domains": [
+        "strength"
+      ],
+      "pattern": "pull",
+      "settings": [
+        "gym"
+      ],
+      "requires": [
+        "gym"
+      ],
+      "equipment": "Cable machine",
+      "level": 2,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Sit with your thighs snug under the pads and take a grip slightly wider than your shoulders.",
+        "Lean back very slightly with your chest lifted.",
+        "Pull the bar to your upper chest by driving your elbows down and back.",
+        "Return slowly until your arms are straight, keeping your shoulders down.",
+        "Breathe out as you pull."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Pulling the bar behind your neck",
+          "fix": "Always pull it in front, to your upper chest."
+        },
+        {
+          "mistake": "Swinging your body to move the weight",
+          "fix": "Lower the weight and keep your torso still."
+        }
+      ],
+      "whyFormMatters": "It builds the large back muscles you need for pulling and for the pull-up later. Pulling behind your neck stresses the shoulders and neck.",
+      "safety": null,
+      "easier": [
+        "supported-dumbbell-row"
+      ],
+      "harder": [
+        "assisted-pull-up"
+      ],
+      "dosage": {
+        "beginner": "2 sets of 8-10 reps, light",
+        "intermediate": "3 sets of 8-12 reps",
+        "advanced": "3 sets of 8-10 reps, heavier"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "assisted-pull-up",
+      "name": "Assisted pull-up (machine)",
+      "domains": [
+        "strength"
+      ],
+      "pattern": "pull",
+      "settings": [
+        "gym"
+      ],
+      "requires": [
+        "gym"
+      ],
+      "equipment": "Assisted pull-up machine",
+      "level": 3,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Set the assistance so you can complete your reps with control; more assistance makes it easier.",
+        "Grip the bar slightly wider than your shoulders and start with your arms long and shoulders down.",
+        "Pull your chest toward the bar, leading with your elbows.",
+        "Lower over about three seconds to straight arms.",
+        "Stop the set when you cannot keep control."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Kicking or swinging",
+          "fix": "Add more assistance and keep your legs still."
+        },
+        {
+          "mistake": "Half reps",
+          "fix": "Go from fully straight arms to chin over the bar, or as far as you can control."
+        }
+      ],
+      "whyFormMatters": "A full pull-up is one of the best upper-body strength tests. The machine lets you build up to it while keeping shoulders and elbows safe.",
+      "safety": "Stop if you feel pain in your shoulder or elbow.",
+      "easier": [
+        "lat-pulldown"
+      ],
+      "harder": [],
+      "dosage": {
+        "beginner": "2 sets of 3-5 reps, high assistance",
+        "intermediate": "3 sets of 5-8 reps",
+        "advanced": "3 sets of 6-10 reps, low assistance"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "dead-bug",
+      "name": "Dead bug",
+      "domains": [
+        "strength"
+      ],
+      "pattern": "core",
+      "settings": [
+        "home",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Bodyweight",
+      "level": 1,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Lie on your back with your arms pointing to the ceiling and your hips and knees bent at 90 degrees.",
+        "Gently press your lower back toward the floor.",
+        "Slowly lower one arm overhead and the opposite leg toward the floor without arching your back.",
+        "Return and swap sides.",
+        "Breathe out as you lower."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Lower back arches off the floor",
+          "fix": "Move less far and only lower your legs."
+        },
+        {
+          "mistake": "Holding your breath",
+          "fix": "Breathe out as you lower and in as you return."
+        }
+      ],
+      "whyFormMatters": "It teaches your deep tummy muscles to stabilise your spine while your limbs move, which is how they work in daily life. Arching removes that benefit.",
+      "safety": null,
+      "easier": [],
+      "harder": [
+        "bird-dog"
+      ],
+      "dosage": {
+        "beginner": "2 sets of 5-6 reps each side",
+        "intermediate": "3 sets of 6-8 reps each side",
+        "advanced": "3 sets of 8-10 reps each side"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "bird-dog",
+      "name": "Bird dog",
+      "domains": [
+        "strength",
+        "balance"
+      ],
+      "pattern": "core",
+      "settings": [
+        "home",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Bodyweight",
+      "level": 2,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Start on hands and knees with your hands under your shoulders and knees under your hips.",
+        "Keep your back flat like a table.",
+        "Reach one arm and the opposite leg out until they are in line with your body.",
+        "Pause for two seconds without letting your hips twist.",
+        "Return and swap sides."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Lifting the leg too high and arching the back",
+          "fix": "Raise your leg only to hip height."
+        },
+        {
+          "mistake": "Hips twisting open",
+          "fix": "Imagine a glass of water sitting on your lower back."
+        }
+      ],
+      "whyFormMatters": "It trains the back muscles and the deep tummy muscles to hold your spine steady while a limb moves.",
+      "safety": null,
+      "easier": [
+        "dead-bug"
+      ],
+      "harder": [
+        "forearm-plank"
+      ],
+      "dosage": {
+        "beginner": "2 sets of 5-6 reps each side",
+        "intermediate": "3 sets of 6-8 reps each side",
+        "advanced": "3 sets of 8-10 reps each side with a 3 second hold"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "forearm-plank",
+      "name": "Forearm plank",
+      "domains": [
+        "strength"
+      ],
+      "pattern": "core",
+      "settings": [
+        "home",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Bodyweight",
+      "level": 3,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Place your elbows under your shoulders with your forearms flat on the floor.",
+        "Extend your legs with your feet hip-width apart, or keep your knees down to begin.",
+        "Squeeze your glutes and gently draw your belly in so your body makes a straight line.",
+        "Hold, breathing steadily.",
+        "Stop when your hips start to sag."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Hips sag",
+          "fix": "Drop to your knees or shorten the hold."
+        },
+        {
+          "mistake": "Hips pike up",
+          "fix": "Lower them until your body is in one line."
+        }
+      ],
+      "whyFormMatters": "A good plank trains the whole trunk to resist sagging. A sagging plank loads the lower back instead.",
+      "safety": null,
+      "easier": [
+        "bird-dog"
+      ],
+      "harder": [
+        "side-plank"
+      ],
+      "dosage": {
+        "beginner": "3 holds of 10-15 seconds (knees down if needed)",
+        "intermediate": "3 holds of 20-30 seconds",
+        "advanced": "3 holds of 30-45 seconds"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "side-plank",
+      "name": "Side plank",
+      "domains": [
+        "strength",
+        "balance"
+      ],
+      "pattern": "core",
+      "settings": [
+        "home",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Bodyweight",
+      "level": 4,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Lie on your side with your elbow under your shoulder and your knees bent.",
+        "Lift your hips until your body makes a straight line from knees to head (straighten the legs when you are ready).",
+        "Rest your top hand on your hip or reach it up.",
+        "Hold, breathing steadily, then swap sides.",
+        "Keep your shoulders stacked and your hips facing forward."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Hips drop toward the floor",
+          "fix": "Shorten the hold or stay with bent knees."
+        },
+        {
+          "mistake": "Rolling forwards or backwards",
+          "fix": "Keep your chest and hips facing the side wall."
+        }
+      ],
+      "whyFormMatters": "The side muscles of your trunk keep your spine and pelvis steady when you walk. A dropping hip shifts the load onto the shoulder.",
+      "safety": null,
+      "easier": [
+        "forearm-plank"
+      ],
+      "harder": [],
+      "dosage": {
+        "beginner": "2 holds of 10-15 seconds each side, knees bent",
+        "intermediate": "3 holds of 15-25 seconds each side",
+        "advanced": "3 holds of 25-40 seconds each side, legs straight"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "farmers-carry",
+      "name": "Farmer's carry",
+      "domains": [
+        "strength"
+      ],
+      "pattern": "carry",
+      "settings": [
+        "gym",
+        "home"
+      ],
+      "requires": [
+        "dumbbells",
+        "gym"
+      ],
+      "equipment": "Dumbbells",
+      "level": 2,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Pick up a dumbbell in each hand with a hip hinge and a flat back.",
+        "Stand tall with your shoulders back and down and your ribs stacked over your hips.",
+        "Walk with short, quick steps for 15 to 20 steps.",
+        "Do not let the weights swing or pull you to one side.",
+        "Set them down with the same hinge."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Leaning to one side",
+          "fix": "Use a lighter weight and keep your ribs over your hips."
+        },
+        {
+          "mistake": "Shrugging your shoulders",
+          "fix": "Keep your shoulders down and long."
+        }
+      ],
+      "whyFormMatters": "Carrying trains grip, trunk and posture the way you use them when you carry shopping. Leaning or shrugging shifts stress to the neck and spine.",
+      "safety": null,
+      "easier": [],
+      "harder": [],
+      "dosage": {
+        "beginner": "2 walks of 15 steps, light",
+        "intermediate": "3 walks of 20 steps",
+        "advanced": "3 walks of 20-30 steps, heavier"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "brisk-walk",
+      "name": "Brisk walk",
+      "domains": [
+        "cardio"
+      ],
+      "pattern": "cardio",
+      "settings": [
+        "outdoor",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Shoes",
+      "level": 1,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Walk at a pace that lifts your breathing but still lets you speak in short sentences.",
+        "Stand tall, look about ten metres ahead and swing your arms naturally.",
+        "Land softly with a natural stride; quicker, shorter steps beat long strides.",
+        "Build up the time gradually from week to week."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Overstriding, with the front foot far ahead",
+          "fix": "Take shorter, quicker steps."
+        },
+        {
+          "mistake": "Slouching and looking at the ground",
+          "fix": "Look ahead and keep your chest open."
+        }
+      ],
+      "whyFormMatters": "Walking is the base of your aerobic fitness and is gentle on joints. Good posture and a short stride keep it comfortable for long sessions.",
+      "safety": null,
+      "easier": [],
+      "harder": [
+        "run-walk-intervals",
+        "trail-walk",
+        "treadmill-incline-walk"
+      ],
+      "dosage": {
+        "beginner": "15-25 minutes at a pace where you can chat",
+        "intermediate": "25-45 minutes at a brisk pace",
+        "advanced": "40-60 minutes at a brisk pace, including hills"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "trail-walk",
+      "name": "Trail walk",
+      "domains": [
+        "cardio"
+      ],
+      "pattern": "cardio",
+      "settings": [
+        "outdoor"
+      ],
+      "requires": [
+        "trails"
+      ],
+      "equipment": "Shoes with grip",
+      "level": 2,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Choose a trail you know or one well marked, and tell someone where you are going.",
+        "Shorten your steps on uneven ground and look two or three steps ahead.",
+        "Slow down on hills rather than pushing hard, and use the downhill to rest.",
+        "Carry water and wear shoes with good grip."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Looking at your feet the whole time",
+          "fix": "Scan ahead and glance down; your eyes steer your feet."
+        },
+        {
+          "mistake": "Going too hard on climbs",
+          "fix": "Slow your pace; keep your breathing at a chatty level."
+        }
+      ],
+      "whyFormMatters": "Uneven ground adds balance and stabiliser work to your aerobic exercise. Rushing it raises your risk of trips and rolled ankles.",
+      "safety": "Take water, check the weather, and avoid the hottest part of the day.",
+      "easier": [
+        "brisk-walk"
+      ],
+      "harder": [],
+      "dosage": {
+        "beginner": "20-30 minutes, easy trail",
+        "intermediate": "30-50 minutes with gentle hills",
+        "advanced": "45-75 minutes with hills"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "treadmill-incline-walk",
+      "name": "Treadmill incline walk",
+      "domains": [
+        "cardio"
+      ],
+      "pattern": "cardio",
+      "settings": [
+        "gym"
+      ],
+      "requires": [
+        "treadmill",
+        "gym"
+      ],
+      "equipment": "Treadmill",
+      "level": 2,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Start flat for three minutes at an easy speed.",
+        "Raise the incline to 2 to 6 percent and keep a speed where you can still talk.",
+        "Walk tall without holding the handrails.",
+        "Lower the incline if you start to lean back or grip the rails."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Holding the rails and leaning back",
+          "fix": "Reduce the incline until you can walk upright with free arms."
+        },
+        {
+          "mistake": "Going too fast and too steep at once",
+          "fix": "Change one at a time: first the incline, then the speed."
+        }
+      ],
+      "whyFormMatters": "Walking uphill raises your heart rate without the impact of running. Hanging on to the rails takes the work out of it.",
+      "safety": null,
+      "easier": [
+        "brisk-walk"
+      ],
+      "harder": [],
+      "dosage": {
+        "beginner": "15-20 minutes, 2% incline",
+        "intermediate": "20-35 minutes, 3-5% incline",
+        "advanced": "30-45 minutes, 4-8% incline"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "run-walk-intervals",
+      "name": "Run/walk intervals",
+      "domains": [
+        "cardio"
+      ],
+      "pattern": "cardio",
+      "settings": [
+        "outdoor",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Shoes",
+      "level": 2,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "After your warm-up, jog gently for one minute.",
+        "Walk briskly for two minutes to recover.",
+        "Repeat the cycle for the time planned.",
+        "Keep the jog slow enough that you can talk.",
+        "As you get fitter, lengthen the jog and shorten the walk."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Jogging too fast",
+          "fix": "Slow down. If you cannot talk, it is too fast."
+        },
+        {
+          "mistake": "Skipping the walk breaks",
+          "fix": "The walk breaks are the plan: they let you keep going longer."
+        }
+      ],
+      "whyFormMatters": "Short bursts of jogging build running fitness with less impact on your joints than continuous running.",
+      "safety": "Choose softer surfaces such as grass or tracks where you can.",
+      "easier": [
+        "brisk-walk"
+      ],
+      "harder": [
+        "easy-jog"
+      ],
+      "dosage": {
+        "beginner": "15-20 minutes: 1 min jog, 2 min walk",
+        "intermediate": "20-30 minutes: 2 min jog, 1-2 min walk",
+        "advanced": "30-40 minutes: 3-4 min jog, 1 min walk"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "easy-jog",
+      "name": "Easy jog",
+      "domains": [
+        "cardio"
+      ],
+      "pattern": "cardio",
+      "settings": [
+        "outdoor",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Running shoes",
+      "level": 3,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Take small, quick steps and land with your foot under your body.",
+        "Keep your shoulders relaxed and your arms swinging loosely.",
+        "Run at a pace where you can talk in full sentences.",
+        "Walk whenever you need to and restart when you are ready."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Overstriding with a heavy heel strike",
+          "fix": "Shorten your steps and quicken your cadence."
+        },
+        {
+          "mistake": "Running faster than you can talk",
+          "fix": "Slow down; easy running builds the base."
+        }
+      ],
+      "whyFormMatters": "Easy running builds heart and lung fitness. Overstriding and going too fast raise the impact on your knees, shins and hips.",
+      "safety": "If you have joint pain or have not run for years, build up with run/walk intervals first.",
+      "easier": [
+        "run-walk-intervals"
+      ],
+      "harder": [],
+      "dosage": {
+        "beginner": "10-20 minutes, with walk breaks",
+        "intermediate": "20-35 minutes steady",
+        "advanced": "30-50 minutes steady"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "easy-ride",
+      "name": "Easy ride",
+      "domains": [
+        "cardio"
+      ],
+      "pattern": "cardio",
+      "settings": [
+        "gym",
+        "outdoor"
+      ],
+      "requires": [
+        "bike",
+        "gym"
+      ],
+      "equipment": "Bike",
+      "level": 1,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Set the seat so your leg has a slight bend at the bottom of the pedal stroke.",
+        "Spin in an easy gear at about 60 to 90 pedal turns a minute.",
+        "Sit tall with relaxed shoulders and soft hands.",
+        "Keep your breathing steady so you can chat."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Seat too low, so your knees bend sharply",
+          "fix": "Raise the seat until you have a slight bend at the bottom."
+        },
+        {
+          "mistake": "Pushing a heavy gear slowly",
+          "fix": "Use an easier gear and spin faster."
+        }
+      ],
+      "whyFormMatters": "Cycling is low impact for your joints. A correct seat height and light gear keep stress off your knees.",
+      "safety": "Wear a helmet if you ride outdoors.",
+      "easier": [],
+      "harder": [
+        "interval-ride"
+      ],
+      "dosage": {
+        "beginner": "15-25 minutes, easy spin",
+        "intermediate": "25-45 minutes steady",
+        "advanced": "40-70 minutes steady"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "interval-ride",
+      "name": "Interval ride",
+      "domains": [
+        "cardio"
+      ],
+      "pattern": "cardio",
+      "settings": [
+        "gym",
+        "outdoor"
+      ],
+      "requires": [
+        "bike",
+        "gym"
+      ],
+      "equipment": "Bike",
+      "level": 3,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "After the warm-up, ride one minute at a harder effort where you could only say a few words.",
+        "Ride two minutes easy to recover.",
+        "Repeat the cycle for the planned time.",
+        "Keep the hard minutes smooth rather than all-out."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Going all-out on the hard minute",
+          "fix": "Aim for about 7 out of 10 effort."
+        },
+        {
+          "mistake": "Not recovering properly",
+          "fix": "Make the easy minutes truly easy."
+        }
+      ],
+      "whyFormMatters": "Alternating effort lifts your fitness quicker than steady riding. Going too hard makes you drop the later intervals.",
+      "safety": null,
+      "easier": [
+        "easy-ride"
+      ],
+      "harder": [],
+      "dosage": {
+        "beginner": "15-20 minutes: 30 sec hard, 90 sec easy",
+        "intermediate": "20-30 minutes: 1 min hard, 2 min easy",
+        "advanced": "25-40 minutes: 2 min hard, 2 min easy"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "pool-lengths",
+      "name": "Pool lengths",
+      "domains": [
+        "cardio"
+      ],
+      "pattern": "cardio",
+      "settings": [
+        "pool"
+      ],
+      "requires": [
+        "pool"
+      ],
+      "equipment": "Pool",
+      "level": 2,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Swim at an easy pace using any stroke you are comfortable with.",
+        "Breathe out steadily under the water rather than holding your breath.",
+        "Rest at the wall whenever you need to.",
+        "Mix strokes if one tires you out."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Holding your breath",
+          "fix": "Breathe out gently under the water, then turn to breathe in."
+        },
+        {
+          "mistake": "Starting too fast",
+          "fix": "Aim for a pace you could hold for twice as long."
+        }
+      ],
+      "whyFormMatters": "Swimming is gentle on joints and works the whole body. Steady breathing makes it feel easy rather than exhausting.",
+      "safety": null,
+      "easier": [
+        "aqua-jog"
+      ],
+      "harder": [],
+      "dosage": {
+        "beginner": "10-20 minutes with rests",
+        "intermediate": "20-35 minutes steady",
+        "advanced": "30-50 minutes steady"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "aqua-jog",
+      "name": "Aqua jog",
+      "domains": [
+        "cardio"
+      ],
+      "pattern": "cardio",
+      "settings": [
+        "pool"
+      ],
+      "requires": [
+        "pool"
+      ],
+      "equipment": "Pool",
+      "level": 1,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Stand in chest-deep water, upright and tall.",
+        "Drive your knees forward and swing your arms as you would when jogging.",
+        "Keep your feet off the bottom if you can; use a flotation belt if you prefer.",
+        "Keep your effort at a chatty pace."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Leaning forward",
+          "fix": "Stay tall with your shoulders over your hips."
+        },
+        {
+          "mistake": "Taking tiny movements",
+          "fix": "Use a full range so the water gives you resistance."
+        }
+      ],
+      "whyFormMatters": "The water supports your weight, so there is no impact. A tall posture lets the legs and trunk do the work.",
+      "safety": null,
+      "easier": [],
+      "harder": [
+        "pool-lengths"
+      ],
+      "dosage": {
+        "beginner": "10-20 minutes",
+        "intermediate": "20-30 minutes",
+        "advanced": "30-45 minutes"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "rowing-machine",
+      "name": "Rowing machine",
+      "domains": [
+        "cardio"
+      ],
+      "pattern": "cardio",
+      "settings": [
+        "gym"
+      ],
+      "requires": [
+        "gym"
+      ],
+      "equipment": "Rowing machine",
+      "level": 2,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Strap in and sit tall with your shins vertical at the front of the stroke.",
+        "Drive with your legs first, then lean back slightly, then pull the handle to your lower ribs.",
+        "Return in the reverse order: arms, then body, then legs.",
+        "Keep your back flat and aim for 18 to 24 strokes a minute."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Pulling with your arms first",
+          "fix": "Push with the legs first, then body, then arms."
+        },
+        {
+          "mistake": "Rounding your back at the front of the stroke",
+          "fix": "Sit tall and hinge from the hips."
+        }
+      ],
+      "whyFormMatters": "Rowing uses the legs, back and arms together, so it builds cardio and strength. Poor sequencing loads the lower back.",
+      "safety": "Ask gym staff to check your set-up the first time.",
+      "easier": [],
+      "harder": [],
+      "dosage": {
+        "beginner": "8-15 minutes, easy pace",
+        "intermediate": "15-25 minutes steady",
+        "advanced": "20-35 minutes steady"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "tandem-stand",
+      "name": "Tandem stand",
+      "domains": [
+        "balance"
+      ],
+      "pattern": "balance",
+      "settings": [
+        "home",
+        "gym",
+        "outdoor"
+      ],
+      "requires": [],
+      "equipment": "Wall nearby",
+      "level": 1,
+      "roles": [
+        "main",
+        "warmup"
+      ],
+      "steps": [
+        "Stand next to a wall or sturdy bench.",
+        "Place one foot directly in front of the other, heel to toe.",
+        "Look at a fixed point ahead and hold for 20 to 30 seconds.",
+        "Swap feet and repeat."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Looking at your feet",
+          "fix": "Pick a spot on the wall at eye level."
+        },
+        {
+          "mistake": "Locking your knees",
+          "fix": "Keep a slight bend."
+        }
+      ],
+      "whyFormMatters": "Narrowing your base of support is the simplest balance challenge, and balance is one of the first things to fade without practice.",
+      "safety": "Stay within arm's reach of a wall or support.",
+      "easier": [],
+      "harder": [
+        "single-leg-stand",
+        "heel-to-toe-walk"
+      ],
+      "dosage": {
+        "beginner": "2 holds of 15-20 seconds each side",
+        "intermediate": "3 holds of 20-30 seconds each side",
+        "advanced": "3 holds of 30-45 seconds each side"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "single-leg-stand",
+      "name": "Single-leg stand",
+      "domains": [
+        "balance"
+      ],
+      "pattern": "balance",
+      "settings": [
+        "home",
+        "gym",
+        "outdoor"
+      ],
+      "requires": [],
+      "equipment": "Counter or wall nearby",
+      "level": 2,
+      "roles": [
+        "main",
+        "warmup"
+      ],
+      "steps": [
+        "Stand next to a counter or wall.",
+        "Shift your weight onto one foot and lift the other a few centimetres.",
+        "Keep your hips level and look at a fixed point.",
+        "Hold for 20 to 30 seconds, then swap."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Hip hitching up on one side",
+          "fix": "Keep both hip bones level."
+        },
+        {
+          "mistake": "Holding your breath",
+          "fix": "Breathe steadily and relax your shoulders."
+        }
+      ],
+      "whyFormMatters": "Standing on one leg is what walking is, repeatedly. Being able to hold it is closely linked to staying steady and avoiding falls.",
+      "safety": "Stay within arm's reach of a wall or support.",
+      "easier": [
+        "tandem-stand"
+      ],
+      "harder": [
+        "single-leg-reach",
+        "soft-surface-single-leg-stand"
+      ],
+      "dosage": {
+        "beginner": "2 holds of 15-20 seconds each side",
+        "intermediate": "3 holds of 20-30 seconds each side",
+        "advanced": "3 holds of 30-45 seconds each side"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "heel-to-toe-walk",
+      "name": "Heel-to-toe walk",
+      "domains": [
+        "balance"
+      ],
+      "pattern": "balance",
+      "settings": [
+        "home",
+        "gym",
+        "outdoor"
+      ],
+      "requires": [],
+      "equipment": "Hallway or wall",
+      "level": 2,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Choose a straight line of about ten steps beside a wall.",
+        "Place the heel of one foot directly against the toes of the other with each step.",
+        "Look ahead, not at your feet, and hold your arms out slightly if you need to.",
+        "Turn at the end and walk back."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Looking down at your feet",
+          "fix": "Look at a fixed point at the end of the line."
+        },
+        {
+          "mistake": "Rushing the steps",
+          "fix": "Slow down so each step is deliberate."
+        }
+      ],
+      "whyFormMatters": "Walking on a narrow line trains the small corrections your ankles and hips make on uneven ground.",
+      "safety": "Walk beside a wall you can touch.",
+      "easier": [
+        "tandem-stand"
+      ],
+      "harder": [],
+      "dosage": {
+        "beginner": "3 lengths of 8-10 steps",
+        "intermediate": "4 lengths of 10 steps",
+        "advanced": "4 lengths of 10 steps, eyes ahead without touching the wall"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "single-leg-reach",
+      "name": "Single-leg reach",
+      "domains": [
+        "balance"
+      ],
+      "pattern": "balance",
+      "settings": [
+        "home",
+        "gym",
+        "outdoor"
+      ],
+      "requires": [],
+      "equipment": "Wall nearby",
+      "level": 3,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Stand on one leg with a slight bend in the knee, hand near a wall for safety.",
+        "Imagine standing at the centre of a clock.",
+        "Lightly tap your free foot forward, to the side and behind you without putting weight on it.",
+        "Return to the centre each time and keep your hips level.",
+        "Finish one side, then swap."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Letting the standing knee cave in",
+          "fix": "Keep it over your second toe."
+        },
+        {
+          "mistake": "Putting weight on the tapping foot",
+          "fix": "Touch lightly like a feather."
+        }
+      ],
+      "whyFormMatters": "Reaching away from your base trains the balance responses you need to catch yourself when you step or stumble.",
+      "safety": "Stay within arm's reach of a wall or support.",
+      "easier": [
+        "single-leg-stand"
+      ],
+      "harder": [
+        "soft-surface-single-leg-stand"
+      ],
+      "dosage": {
+        "beginner": "2 rounds of 3 taps each direction",
+        "intermediate": "3 rounds of 3 taps",
+        "advanced": "3 rounds of 5 taps each direction"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "soft-surface-single-leg-stand",
+      "name": "Single-leg stand on a soft surface",
+      "domains": [
+        "balance"
+      ],
+      "pattern": "balance",
+      "settings": [
+        "home",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Folded towel or foam pad",
+      "level": 4,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Fold a towel or use a foam pad next to a wall or counter.",
+        "Stand on one foot on the soft surface.",
+        "Keep your hips level and your eyes on a fixed point.",
+        "Hold for 15 to 30 seconds, then swap."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Gripping the counter tightly",
+          "fix": "Use only fingertips for support."
+        },
+        {
+          "mistake": "Locking the standing knee",
+          "fix": "Keep a soft bend."
+        }
+      ],
+      "whyFormMatters": "An unstable surface makes the small muscles of your foot and ankle work harder, which trains steadiness on soft grass, sand and uneven paths.",
+      "safety": "Only progress here once the flat-floor version feels easy. Stay close to support.",
+      "easier": [
+        "single-leg-stand",
+        "single-leg-reach"
+      ],
+      "harder": [],
+      "dosage": {
+        "beginner": "2 holds of 10-15 seconds each side",
+        "intermediate": "3 holds of 15-25 seconds each side",
+        "advanced": "3 holds of 25-40 seconds each side"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "cat-cow",
+      "name": "Cat-cow",
+      "domains": [
+        "flexibility"
+      ],
+      "pattern": "mobility",
+      "settings": [
+        "home",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Mat",
+      "level": 1,
+      "roles": [
+        "main",
+        "warmup",
+        "cooldown"
+      ],
+      "steps": [
+        "Start on your hands and knees with your hands under your shoulders and knees under your hips.",
+        "Breathe in and let your tummy sink as you lift your head and tailbone gently (cow).",
+        "Breathe out and round your back as you press the floor away (cat).",
+        "Move slowly and smoothly, within a comfortable range."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Forcing the end of the range",
+          "fix": "Move only as far as is comfortable."
+        },
+        {
+          "mistake": "Holding your breath",
+          "fix": "Link each breath with one movement."
+        }
+      ],
+      "whyFormMatters": "Gentle spinal movement warms the back and reduces stiffness. Forcing the range does the opposite.",
+      "safety": null,
+      "easier": [],
+      "harder": [],
+      "dosage": {
+        "beginner": "1 round of 6-8 slow reps",
+        "intermediate": "2 rounds of 8 slow reps",
+        "advanced": "2 rounds of 10 slow reps"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "hip-flexor-stretch",
+      "name": "Half-kneeling hip flexor stretch",
+      "domains": [
+        "flexibility"
+      ],
+      "pattern": "mobility",
+      "settings": [
+        "home",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Mat or pad",
+      "level": 1,
+      "roles": [
+        "main",
+        "cooldown"
+      ],
+      "steps": [
+        "Kneel on one knee on a soft pad with the other foot flat in front of you.",
+        "Tuck your tailbone under and squeeze the glute of the back leg.",
+        "Shift your weight forward slightly until you feel a stretch at the front of the back hip.",
+        "Hold for 20 to 30 seconds without arching your lower back, then swap."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Arching your lower back",
+          "fix": "Tuck your tailbone and squeeze your glute."
+        },
+        {
+          "mistake": "Leaning too far forward",
+          "fix": "Shift only a little; the stretch should be mild."
+        }
+      ],
+      "whyFormMatters": "Sitting shortens the hip flexors, which tugs on the lower back. A gentle stretch with the pelvis tucked restores length where it counts.",
+      "safety": null,
+      "easier": [],
+      "harder": [],
+      "dosage": {
+        "beginner": "2 holds of 20 seconds each side",
+        "intermediate": "2 holds of 30 seconds each side",
+        "advanced": "3 holds of 30 seconds each side"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "thoracic-open-book",
+      "name": "Thoracic open book",
+      "domains": [
+        "flexibility"
+      ],
+      "pattern": "mobility",
+      "settings": [
+        "home",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Mat",
+      "level": 1,
+      "roles": [
+        "main",
+        "warmup",
+        "cooldown"
+      ],
+      "steps": [
+        "Lie on your side with your hips and knees bent at 90 degrees and your arms straight out in front, palms together.",
+        "Keep your knees together and slowly lift the top arm up and over, opening your chest toward the ceiling.",
+        "Let your eyes follow your hand.",
+        "Return slowly and repeat, then swap sides."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Your knees come apart",
+          "fix": "Keep them stacked; the rotation should come from your mid-back."
+        },
+        {
+          "mistake": "Rushing",
+          "fix": "Move slowly and breathe out as you open."
+        }
+      ],
+      "whyFormMatters": "A stiff mid-back makes the shoulders and neck work harder. Rotating through it keeps your posture and reach easy.",
+      "safety": null,
+      "easier": [],
+      "harder": [],
+      "dosage": {
+        "beginner": "1 round of 6 reps each side",
+        "intermediate": "2 rounds of 8 reps each side",
+        "advanced": "2 rounds of 10 reps each side"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "hamstring-stretch",
+      "name": "Lying hamstring stretch",
+      "domains": [
+        "flexibility"
+      ],
+      "pattern": "mobility",
+      "settings": [
+        "home",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Towel or strap",
+      "level": 1,
+      "roles": [
+        "main",
+        "cooldown"
+      ],
+      "steps": [
+        "Lie on your back with a towel looped around one foot.",
+        "Raise that leg until you feel a stretch behind your thigh, keeping the knee slightly bent if it feels better.",
+        "Keep your other leg relaxed on the floor.",
+        "Hold for 20 to 30 seconds, breathing slowly, then swap."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Pulling into pain",
+          "fix": "You should feel a mild stretch, never a sharp pain."
+        },
+        {
+          "mistake": "Lifting your hips off the floor",
+          "fix": "Keep your hips down and your back relaxed."
+        }
+      ],
+      "whyFormMatters": "Flexible hamstrings help you hinge and walk comfortably. A mild, steady stretch works better than a forced one.",
+      "safety": null,
+      "easier": [],
+      "harder": [],
+      "dosage": {
+        "beginner": "2 holds of 20 seconds each side",
+        "intermediate": "2 holds of 30 seconds each side",
+        "advanced": "3 holds of 30 seconds each side"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "shoulder-circles",
+      "name": "Shoulder and arm circles",
+      "domains": [
+        "flexibility"
+      ],
+      "pattern": "mobility",
+      "settings": [
+        "home",
+        "gym",
+        "outdoor"
+      ],
+      "requires": [],
+      "equipment": "Bodyweight",
+      "level": 1,
+      "roles": [
+        "main",
+        "warmup"
+      ],
+      "steps": [
+        "Stand tall with your arms relaxed.",
+        "Make small circles forward with your arms, gradually making them bigger, for ten reps.",
+        "Reverse the direction for ten reps.",
+        "Finish with a few slow shoulder rolls."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Shrugging as you circle",
+          "fix": "Keep your shoulders down and away from your ears."
+        },
+        {
+          "mistake": "Moving too fast",
+          "fix": "Smooth and slow is better than quick."
+        }
+      ],
+      "whyFormMatters": "Warm shoulders move better and are less likely to be strained when you push, pull or reach overhead.",
+      "safety": null,
+      "easier": [],
+      "harder": [],
+      "dosage": {
+        "beginner": "1 round of 8 each direction",
+        "intermediate": "2 rounds of 10 each direction",
+        "advanced": "2 rounds of 12 each direction"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    },
+    {
+      "slug": "ankle-knee-to-wall",
+      "name": "Ankle knee-to-wall",
+      "domains": [
+        "flexibility"
+      ],
+      "pattern": "mobility",
+      "settings": [
+        "home",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Wall",
+      "level": 1,
+      "roles": [
+        "main",
+        "warmup"
+      ],
+      "steps": [
+        "Stand facing a wall with the toes of one foot about ten centimetres from it.",
+        "Bend your knee forward to touch the wall without lifting your heel.",
+        "Rock gently in and out of the position.",
+        "If it is easy, move your foot a little further back. Repeat on the other side."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Your heel lifts",
+          "fix": "Move your foot closer to the wall."
+        },
+        {
+          "mistake": "Your knee falls inward",
+          "fix": "Aim your knee over your second toe."
+        }
+      ],
+      "whyFormMatters": "Ankle mobility lets your knee move forward in squats and steps. Stiff ankles push the strain up to the knees and hips.",
+      "safety": null,
+      "easier": [],
+      "harder": [],
+      "dosage": {
+        "beginner": "1 round of 8 reps each side",
+        "intermediate": "2 rounds of 10 reps each side",
+        "advanced": "2 rounds of 12 reps each side"
+      },
+      "videoUrl": null,
+      "imageUrl": null
+    }
+  ]
+}

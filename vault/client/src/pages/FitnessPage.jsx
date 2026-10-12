@@ -16,10 +16,16 @@ import Onboarding from './fitness/Onboarding';
 import BaselineView from './fitness/BaselineView';
 import GoalView from './fitness/GoalView';
 import Overview from './fitness/Overview';
+import TodayView from './fitness/TodayView';
+import WeekView from './fitness/WeekView';
+import LibraryView from './fitness/LibraryView';
 import ProfileTab from './fitness/ProfileTab';
 import FitnessInfoBody, { INFO_KEY } from './fitness/FitnessInfo';
 
 const VIEWS = [
+  { mode: 'today', icon: 'sun', label: 'Today' },
+  { mode: 'week', icon: 'calendar', label: 'Week' },
+  { mode: 'library', icon: 'book', label: 'Library' },
   { mode: 'overview', icon: 'home', label: 'Overview' },
   { mode: 'goal', icon: 'target', label: 'Goal' },
   { mode: 'profile', icon: 'user', label: 'Profile' },
@@ -72,7 +78,8 @@ export default function FitnessPage() {
 
   const [meta, setMeta] = useState(null);
   const [state, setState] = useState(null);
-  const [view, setView] = useState('overview');
+  const [view, setView] = useState('today');
+  const [libSlug, setLibSlug] = useState(null);
   const [focusRerate, setFocusRerate] = useState(false);
   const [settingGoal, setSettingGoal] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -99,7 +106,14 @@ export default function FitnessPage() {
 
   const goTo = useCallback((mode, opts = {}) => {
     setFocusRerate(!!opts.rerate);
+    if (mode !== 'library' || !opts.keepSlug) setLibSlug(null);
     setView(mode);
+  }, []);
+
+  // Any exercise name in Today or Week opens its library page.
+  const openExercise = useCallback((slug) => {
+    setLibSlug(slug);
+    setView('library');
   }, []);
 
   const runTour = useCallback(() => {
@@ -127,7 +141,7 @@ export default function FitnessPage() {
       if (!r.ok) throw new Error(d.error || 'Could not reset');
       setState(d);
       setSettingGoal(false);
-      setView('overview');
+      setView('today');
       addToast(clear ? 'Cleared. Starting fresh.' : 'Back to the start. Your earlier answers are filled in.', 'success');
     } catch (err) {
       addToast(err.message, 'error');
@@ -149,10 +163,16 @@ export default function FitnessPage() {
       body = (
         <div className={`${settingGoal ? 'max-w-5xl' : 'max-w-3xl'} mx-auto w-full`}>
           {settingGoal
-            ? <GoalView meta={meta} state={state} mode="first" onSaved={(s) => { setState(s); setSettingGoal(false); setView('overview'); }} />
+            ? <GoalView meta={meta} state={state} mode="first" onSaved={(s) => { setState(s); setSettingGoal(false); setView('today'); }} />
             : <BaselineView meta={meta} state={state} onContinue={() => setSettingGoal(true)} />}
         </div>
       );
+    } else if (view === 'today') {
+      body = <TodayView onOpenExercise={openExercise} goTo={goTo} />;
+    } else if (view === 'week') {
+      body = <WeekView onOpenExercise={openExercise} />;
+    } else if (view === 'library') {
+      body = <LibraryView slug={libSlug} onOpen={openExercise} onBack={() => setLibSlug(null)} />;
     } else if (view === 'overview') {
       body = <Overview meta={meta} state={state} goTo={goTo} />;
     } else if (view === 'goal') {
@@ -163,8 +183,8 @@ export default function FitnessPage() {
             state={state}
             mode="revisit"
             onAddMinutes={() => goTo('profile')}
-            onSaved={(s) => { setState(s); goTo('overview'); }}
-            onCancel={() => goTo('overview')}
+            onSaved={(s) => { setState(s); goTo('today'); }}
+            onCancel={() => goTo('today')}
           />
         </div>
       );

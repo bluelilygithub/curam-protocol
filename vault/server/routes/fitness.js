@@ -13,11 +13,14 @@ const P = require('../services/fitness/profileService');
 const { buildBaseline } = require('../services/fitness/baseline');
 const { buildGoalPlan } = require('../services/fitness/goal');
 const { seedDemoUser } = require('../services/fitness/demoSeed');
+const Lib = require('../services/fitness/library');
+const W = require('../services/fitness/weekService');
 
 const router = express.Router();
 
 function fail(res, err, where) {
   if (err instanceof P.ValidationError || err.status === 400) return res.status(400).json({ error: err.message });
+  if (err.status === 404) return res.status(404).json({ error: err.message });
   getLogger().error({ err }, `fitness ${where} failed`);
   return res.status(500).json({ error: 'Something went wrong. Please try again.' });
 }
@@ -135,6 +138,78 @@ router.get('/goal/history', async (req, res) => {
 // also deletes the weight history, which is otherwise kept for the future diet app.
 router.post('/reset', async (req, res) => {
   try { res.json(await P.resetWizard(req.user.id, { clear: req.body?.clear === true, clearWeight: req.body?.clear === true && req.body?.clearWeight === true })); } catch (err) { fail(res, err, 'reset'); }
+});
+
+// ── Exercise library (named routes before /:slug) ──
+router.get('/library', async (req, res) => {
+  try {
+    const state = await P.getState(req.user.id);
+    const equipment = state.lifestyle?.equipment || [];
+    const q = String(req.query.q || '').trim().toLowerCase();
+    const pattern = String(req.query.pattern || '');
+    const domain = String(req.query.domain || '');
+    const setting = String(req.query.setting || '');
+    const list = Lib.getLibrary().list
+      .filter((e) => (!q || e.name.toLowerCase().includes(q) || e.pattern.includes(q)))
+      .filter((e) => !pattern || e.pattern === pattern)
+      .filter((e) => !domain || e.domains.includes(domain))
+      .filter((e) => !setting || e.settings.includes(setting))
+      .map((e) => ({
+        slug: e.slug, name: e.name, pattern: e.pattern, domains: e.domains, settings: e.settings, equipment: e.equipment,
+        level: e.level, roles: e.roles, available: Lib.isAvailable(e, equipment),
+      }));
+    res.json({ version: Lib.getLibrary().version, patterns: Lib.PATTERNS, settings: Lib.SETTINGS, exercises: list });
+  } catch (err) { fail(res, err, 'library'); }
+});
+
+router.get('/library/:slug', async (req, res) => {
+  try {
+    const { bySlug } = Lib.getLibrary();
+    const e = bySlug.get(String(req.params.slug));
+    if (!e) return res.status(404).json({ error: 'Exercise not found' });
+    const state = await P.getState(req.user.id);
+    const link = (slug) => ({ slug, name: bySlug.get(slug)?.name || slug });
+    res.json({
+      ...e,
+      easier: (e.easier || []).map(link),
+      harder: (e.harder || []).map(link),
+      available: Lib.isAvailable(e, state.lifestyle?.equipment || []),
+    });
+  } catch (err) { fail(res, err, 'library item'); }
+});
+
+// ── Weeks ──
+// This week (or ?start=YYYY-MM-DD, any day in the week). { exists:false } if it has not been created yet.
+router.get('/week', async (req, res) => {
+  try { res.json(await W.getWeek(req.user.id, T.isIsoDate(String(req.query.start || '')) ? String(req.query.start) : undefined)); } catch (err) { fail(res, err, 'week'); }
+});
+
+// Create the week if it does not exist (idempotent); { refresh: true } rebuilds it while nothing has been acted on.
+router.post('/week/generate', aiLimiter, async (req, res) => {
+  try {
+    const start = T.isIsoDate(String(req.body?.start || '')) ? String(req.body.start) : undefined;
+    res.json(await W.ensureWeek(req.user.id, { start, refresh: req.body?.refresh === true }));
+  } catch (err) { fail(res, err, 'week generate'); }
+});
+
+router.get('/today', async (req, res) => {
+  try { res.json(await W.getToday(req.user.id)); } catch (err) { fail(res, err, 'today'); }
+});
+
+router.post('/week/rest-day', async (req, res) => {
+  try { res.json(await W.takeRestDay(req.user.id, { weekStart: req.body?.weekStart, day: req.body?.day })); } catch (err) { fail(res, err, 'rest day'); }
+});
+
+router.post('/week/rest-day/undo', async (req, res) => {
+  try { res.json(await W.undoRestDay(req.user.id, { weekStart: req.body?.weekStart, day: req.body?.day })); } catch (err) { fail(res, err, 'undo rest day'); }
+});
+
+router.patch('/sessions/:id', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad session id' });
+    res.json(await W.moveSession(req.user.id, id, { day: req.body?.day, slot: req.body?.slot }));
+  } catch (err) { fail(res, err, 'move session'); }
 });
 
 // Staging helper: create/refresh the worked-example demo user (admin only). Returns the password once, on creation.

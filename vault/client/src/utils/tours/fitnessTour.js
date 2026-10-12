@@ -28,9 +28,29 @@ const STEPS = [
     text: 'Your ratings against the healthy range for your age, based on WHO guidance. The dot is you now, the hollow dot is how you rated an earlier time, and the shaded band is the healthy range. The wording is written by the AI model set in Settings; the numbers come from fixed rules.',
   },
   {
+    id: 'fitness-today', group: 'done', view: 'today', since: 2, selector: '[data-tour="fitness-today"]', on: 'bottom',
+    title: 'Today',
+    text: 'What is planned today, grouped as warm-up, main and cool-down. Tap any exercise name to see how to do it properly. On a rest day it simply says so: rest is part of the plan.',
+  },
+  {
+    id: 'fitness-week-grid', group: 'done', view: 'week', since: 2, selector: '[data-tour="fitness-week-grid"]', on: 'top',
+    title: 'Your week',
+    text: 'Seven days with morning, midday and evening. Sessions are suggestions: drag one to another slot, or use its move button. If two strength sessions end up less than 48 hours apart you get a gentle note, never a block.',
+  },
+  {
+    id: 'fitness-rest', group: 'done', view: 'week', since: 2, selector: '[data-tour="fitness-rest"]', on: 'bottom',
+    title: 'Rest without guilt',
+    text: 'Two planned rest days plus a flexible one. Use "Take this as a rest day" on any day: that day\'s session moves to a free slot if there is one, otherwise it is let go. Nothing is ever stacked onto later days.',
+  },
+  {
+    id: 'fitness-library-list', group: 'done', view: 'library', since: 2, selector: '[data-tour="fitness-library-list"]', on: 'top',
+    title: 'The exercise library',
+    text: 'Every exercise in your program comes from here, with steps, common mistakes, why form matters, and easier and harder versions. Filter by movement, place or equipment.',
+  },
+  {
     id: 'fitness-tabs', group: 'done', view: 'overview', since: 1, selector: '[data-tour="fitness-tabs"]', on: 'bottom',
     title: 'Overview, Goal and Profile',
-    text: 'Overview is home. Goal shows your five years and lets you change the pace. Profile is where you edit your answers and re-rate. More tabs (your weekly program, logging, charts) arrive as the app grows.',
+    text: 'Today and Week are your plan, Library holds the exercises, Overview is the big picture, Goal shows your five years and lets you change the pace, and Profile is where you edit your answers and re-rate. Logging and charts arrive in the next updates.',
   },
   {
     id: 'fitness-goal-card', group: 'done', view: 'overview', since: 1, selector: '[data-tour="fitness-goal-card"]', on: 'bottom',

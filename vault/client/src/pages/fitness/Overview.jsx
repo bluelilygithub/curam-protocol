@@ -42,10 +42,15 @@ export default function Overview({ meta, state, goTo }) {
         </div>
       )}
 
-      <Card title="Coming next">
+      <Card title="This week">
         <p className="text-sm leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-          Your varied weekly program, with days and times you can move, arrives in the next update. Logging, charts and reminders follow.
+          Your program is made fresh each week: the same targets, with the exercises changing. Rest days and a flexible rest budget are built in.
+          Logging what you did, charts and reminders arrive in the next updates.
         </p>
+        <div className="flex gap-2">
+          <SecondaryButton onClick={() => goTo('today')}>Today</SecondaryButton>
+          <SecondaryButton onClick={() => goTo('week')}>See the week</SecondaryButton>
+        </div>
       </Card>
 
       <BaselineView meta={meta} state={state} compact />

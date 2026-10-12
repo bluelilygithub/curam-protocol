@@ -4,20 +4,21 @@ import React from 'react';
  * Content of the "How the Fitness Planner works" modal. It grows with the app:
  * add to WORKS_NOW when a stage ships, remove it from COMING, and bump INFO_KEY so the modal shows once more.
  */
-export const INFO_KEY = 'vault:fitness:info-seen:v2';
+export const INFO_KEY = 'vault:fitness:info-seen:v3';
 
 const WORKS_NOW = [
   ['Your profile', 'Date of birth, sex, height and weight, plus the equipment and places you have. Your answers are pre-filled for your age band, and you can change any of them.'],
   ['Self-ratings', 'Rate cardio, strength, flexibility and balance from 1 to 5, now and at an earlier time. Nobody checks them; they just help the plan fit you. Re-rate every 4-6 weeks and your earlier ratings are kept.'],
   ['Baseline', 'Where you are against the healthy range for your age, based on the WHO 2020 physical activity guidelines.'],
   ['Five-year goal', 'Pick a pace from Gentle to Stretch. You see a Now row, the focus and weekly targets for each year, the rating you are expected to reach, and a chart against the WHO 150-300 minute band. Revisit it any time.'],
+  ['Today and Week', 'Each week is made for you from your goal: the same targets every week, with the exercises changing so it stays fresh. Every session has a short warm-up and cool-down. Drag a session to another day or time, or use its move button, and take a rest day whenever you like. Every fifth week is a lighter one on purpose.'],
+  ['Rest without guilt', 'You get two planned rest days and one flexible one each week. Taking a rest day moves a session to a free slot if there is one, otherwise it is let go. Missed work is never piled onto later days.'],
+  ['Library', 'About 45 exercises, each with step-by-step how-to, common mistakes, why form matters, and easier and harder versions. Every exercise in your program links to its page.'],
   ['Start over', 'The three-dot menu lets you retake the wizard. By default your earlier goals and ratings are kept; you can choose to clear everything.'],
 ];
 
 const COMING = [
-  'A varied weekly program with days and times you can move, and a rest budget',
-  'An exercise library with how-to steps and easier or harder versions',
-  'Logging planned against actual, with quick back-fill',
+  'Logging planned against actual, with quick back-fill and tips after each session',
   'Charts, a consistency calendar and gentle reminders',
 ];
 

@@ -995,6 +995,81 @@ async function initSchema() {
       )
     `);
     await client.query(`ALTER TABLE fitness_profiles ADD COLUMN IF NOT EXISTS "currentWeeklyMinutes" INTEGER`);
+    // Stage 2: library mirror (file server/seeds/fitnessExercises.v1.json is the source), generated weeks, sessions, exercises.
+    // Session status: planned | moved | done | partial | swapped | skipped | rest. 'rest' (intentional rest, incl. rest budget) is stored
+    // apart from 'skipped' so charts can show planned versus done honestly. Weeks start on Monday; day 0 = Monday.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fitness_exercises (
+        slug             TEXT PRIMARY KEY,
+        name             TEXT NOT NULL,
+        pattern          TEXT NOT NULL,
+        domains          JSONB NOT NULL,
+        data             JSONB NOT NULL,
+        "libraryVersion" TEXT NOT NULL,
+        "updatedAt"      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fitness_weeks (
+        id             SERIAL PRIMARY KEY,
+        "userId"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "goalId"       INTEGER,
+        "weekStart"    DATE NOT NULL,
+        "blockIndex"   INTEGER NOT NULL,
+        "blockWeek"    INTEGER NOT NULL,
+        phase          JSONB NOT NULL DEFAULT '{}',
+        "isDeload"     BOOLEAN NOT NULL DEFAULT FALSE,
+        eased          BOOLEAN NOT NULL DEFAULT FALSE,
+        targets        JSONB NOT NULL,
+        "restBudget"   INTEGER NOT NULL DEFAULT 1,
+        "restDays"     JSONB NOT NULL DEFAULT '[]',
+        "weekNote"     TEXT,
+        notes          JSONB NOT NULL DEFAULT '[]',
+        "generatedBy"  TEXT,
+        model          TEXT,
+        generation     INTEGER NOT NULL DEFAULT 0,
+        "createdAt"    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt"    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE ("userId", "weekStart")
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fitness_planned_sessions (
+        id               SERIAL PRIMARY KEY,
+        "weekId"         INTEGER NOT NULL REFERENCES fitness_weeks(id) ON DELETE CASCADE,
+        "userId"         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "sessionKey"     TEXT NOT NULL,
+        day              INTEGER NOT NULL,
+        slot             TEXT NOT NULL,
+        kind             TEXT NOT NULL,
+        "kindIndex"      INTEGER NOT NULL DEFAULT 0,
+        title            TEXT NOT NULL,
+        components       JSONB NOT NULL,
+        "plannedMinutes" INTEGER NOT NULL,
+        "warmupMin"      INTEGER NOT NULL DEFAULT 5,
+        "cooldownMin"    INTEGER NOT NULL DEFAULT 5,
+        outdoor          BOOLEAN NOT NULL DEFAULT FALSE,
+        status           TEXT NOT NULL DEFAULT 'planned',
+        "movedFrom"      JSONB,
+        "createdAt"      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_fitness_sessions_week ON fitness_planned_sessions ("weekId", day)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_fitness_sessions_user ON fitness_planned_sessions ("userId")`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fitness_planned_exercises (
+        id             SERIAL PRIMARY KEY,
+        "sessionId"    INTEGER NOT NULL REFERENCES fitness_planned_sessions(id) ON DELETE CASCADE,
+        "userId"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        block          TEXT NOT NULL,
+        position       INTEGER NOT NULL,
+        slug           TEXT NOT NULL,
+        pattern        TEXT NOT NULL,
+        nth            INTEGER,
+        prescription   TEXT
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_fitness_pex_session ON fitness_planned_exercises ("sessionId", position)`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS fitness_ratings (
         id               SERIAL PRIMARY KEY,
@@ -3682,6 +3757,12 @@ async function initSchema() {
        VALUES ($1, $2, 'v1') ON CONFLICT (key, "taxonomyVersion") DO NOTHING`,
       [key, label]
     );
+  }
+
+  try {
+    await require('./services/fitness/library').seedLibrary(pool);
+  } catch (err) {
+    console.error('[db] fitness library seed failed (will retry next boot):', err.message);
   }
 
   // Gardens saved by the first server build embedded the tracing picture in the design: move those pictures out (idempotent).
