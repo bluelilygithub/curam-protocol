@@ -80,7 +80,7 @@ export const TIPS = {
   },
   fitnessTasks: {
     title: 'How sessions and Tasks stay together',
-    body: 'Each upcoming session becomes a task in your Tasks list (category Fitness). Moving the session moves the task, and logging it completes the task. Rest days and sessions you did not do have no task, and a session whose day has passed quietly drops out, so nothing turns red. If you delete a task it stays deleted. You can switch this off here at any time.',
+    body: 'Each upcoming session becomes a task in your Tasks list (category Fitness). Moving the session moves the task. They stay open or closed together: logging the session completes the task, and completing the task logs the session as done (you can add effort and weights later). Reopening the task reopens the session, and removes that log. Rest days and sessions you did not do have no task, and a session whose day has passed quietly drops out, so nothing turns red. If you delete a task it stays deleted. You can switch this off here at any time.',
   },
   dashEffort: {
     title: 'How hard weeks have felt',

@@ -196,6 +196,11 @@ router.put('/bulk', async (req, res) => {
     } finally {
       client.release();
     }
+    // a Fitness session's task completed or reopened in bulk: carry it to the session (same bridge as the single-task route)
+    if ('status' in updates) {
+      const { syncSessionFromTask } = require('../services/fitness/fitnessTasks');
+      for (const id of ids) await syncSessionFromTask(Number(id), updates.status === 'done');
+    }
     res.json({ ok: true, updated: ids.length });
   } catch (err) {
     console.error('[tasks bulk update]', err);
@@ -816,6 +821,14 @@ router.put('/:id', async (req, res) => {
       await syncObligationStateFromTask(Number(id), isNowDone).catch((err) => {
         console.error('[tasks] obligation state sync failed:', err.message);
       });
+    }
+
+    // Fitness: a task that follows a planned session is open or closed together with that session, in both directions.
+    if (isNowDone !== wasAlreadyDone) {
+      const { syncSessionFromTask } = require('../services/fitness/fitnessTasks');
+      await syncSessionFromTask(Number(id), isNowDone);
+      const { rows: again } = await pool.query('SELECT * FROM tasks WHERE id=$1', [id]);
+      if (again[0]) Object.assign(built, { status: again[0].status });
     }
 
     res.json(built);

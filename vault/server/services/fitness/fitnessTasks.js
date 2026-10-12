@@ -1,8 +1,10 @@
 'use strict';
 
 /**
- * Planned sessions as ordinary Vault Tasks (the existing /tasks module), kept in step with the fitness plan. One way: the plan
- * writes tasks, and tasks never write back (logging a session needs effort and notes, so it stays in Fitness).
+ * Planned sessions as ordinary Vault Tasks (the existing /tasks module), kept in step with the fitness plan, and open or closed
+ * in both places: logging a session done completes its task, and completing (or reopening) the task in Tasks logs (or un-logs) the
+ * session (`syncSessionFromTask`, called from the Tasks routes). A session done from a task is logged simply as "done as
+ * planned"; effort and exercise details can be added later in Fitness.
  *
  * Rules, all about never making a task feel like a telling-off:
  *  - only sessions for today and later are tasks; a session whose day has passed unlogged quietly loses its task (no overdue red);
@@ -10,7 +12,8 @@
  *  - done, partly done and swapped sessions mark their task done;
  *  - a task is created once per session (`taskSynced`): if you delete it in Tasks it stays deleted;
  *  - moving a session moves its task's due date; regenerating a week removes the old tasks with the old sessions (cascade);
- *  - tasks you have already completed are never reopened, and "Show my sessions in Tasks" can be switched off in Profile.
+ *  - "Show my sessions in Tasks" can be switched off in Profile. Reopening a task whose session was logged removes that log
+ *    (including any effort or weights on it), because the two are meant to say the same thing.
  * No new tables: `tasks."fitnessSessionId"` links a task to its session.
  */
 
@@ -31,6 +34,26 @@ function planTask(s, today) {
   if (DONE_LIKE.has(s.status)) return { action: 'keep', taskStatus: 'done' };
   if (s.date < today) return { action: 'delete' }; // planned, never logged, day gone: no overdue task
   return { action: 'keep', taskStatus: 'todo' };
+}
+
+/** The task status to set after a plan change: follow the session when it is done, else leave what the person set (to do, in progress). */
+function nextTaskStatus(desired, existing) {
+  if (desired === 'done') return 'done';
+  return existing === 'done' ? 'todo' : existing;
+}
+
+/**
+ * What a change to a task's done state should do to its session.
+ * @param {boolean} isDone the task's new state
+ * @param {{ status:string, date:string, weekStart:string }} s
+ * @returns {'log'|'moveToday'|'unlog'|'revert'|'none'}
+ */
+function sessionAction(isDone, s, today, thisMonday) {
+  const doneLike = DONE_LIKE.has(s.status);
+  if (!isDone) return doneLike ? 'unlog' : 'none';
+  if (doneLike || GONE.has(s.status)) return 'none';
+  if (s.date <= today) return 'log';
+  return s.weekStart === thisMonday ? 'moveToday' : 'revert'; // done early this week: it happened today; next week cannot be done yet
 }
 
 const SLOT_WORDS = { morning: 'Morning', midday: 'Midday', evening: 'Evening' };
@@ -101,8 +124,8 @@ async function syncUserTasks(userId, today) {
       counts.created += 1;
       continue;
     }
-    // an existing task: follow the session, but never reopen something already completed
-    const status = r.taskStatus === 'done' ? 'done' : plan.taskStatus;
+    // an existing task: follow the session (done closes it, an undone session reopens it); keep "in progress" as the person set it
+    const status = nextTaskStatus(plan.taskStatus, r.taskStatus);
     if (status !== r.taskStatus || String(r.taskDue || '').slice(0, 10) !== date || r.taskTitle !== text.title) {
       await pool.query(
         `UPDATE tasks SET status=$3, "dueDate"=$4, title=$5, notes=$6, "estimatedMinutes"=$7, "updatedAt"=NOW() WHERE id=$1 AND "userId"=$2`,
@@ -112,6 +135,44 @@ async function syncUserTasks(userId, today) {
     }
   }
   return counts;
+}
+
+/**
+ * A task was completed or reopened in Tasks: carry that to its session. Safe on any task (no link, no effect). Never throws.
+ * @param {number} taskId
+ * @param {boolean} isDone
+ */
+async function syncSessionFromTask(taskId, isDone) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT t."userId", t."fitnessSessionId" AS sid FROM tasks t WHERE t.id=$1 AND t."fitnessSessionId" IS NOT NULL`, [taskId],
+    );
+    if (!rows[0]) return;
+    const { userId, sid } = rows[0];
+    const P = require('./profileService');
+    const state = await P.getState(userId);
+    const { rows: ss } = await pool.query(
+      `SELECT s.day, s.slot, s.status, to_char(w."weekStart",'YYYY-MM-DD') AS "weekStart"
+         FROM fitness_planned_sessions s JOIN fitness_weeks w ON w.id = s."weekId" WHERE s.id=$1 AND s."userId"=$2`, [sid, userId],
+    );
+    if (!ss[0]) return;
+    const session = { ...ss[0], date: Ph.addDays(ss[0].weekStart, ss[0].day) };
+    const action = sessionAction(isDone, session, state.today, Ph.mondayOf(state.today));
+    const L = require('./logService');
+    const W = require('./weekService');
+    if (action === 'moveToday') {
+      await W.moveSession(userId, sid, { day: Ph.dayOfWeek(state.today), slot: session.slot });
+      await L.logSession(userId, sid, { status: 'done' }, { skipWindow: true });
+    } else if (action === 'log') {
+      await L.logSession(userId, sid, { status: 'done' }, { skipWindow: true });
+    } else if (action === 'unlog') {
+      await L.undoLog(userId, sid);
+    } else if (action === 'revert') {
+      await pool.query(`UPDATE tasks SET status='todo', "updatedAt"=NOW() WHERE id=$1`, [taskId]);
+    }
+  } catch (err) {
+    console.warn('[fitness/tasks] could not carry the task change to its session:', err.message);
+  }
 }
 
 /** Fire and forget after anything that changes sessions: it must never slow down or break the fitness action itself. */
@@ -133,4 +194,4 @@ function syncSoon(userId, { force = true } = {}) {
   });
 }
 
-module.exports = { planTask, taskText, syncUserTasks, syncSoon };
+module.exports = { planTask, nextTaskStatus, sessionAction, taskText, syncUserTasks, syncSessionFromTask, syncSoon };

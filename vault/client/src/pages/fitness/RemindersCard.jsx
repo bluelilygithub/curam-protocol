@@ -105,7 +105,7 @@ export default function RemindersCard() {
           <InfoTip tip={TIPS.fitnessTasks} />
         </div>
         <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-          Only today and later, one task per session. Moving a session moves its task; logging a session completes it. A session you did not get to quietly drops out, never as an overdue task. Log the exercises themselves in Fitness.
+          Only today and later, one task per session. Moving a session moves its task, and they stay open or closed together: done in one is done in the other. A session you did not get to quietly drops out, never as an overdue task. Log the exercises themselves in Fitness.
         </p>
       </Card>
 

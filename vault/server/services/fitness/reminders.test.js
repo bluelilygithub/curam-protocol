@@ -170,4 +170,29 @@ test('the task text points back to Fitness and carries the session, time of day 
   assert.ok(!BANNED.test(t.notes) && !/overdue|missed/i.test(t.notes));
 });
 
+// ── open or closed in both places ──
+const MON = '2026-10-12';
+const sess = (status, date, weekStart = MON) => ({ status, date, weekStart });
+test('completing a task logs its session done; a session already done is left alone', () => {
+  assert.strictEqual(T.sessionAction(true, sess('planned', '2026-10-14'), '2026-10-14', MON), 'log');
+  assert.strictEqual(T.sessionAction(true, sess('moved', '2026-10-13'), '2026-10-14', MON), 'log', 'a day that has passed can still be logged');
+  for (const s of ['done', 'partial', 'swapped']) assert.strictEqual(T.sessionAction(true, sess(s, '2026-10-14'), '2026-10-14', MON), 'none', s);
+});
+test('completing a task early this week moves the session to today and logs it; next week cannot be done yet', () => {
+  assert.strictEqual(T.sessionAction(true, sess('planned', '2026-10-17'), '2026-10-14', MON), 'moveToday');
+  assert.strictEqual(T.sessionAction(true, sess('planned', '2026-10-20', '2026-10-19'), '2026-10-14', MON), 'revert');
+});
+test('reopening a task un-logs a session that was done, and does nothing to a session that was not', () => {
+  for (const s of ['done', 'partial', 'swapped']) assert.strictEqual(T.sessionAction(false, sess(s, '2026-10-13'), '2026-10-14', MON), 'unlog', s);
+  assert.strictEqual(T.sessionAction(false, sess('planned', '2026-10-15'), '2026-10-14', MON), 'none');
+  assert.strictEqual(T.sessionAction(true, sess('rest', '2026-10-15'), '2026-10-14', MON), 'none');
+});
+test('the task follows the session: done closes it, an undone session reopens it, in progress is left as set', () => {
+  assert.strictEqual(T.nextTaskStatus('done', 'todo'), 'done');
+  assert.strictEqual(T.nextTaskStatus('done', 'in-progress'), 'done');
+  assert.strictEqual(T.nextTaskStatus('todo', 'done'), 'todo');
+  assert.strictEqual(T.nextTaskStatus('todo', 'in-progress'), 'in-progress');
+  assert.strictEqual(T.nextTaskStatus('todo', 'todo'), 'todo');
+});
+
 console.log(`fitness reminders: ${passed} tests passed${process.exitCode ? ' (with failures)' : ''}`);
