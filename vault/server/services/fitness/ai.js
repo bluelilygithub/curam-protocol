@@ -114,7 +114,7 @@ async function runJson({ userId, kind, input, system, prompt, validate, fallback
       model: modelId,
       stopReason: last?.diagnostics?.stopReason || last?.diagnostics?.finishReason || null,
       outputTokens: last?.outputTokens ?? null,
-      replyStart: String(last?.text || '').slice(0, 160),
+      replyStart: String(last?.text || '').slice(0, 200),
     });
     return { value: fallback(), source: 'fallback', model: modelId, note: 'The AI summary was not available just now, so this is the plain version. You can try again.' };
   }

@@ -5,7 +5,7 @@ import useProcessingStore from '../../store/processingStore';
 import { Notice, PrimaryButton, SecondaryButton } from './ui';
 import {
   emptyDraft, draftFromState, profilePayload, ratingsPayload, useAgeTemplate,
-  AboutSection, RatingsSection, LifestyleSection, WorkAroundSection,
+  AboutSection, ActivitySection, RatingsSection, LifestyleSection, WorkAroundSection,
 } from './sections';
 
 const STEPS = ['About you', 'Your fitness', 'Lifestyle', 'Work around'];
@@ -20,7 +20,7 @@ export default function Onboarding({ meta, state, onSaved }) {
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState(() => (state.profile ? draftFromState(state) : emptyDraft()));
   // Answers already given (a retake, or a half-finished visit) are never overwritten by age-band suggestions.
-  const touched = useRef(new Set(state.profile ? ['scores', 'previousScores', 'previousLabel', 'equipment', 'smoking', 'alcohol', 'dietQuality', 'timeFlexibility'] : []));
+  const touched = useRef(new Set(state.profile ? ['scores', 'previousScores', 'previousLabel', 'weeklyMinutes', 'equipment', 'smoking', 'alcohol', 'dietQuality', 'timeFlexibility'] : []));
   const set = useCallback((key, value) => {
     touched.current.add(key);
     setDraft((d) => ({ ...d, [key]: value }));
@@ -61,8 +61,8 @@ export default function Onboarding({ meta, state, onSaved }) {
             aria-current={i === step ? 'step' : undefined}
             className="px-3 py-1 rounded-full border"
             style={{
-              borderColor: i === step ? 'var(--color-primary)' : 'var(--color-border)',
-              color: i === step ? 'var(--color-primary)' : 'var(--color-muted)',
+              borderColor: i === step ? 'var(--color-text)' : 'var(--color-border)',
+              color: i === step ? 'var(--color-text)' : 'var(--color-muted)',
               fontWeight: i === step ? 600 : 400,
             }}
           >
@@ -72,7 +72,12 @@ export default function Onboarding({ meta, state, onSaved }) {
       </ol>
 
       {step === 0 && <AboutSection meta={meta} draft={draft} set={set} templateInfo={tpl.info} templateError={tpl.error} timezoneInfo={state.timezone} />}
-      {step === 1 && <RatingsSection meta={meta} draft={draft} set={set} fromTemplate={!touched.current.has('scores')} />}
+      {step === 1 && (
+        <>
+          <ActivitySection draft={draft} set={set} fromTemplate={!touched.current.has('weeklyMinutes')} />
+          <RatingsSection meta={meta} draft={draft} set={set} fromTemplate={!touched.current.has('scores')} />
+        </>
+      )}
       {step === 2 && <LifestyleSection meta={meta} draft={draft} set={set} />}
       {step === 3 && <WorkAroundSection draft={draft} set={set} />}
 

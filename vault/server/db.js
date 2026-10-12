@@ -994,6 +994,7 @@ async function initSchema() {
         "updatedAt"       TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
+    await client.query(`ALTER TABLE fitness_profiles ADD COLUMN IF NOT EXISTS "currentWeeklyMinutes" INTEGER`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS fitness_ratings (
         id               SERIAL PRIMARY KEY,

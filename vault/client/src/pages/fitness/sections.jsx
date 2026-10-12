@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../../utils/apiClient';
-import { Card, Field, FIELD, inputCls, Chip, Segmented, ScaleStrip, Voice, Notice } from './ui';
+import { Card, Field, FIELD, inputCls, Chip, Segmented, ScaleStrip, Voice, Notice, selectedStyle } from './ui';
 
 const DOMAIN_ORDER = ['cardio', 'strength', 'flexibility', 'balance'];
 
@@ -10,6 +10,7 @@ export function emptyDraft() {
     scores: { cardio: 3, strength: 3, flexibility: 3, balance: 3 },
     previousScores: { cardio: 3, strength: 3, flexibility: 3, balance: 3 },
     previousLabel: '5 years ago',
+    weeklyMinutes: '',
     equipment: [], smoking: 'none', alcohol: 'light', dietQuality: 3,
     timeFlexibility: { mode: 'flexible', twiceDaily: false, notes: '' },
     workAround: '', otherNotes: '', easeRequested: false,
@@ -27,6 +28,7 @@ export function draftFromState(state) {
   d.timezone = state.timezone?.source === 'user' ? state.timezone.timezone : '';
   if (state.lifestyle) {
     const l = state.lifestyle;
+    d.weeklyMinutes = l.weeklyMinutes ?? '';
     d.equipment = l.equipment || [];
     d.smoking = l.smoking || 'none';
     d.alcohol = l.alcohol || 'none';
@@ -47,6 +49,7 @@ export function draftFromState(state) {
 export function profilePayload(d) {
   return {
     dob: d.dob, sex: d.sex, heightCm: Number(d.heightCm), weightKg: Number(d.weightKg),
+    weeklyMinutes: d.weeklyMinutes === '' ? null : Number(d.weeklyMinutes),
     equipment: d.equipment, smoking: d.smoking, alcohol: d.alcohol, dietQuality: d.dietQuality,
     timeFlexibility: d.timeFlexibility, workAround: d.workAround, otherNotes: d.otherNotes,
     easeRequested: d.easeRequested, timezone: d.timezone || '',
@@ -64,6 +67,7 @@ export function applyTemplate(draft, template, touched) {
   if (!touched.has('scores')) next.scores = { ...t.ratings };
   if (!touched.has('previousScores')) next.previousScores = { ...t.previous };
   if (!touched.has('previousLabel')) next.previousLabel = t.previousLabel;
+  if (!touched.has('weeklyMinutes') && t.weeklyMinutes != null) next.weeklyMinutes = t.weeklyMinutes;
   if (!touched.has('equipment')) next.equipment = [...t.equipment];
   if (!touched.has('smoking')) next.smoking = t.smoking;
   if (!touched.has('alcohol')) next.alcohol = t.alcohol;
@@ -131,6 +135,32 @@ export function AboutSection({ meta, draft, set, templateInfo, templateError, ti
           Age band <strong>{templateInfo.band.label}</strong>. The next steps are pre-filled with typical answers for that age. They are only suggestions: change anything that is not you.
         </Notice>
       )}
+    </Card>
+  );
+}
+
+/** Current weekly activity. Feeds the "Now" row of the goal; left blank, the plan estimates it from your cardio rating. */
+export function ActivitySection({ draft, set, fromTemplate }) {
+  return (
+    <Card title="How active are you right now?">
+      {fromTemplate && <Notice>Pre-filled with a typical figure for your age. Change it to what you really do.</Notice>}
+      <div className="max-w-xs">
+        <Field
+          label="Exercise in a typical week (minutes)"
+          hint="Walking, cycling, swimming, gym, anything that gets you moving. Leave it blank if you are not sure and we will estimate it from your cardio rating."
+        >
+          <input
+            type="number"
+            inputMode="numeric"
+            min="0"
+            max="2000"
+            className={inputCls}
+            style={FIELD}
+            value={draft.weeklyMinutes}
+            onChange={(e) => set('weeklyMinutes', e.target.value)}
+          />
+        </Field>
+      </div>
     </Card>
   );
 }
@@ -203,11 +233,7 @@ export function LifestyleSection({ meta, draft, set }) {
               aria-checked={draft.dietQuality === n}
               onClick={() => set('dietQuality', n)}
               className="w-10 h-10 rounded-xl border text-sm font-medium hover:opacity-70 transition-all duration-200"
-              style={{
-                borderColor: draft.dietQuality === n ? 'var(--color-primary)' : 'var(--color-border)',
-                background: draft.dietQuality === n ? 'var(--color-primary)' : 'var(--color-bg)',
-                color: draft.dietQuality === n ? '#fff' : 'var(--color-text)',
-              }}
+              style={selectedStyle(draft.dietQuality === n)}
             >{n}</button>
           ))}
         </div>

@@ -42,7 +42,7 @@ async function seedDemoUser() {
   await P.saveProfile(userId, {
     dob, sex: 'male', heightCm: 178, weightKg: 86,
     equipment: ['gym', 'pool', 'bike', 'dumbbells', 'trails', 'bodyweight_home'],
-    smoking: 'none', alcohol: 'none', dietQuality: 2,
+    weeklyMinutes: 0, smoking: 'none', alcohol: 'none', dietQuality: 2,
     timeFlexibility: { mode: 'flexible', twiceDaily: true, notes: 'Nearly retired; most days are open.' },
     workAround: null,
     otherNotes: 'Very fit until about 50, mostly sedentary the last 2 years.',

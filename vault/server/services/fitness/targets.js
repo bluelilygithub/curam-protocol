@@ -113,7 +113,7 @@ function addYears(isoDate, years) {
  * Five yearly milestones. `scores`/`previous` are 1-5 per domain. Returns plain data only; wording is added by
  * the caller (template or AI).
  */
-function buildMilestones({ bandId, scores, previous, ambition, startsOn, horizonYears = 5 }, cfg = DEFAULTS) {
+function buildMilestones({ bandId, scores, previous, ambition, startsOn, currentMinutes = null, horizonYears = 5 }, cfg = DEFAULTS) {
   if (!validRatings(scores)) throw new Error('scores must be integers 1-5 for every domain');
   const amb = clampAmbition(ambition);
   const end = weeklyTargets(bandId, amb, cfg);
@@ -122,7 +122,11 @@ function buildMilestones({ bandId, scores, previous, ambition, startsOn, horizon
   const curve = regaining ? cfg.yearCurveRegain : cfg.yearCurve;
   const ratingCurve = regaining ? cfg.yearCurveRatingsRegain : cfg.yearCurveRatings;
   const phaseIds = amb >= 4 ? cfg.yearPhases.ambitious : cfg.yearPhases.gentle;
-  const startMin = Math.min(startingMinutes(scores, cfg), end.aerobicModerateMin);
+  // What the person told us wins; the cardio-rating estimate is only used when it was left blank.
+  const entered = currentMinutes !== null && currentMinutes !== undefined && currentMinutes !== '' && Number.isFinite(Number(currentMinutes));
+  const nowMin = entered ? Math.max(0, Math.round(Number(currentMinutes))) : startingMinutes(scores, cfg);
+  // The path to the target never starts above the target (someone already past it just holds).
+  const startMin = Math.min(nowMin, end.aerobicModerateMin);
 
   const milestones = [];
   for (let y = 1; y <= horizonYears; y += 1) {
@@ -150,8 +154,8 @@ function buildMilestones({ bandId, scores, previous, ambition, startsOn, horizon
     endRatings,
     endWeekly: end,
     startMinutes: startMin,
-    // Where you are today. Minutes are estimated from the cardio self-rating; days per week are not known.
-    now: { aerobicModerateMin: startMin, ratings: { ...scores } },
+    // Where you are today. Minutes are what you entered, else estimated from the cardio rating; days per week are not known.
+    now: { aerobicModerateMin: nowMin, minutesSource: entered ? 'entered' : 'estimated', ratings: { ...scores } },
     milestones,
   };
 }

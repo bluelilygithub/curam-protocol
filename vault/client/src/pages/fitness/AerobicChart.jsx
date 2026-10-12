@@ -50,7 +50,7 @@ export default function AerobicChart({ plan }) {
         </ResponsiveContainer>
       </div>
       <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-        Moderate-intensity equivalents. Hard effort counts double, so 75-150 vigorous minutes sit in the same band. "Now" is estimated from your cardio rating.
+        Moderate-intensity equivalents. Hard effort counts double, so 75-150 vigorous minutes sit in the same band. {plan.now.minutesSource === 'entered' ? '"Now" is what you told us.' : '"Now" is estimated from your cardio rating.'}
       </p>
     </figure>
   );

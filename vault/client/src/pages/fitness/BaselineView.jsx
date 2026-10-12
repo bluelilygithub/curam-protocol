@@ -31,7 +31,7 @@ function RangeBars({ rows, meta, beforeLabel }) {
             <div className="relative h-6 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
               <div
                 className="absolute top-0 bottom-0 rounded-md"
-                style={{ left: `${pct(r.low)}%`, width: `${pct(r.high + 1) - pct(r.low)}%`, background: 'color-mix(in srgb, var(--color-primary) 16%, transparent)' }}
+                style={{ left: `${pct(r.low)}%`, width: `${pct(r.high + 1) - pct(r.low)}%`, background: 'color-mix(in srgb, var(--color-muted) 22%, transparent)' }}
                 aria-hidden="true"
               />
               {r.before != null && (
@@ -43,7 +43,7 @@ function RangeBars({ rows, meta, beforeLabel }) {
               )}
               <span
                 className="absolute top-1/2 w-4 h-4 rounded-full"
-                style={{ left: `${pct(r.now)}%`, transform: 'translate(-50%,-50%)', background: 'var(--color-primary)' }}
+                style={{ left: `${pct(r.now)}%`, transform: 'translate(-50%,-50%)', background: 'var(--color-text)' }}
                 title={`Now: ${r.now}`}
               />
             </div>
@@ -55,9 +55,9 @@ function RangeBars({ rows, meta, beforeLabel }) {
         );
       })}
       <p className="text-xs flex flex-wrap gap-x-4 gap-y-1" style={{ color: 'var(--color-muted)' }}>
-        <span><span className="inline-block w-2.5 h-2.5 rounded-full align-middle mr-1" style={{ background: 'var(--color-primary)' }} />Now</span>
+        <span><span className="inline-block w-2.5 h-2.5 rounded-full align-middle mr-1" style={{ background: 'var(--color-text)' }} />Now</span>
         <span><span className="inline-block w-2.5 h-2.5 rounded-full align-middle mr-1 border-2" style={{ borderColor: 'var(--color-muted)' }} />{beforeLabel || 'Before'}</span>
-        <span><span className="inline-block w-4 h-2.5 rounded align-middle mr-1" style={{ background: 'color-mix(in srgb, var(--color-primary) 16%, transparent)' }} />Healthy range for your age</span>
+        <span><span className="inline-block w-4 h-2.5 rounded align-middle mr-1" style={{ background: 'color-mix(in srgb, var(--color-muted) 22%, transparent)' }} />Healthy range for your age</span>
       </p>
     </div>
   );

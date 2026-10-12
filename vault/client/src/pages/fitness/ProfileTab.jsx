@@ -4,7 +4,7 @@ import useToastStore from '../../store/toastStore';
 import { Card, Notice, PrimaryButton, formatDate } from './ui';
 import {
   draftFromState, profilePayload, ratingsPayload,
-  AboutSection, RatingsSection, LifestyleSection, WorkAroundSection,
+  AboutSection, ActivitySection, RatingsSection, LifestyleSection, WorkAroundSection,
 } from './sections';
 
 function History({ meta }) {
@@ -59,6 +59,7 @@ export default function ProfileTab({ meta, state, onChanged, focusRerate }) {
   return (
     <div className="max-w-3xl mx-auto w-full space-y-5">
       <AboutSection meta={meta} draft={draft} set={set} timezoneInfo={state.timezone} />
+      <ActivitySection draft={draft} set={set} />
       <LifestyleSection meta={meta} draft={draft} set={set} />
       <WorkAroundSection draft={draft} set={set} />
       <div className="flex justify-end">

@@ -9,7 +9,14 @@ export const FIELD = {
   color: 'var(--color-text)',
 };
 
-export const inputCls = 'w-full px-3 py-2.5 rounded-xl border text-sm outline-none transition-all duration-200 focus:border-[var(--color-primary)]';
+/** Selected state for chips, rating buttons, tiles: neutral on purpose. The theme accent is only for primary action buttons. */
+export function selectedStyle(active, idle = 'var(--color-bg)') {
+  return active
+    ? { borderColor: 'var(--color-text)', background: 'var(--color-text)', color: 'var(--color-bg)' }
+    : { borderColor: 'var(--color-border)', background: idle, color: 'var(--color-text)' };
+}
+
+export const inputCls = 'w-full px-3 py-2.5 rounded-xl border text-sm outline-none transition-all duration-200 focus:border-[var(--color-text)]';
 
 export function Card({ title, hint, children, className = '' }) {
   return (
@@ -52,11 +59,11 @@ export function Notice({ tone = 'info', children }) {
       style={{
         background: care ? 'var(--color-surface)' : 'var(--color-bg)',
         borderColor: 'var(--color-border)',
-        borderLeft: care ? '4px solid var(--color-primary)' : '1px solid var(--color-border)',
+        borderLeft: care ? '4px solid var(--color-text)' : '1px solid var(--color-border)',
         color: 'var(--color-text)',
       }}
     >
-      {care && <span className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-primary)' }}>{getIcon('info', { size: 16 })}</span>}
+      {care && <span className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-text)' }}>{getIcon('info', { size: 16 })}</span>}
       <div className="min-w-0">{children}</div>
     </div>
   );
@@ -98,11 +105,7 @@ export function Chip({ active, onClick, children }) {
       onClick={onClick}
       aria-pressed={active}
       className="px-3 py-1.5 rounded-lg border text-sm hover:opacity-70 transition-all duration-200"
-      style={{
-        borderColor: active ? 'var(--color-primary)' : 'var(--color-border)',
-        background: active ? 'var(--color-primary)' : 'transparent',
-        color: active ? '#fff' : 'var(--color-text)',
-      }}
+      style={selectedStyle(active, 'transparent')}
     >
       {children}
     </button>
@@ -135,11 +138,7 @@ export function ScaleStrip({ value, onChange, levels, label }) {
                 aria-checked={active}
                 onClick={() => onChange(n)}
                 className="w-10 h-10 rounded-xl border text-sm font-medium hover:opacity-70 transition-all duration-200"
-                style={{
-                  borderColor: active ? 'var(--color-primary)' : 'var(--color-border)',
-                  background: active ? 'var(--color-primary)' : 'var(--color-bg)',
-                  color: active ? '#fff' : 'var(--color-text)',
-                }}
+                style={selectedStyle(active)}
               >
                 {n}
               </button>

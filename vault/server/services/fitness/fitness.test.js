@@ -216,6 +216,30 @@ test('goal validator needs a summary; whatChanged is optional', () => {
   assert.strictEqual(goal.validateGoalText({ summary: 's', whatChanged: 'w' }).value.whatChanged, 'w');
 });
 
+// ── the Now row uses what the person entered ──
+test('entered weekly minutes win; blank falls back to the cardio-rating estimate', () => {
+  const base = { bandId: '50-64', scores: WORKED, previous: null, ambition: 3, startsOn: '2026-10-12' };
+  const entered = T.buildMilestones({ ...base, currentMinutes: 45 });
+  assert.strictEqual(entered.now.aerobicModerateMin, 45);
+  assert.strictEqual(entered.now.minutesSource, 'entered');
+  const zero = T.buildMilestones({ ...base, currentMinutes: 0 });
+  assert.strictEqual(zero.now.aerobicModerateMin, 0); // zero is an answer, not "blank"
+  assert.strictEqual(zero.now.minutesSource, 'entered');
+  for (const blank of [null, undefined, '']) {
+    const est = T.buildMilestones({ ...base, currentMinutes: blank });
+    assert.strictEqual(est.now.aerobicModerateMin, 90);
+    assert.strictEqual(est.now.minutesSource, 'estimated');
+  }
+});
+test('someone already above the target shows their real minutes but the path holds at the target', () => {
+  const plan = T.buildMilestones({ bandId: '50-64', scores: WORKED, previous: null, ambition: 1, startsOn: '2026-10-12', currentMinutes: 400 });
+  assert.strictEqual(plan.now.aerobicModerateMin, 400);
+  assert.ok(plan.milestones.every((m) => m.weekly.aerobicModerateMin === plan.endWeekly.aerobicModerateMin));
+});
+test('every age template pre-fills weekly minutes', () => {
+  for (const band of C.AGE_BANDS) assert.ok(Number.isInteger(C.DEFAULTS.ageTemplates[band.id].weeklyMinutes));
+});
+
 // ── goal screen: gradual ratings, "now" row, phases ──
 test('ratings climb gradually: no repeated start-to-target jump, year 5 lands on the target', () => {
   const plan = T.buildMilestones({ bandId: '50-64', scores: WORKED, previous: WORKED_PREV, ambition: 3, startsOn: '2026-10-12' });

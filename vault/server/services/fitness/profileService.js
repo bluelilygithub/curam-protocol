@@ -77,7 +77,16 @@ function validateLifestyle(body) {
     },
     workAround: cleanText(body.workAround, 1000),
     otherNotes: cleanText(body.otherNotes, 1000),
+    weeklyMinutes: validateMinutes(body.weeklyMinutes),
   };
+}
+
+/** Typical active minutes in a week right now. Blank means "not given": the plan then estimates from the cardio rating. */
+function validateMinutes(v) {
+  if (v === '' || v == null) return null;
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n) || n < 0 || n > 2000) throw new ValidationError('Weekly exercise minutes must be between 0 and 2000');
+  return n;
 }
 
 function validateScores(obj, label) {
@@ -105,7 +114,7 @@ async function getLatestWeight(userId) {
 async function getFitnessRow(userId) {
   const { rows } = await pool.query(
     `SELECT equipment, smoking, alcohol, "dietQuality", "timeFlexibility", "workAround", "otherNotes",
-            "templateBand", "easeRequested", to_char("onboardedAt",'YYYY-MM-DD') AS "onboardedOn"
+            "currentWeeklyMinutes" AS "weeklyMinutes", "templateBand", "easeRequested", to_char("onboardedAt",'YYYY-MM-DD') AS "onboardedOn"
        FROM fitness_profiles WHERE "userId"=$1`,
     [userId],
   );
@@ -186,7 +195,7 @@ async function getState(userId) {
     } : null,
     lifestyle: fit ? {
       equipment: fit.equipment, smoking: fit.smoking, alcohol: fit.alcohol, dietQuality: fit.dietQuality,
-      timeFlexibility: fit.timeFlexibility, workAround: fit.workAround, otherNotes: fit.otherNotes,
+      weeklyMinutes: fit.weeklyMinutes ?? null, timeFlexibility: fit.timeFlexibility, workAround: fit.workAround, otherNotes: fit.otherNotes,
       templateBand: fit.templateBand, easeRequested: !!fit.easeRequested,
     } : null,
     rating,
@@ -224,13 +233,14 @@ async function saveProfile(userId, body) {
     const safety = checkNotes(life.workAround, life.otherNotes);
     const easeRequested = safety.offerEase ? !!body.easeRequested : false;
     await client.query(
-      `INSERT INTO fitness_profiles ("userId", equipment, smoking, alcohol, "dietQuality", "timeFlexibility", "workAround", "otherNotes", "templateBand", "easeRequested")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      `INSERT INTO fitness_profiles ("userId", equipment, smoking, alcohol, "dietQuality", "timeFlexibility", "workAround", "otherNotes", "templateBand", "easeRequested", "currentWeeklyMinutes")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        ON CONFLICT ("userId") DO UPDATE SET equipment=EXCLUDED.equipment, smoking=EXCLUDED.smoking, alcohol=EXCLUDED.alcohol,
          "dietQuality"=EXCLUDED."dietQuality", "timeFlexibility"=EXCLUDED."timeFlexibility", "workAround"=EXCLUDED."workAround",
-         "otherNotes"=EXCLUDED."otherNotes", "templateBand"=EXCLUDED."templateBand", "easeRequested"=EXCLUDED."easeRequested", "updatedAt"=NOW()`,
+         "otherNotes"=EXCLUDED."otherNotes", "templateBand"=EXCLUDED."templateBand", "easeRequested"=EXCLUDED."easeRequested",
+         "currentWeeklyMinutes"=EXCLUDED."currentWeeklyMinutes", "updatedAt"=NOW()`,
       [userId, JSON.stringify(life.equipment), life.smoking, life.alcohol, life.dietQuality, JSON.stringify(life.timeFlexibility),
-        life.workAround, life.otherNotes, band?.id || null, easeRequested],
+        life.workAround, life.otherNotes, band?.id || null, easeRequested, life.weeklyMinutes],
     );
     await client.query('COMMIT');
   } catch (err) {
@@ -295,9 +305,10 @@ async function saveGoal(userId, { ambition, startsOn, milestones, summary, sourc
 /**
  * Retake the wizard. Default is gentle: the lifestyle answers are removed (so onboarding shows again, pre-filled from
  * what you said before) and the active goal is kept as history. `clear` also wipes ratings, goals, cached wording and
- * the shared date of birth / sex / height. The weight series is never touched: another app shares it.
+ * the shared date of birth / sex / height. The weight history is kept unless `clearWeight` is also set, because the
+ * future diet app shares it.
  */
-async function resetWizard(userId, { clear = false } = {}) {
+async function resetWizard(userId, { clear = false, clearWeight = false } = {}) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -307,6 +318,7 @@ async function resetWizard(userId, { clear = false } = {}) {
       await client.query('DELETE FROM fitness_ratings WHERE "userId"=$1', [userId]);
       await client.query('DELETE FROM fitness_ai_cache WHERE "userId"=$1', [userId]);
       await client.query('DELETE FROM health_profiles WHERE "userId"=$1', [userId]);
+      if (clearWeight) await client.query('DELETE FROM health_weight_log WHERE "userId"=$1', [userId]);
     } else {
       await client.query(`UPDATE fitness_goals SET status='superseded' WHERE "userId"=$1 AND status='active'`, [userId]);
     }
@@ -331,7 +343,7 @@ async function getPlanningInputs(userId) {
     timeFlexibility: lifestyle.timeFlexibility,
   };
   const notes = [lifestyle.workAround, lifestyle.otherNotes, state.rating.note].filter(Boolean).join(' | ') || null;
-  return { state, profile: { ...profile, lifestyleSummary }, scores: state.rating.scores, previous: state.rating.previousScores, previousLabel: state.rating.previousLabel, notes };
+  return { state, profile: { ...profile, lifestyleSummary }, currentMinutes: lifestyle.weeklyMinutes ?? null, scores: state.rating.scores, previous: state.rating.previousScores, previousLabel: state.rating.previousLabel, notes };
 }
 
 module.exports = {

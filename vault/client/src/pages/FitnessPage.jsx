@@ -27,13 +27,14 @@ const VIEWS = [
 
 function StartOverModal({ onConfirm, onCancel }) {
   const [clear, setClear] = useState(false);
+  const [clearWeight, setClearWeight] = useState(false);
   return (
     <ConfirmModal
       title="Start over?"
       confirmLabel="Start over"
       confirmText={clear ? 'RESET' : undefined}
       danger={clear}
-      onConfirm={() => onConfirm(clear)}
+      onConfirm={() => onConfirm(clear, clear && clearWeight)}
       onCancel={onCancel}
       message={(
         <div className="space-y-3">
@@ -41,8 +42,17 @@ function StartOverModal({ onConfirm, onCancel }) {
           <p>Your earlier goals and ratings are kept as history.</p>
           <label className="flex items-start gap-2 cursor-pointer">
             <input type="checkbox" className="mt-1" checked={clear} onChange={(e) => setClear(e.target.checked)} />
-            <span>Clear everything instead: ratings, goals, and my date of birth, sex and height. This cannot be undone. (Your weight history is always kept.)</span>
+            <span>Clear everything instead: ratings, goals, and my date of birth, sex and height. This cannot be undone.</span>
           </label>
+          {clear && (
+            <label className="flex items-start gap-2 cursor-pointer ml-6">
+              <input type="checkbox" className="mt-1" checked={clearWeight} onChange={(e) => setClearWeight(e.target.checked)} />
+              <span>
+                Also delete my weight history
+                <span className="block text-xs mt-0.5">Kept by default, because the diet app planned for later will use it too.</span>
+              </span>
+            </label>
+          )}
         </div>
       )}
     />
@@ -108,11 +118,11 @@ export default function FitnessPage() {
     setTimeout(runTour, 400);
   }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const startOver = async (clear) => {
+  const startOver = async (clear, clearWeight = false) => {
     setConfirmReset(false);
     startProcessing(clear ? 'Clearing your answers…' : 'Resetting the wizard…');
     try {
-      const r = await api.post('/api/fitness/reset', { clear });
+      const r = await api.post('/api/fitness/reset', { clear, clearWeight });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Could not reset');
       setState(d);

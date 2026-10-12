@@ -44,12 +44,12 @@ function validateGoalText(obj) {
  * Build a plan for an ambition and, optionally, the explanation of the change from another ambition.
  * `scores`/`previous` are 1-5 ratings; `profile` = { age, bandId }.
  */
-async function buildGoalPlan({ userId, profile, scores, previous, ambition, fromAmbition, startsOn, notes, refresh }) {
+async function buildGoalPlan({ userId, profile, scores, previous, currentMinutes, ambition, fromAmbition, startsOn, notes, refresh }) {
   const cfg = await loadConfig(pool);
-  const plan = T.buildMilestones({ bandId: profile.bandId, scores, previous, ambition, startsOn }, cfg);
+  const plan = T.buildMilestones({ bandId: profile.bandId, scores, previous, ambition, startsOn, currentMinutes }, cfg);
   let diff = null;
   if (fromAmbition != null && T.clampAmbition(fromAmbition) !== plan.ambition) {
-    const from = T.buildMilestones({ bandId: profile.bandId, scores, previous, ambition: fromAmbition, startsOn }, cfg);
+    const from = T.buildMilestones({ bandId: profile.bandId, scores, previous, ambition: fromAmbition, startsOn, currentMinutes }, cfg);
     diff = T.diffPlans(from, plan);
   }
 
@@ -60,7 +60,7 @@ async function buildGoalPlan({ userId, profile, scores, previous, ambition, from
     currentRatings: scores,
     previousRatings: previous || null,
     regaining: plan.regaining,
-    startMinutesPerWeek: plan.startMinutes,
+    startMinutesPerWeek: plan.now.aerobicModerateMin,
     milestones: plan.milestones.map((m) => ({ year: m.year, phase: m.phase.label, ratings: m.ratings, weekly: m.weekly })),
     change: diff,
     userNotes: notes || null,

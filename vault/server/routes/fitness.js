@@ -102,7 +102,7 @@ router.post('/goal/preview', aiLimiter, async (req, res) => {
     const inp = await P.getPlanningInputs(req.user.id);
     const ambition = T.clampAmbition(req.body?.ambition ?? C.DEFAULT_AMBITION);
     const plan = await buildGoalPlan({
-      userId: req.user.id, profile: inp.profile, scores: inp.scores, previous: inp.previous, ambition,
+      userId: req.user.id, profile: inp.profile, scores: inp.scores, previous: inp.previous, currentMinutes: inp.currentMinutes, ambition,
       fromAmbition: req.body?.fromAmbition, startsOn: inp.state.today, notes: inp.notes, refresh: !!req.body?.refresh,
     });
     res.json({ plan, startsOn: inp.state.today });
@@ -115,7 +115,7 @@ router.post('/goal', aiLimiter, async (req, res) => {
     const inp = await P.getPlanningInputs(req.user.id);
     const ambition = T.clampAmbition(req.body?.ambition ?? C.DEFAULT_AMBITION);
     const plan = await buildGoalPlan({
-      userId: req.user.id, profile: inp.profile, scores: inp.scores, previous: inp.previous, ambition,
+      userId: req.user.id, profile: inp.profile, scores: inp.scores, previous: inp.previous, currentMinutes: inp.currentMinutes, ambition,
       startsOn: inp.state.today, notes: inp.notes,
     });
     await P.saveGoal(req.user.id, {
@@ -131,9 +131,10 @@ router.get('/goal/history', async (req, res) => {
   try { res.json({ history: await P.getGoalHistory(req.user.id) }); } catch (err) { fail(res, err, 'goal history'); }
 });
 
-// Retake the wizard. { clear: true } also wipes ratings, goals and the shared profile (never the weight series).
+// Retake the wizard. { clear: true } also wipes ratings, goals and the shared profile; { clearWeight: true } (only with clear)
+// also deletes the weight history, which is otherwise kept for the future diet app.
 router.post('/reset', async (req, res) => {
-  try { res.json(await P.resetWizard(req.user.id, { clear: req.body?.clear === true })); } catch (err) { fail(res, err, 'reset'); }
+  try { res.json(await P.resetWizard(req.user.id, { clear: req.body?.clear === true, clearWeight: req.body?.clear === true && req.body?.clearWeight === true })); } catch (err) { fail(res, err, 'reset'); }
 });
 
 // Staging helper: create/refresh the worked-example demo user (admin only). Returns the password once, on creation.

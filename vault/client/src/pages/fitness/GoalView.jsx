@@ -27,7 +27,7 @@ function Milestones({ plan, meta }) {
           <tr className="border-t" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
             <td className={`${cell} font-medium`}>Now<span className="block text-xs font-normal" style={{ color: 'var(--color-muted)' }}>today</span></td>
             <td className={cell} style={{ color: 'var(--color-muted)' }}>Where you are</td>
-            <td className={cell}>about {plan.now.aerobicModerateMin} min</td>
+            <td className={cell}>{plan.now.minutesSource === 'entered' ? '' : 'about '}{plan.now.aerobicModerateMin} min</td>
             <td className={cell} style={{ color: 'var(--color-muted)' }}>-</td>
             <td className={cell} style={{ color: 'var(--color-muted)' }}>-</td>
             <td className={cell} style={{ color: 'var(--color-muted)' }}>-</td>
@@ -49,7 +49,7 @@ function Milestones({ plan, meta }) {
       <p className="text-xs leading-relaxed mt-3" style={{ color: 'var(--color-muted)' }}>
         Strength, balance and mobility days can be combined in the same session.
         Ratings are your expected level at the end of each year on the 1-5 scale; a decimal means partway between two levels.
-        Today's aerobic minutes are estimated from your cardio rating.
+        {plan.now.minutesSource === 'entered' ? "Today's aerobic minutes are what you told us." : "Today's aerobic minutes are estimated from your cardio rating."}
       </p>
     </div>
   );
