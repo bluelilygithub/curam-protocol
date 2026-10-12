@@ -68,6 +68,11 @@ const STEPS = [
     text: 'Today and Week are your plan, Library holds the exercises, Overview is the big picture, Goal shows your five years and lets you change the pace, and Profile is where you edit your answers and re-rate. Logging and charts arrive in the next updates.',
   },
   {
+    id: 'fitness-dashboard', group: 'done', view: 'overview', since: 4, selector: '[data-tour="fitness-dashboard"]', on: 'top',
+    title: 'Your dashboard',
+    text: 'How this week is going, how your weeks compare with the plan, how balanced your four kinds of work are, and where your recent pace is heading. Use the buttons at the top right to look at 4 weeks, 12 weeks or everything.',
+  },
+  {
     id: 'fitness-goal-card', group: 'done', view: 'overview', since: 1, selector: '[data-tour="fitness-goal-card"]', on: 'bottom',
     title: 'Your five-year goal',
     text: 'The pace you chose and where it leads. You can revisit it any time from the Goal tab; earlier goals are kept in history.',

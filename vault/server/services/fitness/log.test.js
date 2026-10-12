@@ -297,7 +297,7 @@ const mk = (...kinds) => kinds.map((k, i) => ({ id: i + 1, totalMinutes: 50, com
 const FOUR = mk('strength', 'cardio', 'strength', 'flexibility');
 const THREE = mk('strength', 'cardio', 'strength');
 const FIVE = mk('strength', 'cardio', 'strength', 'cardio', 'balance');
-test('the demo history mixes every kind of outcome across the four weeks, however many sessions a week has', () => {
+test('the demo history mixes every kind of outcome across the twelve weeks, however many sessions a week has', () => {
   for (const sessions of [THREE, FOUR, FIVE]) {
     const seen = new Set();
     for (let w = 0; w < DS.WEEKS; w += 1) for (const x of DS.assignWeek(sessions, w)) seen.add(x.status);
@@ -306,10 +306,10 @@ test('the demo history mixes every kind of outcome across the four weeks, howeve
   assert.ok(DS.EXTRAS.length >= 1 && DS.WEIGHTS.length >= Math.max(...Object.values(DS.WEEKS_BY_SCENARIO)));
   assert.ok(DS.EXTRAS.every(([w, d]) => w >= 0 && w < DS.WEEKS && d >= 0 && d <= 6));
 });
-test('week one is all done; week three has the knee note on a done STRENGTH session, a swim swap for a cardio session, and a miss', () => {
+test('the first week is all done; the third of the four full-mix weeks has the knee note on a done STRENGTH session, a swim swap for a cardio session, and a miss', () => {
   assert.ok(DS.assignWeek(FOUR, 0).every((x) => x.status === 'done'));
   for (const sessions of [THREE, FOUR, FIVE]) {
-    const w2 = DS.assignWeek(sessions, 2);
+    const w2 = DS.assignWeek(sessions, DS.LEAD_IN + 2);
     const i = w2.findIndex((x) => /knee/i.test(x.note || ''));
     assert.ok(i >= 0, 'the knee note is always placed');
     assert.strictEqual(w2[i].status, 'done');
@@ -325,7 +325,7 @@ test('every session gets exactly one outcome, and the last week is complete', ()
     assert.strictEqual(a.length, sessions.length);
     assert.ok(a.every((x) => x && ['done', 'partial', 'swapped', 'rest', 'skipped'].includes(x.status)));
   }
-  assert.ok(DS.assignWeek(FOUR, 3).every((x) => x.status === 'done'), 'last week: all done, a little harder');
+  assert.ok(DS.assignWeek(FOUR, DS.WEEKS - 1).every((x) => x.status === 'done'), 'last week: all done, a little harder');
 });
 test('exactly one demo note mentions knee pain, it triggers the pain notice (not the GP-first one), and no note is guilt-toned', () => {
   const notes = [];
@@ -361,7 +361,7 @@ test('every scripted outcome becomes a log the real validator accepts, with weig
       if (v.status === 'rest' || v.status === 'skipped') assert.deepStrictEqual(v.exercises, []);
     }
   }
-  assert.ok(DS.weightFor(3) > DS.weightFor(0), 'weights rise over the four weeks');
+  assert.ok(DS.weightFor(DS.WEEKS - 1) > DS.weightFor(0), 'weights rise over the weeks');
 });
 
 console.log(`fitness logging: ${passed} tests passed${process.exitCode ? ' (with failures)' : ''}`);

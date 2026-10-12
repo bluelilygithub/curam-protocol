@@ -4,9 +4,10 @@
  * The made-up history for the staging demo user, in three scenarios. Pure data and rules; demoSeed.js applies it.
  * Outcomes are given by KIND of session (strength, cardio, any), not by position, so a lighter week still gets them.
  *
- *  mixed (4 past weeks): every kind of outcome, so the reflection, history, weekly totals and day colours all have data.
- *    Week 0: every session done, comfortable. Week 1: one partly done (a note), one rest taken. Week 2: one "didn't do it", one
- *    swapped for a swim, a strength session with a note about knee pain, plus an extra walk. Week 3 (last week): done, a little harder.
+ *  mixed (12 past weeks, so every dashboard chart has data): eight lead-in weeks of mostly done with the odd partly done, rest or
+ *    "didn't do it" (no notes), then four weeks with the full mix. First of those four: every session done, comfortable. Next: one
+ *    partly done (a note), one rest taken. Next: one "didn't do it", one swapped for a swim, a strength session with a note about
+ *    knee pain, plus an extra walk. Last week: done, a little harder.
  *  easy (7 past weeks): every session done at effort 3-4 throughout. Block weeks 1-4 build, 5 is a deload, 6-7 build, so the
  *    week being made now (a building week) steps up: shows the "nudge up" and its wording.
  *  tough (7 past weeks): normal until the last two building weeks, which are all done at effort 8-9. The week being made now eases:
@@ -16,15 +17,29 @@
 const L = require('./library');
 
 const SCENARIOS = ['mixed', 'easy', 'tough'];
-const WEEKS_BY_SCENARIO = { mixed: 4, easy: 7, tough: 7 };
+const WEEKS_BY_SCENARIO = { mixed: 12, easy: 7, tough: 7 };
+const LEAD_IN = 8; // the mixed scenario's quieter weeks before the four with the full mix
 const WEEKS = WEEKS_BY_SCENARIO.mixed; // kept for older callers
 
 const ALL_DONE = (efforts) => ({ efforts, specials: [] });
 
 // `pick` chooses which still-unassigned session gets the outcome: 'strength' | 'cardio' | 'first' | 'second' | 'last' | 'any'.
 // Everything not listed is "done" with the effort taken from `efforts` in date order.
+// Eight lead-in weeks: mostly done, effort drifting up, the odd partly done / rest / "didn't do it", never a note.
+const LEAD_IN_PLANS = [
+  ALL_DONE([5, 5, 6, 5, 5]),
+  ALL_DONE([5, 6, 5, 5, 6]),
+  { efforts: [5, 5, 5, 5, 5], specials: [{ pick: 'second', status: 'partial', effort: 6, minutes: 20 }] },
+  ALL_DONE([5, 5, 6, 5, 6]),
+  { efforts: [5, 5, 5, 5, 5], specials: [{ pick: 'last', status: 'rest' }] },
+  ALL_DONE([4, 5, 5, 4, 5]), // a deload week in the plan
+  { efforts: [5, 5, 6, 5, 5], specials: [{ pick: 'last', status: 'skipped' }] },
+  ALL_DONE([5, 6, 5, 6, 5]),
+];
+
 const PLANS = {
   mixed: [
+    ...LEAD_IN_PLANS,
     ALL_DONE([4, 5, 4, 5, 4]),
     {
       efforts: [5, 5, 4, 5, 4],
@@ -58,12 +73,12 @@ const WEEK_PLANS = PLANS.mixed; // kept for older callers
 
 // Something done that was not planned (mixed scenario only): [week, day offset from Monday, what, minutes, effort, domain]
 const EXTRAS = [
-  [2, 4, 'Long walk with a friend', 45, 3, 'cardio'],
-  [3, 5, 'Gardening or active chores', 30, 3, 'cardio'],
+  [LEAD_IN + 2, 4, 'Long walk with a friend', 45, 3, 'cardio'],
+  [LEAD_IN + 3, 5, 'Gardening or active chores', 30, 3, 'cardio'],
 ];
 
 // Weigh-ins on the Sunday of each week.
-const WEIGHTS = [86.0, 85.6, 85.3, 85.0, 84.8, 84.7, 84.5];
+const WEIGHTS = [87.4, 87.1, 86.8, 86.6, 86.3, 86.0, 85.6, 85.3, 85.0, 84.8, 84.7, 84.5];
 
 const hasDomain = (s, d) => (s.components || []).some((c) => c.domain === d);
 
@@ -103,7 +118,7 @@ function assignWeek(sessions, weekIdx, scenario = 'mixed') {
 
 /** Kilograms for a loaded exercise, rising a kilogram from the third week. */
 function weightFor(weekIdx) {
-  return weekIdx >= 2 ? 7 : 6;
+  return weekIdx >= LEAD_IN ? 8 : weekIdx >= 3 ? 7 : 6;
 }
 
 /** The log body for one session, from its demo outcome and what the session actually contains. */
@@ -127,4 +142,4 @@ function bodyFor(script, session, weekIdx) {
   return body;
 }
 
-module.exports = { SCENARIOS, WEEKS_BY_SCENARIO, WEEKS, PLANS, WEEK_PLANS, EXTRAS, WEIGHTS, assignWeek, weightFor, bodyFor };
+module.exports = { LEAD_IN, SCENARIOS, WEEKS_BY_SCENARIO, WEEKS, PLANS, WEEK_PLANS, EXTRAS, WEIGHTS, assignWeek, weightFor, bodyFor };

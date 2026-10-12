@@ -11,7 +11,8 @@ Spec: "Fitness Planner App: Spec for Claude Code" (2026-10-12). Built in stages;
 | 1 | Profile, age templates, self-ratings, AI baseline, 5-year goal with ambition dial, goal revisit, re-rate form, safety check, demo user | built |
 | 2 | Exercise library (47, variation chains), 5-week blocks, varied weekly program, Today/Week/Library views, movable sessions, rest budget | built, awaiting library review and staging check |
 | 3 | Logging, back-fill, extras, weigh-in (step 1: built, awaiting staging check); tips, reflection, easing prompt (step 2); adaptation, comfortable-jog gate, load suggestions (step 3); swap, diet-app summary (step 4); demo-user logs | in progress |
-| 4 | Dashboard charts, colour system, rating-history chart, re-rate banner on the dashboard | planned |
+| 3 | Stages 1-3 are merged to production (`version-7`, 2026-10-12) | live |
+| 4 | Dashboard charts, colour system, rating-history chart, re-rate banner on the dashboard (step 1: this-week tile, goal path with projection, planned-vs-done, domain balance, consistency calendar, re-rate banner; step 2: effort, weight, ratings charts) | step 1 built, awaiting staging check |
 | 5 | Morning plan + catch-up reminders (email, `fitnessCron.js`), installable mobile Today view, re-rate email nudge | planned |
 
 Where the approved extras land: re-rate form + revisit-goal + ambition dial are in Stage 1; the soft "time to re-rate" banner is in Stage 1 (Overview), its chart in Stage 4 and its email in Stage 5. The pain/dizzy/chest keyword check runs on the profile notes in Stage 1 and on session notes in Stage 3. Demo user: profile, ratings, goal and a weight series in Stage 1; weeks of mixed logs in Stage 3.
@@ -54,6 +55,12 @@ All working screens (Today, Week, a single day, Month, Log, Library) share Today
 **Week view.** Compact cards (icon, title, when, minutes, state, a pencil to open the day). Click a day or a card to open the day (full session cards with exercises, logging and Move); Back returns to the week. Dragging a card shows three drop places per day. The rest control appears on hover or focus of a day (always visible on touch screens). A small marker shows a session has been moved, and from where. One "?" in the header opens a single guide (moving, time of day, rest, blocks, a different version) instead of several tips.
 
 **Starter rule.** In the first five weeks of a goal, someone who does under 60 minutes of exercise a week (or has not said) gets main work at Gentle or Moderate only: nothing marked Challenging or Advanced, whatever they rated themselves (`selection.STARTER_*`, tested in `week.test.js`: no goblet squat in week one). Week one for the worked example: bodyweight squat, incline push-up, lat pulldown, bird dog; Thursday dumbbell RDL, lateral lunge, wall push-up, dead bug; Saturday a 45 minute easy ride.
+
+## Stage 4: the dashboard (step 1)
+
+The Overview tab is now the dashboard (`pages/fitness/Overview.jsx`, `max-w-6xl`, two columns on desktop and one on mobile). `GET /api/fitness/dashboard?range=4|12|all` (`dashboardService.js` loads, pure `dashboard.js` computes, `dashboard.test.js`); the range choice is remembered per browser. Sections: goal summary, "This week so far", the five-year aerobic path with a **projection**, planned-vs-done bars per week (WHO band behind), **domain balance** (cardio minutes; strength, balance, mobility days; done vs target over the last four logged finished weeks), a consistency calendar (same day colours as Month, no streak), last week's reflection, ratings, baseline. The re-rate banner can be dismissed for seven days.
+
+*Honest rules:* weeks with under half their sessions logged are shown but never used for balance or projection (unlogged is not "did nothing"); the current week is "so far" and never feeds trends; deload weeks are left out of the trend. *Projection:* a least-squares line through the last four to eight usable weeks (at least four needed, otherwise it says how many it has); a flat or falling run is projected as holding steady; the climb is capped at about 10% a week; and the projection never goes beyond the plan (it can fall short or reach it, because a short trend carried a year is a guess). The sentence says it is a rough guide. *Demo:* the mixed scenario is now 12 weeks (eight quieter lead-in weeks, then the four-week full mix).
 
 ## Stage 3: the plan fits itself to you (step 3)
 

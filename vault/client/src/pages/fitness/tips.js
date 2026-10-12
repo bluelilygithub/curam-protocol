@@ -58,6 +58,22 @@ export const TIPS = {
     title: 'How hard should it feel?',
     body: 'Use the talk test while you move, and the 1 to 10 scale afterwards. Around 4 to 5 means breathing is up but you can still talk in short sentences. The two scales line up (see the table).',
   },
+  dashActivity: {
+    title: 'Planned and done',
+    body: 'Each pair of bars is one week: the light bar is the aerobic time planned, the dark bar is what you logged. Partly done counts as half, rest is never counted against you, and the shaded band is the WHO guideline of 150 to 300 minutes. A week with little logged looks low because nothing was recorded, not because nothing happened.',
+  },
+  dashBalance: {
+    title: 'Balance across the four kinds of work',
+    body: 'Over your last few logged weeks: how much cardio, strength, balance and mobility you did against what the plan asked. A bar that is not full is a prompt to look at next week, not a mark against you. Weeks with little logged are left out.',
+  },
+  dashCalendar: {
+    title: 'Your weeks at a glance',
+    body: 'One square per day. Green is done, amber is some done, blue is rest, violet is something extra, and grey is planned or not logged. There is no streak to protect: rest is a good thing and a quiet day does not break anything.',
+  },
+  dashProjection: {
+    title: 'Where your recent weeks are heading',
+    body: 'The dotted line extends the trend of your last four to eight logged weeks (lighter weeks are left out). A flat or falling run is shown as holding steady, the climb is held to the rule the plan itself follows of about 10% a week, and it never goes beyond the plan: it can fall short of it or reach it. It is a rough guide only, and needs at least four logged weeks.',
+  },
   ratings: {
     title: 'What your ratings do',
     body: 'Your own 1 to 5 ratings decide which versions of each exercise you are offered in the weeks to come, and they are kept so you can see how you have changed. They are not checked by anyone. Your five-year goal stays as it is until you revisit it.',
