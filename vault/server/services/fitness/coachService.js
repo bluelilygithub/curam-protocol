@@ -27,7 +27,7 @@ async function tipsForSession(userId, sessionId) {
   const log = rows[0];
   if (!log) throw new ValidationError('Log the session first');
   if (!C.TIP_STATUSES.has(log.status)) return { tips: [], source: 'none' };
-  if (log.tips) return { tips: parse(log.tips, []), source: log.tipsSource || 'stored', note: log.tipsNote || null };
+  if (log.tips) return { tips: parse(log.tips, []), source: log.tipsSource || 'stored', aiNote: log.tipsNote || null };
 
   const { rows: ex } = await pool.query(
     `SELECT e.slug, e.block, e.sets, e.reps, e."weightKg"::float AS "weightKg"
@@ -74,7 +74,7 @@ async function tipsForSession(userId, sessionId) {
     'UPDATE fitness_session_logs SET tips=$3, "tipsSource"=$4, "tipsNote"=$5 WHERE id=$1 AND "userId"=$2',
     [log.id, userId, JSON.stringify(tips), res.source, res.note || null],
   );
-  return { tips, source: res.source, note: res.note || null };
+  return { tips, source: res.source, aiNote: res.note || null };
 }
 
 /** A short look back at a finished week. Null when nothing was logged in it. */

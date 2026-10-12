@@ -99,7 +99,7 @@ async function buildGoalPlan({ userId, profile, scores, previous, currentMinutes
     diff,
     source: result.source,
     model: result.model,
-    note: result.note,
+    aiNote: result.note,
   };
 }
 

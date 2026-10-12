@@ -112,7 +112,7 @@ export default function SessionCard({
     setTipsBusy(true);
     api.post(`/api/fitness/sessions/${session.id}/tips`, {})
       .then((r) => r.json())
-      .then((d) => { setTips(d.tips || []); setTipsNote(d.source === 'fallback' ? d.note : null); })
+      .then((d) => { setTips(d.tips || []); setTipsNote(d.source === 'fallback' ? d.aiNote : null); })
       .catch(() => setTips([]))
       .finally(() => setTipsBusy(false));
   }, [logging, log?.id, log?.status, log?.effort, log?.actualMinutes, log?.note, log?.tips]); // eslint-disable-line react-hooks/exhaustive-deps

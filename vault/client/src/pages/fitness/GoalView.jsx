@@ -184,7 +184,7 @@ export default function GoalView({ meta, state, mode = 'first', onSaved, onCance
             <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
               Easier weeks are built in along the way, and rest is part of the plan.
             </p>
-            {plan.note && <Notice>{plan.note}</Notice>}
+            {plan.aiNote && <Notice>{plan.aiNote}</Notice>}
           </Card>
 
           <div className="flex items-center gap-2">

@@ -115,7 +115,7 @@ export default function BaselineView({ meta, state, onContinue, compact = false 
       </Card>
 
       {data.safety?.message && <Notice tone="care">{data.safety.message}</Notice>}
-      {data.note && <Notice>{data.note}</Notice>}
+      {data.aiNote && <Notice>{data.aiNote}</Notice>}
 
       <div className="flex items-center gap-2">
         <SecondaryButton onClick={() => load(true)} disabled={loading}>Rewrite this summary</SecondaryButton>

@@ -215,9 +215,16 @@ async function loadFirstAdminSettings() {
      ORDER BY s."userId" ASC`
   );
   if (!rows.length) return {};
-  const firstAdminId = rows[0].userId;
-  const firstAdminRows = rows.filter((r) => r.userId === firstAdminId);
-  return Object.fromEntries(firstAdminRows.map((r) => [r.key, r.value]));
+  // The first admin who actually has models set up (an earlier admin with an empty list must not leave everyone without any).
+  const byAdmin = new Map();
+  for (const r of rows) {
+    if (!byAdmin.has(r.userId)) byAdmin.set(r.userId, {});
+    byAdmin.get(r.userId)[r.key] = r.value;
+  }
+  for (const config of byAdmin.values()) {
+    if (parseConfiguredModelIds(config.vault_models).length > 0) return config;
+  }
+  return [...byAdmin.values()][0];
 }
 
 /** User settings, else first admin's vault_models / default_model. */

@@ -107,7 +107,8 @@ function fitLine(ys) {
 /**
  * Where recent weeks are heading, put beside the plan. Honest maths:
  *  - the fitted line through the last four to eight usable weeks (deload and thin weeks left out);
- *  - a falling or flat line is projected as holding steady (it is a few noisy weeks, not a prediction of decline);
+ *  - a falling or flat line is projected as holding steady at the AVERAGE of the last four usable weeks (what you have actually
+ *    been doing lately: not an earlier, higher week, and not the bottom of a falling line);
  *  - the climb is held to the plan's own rule of about 10% a week, and the projection never goes beyond the plan itself: a few
  *    weeks of trend carried forward a year is a guess, so it can fall short of the plan or reach it, never claim to beat it;
  *  - fewer than four usable weeks gives no projection and says so.
@@ -127,10 +128,13 @@ function projection(summaries, milestones, today) {
   }
   const ys = usable.map((s) => s.done.aerobicMinutes);
   const { slope, intercept } = fitLine(ys);
-  const level = Math.max(0, intercept + slope * (ys.length - 1)); // the fitted value now, steadier than the last single week
+  const holding = slope <= 0;
+  const recent = ys.slice(-MIN_PROJECTION_WEEKS);
+  const recentAverage = recent.reduce((a, b) => a + b, 0) / recent.length;
+  // climbing: the fitted value now (steadier than one week); holding: the recent actual average
+  const level = holding ? recentAverage : Math.max(0, intercept + slope * (ys.length - 1));
   const maxClimb = Math.max(5, level * 0.1);
   const perWeek = Math.min(Math.max(slope, 0), maxClimb);
-  const holding = slope <= 0;
   const points = milestones.map((m) => {
     const weeksAhead = Math.max(0, (Date.parse(`${m.by}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / (7 * 86400000));
     const planned = m.weekly.aerobicModerateMin;

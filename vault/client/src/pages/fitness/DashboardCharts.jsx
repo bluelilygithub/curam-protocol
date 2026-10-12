@@ -132,8 +132,9 @@ export function ConsistencyCalendar({ calendar }) {
       <div className="overflow-x-auto">
         <div className="inline-grid gap-1" style={{ gridTemplateColumns: `auto repeat(${calendar.length}, minmax(18px, 1fr))`, minWidth: '100%' }} role="table" aria-label="Each day of each week, coloured by what happened">
           <span aria-hidden="true" />
-          {calendar.map((w) => (
-            <span key={w.weekStart} className="text-[10px] text-center truncate" style={{ color: 'var(--color-muted)' }}>{shortDate(w.weekStart)}{w.isDeload ? '*' : ''}</span>
+          {calendar.map((w, i) => (
+            // on a phone the columns are narrow, so only every other week gets a date (it can run over its neighbour)
+            <span key={w.weekStart} className={`text-[10px] whitespace-nowrap sm:text-center sm:truncate ${i % 2 ? 'max-sm:invisible' : ''}`} style={{ color: 'var(--color-muted)' }}>{shortDate(w.weekStart)}{w.isDeload ? '*' : ''}</span>
           ))}
           {DAY_LETTERS.map((letter, day) => (
             <React.Fragment key={day}>

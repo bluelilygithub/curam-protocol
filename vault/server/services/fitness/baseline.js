@@ -114,7 +114,7 @@ async function buildBaseline({ userId, profile, scores, previous, previousLabel,
     maxTokens: 1500,
   });
 
-  return { data, narrative: result.value, source: result.source, model: result.model, note: result.note };
+  return { data, narrative: result.value, source: result.source, model: result.model, aiNote: result.note };
 }
 
 module.exports = { buildBaseline, buildBaselineData, fallbackNarrative, validateNarrative, weeklyToMaintain };

@@ -121,6 +121,19 @@ test('a flat or falling run is projected as holding steady, not as decline', () 
   assert.ok(falling.points.every((x) => x.minutes === falling.level), 'never projects below where recent weeks sit');
   assert.ok(/stay around \d+ min a week/.test(falling.sentence));
 });
+test('holding steady is at the recent actual average, not an earlier peak or the bottom of a falling line', () => {
+  // 100, 92, 84, 76, 68, 60: falling. The last four average 72; the fitted line ends at 60; the peak was 100.
+  const p = D.projection(rising(100, -8), MILESTONES, TODAY);
+  assert.strictEqual(p.holding, true);
+  assert.strictEqual(p.level, 72);
+  assert.ok(p.points.every((x) => x.minutes === 72));
+  // a high week long ago followed by a flat stretch: holds at the flat stretch
+  const old = [S(week(10, 200)), ...rising(60, 0, 5)];
+  const q = D.projection(old, MILESTONES, TODAY);
+  assert.strictEqual(q.holding, true);
+  assert.strictEqual(q.level, 60);
+  assert.ok(/stay around 60 min a week/.test(q.sentence), q.sentence);
+});
 test('deload weeks and thin weeks are left out of the fit', () => {
   const weeks = rising(60, 5, 5);
   const deload = S({ ...week(0.0001, 5), weekStart: weekAgo(6), isDeload: true });
