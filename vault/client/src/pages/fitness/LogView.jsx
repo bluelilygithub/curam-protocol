@@ -6,6 +6,7 @@ import { Card, Chip, Field, FIELD, inputCls, Notice, PrimaryButton, SecondaryBut
 import { TileGroup } from './ExerciseTile';
 import { DOMAIN_ICON, sessionIcon } from './icons';
 import EffortPicker from './EffortPicker';
+import SafetyNotice from './SafetyNotice';
 import LogPanel, { STATUS_OPTIONS, StatusChip } from './LogPanel';
 import { DAY_NAMES, addDays } from './useWeek';
 
@@ -106,7 +107,7 @@ function CatchUpTile({ s, meta, prefs, onRememberDetail, onSaved }) {
     return (
       <div className="rounded-xl border p-3 space-y-2" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{s.title}: saved</p>
-        <Notice tone="care">{safety.message}</Notice>
+        <SafetyNotice safety={safety} />
         <SecondaryButton onClick={() => onSaved(true)}>OK</SecondaryButton>
       </div>
     );

@@ -73,7 +73,7 @@ async function writeCache(userId, kind, inputHash, output, model) {
  * @param {number} [p.maxTokens=900]
  * @returns {Promise<{ value:any, source:'ai'|'cache'|'fallback', model:string|null, note:string|null }>}
  */
-async function runJson({ userId, kind, input, system, prompt, validate, fallback, tier = 'standard', refresh = false, maxTokens = 900 }) {
+async function runJson({ userId, kind, input, system, prompt, validate, fallback, tier = 'standard', refresh = false, maxTokens = 900, timeoutMs = CALL_TIMEOUT_MS }) {
   const inputHash = hashInput({ kind, input });
 
   if (!refresh) {
@@ -94,7 +94,7 @@ async function runJson({ userId, kind, input, system, prompt, validate, fallback
   try {
     // One retry with a bigger budget if the reply was cut off (a truncated JSON object has no closing brace).
     for (const budget of [maxTokens, maxTokens * 2]) {
-      const res = await callModel(modelId, prompt, { system, maxTokens: budget, returnUsage: true, timeoutMs: CALL_TIMEOUT_MS });
+      const res = await callModel(modelId, prompt, { system, maxTokens: budget, returnUsage: true, timeoutMs });
       logUsage({ userId, model: modelId, inputTokens: res.inputTokens, outputTokens: res.outputTokens, feature: 'fitness' });
       last = res;
       const json = extractJsonObject(res.text);

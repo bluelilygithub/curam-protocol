@@ -38,6 +38,11 @@ const STEPS = [
     text: 'On Today, "Done as planned" is one tap. Here you can catch up on sessions you have not noted (up to 28 days back), add something that was not planned, and weigh in if you want to. Rest and "didn\'t do it" are recorded as they are: neutral, never a mark against you.',
   },
   {
+    id: 'fitness-today-tips', group: 'done', view: 'today', since: 3, selector: '[data-tour="fitness-today"]', on: 'bottom',
+    title: 'Tips and a look back',
+    text: 'Log a session and a lightbulb offers one or two short tips for next time. On the Overview a short reflection looks back at last week. If a note mentions pain, dizziness or chest symptoms you are asked whether to make next week gentler: it only happens if you say yes.',
+  },
+  {
     id: 'fitness-week-grid', group: 'done', view: 'week', since: 2, selector: '[data-tour="fitness-week-grid"]', on: 'top',
     title: 'Your week',
     text: 'One block per day with a small card for each session. A day changes colour once you have logged it (green done, amber some done, blue rest), always with an icon too. Click a day, a card or its pencil to open the day and log or edit. Drag a card to another day or time; the places to drop appear as you drag. The numbers at the top show what you have done against what the plan asks for. The ? explains the rest.',

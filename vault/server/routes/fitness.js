@@ -16,6 +16,7 @@ const { seedDemoUser } = require('../services/fitness/demoSeed');
 const Lib = require('../services/fitness/library');
 const W = require('../services/fitness/weekService');
 const LS = require('../services/fitness/logService');
+const CS = require('../services/fitness/coachService');
 
 const router = express.Router();
 
@@ -271,6 +272,32 @@ router.get('/logs', async (req, res) => {
 
 router.get('/catchup', async (req, res) => {
   try { res.json(await LS.catchUp(req.user.id)); } catch (err) { fail(res, err, 'catch up'); }
+});
+
+// Short tips for a logged session (model from Settings, rule-based fallback). Stored on the log.
+router.post('/sessions/:id/tips', aiLimiter, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad session id' });
+    res.json(await CS.tipsForSession(req.user.id, id));
+  } catch (err) { fail(res, err, 'tips'); }
+});
+
+// A short look back at a finished week (?weekStart=YYYY-MM-DD). { reflection: null } when nothing was logged.
+router.get('/reflection', aiLimiter, async (req, res) => {
+  try {
+    const ws = String(req.query.weekStart || '');
+    if (!T.isIsoDate(ws)) return res.status(400).json({ error: 'weekStart is required (YYYY-MM-DD)' });
+    res.json(await CS.reflectionForWeek(req.user.id, ws, { refresh: req.query.refresh === '1' }));
+  } catch (err) { fail(res, err, 'reflection'); }
+});
+
+// "Yes, keep next week gentle", after a note about pain, dizziness or chest symptoms. Never automatic.
+router.post('/ease', async (req, res) => {
+  try {
+    if (req.body?.confirm !== true) return res.status(400).json({ error: 'Confirm that you would like next week to be gentler' });
+    res.json(await CS.easeNextWeek(req.user.id));
+  } catch (err) { fail(res, err, 'ease'); }
 });
 
 // Optional weigh-in, saved to the shared weight table.

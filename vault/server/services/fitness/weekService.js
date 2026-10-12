@@ -48,7 +48,7 @@ async function loadSessions(weekId, userId) {
   // What was actually done: the log for each session, its exercise rows, and the last weight lifted for each exercise.
   const ids = sess.map((s) => s.id);
   const { rows: logRows } = await pool.query(
-    `SELECT id, "plannedSessionId" AS "sessionId", status, "actualMinutes", effort, note, activity, safety,
+    `SELECT id, "plannedSessionId" AS "sessionId", status, "actualMinutes", effort, note, activity, safety, tips,
             to_char("loggedOn",'YYYY-MM-DD') AS "loggedOn"
        FROM fitness_session_logs WHERE "userId"=$1 AND "plannedSessionId" = ANY($2::int[])`,
     [userId, ids],
@@ -66,7 +66,7 @@ async function loadSessions(weekId, userId) {
   const lastWeight = new Map(lastW.map((r) => [r.slug, r.w]));
   const logBySession = new Map(logRows.map((l) => [l.sessionId, {
     id: l.id, status: l.status, actualMinutes: l.actualMinutes, effort: l.effort, note: l.note, activity: l.activity,
-    safety: parse(l.safety, null), loggedOn: l.loggedOn,
+    safety: parse(l.safety, null), tips: parse(l.tips, null), loggedOn: l.loggedOn,
     exercises: exLogRows.filter((r) => r.sessionLogId === l.id).map(({ sessionLogId, ...rest }) => rest),
   }]));
 
@@ -255,6 +255,7 @@ async function ensureWeek(userId, { start, refresh = false } = {}) {
     goal, weekStart,
     prevBuildMinutes: await previousBuildMinutes(userId, weekStart),
     easeRequested: !!state.lifestyle?.easeRequested,
+    easeWeek: state.lifestyle?.easeWeek || null,
     currentMinutes: state.lifestyle?.weeklyMinutes ?? 0,
   });
   const generation = existing ? existing.generation + 1 : 0;

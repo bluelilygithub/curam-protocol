@@ -115,7 +115,7 @@ async function getLatestWeight(userId) {
 async function getFitnessRow(userId) {
   const { rows } = await pool.query(
     `SELECT equipment, smoking, alcohol, "dietQuality", "timeFlexibility", "workAround", "otherNotes",
-            "currentWeeklyMinutes" AS "weeklyMinutes", "templateBand", "easeRequested", prefs, to_char("onboardedAt",'YYYY-MM-DD') AS "onboardedOn"
+            "currentWeeklyMinutes" AS "weeklyMinutes", "templateBand", "easeRequested", prefs, to_char("easeWeek",'YYYY-MM-DD') AS "easeWeek", to_char("onboardedAt",'YYYY-MM-DD') AS "onboardedOn"
        FROM fitness_profiles WHERE "userId"=$1`,
     [userId],
   );
@@ -205,7 +205,7 @@ async function getState(userId) {
     lifestyle: fit ? {
       equipment: fit.equipment, smoking: fit.smoking, alcohol: fit.alcohol, dietQuality: fit.dietQuality,
       weeklyMinutes: fit.weeklyMinutes ?? null, timeFlexibility: fit.timeFlexibility, workAround: cleanFreeText(fit.workAround, 1000), otherNotes: cleanFreeText(fit.otherNotes, 1000),
-      templateBand: fit.templateBand, easeRequested: !!fit.easeRequested,
+      templateBand: fit.templateBand, easeRequested: !!fit.easeRequested, easeWeek: fit.easeWeek || null,
     } : null,
     rating,
     ratingDue: due,

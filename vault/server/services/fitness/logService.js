@@ -52,7 +52,7 @@ async function logSession(userId, sessionId, body) {
     if (existing[0]) {
       logId = existing[0].id;
       await client.query(
-        `UPDATE fitness_session_logs SET status=$3, title=$4, activity=$5, "plannedMinutes"=$6, "actualMinutes"=$7, effort=$8, note=$9, safety=$10, "updatedAt"=NOW()
+        `UPDATE fitness_session_logs SET status=$3, title=$4, activity=$5, "plannedMinutes"=$6, "actualMinutes"=$7, effort=$8, note=$9, safety=$10, tips=NULL, "updatedAt"=NOW()
           WHERE id=$1 AND "userId"=$2`,
         [logId, userId, ...common],
       );

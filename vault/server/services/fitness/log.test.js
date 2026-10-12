@@ -4,6 +4,8 @@
 const assert = require('assert');
 const LG = require('./logging');
 const { dayState, weekDone } = require('./dayStatus');
+const CO = require('./coaching');
+const Ph = require('./phases');
 
 let passed = 0;
 function test(name, fn) {
@@ -171,6 +173,110 @@ test('swapped counts for what was planned; partly done is half the minutes; extr
 });
 test('nothing logged means nothing done', () => {
   assert.deepStrictEqual(weekDone([{ status: 'planned', day: 0, components: [{ domain: 'cardio', minutes: 30 }] }], []), { aerobicMinutes: 0, strengthDays: 0, balanceDays: 0, mobilityDays: 0 });
+});
+
+
+// ── tips after a session ──
+const ex = (slug, extra = {}) => ({ slug, block: 'main', ...extra });
+test('no tips for rest or "didn\'t do it": nothing to say about a session that was not done', () => {
+  assert.deepStrictEqual(CO.ruleTips({ status: 'rest', effort: null, exercises: [ex('goblet-squat')] }), []);
+  assert.deepStrictEqual(CO.ruleTips({ status: 'skipped', effort: null, exercises: [ex('goblet-squat')] }), []);
+});
+test('effort 9 or 10 suggests the easier version, by name, and a sensible target', () => {
+  const t = CO.ruleTips({ status: 'done', effort: 9, exercises: [ex('push-up'), ex('goblet-squat')] });
+  assert.ok(/9 out of 10/.test(t[0]) && /easier version of Push-up \(Incline push-up\)/.test(t[0]) && /6 to 8/.test(t[0]), t[0]);
+});
+test('a manageable weight gets a small step up; a hard one is left alone', () => {
+  const easy = CO.ruleTips({ status: 'done', effort: 4, exercises: [ex('goblet-squat', { weightKg: 6 })] });
+  assert.ok(easy.some((x) => /6 kg felt manageable/.test(x) && /7 to 8 kg/.test(x)), easy.join(' | '));
+  const hard = CO.ruleTips({ status: 'done', effort: 8, exercises: [ex('goblet-squat', { weightKg: 8 })] });
+  assert.ok(hard.some((x) => /stay at 8 kg/.test(x)), hard.join(' | '));
+  const middle = CO.ruleTips({ status: 'done', effort: 6, exercises: [ex('goblet-squat', { weightKg: 8 })] });
+  assert.ok(!middle.some((x) => /kg/.test(x)), 'effort 6 or 7 is right: no weight advice');
+});
+test('an easy session says the plan steps up by itself; a partly done one says part still counts', () => {
+  assert.ok(CO.ruleTips({ status: 'done', effort: 3, exercises: [] }).some((x) => /plan steps up a little by itself/.test(x)));
+  assert.ok(CO.ruleTips({ status: 'partial', effort: 5, exercises: [] }).some((x) => /Part of a session still counts/.test(x)));
+});
+test('a form cue comes from the library and varies with the seed; never more than two tips', () => {
+  const exs = [ex('goblet-squat'), ex('push-up'), ex('dead-bug'), ex('supported-dumbbell-row')];
+  const cues = new Set();
+  for (let seed = 0; seed < 8; seed += 1) {
+    const t = CO.ruleTips({ status: 'done', effort: 6, exercises: exs }, seed);
+    assert.ok(t.length >= 1 && t.length <= 2);
+    assert.ok(/^A form cue for /.test(t[0]));
+    cues.add(t[0]);
+  }
+  assert.ok(cues.size >= 3, 'the cue rotates between exercises');
+  assert.ok(CO.ruleTips({ status: 'done', effort: 9, exercises: exs }).length <= 2);
+});
+test('no rule-based tip or reflection ever uses guilt words', () => {
+  for (const status of ['done', 'partial', 'swapped']) for (const effort of [1, 3, 5, 7, 9, 10, null]) {
+    for (const tip of CO.ruleTips({ status, effort, exercises: [ex('goblet-squat', { weightKg: 6 }), ex('push-up')] }, 3)) assert.ok(!CO.BANNED.test(tip), tip);
+  }
+  const f = { sessionsLogged: 3, extras: 1, minutesLogged: 140, aerobicDone: 60, aerobicPlanned: 90, averageEffort: 9, done: 2, partly: 1, didSomethingElse: 0, rested: 1 };
+  assert.ok(!CO.BANNED.test(CO.reflectionFallback(f)));
+  assert.ok(!CO.BANNED.test(CO.reflectionFallback({ ...f, averageEffort: 2 })));
+});
+test('model tips are accepted only if short, on tone, and in the right shape', () => {
+  assert.strictEqual(CO.validateTips({ tips: ['Keep the weight where it is.'] }).ok, true);
+  assert.strictEqual(CO.validateTips({ tips: ['One.', 'Two.', 'Three.'] }).value.tips.length, 2);
+  assert.strictEqual(CO.validateTips({ tips: [] }).ok, false);
+  assert.strictEqual(CO.validateTips({ tips: 'nope' }).ok, false);
+  assert.strictEqual(CO.validateTips(null).ok, false);
+  assert.strictEqual(CO.validateTips({ tips: ['You should have done more.'] }).ok, false);
+  assert.strictEqual(CO.validateTips({ tips: ['Do not get behind.'] }).ok, false);
+  assert.strictEqual(CO.validateTips({ tips: ['x'.repeat(500)] }).value.tips[0].length, 220);
+});
+
+// ── the weekly reflection ──
+test('reflection facts count only what was logged; unlogged sessions are simply absent', () => {
+  const week = {
+    sessions: [
+      { status: 'done', log: { status: 'done', actualMinutes: 40, effort: 5 } },
+      { status: 'partial', log: { status: 'partial', actualMinutes: 20, effort: 7 } },
+      { status: 'planned', log: null },
+      { status: 'rest', log: null },
+    ],
+    extras: [{ minutes: 30 }],
+    done: { aerobicMinutes: 60, strengthDays: 1 },
+    targets: { aerobicMinutes: 90, strengthDays: 2 },
+  };
+  const f = CO.reflectionFacts(week);
+  assert.strictEqual(f.sessionsLogged, 2);
+  assert.strictEqual(f.minutesLogged, 90);
+  assert.strictEqual(f.averageEffort, 6);
+  assert.strictEqual(f.rested, 1);
+  assert.strictEqual(f.extras, 1);
+  assert.ok(!('skipped' in f) && !('notLogged' in f));
+});
+test('a week with nothing logged has no reflection; one with something does, in plain words', () => {
+  assert.strictEqual(CO.reflectionFallback({ sessionsLogged: 0, extras: 0 }), null);
+  const text = CO.reflectionFallback({ sessionsLogged: 2, extras: 0, minutesLogged: 80, aerobicDone: 40, aerobicPlanned: 60, averageEffort: 5 });
+  assert.ok(/80 minutes across 2 activities/.test(text) && /40 aerobic minutes against the 60/.test(text) && /Rest and quiet weeks are part of it/.test(text));
+});
+test('model reflections are checked for shape and tone', () => {
+  assert.strictEqual(CO.validateReflection({ reflection: 'A steady week. Keep going at your own pace.' }).ok, true);
+  assert.strictEqual(CO.validateReflection({ reflection: '' }).ok, false);
+  assert.strictEqual(CO.validateReflection({}).ok, false);
+  assert.strictEqual(CO.validateReflection({ reflection: 'You skipped two sessions.' }).ok, false);
+});
+
+// ── keeping one week gentle ──
+test('a confirmed gentler week eases exactly that week and no other', () => {
+  const goal = {
+    startsOn: '2026-10-12', summary: { startMinutes: 60 },
+    milestones: [1, 2, 3, 4, 5].map((y) => ({ year: y, by: `${2026 + y}-10-12`, phase: { id: 'build', label: 'Build', focus: '' }, weekly: { aerobicModerateMin: 120, strengthDays: 2, balanceDays: 1, mobilityDays: 2 } })),
+  };
+  const base = { goal, prevBuildMinutes: 70, currentMinutes: 60 };
+  const plain = Ph.targetsForWeek({ ...base, weekStart: '2026-11-02' });
+  const gentle = Ph.targetsForWeek({ ...base, weekStart: '2026-11-02', easeWeek: '2026-11-02' });
+  const other = Ph.targetsForWeek({ ...base, weekStart: '2026-10-26', easeWeek: '2026-11-02' });
+  assert.strictEqual(plain.eased, false);
+  assert.strictEqual(gentle.eased, true);
+  assert.strictEqual(gentle.easier, true);
+  assert.ok(gentle.targets.aerobicMinutes < plain.targets.aerobicMinutes, 'the gentle week asks for less');
+  assert.strictEqual(other.eased, false);
 });
 
 console.log(`fitness logging: ${passed} tests passed${process.exitCode ? ' (with failures)' : ''}`);

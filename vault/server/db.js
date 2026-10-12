@@ -1110,6 +1110,11 @@ async function initSchema() {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_fitness_exlogs_user_slug ON fitness_exercise_logs ("userId", slug, id DESC)`);
     await client.query(`ALTER TABLE fitness_profiles ADD COLUMN IF NOT EXISTS prefs JSONB NOT NULL DEFAULT '{}'`);
+    // Stage 3 step 2: the one week the person asked to keep gentle; tips stored on the log; the weekly reflection.
+    await client.query(`ALTER TABLE fitness_profiles ADD COLUMN IF NOT EXISTS "easeWeek" DATE`);
+    await client.query(`ALTER TABLE fitness_session_logs ADD COLUMN IF NOT EXISTS tips JSONB`);
+    await client.query(`ALTER TABLE fitness_weeks ADD COLUMN IF NOT EXISTS reflection TEXT`);
+    await client.query(`ALTER TABLE fitness_weeks ADD COLUMN IF NOT EXISTS "reflectionHash" TEXT`);
     // "Not for me": exercises a person has hidden; the week generator never picks them.
     await client.query(`
       CREATE TABLE IF NOT EXISTS fitness_hidden_exercises (

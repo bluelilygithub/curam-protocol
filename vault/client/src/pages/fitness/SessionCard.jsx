@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
 import { FIELD, Notice, SecondaryButton, PrimaryButton, SmallButton, TimeOfDay } from './ui';
 import EffortPicker from './EffortPicker';
 import LogPanel, { StatusChip } from './LogPanel';
+import SafetyNotice from './SafetyNotice';
 import { ExerciseTile, TileGroup, PATTERN_LABELS, LEVEL_LABELS, BLOCK_LABELS } from './ExerciseTile';
 import { BLOCK_ICON, DOMAIN_ICON, DOMAIN_NAME, PATTERN_ICON, sessionIcon } from './icons';
 import { DAY_NAMES, SLOTS } from './useWeek';
@@ -91,10 +93,28 @@ export default function SessionCard({
   const [askEffort, setAskEffort] = useState(false);
   const [effort, setEffort] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [tips, setTips] = useState(null);
+  const [tipsBusy, setTipsBusy] = useState(false);
+  const askedFor = useRef('');
   const note = statusText(session);
   const rest = session.status === 'rest';
   const log = session.log;
   const canMove = session.status === 'planned' || session.status === 'moved';
+
+  // Short tips for what was just logged. Asked once per version of the log, kept on the log so they come back when reopened.
+  useEffect(() => {
+    if (!logging || !log || !['done', 'partial', 'swapped'].includes(log.status)) { setTips(null); return; }
+    if (log.tips) { setTips(log.tips); return; }
+    const key = `${log.id}:${log.status}:${log.effort}:${log.actualMinutes}:${log.note || ""}`;
+    if (askedFor.current === key) return;
+    askedFor.current = key;
+    setTipsBusy(true);
+    api.post(`/api/fitness/sessions/${session.id}/tips`, {})
+      .then((r) => r.json())
+      .then((d) => setTips(d.tips || []))
+      .catch(() => setTips([]))
+      .finally(() => setTipsBusy(false));
+  }, [logging, log?.id, log?.status, log?.effort, log?.actualMinutes, log?.note, log?.tips]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = async (body) => {
     setSaving(true);
@@ -181,7 +201,16 @@ export default function SessionCard({
             )}
           </div>
           {log.note && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>“{log.note}”</p>}
-          {log.safety?.message && <Notice tone="care">{log.safety.message}</Notice>}
+          {log.safety?.message && <SafetyNotice safety={log.safety} />}
+          {logging && (tipsBusy || (tips && tips.length > 0)) && (
+            <div className="space-y-1.5" aria-label="For next time">
+              <p className="flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{getIcon('lightbulb', { size: 13 })}For next time</p>
+              {tipsBusy && !tips && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Thinking of a tip…</p>}
+              {(tips || []).map((t) => (
+                <div key={t} className="rounded-xl border p-2.5 text-sm leading-snug" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>{t}</div>
+              ))}
+            </div>
+          )}
           {logging && askEffort && log.status === 'done' && (
             <div className="rounded-xl border p-3 space-y-2" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
               <EffortPicker value={effort} onChange={setEffort} scale={meta?.effortScale} />

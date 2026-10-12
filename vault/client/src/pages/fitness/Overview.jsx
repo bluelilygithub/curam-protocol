@@ -2,6 +2,8 @@ import React from 'react';
 import { Card, Notice, SecondaryButton, formatDate } from './ui';
 import BaselineView from './BaselineView';
 import RatingProgress from './RatingProgress';
+import ReflectionTile from './ReflectionTile';
+import { addDays, mondayOf } from './useWeek';
 
 /** Landing view once onboarding is done. Today/week views join here in the next stage. */
 export default function Overview({ meta, state, goTo }) {
@@ -53,6 +55,8 @@ export default function Overview({ meta, state, goTo }) {
           <SecondaryButton onClick={() => goTo('week')}>See the week</SecondaryButton>
         </div>
       </Card>
+
+      <ReflectionTile weekStart={addDays(mondayOf(state.today), -7)} title="Last week" />
 
       <RatingProgress meta={meta} due={due.due} onRerate={() => goTo('profile', { rerate: true })} />
 

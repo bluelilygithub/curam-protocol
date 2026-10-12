@@ -75,11 +75,12 @@ function blockInfo(goal, weekStart) {
  * @param {boolean} p.easeRequested          person confirmed gentler first weeks
  * @param {number} p.currentMinutes          entered weekly minutes (0 if unknown)
  */
-function targetsForWeek({ goal, weekStart, prevBuildMinutes = null, easeRequested = false, currentMinutes = 0 }, cfg = DEFAULTS) {
+function targetsForWeek({ goal, weekStart, prevBuildMinutes = null, easeRequested = false, easeWeek = null, currentMinutes = 0 }, cfg = DEFAULTS) {
   void cfg;
   const info = blockInfo(goal, weekStart);
   const ms = milestoneAt(goal, weekStart);
-  const eased = !!easeRequested && info.weeksSinceStart < P.EASE_WEEKS;
+  // Gentler weeks the person agreed to: the first weeks if they asked at the start, and the one week they confirmed after a note.
+  const eased = (!!easeRequested && info.weeksSinceStart < P.EASE_WEEKS) || (easeWeek != null && easeWeek === weekStart);
   const floor = Math.min(P.STARTER_MINUTES, ms.weekly.aerobicModerateMin);
   const aerobic = P.aerobicForWeek({
     blockWeek: info.blockWeek,

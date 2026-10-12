@@ -6,6 +6,7 @@ import { TIPS } from './tips';
 import { DOMAIN_ICON } from './icons';
 import { DayBadge, dayStyle } from './dayColors';
 import SessionCard, { CompactSessionCard } from './SessionCard';
+import ReflectionTile from './ReflectionTile';
 import useWeek, { DAY_NAMES, SLOTS, dayLabel } from './useWeek';
 
 /**
@@ -262,7 +263,7 @@ export default function WeekView({ onOpenExercise, offset: offsetProp, onOffsetC
         </div>
         <Tooltip text="Your plan moves through phases (here: rebuilding a base, then building, consolidating and maintaining). Every phase works in blocks of five weeks: four that build, then one lighter week on purpose.">
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-            Phase: {week.phase.label} · week {week.blockWeek} of {week.blockWeeks} in this block{week.isDeload ? ' (a lighter week)' : ''}{week.eased ? ' · gentle start' : ''}
+            Phase: {week.phase.label} · week {week.blockWeek} of {week.blockWeeks} in this block{week.isDeload ? ' (a lighter week)' : ''}{week.eased ? ' · a gentler week' : ''}
           </p>
         </Tooltip>
         {week.weekNote && <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{week.weekNote}</p>}
@@ -272,6 +273,8 @@ export default function WeekView({ onOpenExercise, offset: offsetProp, onOffsetC
           {' '}({budgetLeft > 0 ? `${budgetLeft} left to spend` : 'used'}). Taking a rest day is a normal part of the week.
         </p>
       </Card>
+
+      {offset < 0 && <ReflectionTile weekStart={week.weekStart} title="Looking back at this week" />}
 
       {w.error && <Notice>{w.error}</Notice>}
       {w.data?.aiNote && <Notice>{w.data.aiNote}</Notice>}
