@@ -13,7 +13,7 @@ Spec: "Fitness Planner App: Spec for Claude Code" (2026-10-12). Built in stages;
 | 3 | Logging, back-fill, extras, weigh-in (step 1: built, awaiting staging check); tips, reflection, easing prompt (step 2); adaptation, comfortable-jog gate, load suggestions (step 3); swap, diet-app summary (step 4); demo-user logs | in progress |
 | 3 | Stages 1-3 are merged to production (`version-7`, 2026-10-12) | live |
 | 4 | Dashboard charts, colour system, rating-history chart, re-rate banner on the dashboard (step 1: this-week tile, goal path with projection, planned-vs-done, domain balance, consistency calendar, re-rate banner; step 2: effort, weight lifted, weight, ratings charts) | built, awaiting staging check |
-| 5 | Morning plan + catch-up reminders (email, `fitnessCron.js`), installable mobile Today view, re-rate email nudge | planned |
+| 5 | Morning plan + catch-up reminders (email, `fitnessCron.js`), installable mobile Today view, re-rate email nudge, sessions as Tasks | built, awaiting staging check |
 
 Where the approved extras land: re-rate form + revisit-goal + ambition dial are in Stage 1; the soft "time to re-rate" banner is in Stage 1 (Overview), its chart in Stage 4 and its email in Stage 5. The pain/dizzy/chest keyword check runs on the profile notes in Stage 1 and on session notes in Stage 3. Demo user: profile, ratings, goal and a weight series in Stage 1; weeks of mixed logs in Stage 3.
 
@@ -55,6 +55,16 @@ All working screens (Today, Week, a single day, Month, Log, Library) share Today
 **Week view.** Compact cards (icon, title, when, minutes, state, a pencil to open the day). Click a day or a card to open the day (full session cards with exercises, logging and Move); Back returns to the week. Dragging a card shows three drop places per day. The rest control appears on hover or focus of a day (always visible on touch screens). A small marker shows a session has been moved, and from where. One "?" in the header opens a single guide (moving, time of day, rest, blocks, a different version) instead of several tips.
 
 **Starter rule.** In the first five weeks of a goal, someone who does under 60 minutes of exercise a week (or has not said) gets main work at Gentle or Moderate only: nothing marked Challenging or Advanced, whatever they rated themselves (`selection.STARTER_*`, tested in `week.test.js`: no goblet squat in week one). Week one for the worked example: bodyweight squat, incline push-up, lat pulldown, bird dog; Thursday dumbbell RDL, lateral lunge, wall push-up, dead bug; Saturday a 45 minute easy ride.
+
+## Stage 5: reminders, Tasks and installing on a phone
+
+**Reminders** (Profile, `RemindersCard.jsx`; `reminders.js` pure + `reminders.test.js`, `reminderEmails.js`, `reminderService.js`, `server/cron/fitnessCron.js` hourly at :05). Three opt-in emails, all off by default, in the person's own Settings time zone: a *morning plan* (only on a day with sessions still to do, never on a rest day), an *evening catch-up* (one gentle "log it or move it" when nothing planned for today is logged), and a *re-rate nudge* (soft at 4 weeks, firmer at 6, once each per rating, only on an otherwise quiet day). A late job still sends within three hours of the chosen time. A pause switch silences all; after three weeks with nothing logged (or since the goal started) reminders stop by themselves and logging turns them back on. Every email has stop-this-kind and stop-all links (public `GET /api/fitness/unsubscribe`, proved by a random per-person token, mounted before `requireAuth`). The wording is tested for guilt words. "Send me a test" (admin-safe, to your own address) is in the card. Failures go to the Suggestions inbox.
+
+**No new tables.** Reminder settings and the already-sent memory are one JSON column (`fitness_profiles.reminders`).
+
+**Sessions as Tasks** (`fitnessTasks.js`, tests in `reminders.test.js`). Upcoming sessions appear in the existing `/tasks` module (category Fitness, tag `fitness`), linked by `tasks."fitnessSessionId"` (cascade) and `fitness_planned_sessions."taskSynced"`. One way: the plan writes tasks. Only today and later; moving a session moves its task; done, partly done and swapped complete it; rest and "didn't do it" have no task; a session whose day has passed unlogged quietly loses its task (nothing turns overdue red); a deleted task stays deleted; a task you completed is never reopened; regenerating a week removes the old tasks with the old sessions. Switchable in Profile ("Sessions in Tasks", on by default); switching off removes them and switching on starts fresh. Synced after every change and hourly by the cron. Completing a task in Tasks does not log the session (logging needs effort and notes).
+
+**Installable.** `public/fitness.webmanifest` (name, icons, `start_url: /fitness`, standalone) is linked only while on the Fitness page, so "Add to Home Screen" gives a Fitness app. No service worker, no push notifications.
 
 ## Stage 4: the dashboard (step 1)
 

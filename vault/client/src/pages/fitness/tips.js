@@ -74,6 +74,10 @@ export const TIPS = {
     title: 'Where your recent weeks are heading',
     body: 'The dotted line extends the trend of your last four to eight logged weeks (lighter weeks are left out). A flat or falling run is shown as holding steady, the climb is held to the rule the plan itself follows of about 10% a week, and it never goes beyond the plan: it can fall short of it or reach it. It is a rough guide only, and needs at least four logged weeks.',
   },
+  fitnessTasks: {
+    title: 'How sessions and Tasks stay together',
+    body: 'Each upcoming session becomes a task in your Tasks list (category Fitness). Moving the session moves the task, and logging it completes the task. Rest days and sessions you did not do have no task, and a session whose day has passed quietly drops out, so nothing turns red. If you delete a task it stays deleted. You can switch this off here at any time.',
+  },
   dashEffort: {
     title: 'How hard weeks have felt',
     body: 'The average of the 1 to 10 effort scores you recorded each week (sessions done in some way, plus extras). It is your own feeling, not a test. The plan uses it: three comfortable weeks in a row nudge the next week up, and two hard weeks ease it off.',

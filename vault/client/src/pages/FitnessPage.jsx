@@ -102,6 +102,16 @@ export default function FitnessPage() {
   const [settingGoal, setSettingGoal] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmDemo, setConfirmDemo] = useState(false);
+
+  // Installable on a phone: a Fitness-only manifest (opens to Fitness, full screen), linked only while you are on this page.
+  useEffect(() => {
+    const link = document.createElement('link');
+    link.rel = 'manifest';
+    link.href = '/fitness.webmanifest';
+    link.dataset.fitness = '1';
+    document.head.appendChild(link);
+    return () => { link.remove(); };
+  }, []);
   const [demoScenario, setDemoScenario] = useState('mixed');
 
   const runDemoSeed = async () => {

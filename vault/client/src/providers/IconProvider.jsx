@@ -111,6 +111,7 @@ const semanticMap = {
   'building':     { lucide: 'Building2' },
   'menu':           { lucide: 'Menu' },
   'smartphone':     { lucide: 'Smartphone' },
+  bell:             { lucide: 'Bell' },
   'more-horizontal': { lucide: 'MoreHorizontal' },
   'help-circle':    { lucide: 'HelpCircle' },
   'brush':          { lucide: 'Brush' },

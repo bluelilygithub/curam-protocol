@@ -228,6 +228,17 @@ router.get('/dashboard', async (req, res) => {
   try { res.json(await require('../services/fitness/dashboardService').getDashboard(req.user.id, String(req.query.range || '12'))); } catch (err) { fail(res, err, 'dashboard'); }
 });
 
+// Reminder settings (all off by default), a test email to yourself, and which sessions follow into Tasks.
+router.get('/reminders', async (req, res) => {
+  try { res.json(await require('../services/fitness/reminderService').getReminders(req.user.id)); } catch (err) { fail(res, err, 'reminders'); }
+});
+router.put('/reminders', async (req, res) => {
+  try { res.json(await require('../services/fitness/reminderService').saveReminders(req.user.id, req.body || {})); } catch (err) { fail(res, err, 'reminders save'); }
+});
+router.post('/reminders/test', aiLimiter, async (req, res) => {
+  try { res.json(await require('../services/fitness/reminderService').sendTest(req.user.id, String(req.body?.kind || ''))); } catch (err) { fail(res, err, 'reminder test'); }
+});
+
 // A month as a calendar grid (?month=YYYY-MM).
 router.get('/month', async (req, res) => {
   try { res.json(await W.getMonth(req.user.id, String(req.query.month || ''))); } catch (err) { fail(res, err, 'month'); }

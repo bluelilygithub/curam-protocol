@@ -1,0 +1,14 @@
+{
+  "name": "Fitness Planner",
+  "short_name": "Fitness",
+  "description": "Today's plan, logging and your progress.",
+  "start_url": "/fitness",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F5F5F0",
+  "theme_color": "#F5F5F0",
+  "icons": [
+    { "src": "/fitness-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/fitness-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../../utils/apiClient';
 import useToastStore from '../../store/toastStore';
 import { Card, Notice, PrimaryButton, formatDate } from './ui';
+import RemindersCard from './RemindersCard';
 import {
   draftFromState, profilePayload, ratingsPayload,
   AboutSection, ActivitySection, RatingsSection, LifestyleSection, WorkAroundSection,
@@ -14,7 +15,7 @@ function History({ meta }) {
   }, []);
   if (!rows || rows.length < 2) return null;
   return (
-    <Card title="Your ratings over time" hint="Each time you re-rate, it is added here. A chart arrives with the dashboard.">
+    <Card title="Your ratings over time" hint="Each time you re-rate, it is added here. The charts are on the dashboard.">
       <ul className="space-y-1.5 text-sm" style={{ color: 'var(--color-text)' }}>
         {[...rows].reverse().map((r) => (
           <li key={r.id}>
@@ -65,6 +66,8 @@ export default function ProfileTab({ meta, state, onChanged, focusRerate }) {
       <div className="flex justify-end">
         <PrimaryButton onClick={() => save('profile')} disabled={saving !== ''}>{saving === 'profile' ? 'Saving…' : 'Save profile'}</PrimaryButton>
       </div>
+
+      <RemindersCard />
 
       <div ref={rerateRef} data-tour="fitness-rerate">
         <RatingsSection

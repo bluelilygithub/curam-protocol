@@ -81,6 +81,7 @@ async function logSession(userId, sessionId, body, { skipWindow = false } = {}) 
   } finally {
     client.release();
   }
+  require('./fitnessTasks').syncSoon(userId);
   return { logId, weekStart: s.weekStart, safety, status: v.status };
 }
 
@@ -92,6 +93,7 @@ async function undoLog(userId, sessionId) {
     'UPDATE fitness_planned_sessions SET status=$3 WHERE id=$1 AND "userId"=$2',
     [sessionId, userId, s.movedFrom ? 'moved' : 'planned'],
   );
+  require('./fitnessTasks').syncSoon(userId);
   return { weekStart: s.weekStart };
 }
 

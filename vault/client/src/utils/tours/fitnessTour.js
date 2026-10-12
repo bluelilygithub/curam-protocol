@@ -93,6 +93,11 @@ const STEPS = [
     text: 'How your weekly aerobic time builds, against the WHO 150-300 minute band (the shaded area).',
   },
   {
+    id: 'fitness-reminders', group: 'done', view: 'profile', since: 5, selector: '[data-tour="fitness-reminders"]', on: 'top',
+    title: 'Reminders and Tasks',
+    text: 'Optional emails for your morning plan, a gentle evening catch-up and a re-rate nudge, all off until you switch them on. Below them, choose whether your upcoming sessions also appear in your Tasks list. Send yourself a test to see the wording first.',
+  },
+  {
     id: 'fitness-rerate', group: 'done', view: 'profile', since: 1, selector: '[data-tour="fitness-rerate"]', on: 'top',
     title: 'Re-rate every 4-6 weeks',
     text: 'Rate yourself again whenever things change. Earlier ratings are kept so you can see progress, and the Overview reminds you gently when it has been a while.',

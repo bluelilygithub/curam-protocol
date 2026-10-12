@@ -316,7 +316,7 @@ async function ensureWeek(userId, { start, refresh = false, allowPast = false, u
   if (!allowPast && weekStart !== current && weekStart !== Ph.addDays(current, 7)) throw new ValidationError('Weeks are created for this week and next week only');
 
   const existing = await loadWeekRow(userId, weekStart);
-  if (existing && !refresh) return buildWeek(userId, existing, state);
+  if (existing && !refresh) { require('./fitnessTasks').syncSoon(userId, { force: false }); return buildWeek(userId, existing, state); }
   if (existing) {
     const acted = (await loadSessions(existing.id, userId)).some((s) => !EDITABLE.has(s.status));
     if (acted) throw new ValidationError('This week already has activity, so it is kept as it is.');
@@ -401,6 +401,7 @@ async function ensureWeek(userId, { start, refresh = false, allowPast = false, u
   const row = await loadWeekRow(userId, weekStart);
   const out = await buildWeek(userId, row, state, weekId);
   out.aiNote = plan.aiNote;
+  require('./fitnessTasks').syncSoon(userId);
   return out;
 }
 
@@ -434,6 +435,7 @@ async function moveSession(userId, sessionId, { day, slot }) {
     const next = S.swapRestOnMove({ restDays, sessions, fromDay: s.day, toDay: day });
     if (next !== restDays) await pool.query('UPDATE fitness_weeks SET "restDays"=$3, "updatedAt"=NOW() WHERE id=$1 AND "userId"=$2', [row.id, userId, JSON.stringify(next)]);
   }
+  require('./fitnessTasks').syncSoon(userId);
   return getWeek(userId, s.weekStart);
 }
 
@@ -481,6 +483,7 @@ async function takeRestDay(userId, { weekStart, day }) {
   }
   const out = await getWeek(userId, row.weekStart);
   out.restResult = { moved: plan.moves.length, rested: plan.rested.length };
+  require('./fitnessTasks').syncSoon(userId);
   return out;
 }
 
@@ -497,6 +500,7 @@ async function undoRestDay(userId, { weekStart, day }) {
       WHERE "weekId"=$1 AND "userId"=$2 AND status='rest' AND ("movedFrom"->>'day')::int = $3`,
     [row.id, userId, day],
   );
+  require('./fitnessTasks').syncSoon(userId);
   return getWeek(userId, row.weekStart);
 }
 

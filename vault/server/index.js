@@ -120,6 +120,8 @@ app.use('/api/shared', require('./routes/sharedTasks'));
 app.use('/api/gmail', require('./routes/gmail'));
 app.use('/api/gsc', require('./routes/gsc'));
 app.use('/api/calendar', require('./routes/calendar'));
+// The stop-these-emails link in Fitness reminders: public (the person's own token is the proof), so before requireAuth.
+app.use('/api/fitness/unsubscribe', require('./routes/fitnessUnsubscribe'));
 
 const { requireAuth, requireAdmin, requireFeature, requireAnyFeature } = require('./middleware/auth');
 app.use('/api', requireAuth);
@@ -262,6 +264,7 @@ const { startFinanceRemindersCron } = require('./cron/financeRemindersCron');
 const { startRecurringCron }        = require('./cron/recurringCron');
 const { startExpenseReviewCron }    = require('./cron/expenseReviewCron');
 const { startWeeklyDigestCron }     = require('./cron/weeklyDigestCron');
+const { startFitnessCron }          = require('./cron/fitnessCron');
 
 // Poll until schema is ready, then seed and start listening
 async function start() {
@@ -291,6 +294,7 @@ async function start() {
     startRecurringCron();
     startExpenseReviewCron();
     startWeeklyDigestCron();
+    startFitnessCron();
   }
 
   // API key presence checks — visible in Railway logs
