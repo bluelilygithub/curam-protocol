@@ -19,12 +19,14 @@ import Overview from './fitness/Overview';
 import TodayView from './fitness/TodayView';
 import WeekView from './fitness/WeekView';
 import LibraryView from './fitness/LibraryView';
+import LogView from './fitness/LogView';
 import ProfileTab from './fitness/ProfileTab';
 import FitnessInfoBody, { INFO_KEY } from './fitness/FitnessInfo';
 
 const VIEWS = [
   { mode: 'today', icon: 'sun', label: 'Today' },
   { mode: 'week', icon: 'calendar', label: 'Week' },
+  { mode: 'log', icon: 'edit', label: 'Log' },
   { mode: 'library', icon: 'book', label: 'Library' },
   { mode: 'overview', icon: 'home', label: 'Overview' },
   { mode: 'goal', icon: 'target', label: 'Goal' },
@@ -106,6 +108,12 @@ export default function FitnessPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Small remembered choices (exercise details open, weigh-in prompt). Saved on the account; applied straight away.
+  const savePrefs = useCallback(async (patch) => {
+    setState((s) => (s ? { ...s, prefs: { ...(s.prefs || {}), ...patch, ...(patch.logDetailOpen ? { logDetailOpen: { ...(s.prefs?.logDetailOpen || {}), ...patch.logDetailOpen } } : {}) } } : s));
+    try { await api.patch('/api/fitness/prefs', patch); } catch { /* the choice still applies for this visit */ }
+  }, []);
+
   const goTo = useCallback((mode, opts = {}) => {
     setFocusRerate(!!opts.rerate);
     if (mode !== 'library' || !opts.keepSlug) setLibSlug(null);
@@ -178,9 +186,11 @@ export default function FitnessPage() {
         </div>
       );
     } else if (view === 'today') {
-      body = <TodayView onOpenExercise={openExercise} goTo={goTo} />;
+      body = <TodayView onOpenExercise={openExercise} goTo={goTo} meta={meta} state={state} onPrefs={savePrefs} onWeighIn={(w) => setState((s) => ({ ...s, weighIn: w }))} />;
     } else if (view === 'week') {
       body = <WeekView onOpenExercise={openExercise} offset={weekOffset} onOffsetChange={setWeekOffset} />;
+    } else if (view === 'log') {
+      body = <LogView meta={meta} state={state} prefs={state.prefs || {}} onPrefs={savePrefs} onWeighIn={(w) => setState((s) => ({ ...s, weighIn: w }))} />;
     } else if (view === 'library') {
       body = <LibraryView slug={libSlug} onOpen={openExercise} onBack={backFromExercise} backLabel={returnTo ? BACK_LABELS[returnTo] : 'All exercises'} />;
     } else if (view === 'overview') {

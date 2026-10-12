@@ -86,6 +86,8 @@ export default function useWeek(offset = 0) {
 
   return {
     data, loading, busy, error, reload: load,
+    logSession: (id, body) => mutate(() => api.post(`/api/fitness/sessions/${id}/log`, body)),
+    undoLog: (id) => mutate(() => api.delete(`/api/fitness/sessions/${id}/log`)),
     move: (id, day, slot) => mutate(() => api.patch(`/api/fitness/sessions/${id}`, { day, slot })),
     rest: (day) => mutate(() => api.post('/api/fitness/week/rest-day', { weekStart: data.week.weekStart, day })),
     undoRest: (day) => mutate(() => api.post('/api/fitness/week/rest-day/undo', { weekStart: data.week.weekStart, day })),

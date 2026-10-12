@@ -15,6 +15,7 @@ const { buildGoalPlan } = require('../services/fitness/goal');
 const { seedDemoUser } = require('../services/fitness/demoSeed');
 const Lib = require('../services/fitness/library');
 const W = require('../services/fitness/weekService');
+const LS = require('../services/fitness/logService');
 
 const router = express.Router();
 
@@ -43,6 +44,8 @@ router.get('/meta', async (req, res) => {
     rerate: cfg.rerate,
     disclaimer: C.DISCLAIMER,
     minAge: T.MIN_AGE,
+    effortScale: Lib.getLibrary().effortScale,
+    backfillDays: 28,
   });
 });
 
@@ -221,6 +224,61 @@ router.patch('/sessions/:id', async (req, res) => {
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad session id' });
     res.json(await W.moveSession(req.user.id, id, { day: req.body?.day, slot: req.body?.slot }));
   } catch (err) { fail(res, err, 'move session'); }
+});
+
+// ── Logging ──
+// Log (or re-log) a planned session. The reply is the whole week plus any safety notice from the note.
+router.post('/sessions/:id/log', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad session id' });
+    const out = await LS.logSession(req.user.id, id, req.body || {});
+    res.json({ ...(await W.getWeek(req.user.id, out.weekStart)), safety: out.safety, logId: out.logId });
+  } catch (err) { fail(res, err, 'log session'); }
+});
+
+router.delete('/sessions/:id/log', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad session id' });
+    const out = await LS.undoLog(req.user.id, id);
+    res.json(await W.getWeek(req.user.id, out.weekStart));
+  } catch (err) { fail(res, err, 'undo log'); }
+});
+
+// Something done that was not in the plan.
+router.post('/logs/extra', async (req, res) => {
+  try { res.json(await LS.logExtra(req.user.id, req.body || {})); } catch (err) { fail(res, err, 'log extra'); }
+});
+
+router.delete('/logs/:id', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad log id' });
+    await LS.deleteExtra(req.user.id, id);
+    res.json({ ok: true });
+  } catch (err) { fail(res, err, 'delete log'); }
+});
+
+router.get('/logs', async (req, res) => {
+  try { res.json({ logs: await LS.listLogs(req.user.id, req.query.limit) }); } catch (err) { fail(res, err, 'list logs'); }
+});
+
+router.get('/catchup', async (req, res) => {
+  try { res.json(await LS.catchUp(req.user.id)); } catch (err) { fail(res, err, 'catch up'); }
+});
+
+// Optional weigh-in, saved to the shared weight table.
+router.get('/weight', async (req, res) => {
+  try { res.json({ weights: await LS.getWeights(req.user.id) }); } catch (err) { fail(res, err, 'weights'); }
+});
+router.post('/weight', async (req, res) => {
+  try { res.json({ weights: await LS.logWeight(req.user.id, req.body || {}) }); } catch (err) { fail(res, err, 'log weight'); }
+});
+
+// Small remembered choices (for example keeping exercise details open for strength sessions).
+router.patch('/prefs', async (req, res) => {
+  try { res.json({ prefs: await LS.setPrefs(req.user.id, req.body || {}) }); } catch (err) { fail(res, err, 'prefs'); }
 });
 
 // Staging helper: create/refresh the worked-example demo user (admin only). Returns the password once, on creation.

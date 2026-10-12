@@ -12,6 +12,7 @@ const Ph = require('./phases');
 const P = require('./profileService');
 const { generateWeekPlan } = require('./weekGenerator');
 const { sessionSafetyLines } = require('./safety');
+const LG = require('./logging');
 
 const { ValidationError } = P;
 const EDITABLE = new Set(['planned', 'moved']);
@@ -42,11 +43,40 @@ async function loadSessions(weekId, userId) {
     [userId, sess.map((s) => s.id)],
   );
   const lib = L.getLibrary().bySlug;
+
+  // What was actually done: the log for each session, its exercise rows, and the last weight lifted for each exercise.
+  const ids = sess.map((s) => s.id);
+  const { rows: logRows } = await pool.query(
+    `SELECT id, "plannedSessionId" AS "sessionId", status, "actualMinutes", effort, note, activity, safety,
+            to_char("loggedOn",'YYYY-MM-DD') AS "loggedOn"
+       FROM fitness_session_logs WHERE "userId"=$1 AND "plannedSessionId" = ANY($2::int[])`,
+    [userId, ids],
+  );
+  const { rows: exLogRows } = logRows.length ? await pool.query(
+    `SELECT "sessionLogId", position, sets, reps, "weightKg"::float AS "weightKg", "distanceKm"::float AS "distanceKm", seconds
+       FROM fitness_exercise_logs WHERE "userId"=$1 AND "sessionLogId" = ANY($2::int[]) ORDER BY position`,
+    [userId, logRows.map((l) => l.id)],
+  ) : { rows: [] };
+  const { rows: lastW } = ex.length ? await pool.query(
+    `SELECT DISTINCT ON (slug) slug, "weightKg"::float AS w FROM fitness_exercise_logs
+      WHERE "userId"=$1 AND slug = ANY($2::text[]) AND "weightKg" IS NOT NULL ORDER BY slug, id DESC`,
+    [userId, [...new Set(ex.map((e) => e.slug))]],
+  ) : { rows: [] };
+  const lastWeight = new Map(lastW.map((r) => [r.slug, r.w]));
+  const logBySession = new Map(logRows.map((l) => [l.sessionId, {
+    id: l.id, status: l.status, actualMinutes: l.actualMinutes, effort: l.effort, note: l.note, activity: l.activity,
+    safety: parse(l.safety, null), loggedOn: l.loggedOn,
+    exercises: exLogRows.filter((r) => r.sessionLogId === l.id).map(({ sessionLogId, ...rest }) => rest),
+  }]));
+
   const bySession = new Map();
   for (const e of ex) {
     if (!bySession.has(e.sessionId)) bySession.set(e.sessionId, []);
     const item = lib.get(e.slug);
-    bySession.get(e.sessionId).push({ ...e, name: item?.name || e.slug, movement: item?.pattern || null, level: item?.level || null });
+    bySession.get(e.sessionId).push({
+      ...e, name: item?.name || e.slug, movement: item?.pattern || null, level: item?.level || null,
+      lastWeightKg: lastWeight.get(e.slug) ?? null, prefill: LG.parsePrescription(e.prescription),
+    });
   }
   const order = { morning: 0, midday: 1, evening: 2 };
   return sess
@@ -56,6 +86,7 @@ async function loadSessions(weekId, userId) {
       movedFrom: parse(s.movedFrom, null),
       totalMinutes: s.plannedMinutes + s.warmupMin + s.cooldownMin,
       exercises: bySession.get(s.id) || [],
+      log: logBySession.get(s.id) || null,
     }))
     .sort((a, b) => a.day - b.day || order[a.slot] - order[b.slot] || a.id - b.id);
 }
@@ -95,7 +126,12 @@ function shapeWeek(row, sessions, state) {
   const timezone = state.timezone.timezone;
   const hot = S.isHotMonth(row.weekStart, timezone);
   const lib = L.getLibrary().bySlug;
-  for (const s of sessions) s.safety = sessionSafetyLines(s, lib, timezone);
+  const oldest = Ph.addDays(state.today, -LG.BACKFILL_DAYS);
+  for (const s of sessions) {
+    s.safety = sessionSafetyLines(s, lib, timezone);
+    s.date = Ph.addDays(row.weekStart, s.day);
+    s.loggable = s.date <= state.today && s.date >= oldest;
+  }
   const soft = S.softNotes(
     sessions.map((s) => ({ ...s, strength: s.components.some((c) => c.domain === 'strength') })),
     { hotOutdoor: hot },

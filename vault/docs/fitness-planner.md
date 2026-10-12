@@ -10,7 +10,7 @@ Spec: "Fitness Planner App: Spec for Claude Code" (2026-10-12). Built in stages;
 |---|---|---|
 | 1 | Profile, age templates, self-ratings, AI baseline, 5-year goal with ambition dial, goal revisit, re-rate form, safety check, demo user | built |
 | 2 | Exercise library (47, variation chains), 5-week blocks, varied weekly program, Today/Week/Library views, movable sessions, rest budget | built, awaiting library review and staging check |
-| 3 | Logging, back-fill, extras, post-log tips, weekly adaptation, pain-note prompt to ease next week, demo-user logs | planned |
+| 3 | Logging, back-fill, extras, weigh-in (step 1: built, awaiting staging check); tips, reflection, easing prompt (step 2); adaptation, comfortable-jog gate, load suggestions (step 3); swap, diet-app summary (step 4); demo-user logs | in progress |
 | 4 | Dashboard charts, colour system, rating-history chart, re-rate banner on the dashboard | planned |
 | 5 | Morning plan + catch-up reminders (email, `fitnessCron.js`), installable mobile Today view, re-rate email nudge | planned |
 
@@ -44,6 +44,14 @@ Where the approved extras land: re-rate form + revisit-goal + ambition dial are 
 **Navigation and explanations.** Opening an exercise from Today, Week or elsewhere remembers where you came from: Back returns there ("Back to Today", "Back to the Week"), and the Week keeps the week you were looking at. `InfoTip` (`pages/fitness/ui.jsx`) is the explanation popover: hover, keyboard focus or tap, Esc to close; all its wording is in `pages/fitness/tips.js` (why move a session, whether time of day matters, rest, blocks, effort, ratings), so it is easy to extend each stage. Session cards have a labelled Move button with a tooltip. The Overview has a "self-ratings over time" card (first rating against latest, from `GET /ratings/history`): that, plus the re-rate nudge, is the only self-reported progress tracked until logging (Stage 3) and charts (Stage 4).
 
 **Known limits.** "Things to work around" reaches the model as a constraint but code cannot parse it, so an exercise that conflicts can still be offered; hiding it is the immediate fix and a per-exercise swap arrives with logging.
+
+## Stage 3: logging (step 1)
+
+**What is recorded.** `fitness_session_logs` (one per planned session, or none for an extra) and `fitness_exercise_logs` (optional sets / reps / kg / km / seconds). The planned session's `status` follows its log (`done | partial | swapped | skipped | rest`). A session with no log is **not logged**: it stays `planned`, is shown neutrally, and nothing treats it as skipped. `rest` (intentional) and `skipped` ("Didn't do it") stay separate in the data. Rules are pure code in `logging.js` (tests: `log.test.js`): effort 1-10, minutes 0-600, exercise numbers bounded, rest and skipped keep no effort or exercise rows, "none" style notes are empty, a session can only be logged on its day or later and within 28 days, extras within 28 days and never in the future.
+
+**Screens.** Today: "Done as planned" is one tap and then offers the optional effort tiles; "Log details" opens the full form (status tiles with icons, minutes, effort with the talk-test line, note with the mic, optional exercise details). Exercise details are collapsed by default and pre-filled from the plan (sets and the low end of the reps range or hold; last logged kg shows as the placeholder); opening them is remembered per account (`fitness_profiles.prefs.logDetailOpen`, strength sessions separate from the rest). The Log tab has Catch up (quick buttons per session, "Add details", "mark all as done as planned"), "Something else I did", an optional weigh-in and recent history. The weigh-in saves to the shared `health_weight_log` (`source = 'fitness'`, one a day); Today shows at most one gentle prompt a week, with "Not this week" and "Don't ask again" (`prefs.weightPromptDismissedFor`, `prefs.weightPrompt`).
+
+**API.** `POST/DELETE /sessions/:id/log`, `POST /logs/extra`, `DELETE /logs/:id`, `GET /logs`, `GET /catchup`, `GET/POST /weight`, `PATCH /prefs`. A log whose note mentions pain, dizziness or chest symptoms returns the safety notice; the "keep next week gentle" confirmation arrives in step 2.
 
 ## Help, tour and starting over
 

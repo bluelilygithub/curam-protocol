@@ -61,7 +61,7 @@ export default function WeekView({ onOpenExercise, offset: offsetProp, onOffsetC
   const isCurrent = week.weekStart === currentWeekStart;
   const restByDay = new Map(week.restDays.map((r) => [r.day, r]));
   const budgetLeft = Math.max(0, week.restBudget - week.restBudgetUsed);
-  const acted = sessions.some((s) => !['planned', 'moved', 'rest'].includes(s.status));
+  const acted = sessions.some((s) => !['planned', 'moved'].includes(s.status));
 
   const onDrop = (e, day, slot) => {
     e.preventDefault();

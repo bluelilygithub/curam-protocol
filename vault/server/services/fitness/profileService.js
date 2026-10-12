@@ -115,13 +115,13 @@ async function getLatestWeight(userId) {
 async function getFitnessRow(userId) {
   const { rows } = await pool.query(
     `SELECT equipment, smoking, alcohol, "dietQuality", "timeFlexibility", "workAround", "otherNotes",
-            "currentWeeklyMinutes" AS "weeklyMinutes", "templateBand", "easeRequested", to_char("onboardedAt",'YYYY-MM-DD') AS "onboardedOn"
+            "currentWeeklyMinutes" AS "weeklyMinutes", "templateBand", "easeRequested", prefs, to_char("onboardedAt",'YYYY-MM-DD') AS "onboardedOn"
        FROM fitness_profiles WHERE "userId"=$1`,
     [userId],
   );
   const r = rows[0];
   if (!r) return null;
-  return { ...r, equipment: parseJson(r.equipment, []), timeFlexibility: parseJson(r.timeFlexibility, { mode: 'flexible', twiceDaily: false }) };
+  return { ...r, equipment: parseJson(r.equipment, []), prefs: parseJson(r.prefs, {}), timeFlexibility: parseJson(r.timeFlexibility, { mode: 'flexible', twiceDaily: false }) };
 }
 
 async function getLatestRating(userId) {
@@ -167,6 +167,14 @@ async function getGoalHistory(userId) {
 }
 
 /** Whole current state for the client. Cheap: a handful of indexed reads, no AI. */
+async function lastWeighIn(userId) {
+  const { rows } = await pool.query(
+    `SELECT "weightKg"::float AS "weightKg", to_char("measuredOn",'YYYY-MM-DD') AS "measuredOn" FROM health_weight_log
+      WHERE "userId"=$1 ORDER BY "measuredOn" DESC, id DESC LIMIT 1`, [userId],
+  );
+  return rows[0] || null;
+}
+
 async function getState(userId) {
   const timezone = await resolveUserTimezone(userId);
   const today = T.todayInZone(timezone.timezone);
@@ -201,6 +209,8 @@ async function getState(userId) {
     } : null,
     rating,
     ratingDue: due,
+    prefs: fit ? fit.prefs : {},
+    weighIn: await lastWeighIn(userId),
     typicalWeeklyMinutes: band ? (cfg.ageTemplates[band.id]?.weeklyMinutes ?? null) : null,
     goal,
     safety,

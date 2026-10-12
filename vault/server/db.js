@@ -1070,6 +1070,46 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_fitness_pex_session ON fitness_planned_exercises ("sessionId", position)`);
+    // Stage 3: logging. A log is what actually happened. plannedSessionId is NULL for "something else I did" (an extra).
+    // Sessions never logged have no row at all ("not logged"); nothing treats them as skipped.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fitness_session_logs (
+        id                 SERIAL PRIMARY KEY,
+        "userId"           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "plannedSessionId" INTEGER REFERENCES fitness_planned_sessions(id) ON DELETE CASCADE,
+        "loggedOn"         DATE NOT NULL,
+        status             TEXT NOT NULL,
+        title              TEXT,
+        activity           TEXT,
+        domain             TEXT,
+        "plannedMinutes"   INTEGER,
+        "actualMinutes"    INTEGER,
+        effort             INTEGER,
+        note               TEXT,
+        safety             JSONB,
+        "createdAt"        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt"        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_fitness_log_planned ON fitness_session_logs ("plannedSessionId") WHERE "plannedSessionId" IS NOT NULL`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_fitness_logs_user_date ON fitness_session_logs ("userId", "loggedOn" DESC, id DESC)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fitness_exercise_logs (
+        id             SERIAL PRIMARY KEY,
+        "sessionLogId" INTEGER NOT NULL REFERENCES fitness_session_logs(id) ON DELETE CASCADE,
+        "userId"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        slug           TEXT NOT NULL,
+        block          TEXT NOT NULL DEFAULT 'main',
+        position       INTEGER NOT NULL,
+        sets           INTEGER,
+        reps           INTEGER,
+        "weightKg"     NUMERIC(6,1),
+        "distanceKm"   NUMERIC(7,2),
+        seconds        INTEGER
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_fitness_exlogs_user_slug ON fitness_exercise_logs ("userId", slug, id DESC)`);
+    await client.query(`ALTER TABLE fitness_profiles ADD COLUMN IF NOT EXISTS prefs JSONB NOT NULL DEFAULT '{}'`);
     // "Not for me": exercises a person has hidden; the week generator never picks them.
     await client.query(`
       CREATE TABLE IF NOT EXISTS fitness_hidden_exercises (

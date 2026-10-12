@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
-import { FIELD, SecondaryButton, PrimaryButton, TimeOfDay } from './ui';
+import { FIELD, Notice, SecondaryButton, PrimaryButton, TimeOfDay } from './ui';
+import EffortPicker from './EffortPicker';
+import LogPanel, { StatusChip } from './LogPanel';
 import { ExerciseTile, TileGroup, PATTERN_LABELS, LEVEL_LABELS, BLOCK_LABELS } from './ExerciseTile';
 import { BLOCK_ICON, DOMAIN_ICON, DOMAIN_NAME, PATTERN_ICON, sessionIcon } from './icons';
 import { DAY_NAMES, SLOTS } from './useWeek';
@@ -69,16 +71,50 @@ function MovePicker({ session, onMove, onClose }) {
  * One planned session. In the week grid it is compact and draggable; on Today it opens out with its exercises.
  * Rest sessions (a rest day was taken) are shown plainly and kept, never struck through or coloured as a failure.
  */
-export default function SessionCard({ session, expanded = false, draggable = false, onMove, onOpenExercise, busy, showDay = false }) {
+/** What was logged, in plain words. */
+function logSummary(log) {
+  const bits = [];
+  if (log.actualMinutes != null) bits.push(`${log.actualMinutes} min`);
+  if (log.effort != null) bits.push(`effort ${log.effort} of 10`);
+  if (log.activity) bits.push(log.activity);
+  return bits.join(' · ');
+}
+
+export default function SessionCard({
+  session, expanded = false, draggable = false, onMove, onOpenExercise, busy, showDay = false,
+  logging = false, meta, prefs, onLog, onUndo, onRememberDetail,
+}) {
   const getIcon = useIcon();
   const [open, setOpen] = useState(expanded);
   const [moving, setMoving] = useState(false);
+  const [form, setForm] = useState(null); // null | initial status for the log form
+  const [askEffort, setAskEffort] = useState(false);
+  const [effort, setEffort] = useState(null);
+  const [saving, setSaving] = useState(false);
   const note = statusText(session);
   const rest = session.status === 'rest';
+  const log = session.log;
+  const canMove = session.status === 'planned' || session.status === 'moved';
+
+  const save = async (body) => {
+    setSaving(true);
+    const out = await onLog?.(session.id, body);
+    setSaving(false);
+    if (out) setForm(null);
+    return out;
+  };
+  const doneAsPlanned = async () => {
+    const out = await save({ status: 'done', actualMinutes: session.totalMinutes });
+    if (out) { setAskEffort(true); setEffort(null); }
+  };
+  const saveEffort = async () => {
+    if (effort != null) await save({ status: 'done', actualMinutes: log?.actualMinutes ?? session.totalMinutes, effort });
+    setAskEffort(false);
+  };
 
   return (
     <div
-      draggable={draggable && !rest}
+      draggable={draggable && canMove}
       onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(session.id)); e.dataTransfer.effectAllowed = 'move'; }}
       className="rounded-xl border p-3 text-sm transition-all duration-200"
       style={{
@@ -86,7 +122,7 @@ export default function SessionCard({ session, expanded = false, draggable = fal
         borderColor: 'var(--color-border)',
         color: 'var(--color-text)',
         opacity: rest ? 0.65 : 1,
-        cursor: draggable && !rest ? 'grab' : 'default',
+        cursor: draggable && canMove ? 'grab' : 'default',
       }}
       data-session-id={session.id}
     >
@@ -118,7 +154,7 @@ export default function SessionCard({ session, expanded = false, draggable = fal
           </p>
           {note && <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{note}</p>}
         </div>
-        {!rest && (
+        {canMove && (
           <Tooltip text="Sessions are suggestions. Move this one to a day or time that suits you, or drag it. The week's targets stay the same.">
             <button
               type="button"
@@ -132,6 +168,51 @@ export default function SessionCard({ session, expanded = false, draggable = fal
           </Tooltip>
         )}
       </div>
+      {log && !form && (
+        <div className="mt-2 pt-2 border-t space-y-1.5" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <StatusChip status={log.status} />
+            {logSummary(log) && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{logSummary(log)}</span>}
+            {logging && (
+              <>
+                <button type="button" onClick={() => setForm(log.status)} className="text-xs underline hover:opacity-60 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }}>Edit</button>
+                <button type="button" onClick={() => onUndo?.(session.id)} className="text-xs underline hover:opacity-60 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }}>Clear this log</button>
+              </>
+            )}
+          </div>
+          {log.note && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>“{log.note}”</p>}
+          {log.safety?.message && <Notice tone="care">{log.safety.message}</Notice>}
+          {logging && askEffort && log.status === 'done' && (
+            <div className="rounded-xl border p-3 space-y-2" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+              <EffortPicker value={effort} onChange={setEffort} scale={meta?.effortScale} />
+              <div className="flex gap-2">
+                <PrimaryButton onClick={saveEffort} disabled={saving || effort == null}>Save</PrimaryButton>
+                <SecondaryButton onClick={() => setAskEffort(false)}>Skip</SecondaryButton>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {logging && !log && session.loggable && canMove && !form && (
+        <div className="flex flex-wrap gap-2 mt-3">
+          <PrimaryButton onClick={doneAsPlanned} disabled={saving || busy}>Done as planned</PrimaryButton>
+          <SecondaryButton onClick={() => setForm('done')}>Log details</SecondaryButton>
+        </div>
+      )}
+      {logging && form && (
+        <div className="mt-3">
+          <LogPanel
+            session={session}
+            meta={meta}
+            prefs={prefs}
+            initialStatus={form}
+            saving={saving}
+            onSave={save}
+            onCancel={() => setForm(null)}
+            onRememberDetail={onRememberDetail}
+          />
+        </div>
+      )}
       {moving && <MovePicker session={session} onMove={(id, d, s) => onMove?.(id, d, s)} onClose={() => setMoving(false)} />}
       {busy && <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Updating…</p>}
       {session.exercises.length > 0 && (

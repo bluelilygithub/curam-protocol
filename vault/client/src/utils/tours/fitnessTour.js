@@ -33,6 +33,11 @@ const STEPS = [
     text: 'What is planned today, grouped as warm-up, main and cool-down. Tap any exercise name to see how to do it properly. On a rest day it simply says so: rest is part of the plan.',
   },
   {
+    id: 'fitness-log', group: 'done', view: 'log', since: 3, selector: '[data-tour="fitness-log"]', on: 'top',
+    title: 'Log what you did',
+    text: 'On Today, "Done as planned" is one tap. Here you can catch up on sessions you have not noted (up to 28 days back), add something that was not planned, and weigh in if you want to. Rest and "didn\'t do it" are recorded as they are: neutral, never a mark against you.',
+  },
+  {
     id: 'fitness-week-grid', group: 'done', view: 'week', since: 2, selector: '[data-tour="fitness-week-grid"]', on: 'top',
     title: 'Your week',
     text: 'Seven days with morning, midday and evening. Sessions are suggestions: drag one to another slot, or use its move button. If two strength sessions end up less than 48 hours apart you get a gentle note, never a block.',
