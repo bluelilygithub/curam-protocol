@@ -138,6 +138,13 @@ async function getLatestRating(userId) {
 }
 
 async function getRatingHistory(userId) {
+  // tidy duplicates already saved: keep only the latest entry of each kind per day
+  await pool.query(
+    `DELETE FROM fitness_ratings r USING fitness_ratings n
+      WHERE r."userId"=$1 AND n."userId"=r."userId" AND n.kind=r.kind AND n."ratedAt"::date = r."ratedAt"::date
+        AND (n."ratedAt", n.id) > (r."ratedAt", r.id)`,
+    [userId],
+  );
   const { rows } = await pool.query(
     `SELECT id, kind, scores, "previousScores", "previousLabel", note, to_char("ratedAt",'YYYY-MM-DD') AS "ratedOn"
        FROM fitness_ratings WHERE "userId"=$1 ORDER BY "ratedAt" ASC, id ASC`,
@@ -286,6 +293,19 @@ async function saveRatings(userId, body) {
   const scores = validateScores(body.scores, 'Current ratings');
   const previous = body.previousScores ? validateScores(body.previousScores, 'Previous ratings') : null;
   const kind = body.kind === 'rerate' ? 'rerate' : 'onboarding';
+  // Saving the same step again (going back and forward, retaking, a retry) updates the entry from the last 12 hours instead of
+  // adding another line to the history.
+  const recent = await pool.query(
+    `SELECT id FROM fitness_ratings WHERE "userId"=$1 AND kind=$2 AND "ratedAt" > NOW() - INTERVAL '12 hours' ORDER BY "ratedAt" DESC, id DESC LIMIT 1`,
+    [userId, kind],
+  );
+  if (recent.rows[0]) {
+    await pool.query(
+      `UPDATE fitness_ratings SET scores=$3, "previousScores"=$4, "previousLabel"=$5, note=$6, "ratedAt"=NOW() WHERE id=$1 AND "userId"=$2`,
+      [recent.rows[0].id, userId, JSON.stringify(scores), previous ? JSON.stringify(previous) : null, cleanText(body.previousLabel, 60), cleanFreeText(body.note, 1000)],
+    );
+    return recent.rows[0].id;
+  }
   const { rows } = await pool.query(
     `INSERT INTO fitness_ratings ("userId", kind, scores, "previousScores", "previousLabel", note)
      VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
