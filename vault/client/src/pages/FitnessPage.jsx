@@ -147,7 +147,7 @@ export default function FitnessPage() {
       body = <Onboarding key={state.profile ? 'retake' : 'new'} meta={meta} state={state} onSaved={(s) => setState(s)} />;
     } else if (stage === 'baseline') {
       body = (
-        <div className="max-w-3xl mx-auto w-full">
+        <div className={`${settingGoal ? 'max-w-5xl' : 'max-w-3xl'} mx-auto w-full`}>
           {settingGoal
             ? <GoalView meta={meta} state={state} mode="first" onSaved={(s) => { setState(s); setSettingGoal(false); setView('overview'); }} />
             : <BaselineView meta={meta} state={state} onContinue={() => setSettingGoal(true)} />}
@@ -157,11 +157,12 @@ export default function FitnessPage() {
       body = <Overview meta={meta} state={state} goTo={goTo} />;
     } else if (view === 'goal') {
       body = (
-        <div className="max-w-3xl mx-auto w-full">
+        <div className="max-w-5xl mx-auto w-full">
           <GoalView
             meta={meta}
             state={state}
             mode="revisit"
+            onAddMinutes={() => goTo('profile')}
             onSaved={(s) => { setState(s); goTo('overview'); }}
             onCancel={() => goTo('overview')}
           />

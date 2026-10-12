@@ -92,11 +92,13 @@ async function buildBaseline({ userId, profile, scores, previous, previousLabel,
     previousLabel: data.previousLabel,
     who: data.who,
     weeklyToMaintain: data.weeklyToMaintain,
-    lifestyle: profile.lifestyleSummary || null,
+    equipmentAvailable: profile.lifestyleSummary?.equipment || [],
+    lifestyle: { ...(profile.lifestyleSummary || {}), equipment: undefined },
+    thingsToWorkAround: profile.workAround || null,
     userNotes: notes || null,
   };
 
-  const system = `${GUARDRAILS}\nScale: ratings are 1 (lowest) to 5 (highest) per domain. "building" means below the healthy range for this age band, "in_range" within it, "above" over it. Describe these gently.`;
+  const system = `${GUARDRAILS}\nScale: ratings are 1 (lowest) to 5 (highest) per domain. "building" means below the healthy range for this age band, "in_range" within it, "above" over it. Describe these gently. The equipment the person has comes only from equipmentAvailable; thingsToWorkAround are constraints (injuries, limits), never equipment, and must not appear in any equipment sentence.`;
   const prompt = `Write a short baseline assessment for this person.\n\nDATA:\n${JSON.stringify(input, null, 1)}\n\nReturn JSON:\n{"headline": string (max 120 chars), "whereYouAre": string (2-4 sentences using the ratings; mention any earlier fitness shown by "before" as a head start), "whereYouShouldBe": string (2-3 sentences on the WHO-based weekly picture for their age), "weeklyToMaintain": array of 3-5 short strings based on the weeklyToMaintain list, "encouragement": string (1 sentence, never guilt-inducing)}`;
 
   const result = await runJson({

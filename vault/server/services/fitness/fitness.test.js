@@ -18,6 +18,7 @@ Module._load = realLoad;
 const C = require('./config');
 const T = require('./targets');
 const { checkNotes } = require('./safety');
+const { isEmptyAnswer, cleanFreeText } = require('./text');
 
 let passed = 0;
 function test(name, fn) {
@@ -217,7 +218,7 @@ test('goal validator needs a summary; whatChanged is optional', () => {
 });
 
 // ── the Now row uses what the person entered ──
-test('entered weekly minutes win; blank falls back to the cardio-rating estimate', () => {
+test('entered weekly minutes win; blank is "not entered" and never shown as a figure', () => {
   const base = { bandId: '50-64', scores: WORKED, previous: null, ambition: 3, startsOn: '2026-10-12' };
   const entered = T.buildMilestones({ ...base, currentMinutes: 45 });
   assert.strictEqual(entered.now.aerobicModerateMin, 45);
@@ -227,8 +228,11 @@ test('entered weekly minutes win; blank falls back to the cardio-rating estimate
   assert.strictEqual(zero.now.minutesSource, 'entered');
   for (const blank of [null, undefined, '']) {
     const est = T.buildMilestones({ ...base, currentMinutes: blank });
-    assert.strictEqual(est.now.aerobicModerateMin, 90);
-    assert.strictEqual(est.now.minutesSource, 'estimated');
+    assert.strictEqual(est.now.aerobicModerateMin, null);
+    assert.strictEqual(est.now.minutesSource, 'not_entered');
+    // the path still starts from the cardio-rating estimate (90), it is just never presented as the person's figure
+    assert.strictEqual(est.startMinutes, 90);
+    assert.ok(est.milestones[0].weekly.aerobicModerateMin > 90);
   }
 });
 test('someone already above the target shows their real minutes but the path holds at the target', () => {
@@ -238,6 +242,20 @@ test('someone already above the target shows their real minutes but the path hol
 });
 test('every age template has a typical weekly-minutes figure (shown as a hint, never pre-filled)', () => {
   for (const band of C.AGE_BANDS) assert.ok(Number.isInteger(C.DEFAULTS.ageTemplates[band.id].weeklyMinutes));
+});
+
+// ── "none" style answers are empty ──
+test('none/nil/n/a style answers count as empty, real text does not', () => {
+  for (const e of ['none', 'None.', ' nil ', 'N/A', 'n/a', 'no', 'No injuries', 'nothing', 'Not applicable', '-', '', '   ', null, undefined]) {
+    assert.strictEqual(isEmptyAnswer(e), true, `empty: ${JSON.stringify(e)}`);
+    assert.strictEqual(cleanFreeText(e, 100), null);
+  }
+  for (const t of ['sore left knee', 'none of the stairs, they hurt', 'no running on hard surfaces']) {
+    assert.strictEqual(isEmptyAnswer(t), false, t);
+    assert.strictEqual(cleanFreeText(t, 100), t);
+  }
+  assert.strictEqual(cleanFreeText('  bad shoulder  ', 100), 'bad shoulder');
+  assert.strictEqual(cleanFreeText('x'.repeat(50), 10).length, 10);
 });
 
 // ── goal screen: gradual ratings, "now" row, phases ──
@@ -256,7 +274,7 @@ test('ratings climb gradually: no repeated start-to-target jump, year 5 lands on
 test('plan carries a now row and a phase per year', () => {
   const plan = T.buildMilestones({ bandId: '50-64', scores: WORKED, previous: WORKED_PREV, ambition: 3, startsOn: '2026-10-12' });
   assert.deepStrictEqual(plan.now.ratings, WORKED);
-  assert.strictEqual(plan.now.aerobicModerateMin, 90);
+  assert.strictEqual(plan.now.aerobicModerateMin, null); // minutes not entered
   assert.deepStrictEqual(plan.milestones.map((m) => m.phase.id), ['base', 'build', 'consolidate', 'consolidate', 'maintain']);
   assert.strictEqual(plan.milestones[0].phase.label, 'Rebuild base'); // regaining
   const fresh = T.buildMilestones({ bandId: '50-64', scores: WORKED, previous: null, ambition: 5, startsOn: '2026-10-12' });

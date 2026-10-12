@@ -10,6 +10,7 @@ const { pool } = require('../../db');
 const C = require('./config');
 const T = require('./targets');
 const { checkNotes } = require('./safety');
+const { cleanFreeText } = require('./text');
 const { resolveUserTimezone, isValidTimezone } = require('./timezone');
 
 class ValidationError extends Error {
@@ -75,8 +76,8 @@ function validateLifestyle(body) {
       twiceDaily: !!tf.twiceDaily,
       notes: cleanText(tf.notes, 300),
     },
-    workAround: cleanText(body.workAround, 1000),
-    otherNotes: cleanText(body.otherNotes, 1000),
+    workAround: cleanFreeText(body.workAround, 1000),
+    otherNotes: cleanFreeText(body.otherNotes, 1000),
     weeklyMinutes: validateMinutes(body.weeklyMinutes),
   };
 }
@@ -195,7 +196,7 @@ async function getState(userId) {
     } : null,
     lifestyle: fit ? {
       equipment: fit.equipment, smoking: fit.smoking, alcohol: fit.alcohol, dietQuality: fit.dietQuality,
-      weeklyMinutes: fit.weeklyMinutes ?? null, timeFlexibility: fit.timeFlexibility, workAround: fit.workAround, otherNotes: fit.otherNotes,
+      weeklyMinutes: fit.weeklyMinutes ?? null, timeFlexibility: fit.timeFlexibility, workAround: cleanFreeText(fit.workAround, 1000), otherNotes: cleanFreeText(fit.otherNotes, 1000),
       templateBand: fit.templateBand, easeRequested: !!fit.easeRequested,
     } : null,
     rating,
@@ -276,7 +277,7 @@ async function saveRatings(userId, body) {
   const { rows } = await pool.query(
     `INSERT INTO fitness_ratings ("userId", kind, scores, "previousScores", "previousLabel", note)
      VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-    [userId, kind, JSON.stringify(scores), previous ? JSON.stringify(previous) : null, cleanText(body.previousLabel, 60), cleanText(body.note, 1000)],
+    [userId, kind, JSON.stringify(scores), previous ? JSON.stringify(previous) : null, cleanText(body.previousLabel, 60), cleanFreeText(body.note, 1000)],
   );
   return rows[0].id;
 }
@@ -343,8 +344,10 @@ async function getPlanningInputs(userId) {
     equipment: lifestyle.equipment, smoking: lifestyle.smoking, alcohol: lifestyle.alcohol, dietQuality: lifestyle.dietQuality,
     timeFlexibility: lifestyle.timeFlexibility,
   };
-  const notes = [lifestyle.workAround, lifestyle.otherNotes, state.rating.note].filter(Boolean).join(' | ') || null;
-  return { state, profile: { ...profile, lifestyleSummary }, currentMinutes: lifestyle.weeklyMinutes ?? null, scores: state.rating.scores, previous: state.rating.previousScores, previousLabel: state.rating.previousLabel, notes };
+  // Free text is cleaned again on the way out: answers saved before "none" was treated as empty are still fixed here.
+  const workAround = cleanFreeText(lifestyle.workAround, 1000);
+  const notes = [...new Set([cleanFreeText(lifestyle.otherNotes, 1000), cleanFreeText(state.rating.note, 1000)].filter(Boolean))].join(' | ') || null;
+  return { state, profile: { ...profile, lifestyleSummary, workAround }, currentMinutes: lifestyle.weeklyMinutes ?? null, scores: state.rating.scores, previous: state.rating.previousScores, previousLabel: state.rating.previousLabel, notes };
 }
 
 module.exports = {

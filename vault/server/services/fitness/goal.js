@@ -60,13 +60,14 @@ async function buildGoalPlan({ userId, profile, scores, previous, currentMinutes
     currentRatings: scores,
     previousRatings: previous || null,
     regaining: plan.regaining,
-    startMinutesPerWeek: plan.now.aerobicModerateMin,
+    currentWeeklyMinutes: plan.now.aerobicModerateMin,
     milestones: plan.milestones.map((m) => ({ year: m.year, phase: m.phase.label, ratings: m.ratings, weekly: m.weekly })),
     change: diff,
+    thingsToWorkAround: profile.workAround || null,
     userNotes: notes || null,
   };
 
-  const system = `${GUARDRAILS}\nThe milestone numbers are fixed by the app. Explain them; never change or add numbers. Ratings are 1-5 self-ratings; decimals mean partway between two levels.`;
+  const system = `${GUARDRAILS}\nThe milestone numbers are fixed by the app. Explain them; never change or add numbers. Ratings are 1-5 self-ratings; decimals mean partway between two levels. If currentWeeklyMinutes is null the person has not said how active they are: never state, guess or imply a current figure.`;
   const prompt = `Explain this 5-year fitness goal in plain language.\n\nDATA:\n${JSON.stringify(input, null, 1)}\n\nReturn JSON:\n{"summary": string (3-4 sentences: the shape of the five years and why year 1 is gentle),\n"whatChanged": ${diff ? 'string (2-3 sentences explaining, with the numbers in "change", what the ambition change means day to day, and that either pace is fine)' : 'null'}}`;
 
   const result = await runJson({

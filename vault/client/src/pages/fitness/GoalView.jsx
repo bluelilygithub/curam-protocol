@@ -7,49 +7,79 @@ import AerobicChart from './AerobicChart';
 
 const fmt1 = (n) => Number(n).toFixed(1);
 
-function Milestones({ plan, meta }) {
-  const cell = 'py-2 pr-3 whitespace-nowrap';
+// Short column names so all ten columns fit; the full names are in the tour and the info modal.
+const SHORT = { cardio: 'Cardio', strength: 'Strength', flexibility: 'Flexibility', balance: 'Balance' };
+
+function Milestones({ plan, meta, onAddMinutes }) {
+  const cell = 'py-2 pr-3';
+  const num = 'py-2 pr-3 tabular-nums';
+  const text = { color: 'var(--color-text)' };
+  const muted = { color: 'var(--color-muted)' };
+  const entered = plan.now.minutesSource === 'entered';
+  const group = 'pb-1 pr-3 text-xs font-medium border-b';
   return (
-    <div className="overflow-x-auto" data-tour="fitness-milestones">
-      <table className="w-full text-sm" style={{ color: 'var(--color-text)' }}>
+    // Scrolls inside its box on a narrow screen instead of being clipped; tabIndex lets the keyboard scroll it.
+    <div className="overflow-x-auto scroll-x-obvious" data-tour="fitness-milestones" tabIndex={0} role="region" aria-label="Five year targets">
+      <table className="w-full text-sm" style={{ ...text, minWidth: 720 }}>
         <thead>
-          <tr className="text-left text-xs" style={{ color: 'var(--color-muted)' }}>
-            <th className="py-2 pr-3 font-medium">Year</th>
-            <th className="py-2 pr-3 font-medium">Focus</th>
-            <th className="py-2 pr-3 font-medium">Aerobic / week</th>
-            <th className="py-2 pr-3 font-medium">Strength days</th>
-            <th className="py-2 pr-3 font-medium">Balance days</th>
-            <th className="py-2 pr-3 font-medium">Mobility days</th>
-            {meta.domains.map((d) => <th key={d.id} className="py-2 pr-3 font-medium">{d.label}</th>)}
+          <tr className="text-left" style={muted}>
+            <th rowSpan={2} className="pr-3 align-bottom text-xs font-medium">Year</th>
+            <th rowSpan={2} className="pr-3 align-bottom text-xs font-medium">Focus</th>
+            <th className={group} style={{ borderColor: 'var(--color-border)' }}>Aerobic</th>
+            <th colSpan={3} className={group} style={{ borderColor: 'var(--color-border)' }}>Days per week</th>
+            <th colSpan={4} className={group} style={{ borderColor: 'var(--color-border)' }}>Expected rating (1-5)</th>
+          </tr>
+          <tr className="text-left text-xs" style={muted}>
+            <th className="py-1 pr-3 font-medium">min / week</th>
+            <th className="py-1 pr-3 font-medium">Strength</th>
+            <th className="py-1 pr-3 font-medium">Balance</th>
+            <th className="py-1 pr-3 font-medium">Mobility</th>
+            {meta.domains.map((d) => <th key={d.id} className="py-1 pr-3 font-medium">{SHORT[d.id] || d.label}</th>)}
           </tr>
         </thead>
         <tbody>
           <tr className="border-t" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-            <td className={`${cell} font-medium`}>Now<span className="block text-xs font-normal" style={{ color: 'var(--color-muted)' }}>today</span></td>
-            <td className={cell} style={{ color: 'var(--color-muted)' }}>Where you are</td>
-            <td className={cell}>{plan.now.minutesSource === 'entered' ? '' : 'about '}{plan.now.aerobicModerateMin} min</td>
-            <td className={cell} style={{ color: 'var(--color-muted)' }}>-</td>
-            <td className={cell} style={{ color: 'var(--color-muted)' }}>-</td>
-            <td className={cell} style={{ color: 'var(--color-muted)' }}>-</td>
-            {meta.domains.map((d) => <td key={d.id} className={cell}>{plan.now.ratings[d.id]}</td>)}
+            <td className={`${cell} font-medium`}>Now<span className="block text-xs font-normal" style={muted}>today</span></td>
+            <td className={cell} style={muted}>Where you are</td>
+            <td className={num}>
+              {entered
+                ? plan.now.aerobicModerateMin
+                : (
+                  <span style={muted}>
+                    not entered
+                    {onAddMinutes && (
+                      <>
+                        {' '}
+                        <button type="button" onClick={onAddMinutes} className="underline hover:opacity-60 transition-opacity duration-200" style={text}>add</button>
+                      </>
+                    )}
+                  </span>
+                )}
+            </td>
+            <td className={cell} style={muted}>-</td>
+            <td className={cell} style={muted}>-</td>
+            <td className={cell} style={muted}>-</td>
+            {meta.domains.map((d) => <td key={d.id} className={num}>{plan.now.ratings[d.id]}</td>)}
           </tr>
           {plan.milestones.map((m) => (
             <tr key={m.year} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
-              <td className={`${cell} font-medium`}>Year {m.year}<span className="block text-xs font-normal" style={{ color: 'var(--color-muted)' }}>by {formatDate(m.by)}</span></td>
-              <td className={cell}>{m.phase?.label}<span className="block text-xs" style={{ color: 'var(--color-muted)' }}>{m.phase?.focus}</span></td>
-              <td className={cell}>{m.weekly.aerobicModerateMin} min</td>
-              <td className={cell}>{m.weekly.strengthDays}</td>
-              <td className={cell}>{m.weekly.balanceDays}</td>
-              <td className={cell}>{m.weekly.mobilityDays}</td>
-              {meta.domains.map((d) => <td key={d.id} className={cell}>{fmt1(m.ratings[d.id])}</td>)}
+              <td className={`${cell} font-medium`}>Year {m.year}<span className="block text-xs font-normal" style={muted}>by {formatDate(m.by)}</span></td>
+              <td className={cell}>{m.phase?.label}<span className="block text-xs" style={muted}>{m.phase?.focus}</span></td>
+              <td className={num}>{m.weekly.aerobicModerateMin}</td>
+              <td className={num}>{m.weekly.strengthDays}</td>
+              <td className={num}>{m.weekly.balanceDays}</td>
+              <td className={num}>{m.weekly.mobilityDays}</td>
+              {meta.domains.map((d) => <td key={d.id} className={num}>{fmt1(m.ratings[d.id])}</td>)}
             </tr>
           ))}
         </tbody>
       </table>
-      <p className="text-xs leading-relaxed mt-3" style={{ color: 'var(--color-muted)' }}>
+      <p className="text-xs leading-relaxed mt-3" style={muted}>
         Strength, balance and mobility days can be combined in the same session.
-        Ratings are your expected level at the end of each year on the 1-5 scale; a decimal means partway between two levels.
-        {plan.now.minutesSource === 'entered' ? "Today's aerobic minutes are what you told us." : "Today's aerobic minutes are estimated from your cardio rating."}
+        Ratings are your expected level at the end of each year on the 1-5 scale; a decimal means partway between two levels.{' '}
+        {entered
+          ? "Today's aerobic minutes are what you told us."
+          : 'You have not entered your weekly exercise minutes, so year one is based on your cardio rating. Add them in Profile for a more accurate starting point.'}
       </p>
     </div>
   );
@@ -60,7 +90,7 @@ function Milestones({ plan, meta }) {
  * goal, and accepting replaces it (the old one stays in history). The dial is five labelled steps; every change
  * re-previews the plan and explains what moved, with nothing saved until "Use this goal".
  */
-export default function GoalView({ meta, state, mode = 'first', onSaved, onCancel }) {
+export default function GoalView({ meta, state, mode = 'first', onSaved, onCancel, onAddMinutes }) {
   const addToast = useToastStore((s) => s.addToast);
   const { startProcessing, stopProcessing } = useProcessingStore();
   const committed = state.goal?.ambition ?? meta.defaultAmbition;
@@ -149,7 +179,7 @@ export default function GoalView({ meta, state, mode = 'first', onSaved, onCance
             {plan.whatChanged && (
               <Notice><strong>What changes:</strong> {plan.whatChanged}</Notice>
             )}
-            <Milestones plan={plan} meta={meta} />
+            <Milestones plan={plan} meta={meta} onAddMinutes={onAddMinutes} />
             <AerobicChart plan={plan} />
             <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
               Easier weeks are built in along the way, and rest is part of the plan.

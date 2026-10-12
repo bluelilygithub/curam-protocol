@@ -10,12 +10,12 @@ const WHO_HIGH = 300;
  */
 export default function AerobicChart({ plan }) {
   const data = [
-    { label: 'Now', minutes: plan.now.aerobicModerateMin },
+    { label: 'Now', minutes: plan.now.aerobicModerateMin }, // null when not entered: the line then starts at Year 1
     ...plan.milestones.map((m) => ({ label: `Year ${m.year}`, minutes: m.weekly.aerobicModerateMin })),
   ];
-  const top = Math.max(WHO_HIGH + 30, ...data.map((d) => d.minutes + 20));
+  const top = Math.max(WHO_HIGH + 30, ...data.map((d) => (d.minutes ?? 0) + 20));
   const yMax = Math.ceil(top / 50) * 50;
-  const summary = data.map((d) => `${d.label} ${d.minutes} minutes`).join(', ');
+  const summary = data.map((d) => `${d.label} ${d.minutes == null ? 'not entered' : `${d.minutes} minutes`}`).join(', ');
 
   return (
     <figure className="m-0" data-tour="fitness-chart">
@@ -45,12 +45,12 @@ export default function AerobicChart({ plan }) {
               formatter={(v) => [`${v} min`, 'Aerobic']}
               contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 12, color: 'var(--color-text)' }}
             />
-            <Line type="monotone" dataKey="minutes" stroke="var(--color-text)" strokeWidth={2} dot={{ r: 4, fill: 'var(--color-text)' }} isAnimationActive={false} />
+            <Line type="monotone" dataKey="minutes" connectNulls={false} stroke="var(--color-text)" strokeWidth={2} dot={{ r: 4, fill: 'var(--color-text)' }} isAnimationActive={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
       <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-        Moderate-intensity equivalents. Hard effort counts double, so 75-150 vigorous minutes sit in the same band. {plan.now.minutesSource === 'entered' ? '"Now" is what you told us.' : '"Now" is estimated from your cardio rating.'}
+        Moderate-intensity equivalents. Hard effort counts double, so 75-150 vigorous minutes sit in the same band. {plan.now.minutesSource === 'entered' ? '"Now" is what you told us.' : 'Your current minutes are not entered, so the chart starts at Year 1.'}
       </p>
     </figure>
   );

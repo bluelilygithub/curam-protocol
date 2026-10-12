@@ -155,7 +155,8 @@ function buildMilestones({ bandId, scores, previous, ambition, startsOn, current
     endWeekly: end,
     startMinutes: startMin,
     // Where you are today. Minutes are what you entered, else estimated from the cardio rating; days per week are not known.
-    now: { aerobicModerateMin: nowMin, minutesSource: entered ? 'entered' : 'estimated', ratings: { ...scores } },
+    // Not entered = null. The estimate only shapes the path (startMinutes); it is never shown or stated as the person's figure.
+    now: { aerobicModerateMin: entered ? nowMin : null, minutesSource: entered ? 'entered' : 'not_entered', ratings: { ...scores } },
     milestones,
   };
 }
