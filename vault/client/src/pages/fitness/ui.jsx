@@ -1,4 +1,5 @@
 import React from 'react';
+import { useIcon } from '../../providers/IconProvider';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import Tooltip from '../../components/Tooltip';
 
@@ -37,20 +38,26 @@ export function Field({ label, hint, children }) {
   );
 }
 
-/** Calm, non-alarming notice. Tone: 'info' (default) or 'care' (amber, for health prompts). Never red. */
+/**
+ * Calm, non-alarming notice, theme colours only. Tone 'care' (health prompts) adds an icon and a thicker left bar
+ * so it stands out without leaning on a status colour. Never red.
+ */
 export function Notice({ tone = 'info', children }) {
+  const getIcon = useIcon();
   const care = tone === 'care';
   return (
     <div
-      className="rounded-xl border p-4 text-sm leading-relaxed"
+      className="rounded-xl border p-4 text-sm leading-relaxed flex gap-3"
       role="note"
       style={{
-        background: care ? '#fef3c7' : 'var(--color-bg)',
-        borderColor: care ? '#f59e0b' : 'var(--color-border)',
-        color: care ? '#78350f' : 'var(--color-text)',
+        background: care ? 'var(--color-surface)' : 'var(--color-bg)',
+        borderColor: 'var(--color-border)',
+        borderLeft: care ? '4px solid var(--color-primary)' : '1px solid var(--color-border)',
+        color: 'var(--color-text)',
       }}
     >
-      {children}
+      {care && <span className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-primary)' }}>{getIcon('info', { size: 16 })}</span>}
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }
