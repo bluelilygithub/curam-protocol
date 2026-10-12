@@ -8,7 +8,7 @@ import type { Fonts } from '../src/export/drawingPackage';
 import { DEFAULT_CONFIG, normaliseConfig, normaliseFeatures, type FeatureGroup, type LiteConfig, type RackType } from '../src/lite/config';
 import { buildScene } from '../src/lite/cellarScene';
 import { analyseApp, fullRuns } from '../src/app/model';
-import { cleanPicks, effectsOf, featureTotals, optionMid, priceLabel, resolveFeatures, togglePick, unavailableReason } from '../src/lite/features';
+import { chosenOptions, cleanPicks, effectsOf, featureTotals, optionMid, priceLabel, resolveFeatures, togglePick, unavailableReason } from '../src/lite/features';
 import { priceRange } from '../src/lite/price';
 import { decodeDesign, defaultLite, encodeDesign, liteToProject, summaryLine, type LiteSettings } from '../src/lite/settings';
 
@@ -99,9 +99,24 @@ describe('resolving what is chosen', () => {
     expect(cleanPicks([5, 2, 5, 0, 1000, 1.5, 'x', 999])).toEqual([2, 5, 999]);
     expect(cleanPicks('nope')).toEqual([]);
   });
-  it('only glass, wall and floor picks change the picture', () => {
-    const r = resolveFeatures(f, [code('glass-doors'), code('in-rack-led'), code('stone-tile')], ROOM);
-    expect(effectsOf(r.extras).sort()).toEqual(['FLOOR_STONE', 'GLASS_DOORS']);
+  it('the picture follows everything chosen, the standard options too, and swapping a standard option swaps its picture', () => {
+    expect(effectsOf(chosenOptions(resolveFeatures(f, [], ROOM))).sort()).toEqual(['DOOR_TIMBER', 'LIGHT_DOWNLIGHTS']);
+    const r = resolveFeatures(f, [code('glass-doors'), code('in-rack-led'), code('stone-tile'), code('tasting-bench')], ROOM);
+    expect(effectsOf(chosenOptions(r)).sort()).toEqual(['CENTRE_BENCH', 'FLOOR_STONE', 'GLASS_DOORS', 'LIGHT_RACK_LED']);
+    expect(effectsOf(r.extras)).not.toContain('DOOR_TIMBER');
+  });
+  it('an effect left on automatic gives a starting option its starting picture, and "nothing" really is nothing, in the browser and on the server', () => {
+    const old = clone(DEFAULT_CONFIG.features); // as saved before pictures existed: every effect blank
+    for (const g of old) for (const o of g.options) o.effect = '';
+    const got = normaliseFeatures(old);
+    expect(got.find((g) => g.id === 'lighting')!.options[1]!.effect).toBe('LIGHT_RACK_LED');
+    expect(got.find((g) => g.id === 'front')!.options[0]!.effect).toBe('DOOR_TIMBER');
+    expect(server.validateConfig({ features: old }).config.features).toEqual(got);
+    const none = clone(old); none[0]!.options[1]!.effect = 'NONE';
+    expect(normaliseFeatures(none)[0]!.options[1]!.effect).toBe('NONE');
+    expect(effectsOf([normaliseFeatures(none)[0]!.options[1]!])).toEqual([]);
+    const custom = clone(old); custom[1]!.options.push({ ...custom[1]!.options[0]!, id: 'neon', name: 'Neon', code: 0, included: false } as never);
+    expect(normaliseFeatures(custom)[1]!.options.at(-1)!.effect).toBe(''); // an option of the owner's own has no picture until they choose one
   });
 });
 
@@ -238,5 +253,31 @@ describe('the 3D picture', () => {
     const plain = buildScene(input), fancy = buildScene({ ...input, effects: ['GLASS_DOORS', 'WALL_STONE', 'FLOOR_OAK'] });
     expect(plain.effects).toEqual([]); expect(fancy.effects).toEqual(['GLASS_DOORS', 'WALL_STONE', 'FLOOR_OAK']);
     expect(fancy.stats).toEqual(plain.stats); // a feature never changes a bottle count
+  });
+  it('draws the door where the door is: glass or timber leaves on the door wall, two for a double door, and the whole front for a full glass front', () => {
+    const at = (s: Partial<LiteSettings>, effects: Array<'GLASS_DOORS' | 'GLASS_FRONT' | 'DOOR_TIMBER'>) => {
+      const p = liteToProject({ ...defaultLite(), ...s }, DEFAULT_CONFIG), a = analyseApp(p);
+      return buildScene({ project: p, runs: fullRuns(p), analysis: a.racks, effects });
+    };
+    const xs = (sc: ReturnType<typeof buildScene>, id: string) => sc.faces.filter((f) => f.id.startsWith(id)).map((f) => (Math.min(...f.pts.map((q) => q[0])) + Math.max(...f.pts.map((q) => q[0]))) / 2);
+    expect(at({}, []).faces.filter((f) => f.kind === 'doorGlass' || f.kind === 'doorTimber').length).toBe(0);
+    expect(at({}, ['GLASS_DOORS']).faces.filter((f) => f.kind === 'doorGlass').length).toBe(1);
+    expect(at({}, ['DOOR_TIMBER']).faces.filter((f) => f.kind === 'doorTimber').length).toBe(1);
+    expect(at({ doorStyle: 'DOUBLE' }, ['GLASS_DOORS']).faces.filter((f) => f.kind === 'doorGlass').length).toBe(2);
+    expect(at({}, ['GLASS_FRONT']).faces.some((f) => f.kind === 'frontGlass')).toBe(true);
+    // a door toward the left of the wall is drawn to the left of one toward the right
+    expect(xs(at({ doorPos: 'LEFT' }, ['GLASS_DOORS']), 'door')[0]!).toBeLessThan(xs(at({ doorPos: 'RIGHT' }, ['GLASS_DOORS']), 'door')[0]!);
+  });
+  it('lights and a centrepiece add faces and strips to the picture, and never a bottle', () => {
+    const p = liteToProject(defaultLite(), DEFAULT_CONFIG), a = analyseApp(p);
+    const input = { project: p, runs: fullRuns(p), analysis: a.racks };
+    const plain = buildScene(input);
+    const lamps = buildScene({ ...input, effects: ['LIGHT_DOWNLIGHTS'] });
+    expect(lamps.faces.filter((f) => f.kind === 'lamp').length).toBeGreaterThan(0);
+    expect(lamps.faces.filter((f) => f.kind === 'glow').length).toBe(lamps.faces.filter((f) => f.kind === 'lamp').length);
+    expect(buildScene({ ...input, effects: ['LIGHT_RACK_LED'] }).lines.some((l) => l.kind === 'led')).toBe(true);
+    expect(buildScene({ ...input, effects: ['LIGHT_BACKLIT'] }).faces.some((f) => f.kind === 'backlight')).toBe(true);
+    expect(buildScene({ ...input, effects: ['CENTRE_BENCH'] }).faces.some((f) => f.kind === 'benchTop')).toBe(true);
+    for (const e of ['LIGHT_DOWNLIGHTS', 'LIGHT_RACK_LED', 'LIGHT_BACKLIT', 'CENTRE_BENCH', 'CENTRE_ISLAND'] as const) expect(buildScene({ ...input, effects: [e] }).stats).toEqual(plain.stats);
   });
 });

@@ -402,6 +402,28 @@ check('the bar\'s button takes the visitor to the contact form with the design f
 check('no script errors (embedded)', errors.length === 0, errors.join(' | '));
 await ctx.close();
 
+// ---- embedded: the cellar picture follows the page as it scrolls (the frame is as tall as the planner, so CSS sticky alone cannot do it)
+{
+  const c = await browser.newContext({ viewport: { width: 1300, height: 800 } });
+  const p = await c.newPage();
+  await p.goto('http://localhost:8801/planner.html');
+  const fr = p.frameLocator('#f');
+  await fr.getByTestId('lite-bottles').waitFor();
+  await fr.getByTestId('lite-step-3').click(); // the long Features step
+  await p.waitForTimeout(900);
+  const place = async () => (await fr.locator('.lite-visual').evaluate((el) => el.getBoundingClientRect().top)) + (await p.evaluate(() => document.getElementById('f').getBoundingClientRect().top));
+  const startTop = await place();
+  await p.evaluate(() => window.scrollTo(0, 900));
+  await p.waitForTimeout(700);
+  const scrolledTop = await place();
+  check('embedded: before scrolling the picture is where it starts', startTop > 100, String(startTop));
+  check('embedded: after scrolling the page, the picture has followed and is still in view near the top of the window', scrolledTop >= 0 && scrolledTop < 200 && (await p.evaluate(() => window.scrollY)) > 500, String(scrolledTop));
+  await p.evaluate(() => window.scrollTo(0, 0));
+  await p.waitForTimeout(600);
+  check('embedded: scrolling back up puts it back beside the top of the controls', Math.abs((await place()) - startTop) < 6, String(await place()));
+  await c.close();
+}
+
 await browser.close(); apiServer.close(); lite.close(); site.close();
 console.log(failed ? `\n${failed} FAILED` : '\nAll passed');
 process.exit(failed ? 1 : 0);

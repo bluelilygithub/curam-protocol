@@ -31,21 +31,22 @@ const MAX_FEATURE_OPTIONS = 8;
 const FEATURE_MODES = ['ONE', 'ANY'];
 const FEATURE_BADGES = ['', 'POPULAR', 'RECOMMENDED'];
 // what an option changes in the 3D picture (nothing else about an option is drawn)
-const FEATURE_EFFECTS = ['', 'GLASS_DOORS', 'GLASS_FRONT', 'WALL_TIMBER', 'WALL_STONE', 'FLOOR_STONE', 'FLOOR_OAK'];
+// '' = automatic (an option from the starting list gets its starting picture), 'NONE' = nothing
+const FEATURE_EFFECTS = ['', 'NONE', 'DOOR_TIMBER', 'GLASS_DOORS', 'GLASS_FRONT', 'LIGHT_DOWNLIGHTS', 'LIGHT_RACK_LED', 'LIGHT_BACKLIT', 'CENTRE_BENCH', 'CENTRE_ISLAND', 'WALL_TIMBER', 'WALL_STONE', 'FLOOR_STONE', 'FLOOR_OAK'];
 
 // The starting feature list (prices blank = not set). `code` is a number that stays with an option for good (it is what a design code carries, so
 // renaming an option never changes a saved design); never reuse one.
 const fo = (code, id, name, description, extra = {}) => ({ code, id, name, description, badge: '', included: false, low: null, high: null, minWidthMm: null, minDepthMm: null, effect: '', enabled: true, ...extra });
 const DEFAULT_FEATURES = [
   { id: 'front', name: 'Front & doors', hint: 'How the cellar looks from the room outside. Glass is the most popular upgrade.', mode: 'ONE', options: [
-    fo(1, 'timber-doors', 'Timber doors', 'Solid, matched to your racks', { included: true }),
+    fo(1, 'timber-doors', 'Timber doors', 'Solid, matched to your racks', { included: true, effect: 'DOOR_TIMBER' }),
     fo(2, 'glass-doors', 'Frameless glass doors', 'See your collection without opening up', { badge: 'POPULAR', effect: 'GLASS_DOORS' }),
     fo(3, 'full-glass-front', 'Full glass front', 'The whole cellar becomes the feature', { effect: 'GLASS_FRONT' }),
   ] },
   { id: 'lighting', name: 'Lighting', hint: 'Low-heat LED throughout, so it never warms the wine.', mode: 'ONE', options: [
-    fo(4, 'ceiling-downlights', 'Ceiling downlights', 'Clean, even light', { included: true }),
-    fo(5, 'in-rack-led', 'In-rack LED strips', 'Warm glow along every row'),
-    fo(6, 'backlit-wall', 'Backlit display wall', 'Bottles lit from behind'),
+    fo(4, 'ceiling-downlights', 'Ceiling downlights', 'Clean, even light', { included: true, effect: 'LIGHT_DOWNLIGHTS' }),
+    fo(5, 'in-rack-led', 'In-rack LED strips', 'Warm glow along every row', { effect: 'LIGHT_RACK_LED' }),
+    fo(6, 'backlit-wall', 'Backlit display wall', 'Bottles lit from behind', { effect: 'LIGHT_BACKLIT' }),
   ] },
   { id: 'special-storage', name: 'Special storage', hint: 'Swap some standard racking for bays made for the bottles you love most.', mode: 'ANY', options: [
     fo(7, 'magnum-large-format', 'Magnum & large format', 'Dedicated bays for big bottles'),
@@ -55,8 +56,8 @@ const DEFAULT_FEATURES = [
   ] },
   { id: 'centrepiece', name: 'Centrepiece', hint: 'Somewhere to open, pour and linger.', mode: 'ONE', options: [
     fo(11, 'no-centrepiece', 'No centrepiece', 'Keep the floor clear', { included: true }),
-    fo(12, 'tasting-bench', 'Tasting bench', 'Stone top, wall-mounted'),
-    fo(13, 'island-with-drawers', 'Island with drawers', 'Needs a room at least 2.4 m deep', { minDepthMm: 2400 }),
+    fo(12, 'tasting-bench', 'Tasting bench', 'Stone top, wall-mounted', { effect: 'CENTRE_BENCH' }),
+    fo(13, 'island-with-drawers', 'Island with drawers', 'Needs a room at least 2.4 m deep', { minDepthMm: 2400, effect: 'CENTRE_ISLAND' }),
   ] },
   { id: 'climate', name: 'Climate system', hint: 'Keeps the cellar at a steady 12 to 14 °C. We confirm sizing on site.', mode: 'ONE', options: [
     fo(14, 'through-wall-unit', 'Through-wall unit', 'Self-contained, some fan noise', { included: true }),
@@ -73,6 +74,9 @@ const DEFAULT_FEATURES = [
     fo(21, 'engineered-oak', 'Engineered oak', 'Warm and stable', { effect: 'FLOOR_OAK' }),
   ] },
 ];
+
+// the picture each starting option has when its effect is left on automatic (an owner who saved the list before pictures existed gets them too)
+const SEED_EFFECT = Object.fromEntries(DEFAULT_FEATURES.flatMap((g) => g.options.map((o) => [o.id, o.effect])));
 
 const DEFAULTS = Object.freeze({
   version: 1,
@@ -337,8 +341,9 @@ function validateConfig(raw) {
       if (low !== null && high !== null && low > high) { errors.push(`${label}: the low price must not be more than the high price.`); high = low; }
       const badge = o.badge === undefined || o.badge === null ? '' : o.badge;
       if (!FEATURE_BADGES.includes(badge)) errors.push(`${label}: the badge must be none, Popular or Recommended.`);
-      const effect = o.effect === undefined || o.effect === null ? '' : o.effect;
-      if (!FEATURE_EFFECTS.includes(effect)) errors.push(`${label}: unknown picture effect.`);
+      const rawEffect = o.effect === undefined || o.effect === null ? '' : o.effect;
+      if (!FEATURE_EFFECTS.includes(rawEffect)) errors.push(`${label}: unknown picture effect.`);
+      const effect = rawEffect === '' ? (SEED_EFFECT[oid] ?? '') : rawEffect;
       const opt = {
         code, id: oid, name: oname,
         description: o.description === undefined ? '' : cleanText(o.description, 120),

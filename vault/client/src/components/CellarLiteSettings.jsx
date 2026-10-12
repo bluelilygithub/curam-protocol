@@ -16,7 +16,7 @@ const MAX_RACK_TYPES = 8;
 const MAX_FEATURE_GROUPS = 10;
 const MAX_FEATURE_OPTIONS = 8;
 const FEATURE_BADGES = [['', 'No badge'], ['POPULAR', 'Popular'], ['RECOMMENDED', 'Recommended']];
-const FEATURE_EFFECTS = [['', 'Nothing'], ['GLASS_DOORS', 'Glass doors at the front'], ['GLASS_FRONT', 'Full glass front'], ['WALL_TIMBER', 'Timber-lined walls'], ['WALL_STONE', 'Stone walls'], ['FLOOR_STONE', 'Stone floor'], ['FLOOR_OAK', 'Oak floor']];
+const FEATURE_EFFECTS = [['NONE', 'Nothing'], ['DOOR_TIMBER', 'Timber doors at the front'], ['GLASS_DOORS', 'Glass doors at the front'], ['GLASS_FRONT', 'Full glass front'], ['LIGHT_DOWNLIGHTS', 'Ceiling downlights (glowing spots)'], ['LIGHT_RACK_LED', 'LED strips along the racks'], ['LIGHT_BACKLIT', 'Backlit racks'], ['CENTRE_BENCH', 'Tasting bench on the floor'], ['CENTRE_ISLAND', 'Island on the floor'], ['WALL_TIMBER', 'Timber-lined walls'], ['WALL_STONE', 'Stone walls'], ['FLOOR_STONE', 'Stone floor'], ['FLOOR_OAK', 'Oak floor']];
 // the figures from the design mockup, by option id: offered as a one-click starting point for blank prices, never applied on their own
 const EXAMPLE_FEATURE_PRICES = {
   'glass-doors': [2800, 3600], 'full-glass-front': [7500, 9800], 'in-rack-led': [1600, 2200], 'backlit-wall': [3400, 4500],
@@ -25,7 +25,7 @@ const EXAMPLE_FEATURE_PRICES = {
   'timber-lined': [2600, 3500], 'stone-feature-wall': [3800, 5200], 'stone-tile': [1500, 2200], 'engineered-oak': [1300, 1900],
 };
 const blank = (v) => (v === null || v === undefined ? '' : String(v));
-const optionToForm = (o) => ({ code: o.code, id: o.id, name: o.name, description: o.description ?? '', badge: o.badge ?? '', included: !!o.included, low: blank(o.low), high: blank(o.high), minWidthMm: blank(o.minWidthMm), minDepthMm: blank(o.minDepthMm), effect: o.effect ?? '', enabled: o.enabled !== false });
+const optionToForm = (o) => ({ code: o.code, id: o.id, name: o.name, description: o.description ?? '', badge: o.badge ?? '', included: !!o.included, low: blank(o.low), high: blank(o.high), minWidthMm: blank(o.minWidthMm), minDepthMm: blank(o.minDepthMm), effect: o.effect || 'NONE', enabled: o.enabled !== false });
 const groupToForm = (g) => ({ id: g.id, name: g.name, hint: g.hint ?? '', mode: g.mode === 'ANY' ? 'ANY' : 'ONE', options: (g.options || []).map(optionToForm) });
 const ORIENTATION_OPTIONS = [['NECK_OUT', 'Neck-out'], ['LABEL_FORWARD', 'Label-forward']];
 const RACK_NUM_KEYS = ['unitWidthMm', 'unitDepthMm', 'unitHeightMm', 'rowPitchMm', 'postsPerUnit', 'bottlesPerRow', 'bottlesPerRowLabelForward', 'rowsPerUnit', 'pricePerUnit'];

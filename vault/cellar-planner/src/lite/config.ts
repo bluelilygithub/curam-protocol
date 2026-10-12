@@ -26,7 +26,7 @@ export interface CoolingSettings { panelConductivity: number; glassU: number; fl
 export type FeatureMode = 'ONE' | 'ANY';
 export type FeatureBadge = '' | 'POPULAR' | 'RECOMMENDED';
 /** What an option changes in the 3D picture (nothing else about an option is drawn). */
-export type FeatureEffect = '' | 'GLASS_DOORS' | 'GLASS_FRONT' | 'WALL_TIMBER' | 'WALL_STONE' | 'FLOOR_STONE' | 'FLOOR_OAK';
+export type FeatureEffect = '' | 'NONE' | 'DOOR_TIMBER' | 'GLASS_DOORS' | 'GLASS_FRONT' | 'LIGHT_DOWNLIGHTS' | 'LIGHT_RACK_LED' | 'LIGHT_BACKLIT' | 'CENTRE_BENCH' | 'CENTRE_ISLAND' | 'WALL_TIMBER' | 'WALL_STONE' | 'FLOOR_STONE' | 'FLOOR_OAK';
 /**
  * One choice in a feature group. `code` is a number that stays with the option for good: it is what a design code and a saved design carry, so
  * renaming an option never changes a saved design. low/high null = price not set (never zero). `included` = the standard choice of a pick-one group.
@@ -64,14 +64,14 @@ export interface LiteConfig {
 const fo = (code: number, id: string, name: string, description: string, extra: Partial<FeatureOption> = {}): FeatureOption => ({ code, id, name, description, badge: '', included: false, low: null, high: null, minWidthMm: null, minDepthMm: null, effect: '', enabled: true, ...extra });
 const DEFAULT_FEATURES: FeatureGroup[] = [
   { id: 'front', name: 'Front & doors', hint: 'How the cellar looks from the room outside. Glass is the most popular upgrade.', mode: 'ONE', options: [
-    fo(1, 'timber-doors', 'Timber doors', 'Solid, matched to your racks', { included: true }),
+    fo(1, 'timber-doors', 'Timber doors', 'Solid, matched to your racks', { included: true, effect: 'DOOR_TIMBER' }),
     fo(2, 'glass-doors', 'Frameless glass doors', 'See your collection without opening up', { badge: 'POPULAR', effect: 'GLASS_DOORS' }),
     fo(3, 'full-glass-front', 'Full glass front', 'The whole cellar becomes the feature', { effect: 'GLASS_FRONT' }),
   ] },
   { id: 'lighting', name: 'Lighting', hint: 'Low-heat LED throughout, so it never warms the wine.', mode: 'ONE', options: [
-    fo(4, 'ceiling-downlights', 'Ceiling downlights', 'Clean, even light', { included: true }),
-    fo(5, 'in-rack-led', 'In-rack LED strips', 'Warm glow along every row'),
-    fo(6, 'backlit-wall', 'Backlit display wall', 'Bottles lit from behind'),
+    fo(4, 'ceiling-downlights', 'Ceiling downlights', 'Clean, even light', { included: true, effect: 'LIGHT_DOWNLIGHTS' }),
+    fo(5, 'in-rack-led', 'In-rack LED strips', 'Warm glow along every row', { effect: 'LIGHT_RACK_LED' }),
+    fo(6, 'backlit-wall', 'Backlit display wall', 'Bottles lit from behind', { effect: 'LIGHT_BACKLIT' }),
   ] },
   { id: 'special-storage', name: 'Special storage', hint: 'Swap some standard racking for bays made for the bottles you love most.', mode: 'ANY', options: [
     fo(7, 'magnum-large-format', 'Magnum & large format', 'Dedicated bays for big bottles'),
@@ -81,8 +81,8 @@ const DEFAULT_FEATURES: FeatureGroup[] = [
   ] },
   { id: 'centrepiece', name: 'Centrepiece', hint: 'Somewhere to open, pour and linger.', mode: 'ONE', options: [
     fo(11, 'no-centrepiece', 'No centrepiece', 'Keep the floor clear', { included: true }),
-    fo(12, 'tasting-bench', 'Tasting bench', 'Stone top, wall-mounted'),
-    fo(13, 'island-with-drawers', 'Island with drawers', 'Needs a room at least 2.4 m deep', { minDepthMm: 2400 }),
+    fo(12, 'tasting-bench', 'Tasting bench', 'Stone top, wall-mounted', { effect: 'CENTRE_BENCH' }),
+    fo(13, 'island-with-drawers', 'Island with drawers', 'Needs a room at least 2.4 m deep', { minDepthMm: 2400, effect: 'CENTRE_ISLAND' }),
   ] },
   { id: 'climate', name: 'Climate system', hint: 'Keeps the cellar at a steady 12 to 14 °C. We confirm sizing on site.', mode: 'ONE', options: [
     fo(14, 'through-wall-unit', 'Through-wall unit', 'Self-contained, some fan noise', { included: true }),
@@ -139,7 +139,7 @@ const MAX_RACK_TYPES = 8;
 const MAX_FEATURE_GROUPS = 10;
 const MAX_FEATURE_OPTIONS = 8;
 const FEATURE_BADGES: readonly string[] = ['', 'POPULAR', 'RECOMMENDED'];
-const FEATURE_EFFECTS: readonly string[] = ['', 'GLASS_DOORS', 'GLASS_FRONT', 'WALL_TIMBER', 'WALL_STONE', 'FLOOR_STONE', 'FLOOR_OAK'];
+const FEATURE_EFFECTS: readonly string[] = ['', 'NONE', 'DOOR_TIMBER', 'GLASS_DOORS', 'GLASS_FRONT', 'LIGHT_DOWNLIGHTS', 'LIGHT_RACK_LED', 'LIGHT_BACKLIT', 'CENTRE_BENCH', 'CENTRE_ISLAND', 'WALL_TIMBER', 'WALL_STONE', 'FLOOR_STONE', 'FLOOR_OAK'];
 
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown, max: number): string => String(v).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -192,6 +192,9 @@ const cleanPhone = (v: unknown): string => {
 /** What to put after "tel:" so the phone dials it: digits with an optional leading +. */
 export const telHref = (phone: string): string => `tel:${(phone.trim().startsWith('+') ? '+' : '') + phone.replace(/\D/g, '')}`;
 
+// the picture each starting option has when its effect is left on automatic (kept equal to the server's by a test)
+const seedEffect = (id: string): FeatureEffect => { for (const g of DEFAULT_FEATURES) for (const o of g.options) if (o.id === id) return o.effect; return ''; };
+
 /** The feature groups, cleaned the same way the server cleans them. A missing list is the standard one; a list that is present is the owner's. */
 export function normaliseFeatures(raw: unknown): FeatureGroup[] {
   const rawGroups: unknown[] = Array.isArray(raw) ? raw : raw === undefined || raw === null ? DEFAULT_FEATURES : [];
@@ -223,7 +226,8 @@ export function normaliseFeatures(raw: unknown): FeatureGroup[] {
       let high = money(o.high);
       if (low !== null && high !== null && low > high) high = low;
       const badge = typeof o.badge === 'string' && FEATURE_BADGES.includes(o.badge) ? (o.badge as FeatureBadge) : '';
-      const effect = typeof o.effect === 'string' && FEATURE_EFFECTS.includes(o.effect) ? (o.effect as FeatureEffect) : '';
+      const asked = typeof o.effect === 'string' && FEATURE_EFFECTS.includes(o.effect) ? (o.effect as FeatureEffect) : '';
+      const effect: FeatureEffect = asked === '' ? seedEffect(oid) : asked;
       const room = (v: unknown): number | null => (v === undefined || v === null || v === '' ? null : optInt(v, R.featureRoomMm));
       const opt: FeatureOption = {
         code: code ?? 0, id: oid, name: oname, description: o.description === undefined ? '' : text(o.description, 120), badge, included: o.included === true, low, high,

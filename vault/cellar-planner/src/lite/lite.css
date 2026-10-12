@@ -54,7 +54,9 @@ body { background: #f1f1ee; }
 .lite-visual .tabs { border: 0; padding: 0; background: none; flex-wrap: wrap; }
 .lite-walls { padding: 0; border: 0; }
 .lite-canvas { position: relative; height: 330px; display: flex; flex-direction: column; background: #fff; border-radius: 8px; overflow: hidden; }
-@media (min-width: 900px) { .lite-canvas { height: clamp(460px, calc(100vh - 260px), 680px); } }
+@media (min-width: 900px) { .lite-canvas { height: clamp(460px, calc(var(--lite-vh, 100vh) - 260px), 680px); } }
+/* embedded: the page script moves the picture (see LiteApp), so CSS sticky is switched off for it */
+.lite-visual[data-follow="1"] { position: relative; top: 0; }
 .lite-canvas .drawing { flex: 1; }
 .lite-units { padding: 0; margin: 0; }
 

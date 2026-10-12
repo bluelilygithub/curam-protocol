@@ -8,6 +8,7 @@ import { ZoomControls } from './ZoomControls';
 
 const BASE: Record<string, [number, number, number]> = {
   floor: [217, 188, 140], wall: [239, 231, 216], glass: [205, 230, 242], rackTop: [205, 152, 98], rackEnd: [128, 84, 45], rackFront: [112, 74, 42], marker: [230, 185, 92],
+  doorTimber: [128, 84, 48], benchTop: [222, 216, 206], benchSide: [108, 78, 54],
 };
 const shade = ([r, g, b]: [number, number, number], k: number): string => `rgb(${Math.round(r * k)},${Math.round(g * k)},${Math.round(b * k)})`;
 
@@ -18,7 +19,7 @@ export function paint(layer: Konva.Layer, scene: Scene, w: number, h: number, op
   const fx = new Set(scene.effects);
   if (fx.has('WALL_TIMBER')) palette.wall = [186, 140, 92];
   else if (fx.has('WALL_STONE')) palette.wall = [168, 166, 158];
-  if (fx.has('FLOOR_STONE')) palette.floor = [176, 176, 170];
+  if (fx.has('FLOOR_STONE')) palette.floor = [158, 160, 158];
   else if (fx.has('FLOOR_OAK')) palette.floor = [214, 170, 112];
   layer.destroyChildren();
   const bg = new Konva.Rect({ x: 0, y: 0, width: w, height: h, fillLinearGradientStartPoint: { x: 0, y: 0 }, fillLinearGradientEndPoint: { x: 0, y: h }, fillLinearGradientColorStops: [0, '#f6f2ea', 1, '#e3d9c6'], listening: false });
@@ -33,15 +34,31 @@ export function paint(layer: Konva.Layer, scene: Scene, w: number, h: number, op
   // one far-to-near pass over faces and bottles together, so a bottle is hidden by anything nearer than the rack it sits in
   type Item = { depth: number; draw: () => void };
   const items: Item[] = [];
+  // translucent and glowing faces: glass doors and front, the light pools, the lamps and the backlit racks
+  const SPECIAL: Record<string, { fill: string; stroke: string; width: number }> = {
+    glass: { fill: 'rgba(205,230,242,0.6)', stroke: '#8fbfd8', width: 2 },
+    doorGlass: { fill: 'rgba(170,214,236,0.5)', stroke: '#4f8fb0', width: 3 },
+    doorTimber: { fill: 'rgba(128,84,48,0.4)', stroke: '#4a2f1a', width: 3 },
+    frontGlass: { fill: 'rgba(205,230,242,0.28)', stroke: '#8fbfd8', width: 2 },
+    glow: { fill: 'rgba(255,214,120,0.42)', stroke: 'rgba(255,214,120,0)', width: 0 },
+    lamp: { fill: '#fff6c8', stroke: '#e0a93c', width: 1.5 },
+    backlight: { fill: 'rgba(255,186,84,0.5)', stroke: 'rgba(255,186,84,0)', width: 0 },
+  };
   for (const f of scene.faces) {
     items.push({ depth: f.depth, draw: () => {
       const base = palette[f.kind] ?? palette.wall;
-      const glass = f.kind === 'glass';
+      const sp = SPECIAL[f.kind];
       layer.add(new Konva.Line({
-        points: flat(f.pts), closed: true, fill: glass ? 'rgba(205,230,242,0.6)' : shade(base, f.shade), stroke: glass ? '#8fbfd8' : f.kind === 'floor' ? '#c9ad7c' : 'rgba(60,40,20,0.35)', strokeWidth: glass ? 2 : 1, lineJoin: 'round', listening: false,
+        points: flat(f.pts), closed: true, fill: sp ? sp.fill : shade(base, f.shade), stroke: sp ? sp.stroke : f.kind === 'floor' ? '#c9ad7c' : 'rgba(60,40,20,0.35)', strokeWidth: sp ? sp.width : 1, lineJoin: 'round', listening: false,
         ...(f.kind === 'rackTop' ? { shadowColor: '#000', shadowBlur: 8, shadowOpacity: 0.22, shadowOffset: { x: 0, y: 4 } } : {}),
+        ...(f.kind === 'lamp' ? { shadowColor: '#ffd36a', shadowBlur: 12, shadowOpacity: 0.9 } : {}),
       }));
     } });
+  }
+  // LED strips are drawn in depth order with the faces, so a rack in front hides the strip behind it
+  for (const l of scene.lines) {
+    if (l.kind !== 'led') continue;
+    items.push({ depth: l.depth, draw: () => { layer.add(new Konva.Line({ points: flat(l.pts), stroke: '#ffd36a', strokeWidth: 2, shadowColor: '#ffb84a', shadowBlur: 6, shadowOpacity: 0.9, listening: false })); } });
   }
   for (const bt of scene.bottles) {
     items.push({ depth: bt.depth, draw: () => {
@@ -57,7 +74,7 @@ export function paint(layer: Konva.Layer, scene: Scene, w: number, h: number, op
   // floor first (it has the largest depth anyway), then the boards on it
   for (const it of items) {
     it.draw();
-    if (items.indexOf(it) === 0) for (const l of scene.lines) layer.add(new Konva.Line({ points: flat(l.pts), stroke: 'rgba(110,80,40,0.16)', strokeWidth: 1, listening: false }));
+    if (items.indexOf(it) === 0) for (const l of scene.lines.filter((x) => x.kind !== 'led')) layer.add(new Konva.Line({ points: flat(l.pts), stroke: 'rgba(110,80,40,0.16)', strokeWidth: 1, listening: false }));
   }
   // measurements last, on top of everything: a thin line with end ticks and the size on a small white label
   if (opts.labels !== false) {
@@ -72,12 +89,6 @@ export function paint(layer: Konva.Layer, scene: Scene, w: number, h: number, op
       label.position({ x: lx, y: ly });
       layer.add(label);
     }
-  }
-  if (scene.door && fx.has('GLASS_FRONT')) {
-    // a full glass front: a wide pale panel across the cut-away wall
-    layer.add(new Konva.Rect({ x: X(scene.door.x) - 280 * k, y: Y(scene.door.y) - 400 * k, width: 560 * k, height: 400 * k, fill: 'rgba(205,230,242,0.5)', stroke: '#8fbfd8', strokeWidth: 1.5, cornerRadius: 2, listening: false }));
-  } else if (scene.door && fx.has('GLASS_DOORS')) {
-    layer.add(new Konva.Rect({ x: X(scene.door.x) - 130 * k, y: Y(scene.door.y) - 400 * k, width: 260 * k, height: 400 * k, fill: 'rgba(205,230,242,0.55)', stroke: '#8fbfd8', strokeWidth: 1.5, cornerRadius: 2, listening: false }));
   }
   if (scene.door && opts.labels !== false) {
     layer.add(new Konva.Text({ x: X(scene.door.x) - 20, y: Y(scene.door.y) - 22, text: fx.has('GLASS_FRONT') ? 'Glass front ▲' : fx.has('GLASS_DOORS') ? 'Glass door ▲' : 'Door ▲', fontSize: 12, fontFamily: 'system-ui, sans-serif', fill: '#7a5a1c', listening: false }));

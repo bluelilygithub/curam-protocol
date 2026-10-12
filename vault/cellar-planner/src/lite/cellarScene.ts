@@ -13,9 +13,9 @@ import type { FeatureEffect } from './config';
 // Coordinates: x to the right, y away from the camera (depth), z up, millimetres, with the door wall at y = depth (the near wall).
 
 export type V3 = [number, number, number];
-export interface SceneFace { id: string; kind: 'floor' | 'wall' | 'glass' | 'rackTop' | 'rackEnd' | 'rackFront' | 'marker'; pts: Array<[number, number]>; shade: number; depth: number; wallKind?: WallKind }
+export interface SceneFace { id: string; kind: 'floor' | 'wall' | 'glass' | 'rackTop' | 'rackEnd' | 'rackFront' | 'marker' | 'doorGlass' | 'doorTimber' | 'frontGlass' | 'glow' | 'lamp' | 'backlight' | 'benchTop' | 'benchSide'; pts: Array<[number, number]>; shade: number; depth: number; wallKind?: WallKind }
 export interface SceneBottle { x: number; y: number; rx: number; ry: number; rotation: number; depth: number }
-export interface SceneLine { pts: Array<[number, number]>; depth: number; kind: 'plank' | 'mullion' }
+export interface SceneLine { pts: Array<[number, number]>; depth: number; kind: 'plank' | 'mullion' | 'led' }
 /** A measurement drawn on the picture: a line from a to b with its size at the middle. */
 export interface SceneDimension { kind: 'width' | 'depth' | 'height'; a: [number, number]; b: [number, number]; text: string }
 export interface Scene {
@@ -125,11 +125,19 @@ export function buildScene(input: SceneInput): Scene {
   addFace('wall-left', glassOrWall(left), [[0, 0, 0], [0, D, 0], [0, D, H], [0, 0, H]], 0.8, { wallKind: wallKind(left) });
   addFace('wall-right', glassOrWall(right), [[W, 0, 0], [W, D, 0], [W, D, H], [W, 0, H]], 0.74, { wallKind: wallKind(right) });
 
-  // floor boards running away from the camera
+  // floor boards running away from the camera (a stone floor is tiles: lines across as well)
+  const fx = new Set(input.effects ?? []);
   for (let x = 300; x < W; x += 300) {
     const pts = project3([[x, 0, 0], [x, D, 0]]);
     if (pts) lines.push({ pts, depth: dist([x, D / 2, 0]) + 1e6, kind: 'plank' });
   }
+  if (fx.has('FLOOR_STONE')) {
+    for (let y = 300; y < D; y += 300) {
+      const pts = project3([[0, y, 0], [W, y, 0]]);
+      if (pts) lines.push({ pts, depth: dist([W / 2, y, 0]) + 1e6, kind: 'plank' });
+    }
+  }
+  const circle = (cx: number, cy: number, z: number, r: number): V3[] => Array.from({ length: 14 }, (_, i) => [cx + r * Math.cos((i / 14) * 2 * Math.PI), cy + r * Math.sin((i / 14) * 2 * Math.PI), z] as V3);
 
   // racks
   let rackCount = 0, bottleCount = 0;
@@ -166,6 +174,8 @@ export function buildScene(input: SceneInput): Scene {
       if (againstWall && !isOpen) continue;
       addFace(`${id}-${q.side}`, isOpen ? 'rackFront' : 'rackEnd', q.pts, q.side === 'W' || q.side === 'E' ? 0.78 : 0.9);
       if (!isOpen) continue;
+      // backlit racks: a warm glow over the rack's open front, behind the bottles
+      if (fx.has('LIGHT_BACKLIT')) addFace(`${id}-backlight`, 'backlight', q.pts, 1, { depth: dist(centreOf(q.pts)) - 0.25 });
       // bottles on the open front: perRow across the run's length, `rows` up the height
       const alongX = q.side === 'N' || q.side === 'S';
       const len = alongX ? x1 - x0 : y1 - y0;
@@ -173,6 +183,15 @@ export function buildScene(input: SceneInput): Scene {
       const radius = Math.min(profile.diameterMm / 2, step / 2) * 0.94;
       const fixed = q.side === 'S' ? y1 : q.side === 'N' ? y0 : q.side === 'W' ? x0 : x1;
       const frontDepth = dist(centreOf(q.pts));
+      // LED strips: a glowing line under every row along the open front
+      if (fx.has('LIGHT_RACK_LED')) {
+        for (let j = 0; j <= rows; j++) {
+          const z = 50 + j * pitch;
+          const a: V3 = alongX ? [x0, fixed, z] : [fixed, y0, z], c: V3 = alongX ? [x1, fixed, z] : [fixed, y1, z];
+          const pts = project3([a, c]);
+          if (pts) lines.push({ pts, depth: frontDepth - 0.4, kind: 'led' });
+        }
+      }
       for (let j = 0; j < rows; j++) {
         const z = 50 + (j + 0.5) * pitch;
         for (let i = 0; i < perRow; i++) {
@@ -192,7 +211,7 @@ export function buildScene(input: SceneInput): Scene {
     }
   }
 
-  // a small marker where the door is, on the floor at the cut-away wall
+  // a small marker where the door is, on the floor at the cut-away wall; and the door itself (glass or timber) where it really is
   let door: Scene['door'] = null;
   try {
     const open = doorOpening(e);
@@ -201,7 +220,42 @@ export function buildScene(input: SceneInput): Scene {
     const mid: V3 = [(ax + bx) / 2, (ay + by) / 2, 0];
     const s = cam(mid);
     if (s) { door = { x: s.x, y: s.y }; grow(s.x, s.y); }
+    const glass = fx.has('GLASS_DOORS') || fx.has('GLASS_FRONT');
+    const timber = fx.has('DOOR_TIMBER') && !glass;
+    if (fx.has('GLASS_FRONT')) addFace('front-glass', 'frontGlass', [[0, D, 0], [W, D, 0], [W, D, H], [0, D, H]], 1);
+    if (glass || timber) {
+      const x0 = Math.min(ax, bx), x1 = Math.max(ax, bx), dh = Math.min(H, Math.max(1500, e.door.heightMm));
+      const leaves = e.door.leaves === 2 ? 2 : 1, gap = leaves === 2 ? 10 : 0, w = (x1 - x0 - gap) / leaves;
+      for (let i = 0; i < leaves; i++) {
+        const l0 = x0 + i * (w + gap), l1 = l0 + w;
+        addFace(`door-${i}`, glass ? 'doorGlass' : 'doorTimber', [[l0, D, 0], [l1, D, 0], [l1, D, dh], [l0, D, dh]], timber ? 0.95 : 1);
+      }
+    }
   } catch { /* no door marker */ }
+
+  // ceiling downlights: a glowing spot on the ceiling and its pool of light on the floor, spread over the room
+  if (fx.has('LIGHT_DOWNLIGHTS')) {
+    const nx = Math.max(1, Math.min(4, Math.round(W / 900))), ny = Math.max(1, Math.min(3, Math.round(D / 900)));
+    for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
+      const cx = (W * (i + 0.5)) / nx, cy = (D * (j + 0.5)) / ny;
+      addFace(`pool-${i}-${j}`, 'glow', circle(cx, cy, 0, 280), 1, { depth: 1e5 });
+      addFace(`lamp-${i}-${j}`, 'lamp', circle(cx, cy, H, 70), 1);
+    }
+  }
+
+  // a centrepiece on the floor: a tasting bench or an island (illustrative: its position is approximate)
+  const piece = fx.has('CENTRE_ISLAND') ? { sx: Math.min(1800, W * 0.5), sy: Math.min(900, D * 0.45), h: 900 } : fx.has('CENTRE_BENCH') ? { sx: Math.min(1600, W * 0.5), sy: Math.min(450, D * 0.3), h: 900 } : null;
+  if (piece) {
+    const cx = W / 2, cy = D / 2, bx0 = cx - piece.sx / 2, bx1 = cx + piece.sx / 2, by0 = cy - piece.sy / 2, by1 = cy + piece.sy / 2, bh = piece.h;
+    const sides: Array<{ id: string; pts: V3[]; normal: V3 }> = [
+      { id: 'S', pts: [[bx0, by1, 0], [bx1, by1, 0], [bx1, by1, bh], [bx0, by1, bh]], normal: [0, 1, 0] },
+      { id: 'N', pts: [[bx0, by0, 0], [bx1, by0, 0], [bx1, by0, bh], [bx0, by0, bh]], normal: [0, -1, 0] },
+      { id: 'W', pts: [[bx0, by0, 0], [bx0, by1, 0], [bx0, by1, bh], [bx0, by0, bh]], normal: [-1, 0, 0] },
+      { id: 'E', pts: [[bx1, by0, 0], [bx1, by1, 0], [bx1, by1, bh], [bx1, by0, bh]], normal: [1, 0, 0] },
+    ];
+    for (const sd of sides) if (dot(sd.normal, sub(eye, centreOf(sd.pts))) > 0) addFace(`piece-${sd.id}`, 'benchSide', sd.pts, sd.id === 'S' || sd.id === 'N' ? 0.9 : 0.75);
+    if (eye[2] > bh) addFace('piece-top', 'benchTop', [[bx0, by0, bh], [bx1, by0, bh], [bx1, by1, bh], [bx0, by1, bh]], 1);
+  }
 
   // measurements along the front edge (width), the right edge (depth) and the front-left corner (height), pushed a little outside the room
   const dimensions: SceneDimension[] = [];

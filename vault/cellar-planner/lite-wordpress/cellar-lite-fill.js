@@ -41,6 +41,8 @@
   var STICKY_BAR = true;        // phone-width screens: a quote bar at the bottom while the planner is on screen
   var STICKY_MAX_WIDTH = 640;   // "phone width" in pixels
   var TRACK_EVENTS = true;      // push the planner's usage events to window.dataLayer
+  var STICKY_PICTURE = true;    // keep the cellar picture in view while the page scrolls (desktop width)
+  var STICKY_TOP = 12;          // gap above the picture in pixels: raise it if your site has a fixed menu bar across the top
   // 5. Set to false once everything works. While true, each step is written to the browser Console (F12), every line starting "[cellar-lite]".
   var DEBUG = false;
   function log() { if (DEBUG && window.console) console.log.apply(console, ['[cellar-lite]'].concat([].slice.call(arguments))); }
@@ -128,6 +130,28 @@
     new IntersectionObserver(function (entries) { frameVisible = entries[0].isIntersecting; refreshBar(); }, { threshold: 0.12 }).observe(frame);
   }
 
+  // ---- keeping the picture in view: tell each planner frame where the visible window is, as the page scrolls or is resized
+  var followed = []; // { frame, origin }
+  var followTick = false;
+  function sendViewport(f) {
+    try {
+      var r = f.frame.getBoundingClientRect();
+      f.frame.contentWindow.postMessage({ type: 'cellar-lite:viewport', version: 1, frameTop: Math.round(r.top), viewportH: window.innerHeight, gap: STICKY_TOP }, f.origin);
+    } catch (e) { /* the frame is gone: nothing to tell */ }
+  }
+  function follow(frame, origin) {
+    if (!STICKY_PICTURE || !frame) return;
+    var known = false;
+    for (var i = 0; i < followed.length; i++) if (followed[i].frame === frame) known = true;
+    if (!known) {
+      followed.push({ frame: frame, origin: origin });
+      var kick = function () { if (followTick) return; followTick = true; window.requestAnimationFrame(function () { followTick = false; followed.forEach(sendViewport); }); };
+      window.addEventListener('scroll', kick, { passive: true });
+      window.addEventListener('resize', kick);
+    }
+    followed.forEach(function (f) { if (f.frame === frame) sendViewport(f); });
+  }
+
   // ---- messages from the planner ----
   window.addEventListener('message', function (ev) {
     var d = ev.data;
@@ -136,6 +160,7 @@
     log('message', d.type, 'from', ev.origin);
     if (!sameSite(ev.origin, PLANNER_ORIGIN)) { log('IGNORED: sent from', ev.origin, 'but PLANNER_ORIGIN is', PLANNER_ORIGIN); return; }
     if (d.version !== 1) { log('IGNORED: unknown version', d.version); return; }
+    if (d.type === 'cellar-lite:height' || d.type === 'cellar-lite:design') follow(frameOf(ev.source), ev.origin);
 
     if (d.type === 'cellar-lite:height') {
       var h = Number(d.height);

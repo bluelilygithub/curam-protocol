@@ -10,7 +10,7 @@ import { makeThumb } from './thumbnail';
 import { LiteHelp, LITE_HELP_KEY } from './LiteHelp';
 import { PriceHelp } from './PriceHelp';
 import { DoorPicker } from './DoorPicker';
-import { effectsOf, featureTotals, priceLabel, resolveFeatures, togglePick, unavailableReason } from './features';
+import { chosenOptions, effectsOf, featureTotals, priceLabel, resolveFeatures, togglePick, unavailableReason } from './features';
 import { STEP_TITLES, stepKeys, type StepKey } from './steps';
 import { LengthField, Segmented, Stepper } from './controls';
 import { TooltipHost } from '@planner-core/help/TooltipHost';
@@ -34,6 +34,8 @@ const UNIT_SHORT: Record<LengthUnit, string> = { m: 'Metres', ft: 'Feet', mm: 'M
 const STEP_MM = 50;
 export const MESSAGE_TYPE = 'cellar-lite:design';
 export const HEIGHT_TYPE = 'cellar-lite:height';
+/** The page around us tells us where its window is relative to our frame, so the picture can stay in view while the page scrolls. */
+export const VIEWPORT_TYPE = 'cellar-lite:viewport';
 
 /**
  * Where to send the hand-off: the page that embeds us. The browser's own list of ancestor origins is used when it has one (Chrome, Safari), else
@@ -88,7 +90,7 @@ export function LiteApp() {
 
   // the feature options: what is chosen for this room, the extras that add to the price, and the picture changes they ask for
   const resolved = useMemo(() => resolveFeatures(cfg.features, s.features, { widthMm: s.widthMm, depthMm: s.depthMm }), [cfg.features, s.features, s.widthMm, s.depthMm]);
-  const effects = useMemo(() => effectsOf(resolved.extras), [resolved]);
+  const effects = useMemo(() => effectsOf(chosenOptions(resolved)), [resolved]);
   const hasFeatures = cfg.features.length > 0;
   const keys = stepKeys(hasFeatures);
   const key: StepKey = keys.includes(stepKey) ? stepKey : 'space';
@@ -152,6 +154,32 @@ export function LiteApp() {
     ro.observe(document.body);
     send();
     return () => { ro.disconnect(); if (raf) cancelAnimationFrame(raf); };
+  }, []);
+
+  // Keeping the picture in view while the page scrolls. When the planner is embedded its frame is as tall as the planner, so CSS "sticky" has nothing
+  // to stick to: the page script (cellar-lite-fill.js) sends where the visible window is, and the picture is moved down by that much, inside the planner's
+  // own columns. Standalone (or a page without the script), plain CSS sticky does the job. Only on two columns (900 px and wider).
+  useEffect(() => {
+    const to = parentOrigin();
+    if (!to) return undefined;
+    const onMessage = (ev: MessageEvent): void => {
+      if (ev.origin !== to || ev.source !== window.parent) return;
+      const d = ev.data as { type?: unknown; version?: unknown; frameTop?: unknown; viewportH?: unknown; gap?: unknown } | null;
+      if (!d || d.type !== VIEWPORT_TYPE || d.version !== 1) return;
+      const frameTop = Number(d.frameTop), vh = Number(d.viewportH), gap = Math.min(400, Math.max(0, Number(d.gap) || 12));
+      if (!Number.isFinite(frameTop) || !Number.isFinite(vh) || vh < 200 || vh > 5000) return;
+      const el = document.querySelector<HTMLElement>('.lite-visual'), main = document.querySelector<HTMLElement>('.lite-main');
+      if (!el || !main) return;
+      document.documentElement.style.setProperty('--lite-vh', `${Math.round(vh)}px`);
+      el.dataset.follow = '1';
+      if (window.innerWidth < 900) { el.style.transform = ''; return; }
+      const mainRect = main.getBoundingClientRect();
+      const room = Math.max(0, mainRect.height - el.offsetHeight);
+      const down = Math.min(room, Math.max(0, -frameTop + gap - mainRect.top));
+      el.style.transform = down > 0 ? `translateY(${Math.round(down)}px)` : '';
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
   }, []);
 
   // After "Request a quote": always bring the revealed panel into view so the visitor does not have to hunt for it. When embedded, the page around

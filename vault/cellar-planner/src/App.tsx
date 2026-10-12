@@ -19,7 +19,7 @@ import { Icon } from './ui/icons';
 import { Accordion } from './ui/fields';
 import { CatalogueContext, ChecksPanel, CoolingPanel, EnclosurePanel, FeaturesPanel, PricePanel, RackPanel, RunsPanel, StoreContext, UiContext } from './ui/panels';
 import { createCatalogueStore, designFeatures, type CatalogueStore } from './app/catalogue';
-import { effectsOf } from './lite/features';
+import { chosenOptions, effectsOf } from './lite/features';
 import { createLeadsStore, openLeadDesign, type FetchFn, type LeadsStore } from './app/leads';
 import { LeadsPanel } from './ui/LeadsPanel';
 import { QuoteModal } from './ui/QuoteModal';
@@ -85,7 +85,7 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
   const finish: FinishKey = project.finish ?? 'OAK';
   const insideInput = useMemo(() => {
     const iz = analysis.enclosure.internal;
-    return { project, runs: fullRuns(project), analysis: analysis.racks, dims: { width: `${iz.widthMm} mm`, depth: `${iz.depthMm} mm`, height: `${iz.heightMm} mm` }, effects: effectsOf(designFeatures(project, catState)?.extras ?? []) };
+    return { project, runs: fullRuns(project), analysis: analysis.racks, dims: { width: `${iz.widthMm} mm`, depth: `${iz.depthMm} mm`, height: `${iz.heightMm} mm` }, effects: effectsOf(chosenOptions(designFeatures(project, catState) ?? { groups: [], extras: [] })) };
   }, [project, analysis, catState]);
 
   // ---- the screen layout: hide the side panels, resize the controls panel, or focus on the drawing. Remembered in this browser.

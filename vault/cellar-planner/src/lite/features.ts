@@ -85,8 +85,11 @@ export function featureTotals(extras: readonly FeatureOption[]): FeatureTotals {
   return { low: Math.round(low * 100) / 100, high: Math.round(high * 100) / 100, mid: Math.round(mid * 100) / 100, unpriced };
 }
 
-/** The 3D picture changes the extras ask for (glass doors, wall and floor finishes). */
-export const effectsOf = (extras: readonly FeatureOption[]): FeatureEffect[] => [...new Set(extras.map((o) => o.effect).filter((e): e is FeatureEffect => e !== ''))];
+/** The 3D picture changes the given options ask for (doors, lights, a centrepiece, wall and floor finishes). */
+export const effectsOf = (options: readonly FeatureOption[]): FeatureEffect[] => [...new Set(options.map((o) => o.effect).filter((e): e is FeatureEffect => e !== '' && e !== 'NONE'))];
+
+/** Every option that is chosen right now, the standard ones included (a standard timber door or ceiling downlights are drawn too, until swapped). */
+export const chosenOptions = (r: ResolvedFeatures): FeatureOption[] => r.groups.flatMap((g) => g.chosen);
 
 /** "+$2,800–3,600", "+$2,900" when both ends are the same, "Price on request" with no price, "Included" for a standard option, nothing while prices are hidden. */
 export function priceLabel(o: FeatureOption, currency: string, showPrices: boolean): string {
