@@ -223,6 +223,11 @@ router.get('/today', async (req, res) => {
   try { res.json(await W.getToday(req.user.id)); } catch (err) { fail(res, err, 'today'); }
 });
 
+// Dashboard numbers for the charts (?range=4|12|all).
+router.get('/dashboard', async (req, res) => {
+  try { res.json(await require('../services/fitness/dashboardService').getDashboard(req.user.id, String(req.query.range || '12'))); } catch (err) { fail(res, err, 'dashboard'); }
+});
+
 // A month as a calendar grid (?month=YYYY-MM).
 router.get('/month', async (req, res) => {
   try { res.json(await W.getMonth(req.user.id, String(req.query.month || ''))); } catch (err) { fail(res, err, 'month'); }
