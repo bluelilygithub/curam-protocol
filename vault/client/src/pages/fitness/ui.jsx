@@ -19,7 +19,8 @@ export function selectedStyle(active, idle = 'var(--color-bg)') {
 
 export const inputCls = 'w-full px-3 py-2.5 rounded-xl border text-sm outline-none transition-all duration-200 focus:border-[var(--color-text)]';
 
-export function Card({ title, hint, children, className = '' }) {
+export function Card({ title, hint, children, className = '', icon }) {
+  const getIcon = useIcon();
   return (
     <section
       className={`rounded-2xl border p-6 space-y-4 ${className}`}
@@ -27,7 +28,12 @@ export function Card({ title, hint, children, className = '' }) {
     >
       {(title || hint) && (
         <div>
-          {title && <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{title}</h2>}
+          {title && (
+            <h2 className="flex items-center gap-2 text-base font-semibold" style={{ color: 'var(--color-text)' }}>
+              {icon && <span style={{ color: 'var(--color-muted)' }} aria-hidden="true">{getIcon(icon, { size: 17 })}</span>}
+              {title}
+            </h2>
+          )}
           {hint && <p className="text-sm leading-relaxed mt-1" style={{ color: 'var(--color-muted)' }}>{hint}</p>}
         </div>
       )}
@@ -249,5 +255,40 @@ export function InfoTip({ tip, trigger = 'icon' }) {
         document.body,
       )}
     </>
+  );
+}
+
+const SLOT_META = {
+  morning: { label: 'Morning', icon: 'sunrise' },
+  midday: { label: 'Midday', icon: 'sun' },
+  evening: { label: 'Evening', icon: 'sunset' },
+};
+
+/** Time of day with its icon, so it reads at a glance and never relies on words alone. */
+export function TimeOfDay({ slot, size = 13, className = '' }) {
+  const getIcon = useIcon();
+  const m = SLOT_META[slot];
+  if (!m) return null;
+  return (
+    <span className={`inline-flex items-center gap-1 ${className}`}>
+      {getIcon(m.icon, { size })}
+      {m.label}
+    </span>
+  );
+}
+
+/** A prominent way back: a filled neutral button with an arrow, not a small link. */
+export function BackButton({ children, onClick }) {
+  const getIcon = useIcon();
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-70 transition-all duration-200"
+      style={{ background: 'var(--color-text)', color: 'var(--color-bg)' }}
+    >
+      {getIcon('arrow-left', { size: 16 })}
+      {children}
+    </button>
   );
 }

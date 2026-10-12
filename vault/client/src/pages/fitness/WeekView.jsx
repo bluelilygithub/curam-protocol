@@ -1,28 +1,30 @@
 import React, { useState } from 'react';
 import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
-import { Card, InfoTip, Notice, SecondaryButton } from './ui';
+import { Card, InfoTip, Notice, SecondaryButton, TimeOfDay } from './ui';
 import { TIPS } from './tips';
+import { DOMAIN_ICON } from './icons';
 import SessionCard from './SessionCard';
 import useWeek, { DAY_NAMES, DAY_SHORT, SLOTS, dayLabel } from './useWeek';
 
 /** The week's targets as four tiles: what is planned against what the week asks for. */
 function Summary({ week, sessions }) {
+  const getIcon = useIcon();
   const live = sessions.filter((s) => s.status !== 'rest');
   const minutes = live.flatMap((s) => s.components).filter((c) => c.domain === 'cardio').reduce((n, c) => n + c.minutes, 0);
   const days = (domain) => new Set(live.filter((s) => s.components.some((c) => c.domain === domain)).map((s) => s.day)).size;
   const t = week.targets;
   const tiles = [
-    { label: 'Aerobic', value: minutes, of: t.aerobicMinutes, unit: 'min' },
-    { label: 'Strength', value: days('strength'), of: t.strengthDays, unit: 'days' },
-    { label: 'Balance', value: days('balance'), of: t.balanceDays, unit: 'days' },
-    { label: 'Mobility', value: days('flexibility'), of: t.mobilityDays, unit: 'days' },
+    { label: 'Aerobic', icon: DOMAIN_ICON.cardio, value: minutes, of: t.aerobicMinutes, unit: 'min' },
+    { label: 'Strength', icon: DOMAIN_ICON.strength, value: days('strength'), of: t.strengthDays, unit: 'days' },
+    { label: 'Balance', icon: DOMAIN_ICON.balance, value: days('balance'), of: t.balanceDays, unit: 'days' },
+    { label: 'Mobility', icon: DOMAIN_ICON.flexibility, value: days('flexibility'), of: t.mobilityDays, unit: 'days' },
   ];
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5" role="list" aria-label="This week's targets">
       {tiles.map((t2) => (
         <div key={t2.label} role="listitem" className="rounded-xl border p-3" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{t2.label}</p>
+          <p className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--color-muted)' }}>{getIcon(t2.icon, { size: 13 })}{t2.label}</p>
           <p className="text-lg font-semibold leading-tight tabular-nums">{t2.value}<span className="text-sm font-normal" style={{ color: 'var(--color-muted)' }}> of {t2.of} {t2.unit}</span></p>
         </div>
       ))}
@@ -145,7 +147,7 @@ export default function WeekView({ onOpenExercise, offset: offsetProp, onOffsetC
                     style={{ borderColor: hot ? 'var(--color-text)' : 'transparent', background: hot ? 'var(--color-bg)' : 'transparent' }}
                     aria-label={`${name} ${slot.label}`}
                   >
-                    {(here.length > 0 || hot) && <p className="text-[10px] mb-1 uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>{slot.label}</p>}
+                    {(here.length > 0 || hot) && <p className="text-[10px] mb-1 uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}><TimeOfDay slot={slot.id} size={11} /></p>}
                     <div className="space-y-2">
                       {here.map((s) => (
                         <SessionCard key={s.id} session={s} draggable onMove={w.move} onOpenExercise={onOpenExercise} busy={w.busy} />

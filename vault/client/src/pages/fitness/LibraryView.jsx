@@ -3,8 +3,9 @@ import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
 import useToastStore from '../../store/toastStore';
 import Tooltip from '../../components/Tooltip';
-import { Card, Chip, FIELD, InfoTip, inputCls, Notice, SecondaryButton } from './ui';
+import { BackButton, Card, Chip, FIELD, InfoTip, inputCls, Notice, SecondaryButton } from './ui';
 import { ExerciseTile, TileGroup, PATTERN_LABELS as PATTERNS_SHARED, LEVEL_LABELS as LEVELS_SHARED } from './ExerciseTile';
+import { PATTERN_ICON } from './icons';
 import { TIPS } from './tips';
 
 const PATTERN_LABELS = {
@@ -50,9 +51,7 @@ function Detail({ slug, onOpen, onBack, backLabel }) {
 
   return (
     <div className="max-w-3xl mx-auto w-full space-y-4">
-      <button type="button" onClick={onBack} className="flex items-center gap-1 text-sm hover:opacity-60 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }}>
-        {getIcon('arrow-left', { size: 14 })}{backLabel}
-      </button>
+      <BackButton onClick={onBack}>{backLabel}</BackButton>
       <Card>
         <div>
           <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{ex.name}</h2>
@@ -65,20 +64,20 @@ function Detail({ slug, onOpen, onBack, backLabel }) {
         {ex.safety && <Notice tone="care">{ex.safety}</Notice>}
         {ex.setup && (
           <section>
-            <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Set-up</h3>
+            <h3 className="flex items-center gap-2 text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>{getIcon('wrench', { size: 15 })}Set-up</h3>
             <ul className="list-disc pl-5 space-y-1.5 text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>
               {ex.setup.map((c) => <li key={c}>{c}</li>)}
             </ul>
           </section>
         )}
         <section>
-          <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>How to do it</h3>
+          <h3 className="flex items-center gap-2 text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>{getIcon('list-checks', { size: 15 })}How to do it</h3>
           <ol className="list-decimal pl-5 space-y-1.5 text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>
             {ex.steps.map((s) => <li key={s}>{s}</li>)}
           </ol>
         </section>
         <section>
-          <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Common mistakes</h3>
+          <h3 className="flex items-center gap-2 text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>{getIcon('alert-triangle', { size: 15 })}Common mistakes</h3>
           <ul className="space-y-2 text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>
             {ex.mistakes.map((m) => (
               <li key={m.mistake}><strong>{m.mistake}.</strong> <span style={{ color: 'var(--color-muted)' }}>{m.fix}</span></li>
@@ -86,11 +85,11 @@ function Detail({ slug, onOpen, onBack, backLabel }) {
           </ul>
         </section>
         <section>
-          <h3 className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Why form matters</h3>
+          <h3 className="flex items-center gap-2 text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>{getIcon('info', { size: 15 })}Why form matters</h3>
           <p className="text-sm leading-relaxed" style={{ color: 'var(--color-muted)' }}>{ex.whyFormMatters}</p>
         </section>
         <section>
-          <h3 className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>How much</h3>
+          <h3 className="flex items-center gap-2 text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>{getIcon('gauge', { size: 15 })}How much</h3>
           <dl className="text-sm grid grid-cols-[auto,1fr] gap-x-4 gap-y-1" style={{ color: 'var(--color-text)' }}>
             {['beginner', 'intermediate', 'advanced'].map((l) => (
               <React.Fragment key={l}>
@@ -101,7 +100,7 @@ function Detail({ slug, onOpen, onBack, backLabel }) {
           </dl>
         </section>
         <section>
-          <h3 className="flex items-center gap-1 text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>How hard <InfoTip tip={TIPS.effort} /></h3>
+          <h3 className="flex items-center gap-2 text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>{getIcon('activity', { size: 15 })}How hard <InfoTip tip={TIPS.effort} /></h3>
           <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{ex.effort}</p>
           {ex.loadGuide && <p className="text-sm leading-relaxed mt-1.5" style={{ color: 'var(--color-text)' }}>{ex.loadGuide}</p>}
           {ex.effortScale && (
@@ -137,6 +136,7 @@ function Detail({ slug, onOpen, onBack, backLabel }) {
           Stop and rest if something hurts, you feel dizzy, or you notice chest symptoms. See your GP if it does not settle.
         </p>
       </Card>
+      <BackButton onClick={onBack}>{backLabel}</BackButton>
     </div>
   );
 }
@@ -202,7 +202,7 @@ export default function LibraryView({ slug, onOpen, onBack, backLabel = 'All exe
           const group = list.filter((e) => e.pattern === p);
           if (!group.length) return null;
           return (
-            <TileGroup key={p} title={PATTERNS_SHARED[p]} hint={`${group.length}`}>
+            <TileGroup key={p} title={PATTERNS_SHARED[p]} hint={`${group.length}`} icon={PATTERN_ICON[p]}>
               {group.map((e) => (
                 <ExerciseTile
                   key={e.slug}
@@ -210,6 +210,7 @@ export default function LibraryView({ slug, onOpen, onBack, backLabel = 'All exe
                   detail={e.equipment}
                   meta={[LEVELS_SHARED[e.level], e.hidden ? 'hidden' : null, !e.available ? 'needs equipment you did not list' : null].filter(Boolean).join(' · ')}
                   dim={e.hidden || !e.available}
+                  icon={PATTERN_ICON[e.pattern]}
                   onOpen={() => onOpen(e.slug)}
                 />
               ))}

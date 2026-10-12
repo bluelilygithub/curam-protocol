@@ -30,7 +30,7 @@ export default function Overview({ meta, state, goTo }) {
 
       {goal && (
         <div data-tour="fitness-goal-card">
-        <Card title="Your 5-year goal">
+        <Card title="Your 5-year goal" icon="target">
           <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{goal.summary?.summary}</p>
           <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
             Pace: <strong style={{ color: 'var(--color-text)' }}>{goal.summary?.ambitionLabel}</strong>
@@ -43,7 +43,7 @@ export default function Overview({ meta, state, goTo }) {
         </div>
       )}
 
-      <Card title="This week">
+      <Card title="This week" icon="calendar">
         <p className="text-sm leading-relaxed" style={{ color: 'var(--color-muted)' }}>
           Your program is made fresh each week: the same targets, with the exercises changing. Rest days and a flexible rest budget are built in.
           Logging what you did, charts and reminders arrive in the next updates.

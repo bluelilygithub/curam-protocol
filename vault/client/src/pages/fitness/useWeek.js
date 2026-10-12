@@ -4,9 +4,9 @@ import api from '../../utils/apiClient';
 export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 export const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 export const SLOTS = [
-  { id: 'morning', label: 'Morning' },
-  { id: 'midday', label: 'Midday' },
-  { id: 'evening', label: 'Evening' },
+  { id: 'morning', label: 'Morning', icon: 'sunrise' },
+  { id: 'midday', label: 'Midday', icon: 'sun' },
+  { id: 'evening', label: 'Evening', icon: 'sunset' },
 ];
 
 export function addDays(iso, n) {

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
-import { FIELD, SecondaryButton, PrimaryButton } from './ui';
+import { FIELD, SecondaryButton, PrimaryButton, TimeOfDay } from './ui';
 import { ExerciseTile, TileGroup, PATTERN_LABELS, LEVEL_LABELS, BLOCK_LABELS } from './ExerciseTile';
+import { BLOCK_ICON, DOMAIN_ICON, DOMAIN_NAME, PATTERN_ICON, sessionIcon } from './icons';
 import { DAY_NAMES, SLOTS } from './useWeek';
 
 /** Exercises for a session as tiles, grouped warm-up / main work / cool-down. Every tile opens its exercise page. */
@@ -14,6 +15,7 @@ export function ExerciseList({ session, onOpenExercise, compact = false }) {
         <TileGroup
           key={b}
           title={BLOCK_LABELS[b]}
+          icon={BLOCK_ICON[b]}
           hint={b !== 'main' ? `about ${b === 'warmup' ? session.warmupMin : session.cooldownMin} min` : `${session.plannedMinutes} min`}
           columns={compact ? '' : 'sm:grid-cols-2 lg:grid-cols-3'}
         >
@@ -24,6 +26,7 @@ export function ExerciseList({ session, onOpenExercise, compact = false }) {
               detail={e.prescription}
               meta={[PATTERN_LABELS[e.movement], LEVEL_LABELS[e.level]].filter(Boolean).join(' · ')}
               compact={compact}
+              icon={PATTERN_ICON[e.movement]}
               onOpen={() => onOpenExercise?.(e.slug)}
             />
           ))}
@@ -66,7 +69,7 @@ function MovePicker({ session, onMove, onClose }) {
  * One planned session. In the week grid it is compact and draggable; on Today it opens out with its exercises.
  * Rest sessions (a rest day was taken) are shown plainly and kept, never struck through or coloured as a failure.
  */
-export default function SessionCard({ session, expanded = false, draggable = false, onMove, onOpenExercise, busy }) {
+export default function SessionCard({ session, expanded = false, draggable = false, onMove, onOpenExercise, busy, showDay = false }) {
   const getIcon = useIcon();
   const [open, setOpen] = useState(expanded);
   const [moving, setMoving] = useState(false);
@@ -87,9 +90,28 @@ export default function SessionCard({ session, expanded = false, draggable = fal
       }}
       data-session-id={session.id}
     >
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-2.5">
+        <span
+          className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center"
+          style={{ background: 'var(--color-surface)', color: 'var(--color-muted)' }}
+          aria-hidden="true"
+        >
+          {getIcon(sessionIcon(session), { size: 16 })}
+        </span>
         <div className="flex-1 min-w-0">
+          <p className="flex items-center gap-1.5 text-xs mb-0.5" style={{ color: 'var(--color-muted)' }}>
+            <TimeOfDay slot={session.slot} />
+            {showDay && <span>· {DAY_NAMES[session.day]}</span>}
+          </p>
           <p className="font-medium leading-snug">{session.title}</p>
+          <ul className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs" style={{ color: 'var(--color-text)' }} aria-label="What is in this session">
+            {session.components.map((c) => (
+              <li key={c.domain} className="inline-flex items-center gap-1">
+                {getIcon(DOMAIN_ICON[c.domain], { size: 12 })}
+                {DOMAIN_NAME[c.domain]} {c.minutes} min
+              </li>
+            ))}
+          </ul>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
             {session.plannedMinutes} min main · {session.totalMinutes} min with warm-up and cool-down
             {session.outdoor ? ' · outdoors' : ''}
