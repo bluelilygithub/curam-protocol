@@ -83,7 +83,9 @@ function rankedCandidates(slot, ctx) {
   let pool = lib.filter((e) => {
     if (slot.block === 'main') { if (e.pattern !== slot.pattern || !e.roles.includes('main')) return false; } else if (!e.roles.includes(role)) return false;
     if (ctx.usedInSession.has(e.slug)) return false;
+    if (ctx.hidden && ctx.hidden.has(e.slug)) return false; // "not for me"
     if (!L.isAvailable(e, ctx.equipment)) return false;
+    if (!L.gateOpen(e, ctx.exposure, ctx.waivers)) return false;
     return e.level <= (slot.block === 'main' ? cap : 4);
   });
   // Warm-ups and cool-downs: variety across mobility and balance, gentle ones first.

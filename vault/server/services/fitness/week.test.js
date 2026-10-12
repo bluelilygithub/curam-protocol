@@ -25,6 +25,7 @@ const S = require('./schedule');
 const Sel = require('./selection');
 const T = require('./targets');
 const { generateWeekPlan } = require('./weekGenerator');
+const { sessionSafetyLines } = require('./safety');
 Module._load = realLoad;
 
 let passed = 0;
@@ -53,14 +54,14 @@ const goal = makeGoal();
     const v = L.validateLibrary();
     assert.deepStrictEqual(v.errors, []);
     const list = L.getLibrary().list;
-    assert.ok(list.length >= 40 && list.length <= 46, `size ${list.length}`);
+    assert.ok(list.length >= 40 && list.length <= 50, `size ${list.length}`);
     for (const p of L.PATTERNS) assert.ok(list.some((e) => e.pattern === p), p);
     assert.ok(list.filter((e) => e.pattern === 'balance').length >= 5, 'balance coverage');
     assert.ok(list.filter((e) => e.pattern === 'mobility').length >= 5, 'mobility coverage');
   });
   await test('requested additions are present', () => {
     const slugs = new Set(L.getLibrary().list.map((e) => e.slug));
-    for (const s of ['easy-jog', 'run-walk-intervals', 'lat-pulldown', 'assisted-pull-up', 'leg-press', 'rowing-machine']) assert.ok(slugs.has(s), s);
+    for (const s of ['easy-jog', 'run-walk-intervals', 'lat-pulldown', 'assisted-pull-up', 'leg-press', 'rowing-machine', 'resistance-band-row', 'supported-single-leg-rdl']) assert.ok(slugs.has(s), s);
   });
   await test('variation chains: links resolve, are two-way, and climb in level', () => {
     const { bySlug, list } = L.getLibrary();
@@ -396,6 +397,107 @@ const goal = makeGoal();
     assert.ok(strengthMin(b) < strengthMin(a));
     const lvl = (p) => Math.max(...p.sessions.flatMap((s) => s.exercises.filter((e) => e.block === 'main')).map((e) => lib.get(e.slug).level));
     assert.ok(lvl(b) <= lvl(a));
+  });
+
+
+  // ── review answers ──
+  await test('every exercise has talk-test and 1-10 effort guidance; the scale lines the two up', () => {
+    for (const e of L.getLibrary().list) assert.ok(/out of 10/.test(e.effort), e.slug);
+    const scale = L.getLibrary().effortScale;
+    assert.ok(scale.length >= 5 && scale.every((r) => r.score && r.talk));
+    for (const e of L.getLibrary().list.filter((x) => x.pattern === 'cardio')) assert.ok(/[Tt]alk test|full sentences|few words|short sentences/.test(e.effort), e.slug);
+  });
+  await test('loaded exercises give a light starting suggestion; machines give 3-4 set-up cues', () => {
+    const get = (s) => L.getLibrary().bySlug.get(s);
+    for (const s of ['goblet-squat', 'dumbbell-romanian-deadlift', 'supported-dumbbell-row', 'bent-over-dumbbell-row', 'farmers-carry']) assert.ok(/4-8 kg/.test(get(s).loadGuide) && /last two reps/.test(get(s).loadGuide), s);
+    for (const s of ['leg-press', 'assisted-pull-up']) assert.ok(get(s).setup.length >= 3 && get(s).setup.length <= 4, s);
+    assert.ok(get('leg-press').setup.join(' ').match(/90 degrees/) && get('leg-press').setup.join(' ').match(/lock/) && get('leg-press').setup.join(' ').match(/safety stops/));
+    assert.ok(get('assisted-pull-up').setup.join(' ').match(/more assistance makes it easier/i) && get('assisted-pull-up').setup.join(' ').match(/lower/i));
+  });
+  await test('resistance band row is the cheap pull: needs bands (or a gym) and sits at the easy end of the pull chain', () => {
+    const band = L.getLibrary().bySlug.get('resistance-band-row');
+    assert.strictEqual(band.pattern, 'pull');
+    assert.strictEqual(band.level, 1);
+    assert.ok(L.isAvailable(band, ['bands']) && L.isAvailable(band, ['gym']) && !L.isAvailable(band, ['dumbbells']));
+    assert.deepStrictEqual(band.harder, ['supported-dumbbell-row']);
+  });
+  const bigWeek = { ...infoFor('2026-10-12'), targets: { ...infoFor('2026-10-12').targets, aerobicMinutes: 150, strengthDays: 3 } };
+  const fit = { ...person, ratings: { cardio: 5, strength: 4, flexibility: 3, balance: 4 } };
+  const everSeen = async (extra, info = bigWeek, runs = 14) => {
+    const seen = new Set();
+    for (let g = 0; g < runs; g += 1) {
+      const plan = await generateWeekPlan({ userId: 21, weekStart: '2026-10-12', info, person: { ...fit, ...extra }, history: { weeks: [] }, generation: g, timezone: 'Australia/Brisbane' });
+      for (const e of plan.sessions.flatMap((x) => x.exercises)) seen.add(e.slug);
+    }
+    return seen;
+  };
+  await test('continuous jogging is gated behind run/walk weeks, unless there is a running history', async () => {
+    assert.ok(!(await everSeen({})).has('easy-jog'), 'closed with no run/walk history');
+    assert.ok(!(await everSeen({ exposure: new Map([['run-walk-intervals', 1]]) })).has('easy-jog'), 'one week is not enough');
+    assert.ok((await everSeen({ exposure: new Map([['run-walk-intervals', 2]]) })).has('easy-jog'), 'open after two weeks');
+    assert.ok((await everSeen({ runningHistory: true })).has('easy-jog'), 'a running history skips the wait');
+  });
+  await test('the 90-minute rule still applies even with a running history', async () => {
+    const light = { ...bigWeek, targets: { ...bigWeek.targets, aerobicMinutes: 60 } };
+    assert.ok(!(await everSeen({ runningHistory: true, exposure: new Map([['run-walk-intervals', 5]]) }, light)).has('easy-jog'));
+  });
+  await test('single-leg RDL needs the hinge and a steady single-leg stand; the supported version is the step between', async () => {
+    const hinge = new Map([['dumbbell-romanian-deadlift', 3]]);
+    assert.ok(!(await everSeen({})).has('single-leg-rdl') && !(await everSeen({})).has('supported-single-leg-rdl'));
+    assert.ok(!(await everSeen({ exposure: hinge })).has('single-leg-rdl'), 'hinge alone is not enough');
+    const withStand = new Map([['single-leg-stand', 2]]);
+    const mid = await everSeen({ exposure: withStand });
+    assert.ok(mid.has('supported-single-leg-rdl'), 'supported version opens with a steady single-leg stand');
+    assert.ok(!mid.has('single-leg-rdl'), 'full version still closed');
+    const both = new Map([['single-leg-stand', 2], ['supported-single-leg-rdl', 2]]);
+    assert.ok((await everSeen({ exposure: both })).has('single-leg-rdl'), 'opens once the supported step and the stand are established');
+    assert.ok((await everSeen({ exposure: new Map([['single-leg-stand', 2], ['dumbbell-romanian-deadlift', 2]]) })).has('single-leg-rdl'), 'or the dumbbell RDL and the stand');
+  });
+  await test('gateOpen: groups are all-of, members are any-of', () => {
+    const ex = { gate: { after: [['a', 'b'], ['c']], weeks: 2 } };
+    assert.strictEqual(L.gateOpen(ex, new Map([['a', 2], ['c', 2]])), true);
+    assert.strictEqual(L.gateOpen(ex, new Map([['b', 2], ['c', 2]])), true);
+    assert.strictEqual(L.gateOpen(ex, new Map([['a', 2]])), false);
+    assert.strictEqual(L.gateOpen(ex, new Map([['a', 1], ['c', 2]])), false);
+    assert.strictEqual(L.gateOpen({}, new Map()), true);
+  });
+  await test('"not for me": a hidden exercise is never chosen, and the slot is still filled', async () => {
+    const lunges = new Set(['split-squat', 'reverse-lunge', 'walking-lunge', 'lateral-lunge']);
+    const seen = await everSeen({ hidden: lunges }, bigWeek, 10);
+    for (const l of lunges) assert.ok(!seen.has(l), l);
+    const plan = await generateWeekPlan({ userId: 22, weekStart: '2026-10-12', info: bigWeek, person: { ...fit, hidden: lunges }, history: { weeks: [] }, timezone: 'Australia/Brisbane' });
+    assert.ok(plan.notes.some((n) => /lunge/.test(n)), 'says when a whole movement has nothing left');
+    assert.ok(plan.sessions.every((s) => s.exercises.length >= 4));
+  });
+  await test('no pull exercise without kit points to resistance bands; ticking bands brings a row back', async () => {
+    const none = await generateWeekPlan({ userId: 23, weekStart: '2026-10-12', info: infoFor('2026-10-12'), person: { ...person, equipment: [] }, history: { weeks: [] }, timezone: 'Australia/Brisbane' });
+    assert.ok(none.notes.some((n) => /resistance band/i.test(n) && /Profile/.test(n)));
+    const bands = await generateWeekPlan({ userId: 23, weekStart: '2026-10-12', info: infoFor('2026-10-12'), person: { ...person, equipment: ['bands'] }, history: { weeks: [] }, timezone: 'Australia/Brisbane' });
+    assert.ok(bands.sessions.flatMap((s) => s.exercises).some((e) => e.slug === 'resistance-band-row'));
+    assert.ok(!bands.notes.some((n) => /pull/.test(n)));
+  });
+  await test('balance exercises always say to stand beside a wall or bench', async () => {
+    const plan = await generateWeekPlan({ userId: 24, weekStart: '2026-10-12', info: infoFor('2026-10-12'), person, history: { weeks: [] }, timezone: 'Australia/Brisbane' });
+    const balance = plan.sessions.flatMap((s) => s.exercises).filter((e) => lib.get(e.slug).pattern === 'balance');
+    assert.ok(balance.length >= 2);
+    for (const e of balance) assert.ok(/beside a wall or bench/.test(e.prescription), e.slug);
+  });
+  await test('every session carries the stop rule; other safety lines appear only when they apply', () => {
+    const mk = (slugs, extra = {}) => ({ exercises: slugs.map((slug) => ({ slug })), ...extra });
+    const stop = /chest pain, dizziness or unusual breathlessness/;
+    const walk = sessionSafetyLines(mk(['cat-cow', 'brisk-walk'], { outdoor: true }), lib, 'Australia/Brisbane');
+    assert.ok(stop.test(walk[0]));
+    assert.ok(walk.some((l) => /Brisbane/.test(l) && /water/.test(l)));
+    assert.ok(walk.some((l) => /floor work/.test(l)), 'cat-cow is floor work');
+    assert.ok(!walk.some((l) => /Breathe out/.test(l)));
+    const lift = sessionSafetyLines(mk(['goblet-squat', 'push-up']), lib, 'Europe/London');
+    assert.ok(lift.some((l) => /Breathe out on the effort and do not hold your breath/.test(l)));
+    assert.ok(lift.some((l) => /floor work/.test(l)), 'push-up is floor work');
+    assert.ok(!lift.some((l) => /water/.test(l)));
+    const swim = sessionSafetyLines(mk(['pool-lengths']), lib, 'Australia/Brisbane');
+    assert.ok(swim.some((l) => /never swim alone in open water/.test(l)));
+    const outdoorElsewhere = sessionSafetyLines(mk(['trail-walk'], { outdoor: true }), lib, 'Europe/London');
+    assert.ok(outdoorElsewhere.some((l) => /hot weather/.test(l)) && !outdoorElsewhere.some((l) => /Brisbane/.test(l)));
   });
 
   // ── generator with a (stubbed) model ──

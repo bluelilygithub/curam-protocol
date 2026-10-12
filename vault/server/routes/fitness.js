@@ -145,6 +145,7 @@ router.get('/library', async (req, res) => {
   try {
     const state = await P.getState(req.user.id);
     const equipment = state.lifestyle?.equipment || [];
+    const hiddenSet = await W.loadHidden(req.user.id);
     const q = String(req.query.q || '').trim().toLowerCase();
     const pattern = String(req.query.pattern || '');
     const domain = String(req.query.domain || '');
@@ -156,7 +157,7 @@ router.get('/library', async (req, res) => {
       .filter((e) => !setting || e.settings.includes(setting))
       .map((e) => ({
         slug: e.slug, name: e.name, pattern: e.pattern, domains: e.domains, settings: e.settings, equipment: e.equipment,
-        level: e.level, roles: e.roles, available: Lib.isAvailable(e, equipment),
+        level: e.level, roles: e.roles, available: Lib.isAvailable(e, equipment), hidden: hiddenSet.has(e.slug),
       }));
     res.json({ version: Lib.getLibrary().version, patterns: Lib.PATTERNS, settings: Lib.SETTINGS, exercises: list });
   } catch (err) { fail(res, err, 'library'); }
@@ -174,8 +175,18 @@ router.get('/library/:slug', async (req, res) => {
       easier: (e.easier || []).map(link),
       harder: (e.harder || []).map(link),
       available: Lib.isAvailable(e, state.lifestyle?.equipment || []),
+      hidden: (await W.loadHidden(req.user.id)).has(e.slug),
+      effortScale: Lib.getLibrary().effortScale,
     });
   } catch (err) { fail(res, err, 'library item'); }
+});
+
+// "Not for me": hide an exercise so the week generator never picks it (and show it again).
+router.post('/library/:slug/hide', async (req, res) => {
+  try { await W.setHidden(req.user.id, String(req.params.slug), true); res.json({ ok: true, hidden: true }); } catch (err) { fail(res, err, 'hide exercise'); }
+});
+router.post('/library/:slug/unhide', async (req, res) => {
+  try { await W.setHidden(req.user.id, String(req.params.slug), false); res.json({ ok: true, hidden: false }); } catch (err) { fail(res, err, 'unhide exercise'); }
 });
 
 // ── Weeks ──

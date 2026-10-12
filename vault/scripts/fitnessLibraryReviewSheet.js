@@ -47,14 +47,23 @@ w(`Cool-down exercises: ${list.filter((e) => e.roles.includes('cooldown')).map((
 w();
 w('## Judgement calls I would like you to check first');
 w();
-w('1. **Jogging.** *Easy jog* is level 3 and *Run/walk intervals* level 2. People with fewer than 90 minutes of cardio in the week are never offered level 3+ cardio, whatever they rate themselves. Is that cautious enough, or too cautious?');
-w('2. **Heavier loads.** Dumbbell exercises say "light", "heavier" and so on but never give kilograms. Is that right for a general audience, or should there be a guide?');
-w('3. **Single-leg Romanian deadlift** is level 3 and also counts as balance work. Offered to intermediate-rated people. Too early?');
-w('4. **Leg press and assisted pull-up** tell people to ask gym staff to set up the first time. Enough?');
-w('5. **No pulling exercise without dumbbells or a gym.** People who list only bodyweight get no row or pull-down; the week says so and leaves the slot out. Is there a safe bodyweight pull I should add (for example a towel row)?');
-w('6. **Warm-up and cool-down** are about 5 minutes each, two exercises each, drawn from mobility and balance. Are the choices sensible as warm-ups (for example *Tandem stand* and *Single-leg stand* as balance warm-ups)?');
-w('7. **Aerobic intensity** is described with the talk test only. Fine, or should there also be a 1-10 effort scale?');
-w('8. **Anything dangerous or missing** that you would not want an older or deconditioned person doing from this wording.');
+w('First round of answers, now in the data (please confirm they read right):');
+w();
+w('1. **Jogging.** Continuous *Easy jog* only opens after two weeks of *Run/walk intervals* in the program (Stage 3 will also require them to be rated comfortable), unless someone rated their earlier cardio fitness 4 or more. The rule that under 90 aerobic minutes a week keeps cardio gentle still applies to everyone.');
+w('2. **Loads.** Loaded exercises say: start light, roughly 4-8 kg in each hand, and pick a weight where the last two reps feel hard but form holds. Machines say the same without kilograms.');
+w('3. **Single-leg Romanian deadlift** now needs the dumbbell RDL (or the new *Supported single-leg RDL*) and a steady *Single-leg stand*, each in the program for two weeks. *Supported single-leg RDL (kickstand)* is the step between and needs a steady single-leg stand.');
+w('4. **Leg press and assisted pull-up** have 4 set-up cues each (also lat pulldown, rowing machine and treadmill). "Ask gym staff" stays as an extra.');
+w('5. **Bodyweight pull.** Added *Resistance band row*. It needs a band (Profile has a new "Resistance bands" equipment option); the week tells people who have no pull exercise that a band is inexpensive.');
+w('6. **Balance warm-ups** say to stand beside a wall or bench, in the exercise and in every session.');
+w('7. **Intensity.** Every exercise shows the 1-10 effort and the talk test, with a scale on each library page. Stage 3 logging will use the same 1-10.');
+w('8. **Safety.** Every session shows the stop rule (chest pain, dizziness, unusual breathlessness). Strength sessions add "breathe out on the effort, do not hold your breath"; floor work adds "get up slowly"; outdoor sessions add water and heat advice (Brisbane-specific in Brisbane); pool exercises add "never swim alone in open water". Library pages have "Not for me, hide this exercise".');
+w();
+w('Still open for your eye:');
+w();
+w('- Is the 2-week gate long enough for running, and for the single-leg hinge?');
+w('- Should anything else be gated (for example slow-tempo push-ups, side plank, interval ride)?');
+w('- Are the set-up cues for the machines complete and correct?');
+w('- Anything dangerous or missing that you would not want an older or deconditioned person doing from this wording.');
 w();
 
 for (const p of ORDER) {
@@ -76,6 +85,14 @@ for (const p of ORDER) {
     w();
     w(`**Why form matters.** ${e.whyFormMatters}`);
     w();
+    w(`**How hard.** ${e.effort}${e.loadGuide ? ` ${e.loadGuide}` : ''}`);
+    w();
+    if (e.setup) { w('**Set-up cues**'); w(); for (const c of e.setup) w(`- ${c}`); w(); }
+    if (e.gate) {
+      const groups = e.gate.after.map((g) => g.map(name).join(' or ')).join(' and ');
+      w(`**Unlocks after** ${groups} have been in the program for ${e.gate.weeks} weeks${e.gate.waivedBy ? ` (skipped with an earlier running history)` : ''}.`);
+      w();
+    }
     w(`**Dosage.** Beginner: ${e.dosage.beginner}. Intermediate: ${e.dosage.intermediate}. Advanced: ${e.dosage.advanced}.`);
     if (e.safety) { w(); w(`**Safety note shown to the user.** ${e.safety}`); }
     w();

@@ -45,7 +45,7 @@ const STEPS = [
   {
     id: 'fitness-library-list', group: 'done', view: 'library', since: 2, selector: '[data-tour="fitness-library-list"]', on: 'top',
     title: 'The exercise library',
-    text: 'Every exercise in your program comes from here, with steps, common mistakes, why form matters, and easier and harder versions. Filter by movement, place or equipment.',
+    text: 'Every exercise in your program comes from here, with steps, common mistakes, why form matters, how hard it should feel, and easier and harder versions. Filter by movement, place or equipment. On any page, "Not for me, hide this exercise" makes your program skip it.',
   },
   {
     id: 'fitness-tabs', group: 'done', view: 'overview', since: 1, selector: '[data-tour="fitness-tabs"]', on: 'bottom',

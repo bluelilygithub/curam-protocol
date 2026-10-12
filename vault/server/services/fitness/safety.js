@@ -47,4 +47,24 @@ function checkNotes(...texts) {
   return { flags, suggestGp: gpFirst, offerEase: true, message };
 }
 
-module.exports = { checkNotes };
+const STRENGTH_PATTERNS = new Set(['squat', 'hinge', 'lunge', 'push', 'pull', 'core', 'carry']);
+
+/**
+ * Plain safety lines for one session, from what is in it. Every session gets the stop rule; the rest appear only when they apply.
+ * @param {{ outdoor?:boolean, exercises:{ slug:string }[] }} session
+ */
+function sessionSafetyLines(session, library, timeZone) {
+  const lines = ['Stop if you have chest pain, dizziness or unusual breathlessness, and see your GP if it happens.'];
+  const items = (session.exercises || []).map((e) => library.get(e.slug)).filter(Boolean);
+  if (items.some((e) => STRENGTH_PATTERNS.has(e.pattern))) lines.push('Breathe out on the effort and do not hold your breath.');
+  if (items.some((e) => (e.tags || []).includes('floor'))) lines.push('Get up slowly after floor work.');
+  if (session.outdoor) {
+    lines.push(timeZone === 'Australia/Brisbane'
+      ? 'Take water and sun protection. In Brisbane heat and humidity choose early morning or evening, and slow down rather than push through.'
+      : 'Take water and sun protection. In hot weather choose early morning or evening, and slow down rather than push through.');
+  }
+  if (items.some((e) => (e.tags || []).includes('pool'))) lines.push('Swim where others are around or a lifeguard is on duty, and never swim alone in open water.');
+  return lines;
+}
+
+module.exports = { checkNotes, sessionSafetyLines };

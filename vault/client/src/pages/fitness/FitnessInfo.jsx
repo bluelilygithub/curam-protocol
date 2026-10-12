@@ -13,7 +13,7 @@ const WORKS_NOW = [
   ['Five-year goal', 'Pick a pace from Gentle to Stretch. You see a Now row, the focus and weekly targets for each year, the rating you are expected to reach, and a chart against the WHO 150-300 minute band. Revisit it any time.'],
   ['Today and Week', 'Each week is made for you from your goal: the same targets every week, with the exercises changing so it stays fresh. Every session has a short warm-up and cool-down. Drag a session to another day or time, or use its move button, and take a rest day whenever you like. Every fifth week is a lighter one on purpose.'],
   ['Rest without guilt', 'You get two planned rest days and one flexible one each week. Taking a rest day moves a session to a free slot if there is one, otherwise it is let go. Missed work is never piled onto later days.'],
-  ['Library', 'About 45 exercises, each with step-by-step how-to, common mistakes, why form matters, and easier and harder versions. Every exercise in your program links to its page.'],
+  ['Library', 'About 47 exercises, each with step-by-step how-to, common mistakes, why form matters, and easier and harder versions. Every exercise in your program links to its page, with how hard it should feel (the talk test and a 1 to 10 scale) and a light starting weight where it helps. If an exercise does not suit you, hide it and your program will skip it.'],
   ['Start over', 'The three-dot menu lets you retake the wizard. By default your earlier goals and ratings are kept; you can choose to clear everything.'],
 ];
 

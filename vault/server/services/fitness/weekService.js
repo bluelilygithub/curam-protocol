@@ -11,6 +11,7 @@ const S = require('./schedule');
 const Ph = require('./phases');
 const P = require('./profileService');
 const { generateWeekPlan } = require('./weekGenerator');
+const { sessionSafetyLines } = require('./safety');
 
 const { ValidationError } = P;
 const EDITABLE = new Set(['planned', 'moved']);
@@ -58,11 +59,42 @@ async function loadSessions(weekId, userId) {
     .sort((a, b) => a.day - b.day || order[a.slot] - order[b.slot] || a.id - b.id);
 }
 
+async function loadHidden(userId) {
+  const { rows } = await pool.query('SELECT slug FROM fitness_hidden_exercises WHERE "userId"=$1', [userId]);
+  return new Set(rows.map((r) => r.slug));
+}
+
+async function setHidden(userId, slug, hidden) {
+  if (!L.getLibrary().bySlug.has(slug)) { const e = new Error('Exercise not found'); e.status = 404; throw e; }
+  if (hidden) {
+    await pool.query('INSERT INTO fitness_hidden_exercises ("userId", slug) VALUES ($1,$2) ON CONFLICT DO NOTHING', [userId, slug]);
+  } else {
+    await pool.query('DELETE FROM fitness_hidden_exercises WHERE "userId"=$1 AND slug=$2', [userId, slug]);
+  }
+  return loadHidden(userId);
+}
+
+/** How many earlier weeks each exercise has been in the main work (for gates). */
+async function loadExposure(userId, weekStart) {
+  const { rows } = await pool.query(
+    `SELECT e.slug, COUNT(DISTINCT s."weekId")::int AS weeks
+       FROM fitness_planned_exercises e
+       JOIN fitness_planned_sessions s ON s.id = e."sessionId"
+       JOIN fitness_weeks w ON w.id = s."weekId"
+      WHERE e."userId"=$1 AND e.block='main' AND w."weekStart" < $2
+      GROUP BY e.slug`,
+    [userId, weekStart],
+  );
+  return new Map(rows.map((r) => [r.slug, r.weeks]));
+}
+
 function shapeWeek(row, sessions, state) {
   const restDays = parse(row.restDays, []);
   const spent = restDays.filter((r) => r.kind === 'budget').length;
   const timezone = state.timezone.timezone;
   const hot = S.isHotMonth(row.weekStart, timezone);
+  const lib = L.getLibrary().bySlug;
+  for (const s of sessions) s.safety = sessionSafetyLines(s, lib, timezone);
   const soft = S.softNotes(
     sessions.map((s) => ({ ...s, strength: s.components.some((c) => c.domain === 'strength') })),
     { hotOutdoor: hot },
@@ -168,6 +200,10 @@ async function ensureWeek(userId, { start, refresh = false } = {}) {
       equipment: state.lifestyle.equipment,
       twiceDaily: !!state.lifestyle.timeFlexibility?.twiceDaily,
       workAround: inp.profile.workAround || null,
+      hidden: await loadHidden(userId),
+      exposure: await loadExposure(userId, weekStart),
+      // an earlier, higher cardio rating stands in for "has run before" until we ask about running directly
+      runningHistory: (state.rating.previousScores?.cardio ?? 0) >= 4,
     },
   });
 
@@ -324,4 +360,4 @@ async function getToday(userId) {
   };
 }
 
-module.exports = { getWeek, ensureWeek, moveSession, takeRestDay, undoRestDay, getToday, loadHistory };
+module.exports = { getWeek, ensureWeek, moveSession, takeRestDay, undoRestDay, getToday, loadHistory, loadHidden, setHidden, loadExposure };

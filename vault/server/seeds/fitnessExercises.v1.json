@@ -1,5 +1,32 @@
 {
   "version": "v1",
+  "effortScale": [
+    {
+      "score": "1-2",
+      "feel": "Very light",
+      "talk": "You could sing"
+    },
+    {
+      "score": "3-4",
+      "feel": "Light",
+      "talk": "You can chat in full sentences"
+    },
+    {
+      "score": "5-6",
+      "feel": "Moderate",
+      "talk": "Breathing is up, but you can speak in short sentences"
+    },
+    {
+      "score": "7-8",
+      "feel": "Hard",
+      "talk": "You can only say a few words at a time"
+    },
+    {
+      "score": "9-10",
+      "feel": "Maximal",
+      "talk": "You cannot talk"
+    }
+  ],
   "exercises": [
     {
       "slug": "sit-to-stand",
@@ -46,7 +73,9 @@
         "advanced": "3 sets of 10-12 slow reps"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "6-8 out of 10. The last two reps feel hard, but your form holds.",
+      "tags": []
     },
     {
       "slug": "bodyweight-squat",
@@ -97,7 +126,9 @@
         "advanced": "3 sets of 12-15 slow reps"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "6-8 out of 10. The last two reps feel hard, but your form holds.",
+      "tags": []
     },
     {
       "slug": "goblet-squat",
@@ -148,7 +179,10 @@
         "advanced": "3 sets of 10-12 reps, heavier weight"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "6-8 out of 10. The last two reps feel hard, but your form holds.",
+      "loadGuide": "Start light, roughly 4-8 kg in each hand for most adults. Pick a weight where the last two reps feel hard but your form holds.",
+      "tags": []
     },
     {
       "slug": "leg-press",
@@ -197,7 +231,16 @@
         "advanced": "3 sets of 8-10 reps, heavier"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "6-8 out of 10. The last two reps feel hard, but your form holds.",
+      "loadGuide": "Start with a light weight. Pick one where the last two reps feel hard but your form holds.",
+      "setup": [
+        "Seat: adjust it so your knees bend to about 90 degrees at the bottom and no further. Do not let them fold past that.",
+        "Feet: flat on the platform, shoulder-width apart, in the middle of the plate.",
+        "Knees: press until almost straight and never lock them.",
+        "Safety: set the safety stops before you load the weight, and know where the release handle is."
+      ],
+      "tags": []
     },
     {
       "slug": "glute-bridge",
@@ -245,7 +288,11 @@
         "advanced": "3 sets of 12-15 reps with a 2 second hold"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "6-8 out of 10. The last two reps feel hard, but your form holds.",
+      "tags": [
+        "floor"
+      ]
     },
     {
       "slug": "dumbbell-romanian-deadlift",
@@ -290,7 +337,7 @@
         "glute-bridge"
       ],
       "harder": [
-        "single-leg-rdl"
+        "supported-single-leg-rdl"
       ],
       "dosage": {
         "beginner": "2 sets of 8-10 reps, light weights",
@@ -298,7 +345,10 @@
         "advanced": "3 sets of 8-10 reps, heavier weights"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "6-8 out of 10. The last two reps feel hard, but your form holds.",
+      "loadGuide": "Start light, roughly 4-8 kg in each hand for most adults. Pick a weight where the last two reps feel hard but your form holds.",
+      "tags": []
     },
     {
       "slug": "single-leg-rdl",
@@ -338,7 +388,7 @@
       "whyFormMatters": "It trains the glutes and hamstrings and also challenges balance, which matters for staying steady as you get older. Twisting or locking the knee puts stress on the joint.",
       "safety": "Keep a wall or chair within reach.",
       "easier": [
-        "dumbbell-romanian-deadlift"
+        "supported-single-leg-rdl"
       ],
       "harder": [],
       "dosage": {
@@ -347,7 +397,21 @@
         "advanced": "3 sets of 8-10 reps each side, light dumbbell"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "6-8 out of 10. The last two reps feel hard, but your form holds.",
+      "gate": {
+        "after": [
+          [
+            "dumbbell-romanian-deadlift",
+            "supported-single-leg-rdl"
+          ],
+          [
+            "single-leg-stand"
+          ]
+        ],
+        "weeks": 2
+      },
+      "tags": []
     },
     {
       "slug": "split-squat",
@@ -396,7 +460,9 @@
         "advanced": "3 sets of 10-12 reps each side"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "6-8 out of 10. The last two reps feel hard, but your form holds.",
+      "tags": []
     },
     {
       "slug": "reverse-lunge",
@@ -446,7 +512,9 @@
         "advanced": "3 sets of 10-12 reps each side, holding dumbbells"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "6-8 out of 10. The last two reps feel hard, but your form holds.",
+      "tags": []
     },
     {
       "slug": "walking-lunge",
@@ -495,7 +563,9 @@
         "advanced": "3 rounds of 10 steps each leg, holding dumbbells"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "6-8 out of 10. The last two reps feel hard, but your form holds.",
+      "tags": []
     },
     {
       "slug": "lateral-lunge",
@@ -543,7 +613,9 @@
         "advanced": "3 sets of 8-10 reps each side"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "6-8 out of 10. The last two reps feel hard, but your form holds.",
+      "tags": []
     },
     {
       "slug": "wall-push-up",
@@ -592,7 +664,9 @@
         "advanced": "3 sets of 12-15 reps"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "6-8 out of 10. The last two reps feel hard, but your form holds.",
+      "tags": []
     },
     {
       "slug": "incline-push-up",
@@ -642,7 +716,9 @@
         "advanced": "3 sets of 12-15 reps"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "6-8 out of 10. The last two reps feel hard, but your form holds.",
+      "tags": []
     },
     {
       "slug": "push-up",
@@ -692,7 +768,11 @@
         "advanced": "3 sets of 10-15 reps"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "6-8 out of 10. The last two reps feel hard, but your form holds.",
+      "tags": [
+        "floor"
+      ]
     },
     {
       "slug": "slow-tempo-push-up",
@@ -740,7 +820,11 @@
         "advanced": "3 sets of 8-10 reps"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "6-8 out of 10. The last two reps feel hard, but your form holds.",
+      "tags": [
+        "floor"
+      ]
     },
     {
       "slug": "supported-dumbbell-row",
@@ -781,7 +865,9 @@
       ],
       "whyFormMatters": "Rows strengthen the muscles between your shoulder blades that hold your posture and balance all the pushing you do. Twisting moves the work away from them.",
       "safety": null,
-      "easier": [],
+      "easier": [
+        "resistance-band-row"
+      ],
       "harder": [
         "bent-over-dumbbell-row",
         "lat-pulldown"
@@ -792,7 +878,10 @@
         "advanced": "3 sets of 10-12 reps each side, heavier"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "6-8 out of 10. The last two reps feel hard, but your form holds.",
+      "loadGuide": "Start light, roughly 4-8 kg in each hand for most adults. Pick a weight where the last two reps feel hard but your form holds.",
+      "tags": []
     },
     {
       "slug": "bent-over-dumbbell-row",
@@ -843,7 +932,10 @@
         "advanced": "3 sets of 10-12 reps, heavier"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "6-8 out of 10. The last two reps feel hard, but your form holds.",
+      "loadGuide": "Start light, roughly 4-8 kg in each hand for most adults. Pick a weight where the last two reps feel hard but your form holds.",
+      "tags": []
     },
     {
       "slug": "lat-pulldown",
@@ -894,7 +986,16 @@
         "advanced": "3 sets of 8-10 reps, heavier"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "6-8 out of 10. The last two reps feel hard, but your form holds.",
+      "loadGuide": "Start with a light weight. Pick one where the last two reps feel hard but your form holds.",
+      "setup": [
+        "Pad: adjust it so your thighs are held snug without squeezing.",
+        "Grip: overhand, slightly wider than your shoulders.",
+        "Start: sit down holding the bar so the weight stack does not jerk, then lean back very slightly with your chest lifted.",
+        "Return: let the bar rise slowly until your arms are straight."
+      ],
+      "tags": []
     },
     {
       "slug": "assisted-pull-up",
@@ -943,7 +1044,15 @@
         "advanced": "3 sets of 6-10 reps, low assistance"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "6-8 out of 10. The last two reps feel hard, but your form holds.",
+      "setup": [
+        "Counterweight: more assistance makes it easier. Start with enough that you can do 5 or 6 smooth reps.",
+        "Grip: slightly wider than your shoulders, starting with arms long and shoulders down.",
+        "Lowering: take about three seconds to come down and control it all the way.",
+        "Knee pad or step: place it carefully, and step off with both feet before you let go."
+      ],
+      "tags": []
     },
     {
       "slug": "dead-bug",
@@ -991,7 +1100,11 @@
         "advanced": "3 sets of 8-10 reps each side"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "5-7 out of 10. Stop the set when your form slips.",
+      "tags": [
+        "floor"
+      ]
     },
     {
       "slug": "bird-dog",
@@ -1042,7 +1155,11 @@
         "advanced": "3 sets of 8-10 reps each side with a 3 second hold"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "5-7 out of 10. Stop the set when your form slips.",
+      "tags": [
+        "floor"
+      ]
     },
     {
       "slug": "forearm-plank",
@@ -1092,7 +1209,11 @@
         "advanced": "3 holds of 30-45 seconds"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "5-7 out of 10. Stop the set when your form slips.",
+      "tags": [
+        "floor"
+      ]
     },
     {
       "slug": "side-plank",
@@ -1141,7 +1262,11 @@
         "advanced": "3 holds of 25-40 seconds each side, legs straight"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "5-7 out of 10. Stop the set when your form slips.",
+      "tags": [
+        "floor"
+      ]
     },
     {
       "slug": "farmers-carry",
@@ -1190,7 +1315,10 @@
         "advanced": "3 walks of 20-30 steps, heavier"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "6-8 out of 10. The last two reps feel hard, but your form holds.",
+      "loadGuide": "Start light, roughly 4-8 kg in each hand for most adults. Pick a weight where the last two reps feel hard but your form holds.",
+      "tags": []
     },
     {
       "slug": "brisk-walk",
@@ -1239,7 +1367,9 @@
         "advanced": "40-60 minutes at a brisk pace, including hills"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "4-5 out of 10. Talk test: breathing is up but you can speak in short sentences.",
+      "tags": []
     },
     {
       "slug": "trail-walk",
@@ -1287,7 +1417,9 @@
         "advanced": "45-75 minutes with hills"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "4-6 out of 10. Talk test: short sentences. Slow down on climbs rather than push.",
+      "tags": []
     },
     {
       "slug": "treadmill-incline-walk",
@@ -1336,7 +1468,14 @@
         "advanced": "30-45 minutes, 4-8% incline"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "4-6 out of 10. Talk test: short sentences without holding the rails.",
+      "setup": [
+        "Clip the safety key to your clothing.",
+        "Start the belt slowly before you step on.",
+        "Raise the incline gradually, and lower it before you stop."
+      ],
+      "tags": []
     },
     {
       "slug": "run-walk-intervals",
@@ -1386,7 +1525,9 @@
         "advanced": "30-40 minutes: 3-4 min jog, 1 min walk"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "Jog minutes 5-6 out of 10 (short sentences); walk minutes 3-4 out of 10 (full sentences).",
+      "tags": []
     },
     {
       "slug": "easy-jog",
@@ -1433,7 +1574,18 @@
         "advanced": "30-50 minutes steady"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "4-6 out of 10. Talk test: you can still speak in short sentences. If you cannot, slow down.",
+      "gate": {
+        "after": [
+          [
+            "run-walk-intervals"
+          ]
+        ],
+        "weeks": 2,
+        "waivedBy": "running-history"
+      },
+      "tags": []
     },
     {
       "slug": "easy-ride",
@@ -1483,7 +1635,9 @@
         "advanced": "40-70 minutes steady"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "3-5 out of 10. Talk test: full sentences.",
+      "tags": []
     },
     {
       "slug": "interval-ride",
@@ -1533,7 +1687,9 @@
         "advanced": "25-40 minutes: 2 min hard, 2 min easy"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "Hard minutes about 7 out of 10 (a few words at a time); easy minutes about 3 out of 10 (full sentences).",
+      "tags": []
     },
     {
       "slug": "pool-lengths",
@@ -1570,7 +1726,7 @@
         }
       ],
       "whyFormMatters": "Swimming is gentle on joints and works the whole body. Steady breathing makes it feel easy rather than exhausting.",
-      "safety": null,
+      "safety": "Swim where others are around or a lifeguard is on duty. Never swim alone in open water.",
       "easier": [
         "aqua-jog"
       ],
@@ -1581,7 +1737,11 @@
         "advanced": "30-50 minutes steady"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "4-5 out of 10. Talk test at the wall: short sentences.",
+      "tags": [
+        "pool"
+      ]
     },
     {
       "slug": "aqua-jog",
@@ -1618,7 +1778,7 @@
         }
       ],
       "whyFormMatters": "The water supports your weight, so there is no impact. A tall posture lets the legs and trunk do the work.",
-      "safety": null,
+      "safety": "Swim where others are around or a lifeguard is on duty. Never swim alone in open water.",
       "easier": [],
       "harder": [
         "pool-lengths"
@@ -1629,7 +1789,11 @@
         "advanced": "30-45 minutes"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "3-5 out of 10. Talk test: full sentences.",
+      "tags": [
+        "pool"
+      ]
     },
     {
       "slug": "rowing-machine",
@@ -1675,7 +1839,15 @@
         "advanced": "20-35 minutes steady"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "4-6 out of 10. Talk test: short sentences.",
+      "setup": [
+        "Foot straps: snug across the middle of your feet.",
+        "Damper: start around 3 to 5, not high.",
+        "Handle: grip loosely with flat wrists.",
+        "Rate: aim for 18 to 24 strokes a minute."
+      ],
+      "tags": []
     },
     {
       "slug": "tandem-stand",
@@ -1725,7 +1897,9 @@
         "advanced": "3 holds of 30-45 seconds each side"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "2-4 out of 10. It is about steadiness, not effort. Stand beside a wall or bench for support.",
+      "tags": []
     },
     {
       "slug": "single-leg-stand",
@@ -1777,7 +1951,9 @@
         "advanced": "3 holds of 30-45 seconds each side"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "2-4 out of 10. It is about steadiness, not effort. Stand beside a wall or bench for support.",
+      "tags": []
     },
     {
       "slug": "heel-to-toe-walk",
@@ -1825,7 +2001,9 @@
         "advanced": "4 lengths of 10 steps, eyes ahead without touching the wall"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "2-4 out of 10. It is about steadiness, not effort. Stand beside a wall or bench for support.",
+      "tags": []
     },
     {
       "slug": "single-leg-reach",
@@ -1876,7 +2054,9 @@
         "advanced": "3 rounds of 5 taps each direction"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "2-4 out of 10. It is about steadiness, not effort. Stand beside a wall or bench for support.",
+      "tags": []
     },
     {
       "slug": "soft-surface-single-leg-stand",
@@ -1924,7 +2104,9 @@
         "advanced": "3 holds of 25-40 seconds each side"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "2-4 out of 10. It is about steadiness, not effort. Stand beside a wall or bench for support.",
+      "tags": []
     },
     {
       "slug": "cat-cow",
@@ -1971,7 +2153,11 @@
         "advanced": "2 rounds of 10 slow reps"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "2-3 out of 10. A mild stretch, never pain.",
+      "tags": [
+        "floor"
+      ]
     },
     {
       "slug": "hip-flexor-stretch",
@@ -2017,7 +2203,11 @@
         "advanced": "3 holds of 30 seconds each side"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "2-3 out of 10. A mild stretch, never pain.",
+      "tags": [
+        "floor"
+      ]
     },
     {
       "slug": "thoracic-open-book",
@@ -2064,7 +2254,11 @@
         "advanced": "2 rounds of 10 reps each side"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "2-3 out of 10. A mild stretch, never pain.",
+      "tags": [
+        "floor"
+      ]
     },
     {
       "slug": "hamstring-stretch",
@@ -2110,7 +2304,11 @@
         "advanced": "3 holds of 30 seconds each side"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "2-3 out of 10. A mild stretch, never pain.",
+      "tags": [
+        "floor"
+      ]
     },
     {
       "slug": "shoulder-circles",
@@ -2157,7 +2355,9 @@
         "advanced": "2 rounds of 12 each direction"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "2-3 out of 10. A mild stretch, never pain.",
+      "tags": []
     },
     {
       "slug": "ankle-knee-to-wall",
@@ -2203,7 +2403,124 @@
         "advanced": "2 rounds of 12 reps each side"
       },
       "videoUrl": null,
-      "imageUrl": null
+      "imageUrl": null,
+      "effort": "2-3 out of 10. A mild stretch, never pain.",
+      "tags": []
+    },
+    {
+      "slug": "supported-single-leg-rdl",
+      "name": "Supported single-leg Romanian deadlift (kickstand)",
+      "domains": [
+        "strength",
+        "balance"
+      ],
+      "pattern": "hinge",
+      "settings": [
+        "home",
+        "gym"
+      ],
+      "requires": [],
+      "equipment": "Wall or sturdy chair",
+      "level": 2,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Stand an arm's length from a wall or beside a sturdy chair and rest one hand on it for support.",
+        "Take most of your weight on one leg and let the other foot rest lightly behind you on its toes, like a kickstand.",
+        "Hinge forward from the hip, pushing your hips back and keeping your back flat; the kickstand foot slides back as you go.",
+        "Lower until you feel a stretch behind the standing leg, usually with your body roughly halfway to parallel.",
+        "Drive your hip forward to stand tall. Finish all reps on one side, then swap."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Leaning heavily on the wall or chair",
+          "fix": "Use only fingertips. If you need more, step closer to the support and shorten the range."
+        },
+        {
+          "mistake": "Rounding your back",
+          "fix": "Keep your chest long and hinge less far."
+        }
+      ],
+      "whyFormMatters": "This is the step between the two-legged hinge and the full single-leg version. The kickstand foot gives just enough help for you to learn the pattern without falling out of it.",
+      "safety": "Keep the wall or chair within reach.",
+      "easier": [
+        "dumbbell-romanian-deadlift"
+      ],
+      "harder": [
+        "single-leg-rdl"
+      ],
+      "dosage": {
+        "beginner": "2 sets of 5-6 reps each side, using support",
+        "intermediate": "3 sets of 6-8 reps each side",
+        "advanced": "3 sets of 8-10 reps each side"
+      },
+      "videoUrl": null,
+      "imageUrl": null,
+      "effort": "6-8 out of 10. The last two reps feel hard, but your form holds.",
+      "gate": {
+        "after": [
+          [
+            "single-leg-stand"
+          ]
+        ],
+        "weeks": 2
+      },
+      "tags": []
+    },
+    {
+      "slug": "resistance-band-row",
+      "name": "Resistance band row",
+      "domains": [
+        "strength"
+      ],
+      "pattern": "pull",
+      "settings": [
+        "home",
+        "gym",
+        "outdoor"
+      ],
+      "requires": [
+        "bands",
+        "gym"
+      ],
+      "equipment": "Resistance band (inexpensive)",
+      "level": 1,
+      "roles": [
+        "main"
+      ],
+      "steps": [
+        "Loop a resistance band around a sturdy post or door anchor at chest height, and check it cannot slip.",
+        "Hold an end in each hand, step back until the band has gentle tension, and stand tall with soft knees.",
+        "Pull your hands toward your ribs, squeezing your shoulder blades together.",
+        "Pause for a second, then let the band return slowly under control.",
+        "Keep your shoulders down and your wrists straight."
+      ],
+      "mistakes": [
+        {
+          "mistake": "Shrugging toward your ears",
+          "fix": "Keep your shoulders down and away from your ears."
+        },
+        {
+          "mistake": "Letting the band snap back",
+          "fix": "Take about three seconds to return."
+        }
+      ],
+      "whyFormMatters": "Pulling balances all the pushing you do and keeps your posture strong. A controlled return keeps the muscles working and the band safe.",
+      "safety": "Check the band for nicks or tears before each use, and make sure the anchor is secure.",
+      "easier": [],
+      "harder": [
+        "supported-dumbbell-row"
+      ],
+      "dosage": {
+        "beginner": "2 sets of 8-10 reps, light band",
+        "intermediate": "3 sets of 10-12 reps",
+        "advanced": "3 sets of 12-15 reps, stronger band"
+      },
+      "videoUrl": null,
+      "imageUrl": null,
+      "effort": "6-8 out of 10. The last two reps feel hard, but your form holds.",
+      "tags": []
     }
   ]
 }

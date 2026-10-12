@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
+import useToastStore from '../../store/toastStore';
 import { Card, Chip, FIELD, inputCls, Notice, SecondaryButton } from './ui';
 
 const PATTERN_LABELS = {
@@ -12,8 +13,26 @@ const LEVEL_LABELS = ['', 'Gentle', 'Moderate', 'Challenging', 'Advanced'];
 
 function Detail({ slug, onOpen, onBack }) {
   const getIcon = useIcon();
+  const addToast = useToastStore((s) => s.addToast);
   const [ex, setEx] = useState(null);
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const toggleHidden = async () => {
+    setSaving(true);
+    try {
+      const r = await api.post(`/api/fitness/library/${encodeURIComponent(slug)}/${ex.hidden ? 'unhide' : 'hide'}`, {});
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Could not save that');
+      setEx((cur) => ({ ...cur, hidden: d.hidden }));
+      addToast(d.hidden ? 'Hidden. It will not appear in future weeks. Use "make a different version" on the Week tab to refresh the current week.' : 'It can appear in your weeks again.', 'success', 8000);
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   useEffect(() => {
     let live = true;
     setEx(null);
@@ -38,8 +57,17 @@ function Detail({ slug, onOpen, onBack }) {
             {PATTERN_LABELS[ex.pattern]} · {LEVEL_LABELS[ex.level]} · {ex.equipment} · {ex.settings.map((s) => SETTING_LABELS[s]).join(', ')}
           </p>
         </div>
+        {ex.hidden && <Notice>You hid this exercise, so it will not appear in your weekly program.</Notice>}
         {!ex.available && <Notice>You did not list the equipment this needs, so it will not appear in your weekly program. You can still read how it is done.</Notice>}
         {ex.safety && <Notice tone="care">{ex.safety}</Notice>}
+        {ex.setup && (
+          <section>
+            <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Set-up</h3>
+            <ul className="list-disc pl-5 space-y-1.5 text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>
+              {ex.setup.map((c) => <li key={c}>{c}</li>)}
+            </ul>
+          </section>
+        )}
         <section>
           <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>How to do it</h3>
           <ol className="list-decimal pl-5 space-y-1.5 text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>
@@ -69,6 +97,25 @@ function Detail({ slug, onOpen, onBack }) {
             ))}
           </dl>
         </section>
+        <section>
+          <h3 className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>How hard</h3>
+          <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{ex.effort}</p>
+          {ex.loadGuide && <p className="text-sm leading-relaxed mt-1.5" style={{ color: 'var(--color-text)' }}>{ex.loadGuide}</p>}
+          {ex.effortScale && (
+            <details className="mt-2">
+              <summary className="text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>The effort scale and the talk test</summary>
+              <dl className="mt-2 text-xs grid grid-cols-[auto,auto,1fr] gap-x-3 gap-y-1" style={{ color: 'var(--color-text)' }}>
+                {ex.effortScale.map((r) => (
+                  <React.Fragment key={r.score}>
+                    <dt className="font-medium">{r.score}</dt>
+                    <dd>{r.feel}</dd>
+                    <dd style={{ color: 'var(--color-muted)' }}>{r.talk}</dd>
+                  </React.Fragment>
+                ))}
+              </dl>
+            </details>
+          )}
+        </section>
         {(ex.easier.length > 0 || ex.harder.length > 0) && (
           <section>
             <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Easier and harder versions</h3>
@@ -78,6 +125,10 @@ function Detail({ slug, onOpen, onBack }) {
             </div>
           </section>
         )}
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <SecondaryButton onClick={toggleHidden} disabled={saving}>{ex.hidden ? 'Show this exercise again' : 'Not for me, hide this exercise'}</SecondaryButton>
+          {!ex.hidden && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>For example if it does not suit a knee or shoulder. Your program will skip it.</span>}
+        </div>
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
           Stop and rest if something hurts, you feel dizzy, or you notice chest symptoms. See your GP if it does not settle.
         </p>
@@ -93,6 +144,7 @@ export default function LibraryView({ slug, onOpen, onBack }) {
   const [pattern, setPattern] = useState('');
   const [setting, setSetting] = useState('');
   const [mineOnly, setMineOnly] = useState(true);
+  const [showHidden, setShowHidden] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -106,8 +158,9 @@ export default function LibraryView({ slug, onOpen, onBack }) {
       .filter((e) => (!needle || e.name.toLowerCase().includes(needle)))
       .filter((e) => !pattern || e.pattern === pattern)
       .filter((e) => !setting || e.settings.includes(setting))
-      .filter((e) => !mineOnly || e.available);
-  }, [data, q, pattern, setting, mineOnly]);
+      .filter((e) => !mineOnly || e.available)
+      .filter((e) => showHidden || !e.hidden);
+  }, [data, q, pattern, setting, mineOnly, showHidden]);
 
   if (slug) return <Detail slug={slug} onOpen={onOpen} onBack={onBack} />;
   if (error) return <Notice>{error}</Notice>;
@@ -131,6 +184,12 @@ export default function LibraryView({ slug, onOpen, onBack }) {
           <input type="checkbox" checked={mineOnly} onChange={(e) => setMineOnly(e.target.checked)} />
           Only what I can do with my equipment
         </label>
+        {data.exercises.some((e) => e.hidden) && (
+          <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
+            <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} />
+            Show exercises I have hidden
+          </label>
+        )}
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{list.length} exercise{list.length === 1 ? '' : 's'}</p>
       </Card>
 
@@ -145,7 +204,7 @@ export default function LibraryView({ slug, onOpen, onBack }) {
           >
             <span className="block text-sm font-medium">{e.name}</span>
             <span className="block text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-              {PATTERN_LABELS[e.pattern]} · {LEVEL_LABELS[e.level]} · {e.equipment}
+              {PATTERN_LABELS[e.pattern]} · {LEVEL_LABELS[e.level]} · {e.equipment}{e.hidden ? ' · hidden' : ''}
             </span>
           </button>
         ))}

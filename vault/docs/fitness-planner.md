@@ -9,7 +9,7 @@ Spec: "Fitness Planner App: Spec for Claude Code" (2026-10-12). Built in stages;
 | Stage | Scope | State |
 |---|---|---|
 | 1 | Profile, age templates, self-ratings, AI baseline, 5-year goal with ambition dial, goal revisit, re-rate form, safety check, demo user | built |
-| 2 | Exercise library (45, variation chains), 5-week blocks, varied weekly program, Today/Week/Library views, movable sessions, rest budget | built, awaiting library review and staging check |
+| 2 | Exercise library (47, variation chains), 5-week blocks, varied weekly program, Today/Week/Library views, movable sessions, rest budget | built, awaiting library review and staging check |
 | 3 | Logging, back-fill, extras, post-log tips, weekly adaptation, pain-note prompt to ease next week, demo-user logs | planned |
 | 4 | Dashboard charts, colour system, rating-history chart, re-rate banner on the dashboard | planned |
 | 5 | Morning plan + catch-up reminders (email, `fitnessCron.js`), installable mobile Today view, re-rate email nudge | planned |
@@ -18,7 +18,7 @@ Where the approved extras land: re-rate form + revisit-goal + ambition dial are 
 
 ## Stage 2: library, blocks, weekly program
 
-**Library** (`server/seeds/fitnessExercises.v1.json`, 45 exercises; `library.js`). The file is the source of truth; `fitness_exercises` mirrors it on boot (upsert by slug) for later joins. Each exercise: pattern, domains, settings, `requires` (any-of equipment, empty = needs nothing), level 1-4, steps, mistakes with fixes, why form matters, dosage by level, easier/harder links (two-way, level never goes down), roles (main / warmup / cooldown), optional safety note. Video and image fields are `null`; a link is only valid with `linksReviewedBy`, so the AI can never introduce one (`validateLibrary()` fails otherwise). Review sheet: `node scripts/fitnessLibraryReviewSheet.js` -> `docs/fitness-library-review.md`.
+**Library** (`server/seeds/fitnessExercises.v1.json`, 47 exercises; `library.js`). The file is the source of truth; `fitness_exercises` mirrors it on boot (upsert by slug) for later joins. Each exercise: pattern, domains, settings, `requires` (any-of equipment, empty = needs nothing), level 1-4, steps, mistakes with fixes, why form matters, dosage by level, easier/harder links (two-way, level never goes down), roles (main / warmup / cooldown), optional safety note. Video and image fields are `null`; a link is only valid with `linksReviewedBy`, so the AI can never introduce one (`validateLibrary()` fails otherwise). Review sheet: `node scripts/fitnessLibraryReviewSheet.js` -> `docs/fitness-library-review.md`.
 
 **Blocks** (`phases.js`, `progression.js`). 5 weeks: weeks 1-4 build, week 5 is a deload (70% of the last build week's aerobic minutes, easier variations). There is no separate phases table: block, phase and targets are computed from the goal by date and each generated week stores a snapshot (`fitness_weeks`). Aerobic minutes rise at most ~10% a week (or 15 minutes, whichever is larger) measured against the last build week, never the deload. Early blocks never sit below a gentle 60-minute starter week; the very first week adds at most 30 minutes to what the person already does (45 minimum). "Ease my first weeks" (confirmed in Stage 1) runs the first two weeks at 80%, easier variations.
 
@@ -28,11 +28,20 @@ Where the approved extras land: re-rate form + revisit-goal + ambition dial are 
 
 **Soft notes, never blocks.** Strength sessions under 48 hours apart; an outdoor session at midday in the hot months (Nov-Mar for southern-hemisphere time zones, Jun-Aug elsewhere); more than two sessions in a day; a weekly aerobic shortfall; a movement pattern with no exercise for the equipment listed.
 
-**API additions:** `GET /library`, `GET /library/:slug`, `GET /week`, `POST /week/generate`, `GET /today`, `PATCH /sessions/:id` (move), `POST /week/rest-day`, `POST /week/rest-day/undo`.
+**API additions:** `GET /library`, `GET /library/:slug`, `POST /library/:slug/hide|unhide`, `GET /week`, `POST /week/generate`, `GET /today`, `PATCH /sessions/:id` (move), `POST /week/rest-day`, `POST /week/rest-day/undo`.
 
-**Tables:** `fitness_exercises`, `fitness_weeks`, `fitness_planned_sessions`, `fitness_planned_exercises`.
+**Tables:** `fitness_exercises`, `fitness_weeks`, `fitness_planned_sessions`, `fitness_planned_exercises`, `fitness_hidden_exercises`.
 
-**Known limits.** "Things to work around" reaches the model as a constraint but code cannot parse it, so an exercise that conflicts can still be offered; a per-exercise swap arrives with logging. People who list no dumbbells or gym get no pulling exercise. No bodyweight pull is in the library yet.
+**After the first library review.**
+- *Gates* (`gate` on an exercise, `library.gateOpen()`): continuous *Easy jog* opens only after *Run/walk intervals* have been in the program for 2 earlier weeks, unless the person's earlier cardio rating was 4 or more ("running history", a stand-in until we ask directly). *Supported single-leg RDL (kickstand)* needs a steady *Single-leg stand* for 2 weeks; *Single-leg RDL* needs the dumbbell RDL (or the supported step) and the stand. The 90-minute cardio rule still applies to everyone. Exposure is counted from planned weeks (`weekService.loadExposure`); **Stage 3 should also require the run/walk to be rated comfortable from logged effort.**
+- *Effort:* every exercise has `effort` (1-10 plus the talk test); the library page shows the scale. Loaded exercises have `loadGuide` ("start light, roughly 4-8 kg in each hand; last two reps hard but form holds"). **Stage 3 logs real kilograms so later weeks can suggest from them.**
+- *Set-up cues* (`setup`, 3-4 each) on leg press, assisted pull-up, lat pulldown, rowing machine, treadmill walk.
+- *Resistance band row* is the cheap pull (new "Resistance bands" equipment option in Profile). Without bands, dumbbells or a gym the week says so.
+- *Balance* always says to stand beside a wall or bench.
+- *Safety lines per session* (`safety.sessionSafetyLines`): the stop rule on every session; "breathe out on the effort" with strength work; "get up slowly" after floor work (`tags: ['floor']`); water and heat advice for outdoor sessions (Brisbane wording when the time zone is Brisbane); "never swim alone in open water" for pool exercises.
+- *"Not for me, hide this exercise"* (`fitness_hidden_exercises`, `POST /library/:slug/hide|unhide`): the generator never picks a hidden exercise; if that empties a whole movement the week says so.
+
+**Known limits.** "Things to work around" reaches the model as a constraint but code cannot parse it, so an exercise that conflicts can still be offered; hiding it is the immediate fix and a per-exercise swap arrives with logging.
 
 ## Help, tour and starting over
 

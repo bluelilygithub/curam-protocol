@@ -122,7 +122,16 @@ export default function SessionCard({ session, expanded = false, draggable = fal
           >
             {open ? 'Hide exercises' : `Show ${session.exercises.length} exercises`}
           </button>
-          {open && <div className="mt-2"><ExerciseList session={session} onOpenExercise={onOpenExercise} /></div>}
+          {open && (
+            <div className="mt-2 space-y-3">
+              <ExerciseList session={session} onOpenExercise={onOpenExercise} />
+              {session.safety?.length > 0 && (
+                <ul className="space-y-0.5 text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }} aria-label="Safety">
+                  {session.safety.map((l) => <li key={l}>{l}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>

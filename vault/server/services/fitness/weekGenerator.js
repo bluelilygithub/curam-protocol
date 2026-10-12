@@ -20,7 +20,9 @@ function prescriptionFor(exercise, session, ctx) {
   }
   let level = Sel.levelFor(exercise.pattern, ctx.ratings);
   if (ctx.easier) level = LEVEL_DOWN[level];
-  return exercise.dosage[level];
+  const base = exercise.dosage[level];
+  // Balance work is always done beside something to hold on to.
+  return exercise.pattern === 'balance' ? `${base}. Stand beside a wall or bench for support.` : base;
 }
 
 function validatePicks(obj) {
@@ -97,7 +99,10 @@ async function generateWeekPlan({ userId, weekStart, info, person, history, gene
     const entry = { session, kind, kindIndex, slots: [] };
     for (const slot of slots) {
       nth[slot.pattern] = (nth[slot.pattern] ?? 0) + (slot.block === 'main' ? 1 : 0);
-      const ctx = { equipment: person.equipment, ratings: person.ratings, easier, lastUse, usedThisWeek, usedInSession, rng, cardioLimit };
+      const ctx = {
+        equipment: person.equipment, ratings: person.ratings, easier, lastUse, usedThisWeek, usedInSession, rng, cardioLimit,
+        hidden: person.hidden, exposure: person.exposure, waivers: { 'running-history': !!person.runningHistory },
+      };
       let candidates = Sel.rankedCandidates(slot, ctx);
       const pool = candidates; // everything eligible, kept for the no-repeat check
       let forced = false;
@@ -223,7 +228,10 @@ async function generateWeekPlan({ userId, weekStart, info, person, history, gene
   const missingPatterns = [...new Set(planned.flatMap((p) => p.slots.filter((s) => s.block === 'main' && !s.pick).map((s) => s.pattern)))];
   const notes = [];
   if (shortfall > 0) notes.push(`This week's aerobic target is about ${shortfall} minutes more than fits in your sessions, so it is a little lower. That is fine.`);
-  if (missingPatterns.length) notes.push(`There is no ${missingPatterns.join(' / ')} exercise for the equipment you listed, so those slots were left out.`);
+  if (missingPatterns.length) {
+    const bands = missingPatterns.includes('pull') && !(person.equipment || []).includes('bands') && !(person.equipment || []).includes('gym');
+    notes.push(`There is no ${missingPatterns.join(' / ')} exercise for the equipment you listed, so those slots were left out.${bands ? ' A resistance band is inexpensive and adds a rowing exercise: tick Resistance bands in your Profile.' : ''}`);
+  }
 
   return {
     sessions: out,

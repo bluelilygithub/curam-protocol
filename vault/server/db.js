@@ -1070,6 +1070,15 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_fitness_pex_session ON fitness_planned_exercises ("sessionId", position)`);
+    // "Not for me": exercises a person has hidden; the week generator never picks them.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fitness_hidden_exercises (
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        slug        TEXT NOT NULL,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY ("userId", slug)
+      )
+    `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS fitness_ratings (
         id               SERIAL PRIMARY KEY,

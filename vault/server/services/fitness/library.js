@@ -11,7 +11,7 @@ const SEED = require('../../seeds/fitnessExercises.v1.json');
 const PATTERNS = ['squat', 'hinge', 'lunge', 'push', 'pull', 'core', 'carry', 'cardio', 'balance', 'mobility'];
 const DOMAIN_IDS = ['cardio', 'strength', 'flexibility', 'balance'];
 const SETTINGS = ['gym', 'pool', 'outdoor', 'home'];
-const EQUIPMENT_IDS = ['gym', 'pool', 'treadmill', 'bike', 'dumbbells', 'trails', 'bodyweight_home'];
+const EQUIPMENT_IDS = ['gym', 'pool', 'treadmill', 'bike', 'dumbbells', 'bands', 'trails', 'bodyweight_home'];
 const LEVELS = ['beginner', 'intermediate', 'advanced'];
 // Patterns that must have a progression chain (an easier and a harder end).
 const CHAINED = ['squat', 'hinge', 'lunge', 'push', 'pull', 'core', 'cardio', 'balance'];
@@ -26,7 +26,7 @@ function loadSeed() {
 function getLibrary() {
   if (!cache) {
     const list = SEED.exercises;
-    cache = { version: SEED.version, list, bySlug: new Map(list.map((e) => [e.slug, e])) };
+    cache = { version: SEED.version, list, bySlug: new Map(list.map((e) => [e.slug, e])), effortScale: SEED.effortScale };
   }
   return cache;
 }
@@ -61,6 +61,21 @@ function validateLibrary(data = SEED) {
       if (e[k] != null && !(typeof e[k] === 'string' && e[k].startsWith('https://') && e.linksReviewedBy)) at(`${k} needs https and linksReviewedBy`);
     }
     for (const r of e.roles || []) if (!['main', 'warmup', 'cooldown'].includes(r)) at(`bad role ${r}`);
+    if (!e.effort) at('missing effort guidance (talk test and 1-10 scale)');
+    if (e.setup && (!Array.isArray(e.setup) || e.setup.length < 3 || e.setup.length > 4)) at('setup needs 3-4 cues');
+    if (e.gate) {
+      if (!Array.isArray(e.gate.after) || !e.gate.after.length || !Number.isInteger(e.gate.weeks)) at('bad gate');
+      for (const group of e.gate.after || []) for (const g of group) if (!slugs.has(g)) at(`gate refers to unknown exercise ${g}`);
+    }
+  }
+  if (!Array.isArray(data.effortScale) || data.effortScale.length < 5) errors.push('effortScale (1-10 with talk test) is missing');
+  for (const need of ['leg-press', 'assisted-pull-up']) {
+    const e = list.find((x) => x.slug === need);
+    if (!e || !e.setup) errors.push(`${need} needs 3-4 set-up cues`);
+  }
+  for (const need of ['goblet-squat', 'dumbbell-romanian-deadlift', 'supported-dumbbell-row', 'bent-over-dumbbell-row', 'farmers-carry']) {
+    const e = list.find((x) => x.slug === need);
+    if (!e || !e.loadGuide) errors.push(`${need} needs a starting-load suggestion`);
   }
   for (const p of PATTERNS) if (!list.some((e) => e.pattern === p)) errors.push(`no exercise for pattern ${p}`);
   for (const p of CHAINED) {
@@ -79,6 +94,20 @@ function isAvailable(exercise, equipment) {
   if (!exercise.requires.length) return true;
   const have = new Set(equipment || []);
   return exercise.requires.some((r) => have.has(r));
+}
+
+/**
+ * Some exercises open up only after others have been in the program for a while ("exposure" = number of earlier weeks
+ * an exercise appeared in the main work). `gate.after` is a list of groups; every group needs at least one member with
+ * enough weeks. A `waivedBy` reason (for example a running history) skips the wait; the weekly-minutes rule still applies.
+ * Stage 3 adds "rated comfortable" from logged effort.
+ */
+function gateOpen(exercise, exposure, waivers = {}) {
+  const g = exercise.gate;
+  if (!g) return true;
+  if (g.waivedBy && waivers[g.waivedBy]) return true;
+  const seen = exposure || new Map();
+  return g.after.every((group) => group.some((slug) => (seen.get(slug) || 0) >= g.weeks));
 }
 
 /** Highest exercise level allowed for a rating-derived level name, one lower when easing or in a deload week. */
@@ -111,5 +140,5 @@ async function seedLibrary(pool) {
 
 module.exports = {
   PATTERNS, LEVELS, CHAINED, SETTINGS,
-  loadSeed, getLibrary, validateLibrary, isAvailable, levelCap, levelName, seedLibrary,
+  loadSeed, getLibrary, validateLibrary, isAvailable, gateOpen, levelCap, levelName, seedLibrary,
 };

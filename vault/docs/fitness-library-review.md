@@ -1,6 +1,6 @@
 # Fitness exercise library: review sheet (v1)
 
-45 exercises. Generated from `server/seeds/fitnessExercises.v1.json` (the file the app reads), so this sheet always matches what users see.
+47 exercises. Generated from `server/seeds/fitnessExercises.v1.json` (the file the app reads), so this sheet always matches what users see.
 Nothing here is final until it has been read by someone who has trained seriously. Please mark each exercise **Approve** or **Change** and write what to change.
 
 ## What to look for
@@ -17,10 +17,10 @@ Nothing here is final until it has been read by someone who has trained seriousl
 | Movement | Count | Exercises (easiest to hardest where there is a chain) |
 |---|---|---|
 | squat | 4 | Sit-to-stand, Bodyweight squat, Goblet squat, Leg press (machine) |
-| hinge | 3 | Glute bridge, Dumbbell Romanian deadlift, Single-leg Romanian deadlift |
+| hinge | 4 | Glute bridge, Dumbbell Romanian deadlift, Supported single-leg Romanian deadlift (kickstand), Single-leg Romanian deadlift |
 | lunge | 4 | Split squat, Reverse lunge, Lateral lunge, Walking lunge |
 | push | 4 | Wall push-up, Incline push-up, Push-up, Slow-tempo push-up |
-| pull | 4 | Supported dumbbell row, Bent-over dumbbell row, Lat pulldown (machine), Assisted pull-up (machine) |
+| pull | 5 | Supported dumbbell row, Resistance band row, Bent-over dumbbell row, Lat pulldown (machine), Assisted pull-up (machine) |
 | core | 4 | Dead bug, Bird dog, Forearm plank, Side plank |
 | carry | 1 | Farmer's carry |
 | cardio | 10 | Brisk walk, Easy ride, Aqua jog, Trail walk, Treadmill incline walk, Run/walk intervals, Pool lengths, Rowing machine, Easy jog, Interval ride |
@@ -33,14 +33,23 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 ## Judgement calls I would like you to check first
 
-1. **Jogging.** *Easy jog* is level 3 and *Run/walk intervals* level 2. People with fewer than 90 minutes of cardio in the week are never offered level 3+ cardio, whatever they rate themselves. Is that cautious enough, or too cautious?
-2. **Heavier loads.** Dumbbell exercises say "light", "heavier" and so on but never give kilograms. Is that right for a general audience, or should there be a guide?
-3. **Single-leg Romanian deadlift** is level 3 and also counts as balance work. Offered to intermediate-rated people. Too early?
-4. **Leg press and assisted pull-up** tell people to ask gym staff to set up the first time. Enough?
-5. **No pulling exercise without dumbbells or a gym.** People who list only bodyweight get no row or pull-down; the week says so and leaves the slot out. Is there a safe bodyweight pull I should add (for example a towel row)?
-6. **Warm-up and cool-down** are about 5 minutes each, two exercises each, drawn from mobility and balance. Are the choices sensible as warm-ups (for example *Tandem stand* and *Single-leg stand* as balance warm-ups)?
-7. **Aerobic intensity** is described with the talk test only. Fine, or should there also be a 1-10 effort scale?
-8. **Anything dangerous or missing** that you would not want an older or deconditioned person doing from this wording.
+First round of answers, now in the data (please confirm they read right):
+
+1. **Jogging.** Continuous *Easy jog* only opens after two weeks of *Run/walk intervals* in the program (Stage 3 will also require them to be rated comfortable), unless someone rated their earlier cardio fitness 4 or more. The rule that under 90 aerobic minutes a week keeps cardio gentle still applies to everyone.
+2. **Loads.** Loaded exercises say: start light, roughly 4-8 kg in each hand, and pick a weight where the last two reps feel hard but form holds. Machines say the same without kilograms.
+3. **Single-leg Romanian deadlift** now needs the dumbbell RDL (or the new *Supported single-leg RDL*) and a steady *Single-leg stand*, each in the program for two weeks. *Supported single-leg RDL (kickstand)* is the step between and needs a steady single-leg stand.
+4. **Leg press and assisted pull-up** have 4 set-up cues each (also lat pulldown, rowing machine and treadmill). "Ask gym staff" stays as an extra.
+5. **Bodyweight pull.** Added *Resistance band row*. It needs a band (Profile has a new "Resistance bands" equipment option); the week tells people who have no pull exercise that a band is inexpensive.
+6. **Balance warm-ups** say to stand beside a wall or bench, in the exercise and in every session.
+7. **Intensity.** Every exercise shows the 1-10 effort and the talk test, with a scale on each library page. Stage 3 logging will use the same 1-10.
+8. **Safety.** Every session shows the stop rule (chest pain, dizziness, unusual breathlessness). Strength sessions add "breathe out on the effort, do not hold your breath"; floor work adds "get up slowly"; outdoor sessions add water and heat advice (Brisbane-specific in Brisbane); pool exercises add "never swim alone in open water". Library pages have "Not for me, hide this exercise".
+
+Still open for your eye:
+
+- Is the 2-week gate long enough for running, and for the single-leg hinge?
+- Should anything else be gated (for example slow-tempo push-ups, side plank, interval ride)?
+- Are the set-up cues for the machines complete and correct?
+- Anything dangerous or missing that you would not want an older or deconditioned person doing from this wording.
 
 ## Squat (4)
 
@@ -62,6 +71,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 - Pushing off with your hands. *Fix:* Cross your arms, or use a higher seat until you can stand without help.
 
 **Why form matters.** This is the movement you use to get out of any chair. Leaning forward and keeping your knees tracking over your toes loads your thighs and glutes instead of your knees and lower back.
+
+**How hard.** 6-8 out of 10. The last two reps feel hard, but your form holds.
 
 **Dosage.** Beginner: 2 sets of 6-8 reps. Intermediate: 3 sets of 8-10 reps. Advanced: 3 sets of 10-12 slow reps.
 
@@ -88,6 +99,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** Controlled depth with a neutral spine builds your thighs and glutes. Dropping fast or rounding your back moves the load onto your knees and spine.
 
+**How hard.** 6-8 out of 10. The last two reps feel hard, but your form holds.
+
 **Dosage.** Beginner: 2 sets of 8-10 reps. Intermediate: 3 sets of 10-12 reps. Advanced: 3 sets of 12-15 slow reps.
 
 **Easier:** Sit-to-stand. **Harder:** Goblet squat, Leg press (machine).
@@ -112,6 +125,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 - You fold forward at the bottom. *Fix:* Use a lighter weight or lower less deeply until you can stay tall.
 
 **Why form matters.** Holding the weight in front helps you stay upright, which keeps the load on your legs. Folding forward turns it into a lower-back exercise.
+
+**How hard.** 6-8 out of 10. The last two reps feel hard, but your form holds. Start light, roughly 4-8 kg in each hand for most adults. Pick a weight where the last two reps feel hard but your form holds.
 
 **Dosage.** Beginner: 2 sets of 8-10 reps, light weight. Intermediate: 3 sets of 8-12 reps. Advanced: 3 sets of 10-12 reps, heavier weight.
 
@@ -138,6 +153,15 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** A machine supports your back, but the knees still take load. A controlled range with unlocked knees protects the joints while you build strength.
 
+**How hard.** 6-8 out of 10. The last two reps feel hard, but your form holds. Start with a light weight. Pick one where the last two reps feel hard but your form holds.
+
+**Set-up cues**
+
+- Seat: adjust it so your knees bend to about 90 degrees at the bottom and no further. Do not let them fold past that.
+- Feet: flat on the platform, shoulder-width apart, in the middle of the plate.
+- Knees: press until almost straight and never lock them.
+- Safety: set the safety stops before you load the weight, and know where the release handle is.
+
 **Dosage.** Beginner: 2 sets of 10-12 reps, light. Intermediate: 3 sets of 8-12 reps. Advanced: 3 sets of 8-10 reps, heavier.
 
 **Safety note shown to the user.** Start light and ask a gym staff member to set up the machine the first time.
@@ -146,7 +170,7 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 - [ ] Approve   - [ ] Change: ______________________________________________
 
-## Hinge (3)
+## Hinge (4)
 
 ### Glute bridge
 
@@ -166,6 +190,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 - Hamstrings cramp. *Fix:* Move your feet closer to your hips and push through your heels, not your toes.
 
 **Why form matters.** The glutes are your main hip extensors, and this teaches the hip hinge in a safe position. Arching your back lets the lower back do the work instead.
+
+**How hard.** 6-8 out of 10. The last two reps feel hard, but your form holds.
 
 **Dosage.** Beginner: 2 sets of 8-10 reps. Intermediate: 3 sets of 10-12 reps. Advanced: 3 sets of 12-15 reps with a 2 second hold.
 
@@ -192,9 +218,42 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** The hinge strengthens the whole back of your body and protects your spine when you lift things in daily life. A rounded back puts that load on your discs instead.
 
+**How hard.** 6-8 out of 10. The last two reps feel hard, but your form holds. Start light, roughly 4-8 kg in each hand for most adults. Pick a weight where the last two reps feel hard but your form holds.
+
 **Dosage.** Beginner: 2 sets of 8-10 reps, light weights. Intermediate: 3 sets of 8-12 reps. Advanced: 3 sets of 8-10 reps, heavier weights.
 
-**Easier:** Glute bridge. **Harder:** Single-leg Romanian deadlift.
+**Easier:** Glute bridge. **Harder:** Supported single-leg Romanian deadlift (kickstand).
+
+- [ ] Approve   - [ ] Change: ______________________________________________
+
+### Supported single-leg Romanian deadlift (kickstand)
+
+`supported-single-leg-rdl` · level 2 (moderate) · strength + balance · Wall or sturdy chair · where: home, gym · needs: nothing · roles: main
+
+**Steps**
+
+1. Stand an arm's length from a wall or beside a sturdy chair and rest one hand on it for support.
+2. Take most of your weight on one leg and let the other foot rest lightly behind you on its toes, like a kickstand.
+3. Hinge forward from the hip, pushing your hips back and keeping your back flat; the kickstand foot slides back as you go.
+4. Lower until you feel a stretch behind the standing leg, usually with your body roughly halfway to parallel.
+5. Drive your hip forward to stand tall. Finish all reps on one side, then swap.
+
+**Common mistakes**
+
+- Leaning heavily on the wall or chair. *Fix:* Use only fingertips. If you need more, step closer to the support and shorten the range.
+- Rounding your back. *Fix:* Keep your chest long and hinge less far.
+
+**Why form matters.** This is the step between the two-legged hinge and the full single-leg version. The kickstand foot gives just enough help for you to learn the pattern without falling out of it.
+
+**How hard.** 6-8 out of 10. The last two reps feel hard, but your form holds.
+
+**Unlocks after** Single-leg stand have been in the program for 2 weeks.
+
+**Dosage.** Beginner: 2 sets of 5-6 reps each side, using support. Intermediate: 3 sets of 6-8 reps each side. Advanced: 3 sets of 8-10 reps each side.
+
+**Safety note shown to the user.** Keep the wall or chair within reach.
+
+**Easier:** Dumbbell Romanian deadlift. **Harder:** Single-leg Romanian deadlift.
 
 - [ ] Approve   - [ ] Change: ______________________________________________
 
@@ -217,11 +276,15 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** It trains the glutes and hamstrings and also challenges balance, which matters for staying steady as you get older. Twisting or locking the knee puts stress on the joint.
 
+**How hard.** 6-8 out of 10. The last two reps feel hard, but your form holds.
+
+**Unlocks after** Dumbbell Romanian deadlift or Supported single-leg Romanian deadlift (kickstand) and Single-leg stand have been in the program for 2 weeks.
+
 **Dosage.** Beginner: 2 sets of 5-6 reps each side, hand on support. Intermediate: 3 sets of 6-8 reps each side. Advanced: 3 sets of 8-10 reps each side, light dumbbell.
 
 **Safety note shown to the user.** Keep a wall or chair within reach.
 
-**Easier:** Dumbbell Romanian deadlift. **Harder:** none.
+**Easier:** Supported single-leg Romanian deadlift (kickstand). **Harder:** none.
 
 - [ ] Approve   - [ ] Change: ______________________________________________
 
@@ -245,6 +308,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 - Front heel lifts. *Fix:* Shift weight to mid-foot and lengthen the step.
 
 **Why form matters.** A stable, long stance shares the load between hip and knee. A short stance loads the front knee and makes you wobble.
+
+**How hard.** 6-8 out of 10. The last two reps feel hard, but your form holds.
 
 **Dosage.** Beginner: 2 sets of 6-8 reps each side, using support. Intermediate: 3 sets of 8-10 reps each side. Advanced: 3 sets of 10-12 reps each side.
 
@@ -271,6 +336,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** Side-to-side strength in the hips and inner thighs is often neglected, and it protects you when you step sideways or catch your balance.
 
+**How hard.** 6-8 out of 10. The last two reps feel hard, but your form holds.
+
 **Dosage.** Beginner: 2 sets of 5-6 reps each side. Intermediate: 3 sets of 6-8 reps each side. Advanced: 3 sets of 8-10 reps each side.
 
 **Easier:** Split squat. **Harder:** none.
@@ -296,6 +363,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** Stepping back keeps your weight over the front leg, which is gentler on the knee than stepping forward. Narrow feet make it a balance test instead of a strength exercise.
 
+**How hard.** 6-8 out of 10. The last two reps feel hard, but your form holds.
+
 **Dosage.** Beginner: 2 sets of 6-8 reps each side. Intermediate: 3 sets of 8-10 reps each side. Advanced: 3 sets of 10-12 reps each side, holding dumbbells.
 
 **Easier:** Split squat. **Harder:** Walking lunge.
@@ -320,6 +389,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 - Rushing so you lose control. *Fix:* Slow down and pause briefly at the bottom of each step.
 
 **Why form matters.** The extra steps add a coordination and balance challenge. Rushing sends the body forward over the front knee and wastes the strength benefit.
+
+**How hard.** 6-8 out of 10. The last two reps feel hard, but your form holds.
 
 **Dosage.** Beginner: 2 rounds of 6 steps each leg. Intermediate: 3 rounds of 8 steps each leg. Advanced: 3 rounds of 10 steps each leg, holding dumbbells.
 
@@ -348,6 +419,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** The right elbow angle loads the chest and arms while keeping the shoulder joint safe. Flared elbows pinch the shoulder.
 
+**How hard.** 6-8 out of 10. The last two reps feel hard, but your form holds.
+
 **Dosage.** Beginner: 2 sets of 8-10 reps. Intermediate: 3 sets of 10-12 reps. Advanced: 3 sets of 12-15 reps.
 
 **Easier:** none. **Harder:** Incline push-up.
@@ -372,6 +445,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 - Head drops forward. *Fix:* Keep your neck in line with your spine and look at the floor a little ahead of your hands.
 
 **Why form matters.** A raised surface lets you practise the full push-up pattern at a load you can control. Sagging hips turn it into a back exercise.
+
+**How hard.** 6-8 out of 10. The last two reps feel hard, but your form holds.
 
 **Dosage.** Beginner: 2 sets of 6-8 reps. Intermediate: 3 sets of 8-12 reps. Advanced: 3 sets of 12-15 reps.
 
@@ -398,6 +473,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** A full push-up trains the chest, shoulders, arms and trunk together. Sagging hips or half reps cut the benefit and strain the lower back.
 
+**How hard.** 6-8 out of 10. The last two reps feel hard, but your form holds.
+
 **Dosage.** Beginner: 2 sets of 4-6 reps (knees down if needed). Intermediate: 3 sets of 6-10 reps. Advanced: 3 sets of 10-15 reps.
 
 **Easier:** Incline push-up. **Harder:** Slow-tempo push-up.
@@ -423,13 +500,44 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** Slowing the lowering phase makes the muscles work longer for the same number of reps, building strength without needing weights.
 
+**How hard.** 6-8 out of 10. The last two reps feel hard, but your form holds.
+
 **Dosage.** Beginner: 2 sets of 3-5 reps. Intermediate: 3 sets of 5-8 reps. Advanced: 3 sets of 8-10 reps.
 
 **Easier:** Push-up. **Harder:** none.
 
 - [ ] Approve   - [ ] Change: ______________________________________________
 
-## Pull (4)
+## Pull (5)
+
+### Resistance band row
+
+`resistance-band-row` · level 1 (gentle) · strength · Resistance band (inexpensive) · where: home, gym, outdoor · needs: any of bands / gym · roles: main
+
+**Steps**
+
+1. Loop a resistance band around a sturdy post or door anchor at chest height, and check it cannot slip.
+2. Hold an end in each hand, step back until the band has gentle tension, and stand tall with soft knees.
+3. Pull your hands toward your ribs, squeezing your shoulder blades together.
+4. Pause for a second, then let the band return slowly under control.
+5. Keep your shoulders down and your wrists straight.
+
+**Common mistakes**
+
+- Shrugging toward your ears. *Fix:* Keep your shoulders down and away from your ears.
+- Letting the band snap back. *Fix:* Take about three seconds to return.
+
+**Why form matters.** Pulling balances all the pushing you do and keeps your posture strong. A controlled return keeps the muscles working and the band safe.
+
+**How hard.** 6-8 out of 10. The last two reps feel hard, but your form holds.
+
+**Dosage.** Beginner: 2 sets of 8-10 reps, light band. Intermediate: 3 sets of 10-12 reps. Advanced: 3 sets of 12-15 reps, stronger band.
+
+**Safety note shown to the user.** Check the band for nicks or tears before each use, and make sure the anchor is secure.
+
+**Easier:** none. **Harder:** Supported dumbbell row.
+
+- [ ] Approve   - [ ] Change: ______________________________________________
 
 ### Supported dumbbell row
 
@@ -450,9 +558,11 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** Rows strengthen the muscles between your shoulder blades that hold your posture and balance all the pushing you do. Twisting moves the work away from them.
 
+**How hard.** 6-8 out of 10. The last two reps feel hard, but your form holds. Start light, roughly 4-8 kg in each hand for most adults. Pick a weight where the last two reps feel hard but your form holds.
+
 **Dosage.** Beginner: 2 sets of 8-10 reps each side, light. Intermediate: 3 sets of 8-12 reps each side. Advanced: 3 sets of 10-12 reps each side, heavier.
 
-**Easier:** none. **Harder:** Bent-over dumbbell row, Lat pulldown (machine).
+**Easier:** Resistance band row. **Harder:** Bent-over dumbbell row, Lat pulldown (machine).
 
 - [ ] Approve   - [ ] Change: ______________________________________________
 
@@ -474,6 +584,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 - Jerking the weights up. *Fix:* Slow down. Lift for one second, lower for two.
 
 **Why form matters.** A held hinge position builds back endurance at the same time. A rounded or swinging back puts strain on the spine.
+
+**How hard.** 6-8 out of 10. The last two reps feel hard, but your form holds. Start light, roughly 4-8 kg in each hand for most adults. Pick a weight where the last two reps feel hard but your form holds.
 
 **Dosage.** Beginner: 2 sets of 8-10 reps, light. Intermediate: 3 sets of 8-12 reps. Advanced: 3 sets of 10-12 reps, heavier.
 
@@ -500,6 +612,15 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** It builds the large back muscles you need for pulling and for the pull-up later. Pulling behind your neck stresses the shoulders and neck.
 
+**How hard.** 6-8 out of 10. The last two reps feel hard, but your form holds. Start with a light weight. Pick one where the last two reps feel hard but your form holds.
+
+**Set-up cues**
+
+- Pad: adjust it so your thighs are held snug without squeezing.
+- Grip: overhand, slightly wider than your shoulders.
+- Start: sit down holding the bar so the weight stack does not jerk, then lean back very slightly with your chest lifted.
+- Return: let the bar rise slowly until your arms are straight.
+
 **Dosage.** Beginner: 2 sets of 8-10 reps, light. Intermediate: 3 sets of 8-12 reps. Advanced: 3 sets of 8-10 reps, heavier.
 
 **Easier:** Supported dumbbell row. **Harder:** Assisted pull-up (machine).
@@ -524,6 +645,15 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 - Half reps. *Fix:* Go from fully straight arms to chin over the bar, or as far as you can control.
 
 **Why form matters.** A full pull-up is one of the best upper-body strength tests. The machine lets you build up to it while keeping shoulders and elbows safe.
+
+**How hard.** 6-8 out of 10. The last two reps feel hard, but your form holds.
+
+**Set-up cues**
+
+- Counterweight: more assistance makes it easier. Start with enough that you can do 5 or 6 smooth reps.
+- Grip: slightly wider than your shoulders, starting with arms long and shoulders down.
+- Lowering: take about three seconds to come down and control it all the way.
+- Knee pad or step: place it carefully, and step off with both feet before you let go.
 
 **Dosage.** Beginner: 2 sets of 3-5 reps, high assistance. Intermediate: 3 sets of 5-8 reps. Advanced: 3 sets of 6-10 reps, low assistance.
 
@@ -554,6 +684,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** It teaches your deep tummy muscles to stabilise your spine while your limbs move, which is how they work in daily life. Arching removes that benefit.
 
+**How hard.** 5-7 out of 10. Stop the set when your form slips.
+
 **Dosage.** Beginner: 2 sets of 5-6 reps each side. Intermediate: 3 sets of 6-8 reps each side. Advanced: 3 sets of 8-10 reps each side.
 
 **Easier:** none. **Harder:** Bird dog.
@@ -578,6 +710,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 - Hips twisting open. *Fix:* Imagine a glass of water sitting on your lower back.
 
 **Why form matters.** It trains the back muscles and the deep tummy muscles to hold your spine steady while a limb moves.
+
+**How hard.** 5-7 out of 10. Stop the set when your form slips.
 
 **Dosage.** Beginner: 2 sets of 5-6 reps each side. Intermediate: 3 sets of 6-8 reps each side. Advanced: 3 sets of 8-10 reps each side with a 3 second hold.
 
@@ -604,6 +738,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** A good plank trains the whole trunk to resist sagging. A sagging plank loads the lower back instead.
 
+**How hard.** 5-7 out of 10. Stop the set when your form slips.
+
 **Dosage.** Beginner: 3 holds of 10-15 seconds (knees down if needed). Intermediate: 3 holds of 20-30 seconds. Advanced: 3 holds of 30-45 seconds.
 
 **Easier:** Bird dog. **Harder:** Side plank.
@@ -628,6 +764,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 - Rolling forwards or backwards. *Fix:* Keep your chest and hips facing the side wall.
 
 **Why form matters.** The side muscles of your trunk keep your spine and pelvis steady when you walk. A dropping hip shifts the load onto the shoulder.
+
+**How hard.** 5-7 out of 10. Stop the set when your form slips.
 
 **Dosage.** Beginner: 2 holds of 10-15 seconds each side, knees bent. Intermediate: 3 holds of 15-25 seconds each side. Advanced: 3 holds of 25-40 seconds each side, legs straight.
 
@@ -656,6 +794,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** Carrying trains grip, trunk and posture the way you use them when you carry shopping. Leaning or shrugging shifts stress to the neck and spine.
 
+**How hard.** 6-8 out of 10. The last two reps feel hard, but your form holds. Start light, roughly 4-8 kg in each hand for most adults. Pick a weight where the last two reps feel hard but your form holds.
+
 **Dosage.** Beginner: 2 walks of 15 steps, light. Intermediate: 3 walks of 20 steps. Advanced: 3 walks of 20-30 steps, heavier.
 
 **Easier:** none. **Harder:** none.
@@ -682,7 +822,11 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** The water supports your weight, so there is no impact. A tall posture lets the legs and trunk do the work.
 
+**How hard.** 3-5 out of 10. Talk test: full sentences.
+
 **Dosage.** Beginner: 10-20 minutes. Intermediate: 20-30 minutes. Advanced: 30-45 minutes.
+
+**Safety note shown to the user.** Swim where others are around or a lifeguard is on duty. Never swim alone in open water.
 
 **Easier:** none. **Harder:** Pool lengths.
 
@@ -705,6 +849,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 - Slouching and looking at the ground. *Fix:* Look ahead and keep your chest open.
 
 **Why form matters.** Walking is the base of your aerobic fitness and is gentle on joints. Good posture and a short stride keep it comfortable for long sessions.
+
+**How hard.** 4-5 out of 10. Talk test: breathing is up but you can speak in short sentences.
 
 **Dosage.** Beginner: 15-25 minutes at a pace where you can chat. Intermediate: 25-45 minutes at a brisk pace. Advanced: 40-60 minutes at a brisk pace, including hills.
 
@@ -729,6 +875,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 - Pushing a heavy gear slowly. *Fix:* Use an easier gear and spin faster.
 
 **Why form matters.** Cycling is low impact for your joints. A correct seat height and light gear keep stress off your knees.
+
+**How hard.** 3-5 out of 10. Talk test: full sentences.
 
 **Dosage.** Beginner: 15-25 minutes, easy spin. Intermediate: 25-45 minutes steady. Advanced: 40-70 minutes steady.
 
@@ -756,7 +904,11 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** Swimming is gentle on joints and works the whole body. Steady breathing makes it feel easy rather than exhausting.
 
+**How hard.** 4-5 out of 10. Talk test at the wall: short sentences.
+
 **Dosage.** Beginner: 10-20 minutes with rests. Intermediate: 20-35 minutes steady. Advanced: 30-50 minutes steady.
+
+**Safety note shown to the user.** Swim where others are around or a lifeguard is on duty. Never swim alone in open water.
 
 **Easier:** Aqua jog. **Harder:** none.
 
@@ -779,6 +931,15 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 - Rounding your back at the front of the stroke. *Fix:* Sit tall and hinge from the hips.
 
 **Why form matters.** Rowing uses the legs, back and arms together, so it builds cardio and strength. Poor sequencing loads the lower back.
+
+**How hard.** 4-6 out of 10. Talk test: short sentences.
+
+**Set-up cues**
+
+- Foot straps: snug across the middle of your feet.
+- Damper: start around 3 to 5, not high.
+- Handle: grip loosely with flat wrists.
+- Rate: aim for 18 to 24 strokes a minute.
 
 **Dosage.** Beginner: 8-15 minutes, easy pace. Intermediate: 15-25 minutes steady. Advanced: 20-35 minutes steady.
 
@@ -807,6 +968,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** Short bursts of jogging build running fitness with less impact on your joints than continuous running.
 
+**How hard.** Jog minutes 5-6 out of 10 (short sentences); walk minutes 3-4 out of 10 (full sentences).
+
 **Dosage.** Beginner: 15-20 minutes: 1 min jog, 2 min walk. Intermediate: 20-30 minutes: 2 min jog, 1-2 min walk. Advanced: 30-40 minutes: 3-4 min jog, 1 min walk.
 
 **Safety note shown to the user.** Choose softer surfaces such as grass or tracks where you can.
@@ -832,6 +995,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 - Going too hard on climbs. *Fix:* Slow your pace; keep your breathing at a chatty level.
 
 **Why form matters.** Uneven ground adds balance and stabiliser work to your aerobic exercise. Rushing it raises your risk of trips and rolled ankles.
+
+**How hard.** 4-6 out of 10. Talk test: short sentences. Slow down on climbs rather than push.
 
 **Dosage.** Beginner: 20-30 minutes, easy trail. Intermediate: 30-50 minutes with gentle hills. Advanced: 45-75 minutes with hills.
 
@@ -859,6 +1024,14 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** Walking uphill raises your heart rate without the impact of running. Hanging on to the rails takes the work out of it.
 
+**How hard.** 4-6 out of 10. Talk test: short sentences without holding the rails.
+
+**Set-up cues**
+
+- Clip the safety key to your clothing.
+- Start the belt slowly before you step on.
+- Raise the incline gradually, and lower it before you stop.
+
 **Dosage.** Beginner: 15-20 minutes, 2% incline. Intermediate: 20-35 minutes, 3-5% incline. Advanced: 30-45 minutes, 4-8% incline.
 
 **Easier:** Brisk walk. **Harder:** none.
@@ -882,6 +1055,10 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 - Running faster than you can talk. *Fix:* Slow down; easy running builds the base.
 
 **Why form matters.** Easy running builds heart and lung fitness. Overstriding and going too fast raise the impact on your knees, shins and hips.
+
+**How hard.** 4-6 out of 10. Talk test: you can still speak in short sentences. If you cannot, slow down.
+
+**Unlocks after** Run/walk intervals have been in the program for 2 weeks (skipped with an earlier running history).
 
 **Dosage.** Beginner: 10-20 minutes, with walk breaks. Intermediate: 20-35 minutes steady. Advanced: 30-50 minutes steady.
 
@@ -909,6 +1086,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** Alternating effort lifts your fitness quicker than steady riding. Going too hard makes you drop the later intervals.
 
+**How hard.** Hard minutes about 7 out of 10 (a few words at a time); easy minutes about 3 out of 10 (full sentences).
+
 **Dosage.** Beginner: 15-20 minutes: 30 sec hard, 90 sec easy. Intermediate: 20-30 minutes: 1 min hard, 2 min easy. Advanced: 25-40 minutes: 2 min hard, 2 min easy.
 
 **Easier:** Easy ride. **Harder:** none.
@@ -934,6 +1113,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 - Locking your knees. *Fix:* Keep a slight bend.
 
 **Why form matters.** Narrowing your base of support is the simplest balance challenge, and balance is one of the first things to fade without practice.
+
+**How hard.** 2-4 out of 10. It is about steadiness, not effort. Stand beside a wall or bench for support.
 
 **Dosage.** Beginner: 2 holds of 15-20 seconds each side. Intermediate: 3 holds of 20-30 seconds each side. Advanced: 3 holds of 30-45 seconds each side.
 
@@ -961,6 +1142,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** Walking on a narrow line trains the small corrections your ankles and hips make on uneven ground.
 
+**How hard.** 2-4 out of 10. It is about steadiness, not effort. Stand beside a wall or bench for support.
+
 **Dosage.** Beginner: 3 lengths of 8-10 steps. Intermediate: 4 lengths of 10 steps. Advanced: 4 lengths of 10 steps, eyes ahead without touching the wall.
 
 **Safety note shown to the user.** Walk beside a wall you can touch.
@@ -986,6 +1169,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 - Holding your breath. *Fix:* Breathe steadily and relax your shoulders.
 
 **Why form matters.** Standing on one leg is what walking is, repeatedly. Being able to hold it is closely linked to staying steady and avoiding falls.
+
+**How hard.** 2-4 out of 10. It is about steadiness, not effort. Stand beside a wall or bench for support.
 
 **Dosage.** Beginner: 2 holds of 15-20 seconds each side. Intermediate: 3 holds of 20-30 seconds each side. Advanced: 3 holds of 30-45 seconds each side.
 
@@ -1014,6 +1199,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** Reaching away from your base trains the balance responses you need to catch yourself when you step or stumble.
 
+**How hard.** 2-4 out of 10. It is about steadiness, not effort. Stand beside a wall or bench for support.
+
 **Dosage.** Beginner: 2 rounds of 3 taps each direction. Intermediate: 3 rounds of 3 taps. Advanced: 3 rounds of 5 taps each direction.
 
 **Safety note shown to the user.** Stay within arm's reach of a wall or support.
@@ -1039,6 +1226,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 - Locking the standing knee. *Fix:* Keep a soft bend.
 
 **Why form matters.** An unstable surface makes the small muscles of your foot and ankle work harder, which trains steadiness on soft grass, sand and uneven paths.
+
+**How hard.** 2-4 out of 10. It is about steadiness, not effort. Stand beside a wall or bench for support.
 
 **Dosage.** Beginner: 2 holds of 10-15 seconds each side. Intermediate: 3 holds of 15-25 seconds each side. Advanced: 3 holds of 25-40 seconds each side.
 
@@ -1068,6 +1257,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** Ankle mobility lets your knee move forward in squats and steps. Stiff ankles push the strain up to the knees and hips.
 
+**How hard.** 2-3 out of 10. A mild stretch, never pain.
+
 **Dosage.** Beginner: 1 round of 8 reps each side. Intermediate: 2 rounds of 10 reps each side. Advanced: 2 rounds of 12 reps each side.
 
 **Easier:** none. **Harder:** none.
@@ -1091,6 +1282,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 - Holding your breath. *Fix:* Link each breath with one movement.
 
 **Why form matters.** Gentle spinal movement warms the back and reduces stiffness. Forcing the range does the opposite.
+
+**How hard.** 2-3 out of 10. A mild stretch, never pain.
 
 **Dosage.** Beginner: 1 round of 6-8 slow reps. Intermediate: 2 rounds of 8 slow reps. Advanced: 2 rounds of 10 slow reps.
 
@@ -1116,6 +1309,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** Sitting shortens the hip flexors, which tugs on the lower back. A gentle stretch with the pelvis tucked restores length where it counts.
 
+**How hard.** 2-3 out of 10. A mild stretch, never pain.
+
 **Dosage.** Beginner: 2 holds of 20 seconds each side. Intermediate: 2 holds of 30 seconds each side. Advanced: 3 holds of 30 seconds each side.
 
 **Easier:** none. **Harder:** none.
@@ -1139,6 +1334,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 - Lifting your hips off the floor. *Fix:* Keep your hips down and your back relaxed.
 
 **Why form matters.** Flexible hamstrings help you hinge and walk comfortably. A mild, steady stretch works better than a forced one.
+
+**How hard.** 2-3 out of 10. A mild stretch, never pain.
 
 **Dosage.** Beginner: 2 holds of 20 seconds each side. Intermediate: 2 holds of 30 seconds each side. Advanced: 3 holds of 30 seconds each side.
 
@@ -1164,6 +1361,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 
 **Why form matters.** Warm shoulders move better and are less likely to be strained when you push, pull or reach overhead.
 
+**How hard.** 2-3 out of 10. A mild stretch, never pain.
+
 **Dosage.** Beginner: 1 round of 8 each direction. Intermediate: 2 rounds of 10 each direction. Advanced: 2 rounds of 12 each direction.
 
 **Easier:** none. **Harder:** none.
@@ -1187,6 +1386,8 @@ Cool-down exercises: Cat-cow, Half-kneeling hip flexor stretch, Thoracic open bo
 - Rushing. *Fix:* Move slowly and breathe out as you open.
 
 **Why form matters.** A stiff mid-back makes the shoulders and neck work harder. Rotating through it keeps your posture and reach easy.
+
+**How hard.** 2-3 out of 10. A mild stretch, never pain.
 
 **Dosage.** Beginner: 1 round of 6 reps each side. Intermediate: 2 rounds of 8 reps each side. Advanced: 2 rounds of 10 reps each side.
 

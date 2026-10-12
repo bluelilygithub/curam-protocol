@@ -71,6 +71,7 @@ const EQUIPMENT = [
   { id: 'treadmill', label: 'Treadmill' },
   { id: 'bike', label: 'Bike' },
   { id: 'dumbbells', label: 'Dumbbells' },
+  { id: 'bands', label: 'Resistance bands' },
   { id: 'trails', label: 'Trails / outdoors' },
   { id: 'bodyweight_home', label: 'Bodyweight at home' },
 ];
