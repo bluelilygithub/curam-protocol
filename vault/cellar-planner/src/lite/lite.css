@@ -42,7 +42,9 @@ body { background: #f1f1ee; }
 .lite-main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
 .lite-visual { order: 1; } .lite-panel { order: 2; }
 @media (min-width: 900px) {
-  .lite-main { grid-template-columns: 390px minmax(0, 1fr); align-items: stretch; gap: 22px; }
+  /* the picture keeps its own height (it used to stretch to the controls, which on the long Features step left the cellar far below the top) and follows you down the page */
+  .lite-main { grid-template-columns: 390px minmax(0, 1fr); align-items: start; gap: 22px; }
+  .lite-visual { position: sticky; top: 12px; }
   .lite-visual, .lite-panel { order: 0; }
 }
 .lite-panel, .lite-visual { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
@@ -52,7 +54,7 @@ body { background: #f1f1ee; }
 .lite-visual .tabs { border: 0; padding: 0; background: none; flex-wrap: wrap; }
 .lite-walls { padding: 0; border: 0; }
 .lite-canvas { position: relative; height: 330px; display: flex; flex-direction: column; background: #fff; border-radius: 8px; overflow: hidden; }
-@media (min-width: 900px) { .lite-canvas { height: auto; min-height: 560px; flex: 1; } }
+@media (min-width: 900px) { .lite-canvas { height: clamp(460px, calc(100vh - 260px), 680px); } }
 .lite-canvas .drawing { flex: 1; }
 .lite-units { padding: 0; margin: 0; }
 
