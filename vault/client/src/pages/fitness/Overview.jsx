@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card, Notice, SecondaryButton, formatDate } from './ui';
 import BaselineView from './BaselineView';
+import RatingProgress from './RatingProgress';
 
 /** Landing view once onboarding is done. Today/week views join here in the next stage. */
 export default function Overview({ meta, state, goTo }) {
@@ -52,6 +53,8 @@ export default function Overview({ meta, state, goTo }) {
           <SecondaryButton onClick={() => goTo('week')}>See the week</SecondaryButton>
         </div>
       </Card>
+
+      <RatingProgress meta={meta} due={due.due} onRerate={() => goTo('profile', { rerate: true })} />
 
       <BaselineView meta={meta} state={state} compact />
     </div>

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useIcon } from '../../providers/IconProvider';
-import { Card, Notice, SecondaryButton } from './ui';
+import Tooltip from '../../components/Tooltip';
+import { Card, InfoTip, Notice, SecondaryButton } from './ui';
+import { TIPS } from './tips';
 import SessionCard from './SessionCard';
 import useWeek, { DAY_NAMES, DAY_SHORT, SLOTS, dayLabel } from './useWeek';
 
@@ -20,9 +22,12 @@ function Summary({ week, sessions }) {
  * Seven days by three times of day. Sessions are suggestions: drag one to another slot, or use its move button.
  * Rest is a normal part of the week: planned rest days, plus a flexible rest budget that can be spent (or not) without any fuss.
  */
-export default function WeekView({ onOpenExercise }) {
+export default function WeekView({ onOpenExercise, offset: offsetProp, onOffsetChange }) {
   const getIcon = useIcon();
-  const [offset, setOffset] = useState(0);
+  const [localOffset, setLocalOffset] = useState(0);
+  // The page can own the offset so coming back from an exercise page returns to the same week.
+  const offset = offsetProp ?? localOffset;
+  const setOffset = (fn) => { const next = typeof fn === 'function' ? fn(offset) : fn; (onOffsetChange || setLocalOffset)(next); };
   const w = useWeek(offset);
   const [overSlot, setOverSlot] = useState(null);
   const { data } = w;
@@ -62,8 +67,9 @@ export default function WeekView({ onOpenExercise }) {
           <button type="button" aria-label="Next week" onClick={() => setOffset((o) => Math.min(1, o + 1))} disabled={offset >= 1} className="hover:opacity-60 transition-opacity duration-200 disabled:opacity-30" style={{ color: 'var(--color-muted)' }}>{getIcon('chevron-right', { size: 18 })}</button>
           {!isCurrent && <SecondaryButton onClick={() => setOffset(0)}>This week</SecondaryButton>}
           <div className="flex-1" />
-          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
             {week.phase.label} · week {week.blockWeek} of {week.blockWeeks}{week.isDeload ? ' · a lighter week' : ''}{week.eased ? ' · gentle start' : ''}
+            <InfoTip tip={TIPS.block} />
           </span>
         </div>
         {week.weekNote && <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{week.weekNote}</p>}
@@ -71,7 +77,13 @@ export default function WeekView({ onOpenExercise }) {
         <p className="text-xs" style={{ color: 'var(--color-muted)' }} data-tour="fitness-rest">
           Rest: {week.restDays.filter((r) => r.kind === 'planned').length} planned days, plus {week.restBudget} flexible
           {' '}({budgetLeft > 0 ? `${budgetLeft} left to spend` : 'used'}). Taking a rest day is a normal part of the week.
+          {' '}<InfoTip tip={TIPS.restBudget} />
         </p>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1" aria-label="How this page works">
+          <InfoTip tip={TIPS.move} trigger="text" />
+          <InfoTip tip={TIPS.timeOfDay} trigger="text" />
+          <InfoTip tip={TIPS.rest} trigger="text" />
+        </div>
       </Card>
 
       {w.error && <Notice>{w.error}</Notice>}
@@ -136,7 +148,9 @@ export default function WeekView({ onOpenExercise }) {
                   {restInfo?.kind === 'budget' ? (
                     <button type="button" onClick={() => w.undoRest(day)} disabled={w.busy} className="text-xs underline hover:opacity-60 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }}>Put this day back</button>
                   ) : (!restInfo && (
-                    <button type="button" onClick={() => w.rest(day)} disabled={w.busy} className="text-xs underline hover:opacity-60 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }}>Take this as a rest day</button>
+                    <Tooltip text="Rest is part of training. This day's session moves to a free slot later in the week if there is one, otherwise it is let go. Nothing is piled onto other days.">
+                      <button type="button" onClick={() => w.rest(day)} disabled={w.busy} className="text-xs underline hover:opacity-60 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }}>Take this as a rest day</button>
+                    </Tooltip>
                   ))}
                 </div>
               )}
@@ -145,11 +159,12 @@ export default function WeekView({ onOpenExercise }) {
         })}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <SecondaryButton onClick={w.regenerate} disabled={w.busy || acted}>Make a different version of this week</SecondaryButton>
         <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
           {acted ? 'Locked: some of this week has already been done.' : 'Same targets, different exercises.'}
         </span>
+        <InfoTip tip={TIPS.regenerate} />
       </div>
     </div>
   );

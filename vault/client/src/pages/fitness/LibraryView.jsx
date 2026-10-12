@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
 import useToastStore from '../../store/toastStore';
-import { Card, Chip, FIELD, inputCls, Notice, SecondaryButton } from './ui';
+import Tooltip from '../../components/Tooltip';
+import { Card, Chip, FIELD, InfoTip, inputCls, Notice, SecondaryButton } from './ui';
+import { TIPS } from './tips';
 
 const PATTERN_LABELS = {
   squat: 'Squat', hinge: 'Hinge', lunge: 'Lunge', push: 'Push', pull: 'Pull', core: 'Core', carry: 'Carry',
@@ -11,7 +13,7 @@ const PATTERN_LABELS = {
 const SETTING_LABELS = { gym: 'Gym', pool: 'Pool', outdoor: 'Outdoors', home: 'Home' };
 const LEVEL_LABELS = ['', 'Gentle', 'Moderate', 'Challenging', 'Advanced'];
 
-function Detail({ slug, onOpen, onBack }) {
+function Detail({ slug, onOpen, onBack, backLabel }) {
   const getIcon = useIcon();
   const addToast = useToastStore((s) => s.addToast);
   const [ex, setEx] = useState(null);
@@ -48,7 +50,7 @@ function Detail({ slug, onOpen, onBack }) {
   return (
     <div className="max-w-3xl mx-auto w-full space-y-4">
       <button type="button" onClick={onBack} className="flex items-center gap-1 text-sm hover:opacity-60 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }}>
-        {getIcon('arrow-left', { size: 14 })}All exercises
+        {getIcon('arrow-left', { size: 14 })}{backLabel}
       </button>
       <Card>
         <div>
@@ -98,7 +100,7 @@ function Detail({ slug, onOpen, onBack }) {
           </dl>
         </section>
         <section>
-          <h3 className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>How hard</h3>
+          <h3 className="flex items-center gap-1 text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>How hard <InfoTip tip={TIPS.effort} /></h3>
           <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{ex.effort}</p>
           {ex.loadGuide && <p className="text-sm leading-relaxed mt-1.5" style={{ color: 'var(--color-text)' }}>{ex.loadGuide}</p>}
           {ex.effortScale && (
@@ -118,7 +120,7 @@ function Detail({ slug, onOpen, onBack }) {
         </section>
         {(ex.easier.length > 0 || ex.harder.length > 0) && (
           <section>
-            <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Easier and harder versions</h3>
+            <h3 className="flex items-center gap-1 text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Easier and harder versions <InfoTip tip={TIPS.ladder} /></h3>
             <div className="flex flex-wrap gap-2">
               {ex.easier.map((x) => <Chip key={x.slug} onClick={() => onOpen(x.slug)}>Easier: {x.name}</Chip>)}
               {ex.harder.map((x) => <Chip key={x.slug} onClick={() => onOpen(x.slug)}>Harder: {x.name}</Chip>)}
@@ -127,6 +129,7 @@ function Detail({ slug, onOpen, onBack }) {
         )}
         <div className="flex flex-wrap items-center gap-3 pt-1">
           <SecondaryButton onClick={toggleHidden} disabled={saving}>{ex.hidden ? 'Show this exercise again' : 'Not for me, hide this exercise'}</SecondaryButton>
+          <InfoTip tip={TIPS.hide} />
           {!ex.hidden && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>For example if it does not suit a knee or shoulder. Your program will skip it.</span>}
         </div>
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
@@ -138,7 +141,7 @@ function Detail({ slug, onOpen, onBack }) {
 }
 
 /** Browse every exercise. Defaults to what you can do with the equipment you listed. */
-export default function LibraryView({ slug, onOpen, onBack }) {
+export default function LibraryView({ slug, onOpen, onBack, backLabel = 'All exercises' }) {
   const [data, setData] = useState(null);
   const [q, setQ] = useState('');
   const [pattern, setPattern] = useState('');
@@ -162,7 +165,7 @@ export default function LibraryView({ slug, onOpen, onBack }) {
       .filter((e) => showHidden || !e.hidden);
   }, [data, q, pattern, setting, mineOnly, showHidden]);
 
-  if (slug) return <Detail slug={slug} onOpen={onOpen} onBack={onBack} />;
+  if (slug) return <Detail slug={slug} onOpen={onOpen} onBack={onBack} backLabel={backLabel} />;
   if (error) return <Notice>{error}</Notice>;
   if (!data) return <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
 
@@ -182,7 +185,7 @@ export default function LibraryView({ slug, onOpen, onBack }) {
         </div>
         <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
           <input type="checkbox" checked={mineOnly} onChange={(e) => setMineOnly(e.target.checked)} />
-          Only what I can do with my equipment
+          Only what I can do with my equipment <InfoTip tip={TIPS.mineOnly} />
         </label>
         {data.exercises.some((e) => e.hidden) && (
           <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>

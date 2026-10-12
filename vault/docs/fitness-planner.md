@@ -41,6 +41,8 @@ Where the approved extras land: re-rate form + revisit-goal + ambition dial are 
 - *Safety lines per session* (`safety.sessionSafetyLines`): the stop rule on every session; "breathe out on the effort" with strength work; "get up slowly" after floor work (`tags: ['floor']`); water and heat advice for outdoor sessions (Brisbane wording when the time zone is Brisbane); "never swim alone in open water" for pool exercises.
 - *"Not for me, hide this exercise"* (`fitness_hidden_exercises`, `POST /library/:slug/hide|unhide`): the generator never picks a hidden exercise; if that empties a whole movement the week says so.
 
+**Navigation and explanations.** Opening an exercise from Today, Week or elsewhere remembers where you came from: Back returns there ("Back to Today", "Back to the Week"), and the Week keeps the week you were looking at. `InfoTip` (`pages/fitness/ui.jsx`) is the explanation popover: hover, keyboard focus or tap, Esc to close; all its wording is in `pages/fitness/tips.js` (why move a session, whether time of day matters, rest, blocks, effort, ratings), so it is easy to extend each stage. Session cards have a labelled Move button with a tooltip. The Overview has a "self-ratings over time" card (first rating against latest, from `GET /ratings/history`): that, plus the re-rate nudge, is the only self-reported progress tracked until logging (Stage 3) and charts (Stage 4).
+
 **Known limits.** "Things to work around" reaches the model as a constraint but code cannot parse it, so an exercise that conflicts can still be offered; hiding it is the immediate fix and a per-exercise swap arrives with logging.
 
 ## Help, tour and starting over

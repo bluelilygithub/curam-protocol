@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useIcon } from '../../providers/IconProvider';
+import Tooltip from '../../components/Tooltip';
 import { FIELD, SecondaryButton, PrimaryButton } from './ui';
 import { DAY_NAMES, SLOTS } from './useWeek';
 
@@ -58,6 +59,9 @@ function MovePicker({ session, onMove, onClose }) {
       </select>
       <PrimaryButton onClick={() => { onMove(session.id, day, slot); onClose(); }}>Move</PrimaryButton>
       <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
+      <p className="basis-full text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+        Time of day is only a suggestion; choose what you will keep. Leave about 48 hours between strength sessions.
+      </p>
     </div>
   );
 }
@@ -97,16 +101,17 @@ export default function SessionCard({ session, expanded = false, draggable = fal
           {note && <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{note}</p>}
         </div>
         {!rest && (
-          <button
-            type="button"
-            aria-label={`Move ${session.title}`}
-            title="Move to another day or time"
-            onClick={() => setMoving((v) => !v)}
-            className="flex-shrink-0 hover:opacity-60 transition-opacity duration-200"
-            style={{ color: 'var(--color-muted)' }}
-          >
-            {getIcon('move', { size: 14 })}
-          </button>
+          <Tooltip text="Sessions are suggestions. Move this one to a day or time that suits you, or drag it. The week's targets stay the same.">
+            <button
+              type="button"
+              aria-label={`Move ${session.title} to another day or time`}
+              onClick={() => setMoving((v) => !v)}
+              className="flex-shrink-0 flex items-center gap-1 text-xs hover:opacity-60 transition-opacity duration-200"
+              style={{ color: 'var(--color-muted)' }}
+            >
+              {getIcon('move', { size: 12 })}Move
+            </button>
+          </Tooltip>
         )}
       </div>
       {moving && <MovePicker session={session} onMove={(id, d, s) => onMove?.(id, d, s)} onClose={() => setMoving(false)} />}

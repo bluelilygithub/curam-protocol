@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useIcon } from '../../providers/IconProvider';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import Tooltip from '../../components/Tooltip';
@@ -173,4 +174,80 @@ export function formatDate(iso) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+/**
+ * Explanation popover. Opens on hover or keyboard focus, and pins open on click/tap, so it works with a mouse, a keyboard
+ * and a phone. Closes on Escape or a click elsewhere. `trigger="text"` shows the question itself as the control.
+ *   <InfoTip tip={TIPS.move} />   <InfoTip tip={TIPS.timeOfDay} trigger="text" />
+ */
+export function InfoTip({ tip, trigger = 'icon' }) {
+  const getIcon = useIcon();
+  const btn = useRef(null);
+  const pop = useRef(null);
+  const [hover, setHover] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const [pos, setPos] = useState(null);
+  const open = hover || pinned;
+  const id = useId();
+
+  useLayoutEffect(() => {
+    if (!open || !btn.current) { setPos(null); return; }
+    const r = btn.current.getBoundingClientRect();
+    const width = Math.min(320, window.innerWidth - 16);
+    const left = Math.min(Math.max(r.left + r.width / 2 - width / 2, 8), window.innerWidth - width - 8);
+    const below = r.bottom + 8;
+    const h = pop.current ? pop.current.offsetHeight : 160;
+    const top = below + h > window.innerHeight - 8 && r.top - h - 8 > 8 ? r.top - h - 8 : below;
+    setPos({ left, top, width });
+  }, [open]);
+
+  useEffect(() => {
+    if (!pinned) return undefined;
+    const away = (e) => { if (!btn.current?.contains(e.target) && !pop.current?.contains(e.target)) setPinned(false); };
+    const esc = (e) => { if (e.key === 'Escape') { setPinned(false); setHover(false); btn.current?.focus(); } };
+    document.addEventListener('mousedown', away);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc); };
+  }, [pinned]);
+
+  return (
+    <>
+      <button
+        ref={btn}
+        type="button"
+        aria-label={tip.title}
+        aria-expanded={open}
+        aria-describedby={open ? id : undefined}
+        onClick={() => setPinned((v) => !v)}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        onFocus={() => setHover(true)}
+        onBlur={() => setHover(false)}
+        className={`inline-flex items-center gap-1 align-middle hover:opacity-60 transition-opacity duration-200 ${trigger === 'text' ? 'text-xs underline decoration-dotted underline-offset-2' : 'w-5 h-5 justify-center rounded-full'}`}
+        style={{ color: 'var(--color-muted)' }}
+      >
+        {trigger === 'text' ? tip.title : null}
+        {getIcon('info', { size: trigger === 'text' ? 12 : 14 })}
+      </button>
+      {open && createPortal(
+        <div
+          ref={pop}
+          id={id}
+          role="tooltip"
+          className="fixed z-30 rounded-xl border p-3 shadow-lg text-sm leading-relaxed"
+          style={{
+            left: pos?.left ?? -9999, top: pos?.top ?? -9999, width: pos?.width ?? 320,
+            background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)',
+          }}
+          onMouseEnter={() => setHover(true)}
+          onMouseLeave={() => setHover(false)}
+        >
+          <p className="font-semibold mb-1">{tip.title}</p>
+          <p style={{ color: 'var(--color-muted)' }}>{tip.body}</p>
+        </div>,
+        document.body,
+      )}
+    </>
+  );
 }

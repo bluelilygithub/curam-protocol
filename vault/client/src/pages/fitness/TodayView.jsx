@@ -1,6 +1,8 @@
 import React from 'react';
 import { useIcon } from '../../providers/IconProvider';
-import { Card, Notice, SecondaryButton } from './ui';
+import Tooltip from '../../components/Tooltip';
+import { Card, InfoTip, Notice, SecondaryButton } from './ui';
+import { TIPS } from './tips';
 import SessionCard from './SessionCard';
 import useWeek, { DAY_NAMES, dayLabel } from './useWeek';
 
@@ -31,6 +33,11 @@ export default function TodayView({ onOpenExercise, goTo }) {
           {week.phase.label} · week {week.blockWeek} of {week.blockWeeks}{week.isDeload ? ' · a lighter week' : ''}
         </p>
         {week.weekNote && <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{week.weekNote}</p>}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <InfoTip tip={TIPS.move} trigger="text" />
+          <InfoTip tip={TIPS.timeOfDay} trigger="text" />
+          <InfoTip tip={TIPS.warmup} trigger="text" />
+        </div>
       </Card>
 
       {w.error && <Notice>{w.error}</Notice>}
@@ -56,7 +63,9 @@ export default function TodayView({ onOpenExercise, goTo }) {
             <SessionCard key={s.id} session={s} expanded onMove={w.move} onOpenExercise={onOpenExercise} busy={w.busy} />
           ))}
           <div className="flex flex-wrap items-center gap-2">
-            <SecondaryButton onClick={() => w.rest(todayIndex)} disabled={w.busy}>Take today as a rest day</SecondaryButton>
+            <Tooltip text="Rest is part of training. Today's session moves to a free slot later in the week if there is one, otherwise it is let go. Nothing is piled onto other days.">
+              <span><SecondaryButton onClick={() => w.rest(todayIndex)} disabled={w.busy}>Take today as a rest day</SecondaryButton></span>
+            </Tooltip>
             <SecondaryButton onClick={() => goTo('week')}>See the whole week</SecondaryButton>
           </div>
         </>

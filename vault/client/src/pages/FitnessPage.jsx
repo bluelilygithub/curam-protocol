@@ -80,6 +80,8 @@ export default function FitnessPage() {
   const [state, setState] = useState(null);
   const [view, setView] = useState('today');
   const [libSlug, setLibSlug] = useState(null);
+  const [returnTo, setReturnTo] = useState(null); // the screen an exercise was opened from, so Back can return there
+  const [weekOffset, setWeekOffset] = useState(0);
   const [focusRerate, setFocusRerate] = useState(false);
   const [settingGoal, setSettingGoal] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -107,14 +109,22 @@ export default function FitnessPage() {
   const goTo = useCallback((mode, opts = {}) => {
     setFocusRerate(!!opts.rerate);
     if (mode !== 'library' || !opts.keepSlug) setLibSlug(null);
+    setReturnTo(null);
     setView(mode);
   }, []);
 
   // Any exercise name in Today or Week opens its library page.
-  const openExercise = useCallback((slug) => {
+  const openExercise = (slug) => {
+    if (view !== 'library') setReturnTo(view);
     setLibSlug(slug);
     setView('library');
-  }, []);
+  };
+
+  const backFromExercise = () => {
+    setLibSlug(null);
+    if (returnTo) { setView(returnTo); setReturnTo(null); }
+  };
+  const BACK_LABELS = { today: 'Back to Today', week: 'Back to the Week', overview: 'Back to Overview', goal: 'Back to Goal', profile: 'Back to Profile' };
 
   const runTour = useCallback(() => {
     if (!state) return;
@@ -170,9 +180,9 @@ export default function FitnessPage() {
     } else if (view === 'today') {
       body = <TodayView onOpenExercise={openExercise} goTo={goTo} />;
     } else if (view === 'week') {
-      body = <WeekView onOpenExercise={openExercise} />;
+      body = <WeekView onOpenExercise={openExercise} offset={weekOffset} onOffsetChange={setWeekOffset} />;
     } else if (view === 'library') {
-      body = <LibraryView slug={libSlug} onOpen={openExercise} onBack={() => setLibSlug(null)} />;
+      body = <LibraryView slug={libSlug} onOpen={openExercise} onBack={backFromExercise} backLabel={returnTo ? BACK_LABELS[returnTo] : 'All exercises'} />;
     } else if (view === 'overview') {
       body = <Overview meta={meta} state={state} goTo={goTo} />;
     } else if (view === 'goal') {
