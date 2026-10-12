@@ -109,7 +109,7 @@ async function buildBaseline({ userId, profile, scores, previous, previousLabel,
     fallback: () => fallbackNarrative(data),
     tier: 'standard',
     refresh,
-    maxTokens: 900,
+    maxTokens: 1500,
   });
 
   return { data, narrative: result.value, source: result.source, model: result.model, note: result.note };

@@ -120,16 +120,21 @@ function buildMilestones({ bandId, scores, previous, ambition, startsOn, horizon
   const endRatings = targetRatings(bandId, scores, amb, cfg);
   const regaining = !!previous && DOMAINS.some((d) => Number.isInteger(previous[d]) && previous[d] >= scores[d] + 1);
   const curve = regaining ? cfg.yearCurveRegain : cfg.yearCurve;
+  const ratingCurve = regaining ? cfg.yearCurveRatingsRegain : cfg.yearCurveRatings;
+  const phaseIds = amb >= 4 ? cfg.yearPhases.ambitious : cfg.yearPhases.gentle;
   const startMin = Math.min(startingMinutes(scores, cfg), end.aerobicModerateMin);
 
   const milestones = [];
   for (let y = 1; y <= horizonYears; y += 1) {
     const share = curve[Math.min(y, curve.length) - 1];
+    const rShare = ratingCurve[Math.min(y, ratingCurve.length) - 1];
     const ratings = {};
-    for (const d of DOMAINS) ratings[d] = Math.round(scores[d] + (endRatings[d] - scores[d]) * share);
+    for (const d of DOMAINS) ratings[d] = Math.round((scores[d] + (endRatings[d] - scores[d]) * rShare) * 10) / 10;
+    const phaseId = phaseIds[Math.min(y, phaseIds.length) - 1];
     milestones.push({
       year: y,
       by: addYears(startsOn, y),
+      phase: { id: phaseId, ...cfg.phases[phaseId], label: phaseId === 'base' && !regaining ? 'Build base' : cfg.phases[phaseId].label },
       ratings,
       weekly: {
         aerobicModerateMin: Math.round((startMin + (end.aerobicModerateMin - startMin) * share) / 5) * 5,
@@ -139,7 +144,16 @@ function buildMilestones({ bandId, scores, previous, ambition, startsOn, horizon
       },
     });
   }
-  return { ambition: amb, regaining, endRatings, endWeekly: end, startMinutes: startMin, milestones };
+  return {
+    ambition: amb,
+    regaining,
+    endRatings,
+    endWeekly: end,
+    startMinutes: startMin,
+    // Where you are today. Minutes are estimated from the cardio self-rating; days per week are not known.
+    now: { aerobicModerateMin: startMin, ratings: { ...scores } },
+    milestones,
+  };
 }
 
 /** Plain differences between two plans, so a dial change can be explained with real numbers. */

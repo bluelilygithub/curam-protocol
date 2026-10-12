@@ -8,15 +8,10 @@
 const { DOMAINS, DOMAIN_LABELS, AMBITION_LEVELS, loadConfig } = require('./config');
 const { pool } = require('../../db');
 const T = require('./targets');
-const { runJson, str, strList, GUARDRAILS } = require('./ai');
+const { runJson, str, GUARDRAILS } = require('./ai');
 
 function ambitionLabel(level) {
   return (AMBITION_LEVELS.find((a) => a.level === level) || AMBITION_LEVELS[2]).label;
-}
-
-function fallbackYearNote(m) {
-  const w = m.weekly;
-  return `About ${w.aerobicModerateMin} min of aerobic activity a week, strength on ${w.strengthDays} day${w.strengthDays > 1 ? 's' : ''}, balance on ${w.balanceDays}, mobility on ${w.mobilityDays}.`;
 }
 
 function fallbackText(plan, diff) {
@@ -34,16 +29,15 @@ function fallbackText(plan, diff) {
       ? `Moving from ${ambitionLabel(diff.fromAmbition)} to ${ambitionLabel(diff.toAmbition)}: ${[...bits, up.length ? `five-year rating targets shift (${up.join(', ')})` : ''].filter(Boolean).join('; ')}.`
       : `Moving from ${ambitionLabel(diff.fromAmbition)} to ${ambitionLabel(diff.toAmbition)} does not change the weekly picture for your age band.`;
   }
-  return { summary, whatChanged, yearNotes: plan.milestones.map(fallbackYearNote) };
+  return { summary, whatChanged };
 }
 
 function validateGoalText(obj) {
   if (!obj || typeof obj !== 'object') return { ok: false, error: 'not an object' };
   const summary = str(obj.summary, 800);
-  const yearNotes = strList(obj.yearNotes, { min: 5, max: 5, each: 200 });
-  if (!summary || !yearNotes) return { ok: false, error: 'missing summary or yearNotes' };
+  if (!summary) return { ok: false, error: 'missing summary' };
   const whatChanged = obj.whatChanged == null ? null : str(obj.whatChanged, 700);
-  return { ok: true, value: { summary, whatChanged, yearNotes } };
+  return { ok: true, value: { summary, whatChanged } };
 }
 
 /**
@@ -67,13 +61,13 @@ async function buildGoalPlan({ userId, profile, scores, previous, ambition, from
     previousRatings: previous || null,
     regaining: plan.regaining,
     startMinutesPerWeek: plan.startMinutes,
-    milestones: plan.milestones.map((m) => ({ year: m.year, ratings: m.ratings, weekly: m.weekly })),
+    milestones: plan.milestones.map((m) => ({ year: m.year, phase: m.phase.label, ratings: m.ratings, weekly: m.weekly })),
     change: diff,
     userNotes: notes || null,
   };
 
-  const system = `${GUARDRAILS}\nThe milestone numbers are fixed by the app. Explain them; never change or add numbers. Ratings are 1-5 self-ratings.`;
-  const prompt = `Explain this 5-year fitness goal in plain language.\n\nDATA:\n${JSON.stringify(input, null, 1)}\n\nReturn JSON:\n{"summary": string (3-4 sentences: the shape of the five years and why year 1 is gentle),\n"whatChanged": ${diff ? 'string (2-3 sentences explaining, with the numbers in "change", what the ambition change means day to day, and that either pace is fine)' : 'null'},\n"yearNotes": array of exactly 5 short strings (max 160 chars), one per year, describing that year's focus using its numbers}`;
+  const system = `${GUARDRAILS}\nThe milestone numbers are fixed by the app. Explain them; never change or add numbers. Ratings are 1-5 self-ratings; decimals mean partway between two levels.`;
+  const prompt = `Explain this 5-year fitness goal in plain language.\n\nDATA:\n${JSON.stringify(input, null, 1)}\n\nReturn JSON:\n{"summary": string (3-4 sentences: the shape of the five years and why year 1 is gentle),\n"whatChanged": ${diff ? 'string (2-3 sentences explaining, with the numbers in "change", what the ambition change means day to day, and that either pace is fine)' : 'null'}}`;
 
   const result = await runJson({
     userId,
@@ -85,16 +79,17 @@ async function buildGoalPlan({ userId, profile, scores, previous, ambition, from
     fallback: () => fallbackText(plan, diff),
     tier: 'standard',
     refresh,
-    maxTokens: 900,
+    maxTokens: 1500,
   });
 
   const text = result.value;
-  const milestones = plan.milestones.map((m, i) => ({ ...m, note: text.yearNotes[i] || fallbackYearNote(m) }));
+  const milestones = plan.milestones;
   return {
     ambition: plan.ambition,
     ambitionLabel: ambitionLabel(plan.ambition),
     regaining: plan.regaining,
     startMinutes: plan.startMinutes,
+    now: plan.now,
     endRatings: plan.endRatings,
     endWeekly: plan.endWeekly,
     milestones,

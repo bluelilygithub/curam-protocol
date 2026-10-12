@@ -65,7 +65,7 @@ export default function ProfileTab({ meta, state, onChanged, focusRerate }) {
         <PrimaryButton onClick={() => save('profile')} disabled={saving !== ''}>{saving === 'profile' ? 'Saving…' : 'Save profile'}</PrimaryButton>
       </div>
 
-      <div ref={rerateRef}>
+      <div ref={rerateRef} data-tour="fitness-rerate">
         <RatingsSection
           meta={meta}
           draft={draft}

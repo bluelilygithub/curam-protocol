@@ -292,6 +292,34 @@ async function saveGoal(userId, { ambition, startsOn, milestones, summary, sourc
   }
 }
 
+/**
+ * Retake the wizard. Default is gentle: the lifestyle answers are removed (so onboarding shows again, pre-filled from
+ * what you said before) and the active goal is kept as history. `clear` also wipes ratings, goals, cached wording and
+ * the shared date of birth / sex / height. The weight series is never touched: another app shares it.
+ */
+async function resetWizard(userId, { clear = false } = {}) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM fitness_profiles WHERE "userId"=$1', [userId]);
+    if (clear) {
+      await client.query('DELETE FROM fitness_goals WHERE "userId"=$1', [userId]);
+      await client.query('DELETE FROM fitness_ratings WHERE "userId"=$1', [userId]);
+      await client.query('DELETE FROM fitness_ai_cache WHERE "userId"=$1', [userId]);
+      await client.query('DELETE FROM health_profiles WHERE "userId"=$1', [userId]);
+    } else {
+      await client.query(`UPDATE fitness_goals SET status='superseded' WHERE "userId"=$1 AND status='active'`, [userId]);
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+  return getState(userId);
+}
+
 /** Inputs the AI services need, assembled from stored state. Throws if onboarding is incomplete. */
 async function getPlanningInputs(userId) {
   const state = await getState(userId);
@@ -316,6 +344,7 @@ module.exports = {
   saveTimezone,
   saveRatings,
   saveGoal,
+  resetWizard,
   getPlanningInputs,
   validateScores,
 };

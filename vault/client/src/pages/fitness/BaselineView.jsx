@@ -92,6 +92,7 @@ export default function BaselineView({ meta, state, onContinue, compact = false 
 
   return (
     <div className="space-y-5">
+      <div data-tour="fitness-baseline">
       <Card title={n.headline}>
         <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{n.whereYouAre}</p>
         <RangeBars rows={data.data.comparison} meta={meta} beforeLabel={data.data.previousLabel} />
@@ -99,6 +100,7 @@ export default function BaselineView({ meta, state, onContinue, compact = false 
           These are your own 1-5 ratings. The healthy range is a guide for your age band, not a medical measure.
         </p>
       </Card>
+      </div>
 
       <Card title={`What is healthy for your age (${state.profile.bandLabel})`}>
         <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{n.whereYouShouldBe}</p>

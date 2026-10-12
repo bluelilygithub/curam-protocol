@@ -28,6 +28,7 @@ export default function Overview({ meta, state, goTo }) {
       )}
 
       {goal && (
+        <div data-tour="fitness-goal-card">
         <Card title="Your 5-year goal">
           <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{goal.summary?.summary}</p>
           <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
@@ -38,6 +39,7 @@ export default function Overview({ meta, state, goTo }) {
             <SecondaryButton onClick={() => goTo('goal')}>See the five years</SecondaryButton>
           </div>
         </Card>
+        </div>
       )}
 
       <Card title="Coming next">

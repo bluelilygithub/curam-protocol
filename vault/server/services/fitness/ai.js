@@ -90,17 +90,32 @@ async function runJson({ userId, kind, input, system, prompt, validate, fallback
     return { value: fallback(), source: 'fallback', model: null, note: 'No AI model is set up in Settings, so this is the plain version.' };
   }
 
+  let last = null;
   try {
-    const res = await callModel(modelId, prompt, { system, maxTokens, returnUsage: true, timeoutMs: CALL_TIMEOUT_MS });
-    logUsage({ userId, model: modelId, inputTokens: res.inputTokens, outputTokens: res.outputTokens, feature: 'fitness' });
-    const json = extractJsonObject(res.text);
-    if (!json) throw new Error('model returned no JSON');
-    const v = validate(JSON.parse(json));
-    if (!v.ok) throw new Error(`invalid model output: ${v.error}`);
-    await writeCache(userId, kind, inputHash, v.value, modelId).catch(() => {});
-    return { value: v.value, source: 'ai', model: modelId, note: null };
+    // One retry with a bigger budget if the reply was cut off (a truncated JSON object has no closing brace).
+    for (const budget of [maxTokens, maxTokens * 2]) {
+      const res = await callModel(modelId, prompt, { system, maxTokens: budget, returnUsage: true, timeoutMs: CALL_TIMEOUT_MS });
+      logUsage({ userId, model: modelId, inputTokens: res.inputTokens, outputTokens: res.outputTokens, feature: 'fitness' });
+      last = res;
+      const json = extractJsonObject(res.text);
+      if (!json) {
+        if (res.diagnostics?.stopReason === 'max_tokens') continue;
+        throw new Error('model returned no JSON');
+      }
+      const v = validate(JSON.parse(json));
+      if (!v.ok) throw new Error(`invalid model output: ${v.error}`);
+      await writeCache(userId, kind, inputHash, v.value, modelId).catch(() => {});
+      return { value: v.value, source: 'ai', model: modelId, note: null };
+    }
+    throw new Error('model reply was cut off twice');
   } catch (err) {
-    console.warn(`[fitness/ai] ${kind} fell back to rules:`, err.message);
+    // Say why, so a fallback on staging can be diagnosed from the logs alone.
+    console.warn(`[fitness/ai] ${kind} fell back to rules: ${err.message}`, {
+      model: modelId,
+      stopReason: last?.diagnostics?.stopReason || last?.diagnostics?.finishReason || null,
+      outputTokens: last?.outputTokens ?? null,
+      replyStart: String(last?.text || '').slice(0, 160),
+    });
     return { value: fallback(), source: 'fallback', model: modelId, note: 'The AI summary was not available just now, so this is the plain version. You can try again.' };
   }
 }

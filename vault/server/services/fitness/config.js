@@ -146,6 +146,23 @@ const YEAR_CURVE = [0.45, 0.7, 0.85, 0.95, 1];
 // Used when someone's earlier fitness was clearly higher (they are regaining, which comes back faster).
 const YEAR_CURVE_REGAIN = [0.6, 0.8, 0.9, 0.97, 1];
 
+// Self-ratings move more slowly than weekly minutes, so the expected rating at the end of each year is a gradual
+// climb (shown to one decimal: 3.4 means "between 3 and 4"). Year 5 always lands on the whole-number target.
+const YEAR_CURVE_RATINGS = [0.2, 0.42, 0.64, 0.84, 1];
+const YEAR_CURVE_RATINGS_REGAIN = [0.3, 0.52, 0.72, 0.89, 1];
+
+// What each year is mostly about. Ambitious paces keep building for longer before consolidating.
+const PHASES = {
+  base: { label: 'Rebuild base', focus: 'Easy, regular, steady' },
+  build: { label: 'Build', focus: 'Add time and strength' },
+  consolidate: { label: 'Consolidate', focus: 'Make it a habit' },
+  maintain: { label: 'Maintain', focus: 'Keep what you have built' },
+};
+const YEAR_PHASES = {
+  gentle: ['base', 'build', 'consolidate', 'consolidate', 'maintain'],
+  ambitious: ['base', 'build', 'build', 'consolidate', 'maintain'],
+};
+
 // Re-rating cadence in weeks (soft prompt at `soft`, firm at `firm`).
 const RERATE = { softWeeks: 4, firmWeeks: 6 };
 
@@ -181,6 +198,10 @@ const DEFAULTS = {
   ambitionRatingBonus: AMBITION_RATING_BONUS,
   yearCurve: YEAR_CURVE,
   yearCurveRegain: YEAR_CURVE_REGAIN,
+  yearCurveRatings: YEAR_CURVE_RATINGS,
+  yearCurveRatingsRegain: YEAR_CURVE_RATINGS_REGAIN,
+  phases: PHASES,
+  yearPhases: YEAR_PHASES,
   rerate: RERATE,
   ageTemplates: AGE_TEMPLATES,
 };

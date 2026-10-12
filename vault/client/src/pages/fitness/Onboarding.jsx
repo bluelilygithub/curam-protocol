@@ -19,7 +19,8 @@ export default function Onboarding({ meta, state, onSaved }) {
   const { startProcessing, stopProcessing } = useProcessingStore();
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState(() => (state.profile ? draftFromState(state) : emptyDraft()));
-  const touched = useRef(new Set());
+  // Answers already given (a retake, or a half-finished visit) are never overwritten by age-band suggestions.
+  const touched = useRef(new Set(state.profile ? ['scores', 'previousScores', 'previousLabel', 'equipment', 'smoking', 'alcohol', 'dietQuality', 'timeFlexibility'] : []));
   const set = useCallback((key, value) => {
     touched.current.add(key);
     setDraft((d) => ({ ...d, [key]: value }));
@@ -53,7 +54,7 @@ export default function Onboarding({ meta, state, onSaved }) {
         <strong>Welcome.</strong> About 4 quick steps, then a baseline and a five-year goal. {meta.disclaimer}
       </Notice>
 
-      <ol className="flex flex-wrap gap-2 text-xs" aria-label="Steps">
+      <ol className="flex flex-wrap gap-2 text-xs" aria-label="Steps" data-tour="fitness-steps">
         {STEPS.map((s, i) => (
           <li
             key={s}

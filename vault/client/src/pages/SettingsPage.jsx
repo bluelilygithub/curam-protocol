@@ -26,6 +26,7 @@ import { startGraphTour, TOUR_KEY as GRAPH_TOUR_KEY } from '../utils/tours/graph
 import { startProductScoutTour, TOUR_KEY as PRODUCT_SCOUT_TOUR_KEY } from '../utils/tours/productScoutTour';
 import { startRecipesTour, TOUR_KEY as RECIPES_TOUR_KEY } from '../utils/tours/recipesTour';
 import { TOUR_KEY as MEASUREMENTS_TOUR_KEY } from '../utils/tours/measurementsTour';
+import { TOUR_KEY as FITNESS_TOUR_KEY } from '../utils/tours/fitnessTour';
 import { TOUR_KEY as MUSIC_TOUR_KEY } from '../utils/tours/musicTour';
 import { startPropertyScenarioTour, TOUR_KEY as PROPERTY_SCENARIO_TOUR_KEY } from '../utils/tours/propertyScenarioTour';
 import { startContractReviewTour, TOUR_KEY as CONTRACT_REVIEW_TOUR_KEY } from '../utils/tours/contractReviewTour';
@@ -2729,6 +2730,24 @@ function SettingsPage() {
               style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
             >
               {localStorage.getItem(MEASUREMENTS_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Fitness Tour</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                Walks through the screen you are on — onboarding, baseline, five-year goal, re-rating; grows as the app does
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(FITNESS_TOUR_KEY);
+                navigate('/fitness?tour=1');
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              {localStorage.getItem(FITNESS_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
             </button>
           </div>
           <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>

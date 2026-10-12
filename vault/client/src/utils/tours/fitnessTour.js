@@ -1,0 +1,137 @@
+import Shepherd from 'shepherd.js';
+import 'shepherd.js/dist/css/shepherd.css';
+import './goalsTour.css';
+
+export const TOUR_KEY = 'vault_tour_fitness_completed';
+
+/**
+ * Fitness Planner tour. It grows with the app: add an entry to STEPS when a stage ships.
+ *  group:  which screen the step belongs to - 'all' | 'onboarding' | 'baseline' | 'done'
+ *  view:   for group 'done', the tab to show first (overview | goal | profile)
+ *  since:  the build stage that added it (for the changelog in docs/fitness-planner.md)
+ * Steps whose target is not on screen are shown without a highlight rather than skipped or broken.
+ */
+const STEPS = [
+  {
+    id: 'fitness-welcome', group: 'all', since: 1,
+    title: 'Fitness Planner - Quick Tour',
+    text: 'A calm, lifestyle-style planner: tell it where you are, see what is healthy for your age, choose a five-year pace, and follow a varied weekly program. Rest and quiet weeks are normal here, and nothing is ever marked as a failure.',
+  },
+  {
+    id: 'fitness-steps', group: 'onboarding', since: 1, selector: '[data-tour="fitness-steps"]', on: 'bottom',
+    title: 'Four quick steps',
+    text: 'About you, your fitness, lifestyle, and anything to work around. Once you enter your date of birth and sex, the later steps are pre-filled with typical answers for your age. Change anything that is not you. You rate yourself on a 1-5 scale; nobody checks it.',
+  },
+  {
+    id: 'fitness-baseline', group: 'baseline', since: 1, selector: '[data-tour="fitness-baseline"]', on: 'top',
+    title: 'Your baseline',
+    text: 'Your ratings against the healthy range for your age, based on WHO guidance. The dot is you now, the hollow dot is how you rated an earlier time, and the shaded band is the healthy range. The wording is written by the AI model set in Settings; the numbers come from fixed rules.',
+  },
+  {
+    id: 'fitness-tabs', group: 'done', view: 'overview', since: 1, selector: '[data-tour="fitness-tabs"]', on: 'bottom',
+    title: 'Overview, Goal and Profile',
+    text: 'Overview is home. Goal shows your five years and lets you change the pace. Profile is where you edit your answers and re-rate. More tabs (your weekly program, logging, charts) arrive as the app grows.',
+  },
+  {
+    id: 'fitness-goal-card', group: 'done', view: 'overview', since: 1, selector: '[data-tour="fitness-goal-card"]', on: 'bottom',
+    title: 'Your five-year goal',
+    text: 'The pace you chose and where it leads. You can revisit it any time from the Goal tab; earlier goals are kept in history.',
+  },
+  {
+    id: 'fitness-pace', group: 'done', view: 'goal', since: 1, selector: '[data-tour="fitness-pace"]', on: 'bottom',
+    title: 'Choose your pace',
+    text: 'Five paces from Gentle to Stretch. Each change re-draws the plan and explains what moved, and nothing is saved until you press the button at the bottom.',
+  },
+  {
+    id: 'fitness-milestones', group: 'done', view: 'goal', since: 1, selector: '[data-tour="fitness-milestones"]', on: 'top',
+    title: 'The five years',
+    text: 'The Now row is where you are today. Each year shows its focus, weekly targets and the rating you are expected to reach by then. Year one is deliberately gentle. Strength, balance and mobility days can share a session.',
+  },
+  {
+    id: 'fitness-chart', group: 'done', view: 'goal', since: 1, selector: '[data-tour="fitness-chart"]', on: 'top',
+    title: 'Weekly aerobic minutes',
+    text: 'How your weekly aerobic time builds, against the WHO 150-300 minute band (the shaded area).',
+  },
+  {
+    id: 'fitness-rerate', group: 'done', view: 'profile', since: 1, selector: '[data-tour="fitness-rerate"]', on: 'top',
+    title: 'Re-rate every 4-6 weeks',
+    text: 'Rate yourself again whenever things change. Earlier ratings are kept so you can see progress, and the Overview reminds you gently when it has been a while.',
+  },
+  {
+    id: 'fitness-help', group: 'all', since: 1, selector: '[data-tour="fitness-help"]', on: 'bottom',
+    title: 'Help, tour and starting over',
+    text: 'The compass retakes this tour and the (i) explains how it all works. The three-dot menu has "Start over", which lets you retake the wizard from the beginning.',
+  },
+];
+
+function injectStepCounter(stepIndex, total) {
+  requestAnimationFrame(() => {
+    const el = document.querySelector('.shepherd-element.vault-tour');
+    if (!el) return;
+    let counter = el.querySelector('.vault-tour-step-count');
+    if (!counter) {
+      counter = document.createElement('div');
+      counter.className = 'vault-tour-step-count';
+      const footer = el.querySelector('.shepherd-footer');
+      if (footer) el.insertBefore(counter, footer);
+    }
+    counter.textContent = `Step ${stepIndex} of ${total}`;
+  });
+}
+
+/** @param {{ stage: string, goTo: (view: string) => void }} opts */
+export function startFitnessTour({ stage, goTo }) {
+  if (Shepherd.activeTour) Shepherd.activeTour.cancel();
+  const group = stage === 'profile' || stage === 'ratings' ? 'onboarding' : stage === 'baseline' ? 'baseline' : 'done';
+  const steps = STEPS.filter((s) => s.group === 'all' || s.group === group);
+  const total = steps.length;
+
+  const tour = new Shepherd.Tour({
+    useModalOverlay: true,
+    exitOnEsc: true,
+    keyboardNavigation: true,
+    defaultStepOptions: {
+      scrollTo: { behavior: 'smooth', block: 'center' },
+      cancelIcon: { enabled: true },
+      classes: 'vault-tour',
+    },
+  });
+
+  const btnSecondary = (text, action) => ({ text, action, classes: 'vault-tour-btn-secondary' });
+  const done = () => { try { localStorage.setItem(TOUR_KEY, '1'); } catch (_) { /* ignore */ } };
+
+  steps.forEach((s, i) => {
+    const first = i === 0;
+    const last = i === total - 1;
+    const stepDef = {
+      id: s.id,
+      title: s.title,
+      text: s.text,
+      when: { show() { injectStepCounter(i + 1, total); } },
+      buttons: first
+        ? [btnSecondary('Skip Tour', () => tour.cancel()), { text: 'Start Tour →', action: () => tour.next() }]
+        : [
+          btnSecondary('← Back', () => tour.back()),
+          last ? { text: 'Finish Tour ✓', action() { done(); tour.complete(); } } : { text: 'Next →', action: () => tour.next() },
+        ],
+    };
+    if (s.selector) {
+      stepDef.attachTo = { element: s.selector, on: s.on || 'bottom' };
+      stepDef.beforeShowPromise = () => new Promise((resolve) => {
+        if (s.view) goTo(s.view);
+        setTimeout(() => {
+          if (!document.querySelector(s.selector)) {
+            const step = tour.getById(s.id);
+            if (step) step.options.attachTo = undefined;
+          }
+          resolve();
+        }, s.view ? 500 : 50);
+      });
+    }
+    tour.addStep(stepDef);
+  });
+
+  tour.on('cancel', done);
+  tour.start();
+  return tour;
+}

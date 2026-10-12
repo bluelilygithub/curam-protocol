@@ -206,13 +206,38 @@ test('goal fallback text covers five years and explains a dial change with real 
   const hi = T.buildMilestones({ bandId: '50-64', scores: WORKED, previous: WORKED_PREV, ambition: 4, startsOn: '2026-10-12' });
   const text = goal.fallbackText(hi, T.diffPlans(lo, hi));
   assert.ok(goal.validateGoalText(text).ok);
-  assert.strictEqual(text.yearNotes.length, 5);
+  assert.strictEqual(text.yearNotes, undefined);
   assert.ok(/Easy-going to Ambitious/.test(text.whatChanged));
   assert.ok(/min a week/.test(text.whatChanged));
 });
-test('goal validator needs exactly five year notes', () => {
-  assert.strictEqual(goal.validateGoalText({ summary: 's', yearNotes: ['1', '2', '3'] }).ok, false);
-  assert.strictEqual(goal.validateGoalText({ summary: 's', yearNotes: ['1', '2', '3', '4', '5'] }).ok, true);
+test('goal validator needs a summary; whatChanged is optional', () => {
+  assert.strictEqual(goal.validateGoalText({ yearNotes: ['1'] }).ok, false);
+  assert.strictEqual(goal.validateGoalText({ summary: 's' }).ok, true);
+  assert.strictEqual(goal.validateGoalText({ summary: 's', whatChanged: 'w' }).value.whatChanged, 'w');
+});
+
+// ── goal screen: gradual ratings, "now" row, phases ──
+test('ratings climb gradually: no repeated start-to-target jump, year 5 lands on the target', () => {
+  const plan = T.buildMilestones({ bandId: '50-64', scores: WORKED, previous: WORKED_PREV, ambition: 3, startsOn: '2026-10-12' });
+  for (const d of C.DOMAINS) {
+    const col = plan.milestones.map((m) => m.ratings[d]);
+    if (plan.endRatings[d] > WORKED[d]) {
+      assert.ok(col[0] > WORKED[d] && col[0] < plan.endRatings[d], `${d} year 1 ${col[0]}`);
+      for (let i = 1; i < 5; i += 1) assert.ok(col[i] > col[i - 1], `${d} strictly rising ${col}`);
+    }
+    assert.strictEqual(col[4], plan.endRatings[d]);
+    assert.ok(col.every((v) => Math.round(v * 10) === v * 10 || Math.abs(v * 10 - Math.round(v * 10)) < 1e-9), 'one decimal');
+  }
+});
+test('plan carries a now row and a phase per year', () => {
+  const plan = T.buildMilestones({ bandId: '50-64', scores: WORKED, previous: WORKED_PREV, ambition: 3, startsOn: '2026-10-12' });
+  assert.deepStrictEqual(plan.now.ratings, WORKED);
+  assert.strictEqual(plan.now.aerobicModerateMin, 90);
+  assert.deepStrictEqual(plan.milestones.map((m) => m.phase.id), ['base', 'build', 'consolidate', 'consolidate', 'maintain']);
+  assert.strictEqual(plan.milestones[0].phase.label, 'Rebuild base'); // regaining
+  const fresh = T.buildMilestones({ bandId: '50-64', scores: WORKED, previous: null, ambition: 5, startsOn: '2026-10-12' });
+  assert.deepStrictEqual(fresh.milestones.map((m) => m.phase.id), ['base', 'build', 'build', 'consolidate', 'maintain']);
+  assert.strictEqual(fresh.milestones[0].phase.label, 'Build base'); // not regaining
 });
 
 console.log(`fitness: ${passed} tests passed${process.exitCode ? ' (with failures)' : ''}`);

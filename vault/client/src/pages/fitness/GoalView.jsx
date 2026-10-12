@@ -3,44 +3,54 @@ import api from '../../utils/apiClient';
 import useToastStore from '../../store/toastStore';
 import useProcessingStore from '../../store/processingStore';
 import { Card, Notice, PrimaryButton, SecondaryButton, formatDate } from './ui';
+import AerobicChart from './AerobicChart';
 
-/** Compact "3 → 4" text for a rating change; plain numbers so it never relies on colour. */
-function RatingCell({ now, then }) {
-  return <span>{then === now ? `${now}` : `${then} → ${now}`}</span>;
-}
+const fmt1 = (n) => Number(n).toFixed(1);
 
-function Milestones({ plan, meta, startScores }) {
+function Milestones({ plan, meta }) {
+  const cell = 'py-2 pr-3 whitespace-nowrap';
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" data-tour="fitness-milestones">
       <table className="w-full text-sm" style={{ color: 'var(--color-text)' }}>
         <thead>
           <tr className="text-left text-xs" style={{ color: 'var(--color-muted)' }}>
             <th className="py-2 pr-3 font-medium">Year</th>
+            <th className="py-2 pr-3 font-medium">Focus</th>
             <th className="py-2 pr-3 font-medium">Aerobic / week</th>
             <th className="py-2 pr-3 font-medium">Strength days</th>
             <th className="py-2 pr-3 font-medium">Balance days</th>
             <th className="py-2 pr-3 font-medium">Mobility days</th>
-            {meta.domains.map((d) => <th key={d.id} className="py-2 pr-3 font-medium">{d.label} (1-5)</th>)}
+            {meta.domains.map((d) => <th key={d.id} className="py-2 pr-3 font-medium">{d.label}</th>)}
           </tr>
         </thead>
         <tbody>
+          <tr className="border-t" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <td className={`${cell} font-medium`}>Now<span className="block text-xs font-normal" style={{ color: 'var(--color-muted)' }}>today</span></td>
+            <td className={cell} style={{ color: 'var(--color-muted)' }}>Where you are</td>
+            <td className={cell}>about {plan.now.aerobicModerateMin} min</td>
+            <td className={cell} style={{ color: 'var(--color-muted)' }}>-</td>
+            <td className={cell} style={{ color: 'var(--color-muted)' }}>-</td>
+            <td className={cell} style={{ color: 'var(--color-muted)' }}>-</td>
+            {meta.domains.map((d) => <td key={d.id} className={cell}>{plan.now.ratings[d.id]}</td>)}
+          </tr>
           {plan.milestones.map((m) => (
-            <React.Fragment key={m.year}>
-              <tr className="border-t" style={{ borderColor: 'var(--color-border)' }}>
-                <td className="py-2 pr-3 whitespace-nowrap font-medium">Year {m.year}<span className="block text-xs font-normal" style={{ color: 'var(--color-muted)' }}>by {formatDate(m.by)}</span></td>
-                <td className="py-2 pr-3 whitespace-nowrap">{m.weekly.aerobicModerateMin} min</td>
-                <td className="py-2 pr-3">{m.weekly.strengthDays}</td>
-                <td className="py-2 pr-3">{m.weekly.balanceDays}</td>
-                <td className="py-2 pr-3">{m.weekly.mobilityDays}</td>
-                {meta.domains.map((d) => <td key={d.id} className="py-2 pr-3 whitespace-nowrap"><RatingCell now={m.ratings[d.id]} then={startScores[d.id]} /></td>)}
-              </tr>
-              {m.note && (
-                <tr><td colSpan={5 + meta.domains.length} className="pb-2 text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{m.note}</td></tr>
-              )}
-            </React.Fragment>
+            <tr key={m.year} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+              <td className={`${cell} font-medium`}>Year {m.year}<span className="block text-xs font-normal" style={{ color: 'var(--color-muted)' }}>by {formatDate(m.by)}</span></td>
+              <td className={cell}>{m.phase?.label}<span className="block text-xs" style={{ color: 'var(--color-muted)' }}>{m.phase?.focus}</span></td>
+              <td className={cell}>{m.weekly.aerobicModerateMin} min</td>
+              <td className={cell}>{m.weekly.strengthDays}</td>
+              <td className={cell}>{m.weekly.balanceDays}</td>
+              <td className={cell}>{m.weekly.mobilityDays}</td>
+              {meta.domains.map((d) => <td key={d.id} className={cell}>{fmt1(m.ratings[d.id])}</td>)}
+            </tr>
           ))}
         </tbody>
       </table>
+      <p className="text-xs leading-relaxed mt-3" style={{ color: 'var(--color-muted)' }}>
+        Strength, balance and mobility days can be combined in the same session.
+        Ratings are your expected level at the end of each year on the 1-5 scale; a decimal means partway between two levels.
+        Today's aerobic minutes are estimated from your cardio rating.
+      </p>
     </div>
   );
 }
@@ -96,7 +106,6 @@ export default function GoalView({ meta, state, mode = 'first', onSaved, onCance
     }
   };
 
-  const scores = state.rating.scores;
   const unchanged = mode === 'revisit' && ambition === committed;
 
   return (
@@ -105,7 +114,7 @@ export default function GoalView({ meta, state, mode = 'first', onSaved, onCance
         title={mode === 'first' ? 'Your 5-year goal' : 'Revisit your 5-year goal'}
         hint="Pick the pace that feels right. You can change it later, as often as you like."
       >
-        <div role="radiogroup" aria-label="How ambitious" className="grid gap-2 sm:grid-cols-5">
+        <div role="radiogroup" aria-label="How ambitious" className="grid gap-2 sm:grid-cols-5" data-tour="fitness-pace">
           {meta.ambitions.map((a) => {
             const active = ambition === a.level;
             return (
@@ -117,9 +126,10 @@ export default function GoalView({ meta, state, mode = 'first', onSaved, onCance
                 onClick={() => setAmbition(a.level)}
                 className="rounded-xl border p-3 text-left hover:opacity-70 transition-all duration-200"
                 style={{
-                  borderColor: active ? 'var(--color-primary)' : 'var(--color-border)',
-                  background: active ? 'var(--color-primary)' : 'var(--color-bg)',
-                  color: active ? '#fff' : 'var(--color-text)',
+                  // Neutral on purpose: the theme accent sits too close to the amber "partly done" status colour.
+                  borderColor: active ? 'var(--color-text)' : 'var(--color-border)',
+                  background: active ? 'var(--color-text)' : 'var(--color-bg)',
+                  color: active ? 'var(--color-bg)' : 'var(--color-text)',
                 }}
               >
                 <span className="block text-sm font-semibold">{a.label}{a.level === committed ? (mode === 'first' ? ' (suggested)' : ' (current)') : ''}</span>
@@ -139,10 +149,10 @@ export default function GoalView({ meta, state, mode = 'first', onSaved, onCance
             {plan.whatChanged && (
               <Notice><strong>What changes:</strong> {plan.whatChanged}</Notice>
             )}
-            <Milestones plan={plan} meta={meta} startScores={scores} />
+            <Milestones plan={plan} meta={meta} />
+            <AerobicChart plan={plan} />
             <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-              Weekly aerobic minutes are moderate-intensity equivalents. Easier weeks are built in along the way, and rest is part of the plan.
-              Ratings are your own 1-5 scale.
+              Easier weeks are built in along the way, and rest is part of the plan.
             </p>
             {plan.note && <Notice>{plan.note}</Notice>}
           </Card>

@@ -120,7 +120,7 @@ router.post('/goal', aiLimiter, async (req, res) => {
     });
     await P.saveGoal(req.user.id, {
       ambition: plan.ambition, startsOn: inp.state.today, milestones: plan.milestones,
-      summary: { summary: plan.summary, regaining: plan.regaining, endRatings: plan.endRatings, endWeekly: plan.endWeekly, startMinutes: plan.startMinutes, ambitionLabel: plan.ambitionLabel },
+      summary: { summary: plan.summary, regaining: plan.regaining, endRatings: plan.endRatings, endWeekly: plan.endWeekly, startMinutes: plan.startMinutes, now: plan.now, ambitionLabel: plan.ambitionLabel },
       source: plan.source,
     });
     res.json(await P.getState(req.user.id));
@@ -129,6 +129,11 @@ router.post('/goal', aiLimiter, async (req, res) => {
 
 router.get('/goal/history', async (req, res) => {
   try { res.json({ history: await P.getGoalHistory(req.user.id) }); } catch (err) { fail(res, err, 'goal history'); }
+});
+
+// Retake the wizard. { clear: true } also wipes ratings, goals and the shared profile (never the weight series).
+router.post('/reset', async (req, res) => {
+  try { res.json(await P.resetWizard(req.user.id, { clear: req.body?.clear === true })); } catch (err) { fail(res, err, 'reset'); }
 });
 
 // Staging helper: create/refresh the worked-example demo user (admin only). Returns the password once, on creation.

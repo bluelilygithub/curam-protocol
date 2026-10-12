@@ -16,6 +16,18 @@ Spec: "Fitness Planner App: Spec for Claude Code" (2026-10-12). Built in stages;
 
 Where the approved extras land: re-rate form + revisit-goal + ambition dial are in Stage 1; the soft "time to re-rate" banner is in Stage 1 (Overview), its chart in Stage 4 and its email in Stage 5. The pain/dizzy/chest keyword check runs on the profile notes in Stage 1 and on session notes in Stage 3. Demo user: profile, ratings, goal and a weight series in Stage 1; weeks of mixed logs in Stage 3.
 
+## Help, tour and starting over
+
+- **Info modal** (`pages/fitness/FitnessInfo.jsx`): "What you can do now" / "Coming next". Auto-shows once per `INFO_KEY` (localStorage). **Each stage: move items from COMING to WORKS_NOW and bump `INFO_KEY`** so it shows once more.
+- **Tour** (`utils/tours/fitnessTour.js`, Shepherd, key `vault_tour_fitness_completed`): a `STEPS` registry grouped by screen (`onboarding` / `baseline` / `done`, with the tab to show), so it only walks what is on screen. **Each stage: add `STEPS` entries and the matching `data-tour` attributes.** Open it from the compass in the Fitness header, or Settings -> Tours -> Fitness Tour (`/fitness?tour=1`).
+- **Start over** (header three-dot menu, `POST /api/fitness/reset`): default retakes the wizard with earlier answers filled in; lifestyle answers are removed, the active goal is kept as history, ratings are kept. "Clear everything" (type RESET) also deletes ratings, goals, cached wording and the shared date of birth / sex / height. The weight series is never touched (shared with the diet app).
+
+## Goal screen
+
+Rows: **Now** (current aerobic minutes, estimated from the cardio rating, and current ratings), then Year 1-5 with a **phase focus** (Rebuild/Build base, Build, Consolidate, Maintain; config `yearPhases`, ambitious paces build for longer) and the **expected rating at the end of each year**, shown to one decimal on a gradual curve (`yearCurveRatings`; year 5 is the whole-number target). A line chart shows weekly aerobic minutes against the shaded WHO 150-300 band. Strength, balance and mobility days can be combined in one session. The selected pace tile uses a neutral colour (the theme accent is too close to the amber "partly done" status colour). The AI writes only the summary and the "what changes" text; per-year sentences were removed because they repeated the table.
+
+AI fallbacks: `ai.js` now retries once with double the token budget if a reply was cut off, and logs the model, stop reason, output tokens and the start of the reply when it falls back. Staging showed `goal fell back to rules: model returned no JSON` (API key set; the 900-token cap was the likely cause, since the old reply also carried five year notes). Budget is now 1500 and the reply is much shorter.
+
 ## Rules that do not bend
 
 - **Code decides, AI explains.** Targets, bands, milestones, progression and chart maths are plain code (`server/services/fitness/targets.js`) and tested. AI only writes wording, validated against a schema, with a rule-based fallback so a failed or missing model never blocks anyone.
@@ -41,7 +53,7 @@ Admin override without a deploy: `workspace_settings` key `fitness_config_overri
 
 ## API (`server/routes/fitness.js`, `/api/fitness`, behind `requireFeature('fitness')`)
 
-`GET /meta` · `GET /template?dob=` · `GET /me` · `PUT /profile` · `POST /safety-check` · `POST /ratings` (`kind: onboarding|rerate`) · `GET /ratings/history` · `POST /baseline` (AI, cached, `refresh`) · `POST /goal/preview` (AI, nothing saved) · `POST /goal` (accept; older goal becomes `superseded`) · `GET /goal/history` · `POST /admin/demo-seed` (admin).
+`GET /meta` · `GET /template?dob=` · `GET /me` · `PUT /profile` · `POST /safety-check` · `POST /ratings` (`kind: onboarding|rerate`) · `GET /ratings/history` · `POST /baseline` (AI, cached, `refresh`) · `POST /goal/preview` (AI, nothing saved) · `POST /goal` (accept; older goal becomes `superseded`) · `GET /goal/history` · `POST /reset` · `POST /admin/demo-seed` (admin).
 
 AI routes use `aiLimiter`. Responses are cached in `fitness_ai_cache` keyed by the exact input, so revisiting is free and a changed rating regenerates.
 
@@ -66,4 +78,4 @@ Admin overflow menu -> "Create demo user" (or `POST /api/fitness/admin/demo-seed
 
 ## Files
 
-Server: `server/routes/fitness.js`, `server/services/fitness/{config,targets,safety,timezone,ai,baseline,goal,profileService,demoSeed}.js`. Client: `client/src/pages/FitnessPage.jsx`, `client/src/pages/fitness/{Onboarding,BaselineView,GoalView,Overview,ProfileTab,sections,ui}.jsx`.
+Server: `server/routes/fitness.js`, `server/services/fitness/{config,targets,safety,timezone,ai,baseline,goal,profileService,demoSeed}.js`. Client: `client/src/pages/FitnessPage.jsx`, `client/src/pages/fitness/{Onboarding,BaselineView,GoalView,AerobicChart,FitnessInfo,Overview,ProfileTab,sections,ui}.jsx`, `client/src/utils/tours/fitnessTour.js`.
