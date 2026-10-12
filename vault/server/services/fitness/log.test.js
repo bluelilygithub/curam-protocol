@@ -6,6 +6,8 @@ const LG = require('./logging');
 const { dayState, weekDone } = require('./dayStatus');
 const CO = require('./coaching');
 const Ph = require('./phases');
+const DS = require('./demoScript');
+const { checkNotes } = require('./safety');
 
 let passed = 0;
 function test(name, fn) {
@@ -277,6 +279,79 @@ test('a confirmed gentler week eases exactly that week and no other', () => {
   assert.strictEqual(gentle.easier, true);
   assert.ok(gentle.targets.aerobicMinutes < plain.targets.aerobicMinutes, 'the gentle week asks for less');
   assert.strictEqual(other.eased, false);
+});
+
+
+// ── the demo history ──
+const mk = (...kinds) => kinds.map((k, i) => ({ id: i + 1, totalMinutes: 50, components: [{ domain: k, minutes: 30 }], exercises: [] }));
+const FOUR = mk('strength', 'cardio', 'strength', 'flexibility');
+const THREE = mk('strength', 'cardio', 'strength');
+const FIVE = mk('strength', 'cardio', 'strength', 'cardio', 'balance');
+test('the demo history mixes every kind of outcome across the four weeks, however many sessions a week has', () => {
+  for (const sessions of [THREE, FOUR, FIVE]) {
+    const seen = new Set();
+    for (let w = 0; w < DS.WEEKS; w += 1) for (const x of DS.assignWeek(sessions, w)) seen.add(x.status);
+    for (const status of ['done', 'partial', 'swapped', 'rest', 'skipped']) assert.ok(seen.has(status), `${status} with ${sessions.length} sessions`);
+  }
+  assert.ok(DS.EXTRAS.length >= 1 && DS.WEIGHTS.length === DS.WEEKS);
+  assert.ok(DS.EXTRAS.every(([w, d]) => w >= 0 && w < DS.WEEKS && d >= 0 && d <= 6));
+});
+test('week one is all done; week three has the knee note on a done STRENGTH session, a swim swap for a cardio session, and a miss', () => {
+  assert.ok(DS.assignWeek(FOUR, 0).every((x) => x.status === 'done'));
+  for (const sessions of [THREE, FOUR, FIVE]) {
+    const w2 = DS.assignWeek(sessions, 2);
+    const i = w2.findIndex((x) => /knee/i.test(x.note || ''));
+    assert.ok(i >= 0, 'the knee note is always placed');
+    assert.strictEqual(w2[i].status, 'done');
+    assert.ok(sessions[i].components.some((c) => c.domain === 'strength'), 'on a strength session');
+    const swap = w2.findIndex((x) => x.status === 'swapped');
+    assert.ok(sessions[swap].components.some((c) => c.domain === 'cardio'), 'the swim replaces a cardio session');
+    assert.strictEqual(w2.filter((x) => x.status === 'skipped').length, 1);
+  }
+});
+test('every session gets exactly one outcome, and the last week is complete', () => {
+  for (const sessions of [THREE, FOUR, FIVE]) for (let w = 0; w < DS.WEEKS; w += 1) {
+    const a = DS.assignWeek(sessions, w);
+    assert.strictEqual(a.length, sessions.length);
+    assert.ok(a.every((x) => x && ['done', 'partial', 'swapped', 'rest', 'skipped'].includes(x.status)));
+  }
+  assert.ok(DS.assignWeek(FOUR, 3).every((x) => x.status === 'done'), 'last week: all done, a little harder');
+});
+test('exactly one demo note mentions knee pain, it triggers the pain notice (not the GP-first one), and no note is guilt-toned', () => {
+  const notes = [];
+  for (let w = 0; w < DS.WEEKS; w += 1) for (const x of DS.assignWeek(FOUR, w)) if (x.note) notes.push(x.note);
+  const knee = notes.filter((n) => /knee/i.test(n));
+  assert.strictEqual(knee.length, 1);
+  const c = checkNotes(knee[0]);
+  assert.deepStrictEqual(c.flags, ['pain']);
+  assert.ok(c.offerEase && !c.suggestGp);
+  for (const n of notes) assert.ok(!CO.BANNED.test(n), n);
+  for (const n of notes.filter((x) => !/knee/i.test(x))) assert.strictEqual(checkNotes(n).flags.length, 0, n);
+});
+test('every scripted outcome becomes a log the real validator accepts, with weights only on loaded exercises', () => {
+  const session = {
+    totalMinutes: 55,
+    components: [{ domain: 'strength', minutes: 30 }],
+    exercises: [
+      { block: 'warmup', position: 0, slug: 'cat-cow', prefill: { kind: 'reps', sets: 1, reps: null, seconds: null } },
+      { block: 'main', position: 2, slug: 'goblet-squat', prefill: { kind: 'reps', sets: 3, reps: 8, seconds: null } },
+      { block: 'main', position: 3, slug: 'dead-bug', prefill: { kind: 'reps', sets: 2, reps: 5, seconds: null } },
+      { block: 'main', position: 4, slug: 'forearm-plank', prefill: { kind: 'hold', sets: 3, reps: null, seconds: 20 } },
+    ],
+  };
+  for (let w = 0; w < DS.WEEKS; w += 1) {
+    for (const script of DS.assignWeek([session, session, session, session], w)) {
+      const v = LG.validateSessionLog(DS.bodyFor(script, session, w));
+      assert.strictEqual(v.status, script.status);
+      if (v.status === 'done') {
+        assert.strictEqual(v.exercises.length, 3, 'only the main work is detailed');
+        assert.strictEqual(v.exercises.find((e) => e.position === 2).weightKg, DS.weightFor(w), 'loaded exercises get a weight');
+        assert.strictEqual(v.exercises.find((e) => e.position === 3).weightKg, null, 'bodyweight work has none');
+      }
+      if (v.status === 'rest' || v.status === 'skipped') assert.deepStrictEqual(v.exercises, []);
+    }
+  }
+  assert.ok(DS.weightFor(3) > DS.weightFor(0), 'weights rise over the four weeks');
 });
 
 console.log(`fitness logging: ${passed} tests passed${process.exitCode ? ' (with failures)' : ''}`);

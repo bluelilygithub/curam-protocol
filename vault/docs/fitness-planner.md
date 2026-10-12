@@ -133,7 +133,9 @@ Diet app link: `getActivitySummary(userId, range)` service (weekly minutes, esti
 
 ## Demo user
 
-Admin overflow menu -> "Create demo user" (or `POST /api/fitness/admin/demo-seed`): `fitness-demo@curam.local` (override with `FITNESS_DEMO_EMAIL`), 60M, very fit before, inactive now, no smoking/alcohol, poor diet, flexible time, gym/pool/bike/dumbbells/trails, no injuries. Password is generated and shown once on creation. Idempotent.
+Admin overflow menu -> **Create or reset demo user** (confirm first), or `POST /api/fitness/admin/demo-seed`. `fitness-demo@curam.local` (override with `FITNESS_DEMO_EMAIL`): 60M, very fit before, inactive now, no smoking/alcohol, poor diet, flexible time, gym/pool/bike/dumbbells/trails, no injuries. The password is generated and shown once, on creation.
+
+**Every run resets** that user's fitness data and rebuilds it: the goal starts four weeks ago (ratings dated then, so the 4-6 week re-rate nudge shows), **four past weeks are planned** (rule-based, no model call) and a mixed history is logged (`demoScript.js`, assigned by kind of session so lighter weeks still get every outcome): week 1 all done and comfortable; week 2 one partly done with a note, one rest; week 3 one "didn't do it", one swapped for a swim, a strength session with the note "Left knee pain on stairs afterwards" (shows the gentle-week prompt and the hide link), and an extra walk; week 4 (last week) done, a little harder, plus some active chores. Weights rise a kilogram from week 3 and there is a weigh-in each Sunday. The current week is made on demand when the demo user opens Today. "Last week" on the Overview, the Month colours, the weekly tiles and the history all have data straight away.
 
 ## Tests
 

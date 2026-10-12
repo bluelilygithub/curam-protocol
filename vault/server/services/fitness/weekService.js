@@ -235,14 +235,14 @@ async function previousBuildMinutes(userId, weekStart) {
 }
 
 /** Create (or, on request, rebuild) the week. Returns the shaped week. */
-async function ensureWeek(userId, { start, refresh = false } = {}) {
+async function ensureWeek(userId, { start, refresh = false, allowPast = false, useAi = true } = {}) {
   const inp = await P.getPlanningInputs(userId);
   const { state } = inp;
   const goal = state.goal;
   if (!goal) throw new ValidationError('Set your 5-year goal first');
   const current = Ph.mondayOf(state.today);
   const weekStart = Ph.mondayOf(start || state.today);
-  if (weekStart !== current && weekStart !== Ph.addDays(current, 7)) throw new ValidationError('Weeks are created for this week and next week only');
+  if (!allowPast && weekStart !== current && weekStart !== Ph.addDays(current, 7)) throw new ValidationError('Weeks are created for this week and next week only');
 
   const existing = await loadWeekRow(userId, weekStart);
   if (existing && !refresh) return buildWeek(userId, existing, state);
@@ -260,7 +260,7 @@ async function ensureWeek(userId, { start, refresh = false } = {}) {
   });
   const generation = existing ? existing.generation + 1 : 0;
   const plan = await generateWeekPlan({
-    userId, weekStart, info, generation, refresh: !!refresh, timezone: state.timezone.timezone,
+    userId, weekStart, info, generation, refresh: !!refresh, useAi, timezone: state.timezone.timezone,
     history: await loadHistory(userId, weekStart),
     person: {
       ratings: state.rating.scores,

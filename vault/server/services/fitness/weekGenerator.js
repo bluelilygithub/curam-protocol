@@ -58,7 +58,7 @@ function fallbackNote({ phase, isDeload, eased }) {
  * @param {number} p.generation  bumps on every regenerate so the rotation and the cache move on
  * @param {string} p.timezone
  */
-async function generateWeekPlan({ userId, weekStart, info, person, history, generation = 0, timezone, refresh = false }) {
+async function generateWeekPlan({ userId, weekStart, info, person, history, generation = 0, timezone, refresh = false, useAi = true }) {
   const easier = info.easier;
   const { sessions, restDays, shortfall } = S.buildSkeleton({
     targets: info.targets,
@@ -159,7 +159,7 @@ async function generateWeekPlan({ userId, weekStart, info, person, history, gene
   let source = 'fallback';
   let model = null;
   let note = null;
-  if (open.length) {
+  if (open.length && useAi) {
     const system = `${GUARDRAILS}\nYou are choosing exercises for one week of a personal program. For each slot id, pick exactly one slug from that slot's options and no other. Prefer variety across the week and avoid choosing the same exercise in two slots. If thingsToWorkAround names a limit and an option clearly conflicts with it, pick another option when one is offered. Write weekNote as 1-2 plain, warm sentences about the character of this week and one thing to focus on. Do not list the targets or repeat numbers: the page already shows them. Strength, balance and mobility are counted in DAYS and can share one session, so never call them separate sessions.`;
     const prompt = `Choose the exercises.\n\nDATA:\n${JSON.stringify(input)}\n\nReturn JSON:\n{"weekNote": string (max 280 chars), "picks": {"<slot id>": "<slug from that slot's options>"}}`;
     const res = await runJson({

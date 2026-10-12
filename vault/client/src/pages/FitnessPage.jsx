@@ -101,6 +101,26 @@ export default function FitnessPage() {
   const [focusRerate, setFocusRerate] = useState(false);
   const [settingGoal, setSettingGoal] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmDemo, setConfirmDemo] = useState(false);
+
+  const runDemoSeed = async () => {
+    setConfirmDemo(false);
+    startProcessing('Setting up the demo user…', 'Planning four past weeks and adding mixed logs.');
+    try {
+      const r = await api.post('/api/fitness/admin/demo-seed', {});
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Could not set up the demo user');
+      const c = d.counts || {};
+      addToast(
+        `${d.email}: ${c.weeks} weeks, ${c.sessions} sessions logged (${c.done} done, ${c.partial} partly, ${c.rest} rest, ${c.skipped} didn't do it, ${c.swapped} swapped), ${c.extras} extras.${d.password ? ` Password: ${d.password}` : ''}`,
+        'success', 25000,
+      );
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      stopProcessing();
+    }
+  };
 
   useEffect(() => {
     api.get('/api/settings/feature-access')
@@ -228,14 +248,7 @@ export default function FitnessPage() {
 
   const overflow = [
     { label: 'Start over (retake the wizard)', icon: 'rotate-ccw', onClick: () => setConfirmReset(true), disabled: !state?.profile && !state?.lifestyle },
-    ...(user?.isAdmin ? [{ label: 'Create demo user', icon: 'user', onClick: async () => {
-      try {
-        const r = await api.post('/api/fitness/admin/demo-seed', {});
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error || 'Could not create the demo user');
-        addToast(d.password ? `${d.email} created. Password: ${d.password}` : `${d.email} refreshed`, 'success', 20000);
-      } catch (err) { addToast(err.message, 'error'); }
-    } }] : []),
+    ...(user?.isAdmin ? [{ label: 'Create or reset demo user', icon: 'user', onClick: () => setConfirmDemo(true) }] : []),
   ];
 
   return (
@@ -279,6 +292,15 @@ export default function FitnessPage() {
       )}
       {modalSlug && (
         <ExerciseModal slug={modalSlug} onClose={() => setModalSlug(null)} onOpen={setModalSlug} onHiddenChange={() => setLibVersion((v) => v + 1)} />
+      )}
+      {confirmDemo && (
+        <ConfirmModal
+          title="Create or reset the demo user?"
+          confirmLabel="Reset demo data"
+          message="This creates the demo user if needed, or wipes their fitness data and rebuilds it: four past weeks of plans with mixed logs (done, partly done, rest, a missed day, a swap, an extra walk, weights, and a note about knee pain). Only the demo user is touched."
+          onConfirm={runDemoSeed}
+          onCancel={() => setConfirmDemo(false)}
+        />
       )}
       {confirmReset && <StartOverModal onConfirm={startOver} onCancel={() => setConfirmReset(false)} />}
     </div>

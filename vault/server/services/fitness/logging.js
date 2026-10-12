@@ -80,12 +80,12 @@ function validDate(s) {
 }
 
 /** Something done that was not in the plan: a walk, a swim, a class. */
-function validateExtra(body, today) {
+function validateExtra(body, today, { windowDays = BACKFILL_DAYS } = {}) {
   const b = body || {};
   const loggedOn = b.date || today;
   if (!validDate(loggedOn)) throw new LogError('That date does not look right');
   if (loggedOn > today) throw new LogError('You can log what you have done, not what is coming');
-  if (loggedOn < addDays(today, -BACKFILL_DAYS)) throw new LogError(`Back-fill goes up to ${BACKFILL_DAYS} days`);
+  if (loggedOn < addDays(today, -windowDays)) throw new LogError(`Back-fill goes up to ${windowDays} days`);
   const title = cleanFreeText(b.title, 80);
   if (!title) throw new LogError('Say what you did');
   const domain = b.domain || 'cardio';

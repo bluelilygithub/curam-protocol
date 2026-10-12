@@ -29,11 +29,11 @@ async function ownedPlanned(userId, sessionId) {
 }
 
 /** Create or replace the log for a planned session. Returns what the route needs to rebuild the week. */
-async function logSession(userId, sessionId, body) {
+async function logSession(userId, sessionId, body, { skipWindow = false } = {}) {
   const state = await P.getState(userId);
   const s = await ownedPlanned(userId, sessionId);
   const date = Ph.addDays(s.weekStart, s.day);
-  LG.checkLoggable(date, state.today);
+  if (skipWindow) { if (date > state.today) throw new LG.LogError('Come back on the day'); } else LG.checkLoggable(date, state.today);
   const v = LG.validateSessionLog(body);
 
   const { rows: planned } = await pool.query(
@@ -96,9 +96,9 @@ async function undoLog(userId, sessionId) {
 }
 
 /** Something done that was not planned. */
-async function logExtra(userId, body) {
+async function logExtra(userId, body, { skipWindow = false } = {}) {
   const state = await P.getState(userId);
-  const v = LG.validateExtra(body, state.today);
+  const v = skipWindow ? LG.validateExtra(body, state.today, { windowDays: 400 }) : LG.validateExtra(body, state.today);
   const { rows } = await pool.query(
     `INSERT INTO fitness_session_logs ("userId","plannedSessionId","loggedOn",status,title,domain,"actualMinutes",effort,note,safety)
      VALUES ($1,NULL,$2,'done',$3,$4,$5,$6,$7,$8) RETURNING id`,
