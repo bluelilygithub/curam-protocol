@@ -66,6 +66,7 @@ export default function RemindersCard() {
   return (
     <div className="space-y-5" data-tour="fitness-reminders">
       <Card title="Reminders" icon="bell" hint="Optional emails to keep you on track. All off until you switch them on, never on a rest day, and never a telling-off.">
+        <InfoTip tip={TIPS.reminders} trigger="text" />
         {!data.emailConfigured && <Notice>Email is not set up on this server yet, so reminders cannot be sent.</Notice>}
         <div className="space-y-3">
           {KINDS.map((k) => (

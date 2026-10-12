@@ -12,7 +12,7 @@ function change(first, latest) {
 
 /**
  * Your own ratings over time: first rating against the latest. This is what the app tracks of your self-reported progress
- * today; what you actually do (logging, effort) arrives with Stage 3 and the charts with Stage 4.
+ * today; what you actually do (logging, effort) is on the dashboard charts.
  */
 export default function RatingProgress({ meta, onRerate, due }) {
   const [rows, setRows] = useState(null);

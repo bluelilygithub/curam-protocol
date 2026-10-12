@@ -65,7 +65,7 @@ const STEPS = [
   {
     id: 'fitness-tabs', group: 'done', view: 'overview', since: 1, selector: '[data-tour="fitness-tabs"]', on: 'bottom',
     title: 'Overview, Goal and Profile',
-    text: 'Today and Week are your plan, Library holds the exercises, Overview is the big picture, Goal shows your five years and lets you change the pace, and Profile is where you edit your answers and re-rate. Logging and charts arrive in the next updates.',
+    text: 'Today and Week are your plan, Library holds the exercises, Log is where you record what you did, Month shows the whole month, Overview is your dashboard of charts, Goal shows your five years and lets you change the pace, and Profile is where you edit your answers, re-rate and set reminders.',
   },
   {
     id: 'fitness-dashboard', group: 'done', view: 'overview', since: 4, selector: '[data-tour="fitness-dashboard"]', on: 'top',

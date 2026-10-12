@@ -74,6 +74,10 @@ export const TIPS = {
     title: 'Where your recent weeks are heading',
     body: 'The dotted line extends the trend of your last four to eight logged weeks (lighter weeks are left out). A flat or falling run is shown as holding steady, the climb is held to the rule the plan itself follows of about 10% a week, and it never goes beyond the plan: it can fall short of it or reach it. It is a rough guide only, and needs at least four logged weeks.',
   },
+  reminders: {
+    title: 'How reminders work',
+    body: 'Three optional emails, all off until you switch them on: your plan in the morning (only on days with a session), one gentle evening note if today is still open, and a re-rate nudge when it is due. Times follow your time zone in Settings. Nothing is sent on a rest day, you can pause for a week, and after three weeks with nothing logged they stop by themselves. Every email has a link to stop it.',
+  },
   fitnessTasks: {
     title: 'How sessions and Tasks stay together',
     body: 'Each upcoming session becomes a task in your Tasks list (category Fitness). Moving the session moves the task, and logging it completes the task. Rest days and sessions you did not do have no task, and a session whose day has passed quietly drops out, so nothing turns red. If you delete a task it stays deleted. You can switch this off here at any time.',
