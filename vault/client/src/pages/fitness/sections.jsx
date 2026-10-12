@@ -67,7 +67,6 @@ export function applyTemplate(draft, template, touched) {
   if (!touched.has('scores')) next.scores = { ...t.ratings };
   if (!touched.has('previousScores')) next.previousScores = { ...t.previous };
   if (!touched.has('previousLabel')) next.previousLabel = t.previousLabel;
-  if (!touched.has('weeklyMinutes') && t.weeklyMinutes != null) next.weeklyMinutes = t.weeklyMinutes;
   if (!touched.has('equipment')) next.equipment = [...t.equipment];
   if (!touched.has('smoking')) next.smoking = t.smoking;
   if (!touched.has('alcohol')) next.alcohol = t.alcohol;
@@ -139,15 +138,17 @@ export function AboutSection({ meta, draft, set, templateInfo, templateError, ti
   );
 }
 
-/** Current weekly activity. Feeds the "Now" row of the goal; left blank, the plan estimates it from your cardio rating. */
-export function ActivitySection({ draft, set, fromTemplate }) {
+/**
+ * Current weekly activity. Feeds the "Now" row of the goal. Never pre-filled: the age-band figure is only a hint, and a
+ * blank answer makes the plan estimate it from the cardio rating.
+ */
+export function ActivitySection({ draft, set, typical }) {
   return (
     <Card title="How active are you right now?">
-      {fromTemplate && <Notice>Pre-filled with a typical figure for your age. Change it to what you really do.</Notice>}
       <div className="max-w-xs">
         <Field
           label="Exercise in a typical week (minutes)"
-          hint="Walking, cycling, swimming, gym, anything that gets you moving. Leave it blank if you are not sure and we will estimate it from your cardio rating."
+          hint={`${typical != null ? `Typical for your age: ${typical}. ` : ''}Walking, cycling, swimming, gym, anything that gets you moving. Leave it blank if you are not sure and we will estimate it from your cardio rating.`}
         >
           <input
             type="number"
@@ -157,6 +158,7 @@ export function ActivitySection({ draft, set, fromTemplate }) {
             className={inputCls}
             style={FIELD}
             value={draft.weeklyMinutes}
+            placeholder={typical != null ? String(typical) : ''}
             onChange={(e) => set('weeklyMinutes', e.target.value)}
           />
         </Field>

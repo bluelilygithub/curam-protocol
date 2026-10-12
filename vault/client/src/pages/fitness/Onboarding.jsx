@@ -74,7 +74,7 @@ export default function Onboarding({ meta, state, onSaved }) {
       {step === 0 && <AboutSection meta={meta} draft={draft} set={set} templateInfo={tpl.info} templateError={tpl.error} timezoneInfo={state.timezone} />}
       {step === 1 && (
         <>
-          <ActivitySection draft={draft} set={set} fromTemplate={!touched.current.has('weeklyMinutes')} />
+          <ActivitySection draft={draft} set={set} typical={tpl.info?.template?.weeklyMinutes ?? state.typicalWeeklyMinutes} />
           <RatingsSection meta={meta} draft={draft} set={set} fromTemplate={!touched.current.has('scores')} />
         </>
       )}

@@ -200,6 +200,7 @@ async function getState(userId) {
     } : null,
     rating,
     ratingDue: due,
+    typicalWeeklyMinutes: band ? (cfg.ageTemplates[band.id]?.weeklyMinutes ?? null) : null,
     goal,
     safety,
   };

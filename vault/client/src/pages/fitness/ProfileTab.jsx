@@ -59,7 +59,7 @@ export default function ProfileTab({ meta, state, onChanged, focusRerate }) {
   return (
     <div className="max-w-3xl mx-auto w-full space-y-5">
       <AboutSection meta={meta} draft={draft} set={set} timezoneInfo={state.timezone} />
-      <ActivitySection draft={draft} set={set} />
+      <ActivitySection draft={draft} set={set} typical={state.typicalWeeklyMinutes} />
       <LifestyleSection meta={meta} draft={draft} set={set} />
       <WorkAroundSection draft={draft} set={set} />
       <div className="flex justify-end">

@@ -236,7 +236,7 @@ test('someone already above the target shows their real minutes but the path hol
   assert.strictEqual(plan.now.aerobicModerateMin, 400);
   assert.ok(plan.milestones.every((m) => m.weekly.aerobicModerateMin === plan.endWeekly.aerobicModerateMin));
 });
-test('every age template pre-fills weekly minutes', () => {
+test('every age template has a typical weekly-minutes figure (shown as a hint, never pre-filled)', () => {
   for (const band of C.AGE_BANDS) assert.ok(Number.isInteger(C.DEFAULTS.ageTemplates[band.id].weeklyMinutes));
 });
 
