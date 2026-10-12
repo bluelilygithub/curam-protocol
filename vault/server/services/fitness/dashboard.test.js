@@ -203,4 +203,56 @@ test('a person with no weeks yet gets an empty but valid dashboard', () => {
   assert.strictEqual(d.projection.status, 'too_little');
 });
 
+// ── step 2: effort, loads, weights ──
+test('weekly effort averages sessions done in some way and extras; rest, skipped and unlogged are left out; no effort is null', () => {
+  const w = S({ ...week(1, 30), sessions: [
+    { day: 0, status: 'done', components: cardio(30), effort: 4 },
+    { day: 1, status: 'partial', components: cardio(30), effort: 7 },
+    { day: 2, status: 'skipped', components: cardio(30), effort: 9 },
+    { day: 3, status: 'rest', components: cardio(30), effort: 9 },
+    { day: 4, status: 'planned', components: cardio(30), effort: null },
+  ], extras: [{ domain: 'cardio', minutes: 20, date: weekAgo(1), effort: 3 }] });
+  assert.strictEqual(w.effort.count, 3);
+  assert.strictEqual(w.effort.avg, 4.7);
+  const none = S({ ...week(1, 30), sessions: [{ day: 0, status: 'done', components: cardio(30), effort: null }], extras: [] });
+  assert.deepStrictEqual(none.effort, { avg: null, count: 0 });
+});
+test('loads are listed per exercise, most logged first, oldest point first; zero or missing weights are ignored', () => {
+  const rows = [
+    { slug: 'goblet-squat', kg: 6, on: '2026-09-01', effort: 5 },
+    { slug: 'goblet-squat', kg: 7, on: '2026-09-15', effort: 6 },
+    { slug: 'goblet-squat', kg: 6, on: '2026-08-20', effort: 4 },
+    { slug: 'bent-row', kg: 8, on: '2026-09-02', effort: null },
+    { slug: 'bent-row', kg: 0, on: '2026-09-09', effort: 5 },
+    { slug: 'bent-row', kg: null, on: '2026-09-10', effort: 5 },
+  ];
+  const out = D.shapeLoads(rows, (s) => s.toUpperCase());
+  assert.deepStrictEqual(out.map((x) => x.slug), ['goblet-squat', 'bent-row']);
+  assert.deepStrictEqual(out[0].points.map((p) => p.on), ['2026-08-20', '2026-09-01', '2026-09-15']);
+  assert.strictEqual(out[1].points.length, 1);
+  assert.strictEqual(out[0].name, 'GOBLET-SQUAT');
+  assert.deepStrictEqual(D.shapeLoads([]), []);
+  assert.strictEqual(D.shapeLoads(Array.from({ length: 12 }, (_, i) => ({ slug: `ex-${i}`, kg: 5, on: '2026-09-01' })), (s) => s, 8).length, 8);
+});
+test('weights are oldest first with a plain start-to-latest change, and one weigh-in has no change', () => {
+  const w = D.shapeWeights([{ kg: 85, on: '2026-09-20' }, { kg: 87, on: '2026-08-01' }, { kg: 0, on: '2026-09-25' }]);
+  assert.strictEqual(w.first.kg, 87);
+  assert.strictEqual(w.latest.kg, 85);
+  assert.strictEqual(w.change, -2);
+  assert.strictEqual(D.shapeWeights([{ kg: 85, on: '2026-09-20' }]).change, null);
+  assert.deepStrictEqual(D.shapeWeights([]), { points: [], first: null, latest: null, change: null });
+});
+test('buildDashboard carries effort for the window, plus loads and weights', () => {
+  const weeks = [0, 1, 2, 3, 4].map((n) => week(n, 60));
+  const d = D.buildDashboard({ weeks, milestones: MILESTONES, today: TODAY, range: '4', loads: [{ slug: 'x', kg: 5, on: '2026-10-01', effort: 4 }], weights: [{ kg: 80, on: '2026-10-01' }], nameOf: (s) => `n-${s}` });
+  assert.strictEqual(d.effort.length, 4);
+  assert.strictEqual(d.effort.at(-1).weekStart, weekAgo(0));
+  assert.strictEqual(d.effort[0].avg, 4);
+  assert.strictEqual(d.loads[0].name, 'n-x');
+  assert.strictEqual(d.weights.latest.kg, 80);
+  const empty = D.buildDashboard({ weeks: [], milestones: [], today: TODAY });
+  assert.deepStrictEqual(empty.loads, []);
+  assert.deepStrictEqual(empty.weights.points, []);
+});
+
 console.log(`fitness dashboard: ${passed} tests passed${process.exitCode ? ' (with failures)' : ''}`);

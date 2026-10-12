@@ -35,6 +35,11 @@ function summariseWeek(w, today) {
   const done = weekDone(sessions, extras);
   const sessionsDone = live.reduce((n, s) => n + (s.status === 'done' || s.status === 'swapped' ? 1 : s.status === 'partial' ? 0.5 : 0), 0);
   const coverage = live.length ? logged.length / live.length : 0;
+  // how hard the week felt: only sessions done in some way, and extras, that have an effort recorded
+  const efforts = [
+    ...sessions.filter((s) => (s.status === 'done' || s.status === 'swapped' || s.status === 'partial') && s.effort != null).map((s) => s.effort),
+    ...extras.filter((x) => x.effort != null).map((x) => x.effort),
+  ];
   const t = w.targets || {};
   const finished = addDays(w.weekStart, 6) < today;
   const restByDay = new Map((w.restDays || []).map((r) => [r.day, r]));
@@ -57,6 +62,7 @@ function summariseWeek(w, today) {
     sessionsPlanned: live.length,
     sessionsDone,
     coverage,
+    effort: { avg: efforts.length ? round1(efforts.reduce((a, b) => a + b, 0) / efforts.length) : null, count: efforts.length },
     usable: finished && !w.isDeload && live.length > 0 && coverage >= MIN_COVERAGE,
     days,
   };
@@ -168,8 +174,34 @@ function projection(summaries, milestones, today) {
   };
 }
 
+/**
+ * Logged weights per loaded exercise, for the "how much you lifted" chart. Rows are { slug, kg, on, effort }; only exercises
+ * with at least one logged weight are listed, most-logged first (ties by name), at most `limit`, each oldest first.
+ */
+function shapeLoads(rows, nameOf = (s) => s, limit = 8) {
+  const by = new Map();
+  for (const r of rows) {
+    if (!(r.kg > 0)) continue;
+    if (!by.has(r.slug)) by.set(r.slug, []);
+    by.get(r.slug).push({ on: r.on, kg: r.kg, effort: r.effort ?? null });
+  }
+  return [...by.entries()]
+    .map(([slug, points]) => ({ slug, name: nameOf(slug), points: points.sort((a, b) => (a.on < b.on ? -1 : a.on > b.on ? 1 : 0)) }))
+    .sort((a, b) => b.points.length - a.points.length || (a.name < b.name ? -1 : 1))
+    .slice(0, limit);
+}
+
+/** Weigh-ins oldest first, with a plain start-to-latest change. No target, no judgement: it is a number. */
+function shapeWeights(rows) {
+  const points = rows.filter((r) => r.kg > 0).map((r) => ({ on: r.on, kg: r.kg })).sort((a, b) => (a.on < b.on ? -1 : a.on > b.on ? 1 : 0));
+  if (!points.length) return { points: [], first: null, latest: null, change: null };
+  const first = points[0];
+  const latest = points[points.length - 1];
+  return { points, first, latest, change: points.length > 1 ? round1(latest.kg - first.kg) : null };
+}
+
 /** Everything the dashboard needs for a window, from week records (see dashboardService.js for where they come from). */
-function buildDashboard({ weeks, milestones = [], today, range = '12' }) {
+function buildDashboard({ weeks, milestones = [], today, range = '12', loads = [], weights = [], nameOf }) {
   const all = weeks.map((w) => summariseWeek(w, today));
   const shown = windowWeeks(all, range, today);
   const current = all.find((s) => s.current) || null;
@@ -182,7 +214,10 @@ function buildDashboard({ weeks, milestones = [], today, range = '12' }) {
     calendar: calendarWeeks.map((s) => ({ weekStart: s.weekStart, isDeload: s.isDeload, days: s.days })),
     balance: domainBalance(all),
     projection: projection(all, milestones, today),
+    effort: shown.map((s) => ({ weekStart: s.weekStart, isDeload: s.isDeload, current: s.current, avg: s.effort.avg, count: s.effort.count })),
+    loads: shapeLoads(loads, nameOf),
+    weights: shapeWeights(weights),
   };
 }
 
-module.exports = { summariseWeek, windowWeeks, domainBalance, fitLine, projection, buildDashboard, WHO_UPPER, MIN_PROJECTION_WEEKS };
+module.exports = { shapeLoads, shapeWeights, summariseWeek, windowWeeks, domainBalance, fitLine, projection, buildDashboard, WHO_UPPER, MIN_PROJECTION_WEEKS };

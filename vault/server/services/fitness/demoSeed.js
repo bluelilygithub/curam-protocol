@@ -75,6 +75,17 @@ async function seedDemoUser(scenario = 'mixed') {
     note: 'Very fit until about 50, sedentary last 2 years.',
   });
   await pool.query(`UPDATE fitness_ratings SET "ratedAt"=$2 WHERE "userId"=$1`, [userId, `${startsOn}T08:00:00Z`]);
+  // re-rates along the way (improving a little), so the ratings-over-time charts have lines; the last one is about five weeks ago
+  const bump = (scores, keys) => Object.fromEntries(Object.entries(scores).map(([k, v]) => [k, keys.includes(k) ? Math.min(5, v + 1) : v]));
+  const rerates = weeksBack >= 12 ? [[4, ['strength']], [7, ['strength', 'flexibility']]] : [[Math.max(1, weeksBack - 5), ['strength']]];
+  let rated = SCORES;
+  for (const [weekIdx, keys] of rerates) {
+    rated = bump(rated, keys);
+    await pool.query(
+      `INSERT INTO fitness_ratings ("userId", kind, scores, "ratedAt") VALUES ($1,'rerate',$2,$3)`,
+      [userId, JSON.stringify(rated), `${Ph.addDays(startsOn, 7 * weekIdx)}T08:00:00Z`],
+    );
+  }
 
   const state = await P.getState(userId);
   const plan = T.buildMilestones({ bandId: state.profile.bandId, scores: SCORES, previous: PREVIOUS, ambition: C.DEFAULT_AMBITION, startsOn, currentMinutes: 0 }, cfg);
@@ -116,7 +127,7 @@ async function seedDemoUser(scenario = 'mixed') {
   }
 
   // weigh-ins: the Sunday of each of the four weeks
-  await pool.query(`DELETE FROM health_weight_log WHERE "userId"=$1 AND source='fitness-demo'`, [userId]);
+  await pool.query(`DELETE FROM health_weight_log WHERE "userId"=$1`, [userId]);
   for (let i = 0; i < weeksBack; i += 1) {
     const on = Ph.addDays(startsOn, 7 * i + 6);
     if (on >= today) continue;

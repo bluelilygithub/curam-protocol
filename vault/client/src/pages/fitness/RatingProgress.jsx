@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import api from '../../utils/apiClient';
 import { Card, InfoTip, SecondaryButton, formatDate } from './ui';
 import { TIPS } from './tips';
+import { RatingsChart } from './DashboardCharts';
 
 function change(first, latest) {
   const d = latest - first;
@@ -38,6 +39,8 @@ export default function RatingProgress({ meta, onRerate, due }) {
           You have rated yourself once, on {formatDate(first.ratedOn)}. Re-rate every 4 to 6 weeks and the change shows up here.
         </p>
       ) : (
+        <div className="space-y-4">
+        <RatingsChart rows={rows} domains={meta.domains} />
         <div className="overflow-x-auto">
           <table className="w-full text-sm" style={{ color: 'var(--color-text)' }}>
             <thead>
@@ -60,9 +63,10 @@ export default function RatingProgress({ meta, onRerate, due }) {
             </tbody>
           </table>
         </div>
+        </div>
       )}
       <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-        {rows.length} rating{rows.length === 1 ? '' : 's'} so far. These are your own ratings on a 1 to 5 scale. A chart and what you actually did each week arrive in later updates.
+        {rows.length} rating{rows.length === 1 ? '' : 's'} so far. These are your own ratings on a 1 to 5 scale. What you actually did each week is on the dashboard charts.
       </p>
       {onRerate && <SecondaryButton onClick={onRerate}>{due ? 'Re-rate now' : 'Re-rate'}</SecondaryButton>}
     </Card>

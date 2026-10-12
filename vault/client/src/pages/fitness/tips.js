@@ -74,6 +74,18 @@ export const TIPS = {
     title: 'Where your recent weeks are heading',
     body: 'The dotted line extends the trend of your last four to eight logged weeks (lighter weeks are left out). A flat or falling run is shown as holding steady, the climb is held to the rule the plan itself follows of about 10% a week, and it never goes beyond the plan: it can fall short of it or reach it. It is a rough guide only, and needs at least four logged weeks.',
   },
+  dashEffort: {
+    title: 'How hard weeks have felt',
+    body: 'The average of the 1 to 10 effort scores you recorded each week (sessions done in some way, plus extras). It is your own feeling, not a test. The plan uses it: three comfortable weeks in a row nudge the next week up, and two hard weeks ease it off.',
+  },
+  dashLoads: {
+    title: 'The weight you lifted',
+    body: 'The weight logged for one exercise each time you did it. Pick an exercise from the list. Only exercises where you have logged a weight appear.',
+  },
+  dashWeight: {
+    title: 'Your weight',
+    body: 'Only if you add weigh-ins, and only as a number: there is no target here and no colour for up or down. Weight moves around from day to day, so look at the direction over weeks.',
+  },
   ratings: {
     title: 'What your ratings do',
     body: 'Your own 1 to 5 ratings decide which versions of each exercise you are offered in the weeks to come, and they are kept so you can see how you have changed. They are not checked by anyone. Your five-year goal stays as it is until you revisit it.',

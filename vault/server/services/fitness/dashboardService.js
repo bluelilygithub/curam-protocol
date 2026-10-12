@@ -5,9 +5,11 @@
 const { pool } = require('../../db');
 const P = require('./profileService');
 const D = require('./dashboard');
+const L = require('./library');
 
 const parse = (v, fb) => (v == null ? fb : typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch { return fb; } })() : v);
 
+const { mondayOf } = require('./phases');
 const addDays = (iso, n) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
 
 async function loadWeeks(userId, fromWeekStart) {
@@ -42,6 +44,23 @@ async function loadWeeks(userId, fromWeekStart) {
   });
 }
 
+/** Logged weights per exercise and weigh-ins since a date (the window's start, or ever for 'all'). */
+async function loadProgress(userId, fromDate) {
+  const { rows: loads } = await pool.query(
+    `SELECT e.slug, e."weightKg"::float AS kg, to_char(l."loggedOn",'YYYY-MM-DD') AS "on", l.effort
+       FROM fitness_exercise_logs e JOIN fitness_session_logs l ON l.id = e."sessionLogId"
+      WHERE e."userId"=$1 AND e."weightKg" IS NOT NULL AND l.status IN ('done','partial') AND l."loggedOn" >= $2
+      ORDER BY l."loggedOn", e.id`,
+    [userId, fromDate],
+  );
+  const { rows: weights } = await pool.query(
+    `SELECT "weightKg"::float AS kg, to_char("measuredOn",'YYYY-MM-DD') AS "on"
+       FROM health_weight_log WHERE "userId"=$1 AND "measuredOn" >= $2 ORDER BY "measuredOn", id`,
+    [userId, fromDate],
+  );
+  return { loads, weights };
+}
+
 async function getDashboard(userId, range) {
   const r = ['4', '12', 'all'].includes(String(range)) ? String(range) : '12';
   const state = await P.getState(userId);
@@ -49,7 +68,11 @@ async function getDashboard(userId, range) {
   // 'all' reads up to five years back; the others only need enough history for the trend and the balance chart
   const back = r === 'all' ? 7 * 260 : 7 * 40;
   const weeks = await loadWeeks(userId, addDays(today, -back));
-  return D.buildDashboard({ weeks, milestones: state.goal?.milestones || [], today, range: r });
+  // the charts follow the toggle: 4 or 12 weeks back from this week's Monday, or everything
+  const windowStart = r === 'all' ? '1900-01-01' : addDays(mondayOf(today), -7 * (Number(r) - 1));
+  const { loads, weights } = await loadProgress(userId, windowStart);
+  const bySlug = L.getLibrary().bySlug;
+  return D.buildDashboard({ weeks, milestones: state.goal?.milestones || [], today, range: r, loads, weights, nameOf: (s) => bySlug.get(s)?.name || s });
 }
 
 module.exports = { getDashboard };

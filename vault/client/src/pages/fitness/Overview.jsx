@@ -5,7 +5,7 @@ import BaselineView from './BaselineView';
 import RatingProgress from './RatingProgress';
 import ReflectionTile from './ReflectionTile';
 import AerobicChart from './AerobicChart';
-import { ActivityChart, BalanceChart, ChartHeading, ConsistencyCalendar, GlanceTile } from './DashboardCharts';
+import { ActivityChart, BalanceChart, ChartHeading, ConsistencyCalendar, EffortChart, GlanceTile, LoadsChart, WeightChart } from './DashboardCharts';
 import { TIPS } from './tips';
 import { addDays, mondayOf } from './useWeek';
 
@@ -123,6 +123,21 @@ export default function Overview({ meta, state, goTo }) {
         <Card className="lg:col-span-2">
           <ChartHeading title="Your days" tip={TIPS.dashCalendar} />
           {data ? <ConsistencyCalendar calendar={data.calendar} /> : <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>}
+        </Card>
+
+        <Card>
+          <ChartHeading title="How hard weeks have felt" tip={TIPS.dashEffort} />
+          {data ? <EffortChart effort={data.effort} /> : <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>}
+        </Card>
+
+        <Card>
+          <ChartHeading title="The weight you lifted" tip={TIPS.dashLoads} />
+          {data ? <LoadsChart loads={data.loads} /> : <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>}
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <ChartHeading title="Your weight" tip={TIPS.dashWeight} />
+          {data ? <WeightChart weights={data.weights} /> : <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>}
         </Card>
 
         <ReflectionTile weekStart={addDays(mondayOf(state.today), -7)} title="Last week" />
