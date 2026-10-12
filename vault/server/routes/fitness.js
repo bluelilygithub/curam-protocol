@@ -20,6 +20,18 @@ const CS = require('../services/fitness/coachService');
 
 const router = express.Router();
 
+// Why a tip is plain (no model set, bad reply) is for the admin running the app. Everyone else just sees the tip.
+// The reason is always logged server side (ai.js).
+router.use((req, res, next) => {
+  if (!req.user?.isAdmin) {
+    const json = res.json.bind(res);
+    res.json = (body) => json(body && typeof body === 'object'
+      ? JSON.parse(JSON.stringify(body, (k, v) => (k === 'tipsNote' ? undefined : v)))
+      : body);
+  }
+  next();
+});
+
 function fail(res, err, where) {
   if (err instanceof P.ValidationError || err.status === 400) return res.status(400).json({ error: err.message });
   if (err.status === 404) return res.status(404).json({ error: err.message });
@@ -279,7 +291,8 @@ router.post('/sessions/:id/tips', aiLimiter, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad session id' });
-    res.json(await CS.tipsForSession(req.user.id, id));
+    const out = await CS.tipsForSession(req.user.id, id);
+    res.json(req.user.isAdmin ? out : { tips: out.tips, source: out.source });
   } catch (err) { fail(res, err, 'tips'); }
 });
 

@@ -50,6 +50,8 @@ async function seedDemoUser(scenario = 'mixed') {
     created = true;
   }
   const userId = rows[0].id;
+  // the demo user is never an admin, on any environment
+  await pool.query('UPDATE users SET "isAdmin"=FALSE WHERE id=$1', [userId]);
 
   // Born 60 years and ~2 months ago, so the age band is stable for the life of a demo.
   const { timezone } = await require('./timezone').resolveUserTimezone(userId);

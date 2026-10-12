@@ -196,7 +196,19 @@ function shapeWeek(row, sessions, state) {
   };
 }
 
+/** Fixes weeks where a session was moved onto a planned rest day before the rest followed it. Idempotent. */
+async function repairRestDays(userId) {
+  const { rows } = await pool.query(`SELECT id, "restDays" FROM fitness_weeks WHERE "userId"=$1 AND "restDays" @> '[{"kind":"planned"}]'::jsonb`, [userId]);
+  for (const w of rows) {
+    const restDays = parse(w.restDays, []);
+    const sessions = (await loadSessions(w.id, userId)).map((x) => ({ day: x.day, status: x.status, movedFrom: x.movedFrom }));
+    const fixed = S.repairRestDays({ restDays, sessions });
+    if (fixed !== restDays) await pool.query('UPDATE fitness_weeks SET "restDays"=$3 WHERE id=$1 AND "userId"=$2', [w.id, userId, JSON.stringify(fixed)]);
+  }
+}
+
 async function getWeek(userId, start) {
+  await repairRestDays(userId);
   const state = await P.getState(userId);
   const weekStart = Ph.mondayOf(start || state.today);
   const row = await loadWeekRow(userId, weekStart);
@@ -414,6 +426,14 @@ async function moveSession(userId, sessionId, { day, slot }) {
     `UPDATE fitness_planned_sessions SET day=$3, slot=$4, status=$5, "movedFrom"=$6 WHERE id=$1 AND "userId"=$2`,
     [sessionId, userId, day, slot, back ? 'planned' : 'moved', back ? null : JSON.stringify(original)],
   );
+  // a planned rest day follows the session that left it: moving onto it moves the rest to the day just vacated
+  if (s.status !== 'rest') {
+    const row = await loadWeekRow(userId, s.weekStart);
+    const sessions = (await loadSessions(row.id, userId)).map((x) => ({ day: x.day, status: x.status }));
+    const restDays = parse(row.restDays, []);
+    const next = S.swapRestOnMove({ restDays, sessions, fromDay: s.day, toDay: day });
+    if (next !== restDays) await pool.query('UPDATE fitness_weeks SET "restDays"=$3, "updatedAt"=NOW() WHERE id=$1 AND "userId"=$2', [row.id, userId, JSON.stringify(next)]);
+  }
   return getWeek(userId, s.weekStart);
 }
 
@@ -500,6 +520,7 @@ async function getToday(userId) {
  * was never made are marked as having no plan. Past weeks only exist if they were made.
  */
 async function getMonth(userId, month) {
+  await repairRestDays(userId);
   const state = await P.getState(userId);
   const m = /^\d{4}-\d{2}$/.test(month || '') ? month : state.today.slice(0, 7);
   const first = `${m}-01`;

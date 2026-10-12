@@ -215,7 +215,41 @@ function planRestDay({ sessions, day, restDays = [], minDay = 0, twiceDaily = fa
   return { moves, rested };
 }
 
+const LIVE = (s) => s.status !== 'rest';
+
+/**
+ * A planned rest day follows the session that was moved off it, not the calendar: when a session lands on a planned rest day and
+ * the day it left is now empty, the rest moves to that vacated day. Budget rest days (taken by choice) stay where they were put.
+ * @returns {{ day:number, kind:string }[]} the new rest days (same array when nothing changes)
+ */
+function swapRestOnMove({ restDays, sessions, fromDay, toDay }) {
+  if (fromDay === toDay) return restDays;
+  const onto = restDays.find((r) => r.day === toDay && r.kind === 'planned');
+  if (!onto) return restDays;
+  if (restDays.some((r) => r.day === fromDay)) return restDays; // already a rest day
+  if (sessions.some((s) => LIVE(s) && s.day === fromDay)) return restDays; // not vacated
+  return restDays.map((r) => (r === onto ? { ...r, day: fromDay } : r));
+}
+
+/**
+ * Repairs a week where a session was moved onto a planned rest day before the rule above existed: a planned rest day with a live
+ * session on it, and an empty day that a moved session came from, swap. Safe to run again: a clean week comes back unchanged.
+ */
+function repairRestDays({ restDays, sessions }) {
+  let out = restDays;
+  for (const r of restDays) {
+    if (r.kind !== 'planned') continue;
+    const here = sessions.filter((s) => LIVE(s) && s.day === r.day);
+    if (!here.length) continue;
+    const origin = here.map((s) => s.movedFrom?.day).find((d) => Number.isInteger(d) && d !== r.day
+      && !out.some((x) => x.day === d) && !sessions.some((s) => LIVE(s) && s.day === d));
+    if (origin != null) out = out.map((x) => (x === r ? { ...x, day: origin } : x));
+  }
+  return out;
+}
+
 module.exports = {
+  swapRestOnMove, repairRestDays,
   SLOTS, SLOT_HOURS, DAY_NAMES, STRENGTH_GAP_HOURS, WARMUP_MIN, COOLDOWN_MIN,
   isHotMonth, buildSkeleton, softNotes, planRestDay, hourOf, isStrength, spread,
 };

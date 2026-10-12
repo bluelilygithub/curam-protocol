@@ -643,5 +643,25 @@ const goal = makeGoal();
     for (const s of data.sessions) for (const slot of s.slots) for (const o of slot.options) assert.ok(slugs.has(o.slug));
   });
 
+  await test('a planned rest day follows the session moved off it (Thursday strength moved onto rest Wednesday)', () => {
+    const rest = [{ day: 2, kind: 'planned' }, { day: 6, kind: 'planned' }];
+    const after = [{ day: 2, status: 'moved' }, { day: 0, status: 'planned' }]; // Thursday (3) now empty
+    const next = S.swapRestOnMove({ restDays: rest, sessions: after, fromDay: 3, toDay: 2 });
+    assert.deepStrictEqual(next.map((r) => r.day).sort(), [3, 6]);
+    assert.strictEqual(S.swapRestOnMove({ restDays: rest, sessions: [...after, { day: 3, status: 'planned' }], fromDay: 3, toDay: 2 }), rest, 'old day still has a session: nothing changes');
+    assert.strictEqual(S.swapRestOnMove({ restDays: [{ day: 2, kind: 'budget' }], sessions: after, fromDay: 3, toDay: 2 }).length, 1);
+    assert.deepStrictEqual(S.swapRestOnMove({ restDays: [{ day: 2, kind: 'budget' }], sessions: after, fromDay: 3, toDay: 2 }), [{ day: 2, kind: 'budget' }], 'budget rest stays put');
+    const back = S.swapRestOnMove({ restDays: next, sessions: [{ day: 3, status: 'planned' }], fromDay: 2, toDay: 3 });
+    assert.deepStrictEqual(back.map((r) => r.day).sort(), [2, 6], 'moving back restores it');
+  });
+  await test('repairing an old week swaps the rest day to where the moved session came from, and is idempotent', () => {
+    const rest = [{ day: 2, kind: 'planned' }, { day: 6, kind: 'planned' }];
+    const sessions = [{ day: 2, status: 'moved', movedFrom: { day: 3, slot: 'morning' } }, { day: 0, status: 'planned' }];
+    const fixed = S.repairRestDays({ restDays: rest, sessions });
+    assert.deepStrictEqual(fixed.map((r) => r.day).sort(), [3, 6]);
+    assert.strictEqual(S.repairRestDays({ restDays: fixed, sessions }), fixed);
+    assert.strictEqual(S.repairRestDays({ restDays: rest, sessions: [{ day: 0, status: 'planned' }] }), rest);
+  });
+
   console.log(`fitness week: ${passed} tests passed${process.exitCode ? ' (with failures)' : ''}`);
 })();
