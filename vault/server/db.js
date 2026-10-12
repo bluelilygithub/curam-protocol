@@ -1122,6 +1122,9 @@ async function initSchema() {
     await client.query(`ALTER TABLE fitness_planned_sessions ADD COLUMN IF NOT EXISTS "taskSynced" BOOLEAN NOT NULL DEFAULT FALSE`);
     await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "fitnessSessionId" INTEGER REFERENCES fitness_planned_sessions(id) ON DELETE CASCADE`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_tasks_fitness_session ON tasks ("fitnessSessionId") WHERE "fitnessSessionId" IS NOT NULL`);
+    // this week's Fitness progress as a goal in /goals: which objective and key results are Fitness's own
+    await client.query(`ALTER TABLE objectives ADD COLUMN IF NOT EXISTS source TEXT`);
+    await client.query(`ALTER TABLE key_results ADD COLUMN IF NOT EXISTS source TEXT`);
     await client.query(`ALTER TABLE fitness_profiles ADD COLUMN IF NOT EXISTS "dumbbellKg" JSONB NOT NULL DEFAULT '[]'`);
     await client.query(`ALTER TABLE fitness_session_logs ADD COLUMN IF NOT EXISTS "tipsSource" TEXT`);
     await client.query(`ALTER TABLE fitness_session_logs ADD COLUMN IF NOT EXISTS "tipsNote" TEXT`);

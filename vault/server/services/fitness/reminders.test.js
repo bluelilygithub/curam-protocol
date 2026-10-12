@@ -61,6 +61,9 @@ test('everything is off until switched on', () => {
   assert.strictEqual(d.catchup.on, false);
   assert.strictEqual(d.rerate.on, false);
   assert.strictEqual(d.showInTasks, true);
+  assert.strictEqual(d.goalLink, false, 'the Goals link is opt-in');
+  assert.strictEqual(R.cleanSettings({ goalLink: true }).goalLink, true);
+  assert.strictEqual(R.cleanSettings({ goalLink: 'yes' }).goalLink, false);
 });
 test('each email goes once a day', () => {
   assert.deepStrictEqual(due({ state: { lastSent: { morning: DAY } } }), []);
@@ -193,6 +196,14 @@ test('the task follows the session: done closes it, an undone session reopens it
   assert.strictEqual(T.nextTaskStatus('todo', 'done'), 'todo');
   assert.strictEqual(T.nextTaskStatus('todo', 'in-progress'), 'in-progress');
   assert.strictEqual(T.nextTaskStatus('todo', 'todo'), 'todo');
+});
+
+// ── this week as a goal ──
+const G = require('./fitnessGoal');
+test('the goal numbers: partly done counts half, rest is not a session, minutes are rounded', () => {
+  const n = G.goalNumbers({ sessionsDone: 2.5, sessionsPlanned: 4, done: { aerobicMinutes: 62.4 }, targets: { aerobicMinutes: 89.6 } });
+  assert.deepStrictEqual(n, { sessions: { current: 2.5, target: 4 }, minutes: { current: 62, target: 90 } });
+  assert.deepStrictEqual(G.goalNumbers({ sessionsDone: 0, sessionsPlanned: 0, done: { aerobicMinutes: 0 }, targets: { aerobicMinutes: 0 } }).sessions, { current: 0, target: 0 });
 });
 
 console.log(`fitness reminders: ${passed} tests passed${process.exitCode ? ' (with failures)' : ''}`);

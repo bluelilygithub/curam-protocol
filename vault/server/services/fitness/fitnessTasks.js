@@ -188,6 +188,7 @@ function syncSoon(userId, { force = true } = {}) {
       const P = require('./profileService');
       const state = await P.getState(userId);
       await syncUserTasks(userId, state.today);
+      await require('./fitnessGoal').syncFitnessGoal(userId, state.today);
     } catch (err) {
       console.warn('[fitness/tasks] sync failed:', err.message);
     }

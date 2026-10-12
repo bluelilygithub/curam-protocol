@@ -16,6 +16,7 @@ const DEFAULT_SETTINGS = {
   catchup: { on: false, time: '18:00' },
   rerate: { on: false },
   showInTasks: true,
+  goalLink: false,
   pausedUntil: null,
 };
 
@@ -50,6 +51,7 @@ function cleanSettings(raw) {
     catchup: { on: r.catchup?.on === true, time: time(r.catchup?.time, DEFAULT_SETTINGS.catchup.time) },
     rerate: { on: r.rerate?.on === true },
     showInTasks: r.showInTasks !== false,
+    goalLink: r.goalLink === true,
     pausedUntil: typeof r.pausedUntil === 'string' && DATE_RE.test(r.pausedUntil) ? r.pausedUntil : null,
   };
 }

@@ -75,4 +75,4 @@ async function getDashboard(userId, range) {
   return D.buildDashboard({ weeks, milestones: state.goal?.milestones || [], today, range: r, loads, weights, nameOf: (s) => bySlug.get(s)?.name || s });
 }
 
-module.exports = { getDashboard };
+module.exports = { getDashboard, loadWeeks };

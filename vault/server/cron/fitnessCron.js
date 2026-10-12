@@ -9,12 +9,15 @@ let task = null;
 async function syncAllTasks() {
   const { syncUserTasks } = require('../services/fitness/fitnessTasks');
   const P = require('../services/fitness/profileService');
-  const { rows } = await pool.query(`SELECT "userId" FROM fitness_profiles WHERE reminders->>'showInTasks' IS DISTINCT FROM 'false'`);
+  const { syncFitnessGoal } = require('../services/fitness/fitnessGoal');
+  // everyone with a profile: each part checks its own switch (tasks default on, the goal default off)
+  const { rows } = await pool.query(`SELECT "userId" FROM fitness_profiles`);
   let synced = 0;
   for (const r of rows) {
     try {
       const state = await P.getState(r.userId);
       await syncUserTasks(r.userId, state.today);
+      await syncFitnessGoal(r.userId, state.today);
       synced += 1;
     } catch (err) {
       console.warn(`[fitness-cron] task sync for user ${r.userId}: ${err.message}`);

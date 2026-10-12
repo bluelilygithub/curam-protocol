@@ -78,6 +78,10 @@ export const TIPS = {
     title: 'How reminders work',
     body: 'Three optional emails, all off until you switch them on: your plan in the morning (only on days with a session), one gentle evening note if today is still open, and a re-rate nudge when it is due. Times follow your time zone in Settings. Nothing is sent on a rest day, you can pause for a week, and after three weeks with nothing logged they stop by themselves. Every email has a link to stop it.',
   },
+  fitnessGoal: {
+    title: 'Your week in Goals',
+    body: 'Optional. Adds a Fitness goal to your Goals page with two key results for the current week: sessions done against the sessions planned, and aerobic minutes against the week target. Your session tasks are linked to it, so Goals shows how many are complete. It starts fresh every week, rest days never count against you, and switching it off removes the goal.',
+  },
   fitnessTasks: {
     title: 'How sessions and Tasks stay together',
     body: 'Each upcoming session becomes a task in your Tasks list (category Fitness). Moving the session moves the task. They stay open or closed together: logging the session completes the task, and completing the task logs the session as done (you can add effort and weights later). Reopening the task reopens the session, and removes that log. Rest days and sessions you did not do have no task, and a session whose day has passed quietly drops out, so nothing turns red. If you delete a task it stays deleted. You can switch this off here at any time.',

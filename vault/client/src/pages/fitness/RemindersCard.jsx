@@ -99,10 +99,14 @@ export default function RemindersCard() {
         </div>
       </Card>
 
-      <Card title="Sessions in Tasks" icon="list-checks" hint="Your upcoming sessions can also appear in your Tasks, so your day sits in one list.">
+      <Card title="Tasks and Goals" icon="list-checks" hint="Your upcoming sessions can appear in your Tasks, and this week's progress in your Goals, so your day sits in one place.">
         <div className="flex flex-wrap items-center gap-3">
           <Chip active={draft.showInTasks} onClick={() => set({ showInTasks: !draft.showInTasks })}>{draft.showInTasks ? 'Showing my sessions in Tasks' : 'Not showing my sessions in Tasks'}</Chip>
           <InfoTip tip={TIPS.fitnessTasks} />
+        </div>
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <Chip active={draft.goalLink} onClick={() => set({ goalLink: !draft.goalLink })}>{draft.goalLink ? 'Showing my week in Goals' : 'Not showing my week in Goals'}</Chip>
+          <InfoTip tip={TIPS.fitnessGoal} />
         </div>
         <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
           Only today and later, one task per session. Moving a session moves its task, and they stay open or closed together: done in one is done in the other. A session you did not get to quietly drops out, never as an overdue task. Log the exercises themselves in Fitness.
