@@ -242,7 +242,7 @@ test('reflection facts count only what was logged; unlogged sessions are simply 
     ],
     extras: [{ minutes: 30 }],
     done: { aerobicMinutes: 60, strengthDays: 1 },
-    targets: { aerobicMinutes: 90, strengthDays: 2 },
+    week: { targets: { aerobicMinutes: 90, strengthDays: 2 } }, // the real GET /week shape
   };
   const f = CO.reflectionFacts(week);
   assert.strictEqual(f.sessionsLogged, 2);
@@ -250,6 +250,8 @@ test('reflection facts count only what was logged; unlogged sessions are simply 
   assert.strictEqual(f.averageEffort, 6);
   assert.strictEqual(f.rested, 1);
   assert.strictEqual(f.extras, 1);
+  assert.strictEqual(f.aerobicPlanned, 90);
+  assert.strictEqual(f.strengthDaysPlanned, 2);
   assert.ok(!('skipped' in f) && !('notLogged' in f));
 });
 test('a week with nothing logged has no reflection; one with something does, in plain words', () => {

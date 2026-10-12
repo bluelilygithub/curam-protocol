@@ -88,9 +88,10 @@ function validateTips(obj) {
 
 /**
  * The week in a few facts, for the reflection. Only what was logged counts; unlogged sessions are simply not mentioned.
- * @param {{ sessions:object[], extras:object[], done:object, targets:object }} week
+ * @param {{ sessions:object[], extras:object[], done:object, week:{ targets:object } }} week the payload of GET /week
  */
 function reflectionFacts(week) {
+  const targets = week.week?.targets || {};
   const logged = week.sessions.filter((s) => s.log);
   const count = (st) => logged.filter((s) => s.log.status === st).length;
   const efforts = logged.map((s) => s.log.effort).filter((e) => e != null);
@@ -105,9 +106,9 @@ function reflectionFacts(week) {
     minutesLogged: minutes,
     averageEffort: efforts.length ? Math.round((efforts.reduce((a, b) => a + b, 0) / efforts.length) * 10) / 10 : null,
     aerobicDone: week.done.aerobicMinutes,
-    aerobicPlanned: week.targets.aerobicMinutes,
+    aerobicPlanned: targets.aerobicMinutes ?? 0,
     strengthDaysDone: week.done.strengthDays,
-    strengthDaysPlanned: week.targets.strengthDays,
+    strengthDaysPlanned: targets.strengthDays ?? 0,
   };
 }
 
