@@ -42,6 +42,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   routeTracer: true,
   cellarPlanner: false,
   measurements: true,
+  fitness: true,
 };
 
 export const FEATURE_ACCESS_GROUPS = [
@@ -90,6 +91,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'routeTracer', label: 'Route Tracer' },
       { key: 'cellarPlanner', label: 'Cellar Planner' },
       { key: 'measurements', label: 'Measurements' },
+      { key: 'fitness', label: 'Fitness' },
       { key: 'wellbeing', label: 'Wellbeing Check' },
       { key: 'gmailIntel', label: 'Inbox Intel' },
       { key: 'productScout', label: 'Amazon Search' },

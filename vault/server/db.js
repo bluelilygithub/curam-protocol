@@ -951,6 +951,89 @@ async function initSchema() {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_route_tracks_user_created ON route_tracks ("userId", "createdAt" DESC, id DESC)
     `);
+    // ── Fitness Planner (Stage 1 tables; later stages add weeks/sessions/logs/library/reminders: docs/fitness-planner.md) ──
+    // health_* tables are the shared profile + weight series the future diet app also reads/writes.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS health_profiles (
+        id          SERIAL PRIMARY KEY,
+        "userId"    INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        dob         DATE,
+        sex         TEXT,
+        "heightCm"  NUMERIC(5,1),
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS health_weight_log (
+        id           SERIAL PRIMARY KEY,
+        "userId"     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "weightKg"   NUMERIC(5,1) NOT NULL,
+        "measuredOn" DATE NOT NULL,
+        source       TEXT NOT NULL DEFAULT 'fitness',
+        note         TEXT,
+        "createdAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_health_weight_user_date ON health_weight_log ("userId", "measuredOn" DESC, id DESC)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fitness_profiles (
+        id                SERIAL PRIMARY KEY,
+        "userId"          INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        equipment         JSONB NOT NULL DEFAULT '[]',
+        smoking           TEXT,
+        alcohol           TEXT,
+        "dietQuality"     INTEGER,
+        "timeFlexibility" JSONB NOT NULL DEFAULT '{}',
+        "workAround"      TEXT,
+        "otherNotes"      TEXT,
+        "templateBand"    TEXT,
+        "easeRequested"   BOOLEAN NOT NULL DEFAULT FALSE,
+        "onboardedAt"     TIMESTAMPTZ,
+        "createdAt"       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt"       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fitness_ratings (
+        id               SERIAL PRIMARY KEY,
+        "userId"         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind             TEXT NOT NULL DEFAULT 'onboarding',
+        scores           JSONB NOT NULL,
+        "previousScores" JSONB,
+        "previousLabel"  TEXT,
+        note             TEXT,
+        "ratedAt"        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_fitness_ratings_user ON fitness_ratings ("userId", "ratedAt" DESC, id DESC)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fitness_goals (
+        id             SERIAL PRIMARY KEY,
+        "userId"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        ambition       INTEGER NOT NULL,
+        status         TEXT NOT NULL DEFAULT 'active',
+        "horizonYears" INTEGER NOT NULL DEFAULT 5,
+        "startsOn"     DATE NOT NULL,
+        milestones     JSONB NOT NULL,
+        summary        JSONB NOT NULL DEFAULT '{}',
+        source         TEXT,
+        "createdAt"    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_fitness_goals_user ON fitness_goals ("userId", status, id DESC)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fitness_ai_cache (
+        id          SERIAL PRIMARY KEY,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind        TEXT NOT NULL,
+        "inputHash" TEXT NOT NULL,
+        output      JSONB NOT NULL,
+        model       TEXT,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE ("userId", kind, "inputHash")
+      )
+    `);
     // Tracing pictures are stored apart from the garden design (a garden references one by underlay.imageId = 'srv-<id>')
     await client.query(`
       CREATE TABLE IF NOT EXISTS garden_images (

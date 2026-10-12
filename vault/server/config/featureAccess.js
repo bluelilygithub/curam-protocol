@@ -43,6 +43,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   // a work in progress with unverified values: off until an admin switches it on (Settings -> Feature Access)
   cellarPlanner: false,
   measurements: true,
+  fitness: true,
 };
 
 const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);
