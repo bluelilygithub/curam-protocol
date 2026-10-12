@@ -28,6 +28,10 @@ export interface AppProject {
   finish?: 'OAK' | 'WALNUT' | 'BLACK';
   /** This design's own temperatures for the cooling estimate (otherwise the Settings defaults are used). */
   cooling?: { ambientC?: number; targetC?: number };
+  /** The feature options chosen (Settings -> Cellar Planner -> Feature options), as option codes: only the extras, never a pick-one group's standard option. A pick whose option has since been removed, switched off or no longer fits the room is ignored. */
+  features?: number[];
+  /** Per-option amounts staff typed over the catalogue's low/high midpoint for THIS design's quote, keyed by option code. */
+  featurePrices?: Record<number, number>;
   /** The website enquiry this design was opened from (Vault CRM). Lets a quote be logged on the enquiry's deal. */
   lead?: { id: number; name: string };
   /** Rack fields whose values are BEST GUESSES (a test case), not supplier values. Empty or absent for a real design. */
@@ -100,6 +104,19 @@ export function sortIssues(issues: Issue[]): Issue[] {
 
 const str = (v: unknown): string => (typeof v === 'string' ? v.slice(0, 200) : '');
 
+/** Whole option codes 1 to 999, no duplicates, sorted. */
+const cleanFeaturePicks = (v: unknown): number[] => (Array.isArray(v) ? [...new Set(v.filter((n): n is number => Number.isInteger(n) && n >= 1 && n <= 999))].sort((a, b) => a - b) : []);
+/** Typed per-option quote amounts: keys are option codes, amounts are 0 to 1,000,000. Anything else is dropped; undefined when none are left. */
+const cleanFeaturePrices = (v: unknown): Record<number, number> | undefined => {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
+  const out: Record<number, number> = {};
+  for (const [k, n] of Object.entries(v as Record<string, unknown>)) {
+    const code = Number(k);
+    if (Number.isInteger(code) && code >= 1 && code <= 999 && typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 1000000) out[code] = Math.round(n * 100) / 100;
+  }
+  return Object.keys(out).length ? out : undefined;
+};
+
 export class ParseError extends Error {}
 
 export const serializeApp = (p: AppProject): string => JSON.stringify(p, null, 2);
@@ -124,6 +141,8 @@ export function deserializeApp(text: string): AppProject {
     ...(o.drawing && typeof o.drawing === 'object' ? { drawing: { company: str(o.drawing.company), client: str(o.drawing.client), address: str(o.drawing.address), projectNo: str(o.drawing.projectNo), drawnBy: str(o.drawing.drawnBy), checkedBy: str(o.drawing.checkedBy) } } : {}),
     ...(o.cooling && typeof o.cooling === 'object' ? (() => { const c = o.cooling as Record<string, unknown>; const ok = (v: unknown, lo: number, hi: number): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? v : undefined); const ambientC = ok(c.ambientC, 15, 50), targetC = ok(c.targetC, 0, 25); return ambientC !== undefined || targetC !== undefined ? { cooling: { ...(ambientC !== undefined ? { ambientC } : {}), ...(targetC !== undefined ? { targetC } : {}) } } : {}; })() : {}),
     ...(o.finish === 'OAK' || o.finish === 'WALNUT' || o.finish === 'BLACK' ? { finish: o.finish } : {}),
+    ...(cleanFeaturePicks(o.features).length ? { features: cleanFeaturePicks(o.features) } : {}),
+    ...(cleanFeaturePrices(o.featurePrices) ? { featurePrices: cleanFeaturePrices(o.featurePrices) } : {}),
     ...(o.lead && typeof o.lead === 'object' && Number.isInteger(o.lead.id) && o.lead.id > 0 ? { lead: { id: o.lead.id, name: str(o.lead.name) } } : {}),
     ...(o.rackType && typeof o.rackType === 'object' && typeof o.rackType.id === 'string' && o.rackType.id ? { rackType: { id: str(o.rackType.id), name: str(o.rackType.name) || str(o.rackType.id), confirmed: o.rackType.confirmed === true } } : {}),
     ...(Array.isArray(o.estimated) ? { estimated: o.estimated.filter((k): k is EstimateField => (ESTIMATE_FIELDS as readonly string[]).includes(k)) } : {}),

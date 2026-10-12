@@ -10,6 +10,8 @@ import { makeThumb } from './thumbnail';
 import { LiteHelp, LITE_HELP_KEY } from './LiteHelp';
 import { PriceHelp } from './PriceHelp';
 import { DoorPicker } from './DoorPicker';
+import { effectsOf, featureTotals, priceLabel, resolveFeatures, togglePick, unavailableReason } from './features';
+import { STEP_TITLES, stepKeys, type StepKey } from './steps';
 import { LengthField, Segmented, Stepper } from './controls';
 import { TooltipHost } from '@planner-core/help/TooltipHost';
 import { PhoneNotice } from './PhoneNotice';
@@ -22,15 +24,13 @@ import { clearLastDesign, readLastDesign, readUnit, writeLastDesign, writeUnit }
 import { LENGTH_UNITS, UNIT_NAMES, describeLength, formatLength, parseLength, rangeText, unitExample, unitSuffix, type LengthUnit } from './units';
 import { BOTTLES, DOOR_POSITIONS, FINISHES, FINISH_NAMES, LIMITS, WALLS, decodeDesign, defaultLite, encodeDesign, liteResult, rackUnitCount, summaryLine, type DoorPosition, type DoorStyle, type Finish, type LiteMode, type LiteSettings } from './settings';
 
-// The public "lite" tool: a three-step planner. Step 1 is the space (size, door), step 2 the racking and finish (bottles, how many, timber), step 3 the
-// review (what it is, the guide price, the plan to keep). A large picture (3D, plan, or one wall of racks) is always beside the controls, with the
+// The public "lite" tool: a planner in steps. Space (size, door), racking and finish (bottles, how many, timber), Features (the owner's "Make it yours"
+// options, only while the owner has any) and a review (what it is, the guide price, the plan to keep). A large picture (3D, plan, or one wall of racks) is always beside the controls, with the
 // capacity, footprint, configuration and quote button along the bottom. The browser remembers only the last design and the chosen unit.
 
 const WALL_NAMES: Record<WallSide, string> = { NORTH: 'North', EAST: 'East', SOUTH: 'South', WEST: 'West' };
 const POSITION_NAMES: Record<DoorPosition, string> = { LEFT: 'Left', CENTRE: 'Centre', RIGHT: 'Right' };
 const UNIT_SHORT: Record<LengthUnit, string> = { m: 'Metres', ft: 'Feet', mm: 'Millimetres' };
-const STEPS = ['Space', 'Racking & finishes', 'Review'];
-const STEP_LABELS = ['space', 'racking', 'review'];
 const STEP_MM = 50;
 export const MESSAGE_TYPE = 'cellar-lite:design';
 export const HEIGHT_TYPE = 'cellar-lite:height';
@@ -68,7 +68,7 @@ export function LiteApp() {
   const [unit, setUnit] = useState<LengthUnit>(readUnit);
   const [draft, setDraft] = useState<Draft>(() => toDraft(start.s, readUnit()));
   const [restored, setRestored] = useState(start.restored);
-  const [step, setStep] = useState(1);
+  const [stepKey, setStepKey] = useState<StepKey>('space');
   const [view, setView] = useState<'inside' | 'plan' | 'racks'>('inside');
   const [rackWall, setRackWall] = useState<WallSide>('NORTH');
   const [asked, setAsked] = useState(false);
@@ -86,16 +86,25 @@ export function LiteApp() {
   const started = useRef(false);
   const stepSeen = useRef(false);
 
+  // the feature options: what is chosen for this room, the extras that add to the price, and the picture changes they ask for
+  const resolved = useMemo(() => resolveFeatures(cfg.features, s.features, { widthMm: s.widthMm, depthMm: s.depthMm }), [cfg.features, s.features, s.widthMm, s.depthMm]);
+  const effects = useMemo(() => effectsOf(resolved.extras), [resolved]);
+  const hasFeatures = cfg.features.length > 0;
+  const keys = stepKeys(hasFeatures);
+  const key: StepKey = keys.includes(stepKey) ? stepKey : 'space';
+  const step = keys.indexOf(key) + 1;
+  const totalSteps = keys.length;
+
   const result = useMemo(() => liteResult(s, cfg), [s, cfg]);
   const analysis = useMemo(() => analyseApp(result.project), [result]);
   const code = useMemo(() => encodeDesign(s), [s]);
-  const price = useMemo(() => priceRange(cfg, rackUnitCount(result.project), s.doorStyle, result.problems.length), [cfg, result, s.doorStyle]);
+  const price = useMemo(() => priceRange(cfg, rackUnitCount(result.project), s.doorStyle, result.problems.length, resolved.extras), [cfg, result, s.doorStyle, resolved]);
   const summary = useMemo(() => summaryLine(s, result.bottles, cfg) + (price ? ` Guide price shown: ${price.text}.` : ''), [s, result.bottles, cfg, price]);
   const fix = useMemo(() => (result.problems.length ? suggestFix(s, cfg, unit) : null), [s, cfg, unit, result.problems.length]);
   const e = result.project.enclosure;
   const plan = useMemo(() => planView(e, fullRuns(result.project), analysis.racks, { walkwayMm: null, badRuns: badRunIds(analysis.racks.issues), plainLabels: true }), [result, analysis, e]);
   const dims = useMemo(() => ({ width: describeLength(s.widthMm, unit), depth: describeLength(s.depthMm, unit), height: describeLength(s.heightMm, unit) }), [s.widthMm, s.depthMm, s.heightMm, unit]);
-  const insideInput = useMemo(() => ({ project: result.project, runs: fullRuns(result.project), analysis: analysis.racks, dims }), [result, analysis, dims]);
+  const insideInput = useMemo(() => ({ project: result.project, runs: fullRuns(result.project), analysis: analysis.racks, dims, effects }), [result, analysis, dims, effects]);
   const racks = useMemo(() => rackFaceView(e, fullRuns(result.project), analysis.racks, rackWall, result.project.bottle, { badRuns: badRunIds(analysis.racks.issues) }), [result, analysis, e, rackWall]);
   const embedded = parentOrigin();
   const say = (name: EventName, detail?: Record<string, string | number | boolean>): void => track(name, embedded, detail);
@@ -160,7 +169,7 @@ export function LiteApp() {
   useEffect(() => {
     if (!stepSeen.current) { stepSeen.current = true; return; }
     panelTitle.current?.focus({ preventScroll: true });
-  }, [step]);
+  }, [key]);
 
   // ?tour=1 starts the tour straight away; the guide opens only from the Help button (a pop-up on arrival is closed unread by most visitors)
   useEffect(() => {
@@ -171,14 +180,14 @@ export function LiteApp() {
   /** Shepherd is loaded on first use, so it stays out of the page's first download. */
   const startTour = async (): Promise<void> => {
     const m = await import('./liteTour');
-    m.startLiteTour({ setView, getView: () => viewRef.current, setStep: (n) => setStepTracked(n, false), getStep: () => stepRef.current });
+    m.startLiteTour({ setView, getView: () => viewRef.current, setStep: (k) => setStepTracked(k, false), getStep: () => keyRef.current });
   };
   const viewRef = useRef(view);
   viewRef.current = view;
-  const stepRef = useRef(step);
-  stepRef.current = step;
+  const keyRef = useRef(key);
+  keyRef.current = key;
 
-  const setStepTracked = (n: number, count = true): void => { setStep(n); if (count) say('step', { step: STEP_LABELS[n - 1] }); };
+  const setStepTracked = (k: StepKey, count = true): void => { setStepKey(k); if (count) say('step', { step: k }); };
 
   /** Put a whole design on screen: the settings and the boxes that show them. */
   const show = (next: LiteSettings, u: LengthUnit = unit): void => { setS(next); setDraft(toDraft(next, u)); setAsked(false); };
@@ -229,7 +238,7 @@ export function LiteApp() {
   const copy = async (): Promise<void> => {
     try { await navigator.clipboard.writeText(`${summary}\nDesign code: ${code}`); setCopied('done'); } catch { codeBox.current?.select(); setCopied('failed'); }
   };
-  const startAgain = (): void => { clearLastDesign(); setRestored(false); show(defaultLite()); setStep(1); };
+  const startAgain = (): void => { clearLastDesign(); setRestored(false); show(defaultLite()); setStepKey('space'); };
   const ask = (): void => { setAsked(true); say('quote'); };
 
   // a non-breaking space before the unit, so "m" never wraps onto a line of its own
@@ -261,7 +270,7 @@ export function LiteApp() {
         {linkCopied === 'done' && <p className="lite-note" role="status" data-testid="lite-share-done">Link copied. Anyone you send it to sees these choices.</p>}
         {linkCopied === 'failed' && <p className="lite-note" role="status">Could not copy automatically. Use the Request a quote button instead: it shows your design to copy.</p>}
         {cfg.promise && <p className="lite-promise" data-testid="lite-promise">{cfg.promise}</p>}
-        <Stepper step={step} steps={STEPS} onGo={(n) => setStepTracked(n)} />
+        <Stepper step={step} steps={keys.map((k) => STEP_TITLES[k])} onGo={(n) => setStepTracked(keys[n - 1] ?? 'space')} />
       </header>
 
       {restored && (
@@ -272,7 +281,7 @@ export function LiteApp() {
       )}
 
       <div className="lite-main">
-        <section className="lite-panel" aria-label={`Step ${step}: ${STEPS[step - 1]}`} data-testid="lite-panel" data-step={step}>
+        <section className="lite-panel" aria-label={`Step ${step}: ${STEP_TITLES[key]}`} data-testid="lite-panel" data-step={step}>
           {result.problems.length > 0 && (
             <div className="lite-alert" role="alert">
               <p className="lite-problem" data-testid="lite-problem">This size cannot be built as entered: {result.problems[0]}</p>
@@ -299,9 +308,9 @@ export function LiteApp() {
             </div>
           )}
 
-          {step === 1 && (
+          {key === 'space' && (
             <>
-              <p className="lite-eyebrow" data-testid="lite-progress">Step 1 of 3</p>
+              <p className="lite-eyebrow" data-testid="lite-progress">Step 1 of {totalSteps}</p>
               <h2 tabIndex={-1} ref={panelTitle} className="lite-step-title">Your space</h2>
               {cfg.presets.length > 0 && (
                 <div className="lite-presets" aria-label="Start from a typical room" data-testid="lite-presets">
@@ -339,14 +348,14 @@ export function LiteApp() {
                 <p className="field-hint" data-testid="lite-doorhint">{s.doorStyle === 'DOUBLE' ? `Two doors that open together, about ${describeLength(cfg.doors.doubleMm, unit)} across.` : `One door, about ${describeLength(cfg.doors.singleMm, unit)} wide.`}</p>
               </div>
               <div className="lite-nav">
-                <button type="button" className="btn primary lite-next" onClick={() => setStepTracked(2)} title="Next: choose your bottles and the finish of the racks." data-testid="lite-next"><span className="lite-next-label">Next: Racking &amp; finishes <span aria-hidden="true">&rarr;</span></span><span className="lite-next-sub">Step 2 of 3</span></button>
+                <button type="button" className="btn primary lite-next" onClick={() => setStepTracked('racking')} title="Next: choose your bottles and the finish of the racks." data-testid="lite-next"><span className="lite-next-label">Next: Racking &amp; finishes <span aria-hidden="true">&rarr;</span></span><span className="lite-next-sub">Step 2 of {totalSteps}</span></button>
               </div>
             </>
           )}
 
-          {step === 2 && (
+          {key === 'racking' && (
             <>
-              <p className="lite-eyebrow" data-testid="lite-progress">Step 2 of 3</p>
+              <p className="lite-eyebrow" data-testid="lite-progress">Step 2 of {totalSteps}</p>
               <h2 tabIndex={-1} ref={panelTitle} className="lite-step-title">Racking &amp; finishes</h2>
               <div className="lite-group" data-tour="lt-bottle">
                 <h3><label htmlFor="lite-bottle-select">Main bottle style</label></h3>
@@ -389,21 +398,63 @@ export function LiteApp() {
                 </div>
               </div>
               <div className="lite-nav two">
-                <button type="button" className="btn lite-backbtn" onClick={() => setStepTracked(1)} title="Back to the size and door." data-testid="lite-back"><span aria-hidden="true">&larr;</span> Space</button>
-                <button type="button" className="btn primary lite-next" onClick={() => setStepTracked(3)} title="Next: review your cellar." data-testid="lite-next"><span className="lite-next-label">Next: Review <span aria-hidden="true">&rarr;</span></span><span className="lite-next-sub">Step 3 of 3</span></button>
+                <button type="button" className="btn lite-backbtn" onClick={() => setStepTracked('space')} title="Back to the size and door." data-testid="lite-back"><span aria-hidden="true">&larr;</span> Space</button>
+                <button type="button" className="btn primary lite-next" onClick={() => setStepTracked(keys[2] ?? 'review')} title={hasFeatures ? 'Next: choose the finishing touches.' : 'Next: review your cellar.'} data-testid="lite-next"><span className="lite-next-label">Next: {STEP_TITLES[keys[2] ?? 'review']} <span aria-hidden="true">&rarr;</span></span><span className="lite-next-sub">Step 3 of {totalSteps}</span></button>
               </div>
             </>
           )}
 
-          {step === 3 && (
+          {key === 'features' && (
             <>
-              <p className="lite-eyebrow" data-testid="lite-progress">Step 3 of 3</p>
+              <p className="lite-eyebrow" data-testid="lite-progress">Step 3 of {totalSteps}</p>
+              <h2 tabIndex={-1} ref={panelTitle} className="lite-step-title">Make it yours</h2>
+              <p className="lite-lede">The finishing touches that turn storage into a room you show off. Add as much or as little as you like.{price ? ' The guide price updates as you go.' : ''}</p>
+              <div data-tour="lt-features" data-testid="lite-features">
+                {resolved.groups.map(({ group, chosen }) => {
+                  const one = group.mode === 'ONE';
+                  return (
+                    <div className="feat-group" key={group.id} role={one ? 'radiogroup' : 'group'} aria-labelledby={`feat-h-${group.id}`} data-testid={`feat-group-${group.id}`}>
+                      <div className="feat-head"><h3 id={`feat-h-${group.id}`}>{group.name}</h3><span className="feat-mode">{one ? 'Choose one' : 'Choose any'}</span></div>
+                      {group.hint && <p className="feat-hint">{group.hint}</p>}
+                      <div className="feat-cards">
+                        {group.options.filter((o) => o.enabled || chosen.some((c) => c.code === o.code)).map((o) => {
+                          const on = chosen.some((c) => c.code === o.code);
+                          const why = unavailableReason(o, { widthMm: s.widthMm, depthMm: s.depthMm });
+                          const label = priceLabel(o, cfg.pricing.currency, cfg.pricing.show);
+                          return (
+                            <button type="button" key={o.id} role={one ? 'radio' : 'checkbox'} aria-checked={on} aria-disabled={why !== null} disabled={why !== null && !on}
+                              className={`feat-card${on ? ' on' : ''}${why ? ' off' : ''}`} data-testid={`feat-${group.id}-${o.id}`}
+                              title={why ?? (on && !one ? `Take ${o.name} out of the design.` : `${one ? 'Choose' : 'Add'} ${o.name}.`)}
+                              onClick={() => { change({ features: togglePick(cfg.features, s.features, group, o) }); say('feature', { group: group.id, option: o.id }); }}>
+                              {o.badge && <span className="feat-badge">{o.badge === 'POPULAR' ? 'Popular' : 'Recommended'}</span>}
+                              <span className="feat-name">{o.name}</span>
+                              <span className="feat-desc">{why ?? o.description}</span>
+                              {label && <span className="feat-price">{label}</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="lite-nav two">
+                <button type="button" className="btn lite-backbtn" onClick={() => setStepTracked('racking')} title="Back to the bottles and finish." data-testid="lite-back"><span aria-hidden="true">&larr;</span> Racking</button>
+                <button type="button" className="btn primary lite-next" onClick={() => setStepTracked('review')} title="Next: review your cellar." data-testid="lite-next"><span className="lite-next-label">Next: Review <span aria-hidden="true">&rarr;</span></span><span className="lite-next-sub">Step {totalSteps} of {totalSteps}</span></button>
+              </div>
+            </>
+          )}
+
+          {key === 'review' && (
+            <>
+              <p className="lite-eyebrow" data-testid="lite-progress">Step {totalSteps} of {totalSteps}</p>
               <h2 tabIndex={-1} ref={panelTitle} className="lite-step-title">Review</h2>
               <dl className="lite-review" data-testid="lite-review">
                 <div><dt>Room</dt><dd data-testid="lite-review-room">{roomText} inside</dd></div>
                 <div><dt>Door</dt><dd>{doorText}</dd></div>
                 <div><dt>Bottles</dt><dd>{BOTTLE_PROFILES[s.bottle].label}{s.mode === 'TARGET' ? `, about ${s.target} wanted` : ', as many as fit'}</dd></div>
                 <div><dt>Racks</dt><dd>{FINISH_NAMES[s.finish]}, {rackUnitCount(result.project)} standard units</dd></div>
+                {hasFeatures && <div><dt>Features</dt><dd data-testid="lite-review-features">{resolved.extras.length ? resolved.extras.map((o) => o.name).join(', ') : 'Standard options only'}</dd></div>}
               </dl>
               <p className="lite-share">
                 <button type="button" className="btn small" disabled={result.problems.length > 0 || pdf === 'working'} onClick={() => void download()} data-testid="lite-download" title="Saves your plan as a PDF to keep or show someone. It is a preliminary design, not a quote.">{pdf === 'working' ? 'Preparing…' : 'Download my plan (PDF)'}</button>
@@ -413,7 +464,7 @@ export function LiteApp() {
               </p>
               <p className="lite-note">This is an estimate to help you plan. Rack unit sizes are typical values, and we always measure on site before anything is made.</p>
               <div className="lite-nav two">
-                <button type="button" className="btn lite-backbtn" onClick={() => setStepTracked(2)} title="Back to the bottles and finish." data-testid="lite-back"><span aria-hidden="true">&larr;</span> Racking</button>
+                <button type="button" className="btn lite-backbtn" onClick={() => setStepTracked(hasFeatures ? 'features' : 'racking')} title={hasFeatures ? 'Back to the finishing touches.' : 'Back to the bottles and finish.'} data-testid="lite-back"><span aria-hidden="true">&larr;</span> {hasFeatures ? 'Features' : 'Racking'}</button>
                 <button type="button" className="btn primary lite-next" onClick={ask} title="Ask us for a quote for exactly this design. Nothing is sent until you press Send on the form." data-testid="lite-quote-review"><span className="lite-next-label">Request a quote <span aria-hidden="true">&rarr;</span></span><span className="lite-next-sub">Final step</span></button>
               </div>
             </>
@@ -443,6 +494,19 @@ export function LiteApp() {
           </div>
           {view === 'racks' && <p className="lite-note lite-units" data-testid="lite-racks-summary" role="status"><strong>{rackWallSummary(analysis.racks, fullRuns(result.project), rackWall).text}</strong> Each circle in the picture is one bottle, so you can count them. The whole cellar is about {result.bottles}.</p>}
           {view !== 'inside' && <p className="lite-note lite-units">The numbers drawn around the edges are sizes in millimetres.</p>}
+          {key === 'features' && (
+            <div className="lite-added" data-testid="lite-added" aria-live="polite">
+              <h3>Added so far</h3>
+              {resolved.extras.length === 0
+                ? <p className="lite-note">Nothing extra yet. Your cellar is priced with the standard options: {resolved.groups.filter((g) => g.group.mode === 'ONE').map((g) => g.chosen[0]?.name).filter(Boolean).join(', ')}.</p>
+                : <ul className="lite-added-list">{resolved.extras.map((o) => <li key={o.code}><span>{o.name}</span>{priceLabel(o, cfg.pricing.currency, cfg.pricing.show) && <span>{priceLabel(o, cfg.pricing.currency, cfg.pricing.show)}</span>}</li>)}</ul>}
+              {cfg.pricing.show && (() => {
+                const t = featureTotals(resolved.extras), fmt = (n: number): string => `${cfg.pricing.currency}${n.toLocaleString('en-AU')}`;
+                return <p className="lite-added-total"><span>Features total</span><strong data-testid="lite-features-total">{t.low === 0 && t.high === 0 ? fmt(0) : t.low === t.high ? fmt(t.low) : `${fmt(t.low)} to ${fmt(t.high)}`}</strong></p>;
+              })()}
+              {resolved.extras.some((o) => featureTotals([o]).unpriced.length > 0) && cfg.pricing.show && <p className="lite-note">Some of your choices are priced on request: they are not in the total.</p>}
+            </div>
+          )}
           <p className="lite-note lite-units" data-testid="lite-units">Built from standard-size rack units, about {describeLength(cfg.rack.unitWidthMm, unit)} wide, placed whole along the walls. A gap at the end of a wall is left-over space, not a mistake.</p>
         </section>
       </div>
@@ -476,7 +540,7 @@ export function LiteApp() {
       </section>
       <p className="foot">ESTIMATE ONLY: FINAL SITE MEASURE REQUIRED. Rack unit sizes are typical values, not a quote.</p>
 
-      <PriceHelp open={priceHelpOpen && !!price} onClose={() => setPriceHelpOpen(false)} cfg={cfg} facts={{ units: rackUnitCount(result.project), doorStyle: s.doorStyle, bottles: result.bottles, roomText, bottleLabel: BOTTLE_PROFILES[s.bottle].label }} />
+      <PriceHelp open={priceHelpOpen && !!price} onClose={() => setPriceHelpOpen(false)} cfg={cfg} facts={{ units: rackUnitCount(result.project), doorStyle: s.doorStyle, bottles: result.bottles, roomText, bottleLabel: BOTTLE_PROFILES[s.bottle].label, extras: resolved.extras.map((o) => o.name) }} />
       <TooltipHost />
       <LiteHelp unit={unit} doorSingleMm={cfg.doors.singleMm} doorDoubleMm={cfg.doors.doubleMm} unitWidthMm={cfg.rack.unitWidthMm} open={helpOpen} onClose={closeHelp} onTour={() => { closeHelp(); window.setTimeout(() => void startTour(), 250); }} />
     </div>

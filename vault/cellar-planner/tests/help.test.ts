@@ -32,8 +32,8 @@ describe('guided tour', () => {
     expect(at('cp-rack')).toBeLessThan(at('cp-runs'));
     expect(at('cp-runs')).toBeLessThan(at('cp-total'));
     expect(at('cp-checks')).toBeLessThan(at('cp-advisory'));
-    expect(TOUR_STEPS.length).toBe(17);
-    for (const id of ['cp-price', 'cp-cooling', 'cp-enquiries', 'cp-quote']) expect(ids).toContain(id);
+    expect(TOUR_STEPS.length).toBe(18);
+    for (const id of ['cp-features', 'cp-price', 'cp-cooling', 'cp-enquiries', 'cp-quote']) expect(ids).toContain(id);
     expect(at('cp-runs')).toBeLessThan(at('cp-price')); expect(at('cp-price')).toBeLessThan(at('cp-cooling')); expect(at('cp-cooling')).toBeLessThan(at('cp-tabs'));
     expect(at('cp-advisory')).toBeLessThan(at('cp-enquiries')); expect(at('cp-quote')).toBeLessThan(at('cp-done'));
   });

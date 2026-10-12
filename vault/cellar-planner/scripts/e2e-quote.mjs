@@ -176,6 +176,58 @@ for (const [label, opts, want] of [['the feature is off (403)', { leadsStatus: 4
   await ctx.close();
 }
 
+// ================================================================ feature options: staff panel, price, quote
+{
+  const { page, errors, ctx } = await open();
+  const FEATURES = [
+    { id: 'front', name: 'Front & doors', hint: '', mode: 'ONE', options: [
+      { code: 1, id: 'timber-doors', name: 'Timber doors', included: true },
+      { code: 2, id: 'glass-doors', name: 'Frameless glass doors', low: 2800, high: 3600, effect: 'GLASS_DOORS' },
+      { code: 3, id: 'mystery-door', name: 'Mystery door', description: 'No price yet' },
+    ] },
+    { id: 'storage', name: 'Special storage', hint: '', mode: 'ANY', options: [
+      { code: 7, id: 'champagne-bins', name: 'Champagne bins', low: 700, high: 1000 },
+      { code: 13, id: 'island', name: 'Island with drawers', low: 6500, high: 8500, minDepthMm: 2400 },
+    ] },
+  ];
+  await page.route('**/api/cellar-planner/catalogue', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ catalogue: { ...catalogue().catalogue, features: FEATURES } }) }));
+  await page.goto(URL); await page.getByTestId('plan-canvas').waitFor(); await page.waitForTimeout(900);
+  await page.getByTestId('sample').click(); await page.waitForTimeout(300);
+  await (await reveal(page, 'rack-type')).selectOption('standard-600');
+  await (await reveal(page, 'fill-NORTH')).click(); await page.waitForTimeout(200);
+  await page.getByTestId('fill-SOUTH').click(); await page.waitForTimeout(200);
+  const plain = Number((await (await reveal(page, 'price-total')).innerText()).replace(/[^0-9.]/g, ''));
+  await reveal(page, 'features-panel');
+  check('features: the panel lists the groups and options from Settings, the standard option chosen', (await page.getByTestId('feature-group-front').count()) === 1 && await page.getByTestId('feature-front-timber-doors').isChecked() && !(await page.getByTestId('feature-front-glass-doors').isChecked()));
+  check('features: an option that needs a deeper room than this design has is disabled', await page.getByTestId('feature-storage-island').isDisabled());
+  await page.getByTestId('feature-front-glass-doors').check(); await page.waitForTimeout(200);
+  const lines = await (await reveal(page, 'price-lines')).innerText();
+  check('features: a chosen option is a price line at halfway between its low and high', /Front & doors: Frameless glass doors/.test(lines) && /\$3,200/.test(lines), lines);
+  check('features: the total went up by that amount and the glass door is in the project', Number((await page.getByTestId('price-total').innerText()).replace(/[^0-9.]/g, '')) === plain + 3200 && (await project(page)).features?.[0] === 2);
+  await reveal(page, 'features-panel');
+  await page.getByTestId('feature-price-2').fill('3333'); await page.getByTestId('feature-price-2').blur(); await page.waitForTimeout(200);
+  check('features: typing an amount for this design replaces the halfway figure', Number((await (await reveal(page, 'price-total')).innerText()).replace(/[^0-9.]/g, '')) === plain + 3333 && (await project(page)).featurePrices?.[2] === 3333);
+  await reveal(page, 'features-panel');
+  await page.getByTestId('feature-front-mystery-door').check(); await page.waitForTimeout(200);
+  check('features: choosing one in the same group swaps it (the glass door is out and its typed amount is not charged)', !(await page.getByTestId('feature-front-glass-doors').isChecked()));
+  check('features: an option with no price is flagged in the Price panel', /Mystery door has no price/.test(await (await reveal(page, 'price-panel')).innerText()));
+  await page.getByTestId('quote-open').click();
+  const b = await page.getByTestId('quote-blockers').innerText();
+  check('features: and it stops the quote, naming the option', /Mystery door" is chosen but has no price/.test(b), b);
+  await page.getByTestId('quote-close').click();
+  await reveal(page, 'features-panel');
+  await page.getByTestId('feature-front-timber-doors').check(); await page.getByTestId('feature-storage-champagne-bins').check(); await page.waitForTimeout(200);
+  await page.getByTestId('quote-open').click();
+  check('features: with only priced options the quote can be made again', (await page.getByTestId('quote-blockers').count()) === 0);
+  const f = await download(page);
+  const pdf = await PDFDocument.load(f.bytes);
+  check('features: the quote PDF is made', f.bytes.slice(0, 5).toString() === '%PDF-' && pdf.getPageCount() >= 1);
+  await page.getByTestId('quote-close').click();
+  await scan(page, 'features panel');
+  check('features: no script errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
 await browser.close();
 console.log(failed ? `\n${failed} FAILED` : '\nAll passed');
 process.exit(failed ? 1 : 0);

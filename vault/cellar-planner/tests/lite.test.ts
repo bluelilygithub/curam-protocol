@@ -11,7 +11,7 @@ describe('lite design code', () => {
   it('round-trips every setting', () => {
     for (const bottle of BOTTLES) for (const doorWall of WALLS) {
       for (const doorStyle of ['SINGLE', 'DOUBLE'] as const) {
-      const s: LiteSettings = { widthMm: 3100, depthMm: 2200, heightMm: 2400, doorWall, doorStyle, doorPos: 'CENTRE', finish: 'OAK', bottle, mode: 'TARGET', target: 321 };
+      const s: LiteSettings = { widthMm: 3100, depthMm: 2200, heightMm: 2400, doorWall, doorStyle, doorPos: 'CENTRE', finish: 'OAK', bottle, mode: 'TARGET', target: 321, features: [] };
       expect(decodeDesign(encodeDesign(s))).toEqual(s);
     }
     }
@@ -72,7 +72,7 @@ describe('lite design to project', () => {
 
 describe('round trip: lite settings -> code -> full planner', () => {
   it('gives the same enclosure, runs and bottle total', () => {
-    const s: LiteSettings = { widthMm: 3300, depthMm: 2000, heightMm: 2300, doorWall: 'WEST', doorStyle: 'DOUBLE', doorPos: 'CENTRE', finish: 'OAK', bottle: 'BURGUNDY', mode: 'TARGET', target: 400 };
+    const s: LiteSettings = { widthMm: 3300, depthMm: 2000, heightMm: 2300, doorWall: 'WEST', doorStyle: 'DOUBLE', doorPos: 'CENTRE', finish: 'OAK', bottle: 'BURGUNDY', mode: 'TARGET', target: 400, features: [] };
     const fromLite = liteToProject(s);
     const fromCode = liteToProject(decodeDesign(encodeDesign(s)) as LiteSettings);
     expect(fromCode).toEqual(fromLite);
@@ -118,12 +118,12 @@ describe('lite help: tour and guide', () => {
   });
   it('walks the questions in the order the screen asks them, then the result, drawings and quote', () => {
     const order = LITE_TOUR_STEPS.filter((x) => x.target).map((x) => x.target);
-    expect(order).toEqual(['lt-size', 'lt-door', 'lt-bottle', 'lt-mode', 'lt-finish', 'lt-result', 'lt-drawing', 'lt-quote']);
+    expect(order).toEqual(['lt-size', 'lt-door', 'lt-bottle', 'lt-mode', 'lt-finish', 'lt-features', 'lt-result', 'lt-drawing', 'lt-quote']);
   });
-  it('each step of the tour opens the panel (1 space, 2 racking and finishes, 3 review) that holds what it points at', () => {
-    const panel: Record<string, number> = { 'lt-size': 1, 'lt-door': 1, 'lt-bottle': 2, 'lt-mode': 2, 'lt-finish': 2 };
+  it('each step of the tour opens the panel (space, racking, features, review) that holds what it points at', () => {
+    const panel: Record<string, string> = { 'lt-size': 'space', 'lt-door': 'space', 'lt-bottle': 'racking', 'lt-mode': 'racking', 'lt-finish': 'racking', 'lt-features': 'features', 'lt-result': 'review', 'lt-quote': 'review' };
     for (const x of LITE_TOUR_STEPS) if (x.target && panel[x.target]) expect(x.step, x.id).toBe(panel[x.target]);
-    for (const x of LITE_TOUR_STEPS) expect([1, 2, 3], x.id).toContain(x.step);
+    for (const x of LITE_TOUR_STEPS) expect(['space', 'racking', 'features', 'review'], x.id).toContain(x.step);
   });
   it('says in plain words that the figures are an estimate, not a quote', () => {
     const all = LITE_TOUR_STEPS.map((x) => x.text).join(' ') + guide;
@@ -131,7 +131,7 @@ describe('lite help: tour and guide', () => {
     expect(guide).toMatch(/not a quote or a building plan/i);
   });
   it('explains every term the screen uses, without jargon', () => {
-    for (const term of ['Inside width, depth and height', 'Door position', 'Door type', 'Main bottle style', 'How many bottles', 'Rack finish', 'Estimated capacity', '<b>3D</b>', '<b>Plan</b>', '<b>Racks</b>', 'Request a quote', 'Save design']) expect(guide, term).toContain(term);
+    for (const term of ['Inside width, depth and height', 'Door position', 'Door type', 'Main bottle style', 'How many bottles', 'Rack finish', 'Make it yours', 'Added so far', 'Estimated capacity', '<b>3D</b>', '<b>Plan</b>', '<b>Racks</b>', 'Request a quote', 'Save design']) expect(guide, term).toContain(term);
     for (const jargon of ['elevation', 'run ', 'build-up', 'header', 'label-forward', 'HVAC']) expect(guide.toLowerCase(), jargon).not.toContain(jargon.toLowerCase());
   });
   it('shows the explanations without hovering (visible hints, no tooltip dependence)', () => {

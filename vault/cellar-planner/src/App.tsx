@@ -17,8 +17,9 @@ import { InfoModal } from './ui/InfoModal';
 import { PackageModal } from './ui/PackageModal';
 import { Icon } from './ui/icons';
 import { Accordion } from './ui/fields';
-import { CatalogueContext, ChecksPanel, CoolingPanel, EnclosurePanel, PricePanel, RackPanel, RunsPanel, StoreContext, UiContext } from './ui/panels';
-import { createCatalogueStore, type CatalogueStore } from './app/catalogue';
+import { CatalogueContext, ChecksPanel, CoolingPanel, EnclosurePanel, FeaturesPanel, PricePanel, RackPanel, RunsPanel, StoreContext, UiContext } from './ui/panels';
+import { createCatalogueStore, designFeatures, type CatalogueStore } from './app/catalogue';
+import { effectsOf } from './lite/features';
 import { createLeadsStore, openLeadDesign, type FetchFn, type LeadsStore } from './app/leads';
 import { LeadsPanel } from './ui/LeadsPanel';
 import { QuoteModal } from './ui/QuoteModal';
@@ -84,8 +85,8 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
   const finish: FinishKey = project.finish ?? 'OAK';
   const insideInput = useMemo(() => {
     const iz = analysis.enclosure.internal;
-    return { project, runs: fullRuns(project), analysis: analysis.racks, dims: { width: `${iz.widthMm} mm`, depth: `${iz.depthMm} mm`, height: `${iz.heightMm} mm` } };
-  }, [project, analysis]);
+    return { project, runs: fullRuns(project), analysis: analysis.racks, dims: { width: `${iz.widthMm} mm`, depth: `${iz.depthMm} mm`, height: `${iz.heightMm} mm` }, effects: effectsOf(designFeatures(project, catState)?.extras ?? []) };
+  }, [project, analysis, catState]);
 
   // ---- the screen layout: hide the side panels, resize the controls panel, or focus on the drawing. Remembered in this browser.
   const [layout, setLayout] = useState(() => loadLayout(typeof localStorage === 'undefined' ? undefined : localStorage));
@@ -226,7 +227,7 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
             <button type="button" key={k} title={tip} aria-pressed={pane === k} className={`tab${pane === k ? ' on' : ''}`} onClick={() => ui.getState().set({ pane: k })} data-testid={`pane-${k}`}>{label}</button>
           ))}
         </nav>
-        <aside className="left" data-testid="left"><Accordion initial="Enclosure"><EnclosurePanel /><RackPanel /><RunsPanel /><PricePanel /><CoolingPanel /></Accordion></aside>
+        <aside className="left" data-testid="left"><Accordion initial="Enclosure"><EnclosurePanel /><RackPanel /><RunsPanel /><FeaturesPanel /><PricePanel /><CoolingPanel /></Accordion></aside>
         <main className="stage">
           {!leftHidden && <div className="resizer" role="separator" aria-orientation="vertical" aria-label="Resize the controls panel" aria-valuemin={LEFT_MIN} aria-valuemax={LEFT_MAX} aria-valuenow={layout.leftW} tabIndex={0} title="Drag to make the controls panel wider or narrower. With the keyboard, use the left and right arrow keys." onPointerDown={startResize} onKeyDown={(e) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); setLayout((l) => ({ ...l, leftW: clampLeft(l.leftW + (e.key === 'ArrowRight' ? 20 : -20)) })); } }} data-testid="resizer" />}
           <StatusStrip project={project} analysis={analysis} cat={catState} layout={strip} />
@@ -252,7 +253,7 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
       </div>
       <InfoModal ui={ui} />
       <CodeModal ui={ui} onOpen={(p) => void addDesign(p, 'Opened the design code as a new design: its rack values are best guesses.')} />
-      <PackageModal store={store} ui={ui} />
+      <PackageModal store={store} ui={ui} catalogue={cat} />
       <CalcModal store={store} ui={ui} catalogue={cat} />
       <QuoteModal store={store} ui={ui} catalogue={cat} fetchFn={fetchFn} storage={localStorage} />
       <LeadsPanel ui={ui} leads={leadStore} reload={() => void leadStore.getState().load(fetchFn, localStorage)} onOpen={(id) => void openEnquiry(id)} />

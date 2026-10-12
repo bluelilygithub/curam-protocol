@@ -235,21 +235,21 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
   const title = () => p2.locator('.shepherd-element.vault-tour:not([hidden]) .shepherd-title').innerText();
   const counter = () => p2.locator('.vault-tour-step-count:visible').innerText();
   await p2.locator('.vault-tour-step-count:visible').waitFor();
-  check('the tour starts on its welcome card, Step 1 of 17', /Quick Tour/.test(await title()) && /Step 1 of 17/.test(await counter()), await counter());
+  check('the tour starts on its welcome card, Step 1 of 18', /Quick Tour/.test(await title()) && /Step 1 of 18/.test(await counter()), await counter());
   await shot2('12-tour-welcome');
   const next = () => p2.locator('.shepherd-element.vault-tour:not([hidden]) .shepherd-button:not(.vault-tour-btn-secondary)').click();
   const titles = [await title()];
   const tabAt = {};
-  for (let i = 2; i <= 17; i++) {
+  for (let i = 2; i <= 18; i++) {
     await next();
-    await p2.waitForFunction((n) => [...document.querySelectorAll('.vault-tour-step-count')].some((c) => c.textContent === 'Step ' + n + ' of 17' && c.offsetParent !== null), i, { timeout: 6000 });
+    await p2.waitForFunction((n) => [...document.querySelectorAll('.vault-tour-step-count')].some((c) => c.textContent === 'Step ' + n + ' of 18' && c.offsetParent !== null), i, { timeout: 6000 });
     await p2.waitForTimeout(500);
     titles.push(await title());
     tabAt[i] = await p2.evaluate(() => window.cellar.ui.getState().tab);
-    if (i === 3 || i === 11) await shot2('13-tour-step-' + i);
+    if (i === 3 || i === 12) await shot2('13-tour-step-' + i);
   }
-  check('the tour has 17 steps in order, from "Your design" to the finish, and covers Price, Cooling, Enquiries and Quote', titles.length === 17 && titles[1] === 'Your design' && titles[2] === 'The enclosure' && /set/.test(titles[16]) && ['Price', 'Cooling', 'Enquiries', 'Quote'].every((t) => titles.includes(t)), JSON.stringify(titles));
-  check('the plan, elevation, racks and 3D step switches to the Racks tab, and the drawing step back to the plan', tabAt[10] === 'racks' && tabAt[11] === 'plan', JSON.stringify(tabAt));
+  check('the tour has 18 steps in order, from "Your design" to the finish, and covers Price, Cooling, Enquiries and Quote', titles.length === 18 && titles[1] === 'Your design' && titles[2] === 'The enclosure' && /set/.test(titles[17]) && ["Features", "Price", "Cooling", "Enquiries", "Quote"].every((t) => titles.includes(t)), JSON.stringify(titles));
+  check('the plan, elevation, racks and 3D step switches to the Racks tab, and the drawing step back to the plan', tabAt[11] === 'racks' && tabAt[12] === 'plan', JSON.stringify(tabAt));
   check('a dimming overlay spotlights the target', await p2.evaluate(() => document.querySelector('.shepherd-modal-overlay-container') !== null));
   await next();
   await p2.waitForTimeout(400);

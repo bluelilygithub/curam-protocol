@@ -3,6 +3,7 @@ import { useStore } from 'zustand';
 import type { AppProject } from '../app/model';
 import type { AppStore } from '../app/store';
 import type { UiStore } from '../app/uiStore';
+import type { CatalogueStore } from '../app/catalogue';
 import { Icon } from './icons';
 import { TextField } from './fields';
 import { insidePicture } from '../export/insidePicture';
@@ -12,7 +13,7 @@ const EMPTY: Details = { company: '', client: '', address: '', projectNo: '', dr
 const today = (): string => new Date().toISOString().slice(0, 10);
 
 /** The drawing package: fill in the title block, then download the PDF (A3 sheets: specification, plan, elevation, and the racks on each wall). */
-export function PackageModal({ store, ui }: { store: AppStore; ui: UiStore }) {
+export function PackageModal({ store, ui, catalogue }: { store: AppStore; ui: UiStore; catalogue?: CatalogueStore }) {
   const open = useStore(ui, (s) => s.packageOpen);
   const project = useStore(store, (s) => s.project);
   const [d, setD] = useState<Details>(project.drawing ?? EMPTY);
@@ -49,7 +50,7 @@ export function PackageModal({ store, ui }: { store: AppStore; ui: UiStore }) {
       // the 3D picture of the inside goes in as its own sheet (skipped quietly if it cannot be drawn)
       let insideImage: string | undefined;
       // only when there are racks to show: a picture of an empty room adds nothing
-      try { insideImage = current.runs.length ? await insidePicture(current) : undefined; } catch { insideImage = undefined; }
+      try { insideImage = current.runs.length ? await insidePicture(current, catalogue?.getState().catalogue ?? null) : undefined; } catch { insideImage = undefined; }
       const { bytes, sheets } = await makePackagePdf(current, { ...d, date }, insideImage ? { insideImage } : {});
       const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }));
       const a = document.createElement('a');

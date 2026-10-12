@@ -27,7 +27,7 @@ export function LiteHelp({ open, onClose, onTour, unit, unitWidthMm, doorSingleM
         <div className="modal-head"><h2>How this works</h2><button type="button" className="icon-btn" aria-label="Close" title="Close" onClick={onClose} data-testid="lite-help-close">✕</button></div>
         <div className="modal-body" tabIndex={0} role="region" aria-label="Guide text">
           <h3>What this is</h3>
-          <p>A quick way to see what a wine cellar could look like in your space, and roughly how many bottles it would hold. You go through three short steps (<b>Space</b>, <b>Racking &amp; finishes</b>, <b>Review</b>) and the picture and the bottle estimate update straight away. You cannot break anything: change any answer as often as you like.</p>
+          <p>A quick way to see what a wine cellar could look like in your space, and roughly how many bottles it would hold. You go through a few short steps (<b>Space</b>, <b>Racking &amp; finishes</b>, <b>Features</b>, <b>Review</b>) and the picture and the bottle estimate update straight away. You cannot break anything: change any answer as often as you like.</p>
           <p><b>It is an estimate, not a quote or a building plan.</b> The sizes of the racks are typical ones, and we always measure on site before anything is made.</p>
 
           <h3>The steps, in plain words</h3>
@@ -38,6 +38,7 @@ export function LiteHelp({ open, onClose, onTour, unit, unitWidthMm, doorSingleM
             <li><b>Main bottle style.</b> The shape of the bottles you have most of. Bordeaux is the common tall straight-sided bottle (most reds and many whites). Burgundy is wider (pinot noir, chardonnay). Champagne and sparkling is wider again. A magnum holds 1.5 litres. Wider bottles need more room, so fewer fit.</li>
             <li><b>How many bottles.</b> <i>As many as fit</i> fills every wall with racks. <i>A number I choose</i> lets you type, or slide, how many you want, and the plan uses just enough racks for that.</li>
             <li><b>Rack finish.</b> Oak, walnut or black. It changes how the racks look in the pictures, not how many bottles fit.</li>
+            <li><b>Features</b> (<i>Make it yours</i>). The finishing touches that turn storage into a room you show off: the front and doors, lighting, special storage, a centrepiece, the climate system, and the wall and floor finishes. In a group marked <b>Choose one</b> the standard choice is already picked and marked <b>Included</b>; pick another to swap to it. In a group marked <b>Choose any</b> you can add as many as you like. Each extra shows its own price range and is added to the guide price. A choice that needs a bigger room is greyed out and says why. Glass doors and the wall and floor finishes show in the 3D picture; the others are written into your enquiry. <b>Added so far</b> lists what you have added.</li>
           </ul>
 
           <h3>What you see</h3>
@@ -53,7 +54,7 @@ export function LiteHelp({ open, onClose, onTour, unit, unitWidthMm, doorSingleM
           <p>The estimate is built from <b>standard-size rack units</b>: ready-made blocks of racking, about <b>{describeLength(unitWidthMm, unit)} wide</b> each, that stand against the walls. Every unit is the same size, so we can count bottles reliably and price them simply. Units are placed <b>whole</b> (we do not cut one down), so what is left over at the end of a wall, or beside the door, is shown as an empty gap. Those gaps are normal. The exact unit sizes are confirmed with the rack supplier, so the final count can differ a little. If a custom size would suit your space better, tell us when you ask for a quote.</p>
 
           <h3>Asking for a quote</h3>
-          <p>When you are happy, press <b>Request a quote</b>, in the <b>Review</b> step or in the bar along the bottom. In <b>Review</b> you can also download your plan as a PDF, and <b>Save design</b> at the top keeps a link to this exact design. Your answers are added to the enquiry form on the page, or you can copy them into an email. Nothing is sent until <i>you</i> press the form&apos;s own Send button. Your answers are only the room size, door, bottle style, rack finish and bottle count: no personal details. You can also bookmark the page address: it remembers your answers.</p>
+          <p>When you are happy, press <b>Request a quote</b>, in the <b>Review</b> step or in the bar along the bottom. In <b>Review</b> you can also download your plan as a PDF, and <b>Save design</b> at the top keeps a link to this exact design. Your answers are added to the enquiry form on the page, or you can copy them into an email. Nothing is sent until <i>you</i> press the form&apos;s own Send button. Your answers are only the room size, door, bottle style, rack finish, features and bottle count: no personal details. You can also bookmark the page address: it remembers your answers.</p>
 
           <h3>Good to know</h3>
           <ul>

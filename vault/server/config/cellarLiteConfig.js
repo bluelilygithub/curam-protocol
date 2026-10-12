@@ -17,12 +17,62 @@ const LIMITS = {
   price: [0, 1000000], rangePct: [0, 50],
   roomWidthMm: [1000, 8000], roomDepthMm: [1000, 8000], roomHeightMm: [1800, 3200],
   quoteValidityDays: [1, 365],
+  featureCode: [1, 999], featureRoomMm: [1000, 8000],
   panelConductivity: [0.01, 0.1], glassU: [0.5, 6], floorU: [0.1, 6], internalGainsW: [0, 5000], marginPct: [0, 100], targetC: [0, 25], ambientC: [15, 50],
 };
 const ROUND_TO = [1, 10, 50, 100, 500, 1000];
 const MAX_PRESETS = 6;
 const MAX_RACK_TYPES = 8;
 const ORIENTATIONS = ['NECK_OUT', 'LABEL_FORWARD'];
+// Feature options (the public tool's "Make it yours" step and the staff Features panel): groups of choices, each with a low and a high price.
+// ONE = pick one (the `included` option is the standard and costs nothing extra); ANY = pick any number (none is standard).
+const MAX_FEATURE_GROUPS = 10;
+const MAX_FEATURE_OPTIONS = 8;
+const FEATURE_MODES = ['ONE', 'ANY'];
+const FEATURE_BADGES = ['', 'POPULAR', 'RECOMMENDED'];
+// what an option changes in the 3D picture (nothing else about an option is drawn)
+const FEATURE_EFFECTS = ['', 'GLASS_DOORS', 'GLASS_FRONT', 'WALL_TIMBER', 'WALL_STONE', 'FLOOR_STONE', 'FLOOR_OAK'];
+
+// The starting feature list (prices blank = not set). `code` is a number that stays with an option for good (it is what a design code carries, so
+// renaming an option never changes a saved design); never reuse one.
+const fo = (code, id, name, description, extra = {}) => ({ code, id, name, description, badge: '', included: false, low: null, high: null, minWidthMm: null, minDepthMm: null, effect: '', enabled: true, ...extra });
+const DEFAULT_FEATURES = [
+  { id: 'front', name: 'Front & doors', hint: 'How the cellar looks from the room outside. Glass is the most popular upgrade.', mode: 'ONE', options: [
+    fo(1, 'timber-doors', 'Timber doors', 'Solid, matched to your racks', { included: true }),
+    fo(2, 'glass-doors', 'Frameless glass doors', 'See your collection without opening up', { badge: 'POPULAR', effect: 'GLASS_DOORS' }),
+    fo(3, 'full-glass-front', 'Full glass front', 'The whole cellar becomes the feature', { effect: 'GLASS_FRONT' }),
+  ] },
+  { id: 'lighting', name: 'Lighting', hint: 'Low-heat LED throughout, so it never warms the wine.', mode: 'ONE', options: [
+    fo(4, 'ceiling-downlights', 'Ceiling downlights', 'Clean, even light', { included: true }),
+    fo(5, 'in-rack-led', 'In-rack LED strips', 'Warm glow along every row'),
+    fo(6, 'backlit-wall', 'Backlit display wall', 'Bottles lit from behind'),
+  ] },
+  { id: 'special-storage', name: 'Special storage', hint: 'Swap some standard racking for bays made for the bottles you love most.', mode: 'ANY', options: [
+    fo(7, 'magnum-large-format', 'Magnum & large format', 'Dedicated bays for big bottles'),
+    fo(8, 'champagne-bins', 'Champagne bins', 'Angled storage for sparkling'),
+    fo(9, 'label-forward-display', 'Label-forward display', 'Your best bottles, face out'),
+    fo(10, 'case-storage', 'Case storage', 'Unopened cases tucked below'),
+  ] },
+  { id: 'centrepiece', name: 'Centrepiece', hint: 'Somewhere to open, pour and linger.', mode: 'ONE', options: [
+    fo(11, 'no-centrepiece', 'No centrepiece', 'Keep the floor clear', { included: true }),
+    fo(12, 'tasting-bench', 'Tasting bench', 'Stone top, wall-mounted'),
+    fo(13, 'island-with-drawers', 'Island with drawers', 'Needs a room at least 2.4 m deep', { minDepthMm: 2400 }),
+  ] },
+  { id: 'climate', name: 'Climate system', hint: 'Keeps the cellar at a steady 12 to 14 °C. We confirm sizing on site.', mode: 'ONE', options: [
+    fo(14, 'through-wall-unit', 'Through-wall unit', 'Self-contained, some fan noise', { included: true }),
+    fo(15, 'ducted-split', 'Ducted split system', 'Near-silent, unit sits outside', { badge: 'RECOMMENDED' }),
+  ] },
+  { id: 'wall-finish', name: 'Wall finish', hint: 'All walls are insulated and vapour-sealed underneath.', mode: 'ONE', options: [
+    fo(16, 'painted', 'Painted', 'Clean and neutral', { included: true }),
+    fo(17, 'timber-lined', 'Timber-lined', 'Warm, matches your racks', { effect: 'WALL_TIMBER' }),
+    fo(18, 'stone-feature-wall', 'Stone feature wall', 'Natural stone on the back wall', { effect: 'WALL_STONE' }),
+  ] },
+  { id: 'flooring', name: 'Flooring', hint: 'Moisture-safe options only.', mode: 'ONE', options: [
+    fo(19, 'keep-existing-floor', 'Keep existing floor', 'We work around it', { included: true }),
+    fo(20, 'stone-tile', 'Stone tile', 'Cool underfoot, classic cellar', { effect: 'FLOOR_STONE' }),
+    fo(21, 'engineered-oak', 'Engineered oak', 'Warm and stable', { effect: 'FLOOR_OAK' }),
+  ] },
+];
 
 const DEFAULTS = Object.freeze({
   version: 1,
@@ -54,6 +104,7 @@ const DEFAULTS = Object.freeze({
   //   internalGainsW: heat from lights, people and new stock, watts. marginPct: safety margin on top, per cent.
   //   targetC / ambientC: the cellar's target temperature and the hottest outside design temperature (each design may override them).
   cooling: { panelConductivity: 0.025, glassU: 1.4, floorU: 1, internalGainsW: 100, marginPct: 20, targetC: 14, ambientC: 35 },
+  features: DEFAULT_FEATURES,
   presets: [
 
     { id: 'small', name: 'Small cellar', widthMm: 1800, depthMm: 1500, heightMm: 2400, doorStyle: 'SINGLE' },
@@ -248,6 +299,72 @@ function validateConfig(raw) {
     text: mn.text === undefined ? D.mobileNotice.text : cleanText(mn.text, 300) || D.mobileNotice.text,
   };
 
+  // ---- feature options. Missing = the standard list; a list that is present is taken as the owner's (an empty one means no Features step).
+  const features = [];
+  if (src.features !== undefined && src.features !== null && !Array.isArray(src.features)) errors.push('The feature options were not in the expected format.');
+  const rawGroups = Array.isArray(src.features) ? src.features : D.features;
+  if (rawGroups.length > MAX_FEATURE_GROUPS) errors.push(`At most ${MAX_FEATURE_GROUPS} feature groups.`);
+  const usedCodes = new Set();
+  const needCode = [];
+  const groupIds = new Set();
+  rawGroups.slice(0, MAX_FEATURE_GROUPS).forEach((g, gi) => {
+    const n = gi + 1;
+    if (!isObj(g)) { errors.push(`Feature group ${n} was not in the expected format.`); return; }
+    const gname = cleanText(g.name ?? '', 40);
+    if (!gname) { errors.push(`Feature group ${n} needs a name.`); return; }
+    let gid = slug(g.id) || slug(gname) || `group-${n}`;
+    while (groupIds.has(gid)) gid += '-x';
+    groupIds.add(gid);
+    const mode = g.mode === undefined || g.mode === null || g.mode === '' ? 'ONE' : g.mode;
+    if (!FEATURE_MODES.includes(mode)) errors.push(`${gname}: choose "pick one" or "pick any".`);
+    const rawOpts = Array.isArray(g.options) ? g.options : [];
+    if (rawOpts.length > MAX_FEATURE_OPTIONS) errors.push(`${gname}: at most ${MAX_FEATURE_OPTIONS} options.`);
+    const optIds = new Set();
+    const options = [];
+    rawOpts.slice(0, MAX_FEATURE_OPTIONS).forEach((o, oi) => {
+      if (!isObj(o)) { errors.push(`${gname}, option ${oi + 1} was not in the expected format.`); return; }
+      const oname = cleanText(o.name ?? '', 40);
+      if (!oname) { errors.push(`${gname}, option ${oi + 1} needs a name.`); return; }
+      const label = `${gname}: ${oname}`;
+      let oid = slug(o.id) || slug(oname) || `option-${oi + 1}`;
+      while (optIds.has(oid)) oid += '-x';
+      optIds.add(oid);
+      let code = o.code === undefined || o.code === null || o.code === '' ? null : int(o.code, LIMITS.featureCode, null, `${label}: the option code`);
+      if (code !== null && usedCodes.has(code)) code = null; // a copied option: it gets its own code below
+      if (code !== null) usedCodes.add(code);
+      let low = money(o.low, `${label}: the low price`);
+      let high = money(o.high, `${label}: the high price`);
+      if (low !== null && high !== null && low > high) { errors.push(`${label}: the low price must not be more than the high price.`); high = low; }
+      const badge = o.badge === undefined || o.badge === null ? '' : o.badge;
+      if (!FEATURE_BADGES.includes(badge)) errors.push(`${label}: the badge must be none, Popular or Recommended.`);
+      const effect = o.effect === undefined || o.effect === null ? '' : o.effect;
+      if (!FEATURE_EFFECTS.includes(effect)) errors.push(`${label}: unknown picture effect.`);
+      const opt = {
+        code, id: oid, name: oname,
+        description: o.description === undefined ? '' : cleanText(o.description, 120),
+        badge: FEATURE_BADGES.includes(badge) ? badge : '',
+        included: o.included === true,
+        low, high,
+        minWidthMm: o.minWidthMm === undefined || o.minWidthMm === null || o.minWidthMm === '' ? null : int(o.minWidthMm, LIMITS.featureRoomMm, null, `${label}: the smallest room width`),
+        minDepthMm: o.minDepthMm === undefined || o.minDepthMm === null || o.minDepthMm === '' ? null : int(o.minDepthMm, LIMITS.featureRoomMm, null, `${label}: the smallest room depth`),
+        effect: FEATURE_EFFECTS.includes(effect) ? effect : '',
+        enabled: o.enabled !== false,
+      };
+      if (code === null) needCode.push(opt);
+      options.push(opt);
+    });
+    if (!options.length) { errors.push(`${gname} needs at least one option.`); return; }
+    const gmode = FEATURE_MODES.includes(mode) ? mode : 'ONE';
+    // pick-one groups always have exactly one standard (included) option; pick-any groups have none
+    if (gmode === 'ONE') {
+      const first = options.findIndex((x) => x.included);
+      options.forEach((x, i) => { x.included = i === (first === -1 ? 0 : first); });
+    } else options.forEach((x) => { x.included = false; });
+    features.push({ id: gid, name: gname, hint: g.hint === undefined ? '' : cleanText(g.hint, 160), mode: gmode, options });
+  });
+  // a new option takes the number after the highest one in use, so it never picks up a code an earlier (now removed) option left in a saved design
+  { let next = Math.max(0, ...usedCodes) + 1; for (const opt of needCode) { if (next > LIMITS.featureCode[1]) { next = 1; while (usedCodes.has(next)) next += 1; } opt.code = next; usedCodes.add(next); next += 1; } }
+
   const config = {
     version: 1,
     promise: src.promise === undefined ? D.promise : cleanText(src.promise, 200),
@@ -265,6 +382,7 @@ function validateConfig(raw) {
     pricing,
     quote,
     cooling,
+    features,
     presets,
   };
   return { config, errors };
@@ -280,12 +398,13 @@ function publicView(config) {
     ...config,
     rackTypes: config.rackTypes.map((r) => ({ ...r, pricePerUnit: null })),
     pricing: { ...config.pricing, fixed: null, perUnit: null, doorSingle: null, doorDouble: null },
+    features: config.features.map((g) => ({ ...g, options: g.options.map((o) => ({ ...o, low: null, high: null })) })),
   };
 }
 
 /** What the signed-in staff app may read: the whole catalogue and the real prices (whether or not the public tool shows a price). */
 function staffView(config) {
-  return { rackTypes: config.rackTypes, defaultRackType: config.defaultRackType, doors: config.doors, pricing: config.pricing, quote: config.quote, cooling: config.cooling };
+  return { rackTypes: config.rackTypes, defaultRackType: config.defaultRackType, doors: config.doors, pricing: config.pricing, quote: config.quote, cooling: config.cooling, features: config.features };
 }
 
-module.exports = { contrastWithWhite, KEY, LIMITS, ROUND_TO, MAX_PRESETS, MAX_RACK_TYPES, DEFAULTS, validateConfig, publicView, staffView };
+module.exports = { contrastWithWhite, KEY, LIMITS, ROUND_TO, MAX_PRESETS, MAX_RACK_TYPES, MAX_FEATURE_GROUPS, MAX_FEATURE_OPTIONS, DEFAULTS, validateConfig, publicView, staffView };

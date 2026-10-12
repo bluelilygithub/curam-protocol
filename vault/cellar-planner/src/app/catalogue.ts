@@ -1,6 +1,8 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { readVaultToken, type ReadableStorage } from '@planner-core/library/library';
-import { normaliseConfig, type CoolingSettings, type LitePricing, type QuoteSettings, type RackType } from '../lite/config';
+import { normaliseConfig, type CoolingSettings, type FeatureGroup, type FeatureOption, type LitePricing, type QuoteSettings, type RackType } from '../lite/config';
+import { internalSize } from '../enclosure/enclosure';
+import { featureTotals, optionMid, optionRange, resolveFeatures, type ResolvedFeatures } from '../lite/features';
 import type { RackSpec } from '../rack';
 import { ESTIMATE_FIELDS, type AppProject } from './model';
 
@@ -18,6 +20,8 @@ export interface Catalogue {
   quote: QuoteSettings;
   /** The assumptions behind the indicative cooling estimate. */
   cooling: CoolingSettings;
+  /** The feature groups and their low/high prices (Settings -> Cellar Planner -> Feature options). */
+  features: FeatureGroup[];
 }
 
 export const CATALOGUE_URL = '/api/cellar-planner/catalogue';
@@ -28,8 +32,8 @@ export function parseCatalogue(raw: unknown): Catalogue | null {
   const o = raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
   const c = o && o.catalogue !== null && typeof o.catalogue === 'object' ? (o.catalogue as Record<string, unknown>) : o;
   if (!c || !Array.isArray(c.rackTypes) || c.rackTypes.length === 0) return null;
-  const cfg = normaliseConfig({ rackTypes: c.rackTypes, defaultRackType: c.defaultRackType, doors: c.doors, pricing: c.pricing, quote: c.quote, cooling: c.cooling });
-  return { rackTypes: cfg.rackTypes, defaultRackType: cfg.defaultRackType, doors: cfg.doors, pricing: cfg.pricing, quote: cfg.quote, cooling: cfg.cooling };
+  const cfg = normaliseConfig({ rackTypes: c.rackTypes, defaultRackType: c.defaultRackType, doors: c.doors, pricing: c.pricing, quote: c.quote, cooling: c.cooling, features: c.features });
+  return { rackTypes: cfg.rackTypes, defaultRackType: cfg.defaultRackType, doors: cfg.doors, pricing: cfg.pricing, quote: cfg.quote, cooling: cfg.cooling, features: cfg.features };
 }
 
 export const typeById = (c: Catalogue | null, id: string | undefined): RackType | null => (c && id ? c.rackTypes.find((r) => r.id === id) ?? null : null);
@@ -60,10 +64,17 @@ export function matchesType(p: AppProject, t: RackType): boolean {
 
 // ---------------------------------------------------------------- the staff price
 
-export interface PriceLine { label: string; detail: string; amount: number }
+export interface PriceLine { label: string; detail: string; amount: number; /** What the line is, for the working-out help. */ kind?: 'fixed' | 'racks' | 'door' | 'feature' }
 export type StaffPrice =
-  | { status: 'OK'; lines: PriceLine[]; total: number; low: number; high: number; text: string; currency: string; warnings: string[] }
+  | { status: 'OK'; lines: PriceLine[]; total: number; low: number; high: number; text: string; currency: string; warnings: string[]; /** Chosen features with no price in Settings: named here, left out of the total, and they stop a quote. */ unpriced: string[] }
   | { status: 'UNAVAILABLE'; reason: string };
+
+/** The feature options chosen in this design, as the catalogue's list reads them for this room (null without a catalogue). */
+export function designFeatures(p: AppProject, cat: Catalogue | null): ResolvedFeatures | null {
+  if (!cat) return null;
+  const iz = internalSize(p.enclosure);
+  return resolveFeatures(cat.features, p.features, { widthMm: iz.widthMm, depthMm: iz.depthMm });
+}
 
 /**
  * The full price breakdown for staff: fixed amount + (the design's rack type price per unit x total units) + the door price, then the range the
@@ -83,21 +94,40 @@ export function staffPrice(p: AppProject, cat: Catalogue | null, opts: { errors?
   if (pr.fixed === null && t.pricePerUnit === null && doorPrice === null) return { status: 'UNAVAILABLE', reason: 'No prices have been entered in Settings -> Cellar Planner.' };
   const fmt = (n: number): string => `${pr.currency}${n.toLocaleString('en-AU')}`;
   const lines: PriceLine[] = [];
-  if (pr.fixed !== null) lines.push({ label: 'Fixed amount', detail: 'every job', amount: pr.fixed });
-  if (t.pricePerUnit !== null) lines.push({ label: `${t.name} racks`, detail: `${units} unit${units === 1 ? '' : 's'} x ${fmt(t.pricePerUnit)}`, amount: Math.round(units * t.pricePerUnit * 100) / 100 });
-  if (doorPrice !== null) lines.push({ label: double ? 'Double door' : 'Single door', detail: '', amount: doorPrice });
+  if (pr.fixed !== null) lines.push({ label: 'Fixed amount', detail: 'every job', amount: pr.fixed, kind: 'fixed' });
+  if (t.pricePerUnit !== null) lines.push({ label: `${t.name} racks`, detail: `${units} unit${units === 1 ? '' : 's'} x ${fmt(t.pricePerUnit)}`, amount: Math.round(units * t.pricePerUnit * 100) / 100, kind: 'racks' });
+  if (doorPrice !== null) lines.push({ label: double ? 'Double door' : 'Single door', detail: '', amount: doorPrice, kind: 'door' });
+  const baseTotal = Math.round(lines.reduce((n, l) => n + l.amount, 0) * 100) / 100;
+  // the chosen feature options: one line each, at the amount typed for this design or else halfway between the option's low and high
+  const chosen = designFeatures(p, cat);
+  const unpriced: string[] = [];
+  const pricedExtras: FeatureOption[] = [];
+  for (const g of chosen?.groups ?? []) {
+    for (const o of g.chosen) {
+      if (o.included) continue;
+      const mid = optionMid(o), typed = p.featurePrices?.[o.code];
+      const amount = typed !== undefined ? typed : mid;
+      if (amount === null || amount === undefined) { unpriced.push(`${g.group.name}: ${o.name}`); continue; }
+      const r = optionRange(o);
+      pricedExtras.push(o);
+      lines.push({ label: `${g.group.name}: ${o.name}`, detail: typed !== undefined ? 'amount set for this quote' : r && r.low !== r.high ? `halfway between ${fmt(r.low)} and ${fmt(r.high)}` : '', amount, kind: 'feature' });
+    }
+  }
   const total = Math.round(lines.reduce((n, l) => n + l.amount, 0) * 100) / 100;
+  // the customer range: the base either side by the percentage, plus each feature's own low at the bottom and high at the top
   const step = pr.roundTo, spread = pr.rangePct / 100;
   const round = (n: number): number => Math.round(n / step) * step;
-  const low = Math.max(0, round(total * (1 - spread))), high = Math.max(low, round(total * (1 + spread)));
+  const ft = featureTotals(pricedExtras);
+  const low = Math.max(0, round(baseTotal * (1 - spread) + ft.low)), high = Math.max(low, round(baseTotal * (1 + spread) + ft.high));
   const warnings: string[] = [];
+  for (const u of unpriced) warnings.push(`${u} has no price in Settings (Feature options), so it is not in this total.`);
   if (t.pricePerUnit === null) warnings.push(`${t.name} has no price per unit, so the racks are not in this total.`);
   if (!t.confirmed) warnings.push(`${t.name} is not confirmed by the supplier: this price is indicative only.`);
   if (opts.errors && opts.errors > 0) {
     const one = opts.errors === 1;
     warnings.push(`${opts.errors} check${one ? '' : 's'} in this design ${one ? 'shows' : 'show'} an error: fix ${one ? 'it' : 'them'} before relying on this price.`);
   }
-  return { status: 'OK', lines, total, low, high, text: low === high ? `about ${fmt(low)}` : `${fmt(low)} to ${fmt(high)}`, currency: pr.currency, warnings };
+  return { status: 'OK', lines, total, low, high, text: low === high ? `about ${fmt(low)}` : `${fmt(low)} to ${fmt(high)}`, currency: pr.currency, warnings, unpriced };
 }
 
 // ---------------------------------------------------------------- loading it

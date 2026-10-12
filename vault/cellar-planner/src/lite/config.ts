@@ -23,6 +23,19 @@ export interface RackType {
 export interface QuoteSettings { businessName: string; details: string; terms: string; validityDays: number; gstNote: string }
 /** The assumptions behind the staff planner's indicative cooling estimate (staff only). See server/config/cellarLiteConfig.js for what each means. */
 export interface CoolingSettings { panelConductivity: number; glassU: number; floorU: number; internalGainsW: number; marginPct: number; targetC: number; ambientC: number }
+export type FeatureMode = 'ONE' | 'ANY';
+export type FeatureBadge = '' | 'POPULAR' | 'RECOMMENDED';
+/** What an option changes in the 3D picture (nothing else about an option is drawn). */
+export type FeatureEffect = '' | 'GLASS_DOORS' | 'GLASS_FRONT' | 'WALL_TIMBER' | 'WALL_STONE' | 'FLOOR_STONE' | 'FLOOR_OAK';
+/**
+ * One choice in a feature group. `code` is a number that stays with the option for good: it is what a design code and a saved design carry, so
+ * renaming an option never changes a saved design. low/high null = price not set (never zero). `included` = the standard choice of a pick-one group.
+ */
+export interface FeatureOption {
+  code: number; id: string; name: string; description: string; badge: FeatureBadge; included: boolean;
+  low: number | null; high: number | null; minWidthMm: number | null; minDepthMm: number | null; effect: FeatureEffect; enabled: boolean;
+}
+export interface FeatureGroup { id: string; name: string; hint: string; mode: FeatureMode; options: FeatureOption[] }
 export interface LiteConfig {
   version: 1;
   promise: string;
@@ -43,8 +56,49 @@ export interface LiteConfig {
   pricing: LitePricing;
   quote: QuoteSettings;
   cooling: CoolingSettings;
+  /** The "Make it yours" feature groups (empty = the tool has no Features step). */
+  features: FeatureGroup[];
   presets: LitePreset[];
 }
+
+const fo = (code: number, id: string, name: string, description: string, extra: Partial<FeatureOption> = {}): FeatureOption => ({ code, id, name, description, badge: '', included: false, low: null, high: null, minWidthMm: null, minDepthMm: null, effect: '', enabled: true, ...extra });
+const DEFAULT_FEATURES: FeatureGroup[] = [
+  { id: 'front', name: 'Front & doors', hint: 'How the cellar looks from the room outside. Glass is the most popular upgrade.', mode: 'ONE', options: [
+    fo(1, 'timber-doors', 'Timber doors', 'Solid, matched to your racks', { included: true }),
+    fo(2, 'glass-doors', 'Frameless glass doors', 'See your collection without opening up', { badge: 'POPULAR', effect: 'GLASS_DOORS' }),
+    fo(3, 'full-glass-front', 'Full glass front', 'The whole cellar becomes the feature', { effect: 'GLASS_FRONT' }),
+  ] },
+  { id: 'lighting', name: 'Lighting', hint: 'Low-heat LED throughout, so it never warms the wine.', mode: 'ONE', options: [
+    fo(4, 'ceiling-downlights', 'Ceiling downlights', 'Clean, even light', { included: true }),
+    fo(5, 'in-rack-led', 'In-rack LED strips', 'Warm glow along every row'),
+    fo(6, 'backlit-wall', 'Backlit display wall', 'Bottles lit from behind'),
+  ] },
+  { id: 'special-storage', name: 'Special storage', hint: 'Swap some standard racking for bays made for the bottles you love most.', mode: 'ANY', options: [
+    fo(7, 'magnum-large-format', 'Magnum & large format', 'Dedicated bays for big bottles'),
+    fo(8, 'champagne-bins', 'Champagne bins', 'Angled storage for sparkling'),
+    fo(9, 'label-forward-display', 'Label-forward display', 'Your best bottles, face out'),
+    fo(10, 'case-storage', 'Case storage', 'Unopened cases tucked below'),
+  ] },
+  { id: 'centrepiece', name: 'Centrepiece', hint: 'Somewhere to open, pour and linger.', mode: 'ONE', options: [
+    fo(11, 'no-centrepiece', 'No centrepiece', 'Keep the floor clear', { included: true }),
+    fo(12, 'tasting-bench', 'Tasting bench', 'Stone top, wall-mounted'),
+    fo(13, 'island-with-drawers', 'Island with drawers', 'Needs a room at least 2.4 m deep', { minDepthMm: 2400 }),
+  ] },
+  { id: 'climate', name: 'Climate system', hint: 'Keeps the cellar at a steady 12 to 14 °C. We confirm sizing on site.', mode: 'ONE', options: [
+    fo(14, 'through-wall-unit', 'Through-wall unit', 'Self-contained, some fan noise', { included: true }),
+    fo(15, 'ducted-split', 'Ducted split system', 'Near-silent, unit sits outside', { badge: 'RECOMMENDED' }),
+  ] },
+  { id: 'wall-finish', name: 'Wall finish', hint: 'All walls are insulated and vapour-sealed underneath.', mode: 'ONE', options: [
+    fo(16, 'painted', 'Painted', 'Clean and neutral', { included: true }),
+    fo(17, 'timber-lined', 'Timber-lined', 'Warm, matches your racks', { effect: 'WALL_TIMBER' }),
+    fo(18, 'stone-feature-wall', 'Stone feature wall', 'Natural stone on the back wall', { effect: 'WALL_STONE' }),
+  ] },
+  { id: 'flooring', name: 'Flooring', hint: 'Moisture-safe options only.', mode: 'ONE', options: [
+    fo(19, 'keep-existing-floor', 'Keep existing floor', 'We work around it', { included: true }),
+    fo(20, 'stone-tile', 'Stone tile', 'Cool underfoot, classic cellar', { effect: 'FLOOR_STONE' }),
+    fo(21, 'engineered-oak', 'Engineered oak', 'Warm and stable', { effect: 'FLOOR_OAK' }),
+  ] },
+];
 
 export const DEFAULT_CONFIG: LiteConfig = {
   version: 1,
@@ -66,6 +120,7 @@ export const DEFAULT_CONFIG: LiteConfig = {
   },
   quote: { businessName: '', details: '', terms: '', validityDays: 30, gstNote: '' },
   cooling: { panelConductivity: 0.025, glassU: 1.4, floorU: 1, internalGainsW: 100, marginPct: 20, targetC: 14, ambientC: 35 },
+  features: DEFAULT_FEATURES,
   presets: [
     { id: 'small', name: 'Small cellar', widthMm: 1800, depthMm: 1500, heightMm: 2400, doorStyle: 'SINGLE' },
     { id: 'walk-in', name: 'Walk-in cellar', widthMm: 2750, depthMm: 1565, heightMm: 2150, doorStyle: 'SINGLE' },
@@ -77,9 +132,14 @@ const R = {
   unitWidthMm: [400, 1200], unitHeightMm: [1000, 3000], unitDepthMm: [150, 1000], rowPitchMm: [60, 300], postsPerUnit: [1, 6], bottlesPerRow: [1, 40], rowsPerUnit: [1, 60], doorSingleMm: [700, 1300], doorDoubleMm: [1200, 2400],
   price: [0, 1000000], rangePct: [0, 50], roomWidthMm: [1000, 8000], roomDepthMm: [1000, 8000], roomHeightMm: [1800, 3200], quoteValidityDays: [1, 365],
   panelConductivity: [0.01, 0.1], glassU: [0.5, 6], floorU: [0.1, 6], internalGainsW: [0, 5000], marginPct: [0, 100], targetC: [0, 25], ambientC: [15, 50],
+  featureCode: [1, 999], featureRoomMm: [1000, 8000],
 } as const;
 const ROUND_TO = [1, 10, 50, 100, 500, 1000];
 const MAX_RACK_TYPES = 8;
+const MAX_FEATURE_GROUPS = 10;
+const MAX_FEATURE_OPTIONS = 8;
+const FEATURE_BADGES: readonly string[] = ['', 'POPULAR', 'RECOMMENDED'];
+const FEATURE_EFFECTS: readonly string[] = ['', 'GLASS_DOORS', 'GLASS_FRONT', 'WALL_TIMBER', 'WALL_STONE', 'FLOOR_STONE', 'FLOOR_OAK'];
 
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown, max: number): string => String(v).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -131,6 +191,56 @@ const cleanPhone = (v: unknown): string => {
 
 /** What to put after "tel:" so the phone dials it: digits with an optional leading +. */
 export const telHref = (phone: string): string => `tel:${(phone.trim().startsWith('+') ? '+' : '') + phone.replace(/\D/g, '')}`;
+
+/** The feature groups, cleaned the same way the server cleans them. A missing list is the standard one; a list that is present is the owner's. */
+export function normaliseFeatures(raw: unknown): FeatureGroup[] {
+  const rawGroups: unknown[] = Array.isArray(raw) ? raw : raw === undefined || raw === null ? DEFAULT_FEATURES : [];
+  const slug = (t: unknown): string => text(t ?? '', 40).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+  const features: FeatureGroup[] = [];
+  const used = new Set<number>();
+  const needCode: FeatureOption[] = [];
+  const groupIds = new Set<string>();
+  rawGroups.slice(0, MAX_FEATURE_GROUPS).forEach((g, gi) => {
+    if (!isObj(g)) return;
+    const gname = text(g.name ?? '', 40);
+    if (!gname) return;
+    let gid = slug(g.id) || slug(gname) || `group-${gi + 1}`;
+    while (groupIds.has(gid)) gid += '-x';
+    groupIds.add(gid);
+    const optIds = new Set<string>();
+    const options: FeatureOption[] = [];
+    (Array.isArray(g.options) ? g.options : []).slice(0, MAX_FEATURE_OPTIONS).forEach((o: unknown, oi: number) => {
+      if (!isObj(o)) return;
+      const oname = text(o.name ?? '', 40);
+      if (!oname) return;
+      let oid = slug(o.id) || slug(oname) || `option-${oi + 1}`;
+      while (optIds.has(oid)) oid += '-x';
+      optIds.add(oid);
+      let code: number | null = o.code === undefined || o.code === null || o.code === '' ? null : optInt(o.code, R.featureCode);
+      if (code !== null && used.has(code)) code = null;
+      if (code !== null) used.add(code);
+      const low = money(o.low);
+      let high = money(o.high);
+      if (low !== null && high !== null && low > high) high = low;
+      const badge = typeof o.badge === 'string' && FEATURE_BADGES.includes(o.badge) ? (o.badge as FeatureBadge) : '';
+      const effect = typeof o.effect === 'string' && FEATURE_EFFECTS.includes(o.effect) ? (o.effect as FeatureEffect) : '';
+      const room = (v: unknown): number | null => (v === undefined || v === null || v === '' ? null : optInt(v, R.featureRoomMm));
+      const opt: FeatureOption = {
+        code: code ?? 0, id: oid, name: oname, description: o.description === undefined ? '' : text(o.description, 120), badge, included: o.included === true, low, high,
+        minWidthMm: room(o.minWidthMm), minDepthMm: room(o.minDepthMm), effect, enabled: o.enabled !== false,
+      };
+      if (code === null) needCode.push(opt);
+      options.push(opt);
+    });
+    if (!options.length) return;
+    const mode: FeatureMode = g.mode === 'ANY' ? 'ANY' : 'ONE';
+    if (mode === 'ONE') { const first = options.findIndex((x) => x.included); options.forEach((x, i) => { x.included = i === (first === -1 ? 0 : first); }); } else options.forEach((x) => { x.included = false; });
+    features.push({ id: gid, name: gname, hint: g.hint === undefined ? '' : text(g.hint, 160), mode, options });
+  });
+  let next = Math.max(0, ...used) + 1;
+  for (const opt of needCode) { if (next > R.featureCode[1]) { next = 1; while (used.has(next)) next += 1; } opt.code = next; used.add(next); next += 1; }
+  return features;
+}
 
 /** Never trusts what came over the network: anything missing or out of range becomes the default, so the tool can always be built from the result. */
 export function normaliseConfig(raw: unknown): LiteConfig {
@@ -221,6 +331,7 @@ export function normaliseConfig(raw: unknown): LiteConfig {
       floorU: decimal(cl.floorU, R.floorU, D.cooling.floorU), internalGainsW: decimal(cl.internalGainsW, R.internalGainsW, D.cooling.internalGainsW),
       marginPct: decimal(cl.marginPct, R.marginPct, D.cooling.marginPct), targetC: decimal(cl.targetC, R.targetC, D.cooling.targetC), ambientC: decimal(cl.ambientC, R.ambientC, D.cooling.ambientC),
     },
+    features: normaliseFeatures(src.features),
     presets,
   };
 }

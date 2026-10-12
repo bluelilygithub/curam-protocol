@@ -107,7 +107,7 @@ check('hovering shows the themed tooltip', (await page.locator('[role="tooltip"]
 await page.mouse.move(5, 5);
 
 // ---- "How is this price worked out?"
-await page.getByTestId('lite-step-3').click();
+await page.getByTestId('lite-step-4').click(); // Review
 await page.getByTestId('lite-price-help-open').waitFor({ timeout: 3000 });
 const helpBtnBox = await page.getByTestId('lite-price-help-open').boundingBox();
 const shareBox = await page.getByTestId('lite-download').boundingBox();
@@ -149,7 +149,7 @@ await adminPut({ pricing: { show: true, perUnit: 1000 } });
 {
   const c2 = await openPage();
   await c2.page.goto('http://localhost:8802/index.html');
-  await c2.page.getByTestId('lite-step-3').click();
+  await c2.page.getByTestId('lite-step-4').click(); // Review
   await c2.page.getByTestId('lite-price-help-open').waitFor({ timeout: 8000 });
   await c2.page.getByTestId('lite-price-help-open').click();
   const t = await c2.page.getByTestId('lite-price-help').innerText();

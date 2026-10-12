@@ -71,7 +71,7 @@ let { ctx, page, errors } = await fresh();
 await page.goto('http://localhost:8802/index.html');
 await page.getByTestId('lite-bottles').waitFor();
 check('first visit: no pop-up guide in the way', (await page.getByTestId('lite-help').count()) === 0);
-check('first visit: a three-step strip is on the page', (await page.getByTestId('lite-stepper').locator('li').count()) === 3 && /Space/.test(await page.getByTestId('lite-stepper').innerText()) && /Review/.test(await page.getByTestId('lite-stepper').innerText()));
+check('first visit: a four-step strip (Space, Racking, Features, Review) is on the page', (await page.getByTestId('lite-stepper').locator('li').count()) === 4 && /Features/.test(await page.getByTestId('lite-stepper').innerText()) && /Space/.test(await page.getByTestId('lite-stepper').innerText()) && /Review/.test(await page.getByTestId('lite-stepper').innerText()));
 check('first visit: sizes are in metres, no jargon', (await page.getByTestId('lite-widthMm').inputValue()) === '2.75' && (await page.getByTestId('lite-heightMm').inputValue()) === '2.15');
 check('first visit: no "welcome back" for a design they never made', (await page.getByTestId('lite-welcome').count()) === 0);
 const start = await bottles(page);
@@ -115,7 +115,7 @@ check('the bottle slider sets the number wanted (to the nearest step it allows)'
 
 // ---- download
 await page.getByTestId('lite-mode-FILL').click();
-await page.getByTestId('lite-step-3').click();
+await page.getByTestId('lite-step-4').click(); // Review is the fourth step now that the Features step exists
 const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 30000 }), page.getByTestId('lite-download').click()]);
 const dlPath = await dl.path();
 const bytes = readFileSync(dlPath);
@@ -132,16 +132,28 @@ await page.getByRole('button', { name: 'Keep editing' }).click();
 const untipped = await page.evaluate(() => [...document.querySelectorAll('button, input, select, textarea')].filter((el) => el.offsetParent !== null && !el.hasAttribute('title') && !el.hasAttribute('data-tip')).map((el) => el.getAttribute('data-testid') || el.outerHTML.slice(0, 70)));
 check('every visible control still has a tooltip (units, fix, slider, download...)', untipped.length === 0, JSON.stringify(untipped));
 
-// ---- the three-step layout
+// ---- the step layout (Space, Racking & finishes, Features, Review)
 await page.getByTestId('lite-step-1').click();
 check('wizard: step 1 shows the space controls only (no bottle or finish controls yet)', (await page.getByTestId('lite-widthMm').count()) === 1 && (await page.getByTestId('lite-finish').count()) === 0 && (await page.getByTestId('lite-bottle').count()) === 0);
 await page.getByTestId('lite-next').click();
 check('wizard: Continue goes to step 2 (bottles and finish) and the heading takes focus', (await page.getByTestId('lite-finish').count()) === 1 && (await page.getByTestId('lite-widthMm').count()) === 0 && (await page.evaluate(() => document.activeElement?.tagName)) === 'H2');
 await page.getByTestId('lite-next').click();
-check('wizard: step 3 is the review, with a summary of the design', (await page.getByTestId('lite-review-room').count()) === 1 && /Review/.test(await page.getByTestId('lite-panel').innerText()));
-check('wizard: the step strip marks the current step and the finished ones', (await page.getByTestId('lite-step-3').getAttribute('aria-current')) === 'step' && (await page.getByTestId('lite-step-1').getAttribute('aria-current')) === null);
+check('wizard: step 3 is Features ("Make it yours"): groups of option cards, Step 3 of 4, and Added so far beside the picture', (await page.getByTestId('lite-features').count()) === 1 && /step 3 of 4/i.test(await page.getByTestId('lite-progress').innerText()) && (await page.getByTestId('lite-added').count()) === 1);
+check('features: a pick-one group starts on its standard option, a pick-any group on nothing', (await page.getByTestId('feat-front-timber-doors').getAttribute('aria-checked')) === 'true' && (await page.getByTestId('feat-special-storage-champagne-bins').getAttribute('aria-checked')) === 'false');
+await page.getByTestId('feat-front-glass-doors').click();
+check('features: choosing glass doors swaps the standard door and lists it under Added so far', (await page.getByTestId('feat-front-glass-doors').getAttribute('aria-checked')) === 'true' && (await page.getByTestId('feat-front-timber-doors').getAttribute('aria-checked')) === 'false' && /Frameless glass doors/.test(await page.getByTestId('lite-added').innerText()));
+await page.getByTestId('feat-special-storage-champagne-bins').click(); await page.getByTestId('feat-special-storage-case-storage').click();
+check('features: a pick-any group takes several choices', (await page.getByTestId('feat-special-storage-champagne-bins').getAttribute('aria-checked')) === 'true' && (await page.getByTestId('feat-special-storage-case-storage').getAttribute('aria-checked')) === 'true');
+check('features: an option that needs a deeper room is greyed out and says why', (await page.getByTestId('feat-centrepiece-island-with-drawers').isDisabled()) && /at least 2\.4 m deep/.test(await page.getByTestId('feat-centrepiece-island-with-drawers').innerText()));
+await page.getByTestId('feat-front-timber-doors').click();
+check('features: choosing the standard option again takes the glass doors back out', (await page.getByTestId('feat-front-glass-doors').getAttribute('aria-checked')) === 'false');
+await page.getByTestId('lite-next').click();
+check('wizard: step 4 is the review, with a summary of the design that names the features', (await page.getByTestId('lite-review-room').count()) === 1 && /Review/.test(await page.getByTestId('lite-panel').innerText()) && /Champagne bins/.test(await page.getByTestId('lite-review-features').innerText()));
+check('wizard: the step strip marks the current step and the finished ones', (await page.getByTestId('lite-step-4').getAttribute('aria-current')) === 'step' && (await page.getByTestId('lite-step-1').getAttribute('aria-current')) === null);
 await page.getByTestId('lite-back').click();
-check('wizard: Back goes to step 2', (await page.getByTestId('lite-finish').count()) === 1);
+check('wizard: Back goes to the Features step', (await page.getByTestId('lite-features').count()) === 1);
+await page.getByTestId('lite-back').click();
+check('wizard: Back again goes to step 2', (await page.getByTestId('lite-finish').count()) === 1);
 await page.getByTestId('lite-step-1').click();
 check('wizard: the step strip jumps straight back to step 1', (await page.getByTestId('lite-widthMm').count()) === 1);
 

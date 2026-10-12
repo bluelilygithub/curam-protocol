@@ -12,7 +12,7 @@ import { dataUrlBytes } from '../src/lite/thumbnail';
 // a 1x1 JPEG, so the PDF code really embeds an image
 const JPEG = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';
 const T: RackType = { ...DEFAULT_CONFIG.rackTypes[0]!, id: 'std', name: 'Standard 600', unitDepthMm: 350, rowPitchMm: 100, postsPerUnit: 2, pricePerUnit: 900, confirmed: true };
-const cat = () => ({ rackTypes: [T], defaultRackType: 'std', doors: { singleMm: 970, doubleMm: 1500 }, pricing: { ...DEFAULT_CONFIG.pricing, fixed: 2000, doorSingle: 500, rangePct: 10, roundTo: 100 }, quote: { ...DEFAULT_CONFIG.quote, businessName: 'Acme Wine Cellars', terms: 'A deposit is due.' }, cooling: { ...DEFAULT_CONFIG.cooling } });
+const cat = () => ({ rackTypes: [T], defaultRackType: 'std', doors: { singleMm: 970, doubleMm: 1500 }, pricing: { ...DEFAULT_CONFIG.pricing, fixed: 2000, doorSingle: 500, rangePct: 10, roundTo: 100 }, quote: { ...DEFAULT_CONFIG.quote, businessName: 'Acme Wine Cellars', terms: 'A deposit is due.' }, cooling: { ...DEFAULT_CONFIG.cooling }, features: DEFAULT_CONFIG.features });
 const META = { reference: 'Q1', date: '2026-10-10', customer: 'Sam', address: '5 Vine Rd', notes: '' };
 const good = () => applyRackType(testCaseProject(), T);
 const fonts = async (): Promise<Fonts> => { const d = await PDFDocument.create(); return { regular: await d.embedFont(StandardFonts.Helvetica), bold: await d.embedFont(StandardFonts.HelveticaBold), italic: await d.embedFont(StandardFonts.HelveticaOblique) }; };

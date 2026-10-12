@@ -4,11 +4,14 @@ import type { BottleProfileId } from '../engine/types';
 import { ESTIMATE_FIELDS, APP_SCHEMA, BEST_GUESS_RACK, analyseApp, type AppProject, type RunPlacement } from '../app/model';
 import { fillWall, type RackRun } from '../placement';
 import { DEFAULT_CONFIG, type LiteConfig } from './config';
+import { cleanPicks, extrasLine, resolveFeatures } from './features';
 
 // The public "lite" tool: a handful of choices that become a normal AppProject (the same one the full planner opens), plus a short design code
 // that carries those choices and nothing else (no personal data). Every figure it produces is an ESTIMATE from best-guess rack values.
 
 export const LITE_VERSION = 1;
+/** The most feature picks a design code carries. */
+const MAX_PICKS = 40;
 export const WALLS: readonly WallSide[] = ['NORTH', 'EAST', 'SOUTH', 'WEST'];
 export const BOTTLES: readonly BottleProfileId[] = ['BORDEAUX', 'BURGUNDY', 'CHAMPAGNE', 'MAGNUM'];
 export type LiteMode = 'FILL' | 'TARGET';
@@ -37,6 +40,8 @@ export interface LiteSettings {
   mode: LiteMode;
   /** Bottles wanted (TARGET mode only). */
   target: number;
+  /** The feature options picked (their codes, see features.ts). Only the extras: a pick-one group's standard option is never listed. */
+  features: number[];
 }
 
 /** The width of the one standard rack unit every estimate is built from (a typical size, not a confirmed supplier value). */
@@ -46,7 +51,7 @@ export const LIMITS = {
   widthMm: [1000, 8000], depthMm: [1000, 8000], heightMm: [1800, 3200], target: [1, 5000],
 } as const;
 
-export const defaultLite = (): LiteSettings => ({ widthMm: 2750, depthMm: 1565, heightMm: 2150, doorWall: 'SOUTH', doorStyle: 'SINGLE', doorPos: 'CENTRE', finish: 'OAK', bottle: 'BORDEAUX', mode: 'FILL', target: 500 });
+export const defaultLite = (): LiteSettings => ({ widthMm: 2750, depthMm: 1565, heightMm: 2150, doorWall: 'SOUTH', doorStyle: 'SINGLE', doorPos: 'CENTRE', finish: 'OAK', bottle: 'BORDEAUX', mode: 'FILL', target: 500, features: [] });
 
 const clamp = (n: number, [lo, hi]: readonly [number, number]): number => Math.min(hi, Math.max(lo, Math.round(Number.isFinite(n) ? n : lo)));
 
@@ -61,6 +66,7 @@ export function normaliseLite(s: LiteSettings): LiteSettings {
     bottle: BOTTLES.includes(s.bottle) ? s.bottle : 'BORDEAUX',
     mode: s.mode === 'TARGET' ? 'TARGET' : 'FILL',
     target: clamp(s.target, LIMITS.target),
+    features: cleanPicks(s.features),
   };
 }
 
@@ -124,7 +130,9 @@ export function liteToProject(input: LiteSettings, cfg: LiteConfig = DEFAULT_CON
       if (units > 0) runs.push({ id: r.id, wall, startMm: a, units });
     }
   }
-  const base: AppProject = { schemaVersion: APP_SCHEMA, name: 'Lite design (estimate)', enclosure, rackSpec: spec, bottle: s.bottle, runs, walkwayMm: null, estimated: [...ESTIMATE_FIELDS] };
+  // the picks travel with the design as codes; the staff planner reads them against the owner's current list (a pick that no longer applies is ignored there)
+  const picks = s.features;
+  const base: AppProject = { schemaVersion: APP_SCHEMA, name: 'Lite design (estimate)', enclosure, rackSpec: spec, bottle: s.bottle, runs, walkwayMm: null, estimated: [...ESTIMATE_FIELDS], ...(picks.length ? { features: picks } : {}) };
   return s.mode === 'TARGET' ? trimToTarget(base, s.target) : base;
 }
 
@@ -166,6 +174,8 @@ export function encodeDesign(input: LiteSettings): string {
   const a = [s.widthMm, s.depthMm, s.heightMm, WALLS.indexOf(s.doorWall), BOTTLES.indexOf(s.bottle), s.mode === 'TARGET' ? 1 : 0, s.target, s.doorStyle === 'DOUBLE' ? 1 : 0, DOOR_POSITIONS.indexOf(s.doorPos), FINISHES.indexOf(s.finish)];
   // the door position and finish (9th and 10th values) are left off while they are the standard ones, so every design made before they existed keeps the exact same code
   while (a.length > 8 && a[a.length - 1] === 0) a.pop();
+  // the feature picks follow as option codes (11th value on); with none the code is exactly what it was before features existed
+  if (s.features.length) { while (a.length < 10) a.push(0); a.push(...s.features); }
   return `CL${LITE_VERSION}.${b64(JSON.stringify(a))}`;
 }
 
@@ -175,10 +185,11 @@ export function decodeDesign(text: string): LiteSettings | null {
   if (!m || Number(m[1]) !== LITE_VERSION) return null;
   try {
     const a: unknown = JSON.parse(unb64(m[2]));
-    if (!Array.isArray(a) || a.length < 7 || a.length > 10 || !a.every((n) => typeof n === 'number')) return null;
+    if (!Array.isArray(a) || a.length < 7 || a.length > 10 + MAX_PICKS || !a.every((n) => typeof n === 'number')) return null;
     // the eighth value (door style) is absent from codes made before double doors existed (those were single doors); the ninth and tenth (door position, finish) from codes made before them (standard ones)
     const [widthMm, depthMm, heightMm, w, b, mode, target, door, pos, fin] = a as number[];
-    return normaliseLite({ widthMm, depthMm, heightMm, doorWall: WALLS[w] ?? 'SOUTH', doorStyle: door === 1 ? 'DOUBLE' : 'SINGLE', doorPos: DOOR_POSITIONS[pos] ?? 'CENTRE', finish: FINISHES[fin] ?? 'OAK', bottle: BOTTLES[b] ?? 'BORDEAUX', mode: mode === 1 ? 'TARGET' : 'FILL', target });
+    const features = cleanPicks((a as number[]).slice(10));
+    return normaliseLite({ widthMm, depthMm, heightMm, doorWall: WALLS[w] ?? 'SOUTH', doorStyle: door === 1 ? 'DOUBLE' : 'SINGLE', doorPos: DOOR_POSITIONS[pos] ?? 'CENTRE', finish: FINISHES[fin] ?? 'OAK', bottle: BOTTLES[b] ?? 'BORDEAUX', mode: mode === 1 ? 'TARGET' : 'FILL', target, features });
   } catch { return null; }
 }
 
@@ -188,5 +199,6 @@ export const rackUnitCount = (p: AppProject): number => p.runs.reduce((n, r) => 
 /** One plain line for the enquiry. */
 export function summaryLine(s: LiteSettings, bottles: number, cfg: LiteConfig = DEFAULT_CONFIG): string {
   const n = normaliseLite(s);
-  return `Inside ${n.widthMm} x ${n.depthMm} x ${n.heightMm} mm, ${n.doorStyle === 'DOUBLE' ? 'double' : 'single'} door on the ${n.doorWall.toLowerCase()} wall${n.doorPos === 'CENTRE' ? '' : `, toward the ${n.doorPos.toLowerCase()}`}, ${BOTTLE_PROFILES[n.bottle].label}${n.finish === 'OAK' ? '' : `, ${FINISH_NAMES[n.finish].toLowerCase()} racks`}, about ${bottles} bottles using standard rack units about ${cfg.rack.unitWidthMm} mm wide (estimate only, final site measure required)`;
+  const extras = extrasLine(resolveFeatures(cfg.features, n.features, { widthMm: n.widthMm, depthMm: n.depthMm }).extras);
+  return `Inside ${n.widthMm} x ${n.depthMm} x ${n.heightMm} mm, ${n.doorStyle === 'DOUBLE' ? 'double' : 'single'} door on the ${n.doorWall.toLowerCase()} wall${n.doorPos === 'CENTRE' ? '' : `, toward the ${n.doorPos.toLowerCase()}`}, ${BOTTLE_PROFILES[n.bottle].label}${n.finish === 'OAK' ? '' : `, ${FINISH_NAMES[n.finish].toLowerCase()} racks`}${extras ? `, features: ${extras}` : ''}, about ${bottles} bottles using standard rack units about ${cfg.rack.unitWidthMm} mm wide (estimate only, final site measure required)`;
 }

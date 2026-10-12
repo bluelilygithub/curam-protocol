@@ -3,6 +3,7 @@ import type { WallKind, WallSide } from '../enclosure/types';
 import { doorOpening, wallPoint, type RackLayoutAnalysis, type RackRun } from '../placement/placement';
 import { BOTTLE_PROFILES } from '../engine/defaults';
 import type { AppProject } from '../app/model';
+import type { FeatureEffect } from './config';
 
 // The "Cellar view": the inside of the cellar as a visitor would see it standing at the door. Pure geometry, no drawing: it turns the design into
 // faces (floor, walls, rack boxes) and bottles in screen space, far to near, for the screen to paint. A pinhole camera at the door looking in, so
@@ -27,6 +28,8 @@ export interface Scene {
   stats: { racks: number; bottles: number };
   /** Door position on the cut-away wall, projected, for a small "Door" marker. */
   door: { x: number; y: number } | null;
+  /** The feature picks that change how the picture looks (glass door, wall and floor finishes). */
+  effects: FeatureEffect[];
 }
 
 export interface SceneInput {
@@ -37,6 +40,8 @@ export interface SceneInput {
   yawDeg?: number;
   /** The three inside sizes already written for the visitor (their unit). When given, they are drawn as measurements along the room's edges. */
   dims?: { width: string; depth: string; height: string };
+  /** Feature picks that change the picture: glass doors or front, a timber or stone wall, a stone or oak floor. Nothing else about a feature is drawn. */
+  effects?: FeatureEffect[];
 }
 
 const QUARTERS: Record<WallSide, number> = { SOUTH: 0, EAST: 1, NORTH: 2, WEST: 3 };
@@ -219,5 +224,5 @@ export function buildScene(input: SceneInput): Scene {
   faces.sort((a, c) => c.depth - a.depth);
   bottles.sort((a, c) => c.depth - a.depth);
   if (!Number.isFinite(b.x0)) { b.x0 = -1; b.y0 = -1; b.x1 = 1; b.y1 = 1; }
-  return { dimensions, faces, bottles, lines, bounds: b, stats: { racks: rackCount, bottles: bottleCount }, door };
+  return { dimensions, faces, bottles, lines, bounds: b, stats: { racks: rackCount, bottles: bottleCount }, door, effects: input.effects ?? [] };
 }

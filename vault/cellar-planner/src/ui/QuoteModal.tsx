@@ -57,7 +57,7 @@ export function QuoteModal({ store, ui, catalogue, fetchFn, storage }: { store: 
       // pdf-lib is loaded only now, so it stays out of the main bundle
       const { makeQuotePdf } = await import('../export/quotePdf');
       let image: string | undefined;
-      try { image = await insidePicture(store.getState().project); } catch { image = undefined; }
+      try { image = await insidePicture(store.getState().project, cat); } catch { image = undefined; }
       const r = await makeQuotePdf(store.getState().project, cat, { reference, date, customer, address, notes, ...(image ? { image } : {}) });
       if (!r.ok) { setMsg(r.blockers.join(' ')); setBusy(false); return; }
       const url = URL.createObjectURL(new Blob([r.bytes as BlobPart], { type: 'application/pdf' }));

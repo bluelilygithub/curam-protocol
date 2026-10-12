@@ -4,7 +4,8 @@ import type { Issue } from '../engine/types';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 import { analyseApp, fillBlankRackWithGuesses, sortIssues, type AppProject, type EstimateField } from '../app/model';
-import { applyRackType, describeRackChange, matchesType, staffPrice, typeById, type CatalogueState, type CatalogueStore } from '../app/catalogue';
+import { applyRackType, describeRackChange, designFeatures, matchesType, staffPrice, typeById, type CatalogueState, type CatalogueStore } from '../app/catalogue';
+import { optionMid, optionRange, togglePick, unavailableReason } from '../lite/features';
 import { fixAll, suggestFix, type Fix } from '../app/fixes';
 import { coolingFit, coolingLoad, effectiveCooling } from '../enclosure/cooling';
 import type { UiStore } from '../app/uiStore';
@@ -253,6 +254,65 @@ export function CoolingPanel() {
           </>
         )}
       <p className="note">Assumptions (set in Settings, Cellar Planner): insulation conductivity {a.panelConductivity} W/m·K, glass {a.glassU} W/m²·K, uninsulated floor {a.floorU} W/m²·K. The working is in How the numbers are calculated.</p>
+    </Section>
+  );
+}
+
+// ---------------------------------------------------------------- features
+
+/**
+ * The feature options (Settings -> Cellar Planner -> Feature options) for this design: the same groups a visitor sees in the public planner's
+ * "Make it yours" step. A pick-one group holds one choice (its standard option adds nothing); a pick-any group holds any number. Each chosen extra
+ * is priced at the amount typed here for this design, else halfway between the option's low and high from Settings.
+ */
+export function FeaturesPanel() {
+  const p = useProject();
+  const edit = useEdit();
+  const cat = useCatalogue();
+  const c = cat.catalogue;
+  const resolved = designFeatures(p, c);
+  const cur = c?.pricing.currency ?? '$';
+  const fmt = (n: number): string => `${cur}${n.toLocaleString('en-AU')}`;
+  const iz = analyseApp(p).enclosure.internal;
+  const room = { widthMm: iz.widthMm, depthMm: iz.depthMm };
+  const setPrice = (code: number, v: number | null): void => edit((q) => {
+    const next = { ...(q.featurePrices ?? {}) };
+    if (v === null) delete next[code]; else next[code] = v;
+    const { featurePrices: _drop, ...rest } = q; void _drop;
+    return Object.keys(next).length ? { ...rest, featurePrices: next } : rest;
+  });
+  return (
+    <Section title="Features" testid="features-panel" tour="cp-features" note={<p className="note">The finishing touches from Settings, Cellar Planner. The same choices a visitor makes in the public planner. They add to the Price and appear on the quote.</p>}>
+      {!c || !resolved
+        ? <p className="note" data-testid="features-off">The feature list is not available ({cat.status === 'loading' ? 'loading' : cat.reason || 'not loaded'}), so features cannot be chosen.</p>
+        : resolved.groups.length === 0
+          ? <p className="note" data-testid="features-none">No feature options have been set up. Add them in Settings, Cellar Planner, Feature options.</p>
+          : resolved.groups.map(({ group, chosen }) => {
+            const one = group.mode === 'ONE';
+            return (
+              <fieldset className="feature-group" key={group.id} data-testid={`feature-group-${group.id}`}>
+                <legend>{group.name} <small>{one ? 'choose one' : 'choose any'}</small></legend>
+                {group.options.filter((o) => o.enabled || chosen.some((x) => x.code === o.code)).map((o) => {
+                  const on = chosen.some((x) => x.code === o.code);
+                  const why = unavailableReason(o, room);
+                  const r = optionRange(o);
+                  const price = o.included ? 'included' : r ? (r.low === r.high ? fmt(r.low) : `${fmt(r.low)} to ${fmt(r.high)}`) : 'no price set';
+                  return (
+                    <label className={`field check feature-opt${why && !on ? ' off' : ''}`} key={o.id} title={why ?? o.description}>
+                      <input type={one ? 'radio' : 'checkbox'} name={`feature-${group.id}`} checked={on} disabled={why !== null && !on} data-testid={`feature-${group.id}-${o.id}`}
+                        onChange={() => edit((q) => { const picks = togglePick(c.features, q.features ?? [], group, o); const { features: _f, ...rest } = q; void _f; return picks.length ? { ...rest, features: picks } : rest; })} />
+                      <span>{o.name} <small className={r || o.included ? '' : 'notset'}>{price}</small>{why && <small> {why}</small>}</span>
+                    </label>
+                  );
+                })}
+                {chosen.filter((o) => !o.included).map((o) => (
+                  <NumField key={o.code} label={`${o.name}: amount for this quote`} nullable unit={cur} value={p.featurePrices?.[o.code] ?? null} min={0}
+                    placeholder={optionMid(o) === null ? 'no price set' : `${optionMid(o)} (halfway)`}
+                    hint="Leave blank to use halfway between the option's low and high prices from Settings, or type the amount to quote for this design. Whole currency units." onCommit={(v) => setPrice(o.code, v)} testid={`feature-price-${o.code}`} />
+                ))}
+              </fieldset>
+            );
+          })}
     </Section>
   );
 }

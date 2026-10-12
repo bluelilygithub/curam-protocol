@@ -8,7 +8,7 @@ import type { DoorStyle } from './settings';
  * always matches the formula actually in use. Opens from a button beside "Copy a link"; same dialog behaviour as the guide (focus in, Esc closes,
  * focus back).
  */
-export interface PriceHelpFacts { units: number; doorStyle: DoorStyle; bottles: number; /** The room size already written in the visitor's unit, for example "2.75 × 1.565 × 2.15 m". */ roomText: string; bottleLabel: string }
+export interface PriceHelpFacts { units: number; doorStyle: DoorStyle; bottles: number; /** The names of the feature options chosen (not the standard ones). */ extras?: string[]; /** The room size already written in the visitor's unit, for example "2.75 × 1.565 × 2.15 m". */ roomText: string; bottleLabel: string }
 
 export function PriceHelp({ open, onClose, cfg, facts }: { open: boolean; onClose(): void; cfg: LiteConfig; facts: PriceHelpFacts }) {
   const close = useRef<HTMLButtonElement>(null);
@@ -42,6 +42,9 @@ export function PriceHelp({ open, onClose, cfg, facts }: { open: boolean; onClos
             {hasDoorPrice && (
               <li><b>The door.</b> The type of door you choose (single or double) is included. Yours is a <b>{door} door</b>.</li>
             )}
+            {(facts.extras?.length ?? 0) > 0 && (
+              <li><b>Your feature choices.</b> Each option you add has its own price range, and they are added to the range above. You have chosen <b>{facts.extras!.join(', ')}</b>. Options marked "price on request" are not in the figure until we confirm them.</li>
+            )}
             {p.fixed !== null && (
               <li><b>The basics every cellar needs.</b> A set amount covers the work and materials that every cellar has, whatever its size.</li>
             )}
@@ -55,6 +58,7 @@ export function PriceHelp({ open, onClose, cfg, facts }: { open: boolean; onClos
             <li>Room: <b>{facts.roomText}</b> inside</li>
             <li>Bottle style: <b>{facts.bottleLabel}</b>, about <b>{facts.bottles}</b> bottles</li>
             <li>Rack units: <b>{facts.units}</b>; door: <b>{door}</b></li>
+            {(facts.extras?.length ?? 0) > 0 && <li>Features: <b>{facts.extras!.join(', ')}</b></li>}
           </ul>
 
           {p.note && <><h3>Good to know</h3><p>{p.note}</p></>}

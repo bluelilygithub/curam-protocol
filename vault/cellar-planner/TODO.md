@@ -36,6 +36,7 @@ Built 2026-10-09 (see Done below and `docs/cellar-planner.md`, "Lite version for
 
 ## Features not built
 
+- [x] 2026-10-12 Feature options ("Make it yours" step, staff Features panel, low/high prices in Settings, quote lines): see `docs/cellar-planner.md`, "Feature options". Still open: the owner to enter real prices (or press **Fill example prices** and adjust); special-storage options do not yet change capacity or drawings (needs the fabricator's bay values); the Settings screen has no browser test; the WordPress script's event list does not yet include `feature` (the page ignores it, harmless).
 - [ ] **Double door extras:** one fixed leaf with one opening leaf, unequal leaves, and confirming the typical 1500 mm double opening (and which widths are offered) with the cabinet maker.
 - [x] 2026-10-10 3D view in the staff planner (the public tool's inside view, finishes, in the drawing package and quote). Still open: header, conditioner and vents are not drawn in 3D; a full 3D editor (spec M4: materials, lights, doors) is not built.
 - [x] 2026-10-10 Pricing, rate table (the rack catalogue), the customer quote and the website enquiry flow. Still open: glass, cooling unit, lighting and installation prices, and a parts list.

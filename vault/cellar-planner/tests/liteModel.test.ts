@@ -24,14 +24,15 @@ describe('door position and rack finish in the design code', () => {
   });
   it('every combination round-trips', () => {
     for (const doorWall of WALLS) for (const doorPos of DOOR_POSITIONS) for (const finish of FINISHES) for (const bottle of BOTTLES) for (const doorStyle of ['SINGLE', 'DOUBLE'] as const) {
-      const s: LiteSettings = { widthMm: 3100, depthMm: 2200, heightMm: 2400, doorWall, doorStyle, doorPos, finish, bottle, mode: 'FILL', target: 321 };
+      const s: LiteSettings = { widthMm: 3100, depthMm: 2200, heightMm: 2400, doorWall, doorStyle, doorPos, finish, bottle, mode: 'FILL', target: 321, features: [] };
       expect(decodeDesign(encodeDesign(s)), JSON.stringify(s)).toEqual(s);
     }
   });
   it('unknown values fall back to the standard ones, never break', () => {
     const d = decodeDesign(b64([2750, 1565, 2150, 2, 0, 0, 500, 0, 9, 9]))!;
     expect(d.doorPos).toBe('CENTRE'); expect(d.finish).toBe('OAK');
-    expect(decodeDesign(b64([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]))).toBeNull();
+    expect(decodeDesign(b64([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, ...Array.from({ length: 41 }, (_, i) => i + 1)]))).toBeNull(); // more picks than a code may carry
+    expect(decodeDesign(b64([2750, 1565, 2150, 2, 0, 0, 500, 0, 0, 0, 11, 11, 4000, 1.5]))?.features).toEqual([11]); // duplicates and non-codes in the pick list are dropped
   });
 });
 

@@ -1,5 +1,5 @@
 import { wrapText, type Prim, type Rgb } from '@planner-core/export/pdfDraw';
-import { matchesType, staffPrice, typeById, type Catalogue, type PriceLine } from '../app/catalogue';
+import { designFeatures, matchesType, staffPrice, typeById, type Catalogue, type PriceLine } from '../app/catalogue';
 import { analyseApp, type Analysis, type AppProject } from '../app/model';
 import { BOTTLE_PROFILES } from '../engine';
 import type { Fonts } from './drawingPackage';
@@ -57,6 +57,8 @@ export function quoteBlockers(p: AppProject, cat: Catalogue | null, a: Analysis 
   else if (a.racks.total.status !== 'OK') out.push('The bottle count is not set yet: the rack values are incomplete.');
   const price = staffPrice(p, cat);
   if (price.status !== 'OK' && !out.some((x) => /rack type|catalogue|No racks/i.test(x))) out.push(price.reason);
+  // a chosen feature with no price would print on the quote with no amount: name it and stop
+  if (price.status === 'OK') for (const u of price.unpriced) out.push(`"${u}" is chosen but has no price. Enter its low and high price in Settings, Cellar Planner, Feature options, or take it out of the design.`);
   if (!cat.quote.businessName) out.push('Enter your business name in Settings, Cellar Planner, Quote details: a quote needs to say who it is from.');
   return out;
 }
@@ -86,6 +88,7 @@ export function buildQuote(p: AppProject, cat: Catalogue | null, meta: QuoteMeta
     ['Door', `${e.door.leaves === 2 ? 'Double door' : 'Single door'}, ${e.door.widthMm} x ${e.door.heightMm} mm, on the ${e.door.wall.toLowerCase()} wall`],
     ['Racking', `${t?.name ?? p.rackType?.name ?? 'Racks'}: ${units} unit${units === 1 ? '' : 's'}`],
     ...(bottles !== null ? [['Bottle capacity', `${bottles} bottles (${BOTTLE_PROFILES[p.bottle].label})`] as [string, string]] : []),
+    ...(designFeatures(p, cat)?.extras.length ? [['Features', designFeatures(p, cat)!.extras.map((o) => o.name).join(', ')] as [string, string]] : []),
   ];
   return {
     ok: true,

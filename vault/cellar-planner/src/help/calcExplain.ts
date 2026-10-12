@@ -160,17 +160,22 @@ export function explainCalculations(p: AppProject, cat: Catalogue | null): CalcS
   const pl = staffPrice(p, cat);
   const priceLines: CalcLine[] = [];
   if (pl.status === 'OK') {
-    for (const l of pl.lines) priceLines.push({ label: l.label, formula: l.detail ? 'units × price per unit' : 'a fixed amount from Settings', working: l.detail || 'from Settings, Cellar Planner', result: `${pl.currency}${l.amount.toLocaleString('en-AU')}`, value: l.amount });
+    for (const l of pl.lines) {
+      const formula = l.kind === 'feature' ? 'the option\'s price: typed for this quote, else halfway between its low and high' : l.kind === 'racks' ? 'units × price per unit' : 'a fixed amount from Settings';
+      priceLines.push({ label: l.label, formula, working: l.detail || 'from Settings, Cellar Planner', result: `${pl.currency}${l.amount.toLocaleString('en-AU')}`, value: l.amount });
+    }
     priceLines.push({ label: 'Total', formula: 'the lines added together', working: pl.lines.map((l) => `${pl.currency}${l.amount.toLocaleString('en-AU')}`).join(' + '), result: `${pl.currency}${pl.total.toLocaleString('en-AU')}`, value: pl.total });
     const pct = cat?.pricing.rangePct ?? 0, step = cat?.pricing.roundTo ?? 1;
-    priceLines.push({ label: 'Range a customer sees', formula: 'total − and + the range %, each end rounded to the nearest step', working: `${pl.total} × (1 ∓ ${pct}%), nearest ${step}`, result: pl.text, value: null });
+    const base = Math.round(pl.lines.filter((l) => l.kind !== 'feature').reduce((n, l) => n + l.amount, 0) * 100) / 100;
+    priceLines.push({ label: 'Range a customer sees', formula: 'the total without features − and + the range %, plus each feature\'s own low at the bottom and high at the top, each end rounded to the nearest step', working: `${base} × (1 ∓ ${pct}%) + the features' low and high, nearest ${step}`, result: pl.text, value: null });
   } else priceLines.push({ label: 'Price', formula: 'fixed + units × price per unit + door price', working: '', result: pl.reason, value: null });
   out.push({
     id: 'price', title: 'Price',
-    summary: 'Price = fixed amount + (rack units × the chosen rack type\'s price per unit) + the door price (single or double). All amounts come from Settings, Cellar Planner. The planner never invents a price.',
+    summary: 'Price = fixed amount + (rack units × the chosen rack type\'s price per unit) + the door price (single or double) + each chosen feature option. All amounts come from Settings, Cellar Planner. The planner never invents a price.',
     lines: priceLines,
     notes: [
       'Units are the whole rack units across ALL runs. A blank amount is left out, never counted as zero, and the Price panel says so.',
+      'A feature option is priced at the amount typed for it in this design, otherwise halfway between its low and high from Settings. A chosen option with no price is left out of the total and stops a quote until it has one. A pick-one group\'s standard (included) option adds nothing.',
       'The public planner shows only the rounded range, and only when the owner switches prices on. Staff always see the breakdown.',
       'This is an indicative guide, not a quote: a site measure and the finishes still decide the final price.',
     ],

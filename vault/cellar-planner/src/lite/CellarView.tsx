@@ -14,6 +14,12 @@ const shade = ([r, g, b]: [number, number, number], k: number): string => `rgb($
 export function paint(layer: Konva.Layer, scene: Scene, w: number, h: number, opts: { pad?: number; labels?: boolean; finish?: FinishKey; zoom?: number } = {}): void {
   const look = FINISH_LOOK[opts.finish ?? 'OAK'];
   const palette: Record<string, [number, number, number]> = { ...BASE, rackTop: look.top, rackEnd: look.end, rackFront: look.front };
+  // feature picks that change the look: the wall and floor finishes (the door is drawn further down)
+  const fx = new Set(scene.effects);
+  if (fx.has('WALL_TIMBER')) palette.wall = [186, 140, 92];
+  else if (fx.has('WALL_STONE')) palette.wall = [168, 166, 158];
+  if (fx.has('FLOOR_STONE')) palette.floor = [176, 176, 170];
+  else if (fx.has('FLOOR_OAK')) palette.floor = [214, 170, 112];
   layer.destroyChildren();
   const bg = new Konva.Rect({ x: 0, y: 0, width: w, height: h, fillLinearGradientStartPoint: { x: 0, y: 0 }, fillLinearGradientEndPoint: { x: 0, y: h }, fillLinearGradientColorStops: [0, '#f6f2ea', 1, '#e3d9c6'], listening: false });
   layer.add(bg);
@@ -67,8 +73,14 @@ export function paint(layer: Konva.Layer, scene: Scene, w: number, h: number, op
       layer.add(label);
     }
   }
+  if (scene.door && fx.has('GLASS_FRONT')) {
+    // a full glass front: a wide pale panel across the cut-away wall
+    layer.add(new Konva.Rect({ x: X(scene.door.x) - 280 * k, y: Y(scene.door.y) - 400 * k, width: 560 * k, height: 400 * k, fill: 'rgba(205,230,242,0.5)', stroke: '#8fbfd8', strokeWidth: 1.5, cornerRadius: 2, listening: false }));
+  } else if (scene.door && fx.has('GLASS_DOORS')) {
+    layer.add(new Konva.Rect({ x: X(scene.door.x) - 130 * k, y: Y(scene.door.y) - 400 * k, width: 260 * k, height: 400 * k, fill: 'rgba(205,230,242,0.55)', stroke: '#8fbfd8', strokeWidth: 1.5, cornerRadius: 2, listening: false }));
+  }
   if (scene.door && opts.labels !== false) {
-    layer.add(new Konva.Text({ x: X(scene.door.x) - 20, y: Y(scene.door.y) - 22, text: 'Door ▲', fontSize: 12, fontFamily: 'system-ui, sans-serif', fill: '#7a5a1c', listening: false }));
+    layer.add(new Konva.Text({ x: X(scene.door.x) - 20, y: Y(scene.door.y) - 22, text: fx.has('GLASS_FRONT') ? 'Glass front ▲' : fx.has('GLASS_DOORS') ? 'Glass door ▲' : 'Door ▲', fontSize: 12, fontFamily: 'system-ui, sans-serif', fill: '#7a5a1c', listening: false }));
   }
   layer.batchDraw();
 }

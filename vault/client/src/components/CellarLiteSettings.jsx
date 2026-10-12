@@ -13,6 +13,20 @@ const CARD_STYLE = { borderColor: 'var(--color-border)', background: 'var(--colo
 const ROUND_TO = [1, 10, 50, 100, 500, 1000];
 const MAX_PRESETS = 6;
 const MAX_RACK_TYPES = 8;
+const MAX_FEATURE_GROUPS = 10;
+const MAX_FEATURE_OPTIONS = 8;
+const FEATURE_BADGES = [['', 'No badge'], ['POPULAR', 'Popular'], ['RECOMMENDED', 'Recommended']];
+const FEATURE_EFFECTS = [['', 'Nothing'], ['GLASS_DOORS', 'Glass doors at the front'], ['GLASS_FRONT', 'Full glass front'], ['WALL_TIMBER', 'Timber-lined walls'], ['WALL_STONE', 'Stone walls'], ['FLOOR_STONE', 'Stone floor'], ['FLOOR_OAK', 'Oak floor']];
+// the figures from the design mockup, by option id: offered as a one-click starting point for blank prices, never applied on their own
+const EXAMPLE_FEATURE_PRICES = {
+  'glass-doors': [2800, 3600], 'full-glass-front': [7500, 9800], 'in-rack-led': [1600, 2200], 'backlit-wall': [3400, 4500],
+  'magnum-large-format': [900, 1300], 'champagne-bins': [700, 1000], 'label-forward-display': [1200, 1700], 'case-storage': [600, 900],
+  'tasting-bench': [2900, 3900], 'island-with-drawers': [6500, 8500], 'ducted-split': [2400, 3200],
+  'timber-lined': [2600, 3500], 'stone-feature-wall': [3800, 5200], 'stone-tile': [1500, 2200], 'engineered-oak': [1300, 1900],
+};
+const blank = (v) => (v === null || v === undefined ? '' : String(v));
+const optionToForm = (o) => ({ code: o.code, id: o.id, name: o.name, description: o.description ?? '', badge: o.badge ?? '', included: !!o.included, low: blank(o.low), high: blank(o.high), minWidthMm: blank(o.minWidthMm), minDepthMm: blank(o.minDepthMm), effect: o.effect ?? '', enabled: o.enabled !== false });
+const groupToForm = (g) => ({ id: g.id, name: g.name, hint: g.hint ?? '', mode: g.mode === 'ANY' ? 'ANY' : 'ONE', options: (g.options || []).map(optionToForm) });
 const ORIENTATION_OPTIONS = [['NECK_OUT', 'Neck-out'], ['LABEL_FORWARD', 'Label-forward']];
 const RACK_NUM_KEYS = ['unitWidthMm', 'unitDepthMm', 'unitHeightMm', 'rowPitchMm', 'postsPerUnit', 'bottlesPerRow', 'bottlesPerRowLabelForward', 'rowsPerUnit', 'pricePerUnit'];
 const typeToForm = (r) => ({ id: r.id, name: r.name, orientation: r.orientation, confirmed: !!r.confirmed, ...Object.fromEntries(RACK_NUM_KEYS.map((k) => [k, r[k] === null || r[k] === undefined ? '' : String(r[k])])) });
@@ -33,6 +47,7 @@ const toForm = (c) => ({
   fixed: c.pricing.fixed ?? '', doorSingle: c.pricing.doorSingle ?? '', doorDouble: c.pricing.doorDouble ?? '',
   rangePct: String(c.pricing.rangePct), roundTo: String(c.pricing.roundTo), note: c.pricing.note ?? '',
   presets: (c.presets || []).map((p) => ({ id: p.id, name: p.name, widthMm: String(p.widthMm), depthMm: String(p.depthMm), heightMm: String(p.heightMm), doorStyle: p.doorStyle })),
+  features: (c.features || []).map(groupToForm),
 });
 const toConfig = (f) => ({
   version: 1,
@@ -47,6 +62,7 @@ const toConfig = (f) => ({
   doors: { singleMm: f.singleMm, doubleMm: f.doubleMm },
   pricing: { show: f.show, currency: f.currency, fixed: f.fixed, doorSingle: f.doorSingle, doorDouble: f.doorDouble, rangePct: f.rangePct, roundTo: f.roundTo, note: f.note },
   presets: f.presets.map((p) => ({ id: p.id, name: p.name, widthMm: p.widthMm, depthMm: p.depthMm, heightMm: p.heightMm, doorStyle: p.doorStyle })),
+  features: f.features.map((g) => ({ id: g.id, name: g.name, hint: g.hint, mode: g.mode, options: g.options.map((o) => ({ code: o.code, id: o.id, name: o.name, description: o.description, badge: o.badge, included: o.included, low: o.low, high: o.high, minWidthMm: o.minWidthMm, minDepthMm: o.minDepthMm, effect: o.effect, enabled: o.enabled })) })),
 });
 
 // The label names the field; the hint is attached separately (aria-describedby) so a screen reader hears "Unit width" then the hint, not one long label.
@@ -96,6 +112,29 @@ export default function CellarLiteSettings({ onDirtyChange }) {
   const setType = (i, key, value) => { setForm((f) => ({ ...f, rackTypes: f.rackTypes.map((r, j) => (j === i ? { ...r, [key]: value } : r)) })); setSaved(false); setErrors([]); };
   const addType = () => { setForm((f) => ({ ...f, rackTypes: [...f.rackTypes, typeToForm({ id: '', name: '', orientation: 'NECK_OUT', confirmed: false, unitWidthMm: 600, unitHeightMm: 2000 })] })); setSaved(false); };
   const removeType = (i) => { setForm((f) => { const next = f.rackTypes.filter((_, j) => j !== i); const gone = f.rackTypes[i]; return { ...f, rackTypes: next, defaultRackType: gone.id === f.defaultRackType ? (next[0]?.id ?? '') : f.defaultRackType }; }); setSaved(false); };
+  const touch = () => { setSaved(false); setErrors([]); };
+  const setGroup = (gi, key, value) => { setForm((f) => ({ ...f, features: f.features.map((g, j) => {
+    if (j !== gi) return g;
+    const next = { ...g, [key]: value };
+    // a pick-any group has no standard option; a pick-one group needs exactly one
+    if (key === 'mode') next.options = g.options.map((o, i) => ({ ...o, included: value === 'ONE' ? i === Math.max(0, g.options.findIndex((x) => x.included)) : false }));
+    return next;
+  }) })); touch(); };
+  const setOpt = (gi, oi, key, value) => { setForm((f) => ({ ...f, features: f.features.map((g, j) => (j === gi ? { ...g, options: g.options.map((o, i) => (i === oi ? { ...o, [key]: value } : o)) } : g)) })); touch(); };
+  const setStandard = (gi, oi) => { setForm((f) => ({ ...f, features: f.features.map((g, j) => (j === gi ? { ...g, options: g.options.map((o, i) => ({ ...o, included: i === oi })) } : g)) })); touch(); };
+  const addGroup = () => { setForm((f) => ({ ...f, features: [...f.features, { id: '', name: '', hint: '', mode: 'ONE', options: [{ ...optionToForm({ code: '', id: '', name: '', included: true }) }] }] })); setSaved(false); };
+  const removeGroup = (gi) => { setForm((f) => ({ ...f, features: f.features.filter((_, j) => j !== gi) })); setSaved(false); };
+  const addOpt = (gi) => { setForm((f) => ({ ...f, features: f.features.map((g, j) => (j === gi ? { ...g, options: [...g.options, optionToForm({ code: '', id: '', name: '', included: false })] } : g)) })); setSaved(false); };
+  const removeOpt = (gi, oi) => { setForm((f) => ({ ...f, features: f.features.map((g, j) => {
+    if (j !== gi) return g;
+    const options = g.options.filter((_, i) => i !== oi);
+    if (g.mode === 'ONE' && options.length && !options.some((o) => o.included)) options[0] = { ...options[0], included: true };
+    return { ...g, options };
+  }) })); setSaved(false); };
+  const fillExamplePrices = () => { setForm((f) => ({ ...f, features: f.features.map((g) => ({ ...g, options: g.options.map((o) => {
+    const ex = EXAMPLE_FEATURE_PRICES[o.id];
+    return ex && !o.included && o.low === '' && o.high === '' ? { ...o, low: String(ex[0]), high: String(ex[1]) } : o;
+  }) })) })); touch(); };
   const removePreset = (i) => { setForm((f) => ({ ...f, presets: f.presets.filter((_, j) => j !== i) })); setSaved(false); };
 
   // the same arithmetic the public tool does, so the owner can see what a visitor would be shown
@@ -171,7 +210,7 @@ export default function CellarLiteSettings({ onDirtyChange }) {
       <div>
         <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>Cellar Planner (public tool)</h2>
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-          These settings are shared by the public planner on your website and by the staff Cellar Planner. The <strong>rack types</strong> (sizes, bottle counts, price per unit, confirmed by supplier), door widths, guide price and starting rooms control the public tool: changes show to visitors within a minute of saving, and if this page can't be reached the planner uses its built-in values, so it never goes blank. Staff also use the full rack catalogue, the <strong>quote details</strong> and the <strong>cooling assumptions</strong> below (staff only: visitors never see them).{' '}
+          These settings are shared by the public planner on your website and by the staff Cellar Planner. The <strong>rack types</strong> (sizes, bottle counts, price per unit, confirmed by supplier), <strong>feature options</strong> (with a low and high price each), door widths, guide price and starting rooms control the public tool: changes show to visitors within a minute of saving, and if this page can't be reached the planner uses its built-in values, so it never goes blank. Staff also use the full rack catalogue, the <strong>quote details</strong> and the <strong>cooling assumptions</strong> below (staff only: visitors never see them).{' '}
           <Tooltip text="Opens the public planner as Vault hosts it, in a new tab. It reads the settings you have saved, so you can see the effect of a change."><a href="/cellar-lite/" target="_blank" rel="noreferrer" className="underline hover:opacity-70 transition-opacity">Preview the planner</a></Tooltip>
         </p>
       </div>
@@ -222,6 +261,74 @@ export default function CellarLiteSettings({ onDirtyChange }) {
                 </div>
               </div>
               {form.rackTypes.length > 1 && <Tooltip text="Remove this rack type. It stays until you press Save."><button onClick={() => removeType(i)} className="text-xs hover:opacity-70 transition-opacity" style={{ color: '#ef4444' }}>Remove this rack type</button></Tooltip>}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className={CARD} style={CARD_STYLE} data-testid="cellar-lite-features">
+        <div className="flex items-center gap-3 flex-wrap">
+          <h3 className="text-base font-semibold flex-1" style={{ color: 'var(--color-text)' }}>Feature options</h3>
+          <Tooltip text="Fill in the low and high price of any option that has none, with the figures from the design mockup (for example $2,800 to $3,600 for frameless glass doors). Options you have already priced are left alone. They are examples to adjust, and nothing is saved until you press Save."><button onClick={fillExamplePrices} className="text-xs px-3 py-1 rounded-lg border font-medium hover:opacity-70 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'transparent' }} data-testid="cellar-lite-features-examples">Fill example prices</button></Tooltip>
+          {form.features.length < MAX_FEATURE_GROUPS && (
+            <Tooltip text="Add another group of choices, such as Lighting or Flooring (up to ten groups)."><button onClick={addGroup} className="text-xs px-3 py-1 rounded-lg border font-medium hover:opacity-70 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'transparent' }} data-testid="cellar-lite-add-featuregroup">+ Add a group</button></Tooltip>
+          )}
+        </div>
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          The finishing touches in the public planner's <strong>Make it yours</strong> step, and in the staff planner's <strong>Features</strong> panel. Each option has a <strong>low</strong> and a <strong>high</strong> price. The public guide price adds every chosen option's low to the bottom of the range and its high to the top. A staff quote uses one amount per option: halfway between the two unless staff type another for that design. In a <strong>pick one</strong> group exactly one option is the standard (<strong>Included</strong>, costs nothing extra); a <strong>pick any</strong> group has no standard. Leave a price blank if you don't know it: it shows as "price on request" and a quote can't be made with that option chosen until it has a price. Remove every group to switch the Features step off.
+        </p>
+        {form.features.length === 0 && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No feature groups: the public planner has no Features step.</p>}
+        <div className="space-y-4">
+          {form.features.map((g, gi) => (
+            <div key={gi} className="rounded-xl border p-4 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }} data-testid="cellar-lite-featuregroup">
+              <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                <Field label="Group name" tip="The heading of this group of choices, for example Lighting. Up to 40 characters."><input type="text" value={g.name} maxLength={40} onChange={(e) => setGroup(gi, 'name', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
+                <Field label="Visitors" tip="Pick one: the visitor chooses one option, and the standard one is already chosen. Pick any: the visitor can add as many options as they like.">
+                  <select value={g.mode} onChange={(e) => setGroup(gi, 'mode', e.target.value)} className={INPUT} style={FIELD_STYLE}>
+                    <option value="ONE">Pick one</option><option value="ANY">Pick any</option>
+                  </select>
+                </Field>
+              </div>
+              <Field label="Line under the heading" tip="A short sentence under the group's name, up to 160 characters. Leave blank to show nothing."><input type="text" value={g.hint} maxLength={160} onChange={(e) => setGroup(gi, 'hint', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
+              <div className="space-y-3">
+                {g.options.map((o, oi) => (
+                  <div key={oi} className="rounded-lg border p-3 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }} data-testid="cellar-lite-featureoption">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field label="Option name" tip="What the choice is called, for example Frameless glass doors. Up to 40 characters."><input type="text" value={o.name} maxLength={40} onChange={(e) => setOpt(gi, oi, 'name', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
+                      <Field label="Short description" tip="One line under the name. Up to 120 characters."><input type="text" value={o.description} maxLength={120} onChange={(e) => setOpt(gi, oi, 'description', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
+                    </div>
+                    <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+                      <Field label="Low price" tip="The least this option is likely to cost. Added to the bottom of the guide price range. Blank means no price (price on request). The standard (included) option adds nothing, whatever is typed here." hint={o.included ? 'Not used: included.' : ''}><input type="text" inputMode="decimal" value={o.low} disabled={o.included} onChange={(e) => setOpt(gi, oi, 'low', e.target.value)} className={INPUT} style={FIELD_STYLE} data-testid="cellar-lite-feature-low" /></Field>
+                      <Field label="High price" tip="The most this option is likely to cost. Added to the top of the guide price range. Staff quotes use halfway between low and high unless they type an amount. Leave blank to use the low price only." hint={o.included ? 'Not used: included.' : ''}><input type="text" inputMode="decimal" value={o.high} disabled={o.included} onChange={(e) => setOpt(gi, oi, 'high', e.target.value)} className={INPUT} style={FIELD_STYLE} data-testid="cellar-lite-feature-high" /></Field>
+                      <Field label="Smallest room width (mm)" tip="The option is greyed out, with a reason, when the visitor's room is narrower than this. Blank means any width." hint="1000 to 8000, or blank."><input type="text" inputMode="numeric" value={o.minWidthMm} onChange={(e) => setOpt(gi, oi, 'minWidthMm', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
+                      <Field label="Smallest room depth (mm)" tip="The option is greyed out, with a reason, when the visitor's room is shallower than this. Blank means any depth." hint="1000 to 8000, or blank."><input type="text" inputMode="numeric" value={o.minDepthMm} onChange={(e) => setOpt(gi, oi, 'minDepthMm', e.target.value)} className={INPUT} style={FIELD_STYLE} data-testid="cellar-lite-feature-mindepth" /></Field>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field label="Badge" tip="A small label on the option card to draw the eye.">
+                        <select value={o.badge} onChange={(e) => setOpt(gi, oi, 'badge', e.target.value)} className={INPUT} style={FIELD_STYLE}>
+                          {FEATURE_BADGES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                        </select>
+                      </Field>
+                      <Field label="Changes the 3D picture" tip="What choosing this option does to the 3D picture a visitor sees. Everything else about an option is text and price only.">
+                        <select value={o.effect} onChange={(e) => setOpt(gi, oi, 'effect', e.target.value)} className={INPUT} style={FIELD_STYLE}>
+                          {FEATURE_EFFECTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                        </select>
+                      </Field>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-4">
+                      {g.mode === 'ONE' && (
+                        <Tooltip text="Make this the standard choice of the group: already chosen for every visitor, shown as Included, and costing nothing extra."><label className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text)' }}><input type="radio" name={`cellar-feature-standard-${gi}`} checked={o.included} onChange={() => setStandard(gi, oi)} />Standard (included)</label></Tooltip>
+                      )}
+                      <Tooltip text="Untick to hide this option from visitors and staff without deleting it. A saved design that already uses it keeps working."><label className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text)' }}><input type="checkbox" checked={o.enabled} onChange={(e) => setOpt(gi, oi, 'enabled', e.target.checked)} />Available</label></Tooltip>
+                      {g.options.length > 1 && <Tooltip text="Remove this option. It stays until you press Save. Designs that chose it simply stop showing it."><button onClick={() => removeOpt(gi, oi)} className="text-xs hover:opacity-70 transition-opacity" style={{ color: '#ef4444' }}>Remove this option</button></Tooltip>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-4">
+                {g.options.length < MAX_FEATURE_OPTIONS && <Tooltip text="Add another choice to this group (up to eight)."><button onClick={() => addOpt(gi)} className="text-xs px-3 py-1 rounded-lg border font-medium hover:opacity-70 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'transparent' }}>+ Add an option</button></Tooltip>}
+                <Tooltip text="Remove this whole group and its options. It stays until you press Save."><button onClick={() => removeGroup(gi)} className="text-xs hover:opacity-70 transition-opacity" style={{ color: '#ef4444' }}>Remove this group</button></Tooltip>
+              </div>
             </div>
           ))}
         </div>
