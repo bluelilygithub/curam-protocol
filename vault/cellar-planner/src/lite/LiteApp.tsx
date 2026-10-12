@@ -14,6 +14,7 @@ import { chosenOptions, effectsOf, featureTotals, priceLabel, resolveFeatures, t
 import { STEP_TITLES, stepKeys, type StepKey } from './steps';
 import { LengthField, Segmented, Stepper } from './controls';
 import { TooltipHost } from '@planner-core/help/TooltipHost';
+import { Icon } from '../ui/icons';
 import { PhoneNotice } from './PhoneNotice';
 import { DEFAULT_CONFIG, accentColours, loadConfig, telHref, type LiteConfig, type LitePreset } from './config';
 import { FINISH_LOOK } from './finishes';
@@ -300,11 +301,12 @@ export function LiteApp() {
             <p className="lite-sub">Create a cellar that fits your space.</p>
           </div>
           <span className="lite-help-btns">
-            <button type="button" className="btn" title="A guided walk through the screen, one step at a time." onClick={() => void startTour()} data-testid="lite-tour">Take the tour</button>
-            <button type="button" className="btn" title="The plain-language guide: what each question means." onClick={() => setHelpOpen(true)} data-testid="lite-help-open">Help</button>
-            <button type="button" className="btn" onClick={() => void copyLink()} data-testid="lite-share" title="Saves a link to this exact design. Paste it anywhere to come back to it, or send it to someone.">Save design</button>
-            <button type="button" className="btn" disabled={result.problems.length > 0 || pdf === 'working'} onClick={() => void download()} data-testid="lite-download" title="Saves your plan as a PDF to keep or show someone. It is a preliminary design, not a quote.">{pdf === 'working' ? 'Preparing…' : 'Download my plan (PDF)'}</button>
-            {price && <button type="button" className="btn" onClick={() => { setPriceHelpOpen(true); say('price_help'); }} title="A short outline of how the guide price follows from your choices." data-testid="lite-price-help-open">How is this price worked out?</button>}
+            {/* icons, not words: each has a name for screen readers and a tooltip */}
+            <button type="button" className="btn icon" aria-label="Take the tour" title="Take the tour: a guided walk through the screen, one step at a time." onClick={() => void startTour()} data-testid="lite-tour"><Icon name="compass" /></button>
+            <button type="button" className="btn icon" aria-label="Help" title="Help: the plain-language guide, what each question means." onClick={() => setHelpOpen(true)} data-testid="lite-help-open"><Icon name="info" /></button>
+            <button type="button" className="btn icon" aria-label="Save design" onClick={() => void copyLink()} data-testid="lite-share" title="Save design: copies a link to this exact design. Paste it anywhere to come back to it, or send it to someone."><Icon name="bookmark" /></button>
+            <button type="button" className="btn icon" aria-label="Download my plan (PDF)" aria-busy={pdf === 'working'} disabled={result.problems.length > 0 || pdf === 'working'} onClick={() => void download()} data-testid="lite-download" title={pdf === 'working' ? 'Preparing your plan…' : 'Download my plan (PDF): saves your plan to keep or show someone. It is a preliminary design, not a quote.'}><Icon name="download" /></button>
+            {price && <button type="button" className="btn icon" aria-label="How is this price worked out?" onClick={() => { setPriceHelpOpen(true); say('price_help'); }} title="How is this price worked out? A short outline of how the guide price follows from your choices." data-testid="lite-price-help-open"><Icon name="calc" /></button>}
           </span>
         </div>
         {pdf === 'done' && <p className="lite-note" role="status" data-testid="lite-download-done">Your plan has been saved.</p>}

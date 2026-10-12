@@ -10,6 +10,7 @@ const G20 = {
   list: ['M7 5h10M7 10h10M7 15h10M3.5 5h.01M3.5 10h.01M3.5 15h.01'],
   download: ['M10 3v9m0 0l-3.5-3.5M10 12l3.5-3.5M4 16h12'],
   upload: ['M10 12V3m0 0L6.5 6.5M10 3l3.5 3.5M4 16h12'],
+  bookmark: ['M5.5 2.5h9v15L10 14l-4.5 3.5z'],
 } as const;
 const G24 = {
   close: ['M18 6L6 18', 'M6 6l12 12'],

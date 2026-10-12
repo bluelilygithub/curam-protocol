@@ -19,6 +19,8 @@ body { background: #f1f1ee; }
 .lite-sub { margin: 4px 0 0; font-size: 18px; color: var(--muted); }
 .lite-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .lite-help-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.lite .lite-help-btns .btn.icon { width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center; align-items: center; }
+.lite .lite-help-btns .btn.icon svg { width: 22px; height: 22px; }
 .lite-promise { margin: 10px 0 0; font-weight: 600; }
 .stepper { list-style: none; margin: 18px 0 0; padding: 0; display: flex; justify-content: center; align-items: center; }
 .stepper-item { display: flex; align-items: center; }
