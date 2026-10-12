@@ -40,12 +40,12 @@ const STEPS = [
   {
     id: 'fitness-week-grid', group: 'done', view: 'week', since: 2, selector: '[data-tour="fitness-week-grid"]', on: 'top',
     title: 'Your week',
-    text: 'Seven days with morning, midday and evening. Sessions are suggestions: drag one to another slot, or use its move button. If two strength sessions end up less than 48 hours apart you get a gentle note, never a block.',
+    text: 'Your week at a glance, one small card per session. Click a day to open it, log a session and see its exercises. Drag a card to another day or time; the three places to drop appear as you drag. If two strength sessions end up less than 48 hours apart you get a gentle note, never a block. The ? at the top explains how the week works.',
   },
   {
     id: 'fitness-rest', group: 'done', view: 'week', since: 2, selector: '[data-tour="fitness-rest"]', on: 'bottom',
     title: 'Rest without guilt',
-    text: 'Two planned rest days plus a flexible one. Use "Take this as a rest day" on any day: that day\'s session moves to a free slot if there is one, otherwise it is let go. Nothing is ever stacked onto later days.',
+    text: 'Two planned rest days plus a flexible one. Hover a day and press Rest (or open the day): its session moves to a free slot if there is one, otherwise it is let go. Nothing is ever stacked onto later days.',
   },
   {
     id: 'fitness-library-list', group: 'done', view: 'library', since: 2, selector: '[data-tour="fitness-library-list"]', on: 'top',

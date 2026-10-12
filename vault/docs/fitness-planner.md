@@ -45,6 +45,12 @@ Where the approved extras land: re-rate form + revisit-goal + ambition dial are 
 
 **Known limits.** "Things to work around" reaches the model as a constraint but code cannot parse it, so an exercise that conflicts can still be offered; hiding it is the immediate fix and a per-exercise swap arrives with logging.
 
+## Week view and the starter rule
+
+**Week view.** Compact cards (icon, title, when, minutes, state), full width. At 900px and wider: seven columns; below: a plain list of days (no dragging; open a day to move things). Click a day or a card to open the day (full session cards with exercises, logging and Move); Back returns to the week. Dragging a card shows three drop places per day. The rest control appears on hover or focus of a day (always visible on touch screens). A small marker shows a session has been moved, and from where. One "?" in the header opens a single guide (moving, time of day, rest, blocks, a different version) instead of several tips.
+
+**Starter rule.** In the first five weeks of a goal, someone who does under 60 minutes of exercise a week (or has not said) gets main work at Gentle or Moderate only: nothing marked Challenging or Advanced, whatever they rated themselves (`selection.STARTER_*`, tested in `week.test.js`: no goblet squat in week one). Week one for the worked example: bodyweight squat, incline push-up, lat pulldown, bird dog; Thursday dumbbell RDL, lateral lunge, wall push-up, dead bug; Saturday a 45 minute easy ride.
+
 ## Stage 3: logging (step 1)
 
 **What is recorded.** `fitness_session_logs` (one per planned session, or none for an extra) and `fitness_exercise_logs` (optional sets / reps / kg / km / seconds). The planned session's `status` follows its log (`done | partial | swapped | skipped | rest`). A session with no log is **not logged**: it stays `planned`, is shown neutrally, and nothing treats it as skipped. `rest` (intentional) and `skipped` ("Didn't do it") stay separate in the data. Rules are pure code in `logging.js` (tests: `log.test.js`): effort 1-10, minutes 0-600, exercise numbers bounded, rest and skipped keep no effort or exercise rows, "none" style notes are empty, a session can only be logged on its day or later and within 28 days, extras within 28 days and never in the future.
