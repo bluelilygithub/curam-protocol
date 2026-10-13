@@ -44,7 +44,8 @@ const {
   videoToGif,
   buildSlideshow,
 } = require('../services/videoFfmpeg');
-const { normalizeSrt, srtToPlainText, prepareCaptionSrt } = require('../services/srtUtils');
+const { normalizeSrt, srtToPlainText, prepareCaptionSrt, parseSrtLoose } = require('../services/srtUtils');
+const { timeScript } = require('../services/scriptTiming');
 const { fetchLicensedVideo } = require('../services/videoUrlIntake');
 const { ffmpegRoute } = require('../middleware/ffmpegRoute');
 const { planSlideshow, normalizeSlideshowPlan } = require('../services/videoSlideshowPlan');
@@ -974,6 +975,61 @@ router.post('/transcribe', upload.single('video'), ffmpegRoute('transcribe', asy
   });
 
   res.json({ srt, source: 'gemini' });
+}));
+
+// "I wrote the script": captions with timings from a script that has none. The media (a video or audio file, or a saved
+// library video) is listened to once so each caption can appear when its words are spoken; with nothing to listen to the
+// script is spread evenly over the length instead, and the answer says which happened. JSON in/out; the client puts the
+// SRT in the captions box for the user to check before anything is burned.
+router.post('/time-script', upload.single('media'), ffmpegRoute('time-script', async (req, res) => {
+  const script = String(req.body?.script || '').slice(0, 60000);
+  if (!script.trim()) return res.status(400).json({ error: 'Write or paste your script first.' });
+  const listen = req.body?.mode !== 'even';
+
+  let libraryAsset = null;
+  if (!req.file?.buffer?.length) {
+    const assetId = parseAssetId(req.body?.libraryId);
+    libraryAsset = assetId && await getAsset(req.user.id, assetId);
+    if (!libraryAsset) return res.status(400).json({ error: 'Choose the video or audio file first.' });
+  }
+
+  const out = await withTempDir(async (dir) => {
+    let mediaPath = libraryAsset?.filePath;
+    if (!mediaPath) {
+      const ext = path.extname(String(req.file.originalname || '')).toLowerCase();
+      mediaPath = path.join(dir, `media-in${AUDIO_EXTS.has(ext) || ['.mov', '.mkv', '.avi', '.m4v'].includes(ext) ? ext : '.mp4'}`);
+      await fs.writeFile(mediaPath, req.file.buffer);
+    }
+    const info = await probeVideo(mediaPath);
+    const durationSec = Number(info.duration) || 0;
+    if (!(durationSec > 0)) throw new Error('Could not read how long that file is. Check it is a valid video or audio file.');
+
+    let transcriptCues = null;
+    let listenNote = '';
+    if (listen && !runtimeConfig.isLocal) {
+      try {
+        const speechPath = path.join(dir, 'speech.mp3');
+        await toSpeechMp3(mediaPath, speechPath);
+        const buf = await fs.readFile(speechPath);
+        if (buf.length > MAX_GEMINI_AUDIO_BYTES) {
+          listenNote = 'The recording is too long to listen to in one go. ';
+        } else {
+          const raw = await transcribeAudioWithGemini(req.user.id, buf.toString('base64'), 'audio/mp3', { format: 'srt' });
+          transcriptCues = parseSrtLoose(raw);
+        }
+      } catch (err) {
+        getLogger().warn({ err }, '[videos/time-script] could not listen to the media');
+        listenNote = 'Could not listen to the recording. ';
+      }
+    } else if (listen) {
+      listenNote = 'Listening to the speech is only available on the hosted site. ';
+    }
+
+    const timed = timeScript(script, { durationSec, transcriptCues });
+    return { ...timed, note: `${listenNote}${timed.note}`.trim(), durationSec: Math.round(durationSec * 10) / 10 };
+  });
+
+  res.json(out);
 }));
 
 // "Audio -> transcript": an audio file (mp3, m4a, wav, ogg, flac, ...) in, readable text (or timestamped SRT) out.

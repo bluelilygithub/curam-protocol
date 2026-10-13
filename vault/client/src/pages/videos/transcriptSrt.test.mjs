@@ -23,3 +23,8 @@ r = applyEditedText(srt.replace(/\n/g, '\r\n'), 'Hello there.\r\n\r\nSecond line
 assert.equal(r.applied, true);
 assert.ok(r.srt.includes('Hello there.'));
 console.log('transcriptSrt tests passed');
+
+import { srtLines } from './transcriptSrt.mjs';
+assert.equal(srtLines('1\n00:00:01,000 --> 00:00:03,000\nHello there.\n\n2\n00:00:03,500 --> 00:00:05,000\nSecond line.\n'), 'Hello there.\nSecond line.');
+assert.equal(srtLines(''), '');
+console.log('srtLines tests passed');

@@ -16,7 +16,8 @@ import LastFramePicker from './videos/LastFramePicker';
 import TakesGrid from './videos/TakesGrid';
 import { VoiceInput, VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 import { VideoVoiceContext, VoiceCommandBar } from './videos/VoiceCommandBar';
-import { applyEditedText } from './videos/transcriptSrt.mjs';
+import { applyEditedText, srtLines } from './videos/transcriptSrt.mjs';
+import ScriptTimer from './videos/ScriptTimer';
 
 const VIDEO_GOOGLE_FONTS = [
   'Roboto',
@@ -261,6 +262,7 @@ const TOOL_HELP = {
     features: [
       'Choose plain text, or text with timestamps (SRT subtitle file)',
       'The result appears in a box you can correct before copying or saving',
+      'Already wrote the words? "I have a script, not captions" times your script to the recording, so you need no timestamps',
       'With timestamps: send the captions to Caption studio, or make a video from the audio with the words along the bottom (choose shape, screen colour, font, size, text colour and text background)',
       'Long recordings are shrunk automatically; up to about 75 minutes at once',
       'Speech only: music and background noise may be skipped or misheard',
@@ -374,6 +376,7 @@ const TOOL_HELP = {
     features: [
       'Upload a video or pick one from Saved media',
       'Auto-transcribe on upload (Gemini on hosted Vault, whisper-cli locally), or paste your own SRT',
+      'Wrote your own script with no timestamps? "I have a script, not captions" listens to the video and times each line to the speech',
       'Same typography controls as Annotate — font, weight, size, text and background colour',
       'Optionally save the captioned result straight to the library',
     ],
@@ -2995,6 +2998,15 @@ export default function VideosPage() {
                 Transcribe
               </button>
             </Tooltip>
+            <ScriptTimer
+              file={trAudioFile}
+              onTimed={(d) => {
+                setTrSrt(d.srt);
+                setTrText(srtLines(d.srt));
+                setTrNote('');
+                addToast(d.method === 'speech' ? 'Script timed to the recording' : 'Script spread evenly over the recording', d.method === 'speech' ? 'success' : 'info');
+              }}
+            />
             {(trText || trSrt) && (
               <div className="space-y-2">
                 {trNote && <p className="text-xs" style={{ color: '#b45309' }}>{trNote}</p>}
@@ -3897,6 +3909,15 @@ export default function VideosPage() {
               setBackgroundColor={setTextBackgroundColor}
               backgroundTransparent={textBackgroundTransparent}
               setBackgroundTransparent={setTextBackgroundTransparent}
+            />
+
+            <ScriptTimer
+              file={sourceFile}
+              libraryId={captionLibraryId}
+              onTimed={(d) => {
+                setSrtText(d.srt);
+                addToast(d.method === 'speech' ? 'Script timed to the speech. Check the captions below.' : 'Script spread evenly over the video. Check the captions below.', d.method === 'speech' ? 'success' : 'info');
+              }}
             />
 
             <div className="space-y-2">

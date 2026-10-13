@@ -27,3 +27,8 @@ export function applyEditedText(srt, editedText) {
   const out = cues.map((c, i) => `${c.head.join('\n')}\n${lines[i]}`).join('\n\n');
   return { srt: `${out}\n`, applied: true };
 }
+
+/** The text of each caption, one per line, for showing a timed script as readable text. */
+export function srtLines(srt) {
+  return cuesOf(srt).map((c) => c.text).join('\n');
+}
