@@ -29,7 +29,7 @@ Upload cap: **`VIDEO_MAX_UPLOAD_MB`** (default **80**). Processed outputs return
 |---|---|
 | **Create** | Generate clip |
 | **Optimise** | Convert / compress, Extract audio, Audio → transcript, Mute / replace audio, Normalize audio, Video → GIF, Export for Social |
-| **Transform** | Clip / trim, Crop / reframe, Speed |
+| **Transform** | Clip / trim, Trim audio, Crop / reframe, Speed |
 | **Compose** | Add music (opens Music), Annotate, Call to action, Overlay / watermark, Join videos, Slideshow, Caption studio |
 | **Library** | Saved media |
 | **Analyse** | File info, Thumbnail |
@@ -71,6 +71,7 @@ Every tool with settings has a **Tell it what to do** box under its title (`Voic
 ### Transform
 
 - **Clip / trim** — **Keep original quality (no re-encode)** checkbox stream-copies the picture and sound (identical to the master; cut starts on the nearest keyframe, so it can begin a second or two early). Off (default) = frame-exact cut re-encoded at CRF 16, near-lossless. End is sent to ffmpeg as a length (`-t`), never `-to`. Also: `startSec` + optional `endSec`, set numerically or by dragging in/out handles on a visual timeline (`ClipTimeline`) rendered beneath the native `<video>` preview once its `loadedmetadata` fires with a duration; the handles and the numeric fields stay in sync in both directions. `POST /api/videos/clip`.
+- **Trim audio** — keep a part of an MP3 (or M4A, WAV, OGG, FLAC...) or cut a part out of it. `POST /api/videos/trim-audio` (multipart `audio`, `startSec`, `endSec`, `mode` `keep`|`remove`, `fadeInSec`, `fadeOutSec`, `format` `original`|`mp3`|`wav`) returns the audio file. **Keep this part** extracts start..end; **Cut this part out** removes start..end and joins the rest (`atrim` + `concat`; cutting the very start or end is treated as keeping the other side). The default format is the **same type with a stream copy**, so there is no quality loss (MP3 cuts land on frame boundaries, about 26 ms); fades and cutting a middle section need a re-encode, which makes an MP3 at 192 kbps (WAV is available as pcm_s16le). The end is sent to ffmpeg as a length (`-t`), as in Clip. `planAudioTrim` / `trimAudioArgs` in `videoFfmpeg.js` are pure and tested (`node server/services/audioTrim.test.js`); requests that make no sense (end before start, start past the end, removing everything) are refused with a plain message. The page (`Trim audio`) has a player with **Set start to here / Set end to here** buttons, times typed as `1:30`, `90` or `1m30` (`client/src/pages/videos/clock.mjs`, `node client/src/pages/videos/clock.test.mjs`), a **Transcribe this →** shortcut into Audio → transcript, and the **Tell it what to do** voice box ("keep from 1:30 to 2:45 and fade out for 2 seconds").
 - **Crop / reframe** — target aspect `9:16` / `16:9` / `1:1` / `4:5`; `mode=crop` (fill) or `pad` (letterbox); crop `focus` center/top/bottom/left/right. `POST /api/videos/reframe`.
 - **Speed** — `speed` 0.25–4 (audio tempo follows). `POST /api/videos/speed`.
 

@@ -776,6 +776,78 @@ async function toSpeechMp3(inputPath, outputPath) {
   ], 600000);
 }
 
+// ---- Trim audio ------------------------------------------------------------------------------------------------------------
+const COPYABLE_AUDIO_EXTS = new Set(['.mp3', '.m4a', '.aac', '.ogg', '.oga', '.opus', '.flac', '.wav']);
+const AUDIO_MIME = { '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.ogg': 'audio/ogg', '.oga': 'audio/ogg', '.opus': 'audio/ogg', '.flac': 'audio/flac', '.wav': 'audio/wav' };
+
+/**
+ * Work out what a Trim audio request means, as plain data (no ffmpeg): which part is kept, what the output file is, and
+ * whether it can be a straight copy. Throws a user-facing Error for a request that cannot make sense.
+ *
+ * mode 'keep'   = the part from startSec to endSec is the result (an extract).
+ * mode 'remove' = the part from startSec to endSec is cut out and the rest joined up.
+ * format 'original' = same file type, stream copy (no quality loss) unless fades are asked for, which need a re-encode (-> MP3).
+ */
+function planAudioTrim({ startSec, endSec, mode = 'keep', fadeInSec = 0, fadeOutSec = 0, format = 'original', durationSec = 0, inputExt = '.mp3' } = {}) {
+  const duration = Number(durationSec) > 0 ? Number(durationSec) : 0;
+  const start = Math.max(0, Number(startSec) || 0);
+  const hasEnd = endSec !== undefined && endSec !== null && endSec !== '' && Number.isFinite(Number(endSec));
+  let end = hasEnd ? Number(endSec) : duration;
+  if (!(end > 0)) throw new Error('Set where the part ends.');
+  if (duration && start >= duration) throw new Error('The start is past the end of the recording.');
+  if (duration && end > duration) end = duration;
+  if (end <= start) throw new Error('The end must be after the start.');
+
+  // Cutting out the very start or very end is the same as keeping the other side.
+  let keepFrom = start;
+  let keepTo = end;
+  let cutMiddle = false;
+  if (mode === 'remove') {
+    if (!duration) throw new Error('Could not read how long the recording is, so a section cannot be cut out of it.');
+    if (start <= 0 && end >= duration) throw new Error('That would remove the whole recording.');
+    if (start <= 0) { keepFrom = end; keepTo = duration; } else if (end >= duration) { keepFrom = 0; keepTo = start; } else { cutMiddle = true; }
+  }
+  const resultSec = cutMiddle ? duration - (end - start) : keepTo - keepFrom;
+
+  const fadeCap = resultSec / 2;
+  const fadeIn = Math.min(Math.max(0, Number(fadeInSec) || 0), fadeCap);
+  const fadeOut = Math.min(Math.max(0, Number(fadeOutSec) || 0), fadeCap);
+
+  const ext0 = String(inputExt || '.mp3').toLowerCase();
+  let outExt;
+  let copy = false;
+  if (format === 'wav') outExt = '.wav';
+  else if (format === 'mp3') outExt = '.mp3';
+  else if (!fadeIn && !fadeOut && !cutMiddle && COPYABLE_AUDIO_EXTS.has(ext0)) { outExt = ext0; copy = true; } else outExt = '.mp3';
+
+  return { keepFrom, keepTo, cutMiddle, cutFrom: start, cutTo: end, resultSec, fadeIn, fadeOut, outExt, copy, mime: AUDIO_MIME[outExt] || 'audio/mpeg' };
+}
+
+/** ffmpeg arguments for a plan from planAudioTrim. */
+function trimAudioArgs(inputPath, outputPath, plan) {
+  const r3 = (n) => String(Math.round(n * 1000) / 1000);
+  const codec = plan.outExt === '.wav' ? ['-c:a', 'pcm_s16le'] : ['-c:a', 'libmp3lame', '-b:a', '192k'];
+  if (plan.copy) {
+    return ['-y', '-ss', r3(plan.keepFrom), '-i', inputPath, '-t', r3(plan.keepTo - plan.keepFrom), '-map', '0:a:0', '-map_metadata', '0', '-c:a', 'copy', outputPath];
+  }
+  const fades = [];
+  if (plan.fadeIn) fades.push(`afade=t=in:st=0:d=${r3(plan.fadeIn)}`);
+  if (plan.fadeOut) fades.push(`afade=t=out:st=${r3(plan.resultSec - plan.fadeOut)}:d=${r3(plan.fadeOut)}`);
+  if (plan.cutMiddle) {
+    const tail = fades.length ? `,${fades.join(',')}` : '';
+    const graph = `[0:a:0]atrim=0:${r3(plan.cutFrom)},asetpts=PTS-STARTPTS[a0];[0:a:0]atrim=start=${r3(plan.cutTo)},asetpts=PTS-STARTPTS[a1];[a0][a1]concat=n=2:v=0:a=1${tail}[out]`;
+    return ['-y', '-i', inputPath, '-filter_complex', graph, '-map', '[out]', ...codec, outputPath];
+  }
+  const args = ['-y', '-ss', r3(plan.keepFrom), '-i', inputPath, '-t', r3(plan.keepTo - plan.keepFrom), '-map', '0:a:0'];
+  if (fades.length) args.push('-af', fades.join(','));
+  args.push(...codec, outputPath);
+  return args;
+}
+
+async function trimAudio(inputPath, outputPath, plan) {
+  await execFileAsync(FFMPEG, trimAudioArgs(inputPath, outputPath, plan), 600000);
+}
+
 async function captureThumbnail(inputPath, outputPath, timeSec = 1) {
   await execFileAsync(FFMPEG, [
     '-y',
@@ -1115,6 +1187,9 @@ module.exports = {
   ASPECT_RATIOS,
   extractAudio,
   toSpeechMp3,
+  planAudioTrim,
+  trimAudioArgs,
+  trimAudio,
   captureThumbnail,
   extractFrames,
   annotateVideo,

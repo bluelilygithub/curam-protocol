@@ -31,6 +31,8 @@ const {
   overlayImage,
   extractAudio,
   toSpeechMp3,
+  planAudioTrim,
+  trimAudio,
   captureThumbnail,
   extractFrames,
   annotateVideo,
@@ -1042,6 +1044,42 @@ router.post('/time-script', upload.single('media'), ffmpegRoute('time-script', a
   });
 
   res.json(out);
+}));
+
+// "Trim audio": keep a part of a recording (an extract), or cut a part out of it. Same file type with no re-encode by default.
+router.post('/trim-audio', upload.single('audio'), ffmpegRoute('trim-audio', async (req, res) => {
+  if (!req.file?.buffer?.length) return res.status(400).json({ error: 'Choose an audio file first.' });
+  const ext = path.extname(String(req.file.originalname || '')).toLowerCase();
+  const inExt = AUDIO_EXTS.has(ext) ? ext : '.mp3';
+  const base = path.basename(String(req.file.originalname || 'audio'), path.extname(String(req.file.originalname || ''))).replace(/[^\w .-]+/g, '_').slice(0, 80) || 'audio';
+
+  const out = await withTempDir(async (dir) => {
+    const inputPath = path.join(dir, `audio-in${inExt}`);
+    await fs.writeFile(inputPath, req.file.buffer);
+    const info = await probeVideo(inputPath);
+    let plan;
+    try {
+      plan = planAudioTrim({
+        startSec: req.body?.startSec,
+        endSec: req.body?.endSec,
+        mode: req.body?.mode === 'remove' ? 'remove' : 'keep',
+        fadeInSec: req.body?.fadeInSec,
+        fadeOutSec: req.body?.fadeOutSec,
+        format: ['mp3', 'wav'].includes(req.body?.format) ? req.body.format : 'original',
+        durationSec: info.duration,
+        inputExt: inExt,
+      });
+    } catch (err) {
+      const e = new Error(err.message);
+      e.status = 400;
+      throw e;
+    }
+    const outputPath = path.join(dir, `trimmed${plan.outExt}`);
+    await trimAudio(inputPath, outputPath, plan);
+    return { buffer: await readOutputFile(outputPath), plan };
+  });
+
+  sendVideoBuffer(res, out.buffer, `${base}-trimmed${out.plan.outExt}`, out.plan.mime);
 }));
 
 // "Audio -> transcript": an audio file (mp3, m4a, wav, ogg, flac, ...) in, readable text (or timestamped SRT) out.

@@ -48,6 +48,17 @@ const TOOL_SCHEMAS = {
       endSec: N('Where the kept part ends, in seconds from the beginning', 0, 86400),
     },
   },
+  'trim-audio': {
+    label: 'Trim audio',
+    fields: {
+      startSec: N('Where the part starts, in seconds from the beginning of the recording', 0, 86400),
+      endSec: N('Where the part ends, in seconds from the beginning of the recording', 0, 86400),
+      mode: E('keep = the part from start to end is the result (an extract); remove = cut that part out and join the rest', ['keep', 'remove']),
+      fadeInSec: N('Fade-in seconds at the start of the result', 0, 10),
+      fadeOutSec: N('Fade-out seconds at the end of the result', 0, 10),
+      format: E('original = same file type, no quality loss; mp3; wav', ['original', 'mp3', 'wav']),
+    },
+  },
   convert: {
     label: 'Convert / compress',
     fields: {
@@ -266,10 +277,10 @@ function parseTimeRange(transcript, durationSec) {
 }
 
 function localParse(tool, transcript, context) {
-  if (tool === 'clip' || tool === 'togif') {
+  if (tool === 'clip' || tool === 'togif' || tool === 'trim-audio') {
     const r = parseTimeRange(transcript, Number(context?.durationSec) || 0);
     if (!r) return null;
-    const keys = tool === 'clip' ? ['startSec', 'endSec'] : ['gifStartSec', 'gifEndSec'];
+    const keys = tool === 'togif' ? ['gifStartSec', 'gifEndSec'] : ['startSec', 'endSec'];
     const values = {};
     if (r.start !== undefined) values[keys[0]] = r.start;
     if (r.end !== undefined) values[keys[1]] = r.end;

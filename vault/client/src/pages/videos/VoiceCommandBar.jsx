@@ -13,6 +13,7 @@ export const VideoVoiceContext = createContext(null);
 export const VOICE_EXAMPLES = {
   generate: 'a slow drone shot over a beach at sunset, cinematic, 8 seconds, wide screen',
   clip: 'cut from 10 seconds to 25 seconds',
+  'trim-audio': 'keep from 1:30 to 2:45 and fade out for 2 seconds',
   convert: 'make the file smaller and no wider than 1280',
   audio: 'mute the sound',
   normalize: 'make it louder',

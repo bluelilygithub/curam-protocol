@@ -32,10 +32,12 @@ assert.deepStrictEqual(normalizeVoiceValues('nope', { a: 1 }), {});
 
 assert.deepStrictEqual(localParse('clip', 'from 2 to 9 seconds', {}), { startSec: 2, endSec: 9 });
 assert.deepStrictEqual(localParse('togif', 'from 2 to 9 seconds', {}), { gifStartSec: 2, gifEndSec: 9 });
+assert.deepStrictEqual(localParse('trim-audio', 'keep from 1:30 to 2:45', {}), { startSec: 90, endSec: 165 });
+assert.deepStrictEqual(normalizeVoiceValues('trim-audio', { mode: 'remove', fadeOutSec: 99, format: 'ogg' }), { mode: 'remove', fadeOutSec: 10 });
 assert.deepStrictEqual(localParse('thumbnail', 'at 12 seconds', {}), { thumbTime: 12 });
 assert.strictEqual(localParse('speed', 'faster', {}), null);
 
-for (const id of ['generate','clip','convert','extract-audio','audio','normalize','togif','export-social','reframe','speed','annotate','end-card','overlay','join','slideshow','caption-studio','saved-library','info','thumbnail']) {
+for (const id of ['generate','clip','convert','extract-audio','audio','normalize','togif','export-social','reframe','speed','annotate','end-card','overlay','join','slideshow','caption-studio','trim-audio','saved-library','info','thumbnail']) {
   assert.ok(TOOL_SCHEMAS[id], id);
 }
 console.log('videoVoiceCommand tests passed');

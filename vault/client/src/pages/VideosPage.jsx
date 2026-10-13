@@ -18,6 +18,7 @@ import { VoiceInput, VoiceInputProvider } from '../components/voiceInput/VoiceIn
 import { VideoVoiceContext, VoiceCommandBar } from './videos/VoiceCommandBar';
 import { applyEditedText, srtLines } from './videos/transcriptSrt.mjs';
 import ScriptTimer from './videos/ScriptTimer';
+import { parseClock, formatClock } from './videos/clock.mjs';
 
 const VIDEO_GOOGLE_FONTS = [
   'Roboto',
@@ -256,6 +257,17 @@ const TOOL_HELP = {
       'Useful for reusing a voiceover or music track elsewhere',
     ],
   },
+  'trim-audio': {
+    title: 'Trim audio',
+    what: 'Cut an MP3 (or other audio file) down to the part you want, or cut an unwanted part out of it.',
+    features: [
+      'Keep this part: the result is just the section between your start and end (an extract)',
+      'Cut this part out: removes the section and joins the rest back together',
+      'Type the times (1:30, 90 or 1m30), or play the audio and press Set start / Set end at the right moment',
+      'Optional fade in and fade out so the cut does not sound abrupt',
+      'Same file type with no re-compression by default, so there is no quality loss',
+    ],
+  },
   'transcribe-audio': {
     title: 'Audio → transcript',
     what: 'Turn a recording (MP3, M4A, WAV and similar) into written text you can edit, copy or download.',
@@ -436,6 +448,7 @@ const TOOL_GROUPS = [
     label: 'Transform',
     tools: [
       { id: 'clip', label: 'Clip / trim', desc: 'Set in and out points' },
+      { id: 'trim-audio', label: 'Trim audio', desc: 'Keep a part of an MP3, or cut a part out' },
       { id: 'reframe', label: 'Crop / reframe', desc: '9:16, 16:9, 1:1, 4:5 — crop or letterbox' },
       { id: 'speed', label: 'Speed', desc: 'Slow-mo or speed up (0.25×–4×)' },
     ],
@@ -1167,6 +1180,20 @@ export default function VideosPage() {
   const [exportItems, setExportItems] = useState([]);
   const [exportId, setExportId] = useState(null);
 
+  // Trim audio
+  const [taFile, setTaFile] = useState(null);
+  const [taStart, setTaStart] = useState('0:00');
+  const [taEnd, setTaEnd] = useState('');
+  const [taMode, setTaMode] = useState('keep');
+  const [taFadeIn, setTaFadeIn] = useState(0);
+  const [taFadeOut, setTaFadeOut] = useState(0);
+  const [taFormat, setTaFormat] = useState('original');
+  const [taDuration, setTaDuration] = useState(0);
+  const taAudioRef = useRef(null);
+  const taInputRef = useRef(null);
+  const taUrl = useMemo(() => (taFile ? URL.createObjectURL(taFile) : ''), [taFile]);
+  useEffect(() => () => { if (taUrl) URL.revokeObjectURL(taUrl); }, [taUrl]);
+
   // Audio -> transcript
   const [trAudioFile, setTrAudioFile] = useState(null);
   const [trFormat, setTrFormat] = useState('text');
@@ -1822,6 +1849,48 @@ export default function VideosPage() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
+  const handleTrimAudio = async () => {
+    if (!taFile) { addToast('Choose an audio file first', 'error'); return; }
+    const start = parseClock(taStart || '0');
+    const end = taEnd.trim() === '' ? null : parseClock(taEnd);
+    if (start === null) { addToast('The start time is not a time. Try 1:30 or 90.', 'error'); return; }
+    if (taEnd.trim() !== '' && end === null) { addToast('The end time is not a time. Try 2:45 or 165.', 'error'); return; }
+    startProcessing('Trimming…', 'Cutting the audio.');
+    try {
+      const fd = new FormData();
+      fd.append('audio', taFile);
+      fd.append('startSec', String(start));
+      if (end !== null) fd.append('endSec', String(end));
+      fd.append('mode', taMode);
+      fd.append('fadeInSec', String(taFadeIn || 0));
+      fd.append('fadeOutSec', String(taFadeOut || 0));
+      fd.append('format', taFormat);
+      const res = await api.postForm('/api/videos/trim-audio', fd);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Trimming failed');
+      }
+      const blob = await res.blob();
+      // The server names the file and may change its type (fades need MP3); take the name it chose.
+      const named = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '');
+      setResultFromBlob(blob, named ? named[1] : 'trimmed-audio.mp3', 'trim-audio');
+      addToast('Audio trimmed', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      stopProcessing();
+    }
+  };
+
+  const useTrimmedForTranscript = () => {
+    const blob = resultBlobRef.current;
+    if (!blob) return;
+    setTrAudioFile(new File([blob], resultName, { type: blob.type }));
+    setTrText(''); setTrSrt(''); setTrNote('');
+    setTool('transcribe-audio');
+    setOpenGroup('optimise');
+  };
+
   const makeTranscriptVideo = async () => {
     if (!trSrt && !trText.trim()) { addToast('Transcribe or paste your script first', 'error'); return; }
     if (!trAudioFile) { addToast('Choose the audio or video file first', 'error'); return; }
@@ -2245,6 +2314,14 @@ export default function VideosPage() {
       slideshow: { slideSecondsPerSlide: setSlideSecondsPerSlide, slideAspect: setSlideAspect, slideCrossfade: setSlideCrossfade },
       'caption-studio': textStyle,
       thumbnail: { thumbTime: setThumbTime },
+      'trim-audio': {
+        startSec: (x) => setTaStart(formatClock(x)),
+        endSec: (x) => setTaEnd(formatClock(x)),
+        mode: setTaMode,
+        fadeInSec: setTaFadeIn,
+        fadeOutSec: setTaFadeOut,
+        format: setTaFormat,
+      },
     }[toolId] || {};
     for (const [k, val] of Object.entries(v)) setters[k]?.(val);
   };
@@ -2863,7 +2940,7 @@ export default function VideosPage() {
           </div>
         )}
 
-        {tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'caption-studio' && captionLibraryId) && !(tool === 'clip' && isClipUrlMode) && (
+        {tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'caption-studio' && captionLibraryId) && !(tool === 'clip' && isClipUrlMode) && (
           <VideoUpload
             file={sourceFile}
             onFile={(f) => { setSourceFile(f); if (f && tool === 'caption-studio') setCaptionLibraryId(''); }}
@@ -2872,7 +2949,7 @@ export default function VideosPage() {
           />
         )}
 
-        {previewUrl && tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'clip' && isClipUrlMode) && (
+        {previewUrl && tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'clip' && isClipUrlMode) && (
           <>
             <video
               ref={tool === 'clip' ? clipVideoRef : undefined}
@@ -2972,6 +3049,133 @@ export default function VideosPage() {
             </Tooltip>
             {resultForTool === 'convert' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
+          </section>
+        )}
+
+        {tool === 'trim-audio' && (
+          <section className="space-y-3">
+            <ToolHeader id="trim-audio" label="Trim audio" onHelp={setHelpTool} getIcon={getIcon} />
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Choose an MP3 (or other audio), pick the part you want, and get a new, shorter file. Your original is not changed.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Tooltip text="Choose an audio file: MP3, M4A, WAV, OGG, FLAC and similar.">
+                <button
+                  type="button"
+                  onClick={() => taInputRef.current?.click()}
+                  className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  {taFile ? 'Change file' : 'Choose audio file'}
+                </button>
+              </Tooltip>
+              {taFile && (
+                <span className="text-xs truncate max-w-xs" style={{ color: 'var(--color-muted)' }}>
+                  {taFile.name} · {formatBytes(taFile.size)}{taDuration ? ` · ${formatClock(taDuration)} long` : ''}
+                </span>
+              )}
+              <input
+                ref={taInputRef}
+                type="file"
+                accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac,.aac,.opus"
+                className="hidden"
+                onChange={(e) => { setTaFile(e.target.files?.[0] || null); setTaDuration(0); setTaStart('0:00'); setTaEnd(''); setResultFromBlob(null, null, null); e.target.value = ''; }}
+              />
+            </div>
+            {taFile && (
+              <Tooltip text="Play the recording and listen for where the part you want starts and ends. Then press Set start or Set end at that moment.">
+                <audio
+                  ref={taAudioRef}
+                  src={taUrl}
+                  controls
+                  className="w-full"
+                  onLoadedMetadata={(e) => setTaDuration(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0)}
+                />
+              </Tooltip>
+            )}
+            <fieldset className="space-y-1">
+              <legend className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>What do you want?</legend>
+              {[
+                ['keep', 'Keep this part', 'The new file is only the section between your start and end: an extract from the longer recording.'],
+                ['remove', 'Cut this part out', 'The section between your start and end is removed, and what is left is joined up into one file.'],
+              ].map(([val, label, tip]) => (
+                <Tooltip key={val} text={tip}>
+                  <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                    <input type="radio" name="taMode" checked={taMode === val} onChange={() => setTaMode(val)} />
+                    {label}
+                  </label>
+                </Tooltip>
+              ))}
+            </fieldset>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="block text-xs" style={{ color: 'var(--color-muted)' }} htmlFor="ta-start">Start</label>
+                <Tooltip text="Where the part begins. Type a time like 1:30 or 90 (seconds), or press Set start while the audio is playing.">
+                  <input id="ta-start" type="text" value={taStart} onChange={(e) => setTaStart(e.target.value)} placeholder="0:00" className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
+                <Tooltip text="Use the point the audio player is at right now as the start.">
+                  <button type="button" disabled={!taFile} onClick={() => setTaStart(formatClock(taAudioRef.current?.currentTime || 0))} className="text-xs px-2 py-1 rounded-lg border transition-opacity hover:opacity-70 disabled:opacity-40" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Set start to here</button>
+                </Tooltip>
+              </div>
+              <div className="space-y-1">
+                <label className="block text-xs" style={{ color: 'var(--color-muted)' }} htmlFor="ta-end">End</label>
+                <Tooltip text="Where the part finishes. Leave empty to go to the end of the recording. Type a time like 2:45 or 165, or press Set end while the audio is playing.">
+                  <input id="ta-end" type="text" value={taEnd} onChange={(e) => setTaEnd(e.target.value)} placeholder={taDuration ? formatClock(taDuration) : 'end of recording'} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
+                <Tooltip text="Use the point the audio player is at right now as the end.">
+                  <button type="button" disabled={!taFile} onClick={() => setTaEnd(formatClock(taAudioRef.current?.currentTime || 0))} className="text-xs px-2 py-1 rounded-lg border transition-opacity hover:opacity-70 disabled:opacity-40" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Set end to here</button>
+                </Tooltip>
+              </div>
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Fade in (seconds)</span>
+                <Tooltip text="Starts the result quietly and brings the volume up over this many seconds. 0 = no fade. Uses MP3 output.">
+                  <input type="number" min={0} max={10} step={0.5} value={taFadeIn} onChange={(e) => setTaFadeIn(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Fade out (seconds)</span>
+                <Tooltip text="Fades the volume down to silence over the last few seconds, so it does not stop abruptly. 0 = no fade. Uses MP3 output.">
+                  <input type="number" min={0} max={10} step={0.5} value={taFadeOut} onChange={(e) => setTaFadeOut(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
+              </label>
+            </div>
+            <label className="block space-y-1">
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Save as</span>
+              <Tooltip text="Same file type is fastest and keeps the sound exactly as it was (no re-compression), but it cannot do fades or cut a middle section out; those make an MP3. Choose MP3 or WAV to force a type.">
+                <select value={taFormat} onChange={(e) => setTaFormat(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                  <option value="original">Same type as the original (no quality loss)</option>
+                  <option value="mp3">MP3 (192 kbps)</option>
+                  <option value="wav">WAV (uncompressed, large)</option>
+                </select>
+              </Tooltip>
+            </label>
+            <Tooltip text="Make the new, shorter audio file. Your original file is not changed.">
+              <button
+                type="button"
+                onClick={handleTrimAudio}
+                disabled={!taFile || !ffmpegOk}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Trim audio
+              </button>
+            </Tooltip>
+            {resultForTool === 'trim-audio' && resultBlob && (
+              <div className="space-y-2 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Result</p>
+                <Tooltip text="Listen to the new file to check it before you download it.">
+                  <audio src={resultBlob} controls className="w-full" />
+                </Tooltip>
+                <div className="flex flex-wrap gap-2">
+                  <Tooltip text="Save the new audio file to your computer.">
+                    <a href={resultBlob} download={resultName} className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Download {resultName}</a>
+                  </Tooltip>
+                  <Tooltip text="Open Audio to transcript with this new file already chosen, so you can write out what is said.">
+                    <button type="button" onClick={useTrimmedForTranscript} className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Transcribe this →</button>
+                  </Tooltip>
+                </div>
+              </div>
             )}
           </section>
         )}
