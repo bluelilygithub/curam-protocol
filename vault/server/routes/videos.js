@@ -614,6 +614,7 @@ router.post('/probe', upload.single('video'), ffmpegRoute('probe', async (req, r
 router.post('/clip', upload.single('video'), ffmpegRoute('clip', async (req, res) => {
   const startSec = Number(req.body?.startSec ?? 0);
   const endSec = req.body?.endSec != null && req.body.endSec !== '' ? Number(req.body.endSec) : null;
+  const keepOriginal = req.body?.keepOriginal === 'true' || req.body?.keepOriginal === true;
   if (!Number.isFinite(startSec) || startSec < 0) {
     return res.status(400).json({ error: 'startSec must be a non-negative number' });
   }
@@ -624,7 +625,7 @@ router.post('/clip', upload.single('video'), ffmpegRoute('clip', async (req, res
   const buffer = await withTempDir(async (dir) => {
     const inputPath = await writeUpload(dir, req.file);
     const outputPath = path.join(dir, 'clip.mp4');
-    await clipVideo(inputPath, outputPath, { startSec, endSec });
+    await clipVideo(inputPath, outputPath, { startSec, endSec, keepOriginal });
     return readOutputFile(outputPath);
   });
 
@@ -641,6 +642,7 @@ router.post('/clip-from-url', ffmpegRoute('clip-from-url', async (req, res) => {
 
   const startSec = Number(req.body?.startSec ?? 0);
   const endSec = req.body?.endSec != null && req.body.endSec !== '' ? Number(req.body.endSec) : null;
+  const keepOriginal = req.body?.keepOriginal === 'true' || req.body?.keepOriginal === true;
   if (!Number.isFinite(startSec) || startSec < 0) {
     return res.status(400).json({ error: 'startSec must be a non-negative number' });
   }
@@ -652,7 +654,7 @@ router.post('/clip-from-url', ffmpegRoute('clip-from-url', async (req, res) => {
     const inputPath = path.join(dir, 'source-download');
     await fetchLicensedVideo(url, inputPath);
     const outputPath = path.join(dir, 'clip.mp4');
-    await clipVideo(inputPath, outputPath, { startSec, endSec });
+    await clipVideo(inputPath, outputPath, { startSec, endSec, keepOriginal });
     return readOutputFile(outputPath);
   });
 
@@ -726,8 +728,9 @@ router.post('/join', upload.array('videos', 12), ffmpegRoute('join', async (req,
   const endCard = endCardRequest(req.body);
   if (endCard?.error) return res.status(400).json({ error: endCard.error });
 
-  const maxWidth = req.body?.maxWidth ? Number(req.body.maxWidth) : 1280;
-  const crf = req.body?.crf != null && req.body.crf !== '' ? Number(req.body.crf) : 23;
+  // Defaults keep the source's own size (cap only) and near-lossless quality; the user can lower either.
+  const maxWidth = req.body?.maxWidth ? Number(req.body.maxWidth) : 3840;
+  const crf = req.body?.crf != null && req.body.crf !== '' ? Number(req.body.crf) : 18;
   let crossfadeSec = req.body?.crossfadeSec != null && req.body.crossfadeSec !== ''
     ? Number(req.body.crossfadeSec)
     : 0;
@@ -751,8 +754,8 @@ router.post('/join', upload.array('videos', 12), ffmpegRoute('join', async (req,
     const playOrder = plan ? plan.order.map((i) => inputPaths[i]) : inputPaths;
     const outputPath = path.join(dir, 'joined.mp4');
     const joinOpts = {
-      maxWidth: Number.isFinite(maxWidth) ? maxWidth : 1280,
-      crf: Number.isFinite(crf) ? crf : 23,
+      maxWidth: Number.isFinite(maxWidth) ? maxWidth : 3840,
+      crf: Number.isFinite(crf) ? crf : 18,
     };
     if (plan) {
       // Per-clip effects are indexed by upload position; reorder them to match play order.

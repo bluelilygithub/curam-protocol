@@ -70,9 +70,9 @@ async function probeVideo(filePath) {
  * Keep the part between startSec and endSec (both measured from the start of the source).
  * With -ss before -i the output clock restarts at 0, so the end must be sent as a LENGTH (-t), not -to:
  * "-ss 156 -to 168" would keep 168 seconds. Re-encoded, not stream-copied, so the cut lands on the exact
- * second instead of the nearest keyframe.
+ * second instead of the nearest keyframe (CRF 16 = visually lossless). `keepOriginal` stream-copies instead.
  */
-function clipArgs(inputPath, outputPath, { startSec, endSec }) {
+function clipArgs(inputPath, outputPath, { startSec, endSec, keepOriginal = false }) {
   const start = Math.max(0, Number(startSec) || 0);
   const end = endSec != null && endSec !== '' ? Number(endSec) : null;
   const args = ['-y', '-ss', String(start), '-i', inputPath];
@@ -80,9 +80,15 @@ function clipArgs(inputPath, outputPath, { startSec, endSec }) {
     if (end <= start) throw new Error('End must be after Start');
     args.push('-t', String(Math.round((end - start) * 1000) / 1000));
   }
+  if (keepOriginal) {
+    // Pass-through: no re-encode, so zero quality loss. Video can only start on a keyframe, so the cut may begin
+    // slightly before the requested time.
+    args.push('-c', 'copy', '-avoid_negative_ts', 'make_zero', '-movflags', '+faststart', outputPath);
+    return args;
+  }
   args.push(
-    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast', '-crf', '20',
-    '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart',
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'slow', '-crf', '16',
+    '-c:a', 'aac', '-b:a', '256k', '-movflags', '+faststart',
     outputPath
   );
   return args;

@@ -1067,6 +1067,7 @@ export default function VideosPage() {
   // Clip
   const [startSec, setStartSec] = useState(0);
   const [endSec, setEndSec] = useState('');
+  const [clipKeepOriginal, setClipKeepOriginal] = useState(false);
   const [clipDuration, setClipDuration] = useState(0);
   const clipVideoRef = useRef(null);
   const [clipUrl, setClipUrl] = useState('');
@@ -1081,8 +1082,8 @@ export default function VideosPage() {
 
   // Join
   const [joinFiles, setJoinFiles] = useState([]);
-  const [joinMaxWidth, setJoinMaxWidth] = useState('1280');
-  const [joinCrf, setJoinCrf] = useState(23);
+  const [joinMaxWidth, setJoinMaxWidth] = useState('');
+  const [joinCrf, setJoinCrf] = useState(18);
   const [joinCrossfade, setJoinCrossfade] = useState('0');
   // AI plan from "Describe how to join them"; its order indices refer to joinFiles, so any change to
   // the clip list (add/remove/reorder) invalidates it.
@@ -1512,6 +1513,7 @@ export default function VideosPage() {
         url: clipUrl.trim(),
         startSec,
         endSec: endSec !== '' ? endSec : undefined,
+        keepOriginal: clipKeepOriginal,
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -1527,7 +1529,7 @@ export default function VideosPage() {
       setClipUrlLoading(false);
       stopProcessing();
     }
-  }, [clipUrl, startSec, endSec, startProcessing, stopProcessing, setResultFromBlob, addToast]);
+  }, [clipUrl, startSec, endSec, clipKeepOriginal, startProcessing, stopProcessing, setResultFromBlob, addToast]);
 
   const requireFile = () => {
     if (!sourceFile) {
@@ -2753,6 +2755,15 @@ export default function VideosPage() {
                 </Tooltip>
               </label>
             </div>
+            <label className="flex items-start gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
+              <input type="checkbox" checked={clipKeepOriginal} onChange={(e) => setClipKeepOriginal(e.target.checked)} className="mt-0.5" />
+              <span>
+                <Tooltip text="Copies the picture and sound exactly as they are, with no re-compression, so quality is identical to your master. The cut can only start on a keyframe, so it may begin a second or two before your Start time.">
+                  <span className="font-medium">Keep original quality (no re-encode)</span>
+                </Tooltip>
+                <span className="block" style={{ color: 'var(--color-muted)' }}>Fastest and lossless. Off = exact cut to the frame, re-saved at very high quality.</span>
+              </span>
+            </label>
             <Tooltip text={isClipUrlMode ? 'Download the file and cut it to the selected in/out range.' : 'Cut the video down to just the selected in/out range.'}>
               <button
                 type="button"
@@ -2763,6 +2774,7 @@ export default function VideosPage() {
                   fd.append('video', sourceFile);
                   fd.append('startSec', String(startSec));
                   if (endSec !== '') fd.append('endSec', String(endSec));
+                  fd.append('keepOriginal', String(clipKeepOriginal));
                   runFormVideo('clip', fd, { label: 'Clipping…', resultFilename: 'clip.mp4', forTool: 'clip' });
                 }}
                 disabled={!ffmpegOk || (isClipUrlMode && clipUrlLoading)}
@@ -3431,7 +3443,7 @@ export default function VideosPage() {
               <label className="block space-y-1">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Max width (output)</span>
                 <Tooltip text="All clips are normalized to this width before joining, so mixed resolutions still match.">
-                  <input type="number" min={320} max={3840} step={2} value={joinMaxWidth} onChange={(e) => setJoinMaxWidth(e.target.value)} placeholder="1280" className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                  <input type="number" min={320} max={3840} step={2} value={joinMaxWidth} onChange={(e) => setJoinMaxWidth(e.target.value)} placeholder="Original size" className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
                 </Tooltip>
               </label>
               <label className="block space-y-1">

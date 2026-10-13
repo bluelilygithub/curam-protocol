@@ -17,6 +17,13 @@ const short = clipArgs('i', 'o', { startSec: 0, endSec: 7.25 });
 assert.strictEqual(short[short.indexOf('-t') + 1], '7.25');
 assert.throws(() => clipArgs('i', 'o', { startSec: 10, endSec: 10 }), /after Start/);
 assert.ok(a.includes('yuv420p'), 'clip output is 4:2:0');
+assert.strictEqual(a[a.indexOf('-crf') + 1], '16', 'exact cut is re-saved near-losslessly');
+
+// Keep original quality = stream copy, no re-encode at all.
+const k = clipArgs('in.mp4', 'out.mp4', { startSec: 156, endSec: 168, keepOriginal: true });
+assert.strictEqual(k[k.indexOf('-c') + 1], 'copy');
+assert.strictEqual(k[k.indexOf('-t') + 1], '12');
+assert.ok(!k.includes('libx264') && !k.includes('-crf'));
 
 // Every H.264 encode must be 4:2:0, or Windows/QuickTime/phones refuse to play it
 // (a "joined.mp4" made through the transition graph came out High 4:4:4 and would not play).
