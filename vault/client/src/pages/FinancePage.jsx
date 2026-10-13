@@ -6485,7 +6485,11 @@ function FyPackModal({ onClose }) {
             {preview.itemsToCheck > 0
               ? <span style={{ color: '#ef4444', fontWeight: 600 }}>{preview.itemsToCheck} item{preview.itemsToCheck === 1 ? '' : 's'} flagged to check — open “Things to Review” in Reports first.</span>
               : <span style={{ color: '#065f46' }}>Nothing flagged in “Things to Review”.</span>}
-            {failed.length > 0 && <span style={{ color: '#ef4444' }}>{failed.length} report(s) could not be produced: {failed.map(f => f.title).join(', ')}.</span>}
+            {failed.length > 0 && (
+              <span style={{ color: '#ef4444' }}>
+                {failed.length} report(s) could not be produced. Reason{[...new Set(failed.map(f => f.error))].length === 1 ? '' : 's'}: {[...new Set(failed.map(f => f.error))].slice(0, 3).join(' | ')}
+              </span>
+            )}
             <span style={{ color: 'var(--color-muted)' }}>{preview.documents.count} supporting document{preview.documents.count === 1 ? '' : 's'} filed under this year ({fmtBytes(preview.documents.bytes)}).</span>
           </div>
         )}
