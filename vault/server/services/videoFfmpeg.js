@@ -66,24 +66,30 @@ async function probeVideo(filePath) {
   };
 }
 
-async function clipVideo(inputPath, outputPath, { startSec, endSec }) {
+/**
+ * Keep the part between startSec and endSec (both measured from the start of the source).
+ * With -ss before -i the output clock restarts at 0, so the end must be sent as a LENGTH (-t), not -to:
+ * "-ss 156 -to 168" would keep 168 seconds. Re-encoded, not stream-copied, so the cut lands on the exact
+ * second instead of the nearest keyframe.
+ */
+function clipArgs(inputPath, outputPath, { startSec, endSec }) {
   const start = Math.max(0, Number(startSec) || 0);
   const end = endSec != null && endSec !== '' ? Number(endSec) : null;
-  const copyArgs = ['-y', '-ss', String(start), '-i', inputPath];
-  if (end != null && Number.isFinite(end)) copyArgs.push('-to', String(end));
-  copyArgs.push('-c', 'copy', '-avoid_negative_ts', '1', outputPath);
-  try {
-    await execFileAsync(FFMPEG, copyArgs);
-  } catch {
-    const enc = ['-y', '-ss', String(start), '-i', inputPath];
-    if (end != null && Number.isFinite(end)) enc.push('-to', String(end));
-    enc.push(
-      '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
-      '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart',
-      outputPath
-    );
-    await execFileAsync(FFMPEG, enc);
+  const args = ['-y', '-ss', String(start), '-i', inputPath];
+  if (end != null && Number.isFinite(end)) {
+    if (end <= start) throw new Error('End must be after Start');
+    args.push('-t', String(Math.round((end - start) * 1000) / 1000));
   }
+  args.push(
+    '-c:v', 'libx264', '-preset', 'fast', '-crf', '20',
+    '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart',
+    outputPath
+  );
+  return args;
+}
+
+async function clipVideo(inputPath, outputPath, range) {
+  await execFileAsync(FFMPEG, clipArgs(inputPath, outputPath, range));
 }
 
 async function convertVideo(inputPath, outputPath, { crf = 23, maxWidth } = {}) {
@@ -1047,6 +1053,7 @@ module.exports = {
   extensionForMime,
   probeVideo,
   clipVideo,
+  clipArgs,
   convertVideo,
   joinVideos,
   joinVideosWithOptionalCrossfade,
