@@ -764,6 +764,18 @@ async function extractAudio(inputPath, outputPath, format = 'mp3') {
   await execFileAsync(FFMPEG, ['-y', '-i', inputPath, ...codec, outputPath]);
 }
 
+/**
+ * Any audio (or video) file -> small mono 16 kHz MP3, ideal for speech-to-text: about 14 MB per hour at 32 kbps,
+ * and it turns m4a/ogg/webm/wav inputs into the one format the transcriber reliably accepts.
+ */
+async function toSpeechMp3(inputPath, outputPath) {
+  await execFileAsync(FFMPEG, [
+    '-y', '-i', inputPath, '-vn',
+    '-ac', '1', '-ar', '16000', '-c:a', 'libmp3lame', '-b:a', '32k',
+    outputPath,
+  ], 600000);
+}
+
 async function captureThumbnail(inputPath, outputPath, timeSec = 1) {
   await execFileAsync(FFMPEG, [
     '-y',
@@ -1069,6 +1081,7 @@ module.exports = {
   overlayImage,
   ASPECT_RATIOS,
   extractAudio,
+  toSpeechMp3,
   captureThumbnail,
   extractFrames,
   annotateVideo,

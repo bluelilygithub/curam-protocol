@@ -37,4 +37,13 @@ for (const file of walk(__dirname).filter((f) => f.endsWith('.js') && !f.endsWit
     }
   });
 }
+
+// Audio -> transcript: SRT is turned into plain readable text.
+const { srtToPlainText } = require('./srtUtils');
+const sampleSrt = [
+  '1', '00:00:01,000 --> 00:00:03,000', 'Hello there.', '',
+  '2', '00:00:03,500 --> 00:00:05,000', 'Second   line.', '',
+].join('\n');
+assert.strictEqual(srtToPlainText(sampleSrt), ['Hello there.', 'Second line.'].join('\n'));
+assert.strictEqual(srtToPlainText(''), '');
 console.log('videoClip tests passed');

@@ -30,6 +30,7 @@ const {
   changeVideoSpeed,
   overlayImage,
   extractAudio,
+  toSpeechMp3,
   captureThumbnail,
   extractFrames,
   annotateVideo,
@@ -42,7 +43,7 @@ const {
   videoToGif,
   buildSlideshow,
 } = require('../services/videoFfmpeg');
-const { normalizeSrt } = require('../services/srtUtils');
+const { normalizeSrt, srtToPlainText } = require('../services/srtUtils');
 const { fetchLicensedVideo } = require('../services/videoUrlIntake');
 const { ffmpegRoute } = require('../middleware/ffmpegRoute');
 const { planSlideshow, normalizeSlideshowPlan } = require('../services/videoSlideshowPlan');
@@ -969,6 +970,43 @@ router.post('/transcribe', upload.single('video'), ffmpegRoute('transcribe', asy
   });
 
   res.json({ srt, source: 'gemini' });
+}));
+
+// "Audio -> transcript": an audio file (mp3, m4a, wav, ogg, flac, ...) in, readable text (or timestamped SRT) out.
+// Hosted: shrunk to a small mono speech MP3 and transcribed by Gemini. Local dev: whisper-cli (text only, no timestamps).
+const AUDIO_EXTS = new Set(['.mp3', '.m4a', '.wav', '.ogg', '.oga', '.flac', '.aac', '.wma', '.webm', '.mp4', '.opus']);
+
+router.post('/transcribe-audio', upload.single('audio'), ffmpegRoute('transcribe-audio', async (req, res) => {
+  if (!req.file?.buffer?.length) return res.status(400).json({ error: 'Choose an audio file first' });
+  const format = req.body?.format === 'srt' ? 'srt' : 'text';
+  const ext = path.extname(String(req.file.originalname || '')).toLowerCase();
+  const inExt = AUDIO_EXTS.has(ext) ? ext : '.mp3';
+
+  const out = await withTempDir(async (dir) => {
+    const inputPath = path.join(dir, `audio-in${inExt}`);
+    await fs.writeFile(inputPath, req.file.buffer);
+
+    if (runtimeConfig.isLocal) {
+      const wavPath = path.join(dir, 'audio.wav');
+      await extractWav16k(inputPath, wavPath);
+      return { text: await transcribeWav(wavPath), source: 'whisper-local', timestamps: false };
+    }
+
+    const speechPath = path.join(dir, 'speech.mp3');
+    await toSpeechMp3(inputPath, speechPath);
+    const buf = await fs.readFile(speechPath);
+    if (buf.length > MAX_GEMINI_AUDIO_BYTES) {
+      throw new Error('That recording is too long for one go (over about 75 minutes). Split it into parts and transcribe each.');
+    }
+    const raw = await transcribeAudioWithGemini(req.user.id, buf.toString('base64'), 'audio/mp3', { format });
+    if (format === 'srt') {
+      const srt = normalizeSrt(raw);
+      return { srt, text: srtToPlainText(srt), source: 'gemini', timestamps: true };
+    }
+    return { text: String(raw).replace(/^```[a-z]*\s*|```\s*$/gi, '').trim(), source: 'gemini', timestamps: false };
+  });
+
+  res.json(out);
 }));
 
 router.post('/burn-captions', upload.fields([{ name: 'video', maxCount: 1 }, { name: 'srt', maxCount: 1 }]), ffmpegRoute('burn-captions', async (req, res) => {

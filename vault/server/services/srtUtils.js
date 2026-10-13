@@ -71,7 +71,16 @@ function normalizeSrt(raw) {
   return cuesToSrt(cues);
 }
 
+/** SRT -> plain readable text: drops cue numbers and timestamps, one cue per line, no blank-line clutter. */
+function srtToPlainText(srt) {
+  return parseSrtLoose(String(srt || ''))
+    .map((c) => String(c.text || '').replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
 module.exports = {
+  srtToPlainText,
   parseTimestamp,
   formatTimestamp,
   parseSrtLoose,

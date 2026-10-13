@@ -343,12 +343,14 @@ async function describeImageWithGemini(modelId, imageDataUrl, instruction) {
 
 const SRT_TRANSCRIBE_INSTRUCTION = `Transcribe the spoken audio in full. Return ONLY a valid SRT-formatted subtitle file — sequential cue numbers, "HH:MM:SS,mmm --> HH:MM:SS,mmm" timestamp lines, then the spoken text for that cue, separated by blank lines. Break into short cues (roughly one sentence or 5-8 seconds each). No markdown fences, no commentary, no extra text before or after the SRT content.`;
 
+const TEXT_TRANSCRIBE_INSTRUCTION = `Transcribe the spoken audio in full, word for word. Return ONLY the transcript as plain text, in paragraphs (start a new paragraph when the topic or speaker changes; if there are clearly different speakers, begin their turns with "Speaker 1:", "Speaker 2:"). Fix obvious punctuation and capitalisation, but do not summarise, translate or leave anything out. No markdown, no timestamps, no commentary before or after.`;
+
 /**
  * Hosted transcription (Railway has no whisper-cli binary): send the
  * extracted audio track to Gemini and ask for SRT-formatted output directly.
  * Reuses the same GoogleGenerativeAI client setup as `describeImageWithGemini`.
  */
-async function transcribeAudioWithGemini(userId, audioBase64, mimeType = 'audio/mp3') {
+async function transcribeAudioWithGemini(userId, audioBase64, mimeType = 'audio/mp3', { format = 'srt' } = {}) {
   const { gemini: modelId } = await getModelsForUser(userId);
   if (!modelId) throw new Error('No Gemini model configured — add one in Settings to use hosted auto-transcribe');
   const { GoogleGenerativeAI } = require('@google/generative-ai');
@@ -358,11 +360,11 @@ async function transcribeAudioWithGemini(userId, audioBase64, mimeType = 'audio/
   const genai = new GoogleGenerativeAI(key);
   const gModel = genai.getGenerativeModel({
     model: modelId,
-    generationConfig: { maxOutputTokens: 8192 },
+    generationConfig: { maxOutputTokens: format === 'text' ? 32768 : 8192 },
   });
 
   const result = await gModel.generateContent([
-    { text: SRT_TRANSCRIBE_INSTRUCTION },
+    { text: format === 'text' ? TEXT_TRANSCRIBE_INSTRUCTION : SRT_TRANSCRIBE_INSTRUCTION },
     { inlineData: { mimeType, data: audioBase64 } },
   ]);
 

@@ -17,7 +17,7 @@ The Video Tools page is a video toolkit mounted in Vault at **`/videos`**. It mi
 | Hosted / paid | Generate clip | LLM brief expansion (`light` tier) + Replicate (default) or FAL; needs `REPLICATE_API_TOKEN` or `FAL_API_KEY` |
 | Server (ffmpeg) | Clip, Convert, Join (+ crossfade), Reframe, Speed, Mute/replace audio, Normalize audio, Video → GIF, Export for Social, Overlay, Extract audio, Annotate (+ optional fade in/out), Slideshow, Caption studio, Thumbnail, File info | CPU-bound; requires `ffmpeg` + `ffprobe` on the server image |
 | Library (disk + DB) | Saved media, Caption studio (library source) | `video_library` table + files under `{UPLOAD_DIR}/video-library/{userId}/` |
-| Hosted or local | Auto-transcribe | Local dev: `whisper-cli` + model file. Hosted Vault (e.g. Railway): extracts the audio track and sends it to Gemini for a direct SRT transcript (`GEMINI_API_KEY` + a Gemini model in Settings) — paste SRT manually if neither is available |
+| Hosted or local | Audio → transcript (audio file → editable text or SRT), Auto-transcribe (video, in Caption studio) | Local dev: `whisper-cli` + model file. Hosted Vault (e.g. Railway): extracts the audio track and sends it to Gemini for a direct SRT transcript (`GEMINI_API_KEY` + a Gemini model in Settings) — paste SRT manually if neither is available |
 
 Upload cap: **`VIDEO_MAX_UPLOAD_MB`** (default **80**). Processed outputs return as binary (`video/mp4`, `image/jpeg`, `audio/mpeg`) — not JSON data URLs.
 
@@ -28,7 +28,7 @@ Upload cap: **`VIDEO_MAX_UPLOAD_MB`** (default **80**). Processed outputs return
 | Group | Tools |
 |---|---|
 | **Create** | Generate clip |
-| **Optimise** | Convert / compress, Extract audio, Mute / replace audio, Normalize audio, Video → GIF, Export for Social |
+| **Optimise** | Convert / compress, Extract audio, Audio → transcript, Mute / replace audio, Normalize audio, Video → GIF, Export for Social |
 | **Transform** | Clip / trim, Crop / reframe, Speed |
 | **Compose** | Add music (opens Music), Annotate, Call to action, Overlay / watermark, Join videos, Slideshow, Caption studio |
 | **Library** | Saved media |
@@ -62,6 +62,7 @@ Every tool with settings has a **Tell it what to do** box under its title (`Voic
 
 - **Convert / compress** — re-encode H.264 MP4 with CRF (18–35) and optional max width. `POST /api/videos/convert`.
 - **Extract audio** — export MP3 (or WAV via API `format=wav`). `POST /api/videos/extract-audio`.
+- **Audio → transcript** — upload an audio file (MP3, M4A, WAV, OGG, FLAC...) and get the spoken words back as editable text, with copy and `.txt` download. Choose **Plain transcript** or **With timestamps (SRT)** (adds a `.srt` download usable in Caption studio). `POST /api/videos/transcribe-audio` (multipart `audio`, `format` = `text`|`srt`). Hosted: the file is shrunk to a mono 16 kHz 32 kbps MP3 (about 14 MB/hour, so roughly 75 minutes fits the ~18 MB Gemini inline limit) and sent to Gemini (`GEMINI_API_KEY` + a Gemini model in Settings). Local dev: `whisper-cli`, text only (no timestamps). Speech only; no speaker labels guaranteed.
 - **Mute / replace audio** — strip soundtrack (`mode=mute`) or replace with uploaded audio (`mode=replace` + `audio` file). `POST /api/videos/audio`.
 - **Normalize audio** — one-click loudness consistency fix via ffmpeg's `loudnorm` filter. Preset `quiet` / `normal` / `loud` maps to different I/LRA/TP targets — no raw ffmpeg parameters exposed. One-pass (not the more accurate two-pass measure-then-apply) — good enough for an occasional-user "fix my volume" tool without doubling encode time. `POST /api/videos/normalize`.
 - **Video → GIF** — short looping GIF via ffmpeg's standard two-pass palette technique (palette generated from the trimmed/scaled clip, then applied with dithering) for cleaner colour than a naive conversion. Controls: fps (1–30, 10–20 typical), max width, optional start/end trim. `POST /api/videos/togif` → `image/gif`.

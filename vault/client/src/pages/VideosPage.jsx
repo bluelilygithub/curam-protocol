@@ -254,6 +254,16 @@ const TOOL_HELP = {
       'Useful for reusing a voiceover or music track elsewhere',
     ],
   },
+  'transcribe-audio': {
+    title: 'Audio → transcript',
+    what: 'Turn a recording (MP3, M4A, WAV and similar) into written text you can edit, copy or download.',
+    features: [
+      'Choose plain text, or text with timestamps (SRT subtitle file)',
+      'The result appears in a box you can correct before copying or saving',
+      'Long recordings are shrunk automatically; up to about 75 minutes at once',
+      'Speech only: music and background noise may be skipped or misheard',
+    ],
+  },
   audio: {
     title: 'Mute / replace audio',
     what: 'Strip a video\'s existing soundtrack, or swap it out for a new uploaded track.',
@@ -408,6 +418,7 @@ const TOOL_GROUPS = [
     tools: [
       { id: 'convert', label: 'Convert / compress', desc: 'Re-encode MP4, optional resize' },
       { id: 'extract-audio', label: 'Extract audio', desc: 'Export MP3 or WAV' },
+      { id: 'transcribe-audio', label: 'Audio → transcript', desc: 'MP3 or other audio in, editable text out' },
       { id: 'audio', label: 'Mute / replace audio', desc: 'Strip soundtrack or swap in a new track' },
       { id: 'normalize', label: 'Normalize audio', desc: 'One-click loudness consistency fix' },
       { id: 'togif', label: 'Video → GIF', desc: 'Short looping GIF with an optimized palette' },
@@ -1150,6 +1161,16 @@ export default function VideosPage() {
   const [exportItems, setExportItems] = useState([]);
   const [exportId, setExportId] = useState(null);
 
+  // Audio -> transcript
+  const [trAudioFile, setTrAudioFile] = useState(null);
+  const [trFormat, setTrFormat] = useState('text');
+  const [trText, setTrText] = useState('');
+  const [trSrt, setTrSrt] = useState('');
+  const [trNote, setTrNote] = useState('');
+  const trInputRef = useRef(null);
+  const trAudioUrl = useMemo(() => (trAudioFile ? URL.createObjectURL(trAudioFile) : ''), [trAudioFile]);
+  useEffect(() => () => { if (trAudioUrl) URL.revokeObjectURL(trAudioUrl); }, [trAudioUrl]);
+
   // Captions
   const [srtText, setSrtText] = useState('');
   const [transcript, setTranscript] = useState('');
@@ -1710,6 +1731,48 @@ export default function VideosPage() {
       addToast('Could not load result as source', 'error');
     }
   }, [resultName, addToast]);
+
+  const handleTranscribeAudio = async () => {
+    if (!trAudioFile) { addToast('Choose an audio file first', 'error'); return; }
+    startProcessing('Transcribing…', 'Listening to the recording and writing it out. Long files can take a minute or two.');
+    try {
+      const fd = new FormData();
+      fd.append('audio', trAudioFile);
+      fd.append('format', trFormat);
+      const res = await api.postForm('/api/videos/transcribe-audio', fd);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Transcription failed');
+      setTrText(data.text || '');
+      setTrSrt(data.srt || '');
+      setTrNote(data.timestamps === false && trFormat === 'srt' ? 'Timestamps are not available on this server, so this is plain text.' : '');
+      addToast('Transcript ready', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      stopProcessing();
+    }
+  };
+
+  const downloadTranscript = (kind) => {
+    const body = kind === 'srt' ? trSrt : trText;
+    if (!body) return;
+    const base = (trAudioFile?.name || 'transcript').replace(/\.[^.]+$/, '');
+    const url = URL.createObjectURL(new Blob([body], { type: 'text/plain;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${base}.${kind === 'srt' ? 'srt' : 'txt'}`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const copyTranscript = async () => {
+    try {
+      await navigator.clipboard.writeText(trText);
+      addToast('Copied', 'success');
+    } catch {
+      addToast('Could not copy. Select the text and copy it by hand.', 'error');
+    }
+  };
 
   const handleProbe = async () => {
     if (!requireFile()) return;
@@ -2705,7 +2768,7 @@ export default function VideosPage() {
           </div>
         )}
 
-        {tool !== 'generate' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'caption-studio' && captionLibraryId) && !(tool === 'clip' && isClipUrlMode) && (
+        {tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'caption-studio' && captionLibraryId) && !(tool === 'clip' && isClipUrlMode) && (
           <VideoUpload
             file={sourceFile}
             onFile={(f) => { setSourceFile(f); if (f && tool === 'caption-studio') setCaptionLibraryId(''); }}
@@ -2714,7 +2777,7 @@ export default function VideosPage() {
           />
         )}
 
-        {previewUrl && tool !== 'generate' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'clip' && isClipUrlMode) && (
+        {previewUrl && tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'clip' && isClipUrlMode) && (
           <>
             <video
               ref={tool === 'clip' ? clipVideoRef : undefined}
@@ -2828,6 +2891,98 @@ export default function VideosPage() {
             </Tooltip>
             {resultForTool === 'extract-audio' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} />
+            )}
+          </section>
+        )}
+
+        {tool === 'transcribe-audio' && (
+          <section className="space-y-3">
+            <ToolHeader id="transcribe-audio" label="Audio → transcript" onHelp={setHelpTool} getIcon={getIcon} />
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Choose a recording and get the words back as text you can correct, copy or download.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Tooltip text="Choose an audio file: MP3, M4A, WAV, OGG, FLAC and similar.">
+                <button
+                  type="button"
+                  onClick={() => trInputRef.current?.click()}
+                  className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  {trAudioFile ? 'Change file' : 'Choose audio file'}
+                </button>
+              </Tooltip>
+              {trAudioFile && (
+                <span className="text-xs truncate max-w-xs" style={{ color: 'var(--color-muted)' }}>
+                  {trAudioFile.name} · {formatBytes(trAudioFile.size)}
+                </span>
+              )}
+              <input
+                ref={trInputRef}
+                type="file"
+                accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac,.aac,.opus"
+                className="hidden"
+                onChange={(e) => { setTrAudioFile(e.target.files?.[0] || null); setTrText(''); setTrSrt(''); setTrNote(''); e.target.value = ''; }}
+              />
+            </div>
+            {trAudioFile && (
+              <Tooltip text="Play the recording to check it is the right one before you transcribe.">
+                <audio src={trAudioUrl} controls className="w-full" />
+              </Tooltip>
+            )}
+            <fieldset className="space-y-1">
+              <legend className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Result</legend>
+              {[
+                ['text', 'Plain transcript', 'Just the words, in paragraphs. Best for reading, notes and articles.'],
+                ['srt', 'With timestamps (SRT)', 'Short lines with start and end times, ready to use as subtitles in Caption studio. A plain-text copy is shown too.'],
+              ].map(([val, label, tip]) => (
+                <Tooltip key={val} text={tip}>
+                  <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                    <input type="radio" name="trFormat" checked={trFormat === val} onChange={() => setTrFormat(val)} />
+                    {label}
+                  </label>
+                </Tooltip>
+              ))}
+            </fieldset>
+            <Tooltip text="Listen to the recording and write out what is said.">
+              <button
+                type="button"
+                onClick={handleTranscribeAudio}
+                disabled={!trAudioFile || !ffmpegOk}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Transcribe
+              </button>
+            </Tooltip>
+            {(trText || trSrt) && (
+              <div className="space-y-2">
+                {trNote && <p className="text-xs" style={{ color: '#b45309' }}>{trNote}</p>}
+                <p className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Transcript (you can edit it)</p>
+                <Tooltip text="The written-out words. Click in and fix any mistakes before you copy or download; your edits are what get copied or saved as .txt.">
+                  <textarea
+                    value={trText}
+                    onChange={(e) => setTrText(e.target.value)}
+                    rows={14}
+                    aria-label="Transcript"
+                    className="w-full px-3 py-2 rounded-xl border text-sm"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  />
+                </Tooltip>
+                <div className="flex flex-wrap gap-2">
+                  <Tooltip text="Copy the transcript above (including your edits) to the clipboard.">
+                    <button type="button" onClick={copyTranscript} className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Copy text</button>
+                  </Tooltip>
+                  <Tooltip text="Save the transcript above as a plain text file, named after your audio file.">
+                    <button type="button" onClick={() => downloadTranscript('txt')} className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Download .txt</button>
+                  </Tooltip>
+                  {trSrt && (
+                    <Tooltip text="Save the timestamped version as a subtitle (.srt) file. Use it in Caption studio to burn captions onto a video. It is the original transcript; edits made in the box above are not included.">
+                      <button type="button" onClick={() => downloadTranscript('srt')} className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Download .srt (timestamps)</button>
+                    </Tooltip>
+                  )}
+                </div>
+              </div>
             )}
           </section>
         )}
