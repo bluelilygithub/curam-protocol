@@ -95,9 +95,9 @@ async function resolveModelVersion(model, token, { pinned = '', envName = 'MUSIC
   return id;
 }
 
-// Create a Replicate prediction for `model`, wait for it, and download the audio it returns.
-// Shared by music generation and text-to-speech (`label` only shapes error messages).
-async function runReplicatePrediction({ model, token, input, label, pinned = '', envName }) {
+// Create a Replicate prediction for `model` and wait for it. Returns the model's raw `output` (whatever shape it has).
+// Shared by music generation, text-to-speech and voice isolation (`label` only shapes error messages).
+async function runReplicateRaw({ model, token, input, label, pinned = '', envName, timeoutMs = POLL_TIMEOUT_MS }) {
   const version = await resolveModelVersion(model, token, { pinned, envName, label });
   const create = await fetch('https://api.replicate.com/v1/predictions', {
     method: 'POST',
@@ -116,7 +116,7 @@ async function runReplicatePrediction({ model, token, input, label, pinned = '',
     throw new Error('Replicate did not return a prediction to poll');
   }
 
-  const deadline = Date.now() + POLL_TIMEOUT_MS;
+  const deadline = Date.now() + timeoutMs;
   while (pred.status !== 'succeeded') {
     if (pred.status === 'failed' || pred.status === 'canceled') {
       throw new Error(String(pred.error || `${label} generation ${pred.status}`).slice(0, 300));
@@ -128,7 +128,12 @@ async function runReplicatePrediction({ model, token, input, label, pinned = '',
     if (!res.ok) throw new Error(next?.detail || `Replicate status failed (${res.status})`);
     pred = next;
   }
-  const out = pred.output;
+  return pred.output;
+}
+
+// ...and download the single audio file it returns (music, speech).
+async function runReplicatePrediction(opts) {
+  const out = await runReplicateRaw(opts);
   const url = typeof out === 'string' ? out : (Array.isArray(out) ? out[0] : out?.url);
   if (!url) throw new Error('Replicate returned no audio');
   return downloadAudio(url);
@@ -213,4 +218,4 @@ function getMusicProvider() {
   return cached;
 }
 
-module.exports = { runReplicatePrediction, getMusicProvider, createReplicateProvider, createFakeProvider, isReplicateAudioUrl, _clearVersionCache: () => versionCache.clear() };
+module.exports = { runReplicateRaw, downloadAudio, runReplicatePrediction, getMusicProvider, createReplicateProvider, createFakeProvider, isReplicateAudioUrl, _clearVersionCache: () => versionCache.clear() };

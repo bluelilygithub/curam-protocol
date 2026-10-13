@@ -42,12 +42,14 @@ const {
   withTempDir,
   readOutputFile,
   execFileAsync,
+  FFMPEG,
   normalizeAudioLoudness,
   videoToGif,
   buildSlideshow,
 } = require('../services/videoFfmpeg');
 const { normalizeSrt, srtToPlainText, prepareCaptionSrt, parseSrtLoose } = require('../services/srtUtils');
 const { timeScript, hasTimeMarkers } = require('../services/scriptTiming');
+const voiceIsolation = require('../services/voiceIsolation');
 const { fetchLicensedVideo } = require('../services/videoUrlIntake');
 const { ffmpegRoute } = require('../middleware/ffmpegRoute');
 const { planSlideshow, normalizeSlideshowPlan } = require('../services/videoSlideshowPlan');
@@ -271,6 +273,8 @@ router.get('/status', async (req, res) => {
     maxUploadMb: Math.round(MAX_VIDEO_BYTES / (1024 * 1024)),
     generate,
     transcribe,
+    // AI voice isolation is billed per run on Replicate and needs the token; the quick (ffmpeg) option always works.
+    isolateVoice: { ai: Boolean(process.env.REPLICATE_API_TOKEN) },
   });
 });
 
@@ -1045,6 +1049,77 @@ router.post('/time-script', upload.single('media'), ffmpegRoute('time-script', a
 
   res.json(out);
 }));
+
+// "Isolate voice": the spoken words out of a recording that has background music. 'ai' = Demucs source separation on Replicate
+// (billed per run, so rate-limited like the other AI routes); 'quick' = ffmpeg filters only (free, reduces music but cannot remove it).
+// Results are kept for 30 minutes so the voice and music files can be fetched separately without running (and paying) twice.
+router.post('/isolate-voice', aiLimiter, upload.single('audio'), ffmpegRoute('isolate-voice', async (req, res) => {
+  if (!req.file?.buffer?.length) return res.status(400).json({ error: 'Choose an audio file first.' });
+  const mode = req.body?.mode === 'quick' ? 'quick' : 'ai';
+  if (mode === 'ai' && !process.env.REPLICATE_API_TOKEN) {
+    return res.status(503).json({ error: 'The AI option is not set up on this server (REPLICATE_API_TOKEN is missing). Use the quick option instead.' });
+  }
+  const ext = path.extname(String(req.file.originalname || '')).toLowerCase();
+  const inExt = AUDIO_EXTS.has(ext) ? ext : '.mp3';
+  const base = path.basename(String(req.file.originalname || 'audio'), path.extname(String(req.file.originalname || ''))).replace(/[^\w .-]+/g, '_').slice(0, 80) || 'audio';
+
+  const files = await withTempDir(async (dir) => {
+    const inputPath = path.join(dir, `audio-in${inExt}`);
+    await fs.writeFile(inputPath, req.file.buffer);
+
+    if (mode === 'quick') {
+      const outPath = path.join(dir, 'voice-quick.mp3');
+      await voiceIsolation.isolateQuick(inputPath, outPath);
+      return { voice: { buffer: await fs.readFile(outPath), ext: '.mp3', mime: 'audio/mpeg' } };
+    }
+
+    // Send the original when it is a sensible size, otherwise a good-quality stereo MP3 of it (still plenty for separation).
+    let audio = req.file.buffer;
+    let mime = req.file.mimetype && req.file.mimetype.startsWith('audio/') ? req.file.mimetype : 'audio/mpeg';
+    if (audio.length > 25 * 1024 * 1024) {
+      const smallPath = path.join(dir, 'audio-small.mp3');
+      await execFileAsync(FFMPEG, ['-y', '-i', inputPath, '-vn', '-ac', '2', '-ar', '44100', '-c:a', 'libmp3lame', '-b:a', '128k', smallPath], 600000);
+      audio = await fs.readFile(smallPath);
+      mime = 'audio/mpeg';
+    }
+    let out;
+    try {
+      out = await voiceIsolation.isolateWithModel({ audio, mime });
+    } catch (err) {
+      const e = new Error(err.message);
+      e.status = 502;
+      throw e;
+    }
+    return {
+      voice: { buffer: out.voice, ext: out.ext, mime: out.mime },
+      ...(out.music ? { music: { buffer: out.music, ext: out.ext, mime: out.mime } } : {}),
+    };
+  });
+
+  const id = crypto.randomBytes(8).toString('hex');
+  const named = {};
+  for (const [stem, f] of Object.entries(files)) named[stem] = { ...f, fileName: `${base}-${stem}${f.ext}` };
+  voiceIsolation.remember(id, req.user.id, named);
+  res.json({
+    id,
+    mode,
+    voice: { fileName: named.voice.fileName, bytes: named.voice.buffer.length },
+    music: named.music ? { fileName: named.music.fileName, bytes: named.music.buffer.length } : null,
+  });
+}));
+
+router.get('/isolate-voice/:id/:stem', async (req, res) => {
+  try {
+    const stem = req.params.stem === 'music' ? 'music' : 'voice';
+    const entry = voiceIsolation.recall(req.params.id, req.user.id);
+    const file = entry?.files?.[stem];
+    if (!file) return res.status(404).json({ error: 'That file has expired. Run it again.' });
+    sendVideoBuffer(res, file.buffer, file.fileName, file.mime);
+  } catch (err) {
+    getLogger().error({ err }, '[videos/isolate-voice/file]');
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // "Trim audio": keep a part of a recording (an extract), or cut a part out of it. Same file type with no re-encode by default.
 router.post('/trim-audio', upload.single('audio'), ffmpegRoute('trim-audio', async (req, res) => {

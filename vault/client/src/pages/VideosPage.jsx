@@ -257,6 +257,16 @@ const TOOL_HELP = {
       'Useful for reusing a voiceover or music track elsewhere',
     ],
   },
+  'isolate-voice': {
+    title: 'Isolate voice',
+    what: 'Take the spoken words out of a recording that has background music, and get a voice-only audio file.',
+    features: [
+      'Best quality (AI): separates the voice from the music, and gives you the music-only file too. Billed per run on the server\'s Replicate account',
+      'Quick filter (free): cleans up the speech range and reduces steady noise. It lowers background music but cannot remove it',
+      'Works best on speech over instrumental music; singing or lyrics tend to leak into the voice',
+      'Send the result straight to Audio to transcript or Trim audio',
+    ],
+  },
   'trim-audio': {
     title: 'Trim audio',
     what: 'Cut an MP3 (or other audio file) down to the part you want, or cut an unwanted part out of it.',
@@ -436,6 +446,7 @@ const TOOL_GROUPS = [
     tools: [
       { id: 'convert', label: 'Convert / compress', desc: 'Re-encode MP4, optional resize' },
       { id: 'extract-audio', label: 'Extract audio', desc: 'Export MP3 or WAV' },
+      { id: 'isolate-voice', label: 'Isolate voice', desc: 'Pull the speech out from under background music' },
       { id: 'transcribe-audio', label: 'Audio → transcript', desc: 'MP3 or other audio in, editable text out' },
       { id: 'audio', label: 'Mute / replace audio', desc: 'Strip soundtrack or swap in a new track' },
       { id: 'normalize', label: 'Normalize audio', desc: 'One-click loudness consistency fix' },
@@ -1180,6 +1191,18 @@ export default function VideosPage() {
   const [exportItems, setExportItems] = useState([]);
   const [exportId, setExportId] = useState(null);
 
+  // Isolate voice
+  const [ivFile, setIvFile] = useState(null);
+  const [ivMode, setIvMode] = useState('ai');
+  const [ivResult, setIvResult] = useState(null); // { id, voice: {fileName, bytes}, music: {...}|null, mode }
+  const [ivVoiceUrl, setIvVoiceUrl] = useState('');
+  const [ivMusicUrl, setIvMusicUrl] = useState('');
+  const ivInputRef = useRef(null);
+  const ivFileUrl = useMemo(() => (ivFile ? URL.createObjectURL(ivFile) : ''), [ivFile]);
+  useEffect(() => () => { if (ivFileUrl) URL.revokeObjectURL(ivFileUrl); }, [ivFileUrl]);
+  useEffect(() => () => { if (ivVoiceUrl) URL.revokeObjectURL(ivVoiceUrl); }, [ivVoiceUrl]);
+  useEffect(() => () => { if (ivMusicUrl) URL.revokeObjectURL(ivMusicUrl); }, [ivMusicUrl]);
+
   // Trim audio
   const [taFile, setTaFile] = useState(null);
   const [taStart, setTaStart] = useState('0:00');
@@ -1847,6 +1870,52 @@ export default function VideosPage() {
     a.download = `${base}.${kind === 'srt' ? 'srt' : 'txt'}`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const handleIsolateVoice = async () => {
+    if (!ivFile) { addToast('Choose an audio file first', 'error'); return; }
+    const mode = status?.isolateVoice?.ai ? ivMode : 'quick'; // the AI option only exists when the server has the key
+    startProcessing(
+      mode === 'ai' ? 'Separating the voice from the music…' : 'Cleaning up the voice…',
+      mode === 'ai' ? 'This can take a minute or two for a long recording. Please keep this page open.' : 'This takes a few seconds.',
+    );
+    try {
+      const fd = new FormData();
+      fd.append('audio', ivFile);
+      fd.append('mode', mode);
+      const res = await api.postForm('/api/videos/isolate-voice', fd);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not isolate the voice');
+      const fetchBlobUrl = async (stem) => {
+        const r = await api.get(`/api/videos/isolate-voice/${data.id}/${stem}`);
+        if (!r.ok) throw new Error('Could not load the result');
+        return URL.createObjectURL(await r.blob());
+      };
+      const voiceUrl = await fetchBlobUrl('voice');
+      const musicUrl = data.music ? await fetchBlobUrl('music').catch(() => '') : '';
+      setIvVoiceUrl(voiceUrl);
+      setIvMusicUrl(musicUrl);
+      setIvResult(data);
+      addToast('Voice ready', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      stopProcessing();
+    }
+  };
+
+  // Hand the cleaned voice to another audio tool as its input file.
+  const sendVoiceTo = async (toolId) => {
+    if (!ivVoiceUrl || !ivResult) return;
+    const blob = await (await fetch(ivVoiceUrl)).blob();
+    const file = new File([blob], ivResult.voice.fileName, { type: blob.type });
+    if (toolId === 'transcribe-audio') {
+      setTrAudioFile(file); setTrText(''); setTrSrt(''); setTrNote('');
+      setTool('transcribe-audio'); setOpenGroup('optimise');
+    } else {
+      setTaFile(file); setTaDuration(0); setTaStart('0:00'); setTaEnd('');
+      setTool('trim-audio'); setOpenGroup('transform');
+    }
   };
 
   const handleTrimAudio = async () => {
@@ -2940,7 +3009,7 @@ export default function VideosPage() {
           </div>
         )}
 
-        {tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'caption-studio' && captionLibraryId) && !(tool === 'clip' && isClipUrlMode) && (
+        {tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'caption-studio' && captionLibraryId) && !(tool === 'clip' && isClipUrlMode) && (
           <VideoUpload
             file={sourceFile}
             onFile={(f) => { setSourceFile(f); if (f && tool === 'caption-studio') setCaptionLibraryId(''); }}
@@ -2949,7 +3018,7 @@ export default function VideosPage() {
           />
         )}
 
-        {previewUrl && tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'clip' && isClipUrlMode) && (
+        {previewUrl && tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'clip' && isClipUrlMode) && (
           <>
             <video
               ref={tool === 'clip' ? clipVideoRef : undefined}
@@ -3049,6 +3118,119 @@ export default function VideosPage() {
             </Tooltip>
             {resultForTool === 'convert' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
+          </section>
+        )}
+
+        {tool === 'isolate-voice' && (
+          <section className="space-y-3">
+            <ToolHeader id="isolate-voice" label="Isolate voice" onHelp={setHelpTool} getIcon={getIcon} />
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Choose a recording with background music and get the spoken words back on their own. Your original is not changed.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Tooltip text="Choose an audio file: MP3, M4A, WAV, OGG, FLAC and similar.">
+                <button
+                  type="button"
+                  onClick={() => ivInputRef.current?.click()}
+                  className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  {ivFile ? 'Change file' : 'Choose audio file'}
+                </button>
+              </Tooltip>
+              {ivFile && (
+                <span className="text-xs truncate max-w-xs" style={{ color: 'var(--color-muted)' }}>
+                  {ivFile.name} · {formatBytes(ivFile.size)}
+                </span>
+              )}
+              <input
+                ref={ivInputRef}
+                type="file"
+                accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac,.aac,.opus"
+                className="hidden"
+                onChange={(e) => { setIvFile(e.target.files?.[0] || null); setIvResult(null); setIvVoiceUrl(''); setIvMusicUrl(''); e.target.value = ''; }}
+              />
+            </div>
+            {ivFile && (
+              <Tooltip text="Play the recording to check it is the right file.">
+                <audio src={ivFileUrl} controls className="w-full" />
+              </Tooltip>
+            )}
+            <fieldset className="space-y-1">
+              <legend className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>How</legend>
+              <Tooltip text={status?.isolateVoice?.ai
+                ? 'An AI model splits the recording into the voice and the music. Best result, and you also get the music-only file. It is billed per run on the server\'s Replicate account (usually a few cents) and can take a minute or two.'
+                : 'This option is not set up on this server (it needs the Replicate key). Use the quick filter instead.'}>
+                <label className="flex items-start gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)', opacity: status?.isolateVoice?.ai ? 1 : 0.5 }}>
+                  <input type="radio" name="ivMode" checked={ivMode === 'ai'} disabled={!status?.isolateVoice?.ai} onChange={() => setIvMode('ai')} className="mt-0.5" />
+                  <span>
+                    Best quality (AI)
+                    <span className="block" style={{ color: 'var(--color-muted)' }}>Separates the voice from the music. Small cost per run; takes a minute or two.</span>
+                  </span>
+                </label>
+              </Tooltip>
+              <Tooltip text="Free and fast. It cuts rumble and hiss and lowers steady background noise, so the voice stands out more. It cannot remove music, only turn it down a little.">
+                <label className="flex items-start gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                  <input type="radio" name="ivMode" checked={ivMode === 'quick' || !status?.isolateVoice?.ai} onChange={() => setIvMode('quick')} className="mt-0.5" />
+                  <span>
+                    Quick filter (free)
+                    <span className="block" style={{ color: 'var(--color-muted)' }}>Reduces the music but cannot remove it. Good for a light touch-up.</span>
+                  </span>
+                </label>
+              </Tooltip>
+            </fieldset>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Works best on speech over instrumental music. If the music has singing, some of it will leak into the voice.
+            </p>
+            <Tooltip text="Take the voice out of the recording. Your original file is not changed.">
+              <button
+                type="button"
+                onClick={handleIsolateVoice}
+                disabled={!ivFile || !ffmpegOk}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                {ivMode === 'ai' && status?.isolateVoice?.ai ? 'Separate voice from music' : 'Clean up voice'}
+              </button>
+            </Tooltip>
+            {ivResult && ivVoiceUrl && (
+              <div className="space-y-3 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Result</p>
+                <div className="space-y-1">
+                  <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Voice</p>
+                  <Tooltip text="Listen to the voice-only file to check it before you use it.">
+                    <audio src={ivVoiceUrl} controls className="w-full" />
+                  </Tooltip>
+                </div>
+                {ivMusicUrl && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Music only</p>
+                    <Tooltip text="The background music with the voice taken out, in case you want to keep or reuse it.">
+                      <audio src={ivMusicUrl} controls className="w-full" />
+                    </Tooltip>
+                  </div>
+                )}
+                {ivResult.mode === 'quick' && (
+                  <p className="text-xs" style={{ color: '#b45309' }}>This is the quick filter: some music will still be audible. For a cleaner voice use Best quality (AI).</p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <Tooltip text="Save the voice-only audio to your computer.">
+                    <a href={ivVoiceUrl} download={ivResult.voice.fileName} className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Download voice</a>
+                  </Tooltip>
+                  {ivMusicUrl && (
+                    <Tooltip text="Save the music-only audio to your computer.">
+                      <a href={ivMusicUrl} download={ivResult.music.fileName} className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Download music</a>
+                    </Tooltip>
+                  )}
+                  <Tooltip text="Open Audio to transcript with this voice file already chosen, so you can write out what is said.">
+                    <button type="button" onClick={() => sendVoiceTo('transcribe-audio')} className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Transcribe this →</button>
+                  </Tooltip>
+                  <Tooltip text="Open Trim audio with this voice file already chosen, so you can keep or cut out a part of it.">
+                    <button type="button" onClick={() => sendVoiceTo('trim-audio')} className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Trim this →</button>
+                  </Tooltip>
+                </div>
+              </div>
             )}
           </section>
         )}
