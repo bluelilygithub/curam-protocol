@@ -16,6 +16,7 @@ import LastFramePicker from './videos/LastFramePicker';
 import TakesGrid from './videos/TakesGrid';
 import { VoiceInput, VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 import { VideoVoiceContext, VoiceCommandBar } from './videos/VoiceCommandBar';
+import { applyEditedText } from './videos/transcriptSrt.mjs';
 
 const VIDEO_GOOGLE_FONTS = [
   'Roboto',
@@ -1753,8 +1754,25 @@ export default function VideosPage() {
     }
   };
 
+  // The SRT with the corrections made in the text box carried in (timings kept). applied=false = line count changed.
+  const transcriptSrtWithEdits = () => applyEditedText(trSrt, trText);
+
+  const useTranscriptAsCaptions = () => {
+    const { srt, applied } = transcriptSrtWithEdits();
+    setSrtText(srt);
+    setCaptionLibraryId('');
+    setTool('caption-studio');
+    setOpenGroup('compose');
+    addToast(
+      applied
+        ? 'Transcript loaded as captions. Choose your video, then burn them in.'
+        : 'Loaded as captions, but your edits were not included because lines were added or removed. Edit the captions box here instead.',
+      applied ? 'success' : 'info',
+    );
+  };
+
   const downloadTranscript = (kind) => {
-    const body = kind === 'srt' ? trSrt : trText;
+    const body = kind === 'srt' ? transcriptSrtWithEdits().srt : trText;
     if (!body) return;
     const base = (trAudioFile?.name || 'transcript').replace(/\.[^.]+$/, '');
     const url = URL.createObjectURL(new Blob([body], { type: 'text/plain;charset=utf-8' }));
@@ -2934,7 +2952,7 @@ export default function VideosPage() {
               <legend className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Result</legend>
               {[
                 ['text', 'Plain transcript', 'Just the words, in paragraphs. Best for reading, notes and articles.'],
-                ['srt', 'With timestamps (SRT)', 'Short lines with start and end times, ready to use as subtitles in Caption studio. A plain-text copy is shown too.'],
+                ['srt', 'With timestamps (SRT)', 'Short lines with start and end times. Needed if you want the words shown along the bottom of a video (Caption studio). A plain-text copy is shown too.'],
               ].map(([val, label, tip]) => (
                 <Tooltip key={val} text={tip}>
                   <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
@@ -2958,6 +2976,16 @@ export default function VideosPage() {
             {(trText || trSrt) && (
               <div className="space-y-2">
                 {trNote && <p className="text-xs" style={{ color: '#b45309' }}>{trNote}</p>}
+                {!trSrt && (
+                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                    Want this as captions on a video? Choose &quot;With timestamps (SRT)&quot; above and transcribe again.
+                  </p>
+                )}
+                {trSrt && (
+                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                    Fix any words below, one line per caption. Keep the same number of lines so each caption keeps its timing.
+                  </p>
+                )}
                 <p className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Transcript (you can edit it)</p>
                 <Tooltip text="The written-out words. Click in and fix any mistakes before you copy or download; your edits are what get copied or saved as .txt.">
                   <textarea
@@ -2977,7 +3005,12 @@ export default function VideosPage() {
                     <button type="button" onClick={() => downloadTranscript('txt')} className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Download .txt</button>
                   </Tooltip>
                   {trSrt && (
-                    <Tooltip text="Save the timestamped version as a subtitle (.srt) file. Use it in Caption studio to burn captions onto a video. It is the original transcript; edits made in the box above are not included.">
+                    <Tooltip text="Put this transcript onto a video as captions along the bottom. Opens Caption studio with the captions filled in (including your corrections); you then choose the video and burn them in.">
+                      <button type="button" onClick={useTranscriptAsCaptions} className="px-3 py-2 rounded-xl text-xs font-medium text-white transition-opacity hover:opacity-80" style={{ background: 'var(--color-primary)' }}>Add as captions on a video →</button>
+                    </Tooltip>
+                  )}
+                  {trSrt && (
+                    <Tooltip text="Save the timestamped version as a subtitle (.srt) file, including your corrections, to use in any video editor or player.">
                       <button type="button" onClick={() => downloadTranscript('srt')} className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Download .srt (timestamps)</button>
                     </Tooltip>
                   )}
