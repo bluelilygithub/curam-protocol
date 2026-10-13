@@ -5119,20 +5119,33 @@ router.use('/reports', require('./financeReports')({ gstPaidForRange, disposalSa
 // existing receipt storage instead of inventing a second file location.
 // Run one of this router's reports in-process for a user and get its JSON (used by the FY pack so it
 // can't drift from what the Reports tab shows). Mirrors an authenticated GET.
+// The request/response are real EventEmitters: in production Sentry's tracing wraps every Express route and
+// calls req.on / res.once('finish'), which a plain object stub doesn't have ("res.once is not a function"
+// made every report in the pack fail on the live server while passing in tests and from a shell).
 function runReport(reportPath, userId, query = {}) {
   return new Promise((resolve, reject) => {
+    const { EventEmitter } = require('events');
     const qs = new URLSearchParams(query).toString();
     const url = `/reports/${reportPath}${qs ? `?${qs}` : ''}`;
-    let status = 200;
-    const req = { method: 'GET', url, originalUrl: url, baseUrl: '', query: { ...query }, params: {}, headers: {}, body: {}, user: { id: userId } };
-    const res = {
-      headersSent: false, statusCode: 200,
-      setHeader() {}, getHeader() {}, removeHeader() {}, end() {},
-      status(c) { status = c; return this; },
-      json(o) { this.headersSent = true; if (status >= 400) reject(new Error((o && o.error) || `${reportPath} failed (${status})`)); else resolve(o); return this; },
-      send() { this.headersSent = true; reject(new Error(`${reportPath} did not return JSON`)); return this; },
-    };
-    router.handle(req, res, (err) => reject(err || new Error(`Unknown report: ${reportPath}`)));
+    const req = Object.assign(new EventEmitter(), {
+      method: 'GET', url, originalUrl: url, baseUrl: '', query: { ...query }, params: {}, headers: {}, body: {}, user: { id: userId },
+      socket: new EventEmitter(), connection: undefined, get() { return undefined; }, header() { return undefined; },
+    });
+    class ReportResponse extends EventEmitter {
+      constructor() { super(); this.headersSent = false; this.finished = false; this.writableEnded = false; this.statusCode = 200; this.locals = {}; this.req = req; }
+      setHeader() { return this; } getHeader() { return undefined; } getHeaders() { return {}; } removeHeader() {} set() { return this; } type() { return this; }
+      writeHead(c) { this.statusCode = c; return this; }
+      status(c) { this.statusCode = c; return this; }
+      finish() { this.headersSent = this.finished = this.writableEnded = true; this.emit('finish'); this.emit('close'); }
+      json(o) {
+        this.finish();
+        if (this.statusCode >= 400) reject(new Error((o && o.error) || `${reportPath} failed (${this.statusCode})`)); else resolve(o);
+        return this;
+      }
+      send() { this.finish(); reject(new Error(`${reportPath} did not return JSON`)); return this; }
+      end() { this.finish(); return this; }
+    }
+    router.handle(req, new ReportResponse(), (err) => reject(err || new Error(`Unknown report: ${reportPath}`)));
   });
 }
 router.runReport = runReport;

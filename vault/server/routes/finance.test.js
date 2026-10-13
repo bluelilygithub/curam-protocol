@@ -864,6 +864,23 @@ test('FY pack: preview, PDF, Excel and zip are produced from the same reports an
   await call('DELETE', `/api/finance/documents/${up.json.documents[0].id}?confirm=1`);
 });
 
+test('FY pack still works when route-level tracing (Sentry-style) wraps every handler', async () => {
+  // Sentry's express tracing calls req.on / res.once on each layer. A plain-object request stub made every
+  // report fail on the live server ("res.once is not a function"). Reproduce by putting such a layer first.
+  const probe = (req, res, next) => { req.on('x', () => {}); res.once('finish', () => {}); next(); };
+  router.use('/reports', probe);
+  const layer = router.stack.pop();
+  router.stack.unshift(layer);
+  try {
+    const pv = await call('GET', '/api/finance/pack/preview?fy=2025-26');
+    assert.strictEqual(pv.status, 200, JSON.stringify(pv.json));
+    const failed = pv.json.reports.filter((r2) => r2.error);
+    assert.deepStrictEqual(failed, [], JSON.stringify(failed.slice(0, 2)));
+  } finally {
+    router.stack.splice(router.stack.indexOf(layer), 1);
+  }
+});
+
 // ---------------------------------------------------------------- audit trail
 test('audit log: triggers record create, field-level change and delete; log is append-only', async () => {
   const e = await call('POST', '/api/finance/expenses', { date: '2026-03-12', description: 'Audit me', amount: 50, gstIncluded: false });
