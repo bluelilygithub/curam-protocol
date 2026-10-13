@@ -1042,6 +1042,39 @@ async function burnSubtitles(inputPath, srtPath, outputPath, style = {}, workDir
   await encodeWithVideoFilter(inputPath, outputPath, vf);
 }
 
+/** Dimensions for the audio->video background, by aspect. Reuses the slideshow sizes. */
+function audioVideoSize(aspect) {
+  return SLIDESHOW_DIMS[aspect] || SLIDESHOW_DIMS['16:9'];
+}
+
+function safeHexColor(value, fallback) {
+  const v = String(value || '').trim();
+  return /^#[0-9a-f]{6}$/i.test(v) ? v : fallback;
+}
+
+/**
+ * An audio file + its subtitles -> an MP4: a flat-colour picture the length of the audio with the words burned along the
+ * bottom (or wherever `style.position` says). Step 1 makes the plain coloured video carrying the audio; step 2 reuses
+ * burnSubtitles, so the captions look exactly like Caption studio's.
+ */
+async function audioToCaptionVideo(audioPath, srtPath, outputPath, { aspect = '16:9', canvasColor = '#111111', style = {} } = {}, workDir) {
+  const [w, h] = audioVideoSize(aspect);
+  const hex = safeHexColor(canvasColor, '#111111').slice(1);
+  const basePath = path.join(workDir, 'audio_base.mp4');
+  await execFileAsync(FFMPEG, [
+    '-y',
+    '-f', 'lavfi', '-i', `color=c=0x${hex}:s=${w}x${h}:r=15`,
+    '-i', audioPath,
+    '-map', '0:v:0', '-map', '1:a:0',
+    '-shortest',
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-tune', 'stillimage', '-preset', 'veryfast', '-crf', '18',
+    '-c:a', 'aac', '-b:a', '192k',
+    '-movflags', '+faststart',
+    basePath,
+  ], 900000);
+  await burnSubtitles(basePath, srtPath, outputPath, { position: 'bottom-center', ...style }, workDir);
+}
+
 async function extractWav16k(inputPath, wavPath) {
   await execFileAsync(FFMPEG, [
     '-y', '-i', inputPath,
@@ -1086,6 +1119,9 @@ module.exports = {
   extractFrames,
   annotateVideo,
   burnSubtitles,
+  audioToCaptionVideo,
+  audioVideoSize,
+  safeHexColor,
   extractWav16k,
   withTempDir,
   readOutputFile,

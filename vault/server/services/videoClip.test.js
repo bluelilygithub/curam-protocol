@@ -46,4 +46,12 @@ const sampleSrt = [
 ].join('\n');
 assert.strictEqual(srtToPlainText(sampleSrt), ['Hello there.', 'Second line.'].join('\n'));
 assert.strictEqual(srtToPlainText(''), '');
+// Audio -> video with the transcript on it: sizes and colour validation (the ffmpeg render itself needs ffmpeg).
+const { audioVideoSize, safeHexColor } = require('./videoFfmpeg');
+assert.deepStrictEqual(audioVideoSize('9:16'), [720, 1280]);
+assert.deepStrictEqual(audioVideoSize('16:9'), [1280, 720]);
+assert.deepStrictEqual(audioVideoSize('weird'), [1280, 720], 'unknown aspect falls back to landscape');
+assert.strictEqual(safeHexColor('#AbCdEf', '#111111'), '#AbCdEf');
+assert.strictEqual(safeHexColor('red; rm -rf', '#111111'), '#111111', 'anything but #RRGGBB is replaced, never passed to ffmpeg');
+assert.strictEqual(safeHexColor(undefined, '#111111'), '#111111');
 console.log('videoClip tests passed');

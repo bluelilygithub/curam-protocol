@@ -261,6 +261,7 @@ const TOOL_HELP = {
     features: [
       'Choose plain text, or text with timestamps (SRT subtitle file)',
       'The result appears in a box you can correct before copying or saving',
+      'With timestamps: send the captions to Caption studio, or make a video from the audio with the words along the bottom (choose shape, screen colour, font, size, text colour and text background)',
       'Long recordings are shrunk automatically; up to about 75 minutes at once',
       'Speech only: music and background noise may be skipped or misheard',
     ],
@@ -1169,6 +1170,8 @@ export default function VideosPage() {
   const [trSrt, setTrSrt] = useState('');
   const [trNote, setTrNote] = useState('');
   const trInputRef = useRef(null);
+  const [avAspect, setAvAspect] = useState('16:9');
+  const [avCanvasColor, setAvCanvasColor] = useState('#111111');
   const trAudioUrl = useMemo(() => (trAudioFile ? URL.createObjectURL(trAudioFile) : ''), [trAudioFile]);
   useEffect(() => () => { if (trAudioUrl) URL.revokeObjectURL(trAudioUrl); }, [trAudioUrl]);
 
@@ -1781,6 +1784,25 @@ export default function VideosPage() {
     a.download = `${base}.${kind === 'srt' ? 'srt' : 'txt'}`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const makeTranscriptVideo = async () => {
+    if (!trAudioFile || !trSrt) { addToast('Transcribe with timestamps first', 'error'); return; }
+    const { srt } = transcriptSrtWithEdits();
+    const fd = new FormData();
+    fd.append('audio', trAudioFile);
+    fd.append('srtText', srt);
+    fd.append('aspect', avAspect);
+    fd.append('canvasColor', avCanvasColor);
+    fd.append('fontFamily', textFontFamily);
+    fd.append('fontSize', String(textFontSize));
+    fd.append('fontColor', textFontColor);
+    fd.append('fontWeight', textFontWeight);
+    fd.append('backgroundColor', textBackgroundColor);
+    fd.append('backgroundTransparent', String(textBackgroundTransparent));
+    fd.append('position', 'bottom-center');
+    await runFormVideo('audio-to-video', fd, { label: 'Making the video…', resultFilename: 'transcript-video.mp4', forTool: 'transcribe-audio' })
+      .catch(() => {});
   };
 
   const copyTranscript = async () => {
@@ -3005,7 +3027,7 @@ export default function VideosPage() {
                     <button type="button" onClick={() => downloadTranscript('txt')} className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Download .txt</button>
                   </Tooltip>
                   {trSrt && (
-                    <Tooltip text="Put this transcript onto a video as captions along the bottom. Opens Caption studio with the captions filled in (including your corrections); you then choose the video and burn them in.">
+                    <Tooltip text="Already have a video? Opens Caption studio with these captions (including your corrections) so you can choose it and burn them along the bottom. No video? Use Make a video below instead.">
                       <button type="button" onClick={useTranscriptAsCaptions} className="px-3 py-2 rounded-xl text-xs font-medium text-white transition-opacity hover:opacity-80" style={{ background: 'var(--color-primary)' }}>Add as captions on a video →</button>
                     </Tooltip>
                   )}
@@ -3015,6 +3037,58 @@ export default function VideosPage() {
                     </Tooltip>
                   )}
                 </div>
+                {trSrt && (
+                  <div className="space-y-3 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                    <div>
+                      <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Make a video with the transcript on it</p>
+                      <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                        No video? This makes one from your audio: a plain coloured screen with the words shown along the bottom as it plays. Your corrections above are included.
+                      </p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="block space-y-1">
+                        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Video shape</span>
+                        <Tooltip text="Landscape for YouTube and screens, portrait for Reels/TikTok/Shorts, square or 4:5 for feeds.">
+                          <select value={avAspect} onChange={(e) => setAvAspect(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                            <option value="16:9">Landscape 16:9</option>
+                            <option value="9:16">Portrait 9:16</option>
+                            <option value="1:1">Square 1:1</option>
+                            <option value="4:5">Portrait 4:5</option>
+                          </select>
+                        </Tooltip>
+                      </label>
+                      <label className="block space-y-1">
+                        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Screen colour</span>
+                        <Tooltip text="The colour of the whole video screen behind the words. Pick something that contrasts with your text colour.">
+                          <input type="color" value={avCanvasColor} onChange={(e) => setAvCanvasColor(e.target.value)} className="w-full h-9 rounded-xl border cursor-pointer" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }} />
+                        </Tooltip>
+                      </label>
+                    </div>
+                    <p className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>The words</p>
+                    <TextStyleFields
+                      fontFamily={textFontFamily} setFontFamily={setTextFontFamily}
+                      fontSize={textFontSize} setFontSize={setTextFontSize}
+                      fontColor={textFontColor} setFontColor={setTextFontColor}
+                      fontWeight={textFontWeight} setFontWeight={setTextFontWeight}
+                      backgroundColor={textBackgroundColor} setBackgroundColor={setTextBackgroundColor}
+                      backgroundTransparent={textBackgroundTransparent} setBackgroundTransparent={setTextBackgroundTransparent}
+                    />
+                    <Tooltip text="Build the video: your audio on a coloured screen, with the transcript shown along the bottom in sync. Long recordings take a while.">
+                      <button
+                        type="button"
+                        onClick={makeTranscriptVideo}
+                        disabled={!ffmpegOk}
+                        className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                        style={{ background: 'var(--color-primary)' }}
+                      >
+                        Make video
+                      </button>
+                    </Tooltip>
+                    {resultForTool === 'transcribe-audio' && (
+                      <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </section>

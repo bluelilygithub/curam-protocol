@@ -35,6 +35,7 @@ const {
   extractFrames,
   annotateVideo,
   burnSubtitles,
+  audioToCaptionVideo,
   extractWav16k,
   withTempDir,
   readOutputFile,
@@ -1007,6 +1008,30 @@ router.post('/transcribe-audio', upload.single('audio'), ffmpegRoute('transcribe
   });
 
   res.json(out);
+}));
+
+// "Audio -> video with the transcript on it": a flat-colour video the length of the audio, captions burned along the
+// bottom in the chosen font/size/colour/background. Same caption look as Caption studio (shared captionStyleFromBody).
+router.post('/audio-to-video', upload.single('audio'), ffmpegRoute('audio-to-video', async (req, res) => {
+  if (!req.file?.buffer?.length) return res.status(400).json({ error: 'Choose an audio file first' });
+  const srtText = normalizeSrt(String(req.body?.srtText || ''));
+  if (!srtText.trim()) return res.status(400).json({ error: 'There are no captions to show. Transcribe with timestamps first.' });
+  const aspect = ['16:9', '9:16', '1:1', '4:5'].includes(req.body?.aspect) ? req.body.aspect : '16:9';
+  const style = captionStyleFromBody(req.body);
+  const ext = path.extname(String(req.file.originalname || '')).toLowerCase();
+  const inExt = AUDIO_EXTS.has(ext) ? ext : '.mp3';
+
+  const buffer = await withTempDir(async (dir) => {
+    const audioPath = path.join(dir, `audio-in${inExt}`);
+    await fs.writeFile(audioPath, req.file.buffer);
+    const srtPath = path.join(dir, 'captions.srt');
+    await fs.writeFile(srtPath, srtText, 'utf8');
+    const outputPath = path.join(dir, 'transcript-video.mp4');
+    await audioToCaptionVideo(audioPath, srtPath, outputPath, { aspect, canvasColor: req.body?.canvasColor, style }, dir);
+    return readOutputFile(outputPath);
+  });
+
+  sendVideoBuffer(res, buffer, 'transcript-video.mp4');
 }));
 
 router.post('/burn-captions', upload.fields([{ name: 'video', maxCount: 1 }, { name: 'srt', maxCount: 1 }]), ffmpegRoute('burn-captions', async (req, res) => {
