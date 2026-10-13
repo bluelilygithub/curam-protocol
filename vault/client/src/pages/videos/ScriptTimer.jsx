@@ -16,9 +16,11 @@ export default function ScriptTimer({ file = null, libraryId = '', onTimed, star
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null); // { kind: 'ok'|'warn'|'error', text }
   const haveMedia = Boolean(file || libraryId);
+  // Times written in the script ([00:00 - 00:12] ...) are used as they are, so no file is needed to read them.
+  const writtenTimes = /\[\s*\d{1,2}:\d{2}/.test(script);
 
   const run = async () => {
-    if (!script.trim() || !haveMedia || busy) return;
+    if (!script.trim() || (!haveMedia && !writtenTimes) || busy) return;
     setBusy(true);
     setResult(null);
     try {
@@ -31,7 +33,7 @@ export default function ScriptTimer({ file = null, libraryId = '', onTimed, star
       if (!res.ok) throw new Error(data.error || 'Could not time the script');
       onTimed?.(data);
       setResult({
-        kind: data.method === 'speech' ? 'ok' : 'warn',
+        kind: data.method === 'speech' || data.method === 'markers' ? 'ok' : 'warn',
         text: `${data.captions} captions made. ${data.note}`,
       });
     } catch (err) {
@@ -59,6 +61,7 @@ export default function ScriptTimer({ file = null, libraryId = '', onTimed, star
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
             Paste or say what is spoken. Start a new line wherever you want a new caption (long lines are split for you).
             Vault listens to the {file || libraryId ? 'recording' : 'file you choose'} and shows each line as it is said.
+            If your script already has times written in it, like [00:12 - 00:30] before a paragraph, those times are used exactly as written and no listening is needed.
           </p>
           <Tooltip text="Your words, as they are spoken. Each new line becomes its own caption, and long lines are split for you. Use the microphone to say it instead of typing.">
             <div>
@@ -75,18 +78,18 @@ export default function ScriptTimer({ file = null, libraryId = '', onTimed, star
             </div>
           </Tooltip>
           <div className="flex flex-wrap items-center gap-3">
-            <Tooltip text={haveMedia ? 'Work out when each line is spoken and fill in the captions. You can check and edit them afterwards.' : 'Choose the video or audio file first, so there is speech to listen to.'}>
+            <Tooltip text={haveMedia || writtenTimes ? 'Work out when each line is shown and fill in the captions. You can check and edit them afterwards.' : 'Choose the video or audio file first, so there is speech to listen to. (Or put times like [00:00 - 00:12] in your script.)'}>
               <button
                 type="button"
                 onClick={run}
-                disabled={!script.trim() || !haveMedia || busy}
+                disabled={!script.trim() || (!haveMedia && !writtenTimes) || busy}
                 className="px-4 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70 disabled:opacity-40"
                 style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
               >
                 {busy ? 'Listening and timing…' : 'Time my script'}
               </button>
             </Tooltip>
-            {!haveMedia && <span className="text-xs" style={{ color: '#b45309' }}>Choose the video or audio first.</span>}
+            {!haveMedia && !writtenTimes && <span className="text-xs" style={{ color: '#b45309' }}>Choose the video or audio first.</span>}
           </div>
           {result && (
             <p

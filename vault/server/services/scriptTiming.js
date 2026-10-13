@@ -51,6 +51,63 @@ function splitScriptIntoCaptions(script, { maxWords = 10 } = {}) {
   return out;
 }
 
+// ---- times written in the script itself: "[00:00 – 00:12] words…" ------------------------------------------------------
+// People often write their script in timed blocks. When it has them those times are used exactly as written; nothing needs
+// listening to. Accepted: [00:12], [00:12 - 00:30], [00:12 – 00:30], [1:14 to 1:30], [0:01:14 – 0:01:30] (mm:ss or hh:mm:ss).
+const T = String.raw`\d{1,2}(?::\d{2}){1,2}`;
+const MARKER_SRC = String.raw`\[\s*(${T})\s*(?:(?:[-–—]+|to|until)\s*(${T})\s*)?\]`;
+
+function clockToMs(t) {
+  const parts = String(t).split(':').map(Number);
+  const sec = parts.reduce((acc, p) => acc * 60 + p, 0);
+  return Math.round(sec * 1000);
+}
+
+function hasTimeMarkers(script) {
+  return new RegExp(MARKER_SRC, 'i').test(String(script || ''));
+}
+
+/** @returns {Array<{startMs:number, endMs:number|null, text:string}>} blocks in the order written (empty if none) */
+function parseTimedScript(script) {
+  const src = String(script || '');
+  const re = new RegExp(MARKER_SRC, 'gi');
+  const marks = [];
+  let m;
+  while ((m = re.exec(src))) {
+    marks.push({ index: m.index, after: re.lastIndex, startMs: clockToMs(m[1]), endMs: m[2] ? clockToMs(m[2]) : null });
+  }
+  if (!marks.length) return [];
+  const blocks = [];
+  const lead = src.slice(0, marks[0].index).trim();
+  if (lead && marks[0].startMs > 0) blocks.push({ startMs: 0, endMs: marks[0].startMs, text: lead });
+  marks.forEach((mk, i) => {
+    const text = src.slice(mk.after, i + 1 < marks.length ? marks[i + 1].index : src.length).trim();
+    if (text) blocks.push({ startMs: mk.startMs, endMs: mk.endMs, text });
+  });
+  return blocks;
+}
+
+/** Captions from time-marked blocks: each block's words are shared out over that block's own time span. */
+function timeFromMarkers(blocks, { durationSec = 0, maxWords = 10 } = {}) {
+  const mediaMs = Math.round((Number(durationSec) || 0) * 1000);
+  const cues = [];
+  let lastEnd = 0;
+  blocks.forEach((b, i) => {
+    const next = blocks[i + 1];
+    let end = b.endMs ?? (next ? next.startMs : (mediaMs || b.startMs + 8000));
+    if (mediaMs && end > mediaMs) end = mediaMs;
+    if (end <= b.startMs) return; // outside the recording or back-to-front: skip rather than invent a time
+    const chunks = splitScriptIntoCaptions(b.text, { maxWords });
+    if (!chunks.length) return;
+    const span = (end - b.startMs) / 1000;
+    weightedTiming(chunks, span, { leadInSec: 0 }).forEach((c) => {
+      cues.push({ text: c.text, startMs: c.startMs + b.startMs, endMs: c.endMs + b.startMs });
+    });
+    lastEnd = Math.max(lastEnd, end);
+  });
+  return { cues: tidyCues(cues, Math.max(mediaMs, lastEnd) / 1000), lastEndMs: lastEnd, mediaMs };
+}
+
 /** Share `durationSec` between captions in proportion to their text length. */
 function weightedTiming(chunks, durationSec, { leadInSec = 0.2 } = {}) {
   const dur = Math.max(1, Number(durationSec) || 1);
@@ -162,6 +219,24 @@ function tidyCues(cues, durationSec) {
  * @returns {{ srt: string, method: 'speech'|'even', note: string, captions: number }}
  */
 function timeScript(script, { durationSec, transcriptCues = null, maxWords = 10 } = {}) {
+  const blocks = parseTimedScript(script);
+  if (blocks.length) {
+    const t = timeFromMarkers(blocks, { durationSec, maxWords });
+    if (!t.cues.length) {
+      const err = new Error('The times in your script are all outside the recording, or back to front. Check them and try again.');
+      err.code = 'SCRIPT_TIMES_INVALID';
+      throw err;
+    }
+    const over = t.mediaMs && blocks.some((b) => (b.endMs ?? b.startMs) > t.mediaMs + 1500);
+    return {
+      srt: cuesToSrt(t.cues),
+      method: 'markers',
+      captions: t.cues.length,
+      note: over
+        ? 'Used the times written in your script. Some of them run past the end of the recording, so those lines were cut short or left out.'
+        : 'Used the times written in your script. Within each timed block the lines are spread by length, so check the middle of long blocks.',
+    };
+  }
   const chunks = splitScriptIntoCaptions(script, { maxWords });
   if (!chunks.length) {
     const err = new Error('Write or paste your script first.');
@@ -193,6 +268,9 @@ function timeScript(script, { durationSec, transcriptCues = null, maxWords = 10 
 }
 
 module.exports = {
+  hasTimeMarkers,
+  parseTimedScript,
+  timeFromMarkers,
   splitScriptIntoCaptions,
   weightedTiming,
   transcriptWords,

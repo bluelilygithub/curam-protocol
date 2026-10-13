@@ -264,6 +264,7 @@ const TOOL_HELP = {
       'The result appears in a box you can correct before copying or saving',
       'Already wrote the words? "I have a script, not captions" times your script to the recording, so you need no timestamps',
       'With timestamps: send the captions to Caption studio, or make a video from the audio with the words along the bottom (choose shape, screen colour, font, size, text colour and text background)',
+      'Choose an audio file or a video file; with a video, put the captions straight onto it',
       'Long recordings are shrunk automatically; up to about 75 minutes at once',
       'Speech only: music and background noise may be skipped or misheard',
     ],
@@ -1175,6 +1176,7 @@ export default function VideosPage() {
   const trInputRef = useRef(null);
   const [avAspect, setAvAspect] = useState('16:9');
   const [avCanvasColor, setAvCanvasColor] = useState('#111111');
+  const trIsVideo = Boolean(trAudioFile && (/^video\//.test(trAudioFile.type) || /\.(mp4|mov|mkv|m4v|avi)$/i.test(trAudioFile.name)));
   const trAudioUrl = useMemo(() => (trAudioFile ? URL.createObjectURL(trAudioFile) : ''), [trAudioFile]);
   useEffect(() => () => { if (trAudioUrl) URL.revokeObjectURL(trAudioUrl); }, [trAudioUrl]);
 
@@ -1740,7 +1742,7 @@ export default function VideosPage() {
   }, [resultName, addToast]);
 
   const handleTranscribeAudio = async () => {
-    if (!trAudioFile) { addToast('Choose an audio file first', 'error'); return; }
+    if (!trAudioFile) { addToast('Choose an audio or video file first', 'error'); return; }
     startProcessing('Transcribing…', 'Listening to the recording and writing it out. Long files can take a minute or two.');
     try {
       const fd = new FormData();
@@ -1790,13 +1792,17 @@ export default function VideosPage() {
   };
 
   const makeTranscriptVideo = async () => {
-    if (!trAudioFile || !trSrt) { addToast('Transcribe with timestamps first', 'error'); return; }
+    if (!trSrt) { addToast('Get the captions with timestamps first', 'error'); return; }
+    if (!trAudioFile) { addToast('Choose the audio or video file first', 'error'); return; }
     const { srt } = transcriptSrtWithEdits();
     const fd = new FormData();
-    fd.append('audio', trAudioFile);
+    // A video gets the captions burned onto it; audio gets a plain coloured screen made for it.
+    fd.append(trIsVideo ? 'video' : 'audio', trAudioFile);
     fd.append('srtText', srt);
-    fd.append('aspect', avAspect);
-    fd.append('canvasColor', avCanvasColor);
+    if (!trIsVideo) {
+      fd.append('aspect', avAspect);
+      fd.append('canvasColor', avCanvasColor);
+    }
     fd.append('fontFamily', textFontFamily);
     fd.append('fontSize', String(textFontSize));
     fd.append('fontColor', textFontColor);
@@ -1804,7 +1810,7 @@ export default function VideosPage() {
     fd.append('backgroundColor', textBackgroundColor);
     fd.append('backgroundTransparent', String(textBackgroundTransparent));
     fd.append('position', 'bottom-center');
-    await runFormVideo('audio-to-video', fd, { label: 'Making the video…', resultFilename: 'transcript-video.mp4', forTool: 'transcribe-audio' })
+    await runFormVideo(trIsVideo ? 'burn-captions' : 'audio-to-video', fd, { label: trIsVideo ? 'Adding the captions…' : 'Making the video…', resultFilename: trIsVideo ? 'captioned.mp4' : 'transcript-video.mp4', forTool: 'transcribe-audio' })
       .catch(() => {});
   };
 
@@ -2942,17 +2948,17 @@ export default function VideosPage() {
           <section className="space-y-3">
             <ToolHeader id="transcribe-audio" label="Audio → transcript" onHelp={setHelpTool} getIcon={getIcon} />
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              Choose a recording and get the words back as text you can correct, copy or download.
+              Choose a recording (audio or video) and get the words back as text you can correct, copy or download. Wrote the words yourself? Use &quot;I have a script&quot; below.
             </p>
             <div className="flex flex-wrap items-center gap-2">
-              <Tooltip text="Choose an audio file: MP3, M4A, WAV, OGG, FLAC and similar.">
+              <Tooltip text="Choose an audio file (MP3, M4A, WAV, OGG, FLAC) or a video file (MP4, MOV). A video file lets you put the captions straight onto it afterwards.">
                 <button
                   type="button"
                   onClick={() => trInputRef.current?.click()}
                   className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70"
                   style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                 >
-                  {trAudioFile ? 'Change file' : 'Choose audio file'}
+                  {trAudioFile ? 'Change file' : 'Choose audio or video file'}
                 </button>
               </Tooltip>
               {trAudioFile && (
@@ -2963,14 +2969,16 @@ export default function VideosPage() {
               <input
                 ref={trInputRef}
                 type="file"
-                accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac,.aac,.opus"
+                accept="audio/*,video/*,.mp3,.m4a,.wav,.ogg,.flac,.aac,.opus,.mp4,.mov,.mkv,.m4v"
                 className="hidden"
                 onChange={(e) => { setTrAudioFile(e.target.files?.[0] || null); setTrText(''); setTrSrt(''); setTrNote(''); e.target.value = ''; }}
               />
             </div>
             {trAudioFile && (
-              <Tooltip text="Play the recording to check it is the right one before you transcribe.">
-                <audio src={trAudioUrl} controls className="w-full" />
+              <Tooltip text="Play it to check it is the right file before you transcribe.">
+                {trIsVideo
+                  ? <video src={trAudioUrl} controls className="w-full max-h-48 rounded-xl bg-black" />
+                  : <audio src={trAudioUrl} controls className="w-full" />}
               </Tooltip>
             )}
             <fieldset className="space-y-1">
@@ -3052,11 +3060,16 @@ export default function VideosPage() {
                 {trSrt && (
                   <div className="space-y-3 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
                     <div>
-                      <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Make a video with the transcript on it</p>
+                      <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>{trIsVideo ? 'Put the transcript on your video' : 'Make a video with the transcript on it'}</p>
                       <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                        No video? This makes one from your audio: a plain coloured screen with the words shown along the bottom as it plays. Your corrections above are included.
+                        {trIsVideo
+                          ? 'The words are shown along the bottom of your video as it plays. Your corrections above are included.'
+                          : trAudioFile
+                            ? 'This makes a video from your audio: a plain coloured screen with the words shown along the bottom as it plays. Your corrections above are included.'
+                            : 'Choose your audio or video file at the top first. A video gets the words put on it; audio gets a plain coloured screen made for it.'}
                       </p>
                     </div>
+                    {!trIsVideo && (
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="block space-y-1">
                         <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Video shape</span>
@@ -3076,6 +3089,7 @@ export default function VideosPage() {
                         </Tooltip>
                       </label>
                     </div>
+                    )}
                     <p className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>The words</p>
                     <TextStyleFields
                       fontFamily={textFontFamily} setFontFamily={setTextFontFamily}
@@ -3085,15 +3099,15 @@ export default function VideosPage() {
                       backgroundColor={textBackgroundColor} setBackgroundColor={setTextBackgroundColor}
                       backgroundTransparent={textBackgroundTransparent} setBackgroundTransparent={setTextBackgroundTransparent}
                     />
-                    <Tooltip text="Build the video: your audio on a coloured screen, with the transcript shown along the bottom in sync. Long recordings take a while.">
+                    <Tooltip text={trIsVideo ? 'Put the transcript along the bottom of your video, in sync. The picture and sound are kept; long videos take a while.' : 'Build the video: your audio on a coloured screen, with the transcript shown along the bottom in sync. Long recordings take a while.'}>
                       <button
                         type="button"
                         onClick={makeTranscriptVideo}
-                        disabled={!ffmpegOk}
+                        disabled={!ffmpegOk || !trAudioFile}
                         className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
                         style={{ background: 'var(--color-primary)' }}
                       >
-                        Make video
+                        {trIsVideo ? 'Add captions to the video' : 'Make video'}
                       </button>
                     </Tooltip>
                     {resultForTool === 'transcribe-audio' && (

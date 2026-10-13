@@ -53,7 +53,7 @@ function ffmpegRoute(name, handler, { errorStatus = 500, source = 'videoTools', 
       if (err.stderr !== undefined) {
         return res.status(errorStatus).json({ error: 'ffmpeg could not process this file — check it is a valid, uncorrupted video/image/audio file.' });
       }
-      return res.status(errorStatus).json({ error: err.message });
+      return res.status(err.status || errorStatus).json({ error: err.message });
     }
   };
 }

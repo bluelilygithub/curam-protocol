@@ -45,7 +45,7 @@ const {
   buildSlideshow,
 } = require('../services/videoFfmpeg');
 const { normalizeSrt, srtToPlainText, prepareCaptionSrt, parseSrtLoose } = require('../services/srtUtils');
-const { timeScript } = require('../services/scriptTiming');
+const { timeScript, hasTimeMarkers } = require('../services/scriptTiming');
 const { fetchLicensedVideo } = require('../services/videoUrlIntake');
 const { ffmpegRoute } = require('../middleware/ffmpegRoute');
 const { planSlideshow, normalizeSlideshowPlan } = require('../services/videoSlideshowPlan');
@@ -984,25 +984,31 @@ router.post('/transcribe', upload.single('video'), ffmpegRoute('transcribe', asy
 router.post('/time-script', upload.single('media'), ffmpegRoute('time-script', async (req, res) => {
   const script = String(req.body?.script || '').slice(0, 60000);
   if (!script.trim()) return res.status(400).json({ error: 'Write or paste your script first.' });
-  const listen = req.body?.mode !== 'even';
+  // Times written in the script itself ([00:00 - 00:12] ...) are used as they are: nothing to listen to, and no file needed.
+  const writtenTimes = hasTimeMarkers(script);
+  const listen = req.body?.mode !== 'even' && !writtenTimes;
 
   let libraryAsset = null;
-  if (!req.file?.buffer?.length) {
+  const haveUpload = Boolean(req.file?.buffer?.length);
+  if (!haveUpload) {
     const assetId = parseAssetId(req.body?.libraryId);
     libraryAsset = assetId && await getAsset(req.user.id, assetId);
-    if (!libraryAsset) return res.status(400).json({ error: 'Choose the video or audio file first.' });
+    if (!libraryAsset && !writtenTimes) return res.status(400).json({ error: 'Choose the video or audio file first.' });
   }
 
   const out = await withTempDir(async (dir) => {
     let mediaPath = libraryAsset?.filePath;
-    if (!mediaPath) {
+    if (!mediaPath && haveUpload) {
       const ext = path.extname(String(req.file.originalname || '')).toLowerCase();
       mediaPath = path.join(dir, `media-in${AUDIO_EXTS.has(ext) || ['.mov', '.mkv', '.avi', '.m4v'].includes(ext) ? ext : '.mp4'}`);
       await fs.writeFile(mediaPath, req.file.buffer);
     }
-    const info = await probeVideo(mediaPath);
-    const durationSec = Number(info.duration) || 0;
-    if (!(durationSec > 0)) throw new Error('Could not read how long that file is. Check it is a valid video or audio file.');
+    let durationSec = 0;
+    if (mediaPath) {
+      const info = await probeVideo(mediaPath);
+      durationSec = Number(info.duration) || 0;
+      if (!(durationSec > 0) && !writtenTimes) throw new Error('Could not read how long that file is. Check it is a valid video or audio file.');
+    }
 
     let transcriptCues = null;
     let listenNote = '';
@@ -1025,7 +1031,13 @@ router.post('/time-script', upload.single('media'), ffmpegRoute('time-script', a
       listenNote = 'Listening to the speech is only available on the hosted site. ';
     }
 
-    const timed = timeScript(script, { durationSec, transcriptCues });
+    let timed;
+    try {
+      timed = timeScript(script, { durationSec, transcriptCues });
+    } catch (err) {
+      if (err.code === 'SCRIPT_TIMES_INVALID' || err.code === 'SCRIPT_EMPTY') { const e = new Error(err.message); e.status = 400; throw e; }
+      throw err;
+    }
     return { ...timed, note: `${listenNote}${timed.note}`.trim(), durationSec: Math.round(durationSec * 10) / 10 };
   });
 
@@ -1034,7 +1046,7 @@ router.post('/time-script', upload.single('media'), ffmpegRoute('time-script', a
 
 // "Audio -> transcript": an audio file (mp3, m4a, wav, ogg, flac, ...) in, readable text (or timestamped SRT) out.
 // Hosted: shrunk to a small mono speech MP3 and transcribed by Gemini. Local dev: whisper-cli (text only, no timestamps).
-const AUDIO_EXTS = new Set(['.mp3', '.m4a', '.wav', '.ogg', '.oga', '.flac', '.aac', '.wma', '.webm', '.mp4', '.opus']);
+const AUDIO_EXTS = new Set(['.mp3', '.m4a', '.wav', '.ogg', '.oga', '.flac', '.aac', '.wma', '.webm', '.mp4', '.opus', '.mov', '.mkv', '.m4v', '.avi']);
 
 router.post('/transcribe-audio', upload.single('audio'), ffmpegRoute('transcribe-audio', async (req, res) => {
   if (!req.file?.buffer?.length) return res.status(400).json({ error: 'Choose an audio file first' });
