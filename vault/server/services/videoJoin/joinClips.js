@@ -118,7 +118,7 @@ async function joinClips(inputPaths, outputPath, plan, opts = {}, deps = {}) {
       args.push('-vf', vf, '-map', '0:v:0', '-map', '1:a:0', '-shortest');
     }
     args.push(
-      '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf),
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast', '-crf', String(crf),
       '-c:a', 'aac', '-b:a', '128k', '-ar', '48000', '-ac', '2',
       '-movflags', '+faststart',
       outPath,
@@ -146,7 +146,7 @@ async function joinClips(inputPaths, outputPath, plan, opts = {}, deps = {}) {
     ...prepared.flatMap((p) => ['-i', p]),
     '-filter_complex', graph.filterComplex,
     '-map', graph.mapV, '-map', graph.mapA,
-    '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf),
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast', '-crf', String(crf),
     '-c:a', 'aac', '-b:a', '128k', '-ar', '48000',
     '-movflags', '+faststart',
     outputPath,

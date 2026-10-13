@@ -81,7 +81,7 @@ function clipArgs(inputPath, outputPath, { startSec, endSec }) {
     args.push('-t', String(Math.round((end - start) * 1000) / 1000));
   }
   args.push(
-    '-c:v', 'libx264', '-preset', 'fast', '-crf', '20',
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast', '-crf', '20',
     '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart',
     outputPath
   );
@@ -98,7 +98,7 @@ async function convertVideo(inputPath, outputPath, { crf = 23, maxWidth } = {}) 
     args.push('-vf', `scale='min(${maxWidth},iw)':-2`);
   }
   args.push(
-    '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf),
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast', '-crf', String(crf),
     '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart',
     outputPath
   );
@@ -160,7 +160,7 @@ async function joinVideos(inputPaths, outputPath, opts = {}) {
       await execFileAsync(FFMPEG, [
         '-y', '-i', inputPath,
         '-vf', vf,
-        '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf),
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast', '-crf', String(crf),
         '-c:a', 'aac', '-b:a', '128k', '-ar', '48000', '-ac', '2',
         '-movflags', '+faststart',
         normPath,
@@ -172,7 +172,7 @@ async function joinVideos(inputPaths, outputPath, opts = {}) {
         '-i', inputPath,
         '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000',
         '-vf', vf,
-        '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf),
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast', '-crf', String(crf),
         '-c:a', 'aac', '-b:a', '128k',
         '-map', '0:v:0', '-map', '1:a:0',
         '-shortest',
@@ -199,7 +199,7 @@ async function joinVideos(inputPaths, outputPath, opts = {}) {
   } catch {
     await execFileAsync(FFMPEG, [
       '-y', '-f', 'concat', '-safe', '0', '-i', listPath,
-      '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf),
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast', '-crf', String(crf),
       '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart',
       outputPath,
     ], 600000);
@@ -267,7 +267,7 @@ async function reframeVideo(inputPath, outputPath, opts = {}) {
   }
 
   const hasAudio = (await probeVideo(inputPath)).hasAudio;
-  const args = ['-y', '-i', inputPath, '-vf', vf, '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf)];
+  const args = ['-y', '-i', inputPath, '-vf', vf, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast', '-crf', String(crf)];
   if (hasAudio) args.push('-c:a', 'aac', '-b:a', '128k');
   else args.push('-an');
   args.push('-movflags', '+faststart', outputPath);
@@ -288,7 +288,7 @@ async function muteOrReplaceAudio(inputPath, outputPath, opts = {}) {
     } catch {
       await execFileAsync(FFMPEG, [
         '-y', '-i', inputPath,
-        '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast', '-crf', '23',
         '-an', '-movflags', '+faststart', outputPath,
       ], 600000);
     }
@@ -306,7 +306,7 @@ async function muteOrReplaceAudio(inputPath, outputPath, opts = {}) {
     await execFileAsync(FFMPEG, [
       '-y', '-i', inputPath, '-i', opts.audioPath,
       '-map', '0:v:0', '-map', '1:a:0',
-      '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast', '-crf', '23',
       '-c:a', 'aac', '-b:a', '192k',
       '-shortest', '-movflags', '+faststart', outputPath,
     ], 600000);
@@ -347,7 +347,7 @@ async function changeVideoSpeed(inputPath, outputPath, opts = {}) {
       '-y', '-i', inputPath,
       '-filter_complex', `[0:v]${setpts},format=yuv420p[v];[0:a]${af}[a]`,
       '-map', '[v]', '-map', '[a]',
-      '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf),
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast', '-crf', String(crf),
       '-c:a', 'aac', '-b:a', '128k',
       '-movflags', '+faststart', outputPath,
     ], 600000);
@@ -356,7 +356,7 @@ async function changeVideoSpeed(inputPath, outputPath, opts = {}) {
       '-y', '-i', inputPath,
       '-vf', `${setpts},format=yuv420p`,
       '-an',
-      '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf),
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast', '-crf', String(crf),
       '-movflags', '+faststart', outputPath,
     ], 600000);
   }
@@ -458,7 +458,7 @@ async function joinVideosWithOptionalCrossfade(inputPaths, outputPath, opts = {}
       await execFileAsync(FFMPEG, [
         '-y', '-i', inputPaths[i],
         '-vf', vf,
-        '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf),
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast', '-crf', String(crf),
         '-c:a', 'aac', '-b:a', '128k', '-ar', '48000', '-ac', '2',
         normPath,
       ], 600000);
@@ -467,7 +467,7 @@ async function joinVideosWithOptionalCrossfade(inputPaths, outputPath, opts = {}
         '-y', '-i', inputPaths[i],
         '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000',
         '-vf', vf,
-        '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf),
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast', '-crf', String(crf),
         '-c:a', 'aac', '-b:a', '128k',
         '-map', '0:v:0', '-map', '1:a:0', '-shortest',
         normPath,
@@ -505,7 +505,7 @@ async function joinVideosWithOptionalCrossfade(inputPaths, outputPath, opts = {}
     '-y', ...inputs,
     '-filter_complex', fc,
     '-map', '[vout]', '-map', '[aout]',
-    '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf),
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast', '-crf', String(crf),
     '-c:a', 'aac', '-b:a', '128k',
     '-movflags', '+faststart', outputPath,
   ], 900000);
@@ -543,7 +543,7 @@ async function normalizeAudioLoudness(inputPath, outputPath, opts = {}) {
     await execFileAsync(FFMPEG, [
       '-y', '-i', inputPath,
       '-af', af,
-      '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf),
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast', '-crf', String(crf),
       '-c:a', 'aac', '-b:a', '192k',
       '-movflags', '+faststart',
       outputPath,
