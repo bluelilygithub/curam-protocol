@@ -79,7 +79,26 @@ function srtToPlainText(srt) {
     .join('\n');
 }
 
+const NO_TIMESTAMPS_MESSAGE = 'These captions have no timestamps, so they cannot be shown on a video. Each caption needs a time line such as 00:00:01,000 --> 00:00:04,000 above its words. If you only have plain text, use Audio to transcript with "With timestamps (SRT)" to get captions with times.';
+
+/**
+ * Captions for burning onto a video: parsed tolerantly and re-written as clean numbered SRT (UTF-8, no stray fences or odd
+ * separators), so ffmpeg only ever sees well-formed input. Plain text with no timestamps is rejected up front with a
+ * message the user can act on, instead of ffmpeg's "Unable to open captions.srt / Invalid data found".
+ */
+function prepareCaptionSrt(raw) {
+  const cues = parseSrtLoose(raw);
+  if (!cues.length) {
+    const err = new Error(NO_TIMESTAMPS_MESSAGE);
+    err.code = 'CAPTIONS_INVALID';
+    throw err;
+  }
+  return cuesToSrt(cues);
+}
+
 module.exports = {
+  prepareCaptionSrt,
+  NO_TIMESTAMPS_MESSAGE,
   srtToPlainText,
   parseTimestamp,
   formatTimestamp,

@@ -54,4 +54,19 @@ assert.deepStrictEqual(audioVideoSize('weird'), [1280, 720], 'unknown aspect fal
 assert.strictEqual(safeHexColor('#AbCdEf', '#111111'), '#AbCdEf');
 assert.strictEqual(safeHexColor('red; rm -rf', '#111111'), '#111111', 'anything but #RRGGBB is replaced, never passed to ffmpeg');
 assert.strictEqual(safeHexColor(undefined, '#111111'), '#111111');
+// ffmpeg failures: the log line carries the last stderr lines (the real complaint), not just the route name.
+const { stderrTail } = require('../middleware/ffmpegRoute');
+assert.strictEqual(
+  stderrTail({ stderr: ['ffmpeg version 5', 'Input #0', '', "[Parsed_subtitles_0] Unable to open /tmp/x/captions.srt", 'Error initializing filter', 'Conversion failed!'].join('\n') }),
+  "[Parsed_subtitles_0] Unable to open /tmp/x/captions.srt | Error initializing filter | Conversion failed!",
+);
+assert.strictEqual(stderrTail({}), '');
+assert.ok(stderrTail({ stderr: 'x'.repeat(1000) }).length <= 301);
+// Captions for burning: clean SRT in, plain text rejected before ffmpeg (the production "Unable to open captions.srt" failure).
+const { prepareCaptionSrt } = require('./srtUtils');
+const fence = '```';
+const messy = [`${fence}srt`, '1', '00:00:01.000 --> 00:00:03.000', 'Hello there.', fence].join('\n');
+assert.strictEqual(prepareCaptionSrt(messy), ['1', '00:00:01,000 --> 00:00:03,000', 'Hello there.', ''].join('\n'));
+assert.throws(() => prepareCaptionSrt('Just a plain transcript with no times.'), (e) => e.code === 'CAPTIONS_INVALID' && /timestamps/.test(e.message));
+assert.throws(() => prepareCaptionSrt(''), (e) => e.code === 'CAPTIONS_INVALID');
 console.log('videoClip tests passed');

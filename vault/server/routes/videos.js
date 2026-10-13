@@ -44,7 +44,7 @@ const {
   videoToGif,
   buildSlideshow,
 } = require('../services/videoFfmpeg');
-const { normalizeSrt, srtToPlainText } = require('../services/srtUtils');
+const { normalizeSrt, srtToPlainText, prepareCaptionSrt } = require('../services/srtUtils');
 const { fetchLicensedVideo } = require('../services/videoUrlIntake');
 const { ffmpegRoute } = require('../middleware/ffmpegRoute');
 const { planSlideshow, normalizeSlideshowPlan } = require('../services/videoSlideshowPlan');
@@ -405,6 +405,13 @@ router.post('/library/:id/captions', upload.fields([{ name: 'srt', maxCount: 1 }
   const srtFile = req.files?.srt?.[0];
   const srtText = req.body?.srtText;
   if (!srtFile && !srtText?.trim()) return res.status(400).json({ error: 'srt file or srtText is required' });
+  let cleanSrt;
+  try {
+    cleanSrt = prepareCaptionSrt(srtFile ? srtFile.buffer.toString('utf8') : String(srtText));
+  } catch (err) {
+    if (err.code === 'CAPTIONS_INVALID') return res.status(400).json({ error: err.message });
+    throw err;
+  }
 
   const style = captionStyleFromBody(req.body);
   const saveToLibrary = req.body?.saveToLibrary === 'true' || req.body?.saveToLibrary === true;
@@ -412,11 +419,7 @@ router.post('/library/:id/captions', upload.fields([{ name: 'srt', maxCount: 1 }
   const buffer = await withTempDir(async (dir) => {
     const inputPath = asset.filePath;
     const srtPath = path.join(dir, 'captions.srt');
-    if (srtFile) {
-      await fs.writeFile(srtPath, srtFile.buffer);
-    } else {
-      await fs.writeFile(srtPath, String(srtText), 'utf8');
-    }
+    await fs.writeFile(srtPath, cleanSrt, 'utf8');
     const outputPath = path.join(dir, 'captioned.mp4');
     await burnSubtitles(inputPath, srtPath, outputPath, style, dir);
     return readOutputFile(outputPath);
@@ -1014,8 +1017,13 @@ router.post('/transcribe-audio', upload.single('audio'), ffmpegRoute('transcribe
 // bottom in the chosen font/size/colour/background. Same caption look as Caption studio (shared captionStyleFromBody).
 router.post('/audio-to-video', upload.single('audio'), ffmpegRoute('audio-to-video', async (req, res) => {
   if (!req.file?.buffer?.length) return res.status(400).json({ error: 'Choose an audio file first' });
-  const srtText = normalizeSrt(String(req.body?.srtText || ''));
-  if (!srtText.trim()) return res.status(400).json({ error: 'There are no captions to show. Transcribe with timestamps first.' });
+  let srtText;
+  try {
+    srtText = prepareCaptionSrt(String(req.body?.srtText || ''));
+  } catch (err) {
+    if (err.code === 'CAPTIONS_INVALID') return res.status(400).json({ error: err.message });
+    throw err;
+  }
   const aspect = ['16:9', '9:16', '1:1', '4:5'].includes(req.body?.aspect) ? req.body.aspect : '16:9';
   const style = captionStyleFromBody(req.body);
   const ext = path.extname(String(req.file.originalname || '')).toLowerCase();
@@ -1040,17 +1048,20 @@ router.post('/burn-captions', upload.fields([{ name: 'video', maxCount: 1 }, { n
   const srtText = req.body?.srtText;
   if (!videoFile) return res.status(400).json({ error: 'video is required' });
   if (!srtFile && !srtText?.trim()) return res.status(400).json({ error: 'srt file or srtText is required' });
+  let cleanSrt;
+  try {
+    cleanSrt = prepareCaptionSrt(srtFile ? srtFile.buffer.toString('utf8') : String(srtText));
+  } catch (err) {
+    if (err.code === 'CAPTIONS_INVALID') return res.status(400).json({ error: err.message });
+    throw err;
+  }
 
   const style = captionStyleFromBody(req.body);
 
   const buffer = await withTempDir(async (dir) => {
     const inputPath = await writeUpload(dir, videoFile);
     const srtPath = path.join(dir, 'captions.srt');
-    if (srtFile) {
-      await fs.writeFile(srtPath, srtFile.buffer);
-    } else {
-      await fs.writeFile(srtPath, String(srtText), 'utf8');
-    }
+    await fs.writeFile(srtPath, cleanSrt, 'utf8');
     const outputPath = path.join(dir, 'captioned.mp4');
     await burnSubtitles(inputPath, srtPath, outputPath, style, dir);
     return readOutputFile(outputPath);

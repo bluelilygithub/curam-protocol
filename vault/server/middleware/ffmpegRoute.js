@@ -15,6 +15,17 @@ const { videoJobGate } = require('../services/videoJobGate');
  * @param {(req, res) => Promise<any>} handler
  * @param {{ errorStatus?: number, source?: string, routePrefix?: string }} [opts]
  */
+/**
+ * The useful part of an ffmpeg failure for a one-line log message: the last few non-empty stderr lines, trimmed.
+ * (ffmpeg prints its banner and filter graph first and the actual complaint last.) Never sent to the browser.
+ */
+function stderrTail(err, maxChars = 300) {
+  const raw = String(err?.stderr || '');
+  const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const tail = lines.slice(-3).join(' | ');
+  return tail.length > maxChars ? `…${tail.slice(-maxChars)}` : tail;
+}
+
 function ffmpegRoute(name, handler, { errorStatus = 500, source = 'videoTools', routePrefix = 'videos' } = {}) {
   return async (req, res) => {
     try {
@@ -22,7 +33,8 @@ function ffmpegRoute(name, handler, { errorStatus = 500, source = 'videoTools', 
       if (!ffmpeg) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
       return await videoJobGate.run(() => handler(req, res));
     } catch (err) {
-      getLogger().error({ err }, `[${routePrefix}/${name}]`);
+      const why = stderrTail(err) || String(err?.message || '').slice(0, 200);
+      getLogger().error({ err }, `[${routePrefix}/${name}] ${why}`);
       if (res.headersSent) return res.end();
       if (err.code === 'VIDEO_BUSY') return res.status(503).json({ error: err.message });
       if (err.killed || err.signal === 'SIGTERM') {
@@ -46,4 +58,4 @@ function ffmpegRoute(name, handler, { errorStatus = 500, source = 'videoTools', 
   };
 }
 
-module.exports = { ffmpegRoute };
+module.exports = { ffmpegRoute, stderrTail };
