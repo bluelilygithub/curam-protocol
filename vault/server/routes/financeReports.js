@@ -199,7 +199,7 @@ async function outstandingInvoices(userId, asOf, clientId) {
 // ── factory ──────────────────────────────────────────────────────────────────
 // gstPaidForRange is injected from finance.js so BAS/GST numbers here can never drift from the
 // figures the BAS tab and GST Summary report already use.
-module.exports = function createFinanceReportsRouter({ gstPaidForRange, disposalSalesForRange, getGstBasis, gstSalesSql, purchaseClaimDateSql, PURCHASES_FROM }) {
+module.exports = function createFinanceReportsRouter({ gstPaidForRange, disposalSalesForRange, getGstRegistration, gstAppliesOn, getGstBasis, gstSalesSql, purchaseClaimDateSql, PURCHASES_FROM }) {
   const router = express.Router();
 
   // ── 1. Aged Receivables ────────────────────────────────────────────────────
@@ -1111,6 +1111,15 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange, disposal
       gstPaidForRange(userId, b.from, b.to, taxBasis),
     ]);
 
+    // Income on a received (cash) basis and tax already paid, so the summary supports either basis.
+    const [recv, inst] = await Promise.all([
+      pool.query(`SELECT COALESCE(SUM(subtotal),0) AS ex FROM fin_invoices WHERE "userId"=$1 AND COALESCE("docType",'invoice')='invoice' AND status='paid' AND "paidAt"::date BETWEEN $2::date AND $3::date`, [userId, b.from, b.to]),
+      pool.query(
+        `SELECT COALESCE(SUM(l.debit) FILTER (WHERE a.code='3100'),0) AS payg_i, COALESCE(SUM(l.debit) FILTER (WHERE a.code='2400'),0) AS payg_w
+         FROM fin_journal_entries e JOIN fin_journal_lines l ON l."entryId"=e.id JOIN fin_accounts a ON a.id=l."accountId"
+         WHERE e."userId"=$1 AND e.type='bas' AND e.date BETWEEN $2::date AND $3::date`, [userId, b.from, b.to]),
+    ]);
+    const recvEx = round2(recv.rows[0].ex), paygInst = round2(inst.rows[0].payg_i), paygWh = round2(inst.rows[0].payg_w);
     const wGross = round2(wages.rows[0].gross), wSuper = round2(wages.rows[0].super);
     const expRows = expByCode.rows.map(x => ({ item: x.category, amount: round2(x.amount) }));
     const expListed = round2(expRows.reduce((s, x) => s + x.amount, 0));
@@ -1129,16 +1138,34 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange, disposal
       subtitle: `Financial year ${b.fy} (${b.from} to ${b.to})`,
       notes: [
         'A hand-over summary for your accountant / tax return, not tax advice. Figures come from the journal and source records and are ex-GST unless stated.',
-        `Business income here is booked when invoices are issued (accrual, per the journal) — GST below is on a ${taxBasis} basis (Finance → Settings).`,
+        `Business income above is what you invoiced in the year (accrual, per the journal). The “Income on a received basis” section shows what you were actually paid; ask your accountant which applies to you. GST below is on a ${taxBasis} basis (Finance → Settings).`,
       ],
       summary: [
         { label: 'Business income', value: pl.totalIncome, format: 'money' },
         { label: 'Total deductions', value: pl.totalExpense, format: 'money' },
         { label: 'Net profit', value: pl.net, format: 'money' },
         { label: "Owner's drawings", value: round2(drawings.rows[0].amount), format: 'money' },
+        { label: 'Income received (ex-GST)', value: recvEx, format: 'money' },
+        { label: 'PAYG instalments paid (T7)', value: paygInst, format: 'money' },
       ],
       sections: [
         { title: 'Income', columns: [cText('item', 'Account'), cMoney('amount', 'Amount')], rows: pl.income.map(x => ({ item: `${x.code} ${x.name}`, amount: x.amount })), totals: { item: 'Total business income', amount: pl.totalIncome } },
+        {
+          title: 'Income on a received (cash) basis',
+          note: 'Invoice payments received in the year, ex-GST, from paid invoices. See the Income Received report for the reconciliation to invoiced income and the unpaid invoices at each end of the year.',
+          columns: [cText('item', 'Item'), cMoney('amount', 'Amount')],
+          rows: [
+            { item: 'Invoice payments received (ex-GST)', amount: recvEx },
+            { item: 'Invoiced in the year, per Profit & Loss (for comparison)', amount: pl.totalIncome },
+            { item: 'Difference (invoiced less received, plus other income recorded)', amount: round2(pl.totalIncome - recvEx) },
+          ],
+        },
+        {
+          title: 'Tax already paid',
+          note: 'From BAS payments recorded in the year. PAYG instalments are a prepayment of your income tax; PAYG withholding relates to employees.',
+          columns: [cText('item', 'Item'), cMoney('amount', 'Amount')],
+          rows: [{ item: 'PAYG instalments (T7)', amount: paygInst }, { item: 'PAYG withholding remitted', amount: paygWh }],
+        },
         {
           title: 'Deductions',
           columns: cols,
@@ -1265,6 +1292,436 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange, disposal
   // The finance module keeps no field-level change history, so this is an ACTIVITY log: every journal
   // entry as it was created, plus every invoice/quote send attempt. Edits that rebuild an entry show
   // up as a new entry — the old version is not retained anywhere.
+  // ═══════════════════════════════════════════════════════════════════════════════════════════
+  // Reports added for the accountant hand-over (FY pack): income received, tax payments, cash book,
+  // capital & related parties, expense listing, things to review, and the chart of accounts/codes.
+  // ═══════════════════════════════════════════════════════════════════════════════════════════
+  const subDay = (d, n) => addDays(d, -n);
+  const DOC_COUNT = `(SELECT COUNT(*)::int FROM fin_document_links l WHERE l."expenseId" = e.id)`;
+  const TAXISH = `(e.supplier ILIKE '%ATO%' OR e.supplier ILIKE '%Taxation Office%' OR e.category ILIKE 'tax' OR t.code = 'EXP-300' OR e.description ILIKE '%for BAS%' OR e.description ILIKE 'BAS %')`;
+
+  // Invoices (not quotes/void) issued on or before `date` and still unpaid at the end of that day.
+  async function debtorsAt(userId, date) {
+    const { rows } = await pool.query(
+      `SELECT i.number, COALESCE(cr.name,'(No client)') AS client, i."issueDate", i."dueDate",
+              i.subtotal, i.gst, i.total
+       FROM fin_invoices i LEFT JOIN clients cr ON cr.id = i."clientRef"
+       WHERE i."userId"=$1 AND COALESCE(i."docType",'invoice')='invoice' AND i.status IN ('sent','paid')
+         AND i."issueDate" <= $2::date AND (i."paidAt" IS NULL OR i."paidAt"::date > $2::date)
+       ORDER BY i."issueDate", i.id`, [userId, date]);
+    return rows.map(r => ({ number: r.number, client: r.client, issued: ds(r.issueDate), due: ds(r.dueDate), subtotal: round2(r.subtotal), gst: round2(r.gst), total: round2(r.total) }));
+  }
+
+  // ── Income Received (cash basis) ─────────────────────────────────────────────
+  router.get('/income-received', wrap(async (req, res) => {
+    const userId = req.user.id;
+    const r = needRange(req, res); if (!r) return;
+    const [paid, invoiced, other] = await Promise.all([
+      pool.query(
+        `SELECT i.number, COALESCE(cr.name,'(No client)') AS client, i."issueDate", i."paidAt", i.subtotal, i.gst, i.total
+         FROM fin_invoices i LEFT JOIN clients cr ON cr.id = i."clientRef"
+         WHERE i."userId"=$1 AND COALESCE(i."docType",'invoice')='invoice' AND i.status='paid' AND i."paidAt"::date BETWEEN $2::date AND $3::date
+         ORDER BY i."paidAt", i.id`, [userId, r.from, r.to]),
+      pool.query(
+        `SELECT COALESCE(SUM(subtotal),0) AS subtotal, COALESCE(SUM(gst),0) AS gst, COALESCE(SUM(total),0) AS total, COUNT(*)::int AS n
+         FROM fin_invoices WHERE "userId"=$1 AND COALESCE("docType",'invoice')='invoice' AND status IN ('sent','paid')
+           AND "issueDate" BETWEEN $2::date AND $3::date`, [userId, r.from, r.to]),
+      accountTotals(userId, r.from, r.to, ['income']),
+    ]);
+    const open = await debtorsAt(userId, subDay(r.from, 1));
+    const close = await debtorsAt(userId, r.to);
+    const sum = (rows, k) => round2(rows.reduce((s2, x) => s2 + num(x[k]), 0));
+    const paidRows = paid.rows.map(x => ({ number: x.number, client: x.client, issued: ds(x.issueDate), paid: ds(x.paidAt), subtotal: round2(x.subtotal), gst: round2(x.gst), total: round2(x.total) }));
+    const recEx = sum(paidRows, 'subtotal');
+    const calc = round2(num(invoiced.rows[0].subtotal) + sum(open, 'subtotal') - sum(close, 'subtotal'));
+    const otherIncome = other.filter(a => a.code !== '4000').map(a => ({ code: a.code, name: a.name, amount: round2(a.credit - a.debit) })).filter(a => a.amount !== 0);
+
+    res.json({
+      title: 'Income Received (cash basis)',
+      subtitle: `${r.from} to ${r.to}`,
+      notes: [
+        'Most sole traders report business income when the money is received, not when the invoice is issued. This report shows both and how they reconcile. Profit & Loss and the Tax Time Summary use the invoice date; ask your accountant which basis applies to you.',
+        'Amounts are ex-GST unless the column says otherwise. Voided invoices and quotes are excluded. Any difference in the reconciliation usually means an invoice was edited or voided after it was sent or paid.',
+      ],
+      summary: [
+        { label: 'Income received (ex-GST)', value: recEx, format: 'money' },
+        { label: 'Invoiced in period (ex-GST)', value: round2(invoiced.rows[0].subtotal), format: 'money' },
+        { label: 'Unpaid at end of period (ex-GST)', value: sum(close, 'subtotal'), format: 'money' },
+      ],
+      sections: [
+        {
+          title: 'Reconciliation: invoiced to received (ex-GST)',
+          columns: [cText('item', 'Item'), cMoney('amount', 'Amount')],
+          rows: [
+            { item: `Invoiced in the period (${invoiced.rows[0].n} invoice${invoiced.rows[0].n === 1 ? '' : 's'})`, amount: round2(invoiced.rows[0].subtotal) },
+            { item: `Add: unpaid at the start (${open.length})`, amount: sum(open, 'subtotal') },
+            { item: `Less: unpaid at the end (${close.length})`, amount: -sum(close, 'subtotal') },
+            { item: 'Income received, calculated', amount: calc, _bold: true },
+            { item: `Income received, per payments recorded (${paidRows.length})`, amount: recEx, _bold: true },
+            { item: 'Difference (should be nil)', amount: round2(recEx - calc) },
+          ],
+        },
+        {
+          title: 'Payments received in the period',
+          columns: [cText('number', 'Invoice'), cText('client', 'Client'), cDate('issued', 'Issued'), cDate('paid', 'Paid'), cMoney('subtotal', 'Ex-GST'), cMoney('gst', 'GST'), cMoney('total', 'Total')],
+          rows: paidRows, totals: { number: 'Total', subtotal: recEx, gst: sum(paidRows, 'gst'), total: sum(paidRows, 'total') },
+        },
+        {
+          title: 'Unpaid at the end of the period (debtors)',
+          columns: [cText('number', 'Invoice'), cText('client', 'Client'), cDate('issued', 'Issued'), cDate('due', 'Due'), cMoney('subtotal', 'Ex-GST'), cMoney('gst', 'GST'), cMoney('total', 'Total')],
+          rows: close, totals: { number: 'Total', subtotal: sum(close, 'subtotal'), gst: sum(close, 'gst'), total: sum(close, 'total') },
+        },
+        {
+          title: 'Unpaid at the start of the period',
+          columns: [cText('number', 'Invoice'), cText('client', 'Client'), cDate('issued', 'Issued'), cDate('due', 'Due'), cMoney('subtotal', 'Ex-GST'), cMoney('gst', 'GST'), cMoney('total', 'Total')],
+          rows: open, totals: { number: 'Total', subtotal: sum(open, 'subtotal'), gst: sum(open, 'gst'), total: sum(open, 'total') },
+        },
+        { title: 'Other income recorded (interest, gain on asset sales, manual entries)', columns: [cText('code', 'Code'), cText('name', 'Account'), cMoney('amount', 'Amount')], rows: otherIncome },
+      ],
+    });
+  }));
+
+  // ── Tax Payments & Credits ───────────────────────────────────────────────────
+  router.get('/tax-payments', wrap(async (req, res) => {
+    const userId = req.user.id;
+    const r = needRange(req, res); if (!r) return;
+    const [bas, quarters, asExpense] = await Promise.all([
+      pool.query(
+        `SELECT e.id, e.date, e.description,
+                COALESCE(SUM(l.debit)  FILTER (WHERE a.code='2200'),0) AS gst_col,
+                COALESCE(SUM(l.credit) FILTER (WHERE a.code='1200'),0) AS gst_paid,
+                COALESCE(SUM(l.debit)  FILTER (WHERE a.code='2400'),0) AS payg_w,
+                COALESCE(SUM(l.debit)  FILTER (WHERE a.code='3100'),0) AS payg_i,
+                COALESCE(SUM(l.credit - l.debit) FILTER (WHERE a.code='1000'),0) AS bank
+         FROM fin_journal_entries e JOIN fin_journal_lines l ON l."entryId"=e.id JOIN fin_accounts a ON a.id=l."accountId"
+         WHERE e."userId"=$1 AND e.type='bas' AND e.date BETWEEN $2::date AND $3::date
+         GROUP BY e.id ORDER BY e.date, e.id`, [userId, r.from, r.to]),
+      pool.query(
+        `SELECT from_date, to_date, status, "paygInstalment", lodged_at, paid_at FROM fin_bas_quarters
+         WHERE "userId"=$1 AND ((to_date >= $2::date AND from_date <= $3::date)
+            OR lodged_at::date BETWEEN $2::date AND $3::date OR paid_at::date BETWEEN $2::date AND $3::date) ORDER BY from_date`, [userId, r.from, r.to]),
+      pool.query(
+        `SELECT e.date, e.supplier, e.description, (e.amount + e.gst) AS total, COALESCE(t.code,'') AS code
+         FROM fin_expenses e LEFT JOIN fin_tx_codes t ON t.id = e."txCodeId"
+         WHERE e."userId"=$1 AND e.date BETWEEN $2::date AND $3::date AND ${TAXISH}
+         ORDER BY e.date, e.id`, [userId, r.from, r.to]),
+    ]);
+    const basRows = bas.rows.map(x => ({ date: ds(x.date), description: x.description, gst: round2(num(x.gst_col) - num(x.gst_paid)), withheld: round2(x.payg_w), instalment: round2(x.payg_i), paid: round2(x.bank) }));
+    const tot = (k) => round2(basRows.reduce((s2, x) => s2 + x[k], 0));
+    const expRows = asExpense.rows.map(x => ({ date: ds(x.date), supplier: x.supplier || '', description: x.description, code: x.code, total: round2(x.total) }));
+    const expTotal = round2(expRows.reduce((s2, x) => s2 + x.total, 0));
+
+    res.json({
+      title: 'Tax Payments & Credits',
+      subtitle: `${r.from} to ${r.to}`,
+      notes: [
+        'Money paid to the ATO through the BAS tab: net GST, PAYG withholding and PAYG instalments (T7). A PAYG instalment is a prepayment of your income tax, so it appears as a credit here and as owner’s drawings in the books, not as a business expense.',
+        'GST and tax payments are not deductible expenses. Anything below under “recorded as an expense” should be moved to a BAS payment (or reviewed with your accountant) so profit and deductions aren’t understated.',
+      ],
+      summary: [
+        { label: 'Paid to the ATO via BAS', value: tot('paid'), format: 'money' },
+        { label: 'PAYG instalments (T7)', value: tot('instalment'), format: 'money' },
+        { label: 'Tax-looking payments booked as expenses', value: expTotal, format: 'money' },
+      ],
+      sections: [
+        { title: 'BAS payments recorded', columns: [cDate('date', 'Paid'), cText('description', 'Description'), cMoney('gst', 'Net GST'), cMoney('withheld', 'PAYG withheld'), cMoney('instalment', 'PAYG instalment'), cMoney('paid', 'Total paid')], rows: basRows, totals: { description: 'Total', gst: tot('gst'), withheld: tot('withheld'), instalment: tot('instalment'), paid: tot('paid') } },
+        { title: 'BAS quarters covered, lodged or paid in the period', columns: [cDate('from', 'From'), cDate('to', 'To'), cText('status', 'Status'), cMoney('instalment', 'PAYG instalment (T7)'), cDate('lodged', 'Lodged'), cDate('paid', 'Paid')], rows: quarters.rows.map(q => ({ from: ds(q.from_date), to: ds(q.to_date), status: q.status, instalment: round2(q.paygInstalment), lodged: ds(q.lodged_at), paid: ds(q.paid_at) })) },
+        { title: 'Payments that look like tax but are recorded as expenses', note: 'Matched on supplier (ATO), the Tax code EXP-300, a “Tax” category or “BAS” in the description.', columns: [cDate('date', 'Date'), cText('supplier', 'Supplier'), cText('description', 'Description'), cText('code', 'Code'), cMoney('total', 'Amount')], rows: expRows, totals: { description: 'Total', total: expTotal } },
+      ],
+    });
+  }));
+
+  // ── Cash Book (bank / card / bills with a running balance) ────────────────────
+  router.get('/cash-book', wrap(async (req, res) => {
+    const userId = req.user.id;
+    const r = needRange(req, res); if (!r) return;
+    const { rows: accts } = await pool.query(`SELECT id, code, name, type FROM fin_accounts WHERE "userId"=$1 AND type IN ('asset','liability') ORDER BY code`, [userId]);
+    let wanted;
+    if (req.query.account) {
+      const a = accts.find(x => x.code === String(req.query.account));
+      if (!a) return res.status(400).json({ error: 'Unknown account code' });
+      wanted = [a];
+    } else {
+      wanted = accts.filter(a => ['1000', '2100', '2000'].includes(a.code));
+    }
+    const ROW_CAP = 5000;
+    const sections = [];
+    const summary = [];
+    let capped = false;
+    for (const a of wanted) {
+      const asset = a.type === 'asset';
+      const sign = asset ? 1 : -1; // balance as a positive number the way a statement shows it
+      const { rows: [ob] } = await pool.query(
+        `SELECT COALESCE(SUM(l.debit - l.credit),0) AS net FROM fin_journal_lines l JOIN fin_journal_entries e ON e.id=l."entryId"
+         WHERE e."userId"=$1 AND l."accountId"=$2 AND e.date < $3::date`, [userId, a.id, r.from]);
+      const { rows } = await pool.query(
+        `SELECT e.date, e.description, e.type, e.reference, l.debit, l.credit
+         FROM fin_journal_lines l JOIN fin_journal_entries e ON e.id=l."entryId"
+         WHERE e."userId"=$1 AND l."accountId"=$2 AND e.date BETWEEN $3::date AND $4::date
+         ORDER BY e.date, e.id, l.id LIMIT ${ROW_CAP + 1}`, [userId, a.id, r.from, r.to]);
+      if (rows.length > ROW_CAP) { capped = true; rows.length = ROW_CAP; }
+      if (!asset && rows.length === 0 && round2(num(ob.net)) === 0) continue;
+      if (asset && a.code !== '1000' && rows.length === 0 && round2(num(ob.net)) === 0) continue;
+      let bal = sign * num(ob.net);
+      let tin = 0, tout = 0;
+      const out = rows.map(x => {
+        const inn = asset ? num(x.debit) : num(x.credit);
+        const outt = asset ? num(x.credit) : num(x.debit);
+        bal += inn - outt; tin += inn; tout += outt;
+        return { date: ds(x.date), description: x.description, reference: x.reference || '', type: x.type, in: round2(inn), out: round2(outt), balance: round2(bal) };
+      });
+      const open = round2(sign * num(ob.net));
+      sections.push({
+        title: `${a.code} ${a.name} — ${asset ? 'tick against your bank statement' : 'tick against the statement / bills'}`,
+        columns: [cDate('date', 'Date'), cText('description', 'Description'), cText('reference', 'Ref'), cText('type', 'Type'), cMoney('in', asset ? 'Money in' : 'Charges'), cMoney('out', asset ? 'Money out' : 'Payments'), cMoney('balance', 'Balance')],
+        rows: [{ date: r.from, description: 'Opening balance', reference: '', type: '', in: '', out: '', balance: open, _bold: true }, ...out],
+        totals: { description: `Closing balance ${r.to}`, in: round2(tin), out: round2(tout), balance: round2(bal) },
+      });
+      summary.push({ label: `${a.name} closing balance`, value: round2(bal), format: 'money' });
+    }
+    res.json({
+      title: 'Cash Book',
+      subtitle: `${r.from} to ${r.to}`,
+      notes: [
+        'Every movement in the books for the bank account (and the credit card and accounts payable, where used), in date order with a running balance. Compare the closing balance with the balance on your bank/card statement for the same date; any difference is a missing, wrong or duplicate entry.',
+        'Vault has no bank feed, so this is what has been entered, not what the bank holds. Opening balances come from the journal (if the books started at zero, so does this).',
+        ...(capped ? [`Showing the first ${ROW_CAP} movements per account — narrow the date range.`] : []),
+      ],
+      summary,
+      sections,
+    });
+  }));
+
+  // ── Capital & Related Parties ────────────────────────────────────────────────
+  router.get('/capital-related', wrap(async (req, res) => {
+    const userId = req.user.id;
+    const r = needRange(req, res); if (!r) return;
+    const [eq, draws, liabAccts, equityBefore] = await Promise.all([
+      pool.query(
+        `SELECT e.date, e.description, e.type, a.code, l.debit, l.credit
+         FROM fin_journal_lines l JOIN fin_journal_entries e ON e.id=l."entryId" JOIN fin_accounts a ON a.id=l."accountId"
+         WHERE e."userId"=$1 AND a.code='3000' AND e.date BETWEEN $2::date AND $3::date ORDER BY e.date, e.id`, [userId, r.from, r.to]),
+      pool.query(
+        `SELECT d.date, d.description, d.amount, COALESCE(pa.name,'Bank / Cash') AS via
+         FROM fin_drawings d LEFT JOIN fin_accounts pa ON pa.id = d."paidViaId"
+         WHERE d."userId"=$1 AND d.date BETWEEN $2::date AND $3::date ORDER BY d.date, d.id`, [userId, r.from, r.to]),
+      pool.query(`SELECT id, code, name FROM fin_accounts WHERE "userId"=$1 AND type='liability' AND "isSystem"=false ORDER BY code`, [userId]),
+      pool.query(
+        `SELECT COUNT(*)::int AS n FROM fin_journal_lines l JOIN fin_journal_entries e ON e.id=l."entryId" JOIN fin_accounts a ON a.id=l."accountId"
+         WHERE e."userId"=$1 AND a.code='3000' AND e.date <= $2::date`, [userId, r.to]),
+    ]);
+    const eqRows = eq.rows.map(x => ({ date: ds(x.date), description: x.description, type: x.type, introduced: round2(num(x.credit) - num(x.debit)) }));
+    const eqTotal = round2(eqRows.reduce((s2, x) => s2 + x.introduced, 0));
+    const drawRows = draws.rows.map(x => ({ date: ds(x.date), description: x.description || '', via: x.via, amount: round2(x.amount) }));
+    const drawTotal = round2(drawRows.reduce((s2, x) => s2 + x.amount, 0));
+
+    const loanRows = [];
+    for (const a of liabAccts.rows) {
+      const { rows: [m] } = await pool.query(
+        `SELECT COALESCE(SUM(l.credit - l.debit) FILTER (WHERE e.date < $3::date),0) AS opening,
+                COALESCE(SUM(l.credit) FILTER (WHERE e.date BETWEEN $3::date AND $4::date),0) AS received,
+                COALESCE(SUM(l.debit)  FILTER (WHERE e.date BETWEEN $3::date AND $4::date),0) AS repaid,
+                COALESCE(SUM(l.credit - l.debit) FILTER (WHERE e.date <= $4::date),0) AS closing
+         FROM fin_journal_lines l JOIN fin_journal_entries e ON e.id=l."entryId" WHERE e."userId"=$1 AND l."accountId"=$2`, [userId, a.id, r.from, r.to]);
+      if (round2(m.opening) || round2(m.received) || round2(m.repaid) || round2(m.closing)) {
+        loanRows.push({ account: `${a.code} ${a.name}`, opening: round2(m.opening), received: round2(m.received), repaid: round2(m.repaid), closing: round2(m.closing) });
+      }
+    }
+    res.json({
+      title: 'Capital & Related Parties',
+      subtitle: `${r.from} to ${r.to}`,
+      notes: [
+        equityBefore.rows[0].n === 0
+          ? 'No opening balance or capital introduced has been recorded in the books up to this date. If money from the owner, another business or a loan paid for early expenses, the Cash Book and Balance Sheet will not agree with the bank until it is recorded. Ask your accountant whether it is capital introduced (equity) or a loan (liability).'
+          : 'Capital introduced and drawings are shown as recorded. Money lent to or borrowed from a related business belongs under a loan account (Accounts tab), not in drawings.',
+        'Owner’s drawings are withdrawals of profit by the sole trader; they are not an expense and not wages.',
+      ],
+      summary: [
+        { label: 'Capital introduced (net)', value: eqTotal, format: 'money' },
+        { label: 'Drawings', value: drawTotal, format: 'money' },
+        { label: 'Loan accounts with activity', value: loanRows.length, format: 'int' },
+      ],
+      sections: [
+        { title: 'Owner’s equity entries (capital introduced / adjustments)', columns: [cDate('date', 'Date'), cText('description', 'Description'), cText('type', 'Type'), cMoney('introduced', 'Introduced')], rows: eqRows, totals: { description: 'Total', introduced: eqTotal } },
+        { title: 'Drawings', columns: [cDate('date', 'Date'), cText('description', 'Description'), cText('via', 'Paid from'), cMoney('amount', 'Amount')], rows: drawRows, totals: { description: 'Total', amount: drawTotal } },
+        { title: 'Loan and other liability accounts you have added', columns: [cText('account', 'Account'), cMoney('opening', 'Opening'), cMoney('received', 'Received'), cMoney('repaid', 'Repaid'), cMoney('closing', 'Closing')], rows: loanRows },
+      ],
+    });
+  }));
+
+  // ── Expense Listing with evidence ────────────────────────────────────────────
+  router.get('/expense-listing', wrap(async (req, res) => {
+    const userId = req.user.id;
+    const r = needRange(req, res); if (!r) return;
+    const ROW_CAP = 5000;
+    const [exp, assets] = await Promise.all([
+      pool.query(
+        `SELECT e.date, e.supplier, e.description, e.category, COALESCE(t.code,'') AS code, e.amount, e.gst,
+                COALESCE(pa.name,'Bank / Cash') AS via, e."isCapitalAsset", e."inputTaxed", e.receipt_path, ${DOC_COUNT} AS docs
+         FROM fin_expenses e LEFT JOIN fin_tx_codes t ON t.id = e."txCodeId" LEFT JOIN fin_accounts pa ON pa.id = e."paidViaId"
+         WHERE e."userId"=$1 AND e.date BETWEEN $2::date AND $3::date ORDER BY e.date, e.id LIMIT ${ROW_CAP + 1}`, [userId, r.from, r.to]),
+      pool.query(
+        `SELECT a."datePurchased", a.description, a.amount, a.gst, COALESCE(pa.name,'Bank / Cash') AS via, a.method,
+                (SELECT COUNT(*)::int FROM fin_document_links l WHERE l."assetId" = a.id) AS docs
+         FROM fin_assets a LEFT JOIN fin_accounts pa ON pa.id = a."paidViaId"
+         WHERE a."userId"=$1 AND a.method IS DISTINCT FROM 'immediate' AND a."datePurchased" BETWEEN $2::date AND $3::date ORDER BY a."datePurchased", a.id`, [userId, r.from, r.to]),
+    ]);
+    const capped = exp.rows.length > ROW_CAP; if (capped) exp.rows.length = ROW_CAP;
+    const calc = (x) => /^Depreciation FY/.test(x.description || '');
+    const evidence = (x) => x.receipt_path && x.docs ? `Receipt + ${x.docs} doc${x.docs === 1 ? '' : 's'}` : x.receipt_path ? 'Receipt' : x.docs ? `${x.docs} document${x.docs === 1 ? '' : 's'}` : calc(x) ? 'n/a (calculated)' : 'None';
+    const { rows: [mapRow] } = await pool.query(`SELECT value FROM settings WHERE "userId"=$1 AND key='fin_export_account_map'`, [userId]);
+    let acctMap = {}; try { acctMap = mapRow ? JSON.parse(mapRow.value) || {} : {}; } catch { acctMap = {}; }
+    const rows = exp.rows.map(x => ({
+      accLabel: (acctMap[x.code] && (acctMap[x.code].name || acctMap[x.code].code)) || '',
+      date: ds(x.date), supplier: x.supplier || '', description: x.description, category: x.category || '', code: x.code,
+      amount: round2(x.amount), gst: round2(x.gst), total: round2(num(x.amount) + num(x.gst)), via: x.via,
+      evidence: evidence(x), flags: [x.isCapitalAsset ? 'Capital' : '', x.inputTaxed ? 'Input-taxed' : ''].filter(Boolean).join(', '),
+    }));
+    const noEv = rows.filter(x => x.evidence === 'None').length;
+    const T = (k) => round2(rows.reduce((s2, x) => s2 + x[k], 0));
+    const assetRows = assets.rows.map(x => ({ date: ds(x.datePurchased), description: x.description, method: (x.method || '').replace(/_/g, ' '), amount: round2(x.amount), gst: round2(x.gst), total: round2(num(x.amount) + num(x.gst)), via: x.via, evidence: x.docs ? `${x.docs} document${x.docs === 1 ? '' : 's'}` : 'None' }));
+    res.json({
+      title: 'Expense Listing',
+      subtitle: `${r.from} to ${r.to}`,
+      notes: [
+        'Every expense in date order, with the account it was paid from and whether evidence (a receipt or a linked document such as a provider statement) is attached. “n/a” rows are calculated claims or depreciation, which have no receipt by nature. Evidence lives in the Documents tab.',
+        ...(capped ? [`Showing the first ${ROW_CAP} expenses — narrow the date range.`] : []),
+      ],
+      summary: [
+        { label: 'Expenses', value: rows.length, format: 'int' },
+        { label: 'Total (incl. GST)', value: T('total'), format: 'money' },
+        { label: 'With no evidence attached', value: noEv, format: 'int' },
+      ],
+      sections: [
+        { title: 'Expenses', columns: [cDate('date', 'Date'), cText('supplier', 'Supplier'), cText('description', 'Description'), cText('category', 'Category'), cText('code', 'Code'), ...(rows.some(x => x.accLabel) ? [cText('accLabel', 'Accountant label')] : []), cMoney('amount', 'Ex-GST'), cMoney('gst', 'GST'), cMoney('total', 'Total'), cText('via', 'Paid from'), cText('evidence', 'Evidence'), cText('flags', 'Flags')], rows, totals: { description: 'Total', amount: T('amount'), gst: T('gst'), total: T('total') } },
+        { title: 'Depreciating asset purchases', columns: [cDate('date', 'Date'), cText('description', 'Asset'), cText('method', 'Method'), cMoney('amount', 'Cost ex-GST'), cMoney('gst', 'GST'), cMoney('total', 'Total'), cText('via', 'Paid from'), cText('evidence', 'Evidence')], rows: assetRows },
+      ],
+    });
+  }));
+
+  // ── Things to Review ─────────────────────────────────────────────────────────
+  router.get('/review-items', wrap(async (req, res) => {
+    const userId = req.user.id;
+    const b = needFy(req, res); if (!b) return;
+    const reg = await getGstRegistration(pool, userId);
+    const items = [];
+    const add = (severity, area, item, detail, count, amount) => items.push({ severity, area, item, detail, count: count ?? '', amount: amount ?? '' });
+
+    // GST quarters
+    const { rows: qs } = await pool.query(`SELECT from_date, to_date, status FROM fin_bas_quarters WHERE "userId"=$1 AND to_date >= $2::date AND from_date <= $3::date ORDER BY from_date`, [userId, b.from, b.to]);
+    for (const q of qs) {
+      if (q.status !== 'paid' && gstAppliesOn(reg, q.from_date)) add('Check', 'BAS', `Quarter ${ds(q.from_date)} to ${ds(q.to_date)} is ${q.status}, not paid`, 'Record it as reconciled, lodged and paid on the BAS tab once it has been done.');
+    }
+    // tax paid through expenses
+    const { rows: [tx] } = await pool.query(
+      `SELECT COUNT(*)::int AS n, COALESCE(SUM(e.amount + e.gst),0) AS total FROM fin_expenses e LEFT JOIN fin_tx_codes t ON t.id = e."txCodeId"
+       WHERE e."userId"=$1 AND e.date BETWEEN $2::date AND $3::date AND ${TAXISH}`, [userId, b.from, b.to]);
+    if (tx.n) add('Check', 'Tax', 'Payments to the ATO recorded as expenses', 'GST and tax payments are not deductions. Record them as BAS payments (or ask your accountant), then remove the expense.', tx.n, round2(tx.total));
+    // wages without PAYG
+    const { rows: [wg] } = await pool.query(`SELECT COUNT(*)::int AS n, COALESCE(SUM(gross),0) AS gross FROM fin_wages WHERE "userId"=$1 AND date BETWEEN $2::date AND $3::date AND tax = 0`, [userId, b.from, b.to]);
+    if (wg.n) add('Check', 'Wages', 'Wage entries with no PAYG withheld', 'If this is your own pay it should be Owner’s Drawings, not wages. Employee wages normally have PAYG withheld.', wg.n, round2(wg.gross));
+    // invoices
+    const { rows: [dr] } = await pool.query(`SELECT COUNT(*)::int AS n, COALESCE(SUM(total),0) AS total FROM fin_invoices WHERE "userId"=$1 AND COALESCE("docType",'invoice')='invoice' AND status='draft' AND "issueDate" BETWEEN $2::date AND $3::date`, [userId, b.from, b.to]);
+    if (dr.n) add('Info', 'Invoices', 'Draft invoices dated in the year (not counted as income)', 'Send or delete them.', dr.n, round2(dr.total));
+    const { rows: [od] } = await pool.query(`SELECT COUNT(*)::int AS n, COALESCE(SUM(total),0) AS total FROM fin_invoices WHERE "userId"=$1 AND COALESCE("docType",'invoice')='invoice' AND status='sent' AND "dueDate" < CURRENT_DATE - 30`, [userId]);
+    if (od.n) add('Info', 'Invoices', 'Invoices more than 30 days overdue', 'Follow up, or write off with your accountant.', od.n, round2(od.total));
+    // GST after cancellation
+    if (!reg.registered && reg.effectiveFrom) {
+      const { rows: [gi] } = await pool.query(`SELECT COUNT(*)::int AS n, COALESCE(SUM(gst),0) AS gst FROM fin_invoices WHERE "userId"=$1 AND gst > 0 AND "issueDate" >= $2::date`, [userId, reg.effectiveFrom]);
+      if (gi.n) add('Check', 'GST', `Invoices dated on or after ${reg.effectiveFrom} that include GST`, 'You are not GST registered from that date.', gi.n, round2(gi.gst));
+      const { rows: [ge] } = await pool.query(`SELECT COUNT(*)::int AS n, COALESCE(SUM(gst),0) AS gst FROM fin_expenses WHERE "userId"=$1 AND gst > 0 AND date >= $2::date`, [userId, reg.effectiveFrom]);
+      if (ge.n) add('Check', 'GST', `Purchases dated on or after ${reg.effectiveFrom} with GST claimed`, 'No GST credit can be claimed once not registered.', ge.n, round2(ge.gst));
+    }
+    // classification and evidence
+    const { rows: [uc] } = await pool.query(`SELECT COUNT(*)::int AS n, COALESCE(SUM(amount+gst),0) AS total FROM fin_expenses WHERE "userId"=$1 AND date BETWEEN $2::date AND $3::date AND "txCodeId" IS NULL AND COALESCE(category,'')='' AND description NOT LIKE 'Depreciation FY%'`, [userId, b.from, b.to]);
+    if (uc.n) add('Check', 'Expenses', 'Expenses with no category or code', 'The Tax Time Summary groups deductions by category.', uc.n, round2(uc.total));
+    const { rows: [me] } = await pool.query(
+      `SELECT COUNT(*)::int AS n, COALESCE(SUM(e.amount+e.gst),0) AS total FROM fin_expenses e
+       WHERE e."userId"=$1 AND e.date BETWEEN $2::date AND $3::date AND (e.amount+e.gst) >= 50 AND e.receipt_path IS NULL
+         AND NOT EXISTS (SELECT 1 FROM fin_document_links l WHERE l."expenseId"=e.id) AND e.description NOT LIKE 'Depreciation FY%'
+         AND NOT EXISTS (SELECT 1 FROM fin_vehicle_expenses v WHERE v."expenseId"=e.id AND v.method='cents_per_km')
+         AND NOT EXISTS (SELECT 1 FROM fin_home_office_expenses h WHERE h."expenseId"=e.id AND h.method='fixed_rate')`, [userId, b.from, b.to]);
+    if (me.n) add('Info', 'Evidence', 'Expenses of $50 or more with no receipt, invoice or statement attached', 'Upload provider statements/invoices in the Documents tab and link them.', me.n, round2(me.total));
+    const { rows: [ud] } = await pool.query(`SELECT COUNT(*)::int AS n FROM fin_documents d WHERE d."userId"=$1 AND d.fy=$2 AND NOT EXISTS (SELECT 1 FROM fin_document_links l WHERE l."documentId"=d.id)`, [userId, b.fy]);
+    if (ud.n) add('Info', 'Evidence', 'Uploaded documents not linked to any expense or asset', 'Link them so it’s clear what they support.', ud.n);
+    // assets
+    const { rows: [ua] } = await pool.query(`SELECT COUNT(*)::int AS n FROM fin_assets WHERE "userId"=$1 AND method IS DISTINCT FROM 'immediate' AND "disposedDate" IS NULL AND "dateFirstUsed" <= $3::date AND ("lastDepreciatedFy" IS NULL OR "lastDepreciatedFy" < $2)`, [userId, b.fy, b.to]);
+    if (ua.n) add('Check', 'Assets', `Assets with no depreciation posted up to FY ${b.fy}`, 'Run the annual depreciation on the Assets tab.', ua.n);
+    // books integrity
+    const { rows: [cap] } = await pool.query(`SELECT COUNT(*)::int AS n FROM fin_journal_lines l JOIN fin_journal_entries e ON e.id=l."entryId" JOIN fin_accounts a ON a.id=l."accountId" WHERE e."userId"=$1 AND a.code='3000' AND e.date <= $2::date`, [userId, b.to]);
+    if (!cap.n) add('Check', 'Opening position', 'No opening balance or capital introduced is recorded', 'If the business started with money or owed money, record it so the bank balance in the books can match your statements.');
+    const { rows: [bank] } = await pool.query(`SELECT COALESCE(SUM(l.debit - l.credit),0) AS bal FROM fin_journal_lines l JOIN fin_journal_entries e ON e.id=l."entryId" JOIN fin_accounts a ON a.id=l."accountId" WHERE e."userId"=$1 AND a.code='1000' AND e.date <= $2::date`, [userId, b.to]);
+    if (num(bank.bal) < 0) add('Check', 'Bank', `The bank balance in the books is negative at ${b.to}`, 'That usually means money in is missing (capital introduced, an unrecorded deposit) or an entry is duplicated. Compare with the Cash Book.', '', round2(bank.bal));
+    const { rows: [mj] } = await pool.query(`SELECT COUNT(*)::int AS n FROM fin_journal_entries WHERE "userId"=$1 AND type='manual' AND date BETWEEN $2::date AND $3::date`, [userId, b.from, b.to]);
+    if (mj.n) add('Info', 'Journal', 'Manual journal entries in the year', 'Listed in the General Ledger; your accountant may ask what they are for.', mj.n);
+
+    const checks = items.filter(i => i.severity === 'Check').length;
+    res.json({
+      title: 'Things to Review',
+      subtitle: `Financial year ${b.fy} (${b.from} to ${b.to})`,
+      notes: ['A checklist generated from the books: “Check” items usually mean the figures are wrong or incomplete; “Info” items are worth a look. It is for you to clear before sending the pack, and for your accountant to see what is unresolved.'],
+      summary: [{ label: 'Items to check', value: checks, format: 'int' }, { label: 'For information', value: items.length - checks, format: 'int' }],
+      sections: [{
+        title: items.length ? 'Items' : 'Items',
+        columns: [cText('severity', 'Level'), cText('area', 'Area'), cText('item', 'Item'), cText('detail', 'What to do'), cInt('count', 'Count'), cMoney('amount', 'Amount')],
+        rows: items.length ? items : [{ severity: 'OK', area: '', item: 'Nothing to flag', detail: '', count: '', amount: '' }],
+      }],
+    });
+  }));
+
+  // ── Documents Index ──────────────────────────────────────────────────────────
+  router.get('/documents-index', wrap(async (req, res) => {
+    const userId = req.user.id;
+    const b = needFy(req, res); if (!b) return;
+    const { rows } = await pool.query(
+      `SELECT d.id, d.kind, d.title, d.supplier, d."docDate", d."originalName", d."sizeBytes",
+              COALESCE((SELECT string_agg(COALESCE(e.description, a.description), '; ' ORDER BY COALESCE(e.date, a."datePurchased"))
+                        FROM fin_document_links l LEFT JOIN fin_expenses e ON e.id = l."expenseId" LEFT JOIN fin_assets a ON a.id = l."assetId"
+                        WHERE l."documentId" = d.id), '') AS links,
+              (SELECT COUNT(*)::int FROM fin_document_links l WHERE l."documentId" = d.id) AS n
+       FROM fin_documents d WHERE d."userId"=$1 AND d.fy=$2 ORDER BY COALESCE(d."docDate", d."createdAt"::date), d.id`, [userId, b.fy]);
+    const KIND = { invoice: 'Invoice', receipt: 'Receipt', statement: 'Statement', bank_statement: 'Bank statement', ato_notice: 'ATO notice', other: 'Other' };
+    res.json({
+      title: 'Supporting Documents Index',
+      subtitle: `Financial year ${b.fy}`,
+      notes: ['The statements, invoices and receipts uploaded to Vault for this year and what each one supports. The files themselves can be included in the pack as a zip; ask for any you need.'],
+      summary: [{ label: 'Documents', value: rows.length, format: 'int' }, { label: 'Not linked to anything', value: rows.filter(x => !x.n).length, format: 'int' }],
+      sections: [{
+        title: 'Documents',
+        columns: [cDate('date', 'Date'), cText('title', 'Title'), cText('kind', 'Type'), cText('supplier', 'Supplier'), cText('file', 'File name'), cText('supports', 'Supports')],
+        rows: rows.map(x => ({ date: ds(x.docDate), title: x.title, kind: KIND[x.kind] || x.kind, supplier: x.supplier || '', file: x.originalName, supports: x.n ? `${x.n} item${x.n === 1 ? '' : 's'}: ${x.links}` : 'Not linked' })),
+      }],
+    });
+  }));
+
+  // ── Chart of Accounts & Codes (with the accountant's mapped labels) ──────────
+  router.get('/chart-of-accounts', wrap(async (req, res) => {
+    const userId = req.user.id;
+    const [accts, codes, mapRow] = await Promise.all([
+      pool.query(`SELECT code, name, type, "isSystem" FROM fin_accounts WHERE "userId"=$1 ORDER BY code`, [userId]),
+      pool.query(`SELECT code, name, type, "isActive" AS active FROM fin_tx_codes WHERE "userId"=$1 ORDER BY type, code`, [userId]),
+      pool.query(`SELECT value FROM settings WHERE "userId"=$1 AND key='fin_export_account_map'`, [userId]),
+    ]);
+    let map = {};
+    try { map = mapRow.rows[0] ? JSON.parse(mapRow.rows[0].value) || {} : {}; } catch { map = {}; }
+    const m = (code) => map[code] || {};
+    const aRows = accts.rows.map(a => ({ code: a.code, name: a.name, type: a.type, accCode: m(a.code).code || '', accName: m(a.code).name || '', myob: m(a.code).myobTax || '', xero: m(a.code).xeroTax || '' }));
+    const cRows = codes.rows.map(c => ({ code: c.code, name: c.name, type: c.type, active: c.active === false ? 'No' : 'Yes', accCode: m(c.code).code || '', accName: m(c.code).name || '' }));
+    const mapped = aRows.filter(a => a.accCode || a.accName).length + cRows.filter(c => c.accCode || c.accName).length;
+    res.json({
+      title: 'Chart of Accounts & Codes',
+      subtitle: mapped ? `${mapped} mapped to your accountant’s codes` : 'Not yet mapped to your accountant’s codes',
+      notes: [
+        'Vault’s own account list and the income/expense codes used to group transactions. The “Accountant code / label” columns are filled where you have entered your accountant’s equivalent (Finance → Settings → Export account mapping); blank means the Vault name should be used. Your accountant can type their codes straight into these columns.',
+      ],
+      summary: [{ label: 'Accounts', value: aRows.length, format: 'int' }, { label: 'Income/expense codes', value: cRows.length, format: 'int' }, { label: 'Mapped', value: mapped, format: 'int' }],
+      sections: [
+        { title: 'Accounts', columns: [cText('code', 'Vault code'), cText('name', 'Vault name'), cText('type', 'Type'), cText('accCode', 'Accountant code'), cText('accName', 'Accountant label'), cText('myob', 'MYOB tax'), cText('xero', 'Xero tax')], rows: aRows },
+        { title: 'Income & expense codes', columns: [cText('code', 'Vault code'), cText('name', 'Vault name'), cText('type', 'Type'), cText('active', 'Active'), cText('accCode', 'Accountant code'), cText('accName', 'Accountant label')], rows: cRows },
+      ],
+    });
+  }));
+
   // Field-level change history comes from fin_audit_log, written by database triggers (see db.js), so
   // it covers every route and any direct SQL. Derived journal postings and email attempts are shown
   // alongside it. Optional ?table= narrows to one record type (e.g. fin_invoices).

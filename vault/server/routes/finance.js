@@ -1543,7 +1543,8 @@ async function managedExpenseReason(db, exp) {
 router.get('/expenses', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT * FROM fin_expenses WHERE "userId"=$1 ORDER BY date DESC, id DESC`, [req.user.id]
+      `SELECT e.*, (SELECT COUNT(*)::int FROM fin_document_links l WHERE l."expenseId" = e.id) AS "docCount"
+       FROM fin_expenses e WHERE e."userId"=$1 ORDER BY e.date DESC, e.id DESC`, [req.user.id]
     );
     res.json(rows);
   } catch (err) {
@@ -4091,8 +4092,12 @@ async function getExportAccountMap(userId) {
 
 router.get('/export/account-map', async (req, res) => {
   try {
+    await ensureAccounts(req.user.id);
+    await ensureTxCodes(req.user.id);
     const map = await getExportAccountMap(req.user.id);
-    res.json({ accounts: DEFAULT_ACCOUNTS, map });
+    const { rows: accounts } = await pool.query(`SELECT code, name, type FROM fin_accounts WHERE "userId"=$1 ORDER BY code`, [req.user.id]);
+    const { rows: txCodes } = await pool.query(`SELECT code, name, type FROM fin_tx_codes WHERE "userId"=$1 ORDER BY type, code`, [req.user.id]);
+    res.json({ accounts, txCodes, map });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -4104,7 +4109,12 @@ router.put('/export/account-map', async (req, res) => {
     if (!map || typeof map !== 'object' || Array.isArray(map)) {
       return res.status(400).json({ error: 'map must be an object keyed by internal account code' });
     }
-    const validCodes = new Set(DEFAULT_ACCOUNTS.map(a => a.code));
+    // Accounts (including ones you added) and the income/expense codes can all carry the accountant's label.
+    const [{ rows: ac }, { rows: tc }] = await Promise.all([
+      pool.query(`SELECT code FROM fin_accounts WHERE "userId"=$1`, [req.user.id]),
+      pool.query(`SELECT code FROM fin_tx_codes WHERE "userId"=$1`, [req.user.id]),
+    ]);
+    const validCodes = new Set([...ac.map(a => a.code), ...tc.map(c => c.code), ...DEFAULT_ACCOUNTS.map(a => a.code)]);
     const cleaned = {};
     for (const [code, entry] of Object.entries(map)) {
       if (!validCodes.has(code) || !entry || typeof entry !== 'object') continue;
@@ -5095,12 +5105,37 @@ router.get('/reports/chart-gst-quarters', async (req, res) => {
 // Extra reports (aged receivables/payables, general ledger, cash flow statement, comparisons,
 // BAS worksheet, budgets, statements, ...) live in their own file to keep this one manageable.
 // Mounted after the four original /reports/* routes above, which never overlap with its paths.
-router.use('/reports', require('./financeReports')({ gstPaidForRange, disposalSalesForRange, getGstBasis, gstSalesSql, purchaseClaimDateSql, PURCHASES_FROM }));
+// Financial-year pack (PDF / Excel / zip) for the accountant.
+router.use('/pack', require('./financePack')({ runReport: (...a) => runReport(...a) }));
+
+// Evidence library: statements/invoices/receipts, linkable to expenses and assets.
+router.use('/documents', require('./financeDocuments'));
+
+router.use('/reports', require('./financeReports')({ gstPaidForRange, disposalSalesForRange, getGstRegistration, gstAppliesOn, getGstBasis, gstSalesSql, purchaseClaimDateSql, PURCHASES_FROM }));
 
 // Exposed for server/routes/expenseReview.js so bulk expense creation from the invoice
 // review queue reuses the exact same insert+journal path as manual expense entry, and
 // (RECEIPT_DIR) so it can drop the already-downloaded invoice PDF straight into Finance's
 // existing receipt storage instead of inventing a second file location.
+// Run one of this router's reports in-process for a user and get its JSON (used by the FY pack so it
+// can't drift from what the Reports tab shows). Mirrors an authenticated GET.
+function runReport(reportPath, userId, query = {}) {
+  return new Promise((resolve, reject) => {
+    const qs = new URLSearchParams(query).toString();
+    const url = `/reports/${reportPath}${qs ? `?${qs}` : ''}`;
+    let status = 200;
+    const req = { method: 'GET', url, originalUrl: url, baseUrl: '', query: { ...query }, params: {}, headers: {}, body: {}, user: { id: userId } };
+    const res = {
+      headersSent: false, statusCode: 200,
+      setHeader() {}, getHeader() {}, removeHeader() {}, end() {},
+      status(c) { status = c; return this; },
+      json(o) { this.headersSent = true; if (status >= 400) reject(new Error((o && o.error) || `${reportPath} failed (${status})`)); else resolve(o); return this; },
+      send() { this.headersSent = true; reject(new Error(`${reportPath} did not return JSON`)); return this; },
+    };
+    router.handle(req, res, (err) => reject(err || new Error(`Unknown report: ${reportPath}`)));
+  });
+}
+router.runReport = runReport;
 router.createExpenseRecord = createExpenseRecord;
 // Exposed for server/cron/recurringCron.js (recurring expenses must post a journal) and tests.
 router.createJournalEntry = createJournalEntry;

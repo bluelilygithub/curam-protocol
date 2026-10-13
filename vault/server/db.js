@@ -3207,13 +3207,13 @@ async function initSchema() {
         src := to_jsonb(OLD);
         INSERT INTO fin_audit_log ("userId","tableName","rowId",label,action,"rowData")
         VALUES ((src->>'userId')::int, TG_TABLE_NAME, NULLIF(src->>'id','')::int,
-                COALESCE(src->>'number', src->>'description', src->>'name', src->>'employee', src->>'key', src->>'code'),
+                COALESCE(src->>'number', src->>'description', src->>'title', src->>'name', src->>'employee', src->>'key', src->>'code'),
                 'DELETE', src);
       ELSIF TG_OP = 'INSERT' THEN
         src := to_jsonb(NEW);
         INSERT INTO fin_audit_log ("userId","tableName","rowId",label,action,"rowData")
         VALUES ((src->>'userId')::int, TG_TABLE_NAME, NULLIF(src->>'id','')::int,
-                COALESCE(src->>'number', src->>'description', src->>'name', src->>'employee', src->>'key', src->>'code'),
+                COALESCE(src->>'number', src->>'description', src->>'title', src->>'name', src->>'employee', src->>'key', src->>'code'),
                 'INSERT', src);
       ELSE
         o := to_jsonb(OLD); n := to_jsonb(NEW);
@@ -3225,7 +3225,7 @@ async function initSchema() {
         IF diff <> '{}'::jsonb THEN
           INSERT INTO fin_audit_log ("userId","tableName","rowId",label,action,"changedFields")
           VALUES ((n->>'userId')::int, TG_TABLE_NAME, NULLIF(n->>'id','')::int,
-                  COALESCE(n->>'number', n->>'description', n->>'name', n->>'employee', n->>'key', n->>'code'),
+                  COALESCE(n->>'number', n->>'description', n->>'title', n->>'name', n->>'employee', n->>'key', n->>'code'),
                   'UPDATE', diff);
         END IF;
       END IF;
@@ -3278,6 +3278,42 @@ async function initSchema() {
   // GST collected on the sale of an asset (1/11 of proceeds when the price includes GST). It is reported
   // in the BAS on the disposal date (G1 / 1A) alongside invoiced sales.
   await pool.query(`ALTER TABLE fin_assets ADD COLUMN IF NOT EXISTS "disposalGst" NUMERIC(12,2) NOT NULL DEFAULT 0`);
+
+  // ── Finance: document library (evidence for the books) ───────────────────
+  // One uploaded file (e.g. a monthly provider statement) can be linked to many expenses/assets; an
+  // expense can have many documents. Files live under UPLOAD_DIR/finance-docs/<userId>/.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS fin_documents (
+      id             SERIAL PRIMARY KEY,
+      "userId"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind           TEXT NOT NULL DEFAULT 'other' CHECK (kind IN ('invoice','receipt','statement','bank_statement','ato_notice','other')),
+      title          TEXT NOT NULL,
+      supplier       TEXT,
+      fy             TEXT NOT NULL,
+      "docDate"      DATE,
+      notes          TEXT,
+      "originalName" TEXT NOT NULL,
+      "storedName"   TEXT NOT NULL,
+      "mimeType"     TEXT,
+      "sizeBytes"    BIGINT NOT NULL DEFAULT 0,
+      "createdAt"    TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_fin_documents_user_fy ON fin_documents ("userId", fy)`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS fin_document_links (
+      id           SERIAL PRIMARY KEY,
+      "documentId" INTEGER NOT NULL REFERENCES fin_documents(id) ON DELETE CASCADE,
+      "expenseId"  INTEGER REFERENCES fin_expenses(id) ON DELETE CASCADE,
+      "assetId"    INTEGER REFERENCES fin_assets(id) ON DELETE CASCADE,
+      CHECK ((("expenseId" IS NOT NULL)::int + ("assetId" IS NOT NULL)::int) = 1)
+    )
+  `);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_fin_doc_link_expense ON fin_document_links ("documentId","expenseId") WHERE "expenseId" IS NOT NULL`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_fin_doc_link_asset ON fin_document_links ("documentId","assetId") WHERE "assetId" IS NOT NULL`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_fin_doc_link_expense ON fin_document_links ("expenseId")`);
+  await pool.query(`DROP TRIGGER IF EXISTS trg_fin_audit ON fin_documents`);
+  await pool.query(`CREATE TRIGGER trg_fin_audit AFTER INSERT OR UPDATE OR DELETE ON fin_documents FOR EACH ROW EXECUTE FUNCTION fin_audit_trigger()`);
 
   // Editable ATO rate settings — never hardcoded in calculation code. Seed a sensible
   // current-year default once per user's first ensureAccounts() pass (see finance.js).

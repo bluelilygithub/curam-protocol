@@ -14,6 +14,11 @@ if (!process.env.DATABASE_URL) {
 }
 
 const assert = require('assert');
+const fsx = require('fs');
+const os = require('os');
+const pathx = require('path');
+// uploads from these tests go to a throwaway folder (read when the finance modules load)
+process.env.UPLOAD_DIR = fsx.mkdtempSync(pathx.join(os.tmpdir(), 'fin-docs-test-'));
 const http = require('http');
 const express = require('express');
 const { pool } = require('../db');
@@ -34,6 +39,15 @@ async function call(method, url, body) {
   });
   let json = null;
   try { json = await res.json(); } catch { /* empty */ }
+  return { status: res.status, json };
+}
+
+async function upload(files, fields = {}) {
+  const fd = new FormData();
+  for (const [name, content, type] of files) fd.append('files', new Blob([content], { type: type || 'application/pdf' }), name);
+  for (const [k, v] of Object.entries(fields)) for (const x of [].concat(v)) fd.append(k, x);
+  const res = await fetch(base + '/api/finance/documents', { method: 'POST', body: fd });
+  let json = null; try { json = await res.json(); } catch { /* empty */ }
   return { status: res.status, json };
 }
 
@@ -589,6 +603,267 @@ test('GST deregistration: no GST on documents or credits on purchases from the e
   }
 });
 
+// ---------------------------------------------------------------- document library
+test('documents: upload, link to many expenses, download, relink, and confirmed delete removes the file', async () => {
+  const e1 = await call('POST', '/api/finance/expenses', { date: '2025-09-05', description: 'AI credits Sep', supplier: 'Provider', amount: 40, gstIncluded: false });
+  const e2 = await call('POST', '/api/finance/expenses', { date: '2025-09-20', description: 'AI credits Sep 2', supplier: 'Provider', amount: 60, gstIncluded: false });
+  const up = await upload([['sep-statement.pdf', '%PDF-1.4 statement bytes']], { kind: 'statement', supplier: 'Provider', docDate: '2025-09-30', expenseIds: [String(e1.json.id), String(e2.json.id)] });
+  assert.strictEqual(up.status, 201, JSON.stringify(up.json));
+  const doc = up.json.documents[0];
+  assert.strictEqual(doc.fy, '2025-26', 'financial year worked out from the document date');
+  assert.strictEqual(doc.links.length, 2);
+  assert.ok(!('storedName' in doc), 'internal file name is never sent to the browser');
+
+  const dl = await fetch(`${base}/api/finance/documents/${doc.id}/file`);
+  assert.strictEqual(dl.status, 200);
+  assert.strictEqual(await dl.text(), '%PDF-1.4 statement bytes');
+  assert.strictEqual(dl.headers.get('x-content-type-options'), 'nosniff');
+
+  const list = (await call('GET', '/api/finance/documents?fy=2025-26&expenseId=' + e1.json.id)).json;
+  assert.strictEqual(list.documents.length, 1);
+  const exps = (await call('GET', '/api/finance/expenses')).json;
+  assert.strictEqual(exps.find((x) => x.id === e1.json.id).docCount, 1, 'expense list shows the linked document count');
+
+  const re = await call('PUT', `/api/finance/documents/${doc.id}/links`, { expenseIds: [e2.json.id] });
+  assert.strictEqual(re.json.links.length, 1);
+  assert.strictEqual((await call('PUT', `/api/finance/documents/${doc.id}/links`, { expenseIds: [987654321] })).status, 400, 'unknown expense refused');
+
+  const meta = await call('PATCH', `/api/finance/documents/${doc.id}`, { title: 'September statement', kind: 'bank_statement', notes: 'checked' });
+  assert.strictEqual(meta.json.title, 'September statement');
+  assert.strictEqual((await call('PATCH', `/api/finance/documents/${doc.id}`, { kind: 'nonsense' })).status, 400);
+
+  const del1 = await call('DELETE', `/api/finance/documents/${doc.id}`);
+  assert.strictEqual(del1.status, 409, 'delete needs explicit confirmation');
+  assert.ok(del1.json.needsConfirm && /five years/.test(del1.json.message));
+  const folder = pathx.join(process.env.UPLOAD_DIR, 'finance-docs', String(userId));
+  assert.ok(fsx.readdirSync(folder).length >= 1);
+  assert.strictEqual((await call('DELETE', `/api/finance/documents/${doc.id}?confirm=1`)).status, 200);
+  assert.strictEqual(fsx.readdirSync(folder).length, 0, 'file removed from disk');
+  assert.strictEqual((await fetch(`${base}/api/finance/documents/${doc.id}/file`)).status, 404);
+  assert.strictEqual((await call('GET', '/api/finance/expenses')).json.find((x) => x.id === e2.json.id).docCount, 0, 'links removed with the document');
+});
+
+test('documents: rejects disguised executables, disallowed types, bad fields; accepts several files at once', async () => {
+  const exe = await upload([['invoice.pdf', 'MZ' + String.fromCharCode(0x90) + ' pretend this is a pdf']]);
+  assert.strictEqual(exe.status, 400);
+  assert.strictEqual(exe.json.rejected.length, 1);
+  const folder = pathx.join(process.env.UPLOAD_DIR, 'finance-docs', String(userId));
+  assert.strictEqual(fsx.existsSync(folder) ? fsx.readdirSync(folder).length : 0, 0, 'rejected file not left on disk');
+  assert.strictEqual((await upload([['payload.exe', 'x']])).status, 400, 'extension not allowed');
+  assert.strictEqual((await upload([['ok.pdf', '%PDF']], { kind: 'bogus' })).status, 400);
+  assert.strictEqual((await upload([['ok.pdf', '%PDF']], { docDate: 'yesterday' })).status, 400);
+  assert.strictEqual((await upload([['ok.pdf', '%PDF']], { expenseId: '987654321' })).status, 400, 'link to unknown expense');
+  const two = await upload([['a.pdf', '%PDF a'], ['b.csv', 'x,y\n1,2', 'text/csv']], { kind: 'invoice', fy: '2024-25' });
+  assert.strictEqual(two.status, 201, JSON.stringify(two.json));
+  assert.strictEqual(two.json.documents.length, 2);
+  assert.ok(two.json.documents.every((d) => d.fy === '2024-25' && d.links.length === 0));
+  const un = (await call('GET', '/api/finance/documents?unlinked=1&fy=2024-25')).json;
+  assert.strictEqual(un.documents.length, 2);
+  const q = (await call('GET', '/api/finance/documents?q=b.csv')).json;
+  assert.strictEqual(q.documents.length, 1);
+  for (const d of two.json.documents) await call('DELETE', `/api/finance/documents/${d.id}?confirm=1`);
+});
+
+test('documents: missing-evidence list excludes linked, below-threshold and depreciation items', async () => {
+  const mk = (extra) => call('POST', '/api/finance/expenses', { date: '2025-10-10', amount: 100, gstIncluded: false, ...extra });
+  await mk({ description: 'Needs evidence' });
+  const linked = await mk({ description: 'Has statement' });
+  await mk({ description: 'Tiny buy', amount: 5 });
+  const up = await upload([['evidence.pdf', '%PDF e']], { expenseId: String(linked.json.id) });
+  assert.strictEqual(up.status, 201);
+  const m = (await call('GET', '/api/finance/documents/missing?fy=2025-26&min=10')).json;
+  const names = m.expenses.map((x) => x.description);
+  assert.ok(names.includes('Needs evidence'), 'unevidenced expense listed');
+  assert.ok(!names.includes('Has statement'), 'linked expense not listed');
+  assert.ok(!names.includes('Tiny buy'), 'below the threshold not listed');
+  assert.ok(!names.some((n) => /^Depreciation FY/.test(n)), 'posted depreciation never needs a receipt');
+  assert.strictEqual((await call('GET', '/api/finance/documents/missing?fy=junk')).status, 400);
+  await call('DELETE', `/api/finance/documents/${up.json.documents[0].id}?confirm=1`);
+});
+
+// ---------------------------------------------------------------- accountant reports (Stage B)
+const report = async (path, q) => {
+  const r = await call('GET', `/api/finance/reports/${path}?${q}`);
+  assert.strictEqual(r.status, 200, `${path}: ${JSON.stringify(r.json)}`);
+  return r.json;
+};
+const secRows = (rep, title) => rep.sections.find((x) => x.title.startsWith(title)).rows;
+
+test('income-received: cash vs invoiced reconciles with opening and closing debtors', async () => {
+  const mk = async (issueDate) => (await call('POST', '/api/finance/invoices', { issueDate, items: [{ description: 'Work', qty: 1, unitPrice: 100 }] })).json;
+  const z = await mk('2018-05-01'); const x = await mk('2018-08-10'); const y = await mk('2018-12-01');
+  for (const inv of [z, x, y]) await call('PATCH', `/api/finance/invoices/${inv.id}/status`, { status: 'sent' });
+  await call('POST', `/api/finance/invoices/${z.id}/mark-paid`, { paidAt: '2018-08-20' });   // opening debtor, paid in period
+  await call('POST', `/api/finance/invoices/${x.id}/mark-paid`, { paidAt: '2018-09-05' });   // issued and paid in period
+  const rep = await report('income-received', 'from=2018-07-01&to=2018-12-31');
+  const rec = Object.fromEntries(rep.summary.map((s2) => [s2.label, s2.value]));
+  assert.ok(near(rec['Income received (ex-GST)'], 200), JSON.stringify(rec));
+  assert.ok(near(rec['Invoiced in period (ex-GST)'], 200));
+  assert.ok(near(rec['Unpaid at end of period (ex-GST)'], 100));
+  const recon = secRows(rep, 'Reconciliation');
+  assert.ok(near(recon[3].amount, 200) && near(recon[4].amount, 200) && near(recon[5].amount, 0), JSON.stringify(recon));
+  assert.deepStrictEqual(secRows(rep, 'Unpaid at the end').map((r2) => r2.number), [y.number]);
+  assert.deepStrictEqual(secRows(rep, 'Unpaid at the start').map((r2) => r2.number), [z.number]);
+  assert.strictEqual(secRows(rep, 'Payments received').length, 2);
+});
+
+test('tax-payments: lists BAS payments with PAYG split and flags tax booked as an expense', async () => {
+  await call('POST', '/api/finance/expenses', { date: '2019-04-27', description: 'For BAS', supplier: 'ATO', amount: 2359.22, gstIncluded: false });
+  const rep = await report('tax-payments', 'from=2019-04-01&to=2019-04-30');
+  const bas = secRows(rep, 'BAS payments');
+  assert.strictEqual(bas.length, 1);
+  assert.ok(near(bas[0].paid, 10) && near(bas[0].gst, 10), JSON.stringify(bas[0]));
+  const flagged = secRows(rep, 'Payments that look like tax');
+  assert.ok(flagged.some((f) => near(f.total, 2359.22) && f.supplier === 'ATO'));
+  assert.ok(secRows(rep, 'BAS quarters').length >= 1);
+});
+
+test('cash-book: opening + movements = closing and agrees with the ledger; unknown account refused', async () => {
+  const rep = await report('cash-book', 'from=2019-04-01&to=2019-04-30&account=1000');
+  const sec = rep.sections[0];
+  const { rows } = await pool.query(
+    `SELECT COALESCE(SUM(l.debit - l.credit),0)::float AS bal FROM fin_journal_lines l JOIN fin_journal_entries e ON e.id=l."entryId"
+     JOIN fin_accounts a ON a.id=l."accountId" WHERE e."userId"=$1 AND a.code='1000' AND e.date <= '2019-04-30'`, [userId]);
+  assert.ok(near(sec.totals.balance, rows[0].bal), `closing ${sec.totals.balance} vs ledger ${rows[0].bal}`);
+  assert.strictEqual(sec.rows[0].description, 'Opening balance');
+  const last = sec.rows[sec.rows.length - 1];
+  assert.ok(near(last.balance, sec.totals.balance), 'running balance ends at the closing balance');
+  assert.strictEqual((await call('GET', '/api/finance/reports/cash-book?from=2019-04-01&to=2019-04-30&account=9999')).status, 400);
+  const all = await report('cash-book', 'from=2019-04-01&to=2019-04-30');
+  assert.ok(all.sections.length >= 1);
+});
+
+test('capital-related: warns when no opening balance exists, then shows capital introduced', async () => {
+  const early = await report('capital-related', 'from=2017-07-01&to=2018-06-30');
+  assert.ok(/No opening balance/.test(early.notes[0]), early.notes[0]);
+  const { rows } = await pool.query(`SELECT id, code FROM fin_accounts WHERE "userId"=$1 AND code IN ('1000','3000')`, [userId]);
+  const id = Object.fromEntries(rows.map((r2) => [r2.code, r2.id]));
+  const j = await call('POST', '/api/finance/journal', { date: '2025-07-02', description: 'Capital introduced', lines: [{ accountId: id['1000'], debit: 5000, credit: 0 }, { accountId: id['3000'], debit: 0, credit: 5000 }] });
+  assert.strictEqual(j.status, 200, JSON.stringify(j.json));
+  await call('POST', '/api/finance/drawings', { date: '2025-08-01', description: 'Living costs', amount: 750 });
+  const rep = await report('capital-related', 'from=2025-07-01&to=2026-06-30');
+  const sum = Object.fromEntries(rep.summary.map((s2) => [s2.label, s2.value]));
+  assert.ok(near(sum['Capital introduced (net)'], 5000) && near(sum.Drawings, 750), JSON.stringify(sum));
+  assert.ok(!/No opening balance/.test(rep.notes[0]));
+});
+
+test('expense-listing: shows evidence status per expense', async () => {
+  const withDoc = await call('POST', '/api/finance/expenses', { date: '2025-12-05', description: 'Listed with doc', supplier: 'S', amount: 80, gstIncluded: false });
+  await call('POST', '/api/finance/expenses', { date: '2025-12-06', description: 'Listed bare', supplier: 'S', amount: 90, gstIncluded: false });
+  const up = await upload([['stmt.pdf', '%PDF s']], { expenseId: String(withDoc.json.id), docDate: '2025-12-31' });
+  const rep = await report('expense-listing', 'from=2025-12-01&to=2025-12-31');
+  const rows = secRows(rep, 'Expenses');
+  assert.strictEqual(rows.find((r2) => r2.description === 'Listed with doc').evidence, '1 document');
+  assert.strictEqual(rows.find((r2) => r2.description === 'Listed bare').evidence, 'None');
+  assert.ok(rep.summary.find((s2) => s2.label === 'With no evidence attached').value >= 1);
+  await call('DELETE', `/api/finance/documents/${up.json.documents[0].id}?confirm=1`);
+});
+
+test('review-items: flags tax booked as expenses, wages without PAYG, and a missing opening position', async () => {
+  await call('POST', '/api/finance/expenses', { date: '2025-11-01', description: 'For BAS', supplier: 'ATO', amount: 100, gstIncluded: false });
+  await call('POST', '/api/finance/wages', { date: '2025-11-02', employee: 'Me', gross: 500, tax: 0 });
+  const rep = await report('review-items', 'fy=2025-26');
+  const items = rep.sections[0].rows.map((r2) => r2.item);
+  assert.ok(items.some((t) => /Payments to the ATO recorded as expenses/.test(t)), items.join(' | '));
+  assert.ok(items.some((t) => /Wage entries with no PAYG withheld/.test(t)));
+  const old = await report('review-items', 'fy=2017-18');
+  assert.ok(old.sections[0].rows.some((r2) => /No opening balance/.test(r2.item)), 'opening position flagged for a year before any capital');
+  assert.strictEqual((await call('GET', '/api/finance/reports/review-items?fy=junk')).status, 400);
+});
+
+test('tax-time-summary: shows income on a received basis and PAYG instalments paid', async () => {
+  const fy18 = await report('tax-time-summary', 'fy=2018-19');
+  const sum = Object.fromEntries(fy18.summary.map((s2) => [s2.label, s2.value]));
+  assert.ok(near(sum['Income received (ex-GST)'], 300), JSON.stringify(sum));
+  assert.ok(fy18.sections.some((x) => x.title === 'Income on a received (cash) basis'));
+  const today = await router.todayStr();
+  const y = parseInt(today.slice(0, 4), 10) + (today.slice(5, 7) >= '07' ? 0 : -1);
+  const now = await report('tax-time-summary', `fy=${y}-${String((y + 1) % 100).padStart(2, '0')}`);
+  const nowSum = Object.fromEntries(now.summary.map((s2) => [s2.label, s2.value]));
+  assert.ok(near(nowSum['PAYG instalments paid (T7)'], 50), `T7 ${nowSum['PAYG instalments paid (T7)']}`);
+});
+
+test('chart-of-accounts: lists accounts and codes with the accountant’s mapped labels', async () => {
+  await pool.query(
+    `INSERT INTO settings ("userId", key, value) VALUES ($1,'fin_export_account_map',$2) ON CONFLICT ("userId", key) DO UPDATE SET value=EXCLUDED.value`,
+    [userId, JSON.stringify({ '1000': { code: '1-1100', name: 'Cheque account', myobTax: 'N-T' }, 'EXP-100': { code: '6-4000', name: 'Advertising' } })]);
+  const rep = await report('chart-of-accounts', '');
+  const bank = secRows(rep, 'Accounts').find((a) => a.code === '1000');
+  assert.strictEqual(bank.accCode, '1-1100'); assert.strictEqual(bank.accName, 'Cheque account'); assert.strictEqual(bank.myob, 'N-T');
+  const adv = secRows(rep, 'Income & expense').find((c) => c.code === 'EXP-100');
+  assert.strictEqual(adv.accName, 'Advertising');
+  assert.ok(/2 mapped/.test(rep.subtitle), rep.subtitle);
+  assert.strictEqual(secRows(rep, 'Accounts').find((a) => a.code === '4000').accCode, '', 'unmapped stays blank');
+});
+
+// ---------------------------------------------------------------- mapping + FY pack (Stage C)
+test('mapping: accounts you added and income/expense codes can carry the accountant’s labels', async () => {
+  const acct = await call('POST', '/api/finance/accounts', { code: '2999', name: 'Loan from other business', type: 'liability' });
+  assert.ok(acct.status === 200 || acct.status === 201, JSON.stringify(acct.json));
+  const got = (await call('GET', '/api/finance/export/account-map')).json;
+  assert.ok(got.accounts.some((a) => a.code === '2999'), 'own accounts listed');
+  assert.ok(got.txCodes.some((c) => c.code === 'EXP-160'), 'income/expense codes listed');
+  const put = await call('PUT', '/api/finance/export/account-map', { map: { '2999': { code: '2-9999', name: 'Related loan' }, 'EXP-160': { code: '6-2200', name: 'Software' }, 'BOGUS': { code: 'x' } } });
+  assert.strictEqual(put.status, 200);
+  assert.deepStrictEqual(Object.keys(put.json.map).sort(), ['2999', 'EXP-160'], 'unknown keys dropped');
+  const chart = await report('chart-of-accounts', '');
+  assert.strictEqual(secRows(chart, 'Accounts').find((a) => a.code === '2999').accName, 'Related loan');
+  assert.strictEqual(secRows(chart, 'Income & expense').find((c) => c.code === 'EXP-160').accCode, '6-2200');
+});
+
+test('FY pack: preview, PDF, Excel and zip are produced from the same reports and contain what they should', async () => {
+  const XLSX = require('xlsx');
+  const JSZip = require('jszip');
+  const fyq = 'fy=2025-26';
+  // one document to include in the zip
+  const up = await upload([['pack-statement.pdf', '%PDF pack doc']], { kind: 'statement', docDate: '2025-12-31', supplier: 'Provider' });
+  assert.strictEqual(up.status, 201);
+
+  const pv = await call('GET', `/api/finance/pack/preview?${fyq}`);
+  assert.strictEqual(pv.status, 200, JSON.stringify(pv.json));
+  const failed = pv.json.reports.filter((r2) => r2.error);
+  assert.deepStrictEqual(failed, [], 'every report in the pack produces: ' + JSON.stringify(failed));
+  assert.ok(pv.json.reports.length >= 18);
+  assert.ok(pv.json.reports.some((r2) => r2.key === 'bs_start') && pv.json.reports.some((r2) => r2.key === 'income_received'));
+  assert.ok(pv.json.documents.count >= 1);
+  assert.strictEqual((await call('GET', '/api/finance/pack/preview?fy=nonsense')).status, 400);
+
+  const pdf = Buffer.from(await (await fetch(`${base}/api/finance/pack/pdf?${fyq}`)).arrayBuffer());
+  assert.strictEqual(pdf.slice(0, 5).toString(), '%PDF-');
+  if (process.env.PACK_DUMP_DIR) fsx.writeFileSync(pathx.join(process.env.PACK_DUMP_DIR, 'pack.pdf'), pdf); // eyeball the layout
+  assert.ok(pdf.length > 8000, `pdf size ${pdf.length}`);
+
+  const xr = await fetch(`${base}/api/finance/pack/xlsx?${fyq}`);
+  assert.ok(/spreadsheetml/.test(xr.headers.get('content-type')));
+  assert.ok(/Vault-FY2025-26/.test(xr.headers.get('content-disposition')));
+  const xbuf = Buffer.from(await xr.arrayBuffer());
+  if (process.env.PACK_DUMP_DIR) fsx.writeFileSync(pathx.join(process.env.PACK_DUMP_DIR, 'pack.xlsx'), xbuf);
+  const wb = XLSX.read(xbuf, { type: 'buffer' });
+  for (const name of ['Cover', 'Contents', 'Profit & Loss', 'Balance Sheet End', 'Tax Time Summary', 'Income Received', 'Cash Book', 'Chart of Accounts', 'Data - Expenses', 'Data - Journal'])
+    assert.ok(wb.SheetNames.includes(name), `sheet ${name} in ${wb.SheetNames.join(', ')}`);
+  assert.strictEqual(wb.SheetNames[1], 'Contents');
+
+  // numbers are real numbers, and the sheet agrees with the report the app serves
+  const plRep = (await call('GET', '/api/finance/reports/profit-loss?from=2025-07-01&to=2026-06-30')).json;
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets['Profit & Loss'], { header: 1 });
+  const net = rows.find((r2) => r2[0] === 'Net profit');
+  assert.ok(net && typeof net[1] === 'number' && near(net[1], plRep.netProfit), `net profit ${net && net[1]} vs ${plRep.netProfit}`);
+  const exp = XLSX.utils.sheet_to_json(wb.Sheets['Data - Expenses'], { header: 1 });
+  assert.ok(exp.length > 3 && typeof exp[3][0] === 'number', 'dates are real Excel dates');
+
+  const zipRes = await fetch(`${base}/api/finance/pack/zip?${fyq}&documents=1`);
+  assert.strictEqual(zipRes.headers.get('content-type'), 'application/zip');
+  const zip = await JSZip.loadAsync(Buffer.from(await zipRes.arrayBuffer()));
+  const names = Object.keys(zip.files);
+  assert.ok(names.some((n2) => n2.endsWith('.pdf')) && names.some((n2) => n2.endsWith('.xlsx')), names.join(', '));
+  assert.ok(names.includes('documents/README.txt'));
+  assert.ok(names.some((n2) => /^documents\/2025-12-31_.*\.pdf$/.test(n2)), 'the uploaded document is in the zip: ' + names.join(', '));
+  const noDocs = await JSZip.loadAsync(Buffer.from(await (await fetch(`${base}/api/finance/pack/zip?${fyq}`)).arrayBuffer()));
+  assert.ok(!Object.keys(noDocs.files).some((n2) => n2.startsWith('documents/')), 'documents only when asked for');
+
+  await call('DELETE', `/api/finance/documents/${up.json.documents[0].id}?confirm=1`);
+});
+
 // ---------------------------------------------------------------- audit trail
 test('audit log: triggers record create, field-level change and delete; log is append-only', async () => {
   const e = await call('POST', '/api/finance/expenses', { date: '2026-03-12', description: 'Audit me', amount: 50, gstIncluded: false });
@@ -659,6 +934,7 @@ async function cleanup(id) {
     server.close();
     // journal lines reference accounts with ON DELETE RESTRICT, so clear the entries (lines cascade) first
     await cleanup(userId);
+    try { fsx.rmSync(process.env.UPLOAD_DIR, { recursive: true, force: true }); } catch { /* best effort */ }
     await pool.end();
   }
   console.log(failed ? `\n${failed} failed` : `\nall ${tests.length} passed`);

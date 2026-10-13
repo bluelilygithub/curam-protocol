@@ -130,6 +130,16 @@ const TOOL_HELP = {
       'Only manual entries can be deleted here; auto-generated entries are deleted by deleting/reversing their source record',
     ],
   },
+  Documents: {
+    title: 'Documents (evidence)',
+    description: 'Provider statements, supplier invoices, bank statements and ATO notices kept as evidence for your books. One document can back many expenses, such as a monthly statement covering twenty charges.',
+    features: [
+      'Upload several files at once; link them to expenses and assets afterwards or straight from the missing-evidence list',
+      'Missing evidence: expenses and assets in the year with no receipt, invoice or statement attached (calculated vehicle/home-office claims and depreciation are excluded)',
+      'Deleting asks for confirmation — business records should be kept for five years',
+      'Private to your login; there is no public link to any file',
+    ],
+  },
   Accounts: {
     title: 'Chart of Accounts',
     description: 'The full list of accounts the business uses — assets, liabilities, equity, income, and expenses. Add your own on top of the built-in set for anything not already covered.',
@@ -153,7 +163,7 @@ const TOOL_HELP = {
     features: [
       'G1, G11, 1A, 1B, net GST, and PAYG withholding per quarter',
       'Warnings before reconciling — e.g. no data recorded, unusual negative net GST, unpaid invoices excluded from this quarter\'s figures',
-      'Cash-basis GST: income recognised when paid, expenses when paid — will not match an accrual-basis BAS',
+      'GST follows the cash or accrual basis chosen in Settings; the GST registration and cancellation date are also set there',
       'Annual summary panel showing all four quarters at a glance',
     ],
   },
@@ -212,7 +222,7 @@ function FinanceHelpModal({ tab, onClose }) {
       >
         <div className="flex items-start justify-between gap-3 mb-3">
           <h3 className="font-semibold text-base" style={{ color: 'var(--color-text)' }}>{entry.title}</h3>
-          <button onClick={onClose} style={{ color: 'var(--color-muted)' }} className="hover:opacity-60 transition-opacity flex-shrink-0">✕</button>
+          <Tooltip text="Close this help."><button onClick={onClose} style={{ color: 'var(--color-muted)' }} className="hover:opacity-60 transition-opacity flex-shrink-0">✕</button></Tooltip>
         </div>
         <p className="text-sm mb-4" style={{ color: 'var(--color-muted)' }}>{entry.description}</p>
         <ul className="space-y-1.5">
@@ -1924,6 +1934,11 @@ function ExpensesTab({ from, to }) {
                         style={{ color: e.receipt_path ? '#f59e0b' : 'var(--color-muted)' }}
                       >{getIcon(e.receipt_path ? 'eye' : 'upload', { size: 15 })}</button>
                     </Tooltip>
+                    {e.docCount > 0 && (
+                      <Tooltip text={`${e.docCount} document${e.docCount === 1 ? '' : 's'} linked as evidence — see the Documents tab.`}>
+                        <span className="text-[10px] ml-1 px-1 rounded" style={{ background: 'var(--color-primary)', color: '#fff' }}>+{e.docCount}</span>
+                      </Tooltip>
+                    )}
                   </td>
                   <td className="py-2 px-2">
                     <div className="flex gap-2">
@@ -3443,7 +3458,7 @@ function AssetsTab() {
             This will post a journal entry clearing <strong>{accountMap[ccPayModal.paidViaId]?.name}</strong> and debiting <strong>Bank / Cash</strong> for {fmt(parseFloat(ccPayModal.amount) + parseFloat(ccPayModal.gst || 0))}.
           </p>
           <Field label="Payment date" hint="Defaults to the purchase date — change it if you paid the card off later.">
-            <Input type="date" value={ccPayDate} onChange={setCcPayDate} />
+            <Tooltip text="The date the card or bill was actually paid off. It dates the bank payment in the books and the Aged Payables report."><Input type="date" value={ccPayDate} onChange={setCcPayDate} /></Tooltip>
           </Field>
           <div className="flex gap-2 mt-3">
             <Tooltip text="Post the payment: money out of the bank, the card or bill cleared."><Btn onClick={submitCcPay} disabled={ccPaySaving}>{ccPaySaving ? 'Recording…' : 'Confirm Payment'}</Btn></Tooltip>
@@ -4641,6 +4656,7 @@ function ExportHistoryPanel({ onChanged }) {
 // accountant's real account codes / tax codes into an export wizard each time.
 function ExportAccountMapPanel() {
   const [accounts, setAccounts] = useState([]);
+  const [txCodes, setTxCodes]   = useState([]);
   const [map, setMap]           = useState({});
   const [draft, setDraft]       = useState({});
   const [loading, setLoading]   = useState(true);
@@ -4653,6 +4669,7 @@ function ExportAccountMapPanel() {
       .then(r => r.json())
       .then(data => {
         setAccounts(data.accounts || []);
+        setTxCodes(data.txCodes || []);
         setMap(data.map || {});
         setDraft(data.map || {});
       })
@@ -4703,7 +4720,8 @@ function ExportAccountMapPanel() {
         Get your accountant's real account code (and, for Xero, the exact tax rate name they use)
         for each row below. Left blank, that row exports using the app's internal code and an
         auto-detected tax code — which your accountant's file almost certainly won't already have.
-        {mappedCount > 0 && <span> {mappedCount} of {accounts.length} accounts mapped.</span>}
+        {mappedCount > 0 && <span> {mappedCount} of {accounts.length + txCodes.length} accounts and codes mapped.</span>}
+        {' '}Your accountant's code and label also appear next to Vault's names in the financial-year pack (PDF and Excel), which never asks you to map anything first — blank just means Vault's name is used.
       </p>
       <div className="overflow-x-auto">
         <table className="text-xs w-full" style={{ borderCollapse: 'collapse' }}>
@@ -4711,7 +4729,7 @@ function ExportAccountMapPanel() {
             <tr style={{ color: 'var(--color-muted)', textAlign: 'left' }}>
               <th className="pb-1 pr-2">Internal account</th>
               <th className="pb-1 pr-2">Accountant's code</th>
-              <th className="pb-1 pr-2">Account name override</th>
+              <th className="pb-1 pr-2">Accountant's label</th>
               <th className="pb-1 pr-2">MYOB tax code</th>
               <th className="pb-1 pr-2">Xero tax type</th>
             </tr>
@@ -4768,6 +4786,32 @@ function ExportAccountMapPanel() {
                       />
                     </Tooltip>
                   </td>
+                </tr>
+              );
+            })}
+            {txCodes.length > 0 && (
+              <tr><td colSpan={5} className="pt-3 pb-1 font-semibold" style={{ color: 'var(--color-text)' }}>Income &amp; expense codes (the categories on your tax summary)</td></tr>
+            )}
+            {txCodes.map(c => {
+              const row = draft[c.code] || {};
+              return (
+                <tr key={c.code} style={{ borderTop: '1px solid var(--color-border)' }}>
+                  <td className="py-1 pr-2 whitespace-nowrap" style={{ color: 'var(--color-text)' }}>{c.code} — {c.name}</td>
+                  <td className="py-1 pr-2">
+                    <Tooltip text="The code your accountant uses for this income or expense category. Leave blank to show Vault's code.">
+                      <input value={row.code || ''} onChange={e => updateDraft(c.code, 'code', e.target.value)} placeholder={c.code}
+                        className="text-xs px-1.5 py-1 rounded border w-24"
+                        style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
+                    </Tooltip>
+                  </td>
+                  <td className="py-1 pr-2">
+                    <Tooltip text="What your accountant calls this category. Leave blank to show Vault's name.">
+                      <input value={row.name || ''} onChange={e => updateDraft(c.code, 'name', e.target.value)} placeholder={c.name}
+                        className="text-xs px-1.5 py-1 rounded border w-36"
+                        style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
+                    </Tooltip>
+                  </td>
+                  <td className="py-1 pr-2" /><td className="py-1 pr-2" />
                 </tr>
               );
             })}
@@ -5252,6 +5296,7 @@ function ExportModal({ type, history, onClose, onSuccess, onGoToAccountMap }) {
   const [loading, setLoading] = useState(false);
   const [accountMap, setAccountMap]         = useState(null); // null while loading
   const [totalAccounts, setTotalAccounts]   = useState(0);
+  const [accountCodes, setAccountCodes]     = useState(new Set());
   const addToast = useToastStore(s => s.addToast);
   const { startProcessing, stopProcessing } = useProcessingStore();
 
@@ -5266,11 +5311,13 @@ function ExportModal({ type, history, onClose, onSuccess, onGoToAccountMap }) {
       .then(data => {
         setAccountMap(data.map || {});
         setTotalAccounts((data.accounts || []).length);
+        setAccountCodes(new Set((data.accounts || []).map(a => a.code)));
       })
       .catch(() => setAccountMap({}));
   }, [needsAccountMap]);
 
-  const mappedCount = accountMap ? Object.values(accountMap).filter(v => v && v.code).length : 0;
+  // only accounts count here: income/expense codes are mapped in the same list but aren't part of a journal export
+  const mappedCount = accountMap ? Object.entries(accountMap).filter(([k, v]) => accountCodes.has(k) && v && v.code).length : 0;
   const unmappedCount = totalAccounts - mappedCount;
 
   const fmtAU = (dateStr) => {
@@ -6370,11 +6417,11 @@ const CashBasisNote = () => (
 );
 
 const REPORT_GROUP_TIPS = {
-  'Statements': 'Profit & loss, balance sheet, cash flow, trial balance and the general ledger.',
+  'Statements': 'Profit & loss, balance sheet, cash flow, trial balance, general ledger, cash book and capital/related-party movements.',
   'Receivables & Payables': 'Who owes you, what you owe, customer statements and invoice/quote status.',
-  'Sales & Purchases': 'Revenue by client, spend by supplier and expenses by category.',
-  'Tax & Compliance': 'GST, BAS worksheet, depreciation, drawings & wages and the tax-time summary.',
-  'Planning & Control': 'Budget vs actual, the activity log and charts.',
+  'Sales & Purchases': 'Revenue by client, income received, spend by supplier, expenses by category and the full expense listing.',
+  'Tax & Compliance': 'GST, BAS worksheet, tax payments, depreciation, drawings & wages and the tax-time summary.',
+  'Planning & Control': 'A checklist of loose ends, your accountant\'s code mapping, budget vs actual, the audit trail and charts.',
 };
 const REPORT_SUBTAB_TIPS = {
   'Profit & Loss': 'Income minus expenses for a period — the report your accountant needs most at tax time.',
@@ -6384,7 +6431,85 @@ const REPORT_SUBTAB_TIPS = {
   Charts: 'Visual trends: income vs expenses, bank balance over time, and GST per quarter.',
 };
 
+// ── Financial-year pack (for the accountant) ─────────────────────────────────
+// One PDF to flip through, one Excel workbook to copy from, and an optional zip with both plus the
+// supporting documents. Built on the server from the same reports as the Reports tab.
+function FyPackModal({ onClose }) {
+  const addToast = useToastStore(s => s.addToast);
+  const { startProcessing, stopProcessing } = useProcessingStore();
+  const [fy, setFy] = useState(() => {
+    const t = todayStr(); // default to the most recently finished financial year
+    const y = parseInt(t.slice(0, 4), 10) + (t.slice(5, 7) >= '07' ? 0 : -1) - 1;
+    return `${y}-${String((y + 1) % 100).padStart(2, '0')}`;
+  });
+  const [preview, setPreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [withDocs, setWithDocs] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPreview(null); setLoading(true);
+    api.get(`/api/finance/pack/preview?fy=${fy}`).then(async r => {
+      const body = await r.json();
+      if (!r.ok) throw new Error(body.error || 'Could not check the pack');
+      if (!cancelled) setPreview(body);
+    }).catch(e => { if (!cancelled) addToast(e.message, 'error'); }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [fy]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const download = async (kind) => {
+    setBusy(true);
+    startProcessing(`Building your FY ${fy} ${kind === 'pdf' ? 'PDF' : kind === 'xlsx' ? 'Excel workbook' : 'zip'}…`, 'This runs every report, so it can take a little while. Please don\'t navigate away.');
+    try {
+      const q = `fy=${fy}${kind === 'zip' && withDocs ? '&documents=1' : ''}`;
+      await api.download(`/api/finance/pack/${kind}?${q}`, `Vault-FY${fy}.${kind}`);
+    } catch (e) { addToast(e.message, 'error'); } finally { stopProcessing(); setBusy(false); }
+  };
+
+  const failed = (preview?.reports || []).filter(r => r.error);
+  return (
+    <Modal title="Export financial-year pack" onClose={onClose} wide>
+      <div className="flex flex-col gap-4">
+        <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+          Everything your accountant needs for the year in one go: statements, tax and BAS reports, receivables and payables, expense listing, the chart of accounts with their mapped codes, and the audit trail. The PDF is for reading; the Excel workbook has real numbers and dates to copy from.
+        </p>
+        <Field label="Financial year">
+          <Tooltip text="The pack covers 1 July to 30 June of this year, with the balance sheet at both ends."><Sel value={fy} onChange={setFy}>{fyOptions().map(o => <option key={o} value={o}>FY {o}</option>)}</Sel></Tooltip>
+        </Field>
+
+        {loading && <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Checking the books…</p>}
+        {preview && (
+          <div className="rounded-lg p-3 text-sm flex flex-col gap-1" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
+            <span>{preview.reports.length} reports{preview.business && !preview.business.startsWith('(') ? ` for ${preview.business}` : ''} ({preview.period}).</span>
+            {preview.itemsToCheck > 0
+              ? <span style={{ color: '#ef4444', fontWeight: 600 }}>{preview.itemsToCheck} item{preview.itemsToCheck === 1 ? '' : 's'} flagged to check — open “Things to Review” in Reports first.</span>
+              : <span style={{ color: '#065f46' }}>Nothing flagged in “Things to Review”.</span>}
+            {failed.length > 0 && <span style={{ color: '#ef4444' }}>{failed.length} report(s) could not be produced: {failed.map(f => f.title).join(', ')}.</span>}
+            <span style={{ color: 'var(--color-muted)' }}>{preview.documents.count} supporting document{preview.documents.count === 1 ? '' : 's'} filed under this year ({fmtBytes(preview.documents.bytes)}).</span>
+          </div>
+        )}
+
+        <label className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-text)' }}>
+          <Tooltip text="Adds the uploaded statements, invoices and receipts for the year to the zip download, in a documents folder with an index.">
+            <input type="checkbox" checked={withDocs} onChange={e => setWithDocs(e.target.checked)} />
+          </Tooltip>
+          Include supporting documents in the zip
+        </label>
+
+        <div className="flex flex-wrap gap-2 justify-end">
+          <Tooltip text="One PDF with a cover, contents and every report. Easy to read and print."><Btn onClick={() => download('pdf')} disabled={busy || loading}>Download PDF</Btn></Tooltip>
+          <Tooltip text="One Excel workbook: a sheet per report plus raw data sheets, ready to sort and copy from."><Btn onClick={() => download('xlsx')} disabled={busy || loading}>Download Excel</Btn></Tooltip>
+          <Tooltip text="The PDF, the Excel workbook and (if ticked) the supporting documents, in one zip."><Btn variant="secondary" onClick={() => download('zip')} disabled={busy || loading}>Download zip</Btn></Tooltip>
+          <Tooltip text="Close without downloading."><Btn variant="secondary" onClick={onClose}>Close</Btn></Tooltip>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function ReportsTab() {
+  const [showPack, setShowPack] = useState(false);
   const [sub, setSub] = useState('Profit & Loss');
   const [from, setFrom] = useState(() => getPresetRange('quarter').from);
   const [to, setTo]     = useState(() => getPresetRange('quarter').to);
@@ -6462,6 +6587,13 @@ function ReportsTab() {
 
   return (
     <div className="p-6">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Reports for the whole year can be sent to your accountant in one download.</p>
+        <Tooltip text="Build a PDF and an Excel workbook with every report for a financial year, and optionally the supporting documents, ready to send to your accountant.">
+          <Btn onClick={() => setShowPack(true)}>Export FY pack</Btn>
+        </Tooltip>
+      </div>
+      {showPack && <FyPackModal onClose={() => setShowPack(false)} />}
       <div className="flex gap-4 mb-2 overflow-x-auto scroll-x-obvious border-b" style={{ borderColor: 'var(--color-border)' }}>
         {REPORT_GROUPS.map(g => {
           const active = g.items.includes(sub);
@@ -6653,8 +6785,345 @@ function ReportTable({ title, rows, total, totalLabel }) {
 
 function fmtNum2(n) { return (parseFloat(n) || 0).toFixed(2); }
 
-const TABS = ['Dashboard', 'Invoices', 'Quotes', 'Suppliers', 'Expenses', 'Drawings', 'Vehicle/Home Office', 'Assets', 'Recurring', 'Wages', 'Interest', 'Journal', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Reports', 'Settings'];
-const NO_DATE_FILTER_TABS = new Set(['Suppliers', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings', 'Recurring', 'Vehicle/Home Office', 'Reports']);
+// ── Documents (evidence library) ─────────────────────────────────────────────
+// Statements, invoices and receipts kept as evidence for the books. One document can back many
+// expenses (a monthly provider statement); the "Missing evidence" list shows what has none.
+const DOC_KIND_LABELS = { invoice: 'Invoice', receipt: 'Receipt', statement: 'Statement', bank_statement: 'Bank statement', ato_notice: 'ATO notice', other: 'Other' };
+const fmtBytes = (n) => {
+  const v = Number(n) || 0;
+  return v >= 1048576 ? `${(v / 1048576).toFixed(1)} MB` : v >= 1024 ? `${Math.round(v / 1024)} KB` : `${v} B`;
+};
+const fyOptions = () => {
+  const cur = parseInt(finYearForDate(todayStr()).slice(0, 4), 10);
+  return Array.from({ length: 8 }, (_, i) => { const y = cur - i; return `${y}-${String((y + 1) % 100).padStart(2, '0')}`; });
+};
+
+function DocumentsTab() {
+  const addToast = useToastStore(s => s.addToast);
+  const [fy, setFy] = useState(finYearForDate(todayStr()));
+  const [kindFilter, setKindFilter] = useState('');
+  const [search, setSearch] = useState('');
+  const [data, setData] = useState({ documents: [], usedBytes: 0, quotaBytes: 0, maxFileBytes: 0 });
+  const [missing, setMissing] = useState({ expenses: [], assets: [] });
+  const [minTotal, setMinTotal] = useState('50');
+  const [files, setFiles] = useState([]);
+  const [meta, setMeta] = useState({ kind: 'statement', supplier: '', docDate: '', notes: '' });
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [linkDoc, setLinkDoc] = useState(null);
+  const [editDoc, setEditDoc] = useState(null);
+  const [confirmModal, setConfirmModal] = useState(null);
+  const pickRef = useRef(null);
+  const missingPickRef = useRef(null);
+  const missingTarget = useRef(null);
+
+  const load = useCallback(async () => {
+    const qs = new URLSearchParams({ fy });
+    if (kindFilter) qs.set('kind', kindFilter);
+    if (search.trim()) qs.set('q', search.trim());
+    try {
+      const [d, m] = await Promise.all([
+        api.get(`/api/finance/documents?${qs}`).then(r => r.json()),
+        api.get(`/api/finance/documents/missing?fy=${fy}&min=${encodeURIComponent(minTotal || 0)}`).then(r => r.json()),
+      ]);
+      if (d.documents) setData(d);
+      if (m.expenses) setMissing(m);
+    } catch (e) { addToast(e.message, 'error'); }
+  }, [fy, kindFilter, search, minTotal]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [load]);
+
+  const send = async (fileList, fields) => {
+    const fd = new FormData();
+    for (const f of fileList) fd.append('files', f);
+    for (const [k, v] of Object.entries(fields)) if (v !== '' && v !== undefined && v !== null) fd.append(k, v);
+    const res = await api.postForm('/api/finance/documents', fd);
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || (body.rejected?.[0]?.error) || 'Upload failed');
+    if (body.rejected?.length) addToast(`${body.rejected.length} file(s) rejected: ${body.rejected.map(r => `${r.file} (${r.error})`).join('; ')}`, 'error');
+    return body;
+  };
+
+  const doUpload = async () => {
+    if (!files.length) { addToast('Choose at least one file', 'error'); return; }
+    setUploading(true);
+    try {
+      const body = await send(files, { kind: meta.kind, supplier: meta.supplier, docDate: meta.docDate, notes: meta.notes, fy: meta.docDate ? '' : fy });
+      addToast(`${body.documents.length} document${body.documents.length === 1 ? '' : 's'} uploaded`);
+      setFiles([]); if (pickRef.current) pickRef.current.value = '';
+      load();
+    } catch (e) { addToast(e.message, 'error'); } finally { setUploading(false); }
+  };
+
+  const uploadForMissing = async (fileList) => {
+    const t = missingTarget.current;
+    if (!t || !fileList.length) return;
+    try {
+      await send(fileList, { kind: 'receipt', fy, [t.type === 'asset' ? 'assetId' : 'expenseId']: t.id });
+      addToast('Evidence attached');
+      load();
+    } catch (e) { addToast(e.message, 'error'); }
+  };
+
+  const fetchBlob = async (d) => {
+    const res = await api.get(`/api/finance/documents/${d.id}/file`);
+    if (!res.ok) { addToast('The file could not be found', 'error'); return null; }
+    return res.blob();
+  };
+  const viewDoc = async (d) => { const b = await fetchBlob(d); if (b) window.open(URL.createObjectURL(b), '_blank'); };
+  const downloadDoc = async (d) => {
+    const b = await fetchBlob(d); if (!b) return;
+    const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = d.originalName; a.click();
+  };
+
+  const deleteDoc = (d) => setConfirmModal({
+    message: `Permanently delete “${d.title}”? Business records should be kept for five years.`,
+    confirmLabel: 'Delete',
+    onConfirm: async () => {
+      setConfirmModal(null);
+      try { await okOrThrow(await api.delete(`/api/finance/documents/${d.id}?confirm=1`)); addToast('Document deleted'); load(); }
+      catch (e) { addToast(e.message, 'error'); }
+    },
+  });
+
+  const usedPct = data.quotaBytes ? Math.min(100, Math.round((data.usedBytes / data.quotaBytes) * 100)) : 0;
+  const missingCount = (missing.expenses?.length || 0) + (missing.assets?.length || 0);
+
+  return (
+    <div className="p-6 flex flex-col gap-6">
+      <div className="flex flex-wrap items-end gap-3">
+        <Field label="Financial year">
+          <Tooltip text="Shows documents filed under this financial year (1 July to 30 June)."><Sel value={fy} onChange={setFy}>{fyOptions().map(o => <option key={o} value={o}>FY {o}</option>)}</Sel></Tooltip>
+        </Field>
+        <Field label="Type">
+          <Tooltip text="Filter by kind of document."><Sel value={kindFilter} onChange={setKindFilter}><option value="">All types</option>{Object.entries(DOC_KIND_LABELS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Sel></Tooltip>
+        </Field>
+        <Field label="Search">
+          <Tooltip text="Search by title, supplier or file name."><Input value={search} onChange={setSearch} placeholder="Title, supplier or file name" /></Tooltip>
+        </Field>
+        <p className="text-xs pb-2" style={{ color: 'var(--color-muted)' }}>
+          {fmtBytes(data.usedBytes)} of {fmtBytes(data.quotaBytes)} used ({usedPct}%)
+        </p>
+      </div>
+
+      {/* Upload */}
+      <div
+        className="rounded-xl border p-4"
+        style={{ borderColor: dragOver ? 'var(--color-primary)' : 'var(--color-border)', background: 'var(--color-surface)', transition: 'border-color 200ms' }}
+        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={e => { e.preventDefault(); setDragOver(false); setFiles([...e.dataTransfer.files]); }}
+      >
+        <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Add documents</h3>
+        <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
+          Provider statements, supplier invoices, bank statements and ATO notices. Drag files here or choose them (PDF, images, CSV, Excel, Word; up to {fmtBytes(data.maxFileBytes)} each). Link them to expenses afterwards, or from the missing-evidence list below.
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          <Tooltip text="Choose one or several files from your computer.">
+            <input ref={pickRef} type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.csv,.xlsx,.xls,.txt,.docx,.doc" onChange={e => setFiles([...e.target.files])} className="text-sm" style={{ color: 'var(--color-text)' }} />
+          </Tooltip>
+          <Field label="Type"><Tooltip text="What kind of document this is."><Sel value={meta.kind} onChange={v => setMeta(p => ({ ...p, kind: v }))}>{Object.entries(DOC_KIND_LABELS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Sel></Tooltip></Field>
+          <Field label="Supplier"><Tooltip text="Who issued it (for example the AI provider). Optional."><Input value={meta.supplier} onChange={v => setMeta(p => ({ ...p, supplier: v }))} placeholder="Optional" /></Tooltip></Field>
+          <Field label="Document date"><Tooltip text="The date on the document. The financial year is worked out from it; leave blank to file it under the year selected above."><Input type="date" value={meta.docDate} onChange={v => setMeta(p => ({ ...p, docDate: v }))} /></Tooltip></Field>
+          <Field label="Notes"><Tooltip text="Anything worth remembering about this document. Optional."><Input value={meta.notes} onChange={v => setMeta(p => ({ ...p, notes: v }))} placeholder="Optional" /></Tooltip></Field>
+          <Tooltip text="Upload the chosen files to this library."><Btn onClick={doUpload} disabled={uploading || !files.length}>{uploading ? 'Uploading…' : `Upload${files.length ? ` ${files.length} file${files.length === 1 ? '' : 's'}` : ''}`}</Btn></Tooltip>
+        </div>
+      </div>
+
+      {/* Missing evidence */}
+      <div className="rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
+          <div>
+            <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Missing evidence — FY {fy}</h3>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              {missingCount ? `${missingCount} item${missingCount === 1 ? '' : 's'} with no receipt, invoice or statement attached.` : 'Every expense and asset at or above the threshold has evidence attached.'} Calculated vehicle/home-office claims and depreciation are excluded.
+            </p>
+          </div>
+          <Field label="Only items of at least ($)">
+            <Tooltip text="Hide small purchases. Records of every expense are still needed; this just keeps the list focused."><Input type="number" value={minTotal} onChange={setMinTotal} /></Tooltip>
+          </Field>
+        </div>
+        {missingCount > 0 && (
+          <table className="w-full text-sm">
+            <tbody>
+              {[...missing.expenses.map(x => ({ ...x, type: 'expense' })), ...missing.assets.map(x => ({ ...x, type: 'asset' }))].map(x => (
+                <tr key={`${x.type}-${x.id}`} className="border-b last:border-0" style={{ borderColor: 'var(--color-border)' }}>
+                  <td className="py-2 px-4 text-xs" style={{ color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>{fmtDate(x.date)}</td>
+                  <td className="py-2 px-2" style={{ color: 'var(--color-text)' }}>{x.description}{x.supplier ? <span className="text-xs" style={{ color: 'var(--color-muted)' }}> · {x.supplier}</span> : null}{x.type === 'asset' && <span className="text-[10px] ml-2 px-1.5 py-0.5 rounded font-semibold" style={{ background: 'var(--color-primary)', color: '#fff' }}>ASSET</span>}</td>
+                  <td className="py-2 px-2 font-medium" style={{ color: 'var(--color-text)' }}>{fmt(x.total)}</td>
+                  <td className="py-2 px-4 text-right">
+                    <Tooltip text="Pick a file and attach it to this item as its evidence."><button className="text-xs hover:opacity-60" style={{ color: 'var(--color-primary)' }} onClick={() => { missingTarget.current = x; missingPickRef.current?.click(); }}>Upload & attach</button></Tooltip>
+                    <Tooltip text="Attach a document you've already uploaded."><button className="text-xs ml-3 hover:opacity-60" style={{ color: 'var(--color-primary)' }} onClick={() => setLinkDoc({ pickFor: x })}>Choose existing</button></Tooltip>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <input ref={missingPickRef} type="file" style={{ display: 'none' }} accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.csv,.xlsx,.xls,.txt,.docx,.doc" onChange={e => { uploadForMissing([...e.target.files]); e.target.value = ''; }} />
+      </div>
+
+      {/* Library */}
+      <div className="rounded-xl border overflow-x-auto" style={{ borderColor: 'var(--color-border)' }}>
+        {data.documents.length === 0 ? (
+          <p className="p-4 text-sm" style={{ color: 'var(--color-muted)' }}>No documents for FY {fy}{kindFilter || search ? ' matching these filters' : ''} yet.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-muted)' }} className="text-left text-xs">
+                <th className="py-2 px-4">Date</th><th className="py-2 px-2">Title</th><th className="py-2 px-2">Type</th><th className="py-2 px-2">Supplier</th><th className="py-2 px-2">Size</th><th className="py-2 px-2">Linked to</th><th className="py-2 px-4" />
+              </tr>
+            </thead>
+            <tbody>
+              {data.documents.map(d => (
+                <tr key={d.id} className="border-b last:border-0" style={{ borderColor: 'var(--color-border)' }}>
+                  <td className="py-2 px-4 text-xs" style={{ color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>{d.docDate ? fmtDate(d.docDate) : '—'}</td>
+                  <td className="py-2 px-2" style={{ color: 'var(--color-text)' }}>{d.title}{d.notes ? <div className="text-[11px]" style={{ color: 'var(--color-muted)' }}>{d.notes}</div> : null}</td>
+                  <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>{DOC_KIND_LABELS[d.kind] || d.kind}</td>
+                  <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>{d.supplier || '—'}</td>
+                  <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>{fmtBytes(d.sizeBytes)}</td>
+                  <td className="py-2 px-2 text-xs">
+                    <Tooltip text={d.links.length ? d.links.map(l => `${l.date || ''} ${l.label}`).join(' • ') : 'Not linked to any expense or asset yet.'}>
+                      <button className="hover:opacity-60" style={{ color: d.links.length ? 'var(--color-text)' : '#f59e0b' }} onClick={() => setLinkDoc(d)}>{d.links.length ? `${d.links.length} item${d.links.length === 1 ? '' : 's'}` : 'Not linked'}</button>
+                    </Tooltip>
+                  </td>
+                  <td className="py-2 px-4 whitespace-nowrap text-right text-xs">
+                    <Tooltip text="Open the file in a new tab."><button className="hover:opacity-60 mr-3" style={{ color: 'var(--color-primary)' }} onClick={() => viewDoc(d)}>View</button></Tooltip>
+                    <Tooltip text="Save a copy to your computer."><button className="hover:opacity-60 mr-3" style={{ color: 'var(--color-muted)' }} onClick={() => downloadDoc(d)}>Download</button></Tooltip>
+                    <Tooltip text="Change the title, type, supplier, date, financial year or notes."><button className="hover:opacity-60 mr-3" style={{ color: 'var(--color-muted)' }} onClick={() => setEditDoc({ ...d })}>Edit</button></Tooltip>
+                    <Tooltip text="Permanently delete this document. You will be asked to confirm."><button className="hover:opacity-60" style={{ color: '#ef4444' }} onClick={() => deleteDoc(d)}>Delete</button></Tooltip>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {linkDoc && <DocumentLinkModal doc={linkDoc} fy={fy} onClose={() => setLinkDoc(null)} onSaved={() => { setLinkDoc(null); load(); }} />}
+
+      {editDoc && (
+        <Modal title="Edit document" onClose={() => setEditDoc(null)}>
+          <div className="flex flex-col gap-3">
+            <Field label="Title"><Tooltip text="A name you'll recognise in lists and exports."><Input value={editDoc.title} onChange={v => setEditDoc(p => ({ ...p, title: v }))} /></Tooltip></Field>
+            <Field label="Type"><Tooltip text="What kind of document this is."><Sel value={editDoc.kind} onChange={v => setEditDoc(p => ({ ...p, kind: v }))}>{Object.entries(DOC_KIND_LABELS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Sel></Tooltip></Field>
+            <Field label="Supplier"><Tooltip text="Who issued it."><Input value={editDoc.supplier || ''} onChange={v => setEditDoc(p => ({ ...p, supplier: v }))} /></Tooltip></Field>
+            <Field label="Document date"><Tooltip text="The date on the document."><Input type="date" value={editDoc.docDate || ''} onChange={v => setEditDoc(p => ({ ...p, docDate: v }))} /></Tooltip></Field>
+            <Field label="Financial year"><Tooltip text="Which financial year this document is filed under."><Sel value={editDoc.fy} onChange={v => setEditDoc(p => ({ ...p, fy: v }))}>{fyOptions().map(o => <option key={o} value={o}>FY {o}</option>)}</Sel></Tooltip></Field>
+            <Field label="Notes"><Tooltip text="Anything worth remembering."><Textarea value={editDoc.notes || ''} onChange={v => setEditDoc(p => ({ ...p, notes: v }))} rows={2} /></Tooltip></Field>
+            <div className="flex gap-2 justify-end">
+              <Tooltip text="Close without saving."><Btn variant="secondary" onClick={() => setEditDoc(null)}>Cancel</Btn></Tooltip>
+              <Tooltip text="Save these changes."><Btn onClick={async () => {
+                try {
+                  await okOrThrow(await api.patch(`/api/finance/documents/${editDoc.id}`, { title: editDoc.title, kind: editDoc.kind, supplier: editDoc.supplier || '', docDate: editDoc.docDate || '', fy: editDoc.fy, notes: editDoc.notes || '' }));
+                  setEditDoc(null); load(); addToast('Document updated');
+                } catch (e) { addToast(e.message, 'error'); }
+              }}>Save</Btn></Tooltip>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {confirmModal && (
+        <ConfirmModal title="Confirm" message={confirmModal.message} confirmLabel={confirmModal.confirmLabel || 'Confirm'} danger onConfirm={confirmModal.onConfirm} onCancel={() => setConfirmModal(null)} />
+      )}
+    </div>
+  );
+}
+
+// Choose which expenses/assets a document backs (or, with `pickFor`, which existing document backs one item).
+function DocumentLinkModal({ doc, fy, onClose, onSaved }) {
+  const addToast = useToastStore(s => s.addToast);
+  const pickFor = doc.pickFor || null;
+  const [items, setItems] = useState([]);
+  const [docs, setDocs] = useState([]);
+  const [sel, setSel] = useState(() => new Set((doc.links || []).map(l => `${l.type}:${l.id}`)));
+  const [q, setQ] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (pickFor) {
+      api.get(`/api/finance/documents?fy=${fy}`).then(r => r.json()).then(d => setDocs(d.documents || [])).catch(() => {});
+      return;
+    }
+    Promise.all([api.get('/api/finance/expenses').then(r => r.json()), api.get('/api/finance/assets').then(r => r.json())]).then(([ex, as]) => {
+      setItems([
+        ...(Array.isArray(ex) ? ex : []).map(e => ({ key: `expense:${e.id}`, type: 'expense', date: String(e.date).slice(0, 10), label: e.description, sub: e.supplier || '', total: parseFloat(e.amount) + parseFloat(e.gst || 0) })),
+        ...(Array.isArray(as) ? as : []).map(a => ({ key: `asset:${a.id}`, type: 'asset', date: String(a.datePurchased).slice(0, 10), label: a.description, sub: 'Asset', total: parseFloat(a.amount) + parseFloat(a.gst || 0) })),
+      ].sort((a, b) => b.date.localeCompare(a.date)));
+    }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const shown = items.filter(i => !q.trim() || `${i.label} ${i.sub} ${i.date}`.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 200);
+  const toggle = (k) => setSel(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n; });
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const ids = (type) => [...sel].filter(k => k.startsWith(type + ':')).map(k => parseInt(k.split(':')[1], 10));
+      await okOrThrow(await api.put(`/api/finance/documents/${doc.id}/links`, { expenseIds: ids('expense'), assetIds: ids('asset') }));
+      addToast('Links saved'); onSaved();
+    } catch (e) { addToast(e.message, 'error'); } finally { setSaving(false); }
+  };
+
+  const attachExisting = async (d) => {
+    setSaving(true);
+    try {
+      const keep = (d.links || []).map(l => l);
+      const expenseIds = keep.filter(l => l.type === 'expense').map(l => l.id);
+      const assetIds = keep.filter(l => l.type === 'asset').map(l => l.id);
+      (pickFor.type === 'asset' ? assetIds : expenseIds).push(pickFor.id);
+      await okOrThrow(await api.put(`/api/finance/documents/${d.id}/links`, { expenseIds, assetIds }));
+      addToast('Evidence attached'); onSaved();
+    } catch (e) { addToast(e.message, 'error'); } finally { setSaving(false); }
+  };
+
+  if (pickFor) {
+    return (
+      <Modal title={`Attach a document to “${pickFor.description}”`} onClose={onClose} wide>
+        {docs.length === 0 ? <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No documents in FY {fy} yet — upload one first.</p> : (
+          <div className="flex flex-col gap-1 max-h-96 overflow-y-auto">
+            {docs.map(d => (
+              <Tooltip key={d.id} text="Attach this document to the item as its evidence.">
+                <button disabled={saving} onClick={() => attachExisting(d)} className="text-left text-sm px-3 py-2 rounded border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                  {d.title} <span className="text-xs" style={{ color: 'var(--color-muted)' }}>· {DOC_KIND_LABELS[d.kind]}{d.supplier ? ` · ${d.supplier}` : ''}{d.docDate ? ` · ${fmtDate(d.docDate)}` : ''}</span>
+                </button>
+              </Tooltip>
+            ))}
+          </div>
+        )}
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal title={`Link “${doc.title}” to expenses and assets`} onClose={onClose} wide>
+      <div className="flex flex-col gap-3">
+        <Tooltip text="Filter the list by description, supplier or date."><Input value={q} onChange={setQ} placeholder="Search expenses and assets" /></Tooltip>
+        <div className="flex flex-col gap-1 max-h-96 overflow-y-auto">
+          {shown.map(i => (
+            <label key={i.key} className="flex items-center gap-3 text-sm px-3 py-1.5 rounded border cursor-pointer" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+              <Tooltip text="Tick to say this document is evidence for this expense or asset."><input type="checkbox" checked={sel.has(i.key)} onChange={() => toggle(i.key)} /></Tooltip>
+              <span className="text-xs" style={{ color: 'var(--color-muted)', minWidth: 80 }}>{fmtDate(i.date)}</span>
+              <span className="flex-1">{i.label}{i.sub ? <span className="text-xs" style={{ color: 'var(--color-muted)' }}> · {i.sub}</span> : null}</span>
+              <span className="font-medium">{fmt(i.total)}</span>
+            </label>
+          ))}
+          {shown.length === 0 && <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Nothing matches.</p>}
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{sel.size} selected</span>
+          <div className="flex gap-2">
+            <Tooltip text="Close without saving."><Btn variant="secondary" onClick={onClose}>Cancel</Btn></Tooltip>
+            <Tooltip text="Save which items this document is evidence for."><Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save links'}</Btn></Tooltip>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+const TABS = ['Dashboard', 'Invoices', 'Quotes', 'Suppliers', 'Expenses', 'Documents', 'Drawings', 'Vehicle/Home Office', 'Assets', 'Recurring', 'Wages', 'Interest', 'Journal', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Reports', 'Settings'];
+const NO_DATE_FILTER_TABS = new Set(['Documents', 'Suppliers', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings', 'Recurring', 'Vehicle/Home Office', 'Reports']);
 
 export default function FinancePage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -6754,6 +7223,7 @@ export default function FinancePage() {
         {tab === 'Quotes'    && <InvoicesTab  from={from} to={to} docType="quote" clientId={clientFilter} onClearClientFilter={clearClientFilter} />}
         {tab === 'Suppliers' && <SuppliersTab />}
         {tab === 'Expenses'  && <ExpensesTab  from={from} to={to} />}
+        {tab === 'Documents' && <DocumentsTab />}
         {tab === 'Drawings'  && <DrawingsTab  from={from} to={to} />}
         {tab === 'Vehicle/Home Office' && <VehicleHomeOfficeTab onGoToSettings={goToVehicleHomeOfficeSettings} />}
         {tab === 'Assets' && <AssetsTab />}

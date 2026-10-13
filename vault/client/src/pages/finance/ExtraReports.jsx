@@ -15,7 +15,7 @@ export const EXTRA_REPORTS = {
   'Cash Flow Statement': { path: 'cash-flow-statement', mode: 'range', tip: 'Where cash actually came from and went — operating, investing and financing — with opening and closing bank balance.' },
   'General Ledger':      { path: 'general-ledger', mode: 'range', extra: 'account', tip: 'Every transaction per account with a running balance — the detail behind any figure in the other reports.' },
   'Aged Receivables':    { path: 'aged-receivables', mode: 'asOf', tip: 'Unpaid invoices grouped by how overdue they are, per client.' },
-  'Aged Payables':       { path: 'aged-payables', mode: 'asOf', tip: 'Credit-card purchases not yet settled, aged by days since purchase, plus liability balances.' },
+  'Aged Payables':       { path: 'aged-payables', mode: 'asOf', tip: 'Supplier bills and card purchases not yet paid, aged from their due date, plus liability balances.' },
   'Customer Statements': { path: 'customer-statement', mode: 'range', extra: 'client', tip: 'A per-client statement of invoices and payments with a running balance. Download it as a PDF to send.' },
   'Invoice Status':      { path: 'invoice-status', mode: 'range', tip: 'Invoices and quotes by status, overdue value, average days to pay and quote conversion rate.' },
   'Sales by Client':     { path: 'sales-by-client', mode: 'range', tip: 'Who your revenue comes from: invoiced, paid and outstanding per client.' },
@@ -26,15 +26,22 @@ export const EXTRA_REPORTS = {
   'Drawings & Wages':    { path: 'drawings-wages', mode: 'range', tip: "Wages by employee, drawings by month, and the roll-forward of owner's equity." },
   'Tax Time Summary':    { path: 'tax-time-summary', mode: 'fy', tip: 'A financial-year hand-over for your accountant: income, deductions, vehicle/home office, assets and GST.' },
   'Budget vs Actual':    { path: 'budget-vs-actual', mode: 'fy', extra: 'budget', tip: 'Compare your budget for the year against actual income and expenses.' },
-  'Audit Trail':         { path: 'audit-trail', mode: 'range', tip: 'When each journal entry was created and every invoice/quote email sent.' },
+  'Audit Trail':         { path: 'audit-trail', mode: 'range', tip: 'Every create, edit and delete of your financial records with the old and new values, plus journal postings and invoice emails.' },
+  'Income Received':     { path: 'income-received', mode: 'range', tip: 'Income on a cash basis (what you were paid), reconciled to what you invoiced, with unpaid invoices at the start and end.' },
+  'Expense Listing':     { path: 'expense-listing', mode: 'range', tip: 'Every expense in date order with what it was paid from and whether a receipt or statement is attached.' },
+  'Tax Payments & Credits': { path: 'tax-payments', mode: 'range', tip: 'BAS payments, PAYG instalments and withholding paid to the ATO, and tax-looking payments wrongly booked as expenses.' },
+  'Cash Book':           { path: 'cash-book', mode: 'range', extra: 'account', tip: 'Every movement in the bank (and card/bills) with a running balance, to tick against your statements.' },
+  'Capital & Related Parties': { path: 'capital-related', mode: 'range', tip: 'Capital introduced, drawings and any loan accounts, e.g. money moving to or from another business.' },
+  'Things to Review':    { path: 'review-items', mode: 'fy', tip: 'A checklist of problems and loose ends in the books for a financial year, to clear before sending the pack.' },
+  'Chart of Accounts & Codes': { path: 'chart-of-accounts', mode: 'none', tip: 'Your accounts and income/expense codes with your accountant’s mapped codes and labels alongside.' },
 };
 
 export const REPORT_GROUPS = [
-  { label: 'Statements', items: ['Profit & Loss', 'P&L Comparison', 'Balance Sheet', 'Cash Flow Statement', 'Trial Balance', 'General Ledger'] },
+  { label: 'Statements', items: ['Profit & Loss', 'P&L Comparison', 'Balance Sheet', 'Cash Flow Statement', 'Trial Balance', 'General Ledger', 'Cash Book', 'Capital & Related Parties'] },
   { label: 'Receivables & Payables', items: ['Aged Receivables', 'Aged Payables', 'Customer Statements', 'Invoice Status'] },
-  { label: 'Sales & Purchases', items: ['Sales by Client', 'Purchases by Supplier', 'Expenses by Category'] },
-  { label: 'Tax & Compliance', items: ['GST Summary', 'BAS Worksheet', 'Depreciation Schedule', 'Drawings & Wages', 'Tax Time Summary'] },
-  { label: 'Planning & Control', items: ['Budget vs Actual', 'Audit Trail', 'Charts'] },
+  { label: 'Sales & Purchases', items: ['Sales by Client', 'Income Received', 'Purchases by Supplier', 'Expenses by Category', 'Expense Listing'] },
+  { label: 'Tax & Compliance', items: ['GST Summary', 'BAS Worksheet', 'Tax Payments & Credits', 'Depreciation Schedule', 'Drawings & Wages', 'Tax Time Summary'] },
+  { label: 'Planning & Control', items: ['Things to Review', 'Chart of Accounts & Codes', 'Budget vs Actual', 'Audit Trail', 'Charts'] },
 ];
 
 // ── local helpers ─────────────────────────────────────────────────────────────
@@ -241,13 +248,15 @@ function BudgetEditor({ fy, onSaved }) {
           <div key={`${kind}:${l.code}`} className="flex items-center gap-3">
             <span className="text-sm flex-1 min-w-0 truncate" style={{ color: 'var(--color-text)' }}>{l.code} · {l.name}</span>
             <span className="text-xs tabular-nums w-24 text-right" style={{ color: 'var(--color-muted)' }}>actual {AUD.format(l.actual)}</span>
-            <input
-              type="number" min="0" step="0.01" placeholder="0.00"
-              value={values[`${kind}:${l.code}`] ?? ''}
-              onChange={e => setValues(v => ({ ...v, [`${kind}:${l.code}`]: e.target.value }))}
-              className="text-sm px-3 py-1.5 rounded-lg border w-32 text-right"
-              style={fieldStyle}
-            />
+            <Tooltip text={`Your budget for ${l.name} for the whole year, excluding GST. Leave blank for no budget.`}>
+              <input
+                type="number" min="0" step="0.01" placeholder="0.00"
+                value={values[`${kind}:${l.code}`] ?? ''}
+                onChange={e => setValues(v => ({ ...v, [`${kind}:${l.code}`]: e.target.value }))}
+                className="text-sm px-3 py-1.5 rounded-lg border w-32 text-right"
+                style={fieldStyle}
+              />
+            </Tooltip>
           </div>
         ))}
       </div>
@@ -263,9 +272,11 @@ function BudgetEditor({ fy, onSaved }) {
         {group('expense', 'Expenses')}
       </div>
       <div className="mt-4">
-        <button onClick={save} disabled={saving} className="px-3 py-1.5 text-sm rounded-lg font-medium transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)', color: '#fff' }}>
-          {saving ? 'Saving…' : 'Save budgets'}
-        </button>
+        <Tooltip text="Save the budget amounts for this financial year. Budget vs Actual updates straight away.">
+          <button onClick={save} disabled={saving} className="px-3 py-1.5 text-sm rounded-lg font-medium transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)', color: '#fff' }}>
+            {saving ? 'Saving…' : 'Save budgets'}
+          </button>
+        </Tooltip>
       </div>
     </div>
   );
