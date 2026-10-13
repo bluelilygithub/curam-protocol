@@ -377,7 +377,7 @@ const TOOL_HELP = {
     features: [
       'Upload a video or pick one from Saved media',
       'Auto-transcribe on upload (Gemini on hosted Vault, whisper-cli locally), or paste your own SRT',
-      'Wrote your own script with no timestamps? "I have a script, not captions" listens to the video and times each line to the speech',
+      'Wrote your own script with no timestamps? Paste it in the captions box (or use "I have a script, not captions"); when you burn, Vault listens to the video and times each line to the speech',
       'Same typography controls as Annotate — font, weight, size, text and background colour',
       'Optionally save the captioned result straight to the library',
     ],
@@ -1453,9 +1453,31 @@ export default function VideosPage() {
     }
   }, [startProcessing, stopProcessing, setResultFromBlob, thumbUrl, addToast]);
 
+  // Text with no times in it (no "-->" time lines) cannot be shown on a video. Rather than stopping, time it to the speech
+  // first (same as the "I have a script" panel) and carry on. Returns the timed SRT; the caller shows the note.
+  const timeScriptNow = async ({ file = null, libraryId = '', script }) => {
+    const fd = new FormData();
+    if (file) fd.append('media', file);
+    else fd.append('libraryId', String(libraryId));
+    fd.append('script', script);
+    const res = await api.postForm('/api/videos/time-script', fd);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not time the text');
+    addToast(
+      data.method === 'speech' || data.method === 'markers'
+        ? `Captions timed (${data.method === 'speech' ? 'to the speech' : 'from your times'}).`
+        : `${data.note}`,
+      data.method === 'even' ? 'info' : 'success',
+    );
+    return data.srt;
+  };
+
+  // Only real subtitle time lines count. A script with [00:00 - 00:12] markers still goes through timing (it uses those times).
+  const hasCaptionTimes = (text) => /-->/.test(String(text || ''));
+
   const handleCaptionStudio = async () => {
     if (!srtText.trim()) {
-      addToast('Paste SRT content', 'error');
+      addToast('Paste your captions or script first', 'error');
       return;
     }
     if (!captionLibraryId && !sourceFile) {
@@ -1465,9 +1487,17 @@ export default function VideosPage() {
     const styleFields = textStyleFields();
     startProcessing('Burning captions…', 'Applying styled subtitles with ffmpeg.');
     try {
+      // No timestamps in the box? Time the text to the video's speech first, show the result, then burn it.
+      let burnSrt = srtText;
+      if (!hasCaptionTimes(srtText)) {
+        startProcessing('Timing your captions…', 'Listening to the video so each line appears when it is spoken.');
+        burnSrt = await timeScriptNow({ file: captionLibraryId ? null : sourceFile, libraryId: captionLibraryId, script: srtText });
+        setSrtText(burnSrt);
+        startProcessing('Burning captions…', 'Applying styled subtitles with ffmpeg.');
+      }
       if (captionLibraryId) {
         const fd = new FormData();
-        fd.append('srtText', srtText);
+        fd.append('srtText', burnSrt);
         fd.append('saveToLibrary', String(captionSaveToLibrary));
         Object.entries(styleFields).forEach(([k, v]) => fd.append(k, String(v)));
         const res = await api.postForm(`/api/videos/library/${captionLibraryId}/captions`, fd);
@@ -1481,7 +1511,7 @@ export default function VideosPage() {
       } else {
         const fd = new FormData();
         fd.append('video', sourceFile);
-        fd.append('srtText', srtText);
+        fd.append('srtText', burnSrt);
         appendTextStyleFields(fd);
         const res = await api.postForm('/api/videos/burn-captions', fd);
         if (!res.ok) {
@@ -1766,14 +1796,15 @@ export default function VideosPage() {
   const transcriptSrtWithEdits = () => applyEditedText(trSrt, trText);
 
   const useTranscriptAsCaptions = () => {
-    const { srt, applied } = transcriptSrtWithEdits();
+    // With no timestamps yet, the plain text goes across as it is; Caption studio times it to the video when you burn.
+    const { srt, applied } = trSrt ? transcriptSrtWithEdits() : { srt: trText, applied: true };
     setSrtText(srt);
     setCaptionLibraryId('');
     setTool('caption-studio');
     setOpenGroup('compose');
     addToast(
       applied
-        ? 'Transcript loaded as captions. Choose your video, then burn them in.'
+        ? (trSrt ? 'Transcript loaded as captions. Choose your video, then burn them in.' : 'Text loaded. Choose your video, then burn: Vault will time the text to the speech for you.')
         : 'Loaded as captions, but your edits were not included because lines were added or removed. Edit the captions box here instead.',
       applied ? 'success' : 'info',
     );
@@ -1792,9 +1823,24 @@ export default function VideosPage() {
   };
 
   const makeTranscriptVideo = async () => {
-    if (!trSrt) { addToast('Get the captions with timestamps first', 'error'); return; }
+    if (!trSrt && !trText.trim()) { addToast('Transcribe or paste your script first', 'error'); return; }
     if (!trAudioFile) { addToast('Choose the audio or video file first', 'error'); return; }
-    const { srt } = transcriptSrtWithEdits();
+    let srt;
+    if (trSrt) {
+      srt = transcriptSrtWithEdits().srt;
+    } else {
+      // Plain text with no times: listen to the recording and time it, then carry on.
+      startProcessing('Timing your captions…', 'Listening to the recording so each line appears when it is spoken.');
+      try {
+        srt = await timeScriptNow({ file: trAudioFile, script: trText });
+        setTrSrt(srt);
+      } catch (err) {
+        addToast(err.message, 'error');
+        return;
+      } finally {
+        stopProcessing();
+      }
+    }
     const fd = new FormData();
     // A video gets the captions burned onto it; audio gets a plain coloured screen made for it.
     fd.append(trIsVideo ? 'video' : 'audio', trAudioFile);
@@ -3020,7 +3066,7 @@ export default function VideosPage() {
                 {trNote && <p className="text-xs" style={{ color: '#b45309' }}>{trNote}</p>}
                 {!trSrt && (
                   <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                    Want this as captions on a video? Choose &quot;With timestamps (SRT)&quot; above and transcribe again.
+                    This text has no times. That is fine: when you put it on a video, Vault listens to the recording and shows each line as it is spoken.
                   </p>
                 )}
                 {trSrt && (
@@ -3046,7 +3092,7 @@ export default function VideosPage() {
                   <Tooltip text="Save the transcript above as a plain text file, named after your audio file.">
                     <button type="button" onClick={() => downloadTranscript('txt')} className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Download .txt</button>
                   </Tooltip>
-                  {trSrt && (
+                  {(trSrt || trText.trim()) && (
                     <Tooltip text="Already have a video? Opens Caption studio with these captions (including your corrections) so you can choose it and burn them along the bottom. No video? Use Make a video below instead.">
                       <button type="button" onClick={useTranscriptAsCaptions} className="px-3 py-2 rounded-xl text-xs font-medium text-white transition-opacity hover:opacity-80" style={{ background: 'var(--color-primary)' }}>Add as captions on a video →</button>
                     </Tooltip>
@@ -3057,7 +3103,7 @@ export default function VideosPage() {
                     </Tooltip>
                   )}
                 </div>
-                {trSrt && (
+                {(trSrt || trText.trim()) && (
                   <div className="space-y-3 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
                     <div>
                       <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>{trIsVideo ? 'Put the transcript on your video' : 'Make a video with the transcript on it'}</p>
@@ -3938,6 +3984,7 @@ export default function VideosPage() {
               <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Subtitles (SRT)</p>
               <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
                 {status?.transcribe?.note || 'Paste SRT content or auto-transcribe when uploading a file.'}
+                {' '}No timestamps? Paste plain text or a script instead: when you burn, Vault listens to the video and times each line to the speech.
                 {' '}Caption burn re-encodes once to embed text — audio is copied unchanged from your source.
               </p>
               {status?.transcribe?.available && !captionLibraryId && (
