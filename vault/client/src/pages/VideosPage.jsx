@@ -932,16 +932,18 @@ function ResultVideo({
 
 function ToolHeader({ id, label, onHelp, getIcon }) {
   return (
-    <div className="flex items-center flex-wrap gap-1.5">
-      <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{label}</h2>
-      <button
-        type="button"
-        onClick={() => onHelp(id)}
-        className="hover:opacity-60 transition-opacity flex-shrink-0"
-        style={{ color: 'var(--color-muted)' }}
-      >
-        {getIcon('help-circle', { size: 13 })}
-      </button>
+    <div className="space-y-3">
+      <div className="flex items-center gap-1.5">
+        <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{label}</h2>
+        <button
+          type="button"
+          onClick={() => onHelp(id)}
+          className="hover:opacity-60 transition-opacity flex-shrink-0"
+          style={{ color: 'var(--color-muted)' }}
+        >
+          {getIcon('help-circle', { size: 13 })}
+        </button>
+      </div>
       <VoiceCommandBar toolId={id} />
     </div>
   );
