@@ -103,6 +103,24 @@ test('depreciation: pure calc pro-rates a mid-year purchase and stops at disposa
   assert.strictEqual(asStr.decline, half.decline);
 });
 
+test('depreciation: low-value pool takes 18.75% in the first year however late it was bought, then 37.5% (no day proration)', () => {
+  const calc = router.computeAssetYearDepreciation;
+  const pool1 = { method: 'low_value_pool', amount: 999.09, accumulatedDepreciation: 0, businessUsePercent: 100 };
+  // bought 5 June 2026: only 26 days of FY2025-26, but the pool rate is not prorated
+  const y1 = calc({ ...pool1, dateFirstUsed: new Date(2026, 5, 5) }, '2025-26');
+  assert.ok(near(y1.decline, 187.33), `first-year pool decline ${y1.decline}`);
+  assert.strictEqual(calc({ ...pool1, dateFirstUsed: new Date(2025, 6, 1) }, '2025-26').decline, y1.decline, 'same figure whenever in the year it was bought');
+  // second year: 37.5% of the opening balance
+  const y2 = calc({ ...pool1, accumulatedDepreciation: y1.decline, dateFirstUsed: new Date(2026, 5, 5) }, '2026-27');
+  assert.ok(near(y2.decline, Math.round((999.09 - y1.decline) * 0.375 * 100) / 100), `second-year pool decline ${y2.decline}`);
+  // business-use % reduces the deduction, not the decline
+  const part = calc({ ...pool1, businessUsePercent: 50, dateFirstUsed: new Date(2026, 5, 5) }, '2025-26');
+  assert.ok(near(part.deduction, y1.decline / 2) && near(part.decline, y1.decline));
+  // prime cost is still prorated by days
+  const pc = calc({ method: 'prime_cost', amount: 1200, accumulatedDepreciation: 0, effectiveLifeYears: 4, businessUsePercent: 100, dateFirstUsed: new Date(2026, 5, 5) }, '2025-26');
+  assert.ok(pc.decline < 25, `prime cost still prorated: ${pc.decline}`);
+});
+
 test('depreciation: run endpoint posts the same pro-rata figure the preview shows', async () => {
   const a = await call('POST', '/api/finance/assets', {
     datePurchased: '2026-01-01', dateFirstUsed: '2026-01-01', description: 'Test laptop',

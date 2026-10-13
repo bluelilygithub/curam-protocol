@@ -2893,6 +2893,7 @@ function computeAssetYearDepreciation(asset, fy) {
   if (openingValue <= 0) return null;
 
   let rate, base;
+  let prorate = true;
   if (asset.method === 'prime_cost') {
     const life = parseFloat(asset.effectiveLifeYears) || 0;
     if (life <= 0) return null;
@@ -2904,11 +2905,15 @@ function computeAssetYearDepreciation(asset, fy) {
     rate = 200 / life;
     base = openingValue;
   } else { // low_value_pool
+    // ATO low-value pool: 18.75% of the cost in the year the asset is allocated to the pool, however late in
+    // the year it was bought (the rate already allows for that), then 37.5% of the opening pool balance each
+    // year after. Unlike prime cost / diminishing value there is NO days-held proration.
     rate = accumulated === 0 ? 18.75 : 37.5;
     base = openingValue;
+    prorate = false;
   }
 
-  let decline = round2(base * (daysHeld / daysInYear) * (rate / 100));
+  let decline = round2(base * (prorate ? daysHeld / daysInYear : 1) * (rate / 100));
   decline = Math.min(decline, openingValue);
   if (decline <= 0) return null;
   const businessUsePercent = parseFloat(asset.businessUsePercent) || 100;
