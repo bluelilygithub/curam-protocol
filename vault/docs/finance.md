@@ -34,7 +34,13 @@ Wages get a friendlier, wages-specific 400 message (`POST /wages`) when the clie
 
 ## Cash-basis GST (A3)
 
-BAS/GST figures are cash-basis: income recognized when an invoice's `paidAt` falls in the period, expenses recognized on their `date` (payment date). This is internally consistent but will not match an accrual-basis BAS. A disclosure note is shown wherever BAS/GST figures appear (BAS tab, GST Summary report, Profit & Loss report). Accrual-basis GST is out of scope.
+BAS/GST figures follow the **GST basis** chosen in Settings (`fin_gst_basis`, default `cash`). The one definition lives in `finance.js` (`getGstBasis`, `gstSalesSql`, `purchaseClaimDateSql`, `PURCHASES_FROM`) and is injected into `financeReports.js`, so the BAS tab, annual BAS, BAS payment journal, GST Summary, BAS Worksheet, Tax Time Summary and the GST chart can't disagree.
+
+- **Cash**: sales count when an invoice is paid (`paidAt`); purchases on their `date`, except supplier bills paid via Accounts Payable (2000), which count on `settledDate` (when paid).
+- **Accrual**: sales count when the invoice is sent/issued (`issueDate`, status sent or paid, quotes excluded); purchases and bills on their `date`.
+- Asset sale GST is recognised on the disposal date on either basis.
+- Invoice locking follows the basis too: the date that decides an invoice's BAS quarter (payment date on cash, issue date on accrual) falling in a reconciled/lodged/paid quarter locks it. On accrual a payment moves no GST, so marking paid isn't locked.
+- **The basis can't be changed once any quarter is reconciled, lodged or paid** (it would re-date figures already reported). Do it at the start of a new period with your accountant.
 
 ## Owner's Drawings vs Wages (B1)
 
@@ -176,16 +182,17 @@ Every new endpoint returns one normalized shape (`{ title, subtitle, notes, summ
 Behaviour worth knowing:
 
 - **Aged Receivables** counts days past due (issue date if no due date), and is date-accurate: an invoice paid after the as-of date still shows as outstanding on it. Quotes/drafts/void excluded.
-- **Aged Payables** can't be a true AP ledger — expenses are recorded when paid. It ages *unsettled credit-card purchases* (expenses/assets whose `paidViaId` is a liability account and `ccSettled=false`) by days since purchase, and shows date-accurate liability balances from the journal. Settlement dates aren't stored, so the unsettled list always reflects today's state.
+- **Aged Payables** is a real supplier-bill report. A bill is an expense (or asset purchase) paid via a liability account: Accounts Payable (2000) for "pay later" bills, or a credit card. `fin_expenses."dueDate"` (optional, entered on the expense form) and `"settledDate"` (set when you press Pay) make it date-accurate: an item paid after the as-of date still shows on it. It ages days past the due date (purchase date when none). Rows settled before payment dates existed have a NULL `settledDate` and are treated as paid before any as-of date. Pay / Pay bill / Unsettle are the existing `cc-pay` / `cc-statement-pay` / `cc-unsettle` routes (the label says "Pay bill" for Accounts Payable).
 - **Cash Flow Statement** is direct-method: every entry touching Bank (1000), grouped by journal `type` (manual entries by the accounts they touch). Closing balance ties to the bank account balance.
-- **BAS Worksheet** maps G1/1A/G10/G11/1B/W1/W2 on the same cash basis as the BAS tab. G2/G3/G13/G14 (GST-free/input-taxed) and T7 (PAYG instalments) are not tracked. A worksheet, not a lodgement.
+- **BAS Worksheet** maps G1, G2 (exports), G3 (other GST-free), G4 (input-taxed sales), 1A, G10, G11, G13 (purchases for input-taxed sales), G14 (purchases without GST in the price), 1B, W1, W2 and T7 on the chosen GST basis. G2/G3/G4 come from the **GST code on each invoice line** (`EXP`, `FRE`, `INP`; `GST` is taxable, `NT` is outside GST and appears only in G1); G13 from the expense checkbox *For making input-taxed sales* (`fin_expenses."inputTaxed"`, which also stops any GST being split out — no credit); G14 is every purchase with `gst = 0` that isn't flagged. G15 (private use) and other PAYG labels aren't tracked. A worksheet, not a lodgement.
+- **T7 (PAYG instalment)** is entered per quarter on the BAS tab (`fin_bas_quarters."paygInstalment"`, `POST /bas/:quarterId/payg-instalment`, editable until lodged). **Recording the BAS payment** now posts one entry: DR GST Collected, CR GST Paid, DR PAYG Withholding Payable (the quarter's W2 — before this, 2400 filled up and was never cleared), DR Owner's Drawings (T7 — a sole trader's instalment is personal income tax), and the balancing bank payment or refund. Quarters paid before this change never cleared their W2 from 2400; adjust that balance with a manual journal if it matters.
 - **Depreciation Schedule** reads *posted* depreciation (expenses named `Depreciation FY<fy>: <asset description>`); assets sharing a description can't be told apart there (the report warns).
 - **Budget vs Actual** — new table `fin_budgets` (`userId, fy, kind, code, amount`), annual budget per transaction code; actuals are ex-GST (income by invoice issue date, expenses by date). Uncoded activity shows as "Uncoded" so spend never vanishes.
 - **Tax Time Summary** — deductions are built from source tables and reconcile to the journal P&L via an explicit "Other / manual journal entries" line.
 - **Customer Statements** — invoices issued (debit) and payments (credit, by the date marked paid), plus ageing; PDF from `server/services/statementPdf.js` (same react-pdf look as `invoicePdf.js`).
-- **Audit Trail** is an *activity log*, not a true audit trail: journal entries by creation time + invoice/quote send attempts. Finance keeps no field-level edit history, and edits rebuild the journal entry, so previous versions are not retained. A real audit trail would need change-capture (triggers or an append-only log) — not built.
+- **Audit Trail** is now a real change history. Database triggers (`fin_audit_trigger`, installed in `db.js`) write every INSERT/UPDATE/DELETE of invoices/quotes, expenses, wages, drawings, assets, accounts, suppliers, tx codes, recurring entries, budget lines, BAS quarters, **manual** journal entries and `fin_*` settings to the append-only `fin_audit_log` (`tableName`, `rowId`, `label`, `action`, `changedFields` as `{field:{from,to}}` for updates, full `rowData` for creates/deletes). Because it is a trigger, no route or script can change those records without a log row. Updating the log is rejected; there is no route that deletes from it; it has no FK on `userId`, so it survives user deletion (the audit test cleanup deletes its own rows). The report (`?table=fin_invoices` narrows it) also lists derived journal postings and email attempts. Limits: history starts when the triggers were installed; invoice line items aren't logged individually (the invoice's subtotal/gst/total changes are); bank details show as "changed" without the value; the actor is the record's owner (Finance has no separate sub-users).
 
-Not built: a cash/accrual toggle (accrual GST stays out of scope, see below).
+
 
 ## Charts (Part D)
 
@@ -197,7 +204,7 @@ Also under the Reports tab ("Charts" sub-tab). Three plain inline-SVG charts, no
 
 ## Tooltips (Part E)
 
-The shared `Tooltip` component (`client/src/components/Tooltip.jsx`) is used on every new control introduced by this work (Drawings, Vehicle/Home Office calculators, capital-asset checkbox, all four Reports' date pickers and export buttons) plus a pass over the most safety-critical existing controls (Wages net-pay field, BAS cash-basis area, and the ABN/GST-registered/bank-detail/payment-terms Settings fields). Full exhaustive coverage of every existing control across Invoices/Clients/Suppliers/Codes/Accounts was not attempted in this pass — flagged as a follow-up.
+The shared `Tooltip` component (`client/src/components/Tooltip.jsx`) is used on every new control introduced by this work (Drawings, Vehicle/Home Office calculators, capital-asset checkbox, all four Reports' date pickers and export buttons) plus a pass over the most safety-critical existing controls (Wages net-pay field, BAS cash-basis area, and the ABN/GST-registered/bank-detail/payment-terms Settings fields). A later pass (2026-10-13) wrapped the remaining uncovered controls in Vehicle/Home Office, Assets and the export account-mapping panel; generic component definitions and the calculator keypad are intentionally untouched.
 
 ## Maintenance endpoint — `POST /assets/cleanup-orphaned-journal-entries`
 
@@ -213,6 +220,30 @@ Deletes `fin_journal_entries`/`fin_journal_lines` rows left behind from before e
 - **`GET /assets/depreciation/preview`** — flags when the queried FY ended more than 90 days ago and assets still have no depreciation posted for it (the annual run was likely forgotten).
 - **`POST /invoices/:id/send`** (catch path) — flags an invoice/quote whose send has now failed twice within 24 hours (bad recipient address, provider outage), rather than only writing to `fin_invoice_send_log`.
 
-## Deliberately out of scope
+## Remaining limits
 
-- **Accrual-basis GST** — only cash-basis is implemented; a disclosure note is shown instead.
+- GST on the sale of an asset isn't apportioned for business use (the whole 1/11 is reported), and a disposal after a *full-year* depreciation run for the same year can't claw that back (the final-year step only runs when the year hasn't been posted).
+- Asset purchases paid via Accounts Payable are claimed on the purchase date under both bases (only expense bills use the paid date on cash).
+- The actor in the audit log is the record owner, not a separate user.
+- Invoice numbers are `INV-2026001` for invoices and `Q-2026-001` for quotes (left alone so existing numbering carries on).
+
+## Gap-closing round (2026-10-13)
+
+Built on top of the fixes above: **audit trail** (triggers + `fin_audit_log`), **supplier bills** (due/settled dates, Aged Payables), **BAS completeness** (GST codes, G2/G3/G4/G13/G14, T7, W2 clearing), **GST basis toggle** (cash/accrual), **asset disposal** (GST on sale, depreciation to the disposal date), a shared `finYearForDate` (`server/utils/finYear.js` + `client/src/utils/finYear.mjs`, checked by `finYear.test.mjs`), a tooltip pass on the Vehicle/Home Office, Assets and export-mapping controls, and UI error surfacing (`okOrThrow` — `api.*` doesn't throw on HTTP errors, so refused deletes/edits used to look like they worked). Tests: `npm run test:finance`.
+
+## GST deregistration
+
+Settings → **Registered for GST** (`fin_gst_registered`) is now enforced, not just stored.
+
+- Un-ticking it stamps `fin_gst_unreg_since` (the day it happened). The real cancellation date from the ATO notice can be entered later as `fin_gst_ended_on` (Settings shows the field while un-ticked) and takes priority. Ticking it again deletes both dates. The one definition is `getGstRegistration()` / `gstAppliesOn(reg, date)` in `finance.js`.
+- **GST applies to anything dated before that date** (or at any date while registered). From it on:
+  - invoices and quotes get no GST — the server forces every `GST` line to `N-T`, so even an API call or an old tab can't add it; the invoice form shows a notice and defaults new lines to N-T;
+  - converting a quote written while registered recomputes the new invoice without GST;
+  - recurring invoices stop adding GST; the PDF is headed **INVOICE** (not TAX INVOICE) and the email/PDF drop the Subtotal/GST rows;
+  - purchases (expenses, recurring expenses, assets) claim no GST credit — the whole price is the cost, nothing posts to GST Paid; GST on an asset sale isn't collected;
+  - `GET /bas` returns `gstRegistered`, `gstEffectiveTo`, `quarterNeedsBas`; the BAS tab shows a banner, and the "BAS overdue" Suggestions alert is skipped for quarters that start on or after the date.
+- Nothing already created is rewritten: earlier invoices keep their GST, lodged quarters stay locked, journals are untouched. If the real date turns out to be *earlier* than the day the box was un-ticked, invoices issued in between keep the GST they were created with and need a manual correction with the accountant.
+
+## Recording a BAS that was lodged/paid outside the app
+
+`POST /bas/:quarterId/lodge` and `/paid` accept `{ date }` (YYYY-MM-DD; default today; not in the future, not before the quarter ended). The payment journal is booked on that date and `lodged_at` / `paid_at` are stored at noon of it. The BAS tab's lodge and payment confirmations have a date field for this. Without it a quarter recorded months late would put its bank payment in the wrong quarter and month.

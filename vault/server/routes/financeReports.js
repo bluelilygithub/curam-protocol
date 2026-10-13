@@ -87,7 +87,9 @@ const cInt   = (key, label) => ({ key, label, format: 'int', align: 'right' });
 const cPct   = (key, label) => ({ key, label, format: 'pct', align: 'right' });
 const cDate  = (key, label) => ({ key, label, format: 'date' });
 
-const CASH_NOTE = 'GST-related figures are cash basis (recognised when paid/received). If you report GST on an accrual basis they will not match your actual BAS.';
+const basisNote = (basis) => basis === 'accrual'
+  ? 'GST-related figures are on an accrual basis (sales when invoiced, bills when dated), as set in Finance → Settings.'
+  : 'GST-related figures are cash basis (sales when paid, purchases when paid). If you report GST on an accrual basis, switch the GST basis in Finance → Settings.';
 const DEPR_PREFIX = 'Depreciation FY';
 
 // ── shared queries ───────────────────────────────────────────────────────────
@@ -197,7 +199,7 @@ async function outstandingInvoices(userId, asOf, clientId) {
 // ── factory ──────────────────────────────────────────────────────────────────
 // gstPaidForRange is injected from finance.js so BAS/GST numbers here can never drift from the
 // figures the BAS tab and GST Summary report already use.
-module.exports = function createFinanceReportsRouter({ gstPaidForRange }) {
+module.exports = function createFinanceReportsRouter({ gstPaidForRange, disposalSalesForRange, getGstBasis, gstSalesSql, purchaseClaimDateSql, PURCHASES_FROM }) {
   const router = express.Router();
 
   // ── 1. Aged Receivables ────────────────────────────────────────────────────
@@ -244,40 +246,44 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange }) {
   }));
 
   // ── 2. Aged Payables ───────────────────────────────────────────────────────
-  // This app records expenses when they are PAID (cash), so there is no supplier-bill / accounts-
-  // payable ledger. The only unpaid supplier obligations it tracks are purchases put on a credit
-  // card (a liability account) that have not been settled yet — that is what this report ages.
+  // A supplier bill is an expense (or asset purchase) paid via a liability account — Accounts Payable
+  // for "pay later" bills, or a credit card — until it is settled. dueDate (optional) is when it must
+  // be paid; settledDate is when it was. Date-accurate: an item paid after the as-of date still shows.
+  // Ageing counts days past the due date (purchase date when no due date was entered).
   router.get('/aged-payables', wrap(async (req, res) => {
     const userId = req.user.id;
     const asOf = needAsOf(req, res); if (!asOf) return;
 
     const [exp, assets, liab] = await Promise.all([
       pool.query(
-        `SELECT e.id, e.date, e.description, COALESCE(NULLIF(e.supplier,''),'(No supplier)') AS supplier, (e.amount + e.gst) AS total
+        `SELECT e.id, e.date, e."dueDate", e.description, pa.code AS "accountCode", pa.name AS "accountName",
+                COALESCE(NULLIF(e.supplier,''),'(No supplier)') AS supplier, (e.amount + e.gst) AS total
          FROM fin_expenses e
          JOIN fin_accounts pa ON pa.id = e."paidViaId" AND pa.type = 'liability'
-         WHERE e."userId"=$1 AND e."ccSettled" = false AND e.date <= $2::date
+         WHERE e."userId"=$1 AND e.date <= $2::date
+           AND (e."ccSettled" = false OR e."settledDate" > $2::date)
          ORDER BY e.date`, [userId, asOf]),
       pool.query(
-        `SELECT a.id, a."datePurchased" AS date, a.description, (a.amount + a.gst) AS total
+        `SELECT a.id, a."datePurchased" AS date, a.description, pa.code AS "accountCode", pa.name AS "accountName", (a.amount + a.gst) AS total
          FROM fin_assets a
          JOIN fin_accounts pa ON pa.id = a."paidViaId" AND pa.type = 'liability'
-         WHERE a."userId"=$1 AND a."ccSettled" = false AND a.method IS DISTINCT FROM 'immediate'
+         WHERE a."userId"=$1 AND a.method IS DISTINCT FROM 'immediate'
            AND a."datePurchased" <= $2::date
+           AND (a."ccSettled" = false OR a."settledDate" > $2::date)
          ORDER BY a."datePurchased"`, [userId, asOf]),
       accountTotals(userId, null, asOf, ['liability']),
     ]);
 
     const AGE = [
-      { key: 'a0', label: '0–30 days', max: 30 }, { key: 'a30', label: '31–60 days', max: 60 },
+      { key: 'a0', label: 'Current / 0–30 days', max: 30 }, { key: 'a30', label: '31–60 days', max: 60 },
       { key: 'a60', label: '61–90 days', max: 90 }, { key: 'a90', label: '90+ days', max: Infinity },
     ];
     const ageKey = (d) => AGE.find(a => d <= a.max).key;
 
     const items = [
-      ...exp.rows.map(r => ({ supplier: r.supplier, description: r.description, date: ds(r.date), amount: num(r.total) })),
-      ...assets.rows.map(r => ({ supplier: '(Asset purchases)', description: r.description, date: ds(r.date), amount: num(r.total) })),
-    ].map(i => ({ ...i, days: diffDays(i.date, asOf) })).map(i => ({ ...i, bucket: ageKey(i.days) }));
+      ...exp.rows.map(r => ({ supplier: r.supplier, description: r.description, account: r.accountName, date: ds(r.date), due: ds(r.dueDate), amount: num(r.total) })),
+      ...assets.rows.map(r => ({ supplier: '(Asset purchases)', description: r.description, account: r.accountName, date: ds(r.date), due: null, amount: num(r.total) })),
+    ].map(i => ({ ...i, days: Math.max(0, diffDays(i.due || i.date, asOf)) })).map(i => ({ ...i, bucket: ageKey(i.days) }));
 
     const bySupplier = new Map();
     const totals = { a0: 0, a30: 0, a60: 0, a90: 0, total: 0 };
@@ -292,26 +298,28 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange }) {
       .sort((a, b) => b.total - a.total);
     for (const k of Object.keys(totals)) totals[k] = round2(totals[k]);
 
+    const overdue = round2(items.filter(i => i.due && i.due < asOf).reduce((s2, i) => s2 + i.amount, 0));
     const liabRows = liab
       .map(r => ({ code: r.code, name: r.name, balance: round2(r.credit - r.debit) }))
       .filter(r => r.balance !== 0);
-    const liabTotal = round2(liabRows.reduce((s, r) => s + r.balance, 0));
+    const liabTotal = round2(liabRows.reduce((s2, r) => s2 + r.balance, 0));
 
     res.json({
       title: 'Aged Payables',
-      subtitle: `Unpaid supplier purchases as of ${asOf}`,
+      subtitle: `Unpaid supplier bills and card purchases as of ${asOf}`,
       notes: [
-        'Expenses in this app are recorded when paid, so there is no separate supplier-bill ledger. This report ages purchases charged to a credit card that have not yet been settled, by days since purchase.',
-        'Settlement dates are not stored, so the unsettled list always reflects what is unsettled today, limited to purchases dated on or before the as-of date. The liability balances table below is date-accurate (from the journal).',
+        'To record a bill you will pay later, enter it as an expense with “Paid via” set to Accounts Payable (and a due date). “Pay” on the expense records the payment and its date. Card purchases not yet paid off appear here too.',
+        'Ageing counts days past the due date (or the purchase date if none was entered). Items paid after the as-of date still show as unpaid on it. Items settled before payment dates were recorded are treated as paid before any as-of date.',
       ],
       summary: [
-        { label: 'Unsettled card purchases', value: totals.total, format: 'money' },
+        { label: 'Unpaid bills and card purchases', value: totals.total, format: 'money' },
+        { label: 'Past due date', value: overdue, format: 'money' },
         { label: 'Items', value: items.length, format: 'int' },
         { label: 'Total liabilities (journal)', value: liabTotal, format: 'money' },
       ],
       sections: [
-        { title: 'Unsettled credit-card purchases by supplier', columns: [cText('supplier', 'Supplier'), ...AGE.map(a => cMoney(a.key, a.label)), cMoney('total', 'Total')], rows: supplierRows, totals: { supplier: 'Total', ...totals } },
-        { title: 'Unsettled items', columns: [cDate('date', 'Date'), cText('supplier', 'Supplier'), cText('description', 'Description'), cInt('days', 'Days'), cMoney('amount', 'Amount')], rows: items.sort((a, b) => b.days - a.days) },
+        { title: 'Unpaid by supplier', columns: [cText('supplier', 'Supplier'), ...AGE.map(a => cMoney(a.key, a.label)), cMoney('total', 'Total')], rows: supplierRows, totals: { supplier: 'Total', ...totals } },
+        { title: 'Unpaid items', columns: [cDate('date', 'Date'), cDate('due', 'Due'), cText('supplier', 'Supplier'), cText('description', 'Description'), cText('account', 'Owed to'), cInt('days', 'Days past due'), cMoney('amount', 'Amount')], rows: items.sort((a, b) => b.days - a.days) },
         { title: 'Liability balances (from the journal)', columns: [cText('code', 'Code'), cText('name', 'Account'), cMoney('balance', 'Balance')], rows: liabRows, totals: { name: 'Total liabilities', balance: liabTotal } },
       ],
     });
@@ -682,54 +690,90 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange }) {
   router.get('/bas-worksheet', wrap(async (req, res) => {
     const userId = req.user.id;
     const r = needRange(req, res); if (!r) return;
-    const [sales, capExp, nonCapExp, assets, wages, gstPaid] = await Promise.all([
+    const basis = await getGstBasis(pool, userId);
+    const claim = purchaseClaimDateSql(basis);
+    const [sales, salesByCode, capExp, nonCapExp, assets, noGstExp, noGstAssets, inputTaxedExp, wages, gstPaid, quarter] = await Promise.all([
       pool.query(
         `SELECT COALESCE(SUM(total),0) AS g1, COALESCE(SUM(gst),0) AS gst FROM fin_invoices
-         WHERE "userId"=$1 AND status='paid' AND "paidAt"::date BETWEEN $2::date AND $3::date`, [userId, r.from, r.to]),
+         WHERE "userId"=$1 AND ${gstSalesSql(basis, '', '$2::date', '$3::date')}`, [userId, r.from, r.to]),
+      // Sale lines by GST code: EXP = exports (G2), FRE = other GST-free (G3), INP = input-taxed (G4).
       pool.query(
-        `SELECT COALESCE(SUM(amount + gst),0) AS total FROM fin_expenses
-         WHERE "userId"=$1 AND "isCapitalAsset"=true AND date BETWEEN $2::date AND $3::date`, [userId, r.from, r.to]),
+        `SELECT ii."gstCode" AS code, COALESCE(SUM(ii.amount),0) AS amount
+         FROM fin_invoice_items ii JOIN fin_invoices i ON i.id = ii."invoiceId"
+         WHERE i."userId"=$1 AND ${gstSalesSql(basis, 'i', '$2::date', '$3::date')}
+         GROUP BY ii."gstCode"`, [userId, r.from, r.to]),
       pool.query(
-        `SELECT COALESCE(SUM(amount + gst),0) AS total FROM fin_expenses
-         WHERE "userId"=$1 AND "isCapitalAsset"=false AND description NOT LIKE $4 AND date BETWEEN $2::date AND $3::date`,
+        `SELECT COALESCE(SUM(e.amount + e.gst),0) AS total FROM ${PURCHASES_FROM}
+         WHERE e."userId"=$1 AND e."isCapitalAsset"=true AND ${claim} BETWEEN $2::date AND $3::date`, [userId, r.from, r.to]),
+      pool.query(
+        `SELECT COALESCE(SUM(e.amount + e.gst),0) AS total FROM ${PURCHASES_FROM}
+         WHERE e."userId"=$1 AND e."isCapitalAsset"=false AND e.description NOT LIKE $4 AND ${claim} BETWEEN $2::date AND $3::date`,
         [userId, r.from, r.to, DEPR_PREFIX + '%']),
       pool.query(
         `SELECT COALESCE(SUM(amount + gst),0) AS total FROM fin_assets
          WHERE "userId"=$1 AND method IS DISTINCT FROM 'immediate' AND "datePurchased" BETWEEN $2::date AND $3::date`, [userId, r.from, r.to]),
+      // G14: purchases with no GST in the price (and not flagged input-taxed). Depreciation is not a purchase.
+      pool.query(
+        `SELECT COALESCE(SUM(e.amount),0) AS total FROM ${PURCHASES_FROM}
+         WHERE e."userId"=$1 AND e.gst = 0 AND e."inputTaxed" = false AND e.description NOT LIKE $4
+           AND ${claim} BETWEEN $2::date AND $3::date`, [userId, r.from, r.to, DEPR_PREFIX + '%']),
+      pool.query(
+        `SELECT COALESCE(SUM(amount),0) AS total FROM fin_assets
+         WHERE "userId"=$1 AND gst = 0 AND method IS DISTINCT FROM 'immediate' AND "datePurchased" BETWEEN $2::date AND $3::date`, [userId, r.from, r.to]),
+      // G13: purchases made to produce input-taxed sales.
+      pool.query(
+        `SELECT COALESCE(SUM(e.amount + e.gst),0) AS total FROM ${PURCHASES_FROM}
+         WHERE e."userId"=$1 AND e."inputTaxed" = true AND ${claim} BETWEEN $2::date AND $3::date`, [userId, r.from, r.to]),
       pool.query(
         `SELECT COALESCE(SUM(gross),0) AS w1, COALESCE(SUM(tax),0) AS w2 FROM fin_wages
          WHERE "userId"=$1 AND date BETWEEN $2::date AND $3::date`, [userId, r.from, r.to]),
-      gstPaidForRange(userId, r.from, r.to),
+      gstPaidForRange(userId, r.from, r.to, basis),
+      pool.query(
+        `SELECT "paygInstalment", status FROM fin_bas_quarters WHERE "userId"=$1 AND from_date=$2::date AND to_date=$3::date`,
+        [userId, r.from, r.to]),
     ]);
-    const g1 = round2(sales.rows[0].g1), a1 = round2(sales.rows[0].gst);
+    const byCode = Object.fromEntries(salesByCode.rows.map(x => [x.code, num(x.amount)]));
+    const sold = await disposalSalesForRange(pool, userId, r.from, r.to);
+    const g1 = round2(num(sales.rows[0].g1) + sold.net + sold.gst), a1 = round2(num(sales.rows[0].gst) + sold.gst);
+    const g2 = round2(byCode.EXP || 0), g3 = round2(byCode.FRE || 0), g4 = round2(byCode.INP || 0);
     const g10 = round2(num(capExp.rows[0].total) + num(assets.rows[0].total));
     const g11 = round2(nonCapExp.rows[0].total);
+    const g13 = round2(inputTaxedExp.rows[0].total);
+    const g14 = round2(num(noGstExp.rows[0].total) + num(noGstAssets.rows[0].total));
     const b1 = round2(gstPaid);
     const w1 = round2(wages.rows[0].w1), w2 = round2(wages.rows[0].w2);
+    const t7 = round2(quarter.rows[0]?.paygInstalment || 0);
     const netGst = round2(a1 - b1);
-    const payable = round2(netGst + w2);
+    const payable = round2(netGst + w2 + t7);
 
     const rows = [
-      { section: 'GST — sales', label: 'G1', desc: 'Total sales (incl. GST)', amount: g1 },
+      { section: 'GST — sales', label: 'G1', desc: 'Total sales (incl. GST, G2–G4 and any asset sales)', amount: g1 },
+      { section: 'GST — sales', label: 'G2', desc: 'Export sales', amount: g2 },
+      { section: 'GST — sales', label: 'G3', desc: 'Other GST-free sales', amount: g3 },
+      { section: 'GST — sales', label: 'G4', desc: 'Input-taxed sales', amount: g4 },
       { section: 'GST — sales', label: '1A', desc: 'GST on sales', amount: a1 },
       { section: 'GST — purchases', label: 'G10', desc: 'Capital purchases (incl. GST)', amount: g10 },
       { section: 'GST — purchases', label: 'G11', desc: 'Non-capital purchases (incl. GST)', amount: g11 },
+      { section: 'GST — purchases', label: 'G13', desc: 'Purchases for making input-taxed sales', amount: g13 },
+      { section: 'GST — purchases', label: 'G14', desc: 'Purchases without GST in the price', amount: g14 },
       { section: 'GST — purchases', label: '1B', desc: 'GST on purchases', amount: b1 },
       { section: 'PAYG withholding', label: 'W1', desc: 'Total salary, wages and other payments', amount: w1 },
       { section: 'PAYG withholding', label: 'W2', desc: 'Amount withheld from payments', amount: w2 },
+      { section: 'PAYG instalment', label: 'T7', desc: quarter.rows[0] ? 'PAYG income-tax instalment (entered on the BAS tab)' : 'PAYG income-tax instalment (open this quarter on the BAS tab to enter it)', amount: t7 },
       { section: 'Result', label: '1A − 1B', desc: 'Net GST (positive = payable to the ATO)', amount: netGst },
-      { section: 'Result', label: '1A − 1B + W2', desc: 'Total payable / (refundable) for this BAS', amount: payable, _bold: true },
+      { section: 'Result', label: '1A − 1B + W2 + T7', desc: 'Total payable / (refundable) for this BAS', amount: payable, _bold: true },
     ];
     res.json({
       title: 'BAS Worksheet',
-      subtitle: `${r.from} to ${r.to}`,
+      subtitle: `${r.from} to ${r.to} · ${basis === 'accrual' ? 'accrual' : 'cash'} basis`,
       notes: [
-        CASH_NOTE,
-        'Worksheet only — check every figure against the ATO BAS form (and your accountant) before lodging. GST-free and input-taxed sales/purchases (G2, G3, G13, G14 …) are not separated out by this app, and PAYG instalments (T7) are not tracked.',
+        basisNote(basis),
+        'Worksheet only — check every figure against the ATO BAS form (and your accountant) before lodging. G2–G4 come from the GST code chosen on each invoice line (GST-free, export, input-taxed); G13 from expenses ticked “for input-taxed sales”; G14 is every purchase with no GST in the price. G15 (private use) and the other PAYG labels are not tracked.',
       ],
       summary: [
         { label: 'GST on sales (1A)', value: a1, format: 'money' },
         { label: 'GST on purchases (1B)', value: b1, format: 'money' },
+        { label: 'PAYG instalment (T7)', value: t7, format: 'money' },
         { label: 'Net payable', value: payable, format: 'money' },
       ],
       sections: [{ title: 'BAS labels', columns: [cText('label', 'Label'), cText('desc', 'Description'), cMoney('amount', 'Amount')], rows }],
@@ -1037,6 +1081,7 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange }) {
   router.get('/tax-time-summary', wrap(async (req, res) => {
     const userId = req.user.id;
     const b = needFy(req, res); if (!b) return;
+    const taxBasis = await getGstBasis(pool, userId);
     const [pl, expByCode, wages, veh, ho, dep, imm, drawings, inv, gstPaid] = await Promise.all([
       plForRange(userId, b.from, b.to),
       pool.query(
@@ -1061,9 +1106,9 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange }) {
          WHERE "userId"=$1 AND "isCapitalAsset"=true AND date BETWEEN $2::date AND $3::date`, [userId, b.from, b.to]),
       pool.query(`SELECT COALESCE(SUM(amount),0) AS amount FROM fin_drawings WHERE "userId"=$1 AND date BETWEEN $2::date AND $3::date`, [userId, b.from, b.to]),
       pool.query(
-        `SELECT COALESCE(SUM(gst),0) AS gst FROM fin_invoices WHERE "userId"=$1 AND status='paid' AND "paidAt"::date BETWEEN $2::date AND $3::date`,
+        `SELECT COALESCE(SUM(gst),0) AS gst FROM fin_invoices WHERE "userId"=$1 AND ${gstSalesSql(taxBasis, '', '$2::date', '$3::date')}`,
         [userId, b.from, b.to]),
-      gstPaidForRange(userId, b.from, b.to),
+      gstPaidForRange(userId, b.from, b.to, taxBasis),
     ]);
 
     const wGross = round2(wages.rows[0].gross), wSuper = round2(wages.rows[0].super);
@@ -1073,7 +1118,8 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange }) {
     // Anything in the journal's expense accounts that the source tables above don't explain
     // (manual journals, rounding) — shown so the deductions total always ties to the P&L.
     const unexplained = round2(pl.totalExpense - expListed - wGross - wSuper - depAmt);
-    const gstCollected = round2(inv.rows[0].gst), gstPd = round2(gstPaid);
+    const soldTax = await disposalSalesForRange(pool, userId, b.from, b.to);
+    const gstCollected = round2(num(inv.rows[0].gst) + soldTax.gst), gstPd = round2(gstPaid);
     const km = round2(veh.rows.reduce((s, x) => s + num(x.km), 0)), vehAmt = round2(veh.rows.reduce((s, x) => s + num(x.amount), 0));
     const hrs = round2(ho.rows.reduce((s, x) => s + num(x.hours), 0)), hoAmt = round2(ho.rows.reduce((s, x) => s + num(x.amount), 0));
     const cols = [cText('item', 'Item'), cMoney('amount', 'Amount')];
@@ -1083,7 +1129,7 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange }) {
       subtitle: `Financial year ${b.fy} (${b.from} to ${b.to})`,
       notes: [
         'A hand-over summary for your accountant / tax return, not tax advice. Figures come from the journal and source records and are ex-GST unless stated.',
-        'Business income here is booked when invoices are issued (accrual, per the journal) — GST below is cash basis.',
+        `Business income here is booked when invoices are issued (accrual, per the journal) — GST below is on a ${taxBasis} basis (Finance → Settings).`,
       ],
       summary: [
         { label: 'Business income', value: pl.totalIncome, format: 'money' },
@@ -1124,7 +1170,7 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange }) {
           note: 'See the Depreciation Schedule report for the per-asset breakdown.',
         },
         {
-          title: 'GST (cash basis)',
+          title: `GST (${taxBasis} basis)`,
           columns: cols,
           rows: [{ item: 'GST collected', amount: gstCollected }, { item: 'GST paid', amount: gstPd }],
           totals: { item: 'Net GST for the year', amount: round2(gstCollected - gstPd) },
@@ -1219,37 +1265,85 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange }) {
   // The finance module keeps no field-level change history, so this is an ACTIVITY log: every journal
   // entry as it was created, plus every invoice/quote send attempt. Edits that rebuild an entry show
   // up as a new entry — the old version is not retained anywhere.
+  // Field-level change history comes from fin_audit_log, written by database triggers (see db.js), so
+  // it covers every route and any direct SQL. Derived journal postings and email attempts are shown
+  // alongside it. Optional ?table= narrows to one record type (e.g. fin_invoices).
+  const AUDIT_ENTITY = {
+    fin_invoices: 'Invoice/quote', fin_expenses: 'Expense', fin_wages: 'Wage', fin_drawings: 'Drawing',
+    fin_assets: 'Asset', fin_accounts: 'Account', fin_suppliers: 'Supplier', fin_tx_codes: 'Transaction code',
+    fin_recurring: 'Recurring entry', fin_budgets: 'Budget line', fin_bas_quarters: 'BAS quarter',
+    fin_journal_entries: 'Manual journal entry', settings: 'Setting',
+  };
+  const auditVal = (v) => {
+    if (v === null || v === undefined) return '(empty)';
+    const t = typeof v === 'object' ? JSON.stringify(v) : String(v);
+    return t.length > 60 ? t.slice(0, 57) + '…' : t;
+  };
+  const AUDIT_SECRET = /(account_number|bsb|password|token|secret)/i;
+
   router.get('/audit-trail', wrap(async (req, res) => {
     const userId = req.user.id;
     const r = needRange(req, res); if (!r) return;
+    const table = req.query.table ? String(req.query.table) : null;
+    if (table && !AUDIT_ENTITY[table]) return res.status(400).json({ error: 'Unknown table filter' });
     const LIMIT = 1000;
-    const [je, sends] = await Promise.all([
+    const [log, je, sends] = await Promise.all([
       pool.query(
+        `SELECT "createdAt", "tableName", "rowId", label, action, "changedFields", "rowData"
+         FROM fin_audit_log
+         WHERE "userId"=$1 AND "createdAt"::date BETWEEN $2::date AND $3::date AND ($4::text IS NULL OR "tableName"=$4)
+         ORDER BY "createdAt" DESC, id DESC LIMIT ${LIMIT}`, [userId, r.from, r.to, table]),
+      table ? Promise.resolve({ rows: [] }) : pool.query(
         `SELECT e.id, e."createdAt", e.date, e.type, e.description, e.reference,
                 (SELECT COALESCE(SUM(debit),0) FROM fin_journal_lines WHERE "entryId" = e.id) AS amount
          FROM fin_journal_entries e
          WHERE e."userId"=$1 AND e."createdAt"::date BETWEEN $2::date AND $3::date
          ORDER BY e."createdAt" DESC LIMIT ${LIMIT}`, [userId, r.from, r.to]),
-      pool.query(
+      table ? Promise.resolve({ rows: [] }) : pool.query(
         `SELECT s."sentAt", s."sentTo", s.ok, s.error, s."pdfAttached", i.number, COALESCE(i."docType",'invoice') AS "docType"
          FROM fin_invoice_send_log s JOIN fin_invoices i ON i.id = s."invoiceId"
          WHERE s."userId"=$1 AND s."sentAt"::date BETWEEN $2::date AND $3::date
          ORDER BY s."sentAt" DESC LIMIT ${LIMIT}`, [userId, r.from, r.to]),
     ]);
+
+    const changeEvents = log.rows.map(x => {
+      const entity = AUDIT_ENTITY[x.tableName] || x.tableName;
+      const name = x.label ? ` “${x.label}”` : (x.rowId ? ` #${x.rowId}` : '');
+      let detail = '';
+      let amount = null;
+      if (x.action === 'UPDATE') {
+        const hide = x.tableName === 'settings' && AUDIT_SECRET.test(x.label || '');
+        const parts = Object.entries(x.changedFields || {}).map(([k, v]) =>
+          hide ? `${k}: changed` : `${k}: ${auditVal(v.from)} → ${auditVal(v.to)}`);
+        detail = parts.slice(0, 8).join('; ') + (parts.length > 8 ? `; +${parts.length - 8} more` : '');
+      } else {
+        const d = x.rowData || {};
+        amount = num(d.total ?? d.amount ?? d.gross ?? 0) || null;
+        detail = x.action === 'INSERT' ? 'Created' : 'Deleted — row kept here for the record';
+      }
+      return {
+        when: x.createdAt,
+        event: `${entity}${name} ${x.action === 'INSERT' ? 'created' : x.action === 'UPDATE' ? 'changed' : 'deleted'}`,
+        detail, type: x.tableName.replace(/^fin_/, ''), entryDate: null, amount, result: '',
+      };
+    });
     const events = [
-      ...je.rows.map(x => ({ when: x.createdAt, event: 'Journal entry created', detail: `${x.description}${x.reference ? ` (${x.reference})` : ''}`, type: x.type, entryDate: ds(x.date), amount: round2(x.amount), result: '' })),
+      ...changeEvents,
+      ...je.rows.map(x => ({ when: x.createdAt, event: 'Journal entry posted', detail: `${x.description}${x.reference ? ` (${x.reference})` : ''}`, type: x.type, entryDate: ds(x.date), amount: round2(x.amount), result: '' })),
       ...sends.rows.map(x => ({ when: x.sentAt, event: `${x.docType === 'quote' ? 'Quote' : 'Invoice'} ${x.number} sent`, detail: `To ${x.sentTo}${x.pdfAttached ? ' · PDF attached' : ''}`, type: 'send', entryDate: null, amount: null, result: x.ok ? 'OK' : `Failed: ${x.error || 'unknown error'}` })),
     ].sort((a, b) => new Date(b.when) - new Date(a.when)).slice(0, LIMIT);
 
     res.json({
       title: 'Audit Trail',
-      subtitle: `Activity recorded ${r.from} to ${r.to}`,
+      subtitle: `Activity recorded ${r.from} to ${r.to}${table ? ` · ${AUDIT_ENTITY[table]} only` : ''}`,
       notes: [
-        'Activity log, not a full audit trail: it lists when each journal entry was created and every invoice/quote email attempt. Finance does not keep field-level edit history, and an edited invoice/expense replaces its journal entry, so the earlier version is not retained.',
-        ...((je.rows.length >= LIMIT || sends.rows.length >= LIMIT) ? [`Showing the most recent ${LIMIT} items per source — narrow the date range for older activity.`] : []),
+        'Every create, edit and delete of an invoice/quote, expense, wage, drawing, asset, account, supplier, code, recurring entry, budget line, BAS quarter, manual journal entry and Finance setting is recorded by the database itself, with the old and new value of each changed field. Deleted records are kept here in full.',
+        'History starts from when this feature was installed; earlier changes were not captured. Invoice line items are not listed one by one (an edit rebuilds them) — the invoice’s subtotal, GST and total changes are. Bank details show as “changed” without the value. Derived journal postings and email attempts are listed too.',
+        ...((log.rows.length >= LIMIT || je.rows.length >= LIMIT || sends.rows.length >= LIMIT) ? [`Showing the most recent ${LIMIT} items per source — narrow the date range for older activity.`] : []),
       ],
       summary: [
-        { label: 'Journal entries created', value: je.rows.length, format: 'int' },
+        { label: 'Record changes', value: log.rows.length, format: 'int' },
+        { label: 'Journal entries posted', value: je.rows.length, format: 'int' },
         { label: 'Emails sent', value: sends.rows.filter(s => s.ok).length, format: 'int' },
         { label: 'Failed sends', value: sends.rows.filter(s => !s.ok).length, format: 'int' },
       ],

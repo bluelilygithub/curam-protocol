@@ -95,7 +95,10 @@ function buildDocument(deps, invoice, items, client, cfg) {
 
   // Header right
   const dueDateLabel = isQuote ? 'Valid Until' : 'Due Date';
-  const docLabel     = isQuote ? 'QUOTE' : 'TAX INVOICE';
+  // A "tax invoice" (with GST lines) only while GST applies. After deregistering, items are N-T and the
+  // document is a plain INVOICE with no GST wording.
+  const taxDoc       = parseFloat(invoice.gst) > 0 || items.some(i => (i.gstCode || 'GST') !== 'NT');
+  const docLabel     = isQuote ? 'QUOTE' : (taxDoc ? 'TAX INVOICE' : 'INVOICE');
   const refLabel     = isQuote ? 'Quote' : 'Invoice';
 
   const headerRight = React.createElement(View, { style: styles.headerRight },
@@ -158,7 +161,7 @@ function buildDocument(deps, invoice, items, client, cfg) {
         isWaived
           ? React.createElement(Text, { style: styles.waivedText }, 'Waived')
           : React.createElement(Text, { style: styles.cellText }, fmtAud(item.amount)),
-        isNt && !isWaived && React.createElement(Text, { style: styles.cellNt }, 'N-T'),
+        isNt && taxDoc && !isWaived && React.createElement(Text, { style: styles.cellNt }, 'N-T'),
       ),
     );
   });
@@ -166,15 +169,15 @@ function buildDocument(deps, invoice, items, client, cfg) {
   // Totals
   const totalLabel = isQuote ? 'Total Value' : 'Total Due';
   const totals = React.createElement(View, { style: styles.totalsArea },
-    React.createElement(View, { style: styles.totalsRow },
+    taxDoc && React.createElement(View, { style: styles.totalsRow },
       React.createElement(Text, { style: styles.totalsLabel }, 'Subtotal (ex-GST)'),
       React.createElement(Text, { style: styles.totalsValue }, fmtAud(invoice.subtotal)),
     ),
-    React.createElement(View, { style: styles.totalsRow },
+    taxDoc && React.createElement(View, { style: styles.totalsRow },
       React.createElement(Text, { style: styles.totalsLabel }, 'GST (10%)'),
       React.createElement(Text, { style: styles.totalsValue }, fmtAud(invoice.gst)),
     ),
-    React.createElement(View, { style: styles.totalDivider }),
+    taxDoc && React.createElement(View, { style: styles.totalDivider }),
     React.createElement(View, { style: styles.totalRow },
       React.createElement(Text, { style: styles.totalLabel }, totalLabel),
       React.createElement(Text, { style: styles.totalValue }, fmtAud(invoice.total)),

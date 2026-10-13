@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { finYearForDate } from '../utils/finYear.mjs';
 import { Link, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import ConfirmModal from '../components/ConfirmModal';
@@ -148,7 +149,7 @@ const TOOL_HELP = {
   },
   BAS: {
     title: 'Business Activity Statement',
-    description: 'For GST-registered businesses only — work through each quarter\'s BAS: review the figures, mark reconciled, lodge with the ATO, then record payment. Figures are calculated on a cash basis.',
+    description: 'For GST-registered businesses only — work through each quarter\'s BAS: review the figures, mark reconciled, lodge with the ATO, then record payment. Figures follow the GST basis chosen in Settings (cash by default).',
     features: [
       'G1, G11, 1A, 1B, net GST, and PAYG withholding per quarter',
       'Warnings before reconciling — e.g. no data recorded, unusual negative net GST, unpaid invoices excluded from this quarter\'s figures',
@@ -728,6 +729,31 @@ function DashboardTab({ from, to }) {
 
 // ── Invoices ──────────────────────────────────────────────────────────────────
 
+// api.* resolves on HTTP errors instead of throwing, so a refused request (locked BAS quarter,
+// validation, not found) used to look like success. Wrap calls whose result isn't otherwise checked.
+async function okOrThrow(res) {
+  if (res && res.ok === false) {
+    let msg = 'Request failed';
+    try { msg = (await res.json()).error || msg; } catch { /* no body */ }
+    throw new Error(msg);
+  }
+  return res;
+}
+
+// GST registration from Settings. GST applies to a document dated before the cancellation date (or
+// always while registered); the server enforces the same rule, this just sets sensible defaults.
+function useGstRegistration() {
+  const [reg, setReg] = useState({ registered: true, effectiveFrom: null });
+  useEffect(() => {
+    api.get('/api/finance/settings').then(r => r.json()).then(st => setReg({
+      registered: st.fin_gst_registered !== 'false',
+      effectiveFrom: st.fin_gst_ended_on || st.fin_gst_unreg_since || null,
+    })).catch(() => {});
+  }, []);
+  const appliesOn = (date) => reg.registered || (!!reg.effectiveFrom && String(date || '').slice(0, 10) < reg.effectiveFrom);
+  return { ...reg, appliesOn };
+}
+
 const BLANK_ITEM = { description: '', qty: '1', unitPrice: '', gstCode: 'GST', txCodeId: null };
 
 function calcTotals(items) {
@@ -763,6 +789,8 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
   const [converting, setConverting]     = useState(null);
   const [calcIdx, setCalcIdx]           = useState(null);
   const [paymentTermsDays, setPaymentTermsDays] = useState(7);
+  const gstReg = useGstRegistration();
+  const blankItem = (date) => ({ ...BLANK_ITEM, gstCode: gstReg.appliesOn(date || todayStr()) ? 'GST' : 'NT' });
   const addToast = useToastStore(s => s.addToast);
 
   // Load payment terms from settings once on mount
@@ -773,7 +801,7 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
     }).catch(() => {});
   }, []);
 
-  const blankForm = () => ({ clientRef: '', issueDate: todayStr(), dueDate: plusDays(todayStr(), paymentTermsDays), notes: '', paidAt: '', items: [{ ...BLANK_ITEM }], docType });
+  const blankForm = () => ({ clientRef: '', issueDate: todayStr(), dueDate: plusDays(todayStr(), paymentTermsDays), notes: '', paidAt: '', items: [blankItem()], docType });
   const [form, setForm] = useState(blankForm);
 
   const load = useCallback(async () => {
@@ -816,7 +844,7 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
     ...p,
     items: p.items.map((item, i) => i === idx ? { ...item, [key]: val } : item),
   }));
-  const addItem    = () => setForm(p => ({ ...p, items: [...p.items, { ...BLANK_ITEM }] }));
+  const addItem    = () => setForm(p => ({ ...p, items: [...p.items, blankItem(p.issueDate)] }));
   const removeItem = (idx) => setForm(p => ({ ...p, items: p.items.filter((_, i) => i !== idx) }));
 
   const totals = calcTotals(form.items);
@@ -859,7 +887,7 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
     const { inv, date } = paidModal;
     setPaidModal(null);
     try {
-      await api.post(`/api/finance/invoices/${inv.id}/mark-paid`, { paidAt: date });
+      await okOrThrow(await api.post(`/api/finance/invoices/${inv.id}/mark-paid`, { paidAt: date }));
       await load();
       if (viewInvoice?.id === inv.id) setViewInvoice(null);
       addToast(`${inv.number} marked paid`);
@@ -885,6 +913,7 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
       await load();
       setSendModal(null);
       addToast(`${sendModal.docType === 'quote' ? 'Quote' : 'Invoice'} sent to ${sendTo.trim()}`);
+      if (result.warning) addToast(result.warning, 'error');
       if (viewInvoice?.id === sendModal.id) {
         api.get(`/api/finance/invoices/${sendModal.id}/send-log`).then(r => r.json()).then(setSendLog).catch(() => {});
       }
@@ -902,9 +931,11 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
       confirmLabel: 'Delete',
       onConfirm: async () => {
         setConfirmModal(null);
-        await api.delete(`/api/finance/invoices/${inv.id}`);
-        setInvoices(prev => prev.filter(i => i.id !== inv.id));
-        addToast('Invoice deleted');
+        try {
+          await okOrThrow(await api.delete(`/api/finance/invoices/${inv.id}`));
+          setInvoices(prev => prev.filter(i => i.id !== inv.id));
+          addToast('Invoice deleted');
+        } catch (err) { addToast(err.message, 'error'); }
       },
     });
   };
@@ -979,7 +1010,7 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
       {clientId && (
         <div className="flex items-center gap-2 mb-3 text-xs px-2.5 py-1.5 rounded-md w-fit" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
           Filtered to {clients.find(c => String(c.id) === String(clientId))?.name || 'client'}
-          <button onClick={onClearClientFilter} className="hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Clear</button>
+          <Tooltip text="Remove the client filter and show every invoice again."><button onClick={onClearClientFilter} className="hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Clear</button></Tooltip>
         </div>
       )}
 
@@ -1141,6 +1172,11 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
                   >+ Add item</button>
                 </Tooltip>
               </div>
+              {!gstReg.appliesOn(form.issueDate) && (
+                <p className="text-xs mb-2 px-2 py-1.5 rounded" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+                  Not GST registered on this date — no GST is added to this {form.docType === 'quote' ? 'quote' : 'invoice'}.
+                </p>
+              )}
               <div className="text-xs mb-1 grid gap-1" style={{ gridTemplateColumns: '1fr 60px 90px 80px 24px', color: 'var(--color-muted)' }}>
                 <span>Description</span><span>Qty</span><span>Unit Price</span><span className="text-center">Tax</span><span />
               </div>
@@ -1189,7 +1225,7 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
                       )}
                     </div>
                     <div className="flex items-start pt-0">
-                      <Tooltip text="GST 10% adds tax to this line; N-T (no tax) leaves it GST-free — get this right, it feeds your BAS.">
+                      <Tooltip text="GST 10% adds tax to this line. GST-free, Export and Input-taxed carry no GST but are reported separately on the BAS (G3, G2, G4). N-T is outside the GST system — get this right, it feeds your BAS.">
                         <select
                           value={item.gstCode || 'GST'}
                           onChange={e => setItem(idx, 'gstCode', e.target.value)}
@@ -1197,6 +1233,9 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
                           style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
                         >
                           <option value="GST">GST 10%</option>
+                          <option value="FRE">GST-free</option>
+                          <option value="EXP">Export (GST-free)</option>
+                          <option value="INP">Input-taxed</option>
                           <option value="NT">N-T</option>
                         </select>
                       </Tooltip>
@@ -1397,7 +1436,7 @@ const LOW_VALUE_POOL_MAX = 1000; // ATO "low-cost asset" pool-eligibility thresh
 // Only offer Low-value pool as a radio choice when the asset is actually eligible for it.
 const assetMethodOptions = (amountNum) => amountNum < LOW_VALUE_POOL_MAX ? ASSET_METHODS : ASSET_METHODS.filter(m => m.value !== 'low_value_pool');
 
-const BLANK_EXPENSE = { date: '', description: '', amount: '', gstIncluded: true, category: '', supplier: '', txCodeId: null, paidViaId: null, isCapitalAsset: false, businessUsePercent: '100', assetMethod: '', effectiveLifeYears: '' };
+const BLANK_EXPENSE = { date: '', description: '', amount: '', gstIncluded: true, category: '', supplier: '', txCodeId: null, paidViaId: null, dueDate: '', inputTaxed: false, isCapitalAsset: false, businessUsePercent: '100', assetMethod: '', effectiveLifeYears: '' };
 
 function ExpensesTab({ from, to }) {
   const getIcon = useIcon();
@@ -1470,6 +1509,8 @@ function ExpensesTab({ from, to }) {
       supplier:    exp.supplier || '',
       txCodeId:    exp.txCodeId || null,
       paidViaId:   exp.paidViaId || null,
+      dueDate:     exp.dueDate ? String(exp.dueDate).slice(0, 10) : '',
+      inputTaxed:  !!exp.inputTaxed,
       isCapitalAsset: !!exp.isCapitalAsset,
     });
     setError('');
@@ -1506,7 +1547,7 @@ function ExpensesTab({ from, to }) {
     setError('');
     try {
       if (editingExpense) {
-        await api.put(`/api/finance/expenses/${editingExpense.id}`, form);
+        await okOrThrow(await api.put(`/api/finance/expenses/${editingExpense.id}`, form));
         addToast('Expense updated');
       } else if (needsAssetFields) {
         // Send the raw GST-inclusive total + gstIncluded flag, not a pre-computed ex-GST figure
@@ -1565,9 +1606,11 @@ function ExpensesTab({ from, to }) {
       message: `Delete "${exp.description}"?`,
       onConfirm: async () => {
         setConfirmModal(null);
-        await api.delete(`/api/finance/expenses/${exp.id}`);
-        setExpenses(prev => prev.filter(e => e.id !== exp.id));
-        addToast('Expense deleted');
+        try {
+          await okOrThrow(await api.delete(`/api/finance/expenses/${exp.id}`));
+          setExpenses(prev => prev.filter(e => e.id !== exp.id));
+          addToast('Expense deleted');
+        } catch (err) { addToast(err.message, 'error'); }
       },
     });
   };
@@ -1616,7 +1659,7 @@ function ExpensesTab({ from, to }) {
     if (!ccPayModal) return;
     setCcPaySaving(true);
     try {
-      await api.post(`/api/finance/expenses/${ccPayModal.expense.id}/cc-pay`, { date: ccPayDate });
+      await okOrThrow(await api.post(`/api/finance/expenses/${ccPayModal.expense.id}/cc-pay`, { date: ccPayDate }));
       addToast('CC payment recorded');
       setCcPayModal(null);
       load();
@@ -1703,7 +1746,7 @@ function ExpensesTab({ from, to }) {
               <Tooltip text="Optional tx code tagging this expense for the GST Summary / expense breakdowns by category."><TxCodeSelect value={form.txCodeId} onChange={v => setForm(p => ({...p, txCodeId: v}))} type="expense" placeholder="— select code —" /></Tooltip>
             </Field>
             <Field label="Paid via">
-              <Tooltip text="Which account the money came from — leave as Bank / Cash unless this was paid on a credit card, which needs settling later.">
+              <Tooltip text="Which account the money came from — leave as Bank / Cash unless this was paid on a credit card, or is a bill you will pay later (choose Accounts Payable and set a due date).">
                 <select
                   value={form.paidViaId || ''}
                   onChange={e => setForm(p => ({...p, paidViaId: e.target.value ? parseInt(e.target.value) : null}))}
@@ -1715,6 +1758,11 @@ function ExpensesTab({ from, to }) {
                 </select>
               </Tooltip>
             </Field>
+            {accountMap[form.paidViaId]?.type === 'liability' && (
+              <Field label={accountMap[form.paidViaId]?.code === '2000' ? 'Bill due date' : 'Payment due date'}>
+                <Tooltip text="When the supplier (or card statement) expects payment. The Aged Payables report ages this bill from its due date. Use Pay on the expense when you pay it."><Input type="date" value={form.dueDate || ''} onChange={v => setForm(p => ({...p, dueDate: v}))} /></Tooltip>
+              </Field>
+            )}
             <Field label="Total Amount Paid ($)">
               <Tooltip text="The total you actually paid, including GST if any — GST is worked out automatically below."><Input type="number" value={form.amount} onChange={v => setForm(p => ({...p, amount: v}))} placeholder="0.00" /></Tooltip>
             </Field>
@@ -1729,10 +1777,23 @@ function ExpensesTab({ from, to }) {
                   />
                 </Tooltip>
                 <label htmlFor="exp-gst" className="text-sm" style={{ color: 'var(--color-text)' }}>GST Included (10%)</label>
-                {form.gstIncluded && form.amount && (
+                {form.gstIncluded && form.amount && !form.inputTaxed && (
                   <span className="text-xs ml-2" style={{ color: 'var(--color-muted)' }}>GST = ${autoGst}</span>
                 )}
               </div>
+            </Field>
+            <Field label="Input-taxed sales">
+              <Tooltip text="Tick if this purchase was made to produce input-taxed sales (for example residential rent). It earns no GST credit, so no GST is split out, and it is reported at G13 on the BAS.">
+                <div className="flex items-center gap-2 pt-2">
+                  <input
+                    type="checkbox"
+                    id="exp-input-taxed"
+                    checked={!!form.inputTaxed}
+                    onChange={e => setForm(p => ({...p, inputTaxed: e.target.checked}))}
+                  />
+                  <label htmlFor="exp-input-taxed" className="text-sm" style={{ color: 'var(--color-text)' }}>For making input-taxed sales (no GST credit)</label>
+                </div>
+              </Tooltip>
             </Field>
             <Field label="Capital Asset">
               <Tooltip text="Tick if this purchase is a capital asset (equipment, machinery, etc.) rather than a day-to-day running cost. $300 or under still posts immediately as a normal expense, just badged. Over $300, this reveals depreciation fields and adds it to the Assets register instead of a plain expense.">
@@ -1849,6 +1910,11 @@ function ExpensesTab({ from, to }) {
                   </td>
                   <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>
                     {e.paidViaId && accountMap[e.paidViaId] ? accountMap[e.paidViaId].name : 'Bank / Cash'}
+                    {accountMap[e.paidViaId]?.type === 'liability' && e.dueDate && !e.ccSettled && (
+                      <div className="text-[10px]" style={{ color: String(e.dueDate).slice(0, 10) < new Date().toISOString().slice(0, 10) ? '#ef4444' : 'var(--color-muted)' }}>
+                        due {String(e.dueDate).slice(0, 10)}
+                      </div>
+                    )}
                   </td>
                   <td className="py-2 px-1">
                     <Tooltip text={e.receipt_path ? 'View the attached receipt.' : 'Attach a receipt image or PDF to this expense.'}>
@@ -1862,19 +1928,20 @@ function ExpensesTab({ from, to }) {
                   <td className="py-2 px-2">
                     <div className="flex gap-2">
                       {e.paidViaId && accountMap[e.paidViaId]?.type === 'liability' && !e.ccSettled && (
-                        <Tooltip text="Record payment of this single card charge from bank."><button onClick={() => openCcPay(e)} className="text-xs hover:opacity-60" style={{ color: '#f59e0b' }}>Pay CC</button></Tooltip>
+                        <Tooltip text={accountMap[e.paidViaId]?.code === '2000' ? 'Record payment of this supplier bill from bank.' : 'Record payment of this single card charge from bank.'}><button onClick={() => openCcPay(e)} className="text-xs hover:opacity-60" style={{ color: '#f59e0b' }}>{accountMap[e.paidViaId]?.code === '2000' ? 'Pay bill' : 'Pay CC'}</button></Tooltip>
                       )}
                       {e.ccSettled && (
-                        <Tooltip text="Unsettle — removes the settled flag only. Reverse the journal entry manually in the Journal tab if the amount was wrong.">
+                        <Tooltip text="Undo the payment — marks it unpaid again and posts a reversing journal entry (bank gets the money back).">
                           <button
                             className="text-xs hover:opacity-60"
                             style={{ color: '#065f46' }}
                             onClick={() => setConfirmModal({
-                              message: 'Unsettle this expense? The settlement journal entry is NOT reversed — delete it manually in the Journal tab if the amount was wrong.',
+                              message: 'Mark this expense unpaid again? A reversing entry is posted so the bank payment is undone.',
+                              confirmLabel: 'Mark unpaid',
                               onConfirm: async () => {
                                 setConfirmModal(null);
                                 try {
-                                  await api.post(`/api/finance/expenses/${e.id}/cc-unsettle`);
+                                  await okOrThrow(await api.post(`/api/finance/expenses/${e.id}/cc-unsettle`));
                                   addToast('Expense unsettled');
                                   load();
                                 } catch (err) {
@@ -1900,7 +1967,7 @@ function ExpensesTab({ from, to }) {
         <ConfirmModal
           title="Confirm"
           message={confirmModal.message}
-          confirmLabel="Delete"
+          confirmLabel={confirmModal.confirmLabel || "Delete"}
           danger
           onConfirm={confirmModal.onConfirm}
           onCancel={() => setConfirmModal(null)}
@@ -1916,14 +1983,14 @@ function ExpensesTab({ from, to }) {
               <strong>{fmt(parseFloat(ccPayModal.expense.amount) + parseFloat(ccPayModal.expense.gst || 0))}</strong>.
             </p>
             <Field label="Payment Date">
-              <Tooltip text="The date the bank actually paid the card statement."><Input type="date" value={ccPayDate} onChange={setCcPayDate} /></Tooltip>
+              <Tooltip text="The date the bank actually paid the card statement."><Tooltip text="The date the card or bill was actually paid — used for the books and the Aged Payables report."><Input type="date" value={ccPayDate} onChange={setCcPayDate} /></Tooltip></Tooltip>
             </Field>
             <div className="rounded-lg p-3 text-xs font-mono flex flex-col gap-1" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
               <div className="flex justify-between"><span>DR {ccPayModal.account?.code} — {ccPayModal.account?.name}</span><span>{fmt(parseFloat(ccPayModal.expense.amount) + parseFloat(ccPayModal.expense.gst || 0))}</span></div>
               <div className="flex justify-between"><span>CR 1000 — Bank / Cash</span><span>{fmt(parseFloat(ccPayModal.expense.amount) + parseFloat(ccPayModal.expense.gst || 0))}</span></div>
             </div>
             <div className="flex gap-2 justify-end">
-              <Tooltip text="Cancel without posting."><Btn variant="secondary" onClick={() => setCcPayModal(null)}>Cancel</Btn></Tooltip>
+              <Tooltip text="Cancel without posting."><Tooltip text="Close without recording a payment."><Btn variant="secondary" onClick={() => setCcPayModal(null)}>Cancel</Btn></Tooltip></Tooltip>
               <Tooltip text="Post this payment journal entry now."><Btn onClick={confirmCcPay} disabled={ccPaySaving}>{ccPaySaving ? 'Posting…' : 'Post Entry'}</Btn></Tooltip>
             </div>
           </div>
@@ -2132,7 +2199,7 @@ function WagesTab({ from, to }) {
     setSaving(true);
     setError('');
     try {
-      await api.post('/api/finance/wages', { ...form, superAmount: form.superannuation });
+      await okOrThrow(await api.post('/api/finance/wages', { ...form, superAmount: form.superannuation }));
       load();
       setForm({ date: todayStr(), employee: '', gross: '', tax: '', superannuation: '', net: '' });
       setShowForm(false);
@@ -2149,9 +2216,11 @@ function WagesTab({ from, to }) {
       message: `Delete wage entry for ${wage.employee}?`,
       onConfirm: async () => {
         setConfirmModal(null);
-        await api.delete(`/api/finance/wages/${wage.id}`);
-        setWages(prev => prev.filter(w => w.id !== wage.id));
-        addToast('Wage entry deleted');
+        try {
+          await okOrThrow(await api.delete(`/api/finance/wages/${wage.id}`));
+          setWages(prev => prev.filter(w => w.id !== wage.id));
+          addToast('Wage entry deleted');
+        } catch (err) { addToast(err.message, 'error'); }
       },
     });
   };
@@ -2261,7 +2330,7 @@ function DrawingsTab({ from, to }) {
     setSaving(true);
     setError('');
     try {
-      await api.post('/api/finance/drawings', form);
+      await okOrThrow(await api.post('/api/finance/drawings', form));
       load();
       setForm({ date: todayStr(), description: '', amount: '', paidViaId: null });
       setShowForm(false);
@@ -2278,9 +2347,11 @@ function DrawingsTab({ from, to }) {
       message: `Delete this drawing of ${fmt(d.amount)}?`,
       onConfirm: async () => {
         setConfirmModal(null);
-        await api.delete(`/api/finance/drawings/${d.id}`);
-        setDrawings(prev => prev.filter(x => x.id !== d.id));
-        addToast('Drawing deleted');
+        try {
+          await okOrThrow(await api.delete(`/api/finance/drawings/${d.id}`));
+          setDrawings(prev => prev.filter(x => x.id !== d.id));
+          addToast('Drawing deleted');
+        } catch (err) { addToast(err.message, 'error'); }
       },
     });
   };
@@ -2378,15 +2449,7 @@ function DrawingsTab({ from, to }) {
 // ── Vehicle & Home Office calculators ────────────────────────────────────────
 // Method (cents-per-km/logbook for vehicle, fixed-rate/actual-cost for home office) is an ATO
 // per-financial-year lock, not a per-entry choice — see docs/finance.md. `finYearForDate()` here
-// must stay in sync with the server's `finYearForDate()` in server/routes/finance.js.
-
-function finYearForDate(dateStr) {
-  const d = new Date(dateStr);
-  const y = d.getUTCFullYear();
-  const startYear = d.getUTCMonth() >= 6 ? y : y - 1; // month 6 = July (0-indexed)
-  const endYY = String((startYear + 1) % 100).padStart(2, '0');
-  return `${startYear}-${endYY}`;
-}
+// is shared from utils/finYear.mjs (guarded against the server copy by finYear.test.mjs).
 
 // Short list of common ATO-accepted sole-trader business-travel purposes — for description/
 // organization only; a real logbook/diary is still what the ATO requires to substantiate a claim.
@@ -2801,10 +2864,12 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
           )}
 
           {lockedVMethod === 'cents_per_km' && (
-            <button type="button" onClick={() => exportDiaryCsv('/api/finance/vehicle-trip-log/export', 'vehicle-trip-diary.csv')}
-              className="text-xs underline mb-2 hover:opacity-60" style={{ color: 'var(--color-muted)' }}>
-              Export full trip diary (CSV)
-            </button>
+            <Tooltip text="Download every logged trip (posted or not) as a CSV — the record to give your accountant or produce in an audit.">
+              <button type="button" onClick={() => exportDiaryCsv('/api/finance/vehicle-trip-log/export', 'vehicle-trip-diary.csv')}
+                className="text-xs underline mb-2 hover:opacity-60" style={{ color: 'var(--color-muted)' }}>
+                Export full trip diary (CSV)
+              </button>
+            </Tooltip>
           )}
 
           {lockedVMethod === 'cents_per_km' && (
@@ -2823,10 +2888,10 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
                   </Select>
                 </Field>
                 {vTripForm.purpose === 'Other (describe)' && (
-                  <Field label="Describe"><Input value={vTripForm.description} onChange={v => setVTripForm(p => ({...p, description: v}))} placeholder="e.g. equipment pickup" /></Field>
+                  <Field label="Describe"><Tooltip text="Optional detail about the trip (who or what it was for) — kept in the diary only."><Input value={vTripForm.description} onChange={v => setVTripForm(p => ({...p, description: v}))} placeholder="e.g. equipment pickup" /></Tooltip></Field>
                 )}
               </div>
-              <Btn onClick={logTrip} disabled={vTripLogging}>{vTripLogging ? 'Logging…' : 'Log Trip'}</Btn>
+              <Tooltip text="Add this trip to your diary. Logging a trip doesn't post a deduction — Post Deduction does that later for everything pending."><Btn onClick={logTrip} disabled={vTripLogging}>{vTripLogging ? 'Logging…' : 'Log Trip'}</Btn></Tooltip>
 
               {vTrips.filter(t => !t.postedExpenseId).length > 0 && (
                 <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
@@ -2837,34 +2902,34 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
                         {editingTripId === t.id ? (
                           <div className="flex flex-col gap-1.5">
                             <div className="grid grid-cols-2 gap-1.5">
-                              <Input type="date" value={editTripForm.tripDate} onChange={v => setEditTripForm(p => ({...p, tripDate: v}))} />
-                              <Input type="number" value={editTripForm.km} onChange={v => setEditTripForm(p => ({...p, km: v}))} placeholder="Km" />
+                              <Tooltip text="The date of this trip."><Input type="date" value={editTripForm.tripDate} onChange={v => setEditTripForm(p => ({...p, tripDate: v}))} /></Tooltip>
+                              <Tooltip text="Business kilometres driven on this trip."><Input type="number" value={editTripForm.km} onChange={v => setEditTripForm(p => ({...p, km: v}))} placeholder="Km" /></Tooltip>
                               <Select value={editTripForm.purpose} onChange={v => setEditTripForm(p => ({...p, purpose: v}))}>
                                 {VEHICLE_PURPOSES.map(p => <option key={p} value={p}>{p}</option>)}
                               </Select>
                               {editTripForm.purpose === 'Other (describe)' && (
-                                <Input value={editTripForm.description} onChange={v => setEditTripForm(p => ({...p, description: v}))} placeholder="Describe" />
+                                <Tooltip text="Optional detail about the trip."><Input value={editTripForm.description} onChange={v => setEditTripForm(p => ({...p, description: v}))} placeholder="Describe" /></Tooltip>
                               )}
                             </div>
                             <div className="flex gap-2">
-                              <button onClick={() => saveEditTrip(t.id)} className="hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Save</button>
-                              <button onClick={cancelEditTrip} className="hover:opacity-60" style={{ color: 'var(--color-muted)' }}>Cancel</button>
+                              <Tooltip text="Save the changes to this trip."><button onClick={() => saveEditTrip(t.id)} className="hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Save</button></Tooltip>
+                              <Tooltip text="Discard the changes."><button onClick={cancelEditTrip} className="hover:opacity-60" style={{ color: 'var(--color-muted)' }}>Cancel</button></Tooltip>
                             </div>
                           </div>
                         ) : deleteTripConfirmId === t.id ? (
                           <div className="flex items-center justify-between">
                             <span style={{ color: 'var(--color-text)' }}>Delete this trip?</span>
                             <div className="flex gap-2">
-                              <button onClick={() => deleteTrip(t.id)} className="hover:opacity-60" style={{ color: '#991b1b' }}>Yes</button>
-                              <button onClick={() => setDeleteTripConfirmId(null)} className="hover:opacity-60" style={{ color: 'var(--color-muted)' }}>No</button>
+                              <Tooltip text="Yes, delete this trip from the diary."><button onClick={() => deleteTrip(t.id)} className="hover:opacity-60" style={{ color: '#991b1b' }}>Yes</button></Tooltip>
+                              <Tooltip text="Keep the trip."><button onClick={() => setDeleteTripConfirmId(null)} className="hover:opacity-60" style={{ color: 'var(--color-muted)' }}>No</button></Tooltip>
                             </div>
                           </div>
                         ) : (
                           <div className="flex items-center justify-between">
                             <span style={{ color: 'var(--color-text)' }}>{formatFriendlyDate(t.tripDate)} — {t.km} km — {t.purpose || 'No purpose'}</span>
                             <div className="flex gap-2">
-                              <button onClick={() => startEditTrip(t)} className="hover:opacity-60" style={{ color: 'var(--color-muted)' }}>Edit</button>
-                              <button onClick={() => setDeleteTripConfirmId(t.id)} className="hover:opacity-60" style={{ color: '#991b1b' }}>Delete</button>
+                              <Tooltip text="Change the date, distance or description of this trip."><button onClick={() => startEditTrip(t)} className="hover:opacity-60" style={{ color: 'var(--color-muted)' }}>Edit</button></Tooltip>
+                              <Tooltip text="Delete this trip from the diary."><button onClick={() => setDeleteTripConfirmId(t.id)} className="hover:opacity-60" style={{ color: '#991b1b' }}>Delete</button></Tooltip>
                             </div>
                           </div>
                         )}
@@ -3046,7 +3111,7 @@ function AssetsTab() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [disposeModal, setDisposeModal] = useState(null); // asset being disposed
-  const [disposeForm, setDisposeForm] = useState({ disposedDate: todayStr(), disposalAmount: '' });
+  const [disposeForm, setDisposeForm] = useState({ disposedDate: todayStr(), disposalAmount: '', gstIncluded: false });
   const [disposing, setDisposing] = useState(false);
   const [preview, setPreview] = useState(null); // depreciation preview rows, or null if not loaded
   const [previewFy, setPreviewFy] = useState(finYearForDate(todayStr()));
@@ -3148,6 +3213,7 @@ function AssetsTab() {
       const res = await api.post(`/api/finance/assets/${disposeModal.id}/dispose`, disposeForm);
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Failed to record disposal');
+      if (body.finalYearDeduction > 0) addToast(`Depreciation to the disposal date posted: $${body.finalYearDeduction.toFixed(2)}`);
       addToast(body.adjustment > 0 ? `Disposed — $${body.adjustment.toFixed(2)} profit on disposal posted` : body.adjustment < 0 ? `Disposed — $${Math.abs(body.adjustment).toFixed(2)} loss on disposal posted` : 'Disposed — no balancing adjustment needed');
       setDisposeModal(null);
       load();
@@ -3196,7 +3262,7 @@ function AssetsTab() {
           </Field>
           <Field label="">
             <div className="flex items-center gap-2 pt-6">
-              <input type="checkbox" id="asset-gst" checked={form.gstIncluded} onChange={e => setForm(p => ({...p, gstIncluded: e.target.checked}))} />
+              <Tooltip text="Tick if the amount you paid includes 10% GST — Vault splits it out so the cost basis is the ex-GST amount."><input type="checkbox" id="asset-gst" checked={form.gstIncluded} onChange={e => setForm(p => ({...p, gstIncluded: e.target.checked}))} /></Tooltip>
               <label htmlFor="asset-gst" className="text-sm" style={{ color: 'var(--color-text)' }}>GST Included (10%)</label>
               {form.gstIncluded && totalPaid > 0 && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>GST = ${(totalPaid / 11).toFixed(2)}</span>}
             </div>
@@ -3353,8 +3419,14 @@ function AssetsTab() {
       {disposeModal && (
         <Modal onClose={() => setDisposeModal(null)} title={`Dispose: ${disposeModal.description}`}>
           <div className="grid grid-cols-2 gap-3 mb-3">
-            <Field label="Disposal date"><Input type="date" value={disposeForm.disposedDate} onChange={v => setDisposeForm(p => ({...p, disposedDate: v}))} /></Field>
+            <Field label="Disposal date"><Tooltip text="The date the asset was sold or scrapped. Depreciation is brought up to this date before the profit or loss is worked out."><Input type="date" value={disposeForm.disposedDate} onChange={v => setDisposeForm(p => ({...p, disposedDate: v}))} /></Tooltip></Field>
             <Field label="Sale/disposal proceeds ($)"><Tooltip text="What the asset sold for, or 0 if scrapped with no proceeds."><Input type="number" value={disposeForm.disposalAmount} onChange={v => setDisposeForm(p => ({...p, disposalAmount: v}))} placeholder="0.00" /></Tooltip></Field>
+            <div className="col-span-2 flex items-center gap-2">
+              <Tooltip text="Tick if the price you were paid includes GST (usual when selling a business asset while registered for GST). One eleventh is booked as GST collected and reported in your BAS on the disposal date; the rest is the sale price used for the profit or loss.">
+                <input type="checkbox" id="dispose-gst" checked={!!disposeForm.gstIncluded} onChange={e => setDisposeForm(p => ({...p, gstIncluded: e.target.checked}))} />
+              </Tooltip>
+              <label htmlFor="dispose-gst" className="text-sm" style={{ color: 'var(--color-text)' }}>Proceeds include GST (1/11 is GST on the sale)</label>
+            </div>
           </div>
           <div className="flex gap-2">
             <Tooltip text="Posts a profit or loss on disposal balancing adjustment automatically, based on proceeds vs written-down value.">
@@ -3374,7 +3446,7 @@ function AssetsTab() {
             <Input type="date" value={ccPayDate} onChange={setCcPayDate} />
           </Field>
           <div className="flex gap-2 mt-3">
-            <Btn onClick={submitCcPay} disabled={ccPaySaving}>{ccPaySaving ? 'Recording…' : 'Confirm Payment'}</Btn>
+            <Tooltip text="Post the payment: money out of the bank, the card or bill cleared."><Btn onClick={submitCcPay} disabled={ccPaySaving}>{ccPaySaving ? 'Recording…' : 'Confirm Payment'}</Btn></Tooltip>
             <Btn variant="secondary" onClick={() => setCcPayModal(null)}>Cancel</Btn>
           </div>
         </Modal>
@@ -3428,7 +3500,7 @@ function InterestTab({ from, to }) {
       onConfirm: async () => {
         setConfirmModal(null);
         try {
-          await api.delete(`/api/finance/interest/${entry.id}`);
+          await okOrThrow(await api.delete(`/api/finance/interest/${entry.id}`));
           addToast('Entry deleted');
           load();
         } catch (e) { addToast(e.message, 'error'); }
@@ -3563,7 +3635,7 @@ function AccountsTab() {
       onConfirm: async () => {
         setConfirmModal(null);
         try {
-          await api.delete(`/api/finance/accounts/${a.id}`);
+          await okOrThrow(await api.delete(`/api/finance/accounts/${a.id}`));
           setAccounts(prev => prev.filter(x => x.id !== a.id));
           addToast('Account deleted');
         } catch (e) { addToast(e.message, 'error'); }
@@ -3736,7 +3808,7 @@ function JournalTab({ from, to }) {
       onConfirm: async () => {
         setConfirmModal(null);
         try {
-          await api.delete(`/api/finance/journal/${entry.id}`);
+          await okOrThrow(await api.delete(`/api/finance/journal/${entry.id}`));
           setEntries(prev => prev.filter(e => e.id !== entry.id));
           addToast('Entry deleted');
         } catch (e) { addToast(e.message, 'error'); }
@@ -4125,6 +4197,7 @@ function BASTab() {
   const [confirmReconcile, setConfirmReconcile] = useState(false);
   const [confirmLodge, setConfirmLodge]         = useState(false);
   const [confirmPay, setConfirmPay]             = useState(false);
+  const [stepDate, setStepDate]                 = useState(todayStr());
   const addToast = useToastStore(s => s.addToast);
 
   const calc = useCallback(async () => {
@@ -4145,9 +4218,9 @@ function BASTab() {
     setStepError('');
     try {
       const id = data.quarterId;
-      if (data.status === 'open')            await api.post(`/api/finance/bas/${id}/reconcile`, {});
-      else if (data.status === 'reconciled') await api.post(`/api/finance/bas/${id}/lodge`, {});
-      else if (data.status === 'lodged')     await api.post(`/api/finance/bas/${id}/paid`, {});
+      if (data.status === 'open')            await okOrThrow(await api.post(`/api/finance/bas/${id}/reconcile`, {}));
+      else if (data.status === 'reconciled') await okOrThrow(await api.post(`/api/finance/bas/${id}/lodge`, { date: stepDate }));
+      else if (data.status === 'lodged')     await okOrThrow(await api.post(`/api/finance/bas/${id}/paid`, { date: stepDate }));
       const labels = { open: 'Marked reconciled', reconciled: 'Lodged with ATO', lodged: 'BAS payment recorded' };
       addToast(labels[data.status] || 'Updated');
       await calc();
@@ -4193,7 +4266,22 @@ function BASTab() {
     null,
     { label: 'W1 — Total Wages',                       value: fmt(data.wages) },
     { label: 'W2 — Tax Withheld (PAYG)',                value: fmt(data.withholdingTax), bold: true },
+    null,
+    { label: 'T7 — PAYG Instalment',                    value: fmt(data.paygInstalment || 0), t7: true },
+    { label: 'Total payable (1A − 1B + W2 + T7)',        value: fmt((data.netGst || 0) + (data.withholdingTax || 0) + (data.paygInstalment || 0)), bold: true },
   ] : [];
+
+  const [t7Draft, setT7Draft] = useState('');
+  useEffect(() => { setT7Draft(data ? String(data.paygInstalment || 0) : ''); }, [data?.quarterId, data?.paygInstalment]);
+  const saveT7 = async () => {
+    try {
+      const res = await api.post(`/api/finance/bas/${data.quarterId}/payg-instalment`, { amount: t7Draft });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Could not save');
+      addToast('PAYG instalment saved');
+      calc();
+    } catch (e) { addToast(e.message, 'error'); }
+  };
 
   const actionLabels = { open: 'Mark Reconciled', reconciled: 'Lodge with ATO', lodged: 'Record Payment' };
   const timestamps   = data ? [
@@ -4205,6 +4293,10 @@ function BASTab() {
   const lodgeMessage = data ? (
     <div>
       <p className="mb-3">Confirm you have submitted this BAS to the ATO for <strong>{quarters[qIdx]?.label}</strong>.</p>
+      <div className="mb-3">
+        <label className="text-xs font-medium block mb-1" style={{ color: 'var(--color-muted)' }}>Date lodged</label>
+        <Tooltip text="The real date this happened. If you already did this with the ATO, enter that date — the bank payment is booked on it, not today."><Input type="date" value={stepDate} onChange={setStepDate} /></Tooltip>
+      </div>
       <div className="rounded-lg p-3 mb-3 text-xs font-mono flex flex-col gap-1" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
         <div className="flex justify-between"><span>G1  Total Sales (inc GST)</span><span>{fmt(incTotal)}</span></div>
         <div className="flex justify-between"><span>1A  GST on Sales</span><span>{fmt(data.gstCollected)}</span></div>
@@ -4218,8 +4310,17 @@ function BASTab() {
   return (
     <div data-tour="finance-bas" className="p-6">
       <h2 className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Business Activity Statement</h2>
+      {data && data.gstRegistered === false && (
+        <div className="rounded-lg p-3 mb-4 text-sm" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
+          {data.quarterNeedsBas
+            ? <>Not GST registered from <strong>{data.gstEffectiveTo}</strong>. This quarter starts before then, so it still needs its BAS.</>
+            : <>Not GST registered from <strong>{data.gstEffectiveTo}</strong> — this quarter doesn't need a BAS, and no GST is added to invoices or claimed on purchases. Earlier quarters stay as lodged.</>}
+        </div>
+      )}
       <p className="text-xs italic mb-4" style={{ color: 'var(--color-muted)' }}>
-        GST is calculated on a cash basis (recognized when paid/received). If you report GST on an accrual basis, these figures will not match your actual BAS.
+        {data?.basis === 'accrual'
+          ? 'GST is calculated on an accrual basis (sales when invoiced, bills when dated), as set in Settings.'
+          : 'GST is calculated on a cash basis (sales when paid, bills when paid). If you report GST on an accrual basis, change the GST basis in Settings first.'}
       </p>
 
       <div className="flex flex-col xl:flex-row gap-8">
@@ -4252,7 +4353,18 @@ function BASTab() {
                       style={{ borderColor: 'var(--color-border)', background: row.bold ? 'var(--color-surface)' : 'transparent' }}
                     >
                       <span className="text-sm" style={{ color: 'var(--color-text)', fontWeight: row.bold ? 600 : 400 }}>{row.label}</span>
-                      <span className="text-sm font-medium" style={{ color: row.warn ? '#f59e0b' : 'var(--color-text)' }}>{row.value}</span>
+                      {row.t7 && ['open', 'reconciled'].includes(data.status) ? (
+                        <span className="flex items-center gap-2">
+                          <Tooltip text="The PAYG income-tax instalment the ATO asked you to pay with this BAS (label T7). It is part of the payment and is booked to owner's drawings when you record the payment. Editable until the quarter is lodged.">
+                            <input type="number" min="0" step="0.01" value={t7Draft} onChange={e => setT7Draft(e.target.value)}
+                              className="text-sm px-2 py-1 rounded border w-28 text-right"
+                              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                          </Tooltip>
+                          <Tooltip text="Save the instalment amount for this quarter."><button onClick={saveT7} className="text-xs px-2 py-1 rounded border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Save</button></Tooltip>
+                        </span>
+                      ) : (
+                        <span className="text-sm font-medium" style={{ color: row.warn ? '#f59e0b' : 'var(--color-text)' }}>{row.value}</span>
+                      )}
                     </div>
                   )
                 )}
@@ -4323,7 +4435,13 @@ function BASTab() {
       {confirmPay && (
         <ConfirmModal
           title="Record BAS Payment"
-          message={`This will create a journal entry for the GST settlement (${fmt(data?.netGst)}) and lock this quarter. Continue?`}
+          message={<div>
+      <div className="mb-3">
+        <label className="text-xs font-medium block mb-1" style={{ color: 'var(--color-muted)' }}>Date paid</label>
+        <Tooltip text="The real date this happened. If you already did this with the ATO, enter that date — the bank payment is booked on it, not today."><Input type="date" value={stepDate} onChange={setStepDate} /></Tooltip>
+      </div>
+            <p>{`This will create a journal entry for the BAS settlement (${fmt((data?.netGst || 0) + (data?.withholdingTax || 0) + (data?.paygInstalment || 0))}), booked on the date above, and lock this quarter. Continue?`}</p>
+          </div>}
           confirmLabel="Record Payment"
           onConfirm={() => { setConfirmPay(false); executeStep(); }}
           onCancel={() => setConfirmPay(false)}
@@ -4607,40 +4725,48 @@ function ExportAccountMapPanel() {
                     {a.code} — {a.name}
                   </td>
                   <td className="py-1 pr-2">
-                    <input
-                      value={row.code || ''}
-                      onChange={e => updateDraft(a.code, 'code', e.target.value)}
-                      placeholder={a.code}
-                      className="text-xs px-1.5 py-1 rounded border w-24"
-                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
-                    />
+                    <Tooltip text="The account code your accountant uses for this line in MYOB/Xero. Leave blank to use Vault's own code.">
+                      <input
+                        value={row.code || ''}
+                        onChange={e => updateDraft(a.code, 'code', e.target.value)}
+                        placeholder={a.code}
+                        className="text-xs px-1.5 py-1 rounded border w-24"
+                        style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+                      />
+                    </Tooltip>
                   </td>
                   <td className="py-1 pr-2">
-                    <input
-                      value={row.name || ''}
-                      onChange={e => updateDraft(a.code, 'name', e.target.value)}
-                      placeholder={a.name}
-                      className="text-xs px-1.5 py-1 rounded border w-36"
-                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
-                    />
+                    <Tooltip text="The account name to export for this line. Leave blank to use Vault's own name.">
+                      <input
+                        value={row.name || ''}
+                        onChange={e => updateDraft(a.code, 'name', e.target.value)}
+                        placeholder={a.name}
+                        className="text-xs px-1.5 py-1 rounded border w-36"
+                        style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+                      />
+                    </Tooltip>
                   </td>
                   <td className="py-1 pr-2">
-                    <input
-                      value={row.myobTax || ''}
-                      onChange={e => updateDraft(a.code, 'myobTax', e.target.value)}
-                      placeholder="GST / N-T"
-                      className="text-xs px-1.5 py-1 rounded border w-20"
-                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
-                    />
+                    <Tooltip text="The MYOB tax code for this account (for example GST or N-T). Leave blank to let Vault choose.">
+                      <input
+                        value={row.myobTax || ''}
+                        onChange={e => updateDraft(a.code, 'myobTax', e.target.value)}
+                        placeholder="GST / N-T"
+                        className="text-xs px-1.5 py-1 rounded border w-20"
+                        style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+                      />
+                    </Tooltip>
                   </td>
                   <td className="py-1 pr-2">
-                    <input
-                      value={row.xeroTax || ''}
-                      onChange={e => updateDraft(a.code, 'xeroTax', e.target.value)}
-                      placeholder="INPUT / OUTPUT / BASEXCLUDED"
-                      className="text-xs px-1.5 py-1 rounded border w-40"
-                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
-                    />
+                    <Tooltip text="The Xero tax type for this account (INPUT, OUTPUT or BASEXCLUDED). Leave blank to let Vault choose.">
+                      <input
+                        value={row.xeroTax || ''}
+                        onChange={e => updateDraft(a.code, 'xeroTax', e.target.value)}
+                        placeholder="INPUT / OUTPUT / BASEXCLUDED"
+                        className="text-xs px-1.5 py-1 rounded border w-40"
+                        style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+                      />
+                    </Tooltip>
                   </td>
                 </tr>
               );
@@ -4902,7 +5028,7 @@ function AssetsSettingsSection() {
           ) : (
             <>
               <p className="text-sm mb-2" style={{ color: 'var(--color-text)' }}>Not yet elected — you'll be asked to choose pool vs. individual the first time you enter a $300-$999.99 asset.</p>
-              <Btn onClick={() => toggle(true)} disabled={saving}>{saving ? 'Saving…' : 'Elect Low-Value Pool Now'}</Btn>
+              <Tooltip text="Record the low-value pool election now. It is permanent: every later asset under $1,000 must then be pooled."><Btn onClick={() => toggle(true)} disabled={saving}>{saving ? 'Saving…' : 'Elect Low-Value Pool Now'}</Btn></Tooltip>
             </>
           )}
         </div>
@@ -4915,7 +5041,7 @@ function SettingsTab({ onHistoryReset, focusSection, onFocusHandled }) {
   const [form, setForm] = useState({
     fin_biz_name: '', fin_abn: '', fin_address: '', fin_website: '',
     fin_bank_name: '', fin_account_name: '', fin_bsb: '', fin_account_number: '',
-    fin_gst_registered: 'true', fin_payment_terms: '14', fin_admin_email: '',
+    fin_gst_registered: 'true', fin_payment_terms: '14', fin_admin_email: '', fin_gst_basis: 'cash', fin_gst_ended_on: '', fin_gst_unreg_since: '',
     fin_reminder_hour: '8',
     fin_vehicle_rate_per_km: '0.88', fin_home_office_rate_per_hour: '0.70',
   });
@@ -4950,11 +5076,22 @@ function SettingsTab({ onHistoryReset, focusSection, onFocusHandled }) {
   const save = async () => {
     setSaving(true);
     try {
-      await api.put('/api/finance/settings', form);
+      await okOrThrow(await api.put('/api/finance/settings', form));
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch {}
+      api.get('/api/finance/settings').then(r => r.json()).then(d => setForm(p => ({ ...p, ...d }))).catch(() => {});
+    } catch (e) { addToast(e.message, 'error'); }
     finally { setSaving(false); }
+  };
+
+  const saveGstBasis = async (value) => {
+    const previous = form.fin_gst_basis;
+    set('fin_gst_basis')(value);
+    try {
+      const res = await api.put('/api/finance/settings', { fin_gst_basis: value });
+      if (res && res.ok === false) throw new Error((await res.json()).error || 'Could not change the GST basis');
+      addToast(`GST basis set to ${value}`);
+    } catch (e) { set('fin_gst_basis')(previous); addToast(e.message, 'error'); }
   };
 
   const saveRate = async (key, value) => {
@@ -5007,8 +5144,18 @@ function SettingsTab({ onHistoryReset, focusSection, onFocusHandled }) {
               </Sel>
             </Tooltip>
           </Field>
+          <div className="mt-3">
+            <Field label="GST basis">
+              <Tooltip text="Cash: GST on sales is counted when the invoice is paid, and on bills when you pay them. Accrual: when the invoice is issued and the bill dated. Match what you registered with the ATO. It can't be changed once a BAS quarter has been reconciled or lodged.">
+                <Sel value={form.fin_gst_basis || 'cash'} onChange={saveGstBasis}>
+                  <option value="cash">Cash (when paid)</option>
+                  <option value="accrual">Accrual (when invoiced)</option>
+                </Sel>
+              </Tooltip>
+            </Field>
+          </div>
           <div className="flex items-center gap-2 mt-3">
-            <Tooltip text="Controls whether GST (10%) is applied to invoice items by default — untick if not registered for GST">
+            <Tooltip text="Untick if you are no longer registered for GST. From the cancellation date no GST is added to invoices, quotes or recurring invoices, and no GST credit is claimed on purchases. Earlier documents and lodged quarters are left exactly as they are.">
               <input
                 type="checkbox"
                 id="gst-reg"
@@ -5018,6 +5165,15 @@ function SettingsTab({ onHistoryReset, focusSection, onFocusHandled }) {
             </Tooltip>
             <label htmlFor="gst-reg" className="text-sm" style={{ color: 'var(--color-text)' }}>Registered for GST</label>
           </div>
+          {f('fin_gst_registered') === 'false' && (
+            <div className="mt-3">
+              <Field label="GST cancellation effective date" hint={form.fin_gst_unreg_since && !form.fin_gst_ended_on ? `Not known yet — using ${form.fin_gst_unreg_since}, the day this box was unticked` : 'The date on the ATO cancellation notice (your accountant has it)'}>
+                <Tooltip text="Invoices and purchases dated on or after this day get no GST. Leave blank if you don't know it yet — the day you unticked the box is used until you enter the real date. Changing it doesn't alter documents you've already created.">
+                  <Input type="date" value={form.fin_gst_ended_on || ''} onChange={set('fin_gst_ended_on')} />
+                </Tooltip>
+              </Field>
+            </div>
+          )}
         </div>
 
         <div className="border-t pt-3 mt-1" style={{ borderColor: 'var(--color-border)' }}>
@@ -5238,13 +5394,15 @@ function ExportModal({ type, history, onClose, onSuccess, onGoToAccountMap }) {
               likely need to map or reject some lines. Map your accounts once and every future export
               uses it automatically.
             </p>
-            <button
-              onClick={onGoToAccountMap}
-              className="mt-2 text-xs px-3 py-1.5 rounded font-medium"
-              style={{ background: '#a16207', color: '#fff' }}
-            >
-              Map accounts now
-            </button>
+            <Tooltip text="Open the account mapping so exports use your accountant's real account codes and tax types.">
+              <button
+                onClick={onGoToAccountMap}
+                className="mt-2 text-xs px-3 py-1.5 rounded font-medium"
+                style={{ background: '#a16207', color: '#fff' }}
+              >
+                Map accounts now
+              </button>
+            </Tooltip>
           </div>
         )}
 
@@ -6052,9 +6210,12 @@ function RecurringTab() {
                         <div className="col-span-2"><Tooltip text="Quantity for this line."><Input type="number" value={item.qty||''} onChange={v => setTplItem(idx,'qty',v)} placeholder="Qty" /></Tooltip></div>
                         <div className="col-span-3"><Tooltip text="Price per unit, excluding GST."><Input type="number" value={item.unitPrice||''} onChange={v => setTplItem(idx,'unitPrice',v)} placeholder="Unit Price" /></Tooltip></div>
                         <div className="col-span-1">
-                          <Tooltip text="GST applies 10% tax to this line; N-T leaves it GST-free.">
+                          <Tooltip text="GST applies 10% tax to this line. Free, Export and Input-taxed carry no GST but are reported separately on the BAS; N-T is outside the GST system.">
                             <select value={item.gstCode||'GST'} onChange={e => setTplItem(idx,'gstCode',e.target.value)} className="text-sm px-2 py-2 rounded-lg border w-full" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                               <option value="GST">GST</option>
+                              <option value="FRE">Free</option>
+                              <option value="EXP">Export</option>
+                              <option value="INP">Input-taxed</option>
                               <option value="NT">N-T</option>
                             </select>
                           </Tooltip>
@@ -6204,7 +6365,7 @@ function TwoSeriesBarChart({ title, points, keyA, keyB, labelA, labelB, xKey }) 
 
 const CashBasisNote = () => (
   <p className="text-xs italic mb-4" style={{ color: 'var(--color-muted)' }}>
-    GST is calculated on a cash basis (recognized when paid/received). If you report GST on an accrual basis, these figures will not match your actual BAS.
+    GST follows the basis chosen in Settings (cash by default: counted when paid/received; accrual: when invoiced). If it doesn't match how you report to the ATO, change it there.
   </p>
 );
 

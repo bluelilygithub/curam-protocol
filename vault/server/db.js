@@ -2901,12 +2901,12 @@ async function initSchema() {
   `);
 
   // 2. Remove invoice journals for invoices still in draft status.
-  //    Journals now only post when an invoice is sent.
+  //    Journals now only post when an invoice is sent. Void invoices are not transactions either.
   await pool.query(`
     DELETE FROM fin_journal_entries
     WHERE type = 'invoice'
       AND "sourceId" IN (
-        SELECT id FROM fin_invoices WHERE status = 'draft'
+        SELECT id FROM fin_invoices WHERE status IN ('draft','void')
       )
   `);
 
@@ -3175,6 +3175,109 @@ async function initSchema() {
   // dropped from the purchase journal entirely, so a CC-paid asset's settlement amount never
   // matched the actual card charge.
   await pool.query(`ALTER TABLE fin_assets ADD COLUMN IF NOT EXISTS gst NUMERIC(12,2) NOT NULL DEFAULT 0`);
+
+  // ── Finance: field-level audit log ────────────────────────────────────────
+  // Captured by database triggers, not route code, so no code path (present or future) can change a
+  // financial record without leaving a row here. UPDATE rows carry only the fields that changed
+  // ({field: {from, to}}); INSERT/DELETE rows carry the whole row. Invoice line items are not logged
+  // individually (an edit rebuilds them) -- the invoice's subtotal/gst/total changes are. No FK on
+  // "userId" on purpose: the trail must survive (and never block) a user's deletion. Updates to the
+  // log itself are rejected; there is no route that deletes from it.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS fin_audit_log (
+      id              BIGSERIAL PRIMARY KEY,
+      "userId"        INTEGER NOT NULL,
+      "tableName"     TEXT NOT NULL,
+      "rowId"         INTEGER,
+      label           TEXT,
+      action          TEXT NOT NULL CHECK (action IN ('INSERT','UPDATE','DELETE')),
+      "changedFields" JSONB,
+      "rowData"       JSONB,
+      "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_fin_audit_user_created ON fin_audit_log ("userId", "createdAt" DESC)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_fin_audit_row ON fin_audit_log ("tableName", "rowId")`);
+  await pool.query(`
+    CREATE OR REPLACE FUNCTION fin_audit_trigger() RETURNS trigger AS $$
+    DECLARE
+      o JSONB; n JSONB; k TEXT; diff JSONB := '{}'::jsonb; src JSONB;
+    BEGIN
+      IF TG_OP = 'DELETE' THEN
+        src := to_jsonb(OLD);
+        INSERT INTO fin_audit_log ("userId","tableName","rowId",label,action,"rowData")
+        VALUES ((src->>'userId')::int, TG_TABLE_NAME, NULLIF(src->>'id','')::int,
+                COALESCE(src->>'number', src->>'description', src->>'name', src->>'employee', src->>'key', src->>'code'),
+                'DELETE', src);
+      ELSIF TG_OP = 'INSERT' THEN
+        src := to_jsonb(NEW);
+        INSERT INTO fin_audit_log ("userId","tableName","rowId",label,action,"rowData")
+        VALUES ((src->>'userId')::int, TG_TABLE_NAME, NULLIF(src->>'id','')::int,
+                COALESCE(src->>'number', src->>'description', src->>'name', src->>'employee', src->>'key', src->>'code'),
+                'INSERT', src);
+      ELSE
+        o := to_jsonb(OLD); n := to_jsonb(NEW);
+        FOR k IN SELECT jsonb_object_keys(n) LOOP
+          IF k NOT IN ('updatedAt') AND (o->k) IS DISTINCT FROM (n->k) THEN
+            diff := diff || jsonb_build_object(k, jsonb_build_object('from', o->k, 'to', n->k));
+          END IF;
+        END LOOP;
+        IF diff <> '{}'::jsonb THEN
+          INSERT INTO fin_audit_log ("userId","tableName","rowId",label,action,"changedFields")
+          VALUES ((n->>'userId')::int, TG_TABLE_NAME, NULLIF(n->>'id','')::int,
+                  COALESCE(n->>'number', n->>'description', n->>'name', n->>'employee', n->>'key', n->>'code'),
+                  'UPDATE', diff);
+        END IF;
+      END IF;
+      RETURN NULL;
+    END;
+    $$ LANGUAGE plpgsql
+  `);
+  await pool.query(`
+    CREATE OR REPLACE FUNCTION fin_audit_log_immutable() RETURNS trigger AS $$
+    BEGIN
+      RAISE EXCEPTION 'fin_audit_log is append-only';
+    END;
+    $$ LANGUAGE plpgsql
+  `);
+  await pool.query(`DROP TRIGGER IF EXISTS trg_fin_audit_log_immutable ON fin_audit_log`);
+  await pool.query(`CREATE TRIGGER trg_fin_audit_log_immutable BEFORE UPDATE ON fin_audit_log FOR EACH ROW EXECUTE FUNCTION fin_audit_log_immutable()`);
+  for (const t of ['fin_invoices','fin_expenses','fin_wages','fin_drawings','fin_assets','fin_accounts','fin_suppliers',
+                   'fin_tx_codes','fin_recurring','fin_budgets','fin_bas_quarters']) {
+    await pool.query(`DROP TRIGGER IF EXISTS trg_fin_audit ON ${t}`);
+    await pool.query(`CREATE TRIGGER trg_fin_audit AFTER INSERT OR UPDATE OR DELETE ON ${t} FOR EACH ROW EXECUTE FUNCTION fin_audit_trigger()`);
+  }
+  // Manual journal entries are user input (everything else in the journal is derived from the
+  // records above); settings rows are logged for Finance keys only (rates, method locks, bank details).
+  await pool.query(`DROP TRIGGER IF EXISTS trg_fin_audit_ins ON fin_journal_entries`);
+  await pool.query(`DROP TRIGGER IF EXISTS trg_fin_audit_del ON fin_journal_entries`);
+  await pool.query(`CREATE TRIGGER trg_fin_audit_ins AFTER INSERT ON fin_journal_entries FOR EACH ROW WHEN (NEW.type = 'manual') EXECUTE FUNCTION fin_audit_trigger()`);
+  await pool.query(`CREATE TRIGGER trg_fin_audit_del AFTER DELETE ON fin_journal_entries FOR EACH ROW WHEN (OLD.type = 'manual') EXECUTE FUNCTION fin_audit_trigger()`);
+  await pool.query(`DROP TRIGGER IF EXISTS trg_fin_audit_ins ON settings`);
+  await pool.query(`DROP TRIGGER IF EXISTS trg_fin_audit_upd ON settings`);
+  await pool.query(`DROP TRIGGER IF EXISTS trg_fin_audit_del ON settings`);
+  await pool.query(`CREATE TRIGGER trg_fin_audit_ins AFTER INSERT ON settings FOR EACH ROW WHEN (NEW.key LIKE 'fin\\_%') EXECUTE FUNCTION fin_audit_trigger()`);
+  await pool.query(`CREATE TRIGGER trg_fin_audit_upd AFTER UPDATE ON settings FOR EACH ROW WHEN (NEW.key LIKE 'fin\\_%') EXECUTE FUNCTION fin_audit_trigger()`);
+  await pool.query(`CREATE TRIGGER trg_fin_audit_del AFTER DELETE ON settings FOR EACH ROW WHEN (OLD.key LIKE 'fin\\_%') EXECUTE FUNCTION fin_audit_trigger()`);
+
+  // ── Finance: supplier bills (Accounts Payable) ───────────────────────────
+  // A bill is an expense paid via a liability account (Accounts Payable, or a card). dueDate is when
+  // the supplier wants paying; settledDate is when it was actually paid, so Aged Payables can be
+  // date-accurate. Rows settled before these columns existed have a NULL settledDate (treated as
+  // paid before any as-of date).
+  await pool.query(`ALTER TABLE fin_expenses ADD COLUMN IF NOT EXISTS "dueDate" DATE`);
+  await pool.query(`ALTER TABLE fin_expenses ADD COLUMN IF NOT EXISTS "settledDate" DATE`);
+  await pool.query(`ALTER TABLE fin_assets ADD COLUMN IF NOT EXISTS "settledDate" DATE`);
+
+  // ── Finance: BAS completeness ────────────────────────────────────────────
+  // "paygInstalment" is label T7 (an income-tax prepayment, entered per quarter); "inputTaxed" marks
+  // a purchase made to produce input-taxed sales (label G13 -- carries no GST credit).
+  await pool.query(`ALTER TABLE fin_bas_quarters ADD COLUMN IF NOT EXISTS "paygInstalment" NUMERIC(12,2) NOT NULL DEFAULT 0`);
+  await pool.query(`ALTER TABLE fin_expenses ADD COLUMN IF NOT EXISTS "inputTaxed" BOOLEAN NOT NULL DEFAULT FALSE`);
+
+  // GST collected on the sale of an asset (1/11 of proceeds when the price includes GST). It is reported
+  // in the BAS on the disposal date (G1 / 1A) alongside invoiced sales.
+  await pool.query(`ALTER TABLE fin_assets ADD COLUMN IF NOT EXISTS "disposalGst" NUMERIC(12,2) NOT NULL DEFAULT 0`);
 
   // Editable ATO rate settings — never hardcoded in calculation code. Seed a sensible
   // current-year default once per user's first ensureAccounts() pass (see finance.js).

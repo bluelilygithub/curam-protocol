@@ -62,6 +62,12 @@ function getDateInTz(tz) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
 }
 
+// "Today" as YYYY-MM-DD in the workspace timezone. new Date().toISOString() is UTC, which dates
+// anything entered before ~10am in Brisbane as yesterday (and can land it in the wrong BAS quarter).
+async function todayStr() {
+  return getDateInTz(await getWorkspaceTimezone());
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 async function nextInvoiceNumber(userId, docType = 'invoice') {
@@ -74,6 +80,32 @@ async function nextInvoiceNumber(userId, docType = 'invoice') {
   if (!rows.length) return `${prefix}001`;
   const seq = parseInt(rows[0].number.slice(prefix.length), 10) || 0;
   return `${prefix}${String(seq + 1).padStart(3, '0')}`;
+}
+
+// GST registration. Settings: fin_gst_registered ('false' = no longer registered), fin_gst_ended_on
+// (the cancellation effective date from the ATO notice, optional) and fin_gst_unreg_since (set by the
+// server the day the box was un-ticked, used when the real date isn't known yet). GST applies to a
+// document or purchase dated before that date, or at any date while registered. While not registered:
+// no GST is added to invoices, and no GST credit is claimed on purchases.
+async function getGstRegistration(db, userId) {
+  const { rows } = await db.query(
+    `SELECT key, value FROM settings WHERE "userId"=$1 AND key IN ('fin_gst_registered','fin_gst_ended_on','fin_gst_unreg_since')`, [userId]);
+  const m = Object.fromEntries(rows.map(r => [r.key, r.value]));
+  const registered = m.fin_gst_registered !== 'false';
+  let effectiveFrom = (m.fin_gst_ended_on && /^\d{4}-\d{2}-\d{2}$/.test(m.fin_gst_ended_on)) ? m.fin_gst_ended_on : (m.fin_gst_unreg_since || null);
+  if (!registered && !effectiveFrom) {
+    // flag was switched off before the date was tracked: start from today rather than rewriting history
+    effectiveFrom = await todayStr();
+    await db.query(
+      `INSERT INTO settings ("userId", key, value) VALUES ($1,'fin_gst_unreg_since',$2) ON CONFLICT ("userId", key) DO NOTHING`, [userId, effectiveFrom]);
+  }
+  return { registered, effectiveFrom };
+}
+// Does GST apply to something dated `date`?
+function gstAppliesOn(reg, date) {
+  if (reg.registered) return true;
+  const d = dateOnly(date);
+  return !!(reg.effectiveFrom && d && d < reg.effectiveFrom);
 }
 
 function calcItemGst(item) {
@@ -149,18 +181,53 @@ async function accountByCode(userId, code) {
   return rows[0]?.id;
 }
 
-// GST paid/claimed for a date range, cash basis. Sums fin_expenses.gst (covers ordinary
-// expenses AND immediate-deduction asset purchases, which post through fin_expenses too)
-// PLUS the GST line on non-immediate asset purchases (prime cost / diminishing value /
-// low-value pool), which post straight to the journal (type='asset_purchase') and never touch
-// fin_expenses — so a plain SUM(gst) FROM fin_expenses silently drops that GST from BAS.
-// Single source of truth for every BAS/GST-summary endpoint instead of each one reimplementing
-// (and drifting from) the same two-part sum.
-async function gstPaidForRange(userId, from, to) {
+// GST collected on assets sold in the period (and the ex-GST proceeds, for G1). A disposal is a one-off
+// event, so it is recognised on the disposal date on either basis.
+async function disposalSalesForRange(db, userId, from, to) {
+  const { rows } = await db.query(
+    `SELECT COALESCE(SUM("disposalGst"),0) AS gst, COALESCE(SUM("disposalAmount" - "disposalGst"),0) AS net
+     FROM fin_assets WHERE "userId"=$1 AND "disposedDate" BETWEEN $2 AND $3 AND "disposalAmount" > 0`,
+    [userId, from, to]
+  );
+  return { gst: parseFloat(rows[0].gst), net: parseFloat(rows[0].net) };
+}
+
+// GST basis for the BAS: 'cash' (default -- sales count when paid) or 'accrual' (when invoiced).
+// Setting key fin_gst_basis. Purchases follow it too: supplier bills (paid via Accounts Payable) are
+// claimed when paid on a cash basis, and when dated on an accrual basis.
+async function getGstBasis(db, userId) {
+  const { rows } = await db.query(`SELECT value FROM settings WHERE "userId"=$1 AND key='fin_gst_basis'`, [userId]);
+  return rows[0]?.value === 'accrual' ? 'accrual' : 'cash';
+}
+
+// SQL predicate: the invoices whose sales/GST belong in the period [pFrom, pTo] (param placeholders).
+function gstSalesSql(basis, alias, pFrom, pTo) {
+  const t = alias ? `${alias}.` : '';
+  return basis === 'accrual'
+    ? `${t}status IN ('sent','paid') AND COALESCE(${t}"docType",'invoice')='invoice' AND ${t}"issueDate"::date BETWEEN ${pFrom} AND ${pTo}`
+    : `${t}status='paid' AND ${t}"paidAt"::date BETWEEN ${pFrom} AND ${pTo}`;
+}
+// The date that decides which BAS quarter an invoice belongs to (and therefore when it locks).
+const gstInvoiceDateSql = (basis, alias) => {
+  const t = alias ? `${alias}.` : '';
+  return basis === 'accrual' ? `${t}"issueDate"::date` : `${t}"paidAt"::date`;
+};
+// Purchases (alias e, with pa = their paid-via account joined) and the date each is claimed.
+const PURCHASES_FROM = `fin_expenses e LEFT JOIN fin_accounts pa ON pa.id = e."paidViaId"`;
+const purchaseClaimDateSql = (basis) =>
+  basis === 'accrual' ? 'e.date' : `(CASE WHEN pa.code = '2000' THEN e."settledDate" ELSE e.date END)`;
+
+// GST paid/claimed for a date range. Sums fin_expenses.gst (ordinary expenses AND immediate-
+// deduction asset purchases, which post through fin_expenses too) PLUS the GST line on non-immediate
+// asset purchases, which post straight to the journal (type='asset_purchase') and never touch
+// fin_expenses. Single source of truth for every BAS/GST-summary endpoint.
+async function gstPaidForRange(userId, from, to, basisArg) {
+  const basis = basisArg || await getGstBasis(pool, userId);
   const gstPaidAccountId = await accountByCode(userId, '1200');
   const [expRows, assetRows] = await Promise.all([
     pool.query(
-      `SELECT COALESCE(SUM(gst),0) AS gst FROM fin_expenses WHERE "userId"=$1 AND date BETWEEN $2 AND $3`,
+      `SELECT COALESCE(SUM(e.gst),0) AS gst FROM ${PURCHASES_FROM}
+       WHERE e."userId"=$1 AND ${purchaseClaimDateSql(basis)} BETWEEN $2 AND $3`,
       [userId, from, to]
     ),
     gstPaidAccountId
@@ -214,6 +281,47 @@ async function createJournalEntry(client, userId, { date, description, reference
   return entryId;
 }
 
+// The BAS quarter (if any) that is reconciled/lodged/paid and contains this date. Money-affecting
+// records dated inside one must not change, or a lodged return stops matching the books.
+async function lockedQuarter(db, userId, date) {
+  const d = dateOnly(date);
+  if (!d) return null;
+  const { rows } = await db.query(
+    `SELECT from_date::text AS from_date, to_date::text AS to_date, status FROM fin_bas_quarters
+     WHERE "userId"=$1 AND $2::date BETWEEN from_date AND to_date AND status <> 'open' LIMIT 1`,
+    [userId, d]
+  );
+  return rows[0] || null;
+}
+const lockedMsg = (q) =>
+  `That date is inside a ${q.status} BAS quarter (${q.from_date} to ${q.to_date}) and can't be changed.`;
+
+// paidViaId / accountId must be one of this user's own accounts.
+async function ownsAccount(db, userId, id) {
+  if (id === undefined || id === null || id === '') return true;
+  const n = Number(id);
+  if (!Number.isInteger(n)) return false;
+  const { rows } = await db.query(`SELECT 1 FROM fin_accounts WHERE id=$1 AND "userId"=$2`, [n, userId]);
+  return rows.length > 0;
+}
+
+// Undo a credit-card settlement (DR Bank, CR card). The original settlement entry may be shared by
+// a whole statement payment, so it is reversed with a new entry instead of deleted.
+async function reverseCcSettlement(db, userId, { creditAccountId, total, description }) {
+  await ensureAccounts(userId);
+  const bankId = await accountByCode(userId, '1000');
+  if (!bankId || !creditAccountId || !(total > 0)) return;
+  await createJournalEntry(db, userId, {
+    date:        await todayStr(),
+    description: `Reversal of CC payment — ${description}`,
+    type:        'manual',
+    lines: [
+      { accountId: bankId,         debit: total, credit: 0 },
+      { accountId: creditAccountId, debit: 0,    credit: total },
+    ],
+  });
+}
+
 async function deleteJournalForSource(dbClient, userId, sourceId, type) {
   const { rows } = await dbClient.query(
     `SELECT id FROM fin_journal_entries WHERE "userId"=$1 AND "sourceId"=$2 AND type=$3`,
@@ -229,7 +337,7 @@ async function deleteJournalForSource(dbClient, userId, sourceId, type) {
 
 router.get('/settings', async (req, res) => {
   try {
-    const keys = ['fin_biz_name','fin_abn','fin_address','fin_website','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms','fin_admin_email','fin_reminder_hour','fin_export_history','fin_vehicle_rate_per_km','fin_home_office_rate_per_hour'];
+    const keys = ['fin_gst_ended_on','fin_gst_unreg_since','fin_gst_basis','fin_biz_name','fin_abn','fin_address','fin_website','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms','fin_admin_email','fin_reminder_hour','fin_export_history','fin_vehicle_rate_per_km','fin_home_office_rate_per_hour'];
     const { rows } = await pool.query(
       `SELECT key, value FROM settings WHERE "userId"=$1 AND key = ANY($2)`,
       [req.user.id, keys]
@@ -248,14 +356,33 @@ router.get('/settings', async (req, res) => {
 
 router.put('/settings', async (req, res) => {
   try {
-    const allowed = ['fin_biz_name','fin_abn','fin_address','fin_website','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms','fin_admin_email','fin_reminder_hour','fin_vehicle_rate_per_km','fin_home_office_rate_per_hour'];
+    const allowed = ['fin_gst_ended_on','fin_gst_basis','fin_biz_name','fin_abn','fin_address','fin_website','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms','fin_admin_email','fin_reminder_hour','fin_vehicle_rate_per_km','fin_home_office_rate_per_hour'];
     for (const [key, value] of Object.entries(req.body)) {
       if (!allowed.includes(key)) continue;
+      if (key === 'fin_gst_ended_on' && value && !/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
+        return res.status(400).json({ error: 'The GST cancellation date must be YYYY-MM-DD' });
+      }
+      if (key === 'fin_gst_basis') {
+        if (!['cash', 'accrual'].includes(value)) return res.status(400).json({ error: 'GST basis must be "cash" or "accrual"' });
+        // Switching basis re-dates every invoice's GST, which would change the figures of a quarter that
+        // has already been reconciled or lodged. Only allowed while every quarter is still open.
+        if (value !== (await getGstBasis(pool, req.user.id))) {
+          const { rows: locked } = await pool.query(`SELECT 1 FROM fin_bas_quarters WHERE "userId"=$1 AND status <> 'open' LIMIT 1`, [req.user.id]);
+          if (locked.length) return res.status(400).json({ error: 'The GST basis can\'t be changed once a BAS quarter has been reconciled, lodged or paid — it would change the figures you already reported. Talk to your accountant about switching at the start of a new period.' });
+        }
+      }
       await pool.query(
         `INSERT INTO settings ("userId", key, value) VALUES ($1,$2,$3)
          ON CONFLICT ("userId", key) DO UPDATE SET value = EXCLUDED.value`,
         [req.user.id, key, String(value)]
       );
+    }
+    // Keep the tracked "not registered since" date in step with the checkbox: stamp the day it was
+    // un-ticked (if no real cancellation date is known yet), and clear both dates if re-registered.
+    if (req.body.fin_gst_registered === 'false' || req.body.fin_gst_registered === false) {
+      await getGstRegistration(pool, req.user.id);
+    } else if (req.body.fin_gst_registered === 'true' || req.body.fin_gst_registered === true) {
+      await pool.query(`DELETE FROM settings WHERE "userId"=$1 AND key IN ('fin_gst_unreg_since','fin_gst_ended_on')`, [req.user.id]);
     }
     res.json({ ok: true });
   } catch (err) {
@@ -504,8 +631,38 @@ router.delete('/tx-codes/:id', async (req, res) => {
 
 // ── Invoices ──────────────────────────────────────────────────────────────────
 
+// Statuses a caller may set directly. 'paid' is deliberately absent: it only ever happens through
+// POST /invoices/:id/mark-paid, which also posts the payment journal and stamps paidAt.
+const SETTABLE_STATUSES = {
+  invoice: ['draft', 'sent', 'void'],
+  quote:   ['draft', 'sent', 'declined', 'accepted'],
+};
+
+// Journal for an issued invoice: DR AR, CR Income, CR GST Collected. Replaces any existing one.
+async function postInvoiceJournal(dbClient, userId, inv, description) {
+  await ensureAccounts(userId);
+  const arId     = await accountByCode(userId, '1100');
+  const incId    = await accountByCode(userId, '4000');
+  const gstColId = await accountByCode(userId, '2200');
+  await deleteJournalForSource(dbClient, userId, inv.id, 'invoice');
+  if (!(arId && incId && gstColId)) return;
+  await createJournalEntry(dbClient, userId, {
+    date:        dateOnly(inv.issueDate) || await todayStr(),
+    description: description || `Invoice ${inv.number}`,
+    reference:   inv.number,
+    type:        'invoice',
+    sourceId:    inv.id,
+    lines: [
+      { accountId: arId,     debit: inv.total,    credit: 0 },
+      { accountId: incId,    debit: 0,            credit: inv.subtotal },
+      { accountId: gstColId, debit: 0,            credit: inv.gst },
+    ],
+  });
+}
+
 router.get('/invoices', async (req, res) => {
   try {
+    const basis = await getGstBasis(pool, req.user.id);
     const { rows } = await pool.query(
       `SELECT i.*, cr.name AS "clientName",
               (SELECT cc.email FROM client_contacts cc
@@ -515,7 +672,8 @@ router.get('/invoices', async (req, res) => {
               EXISTS (
                 SELECT 1 FROM fin_bas_quarters q
                 WHERE q."userId" = i."userId"
-                  AND i."paidAt"::date BETWEEN q.from_date AND q.to_date
+                  AND ${gstInvoiceDateSql(basis, 'i')} BETWEEN q.from_date AND q.to_date
+                  AND (i.status = 'paid' OR (${basis === 'accrual' ? 'TRUE' : 'FALSE'} AND i.status = 'sent'))
                   AND q.status != 'open'
               ) AS "isLocked"
        FROM fin_invoices i
@@ -535,20 +693,22 @@ router.post('/invoices', async (req, res) => {
   try {
     await client.query('BEGIN');
     const userId = req.user.id;
+    await client.query('SELECT pg_advisory_xact_lock(7001, $1)', [userId]); // number allocation
     const { clientRef, issueDate, dueDate, notes, items = [], docType = 'invoice' } = req.body;
 
     let subtotal = 0, gst = 0;
+    const gstOn = gstAppliesOn(await getGstRegistration(client, userId), issueDate || await todayStr());
     for (const item of items) {
       const qty     = parseFloat(item.qty) || 0;
       const up      = parseFloat(item.unitPrice) || 0;
       const amt     = parseFloat((qty * up).toFixed(2));
-      const taxable = calcItemGst(item);
+      const taxable = gstOn && calcItemGst(item);
       const itemGst = taxable ? parseFloat((amt * 0.1).toFixed(2)) : 0;
       item._qty     = qty;
       item._up      = up;
       item._amount  = amt;
       item._gst     = itemGst;
-      item._gstCode = taxable ? 'GST' : (item.gstCode || 'NT');
+      item._gstCode = taxable ? 'GST' : (item.gstCode && item.gstCode !== 'GST' ? item.gstCode : 'NT');
       subtotal += amt;
       gst      += itemGst;
     }
@@ -560,7 +720,7 @@ router.post('/invoices', async (req, res) => {
     const { rows } = await client.query(
       `INSERT INTO fin_invoices ("userId","clientRef",number,status,"issueDate","dueDate",subtotal,gst,total,notes,"docType")
        VALUES ($1,$2,$3,'draft',$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [userId, clientRef||null, number, issueDate||new Date().toISOString().slice(0,10), dueDate||null, subtotal, gst, total, notes||null, docType]
+      [userId, clientRef||null, number, issueDate||await todayStr(), dueDate||null, subtotal, gst, total, notes||null, docType]
     );
     const invoice = rows[0];
 
@@ -671,36 +831,39 @@ router.put('/invoices/:id', async (req, res) => {
     const { clientRef, issueDate, dueDate, notes, status, paidAt, items = [], txCodeId } = req.body;
 
     const { rows: check } = await client.query(
-      `SELECT id, number, status, "paidAt", "docType" FROM fin_invoices WHERE id=$1 AND "userId"=$2`, [invoiceId, userId]
+      `SELECT id, number, status, "paidAt", "issueDate", "docType" FROM fin_invoices WHERE id=$1 AND "userId"=$2`, [invoiceId, userId]
     );
     if (!check[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
 
-    // Paid invoices can be edited until their payment date falls within a reconciled BAS quarter
-    if (check[0].status === 'paid') {
-      const effectivePaidAt = paidAt || check[0].paidAt;
-      const { rows: lockCheck } = await client.query(
-        `SELECT 1 FROM fin_bas_quarters
-         WHERE "userId"=$1 AND $2::date BETWEEN from_date AND to_date AND status != 'open'`,
-        [userId, effectivePaidAt]
-      );
-      if (lockCheck.length > 0) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'Invoice is locked — its payment date falls within a reconciled BAS quarter' });
+    // An invoice is locked once the date that decides its BAS quarter (payment date on a cash basis,
+    // issue date on an accrual basis) falls inside a reconciled/lodged/paid quarter.
+    const putBasis = await getGstBasis(client, userId);
+    if (check[0].docType !== 'quote' && ((putBasis === 'cash' && check[0].status === 'paid') || (putBasis === 'accrual' && ['sent', 'paid'].includes(check[0].status)))) {
+      const dates = putBasis === 'accrual'
+        ? [check[0].issueDate, issueDate]
+        : [paidAt || check[0].paidAt];
+      for (const d of dates) {
+        const lq = await lockedQuarter(client, userId, d);
+        if (lq) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ error: `Invoice is locked — ${putBasis === 'accrual' ? 'its issue date' : 'its payment date'} falls within a ${lq.status} BAS quarter` });
+        }
       }
     }
 
     let subtotal = 0, gst = 0;
+    const gstOn = gstAppliesOn(await getGstRegistration(client, userId), issueDate || check[0].issueDate);
     for (const item of items) {
       const qty     = parseFloat(item.qty) || 0;
       const up      = parseFloat(item.unitPrice) || 0;
       const amt     = parseFloat((qty * up).toFixed(2));
-      const taxable = calcItemGst(item);
+      const taxable = gstOn && calcItemGst(item);
       const itemGst = taxable ? parseFloat((amt * 0.1).toFixed(2)) : 0;
       item._qty     = qty;
       item._up      = up;
       item._amount  = amt;
       item._gst     = itemGst;
-      item._gstCode = taxable ? 'GST' : (item.gstCode || 'NT');
+      item._gstCode = taxable ? 'GST' : (item.gstCode && item.gstCode !== 'GST' ? item.gstCode : 'NT');
       subtotal += amt;
       gst      += itemGst;
     }
@@ -709,6 +872,18 @@ router.put('/invoices/:id', async (req, res) => {
     const total = parseFloat((subtotal + gst).toFixed(2));
 
     const isPaid      = check[0].status === 'paid';
+    const isQuoteDoc  = check[0].docType === 'quote';
+    const allowed     = SETTABLE_STATUSES[isQuoteDoc ? 'quote' : 'invoice'];
+    // A paid invoice stays paid here; anything else must be a settable status. 'paid' can't be
+    // set via edit (use mark-paid) — it used to slip through with no paidAt and no payment journal.
+    if (!isPaid && status && !allowed.includes(status)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: status === 'paid'
+          ? "Use \"Paid\" (mark-paid) to record a payment — it can't be set by editing."
+          : `Invalid status "${status}"`,
+      });
+    }
     const newStatus   = isPaid ? 'paid' : (status || 'draft');
     const newPaidAt   = isPaid ? (paidAt || check[0].paidAt) : null;
 
@@ -730,45 +905,39 @@ router.put('/invoices/:id', async (req, res) => {
     }
 
     const isQuote = check[0].docType === 'quote';
-    await ensureAccounts(userId);
-    const arId     = await accountByCode(userId, '1100');
-    const incId    = await accountByCode(userId, '4000');
-    const gstColId = await accountByCode(userId, '2200');
-    const bankId   = await accountByCode(userId, '1000');
-    const invNum   = check[0].number;
+    const invNum  = check[0].number;
 
-    // Recreate invoice journal entry (AR / Income / GST collected) only when sent/paid — drafts have no journal
-    if (!isQuote && newStatus !== 'draft') {
-      await deleteJournalForSource(client, userId, parseInt(invoiceId), 'invoice');
-      if (arId && incId && gstColId) {
-        await createJournalEntry(client, userId, {
-          date:        issueDate || new Date().toISOString().slice(0, 10),
-          description: `Invoice ${invNum}`,
-          reference:   invNum,
-          type:        'invoice',
-          sourceId:    parseInt(invoiceId),
-          lines: [
-            { accountId: arId,     debit: total,    credit: 0 },
-            { accountId: incId,    debit: 0,        credit: subtotal },
-            { accountId: gstColId, debit: 0,        credit: gst },
-          ],
+    if (!isQuote) {
+      if (newStatus === 'sent' || newStatus === 'paid') {
+        // Issued invoice: (re)build AR / Income / GST from the edited totals.
+        await postInvoiceJournal(client, userId, {
+          id: parseInt(invoiceId), number: invNum, issueDate, total, subtotal, gst,
         });
+      } else {
+        // Draft or void is not an accounting transaction: drop any journal left from an earlier
+        // send (or from an old convert-from-quote) so edits/voids can't leave stale income/AR.
+        await deleteJournalForSource(client, userId, parseInt(invoiceId), 'invoice');
       }
 
       // For paid invoices, also recreate the payment journal entry (Bank / AR)
-      if (isPaid && bankId && arId) {
-        await deleteJournalForSource(client, userId, parseInt(invoiceId), 'payment');
-        await createJournalEntry(client, userId, {
-          date:        newPaidAt,
-          description: `Payment received — ${invNum}`,
-          reference:   invNum,
-          type:        'payment',
-          sourceId:    parseInt(invoiceId),
-          lines: [
-            { accountId: bankId, debit: total,  credit: 0 },
-            { accountId: arId,   debit: 0,      credit: total },
-          ],
-        });
+      if (isPaid) {
+        await ensureAccounts(userId);
+        const bankId = await accountByCode(userId, '1000');
+        const arId   = await accountByCode(userId, '1100');
+        if (bankId && arId) {
+          await deleteJournalForSource(client, userId, parseInt(invoiceId), 'payment');
+          await createJournalEntry(client, userId, {
+            date:        newPaidAt,
+            description: `Payment received — ${invNum}`,
+            reference:   invNum,
+            type:        'payment',
+            sourceId:    parseInt(invoiceId),
+            lines: [
+              { accountId: bankId, debit: total,  credit: 0 },
+              { accountId: arId,   debit: 0,      credit: total },
+            ],
+          });
+        }
       }
     }
 
@@ -866,6 +1035,7 @@ router.post('/invoices/:id/send', async (req, res) => {
       </div>` : '';
 
     const isQuote    = inv.docType === 'quote';
+    const showGst    = parseFloat(inv.gst) > 0 || items.some(i => (i.gstCode || 'GST') !== 'NT');
     const docLabel   = isQuote ? 'Quote' : 'Invoice';
     const addrLabel  = isQuote ? 'Quote For' : 'Bill To';
     const totalLabel = isQuote ? 'Total Value' : 'Total Due';
@@ -931,7 +1101,7 @@ router.post('/invoices/:id/send', async (req, res) => {
 
       <div style="display:flex;justify-content:flex-end;">
         <table style="width:220px;border-collapse:collapse;">
-          <tr>
+          ${showGst ? `          <tr>
             <td style="padding:4px 8px;font-size:13px;color:#6b7280;">Subtotal</td>
             <td style="padding:4px 8px;font-size:13px;text-align:right;color:#1f2937;">${fmtAud(inv.subtotal)}</td>
           </tr>
@@ -939,6 +1109,7 @@ router.post('/invoices/:id/send', async (req, res) => {
             <td style="padding:4px 8px;font-size:13px;color:#6b7280;">GST (10%)</td>
             <td style="padding:4px 8px;font-size:13px;text-align:right;color:#1f2937;">${fmtAud(inv.gst)}</td>
           </tr>
+          ` : ''}
           <tr style="border-top:2px solid #1f2937;">
             <td style="padding:8px 8px 4px;font-size:15px;font-weight:700;color:#1f2937;">${totalLabel}</td>
             <td style="padding:8px 8px 4px;font-size:15px;font-weight:700;text-align:right;color:#1f2937;">${fmtAud(inv.total)}</td>
@@ -1022,45 +1193,31 @@ router.post('/invoices/:id/send', async (req, res) => {
     }
 
     // Mark as sent and post the invoice journal (AR / Income / GST) if not already posted
+    // A paid invoice that is re-sent (e.g. a receipt copy) must stay paid.
+    if (inv.status === 'paid') return res.json({ ok: true, sentTo: to });
     await pool.query(
       `UPDATE fin_invoices SET status='sent',"updatedAt"=NOW() WHERE id=$1 AND "userId"=$2`,
       [invoiceId, userId]
     );
 
+    let journalWarning = null;
     if (!isQuote) {
-      await ensureAccounts(userId);
-      const arId     = await accountByCode(userId, '1100');
-      const incId    = await accountByCode(userId, '4000');
-      const gstColId = await accountByCode(userId, '2200');
       // Delete any stale draft journal then write the definitive one
       const dbClient = await pool.connect();
       try {
         await dbClient.query('BEGIN');
-        await deleteJournalForSource(dbClient, userId, parseInt(invoiceId), 'invoice');
-        if (arId && incId && gstColId) {
-          await createJournalEntry(dbClient, userId, {
-            date:        String(inv.issueDate || new Date()).slice(0, 10),
-            description: `Invoice ${inv.number}`,
-            reference:   inv.number,
-            type:        'invoice',
-            sourceId:    parseInt(invoiceId),
-            lines: [
-              { accountId: arId,     debit: inv.total,    credit: 0 },
-              { accountId: incId,    debit: 0,            credit: inv.subtotal },
-              { accountId: gstColId, debit: 0,            credit: inv.gst },
-            ],
-          });
-        }
+        await postInvoiceJournal(dbClient, userId, inv);
         await dbClient.query('COMMIT');
       } catch (journalErr) {
         await dbClient.query('ROLLBACK');
         console.error('[finance] Invoice journal on send failed:', journalErr.message);
+        journalWarning = `Email sent, but the invoice could not be posted to the books (${journalErr.message}). Mark it Sent again to retry.`;
       } finally {
         dbClient.release();
       }
     }
 
-    res.json({ ok: true, sentTo: to });
+    res.json({ ok: true, sentTo: to, ...(journalWarning ? { warning: journalWarning } : {}) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1088,33 +1245,37 @@ router.patch('/invoices/:id/status', async (req, res) => {
     await dbClient.query('BEGIN');
     const userId = req.user.id;
     const { status } = req.body;
+
+    const { rows: cur } = await dbClient.query(
+      `SELECT * FROM fin_invoices WHERE id=$1 AND "userId"=$2 FOR UPDATE`, [req.params.id, userId]
+    );
+    if (!cur[0]) { await dbClient.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
+    const isQuote = cur[0].docType === 'quote';
+    if (!SETTABLE_STATUSES[isQuote ? 'quote' : 'invoice'].includes(status)) {
+      await dbClient.query('ROLLBACK');
+      return res.status(400).json({
+        error: status === 'paid'
+          ? "Use mark-paid to record a payment — status can't be set to paid directly."
+          : `Invalid status "${status}"`,
+      });
+    }
+    if (cur[0].status === 'paid') {
+      await dbClient.query('ROLLBACK');
+      return res.status(400).json({ error: "A paid invoice's status can't be changed." });
+    }
+
     const { rows } = await dbClient.query(
       `UPDATE fin_invoices SET status=$1,"updatedAt"=NOW() WHERE id=$2 AND "userId"=$3 RETURNING *`,
       [status, req.params.id, userId]
     );
-    if (!rows[0]) { await dbClient.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
     const inv = rows[0];
 
-    // When manually marking as sent, post the invoice journal if not already present
-    if (status === 'sent' && inv.docType !== 'quote') {
-      await ensureAccounts(userId);
-      const arId     = await accountByCode(userId, '1100');
-      const incId    = await accountByCode(userId, '4000');
-      const gstColId = await accountByCode(userId, '2200');
-      if (arId && incId && gstColId) {
+    if (!isQuote) {
+      if (status === 'sent') {
+        await postInvoiceJournal(dbClient, userId, inv);
+      } else {
+        // draft / void: not (or no longer) an accounting transaction, so remove its AR/income.
         await deleteJournalForSource(dbClient, userId, inv.id, 'invoice');
-        await createJournalEntry(dbClient, userId, {
-          date:        String(inv.issueDate || new Date()).slice(0, 10),
-          description: `Invoice ${inv.number}`,
-          reference:   inv.number,
-          type:        'invoice',
-          sourceId:    inv.id,
-          lines: [
-            { accountId: arId,     debit: inv.total,    credit: 0 },
-            { accountId: incId,    debit: 0,            credit: inv.subtotal },
-            { accountId: gstColId, debit: 0,            credit: inv.gst },
-          ],
-        });
       }
     }
 
@@ -1133,18 +1294,48 @@ router.post('/invoices/:id/mark-paid', async (req, res) => {
   try {
     await dbClient.query('BEGIN');
     const userId   = req.user.id;
-    const paidDate = req.body.paidAt || new Date().toISOString().slice(0, 10);
+    const paidDate = req.body.paidAt || await todayStr();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(paidDate))) {
+      await dbClient.query('ROLLBACK');
+      return res.status(400).json({ error: 'paidAt must be YYYY-MM-DD' });
+    }
 
-    const { rows } = await dbClient.query(
-      `UPDATE fin_invoices SET status='paid',"paidAt"=$1,"updatedAt"=NOW()
-       WHERE id=$2 AND "userId"=$3 AND status != 'paid' RETURNING *`,
-      [paidDate, req.params.id, userId]
+    const { rows: cur } = await dbClient.query(
+      `SELECT * FROM fin_invoices WHERE id=$1 AND "userId"=$2 FOR UPDATE`, [req.params.id, userId]
     );
-    if (!rows[0]) {
+    if (!cur[0] || cur[0].status === 'paid') {
       await dbClient.query('ROLLBACK');
       return res.status(400).json({ error: 'Invoice not found or already paid' });
     }
+    if (cur[0].docType === 'quote') {
+      await dbClient.query('ROLLBACK');
+      return res.status(400).json({ error: "A quote can't be marked paid — convert it to an invoice first." });
+    }
+    if (cur[0].status === 'void') {
+      await dbClient.query('ROLLBACK');
+      return res.status(400).json({ error: "A void invoice can't be marked paid." });
+    }
+    // On an accrual basis a payment doesn't move any GST, so only the cash basis locks on the payment date.
+    const paidLock = (await getGstBasis(dbClient, userId)) === 'cash' ? await lockedQuarter(dbClient, userId, paidDate) : null;
+    if (paidLock) {
+      await dbClient.query('ROLLBACK');
+      return res.status(400).json({ error: lockedMsg(paidLock) });
+    }
+
+    const { rows } = await dbClient.query(
+      `UPDATE fin_invoices SET status='paid',"paidAt"=$1,"updatedAt"=NOW()
+       WHERE id=$2 AND "userId"=$3 RETURNING *`,
+      [paidDate, req.params.id, userId]
+    );
     const invoice = rows[0];
+
+    // A draft has no AR/income yet. Post the invoice journal first, otherwise the payment below
+    // (DR Bank, CR AR) drives AR negative and the income is never recorded.
+    const { rows: existing } = await dbClient.query(
+      `SELECT 1 FROM fin_journal_entries WHERE "userId"=$1 AND "sourceId"=$2 AND type='invoice' LIMIT 1`,
+      [userId, invoice.id]
+    );
+    if (!existing.length) await postInvoiceJournal(dbClient, userId, invoice);
 
     // Journal: DR Bank, CR Accounts Receivable
     await ensureAccounts(userId);
@@ -1180,6 +1371,7 @@ router.post('/invoices/:id/convert', async (req, res) => {
     await dbClient.query('BEGIN');
     const userId    = req.user.id;
     const quoteId   = req.params.id;
+    await dbClient.query('SELECT pg_advisory_xact_lock(7001, $1)', [userId]); // number allocation
 
     const { rows: qRows } = await dbClient.query(
       `SELECT * FROM fin_invoices WHERE id=$1 AND "userId"=$2 AND "docType"='quote'`,
@@ -1194,7 +1386,7 @@ router.post('/invoices/:id/convert', async (req, res) => {
     );
 
     const number = await nextInvoiceNumber(userId, 'invoice');
-    const today   = new Date().toISOString().slice(0, 10);
+    const today   = await todayStr();
 
     // Use the user's configured payment terms (default 7 days)
     const { rows: termRows } = await dbClient.query(
@@ -1207,14 +1399,20 @@ router.post('/invoices/:id/convert', async (req, res) => {
     const convertedNote = `Converted from quote ${quote.number} dated ${quoteDate}.`;
     const notes = quote.notes ? `${convertedNote}\n${quote.notes}` : convertedNote;
 
+    const gstOnToday = gstAppliesOn(await getGstRegistration(dbClient, userId), today);
+    const convItems = qItems.map(it => (!gstOnToday && (it.gstCode || 'GST') === 'GST')
+      ? { ...it, gst: 0, gstCode: 'NT' } : it);
+    const cSubtotal = round2(convItems.reduce((a, it) => a + parseFloat(it.amount), 0));
+    const cGst      = round2(convItems.reduce((a, it) => a + parseFloat(it.gst || 0), 0));
+
     const { rows: invRows } = await dbClient.query(
       `INSERT INTO fin_invoices ("userId","clientRef",number,status,"issueDate","dueDate",subtotal,gst,total,notes,"docType")
        VALUES ($1,$2,$3,'draft',$4,$5,$6,$7,$8,$9,'invoice') RETURNING *`,
-      [userId, quote.clientRef, number, today, dueDate, quote.subtotal, quote.gst, quote.total, notes]
+      [userId, quote.clientRef, number, today, dueDate, cSubtotal, cGst, round2(cSubtotal + cGst), notes]
     );
     const invoice = invRows[0];
 
-    for (const item of qItems) {
+    for (const item of convItems) {
       await dbClient.query(
         `INSERT INTO fin_invoice_items ("invoiceId", description, qty, "unitPrice", gst, amount, "txCodeId", "gstCode")
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
@@ -1222,25 +1420,7 @@ router.post('/invoices/:id/convert', async (req, res) => {
       );
     }
 
-    // Create journal entry for the new invoice
-    await ensureAccounts(userId);
-    const arId     = await accountByCode(userId, '1100');
-    const incId    = await accountByCode(userId, '4000');
-    const gstColId = await accountByCode(userId, '2200');
-    if (arId && incId && gstColId) {
-      await createJournalEntry(dbClient, userId, {
-        date:        today,
-        description: `Invoice ${number} (from quote ${quote.number})`,
-        reference:   number,
-        type:        'invoice',
-        sourceId:    invoice.id,
-        lines: [
-          { accountId: arId,     debit: invoice.total,    credit: 0 },
-          { accountId: incId,    debit: 0,                credit: invoice.subtotal },
-          { accountId: gstColId, debit: 0,                credit: invoice.gst },
-        ],
-      });
-    }
+    // The new invoice is a draft: no journal until it is sent (matches POST /invoices).
 
     // Mark the quote as accepted
     await dbClient.query(
@@ -1263,6 +1443,13 @@ router.delete('/invoices/:id', async (req, res) => {
     await dbClient.query('BEGIN');
     const userId = req.user.id;
     const id     = parseInt(req.params.id);
+    const { rows: delInv } = await dbClient.query(`SELECT status, "paidAt", "issueDate", "docType" FROM fin_invoices WHERE id=$1 AND "userId"=$2`, [id, userId]);
+    if (delInv[0] && delInv[0].docType !== 'quote') {
+      const delBasis = await getGstBasis(dbClient, userId);
+      const relevant = delBasis === 'accrual' ? ['sent', 'paid'].includes(delInv[0].status) : delInv[0].status === 'paid';
+      const lq = relevant ? await lockedQuarter(dbClient, userId, delBasis === 'accrual' ? delInv[0].issueDate : delInv[0].paidAt) : null;
+      if (lq) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: lockedMsg(lq) }); }
+    }
     // Remove all journal entries linked to this invoice (AR/income and payment)
     await deleteJournalForSource(dbClient, userId, id, 'invoice');
     await deleteJournalForSource(dbClient, userId, id, 'payment');
@@ -1309,7 +1496,7 @@ router.post('/weekly-digest/test', async (req, res) => {
 // route comments above), so `amount` is already the full deductible figure — no split needed.
 router.get('/expenses/today-summary', async (req, res) => {
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = await todayStr();
     const { rows } = await pool.query(
       `SELECT category, COALESCE(SUM(amount),0)::float AS total, COUNT(*)::int AS count
        FROM fin_expenses WHERE "userId"=$1 AND date=$2 AND category IN ('Vehicle','Home Office')
@@ -1340,6 +1527,19 @@ router.get('/expenses/categories', async (req, res) => {
 // ahead of both call sites, so it's never referenced before its own declaration).
 const IMMEDIATE_DEDUCTION_THRESHOLD = 300;
 
+// Expense rows created and owned by another feature. Editing/deleting them through the expense
+// routes desyncs the asset register (accumulated depreciation, immediateExpenseId) from the books:
+// a depreciation expense's journal has type 'depreciation', not 'expense', so an edit would post a
+// duplicate and a delete would leave the original behind.
+async function managedExpenseReason(db, exp) {
+  if (exp.category === 'Depreciation' && /^Depreciation FY/.test(exp.description || '')) {
+    return 'This is a depreciation entry created by the Assets register and can\'t be edited or deleted here.';
+  }
+  const { rows } = await db.query(`SELECT 1 FROM fin_assets WHERE "immediateExpenseId"=$1 LIMIT 1`, [exp.id]);
+  if (rows.length) return 'This expense belongs to an asset in the Assets register — dispose of the asset instead.';
+  return null;
+}
+
 router.get('/expenses', async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -1355,16 +1555,18 @@ router.get('/expenses', async (req, res) => {
 // (e.g. server/routes/expenseReview.js) can create a fin_expenses row through the exact
 // same accounting path instead of re-implementing the journal entry. Runs inside the
 // caller-managed transaction on dbClient — caller must BEGIN/COMMIT/ROLLBACK.
-async function createExpenseRecord(dbClient, userId, { date, description, amount, gstIncluded, category, supplier, txCodeId, paidViaId, isCapitalAsset }) {
-  // amount = total paid (GST-inclusive when gstIncluded=true)
+async function createExpenseRecord(dbClient, userId, { date, description, amount, gstIncluded, category, supplier, txCodeId, paidViaId, isCapitalAsset, dueDate, inputTaxed }) {
+  // amount = total paid (GST-inclusive when gstIncluded=true). A purchase made to produce input-taxed
+  // sales (BAS label G13) earns no GST credit, so its GST is not split out.
   const totalPaid = parseFloat(amount) || 0;
-  const gstAmt    = gstIncluded ? parseFloat((totalPaid / 11).toFixed(2)) : 0;
+  const claimGst  = gstAppliesOn(await getGstRegistration(dbClient, userId), date || await todayStr());
+  const gstAmt    = gstIncluded && !inputTaxed && claimGst ? parseFloat((totalPaid / 11).toFixed(2)) : 0;
   const amt       = parseFloat((totalPaid - gstAmt).toFixed(2)); // ex-GST amount stored in amount col
 
   const { rows } = await dbClient.query(
-    `INSERT INTO fin_expenses ("userId", date, description, amount, gst, category, supplier, "txCodeId", "paidViaId", "isCapitalAsset")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-    [userId, date||new Date().toISOString().slice(0,10), description, amt, gstAmt, category||null, supplier||null, txCodeId||null, paidViaId||null, !!isCapitalAsset]
+    `INSERT INTO fin_expenses ("userId", date, description, amount, gst, category, supplier, "txCodeId", "paidViaId", "isCapitalAsset", "dueDate", "inputTaxed")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+    [userId, date||await todayStr(), description, amt, gstAmt, category||null, supplier||null, txCodeId||null, paidViaId||null, !!isCapitalAsset, dueDate || null, !!inputTaxed]
   );
   const expense = rows[0];
 
@@ -1397,8 +1599,13 @@ router.post('/expenses', async (req, res) => {
   try {
     await dbClient.query('BEGIN');
     const userId = req.user.id;
-    const { date, description, amount, gstIncluded, category, supplier, txCodeId, paidViaId, isCapitalAsset } = req.body;
-    const { expense, amt } = await createExpenseRecord(dbClient, userId, { date, description, amount, gstIncluded, category, supplier, txCodeId, paidViaId, isCapitalAsset });
+    const { date, description, amount, gstIncluded, category, supplier, txCodeId, paidViaId, isCapitalAsset, dueDate, inputTaxed } = req.body;
+    if (!description || !String(description).trim()) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Description is required' }); }
+    if (!(parseFloat(amount) > 0)) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Amount must be greater than zero' }); }
+    if (!(await ownsAccount(dbClient, userId, paidViaId))) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Unknown "paid via" account' }); }
+    const postLock = await lockedQuarter(dbClient, userId, date || await todayStr());
+    if (postLock) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: lockedMsg(postLock) }); }
+    const { expense, amt } = await createExpenseRecord(dbClient, userId, { date, description, amount, gstIncluded, category, supplier, txCodeId, paidViaId, isCapitalAsset, dueDate, inputTaxed });
 
     await dbClient.query('COMMIT');
 
@@ -1461,7 +1668,7 @@ router.post('/expenses/cc-statement-pay', async (req, res) => {
     if (!bankId) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Bank / Cash account not found' }); }
 
     await createJournalEntry(dbClient, userId, {
-      date:        date || new Date().toISOString().slice(0, 10),
+      date:        date || await todayStr(),
       description: `CC statement payment — ${expenses.length} item${expenses.length > 1 ? 's' : ''}`,
       type:        'manual',
       lines: [
@@ -1471,8 +1678,8 @@ router.post('/expenses/cc-statement-pay', async (req, res) => {
     });
 
     await dbClient.query(
-      `UPDATE fin_expenses SET "ccSettled"=true WHERE id = ANY($1) AND "userId"=$2`,
-      [expenses.map(e => e.id), userId]
+      `UPDATE fin_expenses SET "ccSettled"=true, "settledDate"=$3 WHERE id = ANY($1) AND "userId"=$2`,
+      [expenses.map(e => e.id), userId, date || await todayStr()]
     );
 
     await dbClient.query('COMMIT');
@@ -1491,15 +1698,37 @@ router.put('/expenses/:id', async (req, res) => {
     await dbClient.query('BEGIN');
     const userId    = req.user.id;
     const expenseId = req.params.id;
-    const { date, description, amount, gstIncluded, category, supplier, txCodeId, paidViaId, isCapitalAsset } = req.body;
+    const { date, description, amount, gstIncluded, category, supplier, txCodeId, paidViaId, isCapitalAsset, dueDate, inputTaxed } = req.body;
     const totalPaid = parseFloat(amount) || 0;
-    const gstAmt    = gstIncluded ? parseFloat((totalPaid / 11).toFixed(2)) : 0;
+    const claimGst  = date ? gstAppliesOn(await getGstRegistration(dbClient, userId), date) : true;
+    const gstAmt    = gstIncluded && !inputTaxed && claimGst ? parseFloat((totalPaid / 11).toFixed(2)) : 0;
     const amt       = parseFloat((totalPaid - gstAmt).toFixed(2));
 
+    if (!date) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Date is required' }); }
+    if (!description || !String(description).trim()) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Description is required' }); }
+    if (!(totalPaid > 0)) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Amount must be greater than zero' }); }
+    if (!(await ownsAccount(dbClient, userId, paidViaId))) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Unknown "paid via" account' }); }
+
+    const { rows: before } = await dbClient.query(`SELECT * FROM fin_expenses WHERE id=$1 AND "userId"=$2 FOR UPDATE`, [expenseId, userId]);
+    if (!before[0]) { await dbClient.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
+    const managed = await managedExpenseReason(dbClient, before[0]);
+    if (managed) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: managed }); }
+    for (const d of [before[0].date, date]) {
+      const lq = await lockedQuarter(dbClient, userId, d);
+      if (lq) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: lockedMsg(lq) }); }
+    }
+    if (before[0].ccSettled) {
+      const oldTotal = round2(parseFloat(before[0].amount) + parseFloat(before[0].gst || 0));
+      if (Math.abs(oldTotal - round2(totalPaid)) >= 0.005 || String(before[0].paidViaId || '') !== String(paidViaId || '')) {
+        await dbClient.query('ROLLBACK');
+        return res.status(400).json({ error: 'This expense has already been paid off the card. Unsettle it before changing its amount or card.' });
+      }
+    }
+
     const { rows } = await dbClient.query(
-      `UPDATE fin_expenses SET date=$1,description=$2,amount=$3,gst=$4,category=$5,supplier=$6,"txCodeId"=$7,"paidViaId"=$8,"isCapitalAsset"=$9,"updatedAt"=NOW()
+      `UPDATE fin_expenses SET date=$1,description=$2,amount=$3,gst=$4,category=$5,supplier=$6,"txCodeId"=$7,"paidViaId"=$8,"isCapitalAsset"=$9,"dueDate"=$12,"inputTaxed"=$13,"updatedAt"=NOW()
        WHERE id=$10 AND "userId"=$11 RETURNING *`,
-      [date, description, amt, gstAmt, category||null, supplier||null, txCodeId||null, paidViaId||null, !!isCapitalAsset, expenseId, userId]
+      [date, description, amt, gstAmt, category||null, supplier||null, txCodeId||null, paidViaId||null, !!isCapitalAsset, expenseId, userId, dueDate || null, !!inputTaxed]
     );
     if (!rows[0]) { await dbClient.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
     const expense = rows[0];
@@ -1542,6 +1771,22 @@ router.delete('/expenses/:id', async (req, res) => {
     await dbClient.query('BEGIN');
     const userId = req.user.id;
     const id     = parseInt(req.params.id);
+    const { rows: gone } = await dbClient.query(`SELECT * FROM fin_expenses WHERE id=$1 AND "userId"=$2 FOR UPDATE`, [id, userId]);
+    if (gone[0]) {
+      const managed = await managedExpenseReason(dbClient, gone[0]);
+      if (managed) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: managed }); }
+      const lq = await lockedQuarter(dbClient, userId, gone[0].date);
+      if (lq) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: lockedMsg(lq) }); }
+      // A card-settled expense also has a settlement (DR card, CR bank). Deleting only the expense
+      // would strand that payment and leave the card liability negative, so reverse it.
+      if (gone[0].ccSettled && gone[0].paidViaId) {
+        await reverseCcSettlement(dbClient, userId, {
+          creditAccountId: gone[0].paidViaId,
+          total: round2(parseFloat(gone[0].amount) + parseFloat(gone[0].gst || 0)),
+          description: `deleted expense ${gone[0].description}`,
+        });
+      }
+    }
     await deleteJournalForSource(dbClient, userId, id, 'expense');
     await dbClient.query(`DELETE FROM fin_expenses WHERE id=$1 AND "userId"=$2`, [id, userId]);
     await dbClient.query('COMMIT');
@@ -1578,7 +1823,7 @@ router.post('/expenses/:id/cc-pay', async (req, res) => {
 
     const total = parseFloat(exp.amount) + parseFloat(exp.gst || 0);
     await createJournalEntry(dbClient, userId, {
-      date:        date || new Date().toISOString().slice(0, 10),
+      date:        date || await todayStr(),
       description: `CC payment — ${exp.description}`,
       type:        'manual',
       lines: [
@@ -1587,7 +1832,7 @@ router.post('/expenses/:id/cc-pay', async (req, res) => {
       ],
     });
 
-    await dbClient.query(`UPDATE fin_expenses SET "ccSettled"=true WHERE id=$1 AND "userId"=$2`, [req.params.id, userId]);
+    await dbClient.query(`UPDATE fin_expenses SET "ccSettled"=true, "settledDate"=$3 WHERE id=$1 AND "userId"=$2`, [req.params.id, userId, date || await todayStr()]);
     await dbClient.query('COMMIT');
     res.json({ ok: true });
   } catch (err) {
@@ -1601,17 +1846,32 @@ router.post('/expenses/:id/cc-pay', async (req, res) => {
 // ── Expense receipts ──────────────────────────────────────────────────────────
 
 router.post('/expenses/:id/cc-unsettle', async (req, res) => {
+  const dbClient = await pool.connect();
   try {
-    const { rows } = await pool.query(
-      `UPDATE fin_expenses SET "ccSettled"=false WHERE id=$1 AND "userId"=$2 AND "ccSettled"=true RETURNING id`,
-      [req.params.id, req.user.id]
+    await dbClient.query('BEGIN');
+    const userId = req.user.id;
+    const { rows } = await dbClient.query(
+      `UPDATE fin_expenses SET "ccSettled"=false, "settledDate"=NULL WHERE id=$1 AND "userId"=$2 AND "ccSettled"=true RETURNING *`,
+      [req.params.id, userId]
     );
-    if (!rows[0]) return res.status(404).json({ error: 'Expense not found or not settled' });
+    if (!rows[0]) { await dbClient.query('ROLLBACK'); return res.status(404).json({ error: 'Expense not found or not settled' }); }
+    // Without this the bank payment stayed in the books, so settling again paid the card twice.
+    await reverseCcSettlement(dbClient, userId, {
+      creditAccountId: rows[0].paidViaId,
+      total: round2(parseFloat(rows[0].amount) + parseFloat(rows[0].gst || 0)),
+      description: rows[0].description,
+    });
+    await dbClient.query('COMMIT');
     res.json({ ok: true });
   } catch (err) {
+    await dbClient.query('ROLLBACK');
     res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
   }
 });
+
+// ── Expense receipts ──────────────────────────────────────────────────────────
 
 router.post('/expenses/:id/receipt', receiptUpload.single('receipt'), async (req, res) => {
   try {
@@ -1904,6 +2164,10 @@ router.post('/wages', async (req, res) => {
     // equal gross - tax (to the cent) or the wage journal (DR gross, CR net, CR tax [+ super pair])
     // cannot balance — see A1's createJournalEntry() guard. Give a wages-specific explanation here
     // rather than letting the generic journal-balance error surface on what looks like a simple form.
+    if (!employee || !String(employee).trim()) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Employee is required' }); }
+    if (!(grossAmt > 0) || taxAmt < 0 || superAmt < 0) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Gross must be greater than zero; tax and super can\'t be negative' }); }
+    const wageLock = await lockedQuarter(dbClient, userId, date || await todayStr());
+    if (wageLock) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: lockedMsg(wageLock) }); }
     const expectedNet = Math.round((grossAmt - taxAmt) * 100) / 100;
     const netAmt = (net === undefined || net === null || net === '')
       ? expectedNet
@@ -1918,7 +2182,7 @@ router.post('/wages', async (req, res) => {
     const { rows } = await dbClient.query(
       `INSERT INTO fin_wages ("userId", date, employee, gross, tax, superannuation, net)
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [userId, date||new Date().toISOString().slice(0,10), employee, grossAmt, taxAmt, superAmt, netAmt]
+      [userId, date||await todayStr(), employee, grossAmt, taxAmt, superAmt, netAmt]
     );
     const wage = rows[0];
 
@@ -1964,6 +2228,11 @@ router.delete('/wages/:id', async (req, res) => {
     await dbClient.query('BEGIN');
     const userId = req.user.id;
     const id     = parseInt(req.params.id);
+    const { rows: wRow } = await dbClient.query(`SELECT date FROM fin_wages WHERE id=$1 AND "userId"=$2`, [id, userId]);
+    if (wRow[0]) {
+      const lq = await lockedQuarter(dbClient, userId, wRow[0].date);
+      if (lq) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: lockedMsg(lq) }); }
+    }
     await deleteJournalForSource(dbClient, userId, id, 'wage');
     await dbClient.query(`DELETE FROM fin_wages WHERE id=$1 AND "userId"=$2`, [id, userId]);
     await dbClient.query('COMMIT');
@@ -1999,6 +2268,7 @@ router.post('/drawings', async (req, res) => {
     const { date, description, amount, paidViaId } = req.body;
     const amt = parseFloat(amount) || 0;
     if (amt <= 0) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Valid amount required' }); }
+    if (!(await ownsAccount(dbClient, userId, paidViaId))) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Unknown "paid via" account' }); }
 
     await ensureAccounts(userId);
     const drawingsId = await accountByCode(userId, '3100');
@@ -2012,7 +2282,7 @@ router.post('/drawings', async (req, res) => {
     const { rows } = await dbClient.query(
       `INSERT INTO fin_drawings ("userId", date, description, amount, "paidViaId")
        VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [userId, date || new Date().toISOString().slice(0, 10), description || null, amt, paidViaId || null]
+      [userId, date || await todayStr(), description || null, amt, paidViaId || null]
     );
     const drawing = rows[0];
 
@@ -2047,6 +2317,8 @@ router.put('/drawings/:id', async (req, res) => {
     const { date, description, amount, paidViaId } = req.body;
     const amt = parseFloat(amount) || 0;
     if (amt <= 0) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Valid amount required' }); }
+    if (!date) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Date is required' }); }
+    if (!(await ownsAccount(dbClient, userId, paidViaId))) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Unknown "paid via" account' }); }
 
     const { rows } = await dbClient.query(
       `UPDATE fin_drawings SET date=$1, description=$2, amount=$3, "paidViaId"=$4, "updatedAt"=NOW()
@@ -2115,14 +2387,7 @@ router.delete('/drawings/:id', async (req, res) => {
 // already has a locked method, and that the requested method (if the caller sent one) matches —
 // this guards against any client-side bypass or direct API call.
 
-// Australian financial year (1 Jul–30 Jun) as "YYYY-YY", e.g. 2025-11-03 -> "2025-26".
-function finYearForDate(dateStr) {
-  const d = new Date(dateStr);
-  const y = d.getUTCFullYear();
-  const startYear = d.getUTCMonth() >= 6 ? y : y - 1; // month 6 = July (0-indexed)
-  const endYY = String((startYear + 1) % 100).padStart(2, '0');
-  return `${startYear}-${endYY}`;
-}
+const { finYearForDate } = require('../utils/finYear');
 
 async function getSettingValue(userId, key, fallback) {
   const { rows } = await pool.query(`SELECT value FROM settings WHERE "userId"=$1 AND key=$2`, [userId, key]);
@@ -2262,7 +2527,7 @@ router.post('/expenses/vehicle', async (req, res) => {
     // apply a different method to an entry than the one locked for its financial year. The
     // `method` check below is kept only as defense-in-depth against a direct/legacy API call.
     const { date, description, purpose, method, km, businessUsePercent, actualCost, paidViaId } = req.body;
-    const expenseDate = date || new Date().toISOString().slice(0, 10);
+    const expenseDate = date || await todayStr();
     const fy = finYearForDate(expenseDate);
 
     const methodMap = await getMethodByYearMap(userId, 'fin_vehicle_method_by_year');
@@ -2472,7 +2737,7 @@ router.post('/expenses/home-office', async (req, res) => {
     const userId = req.user.id;
     // See note above the vehicle route — the client no longer sends `method` or a rate.
     const { date, description, method, hours, businessUsePercent, actualCost, paidViaId } = req.body;
-    const expenseDate = date || new Date().toISOString().slice(0, 10);
+    const expenseDate = date || await todayStr();
     const fy = finYearForDate(expenseDate);
 
     const methodMap = await getMethodByYearMap(userId, 'fin_home_office_method_by_year');
@@ -2591,16 +2856,32 @@ function daysBetweenInclusive(a, b) {
 // other calculators. Returns { decline, deduction } for the given FY, or null if the asset isn't
 // depreciable that year (immediate method, not yet in use, disposed before the FY, or fully
 // written down already).
+// pg returns DATE columns as JS Date objects (local midnight); comparing one to a 'YYYY-MM-DD'
+// string is always false, which silently dropped the pro-rata and disposal cut-offs below.
+// Normalise to a plain string here so callers can pass raw rows or ::text-cast rows.
+function dateOnly(v) {
+  if (v == null || v === '') return null;
+  if (v instanceof Date) {
+    if (Number.isNaN(v.getTime())) return null;
+    const p = (n) => String(n).padStart(2, '0');
+    return `${v.getFullYear()}-${p(v.getMonth() + 1)}-${p(v.getDate())}`;
+  }
+  return String(v).slice(0, 10);
+}
+
 function computeAssetYearDepreciation(asset, fy) {
   if (asset.method === 'immediate' || !asset.method) return null;
   const fyStartYear = parseInt(fy.slice(0, 4), 10);
   const fyStart = `${fyStartYear}-07-01`;
   const fyEnd = `${fyStartYear + 1}-06-30`;
-  if (asset.disposedDate && asset.disposedDate < fyStart) return null;
-  if (asset.dateFirstUsed > fyEnd) return null;
+  const firstUsed = dateOnly(asset.dateFirstUsed);
+  const disposed = dateOnly(asset.disposedDate);
+  if (!firstUsed) return null;
+  if (disposed && disposed < fyStart) return null;
+  if (firstUsed > fyEnd) return null;
 
-  const effectiveStart = asset.dateFirstUsed > fyStart ? asset.dateFirstUsed : fyStart;
-  const effectiveEnd = asset.disposedDate && asset.disposedDate < fyEnd ? asset.disposedDate : fyEnd;
+  const effectiveStart = firstUsed > fyStart ? firstUsed : fyStart;
+  const effectiveEnd = disposed && disposed < fyEnd ? disposed : fyEnd;
   if (effectiveStart > effectiveEnd) return null;
 
   const daysHeld = daysBetweenInclusive(effectiveStart, effectiveEnd);
@@ -2656,7 +2937,7 @@ router.post('/assets/low-value-pool-election', async (req, res) => {
     const userId = req.user.id;
     const { elected } = req.body;
     if (elected) {
-      await setLowValuePoolElection(userId, { assetId: null, description: 'Elected in Settings', date: new Date().toISOString().slice(0, 10) });
+      await setLowValuePoolElection(userId, { assetId: null, description: 'Elected in Settings', date: await todayStr() });
       return res.json(await getLowValuePoolElection(userId));
     }
     const { rows } = await pool.query(`SELECT COUNT(*)::int AS count FROM fin_assets WHERE "userId"=$1 AND method='low_value_pool'`, [userId]);
@@ -2716,7 +2997,7 @@ router.post('/assets/:id/cc-pay', async (req, res) => {
     // column — that mismatch was the exact bug this whole fix addresses.
     const totalCharged = round2((parseFloat(asset.amount) || 0) + (parseFloat(asset.gst) || 0));
     await createJournalEntry(dbClient, userId, {
-      date: date || new Date().toISOString().slice(0, 10),
+      date: date || await todayStr(),
       description: `CC payment — ${asset.description}`,
       type: 'manual',
       lines: [
@@ -2724,7 +3005,7 @@ router.post('/assets/:id/cc-pay', async (req, res) => {
         { accountId: bankId, debit: 0, credit: totalCharged },
       ],
     });
-    await dbClient.query(`UPDATE fin_assets SET "ccSettled"=true, "updatedAt"=NOW() WHERE id=$1 AND "userId"=$2`, [asset.id, userId]);
+    await dbClient.query(`UPDATE fin_assets SET "ccSettled"=true, "settledDate"=$3, "updatedAt"=NOW() WHERE id=$1 AND "userId"=$2`, [asset.id, userId, date || await todayStr()]);
     await dbClient.query('COMMIT');
     res.json({ ok: true });
   } catch (err) {
@@ -2750,10 +3031,11 @@ router.post('/assets', async (req, res) => {
     if (!description || !description.trim()) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Description is required' }); }
     const totalPaid = parseFloat(amount);
     if (!(totalPaid > 0)) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Amount must be greater than zero' }); }
-    const gstAmt = gstIncluded ? round2(totalPaid / 11) : 0;
+    const gstAmt = gstIncluded && gstAppliesOn(await getGstRegistration(dbClient, userId), datePurchased) ? round2(totalPaid / 11) : 0;
     const amountNum = round2(totalPaid - gstAmt); // ex-GST cost basis — used for thresholds, capitalization, and depreciation
     const pctNum = businessUsePercent === undefined || businessUsePercent === '' ? 100 : parseFloat(businessUsePercent);
     if (!(pctNum > 0 && pctNum <= 100)) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Business-use % must be between 0 and 100' }); }
+    if (!(await ownsAccount(dbClient, userId, paidViaId))) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Unknown "paid via" account' }); }
 
     let useMethod, lifeNum = null;
     let triggersPoolElection = false;
@@ -2912,6 +3194,13 @@ router.delete('/assets/:id', async (req, res) => {
     // Every asset (any method) posts an 'asset_purchase' journal entry at creation now — deleting
     // the fin_assets row without also removing that journal entry (a real bug: this previously
     // left orphaned Fixed Assets/GST Paid lines in the books forever) leaves the books wrong.
+    if (rows[0].ccSettled && rows[0].paidViaId) {
+      await reverseCcSettlement(dbClient, userId, {
+        creditAccountId: rows[0].paidViaId,
+        total: round2(parseFloat(rows[0].amount) + parseFloat(rows[0].gst || 0)),
+        description: `deleted asset ${rows[0].description}`,
+      });
+    }
     await deleteJournalForSource(dbClient, userId, rows[0].id, 'asset_purchase');
     await dbClient.query(`DELETE FROM fin_assets WHERE id=$1 AND "userId"=$2`, [req.params.id, userId]);
     await dbClient.query('COMMIT');
@@ -2925,75 +3214,119 @@ router.delete('/assets/:id', async (req, res) => {
 });
 
 // Disposal — balancing adjustment between sale proceeds and the asset's written-down value
-// (cost minus accumulated depreciation; for an already-fully-immediate-deducted asset that's
-// effectively the whole amount). Profit posts to Other Income, loss posts as an expense.
+// (cost minus accumulated depreciation). Profit posts to Other Income, loss posts as an expense.
+// - Depreciation is first brought up to the disposal date for the disposal year (a partial-year
+//   deduction), so the written-down value isn't overstated by the months the asset was held.
+// - When the sale price includes GST (gstIncluded), 1/11 is GST collected (2200) and only the
+//   remainder is sale proceeds; that GST is reported on the BAS on the disposal date.
 router.post('/assets/:id/dispose', async (req, res) => {
   const dbClient = await pool.connect();
   try {
     await dbClient.query('BEGIN');
     const userId = req.user.id;
-    const { disposedDate, disposalAmount } = req.body;
-    if (!disposedDate) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Disposal date is required' }); }
+    const { disposedDate, disposalAmount, gstIncluded } = req.body;
+    if (!disposedDate || !/^\d{4}-\d{2}-\d{2}$/.test(String(disposedDate))) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'A valid disposal date is required' }); }
     const disposalNum = parseFloat(disposalAmount) || 0;
-    const { rows } = await dbClient.query(`SELECT * FROM fin_assets WHERE id=$1 AND "userId"=$2`, [req.params.id, userId]);
+    if (disposalNum < 0) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Proceeds can\'t be negative' }); }
+    const { rows } = await dbClient.query(`SELECT * FROM fin_assets WHERE id=$1 AND "userId"=$2 FOR UPDATE`, [req.params.id, userId]);
     if (!rows.length) { await dbClient.query('ROLLBACK'); return res.status(404).json({ error: 'Asset not found' }); }
-    const asset = rows[0];
+    let asset = rows[0];
     if (asset.disposedDate) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Asset already disposed' }); }
+    const lq = await lockedQuarter(dbClient, userId, disposedDate);
+    if (lq) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: lockedMsg(lq) }); }
+    if (dateOnly(asset.datePurchased) > disposedDate) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'The disposal date is before the purchase date' }); }
+
+    await ensureAccounts(userId);
+    await ensureTxCodes(userId);
+    const bankId = await accountByCode(userId, '1000');
+    const incId = await accountByCode(userId, '4100');
+    const expId = await accountByCode(userId, '5000');
+    const gstColId = await accountByCode(userId, '2200');
+    const accDepId = await accountByCode(userId, '1300');
+
+    // ---- depreciation up to the disposal date (non-immediate methods only)
+    let finalYearDeduction = 0;
+    if (asset.method !== 'immediate') {
+      const fy = finYearForDate(disposedDate);
+      const startYear = parseInt(fy.slice(0, 4), 10);
+      const prevFy = `${startYear - 1}-${String(startYear % 100).padStart(2, '0')}`;
+      if (asset.lastDepreciatedFy && asset.lastDepreciatedFy > fy) {
+        await dbClient.query('ROLLBACK');
+        return res.status(400).json({ error: `This asset was already depreciated to FY${asset.lastDepreciatedFy}, after the disposal date.` });
+      }
+      if (asset.lastDepreciatedFy !== prevFy && asset.lastDepreciatedFy !== fy && computeAssetYearDepreciation(asset, prevFy)) {
+        await dbClient.query('ROLLBACK');
+        return res.status(400).json({ error: `Run depreciation for FY${prevFy} first, then dispose of the asset (its value at the disposal date depends on it).` });
+      }
+      if (asset.lastDepreciatedFy !== fy) {
+        const calc = computeAssetYearDepreciation({ ...asset, disposedDate }, fy);
+        if (calc && expId && accDepId) {
+          const { rows: depTx } = await dbClient.query(`SELECT id FROM fin_tx_codes WHERE "userId"=$1 AND code='EXP-210'`, [userId]);
+          const label = `Depreciation FY${fy}: ${asset.description}`;
+          const { rows: expRows } = await dbClient.query(
+            `INSERT INTO fin_expenses ("userId", date, description, amount, gst, category, "txCodeId")
+             VALUES ($1,$2,$3,$4,0,'Depreciation',$5) RETURNING *`,
+            [userId, disposedDate, label, calc.deduction, depTx[0]?.id || null]
+          );
+          await createJournalEntry(dbClient, userId, {
+            date: disposedDate, description: label, type: 'depreciation', sourceId: expRows[0].id,
+            lines: [{ accountId: expId, debit: calc.deduction, credit: 0 }, { accountId: accDepId, debit: 0, credit: calc.deduction }],
+          });
+          const { rows: upd } = await dbClient.query(
+            `UPDATE fin_assets SET "accumulatedDepreciation"="accumulatedDepreciation"+$1,"lastDepreciatedFy"=$2 WHERE id=$3 RETURNING *`,
+            [calc.decline, fy, asset.id]
+          );
+          asset = upd[0];
+          finalYearDeduction = calc.deduction;
+        }
+      }
+    }
 
     const cost = parseFloat(asset.amount) || 0;
     const accumulated = parseFloat(asset.accumulatedDepreciation) || 0;
     const writtenDownValue = round2(cost - accumulated);
-    const adjustment = round2(disposalNum - writtenDownValue);
+    const gstAmt = gstIncluded && disposalNum > 0 && gstAppliesOn(await getGstRegistration(dbClient, userId), disposedDate) ? round2(disposalNum / 11) : 0;
+    const proceedsExGst = round2(disposalNum - gstAmt);
+    const adjustment = round2(proceedsExGst - writtenDownValue);
 
-    await ensureAccounts(userId);
-    const bankId = await accountByCode(userId, '1000');
-    const incId = await accountByCode(userId, '4100');
-    const expId = await accountByCode(userId, '5000');
+    if (gstAmt > 0 && !gstColId) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'GST Collected account missing' }); }
 
     if (asset.method === 'immediate') {
-      // Already fully expensed at purchase — never capitalized, so nothing to derecognize on
-      // the balance sheet. Any proceeds are pure profit (or loss, if negative) on disposal.
-      if (Math.abs(adjustment) >= 0.01 && bankId) {
-        if (adjustment > 0 && incId) {
-          await createJournalEntry(dbClient, userId, {
-            date: disposedDate, description: `Profit on disposal: ${asset.description}`, type: 'asset_disposal', sourceId: asset.id,
-            lines: [{ accountId: bankId, debit: adjustment, credit: 0 }, { accountId: incId, debit: 0, credit: adjustment }],
-          });
-        } else if (adjustment < 0 && expId) {
-          const lossAmt = Math.abs(adjustment);
-          await createJournalEntry(dbClient, userId, {
-            date: disposedDate, description: `Loss on disposal: ${asset.description}`, type: 'asset_disposal', sourceId: asset.id,
-            lines: [{ accountId: expId, debit: lossAmt, credit: 0 }, { accountId: bankId, debit: 0, credit: lossAmt }],
-          });
-        }
+      // Already fully expensed at purchase -- never capitalized, so nothing to derecognize on the
+      // balance sheet. Any proceeds are pure profit.
+      if (disposalNum > 0 && bankId && incId) {
+        const lines = [{ accountId: bankId, debit: disposalNum, credit: 0 }, { accountId: incId, debit: 0, credit: proceedsExGst }];
+        if (gstAmt > 0) lines.push({ accountId: gstColId, debit: 0, credit: gstAmt });
+        await createJournalEntry(dbClient, userId, {
+          date: disposedDate, description: `Profit on disposal: ${asset.description}`, type: 'asset_disposal', sourceId: asset.id, lines,
+        });
       }
     } else {
-      // Real depreciation methods were capitalized to Fixed Assets at purchase — disposal must
-      // fully derecognize both the original cost and its accumulated depreciation, not just post
-      // a standalone profit/loss line, or the balance sheet would carry a phantom asset forever.
+      // Real depreciation methods were capitalized to Fixed Assets at purchase -- disposal must fully
+      // derecognize both the original cost and its accumulated depreciation, not just post a
+      // standalone profit/loss line, or the balance sheet would carry a phantom asset forever.
       const fixedAssetsId = await accountByCode(userId, '1400');
-      const accDepId = await accountByCode(userId, '1300');
       if (fixedAssetsId && accDepId && bankId) {
         const lines = [
           { accountId: accDepId, debit: accumulated, credit: 0 },
           { accountId: bankId, debit: disposalNum, credit: 0 },
           { accountId: fixedAssetsId, debit: 0, credit: cost },
         ];
+        if (gstAmt > 0) lines.push({ accountId: gstColId, debit: 0, credit: gstAmt });
         if (adjustment > 0 && incId) lines.push({ accountId: incId, debit: 0, credit: adjustment });
         else if (adjustment < 0 && expId) lines.push({ accountId: expId, debit: Math.abs(adjustment), credit: 0 });
         await createJournalEntry(dbClient, userId, {
-          date: disposedDate, description: `Disposal: ${asset.description}`, type: 'asset_disposal', sourceId: asset.id,
-          lines,
+          date: disposedDate, description: `Disposal: ${asset.description}`, type: 'asset_disposal', sourceId: asset.id, lines,
         });
       }
     }
 
     const { rows: updated } = await dbClient.query(
-      `UPDATE fin_assets SET "disposedDate"=$1,"disposalAmount"=$2,"updatedAt"=NOW() WHERE id=$3 RETURNING *`,
-      [disposedDate, disposalNum, asset.id]
+      `UPDATE fin_assets SET "disposedDate"=$1,"disposalAmount"=$2,"disposalGst"=$4,"updatedAt"=NOW() WHERE id=$3 RETURNING *`,
+      [disposedDate, disposalNum, asset.id, gstAmt]
     );
     await dbClient.query('COMMIT');
-    res.json({ ...updated[0], writtenDownValue, adjustment });
+    res.json({ ...updated[0], writtenDownValue, adjustment, gstOnSale: gstAmt, finalYearDeduction });
   } catch (err) {
     await dbClient.query('ROLLBACK');
     res.status(500).json({ error: err.message });
@@ -3107,6 +3440,23 @@ router.post('/assets/depreciation/run', async (req, res) => {
     const accDepId = await accountByCode(userId, '1300');
     const { rows: depTx } = await pool.query(`SELECT id FROM fin_tx_codes WHERE "userId"=$1 AND code='EXP-210'`, [userId]);
     const fyEnd = `${parseInt(fy.slice(0, 4), 10) + 1}-06-30`;
+
+    // Years must be posted in order. Running 2027-28 while 2026-27 is unposted (or running an old
+    // year after a later one) leaves accumulatedDepreciation and every later year wrong.
+    const startYear = parseInt(fy.slice(0, 4), 10);
+    const prevFy = `${startYear - 1}-${String(startYear % 100).padStart(2, '0')}`;
+    const outOfOrder = [];
+    for (const asset of assets) {
+      if (asset.lastDepreciatedFy && asset.lastDepreciatedFy > fy) {
+        outOfOrder.push(`${asset.description} (already depreciated to FY${asset.lastDepreciatedFy})`);
+      } else if (asset.lastDepreciatedFy !== prevFy && asset.lastDepreciatedFy !== fy && computeAssetYearDepreciation(asset, prevFy)) {
+        outOfOrder.push(`${asset.description} (FY${prevFy} not posted yet)`);
+      }
+    }
+    if (outOfOrder.length) {
+      await dbClient.query('ROLLBACK');
+      return res.status(400).json({ error: `Run depreciation in order, one financial year at a time. Can't run FY${fy} yet: ${outOfOrder.join('; ')}.` });
+    }
 
     const posted = [];
     for (const asset of assets) {
@@ -3229,7 +3579,19 @@ router.post('/journal', async (req, res) => {
   try {
     await dbClient.query('BEGIN');
     const { date, description, lines = [] } = req.body;
-    if (!lines.length) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Lines required' }); }
+    if (!Array.isArray(lines) || !lines.length) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Lines required' }); }
+    if (!description || !String(description).trim()) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Description is required' }); }
+    for (const l of lines) {
+      const dr = parseFloat(l.debit) || 0, cr = parseFloat(l.credit) || 0;
+      if (dr < 0 || cr < 0 || (dr > 0 && cr > 0) || (dr === 0 && cr === 0)) {
+        await dbClient.query('ROLLBACK');
+        return res.status(400).json({ error: 'Each line needs either a debit or a credit (not both, not negative, not empty)' });
+      }
+      if (!Number.isInteger(Number(l.accountId)) || !(await ownsAccount(dbClient, req.user.id, l.accountId))) {
+        await dbClient.query('ROLLBACK');
+        return res.status(400).json({ error: 'A journal line uses an unknown account' });
+      }
+    }
     const { debits, credits, balanced } = checkJournalBalance(lines);
     if (!balanced) {
       await dbClient.query('ROLLBACK');
@@ -3238,7 +3600,7 @@ router.post('/journal', async (req, res) => {
       });
     }
     const entryId = await createJournalEntry(dbClient, req.user.id, {
-      date:        date || new Date().toISOString().slice(0, 10),
+      date:        date || await todayStr(),
       description,
       type:        'manual',
       lines,
@@ -3261,7 +3623,7 @@ router.delete('/journal/:id', async (req, res) => {
       `SELECT id FROM fin_journal_entries WHERE id=$1 AND "userId"=$2 AND type='manual'`,
       [req.params.id, req.user.id]
     );
-    if (!rows[0]) return res.status(404).json({ error: 'Not found or not a manual entry' });
+    if (!rows[0]) { await dbClient.query('ROLLBACK'); return res.status(404).json({ error: 'Not found or not a manual entry' }); }
     await dbClient.query(`DELETE FROM fin_journal_lines WHERE "entryId"=$1`, [req.params.id]);
     await dbClient.query(`DELETE FROM fin_journal_entries WHERE id=$1`, [req.params.id]);
     await dbClient.query('COMMIT');
@@ -3281,16 +3643,17 @@ router.get('/bas', async (req, res) => {
     const userId = req.user.id;
     const { from, to } = req.query;
     if (!from || !to) return res.status(400).json({ error: 'from and to required' });
+    const basis = await getGstBasis(pool, userId);
 
     const [invRows, expRows, wageRows, gstPaid] = await Promise.all([
       pool.query(
         `SELECT COALESCE(SUM(subtotal),0) AS income, COALESCE(SUM(gst),0) AS "gstCollected"
-         FROM fin_invoices WHERE "userId"=$1 AND status = 'paid' AND "paidAt"::date BETWEEN $2 AND $3`,
+         FROM fin_invoices WHERE "userId"=$1 AND ${gstSalesSql(basis, '', '$2', '$3')}`,
         [userId, from, to]
       ),
       pool.query(
-        `SELECT COALESCE(SUM(amount),0) AS expenses
-         FROM fin_expenses WHERE "userId"=$1 AND date BETWEEN $2 AND $3`,
+        `SELECT COALESCE(SUM(e.amount),0) AS expenses
+         FROM ${PURCHASES_FROM} WHERE e."userId"=$1 AND ${purchaseClaimDateSql(basis)} BETWEEN $2 AND $3`,
         [userId, from, to]
       ),
       pool.query(
@@ -3298,17 +3661,18 @@ router.get('/bas', async (req, res) => {
          FROM fin_wages WHERE "userId"=$1 AND date BETWEEN $2 AND $3`,
         [userId, from, to]
       ),
-      gstPaidForRange(userId, from, to),
+      gstPaidForRange(userId, from, to, basis),
     ]);
 
-    const gstCollected = parseFloat(invRows.rows[0].gstCollected);
+    const sold = await disposalSalesForRange(pool, userId, from, to);
+    const gstCollected = round2(parseFloat(invRows.rows[0].gstCollected) + sold.gst);
 
     // Upsert the quarter record so we can track status
     const { rows: qRows } = await pool.query(
       `INSERT INTO fin_bas_quarters ("userId", from_date, to_date, status)
        VALUES ($1,$2,$3,'open')
        ON CONFLICT ("userId", from_date) DO UPDATE SET to_date=EXCLUDED.to_date
-       RETURNING id, status, reconciled_at, lodged_at, paid_at`,
+       RETURNING id, status, reconciled_at, lodged_at, paid_at, "paygInstalment"`,
       [userId, from, to]
     );
     const quarter = qRows[0];
@@ -3317,7 +3681,9 @@ router.get('/bas', async (req, res) => {
     // (never even reconciled) once that's passed — the one place this route can detect the
     // anomaly itself, per the mandatory SuggestionService rule.
     const daysPastDue = Math.floor((Date.now() - new Date(`${to}T00:00:00Z`).getTime()) / 86400000) - 28;
-    await captureIf(quarter.status === 'open' && daysPastDue > 0, {
+    const reg = await getGstRegistration(pool, userId);
+    const quarterNeedsBas = gstAppliesOn(reg, from);
+    await captureIf(quarterNeedsBas && quarter.status === 'open' && daysPastDue > 0, {
       userId,
       source: 'financeBas',
       category: 'alert',
@@ -3331,11 +3697,16 @@ router.get('/bas', async (req, res) => {
       from,
       to,
       quarterId:       quarter.id,
+      basis,
+      gstRegistered:   reg.registered,
+      gstEffectiveTo:  reg.registered ? null : reg.effectiveFrom,
+      quarterNeedsBas,
+      paygInstalment:  parseFloat(quarter.paygInstalment) || 0,
       status:          quarter.status,
       reconciledAt:    quarter.reconciled_at,
       lodgedAt:        quarter.lodged_at,
       paidAt:          quarter.paid_at,
-      income:          parseFloat(invRows.rows[0].income),
+      income:          round2(parseFloat(invRows.rows[0].income) + sold.net),
       gstCollected,
       expenses:        parseFloat(expRows.rows[0].expenses),
       gstPaid,
@@ -3347,6 +3718,18 @@ router.get('/bas', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// Lodging and paying a BAS are real-world events with their own dates. Accept the actual date (so a
+// quarter lodged/paid long ago can be recorded without dating the payment "today"); default today.
+// Must not be in the future or before the quarter ended.
+async function basStepDate(req, quarterRow) {
+  const today = await todayStr();
+  const d = req.body && req.body.date ? String(req.body.date) : today;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return { error: 'date must be YYYY-MM-DD' };
+  if (d > today) return { error: 'The date can\'t be in the future' };
+  if (quarterRow && d < dateOnly(quarterRow.to_date)) return { error: `The date can't be before the quarter ended (${dateOnly(quarterRow.to_date)})` };
+  return { date: d };
+}
 
 router.post('/bas/:quarterId/reconcile', async (req, res) => {
   try {
@@ -3364,12 +3747,33 @@ router.post('/bas/:quarterId/reconcile', async (req, res) => {
 
 router.post('/bas/:quarterId/lodge', async (req, res) => {
   try {
+    const { rows: qr } = await pool.query(`SELECT to_date FROM fin_bas_quarters WHERE id=$1 AND "userId"=$2`, [req.params.quarterId, req.user.id]);
+    const step = await basStepDate(req, qr[0]);
+    if (step.error) return res.status(400).json({ error: step.error });
     const { rows } = await pool.query(
-      `UPDATE fin_bas_quarters SET status='lodged', lodged_at=NOW(), "updatedAt"=NOW()
+      `UPDATE fin_bas_quarters SET status='lodged', lodged_at=($3::date + interval '12 hours'), "updatedAt"=NOW()
        WHERE id=$1 AND "userId"=$2 AND status='reconciled' RETURNING *`,
-      [req.params.quarterId, req.user.id]
+      [req.params.quarterId, req.user.id, step.date]
     );
     if (!rows[0]) return res.status(400).json({ error: 'Quarter not found or not in reconciled status' });
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// T7: PAYG income-tax instalment for the quarter. Entered by the user (the ATO sets the amount);
+// editable until the quarter is lodged, because it is part of what gets paid with the BAS.
+router.post('/bas/:quarterId/payg-instalment', async (req, res) => {
+  try {
+    const amount = Math.round((parseFloat(req.body.amount) || 0) * 100) / 100;
+    if (amount < 0) return res.status(400).json({ error: 'Amount can\'t be negative' });
+    const { rows } = await pool.query(
+      `UPDATE fin_bas_quarters SET "paygInstalment"=$1, "updatedAt"=NOW()
+       WHERE id=$2 AND "userId"=$3 AND status IN ('open','reconciled') RETURNING *`,
+      [amount, req.params.quarterId, req.user.id]
+    );
+    if (!rows[0]) return res.status(400).json({ error: 'Quarter not found, or already lodged' });
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -3382,44 +3786,62 @@ router.post('/bas/:quarterId/paid', async (req, res) => {
     await dbClient.query('BEGIN');
     const userId = req.user.id;
 
+    const { rows: qPre } = await dbClient.query(`SELECT to_date FROM fin_bas_quarters WHERE id=$1 AND "userId"=$2`, [req.params.quarterId, userId]);
+    const step = await basStepDate(req, qPre[0]);
+    if (step.error) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: step.error }); }
     const { rows: qRows } = await dbClient.query(
-      `UPDATE fin_bas_quarters SET status='paid', paid_at=NOW(), "updatedAt"=NOW()
+      `UPDATE fin_bas_quarters SET status='paid', paid_at=($3::date + interval '12 hours'), "updatedAt"=NOW()
        WHERE id=$1 AND "userId"=$2 AND status='lodged' RETURNING *`,
-      [req.params.quarterId, userId]
+      [req.params.quarterId, userId, step.date]
     );
     if (!qRows[0]) {
       await dbClient.query('ROLLBACK');
       return res.status(400).json({ error: 'Quarter not found or not in lodged status' });
     }
     const quarter = qRows[0];
+    const basis = await getGstBasis(dbClient, userId);
 
-    // Recalculate net GST for journal entry
-    const [invRows, gstPaid] = await Promise.all([
+    // Recalculate what the BAS covers: GST on sales/purchases, PAYG withheld from wages (W2), and the
+    // PAYG instalment (T7).
+    const [invRows, wageRows, gstPaid] = await Promise.all([
       dbClient.query(
-        `SELECT COALESCE(SUM(gst),0) AS "gstCollected"
-         FROM fin_invoices WHERE "userId"=$1 AND status='paid' AND "paidAt"::date BETWEEN $2 AND $3`,
+        `SELECT COALESCE(SUM(gst),0) AS "gstCollected" FROM fin_invoices WHERE "userId"=$1 AND ${gstSalesSql(basis, '', '$2', '$3')}`,
         [userId, quarter.from_date, quarter.to_date]
       ),
-      gstPaidForRange(userId, quarter.from_date, quarter.to_date),
+      dbClient.query(
+        `SELECT COALESCE(SUM(tax),0) AS w2 FROM fin_wages WHERE "userId"=$1 AND date BETWEEN $2 AND $3`,
+        [userId, quarter.from_date, quarter.to_date]
+      ),
+      gstPaidForRange(userId, quarter.from_date, quarter.to_date, basis),
     ]);
-    const gstCollected = parseFloat(invRows.rows[0].gstCollected);
-    const netGst       = parseFloat((gstCollected - gstPaid).toFixed(2));
+    const soldAssets   = await disposalSalesForRange(dbClient, userId, quarter.from_date, quarter.to_date);
+    const gstCollected = round2(parseFloat(invRows.rows[0].gstCollected) + soldAssets.gst);
+    const w2           = Math.round(parseFloat(wageRows.rows[0].w2) * 100) / 100;
+    const t7           = Math.round((parseFloat(quarter.paygInstalment) || 0) * 100) / 100;
 
-    // Journal: DR GST Collected, CR GST Paid, CR Bank (net settlement)
-    if (netGst !== 0) {
+    // Journal: DR GST Collected, CR GST Paid, DR PAYG Withholding Payable (W2, clears what wages
+    // accrued), DR Owner's Drawings (T7: a sole trader's instalment is personal income tax), and the
+    // balancing Bank payment (or refund). Posted whenever any piece is non-zero so those accounts
+    // clear even when the GST happens to net to $0.
+    if (gstCollected > 0 || gstPaid > 0 || w2 > 0 || t7 > 0) {
       await ensureAccounts(userId);
       const gstColId  = await accountByCode(userId, '2200');
       const gstPaidId = await accountByCode(userId, '1200');
+      const paygId    = await accountByCode(userId, '2400');
+      const drawId    = await accountByCode(userId, '3100');
       const bankId    = await accountByCode(userId, '1000');
-      if (gstColId && gstPaidId && bankId) {
+      if (gstColId && gstPaidId && paygId && drawId && bankId) {
         const lines = [];
         if (gstCollected > 0) lines.push({ accountId: gstColId,  debit: gstCollected, credit: 0 });
         if (gstPaid > 0)      lines.push({ accountId: gstPaidId, debit: 0, credit: gstPaid });
-        if (netGst > 0)       lines.push({ accountId: bankId,    debit: 0, credit: netGst });
-        else                  lines.push({ accountId: bankId,    debit: Math.abs(netGst), credit: 0 });
+        if (w2 > 0)           lines.push({ accountId: paygId,    debit: w2, credit: 0 });
+        if (t7 > 0)           lines.push({ accountId: drawId,    debit: t7, credit: 0 });
+        const payable = Math.round((gstCollected - gstPaid + w2 + t7) * 100) / 100;
+        if (payable > 0)      lines.push({ accountId: bankId,    debit: 0, credit: payable });
+        else if (payable < 0) lines.push({ accountId: bankId,    debit: Math.abs(payable), credit: 0 });
         await createJournalEntry(dbClient, userId, {
-          date:        new Date().toISOString().slice(0, 10),
-          description: `BAS payment — ${quarter.from_date} to ${quarter.to_date}`,
+          date:        step.date,
+          description: `BAS payment — ${dateOnly(quarter.from_date)} to ${dateOnly(quarter.to_date)}`,
           type:        'bas',
           sourceId:    quarter.id,
           lines,
@@ -3452,23 +3874,25 @@ router.get('/bas/annual', async (req, res) => {
       { q: 4, label: `Q4 Apr–Jun ${year}`, from: `${year}-04-01`, to: `${year}-06-30` },
     ];
 
+    const annualBasis = await getGstBasis(pool, userId);
     const quarters = await Promise.all(quarterDefs.map(async (qd) => {
       const [invRow, gstCredits, qRow] = await Promise.all([
         pool.query(
           `SELECT COALESCE(SUM(subtotal),0) AS income, COALESCE(SUM(gst),0) AS "gstCollected"
            FROM fin_invoices
-           WHERE "userId"=$1 AND status='paid' AND "paidAt"::date BETWEEN $2 AND $3`,
+           WHERE "userId"=$1 AND ${gstSalesSql(annualBasis, '', '$2', '$3')}`,
           [userId, qd.from, qd.to]
         ),
-        gstPaidForRange(userId, qd.from, qd.to),
+        gstPaidForRange(userId, qd.from, qd.to, annualBasis),
         pool.query(
           `SELECT id, status FROM fin_bas_quarters WHERE "userId"=$1 AND from_date=$2`,
           [userId, qd.from]
         ),
       ]);
 
-      const income     = parseFloat(invRow.rows[0].income);
-      const gstOnSales = parseFloat(invRow.rows[0].gstCollected);
+      const soldAnnual = await disposalSalesForRange(pool, userId, qd.from, qd.to);
+      const income     = round2(parseFloat(invRow.rows[0].income) + soldAnnual.net);
+      const gstOnSales = round2(parseFloat(invRow.rows[0].gstCollected) + soldAnnual.gst);
       const g1         = parseFloat((income + gstOnSales).toFixed(2));
       const netGst     = parseFloat((gstOnSales - gstCredits).toFixed(2));
       const qRecord    = qRow.rows[0] || null;
@@ -3803,7 +4227,7 @@ router.get('/export/myob', async (req, res) => {
       }
     }
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = await todayStr();
     history.myob = { lastTo: to || today, exportedAt: new Date().toISOString() };
     await writeExportHistory(userId, history).catch(e => console.error('[export/myob] history write failed:', e.message));
 
@@ -3885,7 +4309,7 @@ router.get('/export/xero', async (req, res) => {
       }
     }
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = await todayStr();
     history.xero = { lastTo: to || today, exportedAt: new Date().toISOString() };
     await writeExportHistory(userId, history).catch(e => console.error('[export/xero] history write failed:', e.message));
 
@@ -4054,7 +4478,7 @@ router.get('/export/excel', async (req, res) => {
     wsJournal['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 36 }, { wch: 12 }];
     XLSX.utils.book_append_sheet(wb, wsJournal, 'Other Journal');
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = await todayStr();
     history.excel = { lastTo: to || today, exportedAt: new Date().toISOString() };
     await writeExportHistory(userId, history).catch(e => console.error('[export/excel] history write failed:', e.message));
 
@@ -4181,7 +4605,7 @@ router.get('/export/sheets', async (req, res) => {
       ));
     }
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = await todayStr();
     history.sheets = { lastTo: to || today, exportedAt: new Date().toISOString() };
     await writeExportHistory(userId, history).catch(e => console.error('[export/sheets] history write failed:', e.message));
 
@@ -4235,7 +4659,7 @@ router.post('/interest', async (req, res) => {
     if (!bankId || !interestId) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Required accounts not found' }); }
 
     const entryId = await createJournalEntry(dbClient, userId, {
-      date:        date || new Date().toISOString().slice(0, 10),
+      date:        date || await todayStr(),
       description: description?.trim() || 'Bank interest',
       type:        'interest',
       lines: [
@@ -4373,7 +4797,7 @@ router.get('/reports/profit-loss', async (req, res) => {
 router.get('/reports/balance-sheet', async (req, res) => {
   try {
     const userId = req.user.id;
-    const asOf = req.query.asOf || new Date().toISOString().slice(0, 10);
+    const asOf = req.query.asOf || await todayStr();
     await ensureAccounts(userId);
 
     const { rows } = await pool.query(
@@ -4456,53 +4880,58 @@ router.get('/reports/gst-summary', async (req, res) => {
     const { from, to } = req.query;
     if (!from || !to) return res.status(400).json({ error: 'from and to required' });
 
-    // Reuses the same cash-basis calculation as /bas (paidAt for income, date for expenses) —
-    // adds a breakdown by tx code on top rather than reimplementing the totals.
+    // Reuses the same calculation as /bas (the chosen GST basis) -- adds a breakdown by tx code on top
+    // rather than reimplementing the totals.
+    const basis = await getGstBasis(pool, userId);
     const [totalsInv, totalsExp, gstPaid, byIncomeCode, byExpenseCode] = await Promise.all([
       pool.query(
         `SELECT COALESCE(SUM(subtotal),0) AS income, COALESCE(SUM(gst),0) AS "gstCollected"
-         FROM fin_invoices WHERE "userId"=$1 AND status='paid' AND "paidAt"::date BETWEEN $2 AND $3`,
+         FROM fin_invoices WHERE "userId"=$1 AND ${gstSalesSql(basis, '', '$2', '$3')}`,
         [userId, from, to]
       ),
       pool.query(
-        `SELECT COALESCE(SUM(amount),0) AS expenses
-         FROM fin_expenses WHERE "userId"=$1 AND date BETWEEN $2 AND $3`,
+        `SELECT COALESCE(SUM(e.amount),0) AS expenses
+         FROM ${PURCHASES_FROM} WHERE e."userId"=$1 AND ${purchaseClaimDateSql(basis)} BETWEEN $2 AND $3`,
         [userId, from, to]
       ),
-      gstPaidForRange(userId, from, to),
+      gstPaidForRange(userId, from, to, basis),
       pool.query(
         `SELECT COALESCE(t.code,'(none)') AS code, COALESCE(t.name,'Uncategorised') AS name,
                 COALESCE(SUM(ii.amount),0) AS amount, COALESCE(SUM(ii.gst),0) AS gst
          FROM fin_invoice_items ii
          JOIN fin_invoices i ON i.id = ii."invoiceId"
          LEFT JOIN fin_tx_codes t ON t.id = ii."txCodeId"
-         WHERE i."userId"=$1 AND i.status='paid' AND i."paidAt"::date BETWEEN $2 AND $3
+         WHERE i."userId"=$1 AND ${gstSalesSql(basis, 'i', '$2', '$3')}
          GROUP BY t.code, t.name ORDER BY t.code NULLS LAST`,
         [userId, from, to]
       ),
       pool.query(
         `SELECT COALESCE(t.code,'(none)') AS code, COALESCE(t.name,'Uncategorised') AS name,
                 COALESCE(SUM(e.amount),0) AS amount, COALESCE(SUM(e.gst),0) AS gst
-         FROM fin_expenses e
+         FROM ${PURCHASES_FROM}
          LEFT JOIN fin_tx_codes t ON t.id = e."txCodeId"
-         WHERE e."userId"=$1 AND e.date BETWEEN $2 AND $3
+         WHERE e."userId"=$1 AND ${purchaseClaimDateSql(basis)} BETWEEN $2 AND $3
          GROUP BY t.code, t.name ORDER BY t.code NULLS LAST`,
         [userId, from, to]
       ),
     ]);
 
-    const gstCollected = parseFloat(totalsInv.rows[0].gstCollected);
+    const soldSummary = await disposalSalesForRange(pool, userId, from, to);
+    const gstCollected = round2(parseFloat(totalsInv.rows[0].gstCollected) + soldSummary.gst);
 
     res.json({
       from, to,
-      income:         parseFloat(totalsInv.rows[0].income),
+      income:         round2(parseFloat(totalsInv.rows[0].income) + soldSummary.net),
       gstCollected,
       expenses:       parseFloat(totalsExp.rows[0].expenses),
       gstPaid,
       netGst:         parseFloat((gstCollected - gstPaid).toFixed(2)),
       byIncomeCode:   byIncomeCode.rows.map(r => ({ code: r.code, name: r.name, amount: Number(r.amount), gst: Number(r.gst) })),
       byExpenseCode:  byExpenseCode.rows.map(r => ({ code: r.code, name: r.name, amount: Number(r.amount), gst: Number(r.gst) })),
-      cashBasisNote:  'GST is calculated on a cash basis (recognized when paid/received). If you report GST on an accrual basis, these figures will not match your actual BAS.',
+      basis,
+      cashBasisNote:  basis === 'accrual'
+        ? 'GST is calculated on an accrual basis (recognized when invoiced / when the bill is dated), as set in Finance → Settings.'
+        : 'GST is calculated on a cash basis (recognized when paid/received). If you report GST on an accrual basis, switch the GST basis in Finance → Settings.',
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -4512,7 +4941,7 @@ router.get('/reports/gst-summary', async (req, res) => {
 router.get('/reports/trial-balance', async (req, res) => {
   try {
     const userId = req.user.id;
-    const asOf = req.query.asOf || new Date().toISOString().slice(0, 10);
+    const asOf = req.query.asOf || await todayStr();
     await ensureAccounts(userId);
 
     const { rows } = await pool.query(
@@ -4632,12 +5061,15 @@ router.get('/reports/chart-gst-quarters', async (req, res) => {
   try {
     const userId = req.user.id;
     const gstPaidAccountId = await accountByCode(userId, '1200');
+    const basis = await getGstBasis(pool, userId);
     const { rows } = await pool.query(
       `SELECT q.id AS "quarterId", q.from_date AS "from", q.to_date AS "to",
-              COALESCE((SELECT SUM(gst) FROM fin_invoices WHERE "userId"=$1 AND status='paid'
-                        AND "paidAt"::date BETWEEN q.from_date AND q.to_date), 0) AS "gstCollected",
-              COALESCE((SELECT SUM(gst) FROM fin_expenses WHERE "userId"=$1
-                        AND date BETWEEN q.from_date AND q.to_date), 0)
+              COALESCE((SELECT SUM(gst) FROM fin_invoices WHERE "userId"=$1
+                        AND ${gstSalesSql(basis, '', 'q.from_date', 'q.to_date')}), 0)
+              + COALESCE((SELECT SUM("disposalGst") FROM fin_assets WHERE "userId"=$1
+                          AND "disposedDate" BETWEEN q.from_date AND q.to_date), 0) AS "gstCollected",
+              COALESCE((SELECT SUM(e.gst) FROM ${PURCHASES_FROM} WHERE e."userId"=$1
+                        AND ${purchaseClaimDateSql(basis)} BETWEEN q.from_date AND q.to_date), 0)
               + COALESCE((SELECT SUM(l.debit) FROM fin_journal_entries e
                           JOIN fin_journal_lines l ON l."entryId" = e.id
                           WHERE e."userId"=$1 AND e.type='asset_purchase' AND l."accountId"=$2
@@ -4663,13 +5095,25 @@ router.get('/reports/chart-gst-quarters', async (req, res) => {
 // Extra reports (aged receivables/payables, general ledger, cash flow statement, comparisons,
 // BAS worksheet, budgets, statements, ...) live in their own file to keep this one manageable.
 // Mounted after the four original /reports/* routes above, which never overlap with its paths.
-router.use('/reports', require('./financeReports')({ gstPaidForRange }));
+router.use('/reports', require('./financeReports')({ gstPaidForRange, disposalSalesForRange, getGstBasis, gstSalesSql, purchaseClaimDateSql, PURCHASES_FROM }));
 
 // Exposed for server/routes/expenseReview.js so bulk expense creation from the invoice
 // review queue reuses the exact same insert+journal path as manual expense entry, and
 // (RECEIPT_DIR) so it can drop the already-downloaded invoice PDF straight into Finance's
 // existing receipt storage instead of inventing a second file location.
 router.createExpenseRecord = createExpenseRecord;
+// Exposed for server/cron/recurringCron.js (recurring expenses must post a journal) and tests.
+router.createJournalEntry = createJournalEntry;
+router.ensureAccounts = ensureAccounts;
+router.accountByCode = accountByCode;
+router.computeAssetYearDepreciation = computeAssetYearDepreciation;
+router.todayStr = todayStr;
+router.getGstBasis = getGstBasis;
+router.getGstRegistration = getGstRegistration;
+router.gstAppliesOn = gstAppliesOn;
+router.disposalSalesForRange = disposalSalesForRange;
+router.deleteJournalForSource = deleteJournalForSource;
+router.postInvoiceJournal = postInvoiceJournal;
 router.RECEIPT_DIR = RECEIPT_DIR;
 
 module.exports = router;

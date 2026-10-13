@@ -4,14 +4,7 @@ const cron = require('node-cron');
 const { pool } = require('../db');
 const { captureIf, makeFingerprint } = require('../services/SuggestionService');
 
-// Must stay in sync with `finYearForDate()` in server/routes/finance.js and FinancePage.jsx.
-function finYearForDate(dateStr) {
-  const d = new Date(dateStr);
-  const y = d.getUTCFullYear();
-  const startYear = d.getUTCMonth() >= 6 ? y : y - 1; // month 6 = July (0-indexed)
-  const endYY = String((startYear + 1) % 100).padStart(2, '0');
-  return `${startYear}-${endYY}`;
-}
+const { finYearForDate } = require('../utils/finYear');
 
 function fmtDate(d) {
   if (!d) return '—';
