@@ -38,6 +38,12 @@ Cross-cutting: **ProcessingModal** for operations >2 s; **Use in another tool** 
 
 ---
 
+## Voice directions
+
+Every tool with settings has a mic beside its title (`VoiceCommandBar` inside `ToolHeader`; shared `useVoice` via `VoiceInputProvider`). Speak a direction, e.g. Clip: "cut from 10 to 25 seconds". The browser sends the words to `POST /api/videos/voice-command` (`{ tool, transcript, context.durationSec }`); `server/services/videoVoiceCommand.js` returns validated field values and the page applies them to that tool's state. Clip, GIF and Thumbnail times (`1:30`, "one minute thirty", "first 30 seconds", "cut off the last 10 seconds") are parsed in code with no model call; everything else goes to the `light` tier with a per-tool schema (`TOOL_SCHEMAS`), and the answer is clamped/whitelisted so it can never set a value the form would reject. Voice only fills settings; it never presses Export or Generate. Adding a field = one `TOOL_SCHEMAS` entry + one setter in `applyVoiceValues` (VideosPage). Tests: `node server/services/videoVoiceCommand.test.js` (in `npm run test:video-tools`).
+
+---
+
 ## Tools
 
 ### Create

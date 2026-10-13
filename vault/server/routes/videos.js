@@ -46,6 +46,8 @@ const { normalizeSrt } = require('../services/srtUtils');
 const { fetchLicensedVideo } = require('../services/videoUrlIntake');
 const { ffmpegRoute } = require('../middleware/ffmpegRoute');
 const { planSlideshow, normalizeSlideshowPlan } = require('../services/videoSlideshowPlan');
+const { interpretVoiceCommand, TOOL_SCHEMAS: VOICE_TOOL_SCHEMAS } = require('../services/videoVoiceCommand');
+const { aiLimiter } = require('../middleware/aiRateLimit');
 const { planJoin, normalizeJoinPlan } = require('../services/videoJoinPlan');
 const { appendEndCard, normalizeEndCard } = require('../services/videoEndCard');
 const { joinClips } = require('../services/videoJoin/joinClips');
@@ -1022,6 +1024,21 @@ router.post('/togif', upload.single('video'), ffmpegRoute('togif', async (req, r
   res.setHeader('Cache-Control', 'no-store');
   res.send(buffer);
 }));
+
+// Spoken direction for any tool: text in (the browser already transcribed it), validated field values out.
+// JSON only, no uploads, no ffmpeg. Time-range phrases for Clip/GIF/Thumbnail never reach the model.
+router.post('/voice-command', aiLimiter, async (req, res) => {
+  try {
+    const { tool, transcript, context } = req.body || {};
+    if (!VOICE_TOOL_SCHEMAS[tool]) return res.status(400).json({ error: 'Unknown tool' });
+    if (!String(transcript || '').trim()) return res.status(400).json({ error: 'Nothing heard' });
+    const out = await interpretVoiceCommand(req.user.id, { tool, transcript, context: { durationSec: Number(context?.durationSec) || 0 } });
+    res.json(out);
+  } catch (err) {
+    getLogger().error({ err }, '[videos/voice-command]');
+    res.status(500).json({ error: 'Could not understand that — try again, or set it by hand.' });
+  }
+});
 
 // "Describe the video" — turns a plain-English description into a reviewable slideshow plan
 // (order, per-slide timing/captions, transition, camera motion, colour mood). JSON in/out, no

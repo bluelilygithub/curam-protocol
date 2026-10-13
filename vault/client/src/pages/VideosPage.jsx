@@ -15,6 +15,7 @@ import { describePlan } from './videos/JoinEffectsEditor';
 import LastFramePicker from './videos/LastFramePicker';
 import TakesGrid from './videos/TakesGrid';
 import { VoiceInput, VoiceInputProvider } from '../components/voiceInput/VoiceInput';
+import { VideoVoiceContext, VoiceCommandBar } from './videos/VoiceCommandBar';
 
 const VIDEO_GOOGLE_FONTS = [
   'Roboto',
@@ -931,7 +932,7 @@ function ResultVideo({
 
 function ToolHeader({ id, label, onHelp, getIcon }) {
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center flex-wrap gap-1.5">
       <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{label}</h2>
       <button
         type="button"
@@ -941,6 +942,7 @@ function ToolHeader({ id, label, onHelp, getIcon }) {
       >
         {getIcon('help-circle', { size: 13 })}
       </button>
+      <VoiceCommandBar toolId={id} />
     </div>
   );
 }
@@ -2057,6 +2059,48 @@ export default function VideosPage() {
 
   if (!canUse) return <Navigate to="/" replace />;
 
+  // Spoken directions: the server turns the words into validated field values; this maps them onto each tool's state.
+  const applyVoiceValues = (toolId, v) => {
+    const textStyle = {
+      textFontSize: setTextFontSize, textFontColor: setTextFontColor, textFontWeight: setTextFontWeight,
+      textBackgroundColor: (x) => { setTextBackgroundColor(x); setTextBackgroundTransparent(false); },
+      textBackgroundTransparent: setTextBackgroundTransparent,
+    };
+    const setters = {
+      generate: { brief: setBrief, style: setStyle, aspect: setAspect, durationSec: setDurationSec, batchCount: setBatchCount },
+      clip: { startSec: setStartSec, endSec: (x) => setEndSec(String(x)) },
+      convert: { crf: setCrf, maxWidth: (x) => setMaxWidth(String(x)) },
+      audio: { audioMode: setAudioMode },
+      normalize: { normalizePreset: setNormalizePreset },
+      togif: { gifFps: setGifFps, gifWidth: setGifWidth, gifStartSec: setGifStartSec, gifEndSec: (x) => setGifEndSec(String(x)) },
+      'export-social': { exportPresets: setExportPresets, exportFocus: setExportFocus },
+      reframe: { reframeAspect: setReframeAspect, reframeMode: setReframeMode, reframeFocus: setReframeFocus },
+      speed: { speedFactor: (x) => setSpeedFactor(String(x)) },
+      annotate: { overlayText: setOverlayText, textPosition: setTextPosition, fadeInSec: setFadeInSec, fadeOutSec: setFadeOutSec, ...textStyle },
+      'end-card': Object.fromEntries(['headline', 'subline', 'buttonText', 'url', 'durationSec'].map((k) => [k, (x) => setCta((c) => ({ ...c, [k]: x }))])),
+      overlay: { overlayPosition: setOverlayPosition, overlayScale: (x) => setOverlayScale(String(x)), overlayOpacity: (x) => setOverlayOpacity(String(x)) },
+      join: { joinMaxWidth: (x) => setJoinMaxWidth(String(x)), joinCrf: setJoinCrf, joinCrossfade: (x) => setJoinCrossfade(String(x)) },
+      slideshow: { slideSecondsPerSlide: setSlideSecondsPerSlide, slideAspect: setSlideAspect, slideCrossfade: setSlideCrossfade },
+      'caption-studio': textStyle,
+      thumbnail: { thumbTime: setThumbTime },
+    }[toolId] || {};
+    for (const [k, val] of Object.entries(v)) setters[k]?.(val);
+  };
+
+  const voiceValue = {
+    run: async (toolId, transcript) => {
+      const res = await api.post('/api/videos/voice-command', {
+        tool: toolId,
+        transcript,
+        context: { durationSec: clipDuration || probe?.duration || 0 },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Could not understand that');
+      applyVoiceValues(toolId, data.values || {});
+      return data;
+    },
+  };
+
   const ffmpegOk = status?.ffmpeg;
   const generateOk = status?.generate?.available;
   const resultSaveProps = {
@@ -2068,6 +2112,7 @@ export default function VideosPage() {
 
   return (
     <VoiceInputProvider lang="en-AU">
+    <VideoVoiceContext.Provider value={voiceValue}>
     <div className="flex flex-col sm:flex-row min-h-[calc(100dvh-3rem)]">
       <aside
         className="w-full sm:w-56 shrink-0 border-b sm:border-b-0 sm:border-r overflow-y-auto p-4 space-y-3"
@@ -3944,6 +3989,7 @@ export default function VideosPage() {
         </div>
       )}
     </div>
+    </VideoVoiceContext.Provider>
     </VoiceInputProvider>
   );
 }
