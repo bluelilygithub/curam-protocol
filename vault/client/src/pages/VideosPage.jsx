@@ -149,6 +149,17 @@ const TOOL_HELP = {
       'Useful for reusing a voiceover or music track elsewhere',
     ],
   },
+  'extend-ending': {
+    title: 'Extend ending',
+    what: 'Stop a video ending dead on its last picture: hold the last frame for a few seconds while the music plays on and fades out, with an optional closing message over it.',
+    features: [
+      'Choose how many seconds to hold the last frame',
+      'Choose your music file and it plays through the held frame, then fades out over the time you set (it repeats smoothly if it is shorter)',
+      'Without a music file the video\'s own sound is kept, but it ends with the video: it can only be faded out at its end, and the held frame is silent',
+      'Optional call to action: the message appears over the held frame while the music fades',
+      'One finished video; your originals are not changed',
+    ],
+  },
   'mix-audio': {
     title: 'Mix audio',
     what: 'Combine a voice recording and a piece of background music into one audio file.',
@@ -377,6 +388,7 @@ const TOOL_GROUPS = [
       { id: 'join', label: 'Join videos', desc: 'Concatenate clips — hard cut or crossfade' },
       { id: 'slideshow', label: 'Slideshow', desc: 'Images + background music → promo video' },
       { id: 'caption-studio', label: 'Caption studio', desc: 'Upload or library video + styled SRT captions' },
+      { id: 'extend-ending', label: 'Extend ending', desc: 'Hold the last frame; music fades out over it' },
       { id: 'mix-audio', label: 'Mix audio', desc: 'Voice + background music → one audio file' },
       { id: 'add-music', label: 'Add music', desc: 'Opens Music — generate or use your own track', link: '/music' },
     ],
@@ -417,7 +429,7 @@ function appendEndCardFields(fd, c) {
   fd.append('endCardSpec', JSON.stringify(c));
 }
 
-function EndCardFields({ cta, setCta }) {
+function EndCardFields({ cta, setCta, lockTiming = false }) {
   const set = (key) => (value) => setCta((prev) => ({ ...prev, [key]: value }));
   return (
     <div className="space-y-3">
@@ -435,6 +447,7 @@ function EndCardFields({ cta, setCta }) {
           <VoiceInput value={cta.url} onChange={set('url')} placeholder="Web address or phone (optional)" label="Web address or phone" />
         </Tooltip>
       </div>
+      {!lockTiming && (
       <label className="block space-y-1">
         <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Where it appears</span>
         <Tooltip text="Separate closing screen after the video, over a frozen last frame (video gets longer), or over the final seconds of the video (same length).">
@@ -445,6 +458,7 @@ function EndCardFields({ cta, setCta }) {
           </select>
         </Tooltip>
       </label>
+      )}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[['Background', 'bgColor', 'Closing screen colour (or the tint dimming the picture when shown over the video).'], ['Text', 'textColor', 'Colour of the headline and lines.'], ['Button', 'buttonColor', 'Colour behind the button text.']].map(([lbl, key, tip]) => (
           <label key={key} className="block space-y-1">
@@ -454,27 +468,29 @@ function EndCardFields({ cta, setCta }) {
             </Tooltip>
           </label>
         ))}
+        {!lockTiming && (
         <label className="block space-y-1">
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Seconds on screen</span>
           <Tooltip text="How long the closing screen stays up (1–15 seconds).">
             <input type="number" min={1} max={15} step={0.5} value={cta.durationSec} onChange={(e) => set('durationSec')(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
           </Tooltip>
         </label>
+        )}
       </div>
     </div>
   );
 }
 
-function EndCardToggle({ enabled, setEnabled, cta, setCta, tip }) {
+function EndCardToggle({ enabled, setEnabled, cta, setCta, tip, lockTiming = false, label = 'End with a call to action' }) {
   return (
     <div className="rounded-xl border p-3 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
       <label className="flex items-center gap-2 text-xs font-medium" style={{ color: 'var(--color-text)' }}>
         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
         <Tooltip text={tip}>
-          <span>End with a call to action</span>
+          <span>{label}</span>
         </Tooltip>
       </label>
-      {enabled && <EndCardFields cta={cta} setCta={setCta} />}
+      {enabled && <EndCardFields cta={cta} setCta={setCta} lockTiming={lockTiming} />}
       {enabled && !ctaHasContent(cta) && (
         <p className="text-[10px]" style={{ color: '#b45309' }}>Add a headline, button text or web address first.</p>
       )}
@@ -1088,6 +1104,15 @@ export default function VideosPage() {
   const [ctaOnSlideshow, setCtaOnSlideshow] = useState(false);
   const [ctaOnAnnotate, setCtaOnAnnotate] = useState(false);
   const [ctaOnOverlay, setCtaOnOverlay] = useState(false);
+  const [ctaOnExtend, setCtaOnExtend] = useState(true);
+
+  // Extend ending
+  const [exAudio, setExAudio] = useState(null);
+  const [exHold, setExHold] = useState(4);
+  const [exFade, setExFade] = useState(''); // empty = the same as the hold (the music fades over exactly the held time)
+  const exAudioInputRef = useRef(null);
+  const exAudioUrl = useMemo(() => (exAudio ? URL.createObjectURL(exAudio) : ''), [exAudio]);
+  useEffect(() => () => { if (exAudioUrl) URL.revokeObjectURL(exAudioUrl); }, [exAudioUrl]);
 
   // Export for Social
   const [exportPresets, setExportPresets] = useState(['reels', 'square', 'landscape']);
@@ -1235,7 +1260,7 @@ export default function VideosPage() {
   }, []);
 
   useEffect(() => {
-    if (tool === 'annotate' || tool === 'end-card' || tool === 'caption-studio' || tool === 'join' || tool === 'overlay' || tool === 'slideshow') clearComposeResult();
+    if (tool === 'annotate' || tool === 'extend-ending' || tool === 'end-card' || tool === 'caption-studio' || tool === 'join' || tool === 'overlay' || tool === 'slideshow') clearComposeResult();
   }, [tool, clearComposeResult]);
 
   useEffect(() => {
@@ -2355,6 +2380,7 @@ export default function VideosPage() {
       slideshow: { slideSecondsPerSlide: setSlideSecondsPerSlide, slideAspect: setSlideAspect, slideCrossfade: setSlideCrossfade },
       'caption-studio': textStyle,
       thumbnail: { thumbTime: setThumbTime },
+      'extend-ending': { holdSec: setExHold, fadeOutSec: (x) => setExFade(String(x)) },
       'mix-audio': { musicVolume: setMxMusicPct, ducking: setMxDucking, leadInSec: setMxLead, tailSec: setMxTail, format: setMxFormat },
       'trim-audio': {
         startSec: (x) => setTaStart(formatClock(x)),
@@ -3092,6 +3118,102 @@ export default function VideosPage() {
               </button>
             </Tooltip>
             {resultForTool === 'convert' && (
+              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
+          </section>
+        )}
+
+        {tool === 'extend-ending' && (
+          <section className="space-y-3">
+            <ToolHeader id="extend-ending" label="Extend ending" onHelp={setHelpTool} getIcon={getIcon} />
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Hold the last picture for a few seconds so the video does not stop dead, and let your music play on and fade out over that time. Choose your video above.
+            </p>
+            <div className="space-y-1 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+              <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Music or audio (recommended)</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Tooltip text="Choose the music or audio file that goes with this video (for example the file you used in Mix audio). It plays from the start, carries on through the held frame, and fades out. It replaces the video's own sound.">
+                  <button
+                    type="button"
+                    onClick={() => exAudioInputRef.current?.click()}
+                    className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    {exAudio ? 'Change audio file' : 'Choose audio file'}
+                  </button>
+                </Tooltip>
+                {exAudio && (
+                  <Tooltip text="Use the video's own sound instead (no audio file).">
+                    <button type="button" onClick={() => setExAudio(null)} className="text-[11px] underline hover:opacity-60 transition-opacity" style={{ color: 'var(--color-muted)' }}>Remove</button>
+                  </Tooltip>
+                )}
+                {exAudio && <span className="text-[11px] truncate max-w-xs" style={{ color: 'var(--color-muted)' }}>{exAudio.name} · {formatBytes(exAudio.size)}</span>}
+                <input
+                  ref={exAudioInputRef}
+                  type="file"
+                  accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac,.aac,.opus"
+                  className="hidden"
+                  onChange={(e) => { setExAudio(e.target.files?.[0] || null); e.target.value = ''; }}
+                />
+              </div>
+              {exAudio && (
+                <Tooltip text="Play the audio to check it is the right file.">
+                  <audio src={exAudioUrl} controls className="w-full" />
+                </Tooltip>
+              )}
+              <p className="text-[11px]" style={{ color: exAudio ? 'var(--color-muted)' : '#b45309' }}>
+                {exAudio
+                  ? 'This audio plays from the start of the video, through the held frame, and fades out. It replaces the video\'s own sound. If it is shorter than the video it repeats smoothly.'
+                  : 'No audio file chosen: the video\'s own sound is kept, but it ended with the video, so it cannot carry on. It will fade out at the end of the video and the held frame will be silent. Choose your music file to have it play through the held frame.'}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Hold the last frame for (seconds)</span>
+                <Tooltip text="How long the final picture stays on screen after the video would have ended. 3 to 8 seconds is usual. If you add a call to action it appears during this time.">
+                  <input type="number" min={1} max={30} step={0.5} value={exHold} onChange={(e) => setExHold(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Music fades out over (seconds)</span>
+                <Tooltip text={exAudio ? 'How long the fade-out lasts, ending exactly when the video ends. Leave empty to fade over exactly the held time. 0 = no fade.' : 'How long the video\'s own sound takes to fade out, ending where the video itself ends. Leave empty to use the held time. 0 = no fade.'}>
+                  <input type="number" min={0} max={60} step={0.5} value={exFade} placeholder={String(exHold)} onChange={(e) => setExFade(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
+              </label>
+            </div>
+            <EndCardToggle
+              enabled={ctaOnExtend}
+              setEnabled={setCtaOnExtend}
+              cta={cta}
+              setCta={setCta}
+              lockTiming
+              label="Show a call to action over the held frame"
+              tip="Puts your closing message (headline, button-style label, web address) over the held frame, fading in while the music fades out."
+            />
+            <Tooltip text="Hold the last frame, carry the music through it with a fade-out, and add the call to action if ticked. Your original files are not changed.">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!requireFile()) return;
+                  const fd = new FormData();
+                  fd.append('video', sourceFile);
+                  if (exAudio) fd.append('audio', exAudio);
+                  fd.append('holdSec', String(exHold || 4));
+                  if (exFade !== '') fd.append('fadeOutSec', String(exFade));
+                  if (ctaOnExtend) {
+                    if (!ctaHasContent(cta)) { addToast('Add a headline, button text or web address for the call to action, or untick it', 'error'); return; }
+                    appendEndCardFields(fd, cta);
+                  }
+                  runFormVideo('extend-ending', fd, { label: 'Extending the ending…', resultFilename: 'extended.mp4', forTool: 'extend-ending' });
+                }}
+                disabled={!ffmpegOk}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Extend ending
+              </button>
+            </Tooltip>
+            {resultForTool === 'extend-ending' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
             )}
           </section>

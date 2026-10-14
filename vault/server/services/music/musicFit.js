@@ -46,16 +46,23 @@ function planLoop(clipS, targetS, crossfadeS = LOOP_CROSSFADE_S) {
   return { copies: Math.max(2, copies), crossfadeS: xf };
 }
 
-/** Fade lengths that always fit, even for very short videos. */
-function fadeTimes(targetS) {
-  const fadeIn = Math.min(FADE_IN_S, targetS / 6);
-  const fadeOut = Math.min(FADE_OUT_S, targetS / 3);
+/**
+ * Fade lengths that always fit, even for very short videos. `override` ({ fadeInS, fadeOutS }) lets a caller choose its own
+ * (0 = none, never longer than half the piece); without it the defaults are used, exactly as before.
+ */
+function fadeTimes(targetS, override = {}) {
+  const pick = (given, fallback, cap) => {
+    const n = given === undefined || given === null || given === '' ? NaN : Number(given);
+    return Number.isFinite(n) ? Math.min(Math.max(0, n), targetS / 2) : Math.min(fallback, cap);
+  };
+  const fadeIn = pick(override.fadeInS, FADE_IN_S, targetS / 6);
+  const fadeOut = pick(override.fadeOutS, FADE_OUT_S, targetS / 3);
   return { fadeIn, fadeOut, fadeOutStart: Math.max(0, targetS - fadeOut) };
 }
 
 /** filter_complex that loops `copies` inputs (all the same clip), trims to length and fades. */
-function buildFitFilter({ copies, crossfadeS, targetS }) {
-  const { fadeIn, fadeOut, fadeOutStart } = fadeTimes(targetS);
+function buildFitFilter({ copies, crossfadeS, targetS, fades }) {
+  const { fadeIn, fadeOut, fadeOutStart } = fadeTimes(targetS, fades);
   const parts = [];
   let last = '[0:a]';
   for (let i = 1; i < copies; i += 1) {
@@ -63,22 +70,26 @@ function buildFitFilter({ copies, crossfadeS, targetS }) {
     parts.push(`${last}[${i}:a]acrossfade=d=${crossfadeS.toFixed(3)}:c1=qsin:c2=qsin${out}`);
     last = out;
   }
+  // A fade of 0 seconds is left out (ffmpeg rejects a zero-length afade).
+  const fadeFilters = [];
+  if (fadeIn > 0) fadeFilters.push(`afade=t=in:st=0:d=${fadeIn.toFixed(3)}`);
+  if (fadeOut > 0) fadeFilters.push(`afade=t=out:st=${fadeOutStart.toFixed(3)}:d=${fadeOut.toFixed(3)}`);
   parts.push(
     `${last}atrim=0:${targetS.toFixed(3)},asetpts=PTS-STARTPTS,`
-    + `afade=t=in:st=0:d=${fadeIn.toFixed(3)},afade=t=out:st=${fadeOutStart.toFixed(3)}:d=${fadeOut.toFixed(3)},`
+    + `${fadeFilters.map((f) => `${f},`).join('')}`
     + `aformat=sample_rates=${SAMPLE_RATE}:channel_layouts=stereo[fit]`
   );
   return parts.join(';');
 }
 
 /** Loop/trim `clipPath` to exactly `targetS` seconds with fade in/out → WAV at `outPath`. */
-async function fitMusicToDuration(clipPath, outPath, targetS) {
+async function fitMusicToDuration(clipPath, outPath, targetS, fades) {
   const probe = await probeVideo(clipPath);
   const { copies, crossfadeS } = planLoop(probe.duration, targetS);
   const inputs = Array.from({ length: copies }, () => ['-i', clipPath]).flat();
   await execFileAsync(FFMPEG, [
     '-y', ...inputs,
-    '-filter_complex', buildFitFilter({ copies, crossfadeS, targetS }),
+    '-filter_complex', buildFitFilter({ copies, crossfadeS, targetS, fades }),
     '-map', '[fit]', '-t', targetS.toFixed(3),
     '-c:a', 'pcm_s16le', outPath,
   ], 300000);

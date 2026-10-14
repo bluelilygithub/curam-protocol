@@ -51,6 +51,7 @@ const { normalizeSrt, srtToPlainText, prepareCaptionSrt, parseSrtLoose } = requi
 const { timeScript, hasTimeMarkers } = require('../services/scriptTiming');
 const voiceIsolation = require('../services/voiceIsolation');
 const audioMix = require('../services/audioMix');
+const extendEndingService = require('../services/extendEnding');
 const { askTutor } = require('../services/videoTutor');
 const { fetchLicensedVideo } = require('../services/videoUrlIntake');
 const { ffmpegRoute } = require('../middleware/ffmpegRoute');
@@ -1151,6 +1152,46 @@ router.get('/isolate-voice/:id/:stem', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// "Extend ending": hold the last frame for X seconds; chosen music carries on through the hold and fades out over it; an optional
+// closing message (Call to action) is laid over the held part so it appears while the music fades. One video out.
+router.post('/extend-ending', upload.fields([{ name: 'video', maxCount: 1 }, { name: 'audio', maxCount: 1 }]), ffmpegRoute('extend-ending', async (req, res) => {
+  const videoFile = req.files?.video?.[0];
+  const audioFile = req.files?.audio?.[0];
+  if (!videoFile?.buffer?.length) return res.status(400).json({ error: 'Choose your video first.' });
+  if (!enforceAggregateUploadSize(res, [videoFile, audioFile])) return;
+  const endCard = endCardRequest(req.body);
+  if (endCard?.error) return res.status(400).json({ error: endCard.error });
+  const options = extendEndingService.normalizeExtendOptions({ holdSec: req.body?.holdSec, fadeOutSec: req.body?.fadeOutSec });
+  const base = path.basename(String(videoFile.originalname || 'video'), path.extname(String(videoFile.originalname || ''))).replace(/[^\w .-]+/g, '_').slice(0, 80) || 'video';
+
+  const buffer = await withTempDir(async (dir) => {
+    const videoPath = await writeUpload(dir, videoFile);
+    let audioPath = null;
+    if (audioFile?.buffer?.length) {
+      const e = path.extname(String(audioFile.originalname || '')).toLowerCase();
+      audioPath = path.join(dir, `ending-audio-in${AUDIO_EXTS.has(e) ? e : '.mp3'}`);
+      await fs.writeFile(audioPath, audioFile.buffer);
+    }
+    const outPath = path.join(dir, 'extended.mp4');
+    let plan;
+    try {
+      plan = await extendEndingService.extendEnding({ videoPath, audioPath, outPath, workDir: dir, options });
+    } catch (err) {
+      if (err.stderr !== undefined) throw err; // an ffmpeg failure: the generic handler words it safely
+      const e = new Error(err.message);
+      e.status = 400;
+      throw e;
+    }
+    // The message goes over the held frame: it is the last `holdSec` seconds of the new video, so "over the end" is exactly that.
+    const finalPath = endCard
+      ? await withEndCardApplied(dir, outPath, { ...endCard.spec, placement: 'over-end', durationSec: Math.min(plan.holdSec, 15) })
+      : outPath;
+    return readOutputFile(finalPath);
+  });
+
+  sendVideoBuffer(res, buffer, `${base}-extended.mp4`);
+}));
 
 // "Mix audio": a voice (foreground) and a piece of music (background) combined into one audio file. The music is repeated with
 // smooth crossfades or trimmed to fit, dips under the voice (ducking) and fades in and out; the result is levelled for speech.

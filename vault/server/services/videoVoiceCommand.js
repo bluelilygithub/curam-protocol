@@ -48,6 +48,13 @@ const TOOL_SCHEMAS = {
       endSec: N('Where the kept part ends, in seconds from the beginning', 0, 86400),
     },
   },
+  'extend-ending': {
+    label: 'Extend ending',
+    fields: {
+      holdSec: N('How many seconds to hold the last frame', 1, 30),
+      fadeOutSec: N('How many seconds the music takes to fade out (0 = no fade)', 0, 60),
+    },
+  },
   'mix-audio': {
     label: 'Mix audio',
     fields: {
