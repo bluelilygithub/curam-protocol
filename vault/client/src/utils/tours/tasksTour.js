@@ -83,18 +83,11 @@ export function startTasksTour(navigate) {
     ],
   });
 
-  // ── Step 2: Quick Capture FAB ─────────────────────────────────────────────
+  // ── Step 2: Quick Capture (keyboard shortcut; the floating + button was removed) ──
   tour.addStep({
     id: 'quick-capture',
     title: 'Quick Capture',
-    text: "The fastest way to capture a task from anywhere in Vault. Also works with Ctrl+Shift+N from any page. Keep it minimal — title, priority, done. Don't over-plan at capture time.",
-    attachTo: { element: '[data-tour="quick-capture-fab"]', on: 'top' },
-    beforeShowPromise() {
-      return new Promise((resolve) => {
-        safeBeforeShow(tour, 'quick-capture', '[data-tour="quick-capture-fab"]');
-        setTimeout(resolve, 200);
-      });
-    },
+    text: "The fastest way to capture a task from anywhere in Vault: press Ctrl+Shift+N on any page (Cmd+Shift+N on a Mac). You can also select text in a chat and choose to create a task from it. Keep it minimal — title, priority, done. Don't over-plan at capture time.",
     when: { show() { injectStepCounter(2); } },
     buttons: [btnBack(), btnNext],
   });

@@ -86,6 +86,16 @@ export default function TutorChat({ currentTool, onOpenTool }) {
   const [busy, setBusy] = useState(false);
   const [turns, setTurns] = useState([]); // { role: 'user', text } | { role: 'assistant', reply } | { role: 'error', text }
   const endRef = useRef(null);
+  // Wider/narrower is remembered in this browser only (a convenience, never needed for the page to work).
+  const [wide, setWide] = useState(() => {
+    try { return localStorage.getItem('vault:video-tutor:wide') === '1'; } catch { return false; }
+  });
+  const toggleWide = () => {
+    setWide((w) => {
+      try { localStorage.setItem('vault:video-tutor:wide', w ? '0' : '1'); } catch { /* storage unavailable */ }
+      return !w;
+    });
+  };
 
   useEffect(() => {
     if (open) endRef.current?.scrollIntoView?.({ block: 'end' });
@@ -133,10 +143,12 @@ export default function TutorChat({ currentTool, onOpenTool }) {
     <div
       role="dialog"
       aria-label="Video Tools tutor"
-      className="fixed bottom-5 right-5 z-40 flex flex-col rounded-2xl border shadow-xl"
+      className="fixed bottom-5 right-5 z-40 flex flex-col rounded-2xl border shadow-xl h-[80vh] transition-[width] duration-200"
       style={{
-        width: 'min(390px, calc(100vw - 2rem))',
-        height: 'min(580px, calc(100dvh - 6rem))',
+        // 80% of the screen height (dvh where supported, the vh class above where not); never taller than the screen.
+        height: '80dvh',
+        maxHeight: 'calc(100dvh - 2.5rem)',
+        width: wide ? 'min(700px, calc(100vw - 2rem))' : 'min(390px, calc(100vw - 2rem))',
         background: 'var(--color-surface)',
         borderColor: 'var(--color-border)',
       }}
@@ -147,6 +159,18 @@ export default function TutorChat({ currentTool, onOpenTool }) {
           <p className="text-sm font-semibold leading-tight" style={{ color: 'var(--color-text)' }}>Video Tools tutor</p>
           <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>Tell me what you want to make</p>
         </div>
+        <Tooltip text={wide ? 'Make the tutor narrower again.' : 'Make the tutor wider, so there is more room to read and to speak into.'}>
+          <button
+            type="button"
+            onClick={toggleWide}
+            aria-label={wide ? 'Make the tutor narrower' : 'Make the tutor wider'}
+            aria-pressed={wide}
+            className="hover:opacity-60 transition-opacity duration-200"
+            style={{ color: 'var(--color-muted)' }}
+          >
+            {getIcon(wide ? 'minimize-2' : 'maximize-2', { size: 16 })}
+          </button>
+        </Tooltip>
         {turns.length > 0 && (
           <Tooltip text="Clear this conversation and start again.">
             <button type="button" onClick={() => setTurns([])} className="text-[11px] hover:opacity-60 transition-opacity" style={{ color: 'var(--color-muted)' }}>Clear</button>
@@ -202,13 +226,17 @@ export default function TutorChat({ currentTool, onOpenTool }) {
         <div ref={endRef} />
       </div>
 
-      <div className="p-3 border-t flex items-center gap-2" style={{ borderColor: 'var(--color-border)' }}>
+      <div className="p-3 border-t flex items-end gap-2" style={{ borderColor: 'var(--color-border)' }}>
         <div className="flex-1 min-w-0">
+          {/* A taller, multi-line box: what you say is added to the end of what is already there, and you can see all of it. */}
           <VoiceInput
+            type="textarea"
+            append
+            rows={4}
             value={input}
             onChange={setInput}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder="Type or tap the mic: what do you want to do?"
+            placeholder="Type or tap the mic: what do you want to do? (Enter sends, Shift+Enter adds a line)"
             label="Ask the tutor"
             className="!text-xs"
           />

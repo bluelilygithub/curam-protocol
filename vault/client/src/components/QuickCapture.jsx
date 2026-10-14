@@ -63,18 +63,8 @@ export default function QuickCapture() {
 
   return (
     <>
-      {/* FAB */}
-      {!open && (
-        <button
-          data-tour="quick-capture-fab"
-          onClick={() => setOpen(true)}
-          className="fixed bottom-6 right-6 z-40 w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-105 active:scale-95"
-          style={{ background: 'var(--color-primary)', color: '#fff' }}
-          title="Quick capture task (Ctrl+Shift+N)"
-        >
-          {getIcon('plus', { size: 22 })}
-        </button>
-      )}
+      {/* No floating + button any more (it sat over other floating buttons such as the Video Tools tutor).
+          Quick Capture opens with Ctrl+Shift+N, or from "create task" actions elsewhere (vault:open-quick-capture). */}
 
       {/* Modal */}
       {open && (

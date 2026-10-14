@@ -119,6 +119,8 @@ const semanticMap = {
   gauge: { lucide: 'Gauge' },
   'line-chart': { lucide: 'LineChart' },
   'graduation-cap': { lucide: 'GraduationCap' },
+  'maximize-2': { lucide: 'Maximize2' },
+  'minimize-2': { lucide: 'Minimize2' },
   'clipboard-list': { lucide: 'ClipboardList' },
   'heart-pulse': { lucide: 'HeartPulse' },
   'layers': { lucide: 'Layers' },

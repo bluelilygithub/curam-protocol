@@ -40,7 +40,7 @@ Cross-cutting: **ProcessingModal** for operations >2 s; **Use in another tool** 
 
 ## Tutor (the mini chat)
 
-A graduation-cap button at the bottom right of Video Tools (`client/src/pages/videos/TutorChat.jsx`) opens a small chat. Type, or use the microphone, what you want to make ("put my script on a video as captions"). The tutor checks the tools that really exist and answers with a **verdict** and numbered **steps**, each step naming one tool with an **Open <tool> →** button that opens it in the page (the chat stays open):
+The chat panel fills 80% of the screen height and has a **wider / narrower** icon in its header (remembered in the browser); its question box is a tall multi-line box (Enter sends, Shift+Enter adds a line), so a spoken question is visible in full. A graduation-cap button at the bottom right of Video Tools (`client/src/pages/videos/TutorChat.jsx`) opens a small chat. Type, or use the microphone, what you want to make ("put my script on a video as captions"). The tutor checks the tools that really exist and answers with a **verdict** and numbered **steps**, each step naming one tool with an **Open <tool> →** button that opens it in the page (the chat stays open):
 
 | Verdict | Meaning | What the person sees |
 |---|---|---|
