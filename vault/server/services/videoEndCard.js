@@ -42,7 +42,12 @@ function normalizeEndCard(input = {}) {
     return { error: 'Add at least a headline, button text or web address' };
   }
   const durationSec = clamp(Number(input.durationSec) || 4, MIN_DURATION_SEC, MAX_DURATION_SEC);
-  const fadeSec = clamp(input.fadeSec === '' || input.fadeSec == null ? 0.5 : Number(input.fadeSec) || 0, 0, durationSec / 2);
+  const placement = PLACEMENTS.includes(input.placement) ? input.placement : 'after';
+  // A separate closing screen fades in over at most half its time; a message laid over the picture may take the whole time.
+  const fadeSec = clamp(input.fadeSec === '' || input.fadeSec == null ? 0.5 : Number(input.fadeSec) || 0, 0, placement === 'after' ? durationSec / 2 : durationSec);
+  // How much the picture is darkened (tinted with bgColor) behind a message laid over it: 0 = not at all, 100 = solid.
+  const dimRaw = input.dimPct === '' || input.dimPct == null ? 60 : Number(input.dimPct);
+  const dimPct = clamp(Number.isFinite(dimRaw) ? dimRaw : 60, 0, 100);
   const bgColor = cleanHex(input.bgColor, '111111');
   const buttonColor = cleanHex(input.buttonColor, 'CC785C');
   return {
@@ -58,8 +63,28 @@ function normalizeEndCard(input = {}) {
     buttonTextColor: readableOn(buttonColor),
     fontFamily: String(input.fontFamily || 'Roboto'),
     fontWeight: input.fontWeight === 'normal' ? 'normal' : 'bold',
-    placement: PLACEMENTS.includes(input.placement) ? input.placement : 'after',
+    placement,
+    dimPct,
   };
+}
+
+/**
+ * The filter graph for a message laid OVER the picture (placements 'last-frame' and 'over-end'). Pure, so it is unit tested.
+ *  - dim = 0           no tint: the picture keeps all its colour.
+ *  - fadeSec = 0       the tint switches on at once (drawbox).
+ *  - otherwise         the tint fades in over fadeSec: a colour layer whose opacity ramps up, laid over the picture.
+ * `draws` are the text drawtext filters; `enable` is the ":enable=..." clause that holds the text/tint until startAt.
+ */
+function overlayVideoGraph({ w, h, fps, pad = '', startAt, fadeSec, dimPct, bgColor, draws, enable = '' }) {
+  const base = `[0:v]scale=${w}:${h},setsar=1,fps=${fps}${pad}`;
+  const tail = `${draws.length ? `${draws.join(',')},` : ''}format=yuv420p[v]`;
+  const dim = Math.max(0, Math.min(1, Number(dimPct) / 100));
+  if (!(dim > 0)) return `${base},${tail}`;
+  if (!(fadeSec > 0)) return `${base},drawbox=x=0:y=0:w=iw:h=ih:color=0x${bgColor}@${dim.toFixed(2)}:t=fill${enable},${tail}`;
+  return `${base}[base];`
+    + `color=c=0x${bgColor}:s=${w}x${h}:r=${fps},format=rgba,colorchannelmixer=aa=${dim.toFixed(2)},`
+    + `fade=t=in:st=${Number(startAt).toFixed(3)}:d=${Number(fadeSec).toFixed(3)}:alpha=1[tint];`
+    + `[base][tint]overlay=shortest=1,${tail}`;
 }
 
 /**
@@ -118,7 +143,7 @@ async function appendEndCard(inputPath, outputPath, rawSpec, workDir) {
   const srcDur = probe.duration || 0;
   const D = overlay && spec.placement === 'over-end' ? Math.min(spec.durationSec, Math.max(0.5, srcDur)) : spec.durationSec;
   const startAt = spec.placement === 'last-frame' ? srcDur : Math.max(0, srcDur - D);
-  const fadeSec = Math.min(spec.fadeSec, D / 2);
+  const fadeSec = Math.min(spec.fadeSec, overlay ? D : D / 2);
   const enable = overlay ? `:enable='gte(t,${startAt.toFixed(3)})'` : '';
   const alphaExpr = overlay && fadeSec > 0 ? `:alpha='min(1,max(0,(t-${startAt.toFixed(3)})/${fadeSec}))'` : '';
 
@@ -140,22 +165,29 @@ async function appendEndCard(inputPath, outputPath, rawSpec, workDir) {
   }
 
   if (overlay) {
-    // Dim the picture behind the text so it stays readable, then draw the text on top.
-    const dim = `drawbox=x=0:y=0:w=iw:h=ih:color=0x${spec.bgColor}@0.6:t=fill${enable}`;
+    // Tint the picture behind the text (colour = bgColor, strength = dimPct, fading in over fadeSec) so the text stays readable.
     const pad = spec.placement === 'last-frame' ? `,tpad=stop_mode=clone:stop_duration=${D}` : '';
-    const vf = `[0:v]scale=${w}:${h},setsar=1,fps=${fps}${pad},${dim},${draws.join(',')},format=yuv420p[v]`;
-    const oargs = ['-y', '-i', inputPath];
-    let filterO = vf;
-    if (probe.hasAudio && spec.placement === 'last-frame') {
-      filterO += `;[0:a]aresample=${AUDIO_RATE},aformat=channel_layouts=stereo,apad=pad_dur=${D}[a]`;
+    const buildArgs = (fade) => {
+      let filterO = overlayVideoGraph({ w, h, fps, pad, startAt, fadeSec: fade, dimPct: spec.dimPct, bgColor: spec.bgColor, draws, enable });
+      if (probe.hasAudio && spec.placement === 'last-frame') {
+        filterO += `;[0:a]aresample=${AUDIO_RATE},aformat=channel_layouts=stereo,apad=pad_dur=${D}[a]`;
+      }
+      const oargs = ['-y', '-i', inputPath, '-filter_complex', filterO, '-map', '[v]'];
+      if (probe.hasAudio) {
+        oargs.push('-map', spec.placement === 'last-frame' ? '[a]' : '0:a', '-c:a', 'aac', '-b:a', '160k');
+      }
+      if (spec.placement === 'last-frame' && srcDur) oargs.push('-t', String(srcDur + D));
+      oargs.push('-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outputPath);
+      return oargs;
+    };
+    try {
+      await execFileAsync(FFMPEG, buildArgs(fadeSec));
+    } catch (err) {
+      // The smooth tint fade is the only part that needs an unusual filter chain. If this machine's ffmpeg rejects it, still
+      // deliver the video with the tint switching on at once rather than failing the whole job.
+      if (!(fadeSec > 0 && spec.dimPct > 0)) throw err;
+      await execFileAsync(FFMPEG, buildArgs(0));
     }
-    oargs.push('-filter_complex', filterO, '-map', '[v]');
-    if (probe.hasAudio) {
-      oargs.push('-map', spec.placement === 'last-frame' ? '[a]' : '0:a', '-c:a', 'aac', '-b:a', '160k');
-    }
-    if (spec.placement === 'last-frame' && srcDur) oargs.push('-t', String(srcDur + D));
-    oargs.push('-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outputPath);
-    await execFileAsync(FFMPEG, oargs);
     return;
   }
 
@@ -179,5 +211,5 @@ async function appendEndCard(inputPath, outputPath, rawSpec, workDir) {
 }
 
 module.exports = {
-  appendEndCard, normalizeEndCard, layoutEndCard, PLACEMENTS, MIN_DURATION_SEC, MAX_DURATION_SEC,
+  appendEndCard, normalizeEndCard, layoutEndCard, overlayVideoGraph, PLACEMENTS, MIN_DURATION_SEC, MAX_DURATION_SEC,
 };

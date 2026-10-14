@@ -431,6 +431,9 @@ function appendEndCardFields(fd, c) {
 
 function EndCardFields({ cta, setCta, lockTiming = false }) {
   const set = (key) => (value) => setCta((prev) => ({ ...prev, [key]: value }));
+  // When the message sits over the picture (not a separate closing screen), the picture is tinted behind it. That tint's
+  // colour, strength and fade-in time are the person's to set.
+  const overPicture = lockTiming || (cta.placement || 'after') !== 'after';
   return (
     <div className="space-y-3">
       <Tooltip text="The main message, e.g. 'Book your free consult'.">
@@ -450,7 +453,7 @@ function EndCardFields({ cta, setCta, lockTiming = false }) {
       {!lockTiming && (
       <label className="block space-y-1">
         <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Where it appears</span>
-        <Tooltip text="Separate closing screen after the video, over a frozen last frame (video gets longer), or over the final seconds of the video (same length).">
+        <Tooltip text="Separate closing screen after the video, over a frozen last frame (video gets longer), or over the final seconds of the video (same length). When over the picture you can set how dark the tint is and how slowly it fades in.">
           <select value={cta.placement || 'after'} onChange={(e) => set('placement')(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
             <option value="after">Closing screen after the video</option>
             <option value="last-frame">Over a frozen last frame</option>
@@ -460,7 +463,7 @@ function EndCardFields({ cta, setCta, lockTiming = false }) {
       </label>
       )}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[['Background', 'bgColor', 'Closing screen colour (or the tint dimming the picture when shown over the video).'], ['Text', 'textColor', 'Colour of the headline and lines.'], ['Button', 'buttonColor', 'Colour behind the button text.']].map(([lbl, key, tip]) => (
+        {[[overPicture ? 'Tint colour' : 'Background', 'bgColor', overPicture ? 'The colour laid over the picture behind your message. A dark colour makes white text easy to read; a colour from your brand gives a tinted look. Set "Darken the picture" to 0 for no tint at all.' : 'Closing screen colour.'], ['Text', 'textColor', 'Colour of the headline and lines.'], ['Button', 'buttonColor', 'Colour behind the button text.']].map(([lbl, key, tip]) => (
           <label key={key} className="block space-y-1">
             <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{lbl}</span>
             <Tooltip text={tip}>
@@ -468,6 +471,22 @@ function EndCardFields({ cta, setCta, lockTiming = false }) {
             </Tooltip>
           </label>
         ))}
+        {overPicture && (
+          <>
+            <label className="block space-y-1">
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Darken the picture (%)</span>
+              <Tooltip text="How strongly the tint colour covers the picture behind your message. 0 = no tint, so the picture keeps all its colour. 60 is the usual. 100 = the picture is hidden behind the colour.">
+                <input type="number" min={0} max={100} step={5} value={cta.dimPct ?? 60} onChange={(e) => set('dimPct')(e.target.value === '' ? '' : Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              </Tooltip>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Fade-in time (seconds)</span>
+              <Tooltip text="How slowly the tint and your message come in. 0 = instant. 0.5 is quick; 3 or more is a slow, gentle change that can last as long as the held time. It starts when the message starts.">
+                <input type="number" min={0} max={15} step={0.5} value={cta.fadeSec ?? 0.5} onChange={(e) => set('fadeSec')(e.target.value === '' ? '' : Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              </Tooltip>
+            </label>
+          </>
+        )}
         {!lockTiming && (
         <label className="block space-y-1">
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Seconds on screen</span>
