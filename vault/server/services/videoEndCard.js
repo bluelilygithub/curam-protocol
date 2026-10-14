@@ -118,6 +118,30 @@ function layoutEndCard(spec, w, h) {
 }
 
 /**
+ * The drawtext filters for a card's text blocks (headline, supporting line, button, web address). `enable` / `alphaExpr` are the
+ * ":enable=..." and ":alpha=..." clauses that decide when the text shows and how it fades. `prefix` keeps the temporary text
+ * files of two different cards (opening and closing) apart.
+ */
+async function cardDrawFilters({ spec, blocks, fontfile, workDir, enable = '', alphaExpr = '', prefix = 'endcard' }) {
+  const draws = [];
+  for (let i = 0; i < blocks.length; i += 1) {
+    const b = blocks[i];
+    const textPath = path.join(workDir, `${prefix}-${i}.txt`);
+    await fs.writeFile(textPath, b.text, 'utf8');
+    const color = b.kind === 'button' ? spec.buttonTextColor : spec.textColor;
+    const colorAlpha = b.kind === 'url' && !alphaExpr ? '@0.85' : '';
+    let d = `drawtext=fontfile=${fontfile}:textfile=${escapeFilterPath(textPath)}:expansion=none`
+      + `:fontsize=${b.size}:fontcolor=0x${color}${colorAlpha}:line_spacing=${Math.round(b.size * 0.25)}`
+      + `:x=(w-text_w)/2:y=${b.y}${enable}${alphaExpr}`;
+    if (b.kind === 'button') {
+      d += `:box=1:boxcolor=0x${spec.buttonColor}:boxborderw=${b.pad}`;
+    }
+    draws.push(d);
+  }
+  return draws;
+}
+
+/**
  * Append an end card (call to action) to the end of a video. The card is a solid-colour
  * screen at the source's resolution and frame rate, with centred headline, subline, a
  * button-style label and a web address; it fades in, and the source audio (if any) is
@@ -147,22 +171,8 @@ async function appendEndCard(inputPath, outputPath, rawSpec, workDir) {
   const enable = overlay ? `:enable='gte(t,${startAt.toFixed(3)})'` : '';
   const alphaExpr = overlay && fadeSec > 0 ? `:alpha='min(1,max(0,(t-${startAt.toFixed(3)})/${fadeSec}))'` : '';
 
-  const draws = [];
   const blocks = layoutEndCard(spec, w, h);
-  for (let i = 0; i < blocks.length; i += 1) {
-    const b = blocks[i];
-    const textPath = path.join(workDir, `endcard-${i}.txt`);
-    await fs.writeFile(textPath, b.text, 'utf8');
-    const color = b.kind === 'button' ? spec.buttonTextColor : spec.textColor;
-    const colorAlpha = b.kind === 'url' && !alphaExpr ? '@0.85' : '';
-    let d = `drawtext=fontfile=${fontfile}:textfile=${escapeFilterPath(textPath)}:expansion=none`
-      + `:fontsize=${b.size}:fontcolor=0x${color}${colorAlpha}:line_spacing=${Math.round(b.size * 0.25)}`
-      + `:x=(w-text_w)/2:y=${b.y}${enable}${alphaExpr}`;
-    if (b.kind === 'button') {
-      d += `:box=1:boxcolor=0x${spec.buttonColor}:boxborderw=${b.pad}`;
-    }
-    draws.push(d);
-  }
+  const draws = await cardDrawFilters({ spec, blocks, fontfile, workDir, enable, alphaExpr });
 
   if (overlay) {
     // Tint the picture behind the text (colour = bgColor, strength = dimPct, fading in over fadeSec) so the text stays readable.
@@ -210,6 +220,65 @@ async function appendEndCard(inputPath, outputPath, rawSpec, workDir) {
   await execFileAsync(FFMPEG, args);
 }
 
+/**
+ * Filter graph for the OPENING title: the message and tint are fully there from the very first frame, and fade away over
+ * the last `fadeSec` of the held time, ending exactly as the video starts to move. Pure, so it is unit tested.
+ *  - dimPct = 0    no tint: the picture keeps all its colour.
+ *  - fadeSec = 0   tint and text stay until the hold ends, then are gone at once.
+ *  - otherwise     a colour layer whose opacity ramps down to nothing over the last fadeSec of the hold.
+ */
+function introOverlayGraph({ w, h, fps, holdSec, fadeSec, dimPct, bgColor, draws, enable = '' }) {
+  const base = `[0:v]scale=${w}:${h},setsar=1,fps=${fps}`;
+  const tail = `${draws.length ? `${draws.join(',')},` : ''}format=yuv420p[v]`;
+  const dim = Math.max(0, Math.min(1, Number(dimPct) / 100));
+  if (!(dim > 0)) return `${base},${tail}`;
+  if (!(fadeSec > 0)) return `${base},drawbox=x=0:y=0:w=iw:h=ih:color=0x${bgColor}@${dim.toFixed(2)}:t=fill${enable},${tail}`;
+  return `${base}[base];`
+    + `color=c=0x${bgColor}:s=${w}x${h}:r=${fps},format=rgba,colorchannelmixer=aa=${dim.toFixed(2)},`
+    + `fade=t=out:st=${Math.max(0, holdSec - fadeSec).toFixed(3)}:d=${Number(fadeSec).toFixed(3)}:alpha=1[tint];`
+    + `[base][tint]overlay=shortest=1,${tail}`;
+}
+
+/**
+ * Lay an opening title over the first `holdSec` seconds of a video (the held first frame made by Extend ending). Picture and
+ * sound are otherwise untouched: the sound is copied, not re-encoded.
+ */
+async function applyIntroCard(inputPath, outputPath, rawSpec, holdSec, workDir) {
+  const spec = normalizeEndCard({ ...rawSpec, placement: 'over-end' });
+  if (spec.error) throw new Error(spec.error);
+  const probe = await probeVideo(inputPath);
+  if (!probe.width || !probe.height) throw new Error('Could not read the video size');
+  const w = probe.width - (probe.width % 2);
+  const h = probe.height - (probe.height % 2);
+  const fpsParts = String(probe.fps || '30/1').split('/').map(Number);
+  const fps = clamp(fpsParts[1] > 0 ? fpsParts[0] / fpsParts[1] : (fpsParts[0] || 30), 1, 60);
+
+  const H = clamp(Number(holdSec) || 3, 1, 15);
+  const fadeSec = Math.min(spec.fadeSec, H);
+  const enable = `:enable='lte(t,${H.toFixed(3)})'`;
+  const alphaExpr = fadeSec > 0 ? `:alpha='min(1,max(0,(${H.toFixed(3)}-t)/${fadeSec}))'` : '';
+
+  const fontfile = escapeFilterPath(await writeFontToDir(spec.fontFamily, spec.fontWeight, workDir));
+  const blocks = layoutEndCard(spec, w, h);
+  const draws = await cardDrawFilters({ spec, blocks, fontfile, workDir, enable, alphaExpr, prefix: 'introcard' });
+
+  const buildArgs = (fade) => {
+    const graph = introOverlayGraph({ w, h, fps, holdSec: H, fadeSec: fade, dimPct: spec.dimPct, bgColor: spec.bgColor, draws, enable });
+    const args = ['-y', '-i', inputPath, '-filter_complex', graph, '-map', '[v]'];
+    if (probe.hasAudio) args.push('-map', '0:a', '-c:a', 'copy');
+    args.push('-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outputPath);
+    return args;
+  };
+  try {
+    await execFileAsync(FFMPEG, buildArgs(fadeSec));
+  } catch (err) {
+    // As for the closing message: only the smooth tint fade needs an unusual filter chain, so if it is rejected still deliver the
+    // video with the tint ending at once rather than failing.
+    if (!(fadeSec > 0 && spec.dimPct > 0)) throw err;
+    await execFileAsync(FFMPEG, buildArgs(0));
+  }
+}
+
 module.exports = {
-  appendEndCard, normalizeEndCard, layoutEndCard, overlayVideoGraph, PLACEMENTS, MIN_DURATION_SEC, MAX_DURATION_SEC,
+  appendEndCard, applyIntroCard, normalizeEndCard, layoutEndCard, overlayVideoGraph, introOverlayGraph, cardDrawFilters, PLACEMENTS, MIN_DURATION_SEC, MAX_DURATION_SEC,
 };

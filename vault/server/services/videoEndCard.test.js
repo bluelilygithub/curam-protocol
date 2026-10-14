@@ -59,4 +59,20 @@ assert.match(overlayVideoGraph({ ...common, fadeSec: 1, dimPct: 50, pad: ',tpad=
 // every graph ends in the [v] label the caller maps
 for (const f of [3, 0]) for (const d of [0, 60]) assert.ok(overlayVideoGraph({ ...common, fadeSec: f, dimPct: d }).endsWith('[v]'));
 
+// ---- OPENING title: there from the very first frame, fading away as the video starts ----
+const { introOverlayGraph } = require('./videoEndCard');
+const idraws = ["drawtext=text='Title'"];
+const icommon = { w: 1280, h: 720, fps: 30, holdSec: 4, bgColor: '112233', draws: idraws, enable: ":enable='lte(t,4.000)'" };
+let ig = introOverlayGraph({ ...icommon, fadeSec: 1, dimPct: 60 });
+assert.match(ig, /color=c=0x112233:s=1280x720:r=30,format=rgba,colorchannelmixer=aa=0\.60/);
+assert.match(ig, /fade=t=out:st=3\.000:d=1\.000:alpha=1\[tint\]/, 'tint fades OUT over the last second of the hold, ending as the video starts');
+assert.ok(!/fade=t=in/.test(ig), 'it does not fade in: the title is there from the first frame');
+assert.match(ig, /\[base\]\[tint\]overlay=shortest=1,drawtext/);
+ig = introOverlayGraph({ ...icommon, fadeSec: 0, dimPct: 60 });
+assert.match(ig, /drawbox=.*color=0x112233@0\.60:t=fill:enable='lte\(t,4\.000\)'/, 'no fade: tint and title stay until the hold ends');
+ig = introOverlayGraph({ ...icommon, fadeSec: 1, dimPct: 0 });
+assert.ok(!/drawbox|colorchannelmixer|overlay=/.test(ig), 'no tint: the first picture keeps its colour');
+assert.match(ig, /^\[0:v\]scale=1280:720,setsar=1,fps=30,drawtext/);
+for (const f of [1, 0]) for (const d of [0, 60]) assert.ok(introOverlayGraph({ ...icommon, fadeSec: f, dimPct: d }).endsWith('[v]'));
+
 console.log('videoEndCard tests passed');

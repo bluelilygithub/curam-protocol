@@ -53,6 +53,7 @@ const voiceIsolation = require('../services/voiceIsolation');
 const audioMix = require('../services/audioMix');
 const extendEndingService = require('../services/extendEnding');
 const { askTutor } = require('../services/videoTutor');
+const { applyIntroCard } = require('../services/videoEndCard');
 const { fetchLicensedVideo } = require('../services/videoUrlIntake');
 const { ffmpegRoute } = require('../middleware/ffmpegRoute');
 const { planSlideshow, normalizeSlideshowPlan } = require('../services/videoSlideshowPlan');
@@ -727,6 +728,16 @@ function endCardRequest(body) {
   return checked.error ? { error: checked.error } : { spec };
 }
 
+// The opening title on Intro and ending: opt-in via `intro=true` plus `introSpec` (the same fields as the closing message). Returns
+// null (not requested), { error }, or { spec }.
+function introCardRequest(body) {
+  if (!(body?.intro === 'true' || body?.intro === true)) return null;
+  const spec = parseJsonBodyField(body.introSpec);
+  if (!spec) return { error: 'Add the opening title text first.' };
+  const checked = normalizeEndCard({ ...spec, placement: 'over-end' });
+  return checked.error ? { error: checked.error } : { spec };
+}
+
 // Re-encode `outputPath` with the end card appended and return the new path.
 async function withEndCardApplied(dir, outputPath, spec) {
   const cardPath = path.join(dir, 'with-end-card.mp4');
@@ -1164,8 +1175,13 @@ router.post('/extend-ending', upload.fields([{ name: 'video', maxCount: 1 }, { n
   if (!enforceAggregateUploadSize(res, [videoFile, musicFile, voiceFile])) return;
   const endCard = endCardRequest(req.body);
   if (endCard?.error) return res.status(400).json({ error: endCard.error });
+  const introCard = introCardRequest(req.body);
+  if (introCard?.error) return res.status(400).json({ error: introCard.error });
+  // An opening title needs something to sit on: at least a second of held first frame (3 if none was set).
+  const askedIntro = Number(req.body?.introHoldSec);
+  const introSec = introCard ? (askedIntro >= 1 ? askedIntro : 3) : (Number.isFinite(askedIntro) ? askedIntro : 0);
   const options = extendEndingService.normalizeExtendOptions({
-    holdSec: req.body?.holdSec, fadeOutSec: req.body?.fadeOutSec, musicVolume: req.body?.musicVolume, ducking: req.body?.ducking,
+    holdSec: req.body?.holdSec, introSec, fadeOutSec: req.body?.fadeOutSec, musicVolume: req.body?.musicVolume, ducking: req.body?.ducking,
   });
   const base = path.basename(String(videoFile.originalname || 'video'), path.extname(String(videoFile.originalname || ''))).replace(/[^\w .-]+/g, '_').slice(0, 80) || 'video';
 
@@ -1190,10 +1206,16 @@ router.post('/extend-ending', upload.fields([{ name: 'video', maxCount: 1 }, { n
       e.status = 400;
       throw e;
     }
-    // The message goes over the held frame: it is the last `holdSec` seconds of the new video, so "over the end" is exactly that.
-    const finalPath = endCard
+    // The closing message goes over the held last frame: it is the last `holdSec` seconds of the new video, so "over the end" is exactly that.
+    let finalPath = endCard
       ? await withEndCardApplied(dir, outPath, { ...endCard.spec, placement: 'over-end', durationSec: Math.min(plan.holdSec, 15) })
       : outPath;
+    // The opening title goes over the held first frame: the first `introSec` seconds. Its tint and text fade away as the video starts.
+    if (introCard) {
+      const introPath = path.join(dir, 'with-intro-title.mp4');
+      await applyIntroCard(finalPath, introPath, { ...introCard.spec, placement: 'over-end' }, plan.introSec, dir);
+      finalPath = introPath;
+    }
     return readOutputFile(finalPath);
   });
 

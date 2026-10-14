@@ -1,5 +1,9 @@
 'use strict';
 
+// Intro and ending (the tool is still called extend-ending in the API): hold the FIRST frame (so an opening title can sit on it) and
+// the LAST frame, with the music carrying on through both and fading out at the end. The opening title itself is laid on afterwards
+// by videoEndCard.applyIntroCard; the closing one by appendEndCard.
+//
 // Extend ending: hold the last frame of a video for a few seconds so it does not stop dead on its final picture, and let the
 // music carry on through that held time, fading out over it. An optional closing message (the Call to action) is then laid over
 // the held part by the route, using the existing end-card code, so the message appears while the music fades.
@@ -24,6 +28,7 @@ const { buildAudioMixFilter } = require('./audioMix');
 
 const MIN_HOLD = 1;
 const MAX_HOLD = 30;
+const MAX_INTRO = 15;
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 const num = (v, fallback) => (v === '' || v === null || v === undefined || !Number.isFinite(Number(v)) ? fallback : Number(v));
 
@@ -31,6 +36,7 @@ function normalizeExtendOptions(raw = {}) {
   const holdSec = clamp(num(raw.holdSec, 4), MIN_HOLD, MAX_HOLD);
   return {
     holdSec,
+    introSec: clamp(num(raw.introSec, 0), 0, MAX_INTRO),         // how long the first frame is held before the video moves (0 = none)
     // By default the music fades over exactly the held time.
     fadeOutSec: clamp(num(raw.fadeOutSec, holdSec), 0, 60),
     musicVolume: clamp(num(raw.musicVolume, 0.3), 0.02, 1.5),    // against the voice, when both are given
@@ -44,7 +50,7 @@ function normalizeExtendOptions(raw = {}) {
  */
 function planExtend({ srcSec, hasVideoAudio, hasMusic = false, hasVoice = false, options }) {
   const opts = normalizeExtendOptions(options);
-  const total = srcSec + opts.holdSec;
+  const total = opts.introSec + srcSec + opts.holdSec;
   let audio = 'none';
   if (hasMusic && hasVoice) audio = 'mix';
   else if (hasMusic) audio = 'music';
@@ -55,7 +61,7 @@ function planExtend({ srcSec, hasVideoAudio, hasMusic = false, hasVoice = false,
   let fadeOutSec = 0;
   if (audio === 'mix' || audio === 'music') fadeOutSec = clamp(opts.fadeOutSec, 0, total / 2);
   else if (audio === 'own') fadeOutSec = clamp(opts.fadeOutSec, 0, srcSec);
-  return { holdSec: opts.holdSec, srcSec, total, audio, fadeOutSec, musicVolume: opts.musicVolume, ducking: opts.ducking };
+  return { holdSec: opts.holdSec, introSec: opts.introSec, srcSec, total, audio, fadeOutSec, musicVolume: opts.musicVolume, ducking: opts.ducking };
 }
 
 /**
@@ -70,20 +76,27 @@ function buildExtendArgs(videoPath, files, outPath, plan) {
   if (music && (plan.audio === 'music' || plan.audio === 'mix')) { idx.music = args.filter((x) => x === '-i').length; args.push('-i', music); }
   if (voice && (plan.audio === 'voice' || plan.audio === 'mix')) { idx.voice = args.filter((x) => x === '-i').length; args.push('-i', voice); }
 
-  const filters = [`[0:v]tpad=stop_mode=clone:stop_duration=${plan.holdSec.toFixed(3)},format=yuv420p[v]`];
+  // Hold the first frame (intro) and the last frame (ending): the picture is frozen at the start and at the end.
+  const holds = [];
+  if (plan.introSec > 0) holds.push(`start_mode=clone:start_duration=${plan.introSec.toFixed(3)}`);
+  holds.push(`stop_mode=clone:stop_duration=${plan.holdSec.toFixed(3)}`);
+  const filters = [`[0:v]tpad=${holds.join(':')},format=yuv420p[v]`];
+  // Anything that belongs to the video itself (a voice, the video's own sound) starts when the video starts moving, after the
+  // opening hold. The music starts at 0 so the title has music under it.
+  const delay = plan.introSec > 0 ? `adelay=${Math.round(plan.introSec * 1000)}:all=1,` : '';
   let audioMap = null;
   if (plan.audio === 'own') {
-    const fade = plan.fadeOutSec > 0 ? `afade=t=out:st=${(plan.srcSec - plan.fadeOutSec).toFixed(3)}:d=${plan.fadeOutSec.toFixed(3)},` : '';
-    filters.push(`[0:a]aformat=sample_rates=48000:channel_layouts=stereo,${fade}apad=whole_dur=${total}[a]`);
+    const fade = plan.fadeOutSec > 0 ? `afade=t=out:st=${(plan.introSec + plan.srcSec - plan.fadeOutSec).toFixed(3)}:d=${plan.fadeOutSec.toFixed(3)},` : '';
+    filters.push(`[0:a]aformat=sample_rates=48000:channel_layouts=stereo,${delay}${fade}apad=whole_dur=${total}[a]`);
     audioMap = '[a]';
   } else if (plan.audio === 'voice') {
-    // Plays once from the start; whatever remains of the piece is silence. Never repeated.
-    filters.push(`[${idx.voice}:a]aformat=sample_rates=48000:channel_layouts=stereo,apad=whole_dur=${total}[a]`);
+    // Plays once from the start of the video; whatever remains of the piece is silence. Never repeated.
+    filters.push(`[${idx.voice}:a]aformat=sample_rates=48000:channel_layouts=stereo,${delay}apad=whole_dur=${total}[a]`);
     audioMap = '[a]';
   } else if (plan.audio === 'mix') {
-    // Same mix as Mix audio: voice once, music ducked under it, music carrying on (already faded out) after the voice stops.
+    // Same mix as Mix audio: voice once (after the opening hold), music ducked under it, music carrying on (already faded out) after the voice stops.
     filters.push(buildAudioMixFilter(
-      { musicVolume: plan.musicVolume, voiceVolume: 1, ducking: plan.ducking, leadInSec: 0 },
+      { musicVolume: plan.musicVolume, voiceVolume: 1, ducking: plan.ducking, leadInSec: plan.introSec },
       plan.total,
       { music: idx.music, voice: idx.voice },
     ));
@@ -118,4 +131,4 @@ async function extendEnding({ videoPath, musicPath = null, voicePath = null, out
   return plan;
 }
 
-module.exports = { normalizeExtendOptions, planExtend, buildExtendArgs, extendEnding, MIN_HOLD, MAX_HOLD };
+module.exports = { normalizeExtendOptions, planExtend, buildExtendArgs, extendEnding, MIN_HOLD, MAX_HOLD, MAX_INTRO };

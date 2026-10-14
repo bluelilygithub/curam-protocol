@@ -8,7 +8,10 @@ const inputsOf = (args) => args.reduce((acc, x, i) => (x === '-i' ? [...acc, arg
 const plan = (o) => planExtend({ srcSec: 30, hasVideoAudio: true, hasMusic: false, hasVoice: false, options: { holdSec: 5 }, ...o });
 
 // ---- options ----
-assert.deepStrictEqual(normalizeExtendOptions({}), { holdSec: 4, fadeOutSec: 4, musicVolume: 0.3, ducking: 'light' }, 'the music fades over exactly the held time by default');
+assert.deepStrictEqual(normalizeExtendOptions({}), { holdSec: 4, introSec: 0, fadeOutSec: 4, musicVolume: 0.3, ducking: 'light' }, 'the music fades over exactly the held time by default; no opening hold unless asked');
+assert.strictEqual(normalizeExtendOptions({ introSec: '3' }).introSec, 3);
+assert.strictEqual(normalizeExtendOptions({ introSec: 999 }).introSec, 15);
+assert.strictEqual(normalizeExtendOptions({ introSec: -2 }).introSec, 0);
 assert.deepStrictEqual(normalizeExtendOptions({ holdSec: '6' }).fadeOutSec, 6);
 assert.deepStrictEqual(normalizeExtendOptions({ holdSec: 0, fadeOutSec: -3 }).holdSec, 1, 'at least a second');
 assert.strictEqual(normalizeExtendOptions({ holdSec: 0, fadeOutSec: -3 }).fadeOutSec, 0, 'no negative fade');
@@ -85,5 +88,31 @@ assert.strictEqual(fadeTimes(10, { fadeOutS: 99 }).fadeOut, 5, 'never more than 
 assert.strictEqual(fadeTimes(10, { fadeOutS: 0 }).fadeOut, 0);
 assert.match(buildFitFilter({ copies: 1, crossfadeS: 0, targetS: 35, fades: { fadeOutS: 5 } }), /afade=t=out:st=30\.000:d=5\.000/);
 assert.ok(!buildFitFilter({ copies: 1, crossfadeS: 0, targetS: 35, fades: { fadeOutS: 0 } }).includes('afade=t=out'), 'no zero-length fade (ffmpeg rejects it)');
+
+// ---- OPENING hold: the first frame is held, the voice waits for the video to start, the music starts at once ----
+const introPlan = (o) => planExtend({ srcSec: 30, hasVideoAudio: true, hasMusic: false, hasVoice: false, options: { holdSec: 5, introSec: 3 }, ...o });
+let ip = introPlan({ hasMusic: true, hasVoice: true });
+assert.strictEqual(ip.total, 38, 'opening hold + video + closing hold');
+a = buildExtendArgs('in.mp4', { music: 'm.wav', voice: 'v.mp3' }, 'o.mp4', ip);
+fc = arg(a, '-filter_complex');
+assert.match(fc, /^\[0:v\]tpad=start_mode=clone:start_duration=3\.000:stop_mode=clone:stop_duration=5\.000,format=yuv420p\[v\];/, 'first AND last frame held');
+assert.match(fc, /\[2:a\]aformat=.*adelay=3000:all=1/, 'the voice starts when the video starts moving');
+assert.match(fc, /\[1:a\]volume=0\.300\[m\]/, 'the music is not delayed: it plays under the opening title');
+assert.match(fc, /apad=whole_dur=38\.000,atrim=0:38\.000/);
+assert.strictEqual(arg(a, '-t'), '38.000');
+// music only is untouched by the opening hold (it starts at 0 and covers the longer piece)
+a = buildExtendArgs('in.mp4', { music: 'm.wav' }, 'o.mp4', introPlan({ hasMusic: true }));
+assert.ok(!arg(a, '-filter_complex').includes('adelay'));
+assert.match(arg(a, '-filter_complex'), /start_duration=3\.000/);
+// voice only waits for the video; the video's own sound waits too, and its fade ends where the video ends (after the opening hold)
+a = buildExtendArgs('in.mp4', { voice: 'v.mp3' }, 'o.mp4', introPlan({ hasVoice: true }));
+assert.match(arg(a, '-filter_complex'), /\[1:a\]aformat=sample_rates=48000:channel_layouts=stereo,adelay=3000:all=1,apad=whole_dur=38\.000\[a\]/);
+a = buildExtendArgs('in.mp4', {}, 'o.mp4', introPlan({ options: { holdSec: 5, introSec: 3, fadeOutSec: 3 } }));
+fc = arg(a, '-filter_complex');
+assert.match(fc, /adelay=3000:all=1,afade=t=out:st=30\.000:d=3\.000,apad=whole_dur=38\.000/, 'own sound: delayed by the opening hold, fade ends where the video ends (3 + 30)');
+// no opening hold = exactly as before
+a = buildExtendArgs('in.mp4', { music: 'm.wav', voice: 'v.mp3' }, 'o.mp4', plan({ hasMusic: true, hasVoice: true }));
+assert.match(arg(a, '-filter_complex'), /^\[0:v\]tpad=stop_mode=clone:stop_duration=5\.000,format=yuv420p\[v\]/);
+assert.match(arg(a, '-filter_complex'), /adelay=0:all=1/);
 
 console.log('extendEnding tests passed');

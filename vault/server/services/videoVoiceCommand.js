@@ -49,9 +49,10 @@ const TOOL_SCHEMAS = {
     },
   },
   'extend-ending': {
-    label: 'Extend ending',
+    label: 'Intro and ending',
     fields: {
       holdSec: N('How many seconds to hold the last frame', 1, 30),
+      introHoldSec: N('How many seconds to hold the first frame (for an opening title) before the video starts moving (0 = none)', 0, 15),
       fadeOutSec: N('How many seconds the music takes to fade out (0 = no fade)', 0, 60),
       musicVolume: N('How loud the music is compared with the voice, as a percent (30 is a good background level)', 5, 150, { int: true }),
       ducking: E('Whether the music dips while the voice speaks: off, light or strong', ['off', 'light', 'strong']),
