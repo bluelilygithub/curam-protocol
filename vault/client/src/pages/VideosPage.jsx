@@ -153,7 +153,7 @@ const TOOL_HELP = {
     title: 'Intro and ending',
     what: 'Stop a video starting or stopping dead: hold the first and last pictures for a few seconds, with an optional title over each, while the music plays under them and fades out at the end.',
     features: [
-      'Opening: hold the first picture for a few seconds with a title over it (headline, supporting line, button-style label, web address); the title fades away as the video starts moving',
+      'Opening: hold the first picture for a few seconds with a title fully visible over it (headline, supporting line, button-style label, web address); the title then fades away over the first moments of the moving video',
       'Ending: hold the last picture for a few seconds; the closing message appears over it while the music fades out',
       'The voice begins when the video starts moving; the music starts straight away, so the opening title has music under it',
       'Give the voice and the music as two separate files: the voice plays once and stops, and the music carries on through the held frame and fades out (it dips under the voice, and repeats smoothly if it is shorter)',
@@ -348,6 +348,45 @@ const TOOL_HELP = {
   },
 };
 
+// Hover text for every item in the left-hand list: what the tool does, in plain words. A test (videoTutor.test.js) fails if a
+// tool is added to TOOL_GROUPS without an entry here.
+const TOOL_TIPS = {
+  generate: 'Make a short AI video clip (3 to 10 seconds) from a written description. You can start from a picture or a reference video. Costs a small amount per clip.',
+  convert: 'Re-save a video as a standard MP4 and make the file smaller. You choose the quality and an optional maximum width.',
+  'extract-audio': 'Pull the soundtrack out of a video and save it as an MP3 file.',
+  'isolate-voice': 'Take the spoken words out of an audio recording that has background music, and get a voice-only file.',
+  'transcribe-audio': 'Turn speech in an audio or video file into written text you can edit. Also times a script you wrote, so it can be used as captions.',
+  audio: "Remove a video's sound, or swap it for an audio file of your own.",
+  normalize: "Even out the loudness of a video's sound in one click, so it is not too quiet or too loud.",
+  togif: 'Turn part of a video into a short looping GIF.',
+  'export-social': 'Make tall (Reels, TikTok, Shorts), square and widescreen versions of one video in one go.',
+  clip: 'Cut a part out of a video, from a start time to an end time, and save it as a new, shorter video. Has a timeline you can scrub.',
+  'trim-audio': 'Keep one part of an MP3 or other audio file, or cut an unwanted part out of it.',
+  reframe: 'Change the shape of a video (tall, square or widescreen) by cropping it or adding bars.',
+  speed: 'Make a video play slower or faster, from a quarter speed up to four times.',
+  annotate: 'Put one line of text on a video, such as a title or a credit, in the font, colour and position you choose.',
+  'end-card': 'Add a closing message to the end of a video: a headline, a button-style label and a web address.',
+  overlay: 'Place a logo or picture on top of a video, in the corner and size you choose.',
+  join: 'Join two or more video clips into one, with a cut or a transition between each.',
+  slideshow: 'Turn 2 to 20 pictures into a video, with optional music, transitions and captions.',
+  'caption-studio': 'Put styled subtitles on a video, from captions you already have or from a script that has no timestamps.',
+  'mix-audio': 'Combine a voice recording and background music into one audio file. The music dips while the voice speaks.',
+  'extend-ending': 'Hold the first and last pictures of a video with a title over each, while the music plays on and fades out.',
+  'add-music': 'Opens the Music page, where you can make background music to fit your video, or add your own track and a voiceover.',
+  'saved-library': 'The videos and images you have saved from these tools, to preview, rename, delete or send back to Caption studio.',
+  info: "Show a video's length, picture size, format, and whether it has sound.",
+  thumbnail: 'Save one picture (JPG) from any moment in a video.',
+};
+
+const GROUP_TIPS = {
+  create: 'Make something new from a written description.',
+  optimise: 'Change a file or its sound: make it smaller, convert it, clean up the audio, or write out what is said.',
+  transform: 'Cut, reshape or change the speed of a video or an audio file.',
+  compose: 'Build a finished piece: titles, logos, joins, captions and music.',
+  library: 'Your saved work.',
+  analyse: 'Look at a file without changing it.',
+};
+
 const TOOL_GROUPS = [
   {
     id: 'create',
@@ -483,7 +522,7 @@ function EndCardFields({ cta, setCta, lockTiming = false, intro = false }) {
             </label>
             <label className="block space-y-1">
               <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{intro ? 'Fade-away time (seconds)' : 'Fade-in time (seconds)'}</span>
-              <Tooltip text={intro ? 'How slowly the title and tint fade away as the video starts moving. 0 = they disappear at once when the video starts. 1 is gentle; a longer time starts the fade earlier, always finishing exactly as the video begins to move.' : 'How slowly the tint and your message come in. 0 = instant. 0.5 is quick; 3 or more is a slow, gentle change that can last as long as the held time. It starts when the message starts.'}>
+              <Tooltip text={intro ? 'How slowly the title and tint fade away once the video starts moving. 0 = they disappear at once when the video starts. 1 is gentle; 2 or 3 is a slow dissolve over the first moments of the action. It never shortens the time the title is fully visible (the hold above).' : 'How slowly the tint and your message come in. 0 = instant. 0.5 is quick; 3 or more is a slow, gentle change that can last as long as the held time. It starts when the message starts.'}>
                 <input type="number" min={0} max={15} step={0.5} value={cta.fadeSec ?? 0.5} onChange={(e) => set('fadeSec')(e.target.value === '' ? '' : Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
               </Tooltip>
             </label>
@@ -2501,29 +2540,33 @@ export default function VideosPage() {
 
         {filteredGroups.map((group) => (
           <div key={group.id}>
-            <button
-              type="button"
-              onClick={() => setOpenGroup(openGroup === group.id ? null : group.id)}
-              className="text-xs font-semibold w-full text-left py-1 transition-opacity hover:opacity-70"
-              style={{ color: 'var(--color-primary)' }}
-            >
-              {openGroup === group.id ? '▼' : '▶'} {group.label}
-            </button>
+            <Tooltip text={GROUP_TIPS[group.id]}>
+              <button
+                type="button"
+                onClick={() => setOpenGroup(openGroup === group.id ? null : group.id)}
+                className="text-xs font-semibold w-full text-left py-1 transition-opacity hover:opacity-70"
+                style={{ color: 'var(--color-primary)' }}
+              >
+                {openGroup === group.id ? '▼' : '▶'} {group.label}
+              </button>
+            </Tooltip>
             {(openGroup === group.id || search.trim()) && (
               <ul className="pl-2 border-l ml-1 space-y-0.5 mt-1" style={{ borderColor: 'var(--color-border)' }}>
                 {group.tools.map((t) => (
                   <li key={t.id}>
-                    <button
-                      type="button"
-                      onClick={() => (t.link ? openMusicWith(sourceFile) : setTool(t.id))}
-                      className="w-full text-left px-2 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-70"
-                      style={{
-                        background: tool === t.id ? 'var(--color-bg)' : 'transparent',
-                        color: tool === t.id ? 'var(--color-text)' : 'var(--color-muted)',
-                      }}
-                    >
-                      {t.label}
-                    </button>
+                    <Tooltip text={TOOL_TIPS[t.id] || t.desc}>
+                      <button
+                        type="button"
+                        onClick={() => (t.link ? openMusicWith(sourceFile) : setTool(t.id))}
+                        className="w-full text-left px-2 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-70"
+                        style={{
+                          background: tool === t.id ? 'var(--color-bg)' : 'transparent',
+                          color: tool === t.id ? 'var(--color-text)' : 'var(--color-muted)',
+                        }}
+                      >
+                        {t.label}
+                      </button>
+                    </Tooltip>
                   </li>
                 ))}
               </ul>
@@ -3233,7 +3276,7 @@ export default function VideosPage() {
               <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Opening</p>
               <label className="block space-y-1">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Hold the first frame for (seconds, 0 = none)</span>
-                <Tooltip text="How long the very first picture stays still before the video starts moving, so an opening title can sit on it. Your music plays under it from the start; the voice begins when the video starts moving. 0 = the video starts straight away.">
+                <Tooltip text="How long the very first picture stays still, with your title fully visible, before the video starts moving. Your music plays under it from the start; the voice begins when the video starts moving. The title then fades away over the next few moments of the video (set below), so the fade never shortens this time. 0 = the video starts straight away.">
                   <input type="number" min={0} max={15} step={0.5} value={introHold} onChange={(e) => setIntroHold(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
                 </Tooltip>
               </label>

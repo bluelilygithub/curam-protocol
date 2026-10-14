@@ -16,6 +16,15 @@ for (const t of CATALOG) {
 assert.strictEqual(new Set(CATALOG.map((t) => t.id)).size, CATALOG.length, 'no duplicate ids');
 assert.ok(NOT_POSSIBLE.length >= 5);
 
+// ---- every sidebar tool and group has hover text (fails when a tool is added without one) ----
+const tipsBlock = page.slice(page.indexOf('const TOOL_TIPS = {'), page.indexOf('\n};', page.indexOf('const TOOL_TIPS = {')));
+const tipIds = [...tipsBlock.matchAll(/^  '?([a-z-]+)'?: /gm)].map((m) => m[1]).sort();
+assert.deepStrictEqual(tipIds, sidebarIds, 'every Video Tools sidebar item has a tooltip, and none is left over');
+const groupBlock = page.slice(page.indexOf('const GROUP_TIPS = {'), page.indexOf('\n};', page.indexOf('const GROUP_TIPS = {')));
+const groupIds = [...block.matchAll(/^    id: '([a-z]+)',$/gm)].map((m) => m[1]).sort();
+assert.deepStrictEqual([...groupBlock.matchAll(/^  ([a-z]+): /gm)].map((m) => m[1]).sort(), groupIds, 'every group heading has a tooltip');
+assert.ok(tipsBlock.split('\n').every((l) => !/\b(CRF|codec|bitrate|ffmpeg)\b/i.test(l)), 'tooltips use plain words');
+
 // ---- the prompt carries every tool, the gaps, the conversation, and where the person is ----
 const prompt = buildTutorPrompt({ messages: [{ role: 'user', content: 'cut 12 seconds out of my video' }], currentTool: 'clip' });
 for (const t of CATALOG) assert.ok(prompt.includes(`id "${t.id}"`), `prompt lists ${t.id}`);

@@ -59,20 +59,38 @@ assert.match(overlayVideoGraph({ ...common, fadeSec: 1, dimPct: 50, pad: ',tpad=
 // every graph ends in the [v] label the caller maps
 for (const f of [3, 0]) for (const d of [0, 60]) assert.ok(overlayVideoGraph({ ...common, fadeSec: f, dimPct: d }).endsWith('[v]'));
 
-// ---- OPENING title: there from the very first frame, fading away as the video starts ----
+// ---- OPENING title: there from the very first frame, fully visible for the whole hold, then fading away as the video moves ----
 const { introOverlayGraph } = require('./videoEndCard');
 const idraws = ["drawtext=text='Title'"];
 const icommon = { w: 1280, h: 720, fps: 30, holdSec: 4, bgColor: '112233', draws: idraws, enable: ":enable='lte(t,4.000)'" };
 let ig = introOverlayGraph({ ...icommon, fadeSec: 1, dimPct: 60 });
 assert.match(ig, /color=c=0x112233:s=1280x720:r=30,format=rgba,colorchannelmixer=aa=0\.60/);
-assert.match(ig, /fade=t=out:st=3\.000:d=1\.000:alpha=1\[tint\]/, 'tint fades OUT over the last second of the hold, ending as the video starts');
+assert.match(ig, /fade=t=out:st=4\.000:d=1\.000:alpha=1\[tint\]/, 'the tint starts fading only AFTER the whole 4 s hold, so the title is fully visible for the full hold');
 assert.ok(!/fade=t=in/.test(ig), 'it does not fade in: the title is there from the first frame');
 assert.match(ig, /\[base\]\[tint\]overlay=shortest=1,drawtext/);
 ig = introOverlayGraph({ ...icommon, fadeSec: 0, dimPct: 60 });
-assert.match(ig, /drawbox=.*color=0x112233@0\.60:t=fill:enable='lte\(t,4\.000\)'/, 'no fade: tint and title stay until the hold ends');
+assert.match(ig, /drawbox=.*color=0x112233@0\.60:t=fill:enable='lte\(t,4\.000\)'/, 'no fade: tint and title stay until the hold ends, then go at once');
 ig = introOverlayGraph({ ...icommon, fadeSec: 1, dimPct: 0 });
 assert.ok(!/drawbox|colorchannelmixer|overlay=/.test(ig), 'no tint: the first picture keeps its colour');
 assert.match(ig, /^\[0:v\]scale=1280:720,setsar=1,fps=30,drawtext/);
 for (const f of [1, 0]) for (const d of [0, 60]) assert.ok(introOverlayGraph({ ...icommon, fadeSec: f, dimPct: d }).endsWith('[v]'));
+
+// the timing the person asked for: a 3 s hold means 3 s FULLY visible, whatever the fade-away is set to
+const { introTiming } = require('./videoEndCard');
+let it = introTiming({ holdSec: 3, fadeSec: 2, videoSec: 60 });
+assert.strictEqual(it.fadeSec, 2);
+assert.strictEqual(it.lastVisible, 5, 'visible for 3 s held + 2 s fading');
+assert.match(it.alphaExpr, /\(5\.000-t\)\/2\.000/, 'opacity is 1 until t = 3, then falls to 0 at t = 5');
+// check the numbers the ffmpeg expression produces
+const alphaAt = (t, tm) => Math.min(1, Math.max(0, (tm.lastVisible - t) / tm.fadeSec));
+for (const t of [0, 1, 2, 3]) assert.strictEqual(alphaAt(t, it), 1, `fully visible at ${t}s`);
+assert.strictEqual(alphaAt(4, it), 0.5);
+assert.strictEqual(alphaAt(5, it), 0);
+it = introTiming({ holdSec: 3, fadeSec: 0, videoSec: 60 });
+assert.strictEqual(it.alphaExpr, '', 'no fade: no alpha expression, just on then off');
+assert.match(it.enable, /lte\(t,3\.000\)/);
+it = introTiming({ holdSec: 3, fadeSec: 10, videoSec: 5 });
+assert.strictEqual(it.fadeSec, 2, 'the fade-away cannot outlast the video (5 s video: 2 s after the 3 s hold)');
+assert.strictEqual(introTiming({ holdSec: 3, fadeSec: 1, videoSec: 0 }).fadeSec, 0, 'unknown length: no fade rather than a broken expression');
 
 console.log('videoEndCard tests passed');

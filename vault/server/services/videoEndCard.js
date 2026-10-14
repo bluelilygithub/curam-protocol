@@ -221,11 +221,12 @@ async function appendEndCard(inputPath, outputPath, rawSpec, workDir) {
 }
 
 /**
- * Filter graph for the OPENING title: the message and tint are fully there from the very first frame, and fade away over
- * the last `fadeSec` of the held time, ending exactly as the video starts to move. Pure, so it is unit tested.
+ * Filter graph for the OPENING title: the message and tint are fully there from the very first frame and stay FULLY visible for the
+ * whole `holdSec` (the held first frame). When the video starts to move they fade away over the next `fadeSec`, so the fade is a
+ * dissolve over the first moments of the action and never eats into the hold. Pure, so it is unit tested.
  *  - dimPct = 0    no tint: the picture keeps all its colour.
  *  - fadeSec = 0   tint and text stay until the hold ends, then are gone at once.
- *  - otherwise     a colour layer whose opacity ramps down to nothing over the last fadeSec of the hold.
+ *  - otherwise     a colour layer whose opacity ramps down to nothing from holdSec to holdSec + fadeSec.
  */
 function introOverlayGraph({ w, h, fps, holdSec, fadeSec, dimPct, bgColor, draws, enable = '' }) {
   const base = `[0:v]scale=${w}:${h},setsar=1,fps=${fps}`;
@@ -235,8 +236,23 @@ function introOverlayGraph({ w, h, fps, holdSec, fadeSec, dimPct, bgColor, draws
   if (!(fadeSec > 0)) return `${base},drawbox=x=0:y=0:w=iw:h=ih:color=0x${bgColor}@${dim.toFixed(2)}:t=fill${enable},${tail}`;
   return `${base}[base];`
     + `color=c=0x${bgColor}:s=${w}x${h}:r=${fps},format=rgba,colorchannelmixer=aa=${dim.toFixed(2)},`
-    + `fade=t=out:st=${Math.max(0, holdSec - fadeSec).toFixed(3)}:d=${Number(fadeSec).toFixed(3)}:alpha=1[tint];`
+    + `fade=t=out:st=${Number(holdSec).toFixed(3)}:d=${Number(fadeSec).toFixed(3)}:alpha=1[tint];`
     + `[base][tint]overlay=shortest=1,${tail}`;
+}
+
+/**
+ * When the opening title is visible. It is fully visible for the whole `holdSec`; it then fades away over the next `fadeSec`
+ * (never longer than the rest of the video), so the fade never eats into the hold. Pure, so the timing is unit tested.
+ */
+function introTiming({ holdSec, fadeSec, videoSec }) {
+  const fade = Math.max(0, Math.min(Number(fadeSec) || 0, Math.max(0, (Number(videoSec) || 0) - holdSec)));
+  const lastVisible = holdSec + fade;
+  return {
+    fadeSec: fade,
+    lastVisible,
+    enable: `:enable='lte(t,${lastVisible.toFixed(3)})'`,
+    alphaExpr: fade > 0 ? `:alpha='min(1,max(0,(${lastVisible.toFixed(3)}-t)/${fade.toFixed(3)}))'` : '',
+  };
 }
 
 /**
@@ -254,9 +270,7 @@ async function applyIntroCard(inputPath, outputPath, rawSpec, holdSec, workDir) 
   const fps = clamp(fpsParts[1] > 0 ? fpsParts[0] / fpsParts[1] : (fpsParts[0] || 30), 1, 60);
 
   const H = clamp(Number(holdSec) || 3, 1, 15);
-  const fadeSec = Math.min(spec.fadeSec, H);
-  const enable = `:enable='lte(t,${H.toFixed(3)})'`;
-  const alphaExpr = fadeSec > 0 ? `:alpha='min(1,max(0,(${H.toFixed(3)}-t)/${fadeSec}))'` : '';
+  const { fadeSec, enable, alphaExpr } = introTiming({ holdSec: H, fadeSec: spec.fadeSec, videoSec: probe.duration });
 
   const fontfile = escapeFilterPath(await writeFontToDir(spec.fontFamily, spec.fontWeight, workDir));
   const blocks = layoutEndCard(spec, w, h);
@@ -280,5 +294,5 @@ async function applyIntroCard(inputPath, outputPath, rawSpec, holdSec, workDir) 
 }
 
 module.exports = {
-  appendEndCard, applyIntroCard, normalizeEndCard, layoutEndCard, overlayVideoGraph, introOverlayGraph, cardDrawFilters, PLACEMENTS, MIN_DURATION_SEC, MAX_DURATION_SEC,
+  appendEndCard, applyIntroCard, normalizeEndCard, layoutEndCard, overlayVideoGraph, introOverlayGraph, introTiming, cardDrawFilters, PLACEMENTS, MIN_DURATION_SEC, MAX_DURATION_SEC,
 };
