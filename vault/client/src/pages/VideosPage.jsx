@@ -1641,7 +1641,7 @@ export default function VideosPage() {
     const fatal = (message) => Object.assign(new Error(message), { fatal: true });
     let stopped = false; // the person pressed Cancel: stop looking, and do not put the box back up
     const cancel = async () => { stopped = true; try { await api.post(`/api/videos/jobs/${jobId}/cancel`, {}); } catch { /* the server may already have finished */ } };
-    startProcessing(label, 'Starting…', { onCancel: cancel });
+    startProcessing(label, 'Step 2 of 2: starting the build…', { onCancel: cancel });
     let misses = 0;
     try {
       for (;;) {
@@ -1660,7 +1660,7 @@ export default function VideosPage() {
           if (misses >= 12) {
             throw fatal('Lost contact with the server for a while (it may be very busy). Your video may still be building: wait a minute, then reload this page and use "Watch it" at the top.');
           }
-          startProcessing(label, 'The server is busy; still trying to reach it…', { onCancel: cancel });
+          startProcessing(label, 'Step 2 of 2: the server is busy; still trying to reach it…', { onCancel: cancel });
           continue;
         }
         if (job.status === 'cancelled') { forgetJob(); addToast('Cancelled', 'info'); return; }
@@ -1669,8 +1669,8 @@ export default function VideosPage() {
         startProcessing(
           label,
           job.status === 'queued'
-            ? `Waiting for a free slot on the server… (${mmss(job.elapsedSec)})`
-            : `Working… ${mmss(job.elapsedSec)} so far. Videos with titles can take several minutes. You can cancel at any time.`,
+            ? `Step 2 of 2: waiting for a free slot on the server… (${mmss(job.elapsedSec)})`
+            : `Step 2 of 2: building your video… ${mmss(job.elapsedSec)} so far. Videos with titles can take several minutes. You can cancel at any time.`,
           { onCancel: cancel },
         );
         if (job.elapsedSec > 40 * 60) throw fatal('This is taking far too long. Cancel it and try a shorter video, or run it again later.');
@@ -1694,16 +1694,19 @@ export default function VideosPage() {
   }, [startProcessing, stopProcessing, setResultFromBlob, addToast]);
 
   const runJobVideo = useCallback(async (endpoint, formData, meta) => {
-    startProcessing(meta.label, 'Sending your files…');
+    // Stage 1 of 2: the files go to the server (a large video can take a minute or two). Cancel works here too.
+    const upload = new AbortController();
+    startProcessing(meta.label, 'Step 1 of 2: sending your files to the server. A large video can take a minute or two.', { onCancel: () => upload.abort() });
     let jobId;
     try {
-      const startRes = await api.postForm(`/api/videos/${endpoint}`, formData);
+      const startRes = await api.postForm(`/api/videos/${endpoint}`, formData, { signal: upload.signal });
       const started = await startRes.json().catch(() => ({}));
       if (!startRes.ok) throw new Error(started.error || 'Could not start the job');
       jobId = started.jobId;
     } catch (err) {
       stopProcessing();
-      addToast(err.message, 'error');
+      if (err?.name === 'AbortError') addToast('Cancelled', 'info');
+      else addToast(err.message, 'error');
       return;
     }
     rememberJob({ jobId, ...meta });
