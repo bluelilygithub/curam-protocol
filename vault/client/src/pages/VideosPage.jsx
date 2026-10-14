@@ -258,6 +258,17 @@ const TOOL_HELP = {
       'Useful for reusing a voiceover or music track elsewhere',
     ],
   },
+  'mix-audio': {
+    title: 'Mix audio',
+    what: 'Combine a voice recording and a piece of background music into one audio file.',
+    features: [
+      'Choose the voice (foreground) and the music (background) as two audio files',
+      'Set how loud the music is next to the voice',
+      'The music dips while the voice speaks, and comes back up in the gaps (light, strong or off)',
+      'Short music repeats smoothly; long music is trimmed; it fades in and out',
+      'Optional lead-in before the voice and tail after it; saves as MP3 or WAV',
+    ],
+  },
   'isolate-voice': {
     title: 'Isolate voice',
     what: 'Take the spoken words out of a recording that has background music, and get a voice-only audio file.',
@@ -475,6 +486,7 @@ const TOOL_GROUPS = [
       { id: 'join', label: 'Join videos', desc: 'Concatenate clips — hard cut or crossfade' },
       { id: 'slideshow', label: 'Slideshow', desc: 'Images + background music → promo video' },
       { id: 'caption-studio', label: 'Caption studio', desc: 'Upload or library video + styled SRT captions' },
+      { id: 'mix-audio', label: 'Mix audio', desc: 'Voice + background music → one audio file' },
       { id: 'add-music', label: 'Add music', desc: 'Opens Music — generate or use your own track', link: '/music' },
     ],
   },
@@ -1192,6 +1204,21 @@ export default function VideosPage() {
   const [exportItems, setExportItems] = useState([]);
   const [exportId, setExportId] = useState(null);
 
+  // Mix audio
+  const [mxVoice, setMxVoice] = useState(null);
+  const [mxMusic, setMxMusic] = useState(null);
+  const [mxMusicPct, setMxMusicPct] = useState(30);
+  const [mxDucking, setMxDucking] = useState('light');
+  const [mxLead, setMxLead] = useState(0);
+  const [mxTail, setMxTail] = useState(3);
+  const [mxFormat, setMxFormat] = useState('mp3');
+  const mxVoiceInputRef = useRef(null);
+  const mxMusicInputRef = useRef(null);
+  const mxVoiceUrl = useMemo(() => (mxVoice ? URL.createObjectURL(mxVoice) : ''), [mxVoice]);
+  const mxMusicUrl = useMemo(() => (mxMusic ? URL.createObjectURL(mxMusic) : ''), [mxMusic]);
+  useEffect(() => () => { if (mxVoiceUrl) URL.revokeObjectURL(mxVoiceUrl); }, [mxVoiceUrl]);
+  useEffect(() => () => { if (mxMusicUrl) URL.revokeObjectURL(mxMusicUrl); }, [mxMusicUrl]);
+
   // Isolate voice
   const [ivFile, setIvFile] = useState(null);
   const [ivMode, setIvMode] = useState('ai');
@@ -1873,6 +1900,49 @@ export default function VideosPage() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
+  const handleMixAudio = async () => {
+    if (!mxVoice) { addToast('Choose the voice recording first', 'error'); return; }
+    if (!mxMusic) { addToast('Choose the music first', 'error'); return; }
+    startProcessing('Mixing…', 'Fitting the music to the voice and mixing them. Long recordings take a little while.');
+    try {
+      const fd = new FormData();
+      fd.append('voice', mxVoice);
+      fd.append('music', mxMusic);
+      fd.append('musicVolume', String((Number(mxMusicPct) || 30) / 100));
+      fd.append('ducking', mxDucking);
+      fd.append('leadInSec', String(Number(mxLead) || 0));
+      fd.append('tailSec', String(Number(mxTail) || 0));
+      fd.append('format', mxFormat);
+      const res = await api.postForm('/api/videos/mix-audio', fd);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Mixing failed');
+      }
+      const blob = await res.blob();
+      const named = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '');
+      setResultFromBlob(blob, named ? named[1] : `mixed.${mxFormat}`, 'mix-audio');
+      addToast('Mixed', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      stopProcessing();
+    }
+  };
+
+  // Hand the mixed audio to another audio tool as its input file.
+  const sendMixedTo = (toolId) => {
+    const blob = resultBlobRef.current;
+    if (!blob) return;
+    const file = new File([blob], resultName, { type: blob.type });
+    if (toolId === 'transcribe-audio') {
+      setTrAudioFile(file); setTrText(''); setTrSrt(''); setTrNote('');
+      setTool('transcribe-audio'); setOpenGroup('optimise');
+    } else {
+      setTaFile(file); setTaDuration(0); setTaStart('0:00'); setTaEnd('');
+      setTool('trim-audio'); setOpenGroup('transform');
+    }
+  };
+
   const handleIsolateVoice = async () => {
     if (!ivFile) { addToast('Choose an audio file first', 'error'); return; }
     const mode = status?.isolateVoice?.ai ? ivMode : 'quick'; // the AI option only exists when the server has the key
@@ -2394,6 +2464,7 @@ export default function VideosPage() {
       slideshow: { slideSecondsPerSlide: setSlideSecondsPerSlide, slideAspect: setSlideAspect, slideCrossfade: setSlideCrossfade },
       'caption-studio': textStyle,
       thumbnail: { thumbTime: setThumbTime },
+      'mix-audio': { musicVolume: setMxMusicPct, ducking: setMxDucking, leadInSec: setMxLead, tailSec: setMxTail, format: setMxFormat },
       'trim-audio': {
         startSec: (x) => setTaStart(formatClock(x)),
         endSec: (x) => setTaEnd(formatClock(x)),
@@ -3020,7 +3091,7 @@ export default function VideosPage() {
           </div>
         )}
 
-        {tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'caption-studio' && captionLibraryId) && !(tool === 'clip' && isClipUrlMode) && (
+        {tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'mix-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'caption-studio' && captionLibraryId) && !(tool === 'clip' && isClipUrlMode) && (
           <VideoUpload
             file={sourceFile}
             onFile={(f) => { setSourceFile(f); if (f && tool === 'caption-studio') setCaptionLibraryId(''); }}
@@ -3029,7 +3100,7 @@ export default function VideosPage() {
           />
         )}
 
-        {previewUrl && tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'clip' && isClipUrlMode) && (
+        {previewUrl && tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'mix-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'clip' && isClipUrlMode) && (
           <>
             <video
               ref={tool === 'clip' ? clipVideoRef : undefined}
@@ -3129,6 +3200,117 @@ export default function VideosPage() {
             </Tooltip>
             {resultForTool === 'convert' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
+          </section>
+        )}
+
+        {tool === 'mix-audio' && (
+          <section className="space-y-3">
+            <ToolHeader id="mix-audio" label="Mix audio" onHelp={setHelpTool} getIcon={getIcon} />
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Combine a voice recording and a piece of music into one audio file. The music sits quietly behind the voice and dips when the voice speaks.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[
+                ['voice', 'Voice (foreground)', mxVoice, setMxVoice, mxVoiceInputRef, mxVoiceUrl, 'Choose the recording of the spoken voice. This is the main track; the music goes behind it.'],
+                ['music', 'Music (background)', mxMusic, setMxMusic, mxMusicInputRef, mxMusicUrl, 'Choose the background music. If it is shorter than the voice it repeats smoothly; if it is longer it is trimmed.'],
+              ].map(([key, title, file, setFile, inputRef, url, tip]) => (
+                <div key={key} className="space-y-1 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                  <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>{title}</p>
+                  <Tooltip text={tip}>
+                    <button
+                      type="button"
+                      onClick={() => inputRef.current?.click()}
+                      className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                    >
+                      {file ? 'Change file' : 'Choose audio file'}
+                    </button>
+                  </Tooltip>
+                  {file && <p className="text-[11px] truncate" style={{ color: 'var(--color-muted)' }}>{file.name} · {formatBytes(file.size)}</p>}
+                  <input
+                    ref={inputRef}
+                    type="file"
+                    accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac,.aac,.opus"
+                    className="hidden"
+                    onChange={(e) => { setFile(e.target.files?.[0] || null); setResultFromBlob(null, null, null); e.target.value = ''; }}
+                  />
+                  {file && (
+                    <Tooltip text={`Play the ${key} to check it is the right file.`}>
+                      <audio src={url} controls className="w-full" />
+                    </Tooltip>
+                  )}
+                </div>
+              ))}
+            </div>
+            <label className="block space-y-1">
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Music level: {mxMusicPct}% of the voice</span>
+              <Tooltip text="How loud the music is next to the voice. About 20 to 40 is a good quiet background; 100 is as loud as the voice.">
+                <input type="range" min={5} max={100} step={5} value={mxMusicPct} onChange={(e) => setMxMusicPct(Number(e.target.value))} className="w-full" />
+              </Tooltip>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Music dips while the voice speaks</span>
+              <Tooltip text="Lowers the music automatically whenever someone is talking and brings it back up in the gaps, so the voice always stays clear. Light is gentle; Strong drops the music a lot; Off keeps one steady level.">
+                <select value={mxDucking} onChange={(e) => setMxDucking(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                  <option value="light">Light dip (recommended)</option>
+                  <option value="strong">Strong dip</option>
+                  <option value="off">Off (steady level)</option>
+                </select>
+              </Tooltip>
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Music starts before the voice (seconds)</span>
+                <Tooltip text="Lets the music play on its own for this long before the voice comes in. 0 = the voice starts straight away.">
+                  <input type="number" min={0} max={30} step={0.5} value={mxLead} onChange={(e) => setMxLead(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Music carries on after the voice (seconds)</span>
+                <Tooltip text="Lets the music play on for this long after the voice finishes, fading out at the end. 0 = it ends when the voice ends.">
+                  <input type="number" min={0} max={60} step={0.5} value={mxTail} onChange={(e) => setMxTail(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
+              </label>
+            </div>
+            <label className="block space-y-1">
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Save as</span>
+              <Tooltip text="MP3 is small and plays everywhere. WAV is uncompressed and large, for further editing.">
+                <select value={mxFormat} onChange={(e) => setMxFormat(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                  <option value="mp3">MP3</option>
+                  <option value="wav">WAV (large)</option>
+                </select>
+              </Tooltip>
+            </label>
+            <Tooltip text="Mix the voice and the music into one audio file. Your original files are not changed.">
+              <button
+                type="button"
+                onClick={handleMixAudio}
+                disabled={!mxVoice || !mxMusic || !ffmpegOk}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Mix audio
+              </button>
+            </Tooltip>
+            {resultForTool === 'mix-audio' && resultBlob && (
+              <div className="space-y-2 rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Result</p>
+                <Tooltip text="Listen to the mix to check the levels before you download it. If the music is too loud or quiet, change the music level and mix again.">
+                  <audio src={resultBlob} controls className="w-full" />
+                </Tooltip>
+                <div className="flex flex-wrap gap-2">
+                  <Tooltip text="Save the mixed audio to your computer.">
+                    <a href={resultBlob} download={resultName} className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Download {resultName}</a>
+                  </Tooltip>
+                  <Tooltip text="Open Trim audio with the mix already chosen, to keep a part of it or cut a part out.">
+                    <button type="button" onClick={() => sendMixedTo('trim-audio')} className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Trim this →</button>
+                  </Tooltip>
+                  <Tooltip text="Open Audio to transcript with the mix already chosen.">
+                    <button type="button" onClick={() => sendMixedTo('transcribe-audio')} className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Transcribe this →</button>
+                  </Tooltip>
+                </div>
+              </div>
             )}
           </section>
         )}

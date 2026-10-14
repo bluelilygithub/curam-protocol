@@ -34,6 +34,7 @@ assert.deepStrictEqual(localParse('clip', 'from 2 to 9 seconds', {}), { startSec
 assert.deepStrictEqual(localParse('togif', 'from 2 to 9 seconds', {}), { gifStartSec: 2, gifEndSec: 9 });
 assert.deepStrictEqual(localParse('trim-audio', 'keep from 1:30 to 2:45', {}), { startSec: 90, endSec: 165 });
 assert.deepStrictEqual(normalizeVoiceValues('trim-audio', { mode: 'remove', fadeOutSec: 99, format: 'ogg' }), { mode: 'remove', fadeOutSec: 10 });
+assert.deepStrictEqual(normalizeVoiceValues('mix-audio', { musicVolume: 500, ducking: 'strong', format: 'ogg' }), { musicVolume: 150, ducking: 'strong' });
 assert.deepStrictEqual(localParse('thumbnail', 'at 12 seconds', {}), { thumbTime: 12 });
 assert.strictEqual(localParse('speed', 'faster', {}), null);
 

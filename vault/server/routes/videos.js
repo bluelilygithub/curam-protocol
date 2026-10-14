@@ -50,6 +50,7 @@ const {
 const { normalizeSrt, srtToPlainText, prepareCaptionSrt, parseSrtLoose } = require('../services/srtUtils');
 const { timeScript, hasTimeMarkers } = require('../services/scriptTiming');
 const voiceIsolation = require('../services/voiceIsolation');
+const audioMix = require('../services/audioMix');
 const { askTutor } = require('../services/videoTutor');
 const { fetchLicensedVideo } = require('../services/videoUrlIntake');
 const { ffmpegRoute } = require('../middleware/ffmpegRoute');
@@ -1150,6 +1151,48 @@ router.get('/isolate-voice/:id/:stem', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// "Mix audio": a voice (foreground) and a piece of music (background) combined into one audio file. The music is repeated with
+// smooth crossfades or trimmed to fit, dips under the voice (ducking) and fades in and out; the result is levelled for speech.
+router.post('/mix-audio', upload.fields([{ name: 'voice', maxCount: 1 }, { name: 'music', maxCount: 1 }]), ffmpegRoute('mix-audio', async (req, res) => {
+  const voiceFile = req.files?.voice?.[0];
+  const musicFile = req.files?.music?.[0];
+  if (!voiceFile?.buffer?.length) return res.status(400).json({ error: 'Choose the voice recording first.' });
+  if (!musicFile?.buffer?.length) return res.status(400).json({ error: 'Choose the music first.' });
+  if (!enforceAggregateUploadSize(res, [voiceFile, musicFile])) return;
+  const extOf = (f) => {
+    const e = path.extname(String(f.originalname || '')).toLowerCase();
+    return AUDIO_EXTS.has(e) ? e : '.mp3';
+  };
+  const base = path.basename(String(voiceFile.originalname || 'audio'), path.extname(String(voiceFile.originalname || ''))).replace(/[^\w .-]+/g, '_').slice(0, 80) || 'audio';
+  const options = audioMix.normalizeMixOptions({
+    musicVolume: req.body?.musicVolume,
+    voiceVolume: req.body?.voiceVolume,
+    ducking: req.body?.ducking,
+    leadInSec: req.body?.leadInSec,
+    tailSec: req.body?.tailSec,
+    format: req.body?.format,
+  });
+
+  const out = await withTempDir(async (dir) => {
+    const voicePath = path.join(dir, `voice-in${extOf(voiceFile)}`);
+    const musicPath = path.join(dir, `music-in${extOf(musicFile)}`);
+    await fs.writeFile(voicePath, voiceFile.buffer);
+    await fs.writeFile(musicPath, musicFile.buffer);
+    const outPath = path.join(dir, `mixed.${options.format}`);
+    try {
+      await audioMix.mixAudio({ voicePath, musicPath, outPath, workDir: dir, options });
+    } catch (err) {
+      if (err.stderr !== undefined) throw err; // an ffmpeg failure: the generic handler words it safely
+      const e = new Error(err.message);
+      e.status = 400;
+      throw e;
+    }
+    return readOutputFile(outPath);
+  });
+
+  sendVideoBuffer(res, out, `${base}-mixed.${options.format}`, options.format === 'wav' ? 'audio/wav' : 'audio/mpeg');
+}));
 
 // "Trim audio": keep a part of a recording (an extract), or cut a part out of it. Same file type with no re-encode by default.
 router.post('/trim-audio', upload.single('audio'), ffmpegRoute('trim-audio', async (req, res) => {

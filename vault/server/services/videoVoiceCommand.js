@@ -48,6 +48,16 @@ const TOOL_SCHEMAS = {
       endSec: N('Where the kept part ends, in seconds from the beginning', 0, 86400),
     },
   },
+  'mix-audio': {
+    label: 'Mix audio',
+    fields: {
+      musicVolume: N('How loud the music is compared with the voice, as a percent (30 is a good background level, 100 is as loud as the voice)', 5, 150, { int: true }),
+      ducking: E('Whether the music dips while the voice speaks: off, light or strong', ['off', 'light', 'strong']),
+      leadInSec: N('Seconds the music plays before the voice starts', 0, 30),
+      tailSec: N('Seconds the music keeps playing after the voice ends', 0, 60),
+      format: E('File type of the result', ['mp3', 'wav']),
+    },
+  },
   'trim-audio': {
     label: 'Trim audio',
     fields: {
