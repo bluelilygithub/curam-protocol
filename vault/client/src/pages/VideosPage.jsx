@@ -18,6 +18,7 @@ import { VoiceInput, VoiceInputProvider } from '../components/voiceInput/VoiceIn
 import { VideoVoiceContext, VoiceCommandBar } from './videos/VoiceCommandBar';
 import { applyEditedText, srtLines } from './videos/transcriptSrt.mjs';
 import ScriptTimer from './videos/ScriptTimer';
+import ClipTimeline from './videos/ClipTimeline';
 import TutorChat from './videos/TutorChat';
 import { parseClock, formatClock } from './videos/clock.mjs';
 
@@ -67,17 +68,6 @@ const TEXT_POSITIONS = [
   { id: 'bottom-right', label: 'Bottom right', row: 2, col: 2 },
 ];
 
-function formatClipTime(sec) {
-  if (!Number.isFinite(sec) || sec < 0) return '0:00.0';
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  const whole = Math.floor(s);
-  const tenth = Math.floor((s - whole) * 10);
-  return m > 0
-    ? `${m}:${String(whole).padStart(2, '0')}.${tenth}`
-    : `${whole}.${tenth}s`;
-}
-
 function PositionGrid({ value, onChange, label = 'Position' }) {
   const grid = useMemo(() => {
     const cells = Array.from({ length: 9 }, () => null);
@@ -119,106 +109,6 @@ function PositionGrid({ value, onChange, label = 'Position' }) {
   );
 }
 
-function ClipTimeline({
-  duration, startSec, endSec, onStartChange, onEndChange,
-}) {
-  const trackRef = useRef(null);
-  const dragRef = useRef(null);
-
-  const end = endSec === '' || endSec == null ? duration : Number(endSec);
-  const dur = Math.max(0, Number(duration) || 0);
-  const start = Math.max(0, Math.min(Number(startSec) || 0, dur));
-  const endVal = dur > 0 ? Math.max(start + 0.1, Math.min(end || dur, dur)) : start + 0.1;
-
-  const secFromClientX = useCallback((clientX) => {
-    const rect = trackRef.current?.getBoundingClientRect();
-    if (!rect?.width || !dur) return 0;
-    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    return Math.round(ratio * dur * 10) / 10;
-  }, [dur]);
-
-  useEffect(() => {
-    const onMove = (e) => {
-      if (!dragRef.current || !dur) return;
-      const t = secFromClientX(e.clientX);
-      if (dragRef.current === 'start') {
-        onStartChange(Math.max(0, Math.min(t, endVal - 0.1)));
-      } else {
-        onEndChange(Math.min(dur, Math.max(t, start + 0.1)));
-      }
-    };
-    const onUp = () => { dragRef.current = null; };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    return () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-    };
-  }, [dur, endVal, start, onStartChange, onEndChange, secFromClientX]);
-
-  if (!dur) {
-    return (
-      <p className="text-xs rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
-        Load a video to drag in/out markers on the timeline.
-      </p>
-    );
-  }
-
-  const startPct = (start / dur) * 100;
-  const endPct = (endVal / dur) * 100;
-
-  return (
-    <div className="space-y-2 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-      <div className="flex justify-between text-[10px] font-mono" style={{ color: 'var(--color-muted)' }}>
-        <span>In {formatClipTime(start)}</span>
-        <span>Duration {formatClipTime(endVal - start)}</span>
-        <span>Out {formatClipTime(endVal)}</span>
-      </div>
-      <div
-        ref={trackRef}
-        className="relative h-10 rounded-lg cursor-pointer select-none"
-        style={{ background: 'var(--color-surface)' }}
-        onPointerDown={(e) => {
-          if (e.target !== trackRef.current || !dur) return;
-          const t = secFromClientX(e.clientX);
-          const distStart = Math.abs(t - start);
-          const distEnd = Math.abs(t - endVal);
-          if (distStart <= distEnd) onStartChange(Math.max(0, Math.min(t, endVal - 0.1)));
-          else onEndChange(Math.min(dur, Math.max(t, start + 0.1)));
-        }}
-      >
-        <div
-          className="absolute top-1 bottom-1 rounded-md opacity-40"
-          style={{
-            left: `${startPct}%`,
-            width: `${Math.max(0, endPct - startPct)}%`,
-            background: 'var(--color-primary)',
-          }}
-        />
-        <Tooltip text="Drag to set where the exported clip starts.">
-          <div
-            role="slider"
-            aria-label="Start marker"
-            className="absolute top-0 bottom-0 w-3 -ml-1.5 rounded cursor-ew-resize touch-none"
-            style={{ left: `${startPct}%`, background: 'var(--color-primary)' }}
-            onPointerDown={(e) => { e.stopPropagation(); dragRef.current = 'start'; e.currentTarget.setPointerCapture(e.pointerId); }}
-          />
-        </Tooltip>
-        <Tooltip text="Drag to set where the exported clip ends.">
-          <div
-            role="slider"
-            aria-label="End marker"
-            className="absolute top-0 bottom-0 w-3 -ml-1.5 rounded cursor-ew-resize touch-none"
-            style={{ left: `${endPct}%`, background: 'var(--color-primary)' }}
-            onPointerDown={(e) => { e.stopPropagation(); dragRef.current = 'end'; e.currentTarget.setPointerCapture(e.pointerId); }}
-          />
-        </Tooltip>
-      </div>
-      <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>Drag the markers or click the bar to set in/out points.</p>
-    </div>
-  );
-}
-
 const TOOL_HELP = {
   generate: {
     title: 'Generate clip',
@@ -234,8 +124,9 @@ const TOOL_HELP = {
     title: 'Clip / trim',
     what: 'Cut a video down to a specific start and end point.',
     features: [
-      'Set in/out points numerically or by dragging handles on the visual timeline',
-      'Numeric fields and timeline handles stay in sync both ways',
+      'A timeline of pictures from your video: click or drag along it to move through the video, and drag the two markers to choose the part to keep. The video shows the exact picture at each marker',
+      'Set start here / Set end here take the moment you are watching; Play selection previews just the part you chose',
+      'Or type the start and end in seconds. Numbers and timeline stay in sync both ways',
       'Optional end point — leave blank to trim only the start',
       'Source file is never modified',
     ],
@@ -3111,6 +3002,8 @@ export default function VideosPage() {
             />
             {tool === 'clip' && (
               <ClipTimeline
+                src={previewUrl}
+                videoRef={clipVideoRef}
                 duration={clipDuration}
                 startSec={startSec}
                 endSec={endSec}

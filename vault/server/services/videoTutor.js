@@ -40,7 +40,7 @@ const CATALOG = [
   { id: 'export-social', label: 'Export for Social', group: 'Optimise',
     does: 'Makes Reels/TikTok/Shorts (9:16, up to 60 seconds), Square (1:1) and Landscape (16:9) versions of one video in one go, and downloads them separately or as a zip.', needs: 'a video', makes: 'up to three MP4 files', notes: 'Crops to fill each shape; choose which part of the picture to keep.' },
   { id: 'clip', label: 'Clip / trim', group: 'Transform',
-    does: 'Cuts out a part of a video, from a start time to an end time, and saves just that part as a new video. The original is not changed. Can also work from a direct video file link.',
+    does: 'Cuts out a part of a video, from a start time to an end time, and saves just that part as a new video. The original is not changed. Has a timeline of pictures from the video: click or drag along it to move through the video and drag the start and end markers (the video shows the exact picture), or press Set start here / Set end here while watching, or type the times; Play selection previews the chosen part. Can also work from a direct video file link.',
     needs: 'a video', makes: 'a shorter video', notes: 'There is a "keep original quality" option that makes no quality loss but may start a second or two early. Cutting a section OUT of the middle is not available for video (it is for audio in Trim audio).' },
   { id: 'trim-audio', label: 'Trim audio', group: 'Transform',
     does: 'Keeps a part of an MP3 (or other audio file), or cuts a part out of it and joins the rest. Optional fade in and fade out.', needs: 'an audio file', makes: 'an audio file',
