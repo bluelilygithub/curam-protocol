@@ -14,7 +14,10 @@
 const { runReplicateRaw, downloadAudio, isReplicateAudioUrl } = require('./music/musicProviders');
 const { execFileAsync, FFMPEG } = require('./videoFfmpeg');
 
-const DEFAULT_MODEL = 'iboostai/demucs-api';
+// Community Demucs wrappers come and go (one of them broke on its own server: "Could not load libtorchcodec"), so several are
+// tried in order and the first that works is used. ISOLATE_REPLICATE_MODEL can list your own, comma separated, tried first.
+const DEFAULT_MODELS = ['ryan5453/demucs', 'cjwbw/demucs', 'iboostai/demucs-api'];
+const DEFAULT_MODEL = DEFAULT_MODELS[0];
 const POLL_TIMEOUT_MS = 12 * 60 * 1000; // separation of a long recording can take several minutes
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
@@ -79,6 +82,57 @@ async function uploadForModel(buffer, token, mime = 'audio/mpeg') {
   throw new Error('Could not hand the recording to the voice isolation service. Try a shorter file.');
 }
 
+// ---- building the input from the model's own schema -----------------------------------------------------------------------
+
+/**
+ * Different Demucs wrappers name their inputs differently (`stem`, `two_stems`, `model` vs `model_name`, ...). Instead of
+ * guessing, read the input schema Replicate publishes for the model and fill in only what that model actually has.
+ * `props` is the schema's `properties` object ({ name: { type, enum, default, ... } }).
+ */
+function buildModelInput(props, audioUrl) {
+  const input = { audio: audioUrl };
+  const has = (k) => props && Object.prototype.hasOwnProperty.call(props, k);
+  const options = (k) => {
+    const p = props[k] || {};
+    return p.enum || p.allOf?.find((x) => x?.enum)?.enum || null;
+  };
+  const voiceChoice = (k) => {
+    const opts = options(k);
+    if (!opts) return 'vocals';
+    return opts.find((o) => String(o).toLowerCase() === 'vocals') || opts.find((o) => /vocal/i.test(String(o))) || null;
+  };
+  for (const key of ['stem', 'two_stems', 'stems', 'target']) {
+    if (has(key)) {
+      const choice = voiceChoice(key);
+      if (choice) { input[key] = choice; break; }
+    }
+  }
+  // Prefer a small, widely playable file when the model lets us choose.
+  if (has('output_format')) {
+    const opts = options('output_format');
+    input.output_format = opts ? (opts.includes('mp3') ? 'mp3' : opts[0]) : 'mp3';
+  }
+  return input;
+}
+
+const schemaCache = new Map();
+
+async function fetchInputProps(model, token) {
+  if (schemaCache.has(model)) return schemaCache.get(model);
+  const res = await fetch(`https://api.replicate.com/v1/models/${model}`, { headers: { Authorization: `Bearer ${token}` } });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 404) throw new Error(`Model "${model}" was not found on Replicate.`);
+  if (!res.ok) throw new Error(data?.detail || `Could not look up "${model}" (${res.status})`);
+  const props = data?.latest_version?.openapi_schema?.components?.schemas?.Input?.properties || {};
+  schemaCache.set(model, props);
+  return props;
+}
+
+function modelList() {
+  const own = String(process.env.ISOLATE_REPLICATE_MODEL || '').split(',').map((m) => m.trim()).filter(Boolean);
+  return [...new Set([...own, ...DEFAULT_MODELS])];
+}
+
 // ---- the two modes ------------------------------------------------------------------------------------------------------------
 
 /** Free, local: tidy the speech band and reduce steady noise. Does not remove music. */
@@ -99,29 +153,37 @@ async function isolateQuick(inputPath, outputPath) {
  * AI separation. `audio` is the recording's bytes; returns { voice: Buffer, music: Buffer|null, ...type }.
  * Throws plain-worded errors (the route shows them as they are).
  */
-async function isolateWithModel({ audio, mime = 'audio/mpeg', token = process.env.REPLICATE_API_TOKEN, model = process.env.ISOLATE_REPLICATE_MODEL || DEFAULT_MODEL, deps = {} }) {
+async function isolateWithModel({ audio, mime = 'audio/mpeg', token = process.env.REPLICATE_API_TOKEN, models = modelList(), deps = {} }) {
   if (!token) throw new Error('Voice isolation is not set up on this server (REPLICATE_API_TOKEN is missing). Use the quick option instead.');
   if (audio.length > MAX_UPLOAD_BYTES * 3) throw new Error('That recording is too big to separate in one go. Trim it or split it first.');
   const upload = deps.upload || uploadForModel;
   const run = deps.run || runReplicateRaw;
   const download = deps.download || downloadAudio;
 
+  const inputProps = deps.inputProps || fetchInputProps;
+
   const audioUrl = await upload(audio, token, mime);
-  let output;
-  try {
-    output = await run({
-      model, token, label: 'Voice isolation', envName: 'ISOLATE_REPLICATE_MODEL',
-      pinned: process.env.ISOLATE_REPLICATE_VERSION || '', timeoutMs: POLL_TIMEOUT_MS,
-      input: { audio: audioUrl, stem: 'vocals' },
-    });
-  } catch (err) {
-    throw new Error(`Voice isolation failed: ${String(err.message || err).slice(0, 200)}`);
+  const failures = [];
+  for (const model of models) {
+    try {
+      const props = await inputProps(model, token).catch(() => ({})); // no schema -> just { audio }, the model's defaults do the rest
+      const output = await run({
+        model, token, label: 'Voice isolation', envName: 'ISOLATE_REPLICATE_MODEL',
+        pinned: models.length === 1 ? (process.env.ISOLATE_REPLICATE_VERSION || '') : '', timeoutMs: POLL_TIMEOUT_MS,
+        input: buildModelInput(props, audioUrl),
+      });
+      const stems = pickStems(output);
+      if (!stems.voice) throw new Error('it finished but returned no voice file');
+      const voice = await download(stems.voice);
+      const music = stems.music ? await download(stems.music).catch(() => null) : null;
+      return { voice, music, model, ...detectAudioType(voice) };
+    } catch (err) {
+      failures.push(`${model}: ${String(err.message || err).replace(/\s+/g, ' ').slice(0, 160)}`);
+    }
   }
-  const stems = pickStems(output);
-  if (!stems.voice) throw new Error('The voice isolation service finished but did not return a voice file. Try again, or use the quick option.');
-  const voice = await download(stems.voice);
-  const music = stems.music ? await download(stems.music).catch(() => null) : null;
-  return { voice, music, ...detectAudioType(voice) };
+  const e = new Error('The voice separation service is not working right now (every model we tried failed). Try again later, or use the Quick filter. The details are in the server log.');
+  e.failures = failures;
+  throw e;
 }
 
 // ---- short-lived results (so the voice and music files can be downloaded separately without paying twice) --------------
@@ -157,9 +219,12 @@ module.exports = {
   pickStems,
   detectAudioType,
   quickVoiceArgs,
+  buildModelInput,
+  modelList,
   isolateQuick,
   isolateWithModel,
   remember,
   recall,
   DEFAULT_MODEL,
+  DEFAULT_MODELS,
 };

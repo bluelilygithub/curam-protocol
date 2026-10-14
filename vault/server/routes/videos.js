@@ -1086,6 +1086,7 @@ router.post('/isolate-voice', aiLimiter, upload.single('audio'), ffmpegRoute('is
     try {
       out = await voiceIsolation.isolateWithModel({ audio, mime });
     } catch (err) {
+      getLogger().warn({ failures: err.failures }, `[videos/isolate-voice] ${(err.failures || []).join(' || ') || err.message}`);
       const e = new Error(err.message);
       e.status = 502;
       throw e;
