@@ -21,6 +21,7 @@ import ScriptTimer from './videos/ScriptTimer';
 import ClipTimeline from './videos/ClipTimeline';
 import TutorChat from './videos/TutorChat';
 import { parseClock, formatClock } from './videos/clock.mjs';
+import { describeFit } from './videos/replaceCheck.mjs';
 
 const VIDEO_GOOGLE_FONTS = [
   'Roboto',
@@ -181,6 +182,18 @@ const TOOL_HELP = {
       'Quick filter (free): cleans up the speech range and reduces steady noise. It lowers background music but cannot remove it',
       'Works best on speech over instrumental music; singing or lyrics tend to leak into the voice',
       'Send the result straight to Audio to transcript or Trim audio',
+    ],
+  },
+  'replace-section': {
+    title: 'Replace a section',
+    what: 'Swap the picture of one section of your video for another clip, without touching the sound.',
+    features: [
+      'Your soundtrack (music and voice) is left exactly as it is, so it runs straight through with no break',
+      'The finished video is exactly as long as the original',
+      'For a replacement clip of exactly the same length as the section. If yours is a little different, trim it first in Clip / trim; the tool tells you by how much',
+      'Choose the start with the timeline or by typing it; the end follows from your clip\'s length',
+      'Optional transition at each end (crossfade, dip to black or white, wipe, slide). They happen inside the section, so the length never changes',
+      'Differences of up to a tenth of a second are fixed for you',
     ],
   },
   'trim-audio': {
@@ -361,6 +374,7 @@ const TOOL_TIPS = {
   togif: 'Turn part of a video into a short looping GIF.',
   'export-social': 'Make tall (Reels, TikTok, Shorts), square and widescreen versions of one video in one go.',
   clip: 'Cut a part out of a video, from a start time to an end time, and save it as a new, shorter video. Has a timeline you can scrub.',
+  'replace-section': 'Swap the picture of one section of a video for another clip of exactly the same length. The sound is not touched.',
   'trim-audio': 'Keep one part of an MP3 or other audio file, or cut an unwanted part out of it.',
   reframe: 'Change the shape of a video (tall, square or widescreen) by cropping it or adding bars.',
   speed: 'Make a video play slower or faster, from a quarter speed up to four times.',
@@ -414,6 +428,7 @@ const TOOL_GROUPS = [
     label: 'Transform',
     tools: [
       { id: 'clip', label: 'Clip / trim', desc: 'Set in and out points' },
+      { id: 'replace-section', label: 'Replace a section', desc: 'Swap the picture of one section for a matching clip' },
       { id: 'trim-audio', label: 'Trim audio', desc: 'Keep a part of an MP3, or cut a part out' },
       { id: 'reframe', label: 'Crop / reframe', desc: '9:16, 16:9, 1:1, 4:5 — crop or letterbox' },
       { id: 'speed', label: 'Speed', desc: 'Slow-mo or speed up (0.25×–4×)' },
@@ -1205,6 +1220,27 @@ export default function VideosPage() {
   useEffect(() => () => { if (mxVoiceUrl) URL.revokeObjectURL(mxVoiceUrl); }, [mxVoiceUrl]);
   useEffect(() => () => { if (mxMusicUrl) URL.revokeObjectURL(mxMusicUrl); }, [mxMusicUrl]);
 
+  // Replace a section
+  const [rsReplacement, setRsReplacement] = useState(null);
+  const [rsReplDur, setRsReplDur] = useState(0);   // the replacement clip's length, from the player
+  const [rsDuration, setRsDuration] = useState(0);  // the original video's length, from the player
+  const [rsStart, setRsStart] = useState('0:00');   // typed as the person types it (1:30, 90...)
+  const [rsEnd, setRsEnd] = useState('');           // seconds, used only when the end is set by hand
+  const [rsAuto, setRsAuto] = useState(true);       // end = start + the clip's length
+  const [rsFit, setRsFit] = useState('fill');
+  const [rsInType, setRsInType] = useState('cut');
+  const [rsInSec, setRsInSec] = useState(0.5);
+  const [rsOutType, setRsOutType] = useState('cut');
+  const [rsOutSec, setRsOutSec] = useState(0.5);
+  const rsReplInputRef = useRef(null);
+  const rsReplUrl = useMemo(() => (rsReplacement ? URL.createObjectURL(rsReplacement) : ''), [rsReplacement]);
+  useEffect(() => () => { if (rsReplUrl) URL.revokeObjectURL(rsReplUrl); }, [rsReplUrl]);
+  const rsStartSec = parseClock(rsStart || '0') ?? 0;
+  const rsEndSec = rsAuto ? (rsReplDur > 0 ? rsStartSec + rsReplDur : null) : (rsEnd === '' ? null : Number(rsEnd));
+  const rsSectionLen = rsEndSec !== null ? rsEndSec - rsStartSec : 0;
+  const rsFitInfo = describeFit(rsSectionLen, rsReplDur);
+  useEffect(() => { if (tool === 'replace-section') { setRsStart('0:00'); setRsEnd(''); setRsAuto(true); setRsDuration(0); } }, [sourceFile, tool]);
+
   // Isolate voice
   const [ivFile, setIvFile] = useState(null);
   const [ivMode, setIvMode] = useState('ai');
@@ -1330,7 +1366,7 @@ export default function VideosPage() {
   }, []);
 
   useEffect(() => {
-    if (tool === 'annotate' || tool === 'extend-ending' || tool === 'end-card' || tool === 'caption-studio' || tool === 'join' || tool === 'overlay' || tool === 'slideshow') clearComposeResult();
+    if (tool === 'annotate' || tool === 'extend-ending' || tool === 'replace-section' || tool === 'end-card' || tool === 'caption-studio' || tool === 'join' || tool === 'overlay' || tool === 'slideshow') clearComposeResult();
   }, [tool, clearComposeResult]);
 
   useEffect(() => {
@@ -3228,11 +3264,11 @@ export default function VideosPage() {
         {previewUrl && tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'mix-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'clip' && isClipUrlMode) && (
           <>
             <video
-              ref={tool === 'clip' ? clipVideoRef : undefined}
+              ref={tool === 'clip' || tool === 'replace-section' ? clipVideoRef : undefined}
               src={previewUrl}
               controls
               className="w-full max-h-48 rounded-xl bg-black"
-              onLoadedMetadata={tool === 'clip' ? handleClipVideoMeta : undefined}
+              onLoadedMetadata={tool === 'clip' ? handleClipVideoMeta : tool === 'replace-section' ? (e) => setRsDuration(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0) : undefined}
             />
             {tool === 'clip' && (
               <ClipTimeline
@@ -3707,6 +3743,165 @@ export default function VideosPage() {
                   </Tooltip>
                 </div>
               </div>
+            )}
+          </section>
+        )}
+
+        {tool === 'replace-section' && (
+          <section className="space-y-3">
+            <ToolHeader id="replace-section" label="Replace a section" onHelp={setHelpTool} getIcon={getIcon} />
+            <div className="rounded-xl border p-3 text-xs space-y-1" style={{ borderColor: '#f59e0b', color: 'var(--color-text)' }}>
+              <p><strong>Read this first.</strong> This tool only swaps the picture for a clip of exactly the same length.</p>
+              <p style={{ color: 'var(--color-muted)' }}>
+                Your original soundtrack is not changed, so music and voice carry on without a break, and the finished video is exactly as long as the original.
+                If your replacement clip is a little longer or shorter than the section, trim it first in Clip / trim. The tool tells you by how much.
+              </p>
+            </div>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>1. Your video is chosen above. Play it and set where the section starts.</p>
+            <ClipTimeline
+              src={previewUrl}
+              videoRef={clipVideoRef}
+              duration={rsDuration}
+              startSec={rsStartSec}
+              endSec={rsEndSec ?? ''}
+              onStartChange={(v) => setRsStart(formatClock(v))}
+              onEndChange={(v) => { setRsAuto(false); setRsEnd(String(v)); }}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Section starts at</span>
+                <Tooltip text="The exact moment the new picture takes over. Type a time like 1:30 or 90, drag the start marker, or press Set start here while the video is paused.">
+                  <input type="text" value={rsStart} onChange={(e) => setRsStart(e.target.value)} placeholder="0:00" className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Section ends at</span>
+                <Tooltip text={rsAuto ? 'Worked out for you: the start plus the length of your replacement clip. Untick the box below to set the end yourself.' : 'The moment the original picture comes back. It must be exactly as far after the start as your clip is long.'}>
+                  <input
+                    type="text"
+                    value={rsAuto ? (rsEndSec !== null ? formatClock(rsEndSec) : '') : rsEnd}
+                    placeholder={rsAuto ? 'from your clip' : ''}
+                    readOnly={rsAuto}
+                    onChange={(e) => { const v = parseClock(e.target.value); setRsEnd(v === null ? '' : String(v)); }}
+                    className="w-full px-2 py-2 rounded-xl border text-xs"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', opacity: rsAuto ? 0.7 : 1 }}
+                  />
+                </Tooltip>
+              </label>
+            </div>
+            <Tooltip text="Recommended. The end is set for you from the length of your clip, so you only choose where it starts.">
+              <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                <input type="checkbox" checked={rsAuto} onChange={(e) => { setRsAuto(e.target.checked); if (!e.target.checked && rsEndSec !== null) setRsEnd(String(rsEndSec)); }} />
+                End the section where my clip ends (recommended)
+              </label>
+            </Tooltip>
+
+            <div className="space-y-1 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+              <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>2. The replacement clip</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Tooltip text="Choose the clip that goes in. Its length must match the section (within a tenth of a second). Its own sound is ignored.">
+                  <button
+                    type="button"
+                    onClick={() => rsReplInputRef.current?.click()}
+                    className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    {rsReplacement ? 'Change clip' : 'Choose replacement clip'}
+                  </button>
+                </Tooltip>
+                {rsReplacement && <span className="text-xs truncate max-w-xs" style={{ color: 'var(--color-muted)' }}>{rsReplacement.name} · {formatBytes(rsReplacement.size)}{rsReplDur ? ` · ${rsReplDur.toFixed(1)} s` : ''}</span>}
+                <input
+                  ref={rsReplInputRef}
+                  type="file"
+                  accept="video/*"
+                  className="hidden"
+                  onChange={(e) => { setRsReplacement(e.target.files?.[0] || null); setRsReplDur(0); e.target.value = ''; }}
+                />
+              </div>
+              {rsReplacement && (
+                <Tooltip text="Play the clip to check it is the right one.">
+                  <video src={rsReplUrl} controls className="w-full max-h-40 rounded-xl bg-black" onLoadedMetadata={(e) => setRsReplDur(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0)} />
+                </Tooltip>
+              )}
+              <p className="text-xs" role="status" style={{ color: rsFitInfo.state === 'unknown' ? 'var(--color-muted)' : rsFitInfo.ok ? '#16a34a' : '#ef4444' }}>
+                {rsFitInfo.text}
+              </p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[
+                ['In', 'Where the new picture comes in', rsInType, setRsInType, rsInSec, setRsInSec, 'How the original picture changes into your clip at the start of the section. The change happens inside the section, using up this much of the start of your clip.'],
+                ['Out', 'Where the original comes back', rsOutType, setRsOutType, rsOutSec, setRsOutSec, 'How your clip changes back into the original picture at the end of the section. The change happens inside the section, using up this much of the end of your clip.'],
+              ].map(([key, title, type, setType, sec, setSec, tip]) => (
+                <div key={key} className="space-y-1 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                  <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>{title}</p>
+                  <Tooltip text={tip}>
+                    <select value={type} onChange={(e) => setType(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                      <option value="cut">Hard cut</option>
+                      <option value="crossfade">Crossfade</option>
+                      <option value="dip_black">Dip to black</option>
+                      <option value="dip_white">Dip to white</option>
+                      <option value="wipe_left">Wipe (right to left)</option>
+                      <option value="wipe_right">Wipe (left to right)</option>
+                      <option value="slide_left">Slide left</option>
+                      <option value="slide_right">Slide right</option>
+                    </select>
+                  </Tooltip>
+                  {type !== 'cut' && (
+                    <label className="block space-y-1">
+                      <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Length (seconds)</span>
+                      <Tooltip text="How long the change takes. 0.5 is quick; 1 or 2 is gentle. It cannot be longer than the section.">
+                        <input type="number" min={0.1} max={3} step={0.1} value={sec} onChange={(e) => setSec(Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                      </Tooltip>
+                    </label>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <fieldset className="space-y-1">
+              <legend className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>If the clip is a different shape from your video</legend>
+              {[
+                ['fill', 'Fill the frame', 'Enlarges the clip until it fills the whole picture, cutting off whatever sticks out at the edges. No bars.'],
+                ['fit', 'Fit inside the frame', 'Keeps the whole clip visible and adds black bars where it does not reach the edges.'],
+              ].map(([val, label, tip]) => (
+                <Tooltip key={val} text={tip}>
+                  <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                    <input type="radio" name="rsFit" checked={rsFit === val} onChange={() => setRsFit(val)} />
+                    {label}
+                  </label>
+                </Tooltip>
+              ))}
+            </fieldset>
+
+            <Tooltip text={rsFitInfo.ok ? 'Swap the picture of the section for your clip. Your original soundtrack is kept exactly as it is.' : 'The clip and the section must be the same length first. See the message above.'}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!requireFile()) return;
+                  if (!rsReplacement) { addToast('Choose the replacement clip first', 'error'); return; }
+                  if (!rsFitInfo.ok) { addToast(rsFitInfo.text, 'error'); return; }
+                  const fd = new FormData();
+                  fd.append('video', sourceFile);
+                  fd.append('replacement', rsReplacement);
+                  fd.append('startSec', String(rsStartSec));
+                  if (!rsAuto && rsEndSec !== null) fd.append('endSec', String(rsEndSec));
+                  fd.append('fit', rsFit);
+                  fd.append('transitionIn', rsInType);
+                  fd.append('transitionInSec', String(rsInSec));
+                  fd.append('transitionOut', rsOutType);
+                  fd.append('transitionOutSec', String(rsOutSec));
+                  runJobVideo('replace-section', fd, { label: 'Replacing the section…', resultFilename: 'replaced.mp4', forTool: 'replace-section' });
+                }}
+                disabled={!ffmpegOk || !rsReplacement || !rsFitInfo.ok}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Replace section
+              </button>
+            </Tooltip>
+            {resultForTool === 'replace-section' && (
+              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
             )}
           </section>
         )}

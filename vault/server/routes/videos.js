@@ -52,6 +52,7 @@ const { timeScript, hasTimeMarkers } = require('../services/scriptTiming');
 const voiceIsolation = require('../services/voiceIsolation');
 const audioMix = require('../services/audioMix');
 const extendEndingService = require('../services/extendEnding');
+const replaceSectionService = require('../services/replaceSection');
 const { askTutor } = require('../services/videoTutor');
 const {
   startJob: startBackgroundJob, getJobStatus: getBackgroundJobStatus, getJobResult: getBackgroundJobResult, cancelJob: cancelBackgroundJob,
@@ -1227,6 +1228,51 @@ router.post('/extend-ending', upload.fields([{ name: 'video', maxCount: 1 }, { n
   } catch (err) {
     if (err.code === 'JOB_RUNNING') return res.status(409).json({ error: err.message });
     getLogger().error({ err }, '[videos/extend-ending] start');
+    return res.status(500).json({ error: 'Could not start the job. Try again.' });
+  }
+});
+
+// "Replace a section": swap the picture of one stretch of a video for a clip of exactly the same length. The original soundtrack is
+// copied untouched and the finished video is the same length, so nothing else has to change. Runs as a background job like Intro and
+// ending. A clip of the wrong length is refused with the exact amount to trim (plain wording, shown by the page).
+router.post('/replace-section', upload.fields([{ name: 'video', maxCount: 1 }, { name: 'replacement', maxCount: 1 }]), async (req, res) => {
+  try {
+    const videoFile = req.files?.video?.[0];
+    const replacementFile = req.files?.replacement?.[0];
+    if (!videoFile?.buffer?.length) return res.status(400).json({ error: 'Choose your video first.' });
+    if (!replacementFile?.buffer?.length) return res.status(400).json({ error: 'Choose the replacement clip first.' });
+    if (!enforceAggregateUploadSize(res, [videoFile, replacementFile])) return;
+    if (!(await checkFfmpeg())) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+    const startSec = Number(req.body?.startSec);
+    if (!Number.isFinite(startSec) || startSec < 0) return res.status(400).json({ error: 'Set where the section starts.' });
+    const options = {
+      startSec,
+      endSec: req.body?.endSec === undefined || req.body.endSec === '' ? undefined : Number(req.body.endSec),
+      fit: req.body?.fit === 'fit' ? 'fit' : 'fill',
+      transitionIn: { type: req.body?.transitionIn, sec: req.body?.transitionInSec },
+      transitionOut: { type: req.body?.transitionOut, sec: req.body?.transitionOutSec },
+    };
+    const base = path.basename(String(videoFile.originalname || 'video'), path.extname(String(videoFile.originalname || ''))).replace(/[^\w .-]+/g, '_').slice(0, 80) || 'video';
+
+    const jobId = startBackgroundJob(req.user.id, 'replace-section', (signal) => withTempDir(async (dir) => {
+      const videoPath = await writeUpload(dir, videoFile);
+      const replacementPath = path.join(dir, `replacement-in${extensionForMime(replacementFile.mimetype)}`);
+      await fs.writeFile(replacementPath, replacementFile.buffer);
+      const outPath = path.join(dir, 'replaced.mp4');
+      await replaceSectionService.replaceSection({
+        videoPath, replacementPath, outPath, options, signal,
+        log: (m) => getLogger().info(`[videos/replace-section] ${m}`),
+      });
+      return { buffer: await readOutputFile(outPath), fileName: `${base}-replaced.mp4`, mime: 'video/mp4' };
+    }), {
+      describeError: (err) => describeVideoError(err).message,
+      onError: (err) => getLogger().error({ err }, `[videos/replace-section] ${stderrTail(err) || String(err?.message || '').slice(0, 200)}`),
+      onEvent: (m) => getLogger().info(`[videos/replace-section] ${m}`),
+    });
+    return res.status(202).json({ jobId });
+  } catch (err) {
+    if (err.code === 'JOB_RUNNING') return res.status(409).json({ error: err.message });
+    getLogger().error({ err }, '[videos/replace-section] start');
     return res.status(500).json({ error: 'Could not start the job. Try again.' });
   }
 });
