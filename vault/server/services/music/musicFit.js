@@ -83,7 +83,7 @@ function buildFitFilter({ copies, crossfadeS, targetS, fades }) {
 }
 
 /** Loop/trim `clipPath` to exactly `targetS` seconds with fade in/out → WAV at `outPath`. */
-async function fitMusicToDuration(clipPath, outPath, targetS, fades) {
+async function fitMusicToDuration(clipPath, outPath, targetS, fades, opts = {}) {
   const probe = await probeVideo(clipPath);
   const { copies, crossfadeS } = planLoop(probe.duration, targetS);
   const inputs = Array.from({ length: copies }, () => ['-i', clipPath]).flat();
@@ -92,7 +92,7 @@ async function fitMusicToDuration(clipPath, outPath, targetS, fades) {
     '-filter_complex', buildFitFilter({ copies, crossfadeS, targetS, fades }),
     '-map', '[fit]', '-t', targetS.toFixed(3),
     '-c:a', 'pcm_s16le', outPath,
-  ], 300000);
+  ], 900000, opts);
   return { copies, clipS: probe.duration };
 }
 

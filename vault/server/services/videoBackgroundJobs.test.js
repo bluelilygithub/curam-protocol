@@ -66,5 +66,44 @@ const wait = async (fn, ms = 1000) => { const end = Date.now() + ms; while (Date
   r1();
   await wait(() => getJobStatus(second, 11).status === 'done');
 
+  // ---- cancel: stops the work, frees the person, and is theirs alone ----
+  _reset();
+  const { cancelJob } = require('./videoBackgroundJobs');
+  let sawSignal = null;
+  const slow = startJob(20, 'slow', (signal) => new Promise((resolve, reject) => {
+    sawSignal = signal;
+    signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+  }), { gate: createJobGate() });
+  await wait(() => getJobStatus(slow, 20).status === 'running');
+  assert.strictEqual(cancelJob(slow, 21), false, 'someone else cannot cancel it');
+  assert.strictEqual(cancelJob(slow, 20), true);
+  assert.strictEqual(sawSignal.aborted, true, 'the running work was told to stop');
+  assert.strictEqual(getJobStatus(slow, 20).status, 'cancelled');
+  assert.strictEqual(hasActiveJob(20), false, 'cancelling frees the person to start again');
+  await tick(30);
+  assert.strictEqual(getJobStatus(slow, 20).status, 'cancelled', 'the abort error does not turn it into a failure');
+  assert.strictEqual(cancelJob(slow, 20), false, 'nothing left to cancel');
+
+  // cancelled while still waiting for a free slot: it never starts
+  _reset();
+  const g2 = createJobGate({ maxConcurrent: 1, maxQueue: 4 });
+  let rel;
+  const holder = startJob(30, 'holder', () => new Promise((resolve) => { rel = () => resolve({ buffer: Buffer.alloc(1), fileName: 'h.mp4' }); }), { gate: g2 });
+  let started = false;
+  const waiter = startJob(31, 'waiter', async () => { started = true; return { buffer: Buffer.alloc(1), fileName: 'w.mp4' }; }, { gate: g2 });
+  await wait(() => getJobStatus(holder, 30).status === 'running');
+  assert.strictEqual(cancelJob(waiter, 31), true);
+  rel();
+  await wait(() => getJobStatus(holder, 30).status === 'done');
+  await tick(30);
+  assert.strictEqual(started, false, 'a job cancelled in the queue never runs');
+
+  // ---- the log says how long things took ----
+  _reset();
+  const events = [];
+  const logged2 = startJob(40, 'logged', async () => ({ buffer: Buffer.alloc(1), fileName: 'l.mp4' }), { gate: createJobGate(), onEvent: (m) => events.push(m) });
+  await wait(() => getJobStatus(logged2, 40).status === 'done');
+  assert.ok(events.some((m) => /queued/.test(m)) && events.some((m) => /started after waiting \d+s/.test(m)) && events.some((m) => /done in \d+s/.test(m)), events.join(' | '));
+
   console.log('videoBackgroundJobs tests passed');
 })().catch((e) => { console.error(e); process.exit(1); });

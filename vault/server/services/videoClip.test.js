@@ -78,4 +78,5 @@ assert.ok(!/ffmpeg -y|banner|\/tmp/.test(raw.message), 'ffmpeg output is never s
 assert.strictEqual(raw.status, 500);
 assert.strictEqual(describeVideoError(Object.assign(new Error('Choose your video first.'), { status: 400 })).message, 'Choose your video first.', 'our own plain messages pass through');
 assert.strictEqual(describeVideoError(Object.assign(new Error('busy'), { code: 'VIDEO_BUSY' })).status, 503);
+assert.strictEqual(describeVideoError(Object.assign(new Error('x'), { name: 'AbortError' })).cancelled, true);
 console.log('videoClip tests passed');

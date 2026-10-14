@@ -1628,41 +1628,63 @@ export default function VideosPage() {
     }
   }, [startProcessing, stopProcessing, setResultFromBlob, addToast, tool]);
 
-  // For jobs that can take minutes: start it on the server, then check on it every few seconds. No single web request stays open
-  // (the hosting gateway cuts those off at about five minutes), and the person sees how long it has been going.
-  const runJobVideo = useCallback(async (endpoint, formData, { label, resultFilename, forTool }) => {
+  // For jobs that can take minutes: start it on the server, then keep checking on it. No single web request stays open (the hosting
+  // gateway cuts those off at about five minutes). The checks TOLERATE a few failures in a row: while a video is being built the
+  // server can be too busy to answer straight away, and one missed check must not look like the job failing. The person can cancel,
+  // and a job that is still going after a reload or a lost connection can be picked up again (the banner at the top).
+  const JOB_KEY = 'vault:video-job';
+  const rememberJob = (job) => { try { localStorage.setItem(JOB_KEY, JSON.stringify(job)); } catch { /* storage unavailable */ } };
+  const forgetJob = () => { try { localStorage.removeItem(JOB_KEY); } catch { /* storage unavailable */ } };
+
+  const followJob = useCallback(async (jobId, { label, resultFilename, forTool }) => {
     const mmss = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
-    startProcessing(label, 'Starting…');
+    const fatal = (message) => Object.assign(new Error(message), { fatal: true });
+    let stopped = false; // the person pressed Cancel: stop looking, and do not put the box back up
+    const cancel = async () => { stopped = true; try { await api.post(`/api/videos/jobs/${jobId}/cancel`, {}); } catch { /* the server may already have finished */ } };
+    startProcessing(label, 'Starting…', { onCancel: cancel });
+    let misses = 0;
     try {
-      const startRes = await api.postForm(`/api/videos/${endpoint}`, formData);
-      const started = await startRes.json().catch(() => ({}));
-      if (!startRes.ok) throw new Error(started.error || 'Could not start the job');
-      const began = Date.now();
       for (;;) {
         await new Promise((resolve) => setTimeout(resolve, 2500));
-        const res = await api.get(`/api/videos/jobs/${started.jobId}`);
-        const job = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(job.error || 'Lost track of the job. If the server was restarted, run it again.');
-        const secs = Math.round((Date.now() - began) / 1000);
-        if (job.status === 'error') throw new Error(job.error || 'The job failed.');
+        if (stopped) { forgetJob(); addToast('Cancelled', 'info'); return; }
+        let job;
+        try {
+          const res = await api.get(`/api/videos/jobs/${jobId}`);
+          if (res.status === 404) { forgetJob(); throw fatal('That job was not found. If the server was restarted, run it again.'); }
+          job = await res.json();
+          if (!res.ok) throw new Error(job.error || 'The server did not answer');
+          misses = 0;
+        } catch (err) {
+          if (err.fatal) throw err;
+          misses += 1;
+          if (misses >= 12) {
+            throw fatal('Lost contact with the server for a while (it may be very busy). Your video may still be building: wait a minute, then reload this page and use "Watch it" at the top.');
+          }
+          startProcessing(label, 'The server is busy; still trying to reach it…', { onCancel: cancel });
+          continue;
+        }
+        if (job.status === 'cancelled') { forgetJob(); addToast('Cancelled', 'info'); return; }
+        if (job.status === 'error') { forgetJob(); throw fatal(job.error || 'The job failed.'); }
         if (job.status === 'done') break;
         startProcessing(
           label,
           job.status === 'queued'
-            ? `Waiting for a free slot on the server… (${mmss(secs)})`
-            : `Working… ${mmss(secs)} so far. Videos with titles can take several minutes. Please keep this page open.`,
+            ? `Waiting for a free slot on the server… (${mmss(job.elapsedSec)})`
+            : `Working… ${mmss(job.elapsedSec)} so far. Videos with titles can take several minutes. You can cancel at any time.`,
+          { onCancel: cancel },
         );
-        if (secs > 40 * 60) throw new Error('This is taking far too long. Try a shorter video, or run it again later.');
+        if (job.elapsedSec > 40 * 60) throw fatal('This is taking far too long. Cancel it and try a shorter video, or run it again later.');
       }
-      const out = await api.get(`/api/videos/jobs/${started.jobId}/result`);
+      const out = await api.get(`/api/videos/jobs/${jobId}/result`);
       if (!out.ok) {
         const err = await out.json().catch(() => ({}));
-        throw new Error(err.error || 'The finished video could not be fetched');
+        throw fatal(err.error || 'The finished video could not be fetched');
       }
       const blob = await out.blob();
       const named = /filename="([^"]+)"/.exec(out.headers.get('Content-Disposition') || '');
       setResultFromBlob(blob, named ? named[1] : resultFilename, forTool);
       setLastTransaction({ tool: forTool });
+      forgetJob();
       addToast('Done', 'success');
     } catch (err) {
       addToast(err.message, 'error');
@@ -1670,6 +1692,42 @@ export default function VideosPage() {
       stopProcessing();
     }
   }, [startProcessing, stopProcessing, setResultFromBlob, addToast]);
+
+  const runJobVideo = useCallback(async (endpoint, formData, meta) => {
+    startProcessing(meta.label, 'Sending your files…');
+    let jobId;
+    try {
+      const startRes = await api.postForm(`/api/videos/${endpoint}`, formData);
+      const started = await startRes.json().catch(() => ({}));
+      if (!startRes.ok) throw new Error(started.error || 'Could not start the job');
+      jobId = started.jobId;
+    } catch (err) {
+      stopProcessing();
+      addToast(err.message, 'error');
+      return;
+    }
+    rememberJob({ jobId, ...meta });
+    await followJob(jobId, meta);
+  }, [startProcessing, stopProcessing, addToast, followJob]);
+
+  // A job from earlier (page reloaded, or contact lost): offer to pick it up.
+  const [resumable, setResumable] = useState(null); // { jobId, label, resultFilename, forTool, status, elapsedSec }
+  useEffect(() => {
+    let remembered = null;
+    try { remembered = JSON.parse(localStorage.getItem(JOB_KEY) || 'null'); } catch { remembered = null; }
+    if (!remembered?.jobId) return undefined;
+    let cancelled = false;
+    api.get(`/api/videos/jobs/${remembered.jobId}`)
+      .then(async (res) => {
+        if (!res.ok) { forgetJob(); return; }
+        const job = await res.json();
+        if (cancelled) return;
+        if (['queued', 'running', 'done'].includes(job.status)) setResumable({ ...remembered, status: job.status, elapsedSec: job.elapsedSec });
+        else forgetJob();
+      })
+      .catch(() => { /* offline or busy: try again next visit */ });
+    return () => { cancelled = true; };
+  }, []);
 
   const runClipFromUrl = useCallback(async () => {
     if (!clipUrl.trim()) { addToast('Enter a direct video file URL', 'error'); return; }
@@ -2619,6 +2677,36 @@ export default function VideosPage() {
       </aside>
 
       <main className="flex-1 overflow-y-auto p-6 space-y-4 max-w-2xl">
+        {resumable && (
+          <div className="rounded-xl border p-3 text-xs flex flex-wrap items-center gap-2" style={{ borderColor: 'var(--color-primary)', color: 'var(--color-text)' }} role="status">
+            <span className="flex-1 min-w-[12rem]">
+              {resumable.status === 'done'
+                ? 'A video you started earlier is ready.'
+                : `A video you started earlier is still being built (${Math.floor((resumable.elapsedSec || 0) / 60)}:${String((resumable.elapsedSec || 0) % 60).padStart(2, '0')} so far).`}
+            </span>
+            <Tooltip text={resumable.status === 'done' ? 'Fetch the finished video.' : 'Watch its progress, and get the video when it is finished.'}>
+              <button
+                type="button"
+                onClick={() => { const r = resumable; setResumable(null); followJob(r.jobId, r); }}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-opacity hover:opacity-80"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                {resumable.status === 'done' ? 'Get it' : 'Watch it'}
+              </button>
+            </Tooltip>
+            <Tooltip text={resumable.status === 'done' ? 'Forget this video.' : 'Stop it. This frees the server and lets you start another.'}>
+              <button
+                type="button"
+                onClick={async () => { const r = resumable; setResumable(null); forgetJob(); if (r.status !== 'done') { try { await api.post(`/api/videos/jobs/${r.jobId}/cancel`, {}); } catch { /* nothing to cancel */ } } }}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-opacity hover:opacity-70"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              >
+                {resumable.status === 'done' ? 'Dismiss' : 'Cancel it'}
+              </button>
+            </Tooltip>
+          </div>
+        )}
+
         {status && !ffmpegOk && (
           <div className="rounded-xl border p-3 text-xs" style={{ borderColor: '#f59e0b', color: 'var(--color-muted)' }}>
             ffmpeg is not available on this server — clip, convert and annotate tools will not work until ffmpeg is installed.

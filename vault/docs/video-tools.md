@@ -46,7 +46,12 @@ The hosting gateway cuts a web request off after about five minutes, but the ser
 - A person may have **one job at a time**; a second is refused with a plain 409 message while one is running (this is what stops the overlapping-encodes slowdown). It still goes through the global concurrency gate (`videoJobGate`), so a busy server shows as `queued`, not stuck.
 - In memory only: a server restart loses running jobs (the page tells the person to run it again). Finished results are kept 30 minutes (300 MB total cap), visible only to the person who started the job.
 - Failures are logged in full (`[videos/extend-ending] <last ffmpeg lines>`) but the person only sees plain wording (`describeVideoError` in `middleware/ffmpegRoute.js`, shared with the normal routes).
-- **No cancel yet:** closing the page does not stop the server's work; it finishes (and the result is kept for 30 minutes).
+- **Cancel:** the processing box has a Cancel button (`POST /api/videos/jobs/:id/cancel`) that aborts the running ffmpeg (`AbortSignal` passed through `execFileAsync`), marks the job `cancelled` and frees the person to start another. A job cancelled while still waiting for a free slot never starts.
+- **Resume:** the job id is remembered in the browser (`localStorage` key `vault:video-job`). After a reload or a lost connection a banner at the top of Video Tools offers **Watch it** / **Get it** (finished) or **Cancel it**.
+- **Tolerant checking:** the page tolerates up to 12 failed progress checks in a row (about 30 seconds) before giving up, because while a video is being built the server can be too busy to answer straight away (slow database lookups in the Railway log at the same time are the sign). A single missed check no longer ends the box; giving up keeps the job so Resume can pick it up.
+- **Polite ffmpeg:** on Linux ffmpeg is started through `nice -n 10`, so a big encode never starves the website of processor time.
+- **Timing in the log:** `[videos/extend-ending] job <id> queued`, `started after waiting Ns`, `building: video 62.0s 1280x720@30, audio=mix, intro=3s, ending=5s, titles=intro+ending`, `music fitted to 70.0s after Ns`, `encoded after Ns`, `done in Ns` / `failed after Ns: <reason>`. The first thing to read when a build is slow or fails.
+- **Time limits:** the music-fitting step used to be killed after exactly 5 minutes (a 300 000 ms limit in `musicFit.js`); it now has 15 minutes like the main encode. Other ffmpeg steps keep the 8-minute default (`VIDEO_FFMPEG_TIMEOUT_MS`).
 
 ---
 

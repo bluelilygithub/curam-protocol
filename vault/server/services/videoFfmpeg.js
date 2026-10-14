@@ -13,9 +13,21 @@ const MAX_VIDEO_BYTES = Number(process.env.VIDEO_MAX_UPLOAD_MB || 80) * 1024 * 1
 // Default covers a long join/convert of near-cap uploads; probes pass their own short timeout.
 const DEFAULT_EXEC_TIMEOUT_MS = Number(process.env.VIDEO_FFMPEG_TIMEOUT_MS) || 480000;
 
-function execFileAsync(cmd, args, timeout = DEFAULT_EXEC_TIMEOUT_MS) {
+// A video encode will happily use every bit of the server's processor, which leaves the website itself too busy to answer (slow
+// pages, failed progress checks, a dropped connection). Running ffmpeg at a lower priority lets the website win whenever it needs to
+// while the encode still uses whatever is spare. Linux only; if `nice` is not there, ffmpeg just runs normally.
+const NICE = process.platform === 'linux' ? ['/usr/bin/nice', '/bin/nice'].find((p) => require('fs').existsSync(p)) : null;
+
+/**
+ * Run a program and wait for it. `timeout` kills it after that many ms. `opts.signal` (an AbortSignal) lets the caller cancel it
+ * (the error then has name 'AbortError').
+ */
+function execFileAsync(cmd, args, timeout = DEFAULT_EXEC_TIMEOUT_MS, opts = {}) {
+  const lowPriority = Boolean(NICE) && cmd === FFMPEG;
+  const realCmd = lowPriority ? NICE : cmd;
+  const realArgs = lowPriority ? ['-n', '10', cmd, ...args] : args;
   return new Promise((resolve, reject) => {
-    execFile(cmd, args, { timeout, maxBuffer: 20 * 1024 * 1024 }, (error, stdout, stderr) => {
+    execFile(realCmd, realArgs, { timeout, maxBuffer: 20 * 1024 * 1024, ...(opts.signal ? { signal: opts.signal } : {}) }, (error, stdout, stderr) => {
       if (error) {
         error.stderr = stderr;
         reject(error);

@@ -143,7 +143,9 @@ function buildExtendArgs(videoPath, files, outPath, plan, titles = {}) {
 /**
  * @param {{ videoPath: string, musicPath?: string|null, voicePath?: string|null, outPath: string, workDir: string, options?: object }} job
  */
-async function extendEnding({ videoPath, musicPath = null, voicePath = null, outPath, workDir, options = {}, titles = {} }) {
+async function extendEnding({ videoPath, musicPath = null, voicePath = null, outPath, workDir, options = {}, titles = {}, signal, log = () => {} }) {
+  const t0 = Date.now();
+  const since = () => `${Math.round((Date.now() - t0) / 1000)}s`;
   const info = await probeVideo(videoPath);
   const srcSec = Number(info.duration) || 0;
   if (!(srcSec > 0)) throw new Error('Could not read how long the video is. Check it is a valid video file.');
@@ -154,6 +156,8 @@ async function extendEnding({ videoPath, musicPath = null, voicePath = null, out
   const fpsParts = String(info.fps || '30/1').split('/').map(Number);
   const fps = clamp(fpsParts[1] > 0 ? fpsParts[0] / fpsParts[1] : (fpsParts[0] || 30), 1, 60);
   const size = { ...even, fps };
+
+  log(`building: video ${srcSec.toFixed(1)}s ${even.w}x${even.h}@${fps.toFixed(0)}, audio=${plan.audio}, intro=${plan.introSec}s, ending=${plan.holdSec}s, titles=${[titles.intro && 'intro', titles.ending && 'ending'].filter(Boolean).join('+') || 'none'}`);
 
   // Prepare the titles (text files, font) now that the picture size and the final length are known.
   const prepared = {};
@@ -168,19 +172,24 @@ async function extendEnding({ videoPath, musicPath = null, voicePath = null, out
   if (plan.audio === 'music' || plan.audio === 'mix') {
     fitted = path.join(workDir, 'ending-music.wav');
     // Repeats smoothly if shorter than the piece, trims if longer, fades out over the chosen time.
-    await fitMusicToDuration(musicPath, fitted, plan.total, { fadeOutS: plan.fadeOutSec });
+    await fitMusicToDuration(musicPath, fitted, plan.total, { fadeOutS: plan.fadeOutSec }, { signal });
+    log(`music fitted to ${plan.total.toFixed(1)}s after ${since()}`);
   }
   const files = { music: fitted, voice: plan.audio === 'voice' || plan.audio === 'mix' ? voicePath : null };
   try {
-    await execFileAsync(FFMPEG, buildExtendArgs(videoPath, files, outPath, plan, prepared), 900000);
+    await execFileAsync(FFMPEG, buildExtendArgs(videoPath, files, outPath, plan, prepared), 900000, { signal });
+    log(`encoded after ${since()}`);
   } catch (err) {
+    if (err.name === 'AbortError' || signal?.aborted) throw err;
     // The smooth tint fade is the only part needing an unusual filter chain. If this machine's ffmpeg rejects it, still deliver the
     // video with each tint switching on/off at once, rather than failing the whole job.
     const smooth = [prepared.intro, prepared.ending].some((t) => t && t.fadeSec > 0 && t.dimPct > 0);
     if (!smooth || err.killed) throw err;
     const instant = {};
     ['intro', 'ending'].forEach((k) => { if (prepared[k]) instant[k] = { ...prepared[k], fadeSec: 0 }; });
-    await execFileAsync(FFMPEG, buildExtendArgs(videoPath, files, outPath, plan, instant), 900000);
+    log(`smooth fade rejected, retrying with instant tint (${since()} so far)`);
+    await execFileAsync(FFMPEG, buildExtendArgs(videoPath, files, outPath, plan, instant), 900000, { signal });
+    log(`encoded after ${since()}`);
   }
   return plan;
 }

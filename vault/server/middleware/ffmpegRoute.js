@@ -31,6 +31,7 @@ function stderrTail(err, maxChars = 300) {
  * never shown; a timeout and a busy server are explained; our own plain-worded errors (err.status 400 etc.) pass through.
  */
 function describeVideoError(err, errorStatus = 500) {
+  if (err?.name === 'AbortError' || err?.code === 'ABORT_ERR') return { status: 499, message: 'Cancelled.', timedOut: false, cancelled: true };
   if (err?.code === 'VIDEO_BUSY') return { status: 503, message: err.message, timedOut: false };
   if (err?.killed || err?.signal === 'SIGTERM') {
     return { status: 504, message: 'That took too long to process — try a shorter or smaller file.', timedOut: true };

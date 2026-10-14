@@ -54,7 +54,7 @@ const audioMix = require('../services/audioMix');
 const extendEndingService = require('../services/extendEnding');
 const { askTutor } = require('../services/videoTutor');
 const {
-  startJob: startBackgroundJob, getJobStatus: getBackgroundJobStatus, getJobResult: getBackgroundJobResult,
+  startJob: startBackgroundJob, getJobStatus: getBackgroundJobStatus, getJobResult: getBackgroundJobResult, cancelJob: cancelBackgroundJob,
 } = require('../services/videoBackgroundJobs');
 const { describeVideoError, stderrTail } = require('../middleware/ffmpegRoute');
 const { fetchLicensedVideo } = require('../services/videoUrlIntake');
@@ -1192,7 +1192,7 @@ router.post('/extend-ending', upload.fields([{ name: 'video', maxCount: 1 }, { n
 
     // This can take several minutes (the hosting gateway gives up on a request after about five), so it runs in the background:
     // the page gets an id straight away and checks on it (GET /jobs/:id), then fetches the finished video.
-    const jobId = startBackgroundJob(req.user.id, 'extend-ending', () => withTempDir(async (dir) => {
+    const jobId = startBackgroundJob(req.user.id, 'extend-ending', (signal) => withTempDir(async (dir) => {
       const videoPath = await writeUpload(dir, videoFile);
       const saveAudio = async (file, name) => {
         if (!file?.buffer?.length) return null;
@@ -1207,8 +1207,9 @@ router.post('/extend-ending', upload.fields([{ name: 'video', maxCount: 1 }, { n
       try {
         // Hold, sound and BOTH titles are done in one encoding pass.
         await extendEndingService.extendEnding({
-          videoPath, musicPath, voicePath, outPath, workDir: dir, options,
+          videoPath, musicPath, voicePath, outPath, workDir: dir, options, signal,
           titles: { intro: introCard ? introCard.spec : null, ending: endCard ? endCard.spec : null },
+          log: (m) => getLogger().info(`[videos/extend-ending] ${m}`),
         });
       } catch (err) {
         if (err.stderr !== undefined || err.killed) throw err; // an ffmpeg failure: described safely by describeVideoError
@@ -1220,6 +1221,7 @@ router.post('/extend-ending', upload.fields([{ name: 'video', maxCount: 1 }, { n
     }), {
       describeError: (err) => describeVideoError(err).message,
       onError: (err) => getLogger().error({ err }, `[videos/extend-ending] ${stderrTail(err) || String(err?.message || '').slice(0, 200)}`),
+      onEvent: (m) => getLogger().info(`[videos/extend-ending] ${m}`),
     });
     return res.status(202).json({ jobId });
   } catch (err) {
@@ -1234,6 +1236,12 @@ router.get('/jobs/:id', (req, res) => {
   const status = getBackgroundJobStatus(req.params.id, req.user.id);
   if (!status) return res.status(404).json({ error: 'That job was not found. If the server restarted, run it again.' });
   res.json(status);
+});
+
+// Stop a job: kills the running ffmpeg so it stops using the server, and frees the person to start another.
+router.post('/jobs/:id/cancel', (req, res) => {
+  if (!cancelBackgroundJob(req.params.id, req.user.id)) return res.status(404).json({ error: 'There is nothing running to cancel.' });
+  res.json({ cancelled: true });
 });
 
 router.get('/jobs/:id/result', (req, res) => {

@@ -45,7 +45,7 @@ function hasActiveJob(userId) {
  * @param {{ gate?: object, describeError?: (err: Error) => string, onError?: (err: Error) => void }} [deps]
  * @returns {string} the job id
  */
-function startJob(userId, label, work, { gate = videoJobGate, describeError = (e) => e.message, onError = () => {} } = {}) {
+function startJob(userId, label, work, { gate = videoJobGate, describeError = (e) => e.message, onError = () => {}, onEvent = () => {} } = {}) {
   prune();
   if (hasActiveJob(userId)) {
     const err = new Error('You already have a video job running. Wait for it to finish (it can take a few minutes), then start the next one.');
@@ -54,15 +54,33 @@ function startJob(userId, label, work, { gate = videoJobGate, describeError = (e
     throw err;
   }
   const id = crypto.randomBytes(8).toString('hex');
-  const job = { id, userId, label, status: 'queued', startedAt: Date.now(), finishedAt: null, result: null, error: '' };
+  const controller = new AbortController();
+  const job = { id, userId, label, status: 'queued', startedAt: Date.now(), finishedAt: null, result: null, error: '', controller };
   jobs.set(id, job);
+  const say = (m) => { try { onEvent(`job ${id} ${m}`); } catch { /* logging must never break the runner */ } };
+  say('queued');
   Promise.resolve()
-    .then(() => gate.run(async () => { job.status = 'running'; job.runStartedAt = Date.now(); return work(); }))
-    .then((result) => { job.result = result; job.status = 'done'; job.finishedAt = Date.now(); prune(); })
+    .then(() => gate.run(async () => {
+      if (job.status === 'cancelled') return null; // cancelled while waiting for a free slot
+      job.status = 'running';
+      job.runStartedAt = Date.now();
+      say(`started after waiting ${Math.round((job.runStartedAt - job.startedAt) / 1000)}s`);
+      return work(controller.signal);
+    }))
+    .then((result) => {
+      if (job.status === 'cancelled') return;
+      job.result = result;
+      job.status = 'done';
+      job.finishedAt = Date.now();
+      say(`done in ${Math.round((job.finishedAt - (job.runStartedAt || job.startedAt)) / 1000)}s`);
+      prune();
+    })
     .catch((err) => {
+      if (job.status === 'cancelled') return; // the abort error is expected
       job.status = 'error';
       job.error = describeError(err) || 'Something went wrong.';
       job.finishedAt = Date.now();
+      say(`failed after ${Math.round((job.finishedAt - (job.runStartedAt || job.startedAt)) / 1000)}s: ${job.error}`);
       try { onError(err); } catch { /* logging must never break the runner */ }
     });
   return id;
@@ -73,12 +91,24 @@ function getJobStatus(id, userId) {
   const j = jobs.get(id);
   if (!j || j.userId !== userId) return null;
   return {
-    status: j.status, // 'queued' | 'running' | 'done' | 'error'
+    status: j.status, // 'queued' | 'running' | 'done' | 'error' | 'cancelled'
     error: j.error,
     label: j.label,
     elapsedSec: Math.round(((j.finishedAt || Date.now()) - j.startedAt) / 1000),
     fileName: j.result?.fileName || null,
   };
+}
+
+/** Stop a job (kills the running ffmpeg). Returns false if it is not theirs or is already finished. */
+function cancelJob(id, userId) {
+  const j = jobs.get(id);
+  if (!j || j.userId !== userId) return false;
+  if (j.status !== 'queued' && j.status !== 'running') return false;
+  j.status = 'cancelled';
+  j.error = 'Cancelled.';
+  j.finishedAt = Date.now();
+  try { j.controller.abort(); } catch { /* already stopping */ }
+  return true;
 }
 
 function getJobResult(id, userId) {
@@ -87,4 +117,4 @@ function getJobResult(id, userId) {
   return j.result;
 }
 
-module.exports = { startJob, getJobStatus, getJobResult, hasActiveJob, _reset: () => jobs.clear(), TTL_MS };
+module.exports = { startJob, getJobStatus, getJobResult, cancelJob, hasActiveJob, _reset: () => jobs.clear(), TTL_MS };
