@@ -393,75 +393,75 @@ const TOOL_TIPS = {
 };
 
 const GROUP_TIPS = {
-  create: 'Make something new from a written description.',
-  optimise: 'Change a file or its sound: make it smaller, convert it, clean up the audio, or write out what is said.',
-  transform: 'Cut, reshape or change the speed of a video or an audio file.',
-  compose: 'Build a finished piece: titles, logos, joins, captions and music.',
-  library: 'Your saved work.',
-  analyse: 'Look at a file without changing it.',
+  make: 'Start something new: a clip from a written description, or a video from your pictures.',
+  edit: 'Cut, replace, join, reshape or change the speed of a video.',
+  titles: 'Put words and logos on a video: titles, closing messages, captions and watermarks.',
+  audio: 'Everything for sound: pull it out, clean it up, trim it, mix it with music, or write out what is said.',
+  export: 'Make the finished file: smaller, in the right shape for social media, as a GIF, or as a still picture.',
+  library: 'Your saved work, and a quick look at any file.',
 };
 
 const TOOL_GROUPS = [
   {
-    id: 'create',
-    label: 'Create',
+    id: 'make',
+    label: 'Make',
     tools: [
       { id: 'generate', label: 'Generate clip', desc: 'Brief + optional image seed, reference video or YouTube example' },
+      { id: 'slideshow', label: 'Slideshow', desc: 'Images + background music → promo video' },
     ],
   },
   {
-    id: 'optimise',
-    label: 'Optimise',
-    tools: [
-      { id: 'convert', label: 'Convert / compress', desc: 'Re-encode MP4, optional resize' },
-      { id: 'extract-audio', label: 'Extract audio', desc: 'Export MP3 or WAV' },
-      { id: 'isolate-voice', label: 'Isolate voice', desc: 'Pull the speech out from under background music' },
-      { id: 'transcribe-audio', label: 'Audio → transcript', desc: 'MP3 or other audio in, editable text out' },
-      { id: 'audio', label: 'Mute / replace audio', desc: 'Strip soundtrack or swap in a new track' },
-      { id: 'normalize', label: 'Normalize audio', desc: 'One-click loudness consistency fix' },
-      { id: 'togif', label: 'Video → GIF', desc: 'Short looping GIF with an optimized palette' },
-      { id: 'export-social', label: 'Export for Social', desc: 'One video → Reels/Square/Landscape presets' },
-    ],
-  },
-  {
-    id: 'transform',
-    label: 'Transform',
+    id: 'edit',
+    label: 'Edit video',
     tools: [
       { id: 'clip', label: 'Clip / trim', desc: 'Set in and out points' },
       { id: 'replace-section', label: 'Replace a section', desc: 'Swap the picture of one section for a matching clip' },
-      { id: 'trim-audio', label: 'Trim audio', desc: 'Keep a part of an MP3, or cut a part out' },
+      { id: 'join', label: 'Join videos', desc: 'Concatenate clips — hard cut or crossfade' },
       { id: 'reframe', label: 'Crop / reframe', desc: '9:16, 16:9, 1:1, 4:5 — crop or letterbox' },
       { id: 'speed', label: 'Speed', desc: 'Slow-mo or speed up (0.25×–4×)' },
     ],
   },
   {
-    id: 'compose',
-    label: 'Compose',
+    id: 'titles',
+    label: 'Titles and captions',
     tools: [
       { id: 'annotate', label: 'Annotate', desc: 'Burn in a text label' },
       { id: 'end-card', label: 'Call to action', desc: 'End the video with a closing message and button' },
-      { id: 'overlay', label: 'Overlay / watermark', desc: 'Logo or image on top of video' },
-      { id: 'join', label: 'Join videos', desc: 'Concatenate clips — hard cut or crossfade' },
-      { id: 'slideshow', label: 'Slideshow', desc: 'Images + background music → promo video' },
-      { id: 'caption-studio', label: 'Caption studio', desc: 'Upload or library video + styled SRT captions' },
       { id: 'extend-ending', label: 'Intro and ending', desc: 'Hold the first and last frame; titles over them; music fades out' },
+      { id: 'overlay', label: 'Overlay / watermark', desc: 'Logo or image on top of video' },
+      { id: 'caption-studio', label: 'Caption studio', desc: 'Upload or library video + styled SRT captions' },
+    ],
+  },
+  {
+    id: 'audio',
+    label: 'Audio',
+    tools: [
+      { id: 'extract-audio', label: 'Extract audio', desc: 'Export MP3 or WAV' },
+      { id: 'isolate-voice', label: 'Isolate voice', desc: 'Pull the speech out from under background music' },
+      { id: 'transcribe-audio', label: 'Audio → transcript', desc: 'MP3 or other audio in, editable text out' },
+      { id: 'trim-audio', label: 'Trim audio', desc: 'Keep a part of an MP3, or cut a part out' },
       { id: 'mix-audio', label: 'Mix audio', desc: 'Voice + background music → one audio file' },
       { id: 'add-music', label: 'Add music', desc: 'Opens Music — generate or use your own track', link: '/music' },
+      { id: 'audio', label: 'Mute / replace audio', desc: 'Strip soundtrack or swap in a new track' },
+      { id: 'normalize', label: 'Normalize audio', desc: 'One-click loudness consistency fix' },
+    ],
+  },
+  {
+    id: 'export',
+    label: 'Export and convert',
+    tools: [
+      { id: 'convert', label: 'Convert / compress', desc: 'Re-encode MP4, optional resize' },
+      { id: 'export-social', label: 'Export for Social', desc: 'One video → Reels/Square/Landscape presets' },
+      { id: 'togif', label: 'Video → GIF', desc: 'Short looping GIF with an optimized palette' },
+      { id: 'thumbnail', label: 'Thumbnail', desc: 'Export a JPG frame' },
     ],
   },
   {
     id: 'library',
-    label: 'Library',
+    label: 'Library and info',
     tools: [
       { id: 'saved-library', label: 'Saved media', desc: 'Your saved videos, images, and tool runs' },
-    ],
-  },
-  {
-    id: 'analyse',
-    label: 'Analyse',
-    tools: [
       { id: 'info', label: 'File info', desc: 'Duration, resolution, codec' },
-      { id: 'thumbnail', label: 'Thumbnail', desc: 'Export a JPG frame' },
     ],
   },
 ];
@@ -997,7 +997,7 @@ export default function VideosPage() {
   const canUse = isAdmin || featureAccess.videos !== false;
 
   const [status, setStatus] = useState(null);
-  const [openGroup, setOpenGroup] = useState('create');
+  const [openGroup, setOpenGroup] = useState('make');
   const [tool, setTool] = useState('generate');
   const [search, setSearch] = useState('');
   const [helpTool, setHelpTool] = useState(null);
@@ -2005,7 +2005,7 @@ export default function VideosPage() {
     setSrtText(srt);
     setCaptionLibraryId('');
     setTool('caption-studio');
-    setOpenGroup('compose');
+    setOpenGroup('titles');
     addToast(
       applied
         ? (trSrt ? 'Transcript loaded as captions. Choose your video, then burn them in.' : 'Text loaded. Choose your video, then burn: Vault will time the text to the speech for you.')
@@ -2062,10 +2062,10 @@ export default function VideosPage() {
     const file = new File([blob], resultName, { type: blob.type });
     if (toolId === 'transcribe-audio') {
       setTrAudioFile(file); setTrText(''); setTrSrt(''); setTrNote('');
-      setTool('transcribe-audio'); setOpenGroup('optimise');
+      setTool('transcribe-audio'); setOpenGroup('audio');
     } else {
       setTaFile(file); setTaDuration(0); setTaStart('0:00'); setTaEnd('');
-      setTool('trim-audio'); setOpenGroup('transform');
+      setTool('trim-audio'); setOpenGroup('audio');
     }
   };
 
@@ -2108,10 +2108,10 @@ export default function VideosPage() {
     const file = new File([blob], ivResult.voice.fileName, { type: blob.type });
     if (toolId === 'transcribe-audio') {
       setTrAudioFile(file); setTrText(''); setTrSrt(''); setTrNote('');
-      setTool('transcribe-audio'); setOpenGroup('optimise');
+      setTool('transcribe-audio'); setOpenGroup('audio');
     } else {
       setTaFile(file); setTaDuration(0); setTaStart('0:00'); setTaEnd('');
-      setTool('trim-audio'); setOpenGroup('transform');
+      setTool('trim-audio'); setOpenGroup('audio');
     }
   };
 
@@ -2154,7 +2154,7 @@ export default function VideosPage() {
     setTrAudioFile(new File([blob], resultName, { type: blob.type }));
     setTrText(''); setTrSrt(''); setTrNote('');
     setTool('transcribe-audio');
-    setOpenGroup('optimise');
+    setOpenGroup('audio');
   };
 
   const makeTranscriptVideo = async () => {
@@ -2561,7 +2561,7 @@ export default function VideosPage() {
     setSourceFile(null);
     setSrtText('');
     setTool('caption-studio');
-    setOpenGroup('compose');
+    setOpenGroup('titles');
   }, []);
 
   if (!canUse) return <Navigate to="/" replace />;
@@ -2653,15 +2653,19 @@ export default function VideosPage() {
         {videoInfo.show && (
           <ToolInfoModal title="How Video Tools Works" onClose={videoInfo.close}>
             <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-              A real production suite built on ffmpeg — six groups in the sidebar covering everything from a blank brief to a captioned, platform-ready export:
+              A video and audio toolkit. The list on the left is arranged by what you are doing; hover over any item for a plain explanation. Not sure which tool to use? Click the graduation-cap button at the bottom right and tell the tutor what you want to make.
             </p>
             <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-              <p style={{ color: 'var(--color-text)' }}><strong>Create</strong> generates a new clip from a text brief via Replicate's <code>minimax/hailuo-2.3</code> (FAL as fallback) — brief expansion runs first, so a rough idea becomes a properly-formed prompt before the model ever sees it. An optional seed image can animate directly or steer the generated style.</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Optimise</strong> — Convert/compress (adjustable CRF/width), Extract audio (MP3/WAV), Mute/replace audio, Normalize audio (one-click loudness fix), Video→GIF (optimized palette), Export for Social (one video → Reels/Square/Landscape presets in one pass).</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Transform</strong> — Clip/trim (upload a file, or paste a direct licensed-video URL), Crop/reframe (9:16, 16:9, 1:1, 4:5 — crop or letterbox), Speed (0.25×–4×, audio pitch handled correctly).</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Compose</strong> — Annotate (burned-in text), Overlay/watermark, Join videos (hard cut or crossfade — each clip auto-normalized to a shared resolution/frame rate/audio format first, so a join never breaks on mismatched sources), Slideshow (images + music → promo video), and <strong>Caption studio</strong>: real styled subtitles with font, weight, size, and color all yours to set, from an uploaded SRT or (in dev) a local whisper-cli transcription.</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Library</strong> saves full results with their settings intact, so anything you keep can be re-run or re-captioned later, not just re-downloaded. <strong>Analyse</strong> covers File info (duration/resolution/codec) and Thumbnail export.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Make</strong> a new video: Generate clip (from a written description, optionally starting from a picture), or Slideshow (your pictures with music, captions and transitions).</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Edit video</strong> — Clip / trim (with a timeline you can scrub), Replace a section (swap the picture of one stretch for a clip of exactly the same length, sound untouched), Join videos (cuts or transitions), Crop / reframe, Speed.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Titles and captions</strong> — Annotate (a line of text), Call to action (a closing message), Intro and ending (hold the first and last frames with a title over each while the music plays on and fades out), Overlay / watermark, and Caption studio (styled subtitles, including from a script with no timestamps).</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Audio</strong> — Extract audio, Isolate voice (from background music), Audio → transcript, Trim audio, Mix audio (voice plus music), Add music, Mute / replace audio, Normalize audio.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Export and convert</strong> — Convert / compress, Export for Social (tall, square and widescreen versions at once), Video → GIF, Thumbnail.</p>
+              <p style={{ color: 'var(--color-text)' }}><strong>Library and info</strong> — Saved media keeps results with their settings, so anything you keep can be re-run or re-captioned later. File info shows a file's length, size and format.</p>
             </div>
+            <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+              Long builds (like Intro and ending) run in the background with a Cancel button, and pick up again if you reload the page.
+            </p>
             <p className="text-sm" style={{ color: 'var(--color-text)' }}>
               No YouTube/Vimeo/TikTok downloading anywhere in this tool, by design — the Clip tool's URL option only accepts a direct video file link, not a platform page.
             </p>

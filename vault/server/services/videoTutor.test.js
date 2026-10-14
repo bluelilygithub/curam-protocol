@@ -10,6 +10,13 @@ const block = page.slice(page.indexOf('const TOOL_GROUPS = ['), page.indexOf('\n
 const sidebarIds = [...block.matchAll(/\{ id: '([a-z-]+)', label: '/g)].map((m) => m[1]).sort();
 assert.ok(sidebarIds.length >= 20, 'found the sidebar tools');
 assert.deepStrictEqual(CATALOG.map((t) => t.id).sort(), sidebarIds, 'tutor catalogue matches the Video Tools sidebar');
+// ...and files each tool under the same group heading the menu does
+const groupOf = {};
+for (const m of block.matchAll(/\r?\n  \{\r?\n    id: '([a-z]+)',\r?\n    label: '([^']+)',\r?\n    tools: \[([\s\S]*?)\r?\n    \],/g)) {
+  for (const tool of m[3].matchAll(/\{ id: '([a-z-]+)', label:/g)) groupOf[tool[1]] = m[2];
+}
+assert.strictEqual(Object.keys(groupOf).length, sidebarIds.length, 'every sidebar tool is in exactly one group');
+for (const tl of CATALOG) assert.strictEqual(tl.group, groupOf[tl.id], `tutor files ${tl.id} under the menu's heading`);
 for (const t of CATALOG) {
   assert.ok(t.label && t.group && t.does && t.needs && t.makes, `${t.id} is fully described`);
 }
@@ -54,7 +61,7 @@ let r = normalizeTutorReply(JSON.stringify({
 assert.strictEqual(r.verdict, 'doable');
 assert.deepStrictEqual(r.steps.map((s) => s.tool), ['transcribe-audio', 'caption-studio']);
 assert.strictEqual(r.steps[0].label, 'Audio → transcript');
-assert.strictEqual(r.steps[1].group, 'Compose');
+assert.strictEqual(r.steps[1].group, 'Titles and captions');
 
 // invented tools are dropped, and the answer cannot claim "doable" with nothing to do
 r = normalizeTutorReply(JSON.stringify({ verdict: 'doable', answer: 'Use the magic tool.', steps: [{ tool: 'magic-eraser', do: 'Erase it.' }] }));

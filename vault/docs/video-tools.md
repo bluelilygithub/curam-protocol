@@ -25,14 +25,18 @@ Upload cap: **`VIDEO_MAX_UPLOAD_MB`** (default **80**). Processed outputs return
 
 ## Sidebar groups
 
+The menu is arranged by **what you are doing**, in rough workflow order (reorganised 2026-10-15: it had grown by adding tools where it was convenient, which scattered the audio tools across three groups). The group list is `TOOL_GROUPS` in `VideosPage.jsx`; the tutor's catalogue files each tool under the same heading, and a test fails if the two disagree.
+
 | Group | Tools |
 |---|---|
-| **Create** | Generate clip |
-| **Optimise** | Convert / compress, Extract audio, Isolate voice, Audio → transcript, Mute / replace audio, Normalize audio, Video → GIF, Export for Social |
-| **Transform** | Clip / trim, Replace a section, Trim audio, Crop / reframe, Speed |
-| **Compose** | Add music (opens Music), Mix audio, Intro and ending, Annotate, Call to action, Overlay / watermark, Join videos, Slideshow, Caption studio |
-| **Library** | Saved media |
-| **Analyse** | File info, Thumbnail |
+| **Make** | Generate clip, Slideshow |
+| **Edit video** | Clip / trim, Replace a section, Join videos, Crop / reframe, Speed |
+| **Titles and captions** | Annotate, Call to action, Intro and ending, Overlay / watermark, Caption studio |
+| **Audio** | Extract audio, Isolate voice, Audio → transcript, Trim audio, Mix audio, Add music (opens Music), Mute / replace audio, Normalize audio |
+| **Export and convert** | Convert / compress, Export for Social, Video → GIF, Thumbnail |
+| **Library and info** | Saved media, File info |
+
+> The per-tool reference further down this page is kept in the order it was written and still carries the **old** headings (Create / Optimise / Transform / Compose / Library / Analyse). Look a tool up by its name; the table above is the current menu.
 
 Every item in the left-hand list, and each group heading, shows a plain-words **hover tooltip** saying what the tool does (`TOOL_TIPS` / `GROUP_TIPS` in `VideosPage.jsx`; `node server/services/videoTutor.test.js` fails if a tool or group is added without one, and if a tooltip uses technical words such as CRF, codec, bitrate or ffmpeg). Cross-cutting: **ProcessingModal** for operations >2 s; **Use in another tool** loads the result blob back as the source file for chaining; every in-panel control across all 21 tools shows a themed hover popover explaining what it does, via the shared `client/src/components/Tooltip.jsx` component (same one used by Graphics and PDF Tools); every tool's title also carries a click-to-open help icon (`ToolHeader`, `getIcon('help-circle')`) opening a modal with that tool's full title/description/feature list (`TOOL_HELP`) — matching the same two-layer pattern as Graphics and PDF Tools.
 
