@@ -69,4 +69,13 @@ const messy = [`${fence}srt`, '1', '00:00:01.000 --> 00:00:03.000', 'Hello there
 assert.strictEqual(prepareCaptionSrt(messy), ['1', '00:00:01,000 --> 00:00:03,000', 'Hello there.', ''].join('\n'));
 assert.throws(() => prepareCaptionSrt('Just a plain transcript with no times.'), (e) => e.code === 'CAPTIONS_INVALID' && /timestamps/.test(e.message));
 assert.throws(() => prepareCaptionSrt(''), (e) => e.code === 'CAPTIONS_INVALID');
+// ---- what the person is told when a video job fails (never raw ffmpeg output) ----
+const { describeVideoError } = require('../middleware/ffmpegRoute');
+assert.deepStrictEqual(describeVideoError(Object.assign(new Error('x'), { killed: true })), { status: 504, message: 'That took too long to process — try a shorter or smaller file.', timedOut: true });
+assert.strictEqual(describeVideoError(Object.assign(new Error('x'), { signal: 'SIGTERM' })).timedOut, true);
+const raw = describeVideoError(Object.assign(new Error('Command failed: ffmpeg -y -i /tmp/x'), { stderr: 'banner...' }));
+assert.ok(!/ffmpeg -y|banner|\/tmp/.test(raw.message), 'ffmpeg output is never shown');
+assert.strictEqual(raw.status, 500);
+assert.strictEqual(describeVideoError(Object.assign(new Error('Choose your video first.'), { status: 400 })).message, 'Choose your video first.', 'our own plain messages pass through');
+assert.strictEqual(describeVideoError(Object.assign(new Error('busy'), { code: 'VIDEO_BUSY' })).status, 503);
 console.log('videoClip tests passed');

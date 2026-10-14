@@ -59,21 +59,36 @@ assert.match(overlayVideoGraph({ ...common, fadeSec: 1, dimPct: 50, pad: ',tpad=
 // every graph ends in the [v] label the caller maps
 for (const f of [3, 0]) for (const d of [0, 60]) assert.ok(overlayVideoGraph({ ...common, fadeSec: f, dimPct: d }).endsWith('[v]'));
 
-// ---- OPENING title: there from the very first frame, fully visible for the whole hold, then fading away as the video moves ----
-const { introOverlayGraph } = require('./videoEndCard');
-const idraws = ["drawtext=text='Title'"];
-const icommon = { w: 1280, h: 720, fps: 30, holdSec: 4, bgColor: '112233', draws: idraws, enable: ":enable='lte(t,4.000)'" };
-let ig = introOverlayGraph({ ...icommon, fadeSec: 1, dimPct: 60 });
-assert.match(ig, /color=c=0x112233:s=1280x720:r=30,format=rgba,colorchannelmixer=aa=0\.60/);
-assert.match(ig, /fade=t=out:st=4\.000:d=1\.000:alpha=1\[tint\]/, 'the tint starts fading only AFTER the whole 4 s hold, so the title is fully visible for the full hold');
-assert.ok(!/fade=t=in/.test(ig), 'it does not fade in: the title is there from the first frame');
-assert.match(ig, /\[base\]\[tint\]overlay=shortest=1,drawtext/);
-ig = introOverlayGraph({ ...icommon, fadeSec: 0, dimPct: 60 });
-assert.match(ig, /drawbox=.*color=0x112233@0\.60:t=fill:enable='lte\(t,4\.000\)'/, 'no fade: tint and title stay until the hold ends, then go at once');
-ig = introOverlayGraph({ ...icommon, fadeSec: 1, dimPct: 0 });
-assert.ok(!/drawbox|colorchannelmixer|overlay=/.test(ig), 'no tint: the first picture keeps its colour');
-assert.match(ig, /^\[0:v\]scale=1280:720,setsar=1,fps=30,drawtext/);
-for (const f of [1, 0]) for (const d of [0, 60]) assert.ok(introOverlayGraph({ ...icommon, fadeSec: f, dimPct: d }).endsWith('[v]'));
+// ---- titles are pieces of ONE graph (so the video is encoded once, not once per title) ----
+const { titleStage, closingTiming } = require('./videoEndCard');
+const stageDraws = ["drawtext=text='Title'"];
+const base = { inLabel: '[held]', outLabel: '[v]', tintLabel: '[tintI]', w: 1280, h: 720, fps: 30, draws: stageDraws, enable: ":enable='lte(t,5.000)'", bgColor: '112233' };
+
+// OPENING: tint fades OUT starting when the hold ends
+let st = titleStage({ ...base, dimPct: 60, fadeSec: 2, fadeDir: 'out', fadeStart: 3, final: false });
+assert.match(st, /^color=c=0x112233:s=1280x720:r=30,format=rgba,colorchannelmixer=aa=0\.60,fade=t=out:st=3\.000:d=2\.000:alpha=1\[tintI\];\[held\]\[tintI\]overlay=shortest=1,drawtext/);
+assert.ok(st.endsWith('[v]') && !st.includes('format=yuv420p'), 'not the last piece: no pixel-format step yet');
+assert.ok(!/fade=t=in/.test(st), 'the opening does not fade in: it is there from the first picture');
+
+// CLOSING: tint fades IN starting when the message starts
+st = titleStage({ ...base, tintLabel: '[tintE]', dimPct: 60, fadeSec: 3, fadeDir: 'in', fadeStart: 26, final: true });
+assert.match(st, /fade=t=in:st=26\.000:d=3\.000:alpha=1\[tintE\];\[held\]\[tintE\]overlay=shortest=1,drawtext.*,format=yuv420p\[v\]$/);
+
+// instant tint, and no tint at all
+st = titleStage({ ...base, dimPct: 60, fadeSec: 0, fadeDir: 'in', fadeStart: 0, final: true });
+assert.match(st, /^\[held\]drawbox=x=0:y=0:w=iw:h=ih:color=0x112233@0\.60:t=fill:enable='lte\(t,5\.000\)',drawtext.*format=yuv420p\[v\]$/);
+st = titleStage({ ...base, dimPct: 0, fadeSec: 2, fadeDir: 'out', fadeStart: 3, final: true });
+assert.ok(!/drawbox|colorchannelmixer|overlay=/.test(st), 'no tint: the picture keeps its colour');
+assert.match(st, /^\[held\]drawtext/);
+
+// the closing message occupies the last `durationSec` seconds and fades in from its start
+let ct = closingTiming({ totalSec: 38, durationSec: 5, fadeSec: 2 });
+assert.deepStrictEqual([ct.startAt, ct.fadeSec], [33, 2]);
+assert.match(ct.enable, /gte\(t,33\.000\)/);
+assert.match(ct.alphaExpr, /\(t-33\.000\)\/2\.000/);
+assert.strictEqual(closingTiming({ totalSec: 38, durationSec: 5, fadeSec: 99 }).fadeSec, 5, 'a fade cannot outlast the message');
+assert.strictEqual(closingTiming({ totalSec: 3, durationSec: 5, fadeSec: 1 }).startAt, 0, 'a message longer than the video starts at 0');
+assert.strictEqual(closingTiming({ totalSec: 38, durationSec: 5, fadeSec: 0 }).alphaExpr, '');
 
 // the timing the person asked for: a 3 s hold means 3 s FULLY visible, whatever the fade-away is set to
 const { introTiming } = require('./videoEndCard');

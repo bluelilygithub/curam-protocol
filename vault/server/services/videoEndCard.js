@@ -221,26 +221,6 @@ async function appendEndCard(inputPath, outputPath, rawSpec, workDir) {
 }
 
 /**
- * Filter graph for the OPENING title: the message and tint are fully there from the very first frame and stay FULLY visible for the
- * whole `holdSec` (the held first frame). When the video starts to move they fade away over the next `fadeSec`, so the fade is a
- * dissolve over the first moments of the action and never eats into the hold. Pure, so it is unit tested.
- *  - dimPct = 0    no tint: the picture keeps all its colour.
- *  - fadeSec = 0   tint and text stay until the hold ends, then are gone at once.
- *  - otherwise     a colour layer whose opacity ramps down to nothing from holdSec to holdSec + fadeSec.
- */
-function introOverlayGraph({ w, h, fps, holdSec, fadeSec, dimPct, bgColor, draws, enable = '' }) {
-  const base = `[0:v]scale=${w}:${h},setsar=1,fps=${fps}`;
-  const tail = `${draws.length ? `${draws.join(',')},` : ''}format=yuv420p[v]`;
-  const dim = Math.max(0, Math.min(1, Number(dimPct) / 100));
-  if (!(dim > 0)) return `${base},${tail}`;
-  if (!(fadeSec > 0)) return `${base},drawbox=x=0:y=0:w=iw:h=ih:color=0x${bgColor}@${dim.toFixed(2)}:t=fill${enable},${tail}`;
-  return `${base}[base];`
-    + `color=c=0x${bgColor}:s=${w}x${h}:r=${fps},format=rgba,colorchannelmixer=aa=${dim.toFixed(2)},`
-    + `fade=t=out:st=${Number(holdSec).toFixed(3)}:d=${Number(fadeSec).toFixed(3)}:alpha=1[tint];`
-    + `[base][tint]overlay=shortest=1,${tail}`;
-}
-
-/**
  * When the opening title is visible. It is fully visible for the whole `holdSec`; it then fades away over the next `fadeSec`
  * (never longer than the rest of the video), so the fade never eats into the hold. Pure, so the timing is unit tested.
  */
@@ -256,43 +236,75 @@ function introTiming({ holdSec, fadeSec, videoSec }) {
 }
 
 /**
- * Lay an opening title over the first `holdSec` seconds of a video (the held first frame made by Extend ending). Picture and
- * sound are otherwise untouched: the sound is copied, not re-encoded.
+ * When the CLOSING message is visible on a video `totalSec` long: the last `durationSec` seconds, fading in over `fadeSec`
+ * (never longer than that window). Pure, unit tested.
  */
-async function applyIntroCard(inputPath, outputPath, rawSpec, holdSec, workDir) {
+function closingTiming({ totalSec, durationSec, fadeSec }) {
+  const D = Math.max(0.5, Math.min(Number(durationSec) || 4, Number(totalSec) || 0));
+  const startAt = Math.max(0, Number(totalSec) - D);
+  const fade = Math.max(0, Math.min(Number(fadeSec) || 0, D));
+  return {
+    fadeSec: fade,
+    startAt,
+    enable: `:enable='gte(t,${startAt.toFixed(3)})'`,
+    alphaExpr: fade > 0 ? `:alpha='min(1,max(0,(t-${startAt.toFixed(3)})/${fade.toFixed(3)}))'` : '',
+  };
+}
+
+/**
+ * One title (opening or closing) laid over a stretch of video, written as a PIECE of a larger filter graph so that it is done in
+ * the SAME encoding pass as everything else (an earlier version re-encoded the whole video once per title, which was slow).
+ *  - `inLabel` / `outLabel`  the stream labels this piece reads and writes, e.g. '[held]' and '[v]'.
+ *  - dimPct = 0      no tint: the picture keeps all its colour.
+ *  - fadeSec = 0     the tint is switched on/off at once (drawbox).
+ *  - otherwise       a colour layer whose opacity ramps (fadeDir 'in' = appears, 'out' = goes away) from fadeStart over fadeSec.
+ *  - `final`         this is the last piece, so it also converts to yuv420p for the encoder.
+ * Pure, so the graph is unit tested without ffmpeg.
+ */
+function titleStage({ inLabel, outLabel, tintLabel, w, h, fps, draws, enable = '', dimPct, bgColor, fadeSec, fadeDir, fadeStart, final = false }) {
+  const text = draws.join(',');
+  const end = `${text}${final ? `${text ? ',' : ''}format=yuv420p` : ''}`;
+  const dim = Math.max(0, Math.min(1, Number(dimPct) / 100));
+  if (!(dim > 0)) return `${inLabel}${end || 'null'}${outLabel}`;
+  if (!(fadeSec > 0)) return `${inLabel}drawbox=x=0:y=0:w=iw:h=ih:color=0x${bgColor}@${dim.toFixed(2)}:t=fill${enable}${end ? `,${end}` : ''}${outLabel}`;
+  return `color=c=0x${bgColor}:s=${w}x${h}:r=${fps},format=rgba,colorchannelmixer=aa=${dim.toFixed(2)},`
+    + `fade=t=${fadeDir}:st=${Number(fadeStart).toFixed(3)}:d=${Number(fadeSec).toFixed(3)}:alpha=1${tintLabel};`
+    + `${inLabel}${tintLabel}overlay=shortest=1${end ? `,${end}` : ''}${outLabel}`;
+}
+
+/**
+ * Turn the person's title settings into what titleStage needs (writes the text files and fetches the font).
+ * @param {{ spec: object, kind: 'intro'|'ending', introSec: number, totalSec: number, size: { w:number, h:number, fps:number }, workDir: string }} job
+ * @returns {Promise<object>} the pieces of a stage, minus its labels
+ */
+async function prepareTitle({ spec: rawSpec, kind, introSec = 0, totalSec, size, workDir }) {
   const spec = normalizeEndCard({ ...rawSpec, placement: 'over-end' });
   if (spec.error) throw new Error(spec.error);
-  const probe = await probeVideo(inputPath);
-  if (!probe.width || !probe.height) throw new Error('Could not read the video size');
-  const w = probe.width - (probe.width % 2);
-  const h = probe.height - (probe.height % 2);
-  const fpsParts = String(probe.fps || '30/1').split('/').map(Number);
-  const fps = clamp(fpsParts[1] > 0 ? fpsParts[0] / fpsParts[1] : (fpsParts[0] || 30), 1, 60);
-
-  const H = clamp(Number(holdSec) || 3, 1, 15);
-  const { fadeSec, enable, alphaExpr } = introTiming({ holdSec: H, fadeSec: spec.fadeSec, videoSec: probe.duration });
-
+  const { w, h, fps } = size;
+  let timing;
+  let fadeDir;
+  let fadeStart;
+  if (kind === 'intro') {
+    const H = clamp(Number(introSec) || 3, 1, 15);
+    timing = introTiming({ holdSec: H, fadeSec: spec.fadeSec, videoSec: totalSec });
+    fadeDir = 'out';
+    fadeStart = H;
+  } else {
+    timing = closingTiming({ totalSec, durationSec: spec.durationSec, fadeSec: spec.fadeSec });
+    fadeDir = 'in';
+    fadeStart = timing.startAt;
+  }
   const fontfile = escapeFilterPath(await writeFontToDir(spec.fontFamily, spec.fontWeight, workDir));
   const blocks = layoutEndCard(spec, w, h);
-  const draws = await cardDrawFilters({ spec, blocks, fontfile, workDir, enable, alphaExpr, prefix: 'introcard' });
-
-  const buildArgs = (fade) => {
-    const graph = introOverlayGraph({ w, h, fps, holdSec: H, fadeSec: fade, dimPct: spec.dimPct, bgColor: spec.bgColor, draws, enable });
-    const args = ['-y', '-i', inputPath, '-filter_complex', graph, '-map', '[v]'];
-    if (probe.hasAudio) args.push('-map', '0:a', '-c:a', 'copy');
-    args.push('-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outputPath);
-    return args;
+  const draws = await cardDrawFilters({
+    spec, blocks, fontfile, workDir, enable: timing.enable, alphaExpr: timing.alphaExpr, prefix: kind === 'intro' ? 'introcard' : 'endcard',
+  });
+  return {
+    kind, w, h, fps, draws, enable: timing.enable, dimPct: spec.dimPct, bgColor: spec.bgColor,
+    fadeSec: timing.fadeSec, fadeDir, fadeStart,
   };
-  try {
-    await execFileAsync(FFMPEG, buildArgs(fadeSec));
-  } catch (err) {
-    // As for the closing message: only the smooth tint fade needs an unusual filter chain, so if it is rejected still deliver the
-    // video with the tint ending at once rather than failing.
-    if (!(fadeSec > 0 && spec.dimPct > 0)) throw err;
-    await execFileAsync(FFMPEG, buildArgs(0));
-  }
 }
 
 module.exports = {
-  appendEndCard, applyIntroCard, normalizeEndCard, layoutEndCard, overlayVideoGraph, introOverlayGraph, introTiming, cardDrawFilters, PLACEMENTS, MIN_DURATION_SEC, MAX_DURATION_SEC,
+  appendEndCard, normalizeEndCard, layoutEndCard, overlayVideoGraph, introTiming, closingTiming, titleStage, prepareTitle, cardDrawFilters, PLACEMENTS, MIN_DURATION_SEC, MAX_DURATION_SEC,
 };

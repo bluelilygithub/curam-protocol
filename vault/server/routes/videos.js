@@ -53,7 +53,10 @@ const voiceIsolation = require('../services/voiceIsolation');
 const audioMix = require('../services/audioMix');
 const extendEndingService = require('../services/extendEnding');
 const { askTutor } = require('../services/videoTutor');
-const { applyIntroCard } = require('../services/videoEndCard');
+const {
+  startJob: startBackgroundJob, getJobStatus: getBackgroundJobStatus, getJobResult: getBackgroundJobResult,
+} = require('../services/videoBackgroundJobs');
+const { describeVideoError, stderrTail } = require('../middleware/ffmpegRoute');
 const { fetchLicensedVideo } = require('../services/videoUrlIntake');
 const { ffmpegRoute } = require('../middleware/ffmpegRoute');
 const { planSlideshow, normalizeSlideshowPlan } = require('../services/videoSlideshowPlan');
@@ -1166,61 +1169,78 @@ router.get('/isolate-voice/:id/:stem', async (req, res) => {
 
 // "Extend ending": hold the last frame for X seconds; chosen music carries on through the hold and fades out over it; an optional
 // closing message (Call to action) is laid over the held part so it appears while the music fades. One video out.
-router.post('/extend-ending', upload.fields([{ name: 'video', maxCount: 1 }, { name: 'music', maxCount: 1 }, { name: 'voice', maxCount: 1 }, { name: 'audio', maxCount: 1 }]), ffmpegRoute('extend-ending', async (req, res) => {
-  const videoFile = req.files?.video?.[0];
-  // `music` keeps going through the held frame (and repeats if short); `voice` plays once. (`audio` is the old name for `music`.)
-  const musicFile = req.files?.music?.[0] || req.files?.audio?.[0];
-  const voiceFile = req.files?.voice?.[0];
-  if (!videoFile?.buffer?.length) return res.status(400).json({ error: 'Choose your video first.' });
-  if (!enforceAggregateUploadSize(res, [videoFile, musicFile, voiceFile])) return;
-  const endCard = endCardRequest(req.body);
-  if (endCard?.error) return res.status(400).json({ error: endCard.error });
-  const introCard = introCardRequest(req.body);
-  if (introCard?.error) return res.status(400).json({ error: introCard.error });
-  // An opening title needs something to sit on: at least a second of held first frame (3 if none was set).
-  const askedIntro = Number(req.body?.introHoldSec);
-  const introSec = introCard ? (askedIntro >= 1 ? askedIntro : 3) : (Number.isFinite(askedIntro) ? askedIntro : 0);
-  const options = extendEndingService.normalizeExtendOptions({
-    holdSec: req.body?.holdSec, introSec, fadeOutSec: req.body?.fadeOutSec, musicVolume: req.body?.musicVolume, ducking: req.body?.ducking,
-  });
-  const base = path.basename(String(videoFile.originalname || 'video'), path.extname(String(videoFile.originalname || ''))).replace(/[^\w .-]+/g, '_').slice(0, 80) || 'video';
+router.post('/extend-ending', upload.fields([{ name: 'video', maxCount: 1 }, { name: 'music', maxCount: 1 }, { name: 'voice', maxCount: 1 }, { name: 'audio', maxCount: 1 }]), async (req, res) => {
+  try {
+    const videoFile = req.files?.video?.[0];
+    // `music` keeps going through the held frame (and repeats if short); `voice` plays once. (`audio` is the old name for `music`.)
+    const musicFile = req.files?.music?.[0] || req.files?.audio?.[0];
+    const voiceFile = req.files?.voice?.[0];
+    if (!videoFile?.buffer?.length) return res.status(400).json({ error: 'Choose your video first.' });
+    if (!enforceAggregateUploadSize(res, [videoFile, musicFile, voiceFile])) return;
+    const endCard = endCardRequest(req.body);
+    if (endCard?.error) return res.status(400).json({ error: endCard.error });
+    const introCard = introCardRequest(req.body);
+    if (introCard?.error) return res.status(400).json({ error: introCard.error });
+    if (!(await checkFfmpeg())) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+    // An opening title needs something to sit on: at least a second of held first frame (3 if none was set).
+    const askedIntro = Number(req.body?.introHoldSec);
+    const introSec = introCard ? (askedIntro >= 1 ? askedIntro : 3) : (Number.isFinite(askedIntro) ? askedIntro : 0);
+    const options = extendEndingService.normalizeExtendOptions({
+      holdSec: req.body?.holdSec, introSec, fadeOutSec: req.body?.fadeOutSec, musicVolume: req.body?.musicVolume, ducking: req.body?.ducking,
+    });
+    const base = path.basename(String(videoFile.originalname || 'video'), path.extname(String(videoFile.originalname || ''))).replace(/[^\w .-]+/g, '_').slice(0, 80) || 'video';
 
-  const buffer = await withTempDir(async (dir) => {
-    const videoPath = await writeUpload(dir, videoFile);
-    const saveAudio = async (file, name) => {
-      if (!file?.buffer?.length) return null;
-      const e = path.extname(String(file.originalname || '')).toLowerCase();
-      const p = path.join(dir, `${name}-in${AUDIO_EXTS.has(e) ? e : '.mp3'}`);
-      await fs.writeFile(p, file.buffer);
-      return p;
-    };
-    const musicPath = await saveAudio(musicFile, 'ending-music');
-    const voicePath = await saveAudio(voiceFile, 'ending-voice');
-    const outPath = path.join(dir, 'extended.mp4');
-    let plan;
-    try {
-      plan = await extendEndingService.extendEnding({ videoPath, musicPath, voicePath, outPath, workDir: dir, options });
-    } catch (err) {
-      if (err.stderr !== undefined) throw err; // an ffmpeg failure: the generic handler words it safely
-      const e = new Error(err.message);
-      e.status = 400;
-      throw e;
-    }
-    // The closing message goes over the held last frame: it is the last `holdSec` seconds of the new video, so "over the end" is exactly that.
-    let finalPath = endCard
-      ? await withEndCardApplied(dir, outPath, { ...endCard.spec, placement: 'over-end', durationSec: Math.min(plan.holdSec, 15) })
-      : outPath;
-    // The opening title goes over the held first frame: the first `introSec` seconds. Its tint and text fade away as the video starts.
-    if (introCard) {
-      const introPath = path.join(dir, 'with-intro-title.mp4');
-      await applyIntroCard(finalPath, introPath, { ...introCard.spec, placement: 'over-end' }, plan.introSec, dir);
-      finalPath = introPath;
-    }
-    return readOutputFile(finalPath);
-  });
+    // This can take several minutes (the hosting gateway gives up on a request after about five), so it runs in the background:
+    // the page gets an id straight away and checks on it (GET /jobs/:id), then fetches the finished video.
+    const jobId = startBackgroundJob(req.user.id, 'extend-ending', () => withTempDir(async (dir) => {
+      const videoPath = await writeUpload(dir, videoFile);
+      const saveAudio = async (file, name) => {
+        if (!file?.buffer?.length) return null;
+        const e = path.extname(String(file.originalname || '')).toLowerCase();
+        const p = path.join(dir, `${name}-in${AUDIO_EXTS.has(e) ? e : '.mp3'}`);
+        await fs.writeFile(p, file.buffer);
+        return p;
+      };
+      const musicPath = await saveAudio(musicFile, 'ending-music');
+      const voicePath = await saveAudio(voiceFile, 'ending-voice');
+      const outPath = path.join(dir, 'extended.mp4');
+      try {
+        // Hold, sound and BOTH titles are done in one encoding pass.
+        await extendEndingService.extendEnding({
+          videoPath, musicPath, voicePath, outPath, workDir: dir, options,
+          titles: { intro: introCard ? introCard.spec : null, ending: endCard ? endCard.spec : null },
+        });
+      } catch (err) {
+        if (err.stderr !== undefined || err.killed) throw err; // an ffmpeg failure: described safely by describeVideoError
+        const e = new Error(err.message);
+        e.status = 400;
+        throw e;
+      }
+      return { buffer: await readOutputFile(outPath), fileName: `${base}-extended.mp4`, mime: 'video/mp4' };
+    }), {
+      describeError: (err) => describeVideoError(err).message,
+      onError: (err) => getLogger().error({ err }, `[videos/extend-ending] ${stderrTail(err) || String(err?.message || '').slice(0, 200)}`),
+    });
+    return res.status(202).json({ jobId });
+  } catch (err) {
+    if (err.code === 'JOB_RUNNING') return res.status(409).json({ error: err.message });
+    getLogger().error({ err }, '[videos/extend-ending] start');
+    return res.status(500).json({ error: 'Could not start the job. Try again.' });
+  }
+});
 
-  sendVideoBuffer(res, buffer, `${base}-extended.mp4`);
-}));
+// Progress and result of a background job (the person's own only).
+router.get('/jobs/:id', (req, res) => {
+  const status = getBackgroundJobStatus(req.params.id, req.user.id);
+  if (!status) return res.status(404).json({ error: 'That job was not found. If the server restarted, run it again.' });
+  res.json(status);
+});
+
+router.get('/jobs/:id/result', (req, res) => {
+  const result = getBackgroundJobResult(req.params.id, req.user.id);
+  if (!result) return res.status(404).json({ error: 'That result is not available (it may have expired). Run it again.' });
+  sendVideoBuffer(res, result.buffer, result.fileName, result.mime || 'video/mp4');
+});
 
 // "Mix audio": a voice (foreground) and a piece of music (background) combined into one audio file. The music is repeated with
 // smooth crossfades or trimmed to fit, dips under the voice (ducking) and fades in and out; the result is levelled for speech.

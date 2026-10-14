@@ -1628,6 +1628,49 @@ export default function VideosPage() {
     }
   }, [startProcessing, stopProcessing, setResultFromBlob, addToast, tool]);
 
+  // For jobs that can take minutes: start it on the server, then check on it every few seconds. No single web request stays open
+  // (the hosting gateway cuts those off at about five minutes), and the person sees how long it has been going.
+  const runJobVideo = useCallback(async (endpoint, formData, { label, resultFilename, forTool }) => {
+    const mmss = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+    startProcessing(label, 'Starting…');
+    try {
+      const startRes = await api.postForm(`/api/videos/${endpoint}`, formData);
+      const started = await startRes.json().catch(() => ({}));
+      if (!startRes.ok) throw new Error(started.error || 'Could not start the job');
+      const began = Date.now();
+      for (;;) {
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        const res = await api.get(`/api/videos/jobs/${started.jobId}`);
+        const job = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(job.error || 'Lost track of the job. If the server was restarted, run it again.');
+        const secs = Math.round((Date.now() - began) / 1000);
+        if (job.status === 'error') throw new Error(job.error || 'The job failed.');
+        if (job.status === 'done') break;
+        startProcessing(
+          label,
+          job.status === 'queued'
+            ? `Waiting for a free slot on the server… (${mmss(secs)})`
+            : `Working… ${mmss(secs)} so far. Videos with titles can take several minutes. Please keep this page open.`,
+        );
+        if (secs > 40 * 60) throw new Error('This is taking far too long. Try a shorter video, or run it again later.');
+      }
+      const out = await api.get(`/api/videos/jobs/${started.jobId}/result`);
+      if (!out.ok) {
+        const err = await out.json().catch(() => ({}));
+        throw new Error(err.error || 'The finished video could not be fetched');
+      }
+      const blob = await out.blob();
+      const named = /filename="([^"]+)"/.exec(out.headers.get('Content-Disposition') || '');
+      setResultFromBlob(blob, named ? named[1] : resultFilename, forTool);
+      setLastTransaction({ tool: forTool });
+      addToast('Done', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      stopProcessing();
+    }
+  }, [startProcessing, stopProcessing, setResultFromBlob, addToast]);
+
   const runClipFromUrl = useCallback(async () => {
     if (!clipUrl.trim()) { addToast('Enter a direct video file URL', 'error'); return; }
     setClipUrlLoading(true);
@@ -2540,7 +2583,7 @@ export default function VideosPage() {
 
         {filteredGroups.map((group) => (
           <div key={group.id}>
-            <Tooltip text={GROUP_TIPS[group.id]}>
+            <Tooltip text={GROUP_TIPS[group.id]} side="right">
               <button
                 type="button"
                 onClick={() => setOpenGroup(openGroup === group.id ? null : group.id)}
@@ -2554,7 +2597,7 @@ export default function VideosPage() {
               <ul className="pl-2 border-l ml-1 space-y-0.5 mt-1" style={{ borderColor: 'var(--color-border)' }}>
                 {group.tools.map((t) => (
                   <li key={t.id}>
-                    <Tooltip text={TOOL_TIPS[t.id] || t.desc}>
+                    <Tooltip text={TOOL_TIPS[t.id] || t.desc} side="right">
                       <button
                         type="button"
                         onClick={() => (t.link ? openMusicWith(sourceFile) : setTool(t.id))}
@@ -3338,7 +3381,7 @@ export default function VideosPage() {
                     if (!ctaHasContent(cta)) { addToast('Add a headline, button text or web address for the call to action, or untick it', 'error'); return; }
                     appendEndCardFields(fd, cta);
                   }
-                  runFormVideo('extend-ending', fd, { label: 'Building the intro and ending…', resultFilename: 'extended.mp4', forTool: 'extend-ending' });
+                  runJobVideo('extend-ending', fd, { label: 'Building the intro and ending…', resultFilename: 'extended.mp4', forTool: 'extend-ending' });
                 }}
                 disabled={!ffmpegOk}
                 className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"

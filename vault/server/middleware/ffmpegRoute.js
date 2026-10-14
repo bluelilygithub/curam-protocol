@@ -26,6 +26,21 @@ function stderrTail(err, maxChars = 300) {
   return tail.length > maxChars ? `…${tail.slice(-maxChars)}` : tail;
 }
 
+/**
+ * What to tell the person about a failed video job, and with which HTTP status. Raw ffmpeg output (banner, filter graph dumps) is
+ * never shown; a timeout and a busy server are explained; our own plain-worded errors (err.status 400 etc.) pass through.
+ */
+function describeVideoError(err, errorStatus = 500) {
+  if (err?.code === 'VIDEO_BUSY') return { status: 503, message: err.message, timedOut: false };
+  if (err?.killed || err?.signal === 'SIGTERM') {
+    return { status: 504, message: 'That took too long to process — try a shorter or smaller file.', timedOut: true };
+  }
+  if (err?.stderr !== undefined) {
+    return { status: errorStatus, message: 'ffmpeg could not process this file — check it is a valid, uncorrupted video/image/audio file.', timedOut: false };
+  }
+  return { status: err?.status || errorStatus, message: err?.message || 'Something went wrong.', timedOut: false };
+}
+
 function ffmpegRoute(name, handler, { errorStatus = 500, source = 'videoTools', routePrefix = 'videos' } = {}) {
   return async (req, res) => {
     try {
@@ -36,8 +51,8 @@ function ffmpegRoute(name, handler, { errorStatus = 500, source = 'videoTools', 
       const why = stderrTail(err) || String(err?.message || '').slice(0, 200);
       getLogger().error({ err }, `[${routePrefix}/${name}] ${why}`);
       if (res.headersSent) return res.end();
-      if (err.code === 'VIDEO_BUSY') return res.status(503).json({ error: err.message });
-      if (err.killed || err.signal === 'SIGTERM') {
+      const described = describeVideoError(err, errorStatus);
+      if (described.timedOut) {
         await captureIf(true, {
           userId: req.user?.id,
           source,
@@ -47,15 +62,10 @@ function ffmpegRoute(name, handler, { errorStatus = 500, source = 'videoTools', 
           body: 'An ffmpeg job was killed by its timeout. Raise VIDEO_FFMPEG_TIMEOUT_MS, lower the upload cap, or check the host CPU.',
           context: `server/routes/${routePrefix}.js /${name}`,
         }).catch(() => {});
-        return res.status(504).json({ error: 'That took too long to process — try a shorter or smaller file.' });
       }
-      // execFile failures carry ffmpeg's raw stderr (banner, filter graph dumps) — never show that.
-      if (err.stderr !== undefined) {
-        return res.status(errorStatus).json({ error: 'ffmpeg could not process this file — check it is a valid, uncorrupted video/image/audio file.' });
-      }
-      return res.status(err.status || errorStatus).json({ error: err.message });
+      return res.status(described.status).json({ error: described.message });
     }
   };
 }
 
-module.exports = { ffmpegRoute, stderrTail };
+module.exports = { ffmpegRoute, stderrTail, describeVideoError };

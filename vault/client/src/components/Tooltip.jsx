@@ -13,6 +13,7 @@ import { createPortal } from 'react-dom';
 //
 // Usage: <Tooltip text="...">{children}</Tooltip> — wraps a single element
 // that accepts a ref (DOM elements only — input/button/select/div/etc).
+// `side`: 'top' (default), 'bottom', or 'right' (beside the control, for a menu down the left of the page).
 // Hover-only by design; simply doesn't show on touch (no tap variant).
 export default function Tooltip({ text, children, side = 'top' }) {
   const [show, setShow] = useState(false);
@@ -23,6 +24,11 @@ export default function Tooltip({ text, children, side = 'top' }) {
     const el = ref.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
+    if (side === 'right') {
+      // Beside the control (used by the Video Tools menu): to its right, vertically centred on it.
+      setPos({ top: r.top + r.height / 2, left: Math.min(r.right + 8, window.innerWidth - 100), above: false, right: true });
+      return;
+    }
     let top = side === 'bottom' ? r.bottom + 8 : r.top - 8;
     let above = side !== 'bottom';
     if (above && top < 40) { top = r.bottom + 8; above = false; }
@@ -56,7 +62,7 @@ export default function Tooltip({ text, children, side = 'top' }) {
           style={{
             top: pos.top,
             left: pos.left,
-            transform: `translate(-50%, ${pos.above ? '-100%' : '0'})`,
+            transform: pos.right ? 'translate(0, -50%)' : `translate(-50%, ${pos.above ? '-100%' : '0'})`,
             maxWidth: 240,
             zIndex: 30,
             background: 'var(--color-surface)',

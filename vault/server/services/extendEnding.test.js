@@ -115,4 +115,35 @@ a = buildExtendArgs('in.mp4', { music: 'm.wav', voice: 'v.mp3' }, 'o.mp4', plan(
 assert.match(arg(a, '-filter_complex'), /^\[0:v\]tpad=stop_mode=clone:stop_duration=5\.000,format=yuv420p\[v\]/);
 assert.match(arg(a, '-filter_complex'), /adelay=0:all=1/);
 
+// ---- titles go in the SAME pass: one ffmpeg run, one encode, however many titles ----
+const { buildVideoGraph } = require('./extendEnding');
+const mk = (kind, extra = {}) => ({ kind, w: 1280, h: 720, fps: 30, draws: [`drawtext=text='${kind}'`], enable: ":enable='lte(t,5)'", dimPct: 60, bgColor: '112233', fadeSec: 2, fadeDir: kind === 'intro' ? 'out' : 'in', fadeStart: kind === 'intro' ? 3 : 33, ...extra });
+const tp = planExtend({ srcSec: 30, hasVideoAudio: true, hasMusic: true, hasVoice: true, options: { holdSec: 5, introSec: 3 } });
+// neither title: unchanged simple chain
+assert.strictEqual(buildVideoGraph(tp, {}), '[0:v]tpad=start_mode=clone:start_duration=3.000:stop_mode=clone:stop_duration=5.000,format=yuv420p[v]');
+// both titles: held picture -> opening piece -> closing piece -> [v]
+let vg = buildVideoGraph(tp, { intro: mk('intro'), ending: mk('ending') });
+const pieces = vg.split(';');
+assert.match(pieces[0], /^\[0:v\]tpad=.*\[held\]$/);
+assert.ok(/fade=t=out:st=3\.000/.test(vg) && /fade=t=in:st=33\.000/.test(vg), 'opening fades out after its hold; closing fades in at its start');
+assert.ok(vg.includes('[held][tintI]overlay') && vg.includes('[afterIntro][tintE]overlay'), 'the closing piece reads what the opening piece wrote');
+assert.ok(vg.endsWith('format=yuv420p[v]'));
+assert.strictEqual((vg.match(/\[v\]/g) || []).length, 1, 'one final video label');
+// a single title: that piece is the last one
+vg = buildVideoGraph(tp, { intro: mk('intro') });
+assert.ok(vg.endsWith('format=yuv420p[v]') && !vg.includes('afterIntro'));
+vg = buildVideoGraph(tp, { ending: mk('ending') });
+assert.ok(vg.includes('[held][tintE]overlay') && vg.endsWith('format=yuv420p[v]'));
+// the whole job is ONE ffmpeg command with ONE video encode
+a = buildExtendArgs('in.mp4', { music: 'm.wav', voice: 'v.mp3' }, 'out.mp4', tp, { intro: mk('intro'), ending: mk('ending') });
+assert.strictEqual(a.filter((x) => x === 'libx264').length, 1, 'the video is encoded once');
+assert.strictEqual(a.filter((x) => x === '-filter_complex').length, 1);
+assert.strictEqual(arg(a, '-preset'), 'fast', 'fast, not the slowest setting, at the same quality number');
+assert.strictEqual(arg(a, '-crf'), '18');
+assert.ok(a.includes('[v]') && a.includes('[aout]'));
+// the title graph and the sound graph are joined into the one filter_complex
+assert.ok(arg(a, '-filter_complex').includes('sidechaincompress') && arg(a, '-filter_complex').includes('overlay=shortest=1'));
+// an odd-sized picture is made even first (x264 refuses odd sizes)
+assert.match(buildVideoGraph({ ...tp, scale: { w: 1280, h: 718 } }, {}), /^\[0:v\]scale=1280:718,setsar=1,tpad=/);
+
 console.log('extendEnding tests passed');
