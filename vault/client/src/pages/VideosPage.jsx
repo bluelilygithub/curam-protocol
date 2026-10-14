@@ -18,6 +18,7 @@ import { VoiceInput, VoiceInputProvider } from '../components/voiceInput/VoiceIn
 import { VideoVoiceContext, VoiceCommandBar } from './videos/VoiceCommandBar';
 import { applyEditedText, srtLines } from './videos/transcriptSrt.mjs';
 import ScriptTimer from './videos/ScriptTimer';
+import TutorChat from './videos/TutorChat';
 import { parseClock, formatClock } from './videos/clock.mjs';
 
 const VIDEO_GOOGLE_FONTS = [
@@ -2326,6 +2327,16 @@ export default function VideosPage() {
     setVideoHandoff(file || null);
     navigate('/music');
   }, [navigate]);
+
+  // The tutor's "Open <tool>" buttons: open the tool's group and the tool, exactly as clicking it in the sidebar would.
+  const openToolById = useCallback((id) => {
+    const group = TOOL_GROUPS.find((g) => g.tools.some((t) => t.id === id));
+    const entry = group?.tools.find((t) => t.id === id);
+    if (!entry) return;
+    if (entry.link) { openMusicWith(sourceFile); return; }
+    setOpenGroup(group.id);
+    setTool(id);
+  }, [openMusicWith, sourceFile]);
 
   const handleAddMusicFromResult = useCallback(() => {
     const blob = resultBlobRef.current;
@@ -4732,6 +4743,7 @@ export default function VideosPage() {
           </div>
         </div>
       )}
+      <TutorChat currentTool={tool} onOpenTool={openToolById} />
     </div>
     </VideoVoiceContext.Provider>
     </VoiceInputProvider>

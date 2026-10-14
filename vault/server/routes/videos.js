@@ -50,6 +50,7 @@ const {
 const { normalizeSrt, srtToPlainText, prepareCaptionSrt, parseSrtLoose } = require('../services/srtUtils');
 const { timeScript, hasTimeMarkers } = require('../services/scriptTiming');
 const voiceIsolation = require('../services/voiceIsolation');
+const { askTutor } = require('../services/videoTutor');
 const { fetchLicensedVideo } = require('../services/videoUrlIntake');
 const { ffmpegRoute } = require('../middleware/ffmpegRoute');
 const { planSlideshow, normalizeSlideshowPlan } = require('../services/videoSlideshowPlan');
@@ -1049,6 +1050,34 @@ router.post('/time-script', upload.single('media'), ffmpegRoute('time-script', a
 
   res.json(out);
 }));
+
+// The Video Tools tutor (the mini chat): works out which of the real tools to use for a job, or says one is missing / the job is
+// outside Video Tools. JSON only. A "missing" or "partly" answer is a product gap, so it is also noted in the Suggestions inbox
+// (once per distinct gap) for the owner to see which tools people wish existed.
+router.post('/tutor', aiLimiter, async (req, res) => {
+  try {
+    const { messages, currentTool } = req.body || {};
+    const reply = await askTutor(req.user.id, { messages, currentTool: typeof currentTool === 'string' ? currentTool : '' });
+
+    if ((reply.verdict === 'missing' || reply.verdict === 'partly') && reply.missing) {
+      const asked = [...(Array.isArray(messages) ? messages : [])].reverse().find((m) => m?.role === 'user')?.content || '';
+      const key = reply.missing.toLowerCase().replace(/[^a-z0-9 ]+/g, '').split(' ').filter(Boolean).slice(0, 12).join(' ');
+      captureIf(true, {
+        userId: req.user.id,
+        source: 'videoTutor',
+        category: 'other',
+        fingerprint: makeFingerprint('videoTutor', `gap:${key}`),
+        title: `Video Tools: people want "${reply.missing.slice(0, 70)}"`,
+        body: `The Video Tools tutor could not fully help.\n\nAsked: "${String(asked).slice(0, 300)}"\nMissing: ${reply.missing}\n\nWorth considering as a new tool or an addition to an existing one.`,
+        context: 'server/routes/videos.js /tutor',
+      }).catch(() => {});
+    }
+    res.json(reply);
+  } catch (err) {
+    getLogger().error({ err }, '[videos/tutor]');
+    res.status(err.status || 500).json({ error: err.status === 400 ? err.message : 'The tutor could not answer just now. Try again in a moment.' });
+  }
+});
 
 // "Isolate voice": the spoken words out of a recording that has background music. 'ai' = Demucs source separation on Replicate
 // (billed per run, so rate-limited like the other AI routes); 'quick' = ffmpeg filters only (free, reduces music but cannot remove it).

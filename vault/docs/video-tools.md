@@ -38,6 +38,24 @@ Cross-cutting: **ProcessingModal** for operations >2 s; **Use in another tool** 
 
 ---
 
+## Tutor (the mini chat)
+
+A graduation-cap button at the bottom right of Video Tools (`client/src/pages/videos/TutorChat.jsx`) opens a small chat. Type, or use the microphone, what you want to make ("put my script on a video as captions"). The tutor checks the tools that really exist and answers with a **verdict** and numbered **steps**, each step naming one tool with an **Open <tool> →** button that opens it in the page (the chat stays open):
+
+| Verdict | Meaning | What the person sees |
+|---|---|---|
+| **You can do this** | fully possible with the current tools | the steps in order |
+| **Mostly, but one piece is missing** | part is possible | the possible steps, plus a **What is missing** box |
+| **A tool is missing** | sounds like a Video Tools job but no tool does it yet | what tool or feature would be needed |
+| **Beyond Video Tools** | not what Video Tools is for (full timeline editing, colour grading, translating/dubbing, downloading from YouTube...) | a plain statement, no invented workaround |
+| (no badge) | needs one more answer first | a single clarifying question |
+
+Server: `POST /api/videos/tutor` (`{ messages, currentTool }`, rate-limited like the other AI routes) -> `server/services/videoTutor.js`. It asks the workspace **`standard`** model (never a hard-coded model id) with the full tool **catalogue** (`CATALOG`: what each tool does, needs, makes and its limits, plus a `NOT_POSSIBLE` list), and returns JSON that is **validated before anything is shown**: unknown tool ids are dropped, text is bounded, and a verdict must be backed by what it claims (a "doable" with no steps becomes a question; "missing" with no explanation is downgraded). The conversation sent is the last 10 turns. A `missing`/`partly` answer is also noted once per distinct gap in the **Suggestions inbox** (`source: videoTutor`) so you can see which tools people wish existed.
+
+**Keeping it honest:** `CATALOG` is the tutor's only knowledge. `node server/services/videoTutor.test.js` reads the real sidebar (`TOOL_GROUPS` in `VideosPage.jsx`) and **fails if a tool is added or removed without updating the catalogue**, so when you add a tool, add its catalogue entry (what it does, what it needs, limits) in the same change. The tutor never performs an action; it only points at tools.
+
+---
+
 ## Voice directions
 
 Every tool with settings has a **Tell it what to do** box under its title (`VoiceCommandBar` inside `ToolHeader`), built the same way as Restyle, Graphics and the Slideshow/Join planners: the mic (shared `VoiceInput`/`useVoice`) puts your words into an editable text box, live as you speak and added to what is already there. Fix any misheard words, then press **Apply to settings** (or Enter). Nothing runs on its own, and the settings it changed are listed under the box. The text goes to `POST /api/videos/voice-command` (`{ tool, transcript, context.durationSec }`); `server/services/videoVoiceCommand.js` returns validated field values and the page applies them to that tool's state. Clip, GIF and Thumbnail times (`1:30`, "one minute thirty", "first 30 seconds", "cut off the last 10 seconds") are parsed in code with no model call; everything else goes to the `light` tier with a per-tool schema (`TOOL_SCHEMAS`), and the answer is clamped/whitelisted so it can never set a value the form would reject. Voice only fills settings; it never presses Export or Generate. Adding a field = one `TOOL_SCHEMAS` entry + one setter in `applyVoiceValues` (VideosPage). Tests: `node server/services/videoVoiceCommand.test.js` (in `npm run test:video-tools`).
