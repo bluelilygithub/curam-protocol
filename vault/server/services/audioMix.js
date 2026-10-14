@@ -40,13 +40,15 @@ function totalLength(voiceSec, opts) {
  * filter_complex. Input 0 = the music, already fitted to the full length; input 1 = the voice.
  * The voice is delayed by the lead-in, padded to the full length and (optionally) drives the ducking of the music.
  */
-function buildAudioMixFilter(opts, totalSec) {
+function buildAudioMixFilter(opts, totalSec, inputs = {}) {
+  const musicIn = Number.isInteger(inputs.music) ? inputs.music : 0;
+  const voiceIn = Number.isInteger(inputs.voice) ? inputs.voice : 1;
   const total = Number(totalSec).toFixed(3);
   const delayMs = Math.round(opts.leadInSec * 1000);
   const loud = `loudnorm=I=${TARGET_LUFS}:TP=-1.5:LRA=11`;
-  const voice = `[1:a]aformat=sample_rates=${SAMPLE_RATE}:channel_layouts=stereo,adelay=${delayMs}:all=1,`
+  const voice = `[${voiceIn}:a]aformat=sample_rates=${SAMPLE_RATE}:channel_layouts=stereo,adelay=${delayMs}:all=1,`
     + `volume=${opts.voiceVolume.toFixed(3)},apad=whole_dur=${total},atrim=0:${total},asetpts=PTS-STARTPTS[vo0]`;
-  const music = `[0:a]volume=${opts.musicVolume.toFixed(3)}[m]`;
+  const music = `[${musicIn}:a]volume=${opts.musicVolume.toFixed(3)}[m]`;
   const duck = DUCKING[opts.ducking];
   if (!duck) return `${voice};${music};[vo0][m]amix=inputs=2:duration=first:normalize=0[mixed];[mixed]${loud}[aout]`;
   return `${voice};[vo0]asplit=2[vo][key];${music};`

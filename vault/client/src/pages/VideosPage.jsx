@@ -154,7 +154,7 @@ const TOOL_HELP = {
     what: 'Stop a video ending dead on its last picture: hold the last frame for a few seconds while the music plays on and fades out, with an optional closing message over it.',
     features: [
       'Choose how many seconds to hold the last frame',
-      'Choose your music file and it plays through the held frame, then fades out over the time you set (it repeats smoothly if it is shorter)',
+      'Give the voice and the music as two separate files: the voice plays once and stops, and the music carries on through the held frame and fades out (it dips under the voice, and repeats smoothly if it is shorter)',
       'Without a music file the video\'s own sound is kept, but it ends with the video: it can only be faded out at its end, and the held frame is silent',
       'Optional call to action: the message appears over the held frame while the music fades',
       'One finished video; your originals are not changed',
@@ -1126,12 +1126,18 @@ export default function VideosPage() {
   const [ctaOnExtend, setCtaOnExtend] = useState(true);
 
   // Extend ending
-  const [exAudio, setExAudio] = useState(null);
+  const [exMusic, setExMusic] = useState(null); // keeps going through the held frame, repeats if short, fades out
+  const [exVoice, setExVoice] = useState(null); // plays once from the start, then stops
   const [exHold, setExHold] = useState(4);
   const [exFade, setExFade] = useState(''); // empty = the same as the hold (the music fades over exactly the held time)
-  const exAudioInputRef = useRef(null);
-  const exAudioUrl = useMemo(() => (exAudio ? URL.createObjectURL(exAudio) : ''), [exAudio]);
-  useEffect(() => () => { if (exAudioUrl) URL.revokeObjectURL(exAudioUrl); }, [exAudioUrl]);
+  const [exMusicPct, setExMusicPct] = useState(30);
+  const [exDucking, setExDucking] = useState('light');
+  const exMusicInputRef = useRef(null);
+  const exVoiceInputRef = useRef(null);
+  const exMusicUrl = useMemo(() => (exMusic ? URL.createObjectURL(exMusic) : ''), [exMusic]);
+  const exVoiceUrl = useMemo(() => (exVoice ? URL.createObjectURL(exVoice) : ''), [exVoice]);
+  useEffect(() => () => { if (exMusicUrl) URL.revokeObjectURL(exMusicUrl); }, [exMusicUrl]);
+  useEffect(() => () => { if (exVoiceUrl) URL.revokeObjectURL(exVoiceUrl); }, [exVoiceUrl]);
 
   // Export for Social
   const [exportPresets, setExportPresets] = useState(['reels', 'square', 'landscape']);
@@ -2399,7 +2405,7 @@ export default function VideosPage() {
       slideshow: { slideSecondsPerSlide: setSlideSecondsPerSlide, slideAspect: setSlideAspect, slideCrossfade: setSlideCrossfade },
       'caption-studio': textStyle,
       thumbnail: { thumbTime: setThumbTime },
-      'extend-ending': { holdSec: setExHold, fadeOutSec: (x) => setExFade(String(x)) },
+      'extend-ending': { holdSec: setExHold, fadeOutSec: (x) => setExFade(String(x)), musicVolume: setExMusicPct, ducking: setExDucking },
       'mix-audio': { musicVolume: setMxMusicPct, ducking: setMxDucking, leadInSec: setMxLead, tailSec: setMxTail, format: setMxFormat },
       'trim-audio': {
         startSec: (x) => setTaStart(formatClock(x)),
@@ -3148,44 +3154,75 @@ export default function VideosPage() {
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
               Hold the last picture for a few seconds so the video does not stop dead, and let your music play on and fade out over that time. Choose your video above.
             </p>
-            <div className="space-y-1 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-              <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Music or audio (recommended)</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <Tooltip text="Choose the music or audio file that goes with this video (for example the file you used in Mix audio). It plays from the start, carries on through the held frame, and fades out. It replaces the video's own sound.">
-                  <button
-                    type="button"
-                    onClick={() => exAudioInputRef.current?.click()}
-                    className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70"
-                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  >
-                    {exAudio ? 'Change audio file' : 'Choose audio file'}
-                  </button>
-                </Tooltip>
-                {exAudio && (
-                  <Tooltip text="Use the video's own sound instead (no audio file).">
-                    <button type="button" onClick={() => setExAudio(null)} className="text-[11px] underline hover:opacity-60 transition-opacity" style={{ color: 'var(--color-muted)' }}>Remove</button>
-                  </Tooltip>
-                )}
-                {exAudio && <span className="text-[11px] truncate max-w-xs" style={{ color: 'var(--color-muted)' }}>{exAudio.name} · {formatBytes(exAudio.size)}</span>}
-                <input
-                  ref={exAudioInputRef}
-                  type="file"
-                  accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac,.aac,.opus"
-                  className="hidden"
-                  onChange={(e) => { setExAudio(e.target.files?.[0] || null); e.target.value = ''; }}
-                />
-              </div>
-              {exAudio && (
-                <Tooltip text="Play the audio to check it is the right file.">
-                  <audio src={exAudioUrl} controls className="w-full" />
-                </Tooltip>
-              )}
-              <p className="text-[11px]" style={{ color: exAudio ? 'var(--color-muted)' : '#b45309' }}>
-                {exAudio
-                  ? 'This audio plays from the start of the video, through the held frame, and fades out. It replaces the video\'s own sound. If it is shorter than the video it repeats smoothly.'
-                  : 'No audio file chosen: the video\'s own sound is kept, but it ended with the video, so it cannot carry on. It will fade out at the end of the video and the held frame will be silent. Choose your music file to have it play through the held frame.'}
-              </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[
+                ['voice', 'Voice (plays once, then stops)', exVoice, setExVoice, exVoiceInputRef, exVoiceUrl, 'Choose the recording of the spoken voice (or narration). It plays once from the start of the video and then stops: it will not start again during the held frame.'],
+                ['music', 'Music (keeps going to the end)', exMusic, setExMusic, exMusicInputRef, exMusicUrl, 'Choose the background music. It plays through the whole video and the held frame, repeating smoothly if it is shorter, and fades out at the end.'],
+              ].map(([key, title, file, setFile, inputRef, url, tip]) => (
+                <div key={key} className="space-y-1 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                  <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>{title}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Tooltip text={tip}>
+                      <button
+                        type="button"
+                        onClick={() => inputRef.current?.click()}
+                        className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity hover:opacity-70"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                      >
+                        {file ? 'Change file' : 'Choose audio file'}
+                      </button>
+                    </Tooltip>
+                    {file && (
+                      <Tooltip text={`Take the ${key} out again.`}>
+                        <button type="button" onClick={() => setFile(null)} className="text-[11px] underline hover:opacity-60 transition-opacity" style={{ color: 'var(--color-muted)' }}>Remove</button>
+                      </Tooltip>
+                    )}
+                  </div>
+                  {file && <p className="text-[11px] truncate" style={{ color: 'var(--color-muted)' }}>{file.name} · {formatBytes(file.size)}</p>}
+                  <input
+                    ref={inputRef}
+                    type="file"
+                    accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac,.aac,.opus"
+                    className="hidden"
+                    onChange={(e) => { setFile(e.target.files?.[0] || null); e.target.value = ''; }}
+                  />
+                  {file && (
+                    <Tooltip text={`Play the ${key} to check it is the right file.`}>
+                      <audio src={url} controls className="w-full" />
+                    </Tooltip>
+                  )}
+                </div>
+              ))}
             </div>
+            <p className="text-[11px]" style={{ color: exMusic || exVoice ? 'var(--color-muted)' : '#b45309' }}>
+              {exMusic && exVoice
+                ? 'The voice plays once and stops. The music sits behind it, dips while the voice speaks, carries on through the held frame, and fades out. These replace the video\'s own sound.'
+                : exMusic
+                  ? 'The music plays from the start, through the held frame, and fades out. It replaces the video\'s own sound. If you also have a separate voice recording, add it above so it plays once and stops.'
+                  : exVoice
+                    ? 'The voice plays once and then the held frame is silent. If you have the music as a separate file, add it above so it carries on through the held frame.'
+                    : 'No audio chosen: the video\'s own sound is kept, but it ended with the video, so it cannot carry on. It will fade out at the end of the video and the held frame will be silent. If your sound is a voice and music joined together, choose the voice and the music separately above, so the voice stops and the music continues.'}
+            </p>
+            {exMusic && exVoice && (
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block space-y-1">
+                  <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Music level: {exMusicPct}% of the voice</span>
+                  <Tooltip text="How loud the music is next to the voice. About 20 to 40 is a good quiet background.">
+                    <input type="range" min={5} max={100} step={5} value={exMusicPct} onChange={(e) => setExMusicPct(Number(e.target.value))} className="w-full" />
+                  </Tooltip>
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Music dips while the voice speaks</span>
+                  <Tooltip text="Lowers the music whenever the voice is talking so the voice stays clear, and brings it back up when the voice stops. Off keeps one steady level.">
+                    <select value={exDucking} onChange={(e) => setExDucking(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                      <option value="light">Light dip (recommended)</option>
+                      <option value="strong">Strong dip</option>
+                      <option value="off">Off (steady level)</option>
+                    </select>
+                  </Tooltip>
+                </label>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <label className="block space-y-1">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Hold the last frame for (seconds)</span>
@@ -3195,7 +3232,7 @@ export default function VideosPage() {
               </label>
               <label className="block space-y-1">
                 <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Music fades out over (seconds)</span>
-                <Tooltip text={exAudio ? 'How long the fade-out lasts, ending exactly when the video ends. Leave empty to fade over exactly the held time. 0 = no fade.' : 'How long the video\'s own sound takes to fade out, ending where the video itself ends. Leave empty to use the held time. 0 = no fade.'}>
+                <Tooltip text={exMusic ? 'How long the music takes to fade out, ending exactly when the video ends. Leave empty to fade over exactly the held time. 0 = no fade.' : 'How long the video\'s own sound takes to fade out, ending where the video itself ends. Leave empty to use the held time. 0 = no fade.'}>
                   <input type="number" min={0} max={60} step={0.5} value={exFade} placeholder={String(exHold)} onChange={(e) => setExFade(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
                 </Tooltip>
               </label>
@@ -3216,7 +3253,10 @@ export default function VideosPage() {
                   if (!requireFile()) return;
                   const fd = new FormData();
                   fd.append('video', sourceFile);
-                  if (exAudio) fd.append('audio', exAudio);
+                  if (exMusic) fd.append('music', exMusic);
+                  if (exVoice) fd.append('voice', exVoice);
+                  fd.append('musicVolume', String((Number(exMusicPct) || 30) / 100));
+                  fd.append('ducking', exDucking);
                   fd.append('holdSec', String(exHold || 4));
                   if (exFade !== '') fd.append('fadeOutSec', String(exFade));
                   if (ctaOnExtend) {

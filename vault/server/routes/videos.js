@@ -1155,28 +1155,35 @@ router.get('/isolate-voice/:id/:stem', async (req, res) => {
 
 // "Extend ending": hold the last frame for X seconds; chosen music carries on through the hold and fades out over it; an optional
 // closing message (Call to action) is laid over the held part so it appears while the music fades. One video out.
-router.post('/extend-ending', upload.fields([{ name: 'video', maxCount: 1 }, { name: 'audio', maxCount: 1 }]), ffmpegRoute('extend-ending', async (req, res) => {
+router.post('/extend-ending', upload.fields([{ name: 'video', maxCount: 1 }, { name: 'music', maxCount: 1 }, { name: 'voice', maxCount: 1 }, { name: 'audio', maxCount: 1 }]), ffmpegRoute('extend-ending', async (req, res) => {
   const videoFile = req.files?.video?.[0];
-  const audioFile = req.files?.audio?.[0];
+  // `music` keeps going through the held frame (and repeats if short); `voice` plays once. (`audio` is the old name for `music`.)
+  const musicFile = req.files?.music?.[0] || req.files?.audio?.[0];
+  const voiceFile = req.files?.voice?.[0];
   if (!videoFile?.buffer?.length) return res.status(400).json({ error: 'Choose your video first.' });
-  if (!enforceAggregateUploadSize(res, [videoFile, audioFile])) return;
+  if (!enforceAggregateUploadSize(res, [videoFile, musicFile, voiceFile])) return;
   const endCard = endCardRequest(req.body);
   if (endCard?.error) return res.status(400).json({ error: endCard.error });
-  const options = extendEndingService.normalizeExtendOptions({ holdSec: req.body?.holdSec, fadeOutSec: req.body?.fadeOutSec });
+  const options = extendEndingService.normalizeExtendOptions({
+    holdSec: req.body?.holdSec, fadeOutSec: req.body?.fadeOutSec, musicVolume: req.body?.musicVolume, ducking: req.body?.ducking,
+  });
   const base = path.basename(String(videoFile.originalname || 'video'), path.extname(String(videoFile.originalname || ''))).replace(/[^\w .-]+/g, '_').slice(0, 80) || 'video';
 
   const buffer = await withTempDir(async (dir) => {
     const videoPath = await writeUpload(dir, videoFile);
-    let audioPath = null;
-    if (audioFile?.buffer?.length) {
-      const e = path.extname(String(audioFile.originalname || '')).toLowerCase();
-      audioPath = path.join(dir, `ending-audio-in${AUDIO_EXTS.has(e) ? e : '.mp3'}`);
-      await fs.writeFile(audioPath, audioFile.buffer);
-    }
+    const saveAudio = async (file, name) => {
+      if (!file?.buffer?.length) return null;
+      const e = path.extname(String(file.originalname || '')).toLowerCase();
+      const p = path.join(dir, `${name}-in${AUDIO_EXTS.has(e) ? e : '.mp3'}`);
+      await fs.writeFile(p, file.buffer);
+      return p;
+    };
+    const musicPath = await saveAudio(musicFile, 'ending-music');
+    const voicePath = await saveAudio(voiceFile, 'ending-voice');
     const outPath = path.join(dir, 'extended.mp4');
     let plan;
     try {
-      plan = await extendEndingService.extendEnding({ videoPath, audioPath, outPath, workDir: dir, options });
+      plan = await extendEndingService.extendEnding({ videoPath, musicPath, voicePath, outPath, workDir: dir, options });
     } catch (err) {
       if (err.stderr !== undefined) throw err; // an ffmpeg failure: the generic handler words it safely
       const e = new Error(err.message);
