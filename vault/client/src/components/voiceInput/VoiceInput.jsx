@@ -16,11 +16,17 @@ import Tooltip from '../Tooltip';
 const MicContext = createContext(null);
 
 export function VoiceInputProvider({ children, lang = 'en-AU' }) {
-  const voice = useVoice({ lang, continuous: false });
-  const activeRef = useRef(null); // { id, onInterim, onFinal }
+  // Two recognisers, one per style of field. "short" ends by itself when you pause (right for a name or a number);
+  // "long" keeps listening until you press the mic again (right for dictating a sentence or a paragraph, like the chat boxes).
+  const shortVoice = useVoice({ lang, continuous: false });
+  const longVoice = useVoice({ lang, continuous: true });
+  const [mode, setMode] = useState('short');
+  const voice = mode === 'long' ? longVoice : shortVoice;
+  const stoppingRef = useRef(false); // true once the person has pressed stop (so a session that ends is not restarted)
+  const activeRef = useRef(null); // { id, onInterim, onFinal, continuous, keepAlive }
   const [activeId, setActiveId] = useState(null);
   const [error, setError] = useState({ id: null, message: '' });
-  const supported = voice.isSTTAvailable || voice.isLocalSTTAvailable;
+  const supported = shortVoice.isSTTAvailable || shortVoice.isLocalSTTAvailable;
 
   useEffect(() => {
     if (activeRef.current && voice.isListening && voice.interimText) activeRef.current.onInterim?.(voice.interimText);
@@ -29,10 +35,20 @@ export function VoiceInputProvider({ children, lang = 'en-AU' }) {
   useEffect(() => {
     if (!voice.transcript || !activeRef.current) return;
     const a = activeRef.current;
-    activeRef.current = null;
-    setActiveId(null);
+    // Browsers end even a "continuous" session by themselves now and then (after a long pause, or about a minute in). For a long
+    // field that is not what the person asked for, so keep going until they press stop; the words so far are already in the box.
+    const carryOn = mode === 'long' && a.keepAlive && !stoppingRef.current;
+    if (!carryOn) {
+      activeRef.current = null;
+      setActiveId(null);
+    }
     setError({ id: null, message: '' });
     a.onFinal?.(voice.transcript);
+    if (carryOn) {
+      setTimeout(() => {
+        if (activeRef.current === a && !stoppingRef.current) voice.startListening();
+      }, 150);
+    }
   }, [voice.transcript]);
 
   useEffect(() => {
@@ -56,19 +72,23 @@ export function VoiceInputProvider({ children, lang = 'en-AU' }) {
   }, [voice.isListening, voice.isTranscribing]);
 
   const stop = useCallback(() => {
+    stoppingRef.current = true;
     voice.stopListening();
   }, [voice]);
 
   const toggle = useCallback((id, handlers) => {
     if (!supported) return;
     if (activeRef.current && activeRef.current.id === id) { stop(); return; }
-    if (activeRef.current) { activeRef.current.onCancel?.(); voice.stopListening(); }
+    if (activeRef.current) { stoppingRef.current = true; activeRef.current.onCancel?.(); voice.stopListening(); }
+    const next = handlers.continuous ? longVoice : shortVoice;
     activeRef.current = { id, ...handlers };
+    stoppingRef.current = false;
+    setMode(handlers.continuous ? 'long' : 'short');
     setActiveId(id);
     setError({ id: null, message: '' });
-    voice.clearVoiceError?.();
-    voice.startListening();
-  }, [stop, supported, voice]);
+    next.clearVoiceError?.();
+    next.startListening();
+  }, [stop, supported, voice, longVoice, shortVoice]);
 
   const value = useMemo(() => ({
     supported,
@@ -87,7 +107,7 @@ export function useMic() {
 }
 
 /** The mic button. Red + pulsing while listening; click again to stop. */
-export function MicButton({ onStart, onInterim, onFinal, onCancel, label = 'Speak instead of typing', size = 15, className = '', style }) {
+export function MicButton({ onStart, onInterim, onFinal, onCancel, continuous = false, keepAlive = false, label = 'Speak instead of typing', size = 15, className = '', style }) {
   const getIcon = useIcon();
   const ctx = useMic();
   const id = useId();
@@ -99,12 +119,12 @@ export function MicButton({ onStart, onInterim, onFinal, onCancel, label = 'Spea
     e.preventDefault();
     if (!supported) return;
     if (!listening) onStart?.(id);
-    ctx.toggle(id, { onInterim, onFinal, onCancel });
+    ctx.toggle(id, { onInterim, onFinal, onCancel, continuous, keepAlive });
   };
 
   const tip = !supported
     ? "Voice input isn't available in this browser. Type instead (Chrome, Edge or Safari support it)."
-    : listening ? 'Listening — click to stop' : label;
+    : listening ? (continuous ? 'Listening — click to stop (it keeps listening while you pause)' : 'Listening — click to stop') : label;
 
   return (
     <Tooltip text={tip}>
@@ -141,7 +161,7 @@ const FIELD_STYLE = { background: 'var(--color-bg)', borderColor: 'var(--color-b
  *  - `append` adds speech after the existing text (long fields) instead of replacing it.
  */
 export function VoiceInput({
-  value, onChange, placeholder = '', type = 'text', parse, onSpoken, append = false, rows = 3,
+  value, onChange, placeholder = '', type = 'text', parse, onSpoken, append = false, continuous, rows = 3,
   className = '', style, inputRef, label, onKeyDown, onFocus, onBlur, disabled = false, id: idProp, mic = true, ...rest
 }) {
   const ctx = useMic();
@@ -152,6 +172,9 @@ export function VoiceInput({
   const listening = !!ctx && ctx.activeId !== null && ctx.activeId === idRef.current;
   const textarea = type === 'textarea';
   const Tag = textarea ? 'textarea' : 'input';
+  // Multi-line boxes are for dictating, so they keep listening until you press the mic again (set `continuous` to override).
+  // Single-line fields (a name, a number) stop by themselves when you pause.
+  const keepListening = continuous ?? (textarea && append);
 
   const compose = (text) => {
     const parsed = parse ? parse(text) : null;
@@ -185,11 +208,16 @@ export function VoiceInput({
         <div className={`absolute right-1.5 ${textarea ? 'top-1.5' : 'top-1/2 -translate-y-1/2'}`}>
           <MicButton
             label={`Speak into ${label || placeholder || 'this field'}`}
+            continuous={keepListening}
+            keepAlive={keepListening && append}
             onStart={(id) => { idRef.current = id; baseRef.current = value || ''; }}
             onInterim={(text) => { if (parse) { const p = parse(text); if (p !== null && p !== undefined) onChange(compose(text)); } else onChange(compose(text)); }}
             onFinal={(text) => {
               if (onSpoken && onSpoken(text) === true) { onChange(baseRef.current); return; }
-              onChange(compose(text));
+              const composed = compose(text);
+              // If listening carries on after this piece, the next piece is added after it.
+              if (append) baseRef.current = composed;
+              onChange(composed);
             }}
             onCancel={() => { onChange(baseRef.current); }}
           />
