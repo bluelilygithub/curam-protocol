@@ -46,6 +46,10 @@ function normalizeEndCard(input = {}) {
   // A separate closing screen fades in over at most half its time; a message laid over the picture may take the whole time.
   const fadeSec = clamp(input.fadeSec === '' || input.fadeSec == null ? 0.5 : Number(input.fadeSec) || 0, 0, placement === 'after' ? durationSec / 2 : durationSec);
   // How much the picture is darkened (tinted with bgColor) behind a message laid over it: 0 = not at all, 100 = solid.
+  // How long the message takes to fade OUT when it is shown between two times in the middle of a video (Title card). Defaults to the
+  // fade-in length. The opening title fades out on its own schedule and the closing one stays until the end, so they ignore it.
+  const fadeOutRaw = input.fadeOutSec === '' || input.fadeOutSec == null ? fadeSec : Number(input.fadeOutSec);
+  const fadeOutSec = clamp(Number.isFinite(fadeOutRaw) ? fadeOutRaw : fadeSec, 0, 15);
   const dimRaw = input.dimPct === '' || input.dimPct == null ? 60 : Number(input.dimPct);
   const dimPct = clamp(Number.isFinite(dimRaw) ? dimRaw : 60, 0, 100);
   const bgColor = cleanHex(input.bgColor, '111111');
@@ -65,6 +69,7 @@ function normalizeEndCard(input = {}) {
     fontWeight: input.fontWeight === 'normal' ? 'normal' : 'bold',
     placement,
     dimPct,
+    fadeOutSec,
   };
 }
 
@@ -305,6 +310,63 @@ async function prepareTitle({ spec: rawSpec, kind, introSec = 0, totalSec, size,
   };
 }
 
+/**
+ * When a message is visible if it is shown between two times in the middle of a video: from `startSec` to `endSec`, fading in over
+ * `fadeInSec` and out over `fadeOutSec` (together never more than the whole time). Pure, unit tested.
+ */
+function windowTiming({ startSec, endSec, fadeInSec, fadeOutSec }) {
+  const S = Math.max(0, Number(startSec) || 0);
+  const E = Math.max(S + 0.3, Number(endSec) || 0);
+  const L = E - S;
+  let fi = clamp(Number(fadeInSec) || 0, 0, L);
+  let fo = clamp(Number(fadeOutSec) || 0, 0, L);
+  if (fi + fo > L) {
+    const k = L / (fi + fo);
+    fi *= k;
+    fo *= k;
+  }
+  const f3 = (n) => n.toFixed(3);
+  const ramps = [];
+  if (fi > 0) ramps.push(`(t-${f3(S)})/${f3(fi)}`);
+  if (fo > 0) ramps.push(`(${f3(E)}-t)/${f3(fo)}`);
+  const alphaExpr = !ramps.length ? '' : `:alpha='min(1,max(0,${ramps.length === 1 ? ramps[0] : `min(${ramps.join(',')})`}))'`;
+  return { start: S, end: E, length: L, fadeIn: fi, fadeOut: fo, enable: `:enable='between(t,${f3(S)},${f3(E)})'`, alphaExpr };
+}
+
+/**
+ * A title shown between two times, as a piece of a filter graph (same idea as titleStage, but the tint both fades in and out, and is
+ * switched off outside the window). `timing` is from windowTiming. Pure, unit tested.
+ */
+function windowTitleStage({ inLabel, outLabel, tintLabel, w, h, fps, draws, dimPct, bgColor, timing, final = true }) {
+  const text = draws.join(',');
+  const end = `${text}${final ? `${text ? ',' : ''}format=yuv420p` : ''}`;
+  const dim = Math.max(0, Math.min(1, Number(dimPct) / 100));
+  if (!(dim > 0)) return `${inLabel}${end || 'null'}${outLabel}`;
+  if (!(timing.fadeIn > 0 || timing.fadeOut > 0)) {
+    return `${inLabel}drawbox=x=0:y=0:w=iw:h=ih:color=0x${bgColor}@${dim.toFixed(2)}:t=fill${timing.enable}${end ? `,${end}` : ''}${outLabel}`;
+  }
+  const f3 = (n) => n.toFixed(3);
+  const fades = [];
+  if (timing.fadeIn > 0) fades.push(`fade=t=in:st=${f3(timing.start)}:d=${f3(timing.fadeIn)}:alpha=1`);
+  if (timing.fadeOut > 0) fades.push(`fade=t=out:st=${f3(timing.end - timing.fadeOut)}:d=${f3(timing.fadeOut)}:alpha=1`);
+  return `color=c=0x${bgColor}:s=${w}x${h}:r=${fps},format=rgba,colorchannelmixer=aa=${dim.toFixed(2)},${fades.join(',')}${tintLabel};`
+    + `${inLabel}${tintLabel}overlay=shortest=1:enable='between(t,${f3(timing.start)},${f3(timing.end)})'${end ? `,${end}` : ''}${outLabel}`;
+}
+
+/** Text files, font and layout for a title shown between two times. */
+async function prepareWindowTitle({ spec: rawSpec, startSec, endSec, size, workDir }) {
+  // The window's own length caps how slowly the message may fade in (normalizeEndCard bounds fades by durationSec).
+  const spec = normalizeEndCard({ ...rawSpec, placement: 'over-end', durationSec: Math.min(15, Math.max(1, (Number(endSec) || 0) - (Number(startSec) || 0))) });
+  if (spec.error) throw new Error(spec.error);
+  const { w, h, fps } = size;
+  const timing = windowTiming({ startSec, endSec, fadeInSec: spec.fadeSec, fadeOutSec: spec.fadeOutSec });
+  const fontfile = escapeFilterPath(await writeFontToDir(spec.fontFamily, spec.fontWeight, workDir));
+  const blocks = layoutEndCard(spec, w, h);
+  const draws = await cardDrawFilters({ spec, blocks, fontfile, workDir, enable: timing.enable, alphaExpr: timing.alphaExpr, prefix: 'titlecard' });
+  return { w, h, fps, draws, dimPct: spec.dimPct, bgColor: spec.bgColor, timing };
+}
+
 module.exports = {
+  windowTiming, windowTitleStage, prepareWindowTitle,
   appendEndCard, normalizeEndCard, layoutEndCard, overlayVideoGraph, introTiming, closingTiming, titleStage, prepareTitle, cardDrawFilters, PLACEMENTS, MIN_DURATION_SEC, MAX_DURATION_SEC,
 };

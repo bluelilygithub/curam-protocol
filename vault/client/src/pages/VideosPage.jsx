@@ -283,6 +283,17 @@ const TOOL_HELP = {
       'Optional fade in/out to ease the label on and off screen',
     ],
   },
+  'title-card': {
+    title: 'Title card',
+    what: 'Put a message card on the video from a start time to an end time you choose, anywhere in it.',
+    features: [
+      'Headline, supporting line, optional button-style label and web address',
+      'Choose the start and end on the timeline, or type them',
+      'Tint colour and strength (0 keeps the picture in full colour), and separate fade-in and fade-out times',
+      'The video keeps its length and its sound is not touched',
+      'One card per run. Run the result through again to add another',
+    ],
+  },
   'end-card': {
     title: 'Call to action',
     what: 'End a video with a closing screen that tells viewers what to do next.',
@@ -379,6 +390,7 @@ const TOOL_TIPS = {
   reframe: 'Change the shape of a video (tall, square or widescreen) by cropping it or adding bars.',
   speed: 'Make a video play slower or faster, from a quarter speed up to four times.',
   annotate: 'Put one line of text on a video, such as a title or a credit, in the font, colour and position you choose.',
+  'title-card': 'Show a message card (headline, line, button, web address) on the video between a start and an end time you choose, anywhere in it.',
   'end-card': 'Add a closing message to the end of a video: a headline, a button-style label and a web address.',
   overlay: 'Place a logo or picture on top of a video, in the corner and size you choose.',
   join: 'Join two or more video clips into one, with a cut or a transition between each.',
@@ -426,6 +438,7 @@ const TOOL_GROUPS = [
     label: 'Titles and captions',
     tools: [
       { id: 'annotate', label: 'Annotate', desc: 'Burn in a text label' },
+      { id: 'title-card', label: 'Title card', desc: 'A message card on screen between a start and end time' },
       { id: 'end-card', label: 'Call to action', desc: 'End the video with a closing message and button' },
       { id: 'extend-ending', label: 'Intro and ending', desc: 'Hold the first and last frame; titles over them; music fades out' },
       { id: 'overlay', label: 'Overlay / watermark', desc: 'Logo or image on top of video' },
@@ -485,7 +498,7 @@ function appendEndCardFields(fd, c) {
   fd.append('endCardSpec', JSON.stringify(c));
 }
 
-function EndCardFields({ cta, setCta, lockTiming = false, intro = false }) {
+function EndCardFields({ cta, setCta, lockTiming = false, intro = false, windowed = false }) {
   const set = (key) => (value) => setCta((prev) => ({ ...prev, [key]: value }));
   // When the message sits over the picture (not a separate closing screen), the picture is tinted behind it. That tint's
   // colour, strength and fade-in time are the person's to set.
@@ -543,6 +556,14 @@ function EndCardFields({ cta, setCta, lockTiming = false, intro = false }) {
             </label>
           </>
         )}
+        {overPicture && windowed && (
+          <label className="block space-y-1">
+            <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Fade-out time (seconds)</span>
+            <Tooltip text="How slowly the card and tint fade away at the end time. 0 = they disappear at once. Together the fade-in and fade-out cannot take longer than the card is on screen.">
+              <input type="number" min={0} max={15} step={0.5} value={cta.fadeOutSec ?? cta.fadeSec ?? 0.5} onChange={(e) => set('fadeOutSec')(e.target.value === '' ? '' : Number(e.target.value))} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+            </Tooltip>
+          </label>
+        )}
         {!lockTiming && (
         <label className="block space-y-1">
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Seconds on screen</span>
@@ -556,7 +577,7 @@ function EndCardFields({ cta, setCta, lockTiming = false, intro = false }) {
   );
 }
 
-function EndCardToggle({ enabled, setEnabled, cta, setCta, tip, lockTiming = false, intro = false, label = 'End with a call to action' }) {
+function EndCardToggle({ enabled, setEnabled, cta, setCta, tip, lockTiming = false, intro = false, windowed = false, label = 'End with a call to action' }) {
   return (
     <div className="rounded-xl border p-3 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
       <label className="flex items-center gap-2 text-xs font-medium" style={{ color: 'var(--color-text)' }}>
@@ -565,7 +586,7 @@ function EndCardToggle({ enabled, setEnabled, cta, setCta, tip, lockTiming = fal
           <span>{label}</span>
         </Tooltip>
       </label>
-      {enabled && <EndCardFields cta={cta} setCta={setCta} lockTiming={lockTiming} intro={intro} />}
+      {enabled && <EndCardFields cta={cta} setCta={setCta} lockTiming={lockTiming} intro={intro} windowed={windowed} />}
       {enabled && !ctaHasContent(cta) && (
         <p className="text-[10px]" style={{ color: '#b45309' }}>Add a headline, button text or web address first.</p>
       )}
@@ -1220,6 +1241,15 @@ export default function VideosPage() {
   useEffect(() => () => { if (mxVoiceUrl) URL.revokeObjectURL(mxVoiceUrl); }, [mxVoiceUrl]);
   useEffect(() => () => { if (mxMusicUrl) URL.revokeObjectURL(mxMusicUrl); }, [mxMusicUrl]);
 
+  // Title card
+  const [tcStart, setTcStart] = useState('0:00');
+  const [tcEnd, setTcEnd] = useState('');          // typed as the person types it; empty = 5 seconds after the start
+  const [tcDuration, setTcDuration] = useState(0);
+  const [tcCard, setTcCard] = useState({ ...CTA_DEFAULTS, fadeSec: 0.5, fadeOutSec: 0.5 });
+  const tcStartSec = parseClock(tcStart || '0') ?? 0;
+  const tcEndSec = tcEnd === '' ? tcStartSec + Math.min(5, Math.max(1, (tcDuration || 6) - tcStartSec)) : parseClock(tcEnd);
+  useEffect(() => { if (tool === 'title-card') { setTcStart('0:00'); setTcEnd(''); setTcDuration(0); } }, [sourceFile, tool]);
+
   // Replace a section
   const [rsReplacement, setRsReplacement] = useState(null);
   const [rsReplDur, setRsReplDur] = useState(0);   // the replacement clip's length, from the player
@@ -1366,7 +1396,7 @@ export default function VideosPage() {
   }, []);
 
   useEffect(() => {
-    if (tool === 'annotate' || tool === 'extend-ending' || tool === 'replace-section' || tool === 'end-card' || tool === 'caption-studio' || tool === 'join' || tool === 'overlay' || tool === 'slideshow') clearComposeResult();
+    if (tool === 'annotate' || tool === 'title-card' || tool === 'extend-ending' || tool === 'replace-section' || tool === 'end-card' || tool === 'caption-studio' || tool === 'join' || tool === 'overlay' || tool === 'slideshow') clearComposeResult();
   }, [tool, clearComposeResult]);
 
   useEffect(() => {
@@ -3268,11 +3298,11 @@ export default function VideosPage() {
         {previewUrl && tool !== 'generate' && tool !== 'transcribe-audio' && tool !== 'trim-audio' && tool !== 'isolate-voice' && tool !== 'mix-audio' && tool !== 'saved-library' && tool !== 'join' && tool !== 'overlay' && tool !== 'slideshow' && !(tool === 'clip' && isClipUrlMode) && (
           <>
             <video
-              ref={tool === 'clip' || tool === 'replace-section' ? clipVideoRef : undefined}
+              ref={tool === 'clip' || tool === 'replace-section' || tool === 'title-card' ? clipVideoRef : undefined}
               src={previewUrl}
               controls
               className="w-full max-h-48 rounded-xl bg-black"
-              onLoadedMetadata={tool === 'clip' ? handleClipVideoMeta : tool === 'replace-section' ? (e) => setRsDuration(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0) : undefined}
+              onLoadedMetadata={tool === 'clip' ? handleClipVideoMeta : tool === 'replace-section' ? (e) => setRsDuration(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0) : tool === 'title-card' ? (e) => setTcDuration(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0) : undefined}
             />
             {tool === 'clip' && (
               <ClipTimeline
@@ -4715,6 +4745,70 @@ export default function VideosPage() {
               </button>
             </Tooltip>
             {resultForTool === 'annotate' && (
+              <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
+            )}
+          </section>
+        )}
+
+        {tool === 'title-card' && (
+          <section className="space-y-3">
+            <ToolHeader id="title-card" label="Title card" onHelp={setHelpTool} getIcon={getIcon} />
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Show a message card on your video from a start time to an end time, anywhere in it. It sits over the playing picture, so the video keeps its length and its sound is not touched. Choose your video above.
+            </p>
+            <ClipTimeline
+              src={previewUrl}
+              videoRef={clipVideoRef}
+              duration={tcDuration}
+              startSec={tcStartSec}
+              endSec={tcEndSec ?? ''}
+              onStartChange={(v) => setTcStart(formatClock(v))}
+              onEndChange={(v) => setTcEnd(formatClock(v))}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Card appears at</span>
+                <Tooltip text="The moment the card starts to appear. Type a time like 1:30 or 90, drag the start marker, or press Set start here while the video is paused.">
+                  <input type="text" value={tcStart} onChange={(e) => setTcStart(e.target.value)} placeholder="0:00" className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Card gone by</span>
+                <Tooltip text="The moment the card has finished fading away. Type a time, drag the end marker, or press Set end here. Left empty it stays for 5 seconds.">
+                  <input type="text" value={tcEnd} onChange={(e) => setTcEnd(e.target.value)} placeholder={tcEndSec !== null ? formatClock(tcEndSec) : ''} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </Tooltip>
+              </label>
+            </div>
+            <p className="text-xs" style={{ color: tcEndSec !== null && tcEndSec - tcStartSec >= 0.5 ? 'var(--color-muted)' : '#ef4444' }} role="status">
+              {tcEndSec === null
+                ? 'The end time is not a time. Try 1:45 or 105.'
+                : tcEndSec - tcStartSec < 0.5
+                  ? 'The card needs to be on screen for at least half a second. Move the end later than the start.'
+                  : `On screen for ${(tcEndSec - tcStartSec).toFixed(1)} seconds.${tcDuration && tcEndSec > tcDuration + 0.05 ? ' The end is after the end of the video, so it will be held at the end of the video.' : ''}`}
+            </p>
+            <EndCardFields cta={tcCard} setCta={setTcCard} lockTiming windowed />
+            <Tooltip text="Put the card on your video between the start and end times. Your original video is not changed.">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!requireFile()) return;
+                  if (!ctaHasContent(tcCard)) { addToast('Add a headline, button text or web address for the card', 'error'); return; }
+                  if (tcEndSec === null || tcEndSec - tcStartSec < 0.5) { addToast('Set an end time at least half a second after the start', 'error'); return; }
+                  const fd = new FormData();
+                  fd.append('video', sourceFile);
+                  fd.append('startSec', String(tcStartSec));
+                  fd.append('endSec', String(tcEndSec));
+                  fd.append('titleSpec', JSON.stringify(tcCard));
+                  runJobVideo('title-card', fd, { label: 'Adding the title card…', resultFilename: 'titled.mp4', forTool: 'title-card' });
+                }}
+                disabled={!ffmpegOk}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Add title card
+              </button>
+            </Tooltip>
+            {resultForTool === 'title-card' && (
               <ResultVideo blobUrl={resultBlob} downloadName={resultName} onUse={useResultAsSource} {...resultSaveProps} />
             )}
           </section>

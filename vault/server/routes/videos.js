@@ -53,6 +53,7 @@ const voiceIsolation = require('../services/voiceIsolation');
 const audioMix = require('../services/audioMix');
 const extendEndingService = require('../services/extendEnding');
 const replaceSectionService = require('../services/replaceSection');
+const titleCardService = require('../services/titleCard');
 const { askTutor } = require('../services/videoTutor');
 const {
   startJob: startBackgroundJob, getJobStatus: getBackgroundJobStatus, getJobResult: getBackgroundJobResult, cancelJob: cancelBackgroundJob,
@@ -1228,6 +1229,43 @@ router.post('/extend-ending', upload.fields([{ name: 'video', maxCount: 1 }, { n
   } catch (err) {
     if (err.code === 'JOB_RUNNING') return res.status(409).json({ error: err.message });
     getLogger().error({ err }, '[videos/extend-ending] start');
+    return res.status(500).json({ error: 'Could not start the job. Try again.' });
+  }
+});
+
+// "Title card": a message card (headline, supporting line, optional button and web address, over an adjustable tint) shown between a
+// start and an end time in the middle of a video. Same card as the opening / closing titles of Intro and ending, placed anywhere. The
+// video's length and soundtrack are untouched. Background job like the other long builds.
+router.post('/title-card', upload.single('video'), async (req, res) => {
+  try {
+    if (!req.file?.buffer?.length) return res.status(400).json({ error: 'Choose your video first.' });
+    const spec = parseJsonBodyField(req.body?.titleSpec);
+    const checked = spec ? normalizeEndCard({ ...spec, placement: 'over-end' }) : { error: 'Add the text for the card first.' };
+    if (checked.error) return res.status(400).json({ error: checked.error });
+    const startSec = Number(req.body?.startSec);
+    const endSec = Number(req.body?.endSec);
+    if (!Number.isFinite(startSec) || startSec < 0) return res.status(400).json({ error: 'Set when the card starts.' });
+    if (!Number.isFinite(endSec)) return res.status(400).json({ error: 'Set when the card ends.' });
+    if (!(await checkFfmpeg())) return res.status(503).json({ error: 'ffmpeg is not available on this server' });
+    const base = path.basename(String(req.file.originalname || 'video'), path.extname(String(req.file.originalname || ''))).replace(/[^\w .-]+/g, '_').slice(0, 80) || 'video';
+
+    const jobId = startBackgroundJob(req.user.id, 'title-card', (signal) => withTempDir(async (dir) => {
+      const videoPath = await writeUpload(dir, req.file);
+      const outPath = path.join(dir, 'titled.mp4');
+      await titleCardService.addTitleCard({
+        videoPath, outPath, workDir: dir, options: { startSec, endSec }, spec, signal,
+        log: (m) => getLogger().info(`[videos/title-card] ${m}`),
+      });
+      return { buffer: await readOutputFile(outPath), fileName: `${base}-titled.mp4`, mime: 'video/mp4' };
+    }), {
+      describeError: (err) => describeVideoError(err).message,
+      onError: (err) => getLogger().error({ err }, `[videos/title-card] ${stderrTail(err) || String(err?.message || '').slice(0, 200)}`),
+      onEvent: (m) => getLogger().info(`[videos/title-card] ${m}`),
+    });
+    return res.status(202).json({ jobId });
+  } catch (err) {
+    if (err.code === 'JOB_RUNNING') return res.status(409).json({ error: err.message });
+    getLogger().error({ err }, '[videos/title-card] start');
     return res.status(500).json({ error: 'Could not start the job. Try again.' });
   }
 });
