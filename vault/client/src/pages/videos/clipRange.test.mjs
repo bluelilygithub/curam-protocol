@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { MIN_GAP, clampStart, clampEnd, nudge, timeFromX, pct, reachedEnd, normalizeRange } from './clipRange.mjs';
+import { MIN_GAP, clampStart, clampEnd, nudge, timeFromX, pct, reachedEnd, normalizeRange, clampBlockStart, blockStartFromPointer } from './clipRange.mjs';
 
 // markers cannot cross, leave the video, or sit on top of each other
 assert.equal(clampStart(-5, 30), 0);
@@ -41,5 +41,24 @@ assert.deepEqual(normalizeRange(10, '5', 60), { dur: 60, start: 10, end: 10.1 },
 assert.deepEqual(normalizeRange(10, '999', 60), { dur: 60, start: 10, end: 60 });
 assert.deepEqual(normalizeRange(100, '', 60), { dur: 60, start: 59.9, end: 60 }, 'a start past the end is held just inside it, and the end never leaves the video');
 assert.deepEqual(normalizeRange(0, '', 0), { dur: 0, start: 0, end: 0.1 }, 'nothing loaded yet');
+
+
+// ---- a fixed-length block that slides along the video ----
+assert.equal(clampBlockStart(20, 12, 60), 20);
+assert.equal(clampBlockStart(-5, 12, 60), 0, 'never before the start');
+assert.equal(clampBlockStart(55, 12, 60), 48, 'never so late that it runs past the end (60 - 12)');
+assert.equal(clampBlockStart(12.34, 12, 60), 12.3, 'tenths of a second');
+assert.equal(clampBlockStart(5, 80, 60), 0, 'a block longer than the video stays at the start');
+assert.equal(clampBlockStart('x', 12, 60), 0);
+// grabbing the block in the middle does not make it jump
+assert.equal(blockStartFromPointer(26, 6, 12, 60), 20, 'pointer at 26 s, grabbed 6 s into the block -> starts at 20');
+assert.equal(blockStartFromPointer(26, 0, 12, 60), 26);
+assert.equal(blockStartFromPointer(3, 6, 12, 60), 0, 'dragged past the start: held at 0');
+assert.equal(blockStartFromPointer(100, 6, 12, 60), 48, 'dragged past the end: held so it still fits');
+// the length never changes however far it is dragged
+for (const pointer of [0, 10, 30, 59, 200]) {
+  const st = blockStartFromPointer(pointer, 4, 12, 60);
+  assert.ok(st >= 0 && st + 12 <= 60 + 1e-9, `block fits at pointer ${pointer}`);
+}
 
 console.log('clipRange tests passed');

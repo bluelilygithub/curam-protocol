@@ -47,3 +47,19 @@ export function normalizeRange(startSec, endSec, duration) {
   const end = round1(Math.min(dur, Math.max(start + MIN_GAP, wanted)));
   return { dur, start, end };
 }
+
+// ---- a fixed-length block (Replace a section): the whole selection slides along the video, its length never changing ----
+
+/** Where a block `blockSec` long may start: never before 0, never so late that it runs past the end of the video. */
+export function clampBlockStart(t, blockSec, dur) {
+  const latest = Math.max(0, Number(dur) - Number(blockSec));
+  return round1(Math.min(latest, Math.max(0, Number(t) || 0)));
+}
+
+/**
+ * Dragging the block: where it should start, given where the pointer is, and how far into the block it was grabbed
+ * (so the block does not jump to put its left edge under the pointer).
+ */
+export function blockStartFromPointer(pointerSec, grabOffsetSec, blockSec, dur) {
+  return clampBlockStart(Number(pointerSec) - Number(grabOffsetSec || 0), blockSec, dur);
+}

@@ -191,7 +191,7 @@ const TOOL_HELP = {
       'Your soundtrack (music and voice) is left exactly as it is, so it runs straight through with no break',
       'The finished video is exactly as long as the original',
       'For a replacement clip of exactly the same length as the section. If yours is a little different, trim it first in Clip / trim; the tool tells you by how much',
-      'Choose the start with the timeline or by typing it; the end follows from your clip\'s length',
+      'Add your replacement clip and a block exactly as long as it appears on the timeline: drag the whole block to where the new clip should go (or type the start)',
       'Optional transition at each end (crossfade, dip to black or white, wipe, slide). They happen inside the section, so the length never changes',
       'Differences of up to a tenth of a second are fixed for you',
     ],
@@ -3791,13 +3791,14 @@ export default function VideosPage() {
                 If your replacement clip is a little longer or shorter than the section, trim it first in Clip / trim. The tool tells you by how much.
               </p>
             </div>
-            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>1. Your video is chosen above. Play it and set where the section starts.</p>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>1. Your video is chosen above. {rsAuto && rsReplDur > 0 ? 'Drag the block along the timeline to where your new clip should go. It is exactly as long as your clip.' : 'Choose the replacement clip below and a block exactly as long as it will appear here for you to drag. Until then, play the video and set where the section starts.'}</p>
             <ClipTimeline
               src={previewUrl}
               videoRef={clipVideoRef}
               duration={rsDuration}
               startSec={rsStartSec}
               endSec={rsEndSec ?? ''}
+              blockSec={rsAuto && rsReplDur > 0 ? rsReplDur : 0}
               onStartChange={(v) => setRsStart(formatClock(v))}
               onEndChange={(v) => { setRsAuto(false); setRsEnd(String(v)); }}
             />

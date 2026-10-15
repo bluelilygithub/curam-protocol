@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Tooltip from '../../components/Tooltip';
 import {
-  clampStart, clampEnd, nudge, timeFromX, pct, reachedEnd, normalizeRange,
+  clampStart, clampEnd, nudge, timeFromX, pct, reachedEnd, normalizeRange, clampBlockStart, blockStartFromPointer,
 } from './clipRange.mjs';
 
 /**
@@ -14,6 +14,9 @@ import {
  *  - buttons to take the point you are watching as the start or the end, to preview just the selection, and to jump to a marker.
  *
  * `videoRef` is the page's <video>; `src` its URL (used only to draw the frame strip from a hidden copy).
+ *
+ * `blockSec`: when given (> 0) the selection is ONE block of exactly that length that slides along the video as a whole (Replace a
+ * section, where the replacement clip's length is fixed). Only `startSec` / `onStartChange` are used then; the end is start + blockSec.
  */
 
 function fmt(sec) {
@@ -87,13 +90,19 @@ function useFrameStrip(src, duration, count = 12) {
 }
 
 export default function ClipTimeline({
-  src, videoRef, duration, startSec, endSec, onStartChange, onEndChange,
+  src, videoRef, duration, startSec, endSec, onStartChange, onEndChange, blockSec = 0,
 }) {
   const trackRef = useRef(null);
-  const dragRef = useRef(null); // 'start' | 'end' | 'scrub'
+  const dragRef = useRef(null); // 'start' | 'end' | 'block' | 'scrub'
+  const grabRef = useRef(0); // block mode: how far into the block it was grabbed, in seconds
   const previewingRef = useRef(false);
   const [now, setNow] = useState(0);
-  const { dur, start, end } = normalizeRange(startSec, endSec, duration);
+  const ranged = normalizeRange(startSec, endSec, duration);
+  const dur = ranged.dur;
+  const blockMode = Number(blockSec) > 0 && dur > 0;
+  const block = blockMode ? Math.min(Number(blockSec), dur) : 0;
+  const start = blockMode ? clampBlockStart(startSec, block, dur) : ranged.start;
+  const end = blockMode ? start + block : ranged.end;
   const endRef = useRef(end);
   endRef.current = end;
   const frames = useFrameStrip(src, dur);
@@ -141,7 +150,11 @@ export default function ClipTimeline({
       const mode = dragRef.current;
       if (!mode || !dur) return;
       const t = timeFromX(e.clientX, trackRef.current?.getBoundingClientRect(), dur);
-      if (mode === 'start') {
+      if (mode === 'block') {
+        const next = blockStartFromPointer(t, grabRef.current, block, dur);
+        onStartChange(next);
+        seek(next); // show the picture the new clip will start on
+      } else if (mode === 'start') {
         const next = clampStart(t, end);
         onStartChange(next);
         seek(next); // show the exact frame the clip will start on
@@ -162,7 +175,7 @@ export default function ClipTimeline({
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
     };
-  }, [dur, start, end, onStartChange, onEndChange, seek]);
+  }, [dur, start, end, block, onStartChange, onEndChange, seek]);
 
   if (!dur) {
     return (
@@ -181,7 +194,8 @@ export default function ClipTimeline({
     const dir = e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1 : 0;
     if (!dir) return;
     e.preventDefault();
-    if (which === 'start') { const n = clampStart(nudge(start, dir, e.shiftKey), end); onStartChange(n); seek(n); }
+    if (which === 'block') { const n = clampBlockStart(nudge(start, dir, e.shiftKey), block, dur); onStartChange(n); seek(n); }
+    else if (which === 'start') { const n = clampStart(nudge(start, dir, e.shiftKey), end); onStartChange(n); seek(n); }
     else { const n = clampEnd(nudge(end, dir, e.shiftKey), start, dur); onEndChange(n); seek(n); }
   };
 
@@ -223,6 +237,34 @@ export default function ClipTimeline({
         {/* the playhead */}
         <div className="absolute -top-1 -bottom-1 w-0.5 pointer-events-none" style={{ left: `${nowPct}%`, background: '#fff', boxShadow: '0 0 0 1px rgba(0,0,0,0.6)' }} />
 
+        {blockMode ? (
+          <Tooltip text={`This block is exactly as long as your replacement clip (${fmt(block)}). Drag it along the video to where the new clip should go; the video above shows the picture at its start. Arrow keys nudge it (Shift = a whole second).`}>
+            <div
+              data-marker="block"
+              role="slider"
+              tabIndex={0}
+              aria-label="Replacement clip position"
+              aria-valuemin={0}
+              aria-valuemax={Math.max(0, dur - block)}
+              aria-valuenow={start}
+              aria-valuetext={`${fmt(start)} to ${fmt(end)}`}
+              className="absolute -top-1 -bottom-1 rounded-md cursor-grab active:cursor-grabbing touch-none flex items-center justify-center focus:outline-none focus-visible:ring-2"
+              style={{ left: `${startPct}%`, width: `${Math.max(0, endPct - startPct)}%`, background: 'rgba(204,120,92,0.28)', border: '2px solid var(--color-primary)', minWidth: 14 }}
+              onKeyDown={markerKeys('block')}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                dragRef.current = 'block';
+                grabRef.current = Math.max(0, timeFromX(e.clientX, trackRef.current?.getBoundingClientRect(), dur) - start);
+                seek(start);
+              }}
+            >
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded pointer-events-none" style={{ background: 'var(--color-primary)', color: '#fff', whiteSpace: 'nowrap' }}>
+                ⇄ {fmt(block)}
+              </span>
+            </div>
+          </Tooltip>
+        ) : (
+          <>
         <Tooltip text="Drag to choose where the clip starts. The video above jumps to that exact picture. Arrow keys fine-tune it (Shift = a whole second).">
           <div
             data-marker="start"
@@ -259,14 +301,16 @@ export default function ClipTimeline({
             <span className="w-0.5 h-5 rounded bg-white/80" />
           </div>
         </Tooltip>
+          </>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-1.5">
         <Tooltip text="Pause the video where you want the clip to begin, then press this. The start marker moves to the picture you are looking at.">
-          <button type="button" className={btn} style={btnStyle} onClick={() => { const v = video(); if (v) onStartChange(clampStart(v.currentTime, end)); }}>Set start here</button>
+          <button type="button" className={btn} style={btnStyle} onClick={() => { const v = video(); if (!v) return; onStartChange(blockMode ? clampBlockStart(v.currentTime, block, dur) : clampStart(v.currentTime, end)); }}>Set start here</button>
         </Tooltip>
         <Tooltip text="Pause the video where you want the clip to finish, then press this. The end marker moves to the picture you are looking at.">
-          <button type="button" className={btn} style={btnStyle} onClick={() => { const v = video(); if (v) onEndChange(clampEnd(v.currentTime, start, dur)); }}>Set end here</button>
+          <button type="button" className={btn} style={btnStyle} onClick={() => { const v = video(); if (!v) return; if (blockMode) onStartChange(clampBlockStart(v.currentTime - block, block, dur)); else onEndChange(clampEnd(v.currentTime, start, dur)); }}>Set end here</button>
         </Tooltip>
         <Tooltip text="Play only the part you have selected, from the start marker to the end marker, so you can check it before you export.">
           <button
@@ -286,8 +330,13 @@ export default function ClipTimeline({
         </Tooltip>
       </div>
       <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
-        Click or drag along the pictures to move through the video. Drag the two coloured end markers to choose the part to keep; the video shows the picture at each marker.
+        {blockMode
+          ? `Click or drag along the pictures to move through the video. Drag the coloured block (exactly ${fmt(block)} long, the length of your clip) to where the new clip should go; the video shows the picture at its start.`
+          : 'Click or drag along the pictures to move through the video. Drag the two coloured end markers to choose the part to keep; the video shows the picture at each marker.'}
       </p>
+      {Number(blockSec) > dur && dur > 0 && (
+        <p className="text-[11px]" style={{ color: '#ef4444' }} role="alert">Your clip ({fmt(Number(blockSec))}) is longer than this whole video ({fmt(dur)}), so it cannot replace a section of it.</p>
+      )}
     </div>
   );
 }
