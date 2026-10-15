@@ -135,7 +135,8 @@ async function cardDrawFilters({ spec, blocks, fontfile, workDir, enable = '', a
     await fs.writeFile(textPath, b.text, 'utf8');
     const color = b.kind === 'button' ? spec.buttonTextColor : spec.textColor;
     const colorAlpha = b.kind === 'url' && !alphaExpr ? '@0.85' : '';
-    let d = `drawtext=fontfile=${fontfile}:textfile=${escapeFilterPath(textPath)}:expansion=none`
+    // Paths are quoted: an unquoted Windows drive colon (C\:/...) is split into a stray option by ffmpeg's second parsing pass.
+    let d = `drawtext=fontfile='${fontfile}':textfile='${escapeFilterPath(textPath)}':expansion=none`
       + `:fontsize=${b.size}:fontcolor=0x${color}${colorAlpha}:line_spacing=${Math.round(b.size * 0.25)}`
       + `:x=(w-text_w)/2:y=${b.y}${enable}${alphaExpr}`;
     if (b.kind === 'button') {
