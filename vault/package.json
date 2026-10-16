@@ -22,6 +22,7 @@
     "test:cellar-lite-config": "node server/routes/cellarLiteConfig.test.js",
     "test:debate": "node server/routes/debate.test.js",
     "test:pdf-extract": "node server/routes/pdfExtract.test.js",
+    "test:put-ownership": "node server/routes/putOwnership.test.js",
     "test:graph": "node server/routes/graph.test.js",
     "test:ownership-misc": "node server/routes/ownershipMisc.test.js",
     "test:settings-lookup": "node server/routes/settingsLookup.test.js",
