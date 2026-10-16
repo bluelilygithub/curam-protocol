@@ -44,11 +44,31 @@ function buildHtmlEmail(messages, subject) {
 </html>`;
 }
 
-// POST /api/email
+// The same ownership rule as routes/chat.js: the caller owns the chat, or owns the project it lives in.
+// A chat with no saved session row counts only if its messages sit in one of the caller's projects.
+async function ownsSession(userId, sessionId) {
+  const { rows } = await pool.query(
+    `SELECT 1
+     WHERE EXISTS (
+       SELECT 1 FROM sessions s LEFT JOIN projects p ON p.id = s."projectId"
+       WHERE s."sessionId" = $1 AND (s."userId" = $2 OR (s."projectId" IS NOT NULL AND p."userId" = $2))
+     )
+     OR (
+       NOT EXISTS (SELECT 1 FROM sessions WHERE "sessionId" = $1)
+       AND EXISTS (SELECT 1 FROM messages m JOIN projects p ON p.id = m."projectId" WHERE m."sessionId" = $1 AND p."userId" = $2)
+     )`,
+    [sessionId, userId]
+  );
+  return rows.length > 0;
+}
+
+// POST /api/email — emails the caller's own chat transcript. Someone else's chat gets the same
+// "No messages found" as a chat that does not exist.
 router.post('/', async (req, res) => {
   const { sessionId, to, subject } = req.body;
   if (!sessionId || !to) return res.status(400).json({ error: 'sessionId and to are required' });
 
+  if (!(await ownsSession(req.user.id, String(sessionId)))) return res.status(404).json({ error: 'No messages found' });
   const { rows: messages } = await pool.query('SELECT * FROM messages WHERE "sessionId"=$1 ORDER BY "createdAt" ASC', [sessionId]);
   if (messages.length === 0) return res.status(404).json({ error: 'No messages found' });
 
