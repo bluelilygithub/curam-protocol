@@ -9,6 +9,12 @@ const { isYoutubeUrl, fetchYoutubeTranscript } = require('../services/youtubeTra
 const { callModel } = require('../services/callModel');
 const { getModelsForUser } = require('../services/modelResolver');
 const { logUsage } = require('../utils/logUsage');
+const { ownsProject } = require('../utils/ownership');
+
+// Pinned URLs are the owner's project context: their fetched text goes into that project's chats. So
+// every route works only on the caller's own projects' pins; someone else's behave like ones that do
+// not exist, and nothing is fetched on a stranger's behalf.
+const OWNED_PIN = 'FROM pinned_urls pu JOIN projects p ON p.id = pu."projectId" WHERE pu.id=$1 AND p."userId"=$2';
 
 // Returns the transcript as-is if under 5,000 chars; otherwise summarises to ~20%
 // using the user's configured light model. Gracefully returns the raw text on any error.
@@ -111,6 +117,7 @@ function parseHtml(html, url) {
 // GET /api/pinned-urls/:projectId
 router.get('/:projectId', async (req, res) => {
   try {
+    if (!(await ownsProject(req.user.id, req.params.projectId))) return res.json([]);
     const { rows } = await pool.query(
       'SELECT * FROM pinned_urls WHERE "projectId"=$1 ORDER BY "createdAt" ASC',
       [req.params.projectId]
@@ -130,6 +137,8 @@ router.post('/', async (req, res) => {
   let title, content, youtube = false;
 
   try {
+    // Checked before anything is fetched: a stranger's request must not cause a fetch or a stored pin.
+    if (!(await ownsProject(req.user.id, projectId))) return res.status(404).json({ error: 'Not found' });
     let transcriptSummary = null;
     if (isYoutubeUrl(fullUrl)) {
       youtube = true;
@@ -161,7 +170,7 @@ router.post('/', async (req, res) => {
 // PATCH /api/pinned-urls/:id/refresh — re-fetch and update content
 router.patch('/:id/refresh', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM pinned_urls WHERE id=$1', [req.params.id]);
+    const { rows } = await pool.query(`SELECT pu.* ${OWNED_PIN}`, [req.params.id, req.user.id]);
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     const { url, isYoutube } = rows[0];
     const fullUrl = url.startsWith('http') ? url : `https://${url}`;
@@ -195,7 +204,9 @@ router.patch('/:id/refresh', async (req, res) => {
 // DELETE /api/pinned-urls/:id
 router.delete('/:id', async (req, res) => {
   try {
-    await pool.query('DELETE FROM pinned_urls WHERE id=$1', [req.params.id]);
+    const { rows } = await pool.query(`SELECT pu.id ${OWNED_PIN}`, [req.params.id, req.user.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    await pool.query('DELETE FROM pinned_urls WHERE id=$1', [rows[0].id]);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

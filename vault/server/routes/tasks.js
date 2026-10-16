@@ -8,6 +8,12 @@ const { callModel } = require('../services/callModel');
 const { getModelsForUser } = require('../services/modelResolver');
 const { logUsage } = require('../utils/logUsage');
 const crypto = require('crypto');
+const { ownedTaskIds, ownsTask } = require('../utils/ownership');
+
+// Ownership. Every route that addresses a task, a subtask, a comment or a dependency by id works only on
+// the caller's own tasks. A task is theirs if it, or the task it is a subtask of, carries their user id
+// (template-made subtasks have none of their own). Someone else's behave exactly like ones that do not
+// exist: the same 404, or the same empty result the route already gave for a missing record.
 const {
   createAttachmentUpload, rejectIfDisguisedExecutable, assertWithinQuota,
   insertAttachment, attachmentsForEntity, deleteAttachmentsForEntityIds,
@@ -137,6 +143,7 @@ router.get('/', async (req, res) => {
 // GET /api/tasks/:id/subtasks
 router.get('/:id/subtasks', async (req, res) => {
   try {
+    if (!(await ownsTask(req.user.id, req.params.id))) return res.json([]);
     const { rows } = await pool.query('SELECT * FROM tasks WHERE "parentTaskId"=$1 ORDER BY "createdAt" ASC', [req.params.id]);
     res.json(await Promise.all(rows.map(buildTask)));
   } catch (err) {
@@ -149,10 +156,12 @@ router.put('/reorder', async (req, res) => {
   try {
     const { items } = req.body; // [{ id, order }]
     if (!Array.isArray(items)) return res.status(400).json({ error: 'items array required' });
+    const mine = new Set(await ownedTaskIds(req.user.id, items.map(i => i && i.id)));
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
       for (const { id, order } of items) {
+        if (!mine.has(Number(id))) continue;
         await client.query('UPDATE tasks SET "order"=$1, "updatedAt"=NOW() WHERE id=$2', [order, id]);
       }
       await client.query('COMMIT');
@@ -180,10 +189,11 @@ router.put('/bulk', async (req, res) => {
     const setClauses = sets.map((k, i) => `${k}=$${i + 1}`).join(', ');
     const setValues = sets.map(k => updates[k]);
     const idPlaceholder = `$${sets.length + 1}`;
+    const mine = await ownedTaskIds(req.user.id, ids);
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      for (const id of ids) {
+      for (const id of mine) {
         await client.query(
           `UPDATE tasks SET ${setClauses}, "updatedAt"=NOW() WHERE id=${idPlaceholder}`,
           [...setValues, id]
@@ -199,9 +209,9 @@ router.put('/bulk', async (req, res) => {
     // a Fitness session's task completed or reopened in bulk: carry it to the session (same bridge as the single-task route)
     if ('status' in updates) {
       const { syncSessionFromTask } = require('../services/fitness/fitnessTasks');
-      for (const id of ids) await syncSessionFromTask(Number(id), updates.status === 'done');
+      for (const id of mine) await syncSessionFromTask(Number(id), updates.status === 'done');
     }
-    res.json({ ok: true, updated: ids.length });
+    res.json({ ok: true, updated: mine.length });
   } catch (err) {
     console.error('[tasks bulk update]', err);
     res.status(500).json({ error: err.message });
@@ -213,18 +223,20 @@ router.delete('/bulk', async (req, res) => {
   try {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids array required' });
+    // Only the caller's own tasks are touched; ids that are not theirs are skipped, as if they did not exist.
+    const mine = await ownedTaskIds(req.user.id, ids);
     // Attachments have no FK to tasks (same reasoning as touchpoints — see
     // server/utils/attachments.js) so both this task's and its subtasks'
     // attachments must be cleaned up explicitly before the rows go.
     const { rows: subtaskRows } = await pool.query(
-      `SELECT id FROM tasks WHERE "parentTaskId" = ANY($1::int[])`, [ids]
+      `SELECT id FROM tasks WHERE "parentTaskId" = ANY($1::int[])`, [mine]
     );
-    await deleteAttachmentsForEntityIds('task', [...ids, ...subtaskRows.map(r => r.id)]);
+    await deleteAttachmentsForEntityIds('task', [...mine, ...subtaskRows.map(r => r.id)]);
 
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      for (const id of ids) {
+      for (const id of mine) {
         await client.query('DELETE FROM tasks WHERE "parentTaskId"=$1', [id]);
         await client.query('DELETE FROM tasks WHERE id=$1', [id]);
       }
@@ -235,7 +247,7 @@ router.delete('/bulk', async (req, res) => {
     } finally {
       client.release();
     }
-    res.json({ ok: true, deleted: ids.length });
+    res.json({ ok: true, deleted: mine.length });
   } catch (err) {
     console.error('[tasks bulk delete]', err);
     res.status(500).json({ error: err.message });
@@ -422,6 +434,7 @@ router.post('/import', async (req, res) => {
 // POST /api/tasks/:id/share — generate share token — must be before /:id routes
 router.post('/:id/share', async (req, res) => {
   try {
+    if (!(await ownsTask(req.user.id, req.params.id))) return res.status(404).json({ error: 'not found' });
     const { rows } = await pool.query('SELECT id, "shareToken" FROM tasks WHERE id=$1', [req.params.id]);
     const task = rows[0];
     if (!task) return res.status(404).json({ error: 'not found' });
@@ -440,6 +453,7 @@ router.post('/:id/share', async (req, res) => {
 // DELETE /api/tasks/:id/share — revoke share token — must be before /:id routes
 router.delete('/:id/share', async (req, res) => {
   try {
+    if (!(await ownsTask(req.user.id, req.params.id))) return res.status(404).json({ error: 'not found' });
     const { rows } = await pool.query('SELECT id FROM tasks WHERE id=$1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'not found' });
     await pool.query('UPDATE tasks SET "shareToken"=NULL, "updatedAt"=NOW() WHERE id=$1', [req.params.id]);
@@ -550,6 +564,7 @@ router.post('/ai-generate', async (req, res) => {
 // POST /api/tasks/:id/duplicate — must be before /:id routes
 router.post('/:id/duplicate', async (req, res) => {
   try {
+    if (!(await ownsTask(req.user.id, req.params.id))) return res.status(404).json({ error: 'not found' });
     const { rows } = await pool.query('SELECT * FROM tasks WHERE id=$1', [req.params.id]);
     const task = rows[0];
     if (!task) return res.status(404).json({ error: 'not found' });
@@ -588,6 +603,7 @@ router.post('/:id/duplicate', async (req, res) => {
 // GET /api/tasks/:id/comments — must be before /:id routes
 router.get('/:id/comments', async (req, res) => {
   try {
+    if (!(await ownsTask(req.user.id, req.params.id))) return res.json([]);
     const { rows } = await pool.query('SELECT * FROM task_comments WHERE "taskId"=$1 ORDER BY "createdAt" ASC', [req.params.id]);
     res.json(rows);
   } catch (err) {
@@ -598,6 +614,7 @@ router.get('/:id/comments', async (req, res) => {
 // POST /api/tasks/:id/comments — must be before /:id routes
 router.post('/:id/comments', async (req, res) => {
   try {
+    if (!(await ownsTask(req.user.id, req.params.id))) return res.status(404).json({ error: 'not found' });
     const { rows } = await pool.query('SELECT id FROM tasks WHERE id=$1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'not found' });
     const { content, type = 'user' } = req.body;
@@ -616,6 +633,8 @@ router.post('/:id/comments', async (req, res) => {
 // DELETE /api/tasks/comments/:commentId — must be before /:id routes
 router.delete('/comments/:commentId', async (req, res) => {
   try {
+    const { rows: [comment] } = await pool.query('SELECT "taskId" FROM task_comments WHERE id=$1', [req.params.commentId]);
+    if (!comment || !(await ownsTask(req.user.id, comment.taskId))) return res.status(404).json({ error: 'not found' });
     await pool.query('DELETE FROM task_comments WHERE id=$1', [req.params.commentId]);
     res.json({ ok: true });
   } catch (err) {
@@ -647,6 +666,7 @@ router.get('/:id/activity', async (req, res) => {
 // GET /api/tasks/:id/dependencies
 router.get('/:id/dependencies', async (req, res) => {
   try {
+    if (!(await ownsTask(req.user.id, req.params.id))) return res.json({ blockers: [], dependents: [] });
     const { rows: blockers } = await pool.query(
       'SELECT t.id, t.title, t.status, t.priority FROM task_dependencies td JOIN tasks t ON t.id = td."blockedByTaskId" WHERE td."taskId" = $1',
       [req.params.id]
@@ -655,7 +675,9 @@ router.get('/:id/dependencies', async (req, res) => {
       'SELECT t.id, t.title, t.status, t.priority FROM task_dependencies td JOIN tasks t ON t.id = td."taskId" WHERE td."blockedByTaskId" = $1',
       [req.params.id]
     );
-    res.json({ blockers, dependents });
+    // Never list a task that is not the caller's, even if an old link points at one.
+    const mine = new Set(await ownedTaskIds(req.user.id, [...blockers, ...dependents].map(r => r.id)));
+    res.json({ blockers: blockers.filter(r => mine.has(r.id)), dependents: dependents.filter(r => mine.has(r.id)) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -669,6 +691,8 @@ router.post('/:id/dependencies', async (req, res) => {
     const taskId = Number(req.params.id);
     const blockerId = Number(blockedByTaskId);
     if (taskId === blockerId) return res.status(400).json({ error: 'task cannot block itself' });
+    // Both tasks must be the caller's, checked before anything about dependencies is read or written.
+    if (!(await ownsTask(req.user.id, taskId)) || !(await ownsTask(req.user.id, blockerId))) return res.status(404).json({ error: 'not found' });
     // BFS circular dependency check: if taskId is reachable from blockerId, adding this dep would create a cycle
     const visited = new Set();
     const queue = [blockerId];
@@ -691,6 +715,7 @@ router.post('/:id/dependencies', async (req, res) => {
 // DELETE /api/tasks/:id/dependencies/:blockedByTaskId
 router.delete('/:id/dependencies/:blockedByTaskId', async (req, res) => {
   try {
+    if (!(await ownsTask(req.user.id, req.params.id))) return res.status(404).json({ error: 'not found' });
     await pool.query('DELETE FROM task_dependencies WHERE "taskId"=$1 AND "blockedByTaskId"=$2', [req.params.id, req.params.blockedByTaskId]);
     res.json({ ok: true });
   } catch (err) {
@@ -953,6 +978,7 @@ router.post('/:id/attachments', uploadTaskAttachment.single('file'), async (req,
 // POST /api/tasks/:id/subtasks
 router.post('/:id/subtasks', async (req, res) => {
   try {
+    if (!(await ownsTask(req.user.id, req.params.id))) return res.status(404).json({ error: 'parent not found' });
     const { rows } = await pool.query('SELECT id FROM tasks WHERE id=$1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'parent not found' });
     if (!req.body.title) return res.status(400).json({ error: 'title required' });
