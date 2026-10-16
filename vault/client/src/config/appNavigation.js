@@ -82,7 +82,6 @@ export const APP_NAV_GROUPS = [
       { id: 'domains', label: 'Domain', path: '/domains', icon: 'globe', featureKey: 'domains' },
       { id: 'html', label: 'Lighthouse', path: '/html', icon: 'gauge', featureKey: 'html', matchPrefix: true },
       { id: 'webExtractor', label: 'Web Extractor', path: '/web-extractor', icon: 'scissors', featureKey: 'webExtractor' },
-      { id: 'themeBuilder', label: 'WP Theme Builder', path: '/theme-builder', icon: 'blocks', featureKey: 'themeBuilder' },
       { id: 'browserAgent', label: 'Browser Agent', path: '/browser-agent', icon: 'mouse-pointer', featureKey: 'browserAgent' },
     ],
   },

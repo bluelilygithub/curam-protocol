@@ -1828,12 +1828,6 @@ function UserGuidePage() {
           revisit later, or download the finished page as a single file when you're done.
         </P>
 
-        <SubHeading>WP Theme Builder</SubHeading>
-        <P>
-          A separate mini-app (mounted at <code>/tb</code>) for designing a WordPress theme: Stage 1 produces a
-          wireframe and homepage design from a brief, Stage 2 exports it as an installable WordPress theme.
-        </P>
-
         <Divider />
 
         {/* ── Finance ── */}

@@ -27,7 +27,7 @@ Catalog lives in [`client/src/config/appNavigation.js`](../client/src/config/app
 - **Workspace** — Personas, Memory, Prompt Library, User Guide
 - **Productivity** — Notes, Goals, Clients, Student
 - **AI tools** — Prompt Chains, Knowledge Graph, Debate, Document Compare
-- **Website** — SEO, Adwords, Domain, HTML (Lighthouse), WP Theme Builder
+- **Website** — SEO, Adwords, Domain, HTML (Lighthouse)
 - **Content tools** — PDF, Graphics, Video Tools, Recipes, Amazon Search, YouTube
 - **Money & data** — Finance, Shares, Usage & Cost, News Digest
 - **Personal** — Mood, Wellbeing, Inbox Intel

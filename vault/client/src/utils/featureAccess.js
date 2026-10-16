@@ -19,7 +19,6 @@ export const DEFAULT_FEATURE_ACCESS = {
   music: true,
   recipes: true,
   pdf: true,
-  themeBuilder: true,
   wellbeing: true,
   gmailIntel: true,
   domains: true,
@@ -56,7 +55,6 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'domains', label: 'Domain' },
       { key: 'html', label: 'Lighthouse' },
       { key: 'webExtractor', label: 'Web Extractor' },
-      { key: 'themeBuilder', label: 'WP Theme Builder' },
     ],
   },
   {

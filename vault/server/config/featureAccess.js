@@ -21,7 +21,6 @@ const FEATURE_ACCESS_DEFAULTS = {
   music: true,
   recipes: true,
   pdf: true,
-  themeBuilder: true,
   wellbeing: true,
   gmailIntel: true,
   domains: true,

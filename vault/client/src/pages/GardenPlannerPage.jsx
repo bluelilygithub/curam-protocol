@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 
 /**
  * Garden Planner lives in its own app (vault/garden-planner/, Vite + React 19 + Konva + three.js) and is built into
- * dist/garden-planner-app/ by the root build. This page hosts it in the Vault shell, same pattern as ThemeBuilderPage.
+ * dist/garden-planner-app/ by the root build. This page hosts it in the Vault shell, same pattern as the other planner pages.
 
  */
 const APP_URL = '/garden-planner-app/';
