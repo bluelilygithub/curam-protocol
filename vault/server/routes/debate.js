@@ -9,6 +9,7 @@ const { callModel: callModelService } = require('../services/callModel');
 const { pool } = require('../db');
 const { getModelsForUser } = require('../services/modelResolver');
 const { logUsage } = require('../utils/logUsage');
+const { getSettingForUser } = require('../utils/settingsLookup');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -16,10 +17,12 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 
 const DEBATE_SYSTEM =
   'You are participating in a structured debate. Give your honest, well-reasoned response. Be concise but thorough.';
 
-async function getGeminiKey() {
+// The key comes from the caller's own setting, else an administrator's, else the environment. Never
+// from some other member's setting (see utils/settingsLookup.js).
+async function getGeminiKey(userId) {
   try {
-    const { rows } = await pool.query("SELECT value FROM settings WHERE key='GEMINI_API_KEY'");
-    if (rows[0]?.value) return rows[0].value;
+    const value = await getSettingForUser(userId, 'GEMINI_API_KEY');
+    if (value) return value;
   } catch (_) {}
   return process.env.GEMINI_API_KEY || null;
 }
@@ -58,9 +61,9 @@ function buildGeminiParts(text, sharedContextFiles) {
   return parts;
 }
 
-async function callModel(modelId, userText, sharedContextFiles = []) {
+async function callModel(modelId, userText, sharedContextFiles = [], userId = null) {
   if (modelId.startsWith('gemini-')) {
-    const geminiKey = await getGeminiKey();
+    const geminiKey = await getGeminiKey(userId);
     if (!geminiKey) throw new Error('Gemini API key not configured. Add GEMINI_API_KEY in Settings.');
     let GoogleGenerativeAI;
     try {
@@ -165,8 +168,8 @@ router.post('/start', async (req, res) => {
 
   try {
     const [resultA, resultB] = await Promise.allSettled([
-      callModel(modelA, prompt, ctx),
-      callModel(modelB, prompt, ctx),
+      callModel(modelA, prompt, ctx, req.user.id),
+      callModel(modelB, prompt, ctx, req.user.id),
     ]);
 
     if (resultA.status === 'fulfilled') {
@@ -209,8 +212,8 @@ router.post('/round', async (req, res) => {
 
   try {
     const [resultA, resultB] = await Promise.allSettled([
-      callModel(modelA, buildPrompt(prevA, prevB), ctx),
-      callModel(modelB, buildPrompt(prevB, prevA), ctx),
+      callModel(modelA, buildPrompt(prevA, prevB), ctx, req.user.id),
+      callModel(modelB, buildPrompt(prevB, prevA), ctx, req.user.id),
     ]);
 
     if (resultA.status === 'fulfilled') {

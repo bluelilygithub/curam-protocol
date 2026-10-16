@@ -151,7 +151,11 @@ Output ONLY JSON objects, one per line, no explanations, no markdown, no array b
 // PUT /api/goals/key-results/:krId — update a KR (must be before /:id)
 router.put('/key-results/:krId', async (req, res) => {
   try {
-    const { rows: krs } = await pool.query('SELECT * FROM key_results WHERE id = $1', [req.params.krId]);
+    // A key result is the caller's only if its objective is. Someone else's behaves like a missing one.
+    const { rows: krs } = await pool.query(
+      'SELECT kr.* FROM key_results kr JOIN objectives o ON o.id = kr."objectiveId" WHERE kr.id = $1 AND o."userId" = $2',
+      [req.params.krId, req.user.id]
+    );
     if (!krs[0]) return res.status(404).json({ error: 'Key result not found' });
     const kr = krs[0];
     const { title, targetValue, currentValue, unit, dueDate, status } = req.body;
@@ -178,7 +182,10 @@ router.put('/key-results/:krId', async (req, res) => {
 // DELETE /api/goals/key-results/:krId — delete a KR (must be before /:id)
 router.delete('/key-results/:krId', async (req, res) => {
   try {
-    const { rows: krs } = await pool.query('SELECT * FROM key_results WHERE id = $1', [req.params.krId]);
+    const { rows: krs } = await pool.query(
+      'SELECT kr.* FROM key_results kr JOIN objectives o ON o.id = kr."objectiveId" WHERE kr.id = $1 AND o."userId" = $2',
+      [req.params.krId, req.user.id]
+    );
     if (!krs[0]) return res.status(404).json({ error: 'Key result not found' });
     await pool.query('UPDATE tasks SET "keyResultId" = NULL WHERE "keyResultId" = $1', [krs[0].id]);
     await pool.query('DELETE FROM key_results WHERE id = $1', [krs[0].id]);

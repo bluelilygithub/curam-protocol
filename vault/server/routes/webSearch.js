@@ -4,6 +4,7 @@ const https = require('https');
 const rateLimit = require('express-rate-limit');
 const { pool } = require('../db');
 const { runtimeConfig } = require('../config/runtime');
+const { getSettingForUser } = require('../utils/settingsLookup');
 
 const searchLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
@@ -45,10 +46,11 @@ router.get('/', searchLimiter, async (req, res) => {
   let apiKey = process.env.SEARCH_API_KEY;
   let provider = (process.env.SEARCH_PROVIDER || '').toLowerCase();
   try {
-    const { rows: keyRows } = await pool.query("SELECT value FROM settings WHERE key='SEARCH_API_KEY'");
-    if (keyRows[0]?.value) apiKey = keyRows[0].value;
-    const { rows: provRows } = await pool.query("SELECT value FROM settings WHERE key='SEARCH_PROVIDER'");
-    if (provRows[0]?.value) provider = provRows[0].value.toLowerCase();
+    // The caller's own setting, else an administrator's. Never another member's (utils/settingsLookup.js).
+    const storedKey = await getSettingForUser(req.user && req.user.id, 'SEARCH_API_KEY');
+    if (storedKey) apiKey = storedKey;
+    const storedProvider = await getSettingForUser(req.user && req.user.id, 'SEARCH_PROVIDER');
+    if (storedProvider) provider = storedProvider.toLowerCase();
   } catch (_) {}
   if (!apiKey) {
     return res.status(501).json({
