@@ -35,8 +35,10 @@ router.put('/:id', async (req, res) => {
   const { name } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'name required' });
   try {
-    await pool.query('UPDATE folders SET name=$1 WHERE id=$2 AND "userId"=$3', [name.trim(), req.params.id, req.user.id]);
-    const { rows } = await pool.query('SELECT * FROM folders WHERE id=$1', [req.params.id]);
+    // RETURNING keeps the answer tied to the same owner check as the update (a separate SELECT by id alone
+    // handed any member another member's folder)
+    const { rows } = await pool.query('UPDATE folders SET name=$1 WHERE id=$2 AND "userId"=$3 RETURNING *', [name.trim(), req.params.id, req.user.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
