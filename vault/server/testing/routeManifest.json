@@ -2386,12 +2386,6 @@
   "GET /api/settings/runtime": {
    "class": "authed"
   },
-  "GET /api/settings/theme-builder-design-model": {
-   "class": "authed"
-  },
-  "POST /api/settings/theme-builder-design-model": {
-   "class": "authed"
-  },
   "POST /api/settings/tool-maintenance/execute": {
    "class": "authed"
   },

@@ -54,6 +54,13 @@ global.fetch = (input, init) => {
   return realFetch(input, init);
 };
 
+// Rate limits are not what this test checks, and 30 calls a minute would cut the probes off:
+// every limiter becomes a pass-through (only here, only in this process).
+{
+  const p = require.resolve('express-rate-limit');
+  const passThrough = () => (_req, _res, next) => next();
+  require.cache[p] = { id: p, filename: p, loaded: true, exports: Object.assign(passThrough, { rateLimit: passThrough, ipKeyGenerator: (ip) => ip, default: passThrough }) };
+}
 process.env.UPLOAD_DIR = require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'xuser-uploads-'));
 const app = require('../index.js');
 const { pool } = require('../db');

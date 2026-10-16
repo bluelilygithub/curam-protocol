@@ -25,6 +25,10 @@ const { FEATURE_ACCESS_KEYS } = require('../config/featureAccess');
 
 const MANIFEST = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'testing', 'routeManifest.json'), 'utf8')).routes;
 const key = (r) => `${r.method} ${r.path}`;
+// Routes that show one member's rows to others ON PURPOSE. Each needs a written reason.
+const SHARED_BY_DESIGN = {
+  'GET /api/recipes/grocery/corrections': 'the grocery-price correction glossary is workspace-shared (docs/recipes.md, "Correction glossary")',
+};
 const REF_ALIASES = {
   projects: ['projectId'], sessions: ['sessionId'], clients: ['clientId', 'clientRef'], tasks: ['taskId', 'parentId'],
   objectives: ['goalId', 'objectiveId'], key_results: ['krId', 'keyResultId'], fin_invoices: ['invoiceId'], fin_suppliers: ['supplierId'],
@@ -108,7 +112,7 @@ const REF_ALIASES = {
   // 1. leak sweep ────────────────────────────────────────────────────────────────────────────────
   for (const r of plan.filter((p) => p.method === 'GET')) {
     const b = await harness.call(h.base, 'GET', r.url, { token: B.token });
-    if (hasMark(b.text)) results.leaks.push(`${key(r)} -> ${b.status} ${r.url}`);
+    if (hasMark(b.text) && !SHARED_BY_DESIGN[key(r)]) results.leaks.push(`${key(r)} -> ${b.status} ${r.url}`);
     const a = await harness.call(h.base, 'GET', r.url, { token: A.token });
     if (hasMark(a.text)) results.verified++;
     else if (r.unresolved) results.unresolved.push(key(r));
