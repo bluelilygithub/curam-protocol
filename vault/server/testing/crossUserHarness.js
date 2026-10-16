@@ -62,6 +62,9 @@ global.fetch = (input, init) => {
   require.cache[p] = { id: p, filename: p, loaded: true, exports: Object.assign(passThrough, { rateLimit: passThrough, ipKeyGenerator: (ip) => ip, default: passThrough }) };
 }
 process.env.UPLOAD_DIR = require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'xuser-uploads-'));
+// The app syncs Fitness sessions into tasks a few seconds after boot. In a slow boot that write lands in the
+// middle of a probe and would be blamed on the probing user, so the startup sync is switched off here.
+require('../cron/fitnessCron').startFitnessTasksSync = () => {};
 const app = require('../index.js');
 const { pool } = require('../db');
 
