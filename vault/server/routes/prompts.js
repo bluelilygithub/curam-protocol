@@ -40,7 +40,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   const { title, content, tags, projectId } = req.body;
   try {
-    const { rows: existing } = await pool.query('SELECT * FROM prompts WHERE id=$1', [req.params.id]);
+    const { rows: existing } = await pool.query('SELECT * FROM prompts WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
     if (!existing[0]) return res.status(404).json({ error: 'Not found' });
     const e = existing[0];
     await pool.query(
@@ -54,7 +54,7 @@ router.put('/:id', async (req, res) => {
         req.user.id,
       ]
     );
-    const { rows: updated } = await pool.query('SELECT * FROM prompts WHERE id=$1', [req.params.id]);
+    const { rows: updated } = await pool.query('SELECT * FROM prompts WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
     res.json(updated[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -87,4 +87,11 @@ async function ownsTask(userId, taskId) {
   return (await ownedTaskIds(userId, [id])).length === 1;
 }
 
-module.exports = { ownsSession, ownsProject, ownsFile, ownedMessage, ownedTaskIds, ownsTask };
+async function ownsClient(userId, clientId) {
+  if (clientId == null || clientId === '') return true; // no client chosen is fine
+  if (!/^\d+$/.test(String(clientId))) return false;
+  const { rows } = await pool.query('SELECT 1 FROM clients WHERE id=$1 AND "userId"=$2', [clientId, userId]);
+  return rows.length > 0;
+}
+
+module.exports = { ownsSession, ownsProject, ownsFile, ownedMessage, ownedTaskIds, ownsTask, ownsClient };

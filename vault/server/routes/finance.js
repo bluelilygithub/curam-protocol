@@ -41,6 +41,7 @@ const receiptUpload = multer({
   },
 });
 const { pool } = require('../db');
+const { ownsClient } = require('../utils/ownership');
 const { getLogger } = require('../middleware/requestContext');
 const { captureIf, makeFingerprint } = require('../services/SuggestionService');
 
@@ -695,6 +696,8 @@ router.post('/invoices', async (req, res) => {
     const userId = req.user.id;
     await client.query('SELECT pg_advisory_xact_lock(7001, $1)', [userId]); // number allocation
     const { clientRef, issueDate, dueDate, notes, items = [], docType = 'invoice' } = req.body;
+    // the client must be one of this user's own (the invoice views join the client's name and billing details)
+    if (!(await ownsClient(userId, clientRef))) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Client not found' }); }
 
     let subtotal = 0, gst = 0;
     const gstOn = gstAppliesOn(await getGstRegistration(client, userId), issueDate || await todayStr());
@@ -829,6 +832,7 @@ router.put('/invoices/:id', async (req, res) => {
     const userId    = req.user.id;
     const invoiceId = req.params.id;
     const { clientRef, issueDate, dueDate, notes, status, paidAt, items = [], txCodeId } = req.body;
+    if (!(await ownsClient(userId, clientRef))) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Client not found' }); }
 
     const { rows: check } = await client.query(
       `SELECT id, number, status, "paidAt", "issueDate", "docType" FROM fin_invoices WHERE id=$1 AND "userId"=$2`, [invoiceId, userId]
