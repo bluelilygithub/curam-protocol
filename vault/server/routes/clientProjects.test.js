@@ -183,15 +183,16 @@ test('template apply: sets the project and inherits its client; refuses a projec
 });
 
 test('chats and files: only this project\'s live chats and uploaded files are listed', async () => {
+  const run = Date.now(); // session ids are global, so make them unique per run
   const mkSession = async (id, proj, title, deleted) => {
     await pool.query(`INSERT INTO sessions ("sessionId","projectId",title,"deletedAt") VALUES ($1,$2,$3,$4)`, [id, proj, title, deleted ? new Date() : null]);
     await pool.query(`INSERT INTO messages ("sessionId","projectId",role,content) VALUES ($1,$2,'user',$3)`, [id, proj, `first question in ${title}`]);
   };
   const other = (await pool.query(`INSERT INTO projects (name,"userId",model) VALUES ('elsewhere',$1,'m') RETURNING id`, [userA])).rows[0].id;
-  await mkSession('cp-test-s1', projectId, 'Luma clips', false);
-  await mkSession('cp-test-s2', projectId, 'Deleted chat', true);
-  await mkSession('cp-test-s3', other, 'Different project', false);
-  await pool.query(`INSERT INTO sessions ("sessionId","projectId",title) VALUES ('cp-test-empty',$1,'No messages')`, [projectId]);
+  await mkSession(`cp-test-s1-${run}`, projectId, 'Luma clips', false);
+  await mkSession(`cp-test-s2-${run}`, projectId, 'Deleted chat', true);
+  await mkSession(`cp-test-s3-${run}`, other, 'Different project', false);
+  await pool.query(`INSERT INTO sessions ("sessionId","projectId",title) VALUES ($1,$2,'No messages')`, [`cp-test-empty-${run}`, projectId]);
   const chats = await call('GET', `/api/client-projects/${projectId}/chats`);
   assert.deepStrictEqual(chats.json.map((c) => c.title), ['Luma clips']);
   assert.ok(/first question/.test(chats.json[0].firstUserMsg));
@@ -227,6 +228,8 @@ async function cleanup(ids) {
   await new Promise((r) => setTimeout(r, 4000)); // db.js runs its own schema init on load
   const mk = async (tag) => (await pool.query(`INSERT INTO users (email, "passwordHash") VALUES ($1,'x') RETURNING id`, [`cp-test-${tag}-${Date.now()}@example.test`])).rows[0].id;
   userA = await mk('a'); userB = await mk('b');
+  // Creating a project needs a model from Settings; give the throwaway user one so the test works on an empty database.
+  await pool.query(`INSERT INTO settings ("userId", key, value) VALUES ($1,'vault_models',$2)`, [userA, JSON.stringify([{ id: 'test-model', name: 'Test', emoji: '', provider: 'anthropic' }])]);
   clientA = (await pool.query(`INSERT INTO clients ("userId", name) VALUES ($1,'Client A') RETURNING id`, [userA])).rows[0].id;
   clientB = (await pool.query(`INSERT INTO clients ("userId", name) VALUES ($1,'Client B') RETURNING id`, [userB])).rows[0].id;
   const server = http.createServer(app).listen(0);
