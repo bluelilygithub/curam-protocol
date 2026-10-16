@@ -313,6 +313,9 @@ router.get('/:id/raw', async (req, res) => {
 // GET /api/files/:projectId
 router.get('/:projectId', requireNumericProjectId, async (req, res) => {
   try {
+    // The project must belong to the caller; anything else looks the same as a project that does not exist.
+    const { rows: owned } = await pool.query('SELECT 1 FROM projects WHERE id=$1 AND "userId"=$2', [req.params.projectId, req.user.id]);
+    if (!owned.length) return res.status(404).json({ error: 'Not found' });
     const { rows } = await pool.query(
       'SELECT * FROM files WHERE "projectId"=$1 ORDER BY "uploadedAt" DESC',
       [req.params.projectId]
