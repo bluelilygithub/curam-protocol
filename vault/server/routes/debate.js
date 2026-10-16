@@ -11,6 +11,7 @@ const { getModelsForUser } = require('../services/modelResolver');
 const { logUsage } = require('../utils/logUsage');
 const { getSettingForUser } = require('../utils/settingsLookup');
 const { ownsProject } = require('../utils/ownership');
+const { extractPdfTextFromBuffer } = require('../utils/pdfText');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -137,16 +138,7 @@ router.post('/extract', upload.single('file'), async (req, res) => {
 
     let extractedText = '';
     if (mimetype === 'application/pdf') {
-      const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
-      const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
-      const pdfDoc = await loadingTask.promise;
-      const pages = [];
-      for (let i = 1; i <= pdfDoc.numPages; i++) {
-        const page = await pdfDoc.getPage(i);
-        const content = await page.getTextContent();
-        pages.push(content.items.map((item) => item.str).join(' '));
-      }
-      extractedText = pages.join('\n');
+      extractedText = (await extractPdfTextFromBuffer(buffer)).join('\n');
     } else {
       extractedText = buffer.toString('utf8');
     }
