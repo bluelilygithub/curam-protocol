@@ -752,7 +752,12 @@ router.post('/jobs/:id/cancel', async (req, res) => {
 router.post('/jobs/:id/fail', async (req, res) => {
   try {
     const message = req.body?.error || (req.file ? 'Client-side generation error' : 'Unknown error');
-    await setJobStatus(parseInt(req.params.id), { status: 'failed', errorMessage: message });
+    // only the job's owner can mark it failed (this used to update by id alone)
+    const { rows } = await pool.query(
+      `UPDATE translate_jobs SET status='failed', "errorMessage"=$3 WHERE id=$1 AND "userId"=$2 RETURNING id`,
+      [parseInt(req.params.id), req.user.id, message]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
