@@ -82,8 +82,7 @@ jobs:
             node server/routes/$t.test.js > /tmp/$t.log 2>&1 && code=0 || code=$?
             grep -avE '^\s+at |traineddata|TESSDATA|special-words|Failed loading' /tmp/$t.log | tail -60
             if [ $code -ne 0 ]; then
-              echo "::error title=$t.test.js failed (exit $code)::$(grep -aE 'FAIL|Error|rror:|SKIP|refus|cannot|ECONN|does not exist|not ready' /tmp/$t.log | grep -av 'failed to load' | head -6 | tr '
-' ' ' | cut -c1-700)"
+              echo "::error title=$t.test.js failed (exit $code)::$(grep -aE 'FAIL|Error|rror:|SKIP|refus|cannot|ECONN|does not exist|not ready' /tmp/$t.log | grep -av 'failed to load' | head -6 | paste -sd' ' - | cut -c1-700)"
               fail=1
             fi
           done
