@@ -33,7 +33,7 @@ Both are mounted in `server/index.js` before `helmet` and before route registrat
 
 **Auth (`server/routes/auth.js`)** — per-IP, since these run before `req.user` exists:
 - `login` — 10 / 15 min (pre-existing)
-- `register` — 10 / 15 min (added; `INVITE_CODE` is one shared secret with no expiry, so this is the only thing standing between a leaked code and unlimited registration attempts)
+- `register` — limiter removed 2026-10-16: sign-up is closed (the route always returns 403), so there is nothing left to brute-force
 - `reset-password-request` / `reset-password-confirm` — 5 / 15 min each (added; unlimited reset-request was both a spam vector and an email-enumeration side channel)
 
 **AI-cost routes (`server/middleware/aiRateLimit.js`)** — `aiLimiter`, 30 req/min, keyed by `req.user.id` (not IP — so a shared office IP doesn't throttle everyone, and the cap is actually per-user rather than per-network). Mounted in `server/index.js` on every route that calls a paid external API directly: chat, compare, debate, videos, product-scout, property-scenario, document-redaction, google-ads/seo, translate, graphics.

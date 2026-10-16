@@ -17,14 +17,6 @@ const loginLimiter = rateLimit({
   message: { error: 'Too many login attempts, please try again later.' },
 });
 
-// Registration is gated by INVITE_CODE, but the code is a single shared
-// secret — without a limiter here it can still be brute-forced.
-const registerLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  message: { error: 'Too many registration attempts, please try again later.' },
-});
-
 // Password reset emails are a spam/cost vector (and an email-enumeration
 // side channel) if unlimited.
 const resetLimiter = rateLimit({
@@ -43,38 +35,11 @@ function makeExpiry() {
   return d.toISOString();
 }
 
-// POST /api/auth/register
-router.post('/register', registerLimiter, async (req, res) => {
-  const { email, password, inviteCode } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'email and password required' });
-  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
-  if (!inviteCode || inviteCode !== process.env.INVITE_CODE) {
-    return res.status(403).json({ error: 'Invalid invite code' });
-  }
-
-  try {
-    const { rows: existing } = await pool.query(
-      'SELECT id FROM users WHERE email=$1', [email.toLowerCase()]
-    );
-    if (existing[0]) return res.status(409).json({ error: 'Email already registered' });
-
-    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-    const { rows: newUser } = await pool.query(
-      'INSERT INTO users (email, "passwordHash") VALUES ($1, $2) RETURNING id, email, "isAdmin"',
-      [email.toLowerCase(), passwordHash]
-    );
-    const userRow = newUser[0];
-    const userId = userRow.id;
-    const token = makeToken();
-    await pool.query(
-      'INSERT INTO auth_sessions (token, "userId", "expiresAt") VALUES ($1, $2, $3)',
-      [token, userId, makeExpiry()]
-    );
-    await pool.query('UPDATE users SET "lastLoginAt"=NOW(), "lastActiveAt"=NOW() WHERE id=$1', [userId]);
-    res.status(201).json({ token, user: { id: userId, email: userRow.email, isAdmin: !!userRow.isAdmin } });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+// POST /api/auth/register: public sign-up is closed, whatever the request says (including a valid
+// INVITE_CODE, which is no longer read). Accounts are created by an administrator: the Admin page
+// (POST /api/admin/users) or a Wellbeing participant invite (POST /api/wellbeing/admin/invite).
+router.post('/register', (req, res) => {
+  res.status(403).json({ error: 'Sign-up is closed. Accounts are created by an administrator.' });
 });
 
 // POST /api/auth/login

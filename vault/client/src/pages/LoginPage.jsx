@@ -28,36 +28,6 @@ function LoginPage() {
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotStatus, setForgotStatus] = useState(null);
 
-  // Register modal state
-  const [showRegister, setShowRegister] = useState(false);
-  const [regEmail, setRegEmail] = useState('');
-  const [regPassword, setRegPassword] = useState('');
-  const [regShowPw, setRegShowPw] = useState(false);
-  const [regInviteCode, setRegInviteCode] = useState('');
-  const [regLoading, setRegLoading] = useState(false);
-  const [regError, setRegError] = useState('');
-
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    setRegError('');
-    setRegLoading(true);
-    try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: regEmail, password: regPassword, inviteCode: regInviteCode }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setRegError(data.error || 'Registration failed'); return; }
-      setAuth(data.token, data.user);
-      navigate(nextPath, { replace: true });
-    } catch {
-      setRegError('Network error — please try again');
-    } finally {
-      setRegLoading(false);
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -104,91 +74,6 @@ function LoginPage() {
       className="min-h-screen flex items-center justify-center px-4"
       style={{ background: 'var(--color-bg)' }}
     >
-      {/* Register modal */}
-      {showRegister && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center px-4"
-          style={{ background: 'rgba(0,0,0,0.5)' }}
-          onClick={(e) => { if (e.target === e.currentTarget) setShowRegister(false); }}
-        >
-          <div
-            className="w-full max-w-sm rounded-2xl border p-6 space-y-4"
-            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-          >
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Create Account</h2>
-              <button
-                onClick={() => setShowRegister(false)}
-                className="opacity-50 hover:opacity-100 transition-opacity"
-                style={{ color: 'var(--color-muted)' }}
-              >
-                {getIcon('x', { size: 16 })}
-              </button>
-            </div>
-            <form onSubmit={handleRegister} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--color-muted)' }}>Email</label>
-                <input
-                  type="email"
-                  value={regEmail}
-                  onChange={(e) => setRegEmail(e.target.value)}
-                  required
-                  autoFocus
-                  placeholder="you@example.com"
-                  className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--color-muted)' }}>Password</label>
-                <div className="relative">
-                  <input
-                    type={regShowPw ? 'text' : 'password'}
-                    value={regPassword}
-                    onChange={(e) => setRegPassword(e.target.value)}
-                    required
-                    placeholder="••••••••"
-                    className="w-full px-3 py-2.5 pr-10 rounded-xl border text-sm outline-none"
-                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setRegShowPw((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100 transition-opacity"
-                    style={{ color: 'var(--color-muted)' }}
-                  >
-                    {getIcon(regShowPw ? 'eye-off' : 'eye', { size: 14 })}
-                  </button>
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--color-muted)' }}>Invite Code</label>
-                <input
-                  type="text"
-                  value={regInviteCode}
-                  onChange={(e) => setRegInviteCode(e.target.value)}
-                  required
-                  placeholder="Enter your invite code"
-                  className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
-              </div>
-              {regError && (
-                <p className="text-xs text-red-500">{regError}</p>
-              )}
-              <button
-                type="submit"
-                disabled={regLoading}
-                className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-80 disabled:opacity-50"
-                style={{ background: 'var(--color-primary)' }}
-              >
-                {regLoading ? 'Creating account…' : 'Create Account'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* Forgot password modal */}
       {showForgot && (
         <div
@@ -251,7 +136,7 @@ function LoginPage() {
             ✦
           </div>
           <h1 className="text-xl font-bold mb-1" style={{ color: 'var(--color-text)' }}>Project Vault</h1>
-          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Sign in to your workspace</p>
+          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Sign in to your workspace. Accounts are created by an administrator.</p>
         </div>
 
         <form
@@ -320,13 +205,6 @@ function LoginPage() {
             style={{ color: 'var(--color-muted)' }}
           >
             Forgot password?
-          </button>
-          <button
-            onClick={() => { setShowRegister(true); setRegError(''); setRegEmail(''); setRegPassword(''); setRegInviteCode(''); }}
-            className="text-xs hover:opacity-70 transition-opacity"
-            style={{ color: 'var(--color-muted)' }}
-          >
-            Create account
           </button>
         </div>
       </div>
