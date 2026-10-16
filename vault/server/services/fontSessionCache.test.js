@@ -40,8 +40,9 @@ async function test(name, fn) {
   }
 }
 
+// The pipeline itself falls back to python3/python; the Windows venv path is only a local convenience.
 const PYTHON_BIN = process.env.FONTS_PYTHON_BIN
-  || path.join(__dirname, 'fonts', '.venv', 'Scripts', 'python.exe');
+  || (process.platform === 'win32' ? path.join(__dirname, 'fonts', '.venv', 'Scripts', 'python.exe') : 'python3');
 
 /** Reads a glyf-format TTF buffer's OS/2 usWeightClass via a one-off fontTools call, as an independent verification path. */
 async function inspectFont(buffer) {

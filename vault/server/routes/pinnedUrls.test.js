@@ -24,7 +24,14 @@ const express = require('express');
 
 // A fake internet: every host resolves to a public address and every page is the same small page.
 let fetches = 0;
-dns.lookup = (_host, cb) => cb(null, '93.184.216.34');
+// Only for the pretend internet: the database host (localhost in CI) must still resolve normally, and
+// lookup is called as (host, cb) or (host, options, cb) with options.all asking for a list.
+const realLookup = dns.lookup;
+dns.lookup = (host, opts, cb) => {
+  if (typeof opts === 'function') { cb = opts; opts = {}; }
+  if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return realLookup(host, opts, cb);
+  return opts && opts.all ? cb(null, [{ address: '93.184.216.34', family: 4 }]) : cb(null, '93.184.216.34', 4);
+};
 https.get = (_url, _opts, cb) => {
   fetches++;
   const req = new EventEmitter(); req.setTimeout = () => {}; req.destroy = () => {};
