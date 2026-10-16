@@ -132,7 +132,7 @@ async function renderAndExtract(testString, { targetLanguage, sourceLanguage }) 
         stream.on('end', async () => {
           try {
             const full = Buffer.concat(chunks);
-            const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
+            const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs'); // 6.x ships ESM only
             const loaded = await pdfjsLib.getDocument({ data: new Uint8Array(full) }).promise;
             const page = await loaded.getPage(1);
             const tc = await page.getTextContent();

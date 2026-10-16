@@ -29,8 +29,6 @@ EXCLUDED=(
   server/services/contractReview/milestone2.test.js
   server/services/contractReview/milestone3.test.js
   server/services/contractReview/milestone4.test.js
-  # Fails until the PDF text-extraction fix (branch fix/pdf-extract-pdfjs6) is merged
-  client/src/utils/translatePdfFonts.test.js
 )
 
 is_excluded() { local f="$1" x; for x in "${EXCLUDED[@]}"; do [ "$x" = "$f" ] && return 0; done; return 1; }
