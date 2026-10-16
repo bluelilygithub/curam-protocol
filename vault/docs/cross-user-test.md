@@ -47,7 +47,7 @@ calls. A pass means "no leak was found by these probes", not "no leak exists".
 * `server/testing/ownershipBindings.js` / `.json`: which table an id in a path is the primary key of
   (guessed from names; overrides in the JSON, `null` = not one of our rows).
 * `SHARED_BY_DESIGN` in `crossUserOwnership.test.js`: routes that show one member's rows to others on purpose
-  (each needs a written reason). Currently only the workspace-shared grocery correction glossary.
+  (each needs a written reason). Currently only the workspace-shared grocery correction glossary. `WRITES_BY_DESIGN` is the same for writes: the caller's own per-user rows for a song / news topic, and the shared glossary's delete.
 * The harness turns every rate limiter into a pass-through (only in this process), because 30 AI calls a minute
   would cut the probes off.
 

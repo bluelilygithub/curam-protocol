@@ -29,6 +29,12 @@ const key = (r) => `${r.method} ${r.path}`;
 const SHARED_BY_DESIGN = {
   'GET /api/recipes/grocery/corrections': 'the grocery-price correction glossary is workspace-shared (docs/recipes.md, "Correction glossary")',
 };
+// Writes that touch rows tied to another member's id ON PURPOSE. Each needs a written reason.
+const WRITES_BY_DESIGN = {
+  'PATCH /api/guitar/library/:songId': "saves the caller's OWN settings row for a song (keyed by the caller's user id); nothing of the other member's is read or changed",
+  'PUT /api/news-digest/context/:topicId': "saves the caller's OWN note row for a topic (keyed by the caller's user id); nothing of the other member's is read or changed",
+  'DELETE /api/recipes/grocery/corrections/:id': 'the grocery-price correction glossary is workspace-shared (docs/recipes.md, "Correction glossary")',
+};
 const REF_ALIASES = {
   projects: ['projectId'], sessions: ['sessionId'], clients: ['clientId', 'clientRef'], tasks: ['taskId', 'parentId'],
   objectives: ['goalId', 'objectiveId'], key_results: ['krId', 'keyResultId'], fin_invoices: ['invoiceId'], fin_suppliers: ['supplierId'],
@@ -146,7 +152,7 @@ const REF_ALIASES = {
     const changed = changedRows(base, after);
     const grew = Object.keys(fkAfter).filter((i) => fkAfter[i] !== fkBase[i]).map((i) => `${fkEdges[i].child}.${fkEdges[i].col}`);
     if (hasMark(b.text)) results.leaks.push(`${key(r)} -> ${b.status} ${r.url} (response)`);
-    if (changed.length || grew.length) results.violations.push(`${key(r)} as B with A's ids: ${changed.length ? `changed/removed A's rows in ${[...new Set(changed)].join(', ')}` : ''}${grew.length ? ` attached rows to ${[...new Set(grew)].join(', ')}` : ''} (status ${b.status})`);
+    if ((changed.length || grew.length) && !WRITES_BY_DESIGN[key(r)]) results.violations.push(`${key(r)} as B with A's ids: ${changed.length ? `changed/removed A's rows in ${[...new Set(changed)].join(', ')}` : ''}${grew.length ? ` attached rows to ${[...new Set(grew)].join(', ')}` : ''} (status ${b.status})`);
     else if (b.status >= 200 && b.status < 300) results.accepted.push(`${key(r)} -> ${b.status}`);
     base = after; fkBase = fkAfter;
   }
@@ -158,7 +164,7 @@ const REF_ALIASES = {
     const fk1 = await fkCounts();
     const grew = Object.keys(fk1).filter((i) => fk1[i] !== fk0[i]).map((i) => `${fkEdges[i].child}.${fkEdges[i].col}`);
     if (hasMark(b.text)) results.leaks.push(`${key(r)} -> ${b.status} (response)`);
-    if (grew.length) results.violations.push(`${key(r)} as B attached rows to A's data: ${[...new Set(grew)].join(', ')}`);
+    if (grew.length && !WRITES_BY_DESIGN[key(r)]) results.violations.push(`${key(r)} as B attached rows to A's data: ${[...new Set(grew)].join(', ')}`);
     fk0 = fk1;
   }
 
