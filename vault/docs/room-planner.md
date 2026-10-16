@@ -3,7 +3,7 @@
 Professional interior-design room planner. Standalone app in `vault/room-planner/`, shown inside Vault as the **Room Planner** page
 (`/room-planner`, Apps launcher → Content Creation, armchair icon, feature flag `roomPlanner`, allow-by-default).
 
-**How it is wired** (same idea as the WP Theme Builder): the planner is its own Vite app with base `/room-planner-app/`. The root
+**How it is wired** (a separate Vite app hosted by Vault): the planner is its own Vite app with base `/room-planner-app/`. The root
 `npm run build` builds Vault, then `scripts/buildRoomPlanner.js` builds the planner into `dist/room-planner-app/`; Express already serves
 `dist/`. `client/src/pages/RoomPlannerPage.jsx` embeds it in an iframe, and shows a plain notice if the planner build is missing
 (the planner build is non-fatal so it can never break a Vault deploy). It has no server API: projects live in the browser's

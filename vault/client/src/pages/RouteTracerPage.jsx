@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 
 /**
  * Route Tracer lives in its own app (vault/route-tracer/, Vite + React 19 + MapLibre GL) and is built into
- * dist/route-tracer-app/ by the root build. This page hosts it in the Vault shell, same pattern as ThemeBuilderPage.
+ * dist/route-tracer-app/ by the root build. This page hosts it in the Vault shell, same pattern as the other planner pages.
 
  */
 const APP_URL = '/route-tracer-app/';

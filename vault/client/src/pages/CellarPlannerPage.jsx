@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 
 /**
  * Cellar Planner lives in its own app (vault/cellar-planner/, Vite + React 19 + Konva) and is built into
- * dist/cellar-planner-app/ by the root build. This page hosts it in the Vault shell, same pattern as ThemeBuilderPage.
+ * dist/cellar-planner-app/ by the root build. This page hosts it in the Vault shell, same pattern as the other planner pages.
 
  */
 const APP_URL = '/cellar-planner-app/';

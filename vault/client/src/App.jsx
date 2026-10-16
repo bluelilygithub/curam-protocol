@@ -58,7 +58,6 @@ import BrowserAgentArchivePage from './pages/BrowserAgentArchivePage';
 import BrowserAgentSettingsPage from './pages/BrowserAgentSettingsPage';
 import RestylePage from './pages/RestylePage';
 import SearchConsolePage from './pages/SearchConsolePage';
-import ThemeBuilderPage from './pages/ThemeBuilderPage';
 import WellbeingPage from './pages/WellbeingPage';
 import GmailIntelPage from './pages/GmailIntelPage';
 import ExpenseReviewPage from './pages/ExpenseReviewPage';
@@ -207,7 +206,6 @@ function App() {
               <Route path="/browser-agent/archive" element={<BrowserAgentArchivePage />} />
               <Route path="/browser-agent/settings" element={<BrowserAgentSettingsPage />} />
               <Route path="/restyle" element={<RestylePage />} />
-              <Route path="/theme-builder" element={<ThemeBuilderPage />} />
               <Route path="/wellbeing" element={<WellbeingPage />} />
               <Route path="/gmail-intel" element={<GmailIntelPage />} />
               <Route path="/expense-review" element={<ExpenseReviewPage />} />
