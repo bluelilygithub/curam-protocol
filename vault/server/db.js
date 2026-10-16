@@ -2055,6 +2055,8 @@ async function initSchema() {
   await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_milestone ON tasks("userId", "isMilestone") WHERE "isMilestone" = 1`);
   await pool.query(`ALTER TABLE task_templates ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
+  // When true, applying the template creates one task per step (in order) instead of one task with subtasks.
+  await pool.query(`ALTER TABLE task_templates ADD COLUMN IF NOT EXISTS "asSeparateTasks" BOOLEAN NOT NULL DEFAULT FALSE`);
   await pool.query(`ALTER TABLE objectives ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
   await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE SET NULL`);
   await pool.query(`ALTER TABLE prompt_chains ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);

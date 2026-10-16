@@ -30,13 +30,13 @@ router.get('/', async (req, res) => {
 // POST /api/task-templates
 router.post('/', async (req, res) => {
   try {
-    const { name, description, category, priority, recurrence, tags, subtasks } = req.body;
+    const { name, description, category, priority, recurrence, tags, subtasks, asSeparateTasks } = req.body;
     if (!name) return res.status(400).json({ error: 'name required' });
     const { rows } = await pool.query(
-      `INSERT INTO task_templates (name,description,category,priority,recurrence,tags,"userId","updatedAt")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW()) RETURNING id`,
+      `INSERT INTO task_templates (name,description,category,priority,recurrence,tags,"asSeparateTasks","userId","updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW()) RETURNING id`,
       [name, description || null, category || null, priority || 'medium', recurrence || 'none',
-       Array.isArray(tags) ? tags.join(',') : (tags || ''), req.user.id]
+       Array.isArray(tags) ? tags.join(',') : (tags || ''), !!asSeparateTasks, req.user.id]
     );
     const id = rows[0].id;
     if (Array.isArray(subtasks)) {
@@ -61,11 +61,12 @@ router.put('/:id', async (req, res) => {
     const { rows: existing } = await pool.query('SELECT * FROM task_templates WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
     if (!existing[0]) return res.status(404).json({ error: 'not found' });
     const tmpl = existing[0];
-    const { name, description, category, priority, recurrence, tags, subtasks } = req.body;
+    const { name, description, category, priority, recurrence, tags, subtasks, asSeparateTasks } = req.body;
     await pool.query(
-      `UPDATE task_templates SET name=$1,description=$2,category=$3,priority=$4,recurrence=$5,tags=$6,"updatedAt"=NOW() WHERE id=$7`,
+      `UPDATE task_templates SET name=$1,description=$2,category=$3,priority=$4,recurrence=$5,tags=$6,"asSeparateTasks"=$7,"updatedAt"=NOW() WHERE id=$8`,
       [name || tmpl.name, description || null, category || null, priority || tmpl.priority,
-       recurrence || tmpl.recurrence, Array.isArray(tags) ? tags.join(',') : (tags || ''), req.params.id]
+       recurrence || tmpl.recurrence, Array.isArray(tags) ? tags.join(',') : (tags || ''),
+       asSeparateTasks === undefined ? tmpl.asSeparateTasks : !!asSeparateTasks, req.params.id]
     );
     if (Array.isArray(subtasks)) {
       await pool.query('DELETE FROM template_subtasks WHERE "templateId"=$1', [req.params.id]);
@@ -113,6 +114,29 @@ router.post('/:id/apply', async (req, res) => {
     if (clientId) {
       const { rows: [cl] } = await pool.query('SELECT id FROM clients WHERE id=$1 AND "userId"=$2', [clientId, req.user.id]);
       if (!cl) return res.status(400).json({ error: 'clientId does not match one of your clients' });
+    }
+
+    // Templates marked asSeparateTasks create one task per step, in step order, each linked to the
+    // project and client. Every other template keeps the original behaviour below.
+    if (tmpl.asSeparateTasks) {
+      const { rows: steps } = await pool.query(
+        'SELECT title FROM template_subtasks WHERE "templateId"=$1 ORDER BY "order" ASC, id ASC',
+        [tmpl.id]
+      );
+      const tags = tmpl.tags ? tmpl.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+      const taskIds = [];
+      for (let i = 0; i < steps.length; i++) {
+        // "order" is set explicitly: the task list sorts equal orders newest-first, which would reverse the steps.
+        const { rows: [t] } = await pool.query(
+          `INSERT INTO tasks (title,status,priority,category,"projectId","clientId",recurrence,"order","userId","updatedAt")
+           VALUES ($1,'todo',$2,$3,$4,$5,'none',$6,$7,NOW()) RETURNING id`,
+          [steps[i].title, tmpl.priority, category || tmpl.category, projectId || null, clientId || null, i, req.user.id]
+        );
+        for (const tag of tags) await pool.query('INSERT INTO task_tags ("taskId",tag) VALUES ($1,$2)', [t.id, tag]);
+        taskIds.push(t.id);
+      }
+      // taskId (the first step) keeps the response shape the Tasks page already reads.
+      return res.json({ taskId: taskIds[0] || null, taskIds, ok: true });
     }
 
     const { rows: taskRows } = await pool.query(
