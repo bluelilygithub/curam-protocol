@@ -35,6 +35,7 @@ app.use('/api/folders', require('./folders'));
 app.use('/api/personas', require('./personas'));
 app.use('/api/prompts', require('./prompts'));
 app.use('/api/finance', require('./finance'));
+app.use('/api/translate', require('./translate'));
 
 let base;
 async function call(method, url, as, body) {
@@ -73,6 +74,16 @@ test('prompts: same, and a stranger\'s update never borrows the owner\'s text', 
   assert.strictEqual((await pool.query('SELECT content c, title t FROM prompts WHERE id=$1', [p])).rows[0].c, SECRET);
   const own = await call('PUT', `/api/prompts/${p}`, 'A', { title: 'mine now' });
   assert.strictEqual(own.status, 200); assert.strictEqual(own.json.title, 'mine now'); assert.strictEqual(own.json.content, SECRET, 'unsent fields keep the owner\'s values');
+});
+
+test('translate: only the owner can mark a translation job failed', async () => {
+  const j = (await pool.query(`INSERT INTO translate_jobs ("userId",status,filename,"targetLanguage") VALUES ($1,'processing','x.pdf','fr') RETURNING id`, [A])).rows[0].id;
+  const r = await call('POST', `/api/translate/jobs/${j}/fail`, 'B', { error: 'sabotage' });
+  assert.strictEqual(r.status, 404);
+  const row = (await pool.query('SELECT status, "errorMessage" e FROM translate_jobs WHERE id=$1', [j])).rows[0];
+  assert.strictEqual(row.status, 'processing'); assert.ok(row.e == null || !String(row.e).includes('sabotage'), 'not changed');
+  assert.strictEqual((await call('POST', `/api/translate/jobs/${j}/fail`, 'A', { error: 'client side error' })).status, 200);
+  assert.strictEqual((await pool.query('SELECT status FROM translate_jobs WHERE id=$1', [j])).rows[0].status, 'failed');
 });
 
 const inv = (clientRef) => ({ clientRef, issueDate: '2026-03-10', dueDate: '2026-04-10', items: [{ description: 'Work', quantity: 1, unitPrice: 100 }] });
