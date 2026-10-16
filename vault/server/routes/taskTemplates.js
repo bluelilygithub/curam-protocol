@@ -101,11 +101,24 @@ router.post('/:id/apply', async (req, res) => {
     if (!tmpls[0]) return res.status(404).json({ error: 'not found' });
     const tmpl = tmpls[0];
     const { projectId, category } = req.body;
+    let { clientId } = req.body;
+
+    // The project (and the client it belongs to) must be the caller's. When a project is
+    // given without a client, the task inherits the project's client.
+    if (projectId) {
+      const { rows: [proj] } = await pool.query('SELECT "clientId" FROM projects WHERE id=$1 AND "userId"=$2', [projectId, req.user.id]);
+      if (!proj) return res.status(400).json({ error: 'projectId does not match one of your projects' });
+      if (!clientId) clientId = proj.clientId;
+    }
+    if (clientId) {
+      const { rows: [cl] } = await pool.query('SELECT id FROM clients WHERE id=$1 AND "userId"=$2', [clientId, req.user.id]);
+      if (!cl) return res.status(400).json({ error: 'clientId does not match one of your clients' });
+    }
 
     const { rows: taskRows } = await pool.query(
-      `INSERT INTO tasks (title,notes,status,priority,category,"projectId",recurrence,"userId","updatedAt")
-       VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,NOW()) RETURNING id`,
-      [tmpl.name, tmpl.description, tmpl.priority, category || tmpl.category, projectId || null, tmpl.recurrence, req.user.id]
+      `INSERT INTO tasks (title,notes,status,priority,category,"projectId","clientId",recurrence,"userId","updatedAt")
+       VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,$8,NOW()) RETURNING id`,
+      [tmpl.name, tmpl.description, tmpl.priority, category || tmpl.category, projectId || null, clientId || null, tmpl.recurrence, req.user.id]
     );
     const taskId = taskRows[0].id;
 

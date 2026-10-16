@@ -26,6 +26,8 @@ import FinancePage from './pages/FinancePage';
 import ClientsPage from './pages/ClientsPage';
 import PipelinePage from './pages/PipelinePage';
 import ClientDetailPage from './pages/ClientDetailPage';
+import ClientProjectsPage from './pages/ClientProjectsPage';
+import ClientProjectPage from './pages/ClientProjectPage';
 import UsagePage from './pages/UsagePage';
 import MoodPage from './pages/MoodPage';
 import SharedTaskPage from './pages/SharedTaskPage';
@@ -168,6 +170,8 @@ function App() {
               <Route path="/graph"    element={<GraphPage />} />
               <Route path="/clients" element={<ClientsPage />} />
               <Route path="/clients/:id" element={<ClientDetailPage />} />
+              <Route path="/client-projects" element={<ClientProjectsPage />} />
+              <Route path="/client-projects/:id" element={<ClientProjectPage />} />
               <Route path="/pipeline" element={<PipelinePage />} />
               <Route path="/finance" element={<FinancePage />} />
               <Route path="/usage" element={<UsagePage />} />

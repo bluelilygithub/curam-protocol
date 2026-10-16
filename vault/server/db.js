@@ -267,6 +267,35 @@ async function initSchema() {
     await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "targetEndDate" DATE DEFAULT NULL`);
     await client.query(`ALTER TABLE projects ALTER COLUMN model DROP DEFAULT`);
 
+    // ── Client projects (additive, nullable) ───────────────────────────────────
+    // A "client project" is a project with projectType = 'client'. clientStatus is NULL for
+    // every other project. See server/routes/clientProjects.js. Nothing here touches
+    // clients, client_contacts, client_billing_details or any fin_ table.
+    await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "clientStatus" TEXT DEFAULT NULL`);
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE projects ADD CONSTRAINT projects_clientstatus_check
+          CHECK ("clientStatus" IS NULL OR "clientStatus" IN ('active','waiting','done'));
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    // Raw media and other large things are kept as a pointer to where they really live
+    // (a URL or a plain path), never uploaded. Not fetched, not read.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS project_links (
+        id          SERIAL PRIMARY KEY,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "projectId" INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        label       TEXT NOT NULL,
+        location    TEXT NOT NULL,
+        kind        TEXT NOT NULL DEFAULT 'other'
+                    CHECK (kind IN ('raw','delivered','reference','other')),
+        note        TEXT,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_project_links_project ON project_links("projectId")`);
+
     // ── News Digest ───────────────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS news_topics (
@@ -741,6 +770,10 @@ async function initSchema() {
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+
+    // A note can belong to a client directly (no FK on purpose: the route checks the client
+    // belongs to the same user, so this table never depends on the clients table).
+    await client.query(`ALTER TABLE notes ADD COLUMN IF NOT EXISTS client_id INTEGER DEFAULT NULL`);
 
     // ── Full-text search placeholder ──────────────────────────────────────────
     // The SQLite FTS5 virtual table is replaced with a plain table for now.
@@ -1728,6 +1761,11 @@ async function initSchema() {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_cellar_leads_user_created ON cellar_leads ("userId", "createdAt" DESC)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_cellar_leads_dedupe ON cellar_leads ("userId", lower(email), "designCode")`);
+
+    // Optional link from an activity entry to a client project. Additive; the client-wide
+    // feed ignores it, the client project page filters on it.
+    await client.query(`ALTER TABLE client_interactions ADD COLUMN IF NOT EXISTS "projectId" INTEGER REFERENCES projects(id) ON DELETE SET NULL`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_client_interactions_project ON client_interactions("projectId")`);
 
     // client_interactions."dealId" FK — deferred to here since client_deals
     // didn't exist yet when that table was created above.
