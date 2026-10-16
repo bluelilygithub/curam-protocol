@@ -43,6 +43,7 @@ const REF_ALIASES = {
 
   const A = await h.makeUser('A', false);
   const B = await h.makeUser('B', false);
+  const C = await h.makeUser('C', false); // a third member with no data: the "empty" answer to compare against
   const tables = await introspect(pool);
   const builder = makeBuilder(pool, tables, A.id);
   const unbuildable = {};
@@ -110,11 +111,28 @@ const REF_ALIASES = {
   const hasMark = (s) => s.includes(MARK);
 
   // 1. leak sweep ────────────────────────────────────────────────────────────────────────────────
+  // Routes that need a date range or a search term answer 400 to a bare call; retry with ordinary values.
+  const STD_QUERY = 'from=2000-01-01&to=2100-01-01&start=2000-01-01&end=2100-01-01&fy=2025-26&year=2026&month=1&q=probe&limit=50';
+  const withQuery = (u) => u + (u.includes('?') ? '&' : '?') + STD_QUERY;
+  const get = async (user, url) => {
+    let r = await harness.call(h.base, 'GET', url, { token: user.token });
+    if (r.status === 400) r = await harness.call(h.base, 'GET', withQuery(url), { token: user.token });
+    return r;
+  };
+  results.distinguishable = []; results.adminInside = []; results.external = []; results.notFound = [];
   for (const r of plan.filter((p) => p.method === 'GET')) {
-    const b = await harness.call(h.base, 'GET', r.url, { token: B.token });
+    const b = await get(B, r.url);
     if (hasMark(b.text) && !SHARED_BY_DESIGN[key(r)]) results.leaks.push(`${key(r)} -> ${b.status} ${r.url}`);
-    const a = await harness.call(h.base, 'GET', r.url, { token: A.token });
-    if (hasMark(a.text)) results.verified++;
+    const a = await get(A, r.url);
+    if (hasMark(a.text)) { results.verified++; continue; }
+    const c = await get(C, r.url);
+    if (a.status >= 200 && a.status < 300 && a.text !== c.text) {
+      // A's answer is different from an empty member's: the route is user-specific. B must not get A's answer.
+      if (b.text === a.text && a.text.length > 2 && !SHARED_BY_DESIGN[key(r)]) results.leaks.push(`${key(r)} -> B received exactly what A received (A's answer differs from an empty member's) ${r.url}`);
+      else results.distinguishable.push(key(r));
+    } else if (a.status === 403) results.adminInside.push(key(r));
+    else if (a.status >= 500) results.external.push(`${key(r)} (${a.status})`);
+    else if (a.status === 404 || a.status === 410) results.notFound.push(key(r));
     else if (r.unresolved) results.unresolved.push(key(r));
     else results.vacuous.push(`${key(r)} (A got ${a.status})`);
   }
@@ -148,14 +166,17 @@ const REF_ALIASES = {
   const gets = plan.filter((p) => p.method === 'GET').length;
   const idw = plan.filter((p) => p.method !== 'GET' && p.boundTables.length).length;
   const bodyw = plan.filter((p) => p.method !== 'GET' && !p.boundTables.length).length;
-  console.log(`\nGET routes: ${gets} | A could read its own data on ${results.verified} (covered), ${results.vacuous.length} returned nothing even to A (vacuous), ${results.unresolved.length} had an id we could not bind`);
+  console.log(`\nGET routes: ${gets}`);
+  console.log(`  ${results.verified} proven: A's own data (with its tokens) came back to A and never to B`);
+  console.log(`  ${results.distinguishable.length} user-specific: A's answer differs from an empty member's, and B did not get A's answer (numbers, counts, ids)`);
+  console.log(`  ${results.adminInside.length} refused A too (admin-only inside the handler); ${results.external.length} depend on outside services (blocked); ${results.notFound.length} found no row for A (fixture does not fit); ${results.vacuous.length} gave nothing to compare; ${results.unresolved.length} unbound`);
   console.log(`write routes: ${idw} with A's ids in the path, ${bodyw} sent a body naming A's records`);
   console.log(`tables that change on their own and were left out of comparisons: ${[...noisy].join(', ') || 'none'}`);
   if (Object.keys(unbuildable).length) console.log(`tables without an A row: ${Object.keys(unbuildable).join(', ')}`);
   if (h.blocked.length) console.log(`outside network attempts that were blocked: ${[...new Set(h.blocked)].slice(0, 6).join(', ')}`);
   console.log(`write routes that answered 2xx to B with no change and no leak (check these): ${results.accepted.length}`);
   results.accepted.slice(0, 40).forEach((x) => console.log(`   accepted  ${x}`));
-  if (process.argv.includes('--vacuous')) results.vacuous.forEach((x) => console.log(`   vacuous   ${x}`));
+  if (process.argv.includes('--vacuous')) [...results.notFound.map((x) => x + ' [404]'), ...results.vacuous].forEach((x) => console.log(`   vacuous   ${x}`));
   if (process.argv.includes('--unresolved')) results.unresolved.forEach((x) => console.log(`   unbound   ${x}`));
 
   let failed = 0;
@@ -165,7 +186,7 @@ const REF_ALIASES = {
   else console.log('  ok    no write by user B changed or attached to user A\'s data');
   if (results.verified < 50) { failed++; console.log(`  FAIL  only ${results.verified} routes were proven to expose A's data to A; the probes are not meaningful`); }
 
-  await pool.query('DELETE FROM users WHERE id = ANY($1::int[])', [[A.id, B.id]]).catch(() => {}); // throwaway database
+  await pool.query('DELETE FROM users WHERE id = ANY($1::int[])', [[A.id, B.id, C.id]]).catch(() => {}); // throwaway database
   console.log(failed ? `\n${failed} check(s) failed` : '\nall passed');
   process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

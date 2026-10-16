@@ -20,6 +20,9 @@ export GOOGLE_CLIENT_ID= GOOGLE_CLIENT_SECRET= SENTRY_DSN=
 
 # Files that cannot run in a plain offline job, each with the reason. Remove a line when its cause is fixed.
 EXCLUDED=(
+  # Cross-user route tests: run in their own CI step on their own database (they fill ~170 tables with fixtures)
+  server/routes/crossUser.test.js
+  server/routes/crossUserOwnership.test.js
   # Need ANTHROPIC_API_KEY (live model calls)
   server/services/gmailNLP.test.js
   server/services/propertyScenario/parseScenario.test.js

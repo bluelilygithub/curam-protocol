@@ -9,7 +9,7 @@ name: CI
 
 on:
   push:
-    branches: [version-7, staging]
+    branches: [version-7, staging, "test/**"]
   pull_request:
     branches: [version-7, main, staging]
   workflow_dispatch:
@@ -69,6 +69,17 @@ jobs:
       - name: Run test files
         working-directory: vault
         run: bash scripts/ci-run-server-tests.sh
+
+      - name: Cross-user route tests (their own database)
+        working-directory: vault
+        env:
+          PGPASSWORD: ci-throwaway
+        run: |
+          set -e
+          createdb -h localhost -U vault vault_xuser
+          export DATABASE_URL=postgresql://vault:ci-throwaway@localhost:5432/vault_xuser
+          node server/routes/crossUser.test.js
+          node server/routes/crossUserOwnership.test.js
 
   client-build:
     name: Client build (Vite)
