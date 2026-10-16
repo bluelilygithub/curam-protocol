@@ -259,6 +259,8 @@ async function initSchema() {
 
     // Idempotent column additions — safe to run on every boot
     await client.query(`ALTER TABLE files ADD COLUMN IF NOT EXISTS "anthropicFileId" TEXT`);
+    // A PDF upload keeps only its extracted text and stores path = NULL (files.js); the column was NOT NULL.
+    await client.query(`ALTER TABLE files ALTER COLUMN path DROP NOT NULL`);
     await client.query(`ALTER TABLE pinned_urls ADD COLUMN IF NOT EXISTS "lastFetchedAt" TIMESTAMPTZ DEFAULT NOW()`);
     await client.query(`ALTER TABLE pinned_urls ADD COLUMN IF NOT EXISTS "isYoutube" BOOLEAN DEFAULT FALSE`);
     await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "archived_at" TIMESTAMPTZ DEFAULT NULL`);
