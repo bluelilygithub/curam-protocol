@@ -34,6 +34,7 @@ export const APP_NAV_GROUPS = [
     label: 'Business',
     items: [
       { id: 'clients', label: 'CRM', path: '/clients', icon: 'briefcase', featureKey: 'clients', matchPrefix: true },
+      { id: 'clientProjects', label: 'Client projects', path: '/client-projects', icon: 'briefcase', featureKey: 'clients', matchPrefix: true },
       { id: 'pipeline', label: 'Pipeline', path: '/pipeline', icon: 'trending-up', featureKey: 'clients' },
       { id: 'finance', label: 'Finance', path: '/finance', icon: 'finance', featureKey: 'finance' },
       { id: 'shares', label: 'Shares', path: '/shares', icon: 'shares', featureKey: 'shares' },
@@ -157,6 +158,7 @@ export const SIDEBAR_WORKSPACE_LINKS = [
   { id: 'notes', label: 'Notes', path: '/notes', icon: 'pen-line' },
   { id: 'goals', label: 'Goals', path: '/goals', icon: 'target', featureKey: 'goals' },
   { id: 'clients', label: 'CRM', path: '/clients', icon: 'briefcase', featureKey: 'clients', matchPrefix: true },
+  { id: 'clientProjects', label: 'Client projects', path: '/client-projects', icon: 'list-checks', featureKey: 'clients', matchPrefix: true },
   { id: 'pipeline', label: 'Pipeline', path: '/pipeline', icon: 'trending-up', featureKey: 'clients' },
 ];
 
