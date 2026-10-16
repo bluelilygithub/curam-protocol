@@ -162,8 +162,28 @@ function requireNumericProjectId(req, res, next) {
   next();
 }
 
+// Ownership. A project or file that belongs to someone else behaves exactly like one that does not
+// exist (404), so nothing reveals that it is there. This must run before multer: multer writes the
+// upload to disk before the handler starts.
+async function requireOwnedProject(req, res, next) {
+  try {
+    const { rows } = await pool.query('SELECT 1 FROM projects WHERE id=$1 AND "userId"=$2', [req.params.projectId, req.user.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    next();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+const OWNED_FILE_JOIN = 'FROM files f JOIN projects p ON p.id = f."projectId" WHERE f.id=$1 AND p."userId"=$2';
+
+function requireNumericFileId(req, res, next) {
+  if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: 'Invalid file ID' });
+  next();
+}
+
 // POST /api/files/upload/:projectId
-router.post('/upload/:projectId', requireNumericProjectId, upload.single('file'), async (req, res) => {
+router.post('/upload/:projectId', requireNumericProjectId, requireOwnedProject, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
   const { projectId } = req.params;
@@ -295,10 +315,9 @@ router.post('/upload/:projectId', requireNumericProjectId, upload.single('file')
 });
 
 // GET /api/files/:id/raw — serve raw binary for client-side preview (pdfjs-dist etc.)
-router.get('/:id/raw', async (req, res) => {
-  if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: 'Invalid file ID' });
+router.get('/:id/raw', requireNumericFileId, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT path, mimetype, name FROM files WHERE id=$1', [req.params.id]);
+    const { rows } = await pool.query(`SELECT f.path, f.mimetype, f.name ${OWNED_FILE_JOIN}`, [req.params.id, req.user.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
     const { path: filePath, mimetype, name } = rows[0];
     if (!filePath || !fs.existsSync(filePath)) return res.status(404).json({ error: 'File not on disk' });
@@ -327,9 +346,9 @@ router.get('/:projectId', requireNumericProjectId, async (req, res) => {
 });
 
 // PATCH /api/files/:id/pin — toggle pinned
-router.patch('/:id/pin', async (req, res) => {
+router.patch('/:id/pin', requireNumericFileId, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, pinned FROM files WHERE id=$1', [req.params.id]);
+    const { rows } = await pool.query(`SELECT f.id, f.pinned ${OWNED_FILE_JOIN}`, [req.params.id, req.user.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
     const newVal = rows[0].pinned ? 0 : 1;
     await pool.query('UPDATE files SET pinned=$1 WHERE id=$2', [newVal, req.params.id]);
@@ -340,16 +359,17 @@ router.patch('/:id/pin', async (req, res) => {
 });
 
 // DELETE /api/files/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireNumericFileId, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM files WHERE id=$1', [req.params.id]);
+    const { rows } = await pool.query(`SELECT f.* ${OWNED_FILE_JOIN}`, [req.params.id, req.user.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
     const file = rows[0];
 
     if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
     // file_chunks rows are cascade-deleted via the FK on files(id)
     await pool.query('DELETE FROM files WHERE id=$1', [req.params.id]);
-    await pool.query(`DELETE FROM search_index WHERE type='file' AND title=$1`, [file.name]);
+    // Limited to this file's project: another project may hold a file with the same name.
+    await pool.query(`DELETE FROM search_index WHERE type='file' AND title=$1 AND "projectId"=$2`, [file.name, String(file.projectId)]);
 
     // Best-effort cleanup from Anthropic Files API
     if (file.anthropicFileId && process.env.ANTHROPIC_API_KEY) {
