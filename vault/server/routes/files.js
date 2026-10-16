@@ -9,6 +9,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { callModel } = require('../services/callModel');
 const { pool } = require('../db');
 const { sanitiseCodeFile } = require('../utils/sanitiseCodeFile');
+const { extractPdfTextFromBuffer } = require('../utils/pdfText');
 const { getModelsForUser } = require('../services/modelResolver');
 const { logUsage } = require('../utils/logUsage');
 
@@ -124,16 +125,8 @@ async function extractWordText(filePath) {
 
 async function extractPdfText(filePath) {
   try {
-    const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
-    const data = new Uint8Array(fs.readFileSync(filePath));
-    const doc = await pdfjsLib.getDocument({ data }).promise;
-    let text = '';
-    for (let i = 1; i <= doc.numPages; i++) {
-      const page = await doc.getPage(i);
-      const content = await page.getTextContent();
-      text += content.items.map((item) => item.str).join(' ') + '\n';
-    }
-    return text.trim();
+    const pages = await extractPdfTextFromBuffer(fs.readFileSync(filePath));
+    return pages.join('\n').trim();
   } catch (err) {
     console.error('PDF extraction error:', err);
     return '';
