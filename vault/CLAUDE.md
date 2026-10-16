@@ -455,7 +455,7 @@ Custom fonts on a *live* AcroForm field (`field.updateAppearances`) render as He
 | `FIN_DOC_MAX_MB` / `FIN_DOC_QUOTA_MB` | Finance → Documents — largest single upload (default 20) and total per user (default 1000); files live under `UPLOAD_DIR/finance-docs/<userId>/` (`server/routes/financeDocuments.js`) |
 | `APP_URL` | Public URL (OAuth redirects, password reset emails) |
 | `SEED_EMAIL` / `SEED_PASSWORD` | Auto-created user on first boot |
-| `INVITE_CODE` | Required for new user registration |
+| `INVITE_CODE` | **No longer used.** Public sign-up was closed 2026-10-16: `POST /api/auth/register` always returns 403. Accounts are created by an admin (Admin page, `POST /api/admin/users`) or a Wellbeing invite. |
 | `FINNHUB_API_KEY` | Shares — NYSE/NASDAQ quotes + company news (free tier, no IP block on Railway) |
 | `ALPHA_VANTAGE_API_KEY` | Shares — ASX quotes (free tier: 25 req/day; cron polls 2×/day + 15 min cache for UI) |
 | `DOMSCAN_API_KEY` | Domain & Brand — DomScan API (10,000 free credits/month); used by `server/routes/domains.js` |

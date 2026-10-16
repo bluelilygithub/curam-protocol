@@ -24,6 +24,7 @@
     "test:backup": "node server/routes/backup.test.js",
     "test:email": "node server/routes/email.test.js",
     "test:route-tracks": "node server/routes/routeTracks.test.js && node server/services/routeIntent.test.js && node server/services/routePlaces.test.js",
+    "test:auth": "node server/routes/auth.test.js",
     "test:garden-projects": "node server/routes/gardenProjects.test.js && node server/routes/gardenImages.test.js",
     "test:geocode": "node server/services/geocode.test.js",
     "test:map-tiles": "node server/routes/mapTiles.test.js",

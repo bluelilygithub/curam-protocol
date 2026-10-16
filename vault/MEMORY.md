@@ -57,7 +57,7 @@ Key tables: `users`, `auth_sessions`, `projects`, `files`, `messages`, `sessions
 - `DATABASE_URL` — PostgreSQL connection string (provided by Railway PostgreSQL service)
 - `UPLOAD_DIR` — point to Railway volume mount path (e.g. `/data/uploads`)
 - `APP_URL` — base URL for password reset emails (e.g. `https://curam-vault.up.railway.app`)
-- `INVITE_CODE` — required for new user registration; set this to a secret code and share with invited users
+- `INVITE_CODE` — no longer used; public sign-up is closed (accounts are created by an admin or a Wellbeing invite)
 - Optional (can also be set in Settings UI): `GEMINI_API_KEY`, `SEARCH_API_KEY`, `MAIL_CHANNEL_API_KEY`
 
 ## Important Patterns
