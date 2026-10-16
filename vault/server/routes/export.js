@@ -5,10 +5,15 @@ const router = express.Router();
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 const { pool } = require('../db');
 const { buildStudyDeckPdfBuffer } = require('../services/studyDeckPdf');
+const { ownsSession } = require('../utils/ownership');
+
+// Everything here exports the caller's own chats and projects. Someone else's, or one that does not
+// exist, gets the same 404.
 
 // GET /api/export/chat/:sessionId — JSON download
 router.get('/chat/:sessionId', async (req, res) => {
   try {
+    if (!(await ownsSession(req.user.id, req.params.sessionId))) return res.status(404).json({ error: 'Not found' });
     const { rows } = await pool.query(
       'SELECT * FROM messages WHERE "sessionId"=$1 ORDER BY "createdAt" ASC',
       [req.params.sessionId]
@@ -26,6 +31,7 @@ router.post('/chat/pdf', async (req, res) => {
   if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
 
   try {
+    if (!(await ownsSession(req.user.id, sessionId))) return res.status(404).json({ error: 'No messages found' });
     const { rows: messages } = await pool.query(
       'SELECT * FROM messages WHERE "sessionId"=$1 ORDER BY "createdAt" ASC',
       [sessionId]
@@ -98,7 +104,7 @@ router.post('/chat/pdf', async (req, res) => {
 // GET /api/export/project/:id
 router.get('/project/:id', async (req, res) => {
   try {
-    const { rows: projects } = await pool.query('SELECT * FROM projects WHERE id=$1', [req.params.id]);
+    const { rows: projects } = await pool.query('SELECT * FROM projects WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
     if (!projects[0]) return res.status(404).json({ error: 'Not found' });
 
     const { rows: files } = await pool.query(
@@ -120,7 +126,7 @@ router.get('/project/:id', async (req, res) => {
 // GET /api/export/projects
 router.get('/projects', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM projects ORDER BY "updatedAt" DESC');
+    const { rows } = await pool.query('SELECT * FROM projects WHERE "userId"=$1 ORDER BY "updatedAt" DESC', [req.user.id]);
     res.setHeader('Content-Disposition', 'attachment; filename="all-projects.json"');
     res.json(rows);
   } catch (err) {
