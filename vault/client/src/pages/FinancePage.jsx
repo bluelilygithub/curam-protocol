@@ -1132,6 +1132,25 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              {(() => {
+                // Sum the rows shown (after status, client and date filters), in whole cents so it never drifts.
+                // Void invoices are listed but not counted.
+                const counted = filtered.filter(inv => inv.status !== 'void');
+                const cents = counted.reduce((sum, inv) => sum + Math.round((Number(inv.total) || 0) * 100), 0);
+                const voidCount = filtered.length - counted.length;
+                return (
+                  <tr data-testid="invoice-total-row" style={{ borderTop: '2px solid var(--color-border)' }}>
+                    <td className="py-2 px-2 text-xs font-semibold" colSpan={5} style={{ color: 'var(--color-muted)' }}>
+                      Total of {counted.length} {isQuoteTab ? (counted.length === 1 ? 'quote' : 'quotes') : (counted.length === 1 ? 'invoice' : 'invoices')}
+                      {voidCount > 0 ? ` (${voidCount} void not counted)` : ''}
+                    </td>
+                    <td className="py-2 px-2 font-semibold" style={{ color: 'var(--color-text)' }}>{fmt(cents / 100)}</td>
+                    <td colSpan={2}></td>
+                  </tr>
+                );
+              })()}
+            </tfoot>
           </table>
         </div>
         );
