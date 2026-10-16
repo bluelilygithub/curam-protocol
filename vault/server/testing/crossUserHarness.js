@@ -54,6 +54,7 @@ global.fetch = (input, init) => {
   return realFetch(input, init);
 };
 
+process.env.UPLOAD_DIR = require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'xuser-uploads-'));
 const app = require('../index.js');
 const { pool } = require('../db');
 

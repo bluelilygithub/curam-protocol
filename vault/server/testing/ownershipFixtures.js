@@ -1,0 +1,142 @@
+'use strict';
+/**
+ * Builds one row for "user A" in as many tables as the schema allows, by reading the database's own
+ * description of itself: required columns get type-appropriate values, foreign keys get a parent row
+ * (created first), user columns point at A, and every free-text column carries a unique XMARK token
+ * so a leak of A's data into another user's response is easy to spot.
+ *
+ * Throwaway databases only (the cross-user harness refuses anything but localhost).
+ */
+const crypto = require('crypto');
+
+const MARK = 'XMARK-';
+const OWNER_COLS = new Set(['userId', 'user_id', 'ownerId', 'owner_id', 'createdBy']);
+const SKIP_TABLES = new Set(['users', 'auth_sessions']);
+const rnd = () => crypto.randomBytes(3).toString('hex');
+
+async function introspect(pool) {
+  const cols = (await pool.query(`
+    SELECT table_name t, column_name c, data_type dt, udt_name udt, is_nullable nullable, column_default def,
+           character_maximum_length len, is_generated gen, is_identity ident
+    FROM information_schema.columns WHERE table_schema='public' ORDER BY table_name, ordinal_position`)).rows;
+  const tables = {};
+  for (const r of cols) {
+    const t = (tables[r.t] = tables[r.t] || { name: r.t, cols: [], pk: [], fks: {}, checks: {} });
+    t.cols.push({ name: r.c, type: r.dt, udt: r.udt, nullable: r.nullable === 'YES', hasDefault: r.def != null || r.ident === 'YES' || r.gen === 'ALWAYS', len: r.len });
+  }
+  const real = new Set((await pool.query(`SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'`)).rows.map((r) => r.table_name));
+  for (const n of Object.keys(tables)) if (!real.has(n)) delete tables[n];
+  const pks = (await pool.query(`
+    SELECT tc.table_name t, kcu.column_name c FROM information_schema.table_constraints tc
+    JOIN information_schema.key_column_usage kcu ON kcu.constraint_name=tc.constraint_name AND kcu.table_schema=tc.table_schema
+    WHERE tc.table_schema='public' AND tc.constraint_type='PRIMARY KEY' ORDER BY kcu.ordinal_position`)).rows;
+  for (const r of pks) if (tables[r.t]) tables[r.t].pk.push(r.c);
+  const fks = (await pool.query(`
+    SELECT cl.relname child, a.attname col, pcl.relname parent, pa.attname pcol
+    FROM pg_constraint c
+    JOIN pg_class cl ON cl.oid=c.conrelid JOIN pg_namespace n ON n.oid=cl.relnamespace AND n.nspname='public'
+    JOIN pg_class pcl ON pcl.oid=c.confrelid
+    JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=c.conkey[1]
+    JOIN pg_attribute pa ON pa.attrelid=c.confrelid AND pa.attnum=c.confkey[1]
+    WHERE c.contype='f' AND array_length(c.conkey,1)=1`)).rows;
+  for (const r of fks) if (tables[r.child]) tables[r.child].fks[r.col] = { parent: r.parent, pcol: r.pcol };
+  const checks = (await pool.query(`
+    SELECT cl.relname t, pg_get_constraintdef(c.oid) def FROM pg_constraint c
+    JOIN pg_class cl ON cl.oid=c.conrelid JOIN pg_namespace n ON n.oid=cl.relnamespace AND n.nspname='public' WHERE c.contype='c'`)).rows;
+  for (const r of checks) {
+    if (!tables[r.t]) continue;
+    const lits = [...r.def.matchAll(/'([^']*)'::/g)].map((m) => m[1]);
+    for (const col of tables[r.t].cols) if (new RegExp(`\\(?"?${col.name}"?\\)?(::\\w+)?\\s*(=|IN|<>)|\\b${col.name}\\b`).test(r.def) && lits.length) (tables[r.t].checks[col.name] = tables[r.t].checks[col.name] || []).push(...lits);
+  }
+  return tables;
+}
+
+function valueFor(table, col) {
+  const chk = table.checks[col.name];
+  if (chk && chk.length) return chk[0];
+  switch (col.type) {
+    case 'integer': case 'bigint': case 'smallint': return 1;
+    case 'numeric': case 'real': case 'double precision': return 1;
+    case 'boolean': return false;
+    case 'timestamp with time zone': case 'timestamp without time zone': return new Date();
+    case 'date': return new Date();
+    case 'time without time zone': case 'time with time zone': return '00:00:00';
+    case 'uuid': return crypto.randomUUID();
+    case 'jsonb': case 'json': return JSON.stringify(col.name === 'rounds' || /s$/.test(col.name) ? [] : {});
+    case 'bytea': return Buffer.from('x');
+    case 'ARRAY': return '{}';
+    case 'text': case 'character varying': case 'character': case 'citext': {
+      const base = `${MARK}${table.name}-${col.name}-${rnd()}`;
+      return col.len && col.len < base.length ? base.slice(0, col.len) : base;
+    }
+    default: return undefined; // USER-DEFINED (vector) and anything unknown
+  }
+}
+
+/**
+ * fx.build(tableName) -> { table, pk: {col: value}, row } or throws; results cached in fx.rows.
+ */
+function makeBuilder(pool, tables, userA) {
+  const rows = {}; const failed = {}; const building = new Set();
+  async function build(name) {
+    if (rows[name]) return rows[name];
+    if (failed[name]) throw new Error(failed[name]);
+    const t = tables[name];
+    if (!t) throw new Error(`no table ${name}`);
+    if (SKIP_TABLES.has(name)) throw new Error('skipped table');
+    if (building.has(name)) throw new Error('cycle');
+    building.add(name);
+    try {
+      const vals = {};
+      for (const col of t.cols) {
+        const fk = t.fks[col.name];
+        if (OWNER_COLS.has(col.name) && (!fk || fk.parent === 'users')) { vals[col.name] = userA; continue; }
+        if (fk) {
+          if (fk.parent === 'users') { vals[col.name] = userA; continue; }
+          if (col.nullable && fk.parent === name) continue;
+          try { const p = await build(fk.parent); vals[col.name] = p.row[fk.pcol]; }
+          catch (e) { if (col.nullable) continue; throw new Error(`parent ${fk.parent}: ${e.message}`); }
+          continue;
+        }
+        const isPk = t.pk.includes(col.name);
+        if (col.hasDefault && !(isPk && false)) {
+          // let the database fill it, except text columns where a marker is wanted and no CHECK stops us
+          if (!['text', 'character varying'].includes(col.type) || isPk) continue;
+        }
+        const v = valueFor(t, col);
+        if (v === undefined) { if (!col.nullable && !col.hasDefault) throw new Error(`cannot fill ${col.name} (${col.type})`); continue; }
+        vals[col.name] = v;
+      }
+      const names = Object.keys(vals);
+      const sql = names.length
+        ? `INSERT INTO "${name}" (${names.map((n) => `"${n}"`).join(',')}) VALUES (${names.map((_, i) => `$${i + 1}`).join(',')}) RETURNING *`
+        : `INSERT INTO "${name}" DEFAULT VALUES RETURNING *`;
+      let res;
+      try { res = await pool.query(sql, names.map((n) => vals[n])); }
+      catch (e) {
+        // a marker or value a CHECK / format rule rejects: retry with only the required columns
+        const req = t.cols.filter((c) => !c.nullable && !c.hasDefault || t.fks[c.name] || OWNER_COLS.has(c.name)).map((c) => c.name).filter((n) => n in vals);
+        if (!req.length || req.length === names.length) throw e;
+        res = await pool.query(`INSERT INTO "${name}" (${req.map((n) => `"${n}"`).join(',')}) VALUES (${req.map((_, i) => `$${i + 1}`).join(',')}) RETURNING *`, req.map((n) => vals[n]));
+      }
+      const row = res.rows[0];
+      const pk = {}; for (const c of t.pk) pk[c] = row[c];
+      rows[name] = { table: name, pk, row };
+      return rows[name];
+    } catch (e) {
+      failed[name] = e.message;
+      throw e;
+    } finally { building.delete(name); }
+  }
+  return { build, rows, failed };
+}
+
+async function reread(pool, tables, entry) {
+  const t = tables[entry.table];
+  if (!t.pk.length) return null;
+  const where = t.pk.map((c, i) => `"${c}"=$${i + 1}`).join(' AND ');
+  const r = await pool.query(`SELECT * FROM "${entry.table}" WHERE ${where}`, t.pk.map((c) => entry.pk[c]));
+  return r.rows[0] || null;
+}
+
+module.exports = { MARK, introspect, makeBuilder, reread, OWNER_COLS };
