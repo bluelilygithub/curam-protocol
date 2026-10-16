@@ -1,5 +1,14 @@
 'use strict';
 
+/**
+ * Google Drive backup of the caller's OWN workspace data.
+ *
+ * Every route here is admin-only (router.use(requireAdmin) below), and a backup contains only the
+ * calling user's rows and upload folders, never another user's. Restore is switched off: putting
+ * rows back into a database shared by several people needs per-user id remapping, and the old
+ * version deleted every user's data in these tables before inserting. See POST /restore.
+ */
+
 const express = require('express');
 const router = express.Router();
 const path = require('path');
@@ -8,6 +17,7 @@ const { Readable } = require('stream');
 const { google } = require('googleapis');
 const { pool } = require('../db');
 const { decrypt, encrypt } = require('../utils/encryption');
+const { requireAdmin } = require('../middleware/auth');
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
 const BACKUP_ROOT_NAME = 'Curam Vault Backups';
@@ -21,30 +31,40 @@ const ENV_VARS = [
   'APP_URL', 'UPLOAD_DIR', 'MAIL_CHANNEL_API_KEY',
 ];
 
-// Tables exported in backup (backup order = insert order for restore)
-const TABLES_TO_BACKUP = [
-  'folders', 'personas', 'projects', 'memory', 'task_templates',
-  'objectives', 'key_results', 'sessions', 'messages', 'tasks',
-  'task_tags', 'task_comments', 'task_dependencies', 'template_subtasks',
-  'prompts', 'notes', 'pinned_urls', 'files', 'session_files',
-  'bookmarks', 'prompt_chains', 'debates', 'comparisons', 'search_index',
-];
+// What a backup contains, and how each table is limited to the caller's own rows ($1 = the caller's
+// user id). Tables with no user column are reached through the project, chat, task or template they
+// belong to. A table that cannot be tied to its owner is left out rather than guessed at.
+const OWN_PROJECTS = '(SELECT id FROM projects WHERE "userId" = $1)';
+const OWN_SESSIONS = `(SELECT "sessionId" FROM sessions WHERE "userId" = $1 OR "projectId" IN ${OWN_PROJECTS})`;
+const OWN_TASKS = '(SELECT id FROM tasks WHERE "userId" = $1 OR "parentTaskId" IN (SELECT id FROM tasks WHERE "userId" = $1))';
+const OWN_TEMPLATES = '(SELECT id FROM task_templates WHERE "userId" = $1)';
+const OWN_OBJECTIVES = '(SELECT id FROM objectives WHERE "userId" = $1)';
 
-// Cleared in reverse dependency order before restore
-const CLEAR_ORDER = [
-  'file_chunks', 'search_index', 'comparisons', 'debates', 'prompt_chains',
-  'bookmarks', 'session_files', 'files', 'pinned_urls', 'notes', 'prompts',
-  'template_subtasks', 'task_dependencies', 'task_comments', 'task_tags', 'tasks',
-  'messages', 'sessions', 'key_results', 'objectives', 'task_templates',
-  'memory', 'projects', 'personas', 'folders',
-];
-
-// Tables that have a serial id column needing sequence reset after restore
-const TABLES_WITH_SERIAL_ID = [
-  'folders', 'personas', 'projects', 'memory', 'task_templates', 'objectives',
-  'key_results', 'messages', 'tasks', 'task_tags', 'task_comments',
-  'task_dependencies', 'template_subtasks', 'prompts', 'notes', 'pinned_urls',
-  'files', 'bookmarks', 'prompt_chains', 'debates', 'comparisons', 'search_index',
+const BACKUP_TABLES = [
+  ['folders', '"userId" = $1'],
+  ['personas', '"userId" = $1'],
+  ['projects', '"userId" = $1'],
+  ['memory', '"userId" = $1'],
+  ['task_templates', '"userId" = $1'],
+  ['objectives', '"userId" = $1'],
+  ['key_results', `"objectiveId" IN ${OWN_OBJECTIVES}`],
+  ['sessions', `("userId" = $1 OR "projectId" IN ${OWN_PROJECTS})`],
+  ['messages', `("projectId" IN ${OWN_PROJECTS} OR "sessionId" IN ${OWN_SESSIONS})`],
+  ['tasks', `("userId" = $1 OR "parentTaskId" IN (SELECT id FROM tasks WHERE "userId" = $1))`],
+  ['task_tags', `"taskId" IN ${OWN_TASKS}`],
+  ['task_comments', `"taskId" IN ${OWN_TASKS}`],
+  ['task_dependencies', `"taskId" IN ${OWN_TASKS}`],
+  ['template_subtasks', `"templateId" IN ${OWN_TEMPLATES}`],
+  ['prompts', '"userId" = $1'],
+  ['notes', 'user_id = $1'],
+  ['pinned_urls', `"projectId" IN ${OWN_PROJECTS}`],
+  ['files', `"projectId" IN ${OWN_PROJECTS}`],
+  ['session_files', `"sessionId" IN ${OWN_SESSIONS}`],
+  ['bookmarks', `"sessionId" IN ${OWN_SESSIONS}`],
+  ['prompt_chains', '"userId" = $1'],
+  ['debates', `"projectId" IN ${OWN_PROJECTS}`],
+  ['comparisons', `"projectId" IN ${OWN_PROJECTS}`],
+  ['search_index', `"projectId" IN (SELECT id::text FROM projects WHERE "userId" = $1)`],
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -150,20 +170,6 @@ async function downloadToBuffer(drive, fileId) {
   });
 }
 
-async function downloadToFile(drive, fileId, destPath) {
-  const res = await drive.files.get(
-    { fileId, alt: 'media' },
-    { responseType: 'stream' }
-  );
-  await new Promise((resolve, reject) => {
-    const dest = fs.createWriteStream(destPath);
-    res.data.pipe(dest);
-    dest.on('finish', resolve);
-    dest.on('error', reject);
-    res.data.on('error', reject);
-  });
-}
-
 // Recursively walk a directory, returning [{relativePath, absolutePath}] for every file
 function walkDir(dir, base) {
   const results = [];
@@ -183,70 +189,37 @@ function walkDir(dir, base) {
   return results;
 }
 
-// Recursively list all non-folder files in a Drive folder, returning [{id, name, relativePath}]
-async function listDriveFilesRecursive(drive, folderId, base) {
-  const results = [];
-  const { data: { files } } = await drive.files.list({
-    q: `'${folderId}' in parents and trashed=false`,
-    fields: 'files(id, name, mimeType)',
-    pageSize: 1000,
-  });
-  for (const f of (files || [])) {
-    const rel = base ? path.join(base, f.name) : f.name;
-    if (f.mimeType === 'application/vnd.google-apps.folder') {
-      results.push(...await listDriveFilesRecursive(drive, f.id, rel));
-    } else {
-      results.push({ id: f.id, name: f.name, relativePath: rel });
+// The caller's rows, table by table. Tables that cannot be read come back empty.
+async function exportOwnedData(userId) {
+  const tables = {};
+  for (const [table, where] of BACKUP_TABLES) {
+    try {
+      const { rows } = await pool.query(`SELECT * FROM "${table}" WHERE ${where}`, [userId]);
+      tables[table] = rows;
+    } catch (_) {
+      tables[table] = [];
     }
   }
+  return tables;
+}
+
+// The caller's uploaded files: one folder per project they own, plus their own Finance documents.
+// Nothing else under the upload folder (other people's projects and documents) is ever read.
+async function listOwnedUploads(userId, uploadDir = UPLOAD_DIR) {
+  const { rows } = await pool.query('SELECT id FROM projects WHERE "userId" = $1', [userId]);
+  const results = [];
+  for (const { id } of rows) {
+    results.push(...walkDir(path.join(uploadDir, String(id)), String(id)));
+  }
+  const financeBase = path.join('finance-docs', String(userId));
+  results.push(...walkDir(path.join(uploadDir, financeBase), financeBase));
   return results;
 }
 
-// Topological sort so parent tasks are inserted before child tasks
-function topologicalSortTasks(tasks) {
-  const byId = new Map(tasks.map(t => [t.id, t]));
-  const result = [];
-  const visited = new Set();
-
-  function dfs(task) {
-    if (visited.has(task.id)) return;
-    if (task.parentTaskId && byId.has(task.parentTaskId)) {
-      dfs(byId.get(task.parentTaskId));
-    }
-    visited.add(task.id);
-    result.push(task);
-  }
-
-  for (const task of tasks) dfs(task);
-  return result;
-}
-
-// Batch insert rows — columns derived from first row's keys
-async function bulkInsert(client, table, rows) {
-  if (!rows || !rows.length) return;
-  const columns = Object.keys(rows[0]);
-  const BATCH = 100;
-  for (let i = 0; i < rows.length; i += BATCH) {
-    const batch = rows.slice(i, i + BATCH);
-    let paramIdx = 1;
-    const valuePlaceholders = [];
-    const params = [];
-    for (const row of batch) {
-      const placeholders = columns.map(() => `$${paramIdx++}`);
-      valuePlaceholders.push(`(${placeholders.join(', ')})`);
-      for (const col of columns) {
-        params.push(row[col] !== undefined ? row[col] : null);
-      }
-    }
-    const colNames = columns.map(c => `"${c}"`).join(', ');
-    await client.query(
-      `INSERT INTO "${table}" (${colNames}) VALUES ${valuePlaceholders.join(', ')}`,
-      params
-    );
-  }
-}
-
 // ── Routes ─────────────────────────────────────────────────────────────────────
+
+// Every backup route is for administrators only.
+router.use(requireAdmin);
 
 // GET /api/backup/status
 router.get('/status', async (req, res) => {
@@ -257,7 +230,7 @@ router.get('/status', async (req, res) => {
     const driveConnected = !!(rows[0]?.scope && rows[0].scope.includes('drive'));
 
     const { rows: s } = await pool.query(
-      "SELECT value FROM settings WHERE key='last_backup_at'"
+      `SELECT value FROM settings WHERE "userId"=$1 AND key='last_backup_at'`, [req.user.id]
     );
     const lastBackupAt = s[0]?.value || null;
 
@@ -345,33 +318,26 @@ router.post('/create', async (req, res) => {
   try {
     const drive = await getDriveClient(req.user.id);
 
-    // ── Stage 1: Export database ──────────────────────────────────────────────
-    sse(res, { stage: 'database', message: 'Exporting database…', percent: 5 });
+    // ── Stage 1: Export the caller's data ─────────────────────────────────────
+    sse(res, { stage: 'database', message: 'Exporting your data…', percent: 5 });
 
-    const tables = {};
-    for (const table of TABLES_TO_BACKUP) {
-      try {
-        const { rows } = await pool.query(`SELECT * FROM "${table}"`);
-        tables[table] = rows;
-      } catch (_) {
-        tables[table] = [];
-      }
-    }
+    const tables = await exportOwnedData(req.user.id);
 
     const now = new Date();
     const dbExport = {
       version: APP_VERSION,
       created_at: now.toISOString(),
+      userId: req.user.id,
       tables,
     };
 
-    sse(res, { stage: 'database', message: 'Database exported successfully', percent: 20 });
+    sse(res, { stage: 'database', message: 'Data exported successfully', percent: 20 });
 
-    // ── Stage 2: Scan uploaded files ──────────────────────────────────────────
+    // ── Stage 2: Scan the caller's uploaded files ─────────────────────────────
     sse(res, { stage: 'files', message: 'Scanning uploaded files…', percent: 22 });
 
-    const uploadedFiles = walkDir(UPLOAD_DIR);
-    console.log(`[backup] UPLOAD_DIR=${UPLOAD_DIR} | exists=${fs.existsSync(UPLOAD_DIR)} | files found=${uploadedFiles.length}`);
+    const uploadedFiles = await listOwnedUploads(req.user.id);
+    console.log(`[backup] user ${req.user.id}: UPLOAD_DIR=${UPLOAD_DIR} | files found=${uploadedFiles.length}`);
 
     // ── Stage 3: Create Drive folder structure ────────────────────────────────
     sse(res, { stage: 'files', message: 'Creating Drive folder…', percent: 25 });
@@ -448,11 +414,11 @@ router.post('/create', async (req, res) => {
       console.error('[backup] Cleanup error:', cleanupErr.message);
     }
 
-    // ── Stage 8: Save timestamp ───────────────────────────────────────────────
+    // ── Stage 8: Save timestamp (settings are per user: the key is (userId, key)) ──
     await pool.query(
-      `INSERT INTO settings (key, value) VALUES ('last_backup_at', $1)
-       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-      [now.toISOString()]
+      `INSERT INTO settings ("userId", key, value) VALUES ($1, 'last_backup_at', $2)
+       ON CONFLICT ("userId", key) DO UPDATE SET value = EXCLUDED.value`,
+      [req.user.id, now.toISOString()]
     );
 
     sse(res, { stage: 'complete', message: 'Backup complete — saved to Google Drive', percent: 100 });
@@ -466,129 +432,16 @@ router.post('/create', async (req, res) => {
   }
 });
 
-// POST /api/backup/restore — SSE
-router.post('/restore', async (req, res) => {
-  sseHeaders(res);
-  const { folderId } = req.body || {};
-  if (!folderId) {
-    sse(res, { stage: 'error', message: 'folderId is required' });
-    res.write('data: [DONE]\n\n');
-    return res.end();
-  }
-
-  try {
-    const drive = await getDriveClient(req.user.id);
-
-    // ── Download data.json ────────────────────────────────────────────────────
-    sse(res, { stage: 'database', message: 'Downloading backup data…', percent: 5 });
-
-    const { data: { files: dataFiles } } = await drive.files.list({
-      q: `name='data.json' and '${folderId}' in parents and trashed=false`,
-      fields: 'files(id)',
-      pageSize: 1,
-    });
-    if (!dataFiles || !dataFiles.length) {
-      throw new Error('data.json not found in this backup folder. The backup may be corrupted.');
-    }
-    const buf = await downloadToBuffer(drive, dataFiles[0].id);
-    const dbExport = JSON.parse(buf.toString('utf8'));
-    const tables = dbExport.tables || {};
-
-    sse(res, { stage: 'database', message: 'Restoring database…', percent: 15 });
-
-    // ── Restore DB in a transaction ───────────────────────────────────────────
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      // Clear tables in reverse dependency order
-      // Tasks self-reference: nullify parentTaskId first to avoid FK violations
-      await client.query('UPDATE tasks SET "parentTaskId" = NULL WHERE "parentTaskId" IS NOT NULL').catch(() => {});
-      for (const table of CLEAR_ORDER) {
-        await client.query(`DELETE FROM "${table}"`).catch(() => {});
-      }
-
-      // Insert in dependency order
-      const tasksDone = new Set(['tasks']); // handle tasks specially below
-      for (const table of TABLES_TO_BACKUP) {
-        if (table === 'tasks') continue; // handle below
-        const rows = tables[table];
-        if (!rows || !rows.length) continue;
-        await bulkInsert(client, table, rows);
-      }
-
-      // Tasks: topological sort so parents come before children
-      const taskRows = tables['tasks'] || [];
-      if (taskRows.length) {
-        const sorted = topologicalSortTasks(taskRows);
-        await bulkInsert(client, 'tasks', sorted);
-      }
-
-      // Reset serial sequences so future inserts get correct IDs
-      for (const table of TABLES_WITH_SERIAL_ID) {
-        if (tables[table] && tables[table].length) {
-          await client.query(
-            `SELECT setval(pg_get_serial_sequence('"${table}"', 'id'), COALESCE(MAX(id), 1)) FROM "${table}"`
-          ).catch(() => {});
-        }
-      }
-
-      await client.query('COMMIT');
-      sse(res, { stage: 'database', message: 'Database restored successfully', percent: 60 });
-    } catch (dbErr) {
-      await client.query('ROLLBACK');
-      throw new Error(`Database restore failed: ${dbErr.message}`);
-    } finally {
-      client.release();
-    }
-
-    // ── Restore files ─────────────────────────────────────────────────────────
-    sse(res, { stage: 'files', message: 'Restoring uploaded files…', percent: 65 });
-
-    try {
-      // Find the files/ subfolder
-      const { data: { files: subfolders } } = await drive.files.list({
-        q: `name='files' and '${folderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-        fields: 'files(id)',
-        pageSize: 1,
-      });
-
-      if (subfolders && subfolders.length) {
-        const filesFolderId = subfolders[0].id;
-        const driveFiles = await listDriveFilesRecursive(drive, filesFolderId);
-
-        if (!fs.existsSync(UPLOAD_DIR)) {
-          fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-        }
-
-        const total = driveFiles.length;
-        for (let i = 0; i < driveFiles.length; i++) {
-          const driveFile = driveFiles[i];
-          const destPath = path.join(UPLOAD_DIR, driveFile.relativePath);
-          fs.mkdirSync(path.dirname(destPath), { recursive: true });
-          const percent = 65 + Math.round(((i + 1) / Math.max(total, 1)) * 30);
-          sse(res, {
-            stage: 'files',
-            message: `Restoring file ${i + 1} of ${total}…`,
-            percent,
-          });
-          await downloadToFile(drive, driveFile.id, destPath);
-        }
-      }
-    } catch (fileErr) {
-      console.error('[backup] File restore error:', fileErr.message);
-      // Non-fatal — DB is already restored
-    }
-
-    sse(res, { stage: 'complete', message: 'Restore complete — reloading app…', percent: 100 });
-    res.write('data: [DONE]\n\n');
-    res.end();
-  } catch (err) {
-    console.error('[backup] Restore error:', err);
-    sse(res, { stage: 'error', message: err.message });
-    res.write('data: [DONE]\n\n');
-    res.end();
-  }
+// POST /api/backup/restore — DISABLED.
+// The previous version emptied these tables for every user and refilled them from a Drive file, and
+// wrote files into the upload folder using names taken from Drive. With several people sharing one
+// database that is not safe. Restoring one person's backup needs its own design (new ids, no deleting
+// anyone else's rows, path checks). Until then a restore is done from a database backup instead.
+router.post('/restore', (req, res) => {
+  res.status(410).json({
+    error: 'Restore from Drive is switched off for safety. Your Drive backups are untouched; ask for a restore from a database backup.',
+  });
 });
 
 module.exports = router;
+module.exports.helpers = { exportOwnedData, listOwnedUploads, BACKUP_TABLES };
