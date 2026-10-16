@@ -14,6 +14,7 @@
     "test:measurements": "node client/src/utils/units/units.test.mjs && node client/src/utils/units/voice.test.mjs && node client/src/utils/units/scanner.test.mjs",
     "test:finance": "node client/src/utils/finYear.test.mjs && node server/routes/finance.test.js",
     "test:client-projects": "node server/routes/clientProjects.test.js",
+    "test:task-templates": "node server/routes/taskTemplates.test.js",
     "test:room-projects": "node server/routes/roomProjects.test.js",
     "test:cellar-projects": "node server/routes/cellarProjects.test.js",
     "test:cellar-lite": "node server/routes/cellarLite.test.js",
