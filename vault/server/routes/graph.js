@@ -48,6 +48,44 @@ function parseVector(str) {
   }
 }
 
+// ── Ownership ─────────────────────────────────────────────────────────────────
+// The graph is the caller's own: their projects, and what sits in them, their notes, chats, tasks and
+// goals. Nothing of anyone else's is read, listed, counted, sent to the model or stored.
+
+const OWN_PROJECT_IDS = '(SELECT id FROM projects WHERE "userId" = $1)';
+const OWN_TASK_IDS = '(SELECT id FROM tasks WHERE "userId" = $1 OR "parentTaskId" IN (SELECT id FROM tasks WHERE "userId" = $1))';
+
+// The caller's rows, in the order GET / and fetchGraphData read them. Semantic edges carry no user,
+// so they are all read here and then kept only where both ends are the caller's own nodes.
+function scopedGraphQueries(userId) {
+  return Promise.all([
+    pool.query('SELECT id, name FROM projects WHERE archived_at IS NULL AND "userId" = $1 ORDER BY id', [userId]),
+    pool.query(`SELECT id, "projectId", name FROM files WHERE "projectId" IN ${OWN_PROJECT_IDS} ORDER BY id`, [userId]),
+    pool.query('SELECT id, project_id, title FROM notes WHERE user_id = $1 ORDER BY id', [userId]),
+    pool.query(`SELECT "sessionId", "projectId", title, "branchedFrom" FROM sessions WHERE "userId" = $1 OR "projectId" IN ${OWN_PROJECT_IDS} ORDER BY "createdAt" DESC LIMIT 200`, [userId]),
+    pool.query(`SELECT id, title, "projectId", "parentTaskId", "sourceSessionId", "keyResultId" FROM tasks WHERE id IN ${OWN_TASK_IDS} ORDER BY id`, [userId]),
+    pool.query('SELECT id, title FROM objectives WHERE "userId" = $1 ORDER BY id', [userId]),
+    pool.query('SELECT id, title, "objectiveId" FROM key_results WHERE "objectiveId" IN (SELECT id FROM objectives WHERE "userId" = $1) ORDER BY id', [userId]),
+    pool.query(`SELECT id, "projectId", url, title FROM pinned_urls WHERE "projectId" IN ${OWN_PROJECT_IDS} ORDER BY id`, [userId]),
+    pool.query(`SELECT "taskId", "blockedByTaskId" FROM task_dependencies WHERE "taskId" IN ${OWN_TASK_IDS} AND "blockedByTaskId" IN ${OWN_TASK_IDS}`, [userId]),
+    pool.query("SELECT source_id, target_id, similarity FROM graph_edges WHERE edge_type = 'semantic'"),
+  ]);
+}
+
+// Ids of the caller's own files, notes and chats in the form semantic edges use ('file_3', 'note_9', 'session_x').
+async function ownSemanticNodeIds(userId) {
+  const [files, notes, sessions] = await Promise.all([
+    pool.query(`SELECT id FROM files WHERE "projectId" IN ${OWN_PROJECT_IDS}`, [userId]),
+    pool.query('SELECT id FROM notes WHERE user_id = $1', [userId]),
+    pool.query(`SELECT "sessionId" FROM sessions WHERE "userId" = $1 OR "projectId" IN ${OWN_PROJECT_IDS}`, [userId]),
+  ]);
+  return [
+    ...files.rows.map(r => `file_${r.id}`),
+    ...notes.rows.map(r => `note_${r.id}`),
+    ...sessions.rows.map(r => `session_${r.sessionId}`),
+  ];
+}
+
 // ── GET /api/graph ─────────────────────────────────────────────────────────────
 
 router.get('/', async (req, res) => {
@@ -55,22 +93,7 @@ router.get('/', async (req, res) => {
     const [
       projects, files, notes, sessions, tasks,
       objectives, keyResults, pinnedUrls, taskDeps, semanticEdges,
-    ] = await Promise.all([
-      pool.query('SELECT id, name FROM projects WHERE archived_at IS NULL ORDER BY id'),
-      pool.query('SELECT id, "projectId", name FROM files ORDER BY id'),
-      pool.query('SELECT id, project_id, title FROM notes ORDER BY id'),
-      pool.query(
-        'SELECT "sessionId", "projectId", title, "branchedFrom" FROM sessions ORDER BY "createdAt" DESC LIMIT 200'
-      ),
-      pool.query(
-        'SELECT id, title, "projectId", "parentTaskId", "sourceSessionId", "keyResultId" FROM tasks ORDER BY id'
-      ),
-      pool.query('SELECT id, title FROM objectives ORDER BY id'),
-      pool.query('SELECT id, title, "objectiveId" FROM key_results ORDER BY id'),
-      pool.query('SELECT id, "projectId", url, title FROM pinned_urls ORDER BY id'),
-      pool.query('SELECT "taskId", "blockedByTaskId" FROM task_dependencies'),
-      pool.query("SELECT source_id, target_id, similarity FROM graph_edges WHERE edge_type = 'semantic'"),
-    ]);
+    ] = await scopedGraphQueries(req.user.id);
 
     const nodes = [];
     const edges = [];
@@ -150,13 +173,15 @@ router.get('/', async (req, res) => {
     // ── Semantic edges (cached) ────────────────────────────────────────────
 
     const nodeIdSet = new Set(nodes.map(n => n.id));
+    let semanticCount = 0;
     for (const se of semanticEdges.rows) {
       if (nodeIdSet.has(se.source_id) && nodeIdSet.has(se.target_id)) {
         edges.push({ source: se.source_id, target: se.target_id, type: 'semantic', similarity: se.similarity });
+        semanticCount++;
       }
     }
 
-    res.json({ nodes, edges, semanticCount: semanticEdges.rows.length });
+    res.json({ nodes, edges, semanticCount });
   } catch (err) {
     console.error('[graph] Error:', err);
     res.status(500).json({ error: err.message });
@@ -169,8 +194,14 @@ router.post('/compute-semantic', async (req, res) => {
   sseHeaders(res);
 
   try {
-    sse(res, { stage: 'init', message: 'Clearing previous semantic connections…', percent: 2 });
-    await pool.query("DELETE FROM graph_edges WHERE edge_type = 'semantic'");
+    const userId = req.user.id;
+    sse(res, { stage: 'init', message: 'Clearing your previous semantic connections…', percent: 2 });
+    // Only edges between the caller's own files, notes and chats are cleared (and later recomputed).
+    const ownNodeIds = await ownSemanticNodeIds(userId);
+    await pool.query(
+      "DELETE FROM graph_edges WHERE edge_type = 'semantic' AND source_id = ANY($1::text[]) AND target_id = ANY($1::text[])",
+      [ownNodeIds]
+    );
 
     const foundEdges = [];
 
@@ -186,6 +217,7 @@ router.post('/compute-semantic', async (req, res) => {
           SELECT file_id, avg(embedding) AS avg_emb
           FROM file_chunks
           WHERE embedding IS NOT NULL
+            AND file_id IN (SELECT f.id FROM files f WHERE f."projectId" IN (SELECT id FROM projects WHERE "userId" = $3))
           GROUP BY file_id
         )
         SELECT
@@ -197,7 +229,7 @@ router.post('/compute-semantic', async (req, res) => {
         WHERE 1 - (a.avg_emb <=> b.avg_emb) > $1
         ORDER BY similarity DESC
         LIMIT $2
-      `, [SIMILARITY_THRESHOLD, MAX_SEMANTIC_EDGES]);
+      `, [SIMILARITY_THRESHOLD, MAX_SEMANTIC_EDGES, userId]);
 
       for (const pair of fileFilePairs) {
         foundEdges.push({ source_id: `file_${pair.file_a}`, target_id: `file_${pair.file_b}`, similarity: parseFloat(pair.similarity) });
@@ -209,8 +241,9 @@ router.post('/compute-semantic', async (req, res) => {
       const { rows: fileEmbs } = await pool.query(`
         SELECT file_id, avg(embedding) AS avg_emb
         FROM file_chunks WHERE embedding IS NOT NULL
+          AND file_id IN (SELECT f.id FROM files f WHERE f."projectId" IN (SELECT id FROM projects WHERE "userId" = $1))
         GROUP BY file_id
-      `);
+      `, [userId]);
       fileEmbeddings = fileEmbs
         .map(r => ({ id: r.file_id, embedding: parseVector(r.avg_emb) }))
         .filter(r => r.embedding !== null);
@@ -219,14 +252,13 @@ router.post('/compute-semantic', async (req, res) => {
       sse(res, { stage: 'files', message: 'File comparison skipped (embeddings unavailable)', percent: 18 });
     }
 
-    const embConfig = await resolveEmbeddingConfig(req.user?.id);
+    const embConfig = await resolveEmbeddingConfig(userId);
     if (!embConfig.available) {
       sse(res, { stage: 'skipped', message: `Note/session comparisons skipped — ${embConfig.hint}`, percent: 88 });
     } else {
-      const userId = req.user?.id;
       // ── Stage 2: Embed notes ─────────────────────────────────────────────
       const { rows: noteRows } = await pool.query(
-        'SELECT id, title, body FROM notes ORDER BY created_at DESC LIMIT $1', [MAX_NOTES]
+        'SELECT id, title, body FROM notes WHERE user_id = $2 ORDER BY created_at DESC LIMIT $1', [MAX_NOTES, userId]
       );
       sse(res, { stage: 'notes', message: `Embedding ${noteRows.length} notes…`, percent: 20 });
 
@@ -258,9 +290,10 @@ router.post('/compute-semantic', async (req, res) => {
           WHERE "sessionId" = s."sessionId" AND role = 'assistant'
           ORDER BY "createdAt" DESC LIMIT 1
         ) lm ON true
+        WHERE s."userId" = $2 OR s."projectId" IN (SELECT id FROM projects WHERE "userId" = $2)
         ORDER BY s."createdAt" DESC
         LIMIT $1
-      `, [MAX_SESSIONS]);
+      `, [MAX_SESSIONS, userId]);
 
       sse(res, { stage: 'sessions', message: `Embedding ${sessionRows.length} sessions…`, percent: 44 });
 
@@ -340,22 +373,11 @@ router.post('/compute-semantic', async (req, res) => {
 
 // ── Graph data helper (shared between GET / and insights) ─────────────────────
 
-async function fetchGraphData() {
+async function fetchGraphData(userId) {
   const [
     projects, files, notes, sessions, tasks,
     objectives, keyResults, pinnedUrls, taskDeps, semanticEdges,
-  ] = await Promise.all([
-    pool.query('SELECT id, name FROM projects WHERE archived_at IS NULL ORDER BY id'),
-    pool.query('SELECT id, "projectId", name FROM files ORDER BY id'),
-    pool.query('SELECT id, project_id, title FROM notes ORDER BY id'),
-    pool.query('SELECT "sessionId", "projectId", title, "branchedFrom" FROM sessions ORDER BY "createdAt" DESC LIMIT 200'),
-    pool.query('SELECT id, title, "projectId", "parentTaskId", "sourceSessionId", "keyResultId" FROM tasks ORDER BY id'),
-    pool.query('SELECT id, title FROM objectives ORDER BY id'),
-    pool.query('SELECT id, title, "objectiveId" FROM key_results ORDER BY id'),
-    pool.query('SELECT id, "projectId", url, title FROM pinned_urls ORDER BY id'),
-    pool.query('SELECT "taskId", "blockedByTaskId" FROM task_dependencies'),
-    pool.query("SELECT source_id, target_id, similarity FROM graph_edges WHERE edge_type = 'semantic'"),
-  ]);
+  ] = await scopedGraphQueries(userId);
 
   const nodes = [];
   const edges = [];
@@ -416,11 +438,14 @@ async function fetchGraphData() {
       edges.push({ source: `task_${dep.blockedByTaskId}`, target: `task_${dep.taskId}`, type: 'blocks' });
 
   const nodeIdSet = new Set(nodes.map(n => n.id));
+  let semanticCount = 0;
   for (const se of semanticEdges.rows)
-    if (nodeIdSet.has(se.source_id) && nodeIdSet.has(se.target_id))
+    if (nodeIdSet.has(se.source_id) && nodeIdSet.has(se.target_id)) {
       edges.push({ source: se.source_id, target: se.target_id, type: 'semantic', similarity: se.similarity });
+      semanticCount++;
+    }
 
-  return { nodes, edges, semanticCount: semanticEdges.rows.length };
+  return { nodes, edges, semanticCount };
 }
 
 // ── Build a text summary for Claude ──────────────────────────────────────────
@@ -508,7 +533,7 @@ function buildGraphSummary(nodes, edges) {
 
 router.get('/insights', async (req, res) => {
   try {
-    const { rows } = await pool.query("SELECT value FROM settings WHERE key = 'graph_insights'");
+    const { rows } = await pool.query(`SELECT value FROM settings WHERE "userId" = $1 AND key = 'graph_insights'`, [req.user.id]);
     if (rows.length > 0) {
       res.json(JSON.parse(rows[0].value));
     } else {
@@ -523,7 +548,7 @@ router.get('/insights', async (req, res) => {
 
 router.post('/insights/refresh', async (req, res) => {
   try {
-    const graphData = await fetchGraphData();
+    const graphData = await fetchGraphData(req.user.id);
     const summary   = buildGraphSummary(graphData.nodes, graphData.edges);
 
     const { light: lightModel } = await getModelsForUser(req.user?.id);
@@ -544,9 +569,11 @@ router.post('/insights/refresh', async (req, res) => {
 
     const result = { insights: parsed.insights || [], generatedAt: new Date().toISOString() };
 
+    // Stored per user: the settings key is (userId, key), so the old ON CONFLICT (key) could never run.
     await pool.query(
-      "INSERT INTO settings (key, value) VALUES ('graph_insights', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
-      [JSON.stringify(result)]
+      `INSERT INTO settings ("userId", key, value) VALUES ($1, 'graph_insights', $2)
+       ON CONFLICT ("userId", key) DO UPDATE SET value = EXCLUDED.value`,
+      [req.user.id, JSON.stringify(result)]
     );
 
     res.json(result);

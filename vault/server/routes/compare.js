@@ -215,6 +215,11 @@ router.post('/save', async (req, res) => {
   const { projectId, docAName, docBName, mode, model, result } = req.body;
   if (!result) return res.status(400).json({ error: 'result required' });
   try {
+    // A comparison can be filed under a project only if it is the caller's; someone else's behaves like a missing one.
+    if (projectId) {
+      const { rows: owned } = await pool.query('SELECT 1 FROM projects WHERE id=$1 AND "userId"=$2', [Number(projectId) || 0, req.user.id]);
+      if (!owned.length) return res.status(404).json({ error: 'Not found' });
+    }
     const { rows } = await pool.query(
       'INSERT INTO comparisons ("projectId", "docAName", "docBName", mode, model, result) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
       [projectId || null, docAName || '', docBName || '', mode || 'diff', model || '', result]

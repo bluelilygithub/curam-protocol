@@ -8,12 +8,15 @@ const { execFile } = require('child_process');
 const multer = require('multer');
 const { runtimeConfig } = require('../config/runtime');
 const {
-  REF_AUDIO_PATH,
+  userVoicePaths,
   ensureVoiceDir,
   getLocalVoiceStatus,
   getReferencePaths,
   saveProfile,
 } = require('../services/localVoiceProfile');
+
+// The cloned-voice profile is per person: each caller reads and writes only their own (an administrator
+// can also still read the old shared one until they save their own). See services/localVoiceProfile.js.
 
 const router = express.Router();
 const F5_SPEAK_SCRIPT = path.join(__dirname, '..', 'scripts', 'f5_speak.py');
@@ -140,7 +143,7 @@ router.get('/tts/status', async (req, res) => {
     });
   }
   try {
-    const status = await getLocalVoiceStatus();
+    const status = await getLocalVoiceStatus(req.user.id, req.user.isAdmin);
     res.json({
       ...status,
       pythonCommand: localPythonCommand(),
@@ -161,7 +164,7 @@ router.get('/tts/profile', async (req, res) => {
     });
   }
   try {
-    const status = await getLocalVoiceStatus();
+    const status = await getLocalVoiceStatus(req.user.id, req.user.isAdmin);
     res.json(status);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -175,17 +178,18 @@ router.post('/tts/profile', upload.single('audio'), async (req, res) => {
 
   const refTextInput = String(req.body?.refText || '').trim();
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vault-local-voice-'));
+  const mine = userVoicePaths(req.user.id);
 
   try {
-    await ensureVoiceDir();
+    await ensureVoiceDir(req.user.id);
     let refText = refTextInput;
 
     if (req.file?.buffer?.length) {
       const inputPath = path.join(tempDir, `source${extensionForMime(req.file.mimetype)}`);
       await fs.writeFile(inputPath, req.file.buffer);
-      await convertToReferenceWav(inputPath, REF_AUDIO_PATH);
+      await convertToReferenceWav(inputPath, mine.refAudio);
       if (!refText) {
-        refText = await transcribeWavFile(REF_AUDIO_PATH);
+        refText = await transcribeWavFile(mine.refAudio);
       }
     }
 
@@ -193,16 +197,16 @@ router.post('/tts/profile', upload.single('audio'), async (req, res) => {
       return res.status(400).json({ error: 'Reference transcript is required. Paste what you said in the recording, or upload audio to auto-transcribe.' });
     }
 
-    if (!(await pathExists(REF_AUDIO_PATH))) {
+    if (!(await pathExists(mine.refAudio))) {
       return res.status(400).json({ error: 'Reference audio is required. Upload a short recording of your voice.' });
     }
 
-    await saveProfile({
+    await saveProfile(req.user.id, {
       refText,
       updatedAt: new Date().toISOString(),
     });
 
-    const status = await getLocalVoiceStatus();
+    const status = await getLocalVoiceStatus(req.user.id, req.user.isAdmin);
     res.json({ ok: true, ...status });
   } catch (err) {
     console.error('[local-audio/tts/profile] failed:', err.stderr || err.message);
@@ -223,7 +227,7 @@ router.post('/tts/speak', async (req, res) => {
     });
   }
 
-  const reference = await getReferencePaths();
+  const reference = await getReferencePaths(req.user.id, req.user.isAdmin);
   if (!reference) {
     return res.status(503).json({ error: 'Local voice profile is not configured. Add reference audio and transcript in Settings → Profile.' });
   }

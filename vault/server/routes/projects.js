@@ -58,7 +58,8 @@ router.patch('/reorder', async (req, res) => {
   try {
     await client.query('BEGIN');
     for (let i = 0; i < ids.length; i++) {
-      await client.query('UPDATE projects SET "sortOrder"=$1 WHERE id=$2', [i, ids[i]]);
+      // Only the caller's own projects: someone else's id is skipped, exactly like a missing one.
+      await client.query('UPDATE projects SET "sortOrder"=$1 WHERE id=$2 AND "userId"=$3', [i, ids[i], req.user.id]);
     }
     await client.query('COMMIT');
     res.json({ ok: true });
