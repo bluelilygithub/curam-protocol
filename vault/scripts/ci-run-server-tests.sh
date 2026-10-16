@@ -40,7 +40,16 @@ while IFS= read -r f; do
   f="${f#./}"
   is_excluded "$f" && { echo "SKIP (excluded) $f"; continue; }
   echo "::group::$f"
-  if timeout 300 node "$f"; then pass=$((pass+1)); else fail=$((fail+1)); failed+=("$f"); fi
+  if timeout 300 node "$f" > /tmp/ci-test.log 2>&1; then
+    cat /tmp/ci-test.log; pass=$((pass+1))
+  else
+    code=$?
+    cat /tmp/ci-test.log; fail=$((fail+1)); failed+=("$f")
+    # One-line reason as an annotation, so it shows on the run summary page without opening the log
+    reason=$(grep -aE "FAIL|Error|failed|Cannot|ENOENT|not found" /tmp/ci-test.log | head -2 | tr '
+' ' ' | cut -c1-240)
+    echo "::error title=Test file failed::$f (exit $code) $reason"
+  fi
   echo "::endgroup::"
 done < <(find . \( -path ./node_modules -o -path ./dist -o -path ./room-planner -o -path ./garden-planner -o -path ./cellar-planner -o -path ./route-tracer \) -prune -o \( -name '*.test.js' -o -name '*.test.mjs' -o -name '*.test.cjs' \) -print | sort)
 
