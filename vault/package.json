@@ -20,6 +20,7 @@
     "test:cellar-projects": "node server/routes/cellarProjects.test.js",
     "test:cellar-lite": "node server/routes/cellarLite.test.js",
     "test:cellar-lite-config": "node server/routes/cellarLiteConfig.test.js",
+    "test:debate": "node server/routes/debate.test.js",
     "test:graph": "node server/routes/graph.test.js",
     "test:ownership-misc": "node server/routes/ownershipMisc.test.js",
     "test:settings-lookup": "node server/routes/settingsLookup.test.js",

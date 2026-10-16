@@ -10,6 +10,7 @@ const { pool } = require('../db');
 const { getModelsForUser } = require('../services/modelResolver');
 const { logUsage } = require('../utils/logUsage');
 const { getSettingForUser } = require('../utils/settingsLookup');
+const { ownsProject } = require('../utils/ownership');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -167,6 +168,12 @@ router.post('/start', async (req, res) => {
   const prompt = `Topic: ${topic}\n\nGive your initial position on this topic.`;
 
   try {
+    // A saved debate can be filed only under one of the caller's own projects; someone else's gets the
+    // same 404 as a project that does not exist. Checked before any model is called.
+    if (save && projectId && !(await ownsProject(req.user.id, projectId))) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
     const [resultA, resultB] = await Promise.allSettled([
       callModel(modelA, prompt, ctx, req.user.id),
       callModel(modelB, prompt, ctx, req.user.id),
@@ -233,9 +240,13 @@ router.post('/round', async (req, res) => {
 
     if (debateId) {
       const { rows: debates } = await pool.query(
-        'SELECT rounds FROM debates WHERE "debateId"=$1', [debateId]
+        'SELECT rounds, "projectId" FROM debates WHERE "debateId"=$1', [debateId]
       );
-      if (debates[0]) {
+      // A debate filed under a project takes new rounds only from that project's owner; for anyone else it
+      // is skipped, exactly as a debate that does not exist is. (A debate saved with no project has no
+      // owner to check, so its unguessable id is what protects it.)
+      const mayAppend = debates[0] && (!debates[0].projectId || (await ownsProject(req.user.id, debates[0].projectId)));
+      if (mayAppend) {
         const rounds = JSON.parse(debates[0].rounds || '[]');
         rounds.push({ round: roundNumber, responseA: newResponseA, responseB: newResponseB, noChangeA, noChangeB, userComment: userComment || null });
         await pool.query('UPDATE debates SET rounds=$1 WHERE "debateId"=$2', [JSON.stringify(rounds), debateId]);
