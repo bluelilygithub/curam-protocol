@@ -37,7 +37,7 @@ module.exports = function createFinancePackRouter({ runReport }) {
     catch (err) { if (!res.headersSent) res.status(500).json({ error: err.message }); else res.end(); }
     finally { busy.delete(userId); }
   };
-  const stem = (pack) => `Vault-FY${pack.fy}-${(pack.cover.business && !pack.cover.business.startsWith('(') ? pack.cover.business : 'finance').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)}`;
+  const stem = (pack) => `${(pack.cover.business && !pack.cover.business.startsWith('(') ? pack.cover.business : 'Finance').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)}-FY${pack.fy}`;
 
   // What the pack will contain and what needs attention first, without rendering the files.
   router.get('/preview', guarded(async (req, res, fy, userId) => {

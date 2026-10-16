@@ -853,7 +853,7 @@ test('FY pack: preview, PDF, Excel and zip are produced from the same reports an
 
   const xr = await fetch(`${base}/api/finance/pack/xlsx?${fyq}`);
   assert.ok(/spreadsheetml/.test(xr.headers.get('content-type')));
-  assert.ok(/Vault-FY2025-26/.test(xr.headers.get('content-disposition')));
+  assert.ok(/-FY2025-26/.test(xr.headers.get('content-disposition')) && !/Vault/i.test(xr.headers.get('content-disposition')));
   const xbuf = Buffer.from(await xr.arrayBuffer());
   if (process.env.PACK_DUMP_DIR) fsx.writeFileSync(pathx.join(process.env.PACK_DUMP_DIR, 'pack.xlsx'), xbuf);
   const wb = XLSX.read(xbuf, { type: 'buffer' });
@@ -880,6 +880,27 @@ test('FY pack: preview, PDF, Excel and zip are produced from the same reports an
   assert.ok(!Object.keys(noDocs.files).some((n2) => n2.startsWith('documents/')), 'documents only when asked for');
 
   await call('DELETE', `/api/finance/documents/${up.json.documents[0].id}?confirm=1`);
+});
+
+test('FY pack and reports use the stored company name, never the product name', async () => {
+  await call('PUT', '/api/finance/settings', { fin_biz_name: 'Test Trading Co' });
+  const texts = [];
+  for (const [path, q] of [['chart-of-accounts', ''], ['cash-book', 'from=2025-07-01&to=2026-06-30'], ['documents-index', 'fy=2025-26']]) {
+    const rep = await report(path, q);
+    texts.push(JSON.stringify(rep));
+  }
+  const all = texts.join(' ');
+  assert.ok(!/vault/i.test(all), 'a report still mentions the product name: ' + (all.match(/.{30}vault.{30}/i) || [''])[0]);
+  assert.ok(/Test Trading Co/.test(all), 'company name appears in the report wording');
+  const chart = await report('chart-of-accounts', '');
+  assert.ok(chart.sections[0].columns.some((c) => c.label === 'Test Trading Co code'));
+  const XLSX = require('xlsx');
+  const xr = await fetch(`${base}/api/finance/pack/xlsx?fy=2025-26`);
+  assert.ok(/^attachment; filename="Test-Trading-Co-FY2025-26\.xlsx"/.test(xr.headers.get('content-disposition')), xr.headers.get('content-disposition'));
+  const wb = XLSX.read(Buffer.from(await xr.arrayBuffer()), { type: 'buffer' });
+  const cover = XLSX.utils.sheet_to_json(wb.Sheets.Cover, { header: 1 }).flat().join(' ');
+  assert.ok(!/vault/i.test(cover) && /Test Trading Co/.test(cover), cover.slice(0, 200));
+  await call('PUT', '/api/finance/settings', { fin_biz_name: '' });
 });
 
 test('FY pack still works when route-level tracing (Sentry-style) wraps every handler', async () => {

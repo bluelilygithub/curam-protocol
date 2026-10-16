@@ -2,6 +2,7 @@
 /**
  * One-off repair for books affected by the 2026-10 Finance fixes. Dry run by default.
  *
+ *   node server/scripts/backfillFinanceJournals.js --dry-run  # report only (also the default)
  *   node server/scripts/backfillFinanceJournals.js            # report only
  *   node server/scripts/backfillFinanceJournals.js --apply    # make the changes
  *
@@ -19,7 +20,18 @@ process.env.LOG_LEVEL = process.env.LOG_LEVEL || 'silent';
 const { pool } = require('../db');
 const fin = require('../routes/finance');
 
-const apply = process.argv.includes('--apply');
+const args = process.argv.slice(2);
+const apply = args.includes('--apply');
+if (apply && args.includes('--dry-run')) {
+  console.error('Use either --dry-run (report only) or --apply (make the changes), not both.');
+  process.exit(1);
+}
+const unknown = args.filter((a) => !['--apply', '--dry-run'].includes(a));
+if (unknown.length) {
+  console.error(`Unknown option(s): ${unknown.join(' ')}
+Usage: node server/scripts/backfillFinanceJournals.js [--dry-run | --apply]`);
+  process.exit(1);
+}
 const ds = (v) => {
   if (v instanceof Date) {
     const p = (n) => String(n).padStart(2, '0');
@@ -44,7 +56,7 @@ async function inTxn(fn) {
 
 (async () => {
   await new Promise((r) => setTimeout(r, 4000)); // let db.js finish its own schema init
-  console.log(apply ? 'APPLYING changes' : 'DRY RUN (add --apply to make changes)');
+  console.log(apply ? 'APPLYING changes' : 'DRY RUN: reporting only, nothing will be changed (add --apply to make changes)');
 
   const { rows: exps } = await pool.query(
     `SELECT x.* FROM fin_expenses x

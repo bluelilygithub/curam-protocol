@@ -176,9 +176,9 @@ async function collectPack(userId, fy, runReport) {
     itemsToCheck: checks,
     failed: reports.filter(r => r.error).map(r => `${r.title}: ${r.error}`),
     notes: [
-      'Prepared from Vault’s books. The figures come from the same reports as the app, so they agree with it, but the books are only as complete as what has been entered: compare the Cash Book closing balances with your bank and card statements.',
+      `Prepared from ${cfg.fin_biz_name || 'the business'}’s books. The figures come from the same reports as the accounting system, so they agree with it, but the books are only as complete as what has been entered: compare the Cash Book closing balances with your bank and card statements.`,
       'Income is shown as invoiced (Profit & Loss) and as received (Income Received); your accountant will say which basis applies.',
-      'Where an accountant’s code or label has been mapped, it appears beside Vault’s name; blank means Vault’s name is used. The Chart of Accounts & Codes page lists them all so they can be filled in.',
+      `Where an accountant’s code or label has been mapped, it appears beside ${cfg.fin_biz_name || 'the business'}’s own name; blank means the business’s own name is used. The Chart of Accounts & Codes page lists them all so they can be filled in.`,
       'This pack is information for your accountant. It is not tax advice or a lodged return.',
     ],
   };

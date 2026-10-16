@@ -154,7 +154,7 @@ function buildDocument(deps, pack) {
     footer('Contents'),
   );
 
-  return h(Document, { title: clean(`${c.business} — FY ${pack.fy}`), author: 'Vault', subject: 'Financial year pack' },
+  return h(Document, { title: clean(`${c.business} — FY ${pack.fy}`), author: clean(c.business), subject: 'Financial year pack' },
     coverPage, tocPage, ...pack.reports.map((r, i) => reportPage(r, i + 1)));
 }
 

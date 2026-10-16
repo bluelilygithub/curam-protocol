@@ -1297,6 +1297,11 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange, disposal
   // capital & related parties, expense listing, things to review, and the chart of accounts/codes.
   // ═══════════════════════════════════════════════════════════════════════════════════════════
   const subDay = (d, n) => addDays(d, -n);
+  // The company name as stored in Settings (fin_biz_name), used in report wording instead of the product name.
+  const bizName = async (userId) => {
+    const { rows } = await pool.query(`SELECT value FROM settings WHERE "userId"=$1 AND key='fin_biz_name'`, [userId]);
+    return (rows[0] && String(rows[0].value).trim()) || 'The business';
+  };
   const DOC_COUNT = `(SELECT COUNT(*)::int FROM fin_document_links l WHERE l."expenseId" = e.id)`;
   const TAXISH = `(e.supplier ILIKE '%ATO%' OR e.supplier ILIKE '%Taxation Office%' OR e.category ILIKE 'tax' OR t.code = 'EXP-300' OR e.description ILIKE '%for BAS%' OR e.description ILIKE 'BAS %')`;
 
@@ -1434,6 +1439,7 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange, disposal
   // ── Cash Book (bank / card / bills with a running balance) ────────────────────
   router.get('/cash-book', wrap(async (req, res) => {
     const userId = req.user.id;
+    const biz = await bizName(userId);
     const r = needRange(req, res); if (!r) return;
     const { rows: accts } = await pool.query(`SELECT id, code, name, type FROM fin_accounts WHERE "userId"=$1 AND type IN ('asset','liability') ORDER BY code`, [userId]);
     let wanted;
@@ -1484,7 +1490,7 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange, disposal
       subtitle: `${r.from} to ${r.to}`,
       notes: [
         'Every movement in the books for the bank account (and the credit card and accounts payable, where used), in date order with a running balance. Compare the closing balance with the balance on your bank/card statement for the same date; any difference is a missing, wrong or duplicate entry.',
-        'Vault has no bank feed, so this is what has been entered, not what the bank holds. Opening balances come from the journal (if the books started at zero, so does this).',
+        `${biz} has no bank feed, so this is what has been entered in the books, not what the bank holds. Opening balances come from the journal (if the books started at zero, so does this).`,
         ...(capped ? [`Showing the first ${ROW_CAP} movements per account — narrow the date range.`] : []),
       ],
       summary,
@@ -1672,6 +1678,7 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange, disposal
   // ── Documents Index ──────────────────────────────────────────────────────────
   router.get('/documents-index', wrap(async (req, res) => {
     const userId = req.user.id;
+    const biz = await bizName(userId);
     const b = needFy(req, res); if (!b) return;
     const { rows } = await pool.query(
       `SELECT d.id, d.kind, d.title, d.supplier, d."docDate", d."originalName", d."sizeBytes",
@@ -1684,7 +1691,7 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange, disposal
     res.json({
       title: 'Supporting Documents Index',
       subtitle: `Financial year ${b.fy}`,
-      notes: ['The statements, invoices and receipts uploaded to Vault for this year and what each one supports. The files themselves can be included in the pack as a zip; ask for any you need.'],
+      notes: [`The statements, invoices and receipts kept in ${biz}’s records for this year and what each one supports. The files themselves can be included in the pack as a zip; ask for any you need.`],
       summary: [{ label: 'Documents', value: rows.length, format: 'int' }, { label: 'Not linked to anything', value: rows.filter(x => !x.n).length, format: 'int' }],
       sections: [{
         title: 'Documents',
@@ -1697,6 +1704,7 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange, disposal
   // ── Chart of Accounts & Codes (with the accountant's mapped labels) ──────────
   router.get('/chart-of-accounts', wrap(async (req, res) => {
     const userId = req.user.id;
+    const biz = await bizName(userId);
     const [accts, codes, mapRow] = await Promise.all([
       pool.query(`SELECT code, name, type, "isSystem" FROM fin_accounts WHERE "userId"=$1 ORDER BY code`, [userId]),
       pool.query(`SELECT code, name, type, "isActive" AS active FROM fin_tx_codes WHERE "userId"=$1 ORDER BY type, code`, [userId]),
@@ -1712,12 +1720,12 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange, disposal
       title: 'Chart of Accounts & Codes',
       subtitle: mapped ? `${mapped} mapped to your accountant’s codes` : 'Not yet mapped to your accountant’s codes',
       notes: [
-        'Vault’s own account list and the income/expense codes used to group transactions. The “Accountant code / label” columns are filled where you have entered your accountant’s equivalent (Finance → Settings → Export account mapping); blank means the Vault name should be used. Your accountant can type their codes straight into these columns.',
+        `${biz}’s own account list and the income/expense codes used to group transactions. The “Accountant code / label” columns are filled where your accountant’s equivalent has been entered (Finance → Settings → Export account mapping); blank means the name used in ${biz}’s books applies. Your accountant can type their codes straight into these columns.`,
       ],
       summary: [{ label: 'Accounts', value: aRows.length, format: 'int' }, { label: 'Income/expense codes', value: cRows.length, format: 'int' }, { label: 'Mapped', value: mapped, format: 'int' }],
       sections: [
-        { title: 'Accounts', columns: [cText('code', 'Vault code'), cText('name', 'Vault name'), cText('type', 'Type'), cText('accCode', 'Accountant code'), cText('accName', 'Accountant label'), cText('myob', 'MYOB tax'), cText('xero', 'Xero tax')], rows: aRows },
-        { title: 'Income & expense codes', columns: [cText('code', 'Vault code'), cText('name', 'Vault name'), cText('type', 'Type'), cText('active', 'Active'), cText('accCode', 'Accountant code'), cText('accName', 'Accountant label')], rows: cRows },
+        { title: 'Accounts', columns: [cText('code', `${biz} code`), cText('name', `${biz} name`), cText('type', 'Type'), cText('accCode', 'Accountant code'), cText('accName', 'Accountant label'), cText('myob', 'MYOB tax'), cText('xero', 'Xero tax')], rows: aRows },
+        { title: 'Income & expense codes', columns: [cText('code', `${biz} code`), cText('name', `${biz} name`), cText('type', 'Type'), cText('active', 'Active'), cText('accCode', 'Accountant code'), cText('accName', 'Accountant label')], rows: cRows },
       ],
     });
   }));
