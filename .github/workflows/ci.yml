@@ -1,0 +1,127 @@
+name: CI
+
+# One workflow for everything that must pass before a deploy. Holds no secrets: tests run against a
+# throwaway Postgres service container with blank API keys, mail off and crons off. The final job
+# "CI passed" is the single check to require (Railway "Wait for CI" / branch protection).
+#
+# Not included yet: live-API tests, the contract-review suites and the cross-user route test (see
+# the EXCLUDED list in vault/scripts/ci-run-server-tests.sh).
+
+on:
+  push:
+    branches: [version-7, staging]
+  pull_request:
+    branches: [version-7, main, staging]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server-tests:
+    name: Server and client tests (Postgres + pgvector)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.2-pg17
+        env:
+          POSTGRES_USER: vault
+          POSTGRES_PASSWORD: ci-throwaway
+          POSTGRES_DB: vault_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vault -d vault_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://vault:ci-throwaway@localhost:5432/vault_ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: vault/package-lock.json
+
+      - name: System tools used by tests (same as the production image)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg python3 python3-pip qpdf poppler-utils libsndfile1
+
+      - name: Font module dependencies
+        working-directory: vault
+        run: pip3 install --break-system-packages -r server/services/fonts/requirements.txt
+
+      # `npm ci` fails today: package-lock.json is missing ws (out of sync with package.json). Production
+      # installs with `npm install`, so CI does the same until the lock file is regenerated.
+      - name: Install dependencies
+        working-directory: vault
+        run: npm install --include=dev --no-audit --no-fund
+
+      - name: Run test files
+        working-directory: vault
+        run: bash scripts/ci-run-server-tests.sh
+
+  client-build:
+    name: Client build (Vite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: vault/package-lock.json
+      - name: Install dependencies
+        working-directory: vault
+        run: npm install --include=dev --no-audit --no-fund
+      - name: Build client
+        working-directory: vault
+        run: npm run build
+
+  sub-apps:
+    name: ${{ matrix.app }} (typecheck + tests)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [room-planner, garden-planner, cellar-planner, route-tracer]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: vault/${{ matrix.app }}/package-lock.json
+      - name: Install dependencies
+        working-directory: vault/${{ matrix.app }}
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        working-directory: vault/${{ matrix.app }}
+        run: npm run typecheck --if-present
+      - name: Tests
+        working-directory: vault/${{ matrix.app }}
+        run: npx vitest run
+
+  ci-passed:
+    name: CI passed
+    if: always()
+    needs: [server-tests, client-build, sub-apps]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every required job succeeded
+        run: |
+          echo "server-tests: ${{ needs.server-tests.result }}"
+          echo "client-build: ${{ needs.client-build.result }}"
+          echo "sub-apps:     ${{ needs.sub-apps.result }}"
+          [ "${{ needs.server-tests.result }}" = "success" ] && \
+          [ "${{ needs.client-build.result }}" = "success" ] && \
+          [ "${{ needs.sub-apps.result }}" = "success" ]
