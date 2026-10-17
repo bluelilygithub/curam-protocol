@@ -54,7 +54,7 @@ export default function StatementReview({ doc, onClose, onChanged, Modal, Btn, f
       const res = await api.post(`/api/finance/statements/${st.id}/redact`, {});
       const out = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(out.error || 'Could not make the redacted copy');
-      addToast(`Redacted copy saved in Documents: ${out.report.hiddenRows} personal row${out.report.hiddenRows === 1 ? '' : 's'}, balances and totals removed`);
+      addToast(`Redacted copy saved in Documents: ${out.report.hiddenRows} personal row${out.report.hiddenRows === 1 ? '' : 's'}, balances and totals removed. Business charges ${fmt(out.report.businessTotal)}`);
       setSt(x => ({ ...x, redactedDocumentId: out.document.id }));
       onChanged?.();
     } catch (e) { addToast(e.message, 'error'); } finally { setBusy(false); }
@@ -63,6 +63,8 @@ export default function StatementReview({ doc, onClose, onChanged, Modal, Btn, f
   const pending = st ? st.lines.filter(l => l.decision === 'pending').length : 0;
   const business = st ? st.lines.filter(l => l.decision === 'business').length : 0;
   const personal = st ? st.lines.filter(l => l.decision === 'personal').length : 0;
+  // purchases, fees and interest marked business; payments and refunds are credits and are not netted off
+  const businessCharges = st ? st.lines.filter(l => l.decision === 'business' && l.amount < 0).reduce((s, l) => s - l.amount, 0) : 0;
   const choice = (line, d, label, tip) => (
     <Tooltip text={tip}>
       <button
@@ -97,7 +99,7 @@ export default function StatementReview({ doc, onClose, onChanged, Modal, Btn, f
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              {business} business · {personal} personal · {pending} still to review
+              {business} business · {personal} personal · {pending} still to review{st.kind === 'card' ? ` · business charges ${fmt(businessCharges)}` : ''}
             </span>
             <Tooltip text="Mark every line you haven't decided yet as business. Lines you already marked are left alone.">
               <Btn onClick={approveAll} disabled={busy || !pending}>Approve all remaining as business</Btn>
@@ -107,8 +109,8 @@ export default function StatementReview({ doc, onClose, onChanged, Modal, Btn, f
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3 rounded-lg p-3" style={{ border: '1px solid var(--color-border)' }}>
               <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
                 {st.redactedDocumentId
-                  ? 'A redacted copy is saved in Documents. Making it again replaces that copy.'
-                  : 'For your accountant: a copy with the personal rows, the running balances and the account-summary totals removed from the file itself. Your name, address and card number stay.'}
+                  ? 'A redacted copy is saved in Documents, with the business charges total on its last page. Making it again replaces that copy.'
+                  : 'For your accountant: a copy with the personal rows, the running balances and the account-summary totals removed from the file itself, and a last page giving the total of the business charges. Your name, address and card number stay.'}
               </span>
               <Tooltip text={pending ? 'Decide every line first, then make the copy.' : 'Saves a second document. Your original statement is kept untouched and is left out of the accountant pack in its place.'}>
                 <Btn onClick={redact} disabled={busy || pending > 0}>{st.redactedDocumentId ? 'Make the redacted copy again' : 'Create redacted copy'}</Btn>

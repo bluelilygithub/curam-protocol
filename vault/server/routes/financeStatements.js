@@ -180,7 +180,21 @@ router.post('/:id/redact', wrap(async (req, res) => {
   if (!src || !fs.existsSync(src)) throw httpError(404, 'The stored file is missing');
 
   const personal = s.lines.filter((l) => l.decision === 'personal').map((l) => ({ date: l.date, amount: l.amount, balance: l.balance }));
-  const { buffer, report } = await redactCardStatement(fs.readFileSync(src), personal);
+  // What the accountant needs in place of the removed totals: the business charges (purchases, fees and
+  // interest on lines marked business). Payments and refunds are credits and are not netted off.
+  const businessCharges = s.lines.filter((l) => l.decision === 'business' && l.amount < 0);
+  const businessTotal = Math.round(businessCharges.reduce((sum, l) => sum - l.amount, 0) * 100) / 100;
+  const money = (n) => `$${n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const summary = {
+    title: 'Business charges summary',
+    lines: [
+      `Total business charges on this statement: ${money(businessTotal)} (${businessCharges.length} transaction${businessCharges.length === 1 ? '' : 's'}).`,
+      'Purchases, fees and interest marked as business by the cardholder. Payments and refunds are not subtracted.',
+      `Personal transactions (${personal.length}), the running balances and the account-summary totals have been removed from this copy.`,
+    ],
+  };
+  const { buffer, report: baseReport } = await redactCardStatement(fs.readFileSync(src), personal, summary);
+  const report = { ...baseReport, businessTotal, businessCount: businessCharges.length };
 
   const dir = path.resolve(DOC_DIR, String(userId));
   fs.mkdirSync(dir, { recursive: true });
@@ -194,7 +208,7 @@ router.post('/:id/redact', wrap(async (req, res) => {
     await client.query('BEGIN');
     const { rows: old } = await client.query(`DELETE FROM fin_documents WHERE "redactedFromId"=$1 AND "userId"=$2 RETURNING "storedName"`, [doc.id, userId]);
     old.forEach((o) => oldFiles.push(o.storedName));
-    const note = `Redacted copy: ${report.hiddenRows} personal row${report.hiddenRows === 1 ? '' : 's'}, all running balances and the account-summary totals removed from the file. Name, address and card number kept.`;
+    const note = `Redacted copy: ${report.hiddenRows} personal row${report.hiddenRows === 1 ? '' : 's'}, all running balances and the account-summary totals removed from the file. Name, address and card number kept. Business charges total ${money(businessTotal)}, shown on the last page.`;
     ({ rows: [newDoc] } = await client.query(
       `INSERT INTO fin_documents ("userId", kind, title, supplier, fy, "docDate", notes, "originalName", "storedName", "mimeType", "sizeBytes", "redactedFromId")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'application/pdf',$10,$11) RETURNING id, title`,

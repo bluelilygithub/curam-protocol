@@ -171,7 +171,7 @@ function leaksIn(pages, rects) {
   return left;
 }
 
-async function redactCardStatement(pdfBuffer, personalLines) {
+async function redactCardStatement(pdfBuffer, personalLines, summary) {
   const pages = await loadPages(pdfBuffer);
   const plan = planCardRedaction(pages, personalLines);
   if (plan.unmatched.length) {
@@ -183,7 +183,7 @@ async function redactCardStatement(pdfBuffer, personalLines) {
   try {
     const input = path.join(dir, 'in.pdf'); const output = path.join(dir, 'out.pdf');
     await fsp.writeFile(input, pdfBuffer);
-    await runPython({ input, output, pages: plan.rects });
+    await runPython({ input, output, pages: plan.rects, summary });
     const out = await fsp.readFile(output);
     const leaked = leaksIn(await loadPages(out), plan.rects);
     if (leaked.length) {

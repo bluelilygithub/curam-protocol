@@ -1161,6 +1161,10 @@ test('statement redaction: personal rows, balances and summary totals are remove
   assert.strictEqual(r.status, 201, JSON.stringify(r.json));
   assert.strictEqual(r.json.report.hiddenRows, 1);
   assert.ok(r.json.report.totalsHidden >= 5, `summary totals hidden: ${r.json.report.totalsHidden}`);
+  const kept = (await call('GET', `/api/finance/statements/${st.id}`)).json.lines.filter((l) => l.decision === 'business' && l.amount < 0);
+  const expectTotal = Math.round(kept.reduce((sum, l) => sum - l.amount, 0) * 100) / 100;
+  assert.ok(expectTotal > 0 && near(r.json.report.businessTotal, expectTotal), `business total ${r.json.report.businessTotal} vs ${expectTotal}`);
+  assert.strictEqual(r.json.report.businessCount, kept.length);
 
   const copy = (await call('GET', '/api/finance/documents?fy=2025-26')).json.documents.find((d) => d.id === r.json.document.id);
   assert.strictEqual(copy.redactedFromId, orig.id);
@@ -1173,6 +1177,8 @@ test('statement redaction: personal rows, balances and summary totals are remove
   for (const kept of ['MR A N OTHER', '1 SOME ST', '0000-1111-2222-3333', 'REPLIT, INC. REPLIT.COM', '20.00 USD', 'PAYMENT - THANK YOU', 'BP CONNECT 1933', '$50.00', '$10,000.00']) {
     assert.ok(text.includes(kept), `${kept} should still be in the redacted file`);
   }
+  const money = expectTotal.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  assert.ok(text.includes('Business charges summary') && text.includes(`$${money}`), 'last page states the business charges total');
   // the original is untouched
   const o = await pdfText(Buffer.from(await (await fetch(`${base}/api/finance/documents/${orig.id}/file`)).arrayBuffer()));
   assert.ok(o.includes('ALDI STORES') && o.includes('$1,100.00'), 'the original keeps everything');
@@ -1194,6 +1200,26 @@ test('statement redaction: personal rows, balances and summary totals are remove
   const bs = (await call('POST', `/api/finance/statements/from-document/${bank.json.documents[0].id}`, {})).json;
   assert.strictEqual((await call('POST', `/api/finance/statements/${bs.id}/redact`, {})).status, 400, 'bank statements are not redacted yet');
   for (const d of [bank.json.documents[0], again.json.document, orig]) await call('DELETE', `/api/finance/documents/${d.id}?confirm=1`);
+});
+
+test('statement redaction: each statement keeps its own redacted copy; redacting one never replaces the other', async () => {
+  const mk = async (name) => {
+    const up = await upload([[name, await cardPdf(), 'application/pdf']], { kind: 'bank_statement', fy: '2025-26', docDate: '2026-03-10' });
+    const doc = up.json.documents[0];
+    const st = (await call('POST', `/api/finance/statements/from-document/${doc.id}`, {})).json;
+    await call('POST', `/api/finance/statements/${st.id}/approve-all`, { decision: 'business' });
+    return { doc, st };
+  };
+  const a = await mk('cardA.pdf'); const b = await mk('cardB.pdf');
+  const ra = await call('POST', `/api/finance/statements/${a.st.id}/redact`, {});
+  const rb = await call('POST', `/api/finance/statements/${b.st.id}/redact`, {});
+  assert.strictEqual(ra.status, 201, JSON.stringify(ra.json)); assert.strictEqual(rb.status, 201, JSON.stringify(rb.json));
+  const docs = (await call('GET', '/api/finance/documents?fy=2025-26')).json.documents;
+  const copies = docs.filter((d) => d.redactedFromId);
+  assert.deepStrictEqual(copies.map((d) => d.redactedFromId).sort(), [a.doc.id, b.doc.id].sort(), 'one copy for each statement');
+  assert.strictEqual((await call('GET', `/api/finance/statements/${a.st.id}`)).json.redactedDocumentId, ra.json.document.id);
+  assert.strictEqual((await call('GET', `/api/finance/statements/${b.st.id}`)).json.redactedDocumentId, rb.json.document.id);
+  for (const id of [ra.json.document.id, rb.json.document.id, a.doc.id, b.doc.id]) await call('DELETE', `/api/finance/documents/${id}?confirm=1`);
 });
 
 test('trial balance still balances after all of the above', async () => {
