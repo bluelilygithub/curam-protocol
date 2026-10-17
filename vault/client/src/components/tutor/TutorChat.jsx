@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
 import { VoiceInput } from '../voiceInput/VoiceInput';
+import useDraggable from '../../hooks/useDraggable';
 import Tooltip from '../Tooltip';
 
 /**
@@ -22,7 +23,11 @@ import Tooltip from '../Tooltip';
  *   what,                            // "tool" | "tab", used in the Open tooltip
  *   buttonTip, openTip(label), busyText, placeholder, inputLabel, errorText,
  *   wideKey,                         // localStorage key remembering wide/narrow
+ *   positionKey,                     // optional: localStorage key stem for where the button and chat were dragged to
  * }
+ *
+ * Both the round button and the open chat can be dragged out of the way (hooks/useDraggable.js): drag the button, or the chat's
+ * title bar; double-click the title bar to put the chat back. Positions are remembered in this browser only.
  */
 
 function historyText(reply) {
@@ -84,6 +89,14 @@ function TutorInner({ config, current, onOpen }) {
   const [busy, setBusy] = useState(false);
   const [turns, setTurns] = useState([]); // { role: 'user', text } | { role: 'assistant', reply } | { role: 'error', text }
   const endRef = useRef(null);
+  // Where the button and the chat were dragged to (this browser only). Pages need not configure anything.
+  const posKey = config.positionKey || (config.wideKey ? config.wideKey.replace(/:wide$/, '') : 'vault:guide');
+  const buttonDrag = useDraggable({ storageKey: `${posKey}:pos-button` });
+  const panelDrag = useDraggable({
+    storageKey: `${posKey}:pos-panel`,
+    ignore: 'button, input, textarea, select, a, [data-nodrag]',
+    resetOnDoubleClick: true,
+  });
   // Wider/narrower is remembered in this browser only (a convenience, never needed for the page to work).
   const [wide, setWide] = useState(() => {
     try { return localStorage.getItem(config.wideKey) === '1'; } catch { return false; }
@@ -123,13 +136,15 @@ function TutorInner({ config, current, onOpen }) {
 
   if (!open) {
     return (
-      <Tooltip text={config.buttonTip}>
+      <Tooltip text={`${config.buttonTip} Drag it if it is in the way.`}>
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          ref={buttonDrag.ref}
+          {...buttonDrag.handleProps}
+          onClick={buttonDrag.guardClick(() => setOpen(true))}
           aria-label={`Open the ${config.name}`}
           className="fixed bottom-5 right-5 z-30 w-12 h-12 rounded-full flex items-center justify-center text-white shadow-lg hover:opacity-80 transition-opacity duration-200"
-          style={{ background: 'var(--color-primary)' }}
+          style={{ ...buttonDrag.handleProps.style, ...buttonDrag.style, background: 'var(--color-primary)' }}
         >
           {getIcon('graduation-cap', { size: 22 })}
         </button>
@@ -141,8 +156,10 @@ function TutorInner({ config, current, onOpen }) {
     <div
       role="dialog"
       aria-label={config.name}
+      ref={panelDrag.ref}
       className="fixed bottom-5 right-5 z-40 flex flex-col rounded-2xl border shadow-xl h-[80vh] transition-[width] duration-200"
       style={{
+        ...panelDrag.style,
         // 80% of the screen height (dvh where supported, the vh class above where not); never taller than the screen.
         height: '80dvh',
         maxHeight: 'calc(100dvh - 2.5rem)',
@@ -151,7 +168,15 @@ function TutorInner({ config, current, onOpen }) {
         borderColor: 'var(--color-border)',
       }}
     >
-      <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
+      {/* The title bar is the drag handle (its buttons and links still just click). Double-click puts the chat back. */}
+      <div
+        className="flex items-center gap-2 px-4 py-3 border-b rounded-t-2xl"
+        {...panelDrag.handleProps}
+        style={{ ...panelDrag.handleProps.style, borderColor: 'var(--color-border)' }}
+      >
+        <Tooltip text="Drag this bar to move the guide out of the way. Double-click it to put it back.">
+          <span aria-hidden="true" style={{ color: 'var(--color-muted)' }}>{getIcon('grip-vertical', { size: 14 })}</span>
+        </Tooltip>
         <span style={{ color: 'var(--color-primary)' }}>{getIcon('graduation-cap', { size: 18 })}</span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold leading-tight" style={{ color: 'var(--color-text)' }}>{config.name}</p>

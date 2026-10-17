@@ -100,6 +100,10 @@ Always `getIcon(name, { size: n })` from `IconProvider`. Register new names in t
 | `ProcessingModal` | Operations >2s (via `useProcessingStore`) |
 | `Toast` | Instant CRUD feedback |
 | `OverflowMenu` | Secondary page actions |
+| `TutorChat` (`components/tutor/TutorChat.jsx`) | A page guide: round bottom-right button that opens a chat. Pass wording in `config`, never copy the file. Both the button and the open chat are draggable (see below). |
+| `useDraggable` (`hooks/useDraggable.js`) | Any floating element that can cover content (a fixed button, a chat, a tool palette) so the person can drag it out of the way. |
+
+**Floating elements must be draggable.** A fixed button or panel that can sit on top of page content uses `useDraggable`: keep the normal CSS position (`fixed bottom-5 right-5`), put `ref` and `style` from the hook on the element and `handleProps` on the part to grab (the element itself, or a title bar; the hook ignores buttons, inputs and links inside it). Wrap the element's own click with `guardClick` so a drag does not also click. It works with mouse, touch and pen, keeps the element on screen (also after a resize), remembers the position in this browser only (`storageKey`), and a double-click on the handle puts it back (`resetOnDoubleClick`). Pure maths and its test: `utils/dragPosition.mjs` (`npm run test:drag`).
 
 ---
 
