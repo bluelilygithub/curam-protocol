@@ -44,6 +44,9 @@ RUN npm run build
 # Font Customizer pipeline (fontTools) — needs the actual repo present, hence after COPY . .
 RUN pip3 install --no-cache-dir --break-system-packages -r server/services/fonts/requirements.txt
 
+# Statement redaction (PyMuPDF) — removes text from the PDF itself
+RUN pip3 install --no-cache-dir --break-system-packages -r server/services/pdfRedact/requirements.txt
+
 EXPOSE 3000
 ENV NODE_ENV=production
 

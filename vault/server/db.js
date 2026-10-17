@@ -3357,6 +3357,9 @@ async function initSchema() {
   await pool.query(`DROP TRIGGER IF EXISTS trg_fin_audit ON fin_documents`);
   await pool.query(`CREATE TRIGGER trg_fin_audit AFTER INSERT OR UPDATE OR DELETE ON fin_documents FOR EACH ROW EXECUTE FUNCTION fin_audit_trigger()`);
 
+  // A redacted copy of a statement points back at the original it was made from (the original is kept).
+  await pool.query(`ALTER TABLE fin_documents ADD COLUMN IF NOT EXISTS "redactedFromId" INTEGER REFERENCES fin_documents(id) ON DELETE SET NULL`);
+
   // ── Finance: statement review (bank / card statement lines read from an uploaded document) ──
   // One row per statement document, one row per transaction. Each line is approved as business or
   // personal; a business line can carry a suggested/confirmed match to an invoice or expense. Nothing

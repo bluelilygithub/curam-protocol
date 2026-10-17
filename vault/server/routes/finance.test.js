@@ -1068,6 +1068,122 @@ test('statement review: a statement that does not add up, or is not ANZ, is refu
   for (const d of [bad, other]) await call('DELETE', `/api/finance/documents/${d.json.documents[0].id}?confirm=1`);
 });
 
+test('statement review: an ANZ credit card statement is read, an expense is suggested, card number is kept to four digits', async () => {
+  const CARD = 'ANZ LOW RATE STATEMENT PERIOD: 11/02/26 to 10/03/26 ACCOUNT NUMBER: 0000-1111-2222-3333 MR A N OTHER 1 SOME ST TOWN QLD 4000 '
+    + 'YOUR ANZ ACCOUNT SUMMARY Opening Balance $1,000.00 Purchases, Cash Advances & Other Debits $175.00 Interest Charges $0.00 '
+    + 'Payments & Other Credits $1,200.00 Closing Balance $25.00 CR PAYMENT SUMMARY Transaction Details Date Processed Date of Transaction Card Used Transaction Details Amount ($A) Balance '
+    + '11/02/2026 06/02/2026 2456 ALDI STORES CANNON HILL $100.00 $1,100.00 '
+    + '12/02/2026 10/02/2026 2456 REPLIT, INC. REPLIT.COM $50.00 $1,150.00 20.00 USD 12/02/2026 INCL OVERSEAS TXN FEE 2.38 AUD $1,150.00 '
+    + '17/02/2026 17/02/2026 2456 PAYMENT - THANK YOU $1,200.00 CR $50.00 CR '
+    + '18/02/2026 14/02/2026 2456 BP CONNECT 1933 UPPER COOMERA $25.00 $25.00 CR Please refer to the last four digits';
+  const exp = await call('POST', '/api/finance/expenses', { date: '2026-02-10', description: 'Hosting', supplier: 'Replit', amount: 50, gstIncluded: false });
+  assert.strictEqual(exp.status, 200, JSON.stringify(exp.json));
+  const up = await upload([['card.pdf', await pdfWithText(CARD), 'application/pdf']], { kind: 'bank_statement', fy: '2025-26', docDate: '2026-03-10' });
+  assert.strictEqual(up.status, 201, JSON.stringify(up.json));
+  const r = await call('POST', `/api/finance/statements/from-document/${up.json.documents[0].id}`, {});
+  assert.strictEqual(r.status, 201, JSON.stringify(r.json));
+  assert.strictEqual(r.json.kind, 'card');
+  assert.strictEqual(r.json.accountNumber, '…3333');
+  assert.deepStrictEqual(r.json.lines.map((l) => l.amount), [-100, -50, 1200, -25]);
+  assert.strictEqual(r.json.lines[1].matchExpenseId, exp.json.id, 'the Replit charge is matched to its expense');
+  assert.ok(r.json.lines.every((l) => !l.matchInvoiceId), 'a card never matches an invoice');
+  assert.ok(!JSON.stringify(r.json).includes('00001111222'), 'the full card number is not stored');
+  await call('DELETE', `/api/finance/statements/${r.json.id}`);
+  await call('DELETE', `/api/finance/documents/${up.json.documents[0].id}?confirm=1`);
+});
+
+// A card statement drawn cell by cell at the real ANZ column positions (dates x45/x102, card x159,
+// description x193, amount x447, balance x519, summary figures at the right of their labels).
+async function cardPdf() {
+  const { PDFDocument, StandardFonts } = require('pdf-lib');
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const p1 = doc.addPage([595, 841]);
+  const t = (pg, str, x, y, size = 9) => pg.drawText(str, { x, y, size, font });
+  t(p1, 'ANZ LOW RATE', 406, 734, 14);
+  t(p1, 'STATEMENT PERIOD: 11/02/26 to 10/03/26', 363, 720);
+  t(p1, 'ACCOUNT NUMBER: 0000-1111-2222-3333', 364, 706);
+  t(p1, 'MR A N OTHER', 96, 657); t(p1, '1 SOME ST', 96, 647); t(p1, 'TOWN QLD 4000', 96, 637);
+  t(p1, 'YOUR ANZ ACCOUNT SUMMARY', 57, 563, 12);
+  [['Opening Balance', '$1,000.00', 537], ['Purchases, Cash Advances & Other Debits', '$175.00', 501], ['Interest Charges', '$0.00', 467],
+    ['Payments & Other Credits', '$1,200.00', 432], ['Closing Balance', '$25.00', 397]].forEach(([l, v, y]) => {
+    t(p1, l, 67, y); t(p1, v, 264, y - 2, 12);
+  });
+  t(p1, 'CR', 330, 395, 12);
+  t(p1, 'Available Credit at', 380, 280); t(p1, 'Statement Date', 380, 270); t(p1, '$8,975.00', 470, 275, 12);
+  t(p1, 'Credit Limit', 380, 255); t(p1, '$10,000.00', 470, 255, 12);
+  const p2 = doc.addPage([595, 841]);
+  t(p2, 'Transaction Details', 45, 760, 14);
+  [['Date', 'Processed', 45], ['Date of', 'Transaction', 102], ['Card', 'Used', 159], ['Transaction Details', '', 193], ['Amount ($A)', '', 417], ['Balance', '', 520]]
+    .forEach(([a, b, x]) => { t(p2, a, x, 729); if (b) t(p2, b, x, 718); });
+  let y = 706;
+  const row = (d1, d2, desc, amt, bal, cr = '', balCr = '') => {
+    t(p2, d1, 45, y); t(p2, d2, 102, y); t(p2, '2456', 159, y); t(p2, desc, 193, y); t(p2, amt, 447, y);
+    if (cr) t(p2, 'CR', 471, y);
+    t(p2, bal, 519, y); if (balCr) t(p2, 'CR', 553, y);
+    y -= 12.4;
+  };
+  const cont = (d1, text, bal) => { if (d1) t(p2, d1, 45, y); t(p2, text, 193, y); if (bal) t(p2, bal, 519, y); y -= 12.4; };
+  row('11/02/2026', '06/02/2026', 'ALDI STORES CANNON HILL', '$100.00', '$1,100.00');
+  row('12/02/2026', '10/02/2026', 'REPLIT, INC. REPLIT.COM', '$50.00', '$1,150.00');
+  cont(null, '20.00 USD'); cont('12/02/2026', 'INCL OVERSEAS TXN FEE 2.38 AUD', '$1,150.00');
+  row('17/02/2026', '17/02/2026', 'PAYMENT - THANK YOU', '$1,200.00', '$50.00', 'CR', 'CR');
+  row('18/02/2026', '14/02/2026', 'BP CONNECT 1933 UPPER COOMERA', '$25.00', '$25.00', '', 'CR');
+  t(p2, 'Please refer to the last four digits of your credit card', 45, 600);
+  return Buffer.from(await doc.save());
+}
+const pdfText = async (buf) => (await require('../utils/pdfText').extractPdfTextFromBuffer(buf)).join(' ').replace(/\s+/g, ' ');
+
+test('statement redaction: personal rows, balances and summary totals are removed from the file; name and card number stay; the pack uses the copy', async () => {
+  const up = await upload([['card2.pdf', await cardPdf(), 'application/pdf']], { kind: 'bank_statement', fy: '2025-26', docDate: '2026-03-10' });
+  assert.strictEqual(up.status, 201, JSON.stringify(up.json));
+  const orig = up.json.documents[0];
+  const st = (await call('POST', `/api/finance/statements/from-document/${orig.id}`, {})).json;
+  assert.strictEqual(st.kind, 'card', JSON.stringify(st));
+  assert.strictEqual(st.lines.length, 4);
+  assert.strictEqual((await call('POST', `/api/finance/statements/${st.id}/redact`, {})).status, 409, 'every line must be decided first');
+
+  await call('POST', `/api/finance/statements/${st.id}/approve-all`, { decision: 'business' });
+  await call('PATCH', `/api/finance/statements/lines/${st.lines[0].id}`, { decision: 'personal' }); // ALDI
+  const r = await call('POST', `/api/finance/statements/${st.id}/redact`, {});
+  assert.strictEqual(r.status, 201, JSON.stringify(r.json));
+  assert.strictEqual(r.json.report.hiddenRows, 1);
+  assert.ok(r.json.report.totalsHidden >= 5, `summary totals hidden: ${r.json.report.totalsHidden}`);
+
+  const copy = (await call('GET', '/api/finance/documents?fy=2025-26')).json.documents.find((d) => d.id === r.json.document.id);
+  assert.strictEqual(copy.redactedFromId, orig.id);
+  const file = await fetch(`${base}/api/finance/documents/${copy.id}/file`);
+  const text = await pdfText(Buffer.from(await file.arrayBuffer()));
+  // ($1,200.00, $25.00 and $50.00 are also the amounts of kept rows, so they stay; only the balance column and summary go)
+  for (const gone of ['ALDI STORES', '$100.00', '$1,100.00', '$1,150.00', '$1,000.00', '$175.00', '$8,975.00']) {
+    assert.ok(!text.includes(gone), `${gone} is still in the redacted file`);
+  }
+  for (const kept of ['MR A N OTHER', '1 SOME ST', '0000-1111-2222-3333', 'REPLIT, INC. REPLIT.COM', '20.00 USD', 'PAYMENT - THANK YOU', 'BP CONNECT 1933', '$50.00', '$10,000.00']) {
+    assert.ok(text.includes(kept), `${kept} should still be in the redacted file`);
+  }
+  // the original is untouched
+  const o = await pdfText(Buffer.from(await (await fetch(`${base}/api/finance/documents/${orig.id}/file`)).arrayBuffer()));
+  assert.ok(o.includes('ALDI STORES') && o.includes('$1,100.00'), 'the original keeps everything');
+
+  // making it again replaces the copy rather than piling up copies
+  const again = await call('POST', `/api/finance/statements/${st.id}/redact`, {});
+  assert.strictEqual(again.status, 201);
+  const copies = (await call('GET', '/api/finance/documents?fy=2025-26')).json.documents.filter((d) => d.redactedFromId === orig.id);
+  assert.strictEqual(copies.length, 1);
+  assert.strictEqual((await call('GET', `/api/finance/statements/${st.id}`)).json.redactedDocumentId, again.json.document.id);
+
+  // accountant pack: the redacted copy is listed, the original is not
+  const idx = (await call('GET', '/api/finance/reports/documents-index?fy=2025-26')).json;
+  const titles = idx.sections[0].rows.map((x) => x.title);
+  assert.ok(titles.some((x) => /\(redacted\)/.test(x)) && !titles.includes(orig.title), `index: ${titles.join('|')}`);
+
+  // a bank (not card) statement is refused
+  const bank = await upload([['aug2.pdf', await pdfWithText(ANZ_TEXT.replace('%NUM%', '2026777')), 'application/pdf']], { kind: 'bank_statement', fy: '2026-27' });
+  const bs = (await call('POST', `/api/finance/statements/from-document/${bank.json.documents[0].id}`, {})).json;
+  assert.strictEqual((await call('POST', `/api/finance/statements/${bs.id}/redact`, {})).status, 400, 'bank statements are not redacted yet');
+  for (const d of [bank.json.documents[0], again.json.document, orig]) await call('DELETE', `/api/finance/documents/${d.id}?confirm=1`);
+});
+
 test('trial balance still balances after all of the above', async () => {
   const { rows } = await pool.query(
     `SELECT COALESCE(SUM(l.debit),0)::float AS d, COALESCE(SUM(l.credit),0)::float AS c

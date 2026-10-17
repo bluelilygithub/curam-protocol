@@ -42,7 +42,7 @@ module.exports = function createFinancePackRouter({ runReport }) {
   // What the pack will contain and what needs attention first, without rendering the files.
   router.get('/preview', guarded(async (req, res, fy, userId) => {
     const pack = await collectPack(userId, fy, runReport);
-    const { rows: [d] } = await pool.query(`SELECT COUNT(*)::int AS n, COALESCE(SUM("sizeBytes"),0)::float AS bytes FROM fin_documents WHERE "userId"=$1 AND fy=$2`, [userId, fy]);
+    const { rows: [d] } = await pool.query(`SELECT COUNT(*)::int AS n, COALESCE(SUM("sizeBytes"),0)::float AS bytes FROM fin_documents WHERE "userId"=$1 AND fy=$2 AND id NOT IN (SELECT "redactedFromId" FROM fin_documents WHERE "userId"=$1 AND "redactedFromId" IS NOT NULL)`, [userId, fy]);
     res.json({
       fy, period: pack.cover.period, business: pack.cover.business,
       itemsToCheck: pack.cover.itemsToCheck,
@@ -73,7 +73,7 @@ module.exports = function createFinancePackRouter({ runReport }) {
     const [pdf, xlsx] = await Promise.all([renderPackPdf(pack), renderPackXlsx(pack, userId)]);
     const withDocs = req.query.documents === '1';
     const docs = withDocs
-      ? (await pool.query(`SELECT id, title, "docDate"::text AS "docDate", "originalName", "storedName" FROM fin_documents WHERE "userId"=$1 AND fy=$2 ORDER BY COALESCE("docDate","createdAt"::date), id`, [userId, fy])).rows
+      ? (await pool.query(`SELECT id, title, "docDate"::text AS "docDate", "originalName", "storedName" FROM fin_documents WHERE "userId"=$1 AND fy=$2 AND id NOT IN (SELECT "redactedFromId" FROM fin_documents WHERE "userId"=$1 AND "redactedFromId" IS NOT NULL) ORDER BY COALESCE("docDate","createdAt"::date), id`, [userId, fy])).rows
       : [];
 
     res.setHeader('Content-Type', 'application/zip');

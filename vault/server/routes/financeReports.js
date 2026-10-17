@@ -1686,7 +1686,9 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange, disposal
                         FROM fin_document_links l LEFT JOIN fin_expenses e ON e.id = l."expenseId" LEFT JOIN fin_assets a ON a.id = l."assetId"
                         WHERE l."documentId" = d.id), '') AS links,
               (SELECT COUNT(*)::int FROM fin_document_links l WHERE l."documentId" = d.id) AS n
-       FROM fin_documents d WHERE d."userId"=$1 AND d.fy=$2 ORDER BY COALESCE(d."docDate", d."createdAt"::date), d.id`, [userId, b.fy]);
+       FROM fin_documents d WHERE d."userId"=$1 AND d.fy=$2
+         AND d.id NOT IN (SELECT "redactedFromId" FROM fin_documents WHERE "userId"=$1 AND "redactedFromId" IS NOT NULL)
+       ORDER BY COALESCE(d."docDate", d."createdAt"::date), d.id`, [userId, b.fy]);
     const KIND = { invoice: 'Invoice', receipt: 'Receipt', statement: 'Statement', bank_statement: 'Bank statement', ato_notice: 'ATO notice', other: 'Other' };
     res.json({
       title: 'Supporting Documents Index',

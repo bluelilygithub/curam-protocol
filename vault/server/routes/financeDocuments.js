@@ -111,8 +111,8 @@ async function withLinks(userId, docs) {
   return docs.map(d => ({ ...d, links: by.get(d.id) || [] }));
 }
 
-const COLS_D = `d.id, d.kind, d.title, d.supplier, d.fy, d."docDate"::text AS "docDate", d.notes, d."originalName", d."mimeType", d."sizeBytes", d."createdAt"`;
-const COLS = `id, kind, title, supplier, fy, "docDate"::text AS "docDate", notes, "originalName", "storedName", "mimeType", "sizeBytes", "createdAt"`;
+const COLS_D = `d.id, d.kind, d.title, d.supplier, d.fy, d."docDate"::text AS "docDate", d.notes, d."originalName", d."mimeType", d."sizeBytes", d."createdAt", d."redactedFromId"`;
+const COLS = `id, kind, title, supplier, fy, "docDate"::text AS "docDate", notes, "originalName", "storedName", "mimeType", "sizeBytes", "createdAt", "redactedFromId"`;
 
 // ---- routes (named routes before /:id) -------------------------------------------------------
 

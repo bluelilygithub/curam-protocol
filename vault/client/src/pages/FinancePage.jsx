@@ -7007,7 +7007,7 @@ function DocumentsTab() {
               {data.documents.map(d => (
                 <tr key={d.id} className="border-b last:border-0" style={{ borderColor: 'var(--color-border)' }}>
                   <td className="py-2 px-4 text-xs" style={{ color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>{d.docDate ? fmtDate(d.docDate) : '—'}</td>
-                  <td className="py-2 px-2" style={{ color: 'var(--color-text)' }}>{d.title}{d.notes ? <div className="text-[11px]" style={{ color: 'var(--color-muted)' }}>{d.notes}</div> : null}</td>
+                  <td className="py-2 px-2" style={{ color: 'var(--color-text)' }}>{d.title}{d.redactedFromId ? <span className="text-[10px] ml-1 px-1 rounded" style={{ background: 'var(--color-primary)', color: '#fff' }}>Redacted copy</span> : null}{d.notes ? <div className="text-[11px]" style={{ color: 'var(--color-muted)' }}>{d.notes}</div> : null}</td>
                   <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>{DOC_KIND_LABELS[d.kind] || d.kind}</td>
                   <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>{d.supplier || '—'}</td>
                   <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>{fmtBytes(d.sizeBytes)}</td>
