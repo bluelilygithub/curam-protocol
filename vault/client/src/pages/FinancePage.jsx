@@ -5,6 +5,7 @@ import api from '../utils/apiClient';
 import ConfirmModal from '../components/ConfirmModal';
 import useToastStore from '../store/toastStore';
 import Tooltip from '../components/Tooltip';
+import FinanceTutorChat from './finance/FinanceTutorChat';
 import { useIcon } from '../providers/IconProvider';
 import useProcessingStore from '../store/processingStore';
 import ExtraReport, { EXTRA_REPORTS, REPORT_GROUPS } from './finance/ExtraReports';
@@ -7204,6 +7205,7 @@ export default function FinancePage() {
                   ?
                 </button>
               </Tooltip>
+              <FinanceTutorChat currentTab={tab} onOpenTab={setTab} />
             </div>
             <div className="flex items-center gap-2">
               <Tooltip text="Download a MYOB-compatible journal CSV for the selected date range — locks a cutoff date to prevent duplicate imports."><Btn variant="secondary" onClick={() => setExportModal({ type: 'myob' })}>Export MYOB</Btn></Tooltip>

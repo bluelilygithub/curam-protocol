@@ -163,6 +163,7 @@ app.use('/api/bookmarks', require('./routes/bookmarks'));
 app.use('/api/backup', require('./routes/backup'));
 app.use('/api/graph', requireFeature('graph'), require('./routes/graph'));
 app.use('/api/finance', requireFeature('finance'), require('./routes/finance'));
+app.use('/api/finance-tutor', requireFeature('finance'), aiLimiter, require('./routes/financeTutor'));
 app.use('/api/expense-review', requireFeature('gmailIntel'), require('./routes/expenseReview'));
 app.use('/api/usage', requireFeature('usage'), require('./routes/usage'));
 app.use('/api/mood', requireFeature('mood'), require('./routes/mood'));
