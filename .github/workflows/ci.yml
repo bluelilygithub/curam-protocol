@@ -1,15 +1,16 @@
 name: CI
 
-# One workflow for everything that must pass before a deploy. Holds no secrets: tests run against a
-# throwaway Postgres service container with blank API keys, mail off and crons off. The final job
-# "CI passed" is the single check to require (Railway "Wait for CI" / branch protection).
+# The full test suite, run ON DEMAND (Actions tab -> CI -> Run workflow) and on pull requests. It deliberately does NOT
+# run on pushes to staging / version-7: Railway's "Wait for CI" holds a deploy until every workflow on that push has
+# finished, which added ~10-25 minutes to every release of a single-user app. Run it by hand (or run the tests locally,
+# which is what the change history shows catches most problems) when a change is risky. To make it a gate again, add
+# `push: branches: [version-7, staging]` under `on:`. Holds no secrets: tests run against a throwaway Postgres service
+# container with blank API keys, mail off and crons off. The final job "CI passed" is the single result to look at.
 #
 # Not included yet: live-API tests, the contract-review suites and the cross-user route test (see
 # the EXCLUDED list in vault/scripts/ci-run-server-tests.sh).
 
 on:
-  push:
-    branches: [version-7, staging]
   pull_request:
     branches: [version-7, main, staging]
   workflow_dispatch:
