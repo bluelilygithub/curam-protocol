@@ -661,6 +661,9 @@
   "POST /api/files/upload/:projectId": {
    "class": "authed"
   },
+  "POST /api/finance-tutor": {
+   "class": "authed"
+  },
   "DELETE /api/finance/accounts/:id": {
    "class": "authed"
   },
