@@ -2,44 +2,17 @@
 
 /**
  * Fetch + extract text from lender T&Cs / PDS (PDF or HTML).
- * Self-contained SSRF guard — does not import scenario/calc/orchestrator.
+ * SSRF guard: utils/safeFetch.js (no scenario/calc/orchestrator imports).
  */
 
-const dns = require('dns');
 const http = require('http');
 const https = require('https');
 const { getCachedDocument, setCachedDocument } = require('./documentCache');
+const { checkSsrf, pinnedLookup } = require('../../../utils/safeFetch');
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 const MAX_TEXT_CHARS = 120_000;
 const FETCH_TIMEOUT_MS = 20000;
-
-function isPrivateIp(ip) {
-  if (ip === '::1') return true;
-  const lower = String(ip).toLowerCase();
-  if (lower.startsWith('fe80')) return true;
-  if (lower.startsWith('fc') || lower.startsWith('fd')) return true;
-  const parts = String(ip).split('.').map(Number);
-  if (parts.length !== 4 || parts.some(Number.isNaN)) return false;
-  const [a, b] = parts;
-  if (a === 127 || a === 10 || a === 0) return true;
-  if (a === 172 && b >= 16 && b <= 31) return true;
-  if (a === 192 && b === 168) return true;
-  if (a === 169 && b === 254) return true;
-  return false;
-}
-
-function checkSsrf(hostname) {
-  return new Promise((resolve, reject) => {
-    dns.lookup(hostname, (err, address) => {
-      if (err) return reject(new Error('DNS lookup failed'));
-      if (isPrivateIp(address)) {
-        return reject(new Error('URL resolves to a private or internal address'));
-      }
-      resolve(address);
-    });
-  });
-}
 
 function fetchBuffer(url, redirectsLeft = 5) {
   return new Promise((resolve, reject) => {
@@ -54,7 +27,7 @@ function fetchBuffer(url, redirectsLeft = 5) {
       return reject(new Error('Only http/https URLs are allowed'));
     }
 
-    checkSsrf(parsed.hostname).then(() => {
+    checkSsrf(parsed.hostname).then((address) => {
       const mod = parsed.protocol === 'https:' ? https : http;
       const opts = {
         hostname: parsed.hostname,
@@ -67,6 +40,7 @@ function fetchBuffer(url, redirectsLeft = 5) {
           'Accept-Language': 'en-AU,en;q=0.9',
         },
         timeout: FETCH_TIMEOUT_MS,
+        lookup: pinnedLookup(address), // connect to the address that was just checked
       };
 
       const req = mod.request(opts, (res) => {

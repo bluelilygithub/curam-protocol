@@ -90,6 +90,18 @@ async function resolvePublicAddress(host, { resolve = defaultResolve, isAllowedI
 }
 
 /**
+ * Resolve a host name for a fetch and make sure it is safe: every address it resolves to must be public. Resolves with the checked
+ * address (connect to THAT, see pinnedLookup). Rejects with 'DNS lookup failed' or 'URL resolves to a private or internal address'.
+ */
+function checkSsrf(hostname, deps) {
+  return resolvePublicAddress(hostname, deps).catch((err) => {
+    if (err.reason === 'dns') throw new Error('DNS lookup failed');
+    if (err.reason === 'private') throw new Error('URL resolves to a private or internal address');
+    throw err;
+  });
+}
+
+/**
  * A `lookup` option for http(s).request that always answers with an address we already checked, so the connection cannot be
  * redirected by a second DNS answer (DNS rebinding). The request keeps its host name for the Host header and the TLS certificate.
  */
@@ -167,4 +179,4 @@ async function fetchPublicFile(rawUrl, { maxBytes = 25 * 1024 * 1024, timeoutMs 
   throw fail('Too many redirects');
 }
 
-module.exports = { isPublicIp, resolvePublicAddress, pinnedLookup, fetchPublicFile };
+module.exports = { isPublicIp, resolvePublicAddress, checkSsrf, pinnedLookup, fetchPublicFile };

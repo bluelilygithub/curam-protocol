@@ -28,6 +28,10 @@ dns.lookup = (host, opts, cb) => {
   return realLookup(host, opts, cb);
 };
 
+// videoGenerateService loads the database module; none of what is tested here needs it.
+const dbPath = require.resolve('../db');
+require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: { pool: { query: async () => ({ rows: [] }) } } };
+
 const { checkSsrf, fetchHtml, fetchDirect } = require('./htmlFetch');
 const { pinnedLookup } = require('../utils/safeFetch');
 
@@ -62,6 +66,16 @@ const PRIVATE = 'URL resolves to a private or internal address';
   pinnedLookup('203.0.113.9')('x', {}, (e, a, f) => shapes.push([a, f]));
   assert.deepStrictEqual(shapes, [[{ address: '203.0.113.9', family: 4 }], ['203.0.113.9', 4]], 'both lookup callback shapes are answered');
   server.close();
+
+  // ---- the other fetchers that used to carry their own copy of the check refuse the same addresses ----
+  const { fetchDocument } = require('./propertyScenario/insights/fetchDocument');
+  const { toImageDataUrl } = require('./videoGenerateService');
+  for (const url of ['http://internal.test/terms.pdf', 'http://mixed.test/terms.pdf', 'http://[::ffff:10.0.0.1]/terms.pdf']) {
+    const doc = await fetchDocument(url, { forceRefresh: true });
+    assert.strictEqual(doc.ok, false, `fetchDocument refuses ${url}`);
+    assert.match(String(doc.message), /private or internal/, `fetchDocument message for ${url}: ${doc.message}`);
+    await assert.rejects(toImageDataUrl(url), /private or internal/, `video reference images refuse ${url}`);
+  }
 
   console.log('htmlFetch tests passed');
 })().catch((e) => { console.error(e); process.exit(1); });

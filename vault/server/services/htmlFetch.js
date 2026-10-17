@@ -3,7 +3,7 @@
 const http = require('http');
 const https = require('https');
 const zlib = require('zlib');
-const { resolvePublicAddress, pinnedLookup } = require('../utils/safeFetch');
+const { checkSsrf, pinnedLookup } = require('../utils/safeFetch');
 
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 
@@ -20,17 +20,7 @@ const CHROME_HEADERS = {
   'Sec-Fetch-User': '?1',
 };
 
-// SSRF guard shared with Graphics' import-by-URL (utils/safeFetch.js): the name is resolved once, EVERY address it resolves to must be
-// public (IPv4 and IPv6, including IPv4-mapped and NAT64 forms), and the request then connects to that exact address (see fetchOnce) so
-// a second DNS answer cannot point it somewhere internal. Resolves with the checked address. The messages are the ones callers have
-// always shown.
-function checkSsrf(hostname) {
-  return resolvePublicAddress(hostname).catch((err) => {
-    if (err.reason === 'dns') throw new Error('DNS lookup failed');
-    if (err.reason === 'private') throw new Error('URL resolves to a private or internal address');
-    throw err;
-  });
-}
+// SSRF guard: utils/safeFetch.js (every resolved address must be public; fetchOnce connects to the checked address).
 
 function decodeBody(buffer, encoding) {
   const enc = String(encoding || '').toLowerCase();

@@ -1,6 +1,6 @@
 'use strict';
 
-const dns = require('dns');
+const { checkSsrf } = require('../utils/safeFetch');
 const http = require('http');
 const https = require('https');
 const { callModel } = require('./callModel');
@@ -208,38 +208,8 @@ const ASPECT_MAP = {
   '1:1': { width: 720, height: 720 },
 };
 
-function isPrivateIp(ip) {
-  if (ip === '::1') return true;
-  let lower = String(ip).toLowerCase();
-  // IPv4-mapped IPv6 (::ffff:127.0.0.1) — unwrap to the v4 form before checking
-  const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) lower = mapped[1];
-  if (lower.startsWith('fe80')) return true;
-  if (lower.startsWith('fc') || lower.startsWith('fd')) return true;
-  if (lower === '::' || lower === '0:0:0:0:0:0:0:0') return true;
-  const parts = lower.split('.').map(Number);
-  if (parts.length !== 4 || parts.some(Number.isNaN)) return false;
-  const [a, b] = parts;
-  if (a === 127 || a === 10 || a === 0) return true;
-  if (a === 172 && b >= 16 && b <= 31) return true;
-  if (a === 192 && b === 168) return true;
-  if (a === 169 && b === 254) return true;
-  return false;
-}
-
-// Resolves DNS once, validates the IP, then hands back that SAME address for
-// the actual connection (caller must pin to it) — resolving again at connect
-// time would reopen a DNS-rebinding gap (attacker flips the record between
-// the check and the request).
-function checkSsrf(hostname) {
-  return new Promise((resolve, reject) => {
-    dns.lookup(hostname, (err, address) => {
-      if (err) return reject(new Error('DNS lookup failed'));
-      if (isPrivateIp(address)) return reject(new Error('URL resolves to a private or internal address'));
-      resolve(address);
-    });
-  });
-}
+// SSRF check: utils/safeFetch.js. It resolves the name once, requires every address to be public, and hands back that SAME address;
+// fetchBinaryUrl connects to it directly (re-resolving would reopen the DNS-rebinding gap).
 
 function fetchBinaryUrl(url, redirectsLeft = 5) {
   return new Promise((resolve, reject) => {
