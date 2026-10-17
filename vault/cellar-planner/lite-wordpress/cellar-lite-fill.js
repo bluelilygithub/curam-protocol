@@ -42,7 +42,11 @@
   var STICKY_MAX_WIDTH = 640;   // "phone width" in pixels
   var TRACK_EVENTS = true;      // push the planner's usage events to window.dataLayer
   var STICKY_PICTURE = true;    // keep the cellar picture in view while the page scrolls (desktop width)
+  var TOP_INSET = -1;           // pixels of fixed menu bar across the top of your site, so pop-ups are not hidden behind it: -1 = work it out by itself, 0 = none
   var STICKY_TOP = 12;          // gap above the picture in pixels: raise it if your site has a fixed menu bar across the top
+  // 4b. The website help chat. This script loads it for you, on the planner page only (cellar-lite-guide.js sits in the planner folder, inside
+  //     the upload zip). Set to '' to not load it. The chat itself stays hidden until it is switched on in Vault (Cellar Planner -> Settings).
+  var GUIDE_SCRIPT = PLANNER_LINK + 'cellar-lite-guide.js';
   // 5. Set to false once everything works. While true, each step is written to the browser Console (F12), every line starting "[cellar-lite]".
   var DEBUG = false;
   function log() { if (DEBUG && window.console) console.log.apply(console, ['[cellar-lite]'].concat([].slice.call(arguments))); }
@@ -133,10 +137,30 @@
   // ---- keeping the picture in view: tell each planner frame where the visible window is, as the page scrolls or is resized
   var followed = []; // { frame, origin }
   var followTick = false;
+  // How much of the top of the screen a fixed (or stuck) site menu covers, so the planner's pop-ups and tour cards sit below it.
+  var insetAt = 0, insetVal = 0;
+  function topInset() {
+    if (TOP_INSET >= 0) return TOP_INSET;
+    var t = Date.now();
+    if (t - insetAt < 400) return insetVal; // looking is not free: at most a couple of times a second
+    insetAt = t;
+    var max = 0;
+    try {
+      var els = document.querySelectorAll('header,nav,#wpadminbar,[id*="header"],[class*="header"],[class*="sticky"],[class*="navbar"],[class*="menu-bar"]');
+      for (var i = 0; i < els.length && i < 80; i++) {
+        var cs = window.getComputedStyle(els[i]);
+        if ((cs.position !== 'fixed' && cs.position !== 'sticky') || cs.display === 'none' || cs.visibility === 'hidden') continue;
+        var b = els[i].getBoundingClientRect();
+        if (b.top <= 4 && b.bottom > 0 && b.bottom <= 300 && b.width >= window.innerWidth * 0.5) max = Math.max(max, b.bottom);
+      }
+    } catch (e) { max = 0; }
+    insetVal = Math.round(max);
+    return insetVal;
+  }
   function sendViewport(f) {
     try {
       var r = f.frame.getBoundingClientRect();
-      f.frame.contentWindow.postMessage({ type: 'cellar-lite:viewport', version: 1, frameTop: Math.round(r.top), viewportH: window.innerHeight, gap: STICKY_TOP }, f.origin);
+      f.frame.contentWindow.postMessage({ type: 'cellar-lite:viewport', version: 1, frameTop: Math.round(r.top), viewportH: window.innerHeight, gap: STICKY_TOP, topInset: topInset() }, f.origin);
     } catch (e) { /* the frame is gone: nothing to tell */ }
   }
   function follow(frame, origin) {
@@ -152,6 +176,18 @@
     followed.forEach(function (f) { if (f.frame === frame) sendViewport(f); });
   }
 
+  // ---- the help chat: loaded once, and only once a planner has spoken to us (so never on the contact page) ----
+  var guideLoaded = false;
+  function loadGuide() {
+    if (guideLoaded || !GUIDE_SCRIPT || window.__cellarGuideLoaded) return;
+    guideLoaded = true;
+    var s = document.createElement('script');
+    s.src = GUIDE_SCRIPT; s.async = true;
+    s.onerror = function () { log('could not load the help chat from', GUIDE_SCRIPT); };
+    document.head.appendChild(s);
+    log('loading the help chat from', GUIDE_SCRIPT);
+  }
+
   // ---- messages from the planner ----
   window.addEventListener('message', function (ev) {
     var d = ev.data;
@@ -160,7 +196,7 @@
     log('message', d.type, 'from', ev.origin);
     if (!sameSite(ev.origin, PLANNER_ORIGIN)) { log('IGNORED: sent from', ev.origin, 'but PLANNER_ORIGIN is', PLANNER_ORIGIN); return; }
     if (d.version !== 1) { log('IGNORED: unknown version', d.version); return; }
-    if (d.type === 'cellar-lite:height' || d.type === 'cellar-lite:design') follow(frameOf(ev.source), ev.origin);
+    if (d.type === 'cellar-lite:height' || d.type === 'cellar-lite:design') { follow(frameOf(ev.source), ev.origin); loadGuide(); }
 
     // moving to another step: bring the top of the steps (and the picture) into view, as the planner asks
     if (d.type === 'cellar-lite:scroll') {
@@ -200,7 +236,7 @@
 
     if (STICKY_BAR) {
       ensureBar();
-      barText.textContent = 'About ' + latest.bottles + ' bottles' + (latest.priceText ? ' · ' + latest.priceText : '');
+      barText.textContent = 'About ' + latest.bottles + ' bottles' + (latest.priceText ? ' \u00b7 ' + latest.priceText : '');
       if (latest.thumb && barImg.getAttribute('src') !== latest.thumb) barImg.src = latest.thumb;
       var fr = frameOf(ev.source);
       if (fr) watchFrame(fr);

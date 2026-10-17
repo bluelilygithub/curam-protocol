@@ -224,3 +224,10 @@ body { background: #f1f1ee; }
 .lite-added-list li, .lite-added-total { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
 .lite-added-total { margin: 8px 0 0; padding-top: 8px; border-top: 1px solid var(--border); }
 @media (max-width: 700px) { .feat-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .feat-card { min-height: 108px; } }
+
+/* Embedded in the website page, the frame is as tall as the whole planner, so "the middle of the screen" would be the middle of the page. The page
+   script tells us what part of the frame is on the visitor's screen (--vis-top, --vis-h, set in LiteApp), and pop-ups and the tour's centred cards use it. */
+html[data-embedded] .modal-back { top: var(--vis-top, 0px); bottom: auto; height: var(--vis-h, 100%); }
+html[data-embedded] .shepherd-element.shepherd-centered { top: calc(var(--vis-top, 0px) + var(--vis-h, 100vh) / 2) !important; }
+/* the pop-up itself may be no taller than the visible window either (its normal limit, 100vh, is the whole frame): the text inside scrolls */
+html[data-embedded] .modal, html[data-embedded] .modal.wide { max-height: calc(var(--vis-h, 100vh) - 24px); }

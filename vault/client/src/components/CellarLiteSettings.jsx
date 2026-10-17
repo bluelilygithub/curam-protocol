@@ -79,6 +79,33 @@ function Field({ label, hint, tip, children }) {
   );
 }
 
+
+const OPEN_KEY = 'cellar-settings:open:v1';
+const PANEL_IDS = ['rack', 'features', 'doors', 'price', 'onpage', 'mobile', 'guide', 'rooms', 'quote', 'cooling'];
+
+/** A collapsible card: the header always shows the title and a one-line summary of what is set, so nothing is hidden or easy to miss. */
+function Panel({ id, title, summary, warn, open, onToggle, testid, children }) {
+  const bodyId = `cellar-set-${id}`;
+  return (
+    <section className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }} data-testid={testid}>
+      <button
+        type="button"
+        onClick={() => onToggle(id)}
+        aria-expanded={open}
+        aria-controls={bodyId}
+        className="w-full flex items-center gap-3 px-5 py-4 text-left hover:opacity-80 transition-opacity"
+        style={{ transitionDuration: '200ms' }}
+        data-testid={`cellar-set-${id}-toggle`}
+      >
+        <span aria-hidden="true" className="inline-block text-sm transition-transform" style={{ color: 'var(--color-muted)', transform: open ? 'rotate(90deg)' : 'none', transitionDuration: '200ms' }}>▸</span>
+        <span className="text-base font-semibold whitespace-nowrap" style={{ color: 'var(--color-text)' }}>{title}</span>
+        <span className="flex-1 min-w-0 truncate text-xs text-right" style={{ color: warn ? '#f59e0b' : 'var(--color-muted)' }}>{summary}</span>
+      </button>
+      {open && <div id={bodyId} className="px-6 pb-6 pt-4 space-y-4 border-t" style={{ borderColor: 'var(--color-border)' }}>{children}</div>}
+    </section>
+  );
+}
+
 export default function CellarLiteSettings({ onDirtyChange }) {
   const [form, setForm] = useState(null);
   // what is stored right now, as text: the form differs from it exactly when there are unsaved changes
@@ -91,6 +118,13 @@ export default function CellarLiteSettings({ onDirtyChange }) {
   const [saved, setSaved] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [exampleUnits, setExampleUnits] = useState('12');
+
+  // which cards are open is remembered in this browser (a convenience only)
+  const [openIds, setOpenIds] = useState(() => {
+    try { const v = JSON.parse(localStorage.getItem(OPEN_KEY) || '[]'); return Array.isArray(v) ? v.filter((x) => PANEL_IDS.includes(x)) : []; } catch { return []; }
+  });
+  const rememberOpen = (ids) => { setOpenIds(ids); try { localStorage.setItem(OPEN_KEY, JSON.stringify(ids)); } catch { /* not remembered */ } };
+  const togglePanel = (id) => rememberOpen(openIds.includes(id) ? openIds.filter((x) => x !== id) : [...openIds, id]);
 
   const load = useCallback(async () => {
     setLoadError('');
@@ -207,14 +241,38 @@ export default function CellarLiteSettings({ onDirtyChange }) {
     <input type="text" inputMode="decimal" value={form[key]} onChange={(e) => set(key, e.target.value)} className={INPUT} style={FIELD_STYLE} {...props} />
   );
 
+  // one line per card, so the page reads as an overview before anything is opened
+  const typeCount = form.rackTypes.length;
+  const defaultType = form.rackTypes.find((r) => r.id === form.defaultRackType) || form.rackTypes[0];
+  const unconfirmed = form.rackTypes.filter((r) => !r.confirmed).length;
+  const optionCount = form.features.reduce((n, g) => n + g.options.length, 0);
+  const rackSummary = `${typeCount} type${typeCount === 1 ? '' : 's'}${defaultType ? ` · standard: ${defaultType.name || 'unnamed'}` : ''}${unconfirmed ? ` · ${unconfirmed} not confirmed by supplier` : ''}`;
+  const featureSummary = form.features.length ? `${form.features.length} group${form.features.length === 1 ? '' : 's'}, ${optionCount} option${optionCount === 1 ? '' : 's'}` : 'None: the Features step is off';
+  const doorSummary = `Single ${form.singleMm} mm · double ${form.doubleMm} mm`;
+  const priceSummary = form.show ? `Shown to visitors, range ± ${form.rangePct}%` : 'Hidden from visitors';
+  const pageSummary = `Colour ${form.accent || 'standard'} · ${form.phone ? `call ${form.phone}` : 'no phone number'}`;
+  const mobileSummary = form.mnShow ? 'Shown on phones' : 'Off';
+  const guideSummary = form.guideOn ? 'On: visitors see the help button' : 'Off';
+  const roomsSummary = `${form.presets.length} starting room${form.presets.length === 1 ? '' : 's'}`;
+  const quoteSummary = form.qBusinessName ? `From ${form.qBusinessName}` : 'Business name not set';
+  const coolingSummary = `Target ${form.clTarget} °C · outside ${form.clAmbient} °C · margin ${form.clMargin}%`;
+  const warnOf = { rack: unconfirmed > 0, quote: !form.qBusinessName };
+  const pp = (id, title, summary) => ({ id, title, summary, warn: !!warnOf[id], open: openIds.includes(id), onToggle: togglePanel });
+
   return (
     <div className="space-y-6" data-testid="cellar-lite-settings">
       <div>
-        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>Cellar Planner (public tool)</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>Cellar Planner settings</h2>
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
           These settings are shared by the public planner on your website and by the staff Cellar Planner. The <strong>rack types</strong> (sizes, bottle counts, price per unit, confirmed by supplier), <strong>feature options</strong> (with a low and high price each), door widths, guide price and starting rooms control the public tool: changes show to visitors within a minute of saving, and if this page can't be reached the planner uses its built-in values, so it never goes blank. Staff also use the full rack catalogue, the <strong>quote details</strong> and the <strong>cooling assumptions</strong> below (staff only: visitors never see them).{' '}
           <Tooltip text="Opens the public planner as Vault hosts it, in a new tab. It reads the settings you have saved, so you can see the effect of a change."><a href="/cellar-lite/" target="_blank" rel="noreferrer" className="underline hover:opacity-70 transition-opacity">Preview the planner</a></Tooltip>
         </p>
+      </div>
+
+      <div className="flex items-center gap-3 text-xs" data-testid="cellar-set-bar">
+        <span style={{ color: 'var(--color-muted)' }}>{openIds.length} of {PANEL_IDS.length} sections open</span>
+        <button type="button" onClick={() => rememberOpen([...PANEL_IDS])} className="underline underline-offset-2 hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)' }} data-testid="cellar-set-expand">Open all</button>
+        <button type="button" onClick={() => rememberOpen([])} className="underline underline-offset-2 hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)' }} data-testid="cellar-set-collapse">Close all</button>
       </div>
 
       {warnings.length > 0 && (
@@ -224,9 +282,14 @@ export default function CellarLiteSettings({ onDirtyChange }) {
         </div>
       )}
 
-      <section className={CARD} style={CARD_STYLE} data-testid="cellar-lite-racktypes">
+      <div className="pt-2" data-testid="cellar-group">
+        <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>Products and prices</h3>
+        <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>What you sell and what it costs. These feed the public planner, the staff planner and the quote.</p>
+      </div>
+
+      <Panel {...pp('rack', 'Rack types', rackSummary)} testid="cellar-lite-racktypes">
         <div className="flex items-center gap-3">
-          <h3 className="text-base font-semibold flex-1" style={{ color: 'var(--color-text)' }}>Rack types</h3>
+          <span className="flex-1" />
           {form.rackTypes.length < MAX_RACK_TYPES && (
             <Tooltip text="Add another kind of rack to the catalogue (up to eight)."><button onClick={addType} className="text-xs px-3 py-1 rounded-lg border font-medium hover:opacity-70 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'transparent' }} data-testid="cellar-lite-add-racktype">+ Add a rack type</button></Tooltip>
           )}
@@ -266,11 +329,11 @@ export default function CellarLiteSettings({ onDirtyChange }) {
             </div>
           ))}
         </div>
-      </section>
+      </Panel>
 
-      <section className={CARD} style={CARD_STYLE} data-testid="cellar-lite-features">
+      <Panel {...pp('features', 'Feature options', featureSummary)} testid="cellar-lite-features">
         <div className="flex items-center gap-3 flex-wrap">
-          <h3 className="text-base font-semibold flex-1" style={{ color: 'var(--color-text)' }}>Feature options</h3>
+          <span className="flex-1" />
           <Tooltip text="Fill in the low and high price of any option that has none, with the figures from the design mockup (for example $2,800 to $3,600 for frameless glass doors). Options you have already priced are left alone. They are examples to adjust, and nothing is saved until you press Save."><button onClick={fillExamplePrices} className="text-xs px-3 py-1 rounded-lg border font-medium hover:opacity-70 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'transparent' }} data-testid="cellar-lite-features-examples">Fill example prices</button></Tooltip>
           {form.features.length < MAX_FEATURE_GROUPS && (
             <Tooltip text="Add another group of choices, such as Lighting or Flooring (up to ten groups)."><button onClick={addGroup} className="text-xs px-3 py-1 rounded-lg border font-medium hover:opacity-70 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'transparent' }} data-testid="cellar-lite-add-featuregroup">+ Add a group</button></Tooltip>
@@ -334,19 +397,18 @@ export default function CellarLiteSettings({ onDirtyChange }) {
             </div>
           ))}
         </div>
-      </section>
+      </Panel>
 
-      <section className={CARD} style={CARD_STYLE}>
-        <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Doors</h3>
+      <Panel {...pp('doors', 'Doors', doorSummary)}>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Single door width (mm)" tip="The opening width used when a visitor chooses a single door. It takes this much wall, so racks are placed around it." hint="700 to 1300. Standard is 970.">{numInput('singleMm')}</Field>
           <Field label="Double door width (mm)" tip="The total opening width used when a visitor chooses a pair of doors. It takes more wall than a single door." hint="1200 to 2400. Standard is 1500.">{numInput('doubleMm')}</Field>
         </div>
-      </section>
+      </Panel>
 
-      <section className={CARD} style={CARD_STYLE}>
+      <Panel {...pp('price', 'Guide price', priceSummary)}>
         <div className="flex items-center gap-3">
-          <h3 className="text-base font-semibold flex-1" style={{ color: 'var(--color-text)' }}>Guide price</h3>
+          <span className="flex-1" />
           <Tooltip text={form.show ? 'Visitors currently see the guide price. Click to hide it. Hidden prices are never sent from Vault.' : 'The guide price is hidden from visitors. Click to show it (enter at least one amount, then press Save).'}>
           <button
             onClick={() => set('show', !form.show)}
@@ -389,10 +451,14 @@ export default function CellarLiteSettings({ onDirtyChange }) {
             {form.show ? (example ?? 'Nothing yet: enter at least one amount.') : 'Nothing: prices are hidden.'}
           </p>
         </div>
-      </section>
+      </Panel>
 
-      <section className={CARD} style={CARD_STYLE}>
-        <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>On the page</h3>
+      <div className="pt-2" data-testid="cellar-group">
+        <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>Public website planner</h3>
+        <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>What visitors see on your website page.</p>
+      </div>
+
+      <Panel {...pp('onpage', 'On the page', pageSummary)}>
         <div className="space-y-1">
           <label htmlFor="cellar-accent-text" className="block text-xs font-medium" style={{ color: 'var(--color-text)' }}>Brand colour</label>
           <div className="flex items-center gap-2">
@@ -414,11 +480,11 @@ export default function CellarLiteSettings({ onDirtyChange }) {
         <Field label="Line under the heading" tip="A short line shown under the planner's heading. Good for saying it's free and quick. Leave blank to show nothing." hint="Say it's free and quick. Leave blank to show nothing.">
           <textarea value={form.promise} rows={2} maxLength={200} onChange={(e) => set('promise', e.target.value)} className={INPUT} style={FIELD_STYLE} />
         </Field>
-      </section>
+      </Panel>
 
-      <section className={CARD} style={CARD_STYLE} data-testid="cellar-lite-mobile">
+      <Panel {...pp('mobile', 'Message on phones', mobileSummary)} testid="cellar-lite-mobile">
         <div className="flex items-center gap-3">
-          <h3 className="text-base font-semibold flex-1" style={{ color: 'var(--color-text)' }}>Message on phones</h3>
+          <span className="flex-1" />
           <Tooltip text={form.mnShow ? 'Visitors on a phone-sized screen see a note saying the planner is best on a computer or tablet. Click to switch it off (then press Save).' : 'The note is switched off. Click to show it to visitors on a phone-sized screen (then press Save).'}>
             <button
               onClick={() => set('mnShow', !form.mnShow)}
@@ -437,11 +503,11 @@ export default function CellarLiteSettings({ onDirtyChange }) {
         <Field label="Wording" tip="What visitors on a phone read, after the heading Best on a computer or tablet. Leave blank to use the standard wording." hint="Up to 300 characters. Blank uses the standard wording.">
           <textarea value={form.mnText} rows={3} maxLength={300} onChange={(e) => set('mnText', e.target.value)} className={INPUT} style={FIELD_STYLE} />
         </Field>
-      </section>
+      </Panel>
 
-      <section className={CARD} style={CARD_STYLE} data-testid="cellar-lite-guide">
+      <Panel {...pp('guide', 'Website help chat', guideSummary)} testid="cellar-lite-guide">
         <div className="flex items-center gap-3">
-          <h3 className="text-base font-semibold flex-1" style={{ color: 'var(--color-text)' }}>Website help chat</h3>
+          <span className="flex-1" />
           <Tooltip text={form.guideOn ? 'The round help button is showing on the website page. Click to switch it off (then press Save).' : 'The help chat is off. Click to turn it on for website visitors (then press Save).'}>
             <button
               onClick={() => set('guideOn', !form.guideOn)}
@@ -457,45 +523,11 @@ export default function CellarLiteSettings({ onDirtyChange }) {
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
           A round help button on your website's planner page. Visitors ask in their own words how to use the planner and it points them to the right step. It never quotes a price or gives engineering advice, and visitors can send the chat to your admin email. <b>Every answer is a paid AI call</b>, so it is limited per visitor and per day, and it stays off until you switch it on here. It also needs the page script from the planner's website folder (see docs/cellar-planner.md).
         </p>
-      </section>
+      </Panel>
 
-      <section className={CARD} style={CARD_STYLE} data-testid="cellar-lite-cooling">
-        <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Cooling estimate assumptions</h3>
-        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-          The staff Cellar Planner estimates how much cooling a cellar needs: heat through every wall, the ceiling, floor and door (U-value × area × temperature difference), plus lights, people and stock, plus a safety margin. These are the assumptions behind it, shown to staff in the working. It is a guide for choosing a conditioner, never a design: an HVAC engineer still signs off. Staff can set the two temperatures per design. The standard values below are typical; change them to match your supplier's data.
-        </p>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Insulation conductivity (W/m·K)" tip="How well the wall and ceiling insulation conducts heat. The wall's U-value is this divided by its thickness in metres. Polyurethane foam panels are about 0.025; use your panel supplier's figure." hint="0.01 to 0.1. Standard is 0.025.">{numInput('clK')}</Field>
-          <Field label="Glass U-value (W/m²·K)" tip="How much heat glass and glazed doors let through. The guide the advisory notes quote asks for about 1.4 (4 mm glass, 16 mm argon, 4 mm glass). Use your glazier's figure." hint="0.5 to 6. Standard is 1.4.">{numInput('clGlass')}</Field>
-          <Field label="Uninsulated floor U-value (W/m²·K)" tip="Used only for a floor with no build-up entered, which is treated as a bare slab. A lower number means better insulated." hint="0.1 to 6. Standard is 1.">{numInput('clFloor')}</Field>
-          <Field label="Lights, people and stock (W)" tip="Heat added inside the cellar by lighting, people and new bottles, in watts. LED lighting adds little." hint="0 to 5000. Standard is 100.">{numInput('clGains')}</Field>
-          <Field label="Safety margin (%)" tip="Added on top of the total to cover door openings and uncertainty." hint="0 to 100. Standard is 20.">{numInput('clMargin')}</Field>
-          <Field label="Target temperature (°C)" tip="The temperature the cellar is held at. Wine is usually kept at 12 to 15 °C. Staff can change it per design." hint="0 to 25. Standard is 14.">{numInput('clTarget')}</Field>
-          <Field label="Outside design temperature (°C)" tip="The hottest day to design for, where the cellar is. Staff can change it per design." hint="15 to 50. Standard is 35.">{numInput('clAmbient')}</Field>
-        </div>
-      </section>
-
-      <section className={CARD} style={CARD_STYLE} data-testid="cellar-lite-quote">
-        <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Quote details</h3>
-        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-          Used on the customer quote PDF that staff make in the Cellar Planner. Visitors to the public planner never see these. A quote can't be made until the business name is filled in.
-        </p>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Business name" tip="Who the quote is from, printed large at the top of the quote. Required before a quote can be made." hint="Up to 80 characters."><input type="text" value={form.qBusinessName} maxLength={80} onChange={(e) => set('qBusinessName', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
-          <Field label="Quote valid for (days)" tip="How long a quote stays valid. The quote shows the date it is valid until, counted from the quote date." hint="1 to 365. Standard is 30."><input type="text" inputMode="numeric" value={form.qValidityDays} onChange={(e) => set('qValidityDays', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
-        </div>
-        <Field label="Address and contact lines" tip="Printed under the business name: your address, phone, email and ABN, one per line (up to six lines are shown)." hint="One item per line, such as the address, phone and ABN.">
-          <textarea value={form.qDetails} rows={4} maxLength={300} onChange={(e) => set('qDetails', e.target.value)} className={INPUT} style={FIELD_STYLE} />
-        </Field>
-        <Field label="GST note" tip="A short line printed under the total, for example All prices include GST. Leave blank to print nothing." hint="For example: All prices include GST."><input type="text" value={form.qGstNote} maxLength={120} onChange={(e) => set('qGstNote', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
-        <Field label="Terms" tip="Your terms and conditions, printed on every quote under the price: deposit, payment, warranty and so on. Leave blank to print none." hint="Up to 1200 characters. Line breaks are kept.">
-          <textarea value={form.qTerms} rows={6} maxLength={1200} onChange={(e) => set('qTerms', e.target.value)} className={INPUT} style={FIELD_STYLE} />
-        </Field>
-      </section>
-
-      <section className={CARD} style={CARD_STYLE}>
+      <Panel {...pp('rooms', 'Starting rooms', roomsSummary)}>
         <div className="flex items-center gap-3">
-          <h3 className="text-base font-semibold flex-1" style={{ color: 'var(--color-text)' }}>Starting rooms</h3>
+          <span className="flex-1" />
           {form.presets.length < MAX_PRESETS && (
             <Tooltip text="Add another one-tap starting room for visitors (up to six)."><button onClick={addPreset} className="text-xs px-3 py-1 rounded-lg border font-medium hover:opacity-70 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Add a room</button></Tooltip>
           )}
@@ -522,7 +554,44 @@ export default function CellarLiteSettings({ onDirtyChange }) {
             </div>
           ))}
         </div>
-      </section>
+      </Panel>
+
+      <div className="pt-2" data-testid="cellar-group">
+        <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>Staff planner and quote</h3>
+        <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>Used only inside Vault: the customer quote and the indicative cooling figure.</p>
+      </div>
+
+      <Panel {...pp('quote', 'Quote details', quoteSummary)} testid="cellar-lite-quote">
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          Used on the customer quote PDF that staff make in the Cellar Planner. Visitors to the public planner never see these. A quote can't be made until the business name is filled in.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Business name" tip="Who the quote is from, printed large at the top of the quote. Required before a quote can be made." hint="Up to 80 characters."><input type="text" value={form.qBusinessName} maxLength={80} onChange={(e) => set('qBusinessName', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
+          <Field label="Quote valid for (days)" tip="How long a quote stays valid. The quote shows the date it is valid until, counted from the quote date." hint="1 to 365. Standard is 30."><input type="text" inputMode="numeric" value={form.qValidityDays} onChange={(e) => set('qValidityDays', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
+        </div>
+        <Field label="Address and contact lines" tip="Printed under the business name: your address, phone, email and ABN, one per line (up to six lines are shown)." hint="One item per line, such as the address, phone and ABN.">
+          <textarea value={form.qDetails} rows={4} maxLength={300} onChange={(e) => set('qDetails', e.target.value)} className={INPUT} style={FIELD_STYLE} />
+        </Field>
+        <Field label="GST note" tip="A short line printed under the total, for example All prices include GST. Leave blank to print nothing." hint="For example: All prices include GST."><input type="text" value={form.qGstNote} maxLength={120} onChange={(e) => set('qGstNote', e.target.value)} className={INPUT} style={FIELD_STYLE} /></Field>
+        <Field label="Terms" tip="Your terms and conditions, printed on every quote under the price: deposit, payment, warranty and so on. Leave blank to print none." hint="Up to 1200 characters. Line breaks are kept.">
+          <textarea value={form.qTerms} rows={6} maxLength={1200} onChange={(e) => set('qTerms', e.target.value)} className={INPUT} style={FIELD_STYLE} />
+        </Field>
+      </Panel>
+
+      <Panel {...pp('cooling', 'Cooling estimate assumptions', coolingSummary)} testid="cellar-lite-cooling">
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          The staff Cellar Planner estimates how much cooling a cellar needs: heat through every wall, the ceiling, floor and door (U-value × area × temperature difference), plus lights, people and stock, plus a safety margin. These are the assumptions behind it, shown to staff in the working. It is a guide for choosing a conditioner, never a design: an HVAC engineer still signs off. Staff can set the two temperatures per design. The standard values below are typical; change them to match your supplier's data.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Insulation conductivity (W/m·K)" tip="How well the wall and ceiling insulation conducts heat. The wall's U-value is this divided by its thickness in metres. Polyurethane foam panels are about 0.025; use your panel supplier's figure." hint="0.01 to 0.1. Standard is 0.025.">{numInput('clK')}</Field>
+          <Field label="Glass U-value (W/m²·K)" tip="How much heat glass and glazed doors let through. The guide the advisory notes quote asks for about 1.4 (4 mm glass, 16 mm argon, 4 mm glass). Use your glazier's figure." hint="0.5 to 6. Standard is 1.4.">{numInput('clGlass')}</Field>
+          <Field label="Uninsulated floor U-value (W/m²·K)" tip="Used only for a floor with no build-up entered, which is treated as a bare slab. A lower number means better insulated." hint="0.1 to 6. Standard is 1.">{numInput('clFloor')}</Field>
+          <Field label="Lights, people and stock (W)" tip="Heat added inside the cellar by lighting, people and new bottles, in watts. LED lighting adds little." hint="0 to 5000. Standard is 100.">{numInput('clGains')}</Field>
+          <Field label="Safety margin (%)" tip="Added on top of the total to cover door openings and uncertainty." hint="0 to 100. Standard is 20.">{numInput('clMargin')}</Field>
+          <Field label="Target temperature (°C)" tip="The temperature the cellar is held at. Wine is usually kept at 12 to 15 °C. Staff can change it per design." hint="0 to 25. Standard is 14.">{numInput('clTarget')}</Field>
+          <Field label="Outside design temperature (°C)" tip="The hottest day to design for, where the cellar is. Staff can change it per design." hint="15 to 50. Standard is 35.">{numInput('clAmbient')}</Field>
+        </div>
+      </Panel>
 
       {errors.length > 0 && (
         <div className="rounded-xl border px-3 py-2 text-xs space-y-1" role="alert" style={{ borderColor: '#ef4444', color: '#ef4444' }} data-testid="cellar-lite-errors">
@@ -531,7 +600,7 @@ export default function CellarLiteSettings({ onDirtyChange }) {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 sticky bottom-0 py-3 px-4 -mx-4 border-t z-10" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }} data-testid="cellar-set-savebar">
         <Tooltip text={dirty ? 'Store your changes. Visitors see them within a minute of saving.' : 'Nothing to save: everything shown here is already stored.'}>
         <button
           onClick={save}

@@ -41,14 +41,18 @@ const serveDist = (req, res) => {
   res.setHeader('content-type', types[extname(f)] ?? 'application/octet-stream'); res.end(readFileSync(f));
 };
 const lite = await new Promise((r) => { const s = http.createServer(serveDist).listen(8812, () => r(s)); });
+const fillJs = readFileSync(join(ROOT, 'cellar-planner/lite-wordpress/cellar-lite-fill.js'), 'utf8')
+  .replace("'https://www.wiwc.com.au'", "'http://localhost:8812'").replace("'https://wiwc.com.au/contact/'", "'http://localhost:8811/contact.html'").replace("'https://wiwc.com.au/cellar-lite/'", "'http://localhost:8811/'");
+assert.ok(fillJs.includes('localhost:8811/'), 'the page script addresses were pointed at the test servers');
 const guideJs = readFileSync(join(ROOT, 'cellar-planner/lite-wordpress/cellar-lite-guide.js'), 'utf8')
   .replace("'https://curam-vault.up.railway.app'", "'http://localhost:8813'").replace("'https://www.wiwc.com.au'", "'http://localhost:8812'");
 assert.ok(guideJs.includes('localhost:8813') && guideJs.includes('localhost:8812'), 'the script addresses were pointed at the test servers');
 const site = await new Promise((r) => {
   const s = http.createServer((req, res) => {
-    if (req.url.startsWith('/guide.js')) { res.setHeader('content-type', 'text/javascript'); return res.end(guideJs); }
+    if (req.url.startsWith('/cellar-lite-guide.js')) { res.setHeader('content-type', 'text/javascript'); return res.end(guideJs); }
+    if (req.url.startsWith('/fill.js')) { res.setHeader('content-type', 'text/javascript'); return res.end(fillJs); }
     res.setHeader('content-type', 'text/html');
-    res.end('<!doctype html><html><body style="margin:0"><h1>Our wine cellar planner</h1><iframe id="p" title="Wine cellar planner" src="http://localhost:8812/" style="width:100%;height:1400px;border:0"></iframe><script src="/guide.js"></script></body></html>');
+    res.end('<!doctype html><html><body style="margin:0"><div id="menu" style="position:fixed;top:0;left:0;right:0;height:90px;background:#222;color:#fff;z-index:99999">Site menu</div><h1 style="margin-top:100px">Our wine cellar planner</h1><iframe id="p" title="Wine cellar planner" src="http://localhost:8812/" style="width:100%;height:1400px;border:0"></iframe><script src="/fill.js"></script></body></html>');
   }).listen(8811, () => r(s));
 });
 
@@ -81,7 +85,7 @@ await t('on: button appears; asking gives an answer; "Show me" moves the planner
   await page.locator('#clg .open').waitFor({ timeout: 8000 });
   await page.locator('#clg .open').click();
   assert.equal(await page.locator('#clg .panel').isVisible(), true);
-  await page.locator('#clg .chip').first().click();
+  await page.locator('#clg .starter').first().click();
   await page.locator('#clg ol li').first().waitFor();
   assert.match(await page.locator('#clg .bot').last().innerText(), /Measure inside the walls/);
   // the planner starts on step 1; the second tip's button should take it to the last step
@@ -101,13 +105,13 @@ await t('the planner reports its step, and the next question carries it', async 
   await page.locator('#clg .open').click();
   await page.getByRole('button', { name: 'Show me: Review & quote' }).count(); // none yet
   await page.locator('#clg textarea').fill('and the next bit?');
-  await page.locator('#clg .go').first().click();
+  await page.locator('#clg .send').first().click();
   await page.locator('#clg ol li').first().waitFor();
   await page.getByRole('button', { name: 'Show me: Review & quote' }).click();
   await page.waitForTimeout(500);
   await page.locator('#clg textarea').fill('what now?');
   await page.keyboard.press('Enter');
-  await page.waitForFunction(() => document.querySelectorAll('#clg .bot').length >= 4 || document.querySelectorAll('#clg .me').length >= 2 && !document.querySelector('#clg .bot:last-child')?.textContent.startsWith('Checking'));
+  await page.waitForFunction(() => document.querySelectorAll('#clg .me').length >= 2 && !document.querySelector('#clg .busy'));
   assert.equal(state.asked.at(-1).currentTool, 'review');
   await page.context().close();
 });
@@ -117,12 +121,12 @@ await t('send to the team: reaches the admin only, even if the page tries to nam
   const { page } = await newPage();
   await page.goto('http://localhost:8811/'); await planner(page).getByTestId('lite-stepper').waitFor();
   await page.locator('#clg .open').click();
-  assert.equal(await page.getByText('Send this chat to the team').isVisible(), false, 'not offered before there is a chat');
-  await page.locator('#clg .chip').first().click();
+  assert.equal(await page.locator('#clg .elink').isVisible(), false, 'not offered before there is a chat');
+  await page.locator('#clg .starter').first().click();
   await page.locator('#clg ol li').first().waitFor();
-  await page.getByText('Send this chat to the team').click();
+  await page.locator('#clg .elink').click();
   await page.locator('#clg-contact').fill('sam@visitor.com');
-  await page.locator('#clg .tbox .go').click();
+  await page.locator('#clg .ebox .pbtn').click();
   await page.getByText('Sent. The team will see this chat.').waitFor();
   assert.deepEqual(state.sent.map((m) => m.to), ['boss@example.com']);
   assert.equal(state.sent[0].replyTo, 'sam@visitor.com');
@@ -137,9 +141,10 @@ await t('a server refusal is shown kindly, and the question can be asked again',
   await page.goto('http://localhost:8811/'); await planner(page).getByTestId('lite-stepper').waitFor();
   await page.locator('#clg .open').click();
   await page.locator('#clg textarea').fill('hello');
-  await page.locator('#clg .go').first().click();
+  await page.locator('#clg .send').first().click();
   await page.getByText(/asked a lot of questions/).waitFor();
-  assert.equal(await page.locator('#clg .go').first().isDisabled(), false);
+  await page.locator('#clg textarea').fill('hello again');
+  assert.equal(await page.locator('#clg .send').first().isDisabled(), false, 'the question can be asked again');
   await page.context().close();
 });
 
@@ -150,11 +155,138 @@ await t('the visitor text is never turned into markup', async () => {
   await page.goto('http://localhost:8811/'); await planner(page).getByTestId('lite-stepper').waitFor();
   await page.locator('#clg .open').click();
   await page.locator('#clg textarea').fill('<h1>x</h1>');
-  await page.locator('#clg .go').first().click();
+  await page.locator('#clg .send').first().click();
   await page.locator('#clg ol li').first().waitFor();
   assert.equal(await page.evaluate(() => window.__pwned), undefined);
   assert.equal(await page.locator('#clg .list h1, #clg .list img, #clg .list script').count(), 0);
   state.reply = null;
+  await page.context().close();
+});
+
+await t('movable: the title bar drags the chat, it stays on screen, double-click puts it back; the round button drags too', async () => {
+  state.enabled = true;
+  const { page } = await newPage();
+  await page.goto('http://localhost:8811/'); await planner(page).getByTestId('lite-stepper').waitFor();
+  const dot = page.locator('#clg .open'); await dot.waitFor({ timeout: 8000 });
+  const b0 = await dot.boundingBox();
+  await page.mouse.move(b0.x + 20, b0.y + 20); await page.mouse.down(); await page.mouse.move(b0.x - 200, b0.y - 150, { steps: 5 }); await page.mouse.up();
+  const b1 = await dot.boundingBox();
+  assert.ok(b1.x < b0.x - 150 && b1.y < b0.y - 100, 'the round button moved');
+  assert.equal(await page.locator('#clg .panel').isVisible(), false, 'a drag does not open it');
+  await dot.click();
+  assert.equal(await page.locator('#clg .panel').isVisible(), true, 'a plain click still opens it');
+  const head = page.locator('#clg .head'); const h0 = await head.boundingBox();
+  await page.mouse.move(h0.x + 150, h0.y + 10); await page.mouse.down(); await page.mouse.move(h0.x - 100, h0.y + 60, { steps: 5 }); await page.mouse.move(-500, 400, { steps: 3 }); await page.mouse.up();
+  const p1 = await page.locator('#clg .panel').boundingBox();
+  assert.ok(p1.x >= 0 && p1.y >= 0 && p1.x + p1.width <= 1200 && p1.y + p1.height <= 800, 'the chat stays fully on the screen: ' + JSON.stringify(p1));
+  await page.reload(); await page.locator('#clg .open').waitFor({ timeout: 8000 });
+  const b2 = await page.locator('#clg .open').boundingBox();
+  assert.ok(Math.abs(b2.x - b1.x) < 3, 'the button position is remembered');
+  await page.locator('#clg .open').click();
+  const p2 = await page.locator('#clg .panel').boundingBox();
+  assert.ok(Math.abs(p2.x - p1.x) < 3, 'the chat position is remembered');
+  await page.locator('#clg .head .t').dblclick();
+  const p3 = await page.locator('#clg .panel').boundingBox();
+  assert.ok(p3.x > p1.x + 100, 'double-click puts the chat back');
+  await page.context().close();
+});
+
+await t('resizable: wider/narrower button and a drag corner, remembered', async () => {
+  state.enabled = true;
+  const { page } = await newPage();
+  await page.goto('http://localhost:8811/'); await planner(page).getByTestId('lite-stepper').waitFor();
+  await page.locator('#clg .open').click();
+  const w0 = (await page.locator('#clg .panel').boundingBox()).width;
+  await page.getByRole('button', { name: 'Make the help chat wider' }).click();
+  const w1 = (await page.locator('#clg .panel').boundingBox()).width;
+  assert.ok(w1 > w0 + 250, 'wider: ' + w0 + ' to ' + w1);
+  await page.getByRole('button', { name: 'Make the help chat narrower' }).click();
+  const g = await page.locator('#clg .grip').boundingBox(); const before = await page.locator('#clg .panel').boundingBox();
+  await page.mouse.move(g.x + 8, g.y + 8); await page.mouse.down(); await page.mouse.move(g.x - 120, g.y - 100, { steps: 5 }); await page.mouse.up();
+  const after = await page.locator('#clg .panel').boundingBox();
+  assert.ok(after.width > before.width + 80, 'the corner resizes: ' + Math.round(before.width) + 'x' + Math.round(before.height) + ' to ' + Math.round(after.width) + 'x' + Math.round(after.height));
+  await page.reload(); await page.locator('#clg .open').click();
+  assert.ok(Math.abs((await page.locator('#clg .panel').boundingBox()).width - after.width) < 3, 'the size is remembered');
+  await page.context().close();
+});
+
+await t('microphone: speech is added to the end of what is typed, and stops when asked', async () => {
+  state.enabled = true;
+  const { page } = await newPage();
+  await page.addInitScript(() => {
+    window.SpeechRecognition = window.webkitSpeechRecognition = class { constructor() { window.__rec = this; } start() { this.on = true; } stop() { this.on = false; if (this.onend) this.onend(); } };
+    window.__say = (text) => window.__rec.onresult({ results: [[{ transcript: text }]] });
+  });
+  await page.goto('http://localhost:8811/'); await planner(page).getByTestId('lite-stepper').waitFor();
+  await page.locator('#clg .open').click();
+  await page.locator('#clg textarea').fill('how do I');
+  await page.locator('#clg .mic').click();
+  assert.equal(await page.locator('#clg .mic').getAttribute('aria-pressed'), 'true');
+  await page.evaluate(() => window.__say('measure the door'));
+  assert.equal(await page.locator('#clg textarea').inputValue(), 'how do I measure the door');
+  await page.locator('#clg .mic').click();
+  assert.equal(await page.locator('#clg .mic').getAttribute('aria-pressed'), 'false');
+  assert.equal(await page.evaluate(() => window.__rec.on), false);
+  await page.context().close();
+});
+
+await t('the email link is a plain text link, and its Send button is the same colour as the chat Send button', async () => {
+  state.enabled = true;
+  const { page } = await newPage();
+  await page.goto('http://localhost:8811/'); await planner(page).getByTestId('lite-stepper').waitFor();
+  await page.locator('#clg .open').click();
+  await page.locator('#clg .starter').first().click(); await page.locator('#clg ol li').first().waitFor();
+  const link = await page.locator('#clg .elink').evaluate((e) => { const c = getComputedStyle(e); return { bg: c.backgroundColor, td: c.textDecorationLine }; });
+  assert.ok(/underline/.test(link.td) && /rgba\(0, 0, 0, 0\)|transparent/.test(link.bg), 'a plain text link: ' + JSON.stringify(link));
+  await page.locator('#clg .elink').click();
+  if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT });
+  const send = await page.locator('#clg .ebox .pbtn').evaluate((e) => getComputedStyle(e).backgroundColor);
+  const ask = await page.locator('#clg .send').evaluate((e) => getComputedStyle(e).backgroundColor);
+  assert.equal(send, ask);
+  await page.context().close();
+});
+
+await t('the page script loads the help chat by itself (nothing extra to add to the page)', async () => {
+  state.enabled = true;
+  const { page } = await newPage();
+  await page.goto('http://localhost:8811/'); await planner(page).getByTestId('lite-stepper').waitFor();
+  await page.locator('#clg .open').waitFor({ timeout: 8000 });
+  await page.context().close();
+});
+
+await t('pop-ups and the tour card appear in the middle of what the visitor sees, not the middle of the long frame', async () => {
+  state.enabled = false;
+  const { page } = await newPage();
+  await page.goto('http://localhost:8811/'); await planner(page).getByTestId('lite-stepper').waitFor();
+  await page.evaluate(() => window.scrollTo(0, 700)); await page.waitForTimeout(500);
+  const inView = async (sel) => page.evaluate((s) => {
+    const f = document.getElementById('p'); const fr = f.getBoundingClientRect();
+    const el = f.contentDocument ? f.contentDocument.querySelector(s) : null;
+    return el ? { mid: fr.top + el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2, vh: window.innerHeight } : null;
+  }, sel).catch(() => null);
+  // the frame is cross-origin in this test, so measure through the frame's own coordinates instead
+  const rectIn = async (sel) => planner(page).locator(sel).first().evaluate((el) => { const r = el.getBoundingClientRect(); return { top: r.top, h: r.height, innerH: window.innerHeight }; });
+  await planner(page).getByTestId('lite-help-open').click();
+  await planner(page).getByTestId('lite-help').waitFor();
+  const frameTop = await page.evaluate(() => document.getElementById('p').getBoundingClientRect().top);
+  const m = await rectIn('[data-testid="lite-help"] .modal');
+  const mid = frameTop + m.top + m.h / 2;
+  const top = frameTop + m.top;
+  assert.ok(top + m.h <= 800, 'the bottom of the Help pop-up is on screen: it ends at ' + Math.round(top + m.h));
+  assert.ok(top >= 90, 'the top of the Help pop-up is below the site menu (90 px): it starts at ' + Math.round(top));
+  assert.ok(mid > 100 && mid < 700, 'the Help pop-up is centred on the screen: its middle is at ' + Math.round(mid) + ' of 800 (frame ' + m.innerH + ' tall)');
+  await planner(page).getByTestId('info-got-it').count();
+  await planner(page).getByTestId('lite-help-close').evaluate((el) => el.click());
+  await page.evaluate(() => window.scrollTo(0, 700)); await page.waitForTimeout(400);
+  await planner(page).getByRole('button', { name: 'Take the tour' }).click();
+  await planner(page).locator('.shepherd-element').first().waitFor({ timeout: 8000 });
+  await page.waitForTimeout(900);
+  const frameTop2 = await page.evaluate(() => document.getElementById('p').getBoundingClientRect().top);
+  const c = await rectIn('.shepherd-element');
+  const cmid = frameTop2 + c.top + c.h / 2;
+  assert.ok(frameTop2 + c.top >= 90, 'the tour card starts below the site menu: ' + Math.round(frameTop2 + c.top));
+  assert.ok(cmid > 0 && cmid < 800, 'the tour card is on the visible screen: its middle is at ' + Math.round(cmid) + ' of 800 (frame ' + c.innerH + ' tall)');
+  void inView;
   await page.context().close();
 });
 

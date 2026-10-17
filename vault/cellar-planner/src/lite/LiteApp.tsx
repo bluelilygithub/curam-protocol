@@ -111,6 +111,7 @@ export function LiteApp() {
   const insideInput = useMemo(() => ({ project: result.project, runs: fullRuns(result.project), analysis: analysis.racks, dims, effects }), [result, analysis, dims, effects]);
   const racks = useMemo(() => rackFaceView(e, fullRuns(result.project), analysis.racks, rackWall, result.project.bottle, { badRuns: badRunIds(analysis.racks.issues) }), [result, analysis, e, rackWall]);
   const embedded = parentOrigin();
+  useEffect(() => { if (embedded) document.documentElement.dataset.embedded = '1'; }, [embedded]);
   const say = (name: EventName, detail?: Record<string, string | number | boolean>): void => track(name, embedded, detail);
   const brand = useMemo(() => accentColours(cfg.accent), [cfg.accent]);
 
@@ -166,13 +167,21 @@ export function LiteApp() {
     if (!to) return undefined;
     const onMessage = (ev: MessageEvent): void => {
       if (ev.origin !== to || ev.source !== window.parent) return;
-      const d = ev.data as { type?: unknown; version?: unknown; frameTop?: unknown; viewportH?: unknown; gap?: unknown } | null;
+      const d = ev.data as { type?: unknown; version?: unknown; frameTop?: unknown; viewportH?: unknown; gap?: unknown; topInset?: unknown } | null;
       if (!d || d.type !== VIEWPORT_TYPE || d.version !== 1) return;
       const frameTop = Number(d.frameTop), vh = Number(d.viewportH), gap = Math.min(400, Math.max(0, Number(d.gap) || 12));
       if (!Number.isFinite(frameTop) || !Number.isFinite(vh) || vh < 200 || vh > 5000) return;
       const el = document.querySelector<HTMLElement>('.lite-visual'), main = document.querySelector<HTMLElement>('.lite-main');
       if (!el || !main) return;
       document.documentElement.style.setProperty('--lite-vh', `${Math.round(vh)}px`);
+      // Pop-ups and the tour's centred cards belong in the middle of what the visitor can SEE, not in the middle of this frame (which is as tall
+      // as the whole planner): tell the CSS where the visible part of the frame starts and how tall it is.
+      // topInset: how much of the screen's top the website's own fixed menu covers: nothing of ours goes under it
+      const inset = Math.min(300, Math.max(0, Number(d.topInset) || 0));
+      const visTop = Math.max(0, -frameTop + inset);
+      const visH = Math.max(200, Math.min(vh - inset - Math.max(0, frameTop), window.innerHeight - visTop));
+      document.documentElement.style.setProperty('--vis-top', `${Math.round(visTop)}px`);
+      document.documentElement.style.setProperty('--vis-h', `${Math.round(visH)}px`);
       el.dataset.follow = '1';
       if (window.innerWidth < 900) { el.style.transform = ''; return; }
       const mainRect = main.getBoundingClientRect();
