@@ -7205,7 +7205,6 @@ export default function FinancePage() {
                   ?
                 </button>
               </Tooltip>
-              <FinanceTutorChat currentTab={tab} onOpenTab={setTab} />
             </div>
             <div className="flex items-center gap-2">
               <Tooltip text="Download a MYOB-compatible journal CSV for the selected date range — locks a cutoff date to prevent duplicate imports."><Btn variant="secondary" onClick={() => setExportModal({ type: 'myob' })}>Export MYOB</Btn></Tooltip>
@@ -7283,6 +7282,7 @@ export default function FinancePage() {
       )}
 
       {showHelp && <FinanceHelpModal tab={tab} onClose={() => setShowHelp(false)} />}
+      <FinanceTutorChat currentTab={tab} onOpenTab={setTab} />
     </div>
   );
 }
