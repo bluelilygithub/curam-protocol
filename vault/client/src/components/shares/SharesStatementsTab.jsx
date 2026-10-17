@@ -221,6 +221,8 @@ export default function SharesStatementsTab({ onImported }) {
   const [imports, setImports] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [showPaste, setShowPaste] = useState(false);
+  const [pasteText, setPasteText] = useState('');
   const fileInputRef = useRef(null);
   const addToast = useToastStore((s) => s.addToast);
   const { startProcessing, stopProcessing } = useProcessingStore();
@@ -271,6 +273,29 @@ export default function SharesStatementsTab({ onImported }) {
     }
   };
 
+  // CMC's dividend emails have no PDF: paste the email text. Read with plain rules on the server, no AI.
+  const onPasteSubmit = async () => {
+    setUploading(true);
+    try {
+      const res = await api.post('/api/shares/statements/email', { text: pasteText });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not read that email');
+      const warnings = (data.emailWarnings || []).concat(data.overlapWarning || []).filter(Boolean).join(' ');
+      addToast(
+        warnings ? `Read ${data.lines.length} dividend(s). ${warnings}` : `Read ${data.lines.length} dividend(s) — review below`,
+        warnings ? 'error' : 'success'
+      );
+      setPasteText('');
+      setShowPaste(false);
+      loadImports();
+      setExpandedId(data.import.id);
+    } catch (err) {
+      addToast(err.message || 'Could not read that email', 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
     <div>
       <div className="flex items-start justify-between mb-4 gap-4 flex-wrap">
@@ -293,8 +318,51 @@ export default function SharesStatementsTab({ onImported }) {
           >
             {uploading ? 'Uploading…' : '+ Upload statement (PDF)'}
           </button>
+          <button
+            onClick={() => setShowPaste((v) => !v)}
+            disabled={uploading}
+            className="text-sm px-4 py-1.5 rounded-md border hover:opacity-70 transition-opacity duration-200 disabled:opacity-40 flex-shrink-0 ml-2"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            Paste dividend email
+          </button>
         </div>
       </div>
+
+      {showPaste && (
+        <div className="mb-4 rounded-md border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+          <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+            Paste the whole CMC dividend email (from "Dividend On:" down to "Net Amount (AUD)"). It is read on this
+            server with fixed rules — no AI, nothing sent elsewhere — and gross, tax withheld and net come from the
+            email itself. You can paste several emails one after another. Nothing is added until you approve each line.
+          </p>
+          <textarea
+            value={pasteText}
+            onChange={(e) => setPasteText(e.target.value)}
+            rows={10}
+            className="w-full text-xs rounded-md border p-2 font-mono"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+            placeholder="Dividend On: TSM:US&#10;Pay Date    09/10/2026&#10;…"
+          />
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={onPasteSubmit}
+              disabled={uploading || !pasteText.trim()}
+              className="text-sm px-4 py-1.5 rounded-md hover:opacity-70 transition-opacity duration-200 disabled:opacity-40"
+              style={{ background: 'var(--color-primary)', color: '#fff' }}
+            >
+              {uploading ? 'Reading…' : 'Read email'}
+            </button>
+            <button
+              onClick={() => { setShowPaste(false); setPasteText(''); }}
+              className="text-sm px-4 py-1.5 rounded-md hover:opacity-70 transition-opacity duration-200"
+              style={{ color: 'var(--color-muted)' }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {imports.length === 0 && (
         <p className="text-sm text-center py-8" style={{ color: 'var(--color-muted)' }}>

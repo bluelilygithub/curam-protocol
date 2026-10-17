@@ -9,6 +9,7 @@ const { aiLimiter } = require('../middleware/aiRateLimit');
 const {
   createImport, getImports, getImportDetail, updateLineFields, approveLine, rejectLine, revertImport,
 } = require('../services/sharesStatementImport');
+const { parseCmcDividendEmails } = require('../services/sharesDividendEmail');
 
 // PDF-only per docs/shares-statement-import.md. Temp storage — deleted right
 // after text extraction, never kept (the extracted+structured data lives in
@@ -41,6 +42,30 @@ router.post('/upload', aiLimiter, upload.single('file'), async (req, res) => {
     res.status(err.statusCode || 500).json({ error: err.message });
   } finally {
     fs.unlink(req.file.path, () => {}); // best-effort — extraction already read it
+  }
+});
+
+// POST /api/shares/statements/email { text } — pasted CMC dividend email(s). Parsed with plain rules
+// (no model call, nothing leaves the server), then into the same review queue as a PDF.
+router.post('/email', async (req, res) => {
+  try {
+    const text = String((req.body && req.body.text) || '');
+    if (!text.trim()) return res.status(400).json({ error: 'Paste the dividend email text first' });
+    if (text.length > 50000) return res.status(400).json({ error: 'That is too long for a dividend email' });
+    const { lines, warnings, skipped } = parseCmcDividendEmails(text);
+    if (!lines.length) {
+      return res.status(400).json({ error: `No dividend found in that text${skipped.length ? ` (${skipped.join('; ')})` : ' — paste the whole email, starting at "Dividend On:"'}` });
+    }
+    const first = lines[0];
+    const result = await createImport(req.user.id, {
+      filename: lines.length === 1 ? `CMC dividend email — ${first.symbol} ${first.date}` : `CMC dividend emails — ${lines.length} dividends`,
+      brokerHint: 'CMC Markets',
+      lines,
+    });
+    res.status(201).json({ ...result, emailWarnings: [...warnings, ...skipped.map((s) => `Skipped ${s}`)] });
+  } catch (err) {
+    console.error('[sharesStatements] email error:', err.message);
+    res.status(err.statusCode || 500).json({ error: err.message });
   }
 });
 

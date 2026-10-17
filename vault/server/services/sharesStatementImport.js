@@ -185,8 +185,9 @@ async function classifyLine(userId, line) {
   return { matchStatus: 'new', matchedTradeId: null, matchedLedgerId: null, dedupHash: hash };
 }
 
-async function createImport(userId, { filename, filePath, brokerHint }) {
-  const { lines, truncated } = await extractLinesFromPdf(userId, filePath);
+// `lines` (already structured, e.g. from a pasted dividend email) skips the PDF + model step.
+async function createImport(userId, { filename, filePath, brokerHint, lines: given }) {
+  const { lines, truncated } = given ? { lines: given, truncated: false } : await extractLinesFromPdf(userId, filePath);
 
   const dates = lines.map((l) => l.date).filter(Boolean).sort();
   const periodStart = dates[0] || null;

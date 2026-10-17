@@ -13,6 +13,16 @@ Real-usage testing surfaced repeated trade-matching problems even after several 
 
 **Re-enabling trades later**: needs the user's own trade data cleaned up first (accurate per-trade price and date, not averaged/estimated values) — that's a data-quality problem in their existing `share_trades` rows, not something this feature can fix by extracting harder. Once that's sorted, flip `LINE_TYPES` back to the full set and restore the fuller extraction prompt (kept in git history, not deleted).
 
+## Pasted CMC dividend emails — no PDF, no AI (2026-10-17)
+
+CMC's dividend notifications arrive as an **email with no PDF attached**, and unlike the Trading Account Statement they state gross, tax withheld, net (local), the exchange rate and net AUD. So a second way in exists next to the PDF upload: **Shares → Statements → Paste dividend email**.
+
+- `POST /api/shares/statements/email { text }` (`server/routes/sharesStatements.js`; no `aiLimiter`, there is no model call). `server/services/sharesDividendEmail.js` (`parseCmcDividendEmails`, tested by `node server/services/sharesDividendEmail.test.js`) reads the text with fixed rules; the lines go through the same `createImport` → review queue → approve path as a PDF (`createImport` takes `lines` to skip the PDF + model step). Dedup, revert and "nothing auto-applies" are unchanged. Several emails pasted one after another give several lines.
+- **Read, never derived.** Pay Date (not Ex Date) is the line date, DD/MM/YYYY, a real calendar date or the email is skipped with a reason. Exchange Rate is **USD per 1 AUD**, so AUD = USD ÷ rate. Net AUD is taken as stated; withholding = tax USD ÷ rate; gross = net + withholding, so the three always add up. These reach `share_cash_ledger` as `grossAmountAud`/`withholdingTaxAud` with `grossDerived = false` (the 15% default rate is only for statements that show net alone). Example (TSM, 89 shares, ex 16/09/2026, paid 09/10/2026): net 110.43, tax 29.36 (21%), gross 139.79.
+- AUD dividends (no exchange rate) are taken as AUD. A net that disagrees with USD ÷ rate by more than 2c, or gross − tax − fees ≠ net, still imports but carries a visible warning. Missing rate on a foreign-currency dividend, missing/invalid date or no net amount: skipped with the reason, never guessed.
+- The **account number and account name in the email are not stored.** Only the structured line is.
+- The PDF path is unchanged and still sends the statement text to the `standard` model.
+
 ## Gross / withholding / net + payment date + franking columns (2026-09-30)
 
 Backlog item 1 (US withholding) and item 5 (franking fields). **Schema change, additive + nullable** — take a Railway backup before deploying.
