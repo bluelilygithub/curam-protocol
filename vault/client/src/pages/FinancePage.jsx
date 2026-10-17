@@ -7164,6 +7164,19 @@ function DocumentLinkModal({ doc, fy, onClose, onSaved }) {
 }
 
 const TABS = ['Dashboard', 'Invoices', 'Quotes', 'Suppliers', 'Expenses', 'Documents', 'Drawings', 'Vehicle/Home Office', 'Assets', 'Recurring', 'Wages', 'Interest', 'Journal', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Reports', 'Settings'];
+// The same tabs, grouped so the bar fits the page: a row of groups, then the active group's tabs.
+// Every entry of TABS must appear in exactly one group (a test checks it).
+const TAB_GROUPS = [
+  { name: 'Overview',  tabs: ['Dashboard', 'Position', 'Balances'] },
+  { name: 'Sales',     tabs: ['Invoices', 'Quotes'] },
+  { name: 'Purchases', tabs: ['Expenses', 'Suppliers', 'Documents', 'Recurring'] },
+  { name: 'Owner & assets', tabs: ['Assets', 'Vehicle/Home Office', 'Drawings', 'Wages', 'Interest'] },
+  { name: 'Accounting', tabs: ['Journal', 'Accounts', 'Codes'] },
+  { name: 'Tax & reports', tabs: ['BAS', 'Reports'] },
+  { name: 'Settings',  tabs: ['Settings'] },
+];
+const groupOfTab = (t) => TAB_GROUPS.find(g => g.tabs.includes(t)) || TAB_GROUPS[0];
+
 const NO_DATE_FILTER_TABS = new Set(['Documents', 'Suppliers', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings', 'Recurring', 'Vehicle/Home Office', 'Reports']);
 
 export default function FinancePage() {
@@ -7200,8 +7213,16 @@ export default function FinancePage() {
       .catch(() => {});
   }, []);
 
+  // the tour (and anything else) can ask for a tab that is not on screen because its group is closed
+  useEffect(() => {
+    const open = (e) => { if (TABS.includes(e.detail)) setTab(e.detail); };
+    window.addEventListener('vault:finance-tab', open);
+    return () => window.removeEventListener('vault:finance-tab', open);
+  }, []);
+
   const showDatePicker = !NO_DATE_FILTER_TABS.has(tab);
   const { from, to } = dateRange;
+  const activeGroup = groupOfTab(tab);
 
   return (
     <div className="flex flex-col h-full">
@@ -7230,24 +7251,48 @@ export default function FinancePage() {
               <Tooltip text="Download a single combined CSV for Google Sheets — locks a cutoff date to prevent duplicate imports."><Btn variant="secondary" onClick={() => setExportModal({ type: 'sheets' })}>Export Google Sheets</Btn></Tooltip>
             </div>
           </div>
-          <div data-tour="finance-tabs" className="flex gap-0 overflow-x-auto scroll-x-obvious">
-            {TABS.map(t => (
-              <Tooltip key={t} text={TOOL_HELP[t]?.description || `Switch to the ${t} tab.`}>
-                <button
-                  data-finance-tab={t}
-                  onClick={() => setTab(t)}
-                  className="flex-shrink-0 text-sm px-4 py-2 border-b-2 transition-colors"
-                  style={{
-                    background:        'transparent',
-                    color:             tab === t ? 'var(--color-primary)' : 'var(--color-muted)',
-                    borderBottomColor: tab === t ? 'var(--color-primary)' : 'transparent',
-                    fontWeight:        tab === t ? 600 : 400,
-                  }}
-                >
-                  {t}
-                </button>
-              </Tooltip>
-            ))}
+          <div data-tour="finance-tabs">
+            <div className="flex gap-0 overflow-x-auto scroll-x-obvious">
+              {TAB_GROUPS.map(g => {
+                const on = g === activeGroup;
+                return (
+                  <button
+                    key={g.name}
+                    data-finance-group={g.name}
+                    onClick={() => { if (!on) setTab(g.tabs[0]); }}
+                    className="flex-shrink-0 text-sm px-4 py-2 border-b-2 transition-colors"
+                    style={{
+                      background:        'transparent',
+                      color:             on ? 'var(--color-primary)' : 'var(--color-muted)',
+                      borderBottomColor: on ? 'var(--color-primary)' : 'transparent',
+                      fontWeight:        on ? 600 : 400,
+                    }}
+                  >
+                    {g.name}
+                  </button>
+                );
+              })}
+            </div>
+            {activeGroup.tabs.length > 1 && (
+              <div className="flex flex-wrap gap-1 py-2">
+                {activeGroup.tabs.map(t => (
+                  <Tooltip key={t} text={TOOL_HELP[t]?.description || `Switch to the ${t} tab.`}>
+                    <button
+                      data-finance-tab={t}
+                      onClick={() => setTab(t)}
+                      className="text-xs px-3 py-1 rounded-full border transition-colors"
+                      style={{
+                        background:  tab === t ? 'var(--color-primary)' : 'transparent',
+                        color:       tab === t ? '#fff' : 'var(--color-text)',
+                        borderColor: tab === t ? 'var(--color-primary)' : 'var(--color-border)',
+                      }}
+                    >
+                      {t}
+                    </button>
+                  </Tooltip>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

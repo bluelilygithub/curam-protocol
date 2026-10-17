@@ -10,6 +10,8 @@ const tabsLine = page.match(/const TABS = \[([^\]]+)\];/);
 assert.ok(tabsLine, 'found the TABS list on the Finance page');
 const pageTabs = [...tabsLine[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
 assert.ok(pageTabs.length >= 15, 'found the tabs');
+const groups = [...page.matchAll(/tabs: \[([^\]]+)\] \}/g)].flatMap((m) => [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]));
+assert.deepStrictEqual([...groups].sort(), [...pageTabs].sort(), 'every Finance tab sits in exactly one menu group');
 assert.deepStrictEqual(CATALOG.map((t) => t.id).sort(), [...pageTabs].sort(), 'guide catalogue matches the Finance tabs');
 assert.strictEqual(new Set(CATALOG.map((t) => t.id)).size, CATALOG.length, 'no duplicate ids');
 for (const t of CATALOG) assert.ok(t.group && t.does, `${t.id} is described`);

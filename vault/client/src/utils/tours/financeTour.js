@@ -24,6 +24,7 @@ function injectStepCounter(stepIndex) {
 function clickFinanceTab(name) {
   const btn = document.querySelector(`[data-finance-tab="${name}"]`);
   if (btn) btn.click();
+  else window.dispatchEvent(new CustomEvent('vault:finance-tab', { detail: name })); // its group is closed
 }
 
 function safeBeforeShow(tour, stepId, selector) {
