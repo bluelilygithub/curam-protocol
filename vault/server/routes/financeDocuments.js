@@ -128,7 +128,13 @@ router.get('/', wrap(async (req, res) => {
     `SELECT ${COLS_D}
      FROM fin_documents d WHERE ${where.join(' AND ')} ORDER BY COALESCE(d."docDate", d."createdAt"::date) DESC, d.id DESC LIMIT 1000`, params);
   const { rows: [usage] } = await pool.query(`SELECT COALESCE(SUM("sizeBytes"),0)::float AS used FROM fin_documents WHERE "userId"=$1`, [req.user.id]);
-  res.json({ documents: await withLinks(req.user.id, rows), usedBytes: usage.used, quotaBytes: QUOTA, maxFileBytes: MAX_BYTES, kinds: KINDS });
+  // every supplier name used on a document before (any year), plus the Suppliers directory, for the picker
+  const { rows: names } = await pool.query(
+    `SELECT name FROM (
+       SELECT TRIM(supplier) AS name FROM fin_documents WHERE "userId"=$1 AND TRIM(COALESCE(supplier,'')) <> ''
+       UNION SELECT TRIM(name) FROM fin_suppliers WHERE "userId"=$1 AND "isActive"=true
+     ) s WHERE name <> '' GROUP BY name ORDER BY LOWER(name)`, [req.user.id]);
+  res.json({ documents: await withLinks(req.user.id, rows), suppliers: names.map((r) => r.name), usedBytes: usage.used, quotaBytes: QUOTA, maxFileBytes: MAX_BYTES, kinds: KINDS });
 }));
 
 // Expenses (and depreciating assets) in a financial year with no evidence at all. Calculated claims

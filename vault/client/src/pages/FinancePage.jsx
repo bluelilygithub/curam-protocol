@@ -516,7 +516,8 @@ function CategoryInput({ value, onChange }) {
   );
 }
 
-function SupplierInput({ value, onChange }) {
+// `extra`: more names to offer (for example suppliers already used on documents). Any new name can be typed.
+function SupplierInput({ value, onChange, extra }) {
   const [suppliers, setSuppliers] = useState([]);
   const [open, setOpen]           = useState(false);
   const ref = useRef(null);
@@ -528,7 +529,8 @@ function SupplierInput({ value, onChange }) {
       .catch(() => {});
   }, []);
 
-  const filtered = suppliers.filter(s => s.toLowerCase().includes((value || '').toLowerCase()) && s !== value);
+  const all = [...new Set([...suppliers, ...(extra || [])])].sort((a, b) => a.localeCompare(b));
+  const filtered = all.filter(s => s.toLowerCase().includes((value || '').toLowerCase()) && s !== value);
 
   useEffect(() => {
     const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -6952,7 +6954,7 @@ function DocumentsTab() {
             <input ref={pickRef} type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.csv,.xlsx,.xls,.txt,.docx,.doc" onChange={e => setFiles([...e.target.files])} className="text-sm" style={{ color: 'var(--color-text)' }} />
           </Tooltip>
           <Field label="Type"><Tooltip text="What kind of document this is."><Sel value={meta.kind} onChange={v => setMeta(p => ({ ...p, kind: v }))}>{Object.entries(DOC_KIND_LABELS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Sel></Tooltip></Field>
-          <Field label="Supplier"><Tooltip text="Who issued it (for example the AI provider). Optional."><Input value={meta.supplier} onChange={v => setMeta(p => ({ ...p, supplier: v }))} placeholder="Optional" /></Tooltip></Field>
+          <Field label="Supplier"><Tooltip text="Who issued it (for example the AI provider). Pick a previous supplier or type a new one. Optional."><SupplierInput value={meta.supplier} extra={data.suppliers} onChange={v => setMeta(p => ({ ...p, supplier: v }))} /></Tooltip></Field>
           <Field label="Document date"><Tooltip text="The date on the document. The financial year is worked out from it; leave blank to file it under the year selected above."><Input type="date" value={meta.docDate} onChange={v => setMeta(p => ({ ...p, docDate: v }))} /></Tooltip></Field>
           <Field label="Notes"><Tooltip text="Anything worth remembering about this document. Optional."><Input value={meta.notes} onChange={v => setMeta(p => ({ ...p, notes: v }))} placeholder="Optional" /></Tooltip></Field>
           <Tooltip text="Upload the chosen files to this library."><Btn onClick={doUpload} disabled={uploading || !files.length}>{uploading ? 'Uploading…' : `Upload${files.length ? ` ${files.length} file${files.length === 1 ? '' : 's'}` : ''}`}</Btn></Tooltip>
@@ -7045,7 +7047,7 @@ function DocumentsTab() {
           <div className="flex flex-col gap-3">
             <Field label="Title"><Tooltip text="A name you'll recognise in lists and exports."><Input value={editDoc.title} onChange={v => setEditDoc(p => ({ ...p, title: v }))} /></Tooltip></Field>
             <Field label="Type"><Tooltip text="What kind of document this is."><Sel value={editDoc.kind} onChange={v => setEditDoc(p => ({ ...p, kind: v }))}>{Object.entries(DOC_KIND_LABELS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Sel></Tooltip></Field>
-            <Field label="Supplier"><Tooltip text="Who issued it."><Input value={editDoc.supplier || ''} onChange={v => setEditDoc(p => ({ ...p, supplier: v }))} /></Tooltip></Field>
+            <Field label="Supplier"><Tooltip text="Who issued it. Pick a previous supplier or type a new one."><SupplierInput value={editDoc.supplier || ''} extra={data.suppliers} onChange={v => setEditDoc(p => ({ ...p, supplier: v }))} /></Tooltip></Field>
             <Field label="Document date"><Tooltip text="The date on the document."><Input type="date" value={editDoc.docDate || ''} onChange={v => setEditDoc(p => ({ ...p, docDate: v }))} /></Tooltip></Field>
             <Field label="Financial year"><Tooltip text="Which financial year this document is filed under."><Sel value={editDoc.fy} onChange={v => setEditDoc(p => ({ ...p, fy: v }))}>{fyOptions().map(o => <option key={o} value={o}>FY {o}</option>)}</Sel></Tooltip></Field>
             <Field label="Notes"><Tooltip text="Anything worth remembering."><Textarea value={editDoc.notes || ''} onChange={v => setEditDoc(p => ({ ...p, notes: v }))} rows={2} /></Tooltip></Field>
