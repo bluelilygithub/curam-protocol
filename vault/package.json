@@ -27,6 +27,7 @@
     "test:finance-tutor": "node server/services/financeTutor.test.js",
     "test:pdf-tools": "node server/services/pdfTools.test.js",
     "test:pdf-voice": "node server/services/pdfVoiceCommand.test.js",
+    "test:guides": "node server/config/guides.test.js",
     "test:tutor-email": "node server/routes/tutorEmail.test.js",
     "test:pdf-tutor": "node server/services/pdfTutor.test.js",
     "test:graphics": "node server/routes/graphics/graphics.test.js",

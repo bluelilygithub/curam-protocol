@@ -15,7 +15,8 @@ const express = require('express');
 const { rateLimit } = require('express-rate-limit');
 const router = express.Router();
 
-const GUIDES = { pdf: 'PDF guide', graphics: 'Graphics guide', video: 'Video Tools tutor', finance: 'Finance guide' };
+// id -> display name, from the one registry every guide is listed in (server/config/guides.js)
+const GUIDES = Object.fromEntries(Object.entries(require('../config/guides').GUIDES).map(([id, g]) => [id, g.name]));
 const MAX_TURNS = 60;
 
 const limiter = rateLimit({
