@@ -2,7 +2,7 @@ import React, { cloneElement, useCallback, useEffect, useId, useMemo, useState }
 import api from '../utils/apiClient';
 import Tooltip from './Tooltip';
 
-// Settings -> Cellar Planner (admin). The owner's numbers, shared by the PUBLIC lite planner and the staff Cellar Planner: the rack types (sizes, bottle
+// Cellar Planner -> Settings (admin). The owner's numbers, shared by the PUBLIC lite planner and the staff Cellar Planner: the rack types (sizes, bottle
 // counts, price per unit, "confirmed by the supplier"), door widths, the price formula, a line of text and the starting rooms. Saved to Vault (workspace_settings); the public tool fetches them when it opens. Rules live on the server
 // (server/config/cellarLiteConfig.js), which also sends back plain-language reasons when a value is refused. Docs: docs/cellar-planner.md.
 

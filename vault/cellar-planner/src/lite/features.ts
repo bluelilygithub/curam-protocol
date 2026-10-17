@@ -1,6 +1,6 @@
 import type { FeatureEffect, FeatureGroup, FeatureOption } from './config';
 
-// The "Make it yours" feature options: what a person has picked, resolved against the owner's list (Settings -> Cellar Planner -> Feature options).
+// The "Make it yours" feature options: what a person has picked, resolved against the owner's list (Cellar Planner -> Settings -> Feature options).
 // A pick is stored as the option's `code` (a number that never changes for an option), so a design code or saved design survives renames, and a pick
 // whose option was removed, switched off or no longer fits the room is simply ignored (never an error). Pure; used by the public tool, the staff
 // planner, the price, the quote and the design code.

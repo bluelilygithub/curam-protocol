@@ -6,7 +6,7 @@ import type { Fonts } from './drawingPackage';
 
 // The customer quote: one or more A4 pages from the staff planner's price breakdown. Built as plain content first (QuoteDoc, so tests check every word
 // without a PDF reader), then laid out as drawing primitives (layoutQuote), then drawn by quotePdf.ts. A quote is only made when the numbers behind it
-// can be trusted: see quoteBlockers. Prices come from the owner's catalogue (Settings -> Cellar Planner); the wording of the terms is the owner's.
+// can be trusted: see quoteBlockers. Prices come from the owner's catalogue (Cellar Planner -> Settings); the wording of the terms is the owner's.
 
 export const A4_PORTRAIT = { w: 595.28, h: 841.89 };
 export const QUOTE_STATEMENT = 'Prices are based on the design shown and are subject to a final site measure and confirmation of the finishes.';
@@ -47,7 +47,7 @@ export function quoteBlockers(p: AppProject, cat: Catalogue | null, a: Analysis 
   if (!p.rackType) out.push('Choose a rack type (Rack specification) so the design can be priced.');
   else if (!t) out.push(`The rack type "${p.rackType.name}" is no longer in the catalogue. Choose another.`);
   else {
-    if (!t.confirmed) out.push(`"${t.name}" is not confirmed by the supplier. Tick "Confirmed by supplier" in Settings, Cellar Planner, once its values are real, then use the catalogue's values again.`);
+    if (!t.confirmed) out.push(`"${t.name}" is not confirmed by the supplier. Tick "Confirmed by supplier" in Cellar Planner, Settings, once its values are real, then use the catalogue's values again.`);
     if (!matchesType(p, t)) out.push(`The rack values differ from the catalogue's "${t.name}". Use the catalogue's values again, so the quote matches what was priced.`);
   }
   if (p.estimated?.length) out.push('Some rack values are still marked estimated. Type the supplier\'s numbers over them, or use a confirmed rack type.');
@@ -58,8 +58,8 @@ export function quoteBlockers(p: AppProject, cat: Catalogue | null, a: Analysis 
   const price = staffPrice(p, cat);
   if (price.status !== 'OK' && !out.some((x) => /rack type|catalogue|No racks/i.test(x))) out.push(price.reason);
   // a chosen feature with no price would print on the quote with no amount: name it and stop
-  if (price.status === 'OK') for (const u of price.unpriced) out.push(`"${u}" is chosen but has no price. Enter its low and high price in Settings, Cellar Planner, Feature options, or take it out of the design.`);
-  if (!cat.quote.businessName) out.push('Enter your business name in Settings, Cellar Planner, Quote details: a quote needs to say who it is from.');
+  if (price.status === 'OK') for (const u of price.unpriced) out.push(`"${u}" is chosen but has no price. Enter its low and high price in Cellar Planner, Settings, Feature options, or take it out of the design.`);
+  if (!cat.quote.businessName) out.push('Enter your business name in Cellar Planner, Settings, Quote details: a quote needs to say who it is from.');
   return out;
 }
 

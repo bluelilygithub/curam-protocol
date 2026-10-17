@@ -22,13 +22,13 @@ export interface AppProject {
   bottle: BottleProfileId;
   runs: RunPlacement[];
   walkwayMm: number | null;
-  /** The catalogue rack type the rack values came from (Settings -> Cellar Planner). A copy: the numbers live in `rackSpec`, so a later catalogue change never alters this design. `confirmed` = the supplier's values at the time. */
+  /** The catalogue rack type the rack values came from (Cellar Planner -> Settings). A copy: the numbers live in `rackSpec`, so a later catalogue change never alters this design. `confirmed` = the supplier's values at the time. */
   rackType?: { id: string; name: string; confirmed: boolean };
   /** The rack finish shown in the 3D view and printed pictures (colour only: it never changes a count). */
   finish?: 'OAK' | 'WALNUT' | 'BLACK';
   /** This design's own temperatures for the cooling estimate (otherwise the Settings defaults are used). */
   cooling?: { ambientC?: number; targetC?: number };
-  /** The feature options chosen (Settings -> Cellar Planner -> Feature options), as option codes: only the extras, never a pick-one group's standard option. A pick whose option has since been removed, switched off or no longer fits the room is ignored. */
+  /** The feature options chosen (Cellar Planner -> Settings -> Feature options), as option codes: only the extras, never a pick-one group's standard option. A pick whose option has since been removed, switched off or no longer fits the room is ignored. */
   features?: number[];
   /** Per-option amounts staff typed over the catalogue's low/high midpoint for THIS design's quote, keyed by option code. */
   featurePrices?: Record<number, number>;

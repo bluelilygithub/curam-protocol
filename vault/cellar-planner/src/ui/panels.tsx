@@ -135,7 +135,7 @@ export function RackPanel() {
       title="Rack specification" testid="rack-panel" tour="cp-rack"
       note={<>{typeNote}{stillEstimated.length
         ? (fromCatalogue
-          ? <p className="banner estimate" role="note" data-testid="rack-estimated"><b>"{p.rackType?.name}" is not confirmed by the supplier</b>, so its values are marked estimated (still estimated: {stillEstimated.join(', ')}). Type the supplier's number over each one, or tick "Confirmed by supplier" in Settings, Cellar Planner, once they are real and use the catalogue's values again. Do not quote from these.</p>
+          ? <p className="banner estimate" role="note" data-testid="rack-estimated"><b>"{p.rackType?.name}" is not confirmed by the supplier</b>, so its values are marked estimated (still estimated: {stillEstimated.join(', ')}). Type the supplier's number over each one, or tick "Confirmed by supplier" in Cellar Planner, Settings, once they are real and use the catalogue's values again. Do not quote from these.</p>
           : <p className="banner estimate" role="note" data-testid="rack-estimated"><b>Best guesses for testing, not supplier values</b> (still estimated: {stillEstimated.join(', ')}). Type your supplier's or fabricator's number over each one; its "estimated" marker goes as you do. Do not quote from these.</p>)
         : null}{missing.length
           ? (
@@ -148,7 +148,7 @@ export function RackPanel() {
     >
       {cat.catalogue && (
         <SelectField label="Rack type" value={p.rackType?.id ?? null} blank="Custom (typed by hand)" options={typeOptions}
-          hint="A kind of rack from your catalogue (set in Settings, Cellar Planner). Choosing one fills in its sizes and marks them estimated until the supplier has confirmed them. Custom keeps whatever is typed below."
+          hint="A kind of rack from your catalogue (set in Cellar Planner, Settings). Choosing one fills in its sizes and marks them estimated until the supplier has confirmed them. Custom keeps whatever is typed below."
           onChange={(v) => {
             if (v === null) edit((q) => { const { rackType: _drop, ...rest } = q; void _drop; return rest; });
             else { const t = typeById(cat.catalogue, v); if (t) { let note = ''; edit((q) => { const n = applyRackType(q, t); note = describeRackChange(q, n); return n; }); ui?.getState().set({ notice: note }); } }
@@ -232,7 +232,7 @@ export function CoolingPanel() {
     <Section title="Cooling" testid="cooling-panel" tour="cp-cooling">
       <NumField label="Outside design temperature" unit="°C" value={a.ambientC} min={15} hint={`The hottest day to design for, in degrees C (15 to 50). Settings default: ${base.ambientC}.`} onCommit={(v) => setTemp('ambientC', v)} testid="cooling-ambient" />
       <NumField label="Target temperature" unit="°C" value={a.targetC} min={0} hint={`The temperature to hold the cellar at (0 to 25). Wine is usually kept at 12 to 15. Settings default: ${base.targetC}.`} onCommit={(v) => setTemp('targetC', v)} testid="cooling-target" />
-      {own && <button type="button" className="btn small" title="Go back to the temperatures set in Settings, Cellar Planner." onClick={() => edit((q) => { const { cooling: _c, ...rest } = q; void _c; return rest; })} data-testid="cooling-reset">Use the Settings temperatures</button>}
+      {own && <button type="button" className="btn small" title="Go back to the temperatures set in Cellar Planner, Settings." onClick={() => edit((q) => { const { cooling: _c, ...rest } = q; void _c; return rest; })} data-testid="cooling-reset">Use the Settings temperatures</button>}
       {load.status === 'NOT_SET'
         ? <p className="note" data-testid="cooling-unavailable">{load.reason}</p>
         : (
@@ -253,7 +253,7 @@ export function CoolingPanel() {
             {load.notes.map((n) => <p className="note" key={n}>{n}</p>)}
           </>
         )}
-      <p className="note">Assumptions (set in Settings, Cellar Planner): insulation conductivity {a.panelConductivity} W/m·K, glass {a.glassU} W/m²·K, uninsulated floor {a.floorU} W/m²·K. The working is in How the numbers are calculated.</p>
+      <p className="note">Assumptions (set in Cellar Planner, Settings): insulation conductivity {a.panelConductivity} W/m·K, glass {a.glassU} W/m²·K, uninsulated floor {a.floorU} W/m²·K. The working is in How the numbers are calculated.</p>
     </Section>
   );
 }
@@ -261,7 +261,7 @@ export function CoolingPanel() {
 // ---------------------------------------------------------------- features
 
 /**
- * The feature options (Settings -> Cellar Planner -> Feature options) for this design: the same groups a visitor sees in the public planner's
+ * The feature options (Cellar Planner -> Settings -> Feature options) for this design: the same groups a visitor sees in the public planner's
  * "Make it yours" step. A pick-one group holds one choice (its standard option adds nothing); a pick-any group holds any number. Each chosen extra
  * is priced at the amount typed here for this design, else halfway between the option's low and high from Settings.
  */
@@ -282,11 +282,11 @@ export function FeaturesPanel() {
     return Object.keys(next).length ? { ...rest, featurePrices: next } : rest;
   });
   return (
-    <Section title="Features" testid="features-panel" tour="cp-features" note={<p className="note">The finishing touches from Settings, Cellar Planner. The same choices a visitor makes in the public planner. They add to the Price and appear on the quote.</p>}>
+    <Section title="Features" testid="features-panel" tour="cp-features" note={<p className="note">The finishing touches from Cellar Planner, Settings. The same choices a visitor makes in the public planner. They add to the Price and appear on the quote.</p>}>
       {!c || !resolved
         ? <p className="note" data-testid="features-off">The feature list is not available ({cat.status === 'loading' ? 'loading' : cat.reason || 'not loaded'}), so features cannot be chosen.</p>
         : resolved.groups.length === 0
-          ? <p className="note" data-testid="features-none">No feature options have been set up. Add them in Settings, Cellar Planner, Feature options.</p>
+          ? <p className="note" data-testid="features-none">No feature options have been set up. Add them in Cellar Planner, Settings, Feature options.</p>
           : resolved.groups.map(({ group, chosen }) => {
             const one = group.mode === 'ONE';
             return (
@@ -343,7 +343,7 @@ export function PricePanel() {
             {r.warnings.map((w) => <p className="banner" role="note" key={w} data-testid="price-warning">{w}</p>)}
           </>
         )}
-      <p className="note">An indicative guide from the amounts in Settings, Cellar Planner. Not a quote: a site measure and the finishes still decide the final price.</p>
+      <p className="note">An indicative guide from the amounts in Cellar Planner, Settings. Not a quote: a site measure and the finishes still decide the final price.</p>
     </Section>
   );
 }

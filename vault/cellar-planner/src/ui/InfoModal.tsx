@@ -69,7 +69,7 @@ export function InfoModal({ ui }: { ui: UiStore }) {
 
           <h3>Rack types and price</h3>
           <ul>
-            <li>Your owner keeps a <b>catalogue of rack types</b> in Vault (Settings, Cellar Planner): sizes, bottle counts, price per unit, and whether the supplier has <b>confirmed</b> the numbers. Under <b>Rack specification</b>, <b>Rack type</b> copies a type's numbers into the design and tells you exactly which values changed. A new design starts with the default type.</li>
+            <li>Your owner keeps a <b>catalogue of rack types</b> in Vault (Cellar Planner, Settings): sizes, bottle counts, price per unit, and whether the supplier has <b>confirmed</b> the numbers. Under <b>Rack specification</b>, <b>Rack type</b> copies a type's numbers into the design and tells you exactly which values changed. A new design starts with the default type.</li>
             <li>A <b>confirmed</b> type is trusted. An <b>unconfirmed</b> type fills the values but marks every one <b>estimated</b>, and the drawing package says so. If you edit the values afterwards, a note offers <b>Use the catalogue's values again</b>.</li>
             <li>The <b>Price</b> panel is the full breakdown: a fixed amount, the racks (units × the type's price per unit) and the door, then the range a customer would see. It is <b>a guide only</b>: a blank amount is left out (never counted as zero) and the panel says so. A site measure and the finishes decide the real price.</li>
           </ul>
@@ -91,7 +91,7 @@ export function InfoModal({ ui }: { ui: UiStore }) {
           <h3>Enquiries and quotes</h3>
           <ul>
             <li><b>Enquiries</b> lists people who sent your website's contact form with a design from the public planner (a number shows how many are new). <b>Open</b> adds their design as a new design, with your default rack type, named for them. Following the link in their CRM deal does the same.</li>
-            <li><b>Quote</b> makes an A4 PDF for the customer: your business details, the price breakdown and total, the 3D picture, your terms and the dates. Enter your business name, terms and validity in Settings, Cellar Planner first.</li>
+            <li><b>Quote</b> makes an A4 PDF for the customer: your business details, the price breakdown and total, the 3D picture, your terms and the dates. Enter your business name, terms and validity in Cellar Planner, Settings first.</li>
             <li>A quote is <b>refused until the numbers can be trusted</b>, and the window lists what to fix: the rack type must be <b>confirmed by the supplier</b>, the values must still match it, nothing may be estimated, racks must be placed with no errors, and there must be a price. When the design came from an enquiry, making the quote is logged on their deal in the CRM.</li>
           </ul>
 

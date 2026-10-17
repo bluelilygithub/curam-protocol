@@ -5,7 +5,7 @@
  * right corner. A visitor types what they want to do ("how do I measure my room?"); the chat answers in plain words and its "Show me"
  * buttons take the planner to the right step. At the end the visitor can send the chat to your team.
  *
- *  - It stays hidden until you switch it on in Vault (Settings -> Cellar Planner -> Website help chat). Off there = no button on the site.
+ *  - It stays hidden until you switch it on in Vault (Cellar Planner -> Settings -> Website help chat). Off there = no button on the site.
  *  - It never sees the visitor's design, never gives a price, and sends nothing until the visitor presses Send or asks a question.
  *  - "Send this chat to the team" emails YOUR admin address (set in Vault). Never an address the visitor types.
  *  - It must run in the page around the planner, not inside it: the planner's frame is as tall as the planner, so a button inside it

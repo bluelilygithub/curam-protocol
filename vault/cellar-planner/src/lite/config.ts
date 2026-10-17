@@ -1,4 +1,4 @@
-// The settings the business owner controls from Vault (Settings -> Cellar Planner): rack unit size, door widths, the price formula, a few words on
+// The settings the business owner controls from Vault (Cellar Planner -> Settings): rack unit size, door widths, the price formula, a few words on
 // the page and the starting rooms. They are fetched when the tool opens. If that fails for ANY reason the tool carries on with the built-in defaults
 // below (and says why in the browser Console), so the public page never breaks because Vault is unreachable.
 // The server's copy of these rules is server/config/cellarLiteConfig.js; a test keeps the two in step.

@@ -162,7 +162,7 @@ export function explainCalculations(p: AppProject, cat: Catalogue | null): CalcS
   if (pl.status === 'OK') {
     for (const l of pl.lines) {
       const formula = l.kind === 'feature' ? 'the option\'s price: typed for this quote, else halfway between its low and high' : l.kind === 'racks' ? 'units × price per unit' : 'a fixed amount from Settings';
-      priceLines.push({ label: l.label, formula, working: l.detail || 'from Settings, Cellar Planner', result: `${pl.currency}${l.amount.toLocaleString('en-AU')}`, value: l.amount });
+      priceLines.push({ label: l.label, formula, working: l.detail || 'from Cellar Planner, Settings', result: `${pl.currency}${l.amount.toLocaleString('en-AU')}`, value: l.amount });
     }
     priceLines.push({ label: 'Total', formula: 'the lines added together', working: pl.lines.map((l) => `${pl.currency}${l.amount.toLocaleString('en-AU')}`).join(' + '), result: `${pl.currency}${pl.total.toLocaleString('en-AU')}`, value: pl.total });
     const pct = cat?.pricing.rangePct ?? 0, step = cat?.pricing.roundTo ?? 1;
@@ -171,7 +171,7 @@ export function explainCalculations(p: AppProject, cat: Catalogue | null): CalcS
   } else priceLines.push({ label: 'Price', formula: 'fixed + units × price per unit + door price', working: '', result: pl.reason, value: null });
   out.push({
     id: 'price', title: 'Price',
-    summary: 'Price = fixed amount + (rack units × the chosen rack type\'s price per unit) + the door price (single or double) + each chosen feature option. All amounts come from Settings, Cellar Planner. The planner never invents a price.',
+    summary: 'Price = fixed amount + (rack units × the chosen rack type\'s price per unit) + the door price (single or double) + each chosen feature option. All amounts come from Cellar Planner, Settings. The planner never invents a price.',
     lines: priceLines,
     notes: [
       'Units are the whole rack units across ALL runs. A blank amount is left out, never counted as zero, and the Price panel says so.',

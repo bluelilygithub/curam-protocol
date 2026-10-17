@@ -48,7 +48,7 @@ Built 2026-10-09 (see Done below and `docs/cellar-planner.md`, "Lite version for
 - [ ] Enclosure: wall, floor and ceiling panel cut list; the room the enclosure stands in.
 - [ ] Joinery product line in the same app (its engine in `src/engine/` is built, the screens don't use it).
 - [ ] Connect the screens to the commands layer (`src/domain`, `src/state`); the old joinery library binding in `src/state/library.ts` is unused.
-- [x] 2026-10-10 Admin-facing way to edit rack types, prices, quote details and cooling assumptions (Settings -> Cellar Planner).
+- [x] 2026-10-10 Admin-facing way to edit rack types, prices, quote details and cooling assumptions (Cellar Planner -> Settings).
 - [ ] Confirm the cooling assumptions with the suppliers or an HVAC person (the starting values are typical, not verified), and add a room-position input (a cellar inside a warm building is not at the outside temperature).
 - [ ] Cooling: per-design ambient allowance for a cellar inside a conditioned house; humidity.
 - [ ] Keyboard way to move a run on the plan (the Start field in Rack runs does it today).

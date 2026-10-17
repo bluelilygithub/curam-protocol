@@ -18,7 +18,7 @@ if (new URLSearchParams(window.location.search).has('embedded')) document.docume
 const store = createAppStore(loadDraft() ?? testCaseProject());
 const ui = createUiStore(store.getState().project.enclosure.door.wall);
 // the saved designs: the Vault account when signed in (the planner runs on Vault's origin, so it reads Vault's token), else this browser
-// the rack catalogue and prices from Vault (Settings -> Cellar Planner): rack types to choose from, and the staff price breakdown
+// the rack catalogue and prices from Vault (Cellar Planner -> Settings): rack types to choose from, and the staff price breakdown
 const catalogue = createCatalogueStore();
 const leads = createLeadsStore();
 const designs = createDesigns({

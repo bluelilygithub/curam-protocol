@@ -6,7 +6,7 @@ import { featureTotals, optionMid, optionRange, resolveFeatures, type ResolvedFe
 import type { RackSpec } from '../rack';
 import { ESTIMATE_FIELDS, type AppProject } from './model';
 
-// The rack CATALOGUE the owner keeps in Vault (Settings -> Cellar Planner -> Rack types). The public lite tool reads the default type; this staff planner
+// The rack CATALOGUE the owner keeps in Vault (Cellar Planner -> Settings -> Rack types). The public lite tool reads the default type; this staff planner
 // reads all of it, plus the real prices, from the signed-in endpoint /api/cellar-planner/catalogue. Choosing a type copies its numbers into the design
 // (the design stays self-contained: a later catalogue change never silently changes a saved design). A type that is not "confirmed by supplier" keeps its
 // values marked ESTIMATED until the person types over them.
@@ -20,7 +20,7 @@ export interface Catalogue {
   quote: QuoteSettings;
   /** The assumptions behind the indicative cooling estimate. */
   cooling: CoolingSettings;
-  /** The feature groups and their low/high prices (Settings -> Cellar Planner -> Feature options). */
+  /** The feature groups and their low/high prices (Cellar Planner -> Settings -> Feature options). */
   features: FeatureGroup[];
 }
 
@@ -91,7 +91,7 @@ export function staffPrice(p: AppProject, cat: Catalogue | null, opts: { errors?
   const pr = cat.pricing;
   const double = p.enclosure.door.leaves === 2;
   const doorPrice = double ? pr.doorDouble : pr.doorSingle;
-  if (pr.fixed === null && t.pricePerUnit === null && doorPrice === null) return { status: 'UNAVAILABLE', reason: 'No prices have been entered in Settings -> Cellar Planner.' };
+  if (pr.fixed === null && t.pricePerUnit === null && doorPrice === null) return { status: 'UNAVAILABLE', reason: 'No prices have been entered in Cellar Planner -> Settings.' };
   const fmt = (n: number): string => `${pr.currency}${n.toLocaleString('en-AU')}`;
   const lines: PriceLine[] = [];
   if (pr.fixed !== null) lines.push({ label: 'Fixed amount', detail: 'every job', amount: pr.fixed, kind: 'fixed' });

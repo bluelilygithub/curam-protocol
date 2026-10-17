@@ -35,7 +35,6 @@ import { startGardenPlannerTour, TOUR_KEY as GARDEN_PLANNER_TOUR_KEY } from '../
 import { startRouteTracerTour, TOUR_KEY as ROUTE_TRACER_TOUR_KEY } from '../utils/tours/routeTracerTour';
 import { startCellarPlannerTour, TOUR_KEY as CELLAR_PLANNER_TOUR_KEY } from '../utils/tours/cellarPlannerTour';
 import ConfirmModal from '../components/ConfirmModal';
-import CellarLiteSettings from '../components/CellarLiteSettings';
 import UsersAdminPanel from '../components/UsersAdminPanel';
 import NavLayoutEditor from '../components/settings/NavLayoutEditor';
 import { DEFAULT_TILES, DEFAULT_NAV_ITEMS, mergeWithDefaults } from '../utils/mobileConfig';
@@ -199,9 +198,6 @@ function SettingsPage() {
   const [toolMaintenanceLoading, setToolMaintenanceLoading] = useState(false);
   const [toolMaintenanceError, setToolMaintenanceError] = useState('');
 
-  const cellarLiteDirty = useRef(false);
-  const onCellarLiteDirty = useCallback((d) => { cellarLiteDirty.current = d; }, []);
-
   const TABS = user?.isAdmin
     ? [
         'Appearance',
@@ -213,7 +209,6 @@ function SettingsPage() {
         'Integrations',
         'Shares',
         'Amazon Search',
-        'Cellar Planner',
         'Mobile',
         'Navigation',
         'Members',
@@ -227,9 +222,6 @@ function SettingsPage() {
     : ['Appearance', 'Profile', 'Tasks'];
 
   function selectTab(t) {
-    // the Cellar Planner tab only saves when its Save button is pressed: don't lose edits by switching tabs
-    if (t !== tab && cellarLiteDirty.current && !window.confirm('You have unsaved Cellar Planner changes. Leave without saving?')) return;
-    cellarLiteDirty.current = false;
     setTab(t);
     localStorage.setItem('settingsTab', t);
   }
@@ -246,7 +238,6 @@ function SettingsPage() {
           'Integrations',
           'Shares',
           'Amazon Search',
-          'Cellar Planner',
           'Mobile',
           'Navigation',
           'Members',
@@ -3134,13 +3125,6 @@ function SettingsPage() {
           {mobileSaved ? 'Saved ✓' : 'Save Mobile Settings'}
         </button>
       </>
-      )}
-
-      {/* Cellar Planner (admin) — the owner's numbers for the public lite planner */}
-      {tab === 'Cellar Planner' && user?.isAdmin && (
-        <section>
-          <CellarLiteSettings onDirtyChange={onCellarLiteDirty} />
-        </section>
       )}
 
       {/* Navigation (admin) — split the header Apps menu into two sets */}

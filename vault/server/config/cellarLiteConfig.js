@@ -1,6 +1,6 @@
 'use strict';
 
-// Cellar Planner settings the business owner controls from Vault (Settings -> Cellar Planner): the RACK TYPES (sizes, bottle counts, price per unit,
+// Cellar Planner settings the business owner controls from Vault (Cellar Planner -> Settings): the RACK TYPES (sizes, bottle counts, price per unit,
 // "confirmed by the supplier"), door widths, the price formula and a few words on the public page. Shared: the public lite tool reads the default rack
 // type (as `rack` and `pricing.perUnit`, the same shape as before, so pages with an older copy keep working) and the staff Cellar Planner reads the
 // whole catalogue. Stored as one JSON value in workspace_settings under KEY. This file is the single place that says what a valid

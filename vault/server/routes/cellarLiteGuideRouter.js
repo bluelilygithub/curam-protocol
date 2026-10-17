@@ -1,7 +1,7 @@
 'use strict';
 
 // The help chat on the PUBLIC website planner. No login, so it is deliberately boxed in:
-//   - OFF until the owner ticks it (Settings -> Cellar Planner -> Website help chat). Off answers 404 and nothing else happens.
+//   - OFF until the owner ticks it (Cellar Planner -> Settings -> Website help chat). Off answers 404 and nothing else happens.
 //   - Every answer is a paid AI call, so: a per-visitor hourly limit, a per-visitor daily limit, and a ceiling on all visitors together per
 //     24 hours (counted from usage_logs). Past any of them the visitor gets a kind message and an invitation to contact the team.
 //   - The cheap `light` model of the first admin's workspace. Small body, short conversation, no files, no design, no personal data needed.

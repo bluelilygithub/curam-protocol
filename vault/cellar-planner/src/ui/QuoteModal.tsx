@@ -87,7 +87,7 @@ export function QuoteModal({ store, ui, catalogue, fetchFn, storage }: { store: 
               <ul>{blockers.map((b) => <li key={b}>{b}</li>)}</ul>
             </div>
           )}
-          {price.status === 'OK' && <p className="note" data-testid="quote-total">Total: <b>{price.currency}{price.total.toLocaleString('en-AU')}</b> (from the Price panel). Your business details and terms come from Settings, Cellar Planner, Quote details.</p>}
+          {price.status === 'OK' && <p className="note" data-testid="quote-total">Total: <b>{price.currency}{price.total.toLocaleString('en-AU')}</b> (from the Price panel). Your business details and terms come from Cellar Planner, Settings, Quote details.</p>}
           {project.lead && <p className="note" data-testid="quote-lead">From {project.lead.name}'s website enquiry: making the quote is logged on their deal in the CRM.</p>}
           <div className="grid">
             <TextField label="Customer" value={customer} onChange={setCustomer} inputRef={first} testid="quote-customer" hint="Who the quote is for, printed under Prepared for." />
