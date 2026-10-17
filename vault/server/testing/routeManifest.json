@@ -1057,6 +1057,27 @@
   "PUT /api/finance/settings": {
    "class": "authed"
   },
+  "POST /api/finance/statements/:id/approve-all": {
+   "class": "authed"
+  },
+  "POST /api/finance/statements/:id/redact": {
+   "class": "authed"
+  },
+  "DELETE /api/finance/statements/:id": {
+   "class": "authed"
+  },
+  "GET /api/finance/statements/:id": {
+   "class": "authed"
+  },
+  "POST /api/finance/statements/from-document/:docId": {
+   "class": "authed"
+  },
+  "PATCH /api/finance/statements/lines/:lineId": {
+   "class": "authed"
+  },
+  "GET /api/finance/statements": {
+   "class": "authed"
+  },
   "DELETE /api/finance/suppliers/:id": {
    "class": "authed"
   },
@@ -1471,6 +1492,9 @@
   "GET /api/graph": {
    "class": "authed"
   },
+  "POST /api/graphics-tutor": {
+   "class": "authed"
+  },
   "POST /api/graphics/adjust": {
    "class": "authed"
   },
@@ -1544,9 +1568,6 @@
    "class": "authed"
   },
   "POST /api/graphics/gallery": {
-   "class": "authed"
-  },
-  "POST /api/graphics-tutor": {
    "class": "authed"
   },
   "POST /api/graphics/generate": {
@@ -1909,6 +1930,9 @@
   "POST /api/notes": {
    "class": "authed"
   },
+  "POST /api/pdf-tutor": {
+   "class": "authed"
+  },
   "POST /api/pdf/addfields": {
    "class": "authed"
   },
@@ -1924,6 +1948,12 @@
   "POST /api/pdf/compress": {
    "class": "authed"
   },
+  "POST /api/pdf/crop": {
+   "class": "authed"
+  },
+  "POST /api/pdf/extract-images": {
+   "class": "authed"
+  },
   "POST /api/pdf/fill": {
    "class": "authed"
   },
@@ -1931,6 +1961,9 @@
    "class": "authed"
   },
   "POST /api/pdf/google-to-pdf": {
+   "class": "authed"
+  },
+  "POST /api/pdf/headerfooter": {
    "class": "authed"
   },
   "POST /api/pdf/img2pdf": {
@@ -1943,6 +1976,12 @@
    "class": "authed"
   },
   "POST /api/pdf/metadata": {
+   "class": "authed"
+  },
+  "POST /api/pdf/nup": {
+   "class": "authed"
+  },
+  "POST /api/pdf/ocr-layer": {
    "class": "authed"
   },
   "POST /api/pdf/office-to-pdf": {
@@ -1976,24 +2015,6 @@
    "class": "authed"
   },
   "POST /api/pdf/watermark": {
-   "class": "authed"
-  },
-  "POST /api/pdf/crop": {
-   "class": "authed"
-  },
-  "POST /api/pdf/headerfooter": {
-   "class": "authed"
-  },
-  "POST /api/pdf/nup": {
-   "class": "authed"
-  },
-  "POST /api/pdf/extract-images": {
-   "class": "authed"
-  },
-  "POST /api/pdf/ocr-layer": {
-   "class": "authed"
-  },
-  "POST /api/pdf-tutor": {
    "class": "authed"
   },
   "DELETE /api/personas/:id": {
@@ -2501,6 +2522,9 @@
    "class": "authed"
   },
   "GET /api/shares/statements/:id": {
+   "class": "authed"
+  },
+  "POST /api/shares/statements/email": {
    "class": "authed"
   },
   "POST /api/shares/statements/lines/:lineId/approve": {
