@@ -32,6 +32,12 @@ const helpBlock = page.slice(page.indexOf('const TOOL_HELP = {'), page.indexOf('
 const helpIds = [...helpBlock.matchAll(/^  ([A-Za-z0-9]+): \{/gm)].map((m) => m[1]).sort();
 assert.deepStrictEqual(helpIds, pageIds, 'every Graphics tool has help text on the page');
 assert.ok(RULES.length >= 6 && NOT_POSSIBLE.length >= 8);
+// every tool on the page has its own component file, registered for lazy loading (client/src/pages/graphics/tools + toolRegistry.js)
+const registry = fs.readFileSync(path.join(__dirname, '../../client/src/pages/graphics/toolRegistry.js'), 'utf8');
+const registered = [...registry.matchAll(/^  '?([A-Za-z0-9]+)'?: lazy\(\(\) => import\('\.\/tools\/(\w+)'\)\),$/gm)];
+assert.deepStrictEqual(registered.map((m) => m[1]).sort(), pageIds, 'every Graphics tool is registered in toolRegistry.js');
+registered.forEach((m) => assert.ok(fs.existsSync(path.join(__dirname, `../../client/src/pages/graphics/tools/${m[2]}.jsx`)), `${m[2]}.jsx exists`));
+
 
 // ---- safety rules are in the instructions, so deleting them fails the build ----
 assert.match(SYSTEM, /cannot see this person's images/);
