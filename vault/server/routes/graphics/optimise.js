@@ -38,7 +38,10 @@ const {
   SOCIAL_PRESETS,
 } = require('./shared');
 const { runResize } = require('./transform');
+const { runPixelTask } = require('../../services/graphicsWorker');
 const { runWatermark } = require('./compose');
+
+const MAX_UPSCALE_OUTPUT_MP = Number(process.env.GRAPHICS_MAX_UPSCALE_MP) || 64;
 
 router.get('/upscale/info', async (req, res) => {
   try {
@@ -89,6 +92,15 @@ router.post('/upscale', async (req, res) => {
     const requestedModel = String(req.body?.model || '').trim();
 
     const inputBuffer = dataUrlToBuffer(imageDataUrl);
+
+    // The service bills by output size and big outputs fail late. Refuse them before spending anything.
+    const inMeta = await sharp(inputBuffer).metadata().catch(() => null);
+    if (inMeta?.width && inMeta?.height) {
+      const outMp = (inMeta.width * scale) * (inMeta.height * scale) / 1e6;
+      if (outMp > MAX_UPSCALE_OUTPUT_MP) {
+        return res.status(400).json({ error: `The upscaled picture would be about ${Math.round(outMp)} megapixels; the limit is ${MAX_UPSCALE_OUTPUT_MP}. Pick a smaller scale, or shrink the picture first.` });
+      }
+    }
 
     if (!runtimeConfig.isLocal) {
       const result = await upscaleWithReplicate({ imageDataUrl, scale, creativity, model: requestedModel });
@@ -366,28 +378,6 @@ router.post('/export-social', async (req, res) => {
 });
 // ── Print Ready ──────────────────────────────────────────────────────────────
 
-// Convert each RGB pixel to CMYK using the standard device-independent formula.
-// Returns a Buffer of interleaved CMYK bytes (4 bytes per pixel).
-function rgbToCmykBuffer(rgbData, pixelCount) {
-  const out = Buffer.allocUnsafe(pixelCount * 4);
-  for (let i = 0; i < pixelCount; i++) {
-    const r = rgbData[i * 3] / 255;
-    const g = rgbData[i * 3 + 1] / 255;
-    const b = rgbData[i * 3 + 2] / 255;
-    const k = 1 - Math.max(r, g, b);
-    if (k >= 1) {
-      out[i * 4] = 0; out[i * 4 + 1] = 0; out[i * 4 + 2] = 0; out[i * 4 + 3] = 255;
-    } else {
-      const d = 1 - k;
-      out[i * 4]     = Math.round(((1 - r - k) / d) * 255); // C
-      out[i * 4 + 1] = Math.round(((1 - g - k) / d) * 255); // M
-      out[i * 4 + 2] = Math.round(((1 - b - k) / d) * 255); // Y
-      out[i * 4 + 3] = Math.round(k * 255);                  // K
-    }
-  }
-  return out;
-}
-
 // Build a minimal uncompressed CMYK TIFF (PhotometricInterpretation=5).
 // Accepted by all professional prepress and RIP software.
 function buildCmykTiff(cmykData, width, height, dpi) {
@@ -507,7 +497,7 @@ router.post('/print-ready', async (req, res) => {
         .toBuffer({ resolveWithObject: true });
       pxW = info.width;
       pxH = info.height;
-      const cmykData = rgbToCmykBuffer(rgbData, pxW * pxH);
+      const { out: cmykData } = await runPixelTask('cmyk', { rgb: rgbData, pixelCount: pxW * pxH });
       outputBuffer = buildCmykTiff(cmykData, pxW, pxH, dpi);
       mimeType = 'image/tiff';
       ext = 'tiff';

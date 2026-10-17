@@ -10,8 +10,10 @@ const express = require('express');
 const router = express.Router();
 const sharp = require('sharp');
 const archiver = require('archiver');
-const ImageTracer = require('imagetracerjs');
 const { callModel } = require('../../services/callModel');
+const { getModelsForUser } = require('../../services/modelResolver');
+const { logUsage } = require('../../utils/logUsage');
+const { runPixelTask } = require('../../services/graphicsWorker');
 const {
   dataUrlToBuffer,
   outputFormatFor,
@@ -20,7 +22,6 @@ const {
   fitOverlay,
   GRAVITY_MAP,
   parseHexColor,
-  ICON_MODEL,
   safeJsonParse,
   pickOneOf,
   sanitizeIconName,
@@ -422,18 +423,13 @@ router.post('/vectorize', async (req, res) => {
       .ensureAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
-    const imgd = {
-      width: info.width,
-      height: info.height,
-      data: new Uint8ClampedArray(data.buffer, data.byteOffset, data.length),
-    };
     const presets = {
       smooth: { ltres: 1, qtres: 1, pathomit: 8, blurradius: 2, blurdelta: 20 },
       medium: { ltres: 1, qtres: 1, pathomit: 8 },
       detailed: { ltres: 0.5, qtres: 0.5, pathomit: 1 },
     };
     const opts = { numberofcolors: colors, ...(presets[detail] || presets.medium) };
-    const svg = ImageTracer.imagedataToSVG(imgd, opts);
+    const { svg } = await runPixelTask('vectorize', { data, width: info.width, height: info.height, options: opts });
     const base64 = Buffer.from(svg, 'utf8').toString('base64');
     res.json({
       ok: true,
@@ -459,8 +455,13 @@ Return JSON exactly like: {"lucide":["wallet","credit-card"],"fontawesome":["wal
 - "lucide": 12 real lucide-react icon names in kebab-case that genuinely exist.
 - "fontawesome": 8 real Font Awesome 6 Free *solid* icon names (the bare name, no "fa-" prefix) that genuinely exist.
 No duplicates, no made-up names.`;
-    const text = await callModel(ICON_MODEL, prompt, { maxTokens: 600, system });
-    const parsed = safeJsonParse(text) || {};
+    // Model ids come from the workspace's Settings (light tier: this is a short name list), never from code.
+    const { light, standard } = await getModelsForUser(req.user.id);
+    const modelId = light || standard;
+    if (!modelId) throw new Error('No AI model is configured for this workspace yet.');
+    const out = await callModel(modelId, prompt, { maxTokens: 600, system, returnUsage: true });
+    logUsage({ userId: req.user.id, model: out.model || modelId, inputTokens: out.inputTokens, outputTokens: out.outputTokens, feature: 'graphics_icons' });
+    const parsed = safeJsonParse(typeof out === 'string' ? out : out.text) || {};
     const clean = (arr) => (Array.isArray(arr) ? arr.filter((s) => typeof s === 'string' && s.trim()).map((s) => s.trim().toLowerCase().replace(/^fa-/, '')) : []);
     res.json({
       ok: true,
@@ -534,7 +535,10 @@ Return ONLY a JSON array of exactly ${count} objects:
 Names must be unique, lowercase, kebab-case, and describe the icon.`;
 
     const maxTokens = Math.min(8000, 1500 + count * 380);
-    const result = await callModel(ICON_MODEL, prompt, { maxTokens, system, returnUsage: true });
+    const { standard } = await getModelsForUser(req.user.id);
+    if (!standard) throw new Error('No AI model is configured for this workspace yet.');
+    const result = await callModel(standard, prompt, { maxTokens, system, returnUsage: true });
+    logUsage({ userId: req.user.id, model: result.model || standard, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'graphics_icons' });
     const raw = typeof result === 'string' ? result : result.text;
     const arr = safeJsonParse(raw);
     if (!Array.isArray(arr)) throw new Error('The model did not return an icon set — try again');

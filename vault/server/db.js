@@ -1328,6 +1328,9 @@ async function initSchema() {
         "createdAt"   TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    // Small preview shown in the gallery grid, so listing the gallery does not ship every full-size image.
+    await client.query(`ALTER TABLE graphics_gallery ADD COLUMN IF NOT EXISTS "thumbDataUrl" TEXT`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_graphics_gallery_user ON graphics_gallery ("userId", "createdAt" DESC)`);
 
     // ── Video library (saved tool outputs) ────────────────────────────────────
     await client.query(`

@@ -470,6 +470,7 @@ Custom fonts on a *live* AcroForm field (`field.updateAppearances`) render as He
 | `VIDEO_LIBRARY_QUOTA_MB` | Video Tools — per-user saved-library cap (default 1000) |
 | `LOCAL_WHISPER_LANGUAGE` | Video Tools — local whisper-cli transcribe language (default `en`) |
 | `FONTS_PYTHON_BIN` | Font Customizer — Python binary for `server/services/fonts/` subprocess (default tries `python3` then `python`); needs `server/services/fonts/requirements.txt` installed |
+| `GRAPHICS_DAILY_COST_CAP_USD` / `GRAPHICS_MAX_PAID_IN_FLIGHT` / `GRAPHICS_MAX_MEGAPIXELS` / `GRAPHICS_MAX_UPSCALE_MP` / `GRAPHICS_MAX_WORKERS` | Graphics safety nets (`server/middleware/graphicsLimits.js`, `server/services/graphicsWorker.js`): rolling 24h AI spend cap per person (default 5, 0 = off), simultaneous paid jobs per person (2), largest accepted image (64 MP), largest upscale output (64 MP), pixel worker threads (2). See `docs/graphics-tools.md` |
 | `GITHUB_TOKEN` | Font Customizer — optional, raises the Google Fonts repo license-check lookup from 60/hr to 5000/hr |
 | `CELLAR_LITE_FRAME_ANCESTORS` | Cellar Planner lite (`/cellar-lite/`, public static page) — origins allowed to embed it in an iframe, space-separated (e.g. `https://www.example.com.au`). Unset = only Vault can frame it. Invalid entries ignored. `server/routes/cellarLiteRouter.js` |
 | `PAGESPEED_API_KEY` | HTML Lighthouse — PageSpeed Insights API (optional; anonymous quota is small) |

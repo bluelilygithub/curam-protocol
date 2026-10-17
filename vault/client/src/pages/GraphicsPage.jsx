@@ -4065,6 +4065,18 @@ export default function GraphicsPage() {
     }
   };
 
+  // The gallery grid only has small previews; fetch the full-size image when one is opened.
+  const openGalleryItem = (item) => async () => {
+    try {
+      const res = await api.get(`/api/graphics/gallery/${item.id}`);
+      const full = await res.json();
+      if (!res.ok) throw new Error(full.error || 'Could not open that image');
+      selectResult(full, { openPreview: true });
+    } catch (err) {
+      setError(err.message || 'Could not open that image');
+    }
+  };
+
   const deleteGalleryImage = async (id) => {
     await api.delete(`/api/graphics/gallery/${id}`).catch(() => {});
     setGallery(prev => prev.filter(item => item.id !== id));
@@ -8397,12 +8409,12 @@ export default function GraphicsPage() {
               <div key={item.id} className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
                 <button
                   type="button"
-                  onClick={() => {
-                    selectResult(item, { openPreview: true });
-                  }}
+                  onClick={openGalleryItem(item)}
                   className="block w-full"
                 >
-                  <img src={item.imageDataUrl} alt={item.prompt} className="w-full aspect-square object-cover" />
+                  {item.thumbDataUrl
+                    ? <img src={item.thumbDataUrl} alt={item.prompt} className="w-full aspect-square object-cover" />
+                    : <div className="w-full aspect-square flex items-center justify-center text-xs" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}>Preparing preview…</div>}
                 </button>
                 <div className="p-3">
                   <p className="text-xs line-clamp-2" style={{ color: 'var(--color-text)' }}>{item.prompt}</p>

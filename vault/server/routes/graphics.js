@@ -22,6 +22,12 @@ const compose = require('./graphics/compose');
 const retouch = require('./graphics/retouch');
 const analyse = require('./graphics/analyse');
 const plan = require('./graphics/plan');
+const { capImagePixels, makePaidGuard } = require('../middleware/graphicsLimits');
+
+// Safety nets for every route below: no oversized images, and a per-person limit on the paid AI tools.
+// (See middleware/graphicsLimits.js for the settings.)
+router.use(capImagePixels());
+router.use(['/generate', '/augment', '/upscale', '/inpaint', '/background', '/icon-generate', '/icon-references'], makePaidGuard({ pool: shared.pool }));
 
 router.use(shared.router);
 router.use(create);

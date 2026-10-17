@@ -61,8 +61,14 @@ router.get('/models', async (req, res) => {
 });
 
 router.get('/status', async (req, res) => {
-  const selectedModel = await resolveGraphicsModel(req.user.id);
-  const provider = await resolveGraphicsProvider(req.user.id, selectedModel);
+  let selectedModel;
+  let provider;
+  try {
+    selectedModel = await resolveGraphicsModel(req.user.id);
+    provider = await resolveGraphicsProvider(req.user.id, selectedModel);
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
 
   if (provider !== 'local-comfyui') {
     const configured = provider === 'fal' ? Boolean(process.env.FAL_API_KEY) : false;
@@ -298,17 +304,62 @@ router.post('/augment', async (req, res) => {
   }
 });
 
+// ── Gallery ─────────────────────────────────────────────────────────────────
+// Saved generated images. The list sends small previews only (thumbDataUrl); the full image is fetched when one is opened.
+const GALLERY_MAX_IMAGES = 200;
+const GALLERY_MAX_IMAGE_CHARS = 11 * 1024 * 1024; // about 8MB of image
+const GALLERY_THUMB_PX = 320;
+const GALLERY_BACKFILL_PER_REQUEST = 12;
+const GALLERY_COLUMNS = 'id, prompt, model, seed, width, height, metadata, "createdAt", "thumbDataUrl"';
+
+async function makeThumb(imageDataUrl) {
+  try {
+    const buf = dataUrlToBuffer(imageDataUrl);
+    if (!buf) return null;
+    const out = await sharp(buf).rotate().resize(GALLERY_THUMB_PX, GALLERY_THUMB_PX, { fit: 'cover' }).jpeg({ quality: 72 }).toBuffer();
+    return `data:image/jpeg;base64,${out.toString('base64')}`;
+  } catch {
+    return null;
+  }
+}
+
+const galleryId = (value) => (/^\d{1,9}$/.test(String(value)) ? Number(value) : null);
+
 router.get('/gallery', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, prompt, model, seed, width, height, metadata, "createdAt", "imageDataUrl"
-       FROM graphics_gallery
-       WHERE "userId"=$1
-       ORDER BY "createdAt" DESC, id DESC
-       LIMIT 100`,
+      `SELECT ${GALLERY_COLUMNS} FROM graphics_gallery WHERE "userId"=$1 ORDER BY "createdAt" DESC, id DESC LIMIT 100`,
       [req.user.id]
     );
+    // Images saved before previews existed get theirs made a few at a time.
+    const missing = rows.filter((r) => !r.thumbDataUrl).slice(0, GALLERY_BACKFILL_PER_REQUEST);
+    for (const row of missing) {
+      // eslint-disable-next-line no-await-in-loop
+      const { rows: full } = await pool.query('SELECT "imageDataUrl" FROM graphics_gallery WHERE id=$1 AND "userId"=$2', [row.id, req.user.id]);
+      // eslint-disable-next-line no-await-in-loop
+      const thumb = full[0] ? await makeThumb(full[0].imageDataUrl) : null;
+      if (thumb) {
+        row.thumbDataUrl = thumb;
+        // eslint-disable-next-line no-await-in-loop
+        await pool.query('UPDATE graphics_gallery SET "thumbDataUrl"=$1 WHERE id=$2 AND "userId"=$3', [thumb, row.id, req.user.id]);
+      }
+    }
     res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/gallery/:id', async (req, res) => {
+  try {
+    const id = galleryId(req.params.id);
+    if (!id) return res.status(404).json({ error: 'Not found' });
+    const { rows } = await pool.query(
+      `SELECT ${GALLERY_COLUMNS}, "imageDataUrl" FROM graphics_gallery WHERE id=$1 AND "userId"=$2`,
+      [id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -316,24 +367,36 @@ router.get('/gallery', async (req, res) => {
 
 router.post('/gallery', async (req, res) => {
   try {
-    const prompt = String(req.body?.prompt || '').trim();
+    const prompt = String(req.body?.prompt || '').trim().slice(0, 4000);
     const imageDataUrl = String(req.body?.imageDataUrl || '');
     if (!prompt || !imageDataUrl.startsWith('data:image/')) {
       return res.status(400).json({ error: 'Prompt and image required' });
     }
+    if (imageDataUrl.length > GALLERY_MAX_IMAGE_CHARS) {
+      return res.status(413).json({ error: 'That image is too large to keep in the gallery (8MB limit). Compress it first.' });
+    }
+    const { rows: counted } = await pool.query('SELECT COUNT(*) AS n FROM graphics_gallery WHERE "userId"=$1', [req.user.id]);
+    if (Number(counted[0]?.n) >= GALLERY_MAX_IMAGES) {
+      return res.status(409).json({ error: `Your gallery is full (${GALLERY_MAX_IMAGES} images). Delete some to make room.` });
+    }
+    const thumb = await makeThumb(imageDataUrl);
+    // metadata is a small JSON object; anything else (an array, a huge blob) is dropped rather than stored.
+    const meta = req.body?.metadata;
+    const metadata = meta && typeof meta === 'object' && !Array.isArray(meta) && JSON.stringify(meta).length <= 20000 ? JSON.stringify(meta) : null;
     const { rows } = await pool.query(
-      `INSERT INTO graphics_gallery ("userId", prompt, "imageDataUrl", model, seed, width, height, metadata)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-       RETURNING id, prompt, model, seed, width, height, metadata, "createdAt", "imageDataUrl"`,
+      `INSERT INTO graphics_gallery ("userId", prompt, "imageDataUrl", "thumbDataUrl", model, seed, width, height, metadata)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       RETURNING ${GALLERY_COLUMNS}`,
       [
         req.user.id,
         prompt,
         imageDataUrl,
-        req.body?.model || null,
-        req.body?.seed != null ? String(req.body.seed) : null,
+        thumb,
+        req.body?.model ? String(req.body.model).slice(0, 200) : null,
+        req.body?.seed != null ? String(req.body.seed).slice(0, 40) : null,
         Number(req.body?.width) || null,
         Number(req.body?.height) || null,
-        req.body?.metadata || null,
+        metadata,
       ]
     );
     res.status(201).json(rows[0]);
@@ -344,9 +407,11 @@ router.post('/gallery', async (req, res) => {
 
 router.delete('/gallery/:id', async (req, res) => {
   try {
+    const id = galleryId(req.params.id);
+    if (!id) return res.status(404).json({ error: 'Not found' });
     const { rows } = await pool.query(
       `DELETE FROM graphics_gallery WHERE id=$1 AND "userId"=$2 RETURNING id`,
-      [req.params.id, req.user.id]
+      [id, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });
@@ -355,12 +420,15 @@ router.delete('/gallery/:id', async (req, res) => {
   }
 });
 
+const ANIMATE_MAX_FRAMES = 40;
+
 // Build an animated GIF from a series of frames. Uses the pure-JS `gifenc`
 // encoder, lazily required so the app still boots if it isn't installed.
 router.post('/animate', async (req, res) => {
   try {
     const frames = Array.isArray(req.body?.frames) ? req.body.frames : [];
     if (frames.length < 2) return res.status(400).json({ error: 'Add at least 2 frames' });
+    if (frames.length > ANIMATE_MAX_FRAMES) return res.status(400).json({ error: `Too many frames (max ${ANIMATE_MAX_FRAMES})` });
 
     let gifenc;
     try {

@@ -1537,6 +1537,9 @@
   "DELETE /api/graphics/gallery/:id": {
    "class": "authed"
   },
+  "GET /api/graphics/gallery/:id": {
+   "class": "authed"
+  },
   "GET /api/graphics/gallery": {
    "class": "authed"
   },

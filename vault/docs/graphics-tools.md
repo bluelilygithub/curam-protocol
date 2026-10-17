@@ -164,3 +164,14 @@ Adding or removing a tool: update `MODES`, `MODE_GROUPS`, `TOOL_TIPS`, `TOOL_HEL
 ## Tests
 
 `npm run test:graphics` (`server/routes/graphics/graphics.test.js`) calls the real sharp-based routes with small fixtures and guards the bugs found in the 2026-10 review: phone-photo rotation kept by Convert/Compress, see-through PNG to JPG is white, Auto-enhance keeps full size, overlays larger than the image are shrunk instead of failing, crop by shape on rotated photos, and Remove Meta detecting a real GPS tag. No database needed. Rule for new routes: anything that builds a sharp pipeline starting with `.rotate()` must measure the image with `orientedSize()` (shared.js), and any overlay must go through `fitOverlay()`.
+
+---
+
+## Limits and safety nets
+
+- **Per-pixel work runs in a worker thread** (`server/services/graphicsWorker.js`): Recolor, Extract Element, Image Diff, Print Ready's CMYK conversion and Vectorize. At most 2 at a time (`GRAPHICS_MAX_WORKERS`), the rest queue (12 deep, then 503). Before this a 25-megapixel recolor froze the whole server for over a second; the test measures the stall.
+- **Image size cap** (`server/middleware/graphicsLimits.js`, `capImagePixels`): any image in a request body (also inside Batch lists and overlays) over 64 megapixels (`GRAPHICS_MAX_MEGAPIXELS`) is refused with 413 before a route decodes it.
+- **Paid tools** (Generate, Augment, Upscale, Inpaint, Background, AI Icon Library): `paidGuard` allows 2 paid jobs at once per person (`GRAPHICS_MAX_PAID_IN_FLIGHT`) and a rolling 24-hour spend cap of $5 per person (`GRAPHICS_DAILY_COST_CAP_USD`, 0 turns it off), read from `usage_logs` rows whose feature starts `graphics_`. Over the cap: 429 `GRAPHICS_DAILY_CAP`. Upscale also refuses outputs over 64 megapixels (`GRAPHICS_MAX_UPSCALE_MP`) before calling the service.
+- **Icon tools** take their model from Settings (light tier for the name list, standard for the icons) and now log their usage as `graphics_icons`, so they show on the Usage dashboard and count towards the cap.
+- **Animate** accepts at most 40 frames.
+- **Gallery**: 200 images per person, 8MB each. The list sends 320px previews (`thumbDataUrl`, made on save, and made a few at a time for older images); the full image comes from `GET /gallery/:id` when one is opened. Ids must be numbers; metadata must be a small object.

@@ -9,6 +9,7 @@ const sharp = require('sharp');
 const {
   runtimeConfig,
   dataUrlToBuffer,
+  orientedSize,
   parseHexColor,
   logImageUsage,
   loadContentRestrictions,
@@ -22,6 +23,7 @@ const {
   getImgly,
   DEFAULT_REPLICATE_BG_MODEL,
 } = require('./shared');
+const { runPixelTask } = require('../../services/graphicsWorker');
 
 // Extract element: apply a painted mask as an alpha channel to isolate a region.
 // Client sends: imageDataUrl + maskDataUrl (white=keep, black=remove) + optional feather.
@@ -34,25 +36,19 @@ router.post('/extract', async (req, res) => {
     const maskBuf = dataUrlToBuffer(maskDataUrl);
     if (!imgBuf || !maskBuf) return res.status(400).json({ error: 'Both image and mask are required' });
 
-    const meta = await sharp(imgBuf).metadata();
-    const W = meta.width;
-    const H = meta.height;
+    // The painted mask was drawn over the image as the browser shows it (EXIF rotation applied), so rotate the
+    // image the same way before combining them.
+    const { width: W, height: H } = orientedSize(await sharp(imgBuf).metadata());
 
-    // Resize mask to match image, convert to greyscale, optionally blur for feathering.
-    let maskPipeline = sharp(maskBuf).resize(W, H, { fit: 'fill' }).greyscale();
+    // Resize mask to match image, convert to greyscale (see-through mask pixels count as "remove"), optionally blur for feathering.
+    let maskPipeline = sharp(maskBuf).flatten({ background: '#000000' }).resize(W, H, { fit: 'fill' }).greyscale();
     if (feather > 0) maskPipeline = maskPipeline.blur(feather);
     const { data: maskData } = await maskPipeline.raw().toBuffer({ resolveWithObject: true });
 
     // Ensure image has alpha, then multiply existing alpha by mask value.
-    const { data: imgData, info } = await sharp(imgBuf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-    const nPixels = info.width * info.height;
-    const out = Buffer.alloc(nPixels * 4);
-    for (let i = 0; i < nPixels; i++) {
-      out[i * 4]     = imgData[i * 4];
-      out[i * 4 + 1] = imgData[i * 4 + 1];
-      out[i * 4 + 2] = imgData[i * 4 + 2];
-      out[i * 4 + 3] = Math.round(imgData[i * 4 + 3] * (maskData[i] / 255));
-    }
+    const { data: imgData, info } = await sharp(imgBuf).rotate().ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    // The per-pixel loop runs in a worker thread so a big image does not freeze the server.
+    const { out } = await runPixelTask('extract', { rgba: imgData, mask: maskData });
     const resultBuf = await sharp(out, { raw: { width: info.width, height: info.height, channels: 4 } }).png().toBuffer();
     res.json({ imageDataUrl: `data:image/png;base64,${resultBuf.toString('base64')}`, width: info.width, height: info.height });
   } catch (err) {
@@ -101,45 +97,6 @@ router.post('/inpaint', async (req, res) => {
 function dataUrlMime(dataUrl) {
   const m = String(dataUrl || '').match(/^data:([^;]+);base64,/i);
   return m ? m[1] : 'image/png';
-}
-function rgbToHsl(r, g, b) {
-  r /= 255; g /= 255; b /= 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  let h = 0;
-  let s = 0;
-  const l = (max + min) / 2;
-  const d = max - min;
-  if (d !== 0) {
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0));
-    else if (max === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    h /= 6;
-  }
-  return { h, s, l };
-}
-
-function hslToRgb(h, s, l) {
-  if (s === 0) {
-    const v = Math.round(l * 255);
-    return { r: v, g: v, b: v };
-  }
-  const hue2rgb = (p, q, t) => {
-    if (t < 0) t += 1;
-    if (t > 1) t -= 1;
-    if (t < 1 / 6) return p + (q - p) * 6 * t;
-    if (t < 1 / 2) return q;
-    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
-    return p;
-  };
-  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-  const p = 2 * l - q;
-  return {
-    r: Math.round(hue2rgb(p, q, h + 1 / 3) * 255),
-    g: Math.round(hue2rgb(p, q, h) * 255),
-    b: Math.round(hue2rgb(p, q, h - 1 / 3) * 255),
-  };
 }
 async function removeBgLocal(buffer, mime) {
   const { removeBackground } = getImgly();
@@ -302,29 +259,9 @@ router.post('/recolor', async (req, res) => {
     const mode = req.body?.mode === 'preserve' ? 'preserve' : 'match';
     const { data, info } = await sharp(buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     const channels = info.channels;
-    const targetHsl = rgbToHsl(target.r, target.g, target.b);
-    const sourceHsl = rgbToHsl(source.r, source.g, source.b);
-    const lShift = targetHsl.l - sourceHsl.l;
-    let matched = 0;
+    const { out: recolored, matched } = await runPixelTask('recolor', { data, channels, source, target, maxDist, mode });
 
-    for (let i = 0; i < data.length; i += channels) {
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-      const dist = Math.sqrt((r - source.r) ** 2 + (g - source.g) ** 2 + (b - source.b) ** 2);
-      if (dist > maxDist) continue;
-      // Soft falloff at the edge of the tolerance band to avoid hard jaggies.
-      const weight = maxDist > 0 ? Math.min(1, 1 - dist / maxDist + 0.15) : 1;
-      const px = rgbToHsl(r, g, b);
-      const newL = mode === 'preserve' ? px.l : Math.min(1, Math.max(0, px.l + lShift));
-      const recol = hslToRgb(targetHsl.h, targetHsl.s, newL);
-      data[i] = Math.round(r + (recol.r - r) * weight);
-      data[i + 1] = Math.round(g + (recol.g - g) * weight);
-      data[i + 2] = Math.round(b + (recol.b - b) * weight);
-      matched += 1;
-    }
-
-    const outBuffer = await sharp(data, { raw: { width: info.width, height: info.height, channels } }).png().toBuffer();
+    const outBuffer = await sharp(recolored, { raw: { width: info.width, height: info.height, channels } }).png().toBuffer();
     const totalPx = info.width * info.height;
     res.json({
       ok: true,

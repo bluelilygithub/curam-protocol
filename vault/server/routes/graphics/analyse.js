@@ -9,6 +9,7 @@ const router = express.Router();
 const sharp = require('sharp');
 const exifReader = require('exif-reader');
 const { dataUrlToBuffer, clampInt, outputFormatFor } = require('./shared');
+const { runPixelTask } = require('../../services/graphicsWorker');
 
 router.post('/diff', async (req, res) => {
   try {
@@ -21,21 +22,7 @@ router.post('/diff', async (req, res) => {
     const ra = await sharp(a).rotate().ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     const rb = await sharp(b).rotate().resize(W, H, { fit: 'fill' }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     const threshold = clampInt(req.body?.threshold, 0, 255, 25);
-    const da = ra.data;
-    const db = rb.data;
-    const out = Buffer.alloc(W * H * 4);
-    let diffCount = 0;
-    for (let i = 0; i < da.length; i += 4) {
-      const maxd = Math.max(Math.abs(da[i] - db[i]), Math.abs(da[i + 1] - db[i + 1]), Math.abs(da[i + 2] - db[i + 2]));
-      if (maxd > threshold) {
-        out[i] = 255; out[i + 1] = 16; out[i + 2] = 64; out[i + 3] = 255;
-        diffCount += 1;
-      } else {
-        const gray = (da[i] + da[i + 1] + da[i + 2]) / 3;
-        const dim = Math.round(gray * 0.45 + 130); // washed-out context
-        out[i] = dim; out[i + 1] = dim; out[i + 2] = dim; out[i + 3] = 255;
-      }
-    }
+    const { out, diffCount } = await runPixelTask('diff', { a: ra.data, b: rb.data, threshold });
     const png = await sharp(out, { raw: { width: W, height: H, channels: 4 } }).png().toBuffer();
     const total = W * H;
     res.json({

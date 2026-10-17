@@ -12,9 +12,6 @@ const { callModel } = require('../../services/callModel');
 const { pool } = require('../../db');
 const { fetchPublicFile } = require('../../utils/safeFetch');
 
-// AI SVG icon generator model (Anthropic). Overridable via env.
-const ICON_MODEL = process.env.GRAPHICS_ICON_MODEL || 'claude-sonnet-4-6';
-
 // Parse model output that should be JSON but may be wrapped in prose / fences.
 function safeJsonParse(text) {
   if (!text) return null;
@@ -974,7 +971,6 @@ module.exports = {
   callModel,
   pool,
   getVaultModelsConfigForUser,
-  ICON_MODEL,
   safeJsonParse,
   pickOneOf,
   sanitizeIconName,
