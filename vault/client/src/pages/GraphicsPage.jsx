@@ -6,6 +6,7 @@ import Tooltip from '../components/Tooltip';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import GraphicsAskPanel from '../components/GraphicsAskPanel';
 import GraphicsTutorChat from './graphics/GraphicsTutorChat';
+import { createOcrEngine } from '../utils/ocrEngine';
 import useProcessingStore from '../store/processingStore';
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
@@ -811,7 +812,7 @@ const TOOL_HELP = {
   ocr: {
     title: 'Extract Text (OCR)',
     what: 'Read text from screenshots, scans and receipts.',
-    features: ['Powered by Tesseract.js — language model downloads once on first use', 'Languages: English, French, Spanish, German, Italian, Portuguese', 'Live progress readout during recognition', 'Editable result — correct OCR errors inline', 'Copy to clipboard or download as .txt', 'Nothing is uploaded — fully in your browser'],
+    features: ['Powered by Tesseract.js, run on your device with files served from Vault itself (no CDN)', 'English only', 'Live progress readout during recognition', 'Editable result — correct OCR errors inline', 'Copy to clipboard or download as .txt', 'Nothing is uploaded — fully in your browser'],
   },
   blurdetect: {
     title: 'Blur Detection',
@@ -1158,7 +1159,6 @@ export default function GraphicsPage() {
   const redactRectsRef = useRef([]);
   useEffect(() => { redactRectsRef.current = redactRects; }, [redactRects]);
   const [ocrSource, setOcrSource] = useState(null);
-  const [ocrLang, setOcrLang] = useState('eng');
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
   const [ocrText, setOcrText] = useState('');
@@ -3822,17 +3822,19 @@ export default function GraphicsPage() {
     setOcrError('');
     setOcrText('');
     setOcrProgress(0);
+    let engine = null;
     try {
-      const Tesseract = (await import('tesseract.js')).default;
-      const result = await Tesseract.recognize(ocrSource.imageDataUrl, ocrLang, {
-        logger: (m) => { if (m.status === 'recognizing text') setOcrProgress(Math.round(m.progress * 100)); },
-      });
-      const text = (result?.data?.text || '').trim();
+      // The shared on-device reader: its worker and English data are served from our own origin, because the
+      // site's Content Security Policy blocks the CDN that tesseract.js uses by default.
+      engine = await createOcrEngine({ lang: 'eng' });
+      const page = await engine.recognize(ocrSource.imageDataUrl, { onProgress: (p) => setOcrProgress(Math.round(p * 100)) });
+      const text = page.lines.map((l) => l.text).join('\n').trim();
       setOcrText(text);
       if (!text) setOcrError('No readable text was found in this image.');
     } catch (err) {
       setOcrError(err.message || 'Text extraction failed');
     } finally {
+      if (engine) engine.terminate().catch(() => {});
       setOcrBusy(false);
     }
   };
@@ -6962,18 +6964,7 @@ export default function GraphicsPage() {
                 <img src={ocrSource.imageDataUrl} alt="source" className="max-h-56 mx-auto rounded-lg" />
               </div>
             )}
-            <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Language</label>
-              <Tooltip text="Language of the text in the image — picking the right one improves accuracy."><select value={ocrLang} onChange={e => setOcrLang(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                <option value="eng">English</option>
-                <option value="fra">French</option>
-                <option value="spa">Spanish</option>
-                <option value="deu">German</option>
-                <option value="ita">Italian</option>
-                <option value="por">Portuguese</option>
-              </select></Tooltip>
-              <p className="text-[11px] mt-1" style={{ color: 'var(--color-muted)' }}>The language model (a few MB) downloads once on first use.</p>
-            </div>
+            <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Reads English text, on this device. The picture is not uploaded. The first run loads the reader (a few MB).</p>
             {ocrError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{ocrError}</div>}
             <Tooltip text="Read the text out of the image."><button type="button" onClick={runOcr} disabled={ocrBusy || !ocrSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {ocrBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('type', { size: 15 })}
@@ -8440,10 +8431,10 @@ export default function GraphicsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: 'rgba(0,0,0,0.55)' }}>
           <div className="w-full max-w-md rounded-2xl border p-5 shadow-xl" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
-              Content restriction detected
+              This description is not allowed
             </h2>
             <p className="text-sm mt-2" style={{ color: 'var(--color-muted)' }}>
-              This prompt appears to match admin restrictions. If you continue, the refined prompt may remove or redirect that content before image generation.
+              It matches content restrictions set by your admin, so no image will be made from it. Change the description and try again.
             </p>
             <div className="mt-3 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
               <p className="text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Matched restrictions</p>
@@ -8457,18 +8448,10 @@ export default function GraphicsPage() {
               <button
                 type="button"
                 onClick={() => setRestrictionWarning(null)}
-                className="px-4 py-2 rounded-xl text-sm font-medium border hover:opacity-80"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={performGenerate}
                 className="px-4 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90"
                 style={{ background: 'var(--color-primary)' }}
               >
-                Continue
+                OK
               </button>
             </div>
           </div>

@@ -12,7 +12,7 @@ const http = require('http');
 
 // shared.js loads the database module; the routes under test never touch it.
 const dbPath = require.resolve('../../db');
-require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: { pool: { query: async () => ({ rows: [] }) } } };
+require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: { pool: { query: async () => ({ rows: [{ value: global.__restrictions || '[]' }] }) } } };
 
 const express = require('express');
 const sharp = require('sharp');
@@ -109,6 +109,31 @@ async function startServer() {
     assert.strictEqual((await sharp(toBuf(r.body.imageDataUrl)).metadata()).exif, undefined, 'the cleaned file has no EXIF');
     assert.strictEqual(exifHasGps((await sharp(phone).metadata()).exif), false, 'no GPS tag, no GPS claim');
     assert.strictEqual(exifHasGps(undefined), false);
+
+    // ---- Content restrictions are enforced by the server, with whole-word matching ----
+    global.__restrictions = JSON.stringify(['gore', 'graphic violence', 'nudity']);
+    const img = dataUrl(small, 'image/png');
+    r = await post('/generate', { prompt: 'a gory battle scene', skipRefine: true });
+    assert.strictEqual(r.status, 422, 'a restricted prompt is refused');
+    assert.strictEqual(r.body.code, 'CONTENT_RESTRICTED');
+    assert.ok(r.body.matches.some((m) => m.restriction === 'gore'), 'the match is named');
+    assert.strictEqual((await post('/generate', { prompt: 'Nude figure study', skipRefine: true })).status, 422, 'a short restriction also catches its related words');
+    assert.strictEqual((await post('/generate', { prompt: 'a graphic scene full of violence', skipRefine: true })).status, 422, 'all the words of a multi-word restriction');
+    assert.notStrictEqual((await post('/generate', { prompt: 'Singapore skyline at dusk', skipRefine: true })).status, 422, 'gore does not match Singapore');
+    assert.notStrictEqual((await post('/generate', { prompt: 'a graphic design poster', skipRefine: true })).status, 422, 'one word of a multi-word restriction is not enough');
+    assert.strictEqual((await post('/augment', { prompt: 'make it gory', imageDataUrl: img })).status, 422, 'augment is guarded');
+    assert.strictEqual((await post('/inpaint', { prompt: 'add gore here', imageDataUrl: img, maskDataUrl: img })).status, 422, 'inpaint is guarded');
+    r = await post('/preflight', { prompt: 'Singapore' });
+    assert.strictEqual(r.body.restricted, false);
+    r = await post('/preflight', { prompt: 'so much gore' });
+    assert.strictEqual(r.body.restricted, true);
+    global.__restrictions = '[]';
+
+    // ---- Import by URL refuses internal addresses ----
+    for (const url of ['http://127.0.0.1/x.png', 'http://localhost/x.png', 'http://169.254.169.254/latest/meta-data/', 'http://[::1]/x.png', 'http://[::ffff:10.0.0.1]/x.png', 'http://2130706433/x.png', 'http://example.com:8080/x.png', 'ftp://example.com/x.png', 'http://user:pw@example.com/x.png']) {
+      r = await post('/fetch-url', { url });
+      assert.strictEqual(r.status, 400, `${url} is refused (got ${r.status})`);
+    }
 
     console.log('graphics route tests passed');
   } finally {

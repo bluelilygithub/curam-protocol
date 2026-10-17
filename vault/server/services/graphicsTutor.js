@@ -91,7 +91,7 @@ const CATALOG = [
   { id: 'palette', label: 'Palette', group: 'Analyse',
     does: 'Pulls the main 5 to 12 colours out of a picture, with HEX and RGB and roughly how much of the picture each covers.', notes: '' },
   { id: 'ocr', label: 'Extract Text', group: 'Analyse',
-    does: 'Reads the text in a screenshot, scan or receipt photo and lets the person edit, copy or save it as a .txt file. Languages: English, French, Spanish, German, Italian, Portuguese. Runs in the browser.', notes: 'Not for handwriting. The first use downloads the language data. Check numbers against the picture.' },
+    does: 'Reads the text in a screenshot, scan or receipt photo and lets the person edit, copy or save it as a .txt file. English only. Runs in the browser.', notes: 'Not for handwriting. The first use downloads the language data. Check numbers against the picture.' },
   { id: 'blurdetect', label: 'Blur Detection', group: 'Analyse',
     does: 'Scores how sharp a picture is and says Sharp, Soft or Blurry.', notes: 'Tells you about the picture; it cannot fix a blurry one.' },
   { id: 'diff', label: 'Image Diff', group: 'Analyse',
@@ -123,7 +123,7 @@ const NOT_POSSIBLE = [
   'Free-hand painting and drawing like a paint program, apart from Annotate\'s pen, the Eraser and the masks painted in Inpaint and Extract Element.',
   'Editing an SVG after Vectorize (moving points, recolouring shapes). It only traces.',
   'Doing any edit to many pictures at once. Batch covers only watermark, resize, convert, compress and remove metadata (up to 25), and Batch Text covers labels (up to 20).',
-  'Reading handwriting, or text in languages other than English, French, Spanish, German, Italian and Portuguese.',
+  'Reading handwriting, or text in languages other than English.',
   'Colour-accurate print preparation with printer profiles. Print Ready converts to CMYK by calculation only.',
   'Looking at the person\'s pictures to say what is in them or to suggest an edit. The guide knows what the tools do, but cannot see any picture.',
 ];

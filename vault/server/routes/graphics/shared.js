@@ -10,6 +10,7 @@ const exifReader = require('exif-reader');
 const { runtimeConfig } = require('../../config/runtime');
 const { callModel } = require('../../services/callModel');
 const { pool } = require('../../db');
+const { fetchPublicFile } = require('../../utils/safeFetch');
 
 // AI SVG icon generator model (Anthropic). Overridable via env.
 const ICON_MODEL = process.env.GRAPHICS_ICON_MODEL || 'claude-sonnet-4-6';
@@ -279,33 +280,54 @@ function buildNegativePrompt(baseNegativePrompt, restrictions = []) {
   ].filter(Boolean).join(', ');
 }
 
+const escapeRegExp = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// Whole-word match (with an optional plural / -ed / -ing ending), so "gore" does not fire on "Singapore".
+const wordRegex = (term) => new RegExp(`(^|[^a-z0-9])${escapeRegExp(term)}(s|es|ed|ing)?([^a-z0-9]|$)`, 'i');
+
+// Related words an admin's short restriction should also catch.
+const RESTRICTION_SYNONYMS = [
+  [/nud/, ['nude', 'nudity', 'naked']],
+  [/viol/, ['violence', 'violent']],
+  [/gore/, ['gore', 'gory']],
+];
+
+// A restriction matches a prompt when its whole phrase appears, or (for a several-word restriction) every
+// meaningful word in it appears, or one of its known synonyms appears. Single words from a multi-word
+// restriction do NOT match on their own: "graphic violence" must not block "graphic design".
 function restrictionSearchTerms(restriction) {
   const raw = String(restriction || '').trim().toLowerCase();
-  const terms = new Set([raw]);
-  raw.split(/[^a-z0-9]+/i).forEach((part) => {
-    if (part.length >= 4) terms.add(part);
-  });
-  if (raw.includes('nud')) {
-    ['nude', 'nudity', 'naked'].forEach((term) => terms.add(term));
-  }
-  if (raw.includes('viol')) {
-    ['violence', 'violent'].forEach((term) => terms.add(term));
-  }
-  if (raw.includes('gore')) {
-    ['gore', 'gory'].forEach((term) => terms.add(term));
-  }
-  return Array.from(terms).filter(Boolean);
+  const terms = new Set(raw ? [raw] : []);
+  RESTRICTION_SYNONYMS.forEach(([test, words]) => { if (test.test(raw)) words.forEach((w) => terms.add(w)); });
+  return Array.from(terms);
 }
 
 function findRestrictionMatches(prompt, restrictions = []) {
   const source = String(prompt || '').toLowerCase();
   return restrictions
     .map((restriction) => {
-      const matchedTerms = restrictionSearchTerms(restriction)
-        .filter((term) => source.includes(term));
+      const matchedTerms = restrictionSearchTerms(restriction).filter((term) => wordRegex(term).test(source));
+      if (!matchedTerms.length) {
+        const parts = String(restriction || '').toLowerCase().split(/[^a-z0-9]+/).filter((p) => p.length >= 4);
+        if (parts.length > 1 && parts.every((p) => wordRegex(p).test(source))) matchedTerms.push(...parts);
+      }
       return matchedTerms.length ? { restriction, matchedTerms } : null;
     })
     .filter(Boolean);
+}
+
+// Server-side enforcement of the admin's content restrictions. The browser asks /preflight first, but a
+// caller can skip that, so every route that sends text to an image model calls this. Throws a 422 carrying
+// the matches; the routes put them in the response.
+function assertPromptAllowed(promptTexts, restrictions) {
+  const list = Array.isArray(promptTexts) ? promptTexts : [promptTexts];
+  const matches = list.flatMap((text) => findRestrictionMatches(text, restrictions));
+  if (!matches.length) return;
+  const unique = [...new Map(matches.map((m) => [m.restriction, m])).values()];
+  throw Object.assign(new Error(`This request matches a content restriction set by your admin (${unique.map((m) => m.restriction).join(', ')}). Change the description and try again.`), {
+    status: 422,
+    code: 'CONTENT_RESTRICTED',
+    matches: unique,
+  });
 }
 
 function buildWorkflow({ prompt, negativePrompt, width, height, seed, modelName }) {
@@ -920,52 +942,24 @@ const SOCIAL_PRESETS = [
   { id: 'youtube-thumbnail', name: 'YouTube Thumbnail', width: 1280, height: 720, label: 'YouTube Thumbnail (1280x720)' },
   { id: 'pinterest-pin', name: 'Pinterest Pin', width: 1000, height: 1500, label: 'Pinterest Pin (1000x1500)' },
 ];
-// Reject obviously-internal hosts to limit SSRF when importing an image by URL.
-function isPrivateHost(hostname) {
-  const h = String(hostname || '').toLowerCase();
-  if (!h || h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.internal') || h.endsWith('.local')) return true;
-  if (h === '0.0.0.0' || h === '::1' || h === '[::1]') return true;
-  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (m) {
-    const a = Number(m[1]); const b = Number(m[2]);
-    if (a === 10 || a === 127) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 169 && b === 254) return true;
-    if (a === 172 && b >= 16 && b <= 31) return true;
-  }
-  return false;
-}
-
 // Import an image by URL (server-side fetch avoids browser CORS). Returns a data URL.
+// The fetch itself is in utils/safeFetch.js: public addresses only (checked on every redirect hop and pinned
+// against DNS rebinding), ports 80/443, streamed with a 25MB cap.
 router.post('/fetch-url', async (req, res) => {
   try {
     const raw = String(req.body?.url || '').trim();
-    let parsed;
-    try { parsed = new URL(raw); } catch { return res.status(400).json({ error: 'Enter a valid URL' }); }
-    if (!/^https?:$/.test(parsed.protocol)) return res.status(400).json({ error: 'Only http(s) URLs are allowed' });
-    if (isPrivateHost(parsed.hostname)) return res.status(400).json({ error: 'That host is not allowed' });
-    if (typeof fetch !== 'function') return res.status(501).json({ error: 'URL import needs Node 18+' });
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000);
-    let resp;
-    try {
-      resp = await fetch(raw, { redirect: 'follow', signal: controller.signal, headers: { 'user-agent': 'CuramVault/1.0', accept: 'image/*' } });
-    } finally {
-      clearTimeout(timer);
-    }
-    if (!resp.ok) return res.status(400).json({ error: `Could not fetch image (HTTP ${resp.status})` });
-    const ct = String(resp.headers.get('content-type') || '').toLowerCase().split(';')[0].trim();
+    const { buffer, contentType, finalUrl } = await fetchPublicFile(raw, { maxBytes: 25 * 1024 * 1024, accept: 'image/*' });
+    const ct = contentType.toLowerCase().split(';')[0].trim();
     if (!ct.startsWith('image/')) return res.status(400).json({ error: `That URL is not an image (${ct || 'unknown type'})` });
-    const buf = Buffer.from(await resp.arrayBuffer());
-    const MAX = 25 * 1024 * 1024;
-    if (buf.length > MAX) return res.status(400).json({ error: 'Image is too large (max 25MB)' });
-    if (!buf.length) return res.status(400).json({ error: 'The URL returned an empty image' });
-    const name = decodeURIComponent((parsed.pathname.split('/').pop() || '').trim()) || 'image';
-    res.json({ ok: true, name, bytes: buf.length, imageDataUrl: `data:${ct};base64,${buf.toString('base64')}` });
+    if (!buffer.length) return res.status(400).json({ error: 'The URL returned an empty image' });
+    // A page can claim image/png and send HTML; make sure the bytes really decode as an image.
+    try { await sharp(buffer).metadata(); } catch { return res.status(400).json({ error: 'That URL did not return a readable image' }); }
+    const pathname = new URL(finalUrl).pathname;
+    let name = 'image';
+    try { name = decodeURIComponent((pathname.split('/').pop() || '').trim()) || 'image'; } catch { name = (pathname.split('/').pop() || '').trim() || 'image'; }
+    res.json({ ok: true, name, bytes: buffer.length, imageDataUrl: `data:${ct};base64,${buffer.toString('base64')}` });
   } catch (err) {
-    const msg = err?.name === 'AbortError' ? 'Fetching the image timed out' : (err.message || 'Fetch failed');
-    res.status(500).json({ error: msg });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'Fetching the image failed' });
   }
 });
 
@@ -1015,6 +1009,7 @@ module.exports = {
   buildNegativePrompt,
   restrictionSearchTerms,
   findRestrictionMatches,
+  assertPromptAllowed,
   buildWorkflow,
   buildAugmentWorkflow,
   fetchJson,
@@ -1052,5 +1047,4 @@ module.exports = {
   GRAVITY_MAP,
   parseHexColor,
   SOCIAL_PRESETS,
-  isPrivateHost,
 };

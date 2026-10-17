@@ -12,6 +12,7 @@ const {
   parseHexColor,
   logImageUsage,
   loadContentRestrictions,
+  assertPromptAllowed,
   resolveGraphicsModel,
   resolveGraphicsProvider,
   inpaintWithFal,
@@ -70,6 +71,7 @@ router.post('/inpaint', async (req, res) => {
     if (!/^data:image\//i.test(maskDataUrl)) return res.status(400).json({ error: 'Paint a mask over the area to change' });
 
     const restrictions = await loadContentRestrictions();
+    assertPromptAllowed(prompt, restrictions);
     const modelName = await resolveGraphicsModel(req.user.id);
     const provider = await resolveGraphicsProvider(req.user.id, modelName);
     if (provider !== 'fal') {
@@ -93,7 +95,7 @@ router.post('/inpaint', async (req, res) => {
       restrictions,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Inpainting failed' });
+    res.status(err.status || 500).json({ error: err.message || 'Inpainting failed', code: err.code, matches: err.matches });
   }
 });
 function dataUrlMime(dataUrl) {

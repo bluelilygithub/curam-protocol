@@ -27,6 +27,7 @@
     "test:finance-tutor": "node server/services/financeTutor.test.js",
     "test:pdf-tutor": "node server/services/pdfTutor.test.js",
     "test:graphics": "node server/routes/graphics/graphics.test.js",
+    "test:safe-fetch": "node server/utils/safeFetch.test.js",
     "test:graphics-tutor": "node server/services/graphicsTutor.test.js",
     "test:cross-user": "node server/routes/crossUser.test.js && node server/routes/crossUserOwnership.test.js",
     "test:graph": "node server/routes/graph.test.js",

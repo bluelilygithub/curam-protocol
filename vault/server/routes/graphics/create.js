@@ -21,6 +21,7 @@ const {
   refinePromptForImage,
   localTextModel,
   findRestrictionMatches,
+  assertPromptAllowed,
   buildNegativePrompt,
   clampDimension,
   buildWorkflow,
@@ -141,6 +142,7 @@ router.post('/generate', async (req, res) => {
     const prompt = String(req.body?.prompt || '').trim();
     if (!prompt) return res.status(400).json({ error: 'Prompt required' });
     const restrictions = await loadContentRestrictions();
+    assertPromptAllowed(prompt, restrictions);
     const negativePrompt = buildNegativePrompt(String(req.body?.negativePrompt || '').trim(), restrictions);
     const modelName = await resolveGraphicsModel(req.user.id);
     const provider = await resolveGraphicsProvider(req.user.id, modelName);
@@ -151,6 +153,7 @@ router.post('/generate', async (req, res) => {
       ? Math.floor(Number(req.body.seed))
       : Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
     const refinedPrompt = req.body?.skipRefine ? prompt : await refinePromptForImage(prompt, restrictions);
+    assertPromptAllowed(refinedPrompt, restrictions); // the rewrite must not bring a restricted idea back in
 
     if (provider === 'fal') {
       const falResult = await generateWithFal({
@@ -214,7 +217,7 @@ router.post('/generate', async (req, res) => {
       restrictions,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message, code: err.code, matches: err.matches });
   }
 });
 
@@ -224,6 +227,7 @@ router.post('/augment', async (req, res) => {
     if (!prompt) return res.status(400).json({ error: 'Augmentation prompt required' });
     const sourceImageDataUrl = String(req.body?.imageDataUrl || '');
     const restrictions = await loadContentRestrictions();
+    assertPromptAllowed(prompt, restrictions);
     const negativePrompt = buildNegativePrompt(String(req.body?.negativePrompt || '').trim(), restrictions);
     const modelName = await resolveGraphicsModel(req.user.id);
     const provider = await resolveGraphicsProvider(req.user.id, modelName);
@@ -290,7 +294,7 @@ router.post('/augment', async (req, res) => {
       restrictions,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message, code: err.code, matches: err.matches });
   }
 });
 
