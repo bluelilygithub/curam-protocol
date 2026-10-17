@@ -861,6 +861,23 @@ async function upscaleWithReplicate({ imageDataUrl, scale, creativity, model: re
   return { provider: 'replicate', model, url: typeof out === 'string' ? out : null, imageDataUrl: upscaledDataUrl };
 }
 
+// Size of an image AFTER its EXIF orientation is applied (sharp's metadata() reports the stored pixels,
+// but .rotate() makes orientations 5-8 swap width and height). Use this for anything computed from a
+// pipeline that calls .rotate().
+function orientedSize(meta) {
+  const w = meta?.width || 0;
+  const h = meta?.height || 0;
+  return meta?.orientation >= 5 ? { width: h, height: w } : { width: w, height: h };
+}
+
+// sharp refuses to composite an overlay bigger than the base ("Image to composite must have same
+// dimensions or smaller"). Shrink an overlay (PNG or SVG buffer) to fit inside the base, never enlarge.
+async function fitOverlay(overlay, baseWidth, baseHeight) {
+  const m = await sharp(overlay).metadata();
+  if (!m.width || !m.height || (m.width <= baseWidth && m.height <= baseHeight)) return overlay;
+  return sharp(overlay).resize(baseWidth, baseHeight, { fit: 'inside', withoutEnlargement: true }).png().toBuffer();
+}
+
 function clampInt(value, min, max, fallback) {
   const n = Math.round(Number(value));
   if (!Number.isFinite(n)) return fallback;
@@ -1028,6 +1045,8 @@ module.exports = {
   resolveHostedUpscaleModel,
   upscaleWithReplicate,
   clampInt,
+  orientedSize,
+  fitOverlay,
   clampQuality,
   outputFormatFor,
   GRAVITY_MAP,

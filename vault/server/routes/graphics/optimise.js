@@ -33,6 +33,8 @@ const {
   CONVERT_FORMATS,
   clampQuality,
   clampInt,
+  orientedSize,
+  parseHexColor,
   SOCIAL_PRESETS,
 } = require('./shared');
 const { runResize } = require('./transform');
@@ -189,7 +191,16 @@ async function runConvert(params) {
   }
 
   const quality = clampQuality(params?.quality);
-  const pipeline = sharp(buffer, { animated: true });
+  const srcMeta = await sharp(buffer).metadata();
+  let pipeline = sharp(buffer, { animated: true });
+  // sharp drops the EXIF orientation tag on output, so bake it in first or phone photos come out sideways.
+  // (Skipped for animated images, where rotating every frame is not safe.)
+  if (!(srcMeta.pages > 1)) pipeline = pipeline.rotate();
+  // JPG has no transparency; without this the see-through parts come out black.
+  if (target.id === 'jpeg' && srcMeta.hasAlpha) {
+    const bg = parseHexColor(params?.background) || { r: 255, g: 255, b: 255 };
+    pipeline = pipeline.flatten({ background: { r: bg.r, g: bg.g, b: bg.b } });
+  }
   const options = target.lossy ? { quality } : {};
   const outBuffer = await pipeline.toFormat(target.id, options).toBuffer();
   const meta = await sharp(outBuffer).metadata().catch(() => null);
@@ -256,7 +267,10 @@ async function runCompress(params) {
   const fmtMeta = CONVERT_FORMATS.find((f) => f.id === format) || { mime: `image/${format}`, ext: format };
   const quality = clampQuality(params?.quality);
   const options = buildCompressOptions(format, quality);
-  const outBuffer = await sharp(buffer, { animated: true }).toFormat(format, options).toBuffer();
+  const srcMeta = await sharp(buffer).metadata();
+  let pipeline = sharp(buffer, { animated: true });
+  if (!(srcMeta.pages > 1)) pipeline = pipeline.rotate(); // keep phone photos upright (see runConvert)
+  const outBuffer = await pipeline.toFormat(format, options).toBuffer();
   const meta = await sharp(outBuffer).metadata().catch(() => null);
 
   const originalBytes = buffer.length;
@@ -573,9 +587,9 @@ router.post('/auto-enhance', async (req, res) => {
     const buf = dataUrlToBuffer(req.body?.imageDataUrl || '');
     if (!buf) return res.status(400).json({ error: 'No valid image provided' });
 
-    // Analyze histogram to determine optimal adjustments.
-    const img = sharp(buf).rotate();
-    const meta = await img.metadata();
+    // Analyze histogram to determine optimal adjustments. sharp pipelines are mutable, so the analysis
+    // (downsized) and the enhancement (full size) must be separate objects.
+    const meta = await sharp(buf).metadata();
     let w = meta.width || 1;
     let h = meta.height || 1;
 
@@ -588,7 +602,7 @@ router.post('/auto-enhance', async (req, res) => {
     }
 
     // Get pixel data for histogram analysis.
-    const raw = await img
+    const raw = await sharp(buf).rotate()
       .resize(w, h, { fit: 'inside', withoutEnlargement: true })
       .ensureAlpha()
       .raw()
@@ -643,7 +657,7 @@ router.post('/auto-enhance', async (req, res) => {
     if (range > 200) saturation = 1.15; // Boost already-vibrant images
 
     // Apply adjustments via sharp: linear contrast, then manipulate saturation.
-    const enhanced = await img
+    const enhanced = await sharp(buf).rotate()
       .linear(contrast, Math.round(128 * (1 - contrast)))
       .modulate({ brightness, saturation })
       .png()
@@ -653,8 +667,8 @@ router.post('/auto-enhance', async (req, res) => {
       ok: true,
       imageDataUrl: `data:image/png;base64,${enhanced.toString('base64')}`,
       applied: { brightness: Number(brightness.toFixed(2)), contrast: Number(contrast.toFixed(2)), saturation: Number(saturation.toFixed(2)) },
-      width: meta.width,
-      height: meta.height,
+      width: orientedSize(meta).width,
+      height: orientedSize(meta).height,
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Auto-enhance failed' });

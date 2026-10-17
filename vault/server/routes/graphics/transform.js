@@ -11,6 +11,7 @@ const {
   dataUrlToBuffer,
   outputFormatFor,
   clampInt,
+  orientedSize,
   GRAVITY_MAP,
   parseHexColor,
   SOCIAL_PRESETS,
@@ -78,8 +79,8 @@ async function runResize(params) {
   } else {
     const ar = parseAspect(params?.aspect);
     if (!ar) throw Object.assign(new Error('A valid aspect ratio like 1:1 or 16:9 is required to crop'), { status: 400 });
-    const W = meta.width;
-    const H = meta.height;
+    // The pipeline below starts with .rotate(), so measure the image the way it will be after rotation.
+    const { width: W, height: H } = orientedSize(meta);
     const arVal = ar.w / ar.h;
     let tw;
     let th;

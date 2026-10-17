@@ -16,6 +16,8 @@ const {
   dataUrlToBuffer,
   outputFormatFor,
   clampInt,
+  orientedSize,
+  fitOverlay,
   GRAVITY_MAP,
   parseHexColor,
   ICON_MODEL,
@@ -36,6 +38,7 @@ async function runWatermark(params) {
     throw Object.assign(new Error('A valid image is required'), { status: 400 });
   }
   const meta = await sharp(buffer).metadata();
+  const base = orientedSize(meta);
   const fmt = outputFormatFor(meta);
   const type = params?.type === 'image' ? 'image' : 'text';
   const opacity = Math.min(1, Math.max(0, Number(params?.opacity)));
@@ -48,7 +51,7 @@ async function runWatermark(params) {
     const text = String(params?.text || '').slice(0, 200);
     if (!text) throw Object.assign(new Error('Watermark text is required'), { status: 400 });
     const color = parseHexColor(params?.color)?.hex || '#ffffff';
-    const fontSize = clampInt(params?.fontSize, 8, 600, Math.max(16, Math.round(meta.width * 0.06)));
+    const fontSize = clampInt(params?.fontSize, 8, 600, Math.max(16, Math.round(base.width * 0.06)));
     const w = Math.ceil(text.length * fontSize * 0.62) + 24;
     const h = Math.ceil(fontSize * 1.5);
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><text x="50%" y="50%" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="bold" fill="${color}" fill-opacity="${op}" text-anchor="middle" dominant-baseline="middle">${escapeXml(text)}</text></svg>`;
@@ -57,7 +60,7 @@ async function runWatermark(params) {
     const wmBuf = dataUrlToBuffer(params?.watermarkDataUrl || '');
     if (!wmBuf) throw Object.assign(new Error('A watermark image is required'), { status: 400 });
     const scale = clampInt(params?.scale, 1, 100, 25) / 100;
-    const targetW = Math.max(1, Math.round(meta.width * scale));
+    const targetW = Math.max(1, Math.round(base.width * scale));
     const wm = await sharp(wmBuf).resize({ width: targetW, withoutEnlargement: true }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     for (let i = 0; i < wm.data.length; i += 4) {
       wm.data[i + 3] = Math.round(wm.data[i + 3] * op);
@@ -65,6 +68,7 @@ async function runWatermark(params) {
     overlay = await sharp(wm.data, { raw: { width: wm.info.width, height: wm.info.height, channels: 4 } }).png().toBuffer();
   }
 
+  overlay = await fitOverlay(overlay, base.width, base.height);
   const composite = tile ? { input: overlay, tile: true } : { input: overlay, gravity };
   const out = await sharp(buffer).rotate().composite([composite]).toFormat(fmt).toBuffer();
   const m2 = await sharp(out).metadata().catch(() => null);
@@ -179,20 +183,22 @@ router.post('/text', async (req, res) => {
     if (!text) return res.status(400).json({ error: 'Text is required' });
 
     const meta = await sharp(buffer).metadata();
+    const base = orientedSize(meta);
     const fmt = outputFormatFor(meta);
-    const fontSize = clampInt(req.body?.fontSize, 8, 600, Math.max(24, Math.round(meta.width * 0.08)));
+    const fontSize = clampInt(req.body?.fontSize, 8, 600, Math.max(24, Math.round(base.width * 0.08)));
     const color = parseHexColor(req.body?.color)?.hex || '#ffffff';
     const backgroundColor = req.body?.backgroundColor === 'transparent' ? null : (parseHexColor(req.body?.backgroundColor)?.hex || null);
     const align = ['left', 'center', 'right'].includes(req.body?.align) ? req.body.align : 'center';
     const fontWeight = req.body?.fontWeight === 'normal' ? 'normal' : 'bold';
     const maxWidthPct = clampInt(req.body?.maxWidth, 10, 100, 90);
-    const maxWidthPx = Math.round(meta.width * (maxWidthPct / 100));
+    const maxWidthPx = Math.round(base.width * (maxWidthPct / 100));
     const strokeColor = parseHexColor(req.body?.strokeColor)?.hex || null;
     const strokeWidth = clampInt(req.body?.strokeWidth, 1, 40, strokeColor ? 2 : 0);
     const gravity = GRAVITY_MAP[req.body?.position] || 'centre';
 
     const { svg } = buildTextOverlaySvg({ text, fontSize, color, backgroundColor, align, maxWidthPx, fontWeight, strokeColor, strokeWidth });
-    const out = await sharp(buffer).rotate().composite([{ input: svg, gravity }]).toFormat(fmt).toBuffer();
+    const input = await fitOverlay(svg, base.width, base.height);
+    const out = await sharp(buffer).rotate().composite([{ input, gravity }]).toFormat(fmt).toBuffer();
     const m2 = await sharp(out).metadata().catch(() => null);
     res.json({
       ok: true,
@@ -237,6 +243,7 @@ async function buildOverlayComposite(overlay, baseMeta) {
     const targetW = Math.max(1, Math.round(baseMeta.width * scale));
     input = await buildImageOverlayBuffer(overlay?.imageDataUrl, targetW, opacity);
   }
+  input = await fitOverlay(input, baseMeta.width, baseMeta.height);
 
   const composite = { input };
   const position = overlay?.position;
@@ -268,13 +275,14 @@ router.post('/composite', async (req, res) => {
     }
 
     const meta = await sharp(buffer).metadata();
+    const base = orientedSize(meta);
     const fmt = outputFormatFor(meta);
     const composites = [];
     for (const overlay of overlays) {
       // Order matters: first overlay is the bottom of the stack. Sequential
       // await keeps composites in the order overlays were given.
       // eslint-disable-next-line no-await-in-loop
-      composites.push(await buildOverlayComposite(overlay, meta));
+      composites.push(await buildOverlayComposite(overlay, base));
     }
 
     const out = await sharp(buffer).rotate().composite(composites).toFormat(fmt).toBuffer();
@@ -560,8 +568,8 @@ router.post('/batch-text', async (req, res) => {
     const results = [];
     for (let idx = 0; idx < items.length; idx += 1) {
       const item = items[idx];
-      const dataUrl = typeof item === 'string' ? item : (item.imageDataUrl || '');
-      const rawName = typeof item === 'object' ? (item.name || `image-${idx + 1}`) : `image-${idx + 1}`;
+      const dataUrl = typeof item === 'string' ? item : (item?.imageDataUrl || '');
+      const rawName = item && typeof item === 'object' ? String(item.name || `image-${idx + 1}`) : `image-${idx + 1}`;
       const buf = dataUrlToBuffer(dataUrl);
       if (!buf) { results.push({ name: rawName, error: 'Could not decode image' }); continue; }
 
@@ -583,7 +591,8 @@ router.post('/batch-text', async (req, res) => {
         if (bgHex) {
           svgInner = `<rect width="${w}" height="${h}" fill="${bgHex}" fill-opacity="${Math.min(1, opacity * 1.2)}" rx="4"/>` + svgInner;
         }
-        const svgBuf = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">${svgInner}</svg>`);
+        const base = orientedSize(meta);
+        const svgBuf = await fitOverlay(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">${svgInner}</svg>`), base.width, base.height);
 
         const out = await sharp(buf).rotate().composite([{ input: svgBuf, gravity }]).toFormat(fmt).toBuffer();
         results.push({

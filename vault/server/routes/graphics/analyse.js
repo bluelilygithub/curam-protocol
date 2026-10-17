@@ -59,6 +59,19 @@ function gpsToDecimal(parts, ref) {
   return Number.isFinite(dec) ? dec : null;
 }
 
+// True when the EXIF block really holds a GPS position. (EXIF stores GPS under numeric tags, so searching
+// the raw bytes for the text "GPS" finds nothing useful: parse it instead.)
+function exifHasGps(exifBuffer) {
+  if (!Buffer.isBuffer(exifBuffer)) return false;
+  try {
+    const parsed = exifReader(exifBuffer);
+    const gps = parsed?.GPSInfo || parsed?.GPS || {};
+    return Array.isArray(gps.GPSLatitude) && Array.isArray(gps.GPSLongitude);
+  } catch {
+    return false;
+  }
+}
+
 function formatExif(buffer) {
   let parsed;
   try { parsed = exifReader(buffer); } catch { return []; }
@@ -110,7 +123,7 @@ router.post('/metadata', async (req, res) => {
       hasExif: exif.length > 0,
       flags: {
         exif: Boolean(meta.exif),
-        gps: Boolean(meta.exif && Buffer.isBuffer(meta.exif) && meta.exif.includes('GPS')),
+        gps: exifHasGps(meta.exif),
         xmp: Boolean(meta.xmp),
         iptc: Boolean(meta.iptc),
         icc: Boolean(meta.icc),
@@ -131,7 +144,7 @@ router.post('/strip-metadata', async (req, res) => {
     const meta = await sharp(buffer).metadata();
     const removed = [];
     if (meta.exif) removed.push('EXIF (camera, settings, timestamps)');
-    if (meta.exif && Buffer.isBuffer(meta.exif) && meta.exif.includes('GPS')) removed.push('GPS location');
+    if (exifHasGps(meta.exif)) removed.push('GPS location');
     if (meta.xmp) removed.push('XMP');
     if (meta.iptc) removed.push('IPTC');
     if (meta.icc) removed.push('ICC colour profile');
@@ -214,5 +227,7 @@ router.post('/blur-detect', async (req, res) => {
     res.status(500).json({ error: err.message || 'Blur detection failed' });
   }
 });
+
+router.exifHasGps = exifHasGps;
 
 module.exports = router;
