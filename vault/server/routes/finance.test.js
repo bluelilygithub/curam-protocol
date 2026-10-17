@@ -1000,6 +1000,74 @@ test('cash basis: an asset bought on Accounts Payable claims its GST when paid, 
   await setBasis('cash');
 });
 
+// ---------------------------------------------------------------- statement review
+const ANZ_TEXT = 'Account Statement 1 August 2026 - 31 August 2026 A N Other Australia and New Zealand Banking Group Limited (ANZ) '
+  + 'ANZ Plus Flex Saver Branch Number (BSB) Account Number Opening Balance Closing Balance 014 111 808 502 062 $20,830.43 $29,182.00 '
+  + 'Transactions Date Description Credit Debit Balance '
+  + '31 Aug CREDIT INTEREST PAID $53.22 $29,182.00 '
+  + '24 Aug TRANSFER FROM SOMEONE %NUM% $8,500.00 $29,128.78 '
+  + '21 Aug BPAY TO ANZ CARDS #887809 $201.65 $20,628.78 '
+  + 'Opening Balance $20,830.43 Please check your statement carefully.';
+async function pdfWithText(text) {
+  const { PDFDocument, StandardFonts } = require('pdf-lib');
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([6000, 200]);
+  page.drawText(text, { x: 10, y: 100, size: 8, font: await doc.embedFont(StandardFonts.Helvetica) });
+  return Buffer.from(await doc.save());
+}
+
+test('statement review: read an ANZ PDF, suggest the invoice, approve lines, mark personal, re-read is idempotent', async () => {
+  const inv = await newInvoice({ issueDate: '2026-08-01', items: [{ description: 'Job', qty: 1, unitPrice: 7727.27 }] }); // 7727.27 + GST = 8500.00
+  await call('PATCH', `/api/finance/invoices/${inv.id}/status`, { status: 'sent' });
+  const digits = inv.number.replace(/\D/g, '');
+  const up = await upload([['aug.pdf', await pdfWithText(ANZ_TEXT.replace('%NUM%', digits)), 'application/pdf']], { kind: 'bank_statement', fy: '2026-27', docDate: '2026-08-31' });
+  assert.strictEqual(up.status, 201, JSON.stringify(up.json));
+  const doc = up.json.documents[0];
+
+  const r = await call('POST', `/api/finance/statements/from-document/${doc.id}`, {});
+  assert.strictEqual(r.status, 201, JSON.stringify(r.json));
+  const st = r.json;
+  assert.strictEqual(st.lines.length, 3);
+  assert.deepStrictEqual(st.lines.map((l) => l.amount), [-201.65, 8500, 53.22]);
+  assert.strictEqual(st.lines[1].matchInvoiceId, inv.id, 'the 8,500.00 transfer is matched to the invoice');
+  assert.strictEqual(st.lines[1].matchStrength, 'exact');
+  assert.ok(st.lines.every((l) => l.decision === 'pending'));
+  assert.strictEqual(st.bsb, '014-111');
+
+  // nothing reached the books
+  const j = await pool.query(`SELECT COUNT(*)::int AS n FROM fin_journal_entries WHERE "userId"=$1 AND type='bas' AND description ILIKE '%TRANSFER FROM SOMEONE%'`, [userId]);
+  assert.strictEqual(j.rows[0].n, 0);
+
+  const again = await call('POST', `/api/finance/statements/from-document/${doc.id}`, {});
+  assert.strictEqual(again.status, 200);
+  assert.strictEqual(again.json.id, st.id, 'asking again returns the same statement');
+
+  const pers = await call('PATCH', `/api/finance/statements/lines/${st.lines[0].id}`, { decision: 'personal' });
+  assert.strictEqual(pers.json.decision, 'personal');
+  const all = await call('POST', `/api/finance/statements/${st.id}/approve-all`, { decision: 'business' });
+  assert.deepStrictEqual(all.json.lines.map((l) => l.decision), ['personal', 'business', 'business'], 'approve-all leaves decided lines alone');
+  assert.strictEqual(all.json.lines[1].matchInvoiceId, inv.id, 'approving keeps the match');
+  const un = await call('PATCH', `/api/finance/statements/lines/${st.lines[1].id}`, { decision: 'business', matchInvoiceId: null });
+  assert.strictEqual(un.json.matchInvoiceId, null, 'a match can be cleared');
+  assert.strictEqual((await call('PATCH', `/api/finance/statements/lines/${st.lines[1].id}`, { decision: 'maybe' })).status, 400);
+  assert.strictEqual((await call('PATCH', `/api/finance/statements/lines/${st.lines[1].id}`, { decision: 'business', matchInvoiceId: 987654321 })).status, 400, 'unknown invoice refused');
+  const list = (await call('GET', '/api/finance/statements')).json.statements.find((x) => x.id === st.id);
+  assert.deepStrictEqual([list.lines, list.reviewed], [3, 3]);
+  assert.strictEqual((await call('DELETE', `/api/finance/statements/${st.id}`)).status, 200);
+  assert.strictEqual((await call('GET', `/api/finance/documents?q=aug`)).json.documents.length, 1, 'the document itself stays');
+});
+
+test('statement review: a statement that does not add up, or is not ANZ, is refused with the reason', async () => {
+  const bad = await upload([['bad.pdf', await pdfWithText(ANZ_TEXT.replace('%NUM%', '123456').replace('$8,500.00', '$8,400.00')), 'application/pdf']], { kind: 'bank_statement' });
+  const r1 = await call('POST', `/api/finance/statements/from-document/${bad.json.documents[0].id}`, {});
+  assert.strictEqual(r1.status, 422);
+  assert.ok(/balance change/.test(r1.json.error), r1.json.error);
+  const other = await upload([['x.pdf', await pdfWithText('Some other document with no statement in it'), 'application/pdf']], { kind: 'bank_statement' });
+  assert.strictEqual((await call('POST', `/api/finance/statements/from-document/${other.json.documents[0].id}`, {})).status, 422);
+  assert.strictEqual((await call('POST', '/api/finance/statements/from-document/987654321', {})).status, 404);
+  for (const d of [bad, other]) await call('DELETE', `/api/finance/documents/${d.json.documents[0].id}?confirm=1`);
+});
+
 test('trial balance still balances after all of the above', async () => {
   const { rows } = await pool.query(
     `SELECT COALESCE(SUM(l.debit),0)::float AS d, COALESCE(SUM(l.credit),0)::float AS c

@@ -3357,6 +3357,48 @@ async function initSchema() {
   await pool.query(`DROP TRIGGER IF EXISTS trg_fin_audit ON fin_documents`);
   await pool.query(`CREATE TRIGGER trg_fin_audit AFTER INSERT OR UPDATE OR DELETE ON fin_documents FOR EACH ROW EXECUTE FUNCTION fin_audit_trigger()`);
 
+  // ── Finance: statement review (bank / card statement lines read from an uploaded document) ──
+  // One row per statement document, one row per transaction. Each line is approved as business or
+  // personal; a business line can carry a suggested/confirmed match to an invoice or expense. Nothing
+  // here posts to the journal — it is a review layer over fin_documents.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS fin_statements (
+      id               SERIAL PRIMARY KEY,
+      "userId"         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "documentId"     INTEGER NOT NULL UNIQUE REFERENCES fin_documents(id) ON DELETE CASCADE,
+      kind             TEXT NOT NULL DEFAULT 'bank' CHECK (kind IN ('bank','card')),
+      bank             TEXT,
+      product          TEXT,
+      bsb              TEXT,
+      "accountNumber"  TEXT,
+      "periodStart"    DATE,
+      "periodEnd"      DATE,
+      "openingBalance" NUMERIC(14,2),
+      "closingBalance" NUMERIC(14,2),
+      "createdAt"      TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_fin_statements_user ON fin_statements ("userId", "periodStart")`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS fin_statement_lines (
+      id               SERIAL PRIMARY KEY,
+      "statementId"    INTEGER NOT NULL REFERENCES fin_statements(id) ON DELETE CASCADE,
+      "userId"         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "lineNo"         INTEGER NOT NULL,
+      date             DATE NOT NULL,
+      description      TEXT NOT NULL,
+      amount           NUMERIC(14,2) NOT NULL,
+      balance          NUMERIC(14,2),
+      decision         TEXT NOT NULL DEFAULT 'pending' CHECK (decision IN ('pending','business','personal')),
+      "matchInvoiceId" INTEGER REFERENCES fin_invoices(id) ON DELETE SET NULL,
+      "matchExpenseId" INTEGER REFERENCES fin_expenses(id) ON DELETE SET NULL,
+      "matchStrength"  TEXT CHECK ("matchStrength" IN ('exact','possible')),
+      "matchNote"      TEXT,
+      "decidedAt"      TIMESTAMPTZ
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_fin_statement_lines_stmt ON fin_statement_lines ("statementId", "lineNo")`);
+
   // Editable ATO rate settings — never hardcoded in calculation code. Seed a sensible
   // current-year default once per user's first ensureAccounts() pass (see finance.js).
 

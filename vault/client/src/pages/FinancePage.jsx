@@ -9,6 +9,7 @@ import FinanceTutorChat from './finance/FinanceTutorChat';
 import { useIcon } from '../providers/IconProvider';
 import useProcessingStore from '../store/processingStore';
 import ExtraReport, { EXTRA_REPORTS, REPORT_GROUPS } from './finance/ExtraReports';
+import StatementReview from './finance/StatementReview';
 
 // ── Per-tab help (TOOL_HELP + HelpModal) ────────────────────────────────────────
 // Mirrors the HtmlAuditPage / SeoAuditPage TOOL_HELP + click-to-open HelpModal pattern,
@@ -6835,6 +6836,8 @@ function DocumentsTab() {
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [linkDoc, setLinkDoc] = useState(null);
+  const [reviewDoc, setReviewDoc] = useState(null);
+  const [stmtByDoc, setStmtByDoc] = useState({});
   const [editDoc, setEditDoc] = useState(null);
   const [confirmModal, setConfirmModal] = useState(null);
   const pickRef = useRef(null);
@@ -6852,6 +6855,9 @@ function DocumentsTab() {
       ]);
       if (d.documents) setData(d);
       if (m.expenses) setMissing(m);
+      api.get('/api/finance/statements').then(r => r.json()).then(b => {
+        if (b.statements) setStmtByDoc(Object.fromEntries(b.statements.map(x => [x.documentId, x])));
+      }).catch(() => {});
     } catch (e) { addToast(e.message, 'error'); }
   }, [fy, kindFilter, search, minTotal]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [load]);
@@ -7011,6 +7017,13 @@ function DocumentsTab() {
                     </Tooltip>
                   </td>
                   <td className="py-2 px-4 whitespace-nowrap text-right text-xs">
+                    {(d.kind === 'bank_statement' || d.kind === 'statement') && /\.pdf$/i.test(d.originalName || '') && (
+                      <Tooltip text="Read the lines of this statement and approve each as business or personal. Nothing is added to your books.">
+                        <button className="hover:opacity-60 mr-3" style={{ color: 'var(--color-primary)' }} onClick={() => setReviewDoc(d)}>
+                          {stmtByDoc[d.id] ? `Lines ${stmtByDoc[d.id].reviewed}/${stmtByDoc[d.id].lines}` : 'Review lines'}
+                        </button>
+                      </Tooltip>
+                    )}
                     <Tooltip text="Open the file in a new tab."><button className="hover:opacity-60 mr-3" style={{ color: 'var(--color-primary)' }} onClick={() => viewDoc(d)}>View</button></Tooltip>
                     <Tooltip text="Save a copy to your computer."><button className="hover:opacity-60 mr-3" style={{ color: 'var(--color-muted)' }} onClick={() => downloadDoc(d)}>Download</button></Tooltip>
                     <Tooltip text="Change the title, type, supplier, date, financial year or notes."><button className="hover:opacity-60 mr-3" style={{ color: 'var(--color-muted)' }} onClick={() => setEditDoc({ ...d })}>Edit</button></Tooltip>
@@ -7022,6 +7035,8 @@ function DocumentsTab() {
           </table>
         )}
       </div>
+
+      {reviewDoc && <StatementReview doc={reviewDoc} onClose={() => { setReviewDoc(null); load(); }} onChanged={load} Modal={Modal} Btn={Btn} fmt={fmt} fmtDate={fmtDate} />}
 
       {linkDoc && <DocumentLinkModal doc={linkDoc} fy={fy} onClose={() => setLinkDoc(null)} onSaved={() => { setLinkDoc(null); load(); }} />}
 

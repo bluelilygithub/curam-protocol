@@ -5147,6 +5147,7 @@ router.use('/pack', require('./financePack')({ runReport: (...a) => runReport(..
 
 // Evidence library: statements/invoices/receipts, linkable to expenses and assets.
 router.use('/documents', require('./financeDocuments'));
+router.use('/statements', require('./financeStatements'));
 
 router.use('/reports', require('./financeReports')({ gstPaidForRange, disposalSalesForRange, getGstRegistration, gstAppliesOn, getGstBasis, gstSalesSql, purchaseClaimDateSql, PURCHASES_FROM }));
 
