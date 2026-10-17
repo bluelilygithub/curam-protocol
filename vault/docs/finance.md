@@ -223,7 +223,7 @@ Deletes `fin_journal_entries`/`fin_journal_lines` rows left behind from before e
 ## Remaining limits
 
 - GST on the sale of an asset isn't apportioned for business use (the whole 1/11 is reported), and a disposal after a *full-year* depreciation run for the same year can't claw that back (the final-year step only runs when the year hasn't been posted).
-- Asset purchases paid via Accounts Payable are claimed on the purchase date under both bases (only expense bills use the paid date on cash).
+- Asset sale GST is the full 1/11 even for an *immediate-deduction* asset whose purchase GST was claimed only for its business-use share; and non-immediate assets claim the full purchase GST whatever the business-use %. Both are tax-position questions for the accountant — not changed.
 - The actor in the audit log is the record owner, not a separate user.
 - Invoice numbers are `INV-2026001` for invoices and `Q-2026-001` for quotes (left alone so existing numbering carries on).
 
@@ -269,3 +269,10 @@ The export account map (`fin_export_account_map`, Settings → Export account ma
 
 ### Tooltips
 Every control added in the 2026-10 work (Documents tab and its link/edit modals, the FY pack modal, GST registration and basis settings, BAS lodge/pay dates and T7, bills and due dates, disposal GST) has a `Tooltip`, and a pass covered the previously uncovered Vehicle/Home Office, Assets, export-mapping, budget editor and help controls. The checker used was a line scan for `button`/`Btn`/`select`/`Input`/`input` not wrapped in `Tooltip`; the only deliberate exceptions are the generic component definitions, hidden file inputs and the calculator keypad. Re-run that scan after adding controls.
+
+## Review fixes (2026-10-17)
+
+- **Asset GST on Accounts Payable (cash basis).** A non-immediate asset bought on a bill (paid via Accounts Payable, 2000) now claims its GST when it is paid (`fin_assets."settledDate"`, set by `POST /assets/:id/cc-pay`), the same as supplier-bill expenses. Before, it was claimed on the purchase date. Accrual basis still claims on the purchase date. One shared definition — `ASSET_GST_FROM` / `assetGstClaimDateSql(basis)` in `finance.js` — used by `gstPaidForRange` (so the BAS tab, BAS worksheet, reports and FY pack) and the dashboard quarter chart.
+- **Invoice line validation.** `invoiceItemsError()` runs on `POST /invoices` and `PUT /invoices/:id`: quantity and price must be plain non-negative numbers. `"1,5"`, `"12abc"` and negatives return 400 naming the line (before, `parseFloat` read them as 1 / 12 / 0 and a wrong total reached a sent invoice). Blank cells still count as 0 so empty form rows work. Negative lines (credit notes) are not supported.
+- **Bank statements and ATO notices are not "unlinked".** A document links only to expenses/assets, which a bank statement or ATO notice never backs. These two kinds (`STANDALONE_KINDS` in `financeDocuments.js`) now show a muted **Record only** in the Documents tab, are left out of `GET /documents?unlinked=1`, and are left out of the Documents Index report's "Not linked to anything" count (their rows read "Kept as a record"). Invoices, receipts, provider statements and Other keep the amber "Not linked" flag.
+- **Not built (ideas):** link a bank statement to an account and period so Things to Review can warn about a month with no statement; read statement lines and suggest expense matches (review queue only, nothing auto-linked). The Shares statement importer sends the PDF text to the `standard` model; a deterministic CMC dividend parser would keep it local.

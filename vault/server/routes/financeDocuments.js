@@ -23,6 +23,8 @@ const DOC_DIR   = path.join(process.env.UPLOAD_DIR || path.join(__dirname, '../.
 const MAX_BYTES = (Number(process.env.FIN_DOC_MAX_MB) || 20) * 1024 * 1024;
 const QUOTA     = (Number(process.env.FIN_DOC_QUOTA_MB) || 1000) * 1024 * 1024;
 const KINDS = ['invoice', 'receipt', 'statement', 'bank_statement', 'ato_notice', 'other'];
+// Kept as records in their own right: they don't back one expense or asset, so "not linked" is not a gap.
+const STANDALONE_KINDS = ['bank_statement', 'ato_notice'];
 const EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.webp', '.csv', '.xlsx', '.xls', '.txt', '.docx', '.doc'];
 const MIME_BY_EXT = {
   '.pdf': 'application/pdf', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
@@ -120,7 +122,7 @@ router.get('/', wrap(async (req, res) => {
   if (fy) { if (!isFy(fy)) return res.status(400).json({ error: 'fy must look like 2025-26' }); params.push(fy); where.push(`d.fy=$${params.length}`); }
   if (kind) { if (!KINDS.includes(kind)) return res.status(400).json({ error: 'Unknown kind' }); params.push(kind); where.push(`d.kind=$${params.length}`); }
   if (q) { params.push(`%${String(q).toLowerCase()}%`); where.push(`(LOWER(d.title) LIKE $${params.length} OR LOWER(COALESCE(d.supplier,'')) LIKE $${params.length} OR LOWER(d."originalName") LIKE $${params.length})`); }
-  if (unlinked === '1') where.push(`NOT EXISTS (SELECT 1 FROM fin_document_links l WHERE l."documentId" = d.id)`);
+  if (unlinked === '1') { params.push(STANDALONE_KINDS); where.push(`d.kind <> ALL($${params.length}::text[]) AND NOT EXISTS (SELECT 1 FROM fin_document_links l WHERE l."documentId" = d.id)`); }
   if (expenseId) { params.push(Number(expenseId)); where.push(`EXISTS (SELECT 1 FROM fin_document_links l WHERE l."documentId" = d.id AND l."expenseId" = $${params.length})`); }
   const { rows } = await pool.query(
     `SELECT ${COLS_D}

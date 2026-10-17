@@ -677,6 +677,14 @@ test('documents: rejects disguised executables, disallowed types, bad fields; ac
   assert.ok(two.json.documents.every((d) => d.fy === '2024-25' && d.links.length === 0));
   const un = (await call('GET', '/api/finance/documents?unlinked=1&fy=2024-25')).json;
   assert.strictEqual(un.documents.length, 2);
+  const bs = await upload([['jan.pdf', '%PDF jan']], { kind: 'bank_statement', fy: '2024-25' });
+  assert.strictEqual(bs.status, 201, JSON.stringify(bs.json));
+  const un2 = (await call('GET', '/api/finance/documents?unlinked=1&fy=2024-25')).json;
+  assert.strictEqual(un2.documents.length, 2, 'a bank statement is a record in its own right, not an unlinked gap');
+  const idx = (await call('GET', '/api/finance/reports/documents-index?fy=2024-25')).json;
+  assert.strictEqual(idx.summary.find((x) => x.label === 'Not linked to anything').value, 2, 'index report agrees');
+  assert.ok(idx.sections[0].rows.some((r) => r.supports === 'Kept as a record'));
+  await call('DELETE', `/api/finance/documents/${bs.json.documents[0].id}?confirm=1`);
   const q = (await call('GET', '/api/finance/documents?q=b.csv')).json;
   assert.strictEqual(q.documents.length, 1);
   for (const d of two.json.documents) await call('DELETE', `/api/finance/documents/${d.id}?confirm=1`);
@@ -956,6 +964,40 @@ test('audit trail report lists record changes and hides bank details', async () 
   assert.strictEqual((await call('GET', '/api/finance/reports/audit-trail?from=2020-01-01&to=2099-12-31&table=nope')).status, 400);
   const only = await call('GET', '/api/finance/reports/audit-trail?from=2020-01-01&to=2099-12-31&table=fin_expenses');
   assert.ok(only.json.sections[0].rows.every((x) => x.type === 'expenses'));
+});
+
+test('invoice lines: unreadable or negative quantity/price is refused instead of read as 0 or a partial number', async () => {
+  const post = (items) => call('POST', '/api/finance/invoices', { issueDate: '2026-03-10', items });
+  assert.strictEqual((await post([{ description: 'x', qty: '1,5', unitPrice: 100 }])).status, 400, 'comma decimal');
+  assert.strictEqual((await post([{ description: 'x', qty: 1, unitPrice: '12abc' }])).status, 400, 'trailing junk');
+  assert.strictEqual((await post([{ description: 'x', qty: -1, unitPrice: 100 }])).status, 400, 'negative qty');
+  assert.strictEqual((await post([{ description: 'x', qty: 1, unitPrice: -5 }])).status, 400, 'negative price');
+  assert.strictEqual((await post('nope')).status, 400, 'not a list');
+  const ok = await post([{ description: 'x', qty: '2', unitPrice: '10.50' }, { description: 'blank row', qty: '', unitPrice: '' }]);
+  assert.strictEqual(ok.status, 200, JSON.stringify(ok.json));
+  assert.ok(near(ok.json.subtotal, 21), `subtotal ${ok.json.subtotal}`);
+  const put = await call('PUT', `/api/finance/invoices/${ok.json.id}`, { issueDate: '2026-03-10', items: [{ description: 'x', qty: 'abc', unitPrice: 1 }] });
+  assert.strictEqual(put.status, 400, 'PUT validates too');
+});
+
+test('cash basis: an asset bought on Accounts Payable claims its GST when paid, not on the purchase date', async () => {
+  await setBasis('cash');
+  await call('GET', '/api/finance/accounts');
+  const { rows } = await pool.query(`SELECT id FROM fin_accounts WHERE "userId"=$1 AND code='2000'`, [userId]);
+  const a = await call('POST', '/api/finance/assets', {
+    datePurchased: '2018-02-10', dateFirstUsed: '2018-02-10', description: 'AP press',
+    amount: 1100, gstIncluded: true, method: 'prime_cost', effectiveLifeYears: 5, paidViaId: rows[0].id,
+  });
+  assert.strictEqual(a.status, 200, JSON.stringify(a.json));
+  const q1 = () => call('GET', '/api/finance/bas?from=2018-01-01&to=2018-03-31').then((r) => r.json);
+  const q2 = () => call('GET', '/api/finance/bas?from=2018-04-01&to=2018-06-30').then((r) => r.json);
+  assert.ok(near((await q1()).gstPaid, 0), 'unpaid bill: no credit in the purchase quarter');
+  assert.strictEqual((await call('POST', `/api/finance/assets/${a.json.id}/cc-pay`, { date: '2018-05-15' })).status, 200);
+  assert.ok(near((await q1()).gstPaid, 0), 'still nothing in the purchase quarter after payment');
+  assert.ok(near((await q2()).gstPaid, 100), `credit lands in the payment quarter: ${(await q2()).gstPaid}`);
+  await setBasis('accrual');
+  assert.ok(near((await q1()).gstPaid, 100), 'accrual claims on the purchase date');
+  await setBasis('cash');
 });
 
 test('trial balance still balances after all of the above', async () => {

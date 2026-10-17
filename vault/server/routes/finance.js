@@ -109,6 +109,22 @@ function gstAppliesOn(reg, date) {
   return !!(reg.effectiveFrom && d && d < reg.effectiveFrom);
 }
 
+// Reject lines whose qty/unit price are not plain non-negative numbers. Blank counts as 0 (empty
+// form rows); "1,5" or "12abc" are refused rather than silently read as 1 / 12 (parseFloat) or 0.
+function invoiceItemsError(items) {
+  if (!Array.isArray(items)) return 'Line items must be a list';
+  for (let i = 0; i < items.length; i++) {
+    for (const [field, label] of [['qty', 'quantity'], ['unitPrice', 'price']]) {
+      const raw = items[i] && items[i][field];
+      if (raw === undefined || raw === null || raw === '') continue;
+      const n = typeof raw === 'number' ? raw : Number(String(raw).trim());
+      if (!Number.isFinite(n)) return `Line ${i + 1}: ${label} "${raw}" is not a number`;
+      if (n < 0) return `Line ${i + 1}: ${label} can't be negative`;
+    }
+  }
+  return null;
+}
+
 function calcItemGst(item) {
   const code = item.gstCode || (item.gstApplies === false ? 'NT' : 'GST');
   return code === 'GST';
@@ -218,6 +234,16 @@ const PURCHASES_FROM = `fin_expenses e LEFT JOIN fin_accounts pa ON pa.id = e."p
 const purchaseClaimDateSql = (basis) =>
   basis === 'accrual' ? 'e.date' : `(CASE WHEN pa.code = '2000' THEN e."settledDate" ELSE e.date END)`;
 
+// Non-immediate asset purchases post straight to the journal (type='asset_purchase', alias e, lines l).
+// Like supplier bills, on a cash basis an asset paid via Accounts Payable is claimed when it is paid
+// (fin_assets."settledDate"), not on the purchase date; everything else is claimed on the entry date.
+const ASSET_GST_FROM = `fin_journal_entries e
+           JOIN fin_journal_lines l ON l."entryId" = e.id
+           LEFT JOIN fin_assets fa ON fa.id = e."sourceId"
+           LEFT JOIN fin_accounts fpa ON fpa.id = fa."paidViaId"`;
+const assetGstClaimDateSql = (basis) =>
+  basis === 'accrual' ? 'e.date' : `(CASE WHEN fpa.code = '2000' THEN fa."settledDate" ELSE e.date END)`;
+
 // GST paid/claimed for a date range. Sums fin_expenses.gst (ordinary expenses AND immediate-
 // deduction asset purchases, which post through fin_expenses too) PLUS the GST line on non-immediate
 // asset purchases, which post straight to the journal (type='asset_purchase') and never touch
@@ -234,9 +260,8 @@ async function gstPaidForRange(userId, from, to, basisArg) {
     gstPaidAccountId
       ? pool.query(
           `SELECT COALESCE(SUM(l.debit),0) AS gst
-           FROM fin_journal_entries e
-           JOIN fin_journal_lines l ON l."entryId" = e.id
-           WHERE e."userId"=$1 AND e.type='asset_purchase' AND l."accountId"=$2 AND e.date BETWEEN $3 AND $4`,
+           FROM ${ASSET_GST_FROM}
+           WHERE e."userId"=$1 AND e.type='asset_purchase' AND l."accountId"=$2 AND ${assetGstClaimDateSql(basis)} BETWEEN $3 AND $4`,
           [userId, gstPaidAccountId, from, to]
         )
       : Promise.resolve({ rows: [{ gst: 0 }] }),
@@ -698,6 +723,8 @@ router.post('/invoices', async (req, res) => {
     const { clientRef, issueDate, dueDate, notes, items = [], docType = 'invoice' } = req.body;
     // the client must be one of this user's own (the invoice views join the client's name and billing details)
     if (!(await ownsClient(userId, clientRef))) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Client not found' }); }
+    const itemsErr = invoiceItemsError(items);
+    if (itemsErr) { await client.query('ROLLBACK'); return res.status(400).json({ error: itemsErr }); }
 
     let subtotal = 0, gst = 0;
     const gstOn = gstAppliesOn(await getGstRegistration(client, userId), issueDate || await todayStr());
@@ -838,6 +865,8 @@ router.put('/invoices/:id', async (req, res) => {
       `SELECT id, number, status, "paidAt", "issueDate", "docType" FROM fin_invoices WHERE id=$1 AND "userId"=$2`, [invoiceId, userId]
     );
     if (!check[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
+    const itemsErr = invoiceItemsError(items);
+    if (itemsErr) { await client.query('ROLLBACK'); return res.status(400).json({ error: itemsErr }); }
 
     // An invoice is locked once the date that decides its BAS quarter (payment date on a cash basis,
     // issue date on an accrual basis) falls inside a reconciled/lodged/paid quarter.
@@ -5089,10 +5118,9 @@ router.get('/reports/chart-gst-quarters', async (req, res) => {
                           AND "disposedDate" BETWEEN q.from_date AND q.to_date), 0) AS "gstCollected",
               COALESCE((SELECT SUM(e.gst) FROM ${PURCHASES_FROM} WHERE e."userId"=$1
                         AND ${purchaseClaimDateSql(basis)} BETWEEN q.from_date AND q.to_date), 0)
-              + COALESCE((SELECT SUM(l.debit) FROM fin_journal_entries e
-                          JOIN fin_journal_lines l ON l."entryId" = e.id
+              + COALESCE((SELECT SUM(l.debit) FROM ${ASSET_GST_FROM}
                           WHERE e."userId"=$1 AND e.type='asset_purchase' AND l."accountId"=$2
-                            AND e.date BETWEEN q.from_date AND q.to_date), 0) AS "gstPaid"
+                            AND ${assetGstClaimDateSql(basis)} BETWEEN q.from_date AND q.to_date), 0) AS "gstPaid"
        FROM fin_bas_quarters q
        WHERE q."userId"=$1
        ORDER BY q.from_date DESC

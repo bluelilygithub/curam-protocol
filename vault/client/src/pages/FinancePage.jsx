@@ -7006,8 +7006,8 @@ function DocumentsTab() {
                   <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>{d.supplier || '—'}</td>
                   <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>{fmtBytes(d.sizeBytes)}</td>
                   <td className="py-2 px-2 text-xs">
-                    <Tooltip text={d.links.length ? d.links.map(l => `${l.date || ''} ${l.label}`).join(' • ') : 'Not linked to any expense or asset yet.'}>
-                      <button className="hover:opacity-60" style={{ color: d.links.length ? 'var(--color-text)' : '#f59e0b' }} onClick={() => setLinkDoc(d)}>{d.links.length ? `${d.links.length} item${d.links.length === 1 ? '' : 's'}` : 'Not linked'}</button>
+                    <Tooltip text={d.links.length ? d.links.map(l => `${l.date || ''} ${l.label}`).join(' • ') : (d.kind === 'bank_statement' || d.kind === 'ato_notice') ? 'Kept as a record in its own right — it does not need linking to an expense or asset.' : 'Not linked to any expense or asset yet.'}>
+                      <button className="hover:opacity-60" style={{ color: d.links.length ? 'var(--color-text)' : (d.kind === 'bank_statement' || d.kind === 'ato_notice') ? 'var(--color-muted)' : '#f59e0b' }} onClick={() => setLinkDoc(d)}>{d.links.length ? `${d.links.length} item${d.links.length === 1 ? '' : 's'}` : (d.kind === 'bank_statement' || d.kind === 'ato_notice') ? 'Record only' : 'Not linked'}</button>
                     </Tooltip>
                   </td>
                   <td className="py-2 px-4 whitespace-nowrap text-right text-xs">

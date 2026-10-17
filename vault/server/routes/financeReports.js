@@ -1692,11 +1692,11 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange, disposal
       title: 'Supporting Documents Index',
       subtitle: `Financial year ${b.fy}`,
       notes: [`The statements, invoices and receipts kept in ${biz}’s records for this year and what each one supports. The files themselves can be included in the pack as a zip; ask for any you need.`],
-      summary: [{ label: 'Documents', value: rows.length, format: 'int' }, { label: 'Not linked to anything', value: rows.filter(x => !x.n).length, format: 'int' }],
+      summary: [{ label: 'Documents', value: rows.length, format: 'int' }, { label: 'Not linked to anything', value: rows.filter(x => !x.n && !['bank_statement', 'ato_notice'].includes(x.kind)).length, format: 'int' }],
       sections: [{
         title: 'Documents',
         columns: [cDate('date', 'Date'), cText('title', 'Title'), cText('kind', 'Type'), cText('supplier', 'Supplier'), cText('file', 'File name'), cText('supports', 'Supports')],
-        rows: rows.map(x => ({ date: ds(x.docDate), title: x.title, kind: KIND[x.kind] || x.kind, supplier: x.supplier || '', file: x.originalName, supports: x.n ? `${x.n} item${x.n === 1 ? '' : 's'}: ${x.links}` : 'Not linked' })),
+        rows: rows.map(x => ({ date: ds(x.docDate), title: x.title, kind: KIND[x.kind] || x.kind, supplier: x.supplier || '', file: x.originalName, supports: x.n ? `${x.n} item${x.n === 1 ? '' : 's'}: ${x.links}` : (['bank_statement', 'ato_notice'].includes(x.kind) ? 'Kept as a record' : 'Not linked') })),
       }],
     });
   }));
