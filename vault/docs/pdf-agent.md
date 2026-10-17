@@ -11,7 +11,7 @@ The PDF Tools page is a PDF toolkit mounted in Vault at **`/pdf`**. Stateless �
 
 Not currently gated by a feature flag and not listed in `FEATURE_ACCESS_KEYS` — same known-gap pattern as `translate`/`guitar` (see **Feature access** in `vault/CLAUDE.md`).
 
-Two tooltip layers, matching Graphics and Video Tools: a click-to-open help icon (`ToolHeader`, `getIcon('help-circle')`) next to every tool's title opens a modal with that tool's full title/description/feature list (`TOOL_HELP`); every in-panel control across all 23 tools also shows a themed hover popover on its own, via the shared `client/src/components/Tooltip.jsx` component.
+Two tooltip layers, matching Graphics and Video Tools: a click-to-open help icon (`ToolHeader`, `getIcon('help-circle')`) next to every tool's title opens a modal with that tool's full title/description/feature list (`TOOL_HELP`); every in-panel control across all 31 tools also shows a themed hover popover on its own, via the shared `client/src/components/Tooltip.jsx` component.
 
 ---
 
@@ -42,6 +42,11 @@ Two tooltip layers, matching Graphics and Video Tools: a click-to-open help icon
 | `POST /compare-text` | Per-page plain text for both PDFs (text-diff tab of **Compare** — see below) |
 | `POST /protect` | Encrypt a PDF with a password (qpdf, AES-256) — see **Password Protect / Remove Password** below |
 | `POST /unprotect` | Decrypt a password-protected PDF given its password — see **Password Protect / Remove Password** below |
+| `POST /crop` | Trim margins (mm, as seen on screen) off all or listed pages; sets CropBox and MediaBox — see **Extra tools** below |
+| `POST /headerfooter` | Left/centre/right header and footer text with `{n}` `{total}` `{date}` `{filename}` tokens |
+| `POST /nup` | 2/4/6/9 pages per A4 or Letter sheet |
+| `POST /extract-images` | Copy embedded JPEGs out unchanged, returned as a zip |
+| `POST /ocr-layer` | Draw invisible OCR words (boxes measured in the browser) onto the original PDF |
 
 `office-to-pdf`/`pdf-to-office` return `500` with an explicit message if LibreOffice isn't on the server image (`err.code === 'ENOENT'`). `google-to-pdf` checks the stored OAuth scope string for `drive.readonly` before calling the API and returns `needsReconnect: true` if it's missing.
 
@@ -160,6 +165,33 @@ Request bodies:
 Client is two separate tools (**Password Protect** / **Remove Password**) rather than one toggle-mode tool — matches how Fill Form and Fill & Sign are already separate tools for related-but-distinct operations, rather than every related pair being collapsed into a mode switch.
 
 All three password fields (open password, owner password, remove-password) use a shared `PasswordField` component with a show/hide (eye icon) toggle rather than a plain `type="password"` input. Remove Password's submit button is disabled until both a file and a password are entered; the server also 400s an empty password on `/unprotect` up front rather than letting `qpdf` fail on it. `PdfPagePreview` (shared by every tool that shows a live PDF preview) treats pdfjs's `PasswordException` as an expected "🔒 This PDF is password-protected" state, not a red preview-failed error — this fires every time Password Protect's result modal tries to preview the file it just encrypted, and previously showed a raw "Preview failed / No password given".
+
+---
+
+## Extra tools (added 2026-10-17)
+
+Seven tools added after comparing against the open-source PDFCraft (AGPL-3.0: used as a feature checklist only, no code copied). Server logic is pure pdf-lib in `server/services/pdfTools.js`; the routes in `pdf.js` only validate and parse page ranges. Client components live in `client/src/pages/pdf/PdfExtraTools.jsx` and import the shared sub-components from `PdfPage.jsx` (circular import, safe because they are only used while rendering).
+
+- **Pages to Images** (client-only): pdfjs renders each page at 72/150/300 DPI (pixel count capped), PNG or JPG; one page downloads directly, several go into a zip built with `jszip`.
+- **Extract Images** (`/extract-images`): walks `enumerateIndirectObjects()` like Compress. Only single-filter `DCTDecode` non-CMYK images are copied out (the stream bytes ARE a JPEG); everything else is counted as `skipped`, never re-encoded.
+- **OCR** (`/ocr-layer`): the browser renders each page (about 200 DPI), runs `createOcrEngine({ lang: 'eng' })` (same on-device Tesseract as Measurements; English data is served from our own origin because the CSP blocks CDNs), and posts only word boxes. The server draws each word with `opacity: 0` so the page looks identical but is searchable. Pages that already have text are skipped; 30 pages per run; cancel supported. Other languages are not bundled.
+- **Remove Blank Pages** (client + existing `/organize`): pages are rendered small and the share of non-white pixels decides what is "blank" (strictness slider; click a page to override).
+- **Organize** gained **Reverse order** and tick-to-remove-many (no new route).
+- **Crop**: margins are visual, so a rotated page's margins are mapped back onto its stored box. Both CropBox and MediaBox are set so later tools measure the cropped page.
+- **Header & Footer**: Helvetica; characters WinAnsi cannot draw become `?` rather than failing the file.
+- **N-up**: pages with no content stream cannot be embedded by pdf-lib, so they keep their cell as an empty slot. Source page `/Rotate` is not applied.
+
+Not built (from the PDFCraft comparison): other OCR languages, non-JPEG image extraction, draggable crop box, workflow chaining.
+
+---
+
+## Layout and the PDF guide
+
+**Layout** matches Video Tools: a left column (`w-56`, surface background) holding the title with an (i) info button, a search box (filters by name or hover tip, `/` jumps to it) and collapsible groups (Organise, Convert, Edit, Forms, Analyse). Every group and every tool has a hover tip on the right (`GROUP_TIPS`, `TOOL_TIPS` in `PdfPage.jsx`); the main panel is `max-w-5xl` (wider than Video Tools' `max-w-2xl`) because most PDF tools show a preview beside their settings. Not copied from Video Tools: the per-tool "Tell it what to do" voice bar.
+
+**PDF guide:** the round graduation-cap button at the bottom right, same shared `components/tutor/TutorChat.jsx` as Video Tools and Finance. Client wrapper `client/src/pages/pdf/PdfTutorChat.jsx` (wording, starter questions, microphone provider); server `POST /api/pdf-tutor` (`server/routes/pdfTutor.js`, behind sign-in and the AI rate limit; PDF Tools has no feature flag) and `server/services/pdfTutor.js` (`CATALOG` of every tool, `RULES`, `NOT_POSSIBLE`; model = workspace `standard` tier). It cannot see the person's files, does not say whether a signature or stamped form is legally valid, and never offers Annotate/Crop as a way to hide sensitive text (PDF Tools cannot redact). A `missing`/`partly` answer is noted once per gap in the Suggestions inbox (source `pdfTutor`).
+
+**When a PDF tool is added or removed:** add it to `MODES`, a `MODE_GROUPS` group, `TOOL_TIPS`, `TOOL_HELP` AND `CATALOG` in `pdfTutor.js`. `npm run test:pdf-tutor` (no database, no model) fails if any of these drift.
 
 ---
 

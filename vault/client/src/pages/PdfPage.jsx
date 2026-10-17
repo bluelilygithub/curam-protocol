@@ -5,6 +5,8 @@ import api from '../utils/apiClient';
 import useProcessingStore from '../store/processingStore';
 import Tooltip from '../components/Tooltip';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
+import PdfTutorChat from './pdf/PdfTutorChat';
+import { PageToImageTool, ExtractImagesTool, OcrTool, RemoveBlankTool, CropTool, HeaderFooterTool, NupTool } from './pdf/PdfExtraTools';
 // Vite copies this to the build output and returns a same-origin URL,
 // which satisfies script-src 'self' and avoids blob: worker CSP issues.
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -327,6 +329,75 @@ const TOOL_HELP = {
       'Download the same PDF with encryption removed',
     ],
   },
+  pdf2img: {
+    title: 'Pages to Images',
+    what: 'Save PDF pages as PNG or JPG pictures.',
+    features: [
+      'Runs entirely in your browser; nothing is uploaded',
+      'Pick PNG or JPG and 72, 150 or 300 DPI',
+      'Choose all pages or a range such as 1-3,5',
+      'One page downloads as a picture; several come as one zip',
+    ],
+  },
+  extractimages: {
+    title: 'Extract Images',
+    what: 'Pull the original photos out of a PDF without re-compressing them.',
+    features: [
+      'Copies embedded JPEG photos out unchanged, so quality is exactly the original',
+      'Other image formats are counted and skipped rather than converted',
+      'Downloads everything as one zip',
+      'For scans or drawings, use Pages to Images instead',
+    ],
+  },
+  ocr: {
+    title: 'OCR (Searchable PDF)',
+    what: 'Read the text on scanned pages and add it invisibly, so the PDF looks the same but can be searched, selected and copied.',
+    features: [
+      'Recognition runs in your browser; page pictures are not uploaded',
+      'English text only',
+      'Pages that already have text are skipped',
+      'Up to 30 pages at a time; a few seconds per page',
+      'Good for search and copy; check important figures against the page',
+    ],
+  },
+  removeblank: {
+    title: 'Remove Blank Pages',
+    what: 'Find blank pages (for example the empty backs of scanned sheets) and remove them.',
+    features: [
+      'Blank pages are marked automatically using the strictness slider',
+      'Click any page to override: keep a marked one or remove an unmarked one',
+      'Nothing is changed until you press Remove',
+    ],
+  },
+  crop: {
+    title: 'Crop Pages',
+    what: 'Trim margins off every page, or a range of pages.',
+    features: [
+      'Set top, bottom, left and right in millimetres',
+      'The preview shades what will be removed',
+      'Works on rotated pages: top is the top you see',
+      'Page size changes to the cropped area',
+    ],
+  },
+  headerfooter: {
+    title: 'Header & Footer',
+    what: 'Add running text at the top and bottom of pages.',
+    features: [
+      'Left, centre and right text for both header and footer',
+      'Tokens: {n} page number, {total} page count, {date} today, {filename}',
+      'Choose size, edge gap, starting number and page range',
+      'Characters the standard font cannot draw show as ?',
+    ],
+  },
+  nup: {
+    title: 'Pages per Sheet (N-up)',
+    what: 'Shrink 2, 4, 6 or 9 pages onto each sheet, handy for printing handouts.',
+    features: [
+      'A4 or Letter sheets, automatic or chosen orientation',
+      'Adjustable gap and optional border around each page',
+      'Each page is scaled to fit, keeping its proportions',
+    ],
+  },
   compress: {
     title: 'Compress PDF',
     what: "Shrink a PDF's file size with a safe structural pass, plus an optional deeper image recompression.",
@@ -364,26 +435,77 @@ const MODES = [
   { id: 'unprotect',    label: 'Remove Password',  icon: 'unlock'      },
   { id: 'metadata',     label: 'Metadata',         icon: 'info'        },
   { id: 'fileinfo',     label: 'File Info',        icon: 'file-text'   },
+  { id: 'pdf2img',      label: 'Pages → Images',   icon: 'file-image'  },
+  { id: 'extractimages', label: 'Extract Images',  icon: 'images'      },
+  { id: 'ocr',          label: 'OCR (Searchable)', icon: 'scan-text'   },
+  { id: 'removeblank',  label: 'Remove Blank Pages', icon: 'trash'     },
+  { id: 'crop',         label: 'Crop Pages',       icon: 'crop'        },
+  { id: 'headerfooter', label: 'Header & Footer',  icon: 'panel-top'   },
+  { id: 'nup',          label: 'Pages per Sheet',  icon: 'grid-2x2'    },
 ];
 
+// Hover text for every item in the left-hand list: what the tool does, in plain words. The PDF guide's test
+// (server/services/pdfTutor.test.js) fails if a tool is added to MODES without an entry here.
+const TOOL_TIPS = {
+  merge: 'Join two or more PDFs into one document, in the order you choose.',
+  split: 'Pull a page range (such as 1-3,5,7-9) out of a PDF into a new, smaller PDF.',
+  rotate: 'Turn all pages, or only the ones you list, a quarter turn or more.',
+  organize: 'See every page as a thumbnail, then drag to reorder, delete, reverse, or slip in pages from another PDF.',
+  removeblank: 'Find blank pages, such as the empty backs of scanned sheets, and remove them. You can override any choice.',
+  nup: 'Shrink 2, 4, 6 or 9 pages onto each sheet, handy for printing handouts.',
+  img2pdf: 'Turn JPG or PNG pictures into a PDF, one picture per page.',
+  text2pdf: 'Paste or type some text and get a tidy PDF.',
+  extracttext: 'Copy all the text out of a PDF, or save it as a text file. Runs in your browser.',
+  officetopdf: 'Turn a Word, Excel, PowerPoint or similar file into a PDF.',
+  pdftooffice: 'Turn a PDF into an editable Word document.',
+  googletopdf: 'Export a Google Doc, Sheet or Slides file from your Drive as a PDF.',
+  pdf2img: 'Save PDF pages as PNG or JPG pictures. Runs in your browser.',
+  extractimages: 'Pull the original photos out of a PDF as JPEG files, unchanged.',
+  ocr: 'Read a scanned PDF and add invisible text, so it can be searched, selected and copied. English only.',
+  watermark: 'Stamp a faint diagonal word such as CONFIDENTIAL across every page.',
+  pagenumbers: 'Add page numbers in the corner or centre of each page, in the style you pick.',
+  headerfooter: 'Add running text (title, date, page x of y) to the top and bottom of pages.',
+  crop: 'Trim the margins off pages. A preview shades what will be removed.',
+  compress: "Make a PDF's file size smaller, optionally by re-saving its photos at lower quality.",
+  protect: 'Lock a PDF with a password so only people who know it can open it.',
+  unprotect: 'Take the password off a PDF, if you know the password.',
+  inspect: 'List the fillable boxes (form fields) a PDF already has.',
+  fill: 'Type answers into a PDF form and download it.',
+  sign: 'Draw, type or upload a signature, initials or date and place it anywhere on a page.',
+  annotate: 'Mark up pages: highlight, strike through, draw, add sticky notes and text boxes.',
+  flatten: 'Turn form answers into fixed page content so they can no longer be edited.',
+  fielddesigner: 'Draw new fillable boxes (text, tick box, dropdown) onto a PDF so others can fill it in.',
+  metadata: "See and change a PDF's title, author, subject and keywords.",
+  fileinfo: "Show a PDF's size, page count and type. Runs in your browser.",
+  compare: 'Put two PDFs side by side and highlight what changed, by picture or by text.',
+};
+
+const GROUP_TIPS = {
+  Organise: 'Put pages in the right shape and order: join, split, rotate, reorder, remove blanks, or fit several to a sheet.',
+  Convert: 'Move between PDF and other things: pictures, text, Word, Office files and Google Docs. Includes OCR for scans.',
+  Edit: 'Change how every page looks: watermark, numbers, header and footer, crop, file size, and passwords.',
+  Forms: 'Fill, sign, mark up and build forms.',
+  Analyse: 'Look inside a PDF: its details, or what differs between two versions.',
+};
+
 const MODE_GROUPS = [
-  { label: 'Organise', ids: ['merge', 'split', 'rotate', 'organize'] },
-  { label: 'Convert',  ids: ['img2pdf', 'text2pdf', 'extracttext', 'officetopdf', 'pdftooffice', 'googletopdf'] },
-  { label: 'Edit',     ids: ['watermark', 'pagenumbers', 'compress', 'protect', 'unprotect'] },
+  { label: 'Organise', ids: ['merge', 'split', 'rotate', 'organize', 'removeblank', 'nup'] },
+  { label: 'Convert',  ids: ['img2pdf', 'text2pdf', 'extracttext', 'officetopdf', 'pdftooffice', 'googletopdf', 'pdf2img', 'extractimages', 'ocr'] },
+  { label: 'Edit',     ids: ['watermark', 'pagenumbers', 'headerfooter', 'crop', 'compress', 'protect', 'unprotect'] },
   { label: 'Forms',    ids: ['inspect', 'fill', 'sign', 'annotate', 'flatten', 'fielddesigner'] },
   { label: 'Analyse',  ids: ['metadata', 'fileinfo', 'compare']     },
 ];
 
 // ─── Utilities ─────────────────────────────────────────────────────────────────
 
-function formatBytes(bytes) {
+export function formatBytes(bytes) {
   if (!bytes) return '';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1048576).toFixed(1)} MB`;
 }
 
-function downloadFile(dataUrl, filename) {
+export function downloadFile(dataUrl, filename) {
   const a = document.createElement('a');
   a.href = dataUrl;
   a.download = filename || 'document.pdf';
@@ -392,7 +514,7 @@ function downloadFile(dataUrl, filename) {
   document.body.removeChild(a);
 }
 
-function readFileAsDataUrl(file) {
+export function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = e => resolve(e.target.result);
@@ -402,7 +524,7 @@ function readFileAsDataUrl(file) {
 }
 
 // Decode a data URL to Uint8Array without fetch() (avoids CSP connect-src restrictions).
-function dataUrlToUint8Array(dataUrl) {
+export function dataUrlToUint8Array(dataUrl) {
   const base64 = dataUrl.split(',')[1] || '';
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
@@ -410,13 +532,13 @@ function dataUrlToUint8Array(dataUrl) {
   return bytes;
 }
 
-async function initPdfjsWorker(pdfjsLib) {
+export async function initPdfjsWorker(pdfjsLib) {
   if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
     pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
   }
 }
 
-async function getPdfPageCount(dataUrl) {
+export async function getPdfPageCount(dataUrl) {
   try {
     const pdfjsLib = await import('pdfjs-dist');
     await initPdfjsWorker(pdfjsLib);
@@ -461,7 +583,7 @@ function isCanvasBlank(canvas) {
 
 // ─── Shared sub-components ─────────────────────────────────────────────────────
 
-function ToolHeader({ id, label, badge, onHelp, getIcon }) {
+export function ToolHeader({ id, label, badge, onHelp, getIcon }) {
   return (
     <div className="flex items-center justify-between mb-4">
       <div className="flex items-center gap-1.5">
@@ -480,7 +602,7 @@ function ToolHeader({ id, label, badge, onHelp, getIcon }) {
   );
 }
 
-function PdfUpload({ label, accept = '.pdf', multiple = false, onChange, files, onRemove }) {
+export function PdfUpload({ label, accept = '.pdf', multiple = false, onChange, files, onRemove }) {
   const inputRef = useRef();
   const [dragOver, setDragOver] = useState(false);
 
@@ -533,7 +655,7 @@ function PdfUpload({ label, accept = '.pdf', multiple = false, onChange, files, 
 }
 
 // ── PdfPagePreview — renders a PDF data URL to a navigable canvas ──────────────
-function PdfPagePreview({ dataUrl, maxWidth = 540 }) {
+export function PdfPagePreview({ dataUrl, maxWidth = 540 }) {
   const canvasRef = useRef(null);
   const pdfDocRef = useRef(null);
   const [pg, setPg] = useState(1);
@@ -716,12 +838,12 @@ function PdfResultModal({ dataUrl, filename, meta, onClose, getIcon }) {
   );
 }
 
-function ErrMsg({ msg }) {
+export function ErrMsg({ msg }) {
   if (!msg) return null;
   return <p className="text-xs mt-2 px-3 py-2 rounded-lg" style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca' }}>{msg}</p>;
 }
 
-function RunBtn({ onClick, busy, disabled, label, getIcon }) {
+export function RunBtn({ onClick, busy, disabled, label, getIcon }) {
   return (
     <button
       type="button"
@@ -747,7 +869,6 @@ export default function PdfPage() {
   const [mode, setMode] = useState('merge');
   const [openGroup, setOpenGroup] = useState('Organise');
   const [toolSearch, setToolSearch] = useState('');
-  const [hoveredTool, setHoveredTool] = useState(null);
   const [helpTool, setHelpTool] = useState(null);
   const [resultModal, setResultModal] = useState(null); // { dataUrl, filename, meta }
   const [seedBanner, setSeedBanner] = useState('');
@@ -876,6 +997,8 @@ export default function PdfPage() {
 
   // Organize Pages
   const [orgPrimary, setOrgPrimary] = useState(null); // { name, dataUrl, size }
+  const [orgSelected, setOrgSelected] = useState(() => new Set()); // page ids ticked for bulk removal
+  const [orgConfirmBulk, setOrgConfirmBulk] = useState(false);
   const [orgPages, setOrgPages] = useState([]); // [{ id, source: 'primary'|'inserted', index, thumb }]
   const [orgInsertFile, setOrgInsertFile] = useState(null); // { name, dataUrl }
   const [orgInsertThumbs, setOrgInsertThumbs] = useState([]); // [{ id, index, thumb }]
@@ -2383,12 +2506,24 @@ export default function PdfPage() {
     setOrgPrimary(null); setOrgPages([]);
     setOrgInsertFile(null); setOrgInsertThumbs([]);
     setOrgResult(null); setOrgError('');
+    setOrgSelected(new Set()); setOrgConfirmBulk(false);
   };
 
   const orgRemovePage = (id) => {
     setOrgPages(prev => prev.filter(p => p.id !== id));
+    setOrgSelected(prev => { const n = new Set(prev); n.delete(id); return n; });
     setOrgConfirmDelete(null);
   };
+
+  const orgToggleSelect = (id) => {
+    setOrgConfirmBulk(false);
+    setOrgSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  };
+  const orgRemoveSelected = () => {
+    setOrgPages(prev => prev.filter(p => !orgSelected.has(p.id)));
+    setOrgSelected(new Set()); setOrgConfirmBulk(false);
+  };
+  const orgReverse = () => setOrgPages(prev => [...prev].reverse());
 
   // Plain HTML5 drag-and-drop — no drag library exists elsewhere in the
   // client, so this keeps the same "no new dependency" approach as the field
@@ -2827,152 +2962,129 @@ export default function PdfPage() {
   const inpStyle = { background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' };
   const cardStyle = { background: 'var(--color-surface)', borderColor: 'var(--color-border)' };
 
-  const descMap = {
-    merge: 'Combine multiple PDFs into one document.',
-    split: 'Extract a page range into a new PDF.',
-    rotate: 'Rotate all or specific pages.',
-    img2pdf: 'Pack images into a PDF document.',
-    text2pdf: 'Paste formatted text and generate a PDF.',
-    extracttext: 'Pull all text from a PDF (client-side).',
-    watermark: 'Stamp a diagonal text watermark.',
-    pagenumbers: 'Add page numbers to every page.',
-    inspect: 'List all interactive form fields.',
-    fill: 'Fill in form fields and download.',
-    flatten: 'Lock form fields as static content.',
-    fielddesigner: 'Draw and place interactive form fields on a PDF page.',
-    metadata: 'View and edit document metadata.',
-    fileinfo: 'Show basic file information (client-side).',
-    officetopdf: 'Convert Word, Excel or PowerPoint to PDF.',
-    pdftooffice: 'Convert a PDF to an editable Word document.',
-    googletopdf: 'Export a Google Doc, Sheet or Slide as PDF.',
-    organize: 'Reorder, delete, insert, and extract pages.',
-    sign: 'Draw, type, or upload a signature onto any PDF.',
-    compress: "Shrink a PDF's file size.",
+
+  // The guide's "Open <tool>" buttons: open the tool's group and the tool, exactly as clicking it in the list would.
+  const openToolById = (id) => {
+    const group = MODE_GROUPS.find(g => g.ids.includes(id));
+    if (!group) return;
+    setOpenGroup(group.label);
+    setMode(id);
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      {/* ── Page header ─────────────────────────────────────────────────── */}
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
-          {getIcon('file-text', { size: 20 })}
-          PDF Tools
-          <button
-            onClick={pdfInfo.open}
-            title="How PDF Tools works"
-            style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
-          >
-            {getIcon('info', { size: 14 })}
-          </button>
-        </h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
-          {descMap[mode] || ''}
-        </p>
-        {pdfInfo.show && (
-          <ToolInfoModal title="How PDF Tools Works" onClose={pdfInfo.close}>
-            <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-              24 tools in the sidebar, all stateless — file in, file back, nothing kept server-side.
-            </p>
-            <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-              <p style={{ color: 'var(--color-text)' }}><strong>Page operations</strong> — Merge, Split (real page-range syntax, <code>1-3,5,7-9</code>, not just single pages), Rotate Pages, Organize Pages (reorder/delete/insert/extract), Compress.</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Convert</strong> — Images↔PDF, Text→PDF, Office→PDF and PDF→Word (real LibreOffice headless conversion — DOCX/XLSX/PPTX/ODT/RTF/CSV and more, not a lookalike renderer), Extract Text, Google Drive→PDF (reuses your existing Gmail OAuth, no separate login).</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Forms</strong> — Inspect Fields, Fill Form, Fill &amp; Sign, and the <strong>field designer</strong> (canvas-based drag-to-place, pdf-lib's 14 standard fonts everywhere plus a Script group of 10 hand-verified Google Fonts wherever the design guarantees it's safe). Flatten — or Fill Form with flatten on, the default — stamps a value as permanent page content instead of a live field, the actual fix for custom fonts silently rendering as Helvetica in Chrome/Adobe Reader.</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Mark up</strong> — Annotate (highlight, strikeout, draw, sticky notes, text boxes), Watermark, Page Numbers, Compare (two PDFs side by side).</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Security &amp; info</strong> — Password Protect, Remove Password, Metadata (read/write), File Info.</p>
-            </div>
-          </ToolInfoModal>
-        )}
-        {seedBanner && (
-          <div className="mt-3 px-3 py-2 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2" style={{ background: '#ecfdf5', color: '#065f46' }}>
-            <span>{seedBanner}</span>
-            <button type="button" onClick={() => setSeedBanner('')} className="underline transition-opacity duration-200 hover:opacity-70">Dismiss</button>
-          </div>
-        )}
-      </div>
-
-      <div className="flex flex-col md:flex-row gap-6 items-start">
-
+    <div>
+      <div className="flex flex-col sm:flex-row min-h-[calc(100dvh-3rem)]">
         {/* ── Sidebar ───────────────────────────────────────────────────── */}
-        <aside className="w-full md:w-52 md:shrink-0 md:sticky md:top-6">
-          <div className="relative mb-3">
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--color-muted)' }}>
-              {getIcon('search', { size: 14 })}
-            </span>
+        <aside
+          className="w-full sm:w-56 shrink-0 border-b sm:border-b-0 sm:border-r overflow-y-auto p-4 space-y-3"
+          style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+        >
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-bg)', color: 'var(--color-primary)' }}>
+              {getIcon('file-text', { size: 16 })}
+            </div>
+            <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>PDF Tools</h1>
+            <button
+              onClick={pdfInfo.open}
+              title="How PDF Tools works"
+              style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
+            >
+              {getIcon('info', { size: 13 })}
+            </button>
+          </div>
+          {pdfInfo.show && (
+            <ToolInfoModal title="How PDF Tools Works" onClose={pdfInfo.close}>
+              <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+                31 tools, all stateless: a file goes in, a file comes back, and nothing is kept on the server. The list on the left is arranged by what you are doing; hover over any item for a plain explanation. Not sure which tool to use? Click the graduation-cap button at the bottom right and tell the guide what you want to do.
+              </p>
+              <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+                <p style={{ color: 'var(--color-text)' }}><strong>Organise</strong> — Merge, Split (real page-range syntax, <code>1-3,5,7-9</code>), Rotate, Organize Pages (reorder, delete, reverse, insert, extract), Remove Blank Pages, Pages per Sheet.</p>
+                <p style={{ color: 'var(--color-text)' }}><strong>Convert</strong> — Images and Text to PDF, Office to PDF and PDF to Word (real LibreOffice conversion), Google Drive to PDF, Extract Text, Pages to Images, Extract Images, and OCR to make scans searchable.</p>
+                <p style={{ color: 'var(--color-text)' }}><strong>Edit</strong> — Watermark, Page Numbers, Header and Footer, Crop, Compress, Password Protect and Remove Password.</p>
+                <p style={{ color: 'var(--color-text)' }}><strong>Forms</strong> — Inspect Fields, Fill Form, Fill and Sign, Annotate, Flatten, and the field designer. Flattening, or Fill Form with flatten on (the default), stamps a value as permanent page content, which is the fix for custom fonts silently showing as Helvetica in Chrome and Adobe Reader.</p>
+                <p style={{ color: 'var(--color-text)' }}><strong>Analyse</strong> — Metadata (read and write), File Info, and Compare (two PDFs side by side).</p>
+              </div>
+            </ToolInfoModal>
+          )}
+
+          <Tooltip text="Filter the tool list below by name or description. Press / to jump here.">
             <input
               ref={toolSearchRef}
-              type="text"
               value={toolSearch}
-              onChange={e => setToolSearch(e.target.value)}
-              placeholder="Search tools…  ( / )"
-              className="w-full pl-8 pr-7 py-2 rounded-lg border text-sm outline-none"
+              onChange={(e) => setToolSearch(e.target.value)}
+              placeholder="Search tools…"
+              className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none"
               style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
             />
-            {toolSearch && (
-              <button type="button" onClick={() => setToolSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 hover:opacity-70" style={{ color: 'var(--color-muted)' }}>
-                {getIcon('x', { size: 14 })}
-              </button>
-            )}
-          </div>
+          </Tooltip>
 
-          <nav className="flex md:block gap-4 md:gap-0 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
-            {MODE_GROUPS.map(group => {
-              const q = toolSearch.trim().toLowerCase();
-              const ids = group.ids.filter(id => {
-                const m = MODES.find(x => x.id === id);
-                return m && (!q || m.label.toLowerCase().includes(q));
-              });
-              if (!ids.length) return null;
-              const collapsed = q ? false : openGroup !== group.label;
-              return (
-                <div key={group.label} className="mb-0 md:mb-4 shrink-0">
+          {MODE_GROUPS.map(group => {
+            const q = toolSearch.trim().toLowerCase();
+            const ids = group.ids.filter(id => {
+              const m = MODES.find(x => x.id === id);
+              return m && (!q || m.label.toLowerCase().includes(q) || (TOOL_TIPS[id] || '').toLowerCase().includes(q));
+            });
+            if (!ids.length) return null;
+            const open = openGroup === group.label;
+            return (
+              <div key={group.label}>
+                <Tooltip text={GROUP_TIPS[group.label]} side="right">
                   <button
                     type="button"
-                    onClick={() => setOpenGroup(prev => (prev === group.label ? null : group.label))}
-                    className="flex items-center gap-1 w-full px-2 mb-1.5 text-sm font-bold uppercase tracking-wide hover:opacity-80 transition-opacity"
+                    onClick={() => setOpenGroup(open ? null : group.label)}
+                    className="text-xs font-semibold w-full text-left py-1 transition-opacity hover:opacity-70"
                     style={{ color: 'var(--color-primary)' }}
                   >
-                    <span style={{ display: 'inline-flex', transform: collapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 0.15s' }}>
-                      {getIcon('chevron-down', { size: 15 })}
-                    </span>
-                    {group.label}
+                    {open ? '▼' : '▶'} {group.label}
                   </button>
-                  {!collapsed && (
-                    <div className="flex md:flex-col gap-1 md:pl-3 md:ml-1 md:border-l" style={{ borderColor: 'var(--color-border)' }}>
-                      {ids.map(id => {
-                        const m = MODES.find(x => x.id === id);
-                        if (!m) return null;
-                        const active = mode === m.id;
-                        const hovered = hoveredTool === m.id && !active;
-                        return (
-                          <button
-                            key={m.id}
-                            type="button"
-                            onClick={() => setMode(m.id)}
-                            onMouseEnter={() => setHoveredTool(m.id)}
-                            onMouseLeave={() => setHoveredTool(prev => (prev === m.id ? null : prev))}
-                            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors text-left"
-                            style={{
-                              color: active ? '#fff' : hovered ? 'var(--color-primary)' : 'var(--color-text)',
-                              background: active ? 'var(--color-primary)' : hovered ? 'var(--color-bg)' : 'transparent',
-                            }}
-                          >
-                            {getIcon(m.icon, { size: 15 })}
-                            {m.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </nav>
+                </Tooltip>
+                {(open || q) && (
+                  <ul className="pl-2 border-l ml-1 space-y-0.5 mt-1" style={{ borderColor: 'var(--color-border)' }}>
+                    {ids.map(id => {
+                      const m = MODES.find(x => x.id === id);
+                      return (
+                        <li key={id}>
+                          <Tooltip text={TOOL_TIPS[id] || m.label} side="right">
+                            <button
+                              type="button"
+                              onClick={() => setMode(id)}
+                              className="w-full text-left px-2 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-70"
+                              style={{
+                                background: mode === id ? 'var(--color-bg)' : 'transparent',
+                                color: mode === id ? 'var(--color-text)' : 'var(--color-muted)',
+                              }}
+                            >
+                              {m.label}
+                            </button>
+                          </Tooltip>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
         </aside>
 
         {/* ── Main panel ────────────────────────────────────────────────── */}
-        <main className="min-w-0 flex-1 w-full">
+        <main className="flex-1 min-w-0 overflow-y-auto p-6 space-y-4 max-w-5xl">
+          {seedBanner && (
+            <div className="px-3 py-2 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2" style={{ background: '#ecfdf5', color: '#065f46' }}>
+              <span>{seedBanner}</span>
+              <button type="button" onClick={() => setSeedBanner('')} className="underline transition-opacity duration-200 hover:opacity-70">Dismiss</button>
+            </div>
+          )}
+
+          {mode === 'pdf2img' && <PageToImageTool getIcon={getIcon} onHelp={setHelpTool} />}
+          {mode === 'extractimages' && <ExtractImagesTool getIcon={getIcon} onHelp={setHelpTool} />}
+          {mode === 'ocr' && <OcrTool getIcon={getIcon} onHelp={setHelpTool} setResultModal={setResultModal} />}
+          {mode === 'removeblank' && <RemoveBlankTool getIcon={getIcon} onHelp={setHelpTool} setResultModal={setResultModal} />}
+          {mode === 'crop' && <CropTool getIcon={getIcon} onHelp={setHelpTool} setResultModal={setResultModal} />}
+          {mode === 'headerfooter' && <HeaderFooterTool getIcon={getIcon} onHelp={setHelpTool} setResultModal={setResultModal} />}
+          {mode === 'nup' && <NupTool getIcon={getIcon} onHelp={setHelpTool} setResultModal={setResultModal} />}
 
           {/* ═══ Merge ══════════════════════════════════════════════════ */}
           {mode === 'merge' && (
@@ -4148,6 +4260,29 @@ export default function PdfPage() {
 
                   {orgLoading && <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>Rendering page thumbnails…</p>}
 
+                  <div className="flex flex-wrap items-center gap-3 mb-3 text-xs">
+                    <Tooltip text="Flip the whole page order, so the last page comes first.">
+                      <button type="button" onClick={orgReverse} disabled={orgPages.length < 2} className="inline-flex items-center gap-1 hover:opacity-70 transition-opacity disabled:opacity-40" style={{ color: 'var(--color-primary)' }}>
+                        {getIcon('arrow-up-down', { size: 13 })} Reverse order
+                      </button>
+                    </Tooltip>
+                    <Tooltip text="Tick the box on any pages you want gone, then remove them all at once.">
+                      <span style={{ color: 'var(--color-muted)' }}>{orgSelected.size ? `${orgSelected.size} ticked` : 'Tick pages to remove several at once'}</span>
+                    </Tooltip>
+                    {orgSelected.size > 0 && (orgConfirmBulk ? (
+                      <span className="flex items-center gap-2">
+                        <span style={{ color: 'var(--color-text)' }}>Remove {orgSelected.size}?</span>
+                        <button type="button" onClick={orgRemoveSelected} className="font-semibold hover:opacity-70 transition-opacity" style={{ color: '#ef4444' }}>Yes</button>
+                        <button type="button" onClick={() => setOrgConfirmBulk(false)} className="hover:opacity-70 transition-opacity" style={{ color: 'var(--color-muted)' }}>No</button>
+                      </span>
+                    ) : (
+                      <>
+                        <button type="button" onClick={() => setOrgConfirmBulk(true)} className="hover:opacity-70 transition-opacity" style={{ color: '#ef4444' }}>Remove ticked</button>
+                        <button type="button" onClick={() => setOrgSelected(new Set())} className="hover:opacity-70 transition-opacity" style={{ color: 'var(--color-muted)' }}>Clear</button>
+                      </>
+                    ))}
+                  </div>
+
                   <div className="grid gap-3 mb-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))' }}>
                     {orgPages.map((p, i) => (
                       <div
@@ -4160,6 +4295,13 @@ export default function PdfPage() {
                         style={{ borderColor: 'var(--color-border)', background: '#fff', cursor: 'grab' }}
                       >
                         <img src={p.thumb} alt={`Page ${i + 1}`} className="w-full block" draggable={false} />
+                        <input
+                          type="checkbox"
+                          checked={orgSelected.has(p.id)}
+                          onChange={() => orgToggleSelect(p.id)}
+                          aria-label={`Tick page ${i + 1} for removal`}
+                          className="absolute top-1 right-1"
+                        />
                         <div className="absolute top-1 left-1 text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--color-surface)', color: 'var(--color-text)' }}>
                           {i + 1}{p.source === 'inserted' ? ' · inserted' : ''}
                         </div>
@@ -4807,6 +4949,8 @@ export default function PdfPage() {
 
         </main>
       </div>
+
+      <PdfTutorChat currentTool={mode} onOpenTool={openToolById} />
 
       {/* ── Result modal ──────────────────────────────────────────────────── */}
       {resultModal && (

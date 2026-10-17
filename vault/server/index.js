@@ -133,6 +133,7 @@ app.use('/api/files', require('./routes/files'));
 // it spans both the clients and tasks surfaces. See server/routes/attachments.js.
 app.use('/api/attachments', require('./routes/attachments'));
 app.use('/api/pdf', require('./routes/pdf'));
+app.use('/api/pdf-tutor', aiLimiter, require('./routes/pdfTutor'));
 app.use('/api/search', require('./routes/search'));
 app.use('/api/email', require('./routes/email'));
 app.use('/api/export', require('./routes/export'));

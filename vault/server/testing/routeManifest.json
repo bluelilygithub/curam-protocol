@@ -1972,6 +1972,24 @@
   "POST /api/pdf/watermark": {
    "class": "authed"
   },
+  "POST /api/pdf/crop": {
+   "class": "authed"
+  },
+  "POST /api/pdf/headerfooter": {
+   "class": "authed"
+  },
+  "POST /api/pdf/nup": {
+   "class": "authed"
+  },
+  "POST /api/pdf/extract-images": {
+   "class": "authed"
+  },
+  "POST /api/pdf/ocr-layer": {
+   "class": "authed"
+  },
+  "POST /api/pdf-tutor": {
+   "class": "authed"
+  },
   "DELETE /api/personas/:id": {
    "class": "authed"
   },

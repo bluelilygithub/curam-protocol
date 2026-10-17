@@ -13,6 +13,7 @@ const { encrypt, decrypt } = require('../utils/encryption');
 const { libreConvert } = require('../services/officeConvert');
 const { generateTextPdf } = require('../services/textToPdf');
 const { protectPdf, unprotectPdf } = require('../services/pdfCrypto');
+const pdfTools = require('../services/pdfTools');
 
 // ── Shared: Google OAuth client (mirrors gmail.js / calendar.js pattern) ────
 function _googleOAuth2Client() {
@@ -1343,6 +1344,103 @@ router.post('/unprotect', async (req, res) => {
       return res.status(400).json({ error: 'Incorrect password.' });
     res.status(500).json({ error: err.message || 'Unprotect failed. The file may not be password-protected, or may use an unsupported encryption scheme.' });
   }
+});
+
+// ── Crop / Header & footer / N-up / Extract images / OCR layer ───────────────
+// Logic lives in services/pdfTools.js; these routes only validate and parse page ranges.
+async function pdfPageCount(buf) {
+  return (await PDFDocument.load(buf, { ignoreEncryption: true })).getPageCount();
+}
+
+// Blank or "all" means every page (returned as null); otherwise a 1-3,5 style list.
+async function pagesFromRange(buf, range) {
+  const s = String(range ?? '').trim();
+  if (!s || s.toLowerCase() === 'all') return null;
+  const list = parsePageList(s, await pdfPageCount(buf));
+  if (!list.length) throw Object.assign(new Error('No valid pages in that range.'), { status: 400 });
+  return list;
+}
+
+function sendToolError(res, tag, err, fallback) {
+  console.error(`PDF ${tag}:`, err);
+  res.status(err.status || 500).json({ error: err.message || fallback });
+}
+
+router.post('/crop', async (req, res) => {
+  try {
+    const buf = pdfBufFromDataUrl(req.body?.dataUrl);
+    if (!buf) return res.status(400).json({ error: 'A valid PDF is required' });
+    const m = req.body?.marginsMm || {};
+    if (!['top', 'right', 'bottom', 'left'].some(k => Number(m[k]) > 0))
+      return res.status(400).json({ error: 'Enter at least one margin to crop.' });
+    const pages = await pagesFromRange(buf, req.body?.pages);
+    const out = await pdfTools.cropPdf(buf, { pages, marginsMm: m });
+    res.json({ dataUrl: pdfDataUrl(out.bytes), cropped: out.cropped, pageCount: out.pageCount });
+  } catch (err) { sendToolError(res, 'crop', err, 'Crop failed'); }
+});
+
+router.post('/headerfooter', async (req, res) => {
+  try {
+    const buf = pdfBufFromDataUrl(req.body?.dataUrl);
+    if (!buf) return res.status(400).json({ error: 'A valid PDF is required' });
+    const clip = (c) => c && Object.fromEntries(['left', 'center', 'right'].map(k => [k, String(c[k] || '').slice(0, 200)]));
+    const header = clip(req.body?.header);
+    const footer = clip(req.body?.footer);
+    const any = (c) => c && Object.values(c).some(v => v.trim());
+    if (!any(header) && !any(footer)) return res.status(400).json({ error: 'Type some header or footer text first.' });
+    const pages = await pagesFromRange(buf, req.body?.pages);
+    const out = await pdfTools.headerFooterPdf(buf, {
+      pages, header, footer,
+      fontSize: req.body?.fontSize, marginMm: req.body?.marginMm, startAt: req.body?.startAt,
+      date: new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }),
+      name: String(req.body?.filename || '').replace(/\.pdf$/i, '').slice(0, 100),
+    });
+    res.json({ dataUrl: pdfDataUrl(out.bytes), stamped: out.stamped, pageCount: out.pageCount });
+  } catch (err) { sendToolError(res, 'headerfooter', err, 'Header/footer failed'); }
+});
+
+router.post('/nup', async (req, res) => {
+  try {
+    const buf = pdfBufFromDataUrl(req.body?.dataUrl);
+    if (!buf) return res.status(400).json({ error: 'A valid PDF is required' });
+    const out = await pdfTools.nupPdf(buf, {
+      perSheet: Number(req.body?.perSheet) || 2,
+      sheet: String(req.body?.sheet || 'A4'),
+      landscape: req.body?.landscape,
+      gapMm: req.body?.gapMm,
+      border: !!req.body?.border,
+    });
+    res.json({ dataUrl: pdfDataUrl(out.bytes), sheets: out.sheets, pageCount: out.pageCount });
+  } catch (err) { sendToolError(res, 'nup', err, 'N-up failed'); }
+});
+
+router.post('/extract-images', async (req, res) => {
+  try {
+    const buf = pdfBufFromDataUrl(req.body?.dataUrl);
+    if (!buf) return res.status(400).json({ error: 'A valid PDF is required' });
+    const { images, skipped } = await pdfTools.extractJpegImages(buf);
+    if (!images.length) return res.json({ count: 0, skipped, dataUrl: null });
+    const zip = await pdfTools.zipImages(images);
+    res.json({
+      count: images.length, skipped,
+      dataUrl: `data:application/zip;base64,${zip.toString('base64')}`,
+      previews: images.slice(0, 12).map(i => ({ width: i.width, height: i.height, dataUrl: `data:image/jpeg;base64,${i.bytes.toString('base64')}` })),
+    });
+  } catch (err) { sendToolError(res, 'extract-images', err, 'Extract images failed'); }
+});
+
+router.post('/ocr-layer', async (req, res) => {
+  try {
+    const buf = pdfBufFromDataUrl(req.body?.dataUrl);
+    if (!buf) return res.status(400).json({ error: 'A valid PDF is required' });
+    const pages = req.body?.pages;
+    if (!Array.isArray(pages) || !pages.length) return res.status(400).json({ error: 'No recognised text was sent.' });
+    const out = await pdfTools.ocrLayerPdf(buf, pages.map(p => ({
+      page: Number(p?.page), canvasWidth: Number(p?.canvasWidth), canvasHeight: Number(p?.canvasHeight),
+      words: Array.isArray(p?.words) ? p.words.slice(0, 20000).map(w => ({ text: String(w.text || ''), x: +w.x, y: +w.y, w: +w.w, h: +w.h })) : [],
+    })));
+    res.json({ dataUrl: pdfDataUrl(out.bytes), words: out.words, pagesDone: out.pagesDone });
+  } catch (err) { sendToolError(res, 'ocr-layer', err, 'OCR failed'); }
 });
 
 module.exports = router;

@@ -213,6 +213,11 @@ const semanticMap = {
   'mic-off': { lucide: 'MicOff' },
   'arrow-left-right': { lucide: 'ArrowLeftRight' },
   'scan-text': { lucide: 'ScanText' },
+  'crop': { lucide: 'Crop' },
+  'images': { lucide: 'Images' },
+  'panel-top': { lucide: 'PanelTop' },
+  'grid-2x2': { lucide: 'Grid2x2' },
+  'arrow-up-down': { lucide: 'ArrowUpDown' },
 };
 
 const IconContext = createContext(null);
