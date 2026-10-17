@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
@@ -6,6 +6,8 @@ import useProcessingStore from '../store/processingStore';
 import Tooltip from '../components/Tooltip';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import PdfTutorChat from './pdf/PdfTutorChat';
+import { PdfVoiceContext, VoiceCommandBar } from './pdf/PdfVoice';
+import { VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 import { PageToImageTool, ExtractImagesTool, OcrTool, RemoveBlankTool, CropTool, HeaderFooterTool, NupTool } from './pdf/PdfExtraTools';
 // Vite copies this to the build output and returns a same-origin URL,
 // which satisfies script-src 'self' and avoids blob: worker CSP issues.
@@ -341,12 +343,14 @@ const TOOL_HELP = {
   },
   extractimages: {
     title: 'Extract Images',
-    what: 'Pull the original photos out of a PDF without re-compressing them.',
+    what: 'Pull the pictures out of a PDF as image files.',
     features: [
-      'Copies embedded JPEG photos out unchanged, so quality is exactly the original',
-      'Other image formats are counted and skipped rather than converted',
+      'JPEG photos are copied out unchanged, so quality is exactly the original',
+      'Screenshots, logos, charts and scans saved as pictures come out as PNG, with their transparency',
+      'JPEG 2000 pictures are copied as .jp2 files (open them in an image editor)',
+      'Black-and-white fax-style scans and special colour formats are counted and skipped, with the reason',
       'Downloads everything as one zip',
-      'For scans or drawings, use Pages to Images instead',
+      'Drawings made of lines and text (not pictures) are not extracted: use Pages to Images for those',
     ],
   },
   ocr: {
@@ -373,8 +377,9 @@ const TOOL_HELP = {
     title: 'Crop Pages',
     what: 'Trim margins off every page, or a range of pages.',
     features: [
-      'Set top, bottom, left and right in millimetres',
-      'The preview shades what will be removed',
+      'Drag the crop box on the page preview: its edges, its corners, or the whole box',
+      'Or type top, bottom, left and right in millimetres: the box and the numbers stay in step',
+      'The shaded edges are what will be removed',
       'Works on rotated pages: top is the top you see',
       'Page size changes to the cropped area',
     ],
@@ -460,12 +465,12 @@ const TOOL_TIPS = {
   pdftooffice: 'Turn a PDF into an editable Word document.',
   googletopdf: 'Export a Google Doc, Sheet or Slides file from your Drive as a PDF.',
   pdf2img: 'Save PDF pages as PNG or JPG pictures. Runs in your browser.',
-  extractimages: 'Pull the original photos out of a PDF as JPEG files, unchanged.',
+  extractimages: 'Pull the pictures out of a PDF as image files: photos as JPEG, the rest as PNG.',
   ocr: 'Read a scanned PDF and add invisible text, so it can be searched, selected and copied. English only.',
   watermark: 'Stamp a faint diagonal word such as CONFIDENTIAL across every page.',
   pagenumbers: 'Add page numbers in the corner or centre of each page, in the style you pick.',
   headerfooter: 'Add running text (title, date, page x of y) to the top and bottom of pages.',
-  crop: 'Trim the margins off pages. A preview shades what will be removed.',
+  crop: 'Trim the margins off pages. Drag the crop box on the preview, or type the margins.',
   compress: "Make a PDF's file size smaller, optionally by re-saving its photos at lower quality.",
   protect: 'Lock a PDF with a password so only people who know it can open it.',
   unprotect: 'Take the password off a PDF, if you know the password.',
@@ -602,9 +607,21 @@ export function ToolHeader({ id, label, badge, onHelp, getIcon }) {
   );
 }
 
+// "Continue with…": a result handed from one tool to the next. The page holds { mode, file, nonce }; the first upload box shown by
+// the tool it is for takes the file exactly as if the person had picked it, then the hand-off is spent.
+const PdfFlowContext = createContext(null);
+
 export function PdfUpload({ label, accept = '.pdf', multiple = false, onChange, files, onRemove }) {
   const inputRef = useRef();
   const [dragOver, setDragOver] = useState(false);
+  const flow = useContext(PdfFlowContext);
+
+  useEffect(() => {
+    const p = flow?.pending;
+    if (!p || p.mode !== flow.mode || !flow.claim(p.nonce)) return;
+    onChange({ target: { files: [p.file], value: '' } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flow?.pending, flow?.mode]);
 
   const handleDrop = (e) => {
     e.preventDefault();
@@ -798,7 +815,10 @@ function PasswordField({ value, onChange, placeholder, className, style, getIcon
 }
 
 // ── PdfResultModal — full-screen modal showing a rendered result PDF ────────────
-function PdfResultModal({ dataUrl, filename, meta, onClose, getIcon }) {
+// Tools whose first input is a PDF, grouped like the sidebar, for the result window's "Continue with…" menu.
+const NOT_PDF_INPUT = new Set(['img2pdf', 'text2pdf', 'officetopdf', 'googletopdf']);
+
+function PdfResultModal({ dataUrl, filename, meta, onClose, getIcon, onContinue }) {
   if (!dataUrl) return null;
   return (
     <div
@@ -817,6 +837,23 @@ function PdfResultModal({ dataUrl, filename, meta, onClose, getIcon }) {
             {meta && <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{meta}</p>}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            {onContinue && (
+              <Tooltip text="Send this result straight into another tool, with no download and re-upload in between.">
+                <select
+                  value=""
+                  onChange={(e) => { if (e.target.value) onContinue(e.target.value); }}
+                  className="text-xs px-2 py-1.5 rounded-lg border hover:opacity-70 cursor-pointer"
+                  style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)', background: 'transparent' }}
+                  aria-label="Continue with another tool"
+                >
+                  <option value="">Continue with…</option>
+                  {MODE_GROUPS.map((g) => {
+                    const items = g.ids.filter((id) => !NOT_PDF_INPUT.has(id)).map((id) => MODES.find((m) => m.id === id)).filter(Boolean);
+                    return items.length ? <optgroup key={g.label} label={g.label}>{items.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</optgroup> : null;
+                  })}
+                </select>
+              </Tooltip>
+            )}
             <button
               onClick={() => downloadFile(dataUrl, filename || 'result.pdf')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium hover:opacity-80 transition-opacity"
@@ -874,6 +911,12 @@ export default function PdfPage() {
   const [seedBanner, setSeedBanner] = useState('');
   const toolSearchRef = useRef(null);
   const seedHandled = useRef(false);
+  // A result handed on to the next tool (see PdfFlowContext)
+  const [pendingFile, setPendingFile] = useState(null);
+  const flowClaimed = useRef(0);
+  const flowNonce = useRef(0);
+  // Spoken or typed directions: tools that keep their own state register a receiver here
+  const voiceHandlers = useRef({});
 
   // Merge
   const [mergeFiles, setMergeFiles] = useState([]);
@@ -2964,6 +3007,17 @@ export default function PdfPage() {
 
 
   // The guide's "Open <tool>" buttons: open the tool's group and the tool, exactly as clicking it in the list would.
+  // "Continue with…" in the result window: hand the result to the next tool as if it had been uploaded there.
+  const continueWith = (toolId) => {
+    if (!resultModal?.dataUrl || !MODES.some((m) => m.id === toolId)) return;
+    const bytes = dataUrlToUint8Array(resultModal.dataUrl);
+    const file = new File([bytes], resultModal.filename || 'result.pdf', { type: 'application/pdf' });
+    flowNonce.current += 1;
+    setPendingFile({ mode: toolId, file, nonce: flowNonce.current });
+    setResultModal(null);
+    openToolById(toolId);
+  };
+
   const openToolById = (id) => {
     const group = MODE_GROUPS.find(g => g.ids.includes(id));
     if (!group) return;
@@ -2971,7 +3025,46 @@ export default function PdfPage() {
     setMode(id);
   };
 
+  // "Tell it what to do": the server turns the words into validated setting values; this puts them into each tool's form.
+  const applyVoiceValues = (toolId, v) => {
+    const own = voiceHandlers.current[toolId];
+    if (own) { own(v); return; }
+    const setters = {
+      split: { pages: setSplitPages },
+      rotate: { angle: setRotateAngle, pages: setRotatePages },
+      watermark: { text: setWmText, fontSize: setWmFontSize, opacityPercent: (x) => setWmOpacity(x / 100), angle: setWmAngle, color: setWmColor },
+      pagenumbers: {
+        format: (x) => setPnFormat({ number: '{n}', page: 'Page {n}', of: '{n} of {total}', 'page-of': 'Page {n} of {total}' }[x] || '{n}'),
+        position: setPnPosition, fontSize: setPnFontSize, startAt: setPnStartAt,
+      },
+      compress: { recompressImages: setCmpRecompress, quality: setCmpQuality },
+      metadata: Object.fromEntries(['title', 'author', 'subject', 'keywords'].map((k) => [k, (x) => setMetaEdit((prev) => ({ ...prev, [k]: x }))])),
+      img2pdf: { pageSize: setImgPageSize, margin: setImgMargin },
+    }[toolId] || {};
+    for (const [k, val] of Object.entries(v)) setters[k]?.(val);
+  };
+
+  const voiceValue = {
+    register: (id, fn) => { if (fn) voiceHandlers.current[id] = fn; else delete voiceHandlers.current[id]; },
+    run: async (toolId, transcript) => {
+      const res = await api.post('/api/pdf/voice-command', { tool: toolId, transcript });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Could not understand that');
+      applyVoiceValues(toolId, data.values || {});
+      return data;
+    },
+  };
+
+  const flowValue = {
+    pending: pendingFile,
+    mode,
+    claim: (n) => { if (flowClaimed.current === n) return false; flowClaimed.current = n; return true; },
+  };
+
   return (
+    <VoiceInputProvider lang="en-AU">
+    <PdfVoiceContext.Provider value={voiceValue}>
+    <PdfFlowContext.Provider value={flowValue}>
     <div>
       <div className="flex flex-col sm:flex-row min-h-[calc(100dvh-3rem)]">
         {/* ── Sidebar ───────────────────────────────────────────────────── */}
@@ -3146,6 +3239,7 @@ export default function PdfPage() {
                     <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Ranges (1-3) and individual pages (5) can be mixed.</p>
                   </div>
                   <ErrMsg msg={splitError} />
+                  <VoiceCommandBar toolId="split" />
                   <RunBtn onClick={runSplit} busy={splitBusy} disabled={!splitFile || !splitPages.trim()} label="Extract Pages" getIcon={getIcon} />
                 </div>
                 <div>
@@ -3184,6 +3278,7 @@ export default function PdfPage() {
                     </div>
                   </div>
                   <ErrMsg msg={rotateError} />
+                  <VoiceCommandBar toolId="rotate" />
                   <RunBtn onClick={runRotate} busy={rotateBusy} disabled={!rotateFile} label="Rotate & Download" getIcon={getIcon} />
                 </div>
                 <div>
@@ -3233,6 +3328,7 @@ export default function PdfPage() {
                     </div>
                   </div>
                   <ErrMsg msg={imgError} />
+                  <VoiceCommandBar toolId="img2pdf" />
                   <RunBtn onClick={runImg2Pdf} busy={imgBusy} disabled={!imgFiles.length} label="Create PDF" getIcon={getIcon} />
                 </div>
                 <div>
@@ -3355,6 +3451,7 @@ export default function PdfPage() {
                     </div>
                   </div>
                   <ErrMsg msg={wmError} />
+                  <VoiceCommandBar toolId="watermark" />
                   <RunBtn onClick={runWatermark} busy={wmBusy} disabled={!wmFile} label="Apply Watermark" getIcon={getIcon} />
                 </div>
                 <div>
@@ -3416,6 +3513,7 @@ export default function PdfPage() {
                     </div>
                   </div>
                   <ErrMsg msg={pnError} />
+                  <VoiceCommandBar toolId="pagenumbers" />
                   <RunBtn onClick={runPageNumbers} busy={pnBusy} disabled={!pnFile} label="Add Page Numbers" getIcon={getIcon} />
                 </div>
                 <div>
@@ -3653,7 +3751,10 @@ export default function PdfPage() {
                   )}
                   <ErrMsg msg={metaError} />
                   {metaCurrent && (
-                    <RunBtn onClick={runMetaSave} busy={metaBusy} disabled={!metaFile} label="Save & Download" getIcon={getIcon} />
+                    <>
+                      <VoiceCommandBar toolId="metadata" />
+                      <RunBtn onClick={runMetaSave} busy={metaBusy} disabled={!metaFile} label="Save & Download" getIcon={getIcon} />
+                    </>
                   )}
                 </div>
                 <div>
@@ -4911,6 +5012,7 @@ export default function PdfPage() {
                   </div>
 
                   <ErrMsg msg={cmpError} />
+                  <VoiceCommandBar toolId="compress" />
                   <RunBtn onClick={runCompress} busy={cmpBusy} disabled={!cmpFile} label="Compress" getIcon={getIcon} />
 
                   {cmpResult && (
@@ -4960,6 +5062,7 @@ export default function PdfPage() {
           meta={resultModal.meta}
           onClose={() => setResultModal(null)}
           getIcon={getIcon}
+          onContinue={continueWith}
         />
       )}
 
@@ -5013,5 +5116,8 @@ export default function PdfPage() {
         );
       })()}
     </div>
+    </PdfFlowContext.Provider>
+    </PdfVoiceContext.Provider>
+    </VoiceInputProvider>
   );
 }

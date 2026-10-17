@@ -1,11 +1,10 @@
 import React from 'react';
 import SharedTutorChat from '../../components/tutor/TutorChat';
-import { VoiceInputProvider } from '../../components/voiceInput/VoiceInput';
 
 /**
  * The PDF Tools guide. The chat itself is the shared component (components/tutor/TutorChat.jsx, also used by Video Tools and
  * Finance); this file only supplies PDF Tools' wording and endpoint. `onOpenTool(id)` opens a tool in the page. It cannot see
- * your files: it only knows what each tool does. The PDF page has no microphone provider of its own, so this wrapper supplies one.
+ * your files: it only knows what each tool does. (The microphone provider comes from the PDF page.)
  */
 
 const CONFIG = {
@@ -39,8 +38,6 @@ const CONFIG = {
 
 export default function PdfTutorChat({ currentTool, onOpenTool }) {
   return (
-    <VoiceInputProvider lang="en-AU">
-      <SharedTutorChat config={CONFIG} current={currentTool} onOpen={onOpenTool} />
-    </VoiceInputProvider>
+    <SharedTutorChat config={CONFIG} current={currentTool} onOpen={onOpenTool} />
   );
 }

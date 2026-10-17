@@ -2,6 +2,7 @@
 // Same conventions as PdfPage.jsx (shared sub-components imported from it; each tool owns its own state).
 // Imports from PdfPage are only used while rendering, so the circular import is safe.
 import { useState, useRef, useEffect } from 'react';
+import { VoiceCommandBar, useVoiceTarget } from './PdfVoice';
 import api from '../../utils/apiClient';
 import useProcessingStore from '../../store/processingStore';
 import Tooltip from '../../components/Tooltip';
@@ -98,6 +99,7 @@ export function PageToImageTool({ getIcon, onHelp }) {
   const [format, setFormat] = useState('png');
   const [dpi, setDpi] = useState(150);
   const [range, setRange] = useState('all');
+  useVoiceTarget('pdf2img', (v) => { if (v.format) setFormat(v.format); if (v.dpi) setDpi(v.dpi); if (v.pages) setRange(v.pages); });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState('');
@@ -174,6 +176,7 @@ export function PageToImageTool({ getIcon, onHelp }) {
             </div>
             <PageRangeField value={range} onChange={setRange} max={file?.pageCount} />
           </div>
+          <VoiceCommandBar toolId="pdf2img" />
           <ErrMsg msg={error} />
           {done && <p className="text-xs mt-2" style={{ color: '#16a34a' }}>{done}</p>}
           <RunBtn onClick={run} busy={busy} disabled={!file} label="Make images" getIcon={getIcon} />
@@ -185,6 +188,19 @@ export function PageToImageTool({ getIcon, onHelp }) {
 }
 
 // ═══ Extract images ═══════════════════════════════════════════════════════════
+const FORMAT_NAMES = { jpeg: 'JPEG', png: 'PNG', jp2: 'JPEG 2000' };
+const SKIP_REASONS = { bitonal: 'black-and-white fax-style scan', colourSpace: 'special colour format', filter: 'unusual compression', tooBig: 'very large picture', invalid: 'unreadable picture', tooMany: 'beyond the first 500' };
+// "(3 JPEG, 2 PNG)" and "2 skipped (1 black-and-white fax-style scan, 1 special colour format)"
+const formatNote = (formats) => {
+  const parts = Object.entries(formats || {}).map(([k, n]) => `${n} ${FORMAT_NAMES[k] || k}`);
+  return parts.length > 1 ? ` (${parts.join(', ')})` : parts.length === 1 ? ` (${parts[0]})` : '';
+};
+const skippedNote = (result) => {
+  if (!result?.skipped) return '';
+  const why = Object.entries(result.skippedReasons || {}).filter(([k]) => SKIP_REASONS[k]).map(([k, n]) => `${n} ${SKIP_REASONS[k]}${n !== 1 ? 's' : ''}`);
+  return `${result.skipped} skipped${why.length ? ` (${why.join(', ')})` : ''}`;
+};
+
 export function ExtractImagesTool({ getIcon, onHelp }) {
   const { startProcessing, stopProcessing } = useProcessingStore();
   const [file, setFile, onChange] = usePdfFile(() => { setResult(null); setError(''); });
@@ -213,7 +229,7 @@ export function ExtractImagesTool({ getIcon, onHelp }) {
       <ToolHeader id="extractimages" label="Extract Images" onHelp={onHelp} getIcon={getIcon} />
       <div className="grid lg:grid-cols-2 gap-6">
         <div>
-          <Tooltip text="Upload a PDF to pull its embedded photos out as original JPEG files.">
+          <Tooltip text="Upload a PDF to pull its pictures out as image files.">
             <div><PdfUpload onChange={onChange} files={file ? [file] : []} onRemove={() => { setFile(null); setResult(null); }} /></div>
           </Tooltip>
           <ErrMsg msg={error} />
@@ -222,14 +238,14 @@ export function ExtractImagesTool({ getIcon, onHelp }) {
             <div className="mt-4 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
               {result.count === 0 ? (
                 <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-                  No JPEG photos found{result.skipped ? `, and ${result.skipped} other image${result.skipped !== 1 ? 's' : ''} use a format this tool can't copy out unchanged.` : '.'}
-                  {' '}For scans or drawings, use Pages to Images instead.
+                  No pictures found{skippedNote(result) ? `, and ${skippedNote(result)}` : '.'}
+                  {' '}If the pages are drawings or text, use Pages to Images to turn whole pages into pictures.
                 </p>
               ) : (
                 <>
                   <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-                    {result.count} image{result.count !== 1 ? 's' : ''} found
-                    {result.skipped ? ` · ${result.skipped} skipped (format can't be copied out unchanged)` : ''}.
+                    {result.count} picture{result.count !== 1 ? 's' : ''} found{formatNote(result.formats)}
+                    {skippedNote(result) ? ` · ${skippedNote(result)}` : ''}.
                   </p>
                   <div className="flex flex-wrap gap-2 mt-2">
                     {(result.previews || []).map((p, i) => (
@@ -237,9 +253,9 @@ export function ExtractImagesTool({ getIcon, onHelp }) {
                     ))}
                   </div>
                   {result.count > (result.previews || []).length && (
-                    <p className="text-xs mt-1" style={muted}>Showing the first {(result.previews || []).length}; the zip has all of them.</p>
+                    <p className="text-xs mt-1" style={muted}>Showing {(result.previews || []).length} previews; the zip has all of them{result.formats?.jp2 ? ' (JPEG 2000 files have no preview)' : ''}.</p>
                   )}
-                  <Tooltip text="Download every image in one zip file.">
+                  <Tooltip text="Download every picture in one zip file.">
                     <button
                       type="button"
                       onClick={() => downloadFile(result.dataUrl, `${baseName(file)}-images.zip`)}
@@ -267,6 +283,7 @@ export function OcrTool({ getIcon, onHelp, setResultModal }) {
   const { startProcessing, stopProcessing } = useProcessingStore();
   const [file, setFile, onChange] = usePdfFile(() => { setError(''); setNote(''); setText(''); });
   const [range, setRange] = useState('all');
+  useVoiceTarget('ocr', (v) => { if (v.pages) setRange(v.pages); });
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState('');
   const [error, setError] = useState('');
@@ -355,6 +372,7 @@ export function OcrTool({ getIcon, onHelp, setResultModal }) {
               tip={`Which pages to read. Up to ${OCR_PAGE_CAP} at a time; reading takes a few seconds per page.`} />
           </div>
           <p className="text-xs mt-2" style={muted}>English text only. Reading happens in your browser, so the pages are not uploaded for recognition. Good for search and copy, not a guaranteed-exact transcript.</p>
+          <VoiceCommandBar toolId="ocr" />
           <ErrMsg msg={error} />
           {note && <p className="text-xs mt-2" style={{ color: 'var(--color-text)' }}>{note}</p>}
           <RunBtn onClick={run} busy={busy} disabled={!file} label={busy && progress ? progress : 'Make searchable'} getIcon={getIcon} />
@@ -494,11 +512,91 @@ export function RemoveBlankTool({ getIcon, onHelp, setResultModal }) {
 }
 
 // ═══ Crop ═════════════════════════════════════════════════════════════════════
+// The page preview with a crop box you can drag: pull an edge or a corner to trim, or drag inside the box to move it.
+// Everything is in millimetres on the page, so the number boxes beside it stay in step.
+const MIN_BOX_MM = 10;
+const HANDLES = [
+  { id: 'nw', x: 0, y: 0, cursor: 'nwse-resize' }, { id: 'n', x: 0.5, y: 0, cursor: 'ns-resize' }, { id: 'ne', x: 1, y: 0, cursor: 'nesw-resize' },
+  { id: 'e', x: 1, y: 0.5, cursor: 'ew-resize' }, { id: 'se', x: 1, y: 1, cursor: 'nwse-resize' }, { id: 's', x: 0.5, y: 1, cursor: 'ns-resize' },
+  { id: 'sw', x: 0, y: 1, cursor: 'nesw-resize' }, { id: 'w', x: 0, y: 0.5, cursor: 'ew-resize' },
+];
+const round1 = (v) => Math.round(v * 10) / 10;
+
+function dragMargins(mode, start, dxMm, dyMm, wMm, hMm) {
+  const next = { ...start };
+  const clampTo = (v, max) => Math.min(Math.max(0, v), Math.max(0, max));
+  if (mode === 'move') {
+    const sx = Math.min(Math.max(dxMm, -start.left), start.right);
+    const sy = Math.min(Math.max(dyMm, -start.top), start.bottom);
+    next.left = start.left + sx; next.right = start.right - sx; next.top = start.top + sy; next.bottom = start.bottom - sy;
+  } else {
+    if (mode.includes('w')) next.left = clampTo(start.left + dxMm, wMm - start.right - MIN_BOX_MM);
+    if (mode.includes('e')) next.right = clampTo(start.right - dxMm, wMm - start.left - MIN_BOX_MM);
+    if (mode.includes('n')) next.top = clampTo(start.top + dyMm, hMm - start.bottom - MIN_BOX_MM);
+    if (mode.includes('s')) next.bottom = clampTo(start.bottom - dyMm, hMm - start.top - MIN_BOX_MM);
+  }
+  return Object.fromEntries(Object.entries(next).map(([k, v]) => [k, round1(v)]));
+}
+
+function CropPreview({ thumb, m, setM }) {
+  const boxRef = useRef(null);
+  const drag = useRef(null);
+  const pctX = (mm) => Math.min(49, (mm / thumb.wMm) * 100);
+  const pctY = (mm) => Math.min(49, (mm / thumb.hMm) * 100);
+  const left = pctX(m.left); const right = pctX(m.right); const top = pctY(m.top); const bottom = pctY(m.bottom);
+
+  const begin = (mode) => (e) => {
+    e.preventDefault(); e.stopPropagation();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    drag.current = { mode, x: e.clientX, y: e.clientY, start: { ...m } };
+  };
+  const move = (e) => {
+    const d = drag.current; const el = boxRef.current;
+    if (!d || !el) return;
+    const rect = el.getBoundingClientRect();
+    setM(dragMargins(d.mode, d.start, ((e.clientX - d.x) / rect.width) * thumb.wMm, ((e.clientY - d.y) / rect.height) * thumb.hMm, thumb.wMm, thumb.hMm));
+  };
+  const end = () => { drag.current = null; };
+
+  return (
+    <div className="relative inline-block border select-none" ref={boxRef} style={{ borderColor: 'var(--color-border)', lineHeight: 0, touchAction: 'none' }} data-testid="crop-preview">
+      <img src={thumb.src} alt="Page 1" draggable={false} style={{ maxWidth: '100%', width: 360 }} />
+      {[
+        { top: 0, left: 0, right: 0, height: `${top}%` },
+        { bottom: 0, left: 0, right: 0, height: `${bottom}%` },
+        { top: 0, bottom: 0, left: 0, width: `${left}%` },
+        { top: 0, bottom: 0, right: 0, width: `${right}%` },
+      ].map((st, i) => <div key={i} className="absolute pointer-events-none" style={{ ...st, background: 'rgba(239,68,68,0.35)' }} />)}
+      <Tooltip text="The kept area. Drag inside it to move it, or drag an edge or corner handle to trim.">
+        <div
+          data-testid="crop-box"
+          className="absolute cursor-move"
+          style={{ left: `${left}%`, right: `${right}%`, top: `${top}%`, bottom: `${bottom}%`, border: '2px solid var(--color-primary)', boxSizing: 'border-box' }}
+          onPointerDown={begin('move')} onPointerMove={move} onPointerUp={end} onPointerCancel={end}
+        >
+          {HANDLES.map((h) => (
+            <div
+              key={h.id}
+              data-testid={`crop-handle-${h.id}`}
+              onPointerDown={begin(h.id)} onPointerMove={move} onPointerUp={end} onPointerCancel={end}
+              style={{ position: 'absolute', left: `${h.x * 100}%`, top: `${h.y * 100}%`, width: 14, height: 14, marginLeft: -7, marginTop: -7, background: '#fff', border: '2px solid var(--color-primary)', borderRadius: 3, cursor: h.cursor, touchAction: 'none' }}
+            />
+          ))}
+        </div>
+      </Tooltip>
+    </div>
+  );
+}
+
 export function CropTool({ getIcon, onHelp, setResultModal }) {
   const { startProcessing, stopProcessing } = useProcessingStore();
   const [file, setFile, onChange] = usePdfFile(() => { setError(''); });
   const [m, setM] = useState({ top: 0, right: 0, bottom: 0, left: 0 });
   const [range, setRange] = useState('all');
+  useVoiceTarget('crop', (v) => {
+    setM((prev) => ({ top: v.topMm ?? prev.top, bottom: v.bottomMm ?? prev.bottom, left: v.leftMm ?? prev.left, right: v.rightMm ?? prev.right }));
+    if (v.pages) setRange(v.pages);
+  });
   const [thumb, setThumb] = useState(null); // { src, wMm, hMm }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -540,7 +638,7 @@ export function CropTool({ getIcon, onHelp, setResultModal }) {
     <div>
       <label className={lbl} style={muted}>{label} (mm)</label>
       <Tooltip text={tip}>
-        <input type="number" min={0} step={1} className={inp} style={inpStyle} value={m[k] || ''} onChange={set(k)} placeholder="0" />
+        <input type="number" min={0} step={0.5} className={inp} style={inpStyle} value={m[k] || ''} onChange={set(k)} placeholder="0" />
       </Tooltip>
     </div>
   );
@@ -562,23 +660,16 @@ export function CropTool({ getIcon, onHelp, setResultModal }) {
             </div>
             <PageRangeField value={range} onChange={setRange} max={file?.pageCount} tip="Which pages to crop. Leave as all, or type a range such as 1-3,5." />
           </div>
+          <VoiceCommandBar toolId="crop" />
           <ErrMsg msg={error} />
           <RunBtn onClick={run} busy={busy} disabled={!file || !Object.values(m).some(v => v > 0)} label="Crop" getIcon={getIcon} />
         </div>
         <div>
           {thumb ? (
             <div>
-              <p className="text-xs mb-1.5" style={muted}>Page 1 preview. The shaded edges are removed.</p>
-              <div className="relative inline-block border" style={{ borderColor: 'var(--color-border)', lineHeight: 0 }}>
-                <img src={thumb.src} alt="Page 1" style={{ maxWidth: '100%', width: 360 }} />
-                {[
-                  { top: 0, left: 0, right: 0, height: `${pct(m.top, thumb.hMm)}%` },
-                  { bottom: 0, left: 0, right: 0, height: `${pct(m.bottom, thumb.hMm)}%` },
-                  { top: 0, bottom: 0, left: 0, width: `${pct(m.left, thumb.wMm)}%` },
-                  { top: 0, bottom: 0, right: 0, width: `${pct(m.right, thumb.wMm)}%` },
-                ].map((s, i) => <div key={i} className="absolute pointer-events-none" style={{ ...s, background: 'rgba(239,68,68,0.35)' }} />)}
-              </div>
-              <p className="text-xs mt-1.5" style={muted}>{Math.round(thumb.wMm)} × {Math.round(thumb.hMm)} mm</p>
+              <p className="text-xs mb-1.5" style={muted}>Page 1 preview. Drag the box's edges or corners to trim, or drag inside it to move it. The shaded edges are removed.</p>
+              <CropPreview thumb={thumb} m={m} setM={setM} />
+              <p className="text-xs mt-1.5" style={muted}>{Math.round(thumb.wMm)} × {Math.round(thumb.hMm)} mm page{Object.values(m).some(v => v > 0) ? `, keeping ${Math.round(thumb.wMm - m.left - m.right)} × ${Math.round(thumb.hMm - m.top - m.bottom)} mm` : ''}</p>
             </div>
           ) : <PdfPagePreview dataUrl={file?.dataUrl} />}
         </div>
@@ -596,6 +687,16 @@ export function HeaderFooterTool({ getIcon, onHelp, setResultModal }) {
   const [marginMm, setMarginMm] = useState(10);
   const [startAt, setStartAt] = useState(1);
   const [range, setRange] = useState('all');
+  useVoiceTarget('headerfooter', (v) => {
+    const cells = { headerLeft: ['header', 'left'], headerCenter: ['header', 'center'], headerRight: ['header', 'right'], footerLeft: ['footer', 'left'], footerCenter: ['footer', 'center'], footerRight: ['footer', 'right'] };
+    setHf((prev) => {
+      const next = { header: { ...prev.header }, footer: { ...prev.footer } };
+      Object.entries(cells).forEach(([k, [row, pos]]) => { if (v[k] !== undefined) next[row][pos] = v[k]; });
+      return next;
+    });
+    if (v.fontSize) setFontSize(v.fontSize);
+    if (v.pages) setRange(v.pages);
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -664,6 +765,7 @@ export function HeaderFooterTool({ getIcon, onHelp, setResultModal }) {
             </div>
             <PageRangeField value={range} onChange={setRange} max={file?.pageCount} />
           </div>
+          <VoiceCommandBar toolId="headerfooter" />
           <ErrMsg msg={error} />
           <RunBtn onClick={run} busy={busy} disabled={!file || !any} label="Add header & footer" getIcon={getIcon} />
         </div>
@@ -682,6 +784,7 @@ export function NupTool({ getIcon, onHelp, setResultModal }) {
   const [orientation, setOrientation] = useState('auto');
   const [gapMm, setGapMm] = useState(4);
   const [border, setBorder] = useState(true);
+  useVoiceTarget('nup', (v) => { if (v.perSheet) setPerSheet(v.perSheet); if (v.sheet) setSheet(v.sheet); if (v.border !== undefined) setBorder(v.border); if (v.gapMm !== undefined) setGapMm(v.gapMm); });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -755,6 +858,7 @@ export function NupTool({ getIcon, onHelp, setResultModal }) {
               </Tooltip>
             </div>
           </div>
+          <VoiceCommandBar toolId="nup" />
           <ErrMsg msg={error} />
           <RunBtn onClick={run} busy={busy} disabled={!file} label="Combine pages" getIcon={getIcon} />
         </div>

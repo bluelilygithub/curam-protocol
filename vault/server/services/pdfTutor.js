@@ -41,7 +41,7 @@ const CATALOG = [
   { id: 'pdf2img', label: 'Pages → Images', group: 'Convert',
     does: 'Saves PDF pages as PNG or JPG pictures at 72, 150 or 300 DPI, for all pages or a range. Several pages download as one zip. Runs in the browser.', notes: '' },
   { id: 'extractimages', label: 'Extract Images', group: 'Convert',
-    does: 'Pulls the original embedded photos out of a PDF as JPEG files, unchanged, in one zip.', notes: 'Only JPEG photos are copied out; other image formats are skipped. For scans or drawings use Pages → Images instead.' },
+    does: 'Pulls the pictures out of a PDF as image files in one zip: JPEG photos unchanged, screenshots, logos and scanned pages saved as pictures as PNG (with transparency), JPEG 2000 as .jp2.', notes: 'Does not extract drawings made of lines and text, and skips black-and-white fax-style scans (the result says how many and why). For a page as a picture, use Pages → Images.' },
   { id: 'ocr', label: 'OCR (Searchable)', group: 'Convert',
     does: 'Reads a scanned PDF and adds invisible text so it can be searched, selected and copied. The page looks identical. Also shows the text it read. Runs in the browser.', notes: 'English only. Up to 30 pages at a time, a few seconds a page. Pages that already have text are skipped. Good for searching and copying; figures should be checked against the page. Not for handwriting.' },
   { id: 'watermark', label: 'Watermark', group: 'Edit',
@@ -51,7 +51,7 @@ const CATALOG = [
   { id: 'headerfooter', label: 'Header & Footer', group: 'Edit',
     does: 'Adds running text at the left, centre and right of the top and bottom of pages. Tokens: {n} page number, {total} page count, {date} today, {filename}.', notes: 'Characters the standard font cannot draw show as ?' },
   { id: 'crop', label: 'Crop Pages', group: 'Edit',
-    does: 'Trims margins (top, bottom, left, right in millimetres) off all or some pages. A preview shades what will be removed.', notes: 'Numeric margins only; there is no draggable crop box.' },
+    does: 'Trims margins off all or some pages. A preview of page 1 shows a crop box that can be dragged (edges, corners, or the whole box) or set by typing millimetres.', notes: 'The same crop is applied to every page chosen, based on the page-1 preview.' },
   { id: 'compress', label: 'Compress', group: 'Edit',
     does: 'Makes the file smaller. Always tidies the file structure; optionally re-saves JPEG photos at low, medium or high quality for bigger savings. Shows the before and after size.', notes: 'Scans saved as non-JPEG pictures may not shrink much.' },
   { id: 'protect', label: 'Password Protect', group: 'Edit',
@@ -80,14 +80,15 @@ const CATALOG = [
 
 // Rules of the tools that the guide may explain. Taken from how PDF Tools actually behaves (docs/pdf-agent.md).
 const RULES = [
-  'Every tool is stateless: one file goes in and a result comes back to preview and download. Nothing is stored on the server, so keep the downloaded result; the original file is never changed.',
+  'Every tool is stateless: one file goes in and a result comes back to preview and download. Nothing is stored on the server, so keep the downloaded result; the original file is never changed. The result window has a "Continue with…" menu that sends the result straight into another tool, with no download and re-upload.',
   'Page ranges are typed like 1-3,5,7-9, or "all".',
-  'Tools work on one file at a time, so a job with several steps is done by running a tool, downloading the result, and uploading it to the next tool.',
+  'Tools work on one file at a time, so a job with several steps is done one tool after another: run a tool, then use "Continue with…" in its result window (or download the result and upload it to the next tool).',
   'A sensible order for a multi-step job: OCR a scan first (so later steps and searching work), then reorder, crop and clean up pages, then add watermark, page numbers or header and footer, then compress, and set a password last.',
   'A password-protected PDF cannot be processed by other tools until the password is removed.',
   'Fill Form and Fill & Sign stamp their content onto the page as fixed text or pictures, so it looks the same in every PDF viewer.',
   'Tools marked as running in the browser (Extract Text, Pages → Images, File Info, OCR, Remove Blank Pages) read the file on the person\'s own device.',
   'Merge keeps the order the files are listed in; Organize Pages can reorder afterwards.',
+  'Many tools (Split, Rotate, Watermark, Page Numbers, Header & Footer, Crop, Pages per Sheet, Compress, Pages to Images, OCR, Metadata, Images to PDF) have a "Tell it what to do" box: the person types or says what they want and it fills in that tool\'s settings. Nothing runs until they press the tool\'s own button. Password Protect has no such box on purpose.',
 ];
 
 // Things people commonly ask for that PDF Tools does NOT do.
@@ -97,10 +98,10 @@ const NOT_POSSIBLE = [
   'Certificate-based digital signatures that prove who signed and detect changes. Fill & Sign stamps a visual signature only.',
   'Converting a PDF to Excel, PowerPoint or HTML, or extracting tables. PDF → Word is the only Office conversion out of PDF.',
   'OCR in languages other than English, or reading handwriting.',
-  'Extracting embedded images that are not JPEG photos.',
+  'Extracting vector artwork: charts or logos that are drawn with lines rather than stored as pictures (Pages → Images makes a picture of the whole page instead).',
   'Repairing a damaged PDF, converting to PDF/A, or optimising for fast web viewing.',
   'Editing bookmarks or a table of contents, or adding a logo or picture watermark.',
-  'Running one tool over many files at once, or chaining tools automatically.',
+  'Running one tool over many files at once, or running a whole chain of tools in one go (each step is run by hand; "Continue with…" hands the result on to the next one).',
   'Looking inside the person\'s file to answer a question about its contents. The guide knows what the tools do, but cannot see the file.',
 ];
 
@@ -120,7 +121,7 @@ Rules:
 - You are not a lawyer. Never say whether a signature, a stamped form or a marked-up PDF is legally valid or will be accepted by someone; say what the tool actually does, and suggest checking with whoever receives it.
 - Never suggest Annotate, Watermark or Crop to hide or remove sensitive information. Say plainly that PDF Tools cannot permanently redact.
 - Be plain and short, as to someone who is not technical. Avoid jargon; if you must use a term such as "OCR" or "flatten", say what it means in the same sentence.
-- Give steps in order. Each step names exactly one tool by its id and says in a sentence what to do there. Remind the person to download the result and upload it to the next tool when a job needs several tools.
+- Give steps in order. Each step names exactly one tool by its id and says in a sentence what to do there. When a job needs several tools, remind the person that the result window's "Continue with…" menu sends the result straight to the next tool (downloading and re-uploading also works).
 - If you need one more fact to answer, ask ONE short question and give no steps.
 - Warn before anything hard to undo: setting a password (a forgotten one cannot be recovered), or stamping form answers (they can no longer be edited).
 - Choose a verdict:

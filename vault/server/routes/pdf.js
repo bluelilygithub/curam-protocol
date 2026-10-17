@@ -11,6 +11,9 @@ const path = require('path');
 const { google } = require('googleapis');
 const { encrypt, decrypt } = require('../utils/encryption');
 const { libreConvert } = require('../services/officeConvert');
+const { aiLimiter } = require('../middleware/aiRateLimit');
+const { getLogger } = require('../middleware/requestContext');
+const { interpretPdfVoiceCommand } = require('../services/pdfVoiceCommand');
 const { generateTextPdf } = require('../services/textToPdf');
 const { protectPdf, unprotectPdf } = require('../services/pdfCrypto');
 const pdfTools = require('../services/pdfTools');
@@ -1418,13 +1421,21 @@ router.post('/extract-images', async (req, res) => {
   try {
     const buf = pdfBufFromDataUrl(req.body?.dataUrl);
     if (!buf) return res.status(400).json({ error: 'A valid PDF is required' });
-    const { images, skipped } = await pdfTools.extractJpegImages(buf);
-    if (!images.length) return res.json({ count: 0, skipped, dataUrl: null });
+    const { images, skipped, skippedReasons } = await pdfTools.extractImages(buf);
+    if (!images.length) return res.json({ count: 0, skipped, skippedReasons, dataUrl: null });
     const zip = await pdfTools.zipImages(images);
+    const formats = {};
+    images.forEach((i) => { formats[i.format] = (formats[i.format] || 0) + 1; });
+    const previews = [];
+    for (const i of images.slice(0, 12)) {
+      // eslint-disable-next-line no-await-in-loop
+      const dataUrl = await pdfTools.imagePreview(i);
+      if (dataUrl) previews.push({ width: i.width, height: i.height, format: i.format, dataUrl });
+    }
     res.json({
-      count: images.length, skipped,
+      count: images.length, skipped, skippedReasons, formats,
       dataUrl: `data:application/zip;base64,${zip.toString('base64')}`,
-      previews: images.slice(0, 12).map(i => ({ width: i.width, height: i.height, dataUrl: `data:image/jpeg;base64,${i.bytes.toString('base64')}` })),
+      previews,
     });
   } catch (err) { sendToolError(res, 'extract-images', err, 'Extract images failed'); }
 });
@@ -1441,6 +1452,19 @@ router.post('/ocr-layer', async (req, res) => {
     })));
     res.json({ dataUrl: pdfDataUrl(out.bytes), words: out.words, pagesDone: out.pagesDone });
   } catch (err) { sendToolError(res, 'ocr-layer', err, 'OCR failed'); }
+});
+
+// Spoken or typed directions for a PDF tool: text in, validated setting values out. JSON only; no file is sent, and passwords are
+// never accepted here (Password Protect has no voice box). Counted as an AI call (light-tier model, logged as `pdf_voice`).
+router.post('/voice-command', aiLimiter, async (req, res) => {
+  try {
+    const { tool, transcript } = req.body || {};
+    const out = await interpretPdfVoiceCommand(req.user.id, { tool: String(tool || ''), transcript });
+    res.json(out);
+  } catch (err) {
+    getLogger().error({ err }, '[pdf/voice-command]');
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'Could not understand that. Try again, or set it by hand.' });
+  }
 });
 
 module.exports = router;

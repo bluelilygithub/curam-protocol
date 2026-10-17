@@ -1963,6 +1963,9 @@
   "POST /api/pdf/google-to-pdf": {
    "class": "authed"
   },
+  "POST /api/pdf/voice-command": {
+   "class": "authed"
+  },
   "POST /api/pdf/headerfooter": {
    "class": "authed"
   },

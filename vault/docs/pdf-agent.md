@@ -45,7 +45,7 @@ Two tooltip layers, matching Graphics and Video Tools: a click-to-open help icon
 | `POST /crop` | Trim margins (mm, as seen on screen) off all or listed pages; sets CropBox and MediaBox — see **Extra tools** below |
 | `POST /headerfooter` | Left/centre/right header and footer text with `{n}` `{total}` `{date}` `{filename}` tokens |
 | `POST /nup` | 2/4/6/9 pages per A4 or Letter sheet |
-| `POST /extract-images` | Copy embedded JPEGs out unchanged, returned as a zip |
+| `POST /extract-images` | Pull embedded pictures out (JPEG unchanged, raw pictures as PNG, JPEG 2000 as .jp2), returned as a zip |
 | `POST /ocr-layer` | Draw invisible OCR words (boxes measured in the browser) onto the original PDF |
 
 `office-to-pdf`/`pdf-to-office` return `500` with an explicit message if LibreOffice isn't on the server image (`err.code === 'ENOENT'`). `google-to-pdf` checks the stored OAuth scope string for `drive.readonly` before calling the API and returns `needsReconnect: true` if it's missing.
@@ -173,7 +173,7 @@ All three password fields (open password, owner password, remove-password) use a
 Seven tools added after comparing against the open-source PDFCraft (AGPL-3.0: used as a feature checklist only, no code copied). Server logic is pure pdf-lib in `server/services/pdfTools.js`; the routes in `pdf.js` only validate and parse page ranges. Client components live in `client/src/pages/pdf/PdfExtraTools.jsx` and import the shared sub-components from `PdfPage.jsx` (circular import, safe because they are only used while rendering).
 
 - **Pages to Images** (client-only): pdfjs renders each page at 72/150/300 DPI (pixel count capped), PNG or JPG; one page downloads directly, several go into a zip built with `jszip`.
-- **Extract Images** (`/extract-images`): walks `enumerateIndirectObjects()` like Compress. Only single-filter `DCTDecode` non-CMYK images are copied out (the stream bytes ARE a JPEG); everything else is counted as `skipped`, never re-encoded.
+- **Extract Images** (`/extract-images`): walks `enumerateIndirectObjects()` like Compress (`extractImages` in `server/services/pdfTools.js`). Single-filter `DCTDecode` JPEGs are copied out byte for byte (CMYK JPEGs are converted once to RGB JPEG). Raw pixel pictures (Flate/LZW/ASCII85/RunLength, via pdf-lib's `decodePDFRawStream`, so PNG predictors are undone) are rebuilt as PNG: DeviceGray/RGB/CMYK, ICCBased 1/3/4 components, Indexed palettes, 1/2/4/8/16 bits, `/Decode` inversion, and an `SMask` becomes the PNG's alpha channel (the mask is not listed as its own picture). JPEG 2000 is copied as `.jp2`. CCITT/JBIG2 (`bitonal`), unsupported colour spaces and oversize pictures are counted in `skipped` with `skippedReasons`; stencil masks and pictures under 8 px are ignored. Caps: 500 pictures, 60 megapixels each, 16 megapixels for ones that need a per-pixel conversion. `npm run test:pdf-tools`.
 - **OCR** (`/ocr-layer`): the browser renders each page (about 200 DPI), runs `createOcrEngine({ lang: 'eng' })` (same on-device Tesseract as Measurements; English data is served from our own origin because the CSP blocks CDNs), and posts only word boxes. The server draws each word with `opacity: 0` so the page looks identical but is searchable. Pages that already have text are skipped; 30 pages per run; cancel supported. Other languages are not bundled.
 - **Remove Blank Pages** (client + existing `/organize`): pages are rendered small and the share of non-white pixels decides what is "blank" (strictness slider; click a page to override).
 - **Organize** gained **Reverse order** and tick-to-remove-many (no new route).
@@ -181,7 +181,14 @@ Seven tools added after comparing against the open-source PDFCraft (AGPL-3.0: us
 - **Header & Footer**: Helvetica; characters WinAnsi cannot draw become `?` rather than failing the file.
 - **N-up**: pages with no content stream cannot be embedded by pdf-lib, so they keep their cell as an empty slot. Source page `/Rotate` is not applied.
 
-Not built (from the PDFCraft comparison): other OCR languages, non-JPEG image extraction, draggable crop box, workflow chaining.
+Not built (from the PDFCraft comparison): other OCR languages for PDF OCR (English only; Graphics' Extract Text has six). Built since: non-JPEG image extraction, the draggable crop box, "Continue with…" chaining, and the "Tell it what to do" boxes (below).
+
+## Crop box, chaining and "Tell it what to do"
+
+- **Crop Pages** has a draggable crop box on the page-1 preview (`CropPreview` in `client/src/pages/pdf/PdfExtraTools.jsx`): edges, corners or the whole box; pure maths in `dragMargins` (millimetres, minimum box 10 mm, margins rounded to 0.1 mm). The number boxes and the box stay in step.
+- **Continue with…** (chaining): the result window (`PdfResultModal`) has a menu listing every tool that starts from a PDF (not Images/Text/Office/Google to PDF). Choosing one calls `continueWith` in `PdfPage.jsx`, which turns the result into a `File` and stores `{ mode, file, nonce }` in `PdfFlowContext`; the first `PdfUpload` of the target tool claims it and runs the tool's normal `onChange`, exactly as if the person had picked the file. Compress and Add Fields show their result in the page first; their View Result button opens the same window. The guide knows about the menu (`RULES` in `pdfTutor.js`).
+- **Tell it what to do**: `VoiceCommandBar` (`client/src/pages/pdf/PdfVoice.jsx`) under Split, Rotate, Watermark, Page Numbers, Header & Footer, Crop, Pages per Sheet, Compress, Pages to Images, OCR, Metadata and Images to PDF. The browser turns speech into text (the page wraps everything in `VoiceInputProvider`); `POST /api/pdf/voice-command` (`server/services/pdfVoiceCommand.js`, shared field rules in `server/utils/voiceFields.js`) sends only the person's words and the tool's settings list to the **light-tier model from Settings**, then re-validates the answer against the tool's schema (clamped, typed, page ranges checked), logged as `pdf_voice`. Nothing runs until the person presses the tool's own button. **Password Protect, Remove Password, Fill, Sign and the other tools that touch secrets or need drawing have no box: a password is never sent to a model.** Tools that keep their own state register a receiver with `useVoiceTarget`. `npm run test:pdf-voice`.
+
 
 ---
 

@@ -25,6 +25,8 @@
     "test:pdf-extract": "node server/routes/pdfExtract.test.js",
     "test:put-ownership": "node server/routes/putOwnership.test.js",
     "test:finance-tutor": "node server/services/financeTutor.test.js",
+    "test:pdf-tools": "node server/services/pdfTools.test.js",
+    "test:pdf-voice": "node server/services/pdfVoiceCommand.test.js",
     "test:pdf-tutor": "node server/services/pdfTutor.test.js",
     "test:graphics": "node server/routes/graphics/graphics.test.js",
     "test:html-fetch": "node server/services/htmlFetch.test.js",
