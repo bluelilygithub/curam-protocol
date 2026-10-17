@@ -19,7 +19,6 @@ const {
   fetchJson,
   loadContentRestrictions,
   refinePromptForImage,
-  localTextModel,
   findRestrictionMatches,
   assertPromptAllowed,
   buildNegativePrompt,
@@ -113,12 +112,12 @@ router.post('/refine', async (req, res) => {
     const prompt = String(req.body?.prompt || '').trim();
     if (!prompt) return res.status(400).json({ error: 'Prompt required' });
     const restrictions = await loadContentRestrictions();
-    const refinedPrompt = await refinePromptForImage(prompt, restrictions);
+    const refined = await refinePromptForImage(prompt, restrictions, { userId: req.user.id });
     res.json({
       ok: true,
       prompt,
-      refinedPrompt,
-      model: localTextModel(),
+      refinedPrompt: refined.prompt,
+      model: refined.model,
       restrictions,
     });
   } catch (err) {
@@ -158,7 +157,7 @@ router.post('/generate', async (req, res) => {
     const seed = Number.isFinite(Number(req.body?.seed))
       ? Math.floor(Number(req.body.seed))
       : Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
-    const refinedPrompt = req.body?.skipRefine ? prompt : await refinePromptForImage(prompt, restrictions);
+    const refinedPrompt = req.body?.skipRefine ? prompt : (await refinePromptForImage(prompt, restrictions, { userId: req.user.id })).prompt;
     assertPromptAllowed(refinedPrompt, restrictions); // the rewrite must not bring a restricted idea back in
 
     if (provider === 'fal') {

@@ -18,7 +18,7 @@ stub('../../db', { pool: { query: async (sql, params) => (global.__poolHandler ?
 const modelCalls = [];
 const usageLogs = [];
 stub('../../services/modelResolver', { getModelsForUser: async () => ({ light: 'light-model', standard: 'standard-model' }), getVaultModelsConfigForUser: async () => ({ models: [] }) });
-stub('../../services/callModel', { callModel: async (model) => { if (global.__callModelThrow) throw new Error('provider down'); modelCalls.push(model); return { text: JSON.stringify({ lucide: ['a'], fontawesome: ['b'] }), inputTokens: 11, outputTokens: 22, model }; } });
+stub('../../services/callModel', { callModel: async (model) => { if (global.__callModelThrow) throw new Error('provider down'); modelCalls.push(model); return { text: global.__callModelText !== undefined ? global.__callModelText : JSON.stringify({ lucide: ['a'], fontawesome: ['b'] }), inputTokens: 11, outputTokens: 22, model }; } });
 stub('../../utils/logUsage', { logUsage: (u) => usageLogs.push(u) });
 process.env.GRAPHICS_MAX_MEGAPIXELS = '30';
 process.env.GRAPHICS_DAILY_COST_CAP_USD = '5';
@@ -394,6 +394,48 @@ async function startServer() {
     assert.strictEqual(r.status, 502, 'a provider failure is a 502');
     assert.ok(!/provider down/.test(r.body.error), "the provider's raw message is not shown");
     global.__callModelThrow = false;
+
+
+    // ---- Prompt refining uses the workspace's own model on the hosted site, and never blocks a generation ----
+    const { runtimeConfig } = require('./shared');
+    runtimeConfig.isLocal = false; // behave like production
+    const callsBefore = modelCalls.length;
+    const logsBefore = usageLogs.length;
+    global.__callModelText = '  "Prompt: A misty green hill at dawn, soft golden light, wide shot"  ';
+    r = await post('/refine', { prompt: 'a hill' });
+    assert.strictEqual(r.status, 200, `refine: ${r.body.error}`);
+    assert.strictEqual(r.body.refinedPrompt, 'A misty green hill at dawn, soft golden light, wide shot', 'quotes and a label are stripped');
+    assert.strictEqual(r.body.model, 'light-model', 'the model comes from Settings');
+    assert.strictEqual(modelCalls.length, callsBefore + 1);
+    assert.strictEqual(usageLogs[logsBefore].feature, 'graphics_refine', 'the cost is recorded, so it shows on the dashboard and counts toward the cap');
+    global.__callModelText = "I'm sorry, I can't help with that.";
+    r = await post('/refine', { prompt: 'a hill' });
+    assert.strictEqual(r.body.refinedPrompt, 'a hill', 'a refusal or chatter is never used as the prompt');
+    global.__callModelText = 'x'.repeat(2000);
+    assert.strictEqual((await post('/refine', { prompt: 'a hill' })).body.refinedPrompt, 'a hill', 'an over-long answer is not used');
+    global.__callModelThrow = true;
+    r = await post('/refine', { prompt: 'a hill' });
+    assert.strictEqual(r.status, 200, 'a failing model does not fail the request');
+    assert.strictEqual(r.body.refinedPrompt, 'a hill', 'the original prompt is used');
+    global.__callModelThrow = false;
+    // Generate refines unless told not to, and checks the refined text against the content restrictions
+    global.__callModelText = 'A calm lake at sunrise';
+    const before = modelCalls.length;
+    await post('/generate', { prompt: 'a lake' });
+    assert.strictEqual(modelCalls.length, before + 1, 'Generate refines the prompt');
+    await post('/generate', { prompt: 'a lake', skipRefine: true });
+    assert.strictEqual(modelCalls.length, before + 1, 'skipRefine makes no model call');
+    global.__restrictions = JSON.stringify(['gore']);
+    global.__callModelText = 'a gory battle scene';
+    r = await post('/generate', { prompt: 'a battle' });
+    assert.strictEqual(r.status, 422, 'a refined prompt that brings a restricted idea back is refused');
+    global.__restrictions = '[]';
+    // the standalone Refine button is covered by the daily spend cap like the other paid tools
+    global.__poolHandler = (sql) => (/usage_logs/.test(sql) ? { rows: [{ spent: '9' }] } : { rows: [{ value: '[]' }] });
+    assert.strictEqual((await post('/refine', { prompt: 'a hill' })).status, 429, 'Refine respects the daily cap');
+    global.__poolHandler = null;
+    global.__callModelText = undefined;
+    runtimeConfig.isLocal = true;
 
     console.log('graphics route tests passed');
   } finally {

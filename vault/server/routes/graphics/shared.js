@@ -82,7 +82,8 @@ function sanitizeSvgMarkup(svg) {
     return regexStripSvg(raw).trim();
   }
 }
-const { getVaultModelsConfigForUser } = require('../../services/modelResolver');
+const { getVaultModelsConfigForUser, getModelsForUser } = require('../../services/modelResolver');
+const { logUsage } = require('../../utils/logUsage');
 
 const DEFAULT_COMFY_URL = 'http://127.0.0.1:8188';
 const DEFAULT_MODEL = 'DreamShaper_8_pruned.safetensors';
@@ -589,14 +590,33 @@ async function inpaintWithFal({ prompt, imageDataUrl, maskDataUrl, strength, see
   };
 }
 
-async function refinePromptForImage(rawPrompt, restrictions = []) {
+// Turns a short description into a stronger prompt for the image model.
+//  - Hosted (production): the workspace's own light-tier model from Settings, via callModel. One small call, logged as `graphics_refine`
+//    so it shows on the Usage dashboard and counts toward the daily AI spend cap.
+//  - Local development: the free local Ollama model, as before.
+// Never throws and never blocks image generation: if there is no model, the call fails, or the answer is not a usable prompt,
+// the person's own prompt is used unchanged. Resolves { prompt, model, refined }.
+const REFINE_SYSTEM = 'You rewrite short descriptions into strong prompts for a text-to-image model. Reply with ONLY the final image prompt: no quotes, no labels, no explanation.';
+
+// A model's reply is untrusted text that goes straight into an image prompt, so keep only something that looks like one.
+function cleanRefinedPrompt(text) {
+  let t = String(text || '').replace(/\s+/g, ' ').trim();
+  const unquote = (x) => x.replace(/^["'`\u201c\u2018]+|["'`\u201d\u2019]+$/g, '').trim();
+  t = unquote(unquote(t).replace(/^(final\s+)?(image\s+)?prompt\s*:\s*/i, ''));
+  if (!t || t.length > 1200) return null;
+  if (/^(i\s+can(?:no|'|\u2019)t|i\s+am\s+unable|i'm\s+(sorry|unable)|sorry\b|as\s+an\s+ai\b|unable\s+to\b)/i.test(t)) return null;
+  return t;
+}
+
+async function refinePromptForImage(rawPrompt, restrictions = [], { userId } = {}) {
   const source = String(rawPrompt || '').trim();
   if (!source) throw new Error('Prompt required');
+  const unchanged = { prompt: source, model: null, refined: false };
   const restrictionLines = restrictions.length
     ? restrictions.map((restriction) => `- ${restriction}`).join('\n')
     : '- None configured';
 
-  const instruction = `Rewrite this into a strong prompt for a local text-to-image model.
+  const instruction = `Rewrite this into a strong prompt for a text-to-image model.
 
 Rules:
 - Preserve the user's intent.
@@ -610,23 +630,29 @@ Restricted content:
 ${restrictionLines}
 
 User prompt:
-${source}`;
+${source.slice(0, 1000)}`;
 
   try {
-    const data = await fetchJson(`${ollamaBaseUrl()}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: localTextModel(),
-        prompt: instruction,
-        stream: false,
-        options: { temperature: 0.4, num_predict: 220 },
-      }),
-    });
-    return String(data.response || '').trim() || source;
+    if (runtimeConfig.isLocal) {
+      const data = await fetchJson(`${ollamaBaseUrl()}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: localTextModel(), prompt: instruction, stream: false, options: { temperature: 0.4, num_predict: 220 } }),
+      });
+      const prompt = cleanRefinedPrompt(data.response);
+      return prompt ? { prompt, model: localTextModel(), refined: true } : unchanged;
+    }
+    if (!userId) return unchanged;
+    const { light, standard } = await getModelsForUser(userId);
+    const modelId = light || standard;
+    if (!modelId) return unchanged;
+    const out = await callModel(modelId, instruction, { maxTokens: 300, system: REFINE_SYSTEM, returnUsage: true, timeoutMs: 20000 });
+    logUsage({ userId, model: out.model || modelId, inputTokens: out.inputTokens, outputTokens: out.outputTokens, feature: 'graphics_refine' });
+    const prompt = cleanRefinedPrompt(typeof out === 'string' ? out : out.text);
+    return prompt ? { prompt, model: out.model || modelId, refined: true } : { ...unchanged, model: out.model || modelId };
   } catch (err) {
     console.warn('[graphics] prompt refinement failed:', err.message);
-    return source;
+    return unchanged;
   }
 }
 

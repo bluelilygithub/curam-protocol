@@ -186,3 +186,7 @@ Encoding rules (all in `shared.js`): tool outputs in JPEG/WebP use quality 92 (`
 - **Composite `{x, y}` positions:** a value above 0 and below 1 is a fraction of the picture; 1 and above is pixels.
 - **Favicon pack:** the manifest only has a `name` when the request sends one.
 - **Ask Graphics errors:** 400 empty or oversize request, 422 "could not understand", 503 no AI model set up, 502 the AI provider failed (its message is not shown).
+
+## Prompt refining
+
+Generate improves the typed description before sending it to the image model (and the **Refine Prompt** button shows the result). On the hosted site this is one small call to the workspace's **light-tier model from Settings** (`refinePromptForImage` in `shared.js`; local development still uses the free local Ollama model). The call is logged as `graphics_refine`, so it shows on the Usage dashboard and counts toward the daily AI spend cap, and `/refine` is behind the same paid-tool guard. It never blocks a generation: with no model, a failed call, a refusal or an over-long answer, the person's own prompt is used unchanged. The refined text is checked against the admin's content restrictions before it goes to the image model. Ticking "skip refine" (`skipRefine`) makes no model call at all.
