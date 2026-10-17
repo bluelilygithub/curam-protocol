@@ -126,6 +126,21 @@ describe('tooltips: every control explains itself', () => {
     for (const h of hints) { expect(h.length, h).toBeGreaterThan(15); expect(h, h).toMatch(/[a-z]/); }
   });
   it('the shared tooltip host is mounted', () => {
-    expect(read(join(here, 'App.tsx'))).toContain('<TooltipHost />');
+    expect(read(join(here, 'App.tsx'))).toContain('<TooltipHost look="vault" />');
+  });
+});
+
+describe('tooltip look: the same card as Vault Video Tools', () => {
+  it('both the staff planner and the public tool use the Vault look', () => {
+    expect(read(join(here, 'lite/LiteApp.tsx'))).toContain('<TooltipHost look="vault" />');
+  });
+  it('the card is as wide as its words (240 px, 320 px for long text) and placement keeps it inside the window', async () => {
+    const { vaultTipWidth, placeTooltip } = await import('@planner-core/help/tooltipLogic');
+    expect(vaultTipWidth('short')).toBe(240);
+    expect(vaultTipWidth('x'.repeat(111))).toBe(320);
+    const r = { left: 0, right: 10, top: 200, bottom: 220, width: 10 };
+    expect(placeTooltip(r, 1280, 'top', 168).left).toBe(168);
+    expect(placeTooltip({ ...r, left: 1275, right: 1285 }, 1280, 'top', 168).left).toBe(1280 - 168);
+    expect(placeTooltip(r, 1280).left).toBe(80); // the other planners keep their original edge
   });
 });

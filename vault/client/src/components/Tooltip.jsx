@@ -8,7 +8,7 @@ import { createPortal } from 'react-dom';
 // control it decorates. The popover itself is portaled to <body> and
 // position:fixed, so it escapes any overflow/stacking context of its parent.
 //
-// z-index: 30 — above dropdowns (z-20) but below modals (z-50) and
+// z-index: 45 — above dropdowns (z-20) and the floating guide chat panel (z-40) but below modals (z-50) and
 // ProcessingModal (z-[9998]); a tooltip should never need to outrank a modal.
 //
 // Usage: <Tooltip text="...">{children}</Tooltip> — wraps a single element
@@ -73,7 +73,7 @@ export default function Tooltip({ text, children, side = 'top' }) {
             transform: pos.right ? 'translate(0, -50%)' : `translate(-50%, ${pos.above ? '-100%' : '0'})`,
             width: 'max-content',
             maxWidth: `min(${maxWidthFor(text)}px, calc(100vw - ${EDGE * 2}px))`,
-            zIndex: 30,
+            zIndex: 45,
             background: 'var(--color-surface)',
             borderColor: 'var(--color-border)',
             color: 'var(--color-text)',

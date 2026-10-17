@@ -99,6 +99,8 @@ const DEFAULTS = Object.freeze({
     show: false, currency: '$', fixed: null, perUnit: null, doorSingle: null, doorDouble: null, rangePct: 15, roundTo: 100,
     note: 'A guide only. The final price depends on a site measure and the finishes you choose.',
   },
+  // the website guide (the round help button on the public planner): off until the owner ticks it, because every answer is an AI call that costs money
+  guide: { enabled: false },
   // the staff quote PDF: who it is from and the owner's own terms. Never sent to the public tool.
   quote: { businessName: '', details: '', terms: '', validityDays: 30, gstNote: '' },
   // the staff planner's INDICATIVE cooling estimate: the assumptions behind it, owner-editable. Not engineering advice: HVAC sign-off is always needed.
@@ -280,6 +282,9 @@ function validateConfig(raw) {
     gstNote: q.gstNote === undefined ? D.quote.gstNote : cleanText(q.gstNote, 120),
   };
 
+  const gd = isObj(src.guide) ? src.guide : {};
+  const guide = { enabled: gd.enabled === undefined ? D.guide.enabled : gd.enabled === true };
+
   const cl = isObj(src.cooling) ? src.cooling : {};
   const num = (v, [lo, hi], fallback, label) => {
     if (v === undefined || v === null || v === '') return fallback;
@@ -387,6 +392,7 @@ function validateConfig(raw) {
     pricing,
     quote,
     cooling,
+    guide,
     features,
     presets,
   };

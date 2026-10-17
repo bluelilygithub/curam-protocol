@@ -59,6 +59,7 @@ body { background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans
 .modal-foot { display: flex; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--border); } .grow { flex: 1; }
 .btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
 .rp-tooltip { position: fixed; z-index: 70; pointer-events: none; max-width: 160px; /* the shared placement keeps the centre 80 px from the window edge, so the card must be no wider than 160 px */ width: max-content; padding: 6px 10px; border-radius: 8px; font-size: 11px; line-height: 1.4; background: var(--text); color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,.25); animation: tipin var(--duration) ease-out; }
+.rp-tooltip.rp-tooltip-vault { max-width: 240px; padding: 6px 10px; border-radius: 8px; font-size: 11px; line-height: 1.35; background: var(--surface); color: var(--text); border: 1px solid var(--border); box-shadow: 0 4px 12px rgba(0,0,0,.18); animation: none; } /* the same card as Vault's Video Tools tooltip */
 @keyframes tipin { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 

@@ -29,6 +29,7 @@ import { FINISH_LOOK, type FinishKey } from './lite/finishes';
 import { FINISH_NAMES } from './lite/settings';
 import { StatusStrip } from './ui/StatusStrip';
 import { clampLeft, loadLayout, saveLayout, LEFT_MAX, LEFT_MIN } from './app/layoutPrefs';
+import { CONTEXT_TYPE, OPEN_TYPE, currentGuideTool, openGuideTool } from './app/guideTools';
 
 const WALLS: Array<[WallSide, string]> = [['NORTH', 'North'], ['EAST', 'East'], ['SOUTH', 'South'], ['WEST', 'West']];
 
@@ -107,6 +108,29 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
     // the error count: bring the checks into view (the right panel here, or the Checks pane on a phone)
     showChecks: () => { setFocus(false); setLayout((l) => ({ ...l, rightHidden: false })); ui.getState().set({ pane: 'checks' }); },
   };
+  // ---- Vault's guide chat (it lives in the page around this planner) asks us to open things, and is told where the person is. Same origin only.
+  useEffect(() => {
+    if (window.parent === window) return undefined;
+    const onMessage = (ev: MessageEvent): void => {
+      if (ev.origin !== window.location.origin || ev.source !== window.parent) return;
+      const d = ev.data as { type?: unknown; id?: unknown } | null;
+      if (!d || d.type !== OPEN_TYPE || typeof d.id !== 'string') return;
+      openGuideTool(ui, d.id, {
+        showLeft: () => { setFocus(false); setLayout((l) => ({ ...l, leftHidden: false })); },
+        showRight: () => { setFocus(false); setLayout((l) => ({ ...l, rightHidden: false })); },
+        startTour: () => void startTour(),
+      });
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const guideTool = useStore(ui, (s) => currentGuideTool(s));
+  useEffect(() => {
+    if (window.parent === window) return;
+    try { window.parent.postMessage({ type: CONTEXT_TYPE, tool: guideTool }, window.location.origin); } catch { /* the guide must never break the planner */ }
+  }, [guideTool]);
+  const sectionRequest = useStore(ui, (s) => s.openSection);
   const startResize = (ev: React.PointerEvent<HTMLDivElement>): void => {
     const x0 = ev.clientX, w0 = layout.leftW;
     const el = ev.currentTarget; el.setPointerCapture(ev.pointerId);
@@ -227,7 +251,7 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
             <button type="button" key={k} title={tip} aria-pressed={pane === k} className={`tab${pane === k ? ' on' : ''}`} onClick={() => ui.getState().set({ pane: k })} data-testid={`pane-${k}`}>{label}</button>
           ))}
         </nav>
-        <aside className="left" data-testid="left"><Accordion initial="Enclosure"><EnclosurePanel /><RackPanel /><RunsPanel /><FeaturesPanel /><PricePanel /><CoolingPanel /></Accordion></aside>
+        <aside className="left" data-testid="left"><Accordion initial="Enclosure" request={sectionRequest} onChange={(id) => ui.getState().set({ activeSection: id })}><EnclosurePanel /><RackPanel /><RunsPanel /><FeaturesPanel /><PricePanel /><CoolingPanel /></Accordion></aside>
         <main className="stage">
           {!leftHidden && <div className="resizer" role="separator" aria-orientation="vertical" aria-label="Resize the controls panel" aria-valuemin={LEFT_MIN} aria-valuemax={LEFT_MAX} aria-valuenow={layout.leftW} tabIndex={0} title="Drag to make the controls panel wider or narrower. With the keyboard, use the left and right arrow keys." onPointerDown={startResize} onKeyDown={(e) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); setLayout((l) => ({ ...l, leftW: clampLeft(l.leftW + (e.key === 'ArrowRight' ? 20 : -20)) })); } }} data-testid="resizer" />}
           <StatusStrip project={project} analysis={analysis} cat={catState} layout={strip} />
@@ -258,7 +282,7 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
       <QuoteModal store={store} ui={ui} catalogue={cat} fetchFn={fetchFn} storage={localStorage} />
       <LeadsPanel ui={ui} leads={leadStore} reload={() => void leadStore.getState().load(fetchFn, localStorage)} onOpen={(id) => void openEnquiry(id)} />
       <DesignsPanel ui={ui} designs={designs} onImportFile={(f) => void open(f)} />
-      <TooltipHost />
+      <TooltipHost look="vault" />
     </UiContext.Provider>
     </CatalogueContext.Provider>
     </StoreContext.Provider>

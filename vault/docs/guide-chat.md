@@ -30,3 +30,7 @@ Nothing about tooltips or email needs wiring: the wrapper hands its `CONFIG` to 
 ## Behaviour changes belong in the shared files
 
 Change how all guides look or behave in `TutorChat.jsx` (client) or `tutorEmail.js` (server), never in a wrapper. Tooltip behaviour belongs in `Tooltip.jsx` and applies to the whole app.
+
+## Guides built on the shared server pieces
+
+New guides can skip copying the older guides' server code: `server/services/guideCore.js` (`createGuide({ catalog, rules, notPossible, system, ... })` gives the prompt, message cleaning, the safe reply normaliser and the model call) and `server/routes/guideRouter.js` (`makeGuideRouter`, which also files the "something is missing" note). The Cellar Planner guide is the example (`server/services/cellarTutor.js`, `server/routes/cellarTutor.js`). The **public website** guide for the Cellar Planner is the one guide that is not this shared chat: it has no login, so it is plain JavaScript on the website page with its own limits, see `docs/cellar-planner.md` ("Website help chat").

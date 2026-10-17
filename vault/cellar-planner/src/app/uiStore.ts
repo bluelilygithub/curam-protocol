@@ -24,12 +24,16 @@ export interface UiState {
   quoteOpen: boolean;
   /** The one-line message under the header (what just happened: opened, loaded, could not read). */
   notice: string;
-  set(patch: Partial<Pick<UiState, 'codeOpen' | 'pane' | 'tab' | 'wall' | 'rackWall' | 'infoOpen' | 'packageOpen' | 'designsOpen' | 'leadsOpen' | 'quoteOpen' | 'calcOpen' | 'notice'>>): void;
+  /** Asks the controls panel to open one of its sections (by title). The nonce makes the same request work twice (the guide's Open buttons). */
+  openSection: { title: string; nonce: number } | null;
+  /** The controls section that is open now (reported to Vault's guide as "where the person is"). */
+  activeSection: string | null;
+  set(patch: Partial<Pick<UiState, 'codeOpen' | 'pane' | 'tab' | 'wall' | 'rackWall' | 'infoOpen' | 'packageOpen' | 'designsOpen' | 'leadsOpen' | 'quoteOpen' | 'calcOpen' | 'notice' | 'openSection' | 'activeSection'>>): void;
 }
 export type UiStore = StoreApi<UiState>;
 
 export const INFO_KEY = 'cellar-planner:info-seen:v1';
 
 export function createUiStore(wall: WallSide = 'SOUTH'): UiStore {
-  return createStore<UiState>((set) => ({ tab: 'plan', wall, rackWall: 'NORTH', pane: 'drawing', infoOpen: false, codeOpen: false, packageOpen: false, designsOpen: false, leadsOpen: false, quoteOpen: false, calcOpen: false, notice: '', set: (patch) => set(patch) }));
+  return createStore<UiState>((set) => ({ tab: 'plan', wall, rackWall: 'NORTH', pane: 'drawing', infoOpen: false, codeOpen: false, packageOpen: false, designsOpen: false, leadsOpen: false, quoteOpen: false, calcOpen: false, notice: '', openSection: null, activeSection: 'Enclosure', set: (patch) => set(patch) }));
 }

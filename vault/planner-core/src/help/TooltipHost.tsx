@@ -2,11 +2,17 @@
 // touch). Any element with a `title` (or `data-tip`) gets it, so every button, field and function is covered without wrapping each one;
 // the native `title` is moved to `data-tip` while hovering so the browser's grey tooltip never competes.
 import { useEffect, useRef, useState } from 'react';
-import { placeTooltip, tipOf, type Placement } from './tooltipLogic';
+import { placeTooltip, tipOf, vaultTipWidth, TOOLTIP_EDGE, type Placement } from './tooltipLogic';
 
 const SHOW_DELAY_MS = 350;
 
-export function TooltipHost() {
+/**
+ * `look="vault"` makes it the same as Vault's own tooltip (Video Tools): the theme's surface card with a border, shows at once, and is as wide as
+ * its words (up to 240 px, 320 px for long text) kept inside the window. The default is the original planner look (dark card, short delay).
+ */
+export function TooltipHost({ look = 'planner' }: { look?: 'planner' | 'vault' }) {
+  const vault = look === 'vault';
+  const delay = vault ? 0 : SHOW_DELAY_MS;
   const [tip, setTip] = useState<{ text: string; at: Placement } | null>(null);
   const timer = useRef<number | undefined>(undefined);
   const current = useRef<Element | null>(null);
@@ -32,8 +38,8 @@ export function TooltipHost() {
       window.clearTimeout(timer.current);
       timer.current = window.setTimeout(() => {
         if (current.current !== el || !el.isConnected) return;
-        setTip({ text, at: placeTooltip(el.getBoundingClientRect(), window.innerWidth) });
-      }, SHOW_DELAY_MS);
+        setTip({ text, at: placeTooltip(el.getBoundingClientRect(), window.innerWidth, 'top', vault ? vaultTipWidth(text) / 2 + 8 : TOOLTIP_EDGE) });
+      }, delay);
     };
     const target = (e: Event): Element | null => (e.target instanceof Element ? e.target.closest('[title],[data-tip]') : null);
     const over = (e: PointerEvent): void => {
@@ -71,13 +77,14 @@ export function TooltipHost() {
       window.removeEventListener('scroll', hide, true);
       window.removeEventListener('blur', hide);
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vault]);
 
   if (!tip) return null;
   return (
     <span
-      role="tooltip" className="rp-tooltip"
-      style={{ top: tip.at.top, left: tip.at.left, transform: `translate(-50%, ${tip.at.above ? '-100%' : '0'})` }}
+      role="tooltip" className={vault ? 'rp-tooltip rp-tooltip-vault' : 'rp-tooltip'}
+      style={{ top: tip.at.top, left: tip.at.left, transform: `translate(-50%, ${tip.at.above ? '-100%' : '0'})`, ...(vault ? { maxWidth: `min(${vaultTipWidth(tip.text)}px, calc(100vw - 16px))` } : {}) }}
     >
       {tip.text}
     </span>

@@ -76,8 +76,11 @@ export function CheckField({ label, checked, onChange, testid, hint }: { label: 
 /** Inside an Accordion only one Section is open at a time (keyed by title); outside one, each Section toggles on its own. */
 const AccordionContext = createContext<{ openId: string | null; setOpenId(id: string | null): void } | null>(null);
 
-export function Accordion({ children, initial = null }: { children: ReactNode; initial?: string | null }) {
-  const [openId, setOpenId] = useState<string | null>(initial);
+/** `request` opens a section from outside (the guide's Open buttons); `onChange` reports which section is open. */
+export function Accordion({ children, initial = null, request = null, onChange }: { children: ReactNode; initial?: string | null; request?: { title: string; nonce: number } | null; onChange?: (openId: string | null) => void }) {
+  const [openId, setOpenIdState] = useState<string | null>(initial);
+  const setOpenId = (id: string | null): void => { setOpenIdState(id); onChange?.(id); };
+  useEffect(() => { if (request) setOpenId(request.title); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [request?.nonce]);
   return <AccordionContext.Provider value={{ openId, setOpenId }}>{children}</AccordionContext.Provider>;
 }
 

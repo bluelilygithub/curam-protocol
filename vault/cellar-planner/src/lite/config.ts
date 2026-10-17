@@ -56,6 +56,8 @@ export interface LiteConfig {
   pricing: LitePricing;
   quote: QuoteSettings;
   cooling: CoolingSettings;
+  /** The website help chat (the round help button on the page around the tool): off until the owner switches it on. The page script reads this, not the tool. */
+  guide: { enabled: boolean };
   /** The "Make it yours" feature groups (empty = the tool has no Features step). */
   features: FeatureGroup[];
   presets: LitePreset[];
@@ -119,6 +121,7 @@ export const DEFAULT_CONFIG: LiteConfig = {
     note: 'A guide only. The final price depends on a site measure and the finishes you choose.',
   },
   quote: { businessName: '', details: '', terms: '', validityDays: 30, gstNote: '' },
+  guide: { enabled: false },
   cooling: { panelConductivity: 0.025, glassU: 1.4, floorU: 1, internalGainsW: 100, marginPct: 20, targetC: 14, ambientC: 35 },
   features: DEFAULT_FEATURES,
   presets: [
@@ -253,6 +256,7 @@ export function normaliseConfig(raw: unknown): LiteConfig {
   const doors = isObj(src.doors) ? src.doors : {};
   const p = isObj(src.pricing) ? src.pricing : {};
   const q = isObj(src.quote) ? src.quote : {};
+  const gd = isObj(src.guide) ? src.guide : {};
   const cl = isObj(src.cooling) ? src.cooling : {};
   const T0 = D.rackTypes[0]!;
   const slug = (t: unknown): string => text(t ?? '', 40).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
@@ -330,6 +334,7 @@ export function normaliseConfig(raw: unknown): LiteConfig {
       validityDays: int(q.validityDays, R.quoteValidityDays, D.quote.validityDays),
       gstNote: q.gstNote === undefined ? D.quote.gstNote : text(q.gstNote, 120),
     },
+    guide: { enabled: gd.enabled === undefined ? D.guide.enabled : gd.enabled === true },
     cooling: {
       panelConductivity: decimal(cl.panelConductivity, R.panelConductivity, D.cooling.panelConductivity), glassU: decimal(cl.glassU, R.glassU, D.cooling.glassU),
       floorU: decimal(cl.floorU, R.floorU, D.cooling.floorU), internalGainsW: decimal(cl.internalGainsW, R.internalGainsW, D.cooling.internalGainsW),

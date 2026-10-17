@@ -224,6 +224,27 @@ export function LiteApp() {
   const keyRef = useRef(key);
   keyRef.current = key;
 
+  // The website's help chat (cellar-lite-guide.js, on the page around us) can take the visitor to a step, or open Help or the tour: it sends
+  // { type: 'cellar-lite:go', version: 1, id } and we do it. Only from the embedding page; only these ids; a step that is not there is ignored.
+  const goRef = useRef<(id: string) => void>(() => undefined);
+  goRef.current = (id: string): void => {
+    if (id === 'help') { setHelpOpen(true); return; }
+    if (id === 'tour') { void startTour(); return; }
+    if ((stepKeys(hasFeatures) as string[]).includes(id)) setStepTracked(id as StepKey);
+  };
+  useEffect(() => {
+    const to = parentOrigin();
+    if (!to) return undefined;
+    const onGo = (ev: MessageEvent): void => {
+      if (ev.origin !== to || ev.source !== window.parent) return;
+      const d = ev.data as { type?: unknown; version?: unknown; id?: unknown } | null;
+      if (!d || d.type !== 'cellar-lite:go' || d.version !== 1 || typeof d.id !== 'string') return;
+      goRef.current(d.id);
+    };
+    window.addEventListener('message', onGo);
+    return () => window.removeEventListener('message', onGo);
+  }, []);
+
   const setStepTracked = (k: StepKey, count = true): void => { if (!count && k !== keyRef.current) quietStep.current = true; setStepKey(k); if (count) say('step', { step: k }); };
 
   /** Put a whole design on screen: the settings and the boxes that show them. */
@@ -567,7 +588,7 @@ export function LiteApp() {
       <p className="foot">ESTIMATE ONLY: FINAL SITE MEASURE REQUIRED. Rack unit sizes are typical values, not a quote.</p>
 
       <PriceHelp open={priceHelpOpen && !!price} onClose={() => setPriceHelpOpen(false)} cfg={cfg} facts={{ units: rackUnitCount(result.project), doorStyle: s.doorStyle, bottles: result.bottles, roomText, bottleLabel: BOTTLE_PROFILES[s.bottle].label, extras: resolved.extras.map((o) => o.name) }} />
-      <TooltipHost />
+      <TooltipHost look="vault" />
       <LiteHelp unit={unit} doorSingleMm={cfg.doors.singleMm} doorDoubleMm={cfg.doors.doubleMm} unitWidthMm={cfg.rack.unitWidthMm} open={helpOpen} onClose={closeHelp} onTour={() => { closeHelp(); window.setTimeout(() => void startTour(), 250); }} />
     </div>
   );

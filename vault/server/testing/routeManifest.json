@@ -157,6 +157,12 @@
   "POST /api/cellar-lite/enquiry": {
    "class": "public"
   },
+  "POST /api/cellar-lite/guide": {
+   "class": "public"
+  },
+  "POST /api/cellar-lite/guide/email": {
+   "class": "public"
+  },
   "GET /api/cellar-planner/catalogue": {
    "class": "authed"
   },
@@ -1931,6 +1937,9 @@
    "class": "authed"
   },
   "POST /api/tutor-email": {
+   "class": "authed"
+  },
+  "POST /api/cellar-tutor": {
    "class": "authed"
   },
   "POST /api/pdf-tutor": {

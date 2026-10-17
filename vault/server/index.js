@@ -49,6 +49,8 @@ app.use('/api/cellar-lite/config', cellarLiteConfig.publicRouter);
 // the website's contact page copies a planner enquiry into the CRM here: public, before requireAuth (it parses its own body). See server/routes/cellarLeadsRouter.js.
 const cellarLeads = require('./routes/cellarLeadsRouter').createCellarLeadsRouters({ pool: require('./db').pool, capture: require('./services/SuggestionService').capture });
 app.use('/api/cellar-lite/enquiry', cellarLeads.publicRouter);
+// the help chat on the public website planner: public, off until the owner ticks it, boxed in by limits. See server/routes/cellarLiteGuideRouter.js.
+app.use('/api/cellar-lite/guide', require('./routes/cellarLiteGuideRouter').createCellarLiteGuideRouter({ pool: require('./db').pool, ask: require('./services/cellarLiteTutor').askLiteGuide, tutorEmail: require('./routes/tutorEmail'), capture: require('./services/SuggestionService').capture }));
 
 app.use(helmet({
   contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
@@ -197,6 +199,7 @@ app.use('/api/garden-projects', requireFeature('gardenPlanner'), require('./rout
 app.use('/api/cellar-projects', requireFeature('cellarPlanner'), require('./routes/cellarProjects'));
 app.use('/api/cellar-planner/catalogue', requireFeature('cellarPlanner'), cellarLiteConfig.staffRouter);
 app.use('/api/cellar-planner/leads', requireFeature('cellarPlanner'), cellarLeads.staffRouter);
+app.use('/api/cellar-tutor', requireFeature('cellarPlanner'), aiLimiter, require('./routes/cellarTutor')); // the staff planner's guide chat (the public website tool has its own, below the public routes)
 app.use('/api/geocode', requireAnyFeature('gardenPlanner', 'routeTracer'), require('./routes/geocode'));
 app.use('/api/route-tracks', requireFeature('routeTracer'), require('./routes/routeTracks'));
 app.use('/api/map-tiles', requireFeature('gardenPlanner'), require('./routes/mapTiles'));

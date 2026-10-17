@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import CellarTutorChat from './cellar/CellarTutorChat';
 
 /**
  * Cellar Planner lives in its own app (vault/cellar-planner/, Vite + React 19 + Konva) and is built into
@@ -18,6 +19,20 @@ export default function CellarPlannerPage() {
   const leadId = /^[1-9]\d{0,9}$/.test(leadParam || '') ? leadParam : null;
   // 'checking' | 'ok' | 'missing' — a failed cellar-planner build must show a clear notice, not Vault's own page inside the frame
   const [state, setState] = useState('checking');
+  // The guide chat: the planner (inside the frame) tells us which screen the person is on, and the guide's Open buttons ask it to open one.
+  // Same origin only; the ids are listed in cellar-planner/src/app/guideTools.ts.
+  const frameRef = useRef(null);
+  const [tool, setTool] = useState('plan');
+  useEffect(() => {
+    const onMessage = (ev) => {
+      if (ev.origin !== window.location.origin || ev.source !== frameRef.current?.contentWindow) return;
+      const d = ev.data;
+      if (d && d.type === 'cellar-planner:context' && typeof d.tool === 'string') setTool(d.tool.slice(0, 40));
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+  const openTool = (id) => frameRef.current?.contentWindow?.postMessage({ type: 'cellar-planner:open', id }, window.location.origin);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,6 +62,7 @@ export default function CellarPlannerPage() {
     <div className="flex flex-col h-full min-h-0" style={{ height: '100%' }}>
       {state === 'ok' && (
         <iframe
+          ref={frameRef}
           src={`${APP_URL}?embedded=1${wantsTour ? '&tour=1' : ''}${leadId ? `&lead=${leadId}` : ''}`}
           title="Cellar Planner"
           allow="fullscreen"
@@ -55,6 +71,7 @@ export default function CellarPlannerPage() {
           style={{ flex: 1, minHeight: 0, height: '100%', background: 'var(--color-bg)' }}
         />
       )}
+      {state === 'ok' && <CellarTutorChat currentTool={tool} onOpenTool={openTool} />}
     </div>
   );
 }

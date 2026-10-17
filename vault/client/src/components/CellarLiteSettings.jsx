@@ -41,6 +41,7 @@ const toForm = (c) => ({
   rackTypes: (c.rackTypes || []).map(typeToForm), defaultRackType: c.defaultRackType,
   clK: String(c.cooling?.panelConductivity ?? 0.025), clGlass: String(c.cooling?.glassU ?? 1.4), clFloor: String(c.cooling?.floorU ?? 1), clGains: String(c.cooling?.internalGainsW ?? 100), clMargin: String(c.cooling?.marginPct ?? 20), clTarget: String(c.cooling?.targetC ?? 14), clAmbient: String(c.cooling?.ambientC ?? 35),
   mnShow: c.mobileNotice?.show !== false, mnText: c.mobileNotice?.text ?? '',
+  guideOn: c.guide?.enabled === true,
   qBusinessName: c.quote?.businessName ?? '', qDetails: c.quote?.details ?? '', qTerms: c.quote?.terms ?? '', qValidityDays: String(c.quote?.validityDays ?? 30), qGstNote: c.quote?.gstNote ?? '',
   singleMm: String(c.doors.singleMm), doubleMm: String(c.doors.doubleMm),
   show: !!c.pricing.show, currency: c.pricing.currency ?? '$',
@@ -58,6 +59,7 @@ const toConfig = (f) => ({
   rackTypes: f.rackTypes.map(typeToConfig), defaultRackType: f.defaultRackType,
   cooling: { panelConductivity: f.clK, glassU: f.clGlass, floorU: f.clFloor, internalGainsW: f.clGains, marginPct: f.clMargin, targetC: f.clTarget, ambientC: f.clAmbient },
   mobileNotice: { show: f.mnShow, text: f.mnText },
+  guide: { enabled: f.guideOn },
   quote: { businessName: f.qBusinessName, details: f.qDetails, terms: f.qTerms, validityDays: f.qValidityDays, gstNote: f.qGstNote },
   doors: { singleMm: f.singleMm, doubleMm: f.doubleMm },
   pricing: { show: f.show, currency: f.currency, fixed: f.fixed, doorSingle: f.doorSingle, doorDouble: f.doorDouble, rangePct: f.rangePct, roundTo: f.roundTo, note: f.note },
@@ -435,6 +437,26 @@ export default function CellarLiteSettings({ onDirtyChange }) {
         <Field label="Wording" tip="What visitors on a phone read, after the heading Best on a computer or tablet. Leave blank to use the standard wording." hint="Up to 300 characters. Blank uses the standard wording.">
           <textarea value={form.mnText} rows={3} maxLength={300} onChange={(e) => set('mnText', e.target.value)} className={INPUT} style={FIELD_STYLE} />
         </Field>
+      </section>
+
+      <section className={CARD} style={CARD_STYLE} data-testid="cellar-lite-guide">
+        <div className="flex items-center gap-3">
+          <h3 className="text-base font-semibold flex-1" style={{ color: 'var(--color-text)' }}>Website help chat</h3>
+          <Tooltip text={form.guideOn ? 'The round help button is showing on the website page. Click to switch it off (then press Save).' : 'The help chat is off. Click to turn it on for website visitors (then press Save).'}>
+            <button
+              onClick={() => set('guideOn', !form.guideOn)}
+              className="text-xs px-3 py-1 rounded-lg border font-medium transition-all hover:opacity-80"
+              style={{ borderColor: form.guideOn ? 'var(--color-primary)' : 'var(--color-border)', color: form.guideOn ? 'var(--color-primary)' : 'var(--color-muted)', background: 'transparent' }}
+              aria-pressed={form.guideOn}
+              data-testid="cellar-lite-guide-toggle"
+            >
+              {form.guideOn ? 'On' : 'Off'}
+            </button>
+          </Tooltip>
+        </div>
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          A round help button on your website's planner page. Visitors ask in their own words how to use the planner and it points them to the right step. It never quotes a price or gives engineering advice, and visitors can send the chat to your admin email. <b>Every answer is a paid AI call</b>, so it is limited per visitor and per day, and it stays off until you switch it on here. It also needs the page script from the planner's website folder (see docs/cellar-planner.md).
+        </p>
       </section>
 
       <section className={CARD} style={CARD_STYLE} data-testid="cellar-lite-cooling">
