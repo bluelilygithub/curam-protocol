@@ -114,6 +114,17 @@ async function withLinks(userId, docs) {
 const COLS_D = `d.id, d.kind, d.title, d.supplier, d.fy, d."docDate"::text AS "docDate", d.notes, d."originalName", d."mimeType", d."sizeBytes", d."createdAt", d."redactedFromId"`;
 const COLS = `id, kind, title, supplier, fy, "docDate"::text AS "docDate", notes, "originalName", "storedName", "mimeType", "sizeBytes", "createdAt", "redactedFromId"`;
 
+// A supplier named on a document joins the Suppliers directory if it is not there yet (any case, active or
+// not, so one the person switched off is not brought back).
+async function ensureSupplier(userId, name) {
+  const clean = name ? String(name).trim().slice(0, 200) : '';
+  if (!clean) return;
+  await pool.query(
+    `INSERT INTO fin_suppliers ("userId", name)
+     SELECT $1, $2 WHERE NOT EXISTS (SELECT 1 FROM fin_suppliers WHERE "userId"=$1 AND LOWER(TRIM(name)) = LOWER($2))`,
+    [userId, clean]);
+}
+
 // ---- routes (named routes before /:id) -------------------------------------------------------
 
 router.get('/', wrap(async (req, res) => {
@@ -210,6 +221,7 @@ router.post('/', (req, res) => {
         const { storedName, ...pub } = d;
         created.push(pub);
       }
+      if (created.length) await ensureSupplier(userId, supplier);
       res.status(created.length ? 201 : 400).json({ documents: await withLinks(userId, created), rejected });
     } catch (err) {
       discard();
@@ -244,6 +256,7 @@ router.patch('/:id', wrap(async (req, res) => {
      supplier !== undefined, supplier ? String(supplier).slice(0, 200) : null, fy ?? null,
      docDate !== undefined, docDate || null, notes !== undefined, notes ? String(notes).slice(0, 2000) : null]);
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  if (supplier) await ensureSupplier(req.user.id, supplier);
   const { storedName, ...pub } = rows[0];
   res.json((await withLinks(req.user.id, [pub]))[0]);
 }));

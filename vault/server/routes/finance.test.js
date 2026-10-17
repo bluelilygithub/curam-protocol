@@ -622,6 +622,18 @@ test('GST deregistration: no GST on documents or credits on purchases from the e
 });
 
 // ---------------------------------------------------------------- document library
+test('documents: a new supplier joins the Suppliers tab once, in any case, and is offered in the picker', async () => {
+  const up = await upload([['zeta.pdf', '%PDF zeta']], { kind: 'other', supplier: ' Zeta Hosting ' });
+  assert.strictEqual(up.status, 201, JSON.stringify(up.json));
+  const up2 = await upload([['zeta2.pdf', '%PDF zeta2']], { kind: 'other', supplier: 'zeta hosting' });
+  const patched = await call('PATCH', `/api/finance/documents/${up.json.documents[0].id}`, { supplier: 'Zeta Hosting' });
+  assert.strictEqual(patched.status, 200);
+  const dir = (await call('GET', '/api/finance/suppliers')).json;
+  assert.strictEqual(dir.filter((s) => s.name.toLowerCase() === 'zeta hosting').length, 1, 'added once');
+  assert.ok((await call('GET', '/api/finance/documents')).json.suppliers.some((n) => n.toLowerCase() === 'zeta hosting'));
+  for (const u of [up, up2]) await call('DELETE', `/api/finance/documents/${u.json.documents[0].id}?confirm=1`);
+});
+
 test('documents: upload, link to many expenses, download, relink, and confirmed delete removes the file', async () => {
   const e1 = await call('POST', '/api/finance/expenses', { date: '2025-09-05', description: 'AI credits Sep', supplier: 'Provider', amount: 40, gstIncluded: false });
   const e2 = await call('POST', '/api/finance/expenses', { date: '2025-09-20', description: 'AI credits Sep 2', supplier: 'Provider', amount: 60, gstIncluded: false });
