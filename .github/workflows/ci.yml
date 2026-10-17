@@ -70,6 +70,24 @@ jobs:
         working-directory: vault
         run: bash scripts/ci-run-server-tests.sh
 
+      - name: Cross-user route tests (their own database)
+        working-directory: vault
+        env:
+          PGPASSWORD: ci-throwaway
+        run: |
+          createdb -h localhost -U vault vault_xuser || { echo "::error title=createdb failed::could not create the second database"; exit 1; }
+          export DATABASE_URL=postgresql://vault:ci-throwaway@localhost:5432/vault_xuser
+          fail=0
+          for t in crossUser crossUserOwnership; do
+            node server/routes/$t.test.js > /tmp/$t.log 2>&1 && code=0 || code=$?
+            grep -avE '^\s+at |traineddata|TESSDATA|special-words|Failed loading' /tmp/$t.log | tail -60
+            if [ $code -ne 0 ]; then
+              echo "::error title=$t.test.js failed (exit $code)::$(grep -aE '^  FAIL|^        [A-Z]|^GET routes|^write routes|^  [0-9]+ proven|^  [0-9]+ user-specific|fixtures:|^tables without|SKIP|refus|is not ready' /tmp/$t.log | head -30 | paste -sd'|' - | cut -c1-2500)"
+              fail=1
+            fi
+          done
+          exit $fail
+
   client-build:
     name: Client build (Vite)
     runs-on: ubuntu-latest
