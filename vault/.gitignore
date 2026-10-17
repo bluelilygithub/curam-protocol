@@ -7,3 +7,5 @@ uploads/
 .env
 .env.local
 .env.*.local
+# tesseract.js caches downloaded language data in the folder it runs from; the real copies live in planner-core/ocr-assets/*.traineddata.gz
+*.traineddata

@@ -10,6 +10,7 @@ export default function ExtractTextTool({ active }) {
   const { setHelpTool } = useGraphics();
 
   const [ocrSource, setOcrSource] = useState(null);
+  const [ocrLang, setOcrLang] = useState('eng');
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
   const [ocrText, setOcrText] = useState('');
@@ -24,9 +25,9 @@ export default function ExtractTextTool({ active }) {
     setOcrProgress(0);
     let engine = null;
     try {
-      // The shared on-device reader: its worker and English data are served from our own origin, because the
+      // The shared on-device reader: its worker and language data are served from our own origin, because the
       // site's Content Security Policy blocks the CDN that tesseract.js uses by default.
-      engine = await createOcrEngine({ lang: 'eng' });
+      engine = await createOcrEngine({ lang: ocrLang });
       const page = await engine.recognize(ocrSource.imageDataUrl, { onProgress: (p) => setOcrProgress(Math.round(p * 100)) });
       const text = page.lines.map((l) => l.text).join('\n').trim();
       setOcrText(text);
@@ -78,7 +79,18 @@ export default function ExtractTextTool({ active }) {
                 <img src={ocrSource.imageDataUrl} alt="source" className="max-h-56 mx-auto rounded-lg" />
               </div>
             )}
-            <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Reads English text, on this device. The picture is not uploaded. The first run loads the reader (a few MB).</p>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Language of the text</label>
+              <Tooltip text="Pick the language the text in the picture is written in. A wrong choice reads badly."><select value={ocrLang} onChange={e => setOcrLang(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                <option value="eng">English</option>
+                <option value="fra">French</option>
+                <option value="spa">Spanish</option>
+                <option value="deu">German</option>
+                <option value="ita">Italian</option>
+                <option value="por">Portuguese</option>
+              </select></Tooltip>
+            </div>
+            <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Reads text on this device. The picture is not uploaded. The first run loads the reader (a few MB).</p>
             {ocrError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{ocrError}</div>}
             <Tooltip text="Read the text out of the image."><button type="button" onClick={runOcr} disabled={ocrBusy || !ocrSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {ocrBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('type', { size: 15 })}

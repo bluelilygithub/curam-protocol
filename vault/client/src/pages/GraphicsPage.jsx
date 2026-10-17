@@ -286,7 +286,7 @@ const TOOL_HELP = {
   ocr: {
     title: 'Extract Text (OCR)',
     what: 'Read text from screenshots, scans and receipts.',
-    features: ['Powered by Tesseract.js, run on your device with files served from Vault itself (no CDN)', 'English only', 'Live progress readout during recognition', 'Editable result — correct OCR errors inline', 'Copy to clipboard or download as .txt', 'Nothing is uploaded — fully in your browser'],
+    features: ['Powered by Tesseract.js, run on your device with files served from Vault itself (no CDN)', 'Languages: English, French, Spanish, German, Italian, Portuguese — pick the one the text is written in', 'Live progress readout during recognition', 'Editable result — correct OCR errors inline', 'Copy to clipboard or download as .txt', 'Nothing is uploaded — fully in your browser'],
   },
   blurdetect: {
     title: 'Blur Detection',
