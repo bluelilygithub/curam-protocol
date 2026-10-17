@@ -4,6 +4,7 @@ const http = require('http');
 const https = require('https');
 const { JSDOM } = require('jsdom');
 const { fetchHtml, normaliseHttpUrl, checkSsrf } = require('./htmlFetch');
+const { pinnedLookup } = require('../utils/safeFetch');
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
@@ -16,9 +17,10 @@ function fetchBinary(url, redirectsLeft = 5, timeoutMs = 15000) {
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       return reject(new Error('Only http/https URLs are allowed'));
     }
-    checkSsrf(parsed.hostname).then(() => {
+    checkSsrf(parsed.hostname).then((address) => {
       const mod = parsed.protocol === 'https:' ? https : http;
       const req = mod.request({
+        lookup: pinnedLookup(address),
         hostname: parsed.hostname,
         port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
         path: parsed.pathname + parsed.search,

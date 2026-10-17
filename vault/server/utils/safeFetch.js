@@ -82,17 +82,25 @@ async function resolvePublicAddress(host, { resolve = defaultResolve, isAllowedI
   let addresses;
   if (net.isIP(bare)) addresses = [bare];
   else {
-    try { addresses = await resolve(bare); } catch { throw fail('Could not find that web address'); }
+    try { addresses = await resolve(bare); } catch { throw Object.assign(fail('Could not find that web address'), { reason: 'dns' }); }
   }
-  if (!addresses?.length) throw fail('Could not find that web address');
-  if (!addresses.every((a) => isAllowedIp(a))) throw fail('That address is not allowed');
+  if (!addresses?.length) throw Object.assign(fail('Could not find that web address'), { reason: 'dns' });
+  if (!addresses.every((a) => isAllowedIp(a))) throw Object.assign(fail('That address is not allowed'), { reason: 'private' });
   return addresses[0];
+}
+
+/**
+ * A `lookup` option for http(s).request that always answers with an address we already checked, so the connection cannot be
+ * redirected by a second DNS answer (DNS rebinding). The request keeps its host name for the Host header and the TLS certificate.
+ */
+function pinnedLookup(address) {
+  const family = net.isIP(address);
+  return (_host, opts, cb) => (opts && opts.all ? cb(null, [{ address, family }]) : cb(null, address, family));
 }
 
 function requestOnce(url, address, { timeoutMs, maxBytes, accept }) {
   return new Promise((resolve, reject) => {
     const mod = url.protocol === 'https:' ? https : http;
-    const family = net.isIP(address);
     const req = mod.request({
       protocol: url.protocol,
       hostname: url.hostname.replace(/^\[|\]$/g, ''),
@@ -102,7 +110,7 @@ function requestOnce(url, address, { timeoutMs, maxBytes, accept }) {
       headers: { 'user-agent': 'CuramVault/1.0', accept },
       timeout: timeoutMs,
       // Connect to the address we already checked, not whatever the name resolves to a second time.
-      lookup: (_host, opts, cb) => (opts && opts.all ? cb(null, [{ address, family }]) : cb(null, address, family)),
+      lookup: pinnedLookup(address),
     }, (res) => {
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
         res.resume();
@@ -159,4 +167,4 @@ async function fetchPublicFile(rawUrl, { maxBytes = 25 * 1024 * 1024, timeoutMs 
   throw fail('Too many redirects');
 }
 
-module.exports = { isPublicIp, resolvePublicAddress, fetchPublicFile };
+module.exports = { isPublicIp, resolvePublicAddress, pinnedLookup, fetchPublicFile };

@@ -2,8 +2,8 @@
 
 const http = require('http');
 const https = require('https');
-const dns = require('dns');
 const zlib = require('zlib');
+const { resolvePublicAddress, pinnedLookup } = require('../utils/safeFetch');
 
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 
@@ -20,31 +20,15 @@ const CHROME_HEADERS = {
   'Sec-Fetch-User': '?1',
 };
 
-function isPrivateIp(ip) {
-  if (ip === '::1') return true;
-  const lower = ip.toLowerCase();
-  if (lower.startsWith('fe80')) return true;
-  if (lower.startsWith('fc') || lower.startsWith('fd')) return true;
-
-  const parts = ip.split('.').map(Number);
-  if (parts.length !== 4 || parts.some(isNaN)) return false;
-  const [a, b] = parts;
-  if (a === 127) return true;
-  if (a === 10) return true;
-  if (a === 172 && b >= 16 && b <= 31) return true;
-  if (a === 192 && b === 168) return true;
-  if (a === 169 && b === 254) return true;
-  if (a === 0) return true;
-  return false;
-}
-
+// SSRF guard shared with Graphics' import-by-URL (utils/safeFetch.js): the name is resolved once, EVERY address it resolves to must be
+// public (IPv4 and IPv6, including IPv4-mapped and NAT64 forms), and the request then connects to that exact address (see fetchOnce) so
+// a second DNS answer cannot point it somewhere internal. Resolves with the checked address. The messages are the ones callers have
+// always shown.
 function checkSsrf(hostname) {
-  return new Promise((resolve, reject) => {
-    dns.lookup(hostname, (err, address) => {
-      if (err) return reject(new Error('DNS lookup failed'));
-      if (isPrivateIp(address)) return reject(new Error('URL resolves to a private or internal address'));
-      resolve(address);
-    });
+  return resolvePublicAddress(hostname).catch((err) => {
+    if (err.reason === 'dns') throw new Error('DNS lookup failed');
+    if (err.reason === 'private') throw new Error('URL resolves to a private or internal address');
+    throw err;
   });
 }
 
@@ -112,7 +96,7 @@ function fetchOnce(url, redirectsLeft, timeoutMs, extraHeaders, cookies) {
       return reject(new Error('Only http/https URLs are allowed'));
     }
 
-    checkSsrf(parsed.hostname).then(() => {
+    checkSsrf(parsed.hostname).then((address) => {
       const mod = parsed.protocol === 'https:' ? https : http;
       const cookie = cookieHeader(cookies);
       const opts = {
@@ -126,6 +110,8 @@ function fetchOnce(url, redirectsLeft, timeoutMs, extraHeaders, cookies) {
           ...(cookie ? { Cookie: cookie } : {}),
         },
         timeout: timeoutMs,
+        // Connect to the address that was just checked, not to whatever the name resolves to a second time.
+        lookup: pinnedLookup(address),
       };
 
       const req = mod.request(opts, (res) => {
