@@ -10,4 +10,8 @@
   <FilesMatch "\.(js|css)$">
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
+  # the help chat script keeps the same name from one upload to the next, so it must not be kept for long either
+  <FilesMatch "^cellar-lite-guide\.js$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
 </IfModule>

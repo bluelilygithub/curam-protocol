@@ -10,7 +10,8 @@ import type { WallSide } from './enclosure';
 import { badRunIds, bottlesOnWall, dragGhost, elevationView, planRunHits, planView, rackFaceView, rackWallSummary, type Prim } from './views';
 import { placeRun, withRun, type PlaceResult } from './app/runMove';
 import type { RunDragEvent } from './ui/DrawingView';
-import { ConflictBar, DesignsPanel, SaveStatus } from './ui/DesignsPanel';
+import { ConflictBar, SaveStatus } from './ui/DesignsPanel';
+import { JobsPage } from './ui/JobsPage';
 import { DrawingView } from './ui/DrawingView';
 import { CodeModal, projectFromCode } from './ui/CodeModal';
 import { InfoModal } from './ui/InfoModal';
@@ -50,6 +51,7 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
   const rackWall = useStore(ui, (s) => s.rackWall);
   const pane = useStore(ui, (s) => s.pane);
   const msg = useStore(ui, (s) => s.notice);
+  const jobsOpen = useStore(ui, (s) => s.designsOpen);
   const setMsg = (notice: string): void => ui.getState().set({ notice });
   const file = useRef<HTMLInputElement>(null);
 
@@ -57,6 +59,11 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
   useEffect(() => {
     try { if (!localStorage.getItem(INFO_KEY)) ui.getState().set({ infoOpen: true }); } catch { /* storage blocked: skip the auto-open */ }
     if (new URLSearchParams(window.location.search).has('tour')) window.setTimeout(() => void startTour(), 400);
+    // Opened from Vault (?embedded=1) with no link to a particular design: land on the Jobs page, so the first thing you see is your list of jobs.
+    {
+      const q = new URLSearchParams(window.location.search);
+      if (q.has('embedded') && !q.has('testcase') && !q.has('d') && !q.has('lead') && !q.has('tour')) void designs.whenReady().then(() => { if (designs.library.getState().entries.length > 0) ui.getState().set({ designsOpen: true, infoOpen: false }); });
+    }
     // ?testcase=1 opens the ready-made test case (estimated rack values) instead of the saved draft
     if (new URLSearchParams(window.location.search).has('testcase')) void designs.whenReady().then(() => addDesign(testCaseProject(), 'Added the test case as a new design: its rack values are best guesses.'));
     // ?d=<design code> (a link from the public planner) opens that design as a new one
@@ -207,7 +214,7 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
     <StoreContext.Provider value={store}>
     <CatalogueContext.Provider value={catalogue ?? null}>
     <UiContext.Provider value={ui}>
-      <div className="app" data-pane={pane} data-left={leftHidden ? 'hidden' : 'shown'} data-right={rightHidden ? 'hidden' : 'shown'} data-focus={focus ? 'on' : 'off'} style={{ '--left-w': `${layout.leftW}px` } as React.CSSProperties}>
+      <div className="app" data-jobs={jobsOpen ? 'on' : undefined} data-pane={pane} data-left={leftHidden ? 'hidden' : 'shown'} data-right={rightHidden ? 'hidden' : 'shown'} data-focus={focus ? 'on' : 'off'} style={{ '--left-w': `${layout.leftW}px` } as React.CSSProperties}>
         <header className="toolbar" role="toolbar" aria-label="Main toolbar" data-tour="cp-project">
           <div className="toolbar-row">
             <div className="brand">
@@ -223,8 +230,8 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
               <button type="button" className="btn icon" aria-label="Redo" disabled={!canRedo} title="Put back the change you just undid." onClick={() => store.getState().redo()} data-testid="redo"><Icon name="redo" /></button>
             </div>
             <div className="group" role="group" aria-label="Design">
-              <input className="name" value={project.name} aria-label="Project name" title="The name of this design. It is how it appears in Your designs and in the saved file's name." data-testid="project-name" onChange={(e) => store.getState().updateSilently((p) => ({ ...p, name: e.target.value }))} />
-              <button type="button" className="btn" title="Your saved designs: open one, start a new one, copy or delete. Designs save by themselves." onClick={() => ui.getState().set({ designsOpen: true })} data-testid="designs-open"><Icon name="file" /><span className="label">Your designs</span></button>
+              <input className="name" value={project.name} aria-label="Project name" title="The name of this job. It is how it appears on the Jobs page and in the saved file's name." data-testid="project-name" onChange={(e) => store.getState().updateSilently((p) => ({ ...p, name: e.target.value }))} />
+              <button type="button" className="btn" title="Your saved jobs: search them, open one to fill the planner with it, start a new one, copy or delete. Jobs save by themselves." onClick={() => ui.getState().set({ designsOpen: true })} data-testid="designs-open"><Icon name="file" /><span className="label">Jobs</span></button>
               <button type="button" className="btn" title="People who sent your website's contact form with a design from the public planner. Open one to start from their design." onClick={() => ui.getState().set({ leadsOpen: true })} data-testid="leads-open" data-tour="cp-enquiries"><Icon name="list" /><span className="label">Enquiries</span>{newLeads > 0 && <span className="badge" data-testid="leads-new-count" aria-label={`${newLeads} new`}>{newLeads}</span>}</button>
             </div>
             <SaveStatus designs={designs} />
@@ -274,6 +281,7 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
         <aside className="right"><button type="button" className="panel-close" aria-label="Hide the bottles and checks panel" title="Hide this panel to give the drawing more room. The strip above the drawing still shows the bottle count and errors. Bring it back with the tab at the edge, or Show checks." onClick={strip.toggleRight} data-testid="close-right"><Icon name="close" /></button><ChecksPanel /></aside>
         {rightHidden && !focus && <button type="button" className="edge-tab edge-right" title="Show the bottles and checks panel." onClick={strip.toggleRight} data-testid="reveal-right">◂ Bottles and checks</button>}
         {leftHidden && !focus && <button type="button" className="edge-tab edge-left" title="Show the controls panel." onClick={strip.toggleLeft} data-testid="reveal-left">Controls ▸</button>}
+        <JobsPage ui={ui} designs={designs} onImportFile={(f) => void open(f)} />
       </div>
       <InfoModal ui={ui} />
       <CodeModal ui={ui} onOpen={(p) => void addDesign(p, 'Opened the design code as a new design: its rack values are best guesses.')} />
@@ -281,7 +289,6 @@ export function App({ store, ui, designs, catalogue, leads, ready }: { store: Ap
       <CalcModal store={store} ui={ui} catalogue={cat} />
       <QuoteModal store={store} ui={ui} catalogue={cat} fetchFn={fetchFn} storage={localStorage} />
       <LeadsPanel ui={ui} leads={leadStore} reload={() => void leadStore.getState().load(fetchFn, localStorage)} onOpen={(id) => void openEnquiry(id)} />
-      <DesignsPanel ui={ui} designs={designs} onImportFile={(f) => void open(f)} />
       <TooltipHost look="vault" />
     </UiContext.Provider>
     </CatalogueContext.Provider>

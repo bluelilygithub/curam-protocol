@@ -28,7 +28,7 @@ export const GUIDE_TOOLS: GuideTool[] = [
   { id: 'racks', label: 'Racks', kind: 'tab', target: 'racks' },
   { id: 'inside', label: '3D', kind: 'tab', target: 'inside' },
   { id: 'checks', label: 'Checks', kind: 'section' },
-  { id: 'designs', label: 'Your designs', kind: 'dialog', target: 'designsOpen' },
+  { id: 'designs', label: 'Jobs', kind: 'dialog', target: 'designsOpen' },
   { id: 'leads', label: 'Enquiries', kind: 'dialog', target: 'leadsOpen' },
   { id: 'package', label: 'Drawing package', kind: 'dialog', target: 'packageOpen' },
   { id: 'quote', label: 'Quote', kind: 'dialog', target: 'quoteOpen' },

@@ -54,7 +54,7 @@ export function CodeModal({ ui, onOpen }: { ui: UiStore; onOpen(p: AppProject): 
           </label>
           {error && <p className="field-err" role="alert" data-testid="code-error">{error}</p>}
         </div>
-        <div className="modal-foot"><span className="grow" /><button type="button" className="btn" title="Close without opening anything." onClick={close}>Cancel</button><button type="button" className="btn primary" title="Add the design to Your designs and open it." onClick={submit} data-testid="code-open-go">Open</button></div>
+        <div className="modal-foot"><span className="grow" /><button type="button" className="btn" title="Close without opening anything." onClick={close}>Cancel</button><button type="button" className="btn primary" title="Add the design to your Jobs and open it." onClick={submit} data-testid="code-open-go">Open</button></div>
       </div>
     </div>
   );

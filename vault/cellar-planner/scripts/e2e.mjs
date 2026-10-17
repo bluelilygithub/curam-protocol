@@ -500,7 +500,7 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
   await status5('saved', 1000);
   await p5.getByTestId('designs-open').click();
   const firstItem = await p5.getByTestId('design-item').first().innerText();
-  check('Your designs lists the saved design by name, with its counts', /Back cellar/.test(firstItem) && /rack run/.test(firstItem), firstItem);
+  check('the Jobs page lists the saved job by name, with its counts', /Back cellar/.test(firstItem) && /rack run/.test(firstItem), firstItem);
   await p5.getByTestId('design-new').click();
   await p5.waitForTimeout(500);
   check('New design opens a blank one and the first stays saved', (await p5.evaluate(() => window.cellar.store.getState().project.runs.length)) === 0 && (await p5.evaluate(() => window.cellar.designs.library.getState().entries.length)) === 2);
@@ -518,7 +518,7 @@ check('the draft survives a reload', (await state()).runs.length === JSON.parse(
   check('Test case adds a design; nothing was overwritten', (await p5.getByTestId('design-item').count()) === 3 && /Back cellar/.test(await p5.getByTestId('design-list').innerText()));
   await p5.addScriptTag({ path: join(import.meta.dirname, '..', 'node_modules', 'axe-core', 'axe.min.js') });
   const dScan = await p5.evaluate(async () => (await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } })).violations.map((v) => v.id + ' x' + v.nodes.length));
-  check('accessibility scan, Your designs: no violations', dScan.length === 0, dScan.join(', '));
+  check('accessibility scan, Jobs page: no violations', dScan.length === 0, dScan.join(', '));
   await p5.getByTestId('design-item').first().getByTestId('design-delete').click();
   await p5.getByTestId('design-delete-yes').click();
   await p5.waitForTimeout(400);
