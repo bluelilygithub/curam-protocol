@@ -15,6 +15,13 @@ import { createPortal } from 'react-dom';
 // that accepts a ref (DOM elements only — input/button/select/div/etc).
 // `side`: 'top' (default), 'bottom', or 'right' (beside the control, for a menu down the left of the page).
 // Hover-only by design; simply doesn't show on touch (no tap variant).
+//
+// Width: the card is `max-content` up to a maximum (240px; 320px for long text), and always kept inside the window. (A fixed card with
+// only `left` set otherwise shrinks to the space left of the window edge, which made tips on controls in a corner, such as the
+// round guide button bottom right, a few words wide.)
+const EDGE = 8;
+const maxWidthFor = (text) => (String(text || '').length > 110 ? 320 : 240);
+
 export default function Tooltip({ text, children, side = 'top' }) {
   const [show, setShow] = useState(false);
   const [pos, setPos] = useState(null);
@@ -24,18 +31,19 @@ export default function Tooltip({ text, children, side = 'top' }) {
     const el = ref.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
+    const boxW = Math.min(maxWidthFor(text), window.innerWidth - EDGE * 2);
     if (side === 'right') {
       // Beside the control (used by the Video Tools menu): to its right, vertically centred on it.
-      setPos({ top: r.top + r.height / 2, left: Math.min(r.right + 8, window.innerWidth - 100), above: false, right: true });
+      setPos({ top: r.top + r.height / 2, left: Math.max(EDGE, Math.min(r.right + 8, window.innerWidth - boxW - EDGE)), above: false, right: true });
       return;
     }
     let top = side === 'bottom' ? r.bottom + 8 : r.top - 8;
     let above = side !== 'bottom';
     if (above && top < 40) { top = r.bottom + 8; above = false; }
     let left = r.left + r.width / 2;
-    left = Math.min(Math.max(left, 80), window.innerWidth - 80);
+    left = Math.min(Math.max(left, EDGE + boxW / 2), window.innerWidth - EDGE - boxW / 2);
     setPos({ top, left, above });
-  }, [side]);
+  }, [side, text]);
 
   if (!text) return children;
 
@@ -63,7 +71,8 @@ export default function Tooltip({ text, children, side = 'top' }) {
             top: pos.top,
             left: pos.left,
             transform: pos.right ? 'translate(0, -50%)' : `translate(-50%, ${pos.above ? '-100%' : '0'})`,
-            maxWidth: 240,
+            width: 'max-content',
+            maxWidth: `min(${maxWidthFor(text)}px, calc(100vw - ${EDGE * 2}px))`,
             zIndex: 30,
             background: 'var(--color-surface)',
             borderColor: 'var(--color-border)',

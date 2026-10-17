@@ -9,6 +9,7 @@ import SharedTutorChat from '../../components/tutor/TutorChat';
 
 const CONFIG = {
   endpoint: '/api/pdf-tutor',
+  guideId: 'pdf',
   payloadKey: 'currentTool',
   name: 'PDF guide',
   shortName: 'guide',

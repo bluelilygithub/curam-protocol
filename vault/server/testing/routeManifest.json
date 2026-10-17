@@ -1930,6 +1930,9 @@
   "POST /api/notes": {
    "class": "authed"
   },
+  "POST /api/tutor-email": {
+   "class": "authed"
+  },
   "POST /api/pdf-tutor": {
    "class": "authed"
   },

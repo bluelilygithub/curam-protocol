@@ -11,6 +11,7 @@ import { VoiceInputProvider } from '../../components/voiceInput/VoiceInput';
 
 const CONFIG = {
   endpoint: '/api/graphics-tutor',
+  guideId: 'graphics',
   payloadKey: 'currentTool',
   name: 'Graphics guide',
   shortName: 'guide',

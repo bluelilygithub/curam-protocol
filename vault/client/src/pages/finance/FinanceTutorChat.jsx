@@ -11,6 +11,7 @@ import { VoiceInputProvider } from '../../components/voiceInput/VoiceInput';
 
 const CONFIG = {
   endpoint: '/api/finance-tutor',
+  guideId: 'finance',
   payloadKey: 'currentTab',
   name: 'Finance guide',
   shortName: 'guide',

@@ -9,6 +9,7 @@ import SharedTutorChat from '../../components/tutor/TutorChat';
 
 const CONFIG = {
   endpoint: '/api/videos/tutor',
+  guideId: 'video',
   payloadKey: 'currentTool',
   name: 'Video Tools tutor',
   shortName: 'tutor',

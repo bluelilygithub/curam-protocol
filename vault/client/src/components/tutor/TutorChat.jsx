@@ -4,6 +4,7 @@ import { useIcon } from '../../providers/IconProvider';
 import { VoiceInput } from '../voiceInput/VoiceInput';
 import useDraggable from '../../hooks/useDraggable';
 import Tooltip from '../Tooltip';
+import useAuthStore from '../../store/authStore';
 
 /**
  * The shared "guide" chat used by Video Tools and Finance (and any page that gets one later): a round button fixed at the bottom
@@ -23,8 +24,12 @@ import Tooltip from '../Tooltip';
  *   what,                            // "tool" | "tab", used in the Open tooltip
  *   buttonTip, openTip(label), busyText, placeholder, inputLabel, errorText,
  *   wideKey,                         // localStorage key remembering wide/narrow
+ *   guideId,                         // 'pdf' | 'graphics' | 'video' | 'finance': which guide an emailed conversation came from
  *   positionKey,                     // optional: localStorage key stem for where the button and chat were dragged to
  * }
+ *
+ * After at least one answer, "Email this conversation" lets the person send the log to themselves and/or the workspace admin
+ * (POST /api/tutor-email, server/routes/tutorEmail.js). Nothing is sent unless they press Send.
  *
  * Both the round button and the open chat can be dragged out of the way (hooks/useDraggable.js): drag the button, or the chat's
  * title bar; double-click the title bar to put the chat back. Positions are remembered in this browser only.
@@ -89,6 +94,13 @@ function TutorInner({ config, current, onOpen }) {
   const [busy, setBusy] = useState(false);
   const [turns, setTurns] = useState([]); // { role: 'user', text } | { role: 'assistant', reply } | { role: 'error', text }
   const endRef = useRef(null);
+  // Emailing the conversation: panel open?, who to, and the outcome
+  const user = useAuthStore((s) => s.user);
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [toMe, setToMe] = useState(true);
+  const [toAdmin, setToAdmin] = useState(true);
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailStatus, setEmailStatus] = useState(null); // { kind: 'ok'|'error', text }
   // Where the button and the chat were dragged to (this browser only). Pages need not configure anything.
   const posKey = config.positionKey || (config.wideKey ? config.wideKey.replace(/:wide$/, '') : 'vault:guide');
   const buttonDrag = useDraggable({ storageKey: `${posKey}:pos-button` });
@@ -127,10 +139,34 @@ function TutorInner({ config, current, onOpen }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || config.errorText);
       setTurns([...next, { role: 'assistant', reply: data }]);
+      setEmailStatus(null);
     } catch (err) {
       setTurns([...next, { role: 'error', text: err.message }]);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const canEmail = !!config.guideId && !busy && turns.some((t) => t.role === 'assistant');
+
+  const emailLog = async () => {
+    if (emailBusy || (!toMe && !toAdmin)) return;
+    setEmailBusy(true);
+    setEmailStatus(null);
+    try {
+      const log = turns.filter((t) => t.role === 'user' || t.role === 'assistant').map((t) => (t.role === 'user'
+        ? { role: 'user', text: t.text }
+        : { role: 'guide', verdictLabel: config.verdicts[t.reply.verdict]?.label || '', answer: t.reply.answer, steps: (t.reply.steps || []).map((s) => ({ label: s.label, do: s.do })), missing: t.reply.missing, tip: t.reply.tip }));
+      const res = await api.post('/api/tutor-email', { guide: config.guideId, turns: log, toMe, toAdmin });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'The conversation could not be emailed.');
+      const who = [data.me ? 'you' : '', data.admins ? (data.admins === 1 ? 'the admin' : `${data.admins} admins`) : ''].filter(Boolean).join(' and ');
+      setEmailStatus({ kind: 'ok', text: `Sent to ${who || 'the recipients'}.` });
+      setEmailOpen(false);
+    } catch (err) {
+      setEmailStatus({ kind: 'error', text: err.message });
+    } finally {
+      setEmailBusy(false);
     }
   };
 
@@ -196,7 +232,7 @@ function TutorInner({ config, current, onOpen }) {
         </Tooltip>
         {turns.length > 0 && (
           <Tooltip text="Clear this conversation and start again.">
-            <button type="button" onClick={() => setTurns([])} className="text-[11px] hover:opacity-60 transition-opacity" style={{ color: 'var(--color-muted)' }}>Clear</button>
+            <button type="button" onClick={() => { setTurns([]); setEmailOpen(false); setEmailStatus(null); }} className="text-[11px] hover:opacity-60 transition-opacity" style={{ color: 'var(--color-muted)' }}>Clear</button>
           </Tooltip>
         )}
         <Tooltip text={`Close the ${config.shortName}. Your conversation is kept until you leave this page.`}>
@@ -246,6 +282,60 @@ function TutorInner({ config, current, onOpen }) {
         {busy && <p className="text-xs italic" style={{ color: 'var(--color-muted)' }}>{config.busyText}</p>}
         <div ref={endRef} />
       </div>
+
+      {canEmail && (
+        <div className="px-3 pt-2 border-t text-xs" style={{ borderColor: 'var(--color-border)' }}>
+          {!emailOpen ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              <Tooltip text="Send a copy of this conversation by email: to yourself, to the admin, or both. Nothing is sent until you press Send.">
+                <button
+                  type="button"
+                  onClick={() => { setEmailOpen(true); setEmailStatus(null); }}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-medium underline underline-offset-2 hover:opacity-60 transition-opacity"
+                  style={{ color: 'var(--color-primary)' }}
+                >
+                  {getIcon('mail', { size: 13 })}
+                  Email this conversation
+                </button>
+              </Tooltip>
+              {emailStatus?.kind === 'ok' && <span role="status" style={{ color: '#16a34a' }}>{emailStatus.text}</span>}
+            </div>
+          ) : (
+            <div className="space-y-2 rounded-xl border p-2.5" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+              <p className="font-semibold" style={{ color: 'var(--color-text)' }}>Email this conversation to:</p>
+              <Tooltip text="Send a copy to the email address on your account.">
+                <label className="flex items-center gap-2 cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                  <input type="checkbox" checked={toMe} onChange={(e) => setToMe(e.target.checked)} />
+                  <span className="min-w-0 break-words">Me{user?.email ? ` (${user.email})` : ''}</span>
+                </label>
+              </Tooltip>
+              <Tooltip text="Send a copy to the workspace admin. They can reply to you directly from it.">
+                <label className="flex items-center gap-2 cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                  <input type="checkbox" checked={toAdmin} onChange={(e) => setToAdmin(e.target.checked)} />
+                  <span>The admin</span>
+                </label>
+              </Tooltip>
+              <div className="flex items-center gap-2">
+                <Tooltip text="Email the whole conversation to the people ticked above.">
+                  <button
+                    type="button"
+                    onClick={emailLog}
+                    disabled={emailBusy || (!toMe && !toAdmin)}
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-white hover:opacity-80 transition-opacity disabled:opacity-40"
+                    style={{ background: 'var(--color-primary)' }}
+                  >
+                    {emailBusy ? 'Sending…' : 'Send'}
+                  </button>
+                </Tooltip>
+                <Tooltip text="Close this without sending anything.">
+                  <button type="button" onClick={() => setEmailOpen(false)} className="text-[11px] hover:opacity-60 transition-opacity" style={{ color: 'var(--color-muted)' }}>Cancel</button>
+                </Tooltip>
+              </div>
+              {emailStatus?.kind === 'error' && <p role="alert" style={{ color: '#ef4444' }}>{emailStatus.text}</p>}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="p-3 border-t flex items-end gap-2" style={{ borderColor: 'var(--color-border)' }}>
         <div className="flex-1 min-w-0">
