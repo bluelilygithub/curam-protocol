@@ -8,13 +8,13 @@ const express = require('express');
 const router = express.Router();
 const sharp = require('sharp');
 const exifReader = require('exif-reader');
-const { dataUrlToBuffer, clampInt, outputFormatFor } = require('./shared');
+const { dataUrlToBuffer, imageDataUrlToBuffer, clampInt, outputFormatFor, outputOptionsFor } = require('./shared');
 const { runPixelTask } = require('../../services/graphicsWorker');
 
 router.post('/diff', async (req, res) => {
   try {
-    const a = dataUrlToBuffer(req.body?.imageA || '');
-    const b = dataUrlToBuffer(req.body?.imageB || '');
+    const a = imageDataUrlToBuffer(req.body?.imageA);
+    const b = imageDataUrlToBuffer(req.body?.imageB);
     if (!a || !b) return res.status(400).json({ error: 'Two valid images are required' });
     const am = await sharp(a).rotate().metadata();
     const W = am.width;
@@ -138,7 +138,7 @@ router.post('/strip-metadata', async (req, res) => {
     const fmt = outputFormatFor(meta);
     // sharp drops metadata unless withMetadata() is called; rotate() bakes in the
     // EXIF orientation first so the cleaned image isn't left mis-rotated.
-    const out = await sharp(buffer).rotate().toFormat(fmt).toBuffer();
+    const out = await sharp(buffer).rotate().toFormat(fmt, outputOptionsFor(fmt)).toBuffer();
     res.json({
       ok: true,
       removed,
@@ -157,7 +157,7 @@ router.post('/strip-metadata', async (req, res) => {
 // Blur detection using Laplacian variance. Lower variance = blurrier image.
 router.post('/blur-detect', async (req, res) => {
   try {
-    const buf = dataUrlToBuffer(req.body?.imageDataUrl || '');
+    const buf = imageDataUrlToBuffer(req.body?.imageDataUrl);
     if (!buf) return res.status(400).json({ error: 'No valid image provided' });
 
     const img = sharp(buf).rotate();

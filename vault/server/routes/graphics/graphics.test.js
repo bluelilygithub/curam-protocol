@@ -273,6 +273,70 @@ async function startServer() {
     assert.strictEqual((await fetch(`${baseUrl}/gallery/abc`, { method: 'DELETE' })).status, 404);
     global.__poolHandler = null;
 
+
+    // ---- Pipeline keeps the picture's quality across many steps ----
+    let seedN = 12345;
+    const rand = () => { seedN = (seedN * 1103515245 + 12345) & 0x7fffffff; return seedN / 0x7fffffff; };
+    const W0 = 240;
+    const noise = Buffer.alloc(W0 * W0 * 3);
+    for (let i = 0; i < W0 * W0; i += 1) {
+      const x = i % W0; const y = Math.floor(i / W0);
+      noise[i * 3] = (x + Math.sin(y / 5) * 30 + rand() * 40) & 255;
+      noise[i * 3 + 1] = (y + rand() * 40) & 255;
+      noise[i * 3 + 2] = ((x ^ y) + rand() * 30) & 255;
+    }
+    const photo = await sharp(noise, { raw: { width: W0, height: W0, channels: 3 } }).jpeg({ quality: 95 }).toBuffer();
+    const photoPx = await sharp(photo).raw().toBuffer();
+    r = await post('/pipeline', { imageDataUrl: dataUrl(photo, 'image/jpeg'), steps: Array(8).fill({ op: 'brightness', value: 1 }) });
+    assert.strictEqual(r.status, 200, `pipeline: ${r.body.error}`);
+    assert.strictEqual(r.body.format, 'jpeg', 'the result stays a JPEG');
+    const pipePx = await sharp(toBuf(r.body.imageDataUrl)).raw().toBuffer();
+    let diffSum = 0;
+    for (let i = 0; i < photoPx.length; i += 1) diffSum += Math.abs(photoPx[i] - pipePx[i]);
+    const meanErr = diffSum / photoPx.length;
+    // Re-saving as a JPEG after every step measured about 9.7 here; one lossless chain and a single final save is about 4.6.
+    assert.ok(meanErr < 7, `eight pipeline steps cost little quality (mean error ${meanErr.toFixed(2)})`);
+
+    // ---- Compress only squeezes a PNG to 256 colours when asked for strong compression ----
+    const gradient = Buffer.alloc(300 * 300 * 3);
+    for (let i = 0; i < 300 * 300; i += 1) { gradient[i * 3] = (i % 300) * 255 / 300; gradient[i * 3 + 1] = Math.floor(i / 300) * 255 / 300; gradient[i * 3 + 2] = ((i % 300) + Math.floor(i / 300)) % 256; }
+    const gradPng = await sharp(gradient, { raw: { width: 300, height: 300, channels: 3 } }).png({ compressionLevel: 0 }).toBuffer();
+    r = await post('/compress', { imageDataUrl: dataUrl(gradPng, 'image/png'), quality: 95 });
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual((await sharp(toBuf(r.body.imageDataUrl)).metadata()).paletteBitDepth, undefined, 'a high-quality PNG compress is lossless');
+    r = await post('/compress', { imageDataUrl: dataUrl(gradPng, 'image/png'), quality: 50 });
+    assert.ok((await sharp(toBuf(r.body.imageDataUrl)).metadata()).paletteBitDepth, 'a strong PNG compress uses a palette');
+
+    // ---- Auto-enhance gives back the picture's own format ----
+    r = await post('/auto-enhance', { imageDataUrl: dataUrl(photo, 'image/jpeg') });
+    assert.strictEqual(r.body.format, 'jpeg');
+    assert.ok(r.body.imageDataUrl.startsWith('data:image/jpeg;'), 'a JPEG stays a JPEG');
+
+    // ---- Favicon pack includes a real favicon.ico ----
+    const JSZip = require('jszip');
+    r = await post('/favicon', { imageDataUrl: dataUrl(red, 'image/png') });
+    assert.strictEqual(r.status, 200, `favicon: ${r.body.error}`);
+    const zip = await JSZip.loadAsync(toBuf(r.body.zipDataUrl));
+    const names = Object.keys(zip.files);
+    assert.ok(names.includes('favicon.ico'), `favicon.ico is in the zip (${names.join(', ')})`);
+    const icoBytes = await zip.file('favicon.ico').async('nodebuffer');
+    assert.deepStrictEqual([icoBytes.readUInt16LE(0), icoBytes.readUInt16LE(2), icoBytes.readUInt16LE(4)], [0, 1, 3], 'an ICO holding three sizes');
+    assert.ok((await zip.file('head-snippet.html').async('string')).includes('/favicon.ico'), 'the snippet links it');
+
+    // ---- Things that are not images get a clean 400, not a decoder error ----
+    const notImage = 'data:application/pdf;base64,JVBERi0xLjQK';
+    for (const route of ['/smart-crop', '/perspective', '/colorgrade', '/auto-enhance', '/blur-detect']) {
+      r = await post(route, { imageDataUrl: notImage });
+      assert.strictEqual(r.status, 400, `${route} refuses a PDF`);
+    }
+    assert.strictEqual((await post('/diff', { imageA: notImage, imageB: notImage })).status, 400);
+
+    // ---- Ask Graphics bounds what it sends to the model ----
+    r = await post('/plan-request', { transcript: 'x'.repeat(2500), catalog: [{ id: 'adjust' }] });
+    assert.strictEqual(r.status, 400);
+    r = await post('/plan-request', { transcript: 'brighter', catalog: Array.from({ length: 61 }, (_, i) => ({ id: `m${i}` })) });
+    assert.strictEqual(r.status, 400);
+
     console.log('graphics route tests passed');
   } finally {
     server.close();

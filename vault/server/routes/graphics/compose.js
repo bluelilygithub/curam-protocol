@@ -20,12 +20,14 @@ const {
   clampInt,
   orientedSize,
   fitOverlay,
+  outputOptionsFor,
   GRAVITY_MAP,
   parseHexColor,
   safeJsonParse,
   pickOneOf,
   sanitizeIconName,
   sanitizeSvgMarkup,
+  packIco,
 } = require('./shared');
 
 function escapeXml(str) {
@@ -71,7 +73,7 @@ async function runWatermark(params) {
 
   overlay = await fitOverlay(overlay, base.width, base.height);
   const composite = tile ? { input: overlay, tile: true } : { input: overlay, gravity };
-  const out = await sharp(buffer).rotate().composite([composite]).toFormat(fmt).toBuffer();
+  const out = await sharp(buffer).rotate().composite([composite]).toFormat(fmt, outputOptionsFor(fmt)).toBuffer();
   const m2 = await sharp(out).metadata().catch(() => null);
   return {
     ok: true,
@@ -199,7 +201,7 @@ router.post('/text', async (req, res) => {
 
     const { svg } = buildTextOverlaySvg({ text, fontSize, color, backgroundColor, align, maxWidthPx, fontWeight, strokeColor, strokeWidth });
     const input = await fitOverlay(svg, base.width, base.height);
-    const out = await sharp(buffer).rotate().composite([{ input, gravity }]).toFormat(fmt).toBuffer();
+    const out = await sharp(buffer).rotate().composite([{ input, gravity }]).toFormat(fmt, outputOptionsFor(fmt)).toBuffer();
     const m2 = await sharp(out).metadata().catch(() => null);
     res.json({
       ok: true,
@@ -286,7 +288,7 @@ router.post('/composite', async (req, res) => {
       composites.push(await buildOverlayComposite(overlay, base));
     }
 
-    const out = await sharp(buffer).rotate().composite(composites).toFormat(fmt).toBuffer();
+    const out = await sharp(buffer).rotate().composite(composites).toFormat(fmt, outputOptionsFor(fmt)).toBuffer();
     const m2 = await sharp(out).metadata().catch(() => null);
     res.json({
       ok: true,
@@ -372,6 +374,7 @@ router.post('/favicon', async (req, res) => {
     }, null, 2);
 
     const html = [
+      '<link rel="icon" href="/favicon.ico" sizes="any">',
       '<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">',
       '<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">',
       '<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">',
@@ -386,6 +389,10 @@ router.post('/favicon', async (req, res) => {
       archive.on('error', reject);
     });
     files.forEach((f) => archive.append(f.buf, { name: f.name }));
+    // Classic favicon.ico (16, 32 and 48px in one file): browsers and feed readers still request /favicon.ico by default.
+    const icoSizes = [16, 32, 48];
+    const ico = packIco(icoSizes.map((s) => ({ size: s, buf: files.find((f) => f.name === `favicon-${s}x${s}.png`).buf })));
+    archive.append(ico, { name: 'favicon.ico' });
     const apple = files.find((f) => f.name === 'favicon-180x180.png');
     if (apple) archive.append(apple.buf, { name: 'apple-touch-icon.png' });
     archive.append(manifest, { name: 'site.webmanifest' });
@@ -598,7 +605,7 @@ router.post('/batch-text', async (req, res) => {
         const base = orientedSize(meta);
         const svgBuf = await fitOverlay(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">${svgInner}</svg>`), base.width, base.height);
 
-        const out = await sharp(buf).rotate().composite([{ input: svgBuf, gravity }]).toFormat(fmt).toBuffer();
+        const out = await sharp(buf).rotate().composite([{ input: svgBuf, gravity }]).toFormat(fmt, outputOptionsFor(fmt)).toBuffer();
         results.push({
           name: `${baseName}.${fmt}`,
           imageDataUrl: `data:image/${fmt};base64,${out.toString('base64')}`,

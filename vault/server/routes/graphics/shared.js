@@ -902,6 +902,22 @@ function clampInt(value, min, max, fallback) {
   if (!Number.isFinite(n)) return fallback;
   return Math.min(max, Math.max(min, n));
 }
+// Encoder settings for tool outputs. sharp's own defaults (JPEG and WebP at quality 80) visibly soften an
+// edit of a good photo and stack up when results are fed into the next tool, so keep more of the picture.
+function outputOptionsFor(fmt) {
+  if (fmt === 'jpeg') return { quality: 92 };
+  if (fmt === 'webp') return { quality: 92 };
+  if (fmt === 'avif') return { quality: 70 };
+  return {};
+}
+
+// Like dataUrlToBuffer, but only for data URLs that claim to be images (so a PDF or text blob gets a clean 400
+// from the route instead of a decoder error).
+function imageDataUrlToBuffer(value) {
+  const text = String(value || '');
+  return /^data:image\//i.test(text) ? dataUrlToBuffer(text) : null;
+}
+
 function clampQuality(value) {
   const n = Math.round(Number(value));
   if (!Number.isFinite(n)) return 90;
@@ -1038,6 +1054,8 @@ module.exports = {
   clampInt,
   orientedSize,
   fitOverlay,
+  outputOptionsFor,
+  imageDataUrlToBuffer,
   clampQuality,
   outputFormatFor,
   GRAVITY_MAP,

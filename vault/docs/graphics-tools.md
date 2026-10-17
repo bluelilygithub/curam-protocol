@@ -57,7 +57,7 @@ The page uses the same layout as Video Tools and PDF Tools: a narrow left list (
 
 - **Upscale** — enlarge artwork/small images. Model picker for faithful (Real-ESRGAN) vs enhanced (Clarity Pro), with fidelity control and cost display. Hosted models are whitelist-validated. `GET /api/graphics/upscale/info`, `POST /api/graphics/upscale`. (The one hosted/paid tool in this otherwise-local group.)
 - **Convert** — change format between PNG, JPG, WebP, GIF, AVIF, TIFF or a multi-resolution **ICO** (16–256px, packed by hand), with a quality slider for lossy formats. Accepts **HEIC/HEIF** input where the server's libvips supports it (clear message otherwise). Also offers an **import-by-URL** row. `GET /api/graphics/convert/info`, `POST /api/graphics/convert`.
-- **Compress** — batch re-encode at a chosen quality keeping each file's format; shows per-file and total savings, and never returns a larger file. `POST /api/graphics/compress`.
+- **Compress** — batch re-encode at a chosen quality keeping each file's format (PNG is only reduced to a 256-colour palette at quality 85 or below; above that it stays lossless); shows per-file and total savings, and never returns a larger file. `POST /api/graphics/compress`.
 - **Batch** — apply one operation across many images (up to 25) at once: **Watermark**, **Resize** (width/height, fit, or a social-size preset), **Convert format** (with quality), **Compress**, or **Strip metadata**. Per-file results with individual downloads plus **Download all**; one bad file doesn't abort the run. Watermark/resize/convert/compress go through `POST /api/graphics/batch` (`{ op, items, params }`, each item's error isolated); strip-metadata still loops `POST /api/graphics/strip-metadata` client-side since there's no server batch path for it yet.
 - **PDF → Images** — render each page of a PDF to a PNG entirely in the browser via `pdfjs-dist` (CDN worker), with a resolution selector (1×–4×), click-to-zoom, per-page and "download all". Nothing is uploaded.
 - **Auto-enhance** — one-click brightness/contrast/saturation correction driven by histogram analysis (5th/95th percentile per channel). Shows applied multipliers with before/after compare. `POST /api/graphics/auto-enhance`.
@@ -88,7 +88,7 @@ Every Graphics tool shows a **processing modal** (spinner + tool-specific label)
 - **Watermark** — text (colour, position, opacity) or image watermark (scale, opacity), with optional tiling. `POST /api/graphics/watermark`.
 - **Batch Text** — stamp a templated text label (`{filename}`, `{index}`, `{n}`, `{date}`) onto up to 20 images at once. Controls: position, font size, text colour, opacity, optional backing rectangle. Per-image download. `POST /api/graphics/batch-text`.
 - **Collage** — arrange 2–9 images into a grid with columns, spacing and background colour. `POST /api/graphics/collage`.
-- **Favicon / Icons** — generate a full PNG icon set + `site.webmanifest` + `<head>` snippet from one image. `POST /api/graphics/favicon`.
+- **Favicon / Icons** — generate a full PNG icon set + `favicon.ico` (16/32/48) + `site.webmanifest` + `<head>` snippet from one image. `POST /api/graphics/favicon`.
 - **Vectorize (SVG)** — trace a raster to SVG with colour count and detail controls. `POST /api/graphics/vectorize`.
 - **AI Icon Library** — generate cohesive custom SVG icons from a subject with reference styles, refine and add more. `POST /api/graphics/icon-references`, `POST /api/graphics/icon-generate`.
 
@@ -175,3 +175,5 @@ Adding or removing a tool: update `MODES`, `MODE_GROUPS`, `TOOL_TIPS`, `TOOL_HEL
 - **Icon tools** take their model from Settings (light tier for the name list, standard for the icons) and now log their usage as `graphics_icons`, so they show on the Usage dashboard and count towards the cap.
 - **Animate** accepts at most 40 frames.
 - **Gallery**: 200 images per person, 8MB each. The list sends 320px previews (`thumbDataUrl`, made on save, and made a few at a time for older images); the full image comes from `GET /gallery/:id` when one is opened. Ids must be numbers; metadata must be a small object.
+
+Encoding rules (all in `shared.js`): tool outputs in JPEG/WebP use quality 92 (`outputOptionsFor`, instead of sharp's 80), **Pipeline** keeps every step lossless (PNG) and encodes once at the end, and routes that read an image check it really is an image (`imageDataUrlToBuffer`) so a PDF gets a clean 400. Careful with sharp: passing `quality` or `effort` to `png()` silently turns on the palette.

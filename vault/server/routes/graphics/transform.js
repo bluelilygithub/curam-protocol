@@ -12,6 +12,8 @@ const {
   outputFormatFor,
   clampInt,
   orientedSize,
+  outputOptionsFor,
+  imageDataUrlToBuffer,
   GRAVITY_MAP,
   parseHexColor,
   SOCIAL_PRESETS,
@@ -93,7 +95,7 @@ async function runResize(params) {
     pipeline = pipeline.resize(tw, th, { fit: 'cover', position });
   }
 
-  const out = await pipeline.toFormat(fmt).toBuffer();
+  const out = await pipeline.toFormat(fmt, outputOptionsFor(fmt)).toBuffer();
   const m2 = await sharp(out).metadata().catch(() => null);
   return {
     ok: true,
@@ -139,7 +141,7 @@ router.post('/extend', async (req, res) => {
     let pipeline = sharp(buffer).rotate();
     if (transparent) pipeline = pipeline.ensureAlpha();
     pipeline = pipeline.extend({ top, right, bottom, left, background });
-    const out = await pipeline.toFormat(fmt).toBuffer();
+    const out = await pipeline.toFormat(fmt, outputOptionsFor(fmt)).toBuffer();
     const m2 = await sharp(out).metadata().catch(() => null);
     res.json({
       ok: true,
@@ -157,7 +159,7 @@ router.post('/extend', async (req, res) => {
 // hSkew and vSkew are in the range -50…50 (percentage), normalised to -0.5…0.5 for the matrix.
 router.post('/perspective', async (req, res) => {
   try {
-    const buf = dataUrlToBuffer(req.body?.imageDataUrl || '');
+    const buf = imageDataUrlToBuffer(req.body?.imageDataUrl);
     if (!buf) return res.status(400).json({ error: 'No valid image provided' });
 
     const hSkew = Math.max(-0.5, Math.min(0.5, Number(req.body?.hSkew || 0) / 100));
@@ -194,7 +196,7 @@ const SC_FOCUS_POSITIONS = ['attention', 'entropy', 'centre', 'north', 'south', 
 
 router.post('/smart-crop', async (req, res) => {
   try {
-    const buf = dataUrlToBuffer(req.body?.imageDataUrl || '');
+    const buf = imageDataUrlToBuffer(req.body?.imageDataUrl);
     if (!buf) return res.status(400).json({ error: 'No valid image provided' });
 
     const focus = SC_FOCUS_POSITIONS.includes(req.body?.focus) ? req.body.focus : 'attention';
@@ -227,7 +229,7 @@ router.post('/smart-crop', async (req, res) => {
     const out = await sharp(buf)
       .rotate()
       .resize(width || null, height || null, { fit: 'cover', position: focus })
-      .toFormat(fmt)
+      .toFormat(fmt, outputOptionsFor(fmt))
       .toBuffer();
 
     const m2 = await sharp(out).metadata().catch(() => null);

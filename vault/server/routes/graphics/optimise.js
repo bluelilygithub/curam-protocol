@@ -35,6 +35,9 @@ const {
   clampInt,
   orientedSize,
   parseHexColor,
+  imageDataUrlToBuffer,
+  outputFormatFor,
+  outputOptionsFor,
   SOCIAL_PRESETS,
 } = require('./shared');
 const { runResize } = require('./transform');
@@ -257,7 +260,8 @@ function buildCompressOptions(format, quality) {
     case 'jpeg': return { quality, mozjpeg: true };
     case 'webp': return { quality, effort: 6 };
     case 'avif': return { quality, effort: 4 };
-    case 'png': return { quality, compressionLevel: 9, palette: true, effort: 8 };
+    // Squeezing a PNG to 256 colours is visibly lossy on photos and gradients, so only do it when the person asked for strong compression.
+    case 'png': return quality <= 85 ? { quality, compressionLevel: 9, palette: true, effort: 8 } : { compressionLevel: 9 }; // no quality or effort option: sharp treats either as a request for a palette
     case 'tiff': return { quality, compression: 'jpeg' };
     case 'gif': return { effort: 10 };
     default: return { quality };
@@ -574,12 +578,13 @@ router.post('/print-ready', async (req, res) => {
 // Auto-enhance: intelligently adjust brightness, contrast, saturation based on histogram.
 router.post('/auto-enhance', async (req, res) => {
   try {
-    const buf = dataUrlToBuffer(req.body?.imageDataUrl || '');
+    const buf = imageDataUrlToBuffer(req.body?.imageDataUrl);
     if (!buf) return res.status(400).json({ error: 'No valid image provided' });
 
     // Analyze histogram to determine optimal adjustments. sharp pipelines are mutable, so the analysis
     // (downsized) and the enhancement (full size) must be separate objects.
     const meta = await sharp(buf).metadata();
+    const fmt = outputFormatFor(meta);
     let w = meta.width || 1;
     let h = meta.height || 1;
 
@@ -650,12 +655,13 @@ router.post('/auto-enhance', async (req, res) => {
     const enhanced = await sharp(buf).rotate()
       .linear(contrast, Math.round(128 * (1 - contrast)))
       .modulate({ brightness, saturation })
-      .png()
+      .toFormat(fmt, outputOptionsFor(fmt))
       .toBuffer();
 
     res.json({
       ok: true,
-      imageDataUrl: `data:image/png;base64,${enhanced.toString('base64')}`,
+      imageDataUrl: `data:image/${fmt};base64,${enhanced.toString('base64')}`,
+      format: fmt,
       applied: { brightness: Number(brightness.toFixed(2)), contrast: Number(contrast.toFixed(2)), saturation: Number(saturation.toFixed(2)) },
       width: orientedSize(meta).width,
       height: orientedSize(meta).height,

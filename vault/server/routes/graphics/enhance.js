@@ -7,7 +7,9 @@ const router = express.Router();
 const sharp = require('sharp');
 const {
   dataUrlToBuffer,
+  imageDataUrlToBuffer,
   outputFormatFor,
+  outputOptionsFor,
   clampInt,
   parseHexColor,
 } = require('./shared');
@@ -49,7 +51,9 @@ async function applyPipelineStep(buffer, step) {
     }
     default: return buffer;
   }
-  return pipe.toBuffer();
+  // Lossless between steps: re-saving a JPEG after each of up to 12 steps would pile up compression damage.
+  // The caller encodes once, in the picture's own format, at the end.
+  return pipe.png({ compressionLevel: 1 }).toBuffer();
 }
 
 router.post('/pipeline', async (req, res) => {
@@ -69,7 +73,7 @@ router.post('/pipeline', async (req, res) => {
       // eslint-disable-next-line no-await-in-loop
       buffer = await applyPipelineStep(buffer, step);
     }
-    const out = await sharp(buffer).toFormat(fmt).toBuffer();
+    const out = await sharp(buffer).toFormat(fmt, outputOptionsFor(fmt)).toBuffer();
     const m2 = await sharp(out).metadata().catch(() => null);
     res.json({
       ok: true,
@@ -170,7 +174,7 @@ router.post('/effect', async (req, res) => {
       return res.status(400).json({ error: 'Unknown effect' });
     }
 
-    const out = await pipeline.toFormat(fmt).toBuffer();
+    const out = await pipeline.toFormat(fmt, outputOptionsFor(fmt)).toBuffer();
     const m2 = await sharp(out).metadata().catch(() => null);
     res.json({
       ok: true,
@@ -246,7 +250,7 @@ router.post('/adjust', async (req, res) => {
       pipeline = pipeline.composite([{ input: vig, blend: 'over' }]);
     }
 
-    const out = await pipeline.toFormat(fmt).toBuffer();
+    const out = await pipeline.toFormat(fmt, outputOptionsFor(fmt)).toBuffer();
     const m2 = await sharp(out).metadata().catch(() => null);
     res.json({
       ok: true,
@@ -276,7 +280,7 @@ const COLORGRADE_PRESETS = {
 
 router.post('/colorgrade', async (req, res) => {
   try {
-    const buf = dataUrlToBuffer(req.body?.imageDataUrl || '');
+    const buf = imageDataUrlToBuffer(req.body?.imageDataUrl);
     if (!buf) return res.status(400).json({ error: 'No valid image provided' });
 
     const presetKey = Object.prototype.hasOwnProperty.call(COLORGRADE_PRESETS, req.body?.preset)
@@ -301,7 +305,7 @@ router.post('/colorgrade', async (req, res) => {
       pipeline = pipeline.linear(contrast, Math.round(lift + 128 * (1 - contrast)));
     }
 
-    const out = await pipeline.toFormat(fmt).toBuffer();
+    const out = await pipeline.toFormat(fmt, outputOptionsFor(fmt)).toBuffer();
     const m2 = await sharp(out).metadata().catch(() => null);
     res.json({
       ok: true,
