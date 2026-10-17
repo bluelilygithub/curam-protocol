@@ -25,8 +25,10 @@ const isoFromDmy = (s, twoDigitYear) => {
   return `${y}-${m[2]}-${m[1]}`;
 };
 
-const ROW_RE = /(\d{2}\/\d{2}\/\d{4}) (\d{2}\/\d{2}\/\d{4}) (\d{4}) (.+?) \$([\d,]+\.\d{2})( CR)? \$([\d,]+\.\d{2})( CR)?(?: ([\d,]+\.\d{2}) ([A-Z]{3}))?/g;
-const FEE_RE = /(\d{2}\/\d{2}\/\d{4}) INCL OVERSEAS TXN FEE ([\d,]+\.\d{2}) AUD \$([\d,]+\.\d{2})( CR)?/g;
+// "CR" follows an amount either after a space ("$400.00 CR") or glued on ("$400.00CR"); both appear, sometimes in
+// the same statement, so the space is optional everywhere.
+const ROW_RE = /(\d{2}\/\d{2}\/\d{4}) (\d{2}\/\d{2}\/\d{4}) (\d{4}) (.+?) \$([\d,]+\.\d{2})( ?CR)? \$([\d,]+\.\d{2})( ?CR)?(?: ([\d,]+\.\d{2}) ([A-Z]{3}))?/g;
+const FEE_RE = /(\d{2}\/\d{2}\/\d{4}) INCL OVERSEAS TXN FEE ([\d,]+\.\d{2}) AUD \$([\d,]+\.\d{2})( ?CR)?/g;
 
 function looksLikeAnzCard(text) {
   return /STATEMENT PERIOD:/i.test(text) && /YOUR ANZ ACCOUNT SUMMARY/i.test(text) && /Transaction Details/i.test(text);
@@ -109,10 +111,15 @@ function parseAnzCardStatement(rawText) {
   }
   if (round2(bal) !== round2(closing)) problems.push(`The last balance ${bal.toFixed(2)} does not equal the closing balance ${closing.toFixed(2)}`);
 
-  const debits = round2(lines.filter((l) => l.amount < 0).reduce((s, l) => s - l.amount, 0));
+  // Interest has its own line on the summary ("Interest Charges"), separate from purchases, but appears among
+  // the transactions as a row ("INTEREST CHARGED ON PURCHASES"), so those rows are totalled apart.
+  const isInterest = (l) => l.amount < 0 && /^INTEREST(\s|$)/i.test(l.description);
+  const interestSum = round2(lines.filter(isInterest).reduce((s, l) => s - l.amount, 0));
+  const debits = round2(lines.filter((l) => l.amount < 0 && !isInterest(l)).reduce((s, l) => s - l.amount, 0));
   const credits = round2(lines.filter((l) => l.amount > 0).reduce((s, l) => s + l.amount, 0));
   const interestRows = interest || 0;
   if (round2(debits) !== round2(purchases)) problems.push(`Purchases and other debits add up to ${debits.toFixed(2)} but the summary says ${purchases.toFixed(2)}`);
+  if (round2(interestSum) !== round2(interestRows)) problems.push(`Interest rows add up to ${interestSum.toFixed(2)} but the summary says ${interestRows.toFixed(2)}`);
   if (round2(credits) !== round2(payments)) problems.push(`Payments and other credits add up to ${credits.toFixed(2)} but the summary says ${payments.toFixed(2)}`);
   if (round2(opening + purchases + interestRows - payments) !== round2(closing)) problems.push('The account summary does not add up (opening + purchases + interest − payments ≠ closing)');
 

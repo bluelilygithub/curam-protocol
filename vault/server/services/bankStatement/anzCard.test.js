@@ -54,6 +54,29 @@ test('a wrong balance, a missing row, or wrong summary totals are reported', () 
   assert.ok(totals.problems.some((p) => /summary/.test(p)));
 });
 
+// The same layout as an October statement: "CR" glued to the amount, and an interest row whose total is its own
+// summary line ("Interest Charges"), separate from purchases.
+const OCT = 'ANZ LOW RATE STATEMENT PERIOD: 12/09/26 to 11/10/26 ACCOUNT NUMBER: 0000-1111-2222-3333 MR A N OTHER '
+  + 'YOUR ANZ ACCOUNT SUMMARY Opening Balance $1,000.00 Purchases, Cash Advances & Other Debits $300.00 Interest Charges $20.01 '
+  + 'Payments & Other Credits $400.00 Closing Balance $920.01 PAYMENT SUMMARY Transaction Details Date Processed Date of Transaction Card Used Transaction Details Amount ($A) Balance '
+  + '15/09/2026 14/09/2026 2456 COLES 4578 MORNINGSIDE $300.00 $1,300.00 '
+  + '08/10/2026 08/10/2026 2456 PAYMENT - THANK YOU $400.00CR $900.00 '
+  + '11/10/2026 11/10/2026 2449 INTEREST CHARGED ON PURCHASES $20.01 $920.01 '
+  + 'Please refer to the last four digits';
+
+test('"CR" glued to the amount, and interest rows checked against their own summary line', () => {
+  const r = parseAnzCardStatement(OCT);
+  assert.deepStrictEqual(r.problems, []);
+  assert.strictEqual(r.ok, true);
+  assert.deepStrictEqual(r.lines.map((l) => [l.amount, l.balance]), [[-300, 1300], [400, 900], [-20.01, 920.01]]);
+  // an interest row that does not match the summary is reported
+  const bad = parseAnzCardStatement(OCT.replace('Interest Charges $20.01', 'Interest Charges $25.00'));
+  assert.ok(bad.problems.some((p) => /Interest rows add up/.test(p)), bad.problems.join('|'));
+  // a space before CR works too, in the same statement
+  const mixed = parseAnzCardStatement(OCT.replace('$400.00CR', '$400.00 CR'));
+  assert.strictEqual(mixed.ok, true);
+});
+
 test('the dispatcher chooses the card reader, and leaves other statements to the bank reader', () => {
   assert.strictEqual(parseStatementText(CARD).kind, 'card');
   const other = parseStatementText('hello');

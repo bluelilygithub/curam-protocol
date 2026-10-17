@@ -26,7 +26,7 @@ const SCRIPT = path.join(__dirname, '..', 'pdfRedact', 'redact_pdf.py');
 const PYTHON_BINS = [process.env.REDACT_PYTHON_BIN, process.env.FONTS_PYTHON_BIN, 'python3', 'python'].filter(Boolean);
 
 const DATE_RE = /^\d{2}\/\d{2}\/\d{4}$/;
-const DOLLAR_RE = /^\$([\d,]+\.\d{2})( CR)?$/;
+const DOLLAR_RE = /^\$([\d,]+\.\d{2})\s?(CR)?$/; // \"CR\" may be glued on (\"$400.00CR\") or a separate item
 const FOREIGN_RE = /^[\d,]+\.\d{2} [A-Z]{3}$/;
 const iso = (dmy) => `${dmy.slice(6, 10)}-${dmy.slice(3, 5)}-${dmy.slice(0, 2)}`;
 const num = (s) => Math.abs(Number(String(s).replace(/[$,\sCR]/g, '')));
