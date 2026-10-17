@@ -26,6 +26,7 @@
     "test:put-ownership": "node server/routes/putOwnership.test.js",
     "test:finance-tutor": "node server/services/financeTutor.test.js",
     "test:pdf-tutor": "node server/services/pdfTutor.test.js",
+    "test:graphics-tutor": "node server/services/graphicsTutor.test.js",
     "test:cross-user": "node server/routes/crossUser.test.js && node server/routes/crossUserOwnership.test.js",
     "test:graph": "node server/routes/graph.test.js",
     "test:ownership-misc": "node server/routes/ownershipMisc.test.js",

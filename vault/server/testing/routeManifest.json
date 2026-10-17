@@ -1543,6 +1543,9 @@
   "POST /api/graphics/gallery": {
    "class": "authed"
   },
+  "POST /api/graphics-tutor": {
+   "class": "authed"
+  },
   "POST /api/graphics/generate": {
    "class": "authed"
   },

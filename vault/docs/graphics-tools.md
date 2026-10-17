@@ -32,7 +32,7 @@ Most tools run **locally and free** via [`sharp`](https://sharp.pixelplumbing.co
 
 ## Sidebar
 
-Tools are grouped into five collapsible, single-open ("accordion") categories. **Create** is open on load; opening another category closes the previous one. A search box filters tools by name across all groups (temporarily revealing matches), headings use the primary accent colour, tools highlight on hover, and the active tool is filled.
+The page uses the same layout as Video Tools and PDF Tools: a narrow left list (title, info buttons, Brand Kit, search, groups) and the active tool in the main panel, with the Ask Graphics box above it. **Hovering any group or tool shows a plain-English tip** (`GROUP_TIPS`, `TOOL_TIPS` in `GraphicsPage.jsx`); the search box also matches the tips. Tools are grouped into seven collapsible, single-open ("accordion") categories. **Create** is open on load; opening another category closes the previous one. A search box filters tools by name across all groups (temporarily revealing matches), headings use the primary accent colour, tools highlight on hover, and the active tool is filled.
 
 | Group | Tools |
 |---|---|
@@ -149,3 +149,11 @@ These work across the image→image tools (Convert, Upscale, Effects, Adjust, Wa
 - **Route/logic split:** Watermark, Resize, Convert and Compress are each implemented once as a plain `run*` function (`runWatermark`/`runResize`/`runConvert`/`runCompress`); their single-image routes are thin wrappers over these, and `POST /api/graphics/batch` calls the same functions per item — no duplicated logic between the single-file and batch paths.
 
 See `CHANGELOG.md` (entries dated 2026-06-26 to 2026-06-28) for the full build history.
+
+---
+
+## Graphics guide
+
+A round button at the bottom right (shared `components/tutor/TutorChat.jsx`, wrapper `client/src/pages/graphics/GraphicsTutorChat.jsx`) opens a mini chat: say what you want to do with an image and it returns the tools to use, in order, each with an "Open" button, or says a tool is missing or the job is beyond Graphics. `POST /api/graphics-tutor` (flag `graphics`, AI rate limit) -> `server/services/graphicsTutor.js`. It sees no images, only the conversation and the current tool. Model output is untrusted (tool ids checked against `CATALOG`). A "missing" or "partly" answer is filed once in the Suggestions inbox. It is separate from **Ask Graphics** (the box above the tools), which plans and runs a few edits.
+
+Adding or removing a tool: update `MODES`, `MODE_GROUPS`, `TOOL_TIPS`, `TOOL_HELP` on the page and `CATALOG` in `graphicsTutor.js` (`npm run test:graphics-tutor` fails on any drift). Update `RULES`/`NOT_POSSIBLE` when behaviour changes.

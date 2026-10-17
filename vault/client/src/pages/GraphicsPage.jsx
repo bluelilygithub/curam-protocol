@@ -5,6 +5,7 @@ import IconLibraryGenerator from '../components/IconLibraryGenerator';
 import Tooltip from '../components/Tooltip';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import GraphicsAskPanel from '../components/GraphicsAskPanel';
+import GraphicsTutorChat from './graphics/GraphicsTutorChat';
 import useProcessingStore from '../store/processingStore';
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
@@ -224,6 +225,63 @@ const SIZE_PRESETS = [
     { label: 'HD 1920×1080', w: 1920, h: 1080 },
   ] },
 ];
+
+// Hover text for every item in the left-hand list: what the tool does, in plain words. The Graphics guide's test
+// (server/services/graphicsTutor.test.js) fails if a tool is added to MODES without an entry here.
+const TOOL_TIPS = {
+  generate: 'Make a new picture from a written description, choosing a style and a size.',
+  animate: 'Join several pictures into one animated GIF, with the delay per frame and looping.',
+  upscale: 'Make a small picture bigger and sharper. A faithful option keeps it true; an enhanced option adds detail.',
+  convert: 'Change the file type: PNG, JPG, WebP, GIF, AVIF, TIFF or ICO. iPhone HEIC photos can be opened too.',
+  compress: 'Make picture files smaller at a quality you choose, and see how much was saved.',
+  batch: 'Do one job (watermark, resize, convert, compress or remove metadata) on up to 25 pictures at once.',
+  exportsocial: 'Turn one picture into every social media size you tick, with a preview of each and one zip to download.',
+  pdf2img: 'Turn each page of a PDF into a PNG picture. Runs in your browser.',
+  printready: 'Get a picture ready for a printer: set 150, 300 or 600 DPI, add bleed, save as TIFF, PDF or PNG.',
+  autoenhance: 'One click that fixes brightness, contrast and colour, with a before-and-after slider.',
+  cropresize: 'Set an exact size, or drag a crop box. Has presets for common social sizes.',
+  extend: 'Add empty space around a picture on any side, in white, a colour or transparent.',
+  perspective: 'Straighten a picture taken at an angle, such as a sign or document that looks like a trapezoid.',
+  smartcrop: 'Crop to a size or shape while keeping the most interesting or most detailed part.',
+  effects: 'Flip, rotate, add a border, round the corners, add a shadow, or apply a filter such as black and white.',
+  adjust: 'Fine control of brightness, contrast, colour, sharpness, blur, noise and vignette. Save your settings as presets.',
+  colorgrade: 'Give a picture a film look in one click: warm, cool, vintage, noir, golden hour and more.',
+  pipeline: 'Chain several edits into one run on a picture, in the order you choose.',
+  annotate: 'Mark up a picture by hand: type text, draw arrows, boxes and lines, then save a PNG. Runs in your browser.',
+  watermark: 'Stamp text or a logo on a picture, with position, size and see-through level.',
+  textoverlay: 'Put a headline or caption on a picture, with an optional box behind it and an outline for legibility.',
+  composite: 'Stack up to 8 text and logo layers on a picture in one go.',
+  batchtext: 'Stamp a text label on up to 20 pictures at once, using the file name, number or date.',
+  collage: 'Arrange 2 to 9 pictures into a grid.',
+  favicon: 'Make a full website icon set, with its manifest file, from one picture.',
+  svg: 'Trace a picture into a scalable SVG drawing. Best for logos, icons and clipart.',
+  iconlib: 'Create a matching set of custom SVG icons from a subject and reference styles.',
+  background: 'Cut out the subject and remove the background, or replace it with a colour, gradient or picture.',
+  extract: 'Paint over the part you want to keep; everything else becomes transparent.',
+  recolor: 'Change one colour to another everywhere it appears in a picture.',
+  eraser: 'Paint parts of a picture away to transparent, with a restore brush and undo. Runs in your browser.',
+  redact: 'Draw boxes over faces, number plates or private text and blur or pixelate them. Runs in your browser.',
+  inpaint: 'Paint over something to remove it, and optionally describe what to put there. The AI fills the area.',
+  picker: 'Click anywhere on a picture to read its exact colour. Runs in your browser.',
+  histogram: 'See how dark and light the colours in a picture are, as a graph. Runs in your browser.',
+  contrast: 'Check whether a text colour on a background colour is easy enough to read (WCAG).',
+  palette: 'Pull the main 5 to 12 colours out of a picture.',
+  ocr: 'Read the text in a screenshot, scan or receipt photo, then edit, copy or save it. Runs in your browser.',
+  blurdetect: 'Score how sharp a picture is: Sharp, Soft or Blurry.',
+  diff: 'Compare two pictures and mark in red what is different.',
+  metadata: 'See the hidden details in a picture (camera, date, GPS location) and strip them out.',
+  fileinfo: "Show a file's name, type, size, pixel size and date. Runs in your browser.",
+};
+
+const GROUP_TIPS = {
+  Create: 'Make something new: a picture from a description, or an animated GIF from several pictures.',
+  Optimise: 'Get a picture ready for where it is going: bigger, smaller, a different file type, a social size or print.',
+  Transform: 'Change the shape of a picture: crop, resize, add space around it, or straighten it.',
+  Enhance: 'Change how a picture looks: filters, light and colour, film looks, or several edits chained together.',
+  Compose: 'Add things to pictures or build new ones from them: text, logos, grids, icons and SVG drawings.',
+  Retouch: 'Cut out, remove or recolour parts of a picture.',
+  Analyse: 'Look inside a picture: colours, text, sharpness, hidden details and differences.',
+};
 
 const MODE_GROUPS = [
   { label: 'Create', ids: ['generate', 'animate'] },
@@ -811,7 +869,6 @@ export default function GraphicsPage() {
   const [mode, setMode] = useState('generate');
   const [compareOn, setCompareOn] = useState(false);
   const [openGroup, setOpenGroup] = useState('Create');
-  const [hoveredTool, setHoveredTool] = useState(null);
   const [toolSearch, setToolSearch] = useState('');
   const toolSearchRef = useRef(null);
   const [brandKitOpen, setBrandKitOpen] = useState(false);
@@ -4051,13 +4108,27 @@ export default function GraphicsPage() {
     return () => stopProcessing();
   }, [activeBusyLabel, startProcessing, stopProcessing]);
 
+  // The guide's "Open <tool>" buttons: open the tool's group and the tool, exactly as clicking it in the list would.
+  const openToolById = (id) => {
+    const group = MODE_GROUPS.find(g => g.ids.includes(id));
+    if (!group) return;
+    setOpenGroup(group.label);
+    setMode(id);
+  };
+
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
-        <div>
-          <h1 className="text-xl font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
-            {getIcon('image', { size: 20 })}
-            Graphics
+    <div>
+      <div className="flex flex-col sm:flex-row min-h-[calc(100dvh-3rem)]">
+        {/* ── Sidebar ───────────────────────────────────────────────────── */}
+        <aside
+          className="w-full sm:w-56 shrink-0 border-b sm:border-b-0 sm:border-r overflow-y-auto p-4 space-y-3"
+          style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+        >
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-bg)', color: 'var(--color-primary)' }}>
+              {getIcon('image', { size: 16 })}
+            </div>
+            <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Graphics</h1>
             <button
               onClick={graphicsInfo.open}
               title="How Graphics works"
@@ -4065,7 +4136,7 @@ export default function GraphicsPage() {
               onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-primary)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-muted)'; }}
             >
-              {getIcon('info', { size: 14 })}
+              {getIcon('info', { size: 13 })}
             </button>
             <button
               onClick={askCapabilityInfo.open}
@@ -4073,9 +4144,9 @@ export default function GraphicsPage() {
               style={{ color: '#b45309', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer', transition: 'opacity 0.2s' }}
               className="hover:opacity-70"
             >
-              {getIcon('alert-triangle', { size: 14 })}
+              {getIcon('alert-triangle', { size: 13 })}
             </button>
-          </h1>
+          </div>
           {askCapabilityInfo.show && (
             <ToolInfoModal title="What Ask Graphics Can Actually Do" onClose={askCapabilityInfo.close}>
               <p className="text-sm" style={{ color: 'var(--color-text)' }}>
@@ -4095,7 +4166,7 @@ export default function GraphicsPage() {
           {graphicsInfo.show && (
             <ToolInfoModal title="How Graphics Works" onClose={graphicsInfo.close}>
               <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-                Close to 40 modes across seven groups in the sidebar — this covers the full lifecycle, not just "generate a picture":
+                Over 40 tools across seven groups in the list on the left — this covers the full lifecycle, not just "generate a picture". Hover over any group or tool for a plain explanation. Not sure which tool to use? Click the graduation-cap button at the bottom right and tell the guide what you want to do:
               </p>
               <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
                 <p style={{ color: 'var(--color-text)' }}><strong>Create</strong> — Generate makes a new image from a prompt via your admin-configured model, swappable workspace-wide. Animate turns one into a GIF.</p>
@@ -4108,7 +4179,87 @@ export default function GraphicsPage() {
               </div>
             </ToolInfoModal>
           )}
-          <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
+
+          <Tooltip text="Save a logo, up to 3 brand colours and a font name once, then reuse them in Text Overlay, Composite and Watermark.">
+            <button
+              type="button"
+              onClick={() => setBrandKitOpen(true)}
+              className="w-full flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-bg)' }}
+            >
+              {getIcon('briefcase', { size: 13 })}
+              Brand Kit{brandKit ? ' (saved)' : ''}
+            </button>
+          </Tooltip>
+
+          <Tooltip text="Filter the tool list below by name or description. Press / to jump here.">
+            <input
+              ref={toolSearchRef}
+              type="text"
+              value={toolSearch}
+              onChange={e => setToolSearch(e.target.value)}
+              placeholder="Search tools…"
+              className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            />
+          </Tooltip>
+
+          {MODE_GROUPS.map(group => {
+            const q = toolSearch.trim().toLowerCase();
+            const ids = group.ids.filter(id => {
+              const m = MODES.find(x => x.id === id);
+              return m && (!q || m.label.toLowerCase().includes(q) || (TOOL_TIPS[id] || '').toLowerCase().includes(q));
+            });
+            if (!ids.length) return null;
+            const open = openGroup === group.label;
+            return (
+              <div key={group.label}>
+                <Tooltip text={GROUP_TIPS[group.label]} side="right">
+                  <button
+                    type="button"
+                    onClick={() => setOpenGroup(prev => (prev === group.label ? null : group.label))}
+                    className="text-xs font-semibold w-full text-left py-1 transition-opacity hover:opacity-70"
+                    style={{ color: 'var(--color-primary)' }}
+                  >
+                    {open ? '▼' : '▶'} {group.label}
+                  </button>
+                </Tooltip>
+                {(open || q) && (
+                  <ul className="pl-2 border-l ml-1 space-y-0.5 mt-1" style={{ borderColor: 'var(--color-border)' }}>
+                    {ids.map(id => {
+                      const m = MODES.find(x => x.id === id);
+                      return (
+                        <li key={id}>
+                          <Tooltip text={TOOL_TIPS[id] || m.label} side="right">
+                            <button
+                              type="button"
+                              onClick={() => setMode(id)}
+                              className="w-full text-left px-2 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-70"
+                              style={{
+                                background: mode === id ? 'var(--color-bg)' : 'transparent',
+                                color: mode === id ? 'var(--color-text)' : 'var(--color-muted)',
+                              }}
+                            >
+                              {m.label}
+                            </button>
+                          </Tooltip>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
+          {toolSearch.trim() && !MODES.some(m => m.label.toLowerCase().includes(toolSearch.trim().toLowerCase()) || (TOOL_TIPS[m.id] || '').toLowerCase().includes(toolSearch.trim().toLowerCase())) && (
+            <p className="px-2 text-xs" style={{ color: 'var(--color-muted)' }}>No tools match “{toolSearch}”.</p>
+          )}
+        </aside>
+
+        {/* ── Main panel ────────────────────────────────────────────────── */}
+        <main className="flex-1 min-w-0 overflow-y-auto p-6 space-y-4 max-w-5xl">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+          <p className="text-sm min-w-0 flex-1" style={{ color: 'var(--color-muted)' }}>
             {mode === 'generate' && 'Generate local article and story support images from a prompt.'}
             {mode === 'upscale' && 'Enlarge artwork and small images while preserving detail.'}
             {mode === 'convert' && 'Convert an image to PNG, JPG, WebP, GIF, AVIF, TIFF or ICO (HEIC input supported where available).'}
@@ -4149,7 +4300,6 @@ export default function GraphicsPage() {
             {mode === 'colorgrade' && 'Apply a cinematic colour grade — warm, cool, vintage, fade, noir, and more — in one click.'}
             {mode === 'batchtext' && 'Stamp a text label (with {filename}, {index}, {date} variables) onto many images at once.'}
           </p>
-        </div>
         {(mode === 'generate' || mode === 'upscale') && (
           <div
             className="text-xs px-3 py-1.5 rounded-full border"
@@ -4162,102 +4312,10 @@ export default function GraphicsPage() {
             {statusLabel}
           </div>
         )}
-      </div>
+          </div>
 
       <GraphicsAskPanel onOpenInModeWithPrompt={openPlanStepInMode} getModeResultImage={getModeResultImage} currentMode={mode} />
 
-      <div className="flex flex-col md:flex-row gap-6 items-start">
-        <aside className="w-full md:w-52 md:shrink-0 md:sticky md:top-6">
-          <Tooltip text="Save a logo, up to 3 brand colours and a font name once, then reuse them in Text Overlay, Composite and Watermark.">
-            <button
-              type="button"
-              onClick={() => setBrandKitOpen(true)}
-              className="w-full mb-2 flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border hover:opacity-70"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}
-            >
-              {getIcon('briefcase', { size: 13 })}
-              Brand Kit{brandKit ? ' (saved)' : ''}
-            </button>
-          </Tooltip>
-          <div className="relative mb-3">
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--color-muted)' }}>
-              {getIcon('search', { size: 14 })}
-            </span>
-            <input
-              ref={toolSearchRef}
-              type="text"
-              value={toolSearch}
-              onChange={e => setToolSearch(e.target.value)}
-              placeholder="Search tools...  ( / )"
-              className="w-full pl-8 pr-7 py-2 rounded-lg border text-sm outline-none"
-              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-            />
-            {toolSearch && (
-              <button type="button" onClick={() => setToolSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 hover:opacity-70" style={{ color: 'var(--color-muted)' }}>
-                {getIcon('x', { size: 14 })}
-              </button>
-            )}
-          </div>
-          <nav className="flex md:block gap-4 md:gap-0 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
-            {MODE_GROUPS.map(group => {
-              const q = toolSearch.trim().toLowerCase();
-              const ids = group.ids.filter(id => {
-                const m = MODES.find(x => x.id === id);
-                return m && (!q || m.label.toLowerCase().includes(q));
-              });
-              if (!ids.length) return null;
-              const collapsed = q ? false : openGroup !== group.label;
-              return (
-              <div key={group.label} className="mb-0 md:mb-4 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setOpenGroup(prev => (prev === group.label ? null : group.label))}
-                  className="flex items-center gap-1 w-full px-2 mb-1.5 text-sm font-bold uppercase tracking-wide hover:opacity-80 transition-opacity"
-                  style={{ color: 'var(--color-primary)' }}
-                >
-                  <span style={{ display: 'inline-flex', transform: collapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 0.15s' }}>
-                    {getIcon('chevron-down', { size: 15 })}
-                  </span>
-                  {group.label}
-                </button>
-                {!collapsed && (
-                <div className="flex md:flex-col gap-1 md:pl-3 md:ml-1 md:border-l" style={{ borderColor: 'var(--color-border)' }}>
-                  {ids.map(id => {
-                    const m = MODES.find(x => x.id === id);
-                    if (!m) return null;
-                    const active = mode === m.id;
-                    const hovered = hoveredTool === m.id && !active;
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        title={TOOL_HELP[m.id]?.what || m.label}
-                        onClick={() => setMode(m.id)}
-                        onMouseEnter={() => setHoveredTool(m.id)}
-                        onMouseLeave={() => setHoveredTool(prev => (prev === m.id ? null : prev))}
-                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors text-left"
-                        style={{
-                          color: active ? '#fff' : hovered ? 'var(--color-primary)' : 'var(--color-text)',
-                          background: active ? 'var(--color-primary)' : hovered ? 'var(--color-bg)' : 'transparent',
-                        }}
-                      >
-                        {getIcon(m.icon, { size: 15 })}
-                        {m.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                )}
-              </div>
-              );
-            })}
-          </nav>
-          {toolSearch.trim() && !MODES.some(m => m.label.toLowerCase().includes(toolSearch.trim().toLowerCase())) && (
-            <p className="px-2 text-xs" style={{ color: 'var(--color-muted)' }}>No tools match “{toolSearch}”.</p>
-          )}
-        </aside>
-
-        <main className="min-w-0 flex-1 w-full">
 
       {mode === 'generate' && (
       <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -8544,6 +8602,8 @@ export default function GraphicsPage() {
           </div>
         </div>
       )}
+
+      <GraphicsTutorChat currentTool={mode} onOpenTool={openToolById} />
 
       {helpTool && TOOL_HELP[helpTool] && (
         <div

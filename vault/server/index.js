@@ -188,6 +188,7 @@ app.use('/api/shares', requireFeature('shares'), require('./routes/shares'));
 app.use('/api/metals', requireFeature('shares'), require('./routes/metals'));
 app.use('/api/youtube', requireFeature('youtube'), require('./routes/youtube'));
 app.use('/api/graphics', requireFeature('graphics'), aiLimiter, require('./routes/graphics'));
+app.use('/api/graphics-tutor', requireFeature('graphics'), aiLimiter, require('./routes/graphicsTutor'));
 app.use('/api/fonts', requireFeature('fonts'), require('./routes/fonts'));
 app.use('/api/restyle', requireFeature('restyle'), require('./routes/restyle'));
 app.use('/api/room-projects', requireFeature('roomPlanner'), require('./routes/roomProjects'));
