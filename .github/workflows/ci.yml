@@ -9,7 +9,7 @@ name: CI
 
 on:
   push:
-    branches: [version-7, staging, "test/**"]
+    branches: [version-7, staging]
   pull_request:
     branches: [version-7, main, staging]
   workflow_dispatch:
