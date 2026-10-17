@@ -8,7 +8,7 @@ const express = require('express');
 const router = express.Router();
 const sharp = require('sharp');
 const exifReader = require('exif-reader');
-const { dataUrlToBuffer, imageDataUrlToBuffer, clampInt, outputFormatFor, outputOptionsFor } = require('./shared');
+const { dataUrlToBuffer, imageDataUrlToBuffer, clampInt, outputFormatFor, outputOptionsFor, assertStill } = require('./shared');
 const { runPixelTask } = require('../../services/graphicsWorker');
 
 router.post('/diff', async (req, res) => {
@@ -35,7 +35,7 @@ router.post('/diff', async (req, res) => {
       imageDataUrl: `data:image/png;base64,${png.toString('base64')}`,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Diff failed' });
+    res.status(err.status || 500).json({ error: err.message || 'Diff failed' });
   }
 });
 function gpsToDecimal(parts, ref) {
@@ -117,7 +117,7 @@ router.post('/metadata', async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Could not read metadata' });
+    res.status(err.status || 500).json({ error: err.message || 'Could not read metadata' });
   }
 });
 
@@ -129,6 +129,7 @@ router.post('/strip-metadata', async (req, res) => {
       return res.status(400).json({ error: 'A valid image is required' });
     }
     const meta = await sharp(buffer).metadata();
+    assertStill(meta);
     const removed = [];
     if (meta.exif) removed.push('EXIF (camera, settings, timestamps)');
     if (exifHasGps(meta.exif)) removed.push('GPS location');
@@ -151,7 +152,7 @@ router.post('/strip-metadata', async (req, res) => {
       imageDataUrl: `data:image/${fmt};base64,${out.toString('base64')}`,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Metadata removal failed' });
+    res.status(err.status || 500).json({ error: err.message || 'Metadata removal failed' });
   }
 });
 // Blur detection using Laplacian variance. Lower variance = blurrier image.
@@ -211,7 +212,7 @@ router.post('/blur-detect', async (req, res) => {
       height: meta.height,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Blur detection failed' });
+    res.status(err.status || 500).json({ error: err.message || 'Blur detection failed' });
   }
 });
 

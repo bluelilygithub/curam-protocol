@@ -179,3 +179,10 @@ Adding or removing a tool: update `MODES`, `MODE_GROUPS`, `TOOL_TIPS`, `TOOL_HEL
 - **Gallery**: 200 images per person, 8MB each. The list sends 320px previews (`thumbDataUrl`, made on save, and made a few at a time for older images); the full image comes from `GET /gallery/:id` when one is opened. Ids must be numbers; metadata must be a small object.
 
 Encoding rules (all in `shared.js`): tool outputs in JPEG/WebP use quality 92 (`outputOptionsFor`, instead of sharp's 80), **Pipeline** keeps every step lossless (PNG) and encodes once at the end, and routes that read an image check it really is an image (`imageDataUrlToBuffer`) so a PDF gets a clean 400. Careful with sharp: passing `quality` or `effort` to `png()` silently turns on the palette.
+
+## Small rules worth knowing
+
+- **Animated pictures:** only Convert and Compress keep an animated GIF/WebP. Every editing tool (Resize, Extend, Effects, Adjust, Color Grading, Pipeline, Watermark, Text, Composite, Batch Text, Perspective, Smart Crop, Recolor, Remove Meta) refuses with 422 `ANIMATED_NOT_SUPPORTED` through `assertStill()` (shared.js) instead of silently returning the first frame. A batch reports it per item. New editing routes should call `assertStill(meta)`.
+- **Composite `{x, y}` positions:** a value above 0 and below 1 is a fraction of the picture; 1 and above is pixels.
+- **Favicon pack:** the manifest only has a `name` when the request sends one.
+- **Ask Graphics errors:** 400 empty or oversize request, 422 "could not understand", 503 no AI model set up, 502 the AI provider failed (its message is not shown).

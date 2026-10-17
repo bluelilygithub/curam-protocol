@@ -18,7 +18,7 @@ stub('../../db', { pool: { query: async (sql, params) => (global.__poolHandler ?
 const modelCalls = [];
 const usageLogs = [];
 stub('../../services/modelResolver', { getModelsForUser: async () => ({ light: 'light-model', standard: 'standard-model' }), getVaultModelsConfigForUser: async () => ({ models: [] }) });
-stub('../../services/callModel', { callModel: async (model) => { modelCalls.push(model); return { text: JSON.stringify({ lucide: ['a'], fontawesome: ['b'] }), inputTokens: 11, outputTokens: 22, model }; } });
+stub('../../services/callModel', { callModel: async (model) => { if (global.__callModelThrow) throw new Error('provider down'); modelCalls.push(model); return { text: JSON.stringify({ lucide: ['a'], fontawesome: ['b'] }), inputTokens: 11, outputTokens: 22, model }; } });
 stub('../../utils/logUsage', { logUsage: (u) => usageLogs.push(u) });
 process.env.GRAPHICS_MAX_MEGAPIXELS = '30';
 process.env.GRAPHICS_DAILY_COST_CAP_USD = '5';
@@ -336,6 +336,64 @@ async function startServer() {
     assert.strictEqual(r.status, 400);
     r = await post('/plan-request', { transcript: 'brighter', catalog: Array.from({ length: 61 }, (_, i) => ({ id: `m${i}` })) });
     assert.strictEqual(r.status, 400);
+
+
+    // ---- Animated pictures: editing tools refuse rather than quietly keep one frame; Convert and Compress keep the animation ----
+    const frameA = dataUrl(await solid(40, 30, '#cc0000'), 'image/png');
+    const frameB = dataUrl(await solid(40, 30, '#0000cc'), 'image/png');
+    r = await post('/animate', { frames: [frameA, frameB], delay: 100 });
+    assert.strictEqual(r.status, 200, `animate: ${r.body.error}`);
+    const gif = r.body.imageDataUrl;
+    assert.strictEqual((await sharp(toBuf(gif), { animated: true }).metadata()).pages, 2, 'the test GIF really has two frames');
+    const animatedRoutes = [
+      ['/resize', { width: 20 }], ['/extend', { top: 5 }], ['/effect', { effect: 'grayscale' }], ['/adjust', { brightness: 1.2 }], ['/colorgrade', { preset: 'warm' }],
+      ['/watermark', { type: 'text', text: 'hi' }], ['/text', { text: 'hi' }], ['/strip-metadata', {}], ['/smart-crop', { width: 10, height: 10 }], ['/perspective', { hSkew: 5 }],
+      ['/recolor', { sourceColor: '#cc0000', targetColor: '#00cc00' }], ['/pipeline', { steps: [{ op: 'grayscale' }] }], ['/composite', { overlays: [{ type: 'text', text: 'hi' }] }],
+    ];
+    for (const [route, extra] of animatedRoutes) {
+      r = await post(route, { imageDataUrl: gif, ...extra });
+      assert.strictEqual(r.status, 422, `${route} refuses an animated GIF (got ${r.status}: ${r.body.error})`);
+      assert.match(r.body.error, /animated/);
+    }
+    r = await post('/batch', { op: 'resize', items: [{ imageDataUrl: gif, width: 20 }, { imageDataUrl: frameA, width: 20 }] });
+    assert.match(r.body.results[0].error, /animated/, 'in a batch, the animated item is reported');
+    assert.ok(r.body.results[1].imageDataUrl, 'and the others still run');
+    r = await post('/convert', { imageDataUrl: gif, format: 'webp' });
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual((await sharp(toBuf(r.body.imageDataUrl), { animated: true }).metadata()).pages, 2, 'Convert keeps the animation');
+    r = await post('/compress', { imageDataUrl: gif, quality: 60 });
+    assert.strictEqual(r.status, 200);
+
+    // ---- Composite {x, y}: between 0 and 1 is a fraction, 1 and up is pixels ----
+    const dot = dataUrl(await sharp({ create: { width: 4, height: 4, channels: 3, background: '#ff0000' } }).png().toBuffer(), 'image/png');
+    const whiteBase = dataUrl(await solid(100, 100, '#ffffff'), 'image/png');
+    const pixelAt = async (url, x, y) => { const { data, info } = await sharp(toBuf(url)).raw().toBuffer({ resolveWithObject: true }); const o = (y * info.width + x) * info.channels; return [data[o], data[o + 1], data[o + 2]]; };
+    r = await post('/composite', { imageDataUrl: whiteBase, overlays: [{ type: 'image', imageDataUrl: dot, scale: 4, position: { x: 1, y: 1 } }] });
+    assert.strictEqual(r.status, 200, `composite px: ${r.body.error}`);
+    assert.deepStrictEqual(await pixelAt(r.body.imageDataUrl, 2, 2), [255, 0, 0], 'x = 1 means one pixel in');
+    r = await post('/composite', { imageDataUrl: whiteBase, overlays: [{ type: 'image', imageDataUrl: dot, scale: 4, position: { x: 0.5, y: 0.5 } }] });
+    assert.deepStrictEqual(await pixelAt(r.body.imageDataUrl, 51, 51), [255, 0, 0], 'x = 0.5 means halfway across');
+
+    // ---- Favicon manifest has no blank names; a site name is used when given ----
+    r = await post('/favicon', { imageDataUrl: dataUrl(red, 'image/png') });
+    let manifest = JSON.parse(await (await JSZip.loadAsync(toBuf(r.body.zipDataUrl))).file('site.webmanifest').async('string'));
+    assert.ok(!('name' in manifest) && !('short_name' in manifest), 'no empty name fields');
+    r = await post('/favicon', { imageDataUrl: dataUrl(red, 'image/png'), name: 'Curam Vault' });
+    manifest = JSON.parse(await (await JSZip.loadAsync(toBuf(r.body.zipDataUrl))).file('site.webmanifest').async('string'));
+    assert.strictEqual(manifest.name, 'Curam Vault');
+
+    // ---- Ask Graphics reports the right kind of failure ----
+    r = await post('/plan-request', { transcript: '', catalog: [{ id: 'adjust' }] });
+    assert.strictEqual(r.status, 400, 'an empty request is the person');
+    r = await post('/plan-request', { transcript: 'make it brighter', catalog: [] });
+    assert.strictEqual(r.status, 400, 'no catalogue is a bad request');
+    r = await post('/plan-request', { transcript: 'make it brighter', catalog: [{ id: 'adjust', label: 'Adjust', description: 'x', paramSchema: {} }] });
+    assert.strictEqual(r.status, 422, 'an answer that is not a plan is "could not understand", not a server error');
+    global.__callModelThrow = true;
+    r = await post('/plan-request', { transcript: 'make it brighter', catalog: [{ id: 'adjust', label: 'Adjust', description: 'x', paramSchema: {} }] });
+    assert.strictEqual(r.status, 502, 'a provider failure is a 502');
+    assert.ok(!/provider down/.test(r.body.error), "the provider's raw message is not shown");
+    global.__callModelThrow = false;
 
     console.log('graphics route tests passed');
   } finally {

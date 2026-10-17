@@ -12,6 +12,7 @@ const {
   outputFormatFor,
   clampInt,
   orientedSize,
+  assertStill,
   outputOptionsFor,
   imageDataUrlToBuffer,
   GRAVITY_MAP,
@@ -43,6 +44,7 @@ async function runResize(params) {
     throw Object.assign(new Error('A valid image is required'), { status: 400 });
   }
   const meta = await sharp(buffer).metadata();
+  assertStill(meta);
   const fmt = outputFormatFor(meta);
   const presetId = String(params?.preset || '').trim();
   const preset = presetId ? SOCIAL_PRESETS.find((p) => p.id === presetId) : null;
@@ -125,6 +127,7 @@ router.post('/extend', async (req, res) => {
       return res.status(400).json({ error: 'A valid image is required' });
     }
     const meta = await sharp(buffer).metadata();
+    assertStill(meta);
     const top = clampInt(req.body?.top, 0, 5000, 0);
     const right = clampInt(req.body?.right, 0, 5000, 0);
     const bottom = clampInt(req.body?.bottom, 0, 5000, 0);
@@ -152,7 +155,7 @@ router.post('/extend', async (req, res) => {
       imageDataUrl: `data:image/${fmt};base64,${out.toString('base64')}`,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Canvas extend failed' });
+    res.status(err.status || 500).json({ error: err.message || 'Canvas extend failed' });
   }
 });
 // Perspective correction via affine shear (handles keystone / trapezoid distortion).
@@ -173,6 +176,7 @@ router.post('/perspective', async (req, res) => {
           return c ? { r: c.r, g: c.g, b: c.b, alpha: 1 } : { r: 255, g: 255, b: 255, alpha: 1 };
         })();
 
+    assertStill(await sharp(buf).metadata());
     const out = await sharp(buf)
       .rotate()
       .affine([[1, hSkew], [vSkew, 1]], { background: bg, interpolator: sharp.interpolators.nohalo })
@@ -187,7 +191,7 @@ router.post('/perspective', async (req, res) => {
       height: m?.height,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Perspective correction failed' });
+    res.status(err.status || 500).json({ error: err.message || 'Perspective correction failed' });
   }
 });
 // Smart crop — resize to a target size or aspect ratio using a chosen focus strategy.
@@ -204,6 +208,7 @@ router.post('/smart-crop', async (req, res) => {
     let height = clampInt(req.body?.height, 1, 8000, null);
 
     const meta = await sharp(buf).rotate().metadata();
+    assertStill(meta);
     const origW = meta.width;
     const origH = meta.height;
     const fmt = outputFormatFor(meta);
@@ -243,7 +248,7 @@ router.post('/smart-crop', async (req, res) => {
       bytes: out.length,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Smart crop failed' });
+    res.status(err.status || 500).json({ error: err.message || 'Smart crop failed' });
   }
 });
 

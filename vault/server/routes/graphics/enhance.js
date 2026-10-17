@@ -10,6 +10,7 @@ const {
   imageDataUrlToBuffer,
   outputFormatFor,
   outputOptionsFor,
+  assertStill,
   clampInt,
   parseHexColor,
 } = require('./shared');
@@ -68,6 +69,7 @@ router.post('/pipeline', async (req, res) => {
     if (valid.length > 12) return res.status(400).json({ error: 'Too many steps (max 12)' });
 
     const meta = await sharp(buffer).metadata();
+    assertStill(meta);
     const fmt = outputFormatFor(meta);
     for (const step of valid) {
       // eslint-disable-next-line no-await-in-loop
@@ -85,7 +87,7 @@ router.post('/pipeline', async (req, res) => {
       imageDataUrl: `data:image/${fmt};base64,${out.toString('base64')}`,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Pipeline failed' });
+    res.status(err.status || 500).json({ error: err.message || 'Pipeline failed' });
   }
 });
 router.post('/effect', async (req, res) => {
@@ -96,6 +98,7 @@ router.post('/effect', async (req, res) => {
       return res.status(400).json({ error: 'A valid image is required' });
     }
     const meta = await sharp(buffer).metadata();
+    assertStill(meta);
     let fmt = outputFormatFor(meta);
     const effect = String(req.body?.effect || '');
     // Bake EXIF orientation once so every effect operates on upright pixels.
@@ -186,7 +189,7 @@ router.post('/effect', async (req, res) => {
       imageDataUrl: `data:image/${fmt};base64,${out.toString('base64')}`,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Effect failed' });
+    res.status(err.status || 500).json({ error: err.message || 'Effect failed' });
   }
 });
 router.post('/adjust', async (req, res) => {
@@ -197,6 +200,7 @@ router.post('/adjust', async (req, res) => {
       return res.status(400).json({ error: 'A valid image is required' });
     }
     const meta = await sharp(buffer).metadata();
+    assertStill(meta);
     const fmt = outputFormatFor(meta);
     const num = (v, dflt) => (Number.isFinite(Number(v)) ? Number(v) : dflt);
     const clampNumber = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -261,7 +265,7 @@ router.post('/adjust', async (req, res) => {
       imageDataUrl: `data:image/${fmt};base64,${out.toString('base64')}`,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Adjust failed' });
+    res.status(err.status || 500).json({ error: err.message || 'Adjust failed' });
   }
 });
 // Color grading — apply a named look via channel recombination, modulate and linear tone mapping.
@@ -289,6 +293,7 @@ router.post('/colorgrade', async (req, res) => {
     const preset = COLORGRADE_PRESETS[presetKey];
 
     const meta = await sharp(buf).rotate().metadata();
+    assertStill(meta);
     const fmt = outputFormatFor(meta);
     let pipeline = sharp(buf).rotate();
 
@@ -318,7 +323,7 @@ router.post('/colorgrade', async (req, res) => {
       bytes: out.length,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Color grading failed' });
+    res.status(err.status || 500).json({ error: err.message || 'Color grading failed' });
   }
 });
 

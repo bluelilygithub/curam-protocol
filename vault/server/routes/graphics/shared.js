@@ -897,6 +897,14 @@ async function fitOverlay(overlay, baseWidth, baseHeight) {
   return sharp(overlay).resize(baseWidth, baseHeight, { fit: 'inside', withoutEnlargement: true }).png().toBuffer();
 }
 
+// Animated pictures (GIF, animated WebP) are read as ONE frame by every tool except Convert and Compress, which keep the
+// animation. Rather than quietly hand back a still, the editing tools stop and say so.
+function assertStill(meta) {
+  if (meta?.pages > 1) {
+    throw Object.assign(new Error('This is an animated picture, and this tool would keep only its first frame, so it was not changed. Convert and Compress keep the animation; for anything else, save a single frame first.'), { status: 422, code: 'ANIMATED_NOT_SUPPORTED' });
+  }
+}
+
 function clampInt(value, min, max, fallback) {
   const n = Math.round(Number(value));
   if (!Number.isFinite(n)) return fallback;
@@ -1054,6 +1062,7 @@ module.exports = {
   clampInt,
   orientedSize,
   fitOverlay,
+  assertStill,
   outputOptionsFor,
   imageDataUrlToBuffer,
   clampQuality,

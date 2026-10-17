@@ -20,6 +20,7 @@ const {
   clampInt,
   orientedSize,
   fitOverlay,
+  assertStill,
   outputOptionsFor,
   GRAVITY_MAP,
   parseHexColor,
@@ -41,6 +42,7 @@ async function runWatermark(params) {
     throw Object.assign(new Error('A valid image is required'), { status: 400 });
   }
   const meta = await sharp(buffer).metadata();
+  assertStill(meta);
   const base = orientedSize(meta);
   const fmt = outputFormatFor(meta);
   const type = params?.type === 'image' ? 'image' : 'text';
@@ -186,6 +188,7 @@ router.post('/text', async (req, res) => {
     if (!text) return res.status(400).json({ error: 'Text is required' });
 
     const meta = await sharp(buffer).metadata();
+    assertStill(meta);
     const base = orientedSize(meta);
     const fmt = outputFormatFor(meta);
     const fontSize = clampInt(req.body?.fontSize, 8, 600, Math.max(24, Math.round(base.width * 0.08)));
@@ -212,7 +215,7 @@ router.post('/text', async (req, res) => {
       imageDataUrl: `data:image/${fmt};base64,${out.toString('base64')}`,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Text overlay failed' });
+    res.status(err.status || 500).json({ error: err.message || 'Text overlay failed' });
   }
 });
 const COMPOSITE_MAX_OVERLAYS = 8;
@@ -253,8 +256,9 @@ async function buildOverlayComposite(overlay, baseMeta) {
   if (position && typeof position === 'object') {
     const xRaw = Number(position.x) || 0;
     const yRaw = Number(position.y) || 0;
-    composite.left = xRaw > 0 && xRaw <= 1 ? Math.round(xRaw * baseMeta.width) : clampInt(xRaw, 0, 20000, 0);
-    composite.top = yRaw > 0 && yRaw <= 1 ? Math.round(yRaw * baseMeta.height) : clampInt(yRaw, 0, 20000, 0);
+    // Between 0 and 1 (exclusive) is a fraction of the picture; 1 and above are pixels (so 1 means one pixel, not 100%).
+    composite.left = xRaw > 0 && xRaw < 1 ? Math.round(xRaw * baseMeta.width) : clampInt(xRaw, 0, 20000, 0);
+    composite.top = yRaw > 0 && yRaw < 1 ? Math.round(yRaw * baseMeta.height) : clampInt(yRaw, 0, 20000, 0);
   } else {
     composite.gravity = GRAVITY_MAP[position] || 'centre';
   }
@@ -278,6 +282,7 @@ router.post('/composite', async (req, res) => {
     }
 
     const meta = await sharp(buffer).metadata();
+    assertStill(meta);
     const base = orientedSize(meta);
     const fmt = outputFormatFor(meta);
     const composites = [];
@@ -342,7 +347,7 @@ router.post('/collage', async (req, res) => {
       imageDataUrl: `data:image/png;base64,${out.toString('base64')}`,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Collage failed' });
+    res.status(err.status || 500).json({ error: err.message || 'Collage failed' });
   }
 });
 router.post('/favicon', async (req, res) => {
@@ -361,9 +366,9 @@ router.post('/favicon', async (req, res) => {
       files.push({ name: `favicon-${s}x${s}.png`, buf: png });
     }
 
+    const siteName = String(req.body?.name || '').trim().slice(0, 60);
     const manifest = JSON.stringify({
-      name: '',
-      short_name: '',
+      ...(siteName ? { name: siteName, short_name: siteName.slice(0, 12) } : {}),
       icons: [
         { src: 'favicon-192x192.png', sizes: '192x192', type: 'image/png' },
         { src: 'favicon-512x512.png', sizes: '512x512', type: 'image/png' },
@@ -586,6 +591,7 @@ router.post('/batch-text', async (req, res) => {
 
       try {
         const meta = await sharp(buf).rotate().metadata();
+        assertStill(meta);
         const fmt = outputFormatFor(meta);
         const baseName = rawName.replace(/\.[^/.]+$/, '');
 

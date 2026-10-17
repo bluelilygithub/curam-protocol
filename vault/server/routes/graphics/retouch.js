@@ -9,7 +9,9 @@ const sharp = require('sharp');
 const {
   runtimeConfig,
   dataUrlToBuffer,
+  imageDataUrlToBuffer,
   orientedSize,
+  assertStill,
   parseHexColor,
   logImageUsage,
   loadContentRestrictions,
@@ -32,8 +34,8 @@ router.post('/extract', async (req, res) => {
     const imageDataUrl = String(req.body?.imageDataUrl || '');
     const maskDataUrl = String(req.body?.maskDataUrl || '');
     const feather = Math.min(50, Math.max(0, Number(req.body?.feather) || 0));
-    const imgBuf = dataUrlToBuffer(imageDataUrl);
-    const maskBuf = dataUrlToBuffer(maskDataUrl);
+    const imgBuf = imageDataUrlToBuffer(imageDataUrl);
+    const maskBuf = imageDataUrlToBuffer(maskDataUrl);
     if (!imgBuf || !maskBuf) return res.status(400).json({ error: 'Both image and mask are required' });
 
     // The painted mask was drawn over the image as the browser shows it (EXIF rotation applied), so rotate the
@@ -53,7 +55,7 @@ router.post('/extract', async (req, res) => {
     res.json({ imageDataUrl: `data:image/png;base64,${resultBuf.toString('base64')}`, width: info.width, height: info.height });
   } catch (err) {
     console.error('extract error:', err);
-    res.status(500).json({ error: err.message || 'Extraction failed' });
+    res.status(err.status || 500).json({ error: err.message || 'Extraction failed' });
   }
 });
 // Mask-based inpainting / object removal. Currently FAL-only (mask + prompt).
@@ -233,7 +235,7 @@ router.post('/background', async (req, res) => {
       imageDataUrl: `data:image/png;base64,${outBuffer.toString('base64')}`,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Background removal failed' });
+    res.status(err.status || 500).json({ error: err.message || 'Background removal failed' });
   }
 });
 router.post('/recolor', async (req, res) => {
@@ -257,6 +259,7 @@ router.post('/recolor', async (req, res) => {
     // changes). 'match' shifts lightness toward the target so a dark item can
     // become a light colour, keeping relative shading.
     const mode = req.body?.mode === 'preserve' ? 'preserve' : 'match';
+    assertStill(await sharp(buffer).metadata());
     const { data, info } = await sharp(buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     const channels = info.channels;
     const { out: recolored, matched } = await runPixelTask('recolor', { data, channels, source, target, maxDist, mode });
@@ -276,7 +279,7 @@ router.post('/recolor', async (req, res) => {
       imageDataUrl: `data:image/png;base64,${outBuffer.toString('base64')}`,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Recolour failed' });
+    res.status(err.status || 500).json({ error: err.message || 'Recolour failed' });
   }
 });
 

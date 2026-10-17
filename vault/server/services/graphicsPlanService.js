@@ -132,8 +132,8 @@ function validateStep(step, catalogById) {
  */
 async function planGraphicsRequest(userId, transcript, catalog) {
   const text = String(transcript || '').trim();
-  if (!text) throw new Error('Describe what you want to change');
-  if (!Array.isArray(catalog) || !catalog.length) throw new Error('No plannable modes were provided');
+  if (!text) throw Object.assign(new Error('Describe what you want to change'), { status: 400 });
+  if (!Array.isArray(catalog) || !catalog.length) throw Object.assign(new Error('No plannable modes were provided'), { status: 400 });
 
   // standard, not light — this is compound instruction-following over a multi-sentence request
   // (parse several distinct intents, map each to the right mode, judge ambiguity), the same
@@ -142,7 +142,7 @@ async function planGraphicsRequest(userId, transcript, catalog) {
   // multi-part requests to zero steps instead of actually reasoning through them.
   const tiers = await getModelsForUser(userId);
   const modelId = tiers.standard || tiers.light;
-  if (!modelId) throw new Error('No AI model is configured for this workspace yet — ask your admin to set one up in Settings.');
+  if (!modelId) throw Object.assign(new Error('No AI model is configured for this workspace yet — ask your admin to set one up in Settings.'), { status: 503 });
 
   const systemPrompt = buildSystemPrompt(catalog);
   const raw = await callModel(modelId, text, { system: systemPrompt, maxTokens: 2048 });
@@ -153,11 +153,11 @@ async function planGraphicsRequest(userId, transcript, catalog) {
     parsed = jsonText ? JSON.parse(jsonText) : null;
   } catch (err) {
     console.warn(`[graphics-plan] user=${userId} model=${modelId} transcript="${text}" JSON.parse failed (${err.message}). Full raw response:\n${raw}`);
-    throw new Error("Couldn't understand that as a set of edits — try describing what should change more plainly.");
+    throw Object.assign(new Error("Couldn't understand that as a set of edits — try describing what should change more plainly."), { status: 422 });
   }
   if (!parsed || !Array.isArray(parsed.steps)) {
     console.warn(`[graphics-plan] user=${userId} model=${modelId} transcript="${text}" no steps array. Full raw response:\n${raw}`);
-    throw new Error("Couldn't understand that as a set of edits — try describing what should change more plainly.");
+    throw Object.assign(new Error("Couldn't understand that as a set of edits — try describing what should change more plainly."), { status: 422 });
   }
 
   const catalogById = new Map(catalog.map((m) => [m.id, m]));

@@ -21,7 +21,8 @@ router.post('/plan-request', async (req, res) => {
     const result = await planGraphicsRequest(req.user.id, transcript, catalog);
     res.json({ ok: true, ...result });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    // 400/422 are the person's request; 503 is a workspace setup gap; anything else is the AI provider failing.
+    res.status(err.status || 502).json({ error: err.status ? err.message : 'The AI service could not plan that just now. Try again in a moment.' });
   }
 });
 

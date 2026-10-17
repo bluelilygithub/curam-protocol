@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react
 import api from '../utils/apiClient';
 import Tooltip from '../components/Tooltip';
 import GraphicsAskPanel from '../components/GraphicsAskPanel';
+import useToastStore from '../store/toastStore';
 import GraphicsTutorChat from './graphics/GraphicsTutorChat';
 import { GraphicsContext } from './graphics/GraphicsContext';
 import { TOOL_COMPONENTS } from './graphics/toolRegistry';
@@ -336,6 +337,7 @@ const TOOL_HELP = {
 
 export default function GraphicsPage() {
   const getIcon = useIcon();
+  const addToast = useToastStore((st) => st.addToast);
 
   const graphicsInfo = useToolInfoModal('vault_graphics_tools_info_seen');
 
@@ -429,8 +431,7 @@ export default function GraphicsPage() {
       setBrandKit(kit);
       setBrandKitOpen(false);
     } catch (err) {
-      // Simple inline failure — Brand Kit is a small convenience panel, not a full form.
-      window.alert(err.message || 'Failed to save Brand Kit');
+      addToast(err.message || 'Failed to save Brand Kit', 'error');
     } finally {
       setBrandKitSaving(false);
     }
