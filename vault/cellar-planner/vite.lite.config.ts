@@ -23,7 +23,7 @@ export default defineConfig({
   base: './',
   cacheDir: 'node_modules/.vite-lite', // its own dependency cache, so running it beside the full planner's dev server never clashes
   plugins: [react(), asIndex()],
-  resolve: { alias: { '@planner-core': path.resolve(here, '../planner-core/src') }, dedupe: ['react', 'react-dom', 'zustand', 'konva'] },
+  resolve: { alias: { '@planner-core': path.resolve(here, '../planner-core/src') }, dedupe: ['three', 'react', 'react-dom', 'zustand', 'konva'] },
   server: { port: 5177, strictPort: true, fs: { allow: ['..'] }, open: '/lite.html' },
   build: { outDir: 'dist-lite', emptyOutDir: true, rollupOptions: { input: path.resolve(here, 'lite.html') } },
 });

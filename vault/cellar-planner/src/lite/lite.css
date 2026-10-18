@@ -231,3 +231,16 @@ html[data-embedded] .modal-back { top: var(--vis-top, 0px); bottom: auto; height
 html[data-embedded] .shepherd-element.shepherd-centered { top: calc(var(--vis-top, 0px) + var(--vis-h, 100vh) / 2) !important; }
 /* the pop-up itself may be no taller than the visible window either (its normal limit, 100vh, is the whole frame): the text inside scrolls */
 html[data-embedded] .modal, html[data-embedded] .modal.wide { max-height: calc(var(--vis-h, 100vh) - 24px); }
+
+/* Render photo */
+.lite-photo-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.lite-photo-hint { margin: 0; }
+.lite-photo-wait { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--primary-soft, #f3f1ea); }
+.lite-photo-options { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: flex-end; }
+.lite-photo-set { border: 0; padding: 0; margin: 0; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; } .lite-photo-set legend { font-size: 12px; color: var(--muted); padding: 0 0 2px; }
+.lite-photo-set label { display: flex; gap: 6px; align-items: center; }
+.lite-photo-field { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); } .lite-photo-field select { padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: #fff; font: inherit; color: var(--text); }
+.lite-photo-bar { height: 8px; border-radius: 999px; background: var(--border); overflow: hidden; } .lite-photo-bar span { display: block; height: 100%; background: var(--primary); transition: width 200ms; }
+.lite-photo-progress p { margin: 6px 0 0; }
+.lite-photo-canvas { max-width: 100%; } .lite-photo-canvas canvas { width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border); display: block; }
+.lite-photo-left { font-size: 12px; color: var(--muted); align-self: center; }

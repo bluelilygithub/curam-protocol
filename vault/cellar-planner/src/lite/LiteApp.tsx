@@ -15,7 +15,9 @@ import { STEP_TITLES, stepKeys, type StepKey } from './steps';
 import { LengthField, Segmented, Stepper } from './controls';
 import { TooltipHost } from '@planner-core/help/TooltipHost';
 import { Icon } from '../ui/icons';
-import { PhoneNotice } from './PhoneNotice';
+import { PHONE_QUERY, PhoneNotice } from './PhoneNotice';
+import { PhotoModal } from './PhotoModal';
+import { savePicture } from './savePicture';
 import { DEFAULT_CONFIG, accentColours, loadConfig, telHref, type LiteConfig, type LitePreset } from './config';
 import { FINISH_LOOK } from './finishes';
 import { priceRange } from './price';
@@ -75,6 +77,16 @@ export function LiteApp() {
   const [restored, setRestored] = useState(start.restored);
   const [stepKey, setStepKey] = useState<StepKey>('space');
   const [view, setView] = useState<'inside' | 'plan' | 'racks'>('inside');
+  // Render photo: desktop and tablet only. A phone is told so (the same width the layout treats as a phone).
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const [isPhone, setIsPhone] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.(PHONE_QUERY).matches);
+  useEffect(() => {
+    const mq = window.matchMedia?.(PHONE_QUERY);
+    if (!mq) return undefined;
+    const on = (): void => setIsPhone(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
   const [rackWall, setRackWall] = useState<WallSide>('NORTH');
   const [asked, setAsked] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -548,6 +560,19 @@ export function LiteApp() {
               ? <DrawingView look="warm" finish={s.finish} ctrlZoom key="plan" prims={plan} testid="lite-plan" description={`Plan of the cellar from above: ${roomText} inside, door on the ${s.doorWall.toLowerCase()} wall, about ${result.bottles} bottles.`} />
               : <DrawingView look="warmWall" finish={s.finish} ctrlZoom key={`racks-${rackWall}`} prims={racks} testid="lite-racks" description={`The racks on the ${rackWall.toLowerCase()} wall seen from inside, with each bottle drawn end-on.`} />}
           </div>
+          {view === 'inside' && (
+            <div className="lite-photo-row" data-testid="lite-photo-row">
+              {isPhone ? (
+                <p className="lite-note" data-testid="lite-photo-phone">Render photo is not available on a phone. Open this page on a laptop or tablet to make a realistic picture of your cellar.</p>
+              ) : (
+                <>
+                  <button type="button" className="btn" onClick={() => setPhotoOpen(true)} title="Make a realistic picture of your cellar, with lifelike light and shadow. It is drawn by your own computer and takes a few minutes." data-testid="lite-photo-open">Render photo&hellip;</button>
+                  <button type="button" className="btn" onClick={() => void savePicture(document.querySelector('[data-testid="lite-inside-canvas"]') ?? document, result.project.name)} title="Save the 3D picture as it is now, straight away, as a PNG file." data-testid="lite-photo-quick">Save picture</button>
+                  <span className="lite-note lite-photo-hint">Render photo is a realistic picture and takes a few minutes.</span>
+                </>
+              )}
+            </div>
+          )}
           {view === 'racks' && <p className="lite-note lite-units" data-testid="lite-racks-summary" role="status"><strong>{rackWallSummary(analysis.racks, fullRuns(result.project), rackWall).text}</strong> Each circle in the picture is one bottle, so you can count them. The whole cellar is about {result.bottles}.</p>}
           {view !== 'inside' && <p className="lite-note lite-units">The numbers drawn around the edges are sizes in millimetres.</p>}
           {key === 'features' && (
@@ -597,6 +622,7 @@ export function LiteApp() {
       <p className="foot">ESTIMATE ONLY: FINAL SITE MEASURE REQUIRED. Rack unit sizes are typical values, not a quote.</p>
 
       <PriceHelp open={priceHelpOpen && !!price} onClose={() => setPriceHelpOpen(false)} cfg={cfg} facts={{ units: rackUnitCount(result.project), doorStyle: s.doorStyle, bottles: result.bottles, roomText, bottleLabel: BOTTLE_PROFILES[s.bottle].label, extras: resolved.extras.map((o) => o.name) }} />
+      <PhotoModal open={photoOpen} onClose={() => setPhotoOpen(false)} input={insideInput} name={result.project.name} />
       <TooltipHost look="vault" />
       <LiteHelp unit={unit} doorSingleMm={cfg.doors.singleMm} doorDoubleMm={cfg.doors.doubleMm} unitWidthMm={cfg.rack.unitWidthMm} open={helpOpen} onClose={closeHelp} onTour={() => { closeHelp(); window.setTimeout(() => void startTour(), 250); }} />
     </div>

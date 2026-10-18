@@ -47,6 +47,7 @@ export function LiteHelp({ open, onClose, onTour, unit, unitWidthMm, doorSingleM
             <li><b>3D</b> shows what the cellar would look like standing at the door and looking in from above, with the racks full of bottles and the sizes marked. Drag the picture to look a little to the left or right. Racks against the door wall are seen from behind.</li>
             <li><b>Plan</b> is the cellar as if you were looking down from the ceiling: the walls, the door with the way it swings open, and the racks in timber. The numbers around the edge are sizes in millimetres.</li>
             <li><b>Racks</b> shows one wall as you would see it standing inside the cellar, with every bottle drawn at its real size. Choose the wall with the buttons beside the tabs.</li>
+            <li><b>Render photo</b> (under the 3D picture, on a laptop or desktop computer or a tablet, <i>not on a phone</i>) makes a realistic picture of your cellar with lifelike light and shadow. <b>It takes a few minutes</b>: a quick look about 1 to 3 minutes and Good about 5 to 15, longer on a tablet. It starts grainy and sharpens, and you can stop at any point and keep what you have. <b>Save picture</b> saves the 3D picture as it is, straight away.</li>
             <li>To look closer, use the <b>+</b> and <b>&minus;</b> buttons on the picture. Drag the plan or a wall to move it. The round arrow brings it all back.</li>
           </ul>
 
