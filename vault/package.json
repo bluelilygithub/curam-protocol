@@ -13,6 +13,7 @@
     "test:fitness": "node server/services/fitness/fitness.test.js && node server/services/fitness/week.test.js && node server/services/fitness/log.test.js && node server/services/fitness/adapt.test.js && node server/services/fitness/dashboard.test.js && node server/services/fitness/reminders.test.js",
     "test:measurements": "node client/src/utils/units/units.test.mjs && node client/src/utils/units/voice.test.mjs && node client/src/utils/units/scanner.test.mjs",
     "test:drag": "node client/src/utils/dragPosition.test.mjs",
+    "test:settings-nav": "node client/src/utils/settingsGroups.test.mjs",
     "test:finance": "node client/src/utils/finYear.test.mjs && node server/routes/finance.test.js",
     "test:client-projects": "node server/routes/clientProjects.test.js",
     "test:files": "node server/routes/files.test.js",

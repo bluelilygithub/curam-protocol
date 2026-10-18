@@ -35,6 +35,8 @@ import { startGardenPlannerTour, TOUR_KEY as GARDEN_PLANNER_TOUR_KEY } from '../
 import { startRouteTracerTour, TOUR_KEY as ROUTE_TRACER_TOUR_KEY } from '../utils/tours/routeTracerTour';
 import { startCellarPlannerTour, TOUR_KEY as CELLAR_PLANNER_TOUR_KEY } from '../utils/tours/cellarPlannerTour';
 import ConfirmModal from '../components/ConfirmModal';
+import SettingsNav from '../components/SettingsNav';
+import { visibleGroups, allowedTabIds } from '../utils/settingsGroups.mjs';
 import UsersAdminPanel from '../components/UsersAdminPanel';
 import NavLayoutEditor from '../components/settings/NavLayoutEditor';
 import { DEFAULT_TILES, DEFAULT_NAV_ITEMS, mergeWithDefaults } from '../utils/mobileConfig';
@@ -198,28 +200,9 @@ function SettingsPage() {
   const [toolMaintenanceLoading, setToolMaintenanceLoading] = useState(false);
   const [toolMaintenanceError, setToolMaintenanceError] = useState('');
 
-  const TABS = user?.isAdmin
-    ? [
-        'Appearance',
-        'Profile',
-        'AI & Chat',
-        'Translation',
-        'Tasks',
-        'Goals',
-        'Integrations',
-        'Shares',
-        'Amazon Search',
-        'Mobile',
-        'Navigation',
-        'Members',
-        'Feature Access',
-        'Wellbeing Invites',
-        'Content Restrictions',
-        'Tool Maintenance',
-        'Environment',
-        'Tours',
-      ]
-    : ['Appearance', 'Profile', 'Tasks'];
+  // the sections (and their groups) come from one list shared with the menu: see utils/settingsGroups.mjs
+  const groups = visibleGroups(!!user?.isAdmin);
+  const TABS = allowedTabIds(!!user?.isAdmin);
 
   function selectTab(t) {
     setTab(t);
@@ -227,28 +210,7 @@ function SettingsPage() {
   }
 
   useEffect(() => {
-    const allowedTabs = user?.isAdmin
-      ? [
-          'Appearance',
-          'Profile',
-          'AI & Chat',
-          'Translation',
-          'Tasks',
-          'Goals',
-          'Integrations',
-          'Shares',
-          'Amazon Search',
-          'Mobile',
-          'Navigation',
-          'Members',
-          'Feature Access',
-          'Wellbeing Invites',
-          'Content Restrictions',
-          'Tool Maintenance',
-          'Environment',
-          'Tours',
-        ]
-      : ['Appearance', 'Profile', 'Tasks'];
+    const allowedTabs = allowedTabIds(!!user?.isAdmin);
     if (!allowedTabs.includes(tab)) {
       setTab('Appearance');
       localStorage.setItem('settingsTab', 'Appearance');
@@ -730,35 +692,16 @@ function SettingsPage() {
   }
 
   return (
-    <div className={((['Members', 'Environment', 'Wellbeing Invites', 'Tool Maintenance'].includes(tab)) && user?.isAdmin ? 'max-w-4xl' : 'max-w-2xl') + ' mx-auto p-6'}>
+    <div className="max-w-6xl mx-auto p-6">
       <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>
         Settings
       </h1>
 
-      {/* Tab bar */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', marginTop: 16, marginBottom: 28, overflowX: 'auto' }}>
-        {TABS.map(t => (
-          <button
-            key={t}
-            onClick={() => selectTab(t)}
-            style={{
-              padding: '8px 14px',
-              fontSize: 13,
-              fontWeight: tab === t ? 600 : 400,
-              color: tab === t ? 'var(--color-primary)' : 'var(--color-muted)',
-              background: 'none',
-              border: 'none',
-              borderBottom: `2px solid ${tab === t ? 'var(--color-primary)' : 'transparent'}`,
-              marginBottom: -1,
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              transition: 'color 0.15s',
-            }}
-          >
-            {t}
-          </button>
-        ))}
+      <div className="sm:flex sm:gap-8 sm:items-start" style={{ marginTop: 16, marginBottom: 28 }}>
+      <div className="sm:w-48 sm:flex-none">
+        <SettingsNav groups={groups} active={tab} onSelect={selectTab} />
       </div>
+      <div className={'flex-1 min-w-0 ' + ((['Members', 'Environment', 'Wellbeing Invites', 'Tool Maintenance'].includes(tab)) && user?.isAdmin ? 'max-w-4xl' : 'max-w-2xl')}>
 
       <div className="space-y-10">
 
@@ -3506,6 +3449,8 @@ function SettingsPage() {
       )}
 
       </div>{/* end space-y-10 content area */}
+      </div>{/* end content column */}
+      </div>{/* end menu + content row */}
 
       {showReopenWizardConfirm && (
         <ConfirmModal
