@@ -261,3 +261,25 @@ button, select, input, textarea { min-height: 36px; border-radius: 8px; }
 .side-head { padding: 16px 16px 8px; }
 .toolgroup-head, .toolitem, .toollist-info { min-height: 0; }
 .side-head h2 { font-size: 0.9rem; font-weight: 600; }
+
+/* ---- one type scale, the same as Video Tools, Finance and Graphics: 14 px body, 12 px for small print and labels, titles 600, labels 500, the rest 400. */
+:root { font-size: 14px; }
+body { font-size: 1rem; font-weight: 400; line-height: 1.45; }
+button, select, input, textarea { font-size: 1rem; font-weight: 400; }
+button.primary { font-weight: 600; }
+h2, .side-head h2, .places-head h2, .modal h2 { font-size: 1rem; font-weight: 600; }
+.modal-body h3, .modal .sub, .plan-sub { font-size: 1rem; font-weight: 600; }
+.modal-body { font-size: 1rem; }
+.hint, .tmeta, .rc-tag, .stats, .plan-meta, .plan-credit, .pop-credit, .ele-stats, .places-dist, .places-n, .probe-name, .probe-sub { font-size: 0.857rem; font-weight: 400; }
+.tname { font-weight: 500; }
+.plan-name { font-weight: 600; }
+.lbl, .plan-length, .stack label, .modal label, .check, .menu-row, .places-radius, .places-cat, .places-cats legend, .swatches legend { font-size: 1rem; font-weight: 500; }
+.check { font-weight: 400; }
+.readout { font-size: 2rem; font-weight: 600; }
+.big { font-size: 1.8rem; font-weight: 600; }
+button.back { font-size: 1rem; font-weight: 500; }
+.toolgroup-head { font-size: 0.857rem; font-weight: 600; }
+.toolitem { font-size: 0.857rem; font-weight: 400; }
+.toollist-title h1 { font-size: 1rem; font-weight: 600; }
+/* a "back" line at the top of the drawing and planning views, the same as the track's "Tracks" button */
+.side-back { padding: 0 0 2px; }

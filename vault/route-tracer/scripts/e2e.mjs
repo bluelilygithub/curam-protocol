@@ -281,6 +281,10 @@ await shot('home');
 await home();
 await page.getByRole('button', { name: 'Draw a route', exact: true }).click();
 check('draw toolbar opens', await page.getByRole('region', { name: 'Drawing tools' }).isVisible());
+check('the drawing tools have a Back button that returns to the choices (asks nothing when nothing is drawn)', await page.getByTestId('draw-back').isVisible());
+await page.getByTestId('draw-back').click();
+check('Back returns to the list of choices', await page.getByRole('button', { name: 'Draw a route', exact: true }).isVisible());
+await page.getByRole('button', { name: 'Draw a route', exact: true }).click();
 check('readout starts at 0 m', (await readout()) === '0 m', await readout());
 await stroke([[300, 300], [500, 350], [700, 300]]);
 const d1 = await readout();
@@ -1474,6 +1478,7 @@ await wait(300);
   await fp.goto(`${APP}?tour=1`);
   await fp.locator('.shepherd-element.vault-tour').first().waitFor({ timeout: 10000 });
   check('?tour=1 starts the tour', (await fp.locator('.vault-tour-step-count').first().textContent()) === 'Step 1 of 12');
+  await fp.waitForTimeout(800); // let the first step finish opening before Escape, or the key can be missed
   await fp.keyboard.press('Escape');
   const doneFlag = await fp.waitForFunction(() => localStorage.getItem('vault_tour_route_tracer_completed') === '1', undefined, { timeout: 4000 }).then(() => true, () => false);
   check('skipping marks it done', doneFlag);

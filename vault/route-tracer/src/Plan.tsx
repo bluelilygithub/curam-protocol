@@ -1,4 +1,4 @@
-import { ArrowRight, ArrowUpDown, Bike, Car, Footprints, Mountain, Search } from 'lucide-react';
+import { ArrowRight, ArrowUpDown, Bike, Car, ChevronLeft, Footprints, Mountain, Search } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
 import { useEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
@@ -449,6 +449,7 @@ export function PlanPanel({ map }: { map: maplibregl.Map | null }) {
   return (
     <section className="side-view" aria-label="Plan a route" data-testid="planbar">
       <div className="side-head">
+        <div className="side-back"><button type="button" className="back" onClick={cancel} title="Go back to your tracks and the other choices. Nothing is kept from this plan." data-testid="plan-back"><ChevronLeft size={18} aria-hidden="true" /> Back</button></div>
         <h2>Plan a route</h2>
         <div className="plan-fields" data-tour="rt-fields">
           <div className="plan-fields-rows">

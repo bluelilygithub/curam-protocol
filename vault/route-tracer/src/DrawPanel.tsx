@@ -1,3 +1,4 @@
+import { ChevronLeft } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { canSnap, cleared, displayLines, hasWork, snapCounts, snapRetry, undo } from './drawing';
 import { ElevationChart } from './ElevationChart';
@@ -25,6 +26,7 @@ export function DrawPanel({ onFinish }: { onFinish: () => void }) {
   return (
     <section className="side-view" aria-label="Drawing tools">
       <div className="side-head">
+        <div className="side-back"><button type="button" className="back" onClick={cancel} title={work ? 'Go back to your tracks and the other choices. Asks first, because this drawing is not saved.' : 'Go back to your tracks and the other choices'} data-testid="draw-back"><ChevronLeft size={18} aria-hidden="true" /> {extendingId ? 'Track' : 'Back'}</button></div>
         <h2>{extendingId ? 'Edit route' : 'Draw a route'}</h2>
       </div>
       <div className="side-body">
