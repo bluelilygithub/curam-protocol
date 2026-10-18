@@ -125,8 +125,9 @@ check('and says it was saved', (await page.getByTestId('lite-download-done').cou
 
 // ---- quote note
 await page.getByTestId('lite-quote').click();
-check('after asking for a quote (not embedded) a one-line note shows the owner\'s reassurance and that the design was copied, and there is no "ready to send" block', /We reply within a day\./.test(await page.getByTestId('lite-quote-note').innerText().catch(() => '')) && /copied|Could not copy/.test(await page.getByTestId('lite-quote-note').innerText().catch(() => '')) && (await page.getByTestId('lite-sent').count()) === 0);
-check('the note goes away by itself so the button can be pressed again', await page.getByTestId('lite-quote-note').waitFor({ state: 'detached', timeout: 4000 }).then(() => true, () => false));
+check('asking for a quote opens the form with the owner reassurance line and the design summary', /We reply within a day\./.test(await page.getByTestId('lite-quote-form').innerText().catch(() => '')) && /bottles/.test(await page.getByTestId('lite-quote-form').innerText().catch(() => '')));
+await page.getByTestId('lite-quote-form-close').click();
+check('closing it puts the visitor straight back to the design', await page.getByTestId('lite-quote-form').waitFor({ state: 'detached', timeout: 4000 }).then(() => true, () => false));
 check('the plan, price-help and save buttons are in the top row with the tour and help buttons', await page.evaluate(() => { const top = (id) => document.querySelector('[data-testid="' + id + '"]')?.closest('.lite-help-btns') !== null; return ['lite-tour', 'lite-help-open', 'lite-share', 'lite-download'].every(top); }));
 
 // ---- every control has a tooltip
@@ -416,10 +417,8 @@ const thumbHidden = await page.evaluate(() => { const i = document.querySelector
 check('phone bar: when the big picture is on screen the little one is hidden (never shown twice), the bar stays', thumbHidden.img === 'none' && thumbHidden.bar === 'flex', JSON.stringify(thumbHidden));
 await toControls();
 await page.locator('#cellar-lite-bar button').click();
-await page.waitForURL(/contact\.html/, { timeout: 6000 }).catch(() => {});
 await page.waitForTimeout(800);
-const msg = await page.locator('#cw-contact-message').inputValue().catch(() => '');
-check('the bar\'s button takes the visitor to the contact form with the design filled in', /contact\.html/.test(page.url()) && /Design code: CL1\./.test(msg), page.url() + ' ' + msg.slice(0, 80));
+check('the bar button opens the quote form in the planner, without leaving the page', /planner.html/.test(page.url()) && (await page.frameLocator('iframe').first().getByTestId('lite-quote-form').count()) === 1, page.url());
 check('no script errors (embedded)', errors.length === 0, errors.join(' | '));
 await ctx.close();
 

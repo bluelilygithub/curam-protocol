@@ -44,6 +44,7 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const ctx = await browser.newContext({ viewport: { width: 1200, height: 800 } });
 await ctx.addInitScript(() => { try { localStorage.setItem('cellar-lite:help-seen:v1', '1'); localStorage.setItem('cellar-lite:unit:v1', 'mm'); } catch {} });
 const page = await ctx.newPage();
+await page.addInitScript(() => { window.addEventListener('message', (e) => { if (e.data && e.data.type === 'cellar-lite:design') window.__design = { code: e.data.code, summary: e.data.summary }; }); });
 await page.route('https://curam-vault.up.railway.app/**', (r) => r.abort());
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
@@ -52,9 +53,14 @@ const frame = page.frameLocator('#f');
 await frame.getByTestId('lite-quote').waitFor();
 const btn = await frame.getByTestId('lite-quote').evaluate((el) => { const c = getComputedStyle(el); return { w: el.getBoundingClientRect().width, h: el.getBoundingClientRect().height, bg: c.backgroundColor }; });
 check('the quote button is a large, filled button in the brand colour (not a banner)', btn.w < 500 && btn.h >= 50 && btn.bg === 'rgb(74, 90, 42)', JSON.stringify(btn));
+// The quote button no longer leaves the page (see e2e-lite-quote.mjs). This script still covers the contact page's own behaviour, for links made by
+// an older planner: a design in the address fills the form.
 await frame.getByTestId('lite-quote').click();
-await page.waitForURL(/contact\.html/, { timeout: 8000 }).catch(() => {});
-check('pressing the button takes the visitor to the contact page', /contact\.html/.test(page.url()), page.url());
+await page.waitForTimeout(500);
+check('pressing the button stays on the planner page and opens the quote form', /planner\.html/.test(page.url()) && (await frame.getByTestId('lite-quote-form').count()) === 1, page.url());
+const dsn = await page.evaluate(() => window.__design);
+check('the planner told the page its design', !!dsn && /^CL1\./.test(dsn.code), JSON.stringify(dsn));
+await page.goto('http://localhost:8801/contact.html?cellar-design=' + encodeURIComponent(dsn.code) + '&cellar-summary=' + encodeURIComponent(dsn.summary) + '#cw-contact-form');
 await page.waitForTimeout(4000);
 const msg = await page.locator('#cw-contact-message').inputValue().catch(() => '');
 check('message box holds the design summary and code', /Cellar planner design/.test(msg) && /Design code: CL1\./.test(msg) && /bottles/.test(msg), msg);

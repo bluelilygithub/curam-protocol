@@ -19,6 +19,9 @@ const { getLogger } = require('../middleware/requestContext');
 
 const CODE_RE = /^CL\d+\.[A-Za-z0-9_-]{1,200}$/;
 const EMAIL_RE = /^[^\s@<>"',;:()\[\]\\]{1,64}@[^\s@<>"',;:()\[\]\\]{1,190}\.[A-Za-z]{2,24}$/;
+/** The states and territories of Australia the form offers. */
+const STATES = ['NSW', 'VIC', 'QLD', 'SA', 'WA', 'TAS', 'ACT', 'NT'];
+const STATE_NAMES = { NSW: 'New South Wales', VIC: 'Victoria', QLD: 'Queensland', SA: 'South Australia', WA: 'Western Australia', TAS: 'Tasmania', ACT: 'Australian Capital Territory', NT: 'Northern Territory' };
 const LIMITS = { name: 100, email: 254, phone: 24, message: 2000, summary: 400, priceText: 60, perIpPerHour: 5, perDay: 100, dedupeHours: 24 };
 const HOUR = 60 * 60 * 1000;
 
@@ -33,6 +36,9 @@ function validateEnquiry(raw) {
   const email = cleanLine(raw.email, LIMITS.email).toLowerCase();
   const phoneRaw = cleanLine(raw.phone, LIMITS.phone);
   const code = typeof raw.code === 'string' ? raw.code.trim() : '';
+  // optional (the contact page's copy has none), but when it is there it must be one of ours
+  const stateRaw = cleanLine(raw.state, 8).toUpperCase();
+  if (stateRaw && !STATES.includes(stateRaw)) return { ok: false, error: 'Choose your state or territory from the list.' };
   if (!name) return { ok: false, error: 'A name is needed.' };
   if (!EMAIL_RE.test(email)) return { ok: false, error: 'A valid email address is needed.' };
   if (!CODE_RE.test(code)) return { ok: false, error: 'The design code is not valid.' };
@@ -44,7 +50,7 @@ function validateEnquiry(raw) {
   return {
     ok: true,
     value: {
-      name, email, phone, code, bottles,
+      name, email, phone, code, bottles, state: stateRaw,
       message: clean(raw.message, LIMITS.message),
       summary: cleanLine(raw.summary, LIMITS.summary),
       priceText: cleanLine(raw.priceText, LIMITS.priceText),
@@ -55,7 +61,7 @@ function validateEnquiry(raw) {
 const ipOf = (req) => (String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress || 'unknown');
 const hashIp = (ip) => crypto.createHash('sha256').update(`cellar-lead:${ip}`).digest('hex').slice(0, 24);
 
-function createCellarLeadsRouters({ pool, now = () => Date.now(), capture = null, appUrl = () => process.env.APP_URL || 'https://curam-vault.up.railway.app' }) {
+function createCellarLeadsRouters({ pool, now = () => Date.now(), capture = null, sendEmail = null, appUrl = () => process.env.APP_URL || 'https://curam-vault.up.railway.app' }) {
   const log = () => getLogger();
   const seen = new Map(); // ip hash -> [timestamps] (in memory: a restart only resets a limit, never loses an enquiry)
 
@@ -68,6 +74,27 @@ function createCellarLeadsRouters({ pool, now = () => Date.now(), capture = null
     seen.set(h, recent);
     if (seen.size > 5000) for (const [k, v] of seen) if (!v.some((x) => t - x < HOUR)) seen.delete(k);
     return true;
+  }
+
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  /** An email to the admin address(es) with what the visitor sent and a link that opens the design. Reply-To is the visitor's own (strictly checked) address. */
+  async function notifyOwner({ lead, e, link }) {
+    if (!sendEmail) return;
+    if (typeof sendEmail.isConfigured === 'function' && !(await sendEmail.isConfigured())) return;
+    const { rows } = await pool.query(`SELECT email FROM users WHERE "isAdmin" = TRUE AND email IS NOT NULL AND email <> '' ORDER BY id ASC LIMIT 5`);
+    const to = [...new Set(rows.map((r) => String(r.email).trim()).filter(Boolean))];
+    if (!to.length) return;
+    const row = (k, v) => (v ? `<tr><td style="padding:3px 12px 3px 0;color:#666;vertical-align:top">${esc(k)}</td><td style="padding:3px 0">${esc(v).replace(/\n/g, '<br>')}</td></tr>` : '');
+    const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:620px"><h2 style="margin:0 0 8px;font-size:18px">New Cellar Planner enquiry</h2>`
+      + `<table role="presentation" cellspacing="0" cellpadding="0" style="font-size:14px">${row('Name', e.name)}${row('Email', e.email)}${row('Phone', e.phone)}${row('State', e.state ? `${STATE_NAMES[e.state]} (${e.state})` : '')}${row('Design', e.summary)}${row('Bottles', e.bottles !== null ? String(e.bottles) : '')}${row('Guide price shown', e.priceText)}${row('Their message', e.message)}</table>`
+      + `<p style="margin:14px 0"><a href="${esc(link)}">Open the design in the Cellar Planner</a></p>`
+      + `<p style="font-size:12px;color:#888">It is also in your CRM as a new lead. Reply to this email to answer them directly.</p></div>`;
+    const subject = `New cellar enquiry from ${e.name}${e.state ? ` (${e.state})` : ''}`;
+    for (const addr of to) {
+      // eslint-disable-next-line no-await-in-loop
+      await sendEmail({ to: addr, subject, html, replyTo: EMAIL_RE.test(e.email) ? e.email : undefined });
+    }
+    log().info({ leadId: lead, admins: to.length }, '[cellar-leads] owner notified');
   }
 
   // ---------------------------------------------------------------- public: POST /api/cellar-lite/enquiry
@@ -121,9 +148,9 @@ function createCellarLeadsRouters({ pool, now = () => Date.now(), capture = null
       try {
         await client.query('BEGIN');
         const { rows: [lead] } = await client.query(
-          `INSERT INTO cellar_leads ("userId", name, email, phone, message, "designCode", summary, "priceText", bottles, "ipHash")
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
-          [userId, e.name, e.email, e.phone || null, e.message || null, e.code, e.summary || null, e.priceText || null, e.bottles, hashIp(ipOf(req))]);
+          `INSERT INTO cellar_leads ("userId", name, email, phone, message, "designCode", summary, "priceText", bottles, "ipHash", state)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+          [userId, e.name, e.email, e.phone || null, e.message || null, e.code, e.summary || null, e.priceText || null, e.bottles, hashIp(ipOf(req)), e.state || null]);
         const link = `${appUrl().replace(/\/$/, '')}/cellar-planner?lead=${lead.id}`;
 
         // the same email already in the CRM -> that client; otherwise a new prospect with a primary contact
@@ -140,7 +167,8 @@ function createCellarLeadsRouters({ pool, now = () => Date.now(), capture = null
           await client.query(`INSERT INTO client_contacts ("clientId", name, email, phone, "isPrimary") VALUES ($1,$2,$3,$4,TRUE)`, [clientId, e.name, e.email, e.phone || null]);
         }
         const design = [e.summary, e.bottles !== null ? `${e.bottles} bottles` : '', e.priceText ? `guide price ${e.priceText}` : ''].filter(Boolean).join(' | ');
-        const notes = [`Cellar Planner enquiry.`, design && `Design: ${design}`, e.message && `Their message:\n${e.message}`, `Open the design in the Cellar Planner: ${link}`].filter(Boolean).join('\n\n');
+        const where = e.state ? `State: ${STATE_NAMES[e.state]} (${e.state})` : '';
+        const notes = [`Cellar Planner enquiry.`, where, design && `Design: ${design}`, e.message && `Their message:\n${e.message}`, `Open the design in the Cellar Planner: ${link}`].filter(Boolean).join('\n\n');
         const { rows: [deal] } = await client.query(
           `INSERT INTO client_deals ("userId", "clientId", title, stage, notes) VALUES ($1,$2,$3,'lead',$4) RETURNING id`,
           [userId, clientId, `Cellar enquiry${e.bottles !== null ? `: ${e.bottles} bottles` : ''}`.slice(0, 255), notes]);
@@ -151,6 +179,8 @@ function createCellarLeadsRouters({ pool, now = () => Date.now(), capture = null
         await client.query('COMMIT');
         log().info({ leadId: lead.id, clientId, dealId: deal.id, newClient: isNew }, '[cellar-leads] enquiry recorded');
         res.json({ ok: true });
+        // tell the owner (a new enquiry has no website email of its own now that the form is inside the planner); never delays or fails the answer
+        void notifyOwner({ lead: lead.id, e, link }).catch((err) => log().warn({ err: err.message }, '[cellar-leads] owner email failed'));
       } catch (err) {
         await client.query('ROLLBACK').catch(() => {});
         throw err;
@@ -168,7 +198,7 @@ function createCellarLeadsRouters({ pool, now = () => Date.now(), capture = null
   const staffRouter = express.Router();
   const idOf = (req) => { const n = Number(req.params.id); return Number.isInteger(n) && n > 0 && n < 2147483647 ? n : null; };
   const publicLead = (r, full) => ({
-    id: r.id, name: r.name, email: r.email, phone: r.phone, summary: r.summary, priceText: r.priceText, bottles: r.bottles, status: r.status,
+    id: r.id, name: r.name, email: r.email, phone: r.phone, state: r.state ?? null, summary: r.summary, priceText: r.priceText, bottles: r.bottles, status: r.status,
     clientId: r.clientId, dealId: r.dealId, createdAt: new Date(r.createdAt).toISOString(),
     ...(full ? { message: r.message, code: r.designCode } : {}),
   });
@@ -176,7 +206,7 @@ function createCellarLeadsRouters({ pool, now = () => Date.now(), capture = null
   staffRouter.get('/', async (req, res) => {
     try {
       const { rows } = await pool.query(
-        `SELECT id, name, email, phone, summary, "priceText", bottles, status, "clientId", "dealId", "createdAt"
+        `SELECT id, name, email, phone, state, summary, "priceText", bottles, status, "clientId", "dealId", "createdAt"
            FROM cellar_leads WHERE "userId"=$1 ORDER BY "createdAt" DESC, id DESC LIMIT 50`, [req.user.id]);
       res.json({ leads: rows.map((r) => publicLead(r, false)) });
     } catch (err) {
@@ -246,4 +276,4 @@ function createCellarLeadsRouters({ pool, now = () => Date.now(), capture = null
   return { publicRouter, staffRouter };
 }
 
-module.exports = { createCellarLeadsRouters, validateEnquiry, LIMITS };
+module.exports = { createCellarLeadsRouters, validateEnquiry, LIMITS, STATES };

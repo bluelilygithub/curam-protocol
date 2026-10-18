@@ -14,6 +14,7 @@
     "e2e:catalogue": "node scripts/e2e-catalogue.mjs",
     "e2e:quote": "node scripts/e2e-quote.mjs",
     "e2e:lite-photo": "node scripts/e2e-lite-photo.mjs",
+    "e2e:lite-quote": "node scripts/e2e-lite-quote.mjs",
     "e2e:costs": "node scripts/e2e-costs.mjs",
     "e2e:jobs": "node scripts/e2e-jobs.mjs",
     "e2e:workflow": "node scripts/e2e-workflow.mjs",

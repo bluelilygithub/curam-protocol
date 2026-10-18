@@ -58,6 +58,7 @@
   var EVENTS = ['start', 'preset', 'unit', 'view', 'quote', 'link_copied', 'plan_downloaded', 'price_help', 'fix', 'welcome_back', 'call', 'door_pick', 'step', 'finish'];
   var wasRequested = false;
   var latest = null; // the newest valid design message { code, summary, bottles, priceText, thumb }
+  var plannerWin = null, plannerOrigin = ''; // where the newest design message came from, so the phone bar can ask the planner to open its own quote form
   var layout = null; // where the planner's big picture sits inside its frame { frame, top, bottom }
   var THUMB_RE = /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/;
 
@@ -105,7 +106,11 @@
     btn.type = 'button';
     btn.textContent = 'Request a quote';
     btn.setAttribute('title', 'Ask for a quote for the design you have made.');
-    btn.addEventListener('click', function () { if (latest) goToContact(latest.code, latest.summary); });
+    btn.addEventListener('click', function () {
+      // the planner asks for the visitor's details itself; only an older planner that cannot is answered by going to the contact page
+      if (plannerWin) { try { plannerWin.postMessage({ type: 'cellar-lite:go', version: 1, id: 'quote' }, plannerOrigin); return; } catch (e) { log('could not reach the planner, going to the contact page', e); } }
+      if (latest) goToContact(latest.code, latest.summary);
+    });
     bar.appendChild(barImg); bar.appendChild(barText); bar.appendChild(btn);
     document.body.appendChild(bar);
     window.addEventListener('resize', refreshBar);
@@ -231,6 +236,7 @@
     if (typeof d.code !== 'string' || typeof d.summary !== 'string') { log('IGNORED: code or summary missing'); return; }
     // the code is base64url text and the summary one plain line; refuse anything else
     if (!CODE_RE.test(d.code) || d.summary.length > 400) { log('IGNORED: code or summary has an unexpected shape'); return; }
+    plannerWin = ev.source; plannerOrigin = ev.origin;
     latest = { code: d.code, summary: d.summary, bottles: Number(d.bottles) || 0, priceText: typeof d.priceText === 'string' && d.priceText.length <= 60 ? d.priceText : '',
       thumb: typeof d.thumb === 'string' && d.thumb.length <= 40000 && THUMB_RE.test(d.thumb) ? d.thumb : '' };
 

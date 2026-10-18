@@ -244,3 +244,12 @@ html[data-embedded] .modal, html[data-embedded] .modal.wide { max-height: calc(v
 .lite-photo-progress p { margin: 6px 0 0; }
 .lite-photo-canvas { max-width: 100%; } .lite-photo-canvas canvas { width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border); display: block; }
 .lite-photo-left { font-size: 12px; color: var(--muted); align-self: center; }
+
+/* Request a quote: the form that opens in the planner */
+.quote-form { max-width: 460px; }
+.qf-row { display: block; margin: 0 0 12px; font-size: 15px; font-weight: 600; }
+.qf-row small { font-weight: 400; color: var(--muted); }
+.qf-row input, .qf-row select, .qf-row textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 10px; font: inherit; font-weight: 400; min-height: 44px; }
+.qf-row textarea { min-height: 80px; resize: vertical; }
+.qf-row [aria-invalid="true"] { border-color: #b3261e; outline-color: #b3261e; }
+.qf-error { color: #b3261e; }

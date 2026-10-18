@@ -47,7 +47,7 @@ app.use(httpLogger);
 const cellarLiteConfig = require('./routes/cellarLiteConfigRouter').createCellarLiteConfigRouters({ pool: require('./db').pool });
 app.use('/api/cellar-lite/config', cellarLiteConfig.publicRouter);
 // the website's contact page copies a planner enquiry into the CRM here: public, before requireAuth (it parses its own body). See server/routes/cellarLeadsRouter.js.
-const cellarLeads = require('./routes/cellarLeadsRouter').createCellarLeadsRouters({ pool: require('./db').pool, capture: require('./services/SuggestionService').capture });
+const cellarLeads = require('./routes/cellarLeadsRouter').createCellarLeadsRouters({ pool: require('./db').pool, capture: require('./services/SuggestionService').capture, sendEmail: require('./utils/sendEmail') });
 app.use('/api/cellar-lite/enquiry', cellarLeads.publicRouter);
 // the help chat on the public website planner: public, off until the owner ticks it, boxed in by limits. See server/routes/cellarLiteGuideRouter.js.
 app.use('/api/cellar-lite/guide', require('./routes/cellarLiteGuideRouter').createCellarLiteGuideRouter({ pool: require('./db').pool, ask: require('./services/cellarLiteTutor').askLiteGuide, tutorEmail: require('./routes/tutorEmail'), capture: require('./services/SuggestionService').capture }));

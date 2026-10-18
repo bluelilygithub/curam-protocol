@@ -9,6 +9,7 @@ import { buildScene } from './cellarScene';
 import { makeThumb } from './thumbnail';
 import { LiteHelp, LITE_HELP_KEY } from './LiteHelp';
 import { PriceHelp } from './PriceHelp';
+import { QuoteForm } from './QuoteForm';
 import { DoorPicker } from './DoorPicker';
 import { chosenOptions, effectsOf, featureTotals, priceLabel, resolveFeatures, togglePick, unavailableReason } from './features';
 import { STEP_TITLES, stepKeys, type StepKey } from './steps';
@@ -88,10 +89,9 @@ export function LiteApp() {
     return () => mq.removeEventListener('change', on);
   }, []);
   const [rackWall, setRackWall] = useState<WallSide>('NORTH');
-  const [asked, setAsked] = useState(false);
+  const [quoteOpen, setQuoteOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [priceHelpOpen, setPriceHelpOpen] = useState(false);
-  const [copied, setCopied] = useState<'' | 'done' | 'failed'>('');
   const [linkCopied, setLinkCopied] = useState<'' | 'done' | 'failed'>('');
   const [pdf, setPdf] = useState<'' | 'working' | 'done' | 'failed'>('');
   const [thumb, setThumb] = useState('');
@@ -133,8 +133,8 @@ export function LiteApp() {
     // only a design the visitor has changed is worth remembering: the untouched standard room would just greet them as "welcome back" for nothing
     if (code === encodeDesign(defaultLite())) clearLastDesign(); else writeLastDesign(code);
     const to = parentOrigin();
-    if (to) window.parent.postMessage({ type: MESSAGE_TYPE, version: 1, code, summary, bottles: result.bottles, priceText: price?.text ?? '', thumb, requested: asked }, to);
-  }, [code, summary, result.bottles, price, asked, thumb]);
+    if (to) window.parent.postMessage({ type: MESSAGE_TYPE, version: 1, code, summary, bottles: result.bottles, priceText: price?.text ?? '', thumb, requested: false }, to);
+  }, [code, summary, result.bottles, price, thumb]);
 
   // a small picture for the page's phone bar, redrawn a moment after the design stops changing (only when embedded: standalone nobody shows it)
   useEffect(() => {
@@ -205,13 +205,6 @@ export function LiteApp() {
     return () => window.removeEventListener('message', onMessage);
   }, []);
 
-  // After "Request a quote" the flag drops back after a moment, so the page script sees a fresh press the next time (it acts once per press)
-  useEffect(() => {
-    if (!asked) return undefined;
-    const t = window.setTimeout(() => setAsked(false), 1200);
-    return () => window.clearTimeout(t);
-  }, [asked]);
-
   useEffect(() => { void loadConfig().then((r) => setCfg(r.config)); }, []);
   useEffect(() => { if (restored) say('welcome_back'); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
@@ -251,6 +244,7 @@ export function LiteApp() {
   goRef.current = (id: string): void => {
     if (id === 'help') { setHelpOpen(true); return; }
     if (id === 'tour') { void startTour(); return; }
+    if (id === 'quote') { if (!result.problems.length) ask(); return; }
     if ((stepKeys(hasFeatures) as string[]).includes(id)) setStepTracked(id as StepKey);
   };
   useEffect(() => {
@@ -269,7 +263,7 @@ export function LiteApp() {
   const setStepTracked = (k: StepKey, count = true): void => { if (!count && k !== keyRef.current) quietStep.current = true; setStepKey(k); if (count) say('step', { step: k }); };
 
   /** Put a whole design on screen: the settings and the boxes that show them. */
-  const show = (next: LiteSettings, u: LengthUnit = unit): void => { setS(next); setDraft(toDraft(next, u)); setAsked(false); };
+  const show = (next: LiteSettings, u: LengthUnit = unit): void => { setS(next); setDraft(toDraft(next, u)); };
   const change = (patch: Partial<LiteSettings>): void => setS((cur) => ({ ...cur, ...patch }));
 
   const chooseUnit = (u: LengthUnit): void => { setUnit(u); writeUnit(u); setDraft(toDraft(s, u)); say('unit', { unit: u }); };
@@ -314,13 +308,9 @@ export function LiteApp() {
     setPdf('working');
     try { const { downloadPlan } = await import('./planPdf'); await downloadPlan(result.project, code); setPdf('done'); say('plan_downloaded'); } catch { setPdf('failed'); }
   };
-  const copy = async (): Promise<void> => {
-    try { await navigator.clipboard.writeText(`${summary}\nDesign code: ${code}`); setCopied('done'); } catch { setCopied('failed'); }
-  };
   const startAgain = (): void => { clearLastDesign(); setRestored(false); show(defaultLite()); setStepKey('space'); };
-  // Request a quote: embedded, the page script takes the visitor to the contact form with the design filled in (it sees `requested`). On its own the design is
-  // copied for pasting. `asked` drops back after a moment, so pressing the button again works.
-  const ask = (): void => { setAsked(true); setCopied(''); say('quote'); if (!embedded) void copy(); };
+  // Request a quote: the visitor's name, email, phone and state are asked for right here (QuoteForm), not on another page.
+  const ask = (): void => { say('quote'); setQuoteOpen(true); };
 
   // a non-breaking space before the unit, so "m" never wraps onto a line of its own
   const withUnit = (t: string): string => (unit === 'ft' ? t : `${t} ${unit}`);
@@ -353,11 +343,6 @@ export function LiteApp() {
         </div>
         {pdf === 'done' && <p className="lite-note" role="status" data-testid="lite-download-done">Your plan has been saved.</p>}
         {pdf === 'failed' && <p className="lite-note" role="alert">Could not make the PDF. Please try again.</p>}
-        {asked && !embedded && (
-          <p className="lite-note" role="status" data-testid="lite-quote-note">
-            {copied === 'done' ? 'Your design has been copied: paste it into your enquiry. ' : copied === 'failed' ? 'Could not copy your design automatically: use Save design to get a link to it. ' : ''}{cfg.quoteNote}
-          </p>
-        )}
         {linkCopied === 'done' && <p className="lite-note" role="status" data-testid="lite-share-done">Link copied. Anyone you send it to sees these choices.</p>}
         {linkCopied === 'failed' && <p className="lite-note" role="status">Could not copy the link automatically. Copy the address from your browser's address bar instead: it holds your design.</p>}
         {cfg.promise && <p className="lite-promise" data-testid="lite-promise">{cfg.promise}</p>}
@@ -621,6 +606,7 @@ export function LiteApp() {
       </section>
       <p className="foot">ESTIMATE ONLY: FINAL SITE MEASURE REQUIRED. Rack unit sizes are typical values, not a quote.</p>
 
+      <QuoteForm open={quoteOpen} onClose={() => setQuoteOpen(false)} design={{ code, summary, bottles: result.bottles, priceText: price?.text ?? '' }} phone={cfg.phone} note={cfg.quoteNote} onSent={() => say('quote_sent')} />
       <PriceHelp open={priceHelpOpen && !!price} onClose={() => setPriceHelpOpen(false)} cfg={cfg} facts={{ units: rackUnitCount(result.project), doorStyle: s.doorStyle, bottles: result.bottles, roomText, bottleLabel: BOTTLE_PROFILES[s.bottle].label, extras: resolved.extras.map((o) => o.name) }} />
       <PhotoModal open={photoOpen} onClose={() => setPhotoOpen(false)} input={insideInput} name={result.project.name} />
       <TooltipHost look="vault" />

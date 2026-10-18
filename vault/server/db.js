@@ -1764,6 +1764,8 @@ async function initSchema() {
         "updatedAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
+    // the visitor's state or territory (the website form asks for it); older enquiries have none
+    await client.query(`ALTER TABLE cellar_leads ADD COLUMN IF NOT EXISTS state VARCHAR(3)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_cellar_leads_user_created ON cellar_leads ("userId", "createdAt" DESC)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_cellar_leads_dedupe ON cellar_leads ("userId", lower(email), "designCode")`);
 

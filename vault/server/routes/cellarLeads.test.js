@@ -10,7 +10,7 @@
 const assert = require('assert');
 const http = require('http');
 const express = require('express');
-const { createCellarLeadsRouters, validateEnquiry, LIMITS } = require('./cellarLeadsRouter');
+const { createCellarLeadsRouters, validateEnquiry, LIMITS, STATES } = require('./cellarLeadsRouter');
 
 let passed = 0;
 const t = async (name, fn) => { try { await fn(); passed++; console.log('PASS ', name); } catch (e) { console.log('FAIL ', name, '\n     ', e.stack.split('\n').slice(0, 3).join('\n      ')); process.exitCode = 1; } };
@@ -29,6 +29,7 @@ function fakePool({ admin = 1 } = {}) {
     if (/^\s*BEGIN/i.test(sql)) { log.begin++; db._snapshot = JSON.stringify(db); return { rows: [] }; }
     if (/^\s*COMMIT/i.test(sql)) { log.commit++; return { rows: [] }; }
     if (/^\s*ROLLBACK/i.test(sql)) { log.rollback++; const s = JSON.parse(db._snapshot); for (const k of Object.keys(s)) if (k !== '_snapshot') db[k] = s[k]; return { rows: [] }; }
+    if (/SELECT email FROM users/i.test(sql)) return { rows: state.adminEmails ?? [{ email: 'boss@example.com' }] };
     if (/FROM users WHERE "isAdmin"/i.test(sql)) return { rows: admin ? [{ id: admin }] : [] };
     if (/FROM cellar_leads WHERE "userId"=\$1 AND lower\(email\)=\$2/i.test(sql)) {
       const cutoff = state.clock() - Number(p[3]) * 3600e3;
@@ -36,7 +37,7 @@ function fakePool({ admin = 1 } = {}) {
     }
     if (/SELECT COUNT\(\*\) AS n FROM cellar_leads/i.test(sql)) return { rows: [{ n: String(db.leads.filter((l) => l.createdAt > state.clock() - 24 * 3600e3).length) }] };
     if (/INSERT INTO cellar_leads/i.test(sql)) {
-      const l = { id: nextId++, userId: p[0], name: p[1], email: p[2], phone: p[3], message: p[4], designCode: p[5], summary: p[6], priceText: p[7], bottles: p[8], ipHash: p[9], status: 'new', clientId: null, dealId: null, createdAt: state.clock() };
+      const l = { id: nextId++, userId: p[0], name: p[1], email: p[2], phone: p[3], message: p[4], designCode: p[5], summary: p[6], priceText: p[7], bottles: p[8], ipHash: p[9], state: p[10], status: 'new', clientId: null, dealId: null, createdAt: state.clock() };
       db.leads.push(l); return { rows: [{ id: l.id }] };
     }
     if (/FROM client_contacts cc JOIN clients c/i.test(sql)) {
@@ -49,7 +50,7 @@ function fakePool({ admin = 1 } = {}) {
     if (/INSERT INTO client_interactions/i.test(sql)) { db.interactions.push({ clientId: p[0], userId: p[1], title: p[2], note: p[3], dealId: p[4] }); return { rows: [] }; }
     if (/UPDATE cellar_leads SET "clientId"/i.test(sql)) { const l = db.leads.find((x) => x.id === p[2]); l.clientId = p[0]; l.dealId = p[1]; return { rows: [] }; }
     // ---- staff
-    if (/SELECT id, name, email, phone, summary.*FROM cellar_leads WHERE "userId"=\$1/is.test(sql)) return { rows: db.leads.filter((l) => l.userId === p[0]).sort((a, b) => b.createdAt - a.createdAt || b.id - a.id).slice(0, 50) };
+    if (/SELECT id, name, email, phone, (?:state, )?summary.*FROM cellar_leads WHERE "userId"=\$1/is.test(sql)) return { rows: db.leads.filter((l) => l.userId === p[0]).sort((a, b) => b.createdAt - a.createdAt || b.id - a.id).slice(0, 50) };
     if (/SELECT \* FROM cellar_leads WHERE id=\$1 AND "userId"=\$2/i.test(sql)) return { rows: db.leads.filter((l) => l.id === p[0] && l.userId === p[1]) };
     if (/UPDATE cellar_leads SET status = CASE/i.test(sql)) { const l = db.leads.find((x) => x.id === p[0] && x.userId === p[1]); if (!l) return { rows: [] }; if (l.status === 'new') l.status = 'opened'; return { rows: [{ status: l.status }] }; }
     if (/SELECT id, "clientId", "dealId" FROM cellar_leads WHERE id=\$1 AND "userId"=\$2/i.test(sql)) return { rows: db.leads.filter((l) => l.id === p[0] && l.userId === p[1]) };
@@ -60,8 +61,8 @@ function fakePool({ admin = 1 } = {}) {
   return { db, log, state, query: q, async connect() { return { query: q, release() { log.released++; } }; } };
 }
 
-function serve(pool, { now, capture } = {}) {
-  const { publicRouter, staffRouter } = createCellarLeadsRouters({ pool, now, capture, appUrl: () => 'https://vault.test' });
+function serve(pool, { now, capture, sendEmail } = {}) {
+  const { publicRouter, staffRouter } = createCellarLeadsRouters({ pool, now, capture, sendEmail, appUrl: () => 'https://vault.test' });
   const app = express();
   app.use('/api/cellar-lite/enquiry', publicRouter); // public: before the JSON parser, like the real mount
   app.use(express.json());
@@ -279,6 +280,51 @@ const post = (s, body, headers) => call(s, 'POST', '/api/cellar-lite/enquiry', b
     assert.ok(pub > 0 && pub < auth, 'public enquiry route is before requireAuth');
     assert.ok(staff > auth, 'staff leads route is after requireAuth');
     assert.match(src.slice(staff, staff + 120), /requireFeature\('cellarPlanner'\)/);
+  });
+
+  await t('the state or territory: optional (the contact page copy has none), one of ours when present, kept in the lead and the CRM deal', async () => {
+    assert.deepStrictEqual(STATES, ['NSW', 'VIC', 'QLD', 'SA', 'WA', 'TAS', 'ACT', 'NT']);
+    assert.strictEqual(validateEnquiry({ ...GOOD }).value.state, '');
+    assert.strictEqual(validateEnquiry({ ...GOOD, state: ' vic ' }).value.state, 'VIC');
+    const bad = validateEnquiry({ ...GOOD, state: 'Texas' });
+    assert.strictEqual(bad.ok, false); assert.match(bad.error, /state or territory/);
+    const pool = fakePool(); const s = await serve(pool);
+    const r = await post(s, { ...GOOD, state: 'QLD' });
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(pool.db.leads[0].state, 'QLD');
+    assert.match(pool.db.deals[0].notes, /State: Queensland \(QLD\)/);
+    assert.strictEqual((await post(s, { ...GOOD, email: 'x@example.com', state: 'Nowhere' })).status, 400);
+    s.close();
+  });
+
+  await t('a new enquiry emails the owner: every admin address, what the visitor sent (escaped), a link to the design, Reply-To the visitor', async () => {
+    const sent = [];
+    const mail = Object.assign(async (m) => { sent.push(m); }, { isConfigured: async () => true });
+    const pool = fakePool(); pool.state.adminEmails = [{ email: 'boss@example.com' }, { email: 'second@example.com' }];
+    const s = await serve(pool, { sendEmail: mail });
+    const r = await post(s, { ...GOOD, name: 'Sam <b>Rivera</b>', state: 'VIC', message: '<script>alert(1)</script> hi' });
+    assert.strictEqual(r.status, 200);
+    await new Promise((res) => setTimeout(res, 50)); // the email is sent after the answer
+    assert.deepStrictEqual(sent.map((m) => m.to), ['boss@example.com', 'second@example.com']);
+    assert.match(sent[0].subject, /New cellar enquiry from Sam <b>Rivera<\/b> \(VIC\)/);
+    assert.ok(!sent[0].html.includes('<script>') && !sent[0].html.includes('<b>Rivera'), 'the visitor text is escaped');
+    assert.match(sent[0].html, /Victoria \(VIC\)/); assert.match(sent[0].html, /vault\.test\/cellar-planner\?lead=/);
+    assert.strictEqual(sent[0].replyTo, 'sam@example.com');
+    // a duplicate (same person, same design) is not emailed twice
+    await post(s, { ...GOOD, state: 'VIC' }); await new Promise((res) => setTimeout(res, 50));
+    assert.strictEqual(sent.length, 2, 'no second email for a duplicate');
+    s.close();
+  });
+
+  await t('the owner email never stops the enquiry: not set up, no admin address, or the mail provider failing', async () => {
+    for (const mail of [Object.assign(async () => {}, { isConfigured: async () => false }), Object.assign(async () => { throw new Error('mail down'); }, { isConfigured: async () => true })]) {
+      const pool = fakePool(); const s = await serve(pool, { sendEmail: mail });
+      assert.strictEqual((await post(s, GOOD)).status, 200); assert.strictEqual(pool.db.leads.length, 1);
+      s.close();
+    }
+    const pool = fakePool(); pool.state.adminEmails = []; const s = await serve(pool, { sendEmail: Object.assign(async () => { throw new Error('should not be called'); }, { isConfigured: async () => true }) });
+    assert.strictEqual((await post(s, GOOD)).status, 200);
+    s.close();
   });
 
   console.log(`\n${process.exitCode ? 'Some checks FAILED' : `All ${passed} checks passed`}`);

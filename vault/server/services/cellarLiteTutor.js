@@ -19,8 +19,8 @@ const CATALOG = [
     does: 'A step of finishing touches the business offers (for example lighting or door style). Each choice adds to the guide price.',
     notes: 'Only there when the business has set up feature options; if the visitor does not see it, there are none.' },
   { id: 'review', label: 'Review & quote', group: 'Steps',
-    does: 'The last step. A summary of the design, the guide price (if the business shows one), a button to download the plan as a PDF, price help, a link that reopens the design, and the "Request a quote" button that takes them to the contact form with the design filled in.',
-    notes: 'Nothing is sent until the visitor presses Send on the contact form.' },
+    does: 'The last step. A summary of the design, the guide price (if the business shows one), a button to download the plan as a PDF, price help, a link that reopens the design, and the "Request a quote" button, which opens a short form right there asking for their name, email, phone (optional) and state or territory, and sends the enquiry with the design attached.',
+    notes: 'Nothing is sent until the visitor presses Send my enquiry on that form.' },
   { id: 'help', label: 'Help', group: 'Buttons',
     does: 'The Help button opens a written guide: what the tool is, each question in plain words, how to measure the inside of the room, what South/North/East/West mean on the drawing, what the bottle styles are.', notes: '' },
   { id: 'tour', label: 'Take the tour', group: 'Buttons',
@@ -44,7 +44,7 @@ const NOT_POSSIBLE = [
   'Engineering, building, electrical, refrigeration or planning advice, including whether a room is suitable for a cellar or what cooling is needed. Suggest asking the team.',
   'Seeing the visitor\'s design or numbers. The guide only knows what the steps do.',
   'Rooms that are not rectangular, curved or sloping walls, islands in the middle of the room, and mixing different racking styles in one design.',
-  'Booking a visit, taking an order or payment, or sending a quote. The quote button only takes them to the contact form.',
+  'Booking a visit, taking an order or payment, or sending a quote. The quote button only opens a form that sends their details and design to the business, who reply with a quote.',
   'Questions unrelated to the wine cellar planner.',
 ];
 
