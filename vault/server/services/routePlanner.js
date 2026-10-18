@@ -37,6 +37,7 @@ const DETOUR_TOLERANCE = 0.08;
 const DETOUR_SHAPES = [[[1, 0.5], [-1, 0.5], [1, 0.3]], [[1, 0.7], [-1, 0.7], [-1, 0.3]], [[1, 0.4], [-1, 0.4], [1, 0.6]]];
 const LEG_MIN_M = 5; // two clicks closer than this are the same place: no call, the segment is just the two points
 const TIMEOUT_MS = 15000;
+const LOOP_TIMEOUT_MS = 30000; // a round trip is slower for the service to work out than A to B, and a long one used to run out of time
 const CACHE_TTL_MS = 60 * 60 * 1000;
 const CACHE_MAX = 300;
 const ATTRIBUTION = '© openrouteservice.org | © OpenStreetMap contributors';
@@ -82,9 +83,9 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
     userHits.set(userId, mine);
   }
 
-  async function post(key, profile, body) {
+  async function post(key, profile, body, timeoutMs = TIMEOUT_MS) {
     const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
+    const timer = setTimeout(() => ctl.abort(), timeoutMs);
     let res;
     try {
       res = await fetchFn(`${ORS_BASE}/v2/directions/${PROFILES[profile]}/geojson`, {
@@ -93,8 +94,9 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
         body: JSON.stringify(body),
       });
     } catch (err) {
-      log('route planner: request failed', err && err.name);
-      throw new PlanError(502, 'The route planner did not answer. Try again in a moment.');
+      // say WHY in the log (a timeout, a refused connection, a DNS failure): the person only ever sees the plain message
+      log('route planner: request failed', `${err && err.name}: ${err && err.message}${err && err.cause && (err.cause.code || err.cause.message) ? ` (${err.cause.code || err.cause.message})` : ''} after ${timeoutMs} ms limit`);
+      throw Object.assign(new PlanError(502, 'The route planner did not answer. Try again in a moment.'), { transient: true });
     } finally { clearTimeout(timer); }
     let json = null;
     try { json = await res.json(); } catch { /* not JSON */ }
@@ -187,17 +189,20 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
 
   /** One round trip from `from` of about `lengthM` metres for a seed (the seed picks the loop's general direction). */
   async function oneLoop(key, profile, from, lengthM, seed) {
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    let retried = false;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         const body = { coordinates: [from], instructions: false, elevation: false, options: { [roundTripKey]: { length: Math.round(lengthM), points: LOOP_POINTS, seed } } };
-        const json = await post(key, profile, body);
+        const json = await post(key, profile, body, LOOP_TIMEOUT_MS);
         const r = toRoutes(json)[0];
         if (!r) throw Object.assign(new Error('upstream'), { upstream: { status: 404, code: 2009, message: '' } });
         return r;
       } catch (err) {
         const u = err.upstream;
+        // the service did not answer at all (a slow moment, a dropped connection): one more try before giving up
+        if (err.transient && !retried) { retried = true; continue; }
         // an unknown-option answer (not a routing answer): try the other spelling of the option once, and keep the one that works
-        if (u && attempt === 0 && u.status === 400 && ![2004, 2009, 2010].includes(u.code)) { roundTripKey = roundTripKey === 'round_trip' ? 'round-trip' : 'round_trip'; continue; }
+        if (u && attempt < 2 && u.status === 400 && ![2004, 2009, 2010].includes(u.code)) { roundTripKey = roundTripKey === 'round_trip' ? 'round-trip' : 'round_trip'; continue; }
         throw err;
       }
     }

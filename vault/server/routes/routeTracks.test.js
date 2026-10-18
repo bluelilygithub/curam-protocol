@@ -308,6 +308,15 @@ async function planTests() {
     const part = await flaky.loops(1, { from, lengthKm: 5, profile: 'walking' });
     assert.strictEqual(part.routes.length, 2, 'the loops that worked are returned');
     await rejects(createPlanner({ getKey: () => KEY, fetchFn: async () => { throw new Error('boom'); } }).loops(1, { from, lengthKm: 5, profile: 'walking' }), 502, /did not answer/);
+    // a slow or dropped connection is tried once more before giving up (a voice request used to fail on one such moment), and the reason is logged
+    let dropped = 0; const logged = [];
+    const blip = createPlanner({ getKey: () => KEY, log: (m, d) => logged.push(`${m} ${d}`), fetchFn: (url, init) => { dropped += 1; if (dropped <= 3) return Promise.reject(Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNRESET' } })); return loopFetch(url, init); } });
+    const blipRes = await blip.loops(1, { from, lengthKm: 5, profile: 'walking' });
+    assert.ok(blipRes.routes.length >= 1, 'the loops come back after one dropped connection per seed');
+    assert.ok(logged.length >= 1 && /TypeError: fetch failed \(ECONNRESET\)/.test(logged[0]), 'the log says why: ' + logged[0]);
+    assert.ok(!logged.join(' ').includes(KEY), 'the key is never logged');
+    const gone = createPlanner({ getKey: () => KEY, fetchFn: async () => { throw Object.assign(new Error('x'), { name: 'AbortError' }); } });
+    await rejects(gone.loops(1, { from, lengthKm: 5, profile: 'walking' }), 502, /did not answer/);
 
     // quota: a loop costs three calls; running out during the correction keeps the first answers
     let tt = 9000000;
