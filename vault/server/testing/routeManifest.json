@@ -2359,6 +2359,9 @@
   "POST /api/route-tracks/ask": {
    "class": "authed"
   },
+  "GET /api/route-tracks/diagnose": {
+   "class": "authed"
+  },
   "GET /api/route-tracks/config": {
    "class": "authed"
   },

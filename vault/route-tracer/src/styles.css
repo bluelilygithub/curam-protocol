@@ -283,3 +283,10 @@ button.back { font-size: 1rem; font-weight: 500; }
 .toollist-title h1 { font-size: 1rem; font-weight: 600; }
 /* a "back" line at the top of the drawing and planning views, the same as the track's "Tracks" button */
 .side-back { padding: 0 0 2px; }
+
+/* ---- "working" card over the map while a route is being found */
+.working { position: absolute; z-index: 9; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(340px, calc(100% - 32px)); padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22); pointer-events: none; }
+.working p { margin: 4px 0 0; font-size: 0.857rem; color: var(--muted); }
+.working-spin { flex: none; margin-top: 1px; color: var(--primary); animation: working-spin 1s linear infinite; }
+@keyframes working-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .working-spin { animation: none; } }

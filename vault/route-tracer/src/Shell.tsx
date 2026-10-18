@@ -136,7 +136,8 @@ export async function importGpxFile(file: File | undefined, map: maplibregl.Map 
 
 /** The gear: units, distance markers, GPX import and the tour. */
 function SettingsMenu({ map }: { map: maplibregl.Map | null }) {
-  const { units, setUnits, markersOn, setMarkersOn, drawing } = useStore();
+  const { units, setUnits, markersOn, setMarkersOn, drawing, isAdmin } = useStore();
+  const [checking, setChecking] = useState(false);
   const planningNow = usePlan((s) => s.active);
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
@@ -165,6 +166,21 @@ function SettingsMenu({ map }: { map: maplibregl.Map | null }) {
           </label>
           <button type="button" role="menuitemcheckbox" aria-checked={markersOn} aria-pressed={markersOn} onClick={() => setMarkersOn(!markersOn)} title={`Show or hide the numbered distance markers along the line (every 1 ${units}; zoomed out they thin to every 5th, 10th and so on)`}>Distance markers</button>
           <button type="button" role="menuitem" disabled={!idle} onClick={() => { setOpen(false); fileInput.current?.click(); }} title={idle ? 'Open a GPX file from Strava, Garmin or a friend, see it on the map and save it as a track' : 'Finish or cancel what you are doing first'}>Import GPX</button>
+          {isAdmin && (
+            <button
+              type="button" role="menuitem" disabled={checking}
+              title="For the owner: make one tiny routing request from the server and see whether the routing service answers, and how fast. Use it when planning keeps failing."
+              onClick={() => {
+                setOpen(false);
+                setChecking(true);
+                useStore.getState().toast('ok', 'Checking route planning… this can take up to 45 seconds.', 6000);
+                void api.diagnose()
+                  .then((r) => useStore.getState().toast(r.ok ? 'ok' : 'error', r.summary, 12000))
+                  .catch((e: unknown) => useStore.getState().toast('error', e instanceof Error ? e.message : 'The check could not run.', 8000))
+                  .finally(() => setChecking(false));
+              }}
+            >{checking ? 'Checking…' : 'Check route planning'}</button>
+          )}
           <button type="button" role="menuitem" onClick={() => { setOpen(false); startTour(); }} aria-label="Take the guided tour" title="Take the guided tour (about two minutes)">Take the tour</button>
         </div>
       )}

@@ -90,6 +90,7 @@ await page.route('**/api/geocode/reverse', (r) => { reverseLog.push(r.request().
 await page.route('**/api/geocode', (r) => { geocodeLog.push(r.request().postDataJSON()); return r.fulfill({ json: { results: geocodeAnswer, attribution: 'x', cached: false } }); });
 const db = [];
 const planLog = [];
+let planDelay = 0; // a slow routing service, to see the working card
 let planOrder = 'sorted';
 const loopLog = [];
 const legLog = [];
@@ -161,6 +162,7 @@ await page.route('**/api/route-tracks**', async (route) => {
   if (m === 'POST' && path === '/plan') {
     const b = req.postDataJSON();
     planLog.push(b);
+    if (planDelay) await new Promise((r) => setTimeout(r, planDelay));
     if (planFail) return route.fulfill({ status: 422, json: { error: planFail } });
     const mk = (bow) => { const mid = [(b.from[0] + b.to[0]) / 2 + bow * (b.to[1] - b.from[1]), (b.from[1] + b.to[1]) / 2 - bow * (b.to[0] - b.from[0])]; const coordinates = [b.from, [(b.from[0] + mid[0]) / 2, (b.from[1] + mid[1]) / 2], mid, [(mid[0] + b.to[0]) / 2, (mid[1] + b.to[1]) / 2], b.to]; return { distanceM: dist([coordinates]), durationS: dist([coordinates]) / 1.4, coordinates }; };
     return route.fulfill({ json: { routes: planOrder === 'shuffled' ? [mk(-0.4), mk(0), mk(0.25)] : [mk(0), mk(0.25), mk(-0.4)], attribution: '(c) openrouteservice.org | (c) OpenStreetMap contributors', cached: false } });
@@ -830,10 +832,15 @@ await wait(300);
   check('planning asks for the start first', /set the start/.test((await page.getByTestId('plan-step').textContent()) ?? ''));
   await tipsOk('plan route');
   planLog.length = 0;
+  planDelay = 2500;
   await page.mouse.click(MX + 300, MY + 300); await wait(300);
   check('then the end', /set the end/.test((await page.getByTestId('plan-step').textContent()) ?? '') && (await page.locator('.plan-pin-a').count()) === 1);
   await page.mouse.click(MX + 760, MY + 360); await wait(300);
+  await page.getByTestId('plan-working').waitFor({ timeout: 3000 });
+  check('a "working" card shows over the map while the routes are being found', /Finding your route/.test((await page.getByTestId('plan-working').textContent()) ?? ''));
   await page.getByTestId('plan-route').first().waitFor({ timeout: 10000 });
+  planDelay = 0;
+  check('the card goes away when the routes arrive', (await page.getByTestId('plan-working').count()) === 0);
   const cards = page.getByTestId('plan-route');
   await wait(800); await shot('plan');
   check('three routes are offered with distance and time', (await cards.count()) === 3 && /km|m/.test((await cards.first().textContent()) ?? '') && /min|h/.test((await cards.first().textContent()) ?? ''), (await cards.allTextContents()).join(' | '));

@@ -39,7 +39,9 @@ export interface PlannedRoute { distanceM: number; durationS: number | null; coo
 export interface GeocodeResult { label: string; lat: number; lng: number }
 
 export const api = {
-  config: () => call<{ maptilerKey: string | null; routePlanning?: boolean; emailEnabled?: boolean }>('GET', '/api/route-tracks/config'),
+  config: () => call<{ maptilerKey: string | null; routePlanning?: boolean; emailEnabled?: boolean; isAdmin?: boolean }>('GET', '/api/route-tracks/config'),
+  /** Owner only: one tiny routing request, to see whether the routing service answers from the server and how fast. */
+  diagnose: () => call<{ ok: boolean; keySet: boolean; ms: number; summary: string }>('GET', '/api/route-tracks/diagnose'),
   /** The road or path between two clicks (Click mode with Follow roads on): one route, not alternatives. */
   leg: (input: { from: [number, number]; to: [number, number]; profile: PlanProfile }) =>
     call<{ route: PlannedRoute; cached: boolean }>('POST', '/api/route-tracks/leg', input),

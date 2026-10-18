@@ -136,7 +136,14 @@ function createRouter(pool, {
     res.set('Cache-Control', 'no-store');
     let emailEnabled = false;
     try { emailEnabled = !!(await emailConfigured()); } catch { emailEnabled = false; }
-    res.json({ maptilerKey: getMapKey(), routePlanning: !!getOrsKey(), emailEnabled, planProfiles: Object.keys(PROFILES), loopKm: { min: LOOP_MIN_KM, max: LOOP_MAX_KM }, detourKm: { min: DETOUR_MIN_KM, max: DETOUR_MAX_KM } });
+    res.json({ maptilerKey: getMapKey(), routePlanning: !!getOrsKey(), isAdmin: !!req.user?.isAdmin, emailEnabled, planProfiles: Object.keys(PROFILES), loopKm: { min: LOOP_MIN_KM, max: LOOP_MAX_KM }, detourKm: { min: DETOUR_MIN_KM, max: DETOUR_MAX_KM } });
+  });
+
+  // GET /api/route-tracks/diagnose (owner only): one tiny routing request, to see whether the routing service answers from this server and how fast.
+  router.get('/diagnose', async (req, res) => {
+    if (!req.user?.isAdmin) return res.status(403).json({ error: 'Only an administrator can run this check.' });
+    res.set('Cache-Control', 'no-store');
+    res.json(await planner.diagnose());
   });
 
   // GET /api/route-tracks?q=&limit=&cursor=: newest first, no geometry.

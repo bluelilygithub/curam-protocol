@@ -75,6 +75,9 @@ interface State {
   /** The server has an OpenRouteService key (Plan route works). */
   routePlanning: boolean;
   setRoutePlanning(v: boolean): void;
+  /** The signed-in person is an administrator (the settings menu then offers the route planning check). */
+  isAdmin: boolean;
+  setIsAdmin(v: boolean): void;
   /** The server can send email (a mail key or SMTP is set up). */
   emailEnabled: boolean;
   setEmailEnabled(v: boolean): void;
@@ -174,6 +177,8 @@ export const useStore = create<State>((set, get) => {
   setPlanned: (planned) => set({ planned }),
   routePlanning: false,
   setRoutePlanning: (routePlanning) => set({ routePlanning }),
+  isAdmin: false,
+  setIsAdmin: (isAdmin) => set({ isAdmin }),
   emailEnabled: false,
   setEmailEnabled: (emailEnabled) => set({ emailEnabled }),
   imported: null,

@@ -36,8 +36,10 @@ const DETOUR_TOLERANCE = 0.08;
 // the shapes tried, per round: [side (+1 left of A to B, -1 right), how far along A to B the via point sits]
 const DETOUR_SHAPES = [[[1, 0.5], [-1, 0.5], [1, 0.3]], [[1, 0.7], [-1, 0.7], [-1, 0.3]], [[1, 0.4], [-1, 0.4], [1, 0.6]]];
 const LEG_MIN_M = 5; // two clicks closer than this are the same place: no call, the segment is just the two points
-const TIMEOUT_MS = 15000;
-const LOOP_TIMEOUT_MS = 30000; // a round trip is slower for the service to work out than A to B, and a long one used to run out of time
+const TIMEOUT_MS = 30000; // the public routing service is sometimes slow: waiting is better than a failed plan (the page shows a "working" card meanwhile)
+const LOOP_TIMEOUT_MS = 30000;
+const LEG_TIMEOUT_MS = 15000; // one click of Follow roads: a person is waiting for the line to appear
+const DIAGNOSE_TIMEOUT_MS = 45000;
 const CACHE_TTL_MS = 60 * 60 * 1000;
 const CACHE_MAX = 300;
 const ATTRIBUTION = '© openrouteservice.org | © OpenStreetMap contributors';
@@ -96,7 +98,7 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
     } catch (err) {
       // say WHY in the log (a timeout, a refused connection, a DNS failure): the person only ever sees the plain message
       log('route planner: request failed', `${err && err.name}: ${err && err.message}${err && err.cause && (err.cause.code || err.cause.message) ? ` (${err.cause.code || err.cause.message})` : ''} after ${timeoutMs} ms limit`);
-      throw Object.assign(new PlanError(502, 'The route planner did not answer. Try again in a moment.'), { transient: true });
+      throw Object.assign(new PlanError(502, 'The route planner did not answer. Try again in a moment.'), { transient: true, reason: err && err.name === 'AbortError' ? `no answer within ${timeoutMs / 1000} seconds` : `${err && err.name}: ${err && err.message}${err && err.cause && (err.cause.code || err.cause.message) ? ` (${err.cause.code || err.cause.message})` : ''}` });
     } finally { clearTimeout(timer); }
     let json = null;
     try { json = await res.json(); } catch { /* not JSON */ }
@@ -150,13 +152,13 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
   }
 
   /** A route through the given points (2 or 3), plain errors thrown. `alternatives` only for exactly two points under about 100 km. */
-  async function route(key, profile, points, alternatives) {
+  async function route(key, profile, points, alternatives, timeoutMs = TIMEOUT_MS) {
     let alt = alternatives;
     for (;;) {
       try {
         const body = { coordinates: points, instructions: false, elevation: false };
         if (alt) body.alternative_routes = { target_count: 3, weight_factor: 1.6, share_factor: 0.6 };
-        return toRoutes(await post(key, profile, body));
+        return toRoutes(await post(key, profile, body, timeoutMs));
       } catch (err) {
         const u = err.upstream;
         if (!u) throw err;
@@ -281,7 +283,7 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
     const hit = fromCache(ck);
     if (hit) return hit;
     limit(userId, 1);
-    const r = (await route(key, profile, [from, to], false))[0];
+    const r = (await route(key, profile, [from, to], false, LEG_TIMEOUT_MS))[0];
     if (!r) throw new PlanError(422, 'No route could be found between those points for this way of travelling.');
     const value = { route: r, attribution: ATTRIBUTION };
     remember(ck, value);
@@ -381,7 +383,29 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
     return done(routes);
   }
 
-  return { plan, loops, detour, leg };
+  /**
+   * For the owner: one tiny routing request (a few hundred metres in Dublin) to see whether the routing service answers from this server, and how fast.
+   * Never throws; always answers { ok, ms, ... } in plain words. Costs one call of the service's quota. Never includes the key.
+   */
+  async function diagnose() {
+    const key = getKey();
+    if (!key) return { ok: false, keySet: false, ms: 0, summary: 'No routing key is set on the server (ORS_API_KEY), so route planning is switched off.' };
+    const t0 = now();
+    try {
+      await post(key, 'walking', { coordinates: [[-6.3108, 53.2895], [-6.3043, 53.2927]], instructions: false, elevation: false }, DIAGNOSE_TIMEOUT_MS);
+      const ms = now() - t0;
+      return { ok: true, keySet: true, ms, summary: ms > 8000 ? `The routing service answered, but slowly: ${(ms / 1000).toFixed(1)} seconds for a tiny request. Plans may time out at busy moments.` : `The routing service answered in ${(ms / 1000).toFixed(1)} seconds. Route planning is working from this server.` };
+    } catch (err) {
+      const ms = now() - t0;
+      if (err.upstream) {
+        const e = explain(err.upstream);
+        return { ok: false, keySet: true, ms, status: err.upstream.status, code: Number.isFinite(err.upstream.code) ? err.upstream.code : null, summary: `The routing service answered with an error (${err.upstream.status}): ${e.message}` };
+      }
+      return { ok: false, keySet: true, ms, reason: err.reason || null, summary: `The routing service did not answer from this server (${err.reason || 'unknown reason'}). It may be slow, down, or unreachable from the host.` };
+    }
+  }
+
+  return { plan, loops, detour, leg, diagnose };
 }
 
 module.exports = { createPlanner, PlanError, PROFILES, ATTRIBUTION, ALTERNATIVES_MAX_M, LOOP_MIN_KM, LOOP_MAX_KM, DETOUR_MIN_KM, DETOUR_MAX_KM };

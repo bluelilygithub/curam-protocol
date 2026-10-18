@@ -535,6 +535,36 @@ async function planTests() {
     s.close();
   }
 
+  // ---- the owner's check: does the routing service answer from this server, and how fast (admin only, never the key)
+  {
+    const okFetch = async () => ({ ok: true, status: 200, json: async () => ({ features: [{ properties: { summary: { distance: 500, duration: 360 } }, geometry: { type: 'LineString', coordinates: [[-6.31, 53.29], [-6.30, 53.29]] } }] }) });
+    const opened = [];
+    const asAdmin = (fetchFn, getOrsKey = () => 'ors-secret', isAdmin = true) => {
+      const app = express();
+      app.use(express.json());
+      app.use((req, res, next) => { req.user = { id: 1, isAdmin }; next(); });
+      app.use('/api/route-tracks', createRouter(fakePool(), { emailConfigured: async () => false, getMapKey: () => 'K', getOrsKey, fetchFn }));
+      const srv = http.createServer(app).listen(0);
+      opened.push(srv);
+      return srv;
+    };
+    const good = await call(asAdmin(okFetch), 'GET', '/api/route-tracks/diagnose');
+    assert.strictEqual(good.status, 200);
+    assert.strictEqual(good.json.ok, true);
+    assert.match(good.json.summary, /working from this server/);
+    assert.ok(!good.text.includes('ors-secret'), 'the key is never in the answer');
+    assert.strictEqual((await call(asAdmin(okFetch, () => 'k', false), 'GET', '/api/route-tracks/diagnose')).status, 403, 'only an administrator');
+    const noKey = await call(asAdmin(okFetch, () => null), 'GET', '/api/route-tracks/diagnose');
+    assert.strictEqual(noKey.json.ok, false); assert.strictEqual(noKey.json.keySet, false);
+    const refused = await call(asAdmin(async () => ({ ok: false, status: 403, json: async () => ({}) })), 'GET', '/api/route-tracks/diagnose');
+    assert.strictEqual(refused.json.ok, false); assert.strictEqual(refused.json.status, 403); assert.match(refused.json.summary, /rejected/);
+    const down = await call(asAdmin(async () => { throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ENOTFOUND' } }); }), 'GET', '/api/route-tracks/diagnose');
+    assert.strictEqual(down.json.ok, false); assert.match(down.json.summary, /did not answer/); assert.match(down.json.summary, /ENOTFOUND/);
+    assert.strictEqual((await call(asAdmin(okFetch), 'GET', '/api/route-tracks/config')).json.isAdmin, true, 'config tells the page whether to show the check');
+    assert.strictEqual((await call(asAdmin(okFetch, () => 'k', false), 'GET', '/api/route-tracks/config')).json.isAdmin, false);
+    opened.forEach((srv) => srv.close());
+  }
+
   // ---- /plan through the router: signed-in user's id for the limits, errors become JSON with the right status, the key stays out
   {
     const calls = [];

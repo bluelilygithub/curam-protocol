@@ -11,6 +11,7 @@ import MapView from './MapView';
 import { useDistanceMarkers } from './Markers';
 import { clearDraft, fitTo, RecoveryBanner, SaveDialog, TracksPanel, useAutosave, useSavedLayer } from './Panels';
 import { PlanPanel, usePlan, usePlanning } from './Plan';
+import { PlanWorking } from './PlanWorking';
 import { PlacesPanel, usePlaces, usePlacesLayer } from './Places';
 import { CONTEXT_TYPE, OPEN_TYPE, currentGuideTool, openGuideTool } from './guideTools';
 import { ProbeReadout, useDistanceProbe } from './Probe';
@@ -31,7 +32,7 @@ export default function App() {
   useEffect(() => {
     const ready = (key: string) => { useStore.getState().setMapKey(key); setBoot({ state: 'ready', key }); };
     api.config()
-      .then((c) => { useStore.getState().setRoutePlanning(!!c.routePlanning); useStore.getState().setEmailEnabled(!!c.emailEnabled); return c; })
+      .then((c) => { useStore.getState().setRoutePlanning(!!c.routePlanning); useStore.getState().setEmailEnabled(!!c.emailEnabled); useStore.getState().setIsAdmin(!!c.isAdmin); return c; })
       .then((c) => (c.maptilerKey ? ready(c.maptilerKey) : DEV_KEY ? ready(DEV_KEY) : setBoot({ state: 'error', message: 'The map key is not set up on the server (ROUTE_TRACER_MAPTILER_KEY).' })))
       .catch((e: unknown) => {
         if (DEV_KEY && !(e instanceof ApiError && e.status === 403)) return ready(DEV_KEY);
@@ -135,6 +136,7 @@ function Shell({ mapKey, map, onMap }: { mapKey: string; map: maplibregl.Map | n
           <PlacesPanel map={map} />
           <RecoveryBanner />
           <ProbeReadout />
+          <PlanWorking />
           <Toasts />
         </div>
       </div>
