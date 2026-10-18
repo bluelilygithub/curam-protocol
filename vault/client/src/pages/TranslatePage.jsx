@@ -5,7 +5,7 @@ import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
 import { useIcon } from '../providers/IconProvider';
 import { LANGUAGES, orderLanguages, languageOptionLabel } from '../utils/translateLanguages';
-import { pickPdfFontUrl, needsNotoFont } from '../utils/translatePdfFonts';
+import { pickPdfFontUrl, needsNotoFont } from '../utils/translatePdfFonts.mjs';
 
 // Deployed commit shown on QA/Lessons-learnt reports so a stale build is checkable at a glance
 // instead of re-testing a fix against a report that never actually deployed — see /api/health.

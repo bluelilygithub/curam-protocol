@@ -1,9 +1,8 @@
 // PDF font-selection logic for the Translate agent — split out of TranslatePage.jsx so it can
 // be unit-tested with plain `node` (no JSX/bundler needed), same convention as
-// translateLlmService.test.js. See docs/translate-agent.md "Fonts" section for the two real
+// translateLlmService.test.js. An ES module (.mjs) so the browser build and Vite's dev server can import it as well as the node test (Node 22.12+
+// lets a plain require() load it). See docs/translate-agent.md "Fonts" section for the two real
 // incidents this module exists to prevent from recurring.
-
-'use strict';
 
 // Helvetica (react-pdf's built-in default) only covers WinAnsi/Latin-1 — no macrons, no Polish
 // diacritics. Confirmed on a real te reo Māori job: every macron vowel (ā ē ī ō ū) rendered as
@@ -36,4 +35,4 @@ function needsNotoFont(targetLanguage, sourceLanguage) {
   return Boolean(FONT_BY_LANG[targetLanguage]) || Boolean(FONT_BY_LANG[sourceLanguage]);
 }
 
-module.exports = { FONT_BY_LANG, pickPdfFontUrl, needsNotoFont };
+export { FONT_BY_LANG, pickPdfFontUrl, needsNotoFont };

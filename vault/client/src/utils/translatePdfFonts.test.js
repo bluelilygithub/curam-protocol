@@ -25,7 +25,7 @@ const assert = require('assert');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
-const { pickPdfFontUrl, needsNotoFont, FONT_BY_LANG } = require('./translatePdfFonts');
+const { pickPdfFontUrl, needsNotoFont, FONT_BY_LANG } = require('./translatePdfFonts.mjs');
 
 const G = '\x1b[32m';
 const R = '\x1b[31m';
