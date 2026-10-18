@@ -175,7 +175,7 @@ function SettingsMenu({ map }: { map: maplibregl.Map | null }) {
                 setChecking(true);
                 useStore.getState().toast('ok', 'Checking route planning… this can take up to 45 seconds.', 6000);
                 void api.diagnose()
-                  .then((r) => useStore.getState().toast(r.ok ? 'ok' : 'error', r.summary, 12000))
+                  .then((r) => useStore.getState().toast(r.ok ? 'ok' : 'error', r.summary, 30000))
                   .catch((e: unknown) => useStore.getState().toast('error', e instanceof Error ? e.message : 'The check could not run.', 8000))
                   .finally(() => setChecking(false));
               }}

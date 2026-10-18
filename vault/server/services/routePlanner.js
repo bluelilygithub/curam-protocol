@@ -383,26 +383,52 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
     return done(routes);
   }
 
+  /** A plain GET with its own short limit: did anything answer at all, and how fast. Never throws. */
+  async function probe(url, ms = 10000) {
+    const t0 = now();
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), ms);
+    try {
+      const res = await fetchFn(url, { method: 'GET', signal: ctl.signal, headers: { 'User-Agent': 'VaultRouteTracer-check' } });
+      try { await res.text(); } catch { /* the headers are enough */ }
+      return { ok: true, status: res.status, ms: now() - t0 };
+    } catch (err) {
+      return { ok: false, ms: now() - t0, reason: err && err.name === 'AbortError' ? `no answer within ${ms / 1000} seconds` : `${err && err.name}: ${err && err.message}${err && err.cause && (err.cause.code || err.cause.message) ? ` (${err.cause.code || err.cause.message})` : ''}` };
+    } finally { clearTimeout(timer); }
+  }
+
   /**
-   * For the owner: one tiny routing request (a few hundred metres in Dublin) to see whether the routing service answers from this server, and how fast.
-   * Never throws; always answers { ok, ms, ... } in plain words. Costs one call of the service's quota. Never includes the key.
+   * For the owner: does the routing service answer from this server, and how fast? Three small checks side by side: one tiny routing request (a few
+   * hundred metres in Dublin, with the key), a plain visit to the routing service's address (no key), and a plain visit to an unrelated site as a
+   * control, so the answer can say whether the whole connection out of this host is the problem or only the routing service. Never throws; plain words;
+   * never includes the key. Costs one call of the service's quota.
    */
   async function diagnose() {
     const key = getKey();
     if (!key) return { ok: false, keySet: false, ms: 0, summary: 'No routing key is set on the server (ORS_API_KEY), so route planning is switched off.' };
     const t0 = now();
-    try {
-      await post(key, 'walking', { coordinates: [[-6.3108, 53.2895], [-6.3043, 53.2927]], instructions: false, elevation: false }, DIAGNOSE_TIMEOUT_MS);
-      const ms = now() - t0;
-      return { ok: true, keySet: true, ms, summary: ms > 8000 ? `The routing service answered, but slowly: ${(ms / 1000).toFixed(1)} seconds for a tiny request. Plans may time out at busy moments.` : `The routing service answered in ${(ms / 1000).toFixed(1)} seconds. Route planning is working from this server.` };
-    } catch (err) {
-      const ms = now() - t0;
-      if (err.upstream) {
-        const e = explain(err.upstream);
-        return { ok: false, keySet: true, ms, status: err.upstream.status, code: Number.isFinite(err.upstream.code) ? err.upstream.code : null, summary: `The routing service answered with an error (${err.upstream.status}): ${e.message}` };
-      }
-      return { ok: false, keySet: true, ms, reason: err.reason || null, summary: `The routing service did not answer from this server (${err.reason || 'unknown reason'}). It may be slow, down, or unreachable from the host.` };
-    }
+    const [route, site, control] = await Promise.all([
+      (async () => {
+        try {
+          await post(key, 'walking', { coordinates: [[-6.3108, 53.2895], [-6.3043, 53.2927]], instructions: false, elevation: false }, DIAGNOSE_TIMEOUT_MS);
+          return { ok: true, ms: now() - t0 };
+        } catch (err) {
+          if (err.upstream) { const e = explain(err.upstream); return { ok: false, ms: now() - t0, answered: true, status: err.upstream.status, code: Number.isFinite(err.upstream.code) ? err.upstream.code : null, text: e.message }; }
+          return { ok: false, ms: now() - t0, answered: false, reason: err.reason || 'unknown reason' };
+        }
+      })(),
+      probe(`${ORS_BASE}/`),
+      probe('https://www.google.com/generate_204'),
+    ]);
+    const sec = (ms) => `${(ms / 1000).toFixed(1)} s`;
+    const where = `Site check: the routing service's address ${site.ok ? `answered in ${sec(site.ms)}` : `did not answer (${site.reason})`}; an unrelated site ${control.ok ? `answered in ${sec(control.ms)}` : `did not answer (${control.reason})`}.`;
+    let summary;
+    if (route.ok) summary = route.ms > 8000 ? `The routing service answered, but slowly: ${sec(route.ms)} for a tiny request. Plans may time out at busy moments. ${where}` : `The routing service answered in ${sec(route.ms)}. Route planning is working from this server. ${where}`;
+    else if (route.answered) summary = `The routing service answered with an error (${route.status}): ${route.text} ${where}`;
+    else if (!control.ok) summary = `Nothing answered from this server: the routing request failed (${route.reason}) and so did a visit to an unrelated site (${control.reason}). The problem is the host's connection to the internet, not the routing service. ${where}`;
+    else if (!site.ok) summary = `The routing request failed (${route.reason}) and the routing service's address does not answer from this server, although an unrelated site does. The routing service is down, or it is blocking this host. ${where}`;
+    else summary = `The routing request failed (${route.reason}), yet the routing service's address answers. So the service is up but is not answering routing requests from this server (a problem with the key's account, or a block on routing requests). ${where}`;
+    return { ok: route.ok, keySet: true, ms: route.ms, route, site, control, summary };
   }
 
   return { plan, loops, detour, leg, diagnose };

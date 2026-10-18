@@ -557,9 +557,15 @@ async function planTests() {
     const noKey = await call(asAdmin(okFetch, () => null), 'GET', '/api/route-tracks/diagnose');
     assert.strictEqual(noKey.json.ok, false); assert.strictEqual(noKey.json.keySet, false);
     const refused = await call(asAdmin(async () => ({ ok: false, status: 403, json: async () => ({}) })), 'GET', '/api/route-tracks/diagnose');
-    assert.strictEqual(refused.json.ok, false); assert.strictEqual(refused.json.status, 403); assert.match(refused.json.summary, /rejected/);
+    assert.strictEqual(refused.json.ok, false); assert.strictEqual(refused.json.route.status, 403); assert.match(refused.json.summary, /rejected/);
     const down = await call(asAdmin(async () => { throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ENOTFOUND' } }); }), 'GET', '/api/route-tracks/diagnose');
-    assert.strictEqual(down.json.ok, false); assert.match(down.json.summary, /did not answer/); assert.match(down.json.summary, /ENOTFOUND/);
+    assert.strictEqual(down.json.ok, false); assert.match(down.json.summary, /Nothing answered from this server/); assert.match(down.json.summary, /ENOTFOUND/);
+    // only the routing service silent: the control site answers
+    const only = await call(asAdmin(async (url) => { if (String(url).includes('openrouteservice')) throw Object.assign(new Error('x'), { name: 'AbortError' }); return { ok: true, status: 204, text: async () => '' }; }), 'GET', '/api/route-tracks/diagnose');
+    assert.strictEqual(only.json.ok, false); assert.match(only.json.summary, /routing service is down, or it is blocking this host/); assert.strictEqual(only.json.control.ok, true);
+    // everything answers except the routing request itself
+    const ping = await call(asAdmin(async (url, init) => { if (init && init.method === 'POST') throw Object.assign(new Error('x'), { name: 'AbortError' }); return { ok: true, status: 200, text: async () => '' }; }), 'GET', '/api/route-tracks/diagnose');
+    assert.match(ping.json.summary, /service is up but is not answering routing requests/);
     assert.strictEqual((await call(asAdmin(okFetch), 'GET', '/api/route-tracks/config')).json.isAdmin, true, 'config tells the page whether to show the check');
     assert.strictEqual((await call(asAdmin(okFetch, () => 'k', false), 'GET', '/api/route-tracks/config')).json.isAdmin, false);
     opened.forEach((srv) => srv.close());
