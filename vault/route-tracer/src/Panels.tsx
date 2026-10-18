@@ -1,4 +1,5 @@
-import { ChevronLeft, MapPinned, PencilLine } from 'lucide-react';
+import { ToolList } from './ToolList';
+import { ChevronLeft } from 'lucide-react';
 import type maplibregl from 'maplibre-gl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type Track, type TrackSummary } from './api';
@@ -10,7 +11,6 @@ import { ExportPdf } from './ExportPdf';
 import { fitToLimit } from './gpx';
 import { fitPadding } from './layout';
 import { Field, Mic } from './Mic';
-import { usePlan } from './Plan';
 import { tidySpoken } from './voice';
 import { COLORS, useStore } from './store';
 
@@ -117,7 +117,7 @@ function Swatches({ value, onChange }: { value: string; onChange: (c: string) =>
 }
 
 export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
-  const { panel, setPanel, tracks, setTracks, selected, select, showAll, setShowAll, units, toast, startDrawing, routePlanning } = useStore();
+  const { panel, setPanel, tracks, setTracks, selected, select, showAll, setShowAll, units, toast } = useStore();
   const [q, setQ] = useState('');
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -182,10 +182,7 @@ export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
   return (
     <section className="side-view" role="complementary" aria-label="Tracks" data-tour="rt-panel">
       <div className="side-head">
-        <div className="home-actions">
-          <button type="button" className="primary wide" onClick={() => startDrawing()} title="Start tracing a new route on the map" data-tour="rt-draw"><PencilLine size={18} aria-hidden="true" /> Draw</button>
-          <button type="button" className="wide" onClick={() => usePlan.getState().start()} disabled={!routePlanning} title={routePlanning ? 'Plan a route: set a start and an end and get up to three routes along real roads and paths, for walking, hiking, cycling or driving' : 'Route planning is not set up on this server yet (it needs an OpenRouteService key, ORS_API_KEY)'} data-tour="rt-plan"><MapPinned size={18} aria-hidden="true" /> Plan route</button>
-        </div>
+        <ToolList map={map} />
         <h2>Your tracks</h2>
         <span className="vwrap"><input type="search" aria-label="Search tracks" title="Type part of a track name to filter the list" placeholder="Search by name" value={q} onChange={(e) => setQ(e.target.value)} /><Mic label="Speak part of a track name" onText={setQ} onDone={(t) => { setQ(tidySpoken(t)); }} /></span>
       </div>
@@ -217,7 +214,7 @@ export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
             </li>
           ))}
         </ul>
-        {loaded && !tracks.length && <p className="hint">{q ? 'No tracks match.' : 'No saved tracks yet. Press Draw to trace one, or Plan route to find one.'}</p>}
+        {loaded && !tracks.length && <p className="hint">{q ? 'No tracks match.' : 'No saved tracks yet. Choose Draw a route to trace one, or Plan a route to find one.'}</p>}
         {loading && <p className="hint">Loading…</p>}
         <div ref={sentinel} style={{ height: 1 }} />
       </div>

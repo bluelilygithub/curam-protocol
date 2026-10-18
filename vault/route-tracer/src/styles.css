@@ -238,3 +238,26 @@ h2 { margin: 0; font-size: 1.15rem; }
 .linklike { min-height: 0; padding: 0; border: 0; background: none; color: var(--primary); text-decoration: underline; cursor: pointer; font-size: inherit; }
 .place-card { font-family: inherit; font-size: 0.9rem; line-height: 1.35; color: #222; }
 @media (max-width: 640px) { .places-pop { top: 8px; right: 64px; width: min(330px, calc(100% - 72px)); max-height: calc(100% - 16px); } }
+
+/* ---- the same look as Video Tools, Finance and Graphics: their tooltip, their left-hand list, their button size. */
+/* tooltip: the theme's surface card with a border, shown at once, as wide as its words (see planner-core TooltipHost look="vault") */
+.rp-tooltip.rp-tooltip-vault { max-width: 240px; padding: 6px 10px; border-radius: 8px; font-size: 11px; line-height: 1.35; background: var(--surface); color: var(--text); border: 1px solid var(--border); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18); animation: none; }
+/* the list: an icon and the name, then groups you open and close, each with a few plain items */
+.toollist { display: grid; gap: 8px; padding-bottom: 4px; }
+.toollist-title { display: flex; align-items: center; gap: 8px; }
+.toollist-title h1 { margin: 0; font-size: 0.9rem; font-weight: 600; }
+.toollist-tile { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; background: var(--bg); color: var(--primary); flex: none; }
+.toollist-info { min-height: 0; width: 24px; height: 24px; padding: 0; border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; }
+.toollist-info:hover:not(:disabled) { color: var(--primary); opacity: 1; }
+.toolgroup { display: grid; }
+.toolgroup-head { min-height: 0; padding: 4px 0; border: 0; background: transparent; text-align: left; font-size: 0.75rem; font-weight: 600; color: var(--primary); }
+.toolgroup-items { list-style: none; margin: 4px 0 0 4px; padding: 0 0 0 8px; display: grid; gap: 2px; border-left: 1px solid var(--border); }
+.toolitem { width: 100%; min-height: 0; padding: 6px 8px; border: 0; border-radius: 8px; background: transparent; text-align: left; font-size: 0.8rem; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.toolitem:hover:not(:disabled) { color: var(--text); }
+.toolitem svg { flex: none; color: var(--primary); }
+/* buttons and boxes: Vault's size on a mouse, the larger touch size on a finger */
+button, select, input, textarea { min-height: 36px; border-radius: 8px; }
+@media (pointer: coarse) { button, select, input, textarea { min-height: 44px; } }
+.side-head { padding: 16px 16px 8px; }
+.toolgroup-head, .toolitem, .toollist-info { min-height: 0; }
+.side-head h2 { font-size: 0.9rem; font-weight: 600; }

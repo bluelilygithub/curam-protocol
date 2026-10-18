@@ -275,10 +275,11 @@ await ready(page);
 check('map loads with the key from /config', true);
 check('the sidebar is beside the map, not over it', MX > 300 && MY > 40, `${MX},${MY}`);
 await tipsOk('home screen');
+await shot('home');
 
 // ---- freehand
 await home();
-await page.getByRole('button', { name: 'Draw', exact: true }).click();
+await page.getByRole('button', { name: 'Draw a route', exact: true }).click();
 check('draw toolbar opens', await page.getByRole('region', { name: 'Drawing tools' }).isVisible());
 check('readout starts at 0 m', (await readout()) === '0 m', await readout());
 await stroke([[300, 300], [500, 350], [700, 300]]);
@@ -656,7 +657,7 @@ check('the saved track is drawn on the map', await page.evaluate(() => window.ro
   // a planned route is searched near too, and the label says so
   await page.getByRole('button', { name: 'Close places' }).click();
   await page.getByRole('button', { name: 'Tracks', exact: true }).click().catch(() => undefined);
-  await page.getByRole('button', { name: 'Plan route' }).click();
+  await page.getByRole('button', { name: 'Plan a route' }).click();
   await page.getByTestId('planbar').waitFor();
   await page.getByRole('button', { name: 'A to B', exact: true }).click();
   await page.mouse.click(MX + 300, MY + 300); await wait(400);
@@ -817,7 +818,7 @@ await wait(300);
 
 // ---- Plan route: A and B, three routes, choose one, drag a pin, change how you travel, errors, use it as a track
 {
-  const planButton = page.getByRole('button', { name: 'Plan route' });
+  const planButton = page.getByRole('button', { name: 'Plan a route' });
   check('Plan route is on when the server has a routing key', await planButton.isEnabled());
   await planButton.click();
   const bar = page.getByTestId('planbar');
@@ -888,7 +889,7 @@ await wait(300);
   check('saved as a planned route with the same points', planned.drawMode === 'route' && JSON.stringify(planned.geometry.coordinates[0]) === JSON.stringify(chosen), `${planned.drawMode} ${planned.geometry.coordinates[0].length} vs ${chosen.length}`);
   // cancel leaves nothing behind
   await home();
-  await page.getByRole('button', { name: 'Plan route' }).click();
+  await page.getByRole('button', { name: 'Plan a route' }).click();
   await page.mouse.click(MX + 300, MY + 300); await wait(200);
   await page.getByRole('button', { name: 'Cancel' }).click(); await wait(300);
   check('Cancel clears the pins and routes', (await page.locator('.plan-pin').count()) === 0 && !(await bar.isVisible()));
@@ -897,7 +898,7 @@ await wait(300);
 // ---- Plan route: the A and B fields (named places, searched on Enter, never as you type) and the order of the routes
 {
   await home();
-  await page.getByRole('button', { name: 'Plan route' }).click();
+  await page.getByRole('button', { name: 'Plan a route' }).click();
   await page.getByTestId('planbar').waitFor();
   await page.getByRole('button', { name: 'A to B', exact: true }).click();
   await tipsOk('plan route: the A and B fields');
@@ -1013,7 +1014,7 @@ await wait(300);
 // ---- Plan route: a loop of about X km from one point
 {
   await home();
-  await page.getByRole('button', { name: 'Plan route' }).click();
+  await page.getByRole('button', { name: 'Plan a route' }).click();
   await page.getByTestId('planbar').waitFor();
   await page.getByRole('button', { name: 'Loop', exact: true }).click();
   check('Loop asks for just a start', /set the start\. The loop begins and ends there/.test((await page.getByTestId('plan-step').textContent()) ?? ''));
@@ -1073,7 +1074,7 @@ await wait(300);
 // ---- Plan route: a longer A to B (about X km between the same two points)
 {
   await home();
-  await page.getByRole('button', { name: 'Plan route' }).click();
+  await page.getByRole('button', { name: 'Plan a route' }).click();
   await page.getByTestId('planbar').waitFor();
   await page.getByRole('button', { name: 'Longer route' }).click();
   check('Longer route asks for the start first', /set the start \(A\)/.test((await page.getByTestId('plan-step').textContent()) ?? ''));
@@ -1284,6 +1285,7 @@ await wait(300);
   await tp2.waitForFunction(() => window.routeTracer?.map?.isStyleLoaded());
   check('the chosen theme colours are used (Dark Slate)', (await cssVar(tp2, '--color-primary')).toLowerCase() === '#7c8cf8' && (await bgOf(tp2, 'body')) === 'rgb(15, 17, 23)' && (await bgOf(tp2, '[data-testid=sidebar]')) === 'rgb(26, 29, 39)', `${await cssVar(tp2, '--color-primary')} ${await bgOf(tp2, 'body')} ${await bgOf(tp2, '[data-testid=sidebar]')}`);
   check('the chosen font is used (Lato), and fetched like Vault does', (await tp2.evaluate(() => getComputedStyle(document.body).fontFamily)).includes('Lato') && (await tp2.evaluate(() => [...document.querySelectorAll('link[rel=stylesheet]')].some((l) => l.href.includes('family=Lato')))));
+  await tp2.getByRole('button', { name: 'Draw a route', exact: true }).click(); // the home list has no primary button; the drawing tools do
   check('a primary button is the theme colour with readable text', (await bgOf(tp2, 'button.primary')) === 'rgb(124, 140, 248)' && (await tp2.evaluate(() => getComputedStyle(document.querySelector('button.primary')).color)) === 'rgb(255, 255, 255)');
   check('a dark theme tells the browser, so its own controls follow', (await tp2.evaluate(() => getComputedStyle(document.documentElement).colorScheme)) === 'dark');
   // Vault's Settings changed in another tab: the theme follows without a reload
@@ -1303,7 +1305,7 @@ await wait(300);
 // ---- Click mode with Follow roads: each click finds the road from the last one
 {
   await home();
-  await page.getByRole('button', { name: 'Draw', exact: true }).click();
+  await page.getByRole('button', { name: 'Draw a route', exact: true }).click();
   await page.getByRole('button', { name: 'Click', exact: true }).click();
   const follow = page.getByRole('button', { name: 'Follow roads', exact: true });
   const feats = () => page.evaluate(() => (window.routeTracer.sent.draw?.features ?? []).map((f) => ({ kind: f.properties.kind, n: f.geometry.type === 'LineString' ? f.geometry.coordinates.length : 1, c: f.geometry.coordinates })));
@@ -1453,9 +1455,9 @@ await wait(300);
   const noTips = await fp.evaluate(() => [...document.querySelectorAll('[data-testid=info-modal] button')].filter((b) => !(b.getAttribute('title') || b.getAttribute('data-tip') || '').trim()).length); // a focused button has its title moved to data-tip by the tooltip host
   check('guide buttons have tooltips too', noTips === 0);
   await fp.keyboard.press('Escape'); await wait(300);
-  check('Plan route is greyed out, with a reason, when the server has no routing key', await fp.getByRole('button', { name: 'Plan route' }).isDisabled() && /not set up/.test((await fp.getByRole('button', { name: 'Plan route' }).getAttribute('title')) ?? '') );
+  check('Plan route is greyed out, with a reason, when the server has no routing key', await fp.getByRole('button', { name: 'Plan a route' }).isDisabled() && /not set up/.test((await fp.getByRole('button', { name: 'Plan a route' }).getAttribute('title')) ?? '') );
   await fp.keyboard.press('Escape'); await wait(150);
-  await fp.getByRole('button', { name: 'Draw', exact: true }).click();
+  await fp.getByRole('button', { name: 'Draw a route', exact: true }).click();
   await fp.getByRole('button', { name: 'Click', exact: true }).click();
   { const f = fp.getByRole('button', { name: 'Follow roads', exact: true }); check('without a routing key Follow roads is off and says why', (await f.isDisabled()) && /not set up/.test((await f.getAttribute('title')) ?? '')); }
   await fp.getByRole('button', { name: 'Cancel' }).click();
@@ -1506,7 +1508,7 @@ await wait(300);
 // ---- units
 await setUnits('mi');
 await home();
-await page.getByRole('button', { name: 'Draw', exact: true }).click();
+await page.getByRole('button', { name: 'Draw a route', exact: true }).click();
 check('miles toggle changes the readout', /(ft|mi)$/.test(await readout()), await readout());
 await page.getByRole('button', { name: 'Cancel' }).click();
 
@@ -1519,7 +1521,7 @@ await tp.route('**/api/route-tracks/config', (r) => r.fulfill({ json: { maptiler
 await tp.route('**/api/route-tracks?**', (r) => r.fulfill({ json: { tracks: [], nextCursor: null } }));
 await tp.goto(APP);
 await ready(tp);
-await tp.getByRole('button', { name: 'Draw', exact: true }).click();
+await tp.getByRole('button', { name: 'Draw a route', exact: true }).click();
 const cdp = await touch.newCDPSession(tp);
 const tdist = async () => (await tp.getByTestId('distance').textContent()) ?? '';
 const send = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts });

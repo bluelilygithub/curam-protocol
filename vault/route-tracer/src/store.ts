@@ -29,6 +29,9 @@ interface State {
   /** Elevation chart open in the drawing tools. */
   elevationOpen: boolean;
   setElevationOpen(v: boolean): void;
+  /** The guide chat asks for a menu to open (the gear, or the map-style list); the nonce makes asking twice work. */
+  menuRequest: { name: 'settings' | 'layers'; n: number } | null;
+  requestMenu(name: 'settings' | 'layers'): void;
   /** The "How this works" guide. */
   infoOpen: boolean;
   setInfoOpen(v: boolean): void;
@@ -117,6 +120,8 @@ export const useStore = create<State>((set, get) => {
   setMapKey: (mapKey) => set({ mapKey }),
   elevationOpen: false,
   setElevationOpen: (elevationOpen) => set({ elevationOpen }),
+  menuRequest: null,
+  requestMenu: (name) => set({ menuRequest: { name, n: (get().menuRequest?.n ?? 0) + 1 } }),
   infoOpen: false,
   setInfoOpen: (infoOpen) => set({ infoOpen }),
   probe: null,

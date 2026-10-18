@@ -1,4 +1,4 @@
-import { Compass, CircleHelp, Layers, LocateFixed, Minus, Plus, Route as RouteIcon, Search, Settings } from 'lucide-react';
+import { Compass, CircleHelp, Layers, LocateFixed, Minus, Plus, Search, Settings } from 'lucide-react';
 import type maplibregl from 'maplibre-gl';
 import { useEffect, useRef, useState } from 'react';
 import { api, type GeocodeResult } from './api';
@@ -84,7 +84,6 @@ export function Header({ map }: { map: maplibregl.Map | null }) {
 
   return (
     <header className="app-header">
-      <div className="brand" title="Route Tracer"><RouteIcon size={22} aria-hidden="true" /><span>Route Tracer</span></div>
       <form ref={box} className="header-search" onSubmit={search} role="search" data-tour="rt-search">
         <Search size={16} className="search-icon" aria-hidden="true" />
         <span className="vwrap">
@@ -109,42 +108,48 @@ export function Header({ map }: { map: maplibregl.Map | null }) {
   );
 }
 
+/** Open a GPX file in the drawing tools (Edit points mode, so a stray touch cannot draw): see it, measure it, fix it, Finish to save. */
+export async function importGpxFile(file: File | undefined, map: maplibregl.Map | null): Promise<void> {
+  const toast = useStore.getState().toast;
+  if (!file) return;
+  if (file.size > MAX_FILE_BYTES) return toast('error', 'That file is larger than 15 MB.');
+  let source: string;
+  try { source = await file.text(); } catch { return toast('error', 'Could not read that file.'); }
+  const parsed = parseGpx(source);
+  if (!parsed.ok) return toast('error', parsed.error);
+  const { gpx } = parsed;
+  const fit = fitToLimit(gpx.lines);
+  const s = useStore.getState();
+  s.startDrawing(fromLines(fit.lines));
+  s.setMode('edit');
+  s.setImported({ name: gpx.name, notes: gpx.notes });
+  const box = bboxOf(fit.lines);
+  if (map && box) fitTo(map, box);
+  const notes = [
+    `Imported ${formatDistance(totalKm(fit.lines), s.units)}.`,
+    fit.after < fit.before ? `Simplified from ${fit.before.toLocaleString()} to ${fit.after.toLocaleString()} points to fit.` : '',
+    gpx.skipped ? `${gpx.skipped} points with bad coordinates were left out.` : '',
+    'Press Finish to save it.',
+  ].filter(Boolean);
+  toast('ok', notes.join(' '), 7000);
+}
+
 /** The gear: units, distance markers, GPX import and the tour. */
 function SettingsMenu({ map }: { map: maplibregl.Map | null }) {
   const { units, setUnits, markersOn, setMarkersOn, drawing } = useStore();
   const planningNow = usePlan((s) => s.active);
-  const toast = useStore((s) => s.toast);
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   useDismiss(open, () => setOpen(false), wrap);
+  const menuRequest = useStore((s) => s.menuRequest);
+  useEffect(() => { if (menuRequest?.name === 'settings') setOpen(true); }, [menuRequest]);
   const idle = !drawing && !planningNow;
 
-  /** Open a GPX file in the drawing tools (Edit points mode, so a stray touch cannot draw): see it, measure it, fix it, Finish to save. */
   async function importGpx(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = ''; // the same file can be chosen again
-    if (!file) return;
-    if (file.size > MAX_FILE_BYTES) return toast('error', 'That file is larger than 15 MB.');
-    let source: string;
-    try { source = await file.text(); } catch { return toast('error', 'Could not read that file.'); }
-    const parsed = parseGpx(source);
-    if (!parsed.ok) return toast('error', parsed.error);
-    const { gpx } = parsed;
-    const fit = fitToLimit(gpx.lines);
-    const s = useStore.getState();
-    s.startDrawing(fromLines(fit.lines));
-    s.setMode('edit');
-    s.setImported({ name: gpx.name, notes: gpx.notes });
-    const box = bboxOf(fit.lines);
-    if (map && box) fitTo(map, box);
-    const notes = [
-      `Imported ${formatDistance(totalKm(fit.lines), s.units)}.`,
-      fit.after < fit.before ? `Simplified from ${fit.before.toLocaleString()} to ${fit.after.toLocaleString()} points to fit.` : '',
-      gpx.skipped ? `${gpx.skipped} points with bad coordinates were left out.` : '',
-      'Press Finish to save it.',
-    ].filter(Boolean);
-    toast('ok', notes.join(' '), 7000);
+    await importGpxFile(file, map);
   }
 
   return (
@@ -175,6 +180,8 @@ export function MapControls({ map }: { map: maplibregl.Map | null }) {
   const [layers, setLayers] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   useDismiss(layers, () => setLayers(false), wrap);
+  const menuRequest = useStore((s) => s.menuRequest);
+  useEffect(() => { if (menuRequest?.name === 'layers') setLayers(true); }, [menuRequest]);
 
   function locate() {
     if (!navigator.geolocation) return toast('error', 'This device cannot share its location.');

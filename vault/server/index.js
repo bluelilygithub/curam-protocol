@@ -202,6 +202,7 @@ app.use('/api/cellar-planner/leads', requireFeature('cellarPlanner'), cellarLead
 app.use('/api/cellar-tutor', requireFeature('cellarPlanner'), aiLimiter, require('./routes/cellarTutor')); // the staff planner's guide chat (the public website tool has its own, below the public routes)
 app.use('/api/geocode', requireAnyFeature('gardenPlanner', 'routeTracer'), require('./routes/geocode'));
 app.use('/api/route-tracks', requireFeature('routeTracer'), require('./routes/routeTracks'));
+app.use('/api/route-tutor', requireFeature('routeTracer'), aiLimiter, require('./routes/routeTutor')); // the Route Tracer guide chat
 app.use('/api/map-tiles', requireFeature('gardenPlanner'), require('./routes/mapTiles'));
 app.use('/api/plant-images', requireFeature('gardenPlanner'), require('./routes/plantImages'));
 require('./services/fontGoogleCatalog').warmCatalog(); // background build — first real request shouldn't pay this cost

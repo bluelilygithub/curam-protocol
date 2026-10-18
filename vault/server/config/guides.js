@@ -16,6 +16,7 @@ const GUIDES = {
   video: { name: 'Video Tools tutor', endpoint: '/api/videos/tutor' },
   finance: { name: 'Finance guide', endpoint: '/api/finance-tutor' },
   cellar: { name: 'Cellar Planner guide', endpoint: '/api/cellar-tutor' },
+  route: { name: 'Route Tracer guide', endpoint: '/api/route-tutor' },
 };
 
 module.exports = { GUIDES };

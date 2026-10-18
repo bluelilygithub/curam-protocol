@@ -1939,6 +1939,9 @@
   "POST /api/tutor-email": {
    "class": "authed"
   },
+  "POST /api/route-tutor": {
+   "class": "authed"
+  },
   "POST /api/cellar-tutor": {
    "class": "authed"
   },

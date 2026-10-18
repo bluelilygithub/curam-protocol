@@ -11,7 +11,8 @@ import MapView from './MapView';
 import { useDistanceMarkers } from './Markers';
 import { clearDraft, fitTo, RecoveryBanner, SaveDialog, TracksPanel, useAutosave, useSavedLayer } from './Panels';
 import { PlanPanel, usePlan, usePlanning } from './Plan';
-import { PlacesPanel, usePlacesLayer } from './Places';
+import { PlacesPanel, usePlaces, usePlacesLayer } from './Places';
+import { CONTEXT_TYPE, OPEN_TYPE, currentGuideTool, openGuideTool } from './guideTools';
 import { ProbeReadout, useDistanceProbe } from './Probe';
 import { Header, MapControls } from './Shell';
 import { useStore } from './store';
@@ -82,6 +83,38 @@ function Shell({ mapKey, map, onMap }: { mapKey: string; map: maplibregl.Map | n
     return () => window.removeEventListener('beforeunload', warn);
   }, []);
 
+  // Vault's guide chat (it lives in the page around this app) asks us to open screens, and is told which one the person is on. Same origin only.
+  const infoOpen = useStore((s) => s.infoOpen);
+  const panel = useStore((s) => s.panel);
+  const placesOpen = usePlaces((s) => s.open);
+  useEffect(() => {
+    if (window.parent === window) return undefined;
+    const onMessage = (ev: MessageEvent): void => {
+      if (ev.origin !== window.location.origin || ev.source !== window.parent) return;
+      const d = ev.data as { type?: unknown; id?: unknown } | null;
+      if (!d || d.type !== OPEN_TYPE || typeof d.id !== 'string') return;
+      openGuideTool(d.id, {
+        busy: () => (useStore.getState().drawing ? 'drawing' : usePlan.getState().active ? 'planning' : null),
+        showTracks: () => { const s = useStore.getState(); s.select(null); s.setPanel('tracks'); },
+        startDrawing: () => useStore.getState().startDrawing(),
+        startPlan: () => { if (!useStore.getState().routePlanning) return false; usePlan.getState().start(); return true; },
+        openPlaces: () => usePlaces.getState().setOpen(true),
+        openInfo: () => useStore.getState().setInfoOpen(true),
+        startTour: () => startTour(),
+        menu: (name) => useStore.getState().requestMenu(name),
+        focusSearch: () => document.querySelector<HTMLInputElement>('.header-search input')?.focus(),
+        toast: (kind, text) => useStore.getState().toast(kind, text, 5000),
+      });
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+  const guideTool = currentGuideTool({ info: infoOpen, planning, drawing, places: placesOpen, panel });
+  useEffect(() => {
+    if (window.parent === window) return;
+    try { window.parent.postMessage({ type: CONTEXT_TYPE, tool: guideTool }, window.location.origin); } catch { /* the guide must never break the app */ }
+  }, [guideTool]);
+
   // First visit: the guide opens once. Vault's Settings page opens the app with ?tour=1 to run the tour instead.
   useEffect(() => {
     if (!map) return;
@@ -107,7 +140,7 @@ function Shell({ mapKey, map, onMap }: { mapKey: string; map: maplibregl.Map | n
       </div>
       {saving && <SaveDialog onSaved={onSaved} />}
       <InfoModal />
-      <TooltipHost />
+      <TooltipHost look="vault" />
     </div>
   );
 }

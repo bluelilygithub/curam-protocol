@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import RouteTutorChat from './route/RouteTutorChat';
 
 /**
  * Route Tracer lives in its own app (vault/route-tracer/, Vite + React 19 + MapLibre GL) and is built into
@@ -13,6 +14,20 @@ export default function RouteTracerPage() {
   const wantsTour = new URLSearchParams(useLocation().search).has('tour');
   // 'checking' | 'ok' | 'missing' — a failed route-tracer build must show a clear notice, not Vault's own page inside the frame
   const [state, setState] = useState('checking');
+  // The guide chat: the app (inside the frame) tells us which screen the person is on, and the guide's Open buttons ask it to open one.
+  // Same origin only; the ids are listed in route-tracer/src/guideTools.ts.
+  const frameRef = useRef(null);
+  const [tool, setTool] = useState('tracks');
+  useEffect(() => {
+    const onMessage = (ev) => {
+      if (ev.origin !== window.location.origin || ev.source !== frameRef.current?.contentWindow) return;
+      const d = ev.data;
+      if (d && d.type === 'route-tracer:context' && typeof d.tool === 'string') setTool(d.tool.slice(0, 40));
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+  const openTool = (id) => frameRef.current?.contentWindow?.postMessage({ type: 'route-tracer:open', id }, window.location.origin);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,6 +57,7 @@ export default function RouteTracerPage() {
     <div className="flex flex-col h-full min-h-0" style={{ height: '100%' }}>
       {state === 'ok' && (
         <iframe
+          ref={frameRef}
           src={`${APP_URL}?embedded=1${wantsTour ? '&tour=1' : ''}`}
           title="Route Tracer"
           allow="geolocation; microphone; fullscreen"
@@ -50,6 +66,7 @@ export default function RouteTracerPage() {
           style={{ flex: 1, minHeight: 0, height: '100%', background: 'var(--color-bg)' }}
         />
       )}
+      {state === 'ok' && <RouteTutorChat currentTool={tool} onOpenTool={openTool} />}
     </div>
   );
 }

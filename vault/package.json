@@ -30,6 +30,7 @@
     "test:guides": "node server/config/guides.test.js",
     "test:tutor-email": "node server/routes/tutorEmail.test.js",
     "test:cellar-lite-guide": "node server/routes/cellarLiteGuide.test.js",
+    "test:route-tutor": "node server/services/routeTutor.test.js",
     "test:cellar-tutor": "node server/services/cellarTutor.test.js",
     "test:pdf-tutor": "node server/services/pdfTutor.test.js",
     "test:graphics": "node server/routes/graphics/graphics.test.js",

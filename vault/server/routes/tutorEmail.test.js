@@ -23,7 +23,7 @@ const reset = () => { sent.length = 0; };
 
 (async () => {
   // ---- the four guides are known ----
-  assert.deepStrictEqual(Object.keys(GUIDES).sort(), ['cellar', 'finance', 'graphics', 'pdf', 'video']);
+  assert.deepStrictEqual(Object.keys(GUIDES).sort(), ['cellar', 'finance', 'graphics', 'pdf', 'route', 'video']);
 
   // ---- to me and the admin: two separate emails, the admin copy replies to the person ----
   let out = await sendTutorEmails(user, { guide: 'pdf', turns, toMe: true, toAdmin: true }, deps());
