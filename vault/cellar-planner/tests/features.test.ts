@@ -1,3 +1,4 @@
+import { NO_COSTS } from './_costs';
 import { createRequire } from 'node:module';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
@@ -185,7 +186,7 @@ function btoaUrl(a: number[]): string { return btoa(JSON.stringify(a)).replace(/
 describe('the staff price, the quote and the saved design', () => {
   const T: RackType = { ...DEFAULT_CONFIG.rackTypes[0]!, id: 'std', name: 'Standard 600', unitDepthMm: 350, rowPitchMm: 100, postsPerUnit: 2, pricePerUnit: 900, confirmed: true };
   const QUOTE = { businessName: 'Acme Wine Cellars', details: '', terms: '', validityDays: 30, gstNote: '' };
-  const cat = (features = priced()): Catalogue => ({ rackTypes: [T], defaultRackType: 'std', doors: { singleMm: 970, doubleMm: 1500 }, pricing: { ...DEFAULT_CONFIG.pricing, fixed: 2000, doorSingle: 500, doorDouble: 900, rangePct: 10, roundTo: 100 }, quote: QUOTE, cooling: { ...DEFAULT_CONFIG.cooling }, features });
+  const cat = (features = priced()): Catalogue => ({ rackTypes: [T], defaultRackType: 'std', doors: { singleMm: 970, doubleMm: 1500 }, pricing: { ...DEFAULT_CONFIG.pricing, fixed: 2000, doorSingle: 500, doorDouble: 900, rangePct: 10, roundTo: 100 }, quote: QUOTE, cooling: { ...DEFAULT_CONFIG.cooling }, costs: NO_COSTS, features });
   const base = (): AppProject => applyRackType(testCaseProject(), T);
   const META = { reference: 'Q1', date: '2026-10-12', customer: 'Sam', address: '', notes: '' };
 

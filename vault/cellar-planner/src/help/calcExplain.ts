@@ -161,22 +161,24 @@ export function explainCalculations(p: AppProject, cat: Catalogue | null): CalcS
   const priceLines: CalcLine[] = [];
   if (pl.status === 'OK') {
     for (const l of pl.lines) {
-      const formula = l.kind === 'feature' ? 'the option\'s price: typed for this quote, else halfway between its low and high' : l.kind === 'racks' ? 'units × price per unit' : 'a fixed amount from Settings';
+      const formula = l.kind === 'feature' ? 'the option\'s price: typed for this quote, else halfway between its low and high' : l.kind === 'racks' ? 'units × price per unit' : l.kind === 'cost' ? (l.label === 'Glass walls' ? 'square metres of glass wall × the price per square metre' : 'a fixed amount per job from Settings (Other costs)') : l.kind === 'margin' ? 'the margin % × everything above' : 'a fixed amount from Settings';
       priceLines.push({ label: l.label, formula, working: l.detail || 'from Cellar Planner, Settings', result: `${pl.currency}${l.amount.toLocaleString('en-AU')}`, value: l.amount });
     }
     priceLines.push({ label: 'Total', formula: 'the lines added together', working: pl.lines.map((l) => `${pl.currency}${l.amount.toLocaleString('en-AU')}`).join(' + '), result: `${pl.currency}${pl.total.toLocaleString('en-AU')}`, value: pl.total });
     const pct = cat?.pricing.rangePct ?? 0, step = cat?.pricing.roundTo ?? 1;
-    const base = Math.round(pl.lines.filter((l) => l.kind !== 'feature').reduce((n, l) => n + l.amount, 0) * 100) / 100;
-    priceLines.push({ label: 'Range a customer sees', formula: 'the total without features − and + the range %, plus each feature\'s own low at the bottom and high at the top, each end rounded to the nearest step', working: `${base} × (1 ∓ ${pct}%) + the features' low and high, nearest ${step}`, result: pl.text, value: null });
+    const base = Math.round(pl.lines.filter((l) => l.kind !== 'feature' && l.kind !== 'margin').reduce((n, l) => n + l.amount, 0) * 100) / 100;
+    const hasMargin = pl.lines.some((l) => l.kind === 'margin');
+    priceLines.push({ label: 'Range a customer sees', formula: 'the total without features or margin − and + the range %, plus each feature\'s own low at the bottom and high at the top, all times the margin, each end rounded to the nearest step', working: `(${base} × (1 ∓ ${pct}%) + the features' low and high)${hasMargin ? ` × ${1 + (cat?.costs.margin.pct ?? 0) / 100}` : ''}, nearest ${step}`, result: pl.text, value: null });
   } else priceLines.push({ label: 'Price', formula: 'fixed + units × price per unit + door price', working: '', result: pl.reason, value: null });
   out.push({
     id: 'price', title: 'Price',
-    summary: 'Price = fixed amount + (rack units × the chosen rack type\'s price per unit) + the door price (single or double) + each chosen feature option. All amounts come from Cellar Planner, Settings. The planner never invents a price.',
+    summary: 'Price = fixed amount + (rack units × the chosen rack type\'s price per unit) + the door price (single or double) + glass walls (area × price per m²) + cooling unit + lighting + installation + each chosen feature option, then the margin on top. All amounts come from Cellar Planner, Settings. Amounts marked placeholder are rough figures, not confirmed, and stop a quote. The planner never invents a price.',
     lines: priceLines,
     notes: [
       'Units are the whole rack units across ALL runs. A blank amount is left out, never counted as zero, and the Price panel says so.',
       'A feature option is priced at the amount typed for it in this design, otherwise halfway between its low and high from Settings. A chosen option with no price is left out of the total and stops a quote until it has one. A pick-one group\'s standard (included) option adds nothing.',
       'The public planner shows only the rounded range, and only when the owner switches prices on. Staff always see the breakdown.',
+      'The other costs (glass, cooling unit, lighting, installation) and the margin start as PLACEHOLDERS: rough figures from public cost guides, mostly US and Canadian and not checked for Australia. Each stays marked placeholder, and blocks the customer quote, until the owner ticks Confirmed for it in Cellar Planner, Settings, Other costs. A blank amount is left out, never counted as zero, and also blocks the quote. A confirmed zero means no charge.',
       'This is an indicative guide, not a quote: a site measure and the finishes still decide the final price.',
     ],
   });

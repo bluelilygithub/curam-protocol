@@ -1,7 +1,7 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { readVaultToken, type ReadableStorage } from '@planner-core/library/library';
-import { normaliseConfig, type CoolingSettings, type FeatureGroup, type FeatureOption, type LitePricing, type QuoteSettings, type RackType } from '../lite/config';
-import { internalSize } from '../enclosure/enclosure';
+import { normaliseConfig, type CoolingSettings, type CostSettings, type FeatureGroup, type FeatureOption, type LitePricing, type QuoteSettings, type RackType } from '../lite/config';
+import { internalSize, wallLengthMm } from '../enclosure/enclosure';
 import { featureTotals, optionMid, optionRange, resolveFeatures, type ResolvedFeatures } from '../lite/features';
 import type { RackSpec } from '../rack';
 import { ESTIMATE_FIELDS, type AppProject } from './model';
@@ -20,6 +20,8 @@ export interface Catalogue {
   quote: QuoteSettings;
   /** The assumptions behind the indicative cooling estimate. */
   cooling: CoolingSettings;
+  /** The other costs of a job (glass, cooling unit, lighting, installation, margin): placeholders until confirmed. */
+  costs: CostSettings;
   /** The feature groups and their low/high prices (Cellar Planner -> Settings -> Feature options). */
   features: FeatureGroup[];
 }
@@ -32,8 +34,8 @@ export function parseCatalogue(raw: unknown): Catalogue | null {
   const o = raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
   const c = o && o.catalogue !== null && typeof o.catalogue === 'object' ? (o.catalogue as Record<string, unknown>) : o;
   if (!c || !Array.isArray(c.rackTypes) || c.rackTypes.length === 0) return null;
-  const cfg = normaliseConfig({ rackTypes: c.rackTypes, defaultRackType: c.defaultRackType, doors: c.doors, pricing: c.pricing, quote: c.quote, cooling: c.cooling, features: c.features });
-  return { rackTypes: cfg.rackTypes, defaultRackType: cfg.defaultRackType, doors: cfg.doors, pricing: cfg.pricing, quote: cfg.quote, cooling: cfg.cooling, features: cfg.features };
+  const cfg = normaliseConfig({ rackTypes: c.rackTypes, defaultRackType: c.defaultRackType, doors: c.doors, pricing: c.pricing, quote: c.quote, cooling: c.cooling, costs: c.costs, features: c.features });
+  return { rackTypes: cfg.rackTypes, defaultRackType: cfg.defaultRackType, doors: cfg.doors, pricing: cfg.pricing, quote: cfg.quote, cooling: cfg.cooling, costs: cfg.costs, features: cfg.features };
 }
 
 export const typeById = (c: Catalogue | null, id: string | undefined): RackType | null => (c && id ? c.rackTypes.find((r) => r.id === id) ?? null : null);
@@ -64,10 +66,31 @@ export function matchesType(p: AppProject, t: RackType): boolean {
 
 // ---------------------------------------------------------------- the staff price
 
-export interface PriceLine { label: string; detail: string; amount: number; /** What the line is, for the working-out help. */ kind?: 'fixed' | 'racks' | 'door' | 'feature' }
+export interface PriceLine { label: string; detail: string; amount: number; /** What the line is, for the working-out help. */ kind?: 'fixed' | 'racks' | 'door' | 'feature' | 'cost' | 'margin' }
 export type StaffPrice =
-  | { status: 'OK'; lines: PriceLine[]; total: number; low: number; high: number; text: string; currency: string; warnings: string[]; /** Chosen features with no price in Settings: named here, left out of the total, and they stop a quote. */ unpriced: string[] }
+  | { status: 'OK'; lines: PriceLine[]; total: number; low: number; high: number; text: string; currency: string; warnings: string[]; /** Cost lines (glass, cooling unit, lighting, installation, margin) still marked placeholder, and those with no amount at all. */ placeholders: string[]; missingCosts: string[]; /** Chosen features with no price in Settings: named here, left out of the total, and they stop a quote. */ unpriced: string[] }
   | { status: 'UNAVAILABLE'; reason: string };
+
+/** Square metres of glass WALL (outer face), not counting the door opening on its own wall: the door has its own price line. */
+export function glassWallAreaM2(p: AppProject): number {
+  const e = p.enclosure;
+  let mm2 = 0;
+  for (const s of ['NORTH', 'EAST', 'SOUTH', 'WEST'] as const) {
+    if (e.walls[s].kind !== 'GLASS') continue;
+    const wall = wallLengthMm(e, s) * e.heightMm;
+    const doorHere = e.door.wall === s ? e.door.widthMm * Math.min(e.door.heightMm, e.heightMm) : 0;
+    mm2 += Math.max(0, wall - doorHere);
+  }
+  return Math.round((mm2 / 1e6) * 100) / 100;
+}
+
+/** The cost lines (glass, cooling unit, lighting, installation) with what each needs to be priced; used by the price, the quote gate and the settings. */
+export const COST_LINES = [
+  { key: 'glassPerM2', label: 'Glass walls', unit: 'per m² of glass wall' },
+  { key: 'cooling', label: 'Cooling unit', unit: 'per job' },
+  { key: 'lighting', label: 'Lighting', unit: 'per job' },
+  { key: 'installation', label: 'Installation', unit: 'per job' },
+] as const;
 
 /** The feature options chosen in this design, as the catalogue's list reads them for this room (null without a catalogue). */
 export function designFeatures(p: AppProject, cat: Catalogue | null): ResolvedFeatures | null {
@@ -113,21 +136,50 @@ export function staffPrice(p: AppProject, cat: Catalogue | null, opts: { errors?
       lines.push({ label: `${g.group.name}: ${o.name}`, detail: typed !== undefined ? 'amount set for this quote' : r && r.low !== r.high ? `halfway between ${fmt(r.low)} and ${fmt(r.high)}` : '', amount, kind: 'feature' });
     }
   }
+  // the other costs: glass by area, then the cooling unit, lighting and installation, each marked placeholder until the owner confirms it
+  const cs = cat.costs;
+  const placeholders: string[] = [];
+  const missingCosts: string[] = [];
+  const glassM2 = glassWallAreaM2(p);
+  const costRows: Array<{ label: string; detail: string; amount: number | null; confirmed: boolean; skip?: boolean }> = [
+    { label: 'Glass walls', detail: `${glassM2} m² x ${cs.glassPerM2.amount === null ? 'not set' : fmt(cs.glassPerM2.amount)}`, amount: cs.glassPerM2.amount === null ? null : Math.round(glassM2 * cs.glassPerM2.amount * 100) / 100, confirmed: cs.glassPerM2.confirmed, skip: glassM2 <= 0 },
+    { label: 'Cooling unit', detail: 'per job', amount: cs.cooling.amount, confirmed: cs.cooling.confirmed },
+    { label: 'Lighting', detail: 'per job', amount: cs.lighting.amount, confirmed: cs.lighting.confirmed },
+    { label: 'Installation', detail: 'per job', amount: cs.installation.amount, confirmed: cs.installation.confirmed },
+  ];
+  for (const r of costRows) {
+    if (r.skip || r.amount === 0) continue; // a zero is a deliberate "no charge": no line
+    if (r.amount === null) { missingCosts.push(r.label); continue; }
+    lines.push({ label: r.label, detail: r.confirmed ? r.detail : `${r.detail}, placeholder`, amount: r.amount, kind: 'cost' });
+    if (!r.confirmed) placeholders.push(r.label);
+  }
+  const preMargin = Math.round(lines.reduce((n, l) => n + l.amount, 0) * 100) / 100;
+  const marginPct = cs.margin.pct;
+  let mult = 1;
+  if (marginPct !== null && marginPct > 0) {
+    mult = 1 + marginPct / 100;
+    lines.push({ label: 'Margin', detail: `${marginPct}% on everything above${cs.margin.confirmed ? '' : ', placeholder'}`, amount: Math.round(preMargin * (mult - 1) * 100) / 100, kind: 'margin' });
+    if (!cs.margin.confirmed) placeholders.push('Margin');
+  } else if (marginPct === null) missingCosts.push('Margin');
   const total = Math.round(lines.reduce((n, l) => n + l.amount, 0) * 100) / 100;
   // the customer range: the base either side by the percentage, plus each feature's own low at the bottom and high at the top
   const step = pr.roundTo, spread = pr.rangePct / 100;
   const round = (n: number): number => Math.round(n / step) * step;
   const ft = featureTotals(pricedExtras);
-  const low = Math.max(0, round(baseTotal * (1 - spread) + ft.low)), high = Math.max(low, round(baseTotal * (1 + spread) + ft.high));
+  // the cost lines belong to the base (so they widen with the range), and the margin multiplies the whole
+  const baseWithCosts = baseTotal + lines.filter((l) => l.kind === 'cost').reduce((n, l) => n + l.amount, 0);
+  const low = Math.max(0, round((baseWithCosts * (1 - spread) + ft.low) * mult)), high = Math.max(low, round((baseWithCosts * (1 + spread) + ft.high) * mult));
   const warnings: string[] = [];
   for (const u of unpriced) warnings.push(`${u} has no price in Settings (Feature options), so it is not in this total.`);
   if (t.pricePerUnit === null) warnings.push(`${t.name} has no price per unit, so the racks are not in this total.`);
   if (!t.confirmed) warnings.push(`${t.name} is not confirmed by the supplier: this price is indicative only.`);
+  if (placeholders.length) warnings.push(`${placeholders.join(', ')} ${placeholders.length === 1 ? 'is a placeholder amount' : 'are placeholder amounts'}, not confirmed: this price is indicative only. Confirm them in Cellar Planner, Settings, Other costs.`);
+  for (const m of missingCosts) warnings.push(`${m} has no amount in Settings (Other costs), so it is not in this total.`);
   if (opts.errors && opts.errors > 0) {
     const one = opts.errors === 1;
     warnings.push(`${opts.errors} check${one ? '' : 's'} in this design ${one ? 'shows' : 'show'} an error: fix ${one ? 'it' : 'them'} before relying on this price.`);
   }
-  return { status: 'OK', lines, total, low, high, text: low === high ? `about ${fmt(low)}` : `${fmt(low)} to ${fmt(high)}`, currency: pr.currency, warnings, unpriced };
+  return { status: 'OK', lines, total, low, high, text: low === high ? `about ${fmt(low)}` : `${fmt(low)} to ${fmt(high)}`, currency: pr.currency, warnings, placeholders, missingCosts, unpriced };
 }
 
 // ---------------------------------------------------------------- loading it

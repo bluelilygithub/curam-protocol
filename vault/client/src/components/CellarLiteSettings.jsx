@@ -40,6 +40,9 @@ const toForm = (c) => ({
   accent: c.accent ?? '#4a5a2a',
   rackTypes: (c.rackTypes || []).map(typeToForm), defaultRackType: c.defaultRackType,
   clK: String(c.cooling?.panelConductivity ?? 0.025), clGlass: String(c.cooling?.glassU ?? 1.4), clFloor: String(c.cooling?.floorU ?? 1), clGains: String(c.cooling?.internalGainsW ?? 100), clMargin: String(c.cooling?.marginPct ?? 20), clTarget: String(c.cooling?.targetC ?? 14), clAmbient: String(c.cooling?.ambientC ?? 35),
+  costGlass: blank(c.costs?.glassPerM2?.amount), costGlassOk: c.costs?.glassPerM2?.confirmed === true, costCooling: blank(c.costs?.cooling?.amount), costCoolingOk: c.costs?.cooling?.confirmed === true,
+  costLighting: blank(c.costs?.lighting?.amount), costLightingOk: c.costs?.lighting?.confirmed === true, costInstall: blank(c.costs?.installation?.amount), costInstallOk: c.costs?.installation?.confirmed === true,
+  costMargin: blank(c.costs?.margin?.pct), costMarginOk: c.costs?.margin?.confirmed === true,
   mnShow: c.mobileNotice?.show !== false, mnText: c.mobileNotice?.text ?? '',
   guideOn: c.guide?.enabled === true,
   qBusinessName: c.quote?.businessName ?? '', qDetails: c.quote?.details ?? '', qTerms: c.quote?.terms ?? '', qValidityDays: String(c.quote?.validityDays ?? 30), qGstNote: c.quote?.gstNote ?? '',
@@ -58,6 +61,11 @@ const toConfig = (f) => ({
   accent: f.accent,
   rackTypes: f.rackTypes.map(typeToConfig), defaultRackType: f.defaultRackType,
   cooling: { panelConductivity: f.clK, glassU: f.clGlass, floorU: f.clFloor, internalGainsW: f.clGains, marginPct: f.clMargin, targetC: f.clTarget, ambientC: f.clAmbient },
+  costs: {
+    glassPerM2: { amount: f.costGlass, confirmed: f.costGlassOk }, cooling: { amount: f.costCooling, confirmed: f.costCoolingOk },
+    lighting: { amount: f.costLighting, confirmed: f.costLightingOk }, installation: { amount: f.costInstall, confirmed: f.costInstallOk },
+    margin: { pct: f.costMargin, confirmed: f.costMarginOk },
+  },
   mobileNotice: { show: f.mnShow, text: f.mnText },
   guide: { enabled: f.guideOn },
   quote: { businessName: f.qBusinessName, details: f.qDetails, terms: f.qTerms, validityDays: f.qValidityDays, gstNote: f.qGstNote },
@@ -81,7 +89,7 @@ function Field({ label, hint, tip, children }) {
 
 
 const OPEN_KEY = 'cellar-settings:open:v1';
-const PANEL_IDS = ['rack', 'features', 'doors', 'price', 'onpage', 'mobile', 'guide', 'rooms', 'quote', 'cooling'];
+const PANEL_IDS = ['rack', 'features', 'doors', 'price', 'costs', 'onpage', 'mobile', 'guide', 'rooms', 'quote', 'cooling'];
 
 /** A collapsible card: the header always shows the title and a one-line summary of what is set, so nothing is hidden or easy to miss. */
 function Panel({ id, title, summary, warn, open, onToggle, testid, children }) {
@@ -256,7 +264,11 @@ export default function CellarLiteSettings({ onDirtyChange }) {
   const roomsSummary = `${form.presets.length} starting room${form.presets.length === 1 ? '' : 's'}`;
   const quoteSummary = form.qBusinessName ? `From ${form.qBusinessName}` : 'Business name not set';
   const coolingSummary = `Target ${form.clTarget} °C · outside ${form.clAmbient} °C · margin ${form.clMargin}%`;
-  const warnOf = { rack: unconfirmed > 0, quote: !form.qBusinessName };
+  const costRows = [['costGlass', 'costGlassOk'], ['costCooling', 'costCoolingOk'], ['costLighting', 'costLightingOk'], ['costInstall', 'costInstallOk'], ['costMargin', 'costMarginOk']];
+  const costsUnconfirmed = costRows.filter(([v, ok]) => form[v] !== '' && Number(form[v]) !== 0 && !form[ok]).length;
+  const costsBlank = costRows.filter(([v]) => form[v] === '').length;
+  const costsSummary = costsBlank ? `${costsBlank} not set` + (costsUnconfirmed ? ` · ${costsUnconfirmed} placeholder${costsUnconfirmed === 1 ? '' : 's'}` : '') : costsUnconfirmed ? `${costsUnconfirmed} of 5 are placeholders: quotes are blocked until confirmed` : 'All confirmed';
+  const warnOf = { rack: unconfirmed > 0, quote: !form.qBusinessName, costs: costsUnconfirmed > 0 || costsBlank > 0 };
   const pp = (id, title, summary) => ({ id, title, summary, warn: !!warnOf[id], open: openIds.includes(id), onToggle: togglePanel });
 
   return (
@@ -450,6 +462,38 @@ export default function CellarLiteSettings({ onDirtyChange }) {
           <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }} data-testid="cellar-lite-price-example">
             {form.show ? (example ?? 'Nothing yet: enter at least one amount.') : 'Nothing: prices are hidden.'}
           </p>
+        </div>
+      </Panel>
+
+
+      <Panel {...pp('costs', 'Other costs and margin', costsSummary)}>
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          The costs of a job beyond racks, door and feature options. Staff see them in the Price panel and on the quote; <strong>visitors never see them</strong>. The amounts start as <strong>placeholders</strong>: rough figures from public cost guides, mostly US and Canadian, not supplier quotes and not checked for Australia. Replace each with your real figure and tick <strong>Confirmed</strong>. <strong>A quote is refused while any line is a placeholder or blank</strong>, so a guess never reaches a customer. A blank is "not set", never zero; a confirmed 0 means no charge.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {[
+            ['costGlass', 'costGlassOk', 'Glass walls (per m² of glass wall)', 'The price for each square metre of glass wall. The door is priced separately. Multiplied by the design\'s glass wall area.', 'Placeholder from public guides is about 1,400.'],
+            ['costCooling', 'costCoolingOk', 'Cooling unit (per job)', 'The refrigeration unit and its fitting, as one amount per job.', 'Placeholder from public guides is about 6,500.'],
+            ['costLighting', 'costLightingOk', 'Lighting (per job)', 'Cellar lighting, as one amount per job.', 'Placeholder is about 1,200.'],
+            ['costInstall', 'costInstallOk', 'Installation (per job)', 'Your installation labour and site costs, as one amount per job.', 'Placeholder is about 3,500.'],
+          ].map(([v, ok, label, tip, hint]) => (
+            <div key={v} className="space-y-1">
+              <Field label={label} tip={tip} hint={hint}>{numInput(v)}</Field>
+              <Tooltip text="Tick when this is your real figure. Until then it is a placeholder and a quote cannot be made.">
+                <label className="inline-flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                  <input type="checkbox" checked={!!form[ok]} onChange={(e) => set(ok, e.target.checked)} /> Confirmed (my real figure)
+                </label>
+              </Tooltip>
+            </div>
+          ))}
+          <div className="space-y-1">
+            <Field label="Margin (% on top of everything)" tip="Added on top of the racks, door, glass, cooling, lighting, installation and chosen features. Customers see the total, never the margin." hint="0 to 100. Blank is not set. Placeholder is 25.">{numInput('costMargin')}</Field>
+            <Tooltip text="Tick when this is your real margin. Until then it is a placeholder and a quote cannot be made.">
+              <label className="inline-flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
+                <input type="checkbox" checked={!!form.costMarginOk} onChange={(e) => set('costMarginOk', e.target.checked)} /> Confirmed (my real margin)
+              </label>
+            </Tooltip>
+          </div>
         </div>
       </Panel>
 

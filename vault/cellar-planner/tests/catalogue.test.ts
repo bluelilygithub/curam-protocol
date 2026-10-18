@@ -1,3 +1,4 @@
+import { NO_COSTS } from './_costs';
 import { describe, expect, it } from 'vitest';
 import { applyRackType, CATALOGUE_SAVED_KEY, CATALOGUE_URL, createCatalogueStore, defaultType, matchesType, parseCatalogue, rackSpecFromType, staffPrice, type Catalogue } from '../src/app/catalogue';
 import { analyseApp, deserializeApp, ESTIMATE_FIELDS, sampleProject, serializeApp, testCaseProject } from '../src/app/model';
@@ -9,7 +10,7 @@ const W: RackType = { ...T, id: 'wide', name: 'Wide display', unitWidthMm: 900, 
 const cat = (over: Partial<Catalogue['pricing']> = {}, types: RackType[] = [T, W]): Catalogue => ({
   rackTypes: types, defaultRackType: types[0]!.id, doors: { singleMm: 970, doubleMm: 1500 },
   pricing: { ...DEFAULT_CONFIG.pricing, fixed: 2000, doorSingle: 500, doorDouble: 900, rangePct: 10, roundTo: 100, ...over },
-  quote: { ...DEFAULT_CONFIG.quote }, cooling: { ...DEFAULT_CONFIG.cooling }, features: DEFAULT_CONFIG.features,
+  quote: { ...DEFAULT_CONFIG.quote }, cooling: { ...DEFAULT_CONFIG.cooling }, costs: NO_COSTS, features: DEFAULT_CONFIG.features,
 });
 const unitsOf = (p: ReturnType<typeof testCaseProject>): number => p.runs.reduce((n, r) => n + r.units, 0);
 

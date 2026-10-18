@@ -57,9 +57,32 @@ export function quoteBlockers(p: AppProject, cat: Catalogue | null, a: Analysis 
   else if (a.racks.total.status !== 'OK') out.push('The bottle count is not set yet: the rack values are incomplete.');
   const price = staffPrice(p, cat);
   if (price.status !== 'OK' && !out.some((x) => /rack type|catalogue|No racks/i.test(x))) out.push(price.reason);
+  // the other costs: a quote must not carry a guessed glass, cooling, lighting, installation or margin figure, nor leave one out
+  if (price.status === 'OK') {
+    for (const n of price.placeholders) out.push(`${n} is still a placeholder amount. Confirm it in Cellar Planner, Settings, Other costs (tick Confirmed) once it is a real figure.`);
+    for (const n of price.missingCosts) out.push(`${n} has no amount. Enter it in Cellar Planner, Settings, Other costs.`);
+  }
   // a chosen feature with no price would print on the quote with no amount: name it and stop
   if (price.status === 'OK') for (const u of price.unpriced) out.push(`"${u}" is chosen but has no price. Enter its low and high price in Cellar Planner, Settings, Feature options, or take it out of the design.`);
   if (!cat.quote.businessName) out.push('Enter your business name in Cellar Planner, Settings, Quote details: a quote needs to say who it is from.');
+  return out;
+}
+
+/**
+ * The lines a CUSTOMER sees. The margin is never shown as a line: it is folded into the other lines in proportion, so they add up to the same total. With a margin the
+ * per-line working ("12 units x $900") no longer matches the scaled amount, so it is left off. Without a margin the lines are exactly the staff lines.
+ */
+export function customerLines(lines: PriceLine[], total: number): PriceLine[] {
+  const margin = lines.find((l) => l.kind === 'margin');
+  if (!margin || margin.amount <= 0) return lines.filter((l) => l.kind !== 'margin');
+  const rest = lines.filter((l) => l.kind !== 'margin');
+  const base = rest.reduce((n, l) => n + l.amount, 0);
+  if (base <= 0) return rest;
+  const scale = total / base;
+  const out = rest.map((l) => ({ ...l, detail: '', amount: Math.round(l.amount * scale * 100) / 100 }));
+  // rounding to the cent can leave a few cents: put them on the biggest line so the lines add up to the total exactly
+  const diff = Math.round((total - out.reduce((n, l) => n + l.amount, 0)) * 100) / 100;
+  if (diff !== 0) { const big = out.reduce((bi, l, i) => (l.amount > out[bi]!.amount ? i : bi), 0); out[big] = { ...out[big]!, amount: Math.round((out[big]!.amount + diff) * 100) / 100 }; }
   return out;
 }
 
@@ -96,7 +119,7 @@ export function buildQuote(p: AppProject, cat: Catalogue | null, meta: QuoteMeta
       business: cat.quote.businessName, details: cat.quote.details ? cat.quote.details.split('\n') : [],
       reference: meta.reference.trim(), date: meta.date, validUntil: addDays(meta.date, cat.quote.validityDays),
       customer: meta.customer.trim(), address: meta.address.trim(), project: p.name,
-      cellar, lines: price.lines, total: price.total, currency: price.currency, gstNote: cat.quote.gstNote,
+      cellar, lines: customerLines(price.lines, price.total), total: price.total, currency: price.currency, gstNote: cat.quote.gstNote,
       notes: meta.notes.trim(), terms: cat.quote.terms, statement: QUOTE_STATEMENT,
       ...(meta.image ? { image: meta.image } : {}),
     },

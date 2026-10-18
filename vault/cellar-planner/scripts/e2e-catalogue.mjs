@@ -16,7 +16,9 @@ const type = (over) => ({
 });
 const STANDARD = type({ id: 'standard-600', name: 'Standard 600', unitWidthMm: 600, unitHeightMm: 2000, unitDepthMm: 350, rowPitchMm: 100, postsPerUnit: 2, pricePerUnit: 900, confirmed: true });
 const WIDE = type({ id: 'wide-display', name: 'Wide display', unitWidthMm: 900, unitHeightMm: 2100, orientation: 'LABEL_FORWARD', bottlesPerRowLabelForward: 6, pricePerUnit: 1500, confirmed: false });
-const CATALOGUE = { catalogue: { rackTypes: [STANDARD, WIDE], defaultRackType: 'standard-600', doors: { singleMm: 970, doubleMm: 1500 }, pricing: { show: false, currency: '$', fixed: 2000, perUnit: 900, doorSingle: 500, doorDouble: 900, rangePct: 10, roundTo: 100, note: '' } }, updatedAt: null };
+// no other costs (a confirmed zero each, no margin), so these checks see only racks, door and features; the placeholders are tested in tests/costs.test.ts
+const ZERO_COSTS = { glassPerM2: { amount: 0, confirmed: true }, cooling: { amount: 0, confirmed: true }, lighting: { amount: 0, confirmed: true }, installation: { amount: 0, confirmed: true }, margin: { pct: 0, confirmed: true } };
+const CATALOGUE = { catalogue: { rackTypes: [STANDARD, WIDE], defaultRackType: 'standard-600', costs: ZERO_COSTS, doors: { singleMm: 970, doubleMm: 1500 }, pricing: { show: false, currency: '$', fixed: 2000, perUnit: 900, doorSingle: 500, doorDouble: 900, rangePct: 10, roundTo: 100, note: '' } }, updatedAt: null };
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 

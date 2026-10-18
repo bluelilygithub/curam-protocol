@@ -15,7 +15,9 @@ const type = (over) => ({ unitDepthMm: null, rowPitchMm: null, postsPerUnit: nul
 const STANDARD = type({ id: 'standard-600', name: 'Standard 600', unitWidthMm: 600, unitHeightMm: 2000, unitDepthMm: 350, rowPitchMm: 100, postsPerUnit: 2, pricePerUnit: 900, confirmed: true });
 const WIDE = type({ id: 'wide-display', name: 'Wide display', unitWidthMm: 900, unitHeightMm: 2100, orientation: 'LABEL_FORWARD', bottlesPerRowLabelForward: 6, pricePerUnit: 1500, confirmed: false });
 const QUOTE = { businessName: 'Acme Wine Cellars', details: '1 High St\nMelbourne VIC 3000', terms: 'A 30% deposit is due on acceptance.', validityDays: 30, gstNote: 'All prices include GST.' };
-const catalogue = (quote = QUOTE) => ({ catalogue: { rackTypes: [STANDARD, WIDE], defaultRackType: 'standard-600', doors: { singleMm: 970, doubleMm: 1500 }, pricing: { show: false, currency: '$', fixed: 2000, perUnit: 900, doorSingle: 500, doorDouble: 900, rangePct: 10, roundTo: 100, note: '' }, quote }, updatedAt: null });
+// no other costs (a confirmed zero each, no margin), so these checks see only racks, door and features; the placeholders are tested in tests/costs.test.ts
+const ZERO_COSTS = { glassPerM2: { amount: 0, confirmed: true }, cooling: { amount: 0, confirmed: true }, lighting: { amount: 0, confirmed: true }, installation: { amount: 0, confirmed: true }, margin: { pct: 0, confirmed: true } };
+const catalogue = (quote = QUOTE) => ({ catalogue: { rackTypes: [STANDARD, WIDE], defaultRackType: 'standard-600', costs: ZERO_COSTS, doors: { singleMm: 970, doubleMm: 1500 }, pricing: { show: false, currency: '$', fixed: 2000, perUnit: 900, doorSingle: 500, doorDouble: 900, rangePct: 10, roundTo: 100, note: '' }, quote }, updatedAt: null });
 const CODE = 'CL1.WzI3NTAsMTU2NSwyMTUwLDIsMCwwLDUwMCwwXQ';
 const LEAD = { id: 7, name: 'Sam Rivera', email: 'sam@example.com', phone: '0412 345 678', summary: 'Inside 2750 x 1565 x 2150 mm, single door', priceText: '$7,100 to $8,700', bottles: 840, status: 'new', clientId: 3, dealId: 4, createdAt: '2026-10-09T01:00:00.000Z' };
 

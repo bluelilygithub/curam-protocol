@@ -21,6 +21,13 @@ export interface RackType {
 }
 /** Who the staff quote PDF is from and the owner's own terms (staff only: the public answer never carries them). */
 export interface QuoteSettings { businessName: string; details: string; terms: string; validityDays: number; gstNote: string }
+/** One of the other costs of a job (staff only): an amount (null = not set, never zero) and whether the owner has confirmed it. */
+export interface CostLine { amount: number | null; confirmed: boolean }
+/**
+ * The other costs of a job beyond racks, door and feature options (staff only; the public answer never carries them). Every default is a PLACEHOLDER
+ * (`confirmed: false`) and blocks the customer quote until the owner confirms it. glassPerM2 is per square metre of glass wall.
+ */
+export interface CostSettings { glassPerM2: CostLine; cooling: CostLine; lighting: CostLine; installation: CostLine; margin: { pct: number | null; confirmed: boolean } }
 /** The assumptions behind the staff planner's indicative cooling estimate (staff only). See server/config/cellarLiteConfig.js for what each means. */
 export interface CoolingSettings { panelConductivity: number; glassU: number; floorU: number; internalGainsW: number; marginPct: number; targetC: number; ambientC: number }
 export type FeatureMode = 'ONE' | 'ANY';
@@ -56,6 +63,8 @@ export interface LiteConfig {
   pricing: LitePricing;
   quote: QuoteSettings;
   cooling: CoolingSettings;
+  /** The other costs of a job (staff only: the public answer never carries them). */
+  costs: CostSettings;
   /** The website help chat (the round help button on the page around the tool): off until the owner switches it on. The page script reads this, not the tool. */
   guide: { enabled: boolean };
   /** The "Make it yours" feature groups (empty = the tool has no Features step). */
@@ -123,6 +132,7 @@ export const DEFAULT_CONFIG: LiteConfig = {
   quote: { businessName: '', details: '', terms: '', validityDays: 30, gstNote: '' },
   guide: { enabled: false },
   cooling: { panelConductivity: 0.025, glassU: 1.4, floorU: 1, internalGainsW: 100, marginPct: 20, targetC: 14, ambientC: 35 },
+  costs: { glassPerM2: { amount: 1400, confirmed: false }, cooling: { amount: 6500, confirmed: false }, lighting: { amount: 1200, confirmed: false }, installation: { amount: 3500, confirmed: false }, margin: { pct: 25, confirmed: false } },
   features: DEFAULT_FEATURES,
   presets: [
     { id: 'small', name: 'Small cellar', widthMm: 1800, depthMm: 1500, heightMm: 2400, doorStyle: 'SINGLE' },
@@ -256,6 +266,13 @@ export function normaliseConfig(raw: unknown): LiteConfig {
   const doors = isObj(src.doors) ? src.doors : {};
   const p = isObj(src.pricing) ? src.pricing : {};
   const q = isObj(src.quote) ? src.quote : {};
+  const cs = isObj(src.costs) ? src.costs : {};
+  const cost = (key: 'glassPerM2' | 'cooling' | 'lighting' | 'installation'): CostLine => {
+    const raw = isObj(cs[key]) ? (cs[key] as Record<string, unknown>) : {};
+    return { amount: raw.amount === undefined ? D.costs[key].amount : money(raw.amount), confirmed: raw.confirmed === true };
+  };
+  const mg = isObj(cs.margin) ? (cs.margin as Record<string, unknown>) : {};
+  const marginPct = mg.pct === undefined ? D.costs.margin.pct : mg.pct === null || mg.pct === '' ? null : Number.isFinite(Number(mg.pct)) && Number(mg.pct) >= R.marginPct[0] && Number(mg.pct) <= R.marginPct[1] ? Math.round(Number(mg.pct) * 10) / 10 : D.costs.margin.pct;
   const gd = isObj(src.guide) ? src.guide : {};
   const cl = isObj(src.cooling) ? src.cooling : {};
   const T0 = D.rackTypes[0]!;
@@ -334,6 +351,7 @@ export function normaliseConfig(raw: unknown): LiteConfig {
       validityDays: int(q.validityDays, R.quoteValidityDays, D.quote.validityDays),
       gstNote: q.gstNote === undefined ? D.quote.gstNote : text(q.gstNote, 120),
     },
+    costs: { glassPerM2: cost('glassPerM2'), cooling: cost('cooling'), lighting: cost('lighting'), installation: cost('installation'), margin: { pct: marginPct, confirmed: mg.confirmed === true } },
     guide: { enabled: gd.enabled === undefined ? D.guide.enabled : gd.enabled === true },
     cooling: {
       panelConductivity: decimal(cl.panelConductivity, R.panelConductivity, D.cooling.panelConductivity), glassU: decimal(cl.glassU, R.glassU, D.cooling.glassU),

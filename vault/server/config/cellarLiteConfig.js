@@ -101,6 +101,19 @@ const DEFAULTS = Object.freeze({
   },
   // the website guide (the round help button on the public planner): off until the owner ticks it, because every answer is an AI call that costs money
   guide: { enabled: false },
+  // The other costs of a job (staff only, never sent to the public tool): glass, the cooling unit, lighting, installation, and the margin. Every amount here
+  // is a PLACEHOLDER until the owner confirms it (rough figures from public cost guides, mostly US and Canadian: NOT supplier quotes and NOT checked for
+  // Australia). `confirmed: false` is shown on the price and BLOCKS the customer quote, so a guess never reaches a customer. A blank amount is "not set",
+  // never zero, and also blocks the quote.
+  //   glassPerM2: per square metre of glass WALL (the door is its own line); cooling, lighting, installation: one amount per job;
+  //   marginPct: added on top of everything else, per cent (null = not set).
+  costs: {
+    glassPerM2: { amount: 1400, confirmed: false },
+    cooling: { amount: 6500, confirmed: false },
+    lighting: { amount: 1200, confirmed: false },
+    installation: { amount: 3500, confirmed: false },
+    margin: { pct: 25, confirmed: false },
+  },
   // the staff quote PDF: who it is from and the owner's own terms. Never sent to the public tool.
   quote: { businessName: '', details: '', terms: '', validityDays: 30, gstNote: '' },
   // the staff planner's INDICATIVE cooling estimate: the assumptions behind it, owner-editable. Not engineering advice: HVAC sign-off is always needed.
@@ -282,6 +295,31 @@ function validateConfig(raw) {
     gstNote: q.gstNote === undefined ? D.quote.gstNote : cleanText(q.gstNote, 120),
   };
 
+  // ---- the other costs (staff only): an amount or blank for each, and whether the owner has confirmed it. Missing = the placeholders.
+  const cs = isObj(src.costs) ? src.costs : {};
+  const cost = (key, label) => {
+    const raw = isObj(cs[key]) ? cs[key] : {};
+    const fallback = D.costs[key];
+    return {
+      amount: raw.amount === undefined ? fallback.amount : money(raw.amount, label),
+      confirmed: raw.confirmed === undefined ? false : raw.confirmed === true,
+    };
+  };
+  const mg = isObj(cs.margin) ? cs.margin : {};
+  let marginPct = D.costs.margin.pct;
+  if (mg.pct !== undefined) {
+    if (mg.pct === null || mg.pct === '') marginPct = null;
+    else if (Number.isFinite(Number(mg.pct)) && Number(mg.pct) >= LIMITS.marginPct[0] && Number(mg.pct) <= LIMITS.marginPct[1]) marginPct = Math.round(Number(mg.pct) * 10) / 10;
+    else errors.push(`The margin must be between ${LIMITS.marginPct[0]} and ${LIMITS.marginPct[1]} per cent, or left blank.`);
+  }
+  const costs = {
+    glassPerM2: cost('glassPerM2', 'The glass price per square metre'),
+    cooling: cost('cooling', 'The cooling unit price'),
+    lighting: cost('lighting', 'The lighting price'),
+    installation: cost('installation', 'The installation price'),
+    margin: { pct: marginPct, confirmed: mg.confirmed === true },
+  };
+
   const gd = isObj(src.guide) ? src.guide : {};
   const guide = { enabled: gd.enabled === undefined ? D.guide.enabled : gd.enabled === true };
 
@@ -392,6 +430,7 @@ function validateConfig(raw) {
     pricing,
     quote,
     cooling,
+    costs,
     guide,
     features,
     presets,
@@ -401,8 +440,8 @@ function validateConfig(raw) {
 
 /** What the public endpoint may say. Unpublished prices are never sent: with `show` off the amounts are blanked. */
 function publicView(config) {
-  const { quote: _quote, cooling: _cooling, ...open } = config; // the quote details and cooling assumptions are for staff only
-  void _quote; void _cooling;
+  const { quote: _quote, cooling: _cooling, costs: _costs, ...open } = config; // the quote details, cooling assumptions and cost lines are for staff only
+  void _quote; void _cooling; void _costs;
   config = open;
   if (config.pricing.show) return config;
   return {
@@ -415,7 +454,7 @@ function publicView(config) {
 
 /** What the signed-in staff app may read: the whole catalogue and the real prices (whether or not the public tool shows a price). */
 function staffView(config) {
-  return { rackTypes: config.rackTypes, defaultRackType: config.defaultRackType, doors: config.doors, pricing: config.pricing, quote: config.quote, cooling: config.cooling, features: config.features };
+  return { rackTypes: config.rackTypes, defaultRackType: config.defaultRackType, doors: config.doors, pricing: config.pricing, quote: config.quote, cooling: config.cooling, costs: config.costs, features: config.features };
 }
 
 module.exports = { contrastWithWhite, KEY, LIMITS, ROUND_TO, MAX_PRESETS, MAX_RACK_TYPES, MAX_FEATURE_GROUPS, MAX_FEATURE_OPTIONS, DEFAULTS, validateConfig, publicView, staffView };

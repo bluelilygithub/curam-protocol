@@ -63,6 +63,26 @@ export function PackageModal({ store, ui, catalogue }: { store: AppStore; ui: Ui
     setBusy(false);
   };
 
+  // the same drawings as a DXF CAD file (millimetres, full size), for an architect or fabricator to open in AutoCAD, BricsCAD, LibreCAD or to link into Revit
+  const downloadDxf = async (): Promise<void> => {
+    if (busy) return;
+    setBusy(true); setMsg('');
+    try {
+      if (JSON.stringify(project.drawing ?? EMPTY) !== JSON.stringify(d)) store.getState().edit((p) => ({ ...p, drawing: d }));
+      const { makeDxf, dxfFileName, dxfViews } = await import('../export/dxf');
+      const current = store.getState().project;
+      const text = makeDxf(current, date);
+      const url = URL.createObjectURL(new Blob([text], { type: 'application/dxf' }));
+      const a = document.createElement('a');
+      a.href = url; a.download = dxfFileName(current.name);
+      a.click(); URL.revokeObjectURL(url);
+      setMsg(`Downloaded a DXF with ${dxfViews(current).length} views (${dxfViews(current).map((v) => v.id).join(', ')}), in millimetres at full size.`);
+    } catch {
+      setMsg('Could not make the DXF. Try again, and tell the team if it keeps happening.');
+    }
+    setBusy(false);
+  };
+
   return (
     <div className="modal-back" role="dialog" aria-modal="true" aria-label="Drawing package" data-testid="package-modal" onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
       <div className="modal">
@@ -83,6 +103,7 @@ export function PackageModal({ store, ui, catalogue }: { store: AppStore; ui: Ui
         <div className="modal-foot">
           <span className="grow" />
           <button type="button" className="btn" title="Close without making the PDF." onClick={close}>Cancel</button>
+          <button type="button" className="btn" disabled={busy} title="Download the plan, the elevation and each wall of racks as a DXF CAD file: millimetres, full size, one layer per kind of thing, for AutoCAD, BricsCAD, LibreCAD or linking into Revit. The title block details are kept with the design." onClick={() => void downloadDxf()} data-testid="package-dxf">Download DXF</button>
           <button type="button" className="btn primary" disabled={busy} title="Make the PDF and download it. The details above are kept with the design." onClick={() => void download()} data-testid="package-download">{busy ? 'Making the PDF…' : 'Download PDF'}</button>
         </div>
       </div>

@@ -1,3 +1,4 @@
+import { NO_COSTS } from './_costs';
 import { describe, expect, it } from 'vitest';
 import { applyRackType, staffPrice, type Catalogue } from '../src/app/catalogue';
 import { analyseApp, fullRuns, sampleProject, testCaseProject, type AppProject } from '../src/app/model';
@@ -12,7 +13,7 @@ import { coolingLoad, effectiveCooling } from '../src/enclosure/cooling';
 const T: RackType = { ...DEFAULT_CONFIG.rackTypes[0]!, id: 'std', name: 'Standard 600', unitDepthMm: 350, rowPitchMm: 100, postsPerUnit: 2, pricePerUnit: 900, confirmed: true };
 const cat = (types: RackType[] = [T]): Catalogue => ({
   rackTypes: types, defaultRackType: types[0]!.id, doors: { singleMm: 970, doubleMm: 1500 },
-  pricing: { ...DEFAULT_CONFIG.pricing, fixed: 2000, doorSingle: 500, doorDouble: 900, rangePct: 10, roundTo: 100 }, quote: { ...DEFAULT_CONFIG.quote }, cooling: { ...DEFAULT_CONFIG.cooling }, features: DEFAULT_CONFIG.features,
+  pricing: { ...DEFAULT_CONFIG.pricing, fixed: 2000, doorSingle: 500, doorDouble: 900, rangePct: 10, roundTo: 100 }, quote: { ...DEFAULT_CONFIG.quote }, cooling: { ...DEFAULT_CONFIG.cooling }, costs: NO_COSTS, features: DEFAULT_CONFIG.features,
 });
 
 const base = (): AppProject => testCaseProject();
