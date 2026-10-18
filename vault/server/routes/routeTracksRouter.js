@@ -102,7 +102,7 @@ function createRouter(pool, {
   needsAiFn = (text) => require('../services/routeIntent').needsAi(text),
   askLimits = {},
   // places near a route (OpenStreetMap through Overpass): { near({ line, radiusKm }) }
-  placesService = require('../services/routePlaces').createPlacesService(),
+  placesService = require('../services/routePlaces').createPlacesService({ log: (m, d) => getLogger().warn({ detail: d }, m) }),
   placesLimits = {},
 } = {}) {
   const router = express.Router();

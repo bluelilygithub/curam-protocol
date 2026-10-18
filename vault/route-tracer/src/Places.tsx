@@ -164,8 +164,8 @@ export function PlacesPanel({ map }: { map: maplibregl.Map | null }) {
             </div>
             {(categories.length ? categories : ALL_CATEGORY_IDS.map((id) => ({ id, label: FALLBACK_LABEL[id] ?? id, color: '#777777' }))).map((c) => (
               <label key={c.id} className="check places-cat" title={`Show or hide: ${c.label}`}>
-                <input type="checkbox" checked={enabled.has(c.id)} onChange={() => toggleCat(c.id)} title={`Show or hide: ${c.label}`} />
-                <span className="places-dot" style={{ background: c.color }} aria-hidden="true" />
+                {/* one control, not two: the tick box itself wears the colour of that kind's pins on the map */}
+                <input type="checkbox" checked={enabled.has(c.id)} onChange={() => toggleCat(c.id)} title={`Show or hide: ${c.label}`} style={{ accentColor: c.color }} />
                 <span className="places-label">{c.label}</span>
                 {found && <span className="places-n" aria-label={`${found.counts[c.id] ?? 0} found`}>{found.counts[c.id] ?? 0}</span>}
               </label>
@@ -185,8 +185,7 @@ export function PlacesPanel({ map }: { map: maplibregl.Map | null }) {
                   const c = categories.find((x) => x.id === p.category);
                   return (
                     <li key={p.id}>
-                      <button type="button" onClick={() => map?.flyTo({ center: [p.lng, p.lat], zoom: Math.max(map.getZoom(), 16) })} title={`Fly the map to ${p.name}`}>
-                        <span className="places-dot" style={{ background: c?.color ?? '#777' }} aria-hidden="true" />
+                      <button type="button" onClick={() => map?.flyTo({ center: [p.lng, p.lat], zoom: Math.max(map.getZoom(), 16) })} title={`Fly the map to ${p.name}`} style={{ borderLeft: `4px solid ${c?.color ?? '#777'}` }}>
                         <span className="places-name">{p.name}</span>
                         <span className="places-dist">{formatDistance(p.distKm, units)}</span>
                       </button>

@@ -189,5 +189,28 @@ assert.ok(/out center tags \d+;/.test(q));
   svc = mk(async () => body(undefined));
   assert.deepStrictEqual((await svc.near({ line: route, radiusKm: 2 })).places, []);
 
+  // several public servers: a dead or busy one is skipped and the next answers; a refusal of the query itself is not retried
+  const urls = ['https://one.test/api', 'https://two.test/api', 'https://three.test/api'];
+  const tried = []; const logged = [];
+  const multi = (handler) => createPlacesService({ fetchFn: async (url, init) => { tried.push(url); return handler(url, init); }, getUrls: () => urls, log: (m, d) => logged.push(`${m} ${d}`), userAgent: () => 'UA-test' });
+  tried.length = 0;
+  let m = multi(async (url) => { if (url.includes('one')) throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNRESET' } }); return body(good); });
+  assert.strictEqual((await m.near({ line: route, radiusKm: 2 })).places.length, 1);
+  assert.deepStrictEqual(tried, [urls[0], urls[1]], 'the second server answered, the third was not needed');
+  assert.ok(/one\.test.*ECONNRESET/.test(logged[0]), 'the log says which server failed and why: ' + logged[0]);
+  tried.length = 0;
+  m = multi(async (url) => (url.includes('three') ? body(good) : { ok: false, status: url.includes('one') ? 429 : 504, json: async () => ({}) }));
+  assert.strictEqual((await m.near({ line: route, radiusKm: 3 })).places.length, 1);
+  assert.deepStrictEqual(tried, urls, 'busy servers are skipped one after another');
+  tried.length = 0;
+  m = multi(async () => { throw Object.assign(new Error('x'), { name: 'AbortError' }); });
+  await assert.rejects(() => m.near({ line: route, radiusKm: 4 }), (e) => e.status === 502 && /took too long/.test(e.message));
+  assert.deepStrictEqual(tried, urls, 'every server is tried before giving up');
+  tried.length = 0;
+  m = multi(async () => ({ ok: false, status: 400, json: async () => ({}) }));
+  await assert.rejects(() => m.near({ line: route, radiusKm: 5 }), (e) => e.status === 502);
+  assert.strictEqual(tried.length, 1, 'a refused query is not sent to the other servers');
+  assert.ok(require('./routePlaces').createPlacesService, 'exported');
+
   console.log('routePlaces.test.js: all passed');
 })().catch((e) => { console.error(e); process.exit(1); });

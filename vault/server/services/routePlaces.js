@@ -42,7 +42,10 @@ const PER_CATEGORY = 40;
 const MAX_RAW = 1500;
 const CACHE_MS = 30 * 60 * 1000;
 const CACHE_MAX = 40;
-const FETCH_TIMEOUT_MS = 30000;
+const FETCH_TIMEOUT_MS = 30000; // one server only
+const TRY_TIMEOUT_MS = 18000; // each of several servers: a dead one is given up on quickly so the next can answer
+// the public Overpass servers (OpenStreetMap data), tried in this order; OVERPASS_URL (one address, or several separated by commas) replaces them
+const DEFAULT_URLS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
 
 class PlacesError extends Error { constructor(status, message) { super(message); this.status = status; } }
 
@@ -180,7 +183,7 @@ function rank(elements, line, radiusM) {
 }
 
 /** The service: one at a time, cached, with a plain-language error for every way Overpass can say no. */
-function createPlacesService({ fetchFn = (...a) => fetch(...a), now = Date.now, getUrl = () => process.env.OVERPASS_URL || 'https://overpass-api.de/api/interpreter', userAgent = () => `VaultRouteTracer/1.0 (${process.env.APP_URL || 'https://curam-vault.up.railway.app'})` } = {}) {
+function createPlacesService({ fetchFn = (...a) => fetch(...a), now = Date.now, getUrl, getUrls = () => (process.env.OVERPASS_URL ? process.env.OVERPASS_URL.split(',').map((u) => u.trim()).filter(Boolean) : DEFAULT_URLS), log = () => {}, userAgent = () => `VaultRouteTracer/1.0 (${process.env.APP_URL || 'https://curam-vault.up.railway.app'})` } = {}) {
   const cache = new Map();
   let chain = Promise.resolve();
   const queue = (fn) => { const run = chain.then(fn, fn); chain = run.catch(() => undefined); return run; };
@@ -197,15 +200,28 @@ function createPlacesService({ fetchFn = (...a) => fetch(...a), now = Date.now, 
     const value = await queue(async () => {
       const again = cache.get(key); // another request for the same route may have finished while this waited
       if (again && now() - again.at < CACHE_MS) return again.value;
-      const ctl = new AbortController();
-      const timer = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
-      let res;
-      try {
-        res = await fetchFn(getUrl(), { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': userAgent(), Accept: 'application/json' }, body: `data=${encodeURIComponent(buildQuery(line, radiusKm * 1000))}`, signal: ctl.signal });
-      } catch (e) {
-        throw new PlacesError(502, e && e.name === 'AbortError' ? 'The places service took too long. Try a smaller distance, or try again in a minute.' : 'The places service could not be reached. Try again in a minute.');
-      } finally { clearTimeout(timer); }
-      if (res.status === 429 || res.status === 504 || res.status === 503) throw new PlacesError(503, 'The places service is busy. Try again in a minute.');
+      const urls = getUrl ? [getUrl()] : getUrls();
+      const body = `data=${encodeURIComponent(buildQuery(line, radiusKm * 1000))}`;
+      let res = null;
+      let failure = null;
+      for (let i = 0; i < urls.length && !res; i += 1) {
+        const ctl = new AbortController();
+        const timer = setTimeout(() => ctl.abort(), urls.length > 1 ? TRY_TIMEOUT_MS : FETCH_TIMEOUT_MS);
+        const host = (() => { try { return new URL(urls[i]).host; } catch { return 'places server'; } })();
+        try {
+          const r = await fetchFn(urls[i], { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': userAgent(), Accept: 'application/json' }, body, signal: ctl.signal });
+          // busy or broken servers (429, 5xx) are not the end: the next one may answer. A refusal of the query itself (4xx) will be the same everywhere.
+          if (r.status === 429 || r.status >= 500) {
+            failure = new PlacesError(r.status === 500 || r.status === 502 ? 502 : 503, r.status === 500 || r.status === 502 ? 'The places service did not answer properly. Try again in a minute.' : 'The places service is busy. Try again in a minute.');
+            log('route places: server not usable', `${host} answered ${r.status}`);
+          } else res = r;
+        } catch (e) {
+          const timedOut = e && e.name === 'AbortError';
+          failure = new PlacesError(502, timedOut ? 'The places service took too long. Try a smaller distance, or try again in a minute.' : 'The places service could not be reached. Try again in a minute.');
+          log('route places: request failed', `${host}: ${e && e.name}: ${e && e.message}${e && e.cause && (e.cause.code || e.cause.message) ? ` (${e.cause.code || e.cause.message})` : ''}`);
+        } finally { clearTimeout(timer); }
+      }
+      if (!res) throw failure;
       if (!res.ok) throw new PlacesError(502, 'The places service did not answer properly. Try again in a minute.');
       let json;
       try { json = await res.json(); } catch { throw new PlacesError(502, 'The places service sent something unreadable. Try again in a minute.'); }

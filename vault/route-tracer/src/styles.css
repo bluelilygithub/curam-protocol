@@ -290,3 +290,5 @@ button.back { font-size: 1rem; font-weight: 500; }
 .working-spin { flex: none; margin-top: 1px; color: var(--primary); animation: working-spin 1s linear infinite; }
 @keyframes working-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .working-spin { animation: none; } }
+/* a place in the list wears its pin colour as a stripe, not a round dot (a dot looks like a radio button next to the tick boxes) */
+.places-list button { border-radius: 0 8px 8px 0; padding-left: 8px; }
