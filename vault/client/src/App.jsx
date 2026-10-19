@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import ThemeProvider from './providers/ThemeProvider';
 import { IconProvider } from './providers/IconProvider';
 import Layout from './components/Layout';
+import FeatureRoute from './components/FeatureRoute';
 import ProjectList from './pages/ProjectList';
 import ProjectDetail from './pages/ProjectDetail';
 import ChatPage from './pages/ChatPage';
@@ -153,20 +154,20 @@ function App() {
               <Route path="/student/cards" element={<StudentCardsChatPage />} />
               <Route path="/student/saved-decks" element={<StudentSavedDecksPage />} />
               <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/memory" element={<MemoryPage />} />
+              <Route path="/memory" element={<FeatureRoute feature="memory"><MemoryPage /></FeatureRoute>} />
               <Route path="/suggestions" element={<SuggestionsPage />} />
-              <Route path="/prompts" element={<PromptsPage />} />
+              <Route path="/prompts" element={<FeatureRoute feature="prompts"><PromptsPage /></FeatureRoute>} />
               <Route path="/guide" element={<UserGuidePage />} />
-              <Route path="/personas" element={<PersonasPage />} />
-              <Route path="/compare" element={<ComparisonPage />} />
-              <Route path="/debate" element={<DebatePage />} />
+              <Route path="/personas" element={<FeatureRoute feature="personas"><PersonasPage /></FeatureRoute>} />
+              <Route path="/compare" element={<FeatureRoute feature="compare"><ComparisonPage /></FeatureRoute>} />
+              <Route path="/debate" element={<FeatureRoute feature="debate"><DebatePage /></FeatureRoute>} />
               <Route path="/admin" element={<AdminRoute />} />
               <Route path="/history" element={<ChatHistoryPage />} />
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/goals" element={<GoalsPage />} />
               <Route path="/notes" element={<NotesPage />} />
-              <Route path="/chains" element={<ChainsPage />} />
-              <Route path="/graph"    element={<GraphPage />} />
+              <Route path="/chains" element={<FeatureRoute feature="chains"><ChainsPage /></FeatureRoute>} />
+              <Route path="/graph" element={<FeatureRoute feature="graph"><GraphPage /></FeatureRoute>} />
               <Route path="/clients" element={<ClientsPage />} />
               <Route path="/clients/:id" element={<ClientDetailPage />} />
               <Route path="/client-projects" element={<ClientProjectsPage />} />
