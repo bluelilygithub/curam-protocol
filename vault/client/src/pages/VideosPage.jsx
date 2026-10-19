@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { setVideoHandoff } from '../utils/videoHandoff';
+import { takeToolHandoff } from '../utils/toolHandoff.mjs';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
@@ -2570,8 +2571,32 @@ export default function VideosPage() {
   useEffect(() => {
     const wanted = searchParams.get('tool');
     const group = wanted && TOOL_GROUPS.find((g) => g.tools.some((t) => t.id === wanted && !t.link));
-    if (group) { setOpenGroup(group.id); setTool(wanted); }
-  }, [searchParams]);
+    if (!group) return;
+    setOpenGroup(group.id);
+    setTool(wanted);
+    // A file sent over from Music ("Finish in Video Tools"): load it into the tool, once.
+    const file = takeToolHandoff(wanted);
+    if (!file) return;
+    if (wanted === 'trim-audio') { setTaFile(file); setTaDuration(0); setTaStart('0:00'); setTaEnd(''); }
+    else if (wanted === 'mix-audio') setMxMusic(file);
+    else setSourceFile(file);
+    addToast(`Loaded ${file.name} from Music`, 'success');
+  }, [searchParams, addToast]);
+
+  // Saved media -> Music: pull the video down and hand it over (no re-upload).
+  const openLibraryItemInMusic = useCallback(async (item) => {
+    startProcessing('Loading from library…', '');
+    try {
+      const res = await api.get(item.streamUrl);
+      if (!res.ok) throw new Error('Could not load saved video');
+      const blob = await res.blob();
+      openMusicWith(new File([blob], `${item.title || 'video'}.mp4`, { type: blob.type || 'video/mp4' }));
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      stopProcessing();
+    }
+  }, [startProcessing, stopProcessing, addToast, openMusicWith]);
 
   const handleAddMusicFromResult = useCallback(() => {
     const blob = resultBlobRef.current;
@@ -5317,6 +5342,18 @@ export default function VideosPage() {
                           Rename
                         </button>
                       </Tooltip>
+                      {item.mediaType === 'video' && musicOk && (
+                        <Tooltip text="Open Music with this video: make background music for it, add your own track or a voiceover.">
+                          <button
+                            type="button"
+                            onClick={() => openLibraryItemInMusic(item)}
+                            className="text-xs px-2.5 py-1 rounded-lg border transition-opacity hover:opacity-70"
+                            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                          >
+                            Add music
+                          </button>
+                        </Tooltip>
+                      )}
                       {item.mediaType === 'video' && (
                         <Tooltip text="Open Caption studio with this video pre-selected.">
                           <button

@@ -1,11 +1,24 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../../utils/apiClient';
 import useToastStore from '../../store/toastStore';
 import Tooltip from '../../components/Tooltip';
+import { setToolHandoff } from '../../utils/toolHandoff.mjs';
+import { keepJobForReturn } from './jobMemory.mjs';
 import { card, field, muted, DEFAULT_SETTINGS, DUCKING_OPTIONS, formatDuration, qs } from './musicShared';
 
 // One music option: preview against the video, volume + ducking, export / save. Moved out of MusicPage.jsx unchanged.
-export default function OptionCard({ jobId, option, hasAudio, durationS, source, voice, voiceSettings }) {
+// Video Tools tools a finished option can be sent to. `kind` = which file they take: the music alone (WAV) or the video with the music mixed in (MP4).
+const FINISH_TOOLS = [
+  { id: 'normalize', kind: 'video', label: 'Normalize audio', tip: 'Open Normalize audio in Video Tools with your video and this music mixed in, to even out the loudness.' },
+  { id: 'trim-audio', kind: 'audio', label: 'Trim audio', tip: 'Open Trim audio in Video Tools with just this music, to keep one part or cut a part out.' },
+  { id: 'mix-audio', kind: 'audio', label: 'Mix audio', tip: 'Open Mix audio in Video Tools with this music in the background slot, ready for a voice recording.' },
+  { id: 'export-social', kind: 'video', label: 'Export for Social', tip: 'Open Export for Social in Video Tools with your video and this music mixed in, to make tall, square and widescreen versions.' },
+];
+
+export default function OptionCard({ jobId, option, hasAudio, durationS, source, voice, voiceSettings, videosOk = false }) {
+  const navigate = useNavigate();
+  const [handing, setHanding] = useState('');
   const addToast = useToastStore((s) => s.addToast);
   const [musicSettings, setSettings] = useState(DEFAULT_SETTINGS);
   const settings = { ...musicSettings, voiceVolume: voiceSettings.volume, voiceStart: voiceSettings.start };
@@ -54,6 +67,27 @@ export default function OptionCard({ jobId, option, hasAudio, durationS, source,
       addToast(`${label} saved`, 'success');
     } catch (err) {
       addToast(err.message, 'error');
+    }
+  };
+
+  // Send this option to a Video Tools tool: fetch the file (the music alone, or the video with the music mixed in, using the
+  // settings above), leave it for that tool, and go there. The job is kept so the other options are still here on return.
+  const finishIn = async (t) => {
+    setHanding(t.id);
+    try {
+      const res = await api.get(t.kind === 'audio' ? `${base}/audio` : `${base}/video?${qs(settings, voice)}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Could not prepare that file');
+      }
+      const blob = await res.blob();
+      const name = t.kind === 'audio' ? 'music.wav' : (voice ? 'video-with-music-and-voice.mp4' : 'video-with-music.mp4');
+      setToolHandoff(t.id, new File([blob], name, { type: blob.type || (t.kind === 'audio' ? 'audio/wav' : 'video/mp4') }));
+      keepJobForReturn(jobId);
+      navigate(`/videos?tool=${t.id}`);
+    } catch (err) {
+      addToast(err.message, 'error');
+      setHanding('');
     }
   };
 
@@ -183,6 +217,23 @@ export default function OptionCard({ jobId, option, hasAudio, durationS, source,
           </button>
         </Tooltip>
       </div>
+
+      {videosOk && (
+        <div className="flex flex-wrap items-center gap-2" data-tour="music-finish">
+          <span className="text-xs" style={muted}>Finish in Video Tools:</span>
+          {FINISH_TOOLS.map((t) => (
+            <Tooltip key={t.id} text={t.tip}>
+              <button
+                type="button" onClick={() => finishIn(t)} disabled={Boolean(handing)}
+                className="px-2.5 py-1 rounded-lg text-xs border transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+              >
+                {handing === t.id ? 'Preparing…' : t.label}
+              </button>
+            </Tooltip>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

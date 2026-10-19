@@ -31,7 +31,7 @@ Extend the Video Tools guide rather than adding a second one. Add Music tools to
 
 **Done when:** asking the tutor "add music to my video" or "make a voiceover" points at the right Music tool, and asking about trimming points at Video Tools.
 
-## Stage 3: Handoff both ways (audio included)
+## Stage 3: Handoff both ways (audio included) (built 2026-10-19, not yet checked in a browser)
 
 `client/src/utils/videoHandoff.js` carries a video only. Extend it to carry an audio file, consumed once, as it is now.
 
@@ -39,7 +39,7 @@ Extend the Video Tools guide rather than adding a second one. Add Music tools to
 - Video Tools' Saved media gets "Open in Music" on audio and video items.
 - Music items saved to Saved media keep `tool: 'music'` (already done).
 
-**Check first:** whether Video Tools' audio tools accept a handed-over file or only read their own picker; add that if missing.
+**Built as:** Trim audio, Mix audio (background slot), Normalize and Export for Social accept a handed-over file via `?tool=` and a per-tool in-memory handoff. Music keeps the job across the trip. Video Tools sends videos to Music from Saved media; audio files from Video Tools to Use my own track are not done (Saved media holds only videos and images, and no audio result has a button yet).
 
 **Done when:** a generated track reaches Normalize and Trim audio without re-upload, and back.
 

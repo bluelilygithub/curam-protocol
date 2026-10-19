@@ -46,6 +46,7 @@ export const TOOL_HELP = {
       'Three options are made so you can compare them, each previewed against your video',
       'Set the music volume and let it dip while people talk (ducking)',
       'Export the music as WAV, your video with the music as MP4, or save it to Saved media',
+      'Or send an option on to Video Tools to normalize, trim, mix or export for social media; your other options are still here when you come back',
     ],
   },
   'own-track': {

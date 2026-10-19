@@ -61,6 +61,13 @@ Besides generating, the page has a **Use my own track** switch (step 2). Send a 
 - **Save to Saved media:** each option has a button that calls `POST /api/music/jobs/:id/options/:n/save` (`{ title?, volume?, ducking? }`). It renders (or reuses the cached) full-quality export, checks the per-user library quota (`LIBRARY_QUOTA_BYTES`, shared with Video Tools via `videoLibraryService`), and stores it with `tool: 'music'` and a transaction recording source/mood/prompt/volume/ducking. It then shows in Video Tools → Saved media for captioning, joining, annotating etc.
 - **From Video Tools:** the Compose group has **Add music** (opens `/music`, handing over the loaded source video), and every video result has an **Add music** button. The video travels in memory via `client/src/utils/videoHandoff.js` (consumed once; lost on reload) — no re-upload. Both are hidden when the `music` feature is off for the user.
 
+## Moving between Music and Video Tools
+
+- **Music -> Video Tools:** each finished option has a "Finish in Video Tools" row: **Normalize audio** and **Export for Social** take the video with the music mixed in (MP4, using the volume/ducking/voiceover set on the card); **Trim audio** and **Mix audio** (background slot) take the music alone (WAV). The file is fetched, left for that tool (`client/src/utils/toolHandoff.mjs`: per tool, in memory, taken once), and the page goes to `/videos?tool=<id>`, where `VideosPage.jsx` loads it. Hidden when the `videos` feature is off for the person.
+- **Coming back:** sending a result marks the job to be kept (`music/jobMemory.mjs`), so the Music page does not delete its files on leaving, and picks the job up again on return (options and previews work; the chosen video file is not remembered, so choose it again to generate again). A reload forgets it; the server still deletes files after about 90 minutes.
+- **Video Tools -> Music:** Saved media has an **Add music** button on video items (alongside the existing Add music on tool results and the Add music tool), using the older `utils/videoHandoff.js`. Audio files from Video Tools are not sent to Music yet; use Use my own track.
+- Tests: `node client/src/utils/toolHandoff.test.mjs`, `node client/src/pages/music/jobMemory.test.mjs` (both in `npm run test:music`).
+
 ## Voiceover
 
 Once a job is `done`, a **Voiceover** panel appears above the options. One voiceover per job, mixed into every option's preview, export and save:

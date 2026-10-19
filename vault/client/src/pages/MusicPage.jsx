@@ -12,6 +12,7 @@ import { startMusicTour, TOUR_KEY as MUSIC_TOUR_KEY } from '../utils/tours/music
 import { musicProgressSteps, formatElapsed } from './music/musicProgress.mjs';
 import { takeVideoHandoff } from '../utils/videoHandoff';
 import OptionCard from './music/OptionCard';
+import { shouldKeepJob, takeKeptJob } from './music/jobMemory.mjs';
 import VoiceoverPanel from './music/VoiceoverPanel';
 import MusicSidebar from './music/MusicSidebar';
 import MusicTutorChat from './music/MusicTutorChat';
@@ -25,7 +26,7 @@ import { POLL_MS, card, field, muted, formatDuration } from './music/musicShared
 // page polls it. Laid out like Video Tools: a tool list on the left, one tool at a time on the right.
 // The job lives here, so it survives switching tools. Docs: docs/music.md, docs/music-plan.md.
 
-function MusicPageInner() {
+function MusicPageInner({ videosOk }) {
   const addToast = useToastStore((s) => s.addToast);
   const info = useToolInfoModal('vault_music_info_seen');
   const { startProcessing, stopProcessing, setProcessingSteps, updateProcessingDetail } = useProcessingStore();
@@ -138,10 +139,25 @@ function MusicPageInner() {
     return () => clearInterval(t);
   }, [job?.status, job?.id, updateProcessingDetail]);
 
-  // Best-effort cleanup of the server's temp files when leaving the page.
+  // Coming back from Video Tools ("Finish in Video Tools"): pick the kept job up again. The video file itself is not
+  // remembered, so to generate again the person chooses it again; the options and previews work as before.
+  useEffect(() => {
+    const keptId = takeKeptJob();
+    if (!keptId) return;
+    api.get(`/api/music/jobs/${keptId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!j) { addToast('Those music options have expired — generate again.', 'warn'); return; }
+        jobIdRef.current = j.id;
+        setJob(j);
+      })
+      .catch(() => {});
+  }, [addToast]);
+
+  // Best-effort cleanup of the server's temp files when leaving the page (unless a result was just sent to Video Tools).
   useEffect(() => () => {
     stopProcessing();
-    if (jobIdRef.current) api.delete(`/api/music/jobs/${jobIdRef.current}`).catch(() => {});
+    if (jobIdRef.current && !shouldKeepJob(jobIdRef.current)) api.delete(`/api/music/jobs/${jobIdRef.current}`).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -383,7 +399,7 @@ function MusicPageInner() {
                 {job.options.map((o) => (
                   <OptionCard
                     key={`${job.id}-${o.n}`} jobId={job.id} option={o} hasAudio={job.hasAudio} durationS={job.durationS} source={job.source}
-                    voice={job.voice} voiceSettings={voiceSettings}
+                    voice={job.voice} voiceSettings={voiceSettings} videosOk={videosOk}
                   />
                 ))}
               </div>
@@ -448,7 +464,7 @@ export default function MusicPage() {
   if (!(user?.isAdmin || featureAccess.music !== false)) return <Navigate to="/" replace />;
   return (
     <VoiceInputProvider lang="en-AU">
-      <MusicPageInner />
+      <MusicPageInner videosOk={Boolean(user?.isAdmin) || featureAccess.videos !== false} />
     </VoiceInputProvider>
   );
 }
