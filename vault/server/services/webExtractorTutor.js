@@ -10,8 +10,11 @@ const { createGuide, REPLY_FORMAT, VERDICT_HELP } = require('./guideCore');
 
 const CATALOG = [
   { id: 'article', label: 'Article content', group: 'Text',
-    does: 'Paste a web address at the top and press Extract. You get the readable words of the page with its headings, in a box you can read, copy or save as a PDF. The menus, header and footer, adverts, sidebars, comments, "most read" and "related stories" boxes, forms and all pictures are left out.',
+    does: 'Paste a web address at the top and press Extract. You get the readable words of the page with its headings, a word count and a reading time, in a box you can read, copy or save as a PDF. The menus, header and footer, adverts, sidebars, comments, "most read" and "related stories" boxes, forms and all pictures are left out.',
     notes: 'Only public pages. A page that builds itself with JavaScript, needs a sign-in, or blocks automatic visitors can come back empty or thin, and the tool says so.' },
+  { id: 'css-selector', label: 'Only extract inside', group: 'Text',
+    does: 'In Article content, the box "Only extract inside…" takes a CSS selector such as .product-card or #story or article p. Only the text inside the boxes that match is returned, in page order, with a count of the boxes found. You can say it with the microphone ("dot product dash card"). Leave it empty to read the whole article.',
+    notes: 'It needs a CSS selector, which means knowing the class or id names used in the page (right-click the page and choose Inspect to see them). With a selector the automatic clean-up of menus and "related" boxes is skipped, because you chose the boxes. A selector that matches nothing says so; one that is not valid is refused.' },
   { id: 'exclude-sections', label: 'Also exclude sections', group: 'Text',
     does: 'In Article content, the box "Also exclude sections titled…" takes names separated by commas, for example Author, Date, Newsletter signup. Any box on the page whose heading is one of those names is left out of the text. It matches the whole heading word, so "Date" does not remove a heading such as "Updates".',
     notes: 'It works on headings. Plain text with no heading above it cannot be picked out this way.' },
@@ -26,6 +29,23 @@ const CATALOG = [
   { id: 'download-images', label: 'Download images', group: 'Pictures',
     does: 'The Download button under a picture saves that one. Download all at the top saves up to 60 pictures in one zip, a few at a time. If some could not be fetched, the tool says how many.',
     notes: 'Up to 60 pictures and about 150 MB per zip. Only real pictures are downloaded. You are responsible for having the right to use them.' },
+  { id: 'links', label: 'Links', group: 'Data',
+    does: 'Paste a web address and press Extract. You get every link on the page with its words and where it goes, marked This site, Other site, Email or Phone, with counts. Filter by type, or type words to filter the list. Copy links puts the list on the clipboard.',
+    notes: 'It lists the links in the page source, once each. It does not check whether a link still works. Links a page draws with JavaScript cannot be seen. Up to 2000 links.' },
+  { id: 'download-links', label: 'Download links', group: 'Data',
+    does: 'The Download CSV button above the links list saves the links shown (after any filter) as a CSV file that opens in Excel or Google Sheets, with the words, address, type and how many times each appears.',
+    notes: 'It saves what the filter currently shows.' },
+  { id: 'tables', label: 'Tables', group: 'Data',
+    does: 'Paste a web address and press Extract. Each table on the page is shown as a grid, with its header row when it has one. Under each table, Copy CSV and Download CSV save that table. Download all as JSON saves every table, each row keyed by its column headings.',
+    notes: 'Tables that are only used to lay a page out, and tables inside the cells of another table, are skipped. Up to 50 tables of 1000 rows. Tables a page draws with JavaScript cannot be seen.' },
+  { id: 'download-tables', label: 'Download tables', group: 'Data',
+    does: 'Under each table in Tables, Download CSV saves that one table for a spreadsheet; Download all as JSON at the top saves every table in one file.',
+    notes: 'CSV is one table per file.' },
+  { id: 'metadata', label: 'Metadata', group: 'Data',
+    does: 'Paste a web address and press Extract. You get what the page says about itself: title, description, canonical address, author, published and updated dates, language, the robots tag, the share-card tags (Open Graph and Twitter), any structured data (JSON-LD), and the outline of its headings H1 to H6. It warns when the page does not have exactly one main heading (H1).',
+    notes: 'It shows what the page declares, not whether it is good or ranks well. It is not a full SEO audit (Vault has an SEO and a Lighthouse tool for that).' },
+  { id: 'copy-metadata', label: 'Copy metadata', group: 'Data',
+    does: 'The Copy JSON button above the metadata puts everything shown on the clipboard as JSON.', notes: 'It copies the data as JSON, not as the formatted view.' },
   { id: 'styled', label: 'Exact scrape', group: 'Page',
     does: 'Paste a web address and press Extract. The page appears in a framed preview the way the website shows it, with its own styling. Nothing on the page can run in the preview.',
     notes: 'It is a still snapshot. Anything the page draws with JavaScript is missing, and it can look a little different from the live site.' },
@@ -36,7 +56,7 @@ const CATALOG = [
 
 const RULES = [
   'Every tool starts the same way: paste or speak a web address in the box at the top, choose the tool in the list on the left, then press Extract.',
-  'The web address box and the sections box both have a microphone button. Spoken addresses work as "example dot com slash news".',
+  'The web address box, the sections box, the selector box and the filter boxes all have a microphone button. Spoken addresses work as "example dot com slash news" and selectors as "dot product dash card".',
   'Each tool keeps its own result while you switch between them, so you can run Article content, then Extract images, on the same address without pasting it again.',
   'It reads the page like a search engine does: the page text as the website sends it. It does not run JavaScript, sign in, click anything or scroll.',
   'Only public web addresses work. Addresses on a private network or the person\'s own computer are refused.',
@@ -50,7 +70,10 @@ const NOT_POSSIBLE = [
   'Taking a whole website: it reads one page at a time, with no crawling, no following links and no scheduled or repeated runs.',
   'Saving results inside Vault: there is no history or library, so copy or download them before leaving the page.',
   'Rewriting, summarising or translating what it extracts. Nothing here uses AI on the page; the text can be taken to chat or other tools to do that.',
-  'Tables as a spreadsheet, or downloading videos or files other than pictures.',
+  'Checking whether links work (broken-link check), following links to other pages, or reading more than one page at a time.',
+  'Phone numbers or emails that are not written as links, or lists of contacts. Links and the text of the page are all it reads.',
+  'Pictures or files that are not pictures: videos, audio and downloads such as PDFs are not listed or downloaded.',
+  'A full SEO audit or a speed test: the Metadata tool only reads what the page declares. the SEO and Lighthouse tools in Vault do the audits.',
   'Checking whether the person may copy or reuse the page\'s text or pictures: that is the owner\'s copyright and is up to the person.',
 ];
 
@@ -61,7 +84,7 @@ Rules:
 - You cannot see any page or any result. Never state or guess what is on a web page.
 - Be plain and short, as to a friend who is not technical. Avoid jargon.
 - Give steps in order. Each step names exactly one tool by its id and says in a sentence what to do there.
-- Be clear about which of the three tools fits the job: Article content for the words, Extract images for the pictures, Exact scrape for how the page looks or its code.
+- Be clear about which tool fits the job: Article content for the words (with a CSS selector for one part of the page), Extract images for the pictures, Links for the links, Tables for the tables, Metadata for the title, description, dates, share tags and headings, Exact scrape for how the page looks or its code.
 - If they want something the page cannot give (a sign-in page, a page built with JavaScript, a whole website), say so plainly and say what they could do instead.
 - If you need one more fact to answer, ask ONE short question and give no steps.
 ${VERDICT_HELP}

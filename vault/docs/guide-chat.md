@@ -37,7 +37,7 @@ The **Notes guide** (`guideId` `notes`, `POST /api/notes-tutor`, `server/service
 
 ## The Web Extractor guide
 
-The **Web Extractor guide** (`guideId` `web-extractor`, `POST /api/web-extractor-tutor`, `server/services/webExtractorTutor.js` on `guideCore.js`, wrapper `client/src/pages/webExtractor/WebExtractorTutorChat.jsx`) knows the three tools (Article content, Extract images, Exact scrape) and their buttons. It sees no page or result. `client/src/pages/webExtractor/webExtractorTools.mjs` lists the tools, tips and the controls the Open buttons can switch to; `npm run test:web-extractor-tutor` fails if that list and the catalogue drift. See `docs/web-extractor.md`.
+The **Web Extractor guide** (`guideId` `web-extractor`, `POST /api/web-extractor-tutor`, `server/services/webExtractorTutor.js` on `guideCore.js`, wrapper `client/src/pages/webExtractor/WebExtractorTutorChat.jsx`) knows the six tools (Article content with its CSS selector, Extract images, Links, Tables, Metadata, Exact scrape) and their buttons. It sees no page or result. `client/src/pages/webExtractor/webExtractorTools.mjs` lists the tools, tips and the controls the Open buttons can switch to; `npm run test:web-extractor-tutor` fails if that list and the catalogue drift. See `docs/web-extractor.md`.
 
 ## Behaviour changes belong in the shared files
 

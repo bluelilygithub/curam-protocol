@@ -45,7 +45,7 @@ function imageFilename(src, index, contentType) {
 /** What went wrong, as an HTTP status: the person's address (400), the other website (502), or us (500). */
 function statusFor(err) {
   const m = String((err && err.message) || '');
-  if (/private|DNS|too large|Invalid URL|Only http/i.test(m)) return 400;
+  if (/private|DNS|too large|Invalid URL|Only http|Invalid CSS selector/i.test(m)) return 400;
   if (/Server returned|timed out|Too many redirects|ECONN|ENOTFOUND|EAI_AGAIN|socket hang up|Not an image/i.test(m)) return 502;
   return 500;
 }
@@ -59,10 +59,11 @@ async function fetchImage(src) {
   return { url, ...got, contentType: type.startsWith('image/') ? type : 'application/octet-stream' };
 }
 
-const MODES = new Set(['article', 'images', 'styled']);
+const MODES = new Set(['article', 'images', 'styled', 'links', 'tables', 'metadata']);
+const MAX_SELECTOR_CHARS = 200;
 
 router.post('/extract', async (req, res) => {
-  const { url, mode, excludeSections } = req.body || {};
+  const { url, mode, excludeSections, selector } = req.body || {};
   if (!url || typeof url !== 'string') {
     return res.status(400).json({ error: 'url is required' });
   }
@@ -71,7 +72,8 @@ router.post('/extract', async (req, res) => {
     ? excludeSections.map((s) => String(s || '').trim().slice(0, 80)).filter(Boolean).slice(0, 20)
     : [];
   try {
-    const result = await runExtraction(url, chosenMode, customExcludes);
+    const cssSelector = typeof selector === 'string' ? selector.trim().slice(0, MAX_SELECTOR_CHARS) : '';
+    const result = await runExtraction(url, chosenMode, customExcludes, { selector: cssSelector });
     res.json(result);
   } catch (err) {
     getLogger().error({ err }, '[web-extractor/extract]');

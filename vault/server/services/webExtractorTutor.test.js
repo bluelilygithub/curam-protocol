@@ -11,7 +11,7 @@ const {
 
 (async () => {
   const tools = await import(pathToFileURL(path.join(__dirname, '../../client/src/pages/webExtractor/webExtractorTools.mjs')).href);
-  const { GUIDE_TOOLS, WEB_EXTRACTOR_TOOLS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, parseSpokenUrl, parseSpokenList } = tools;
+  const { GUIDE_TOOLS, WEB_EXTRACTOR_TOOLS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, parseSpokenUrl, parseSpokenList, parseSpokenSelector, toCsv, tableToObjects, linksToRows, tableToRows } = tools;
 
   // ---- the guide knows exactly the tools and buttons the page can show (fails if one is added to or removed from either list alone) ----
   assert.deepStrictEqual(CATALOG.map((t) => t.id).sort(), GUIDE_TOOLS.map((t) => t.id).sort(), 'the guide catalogue matches the page');
@@ -84,6 +84,23 @@ const {
   assert.strictEqual(parseSpokenUrl('   '), null);
   assert.strictEqual(parseSpokenList('Author comma Date comma newsletter signup'), 'Author, Date, newsletter signup');
   assert.strictEqual(parseSpokenList(''), null);
+  assert.strictEqual(parseSpokenSelector('dot product dash card'), '.product-card');
+  assert.strictEqual(parseSpokenSelector('Hash story space P'), '#story p');
+  assert.strictEqual(parseSpokenSelector('ul dot list space greater than space li'), 'ul.list > li');
+  assert.strictEqual(parseSpokenSelector(' '), null);
+
+  // ---- CSV and JSON for Links and Tables ----
+  assert.strictEqual(toCsv([['a', 'b,c'], ['say "hi"', 'x\ny']]), '﻿a,"b,c"\r\n"say ""hi""","x\ny"');
+  assert.strictEqual(toCsv([['=SUM(A1)', '+1', '@x', '-cmd', '-5', '-0.5', 'plain']]), "﻿'=SUM(A1),'+1,'@x,'-cmd,-5,-0.5,plain", 'formula starts are defused, plain negative numbers are not');
+  assert.strictEqual(toCsv([[null, undefined, 0]]), '﻿,,0');
+  const table = { headers: ['Item', 'Item', ''], rows: [['Pen', '2', 'x'], ['Book']], colCount: 3 };
+  assert.deepStrictEqual(tableToObjects(table), [{ Item: 'Pen', 'Item (2)': '2', 'column 3': 'x' }, { Item: 'Book', 'Item (2)': '', 'column 3': '' }], 'repeated and missing headings get distinct keys; short rows are padded');
+  assert.deepStrictEqual(tableToObjects({ headers: null, rows: [['a', 'b']], colCount: 2 }), [{ 'column 1': 'a', 'column 2': 'b' }]);
+  assert.deepStrictEqual(tableToRows({ headers: ['H'], rows: [['r']] }), [['H'], ['r']]);
+  assert.deepStrictEqual(tableToRows({ headers: null, rows: [['r']] }), [['r']]);
+  const linkRows = linksToRows([{ text: 'About', href: 'https://e.com/a', type: 'internal', nofollow: false, occurrences: 2 }]);
+  assert.deepStrictEqual(linkRows[1], ['About', 'https://e.com/a', 'This site', '', 2]);
+  assert.strictEqual(linkRows[0].length, linkRows[1].length);
 
   console.log('webExtractorTutor tests passed');
 })().catch((e) => { console.error(e); process.exit(1); });

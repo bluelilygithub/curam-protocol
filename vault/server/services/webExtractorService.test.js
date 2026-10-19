@@ -3,7 +3,9 @@
 // node server/services/webExtractorService.test.js   (npm run test:web-extractor). No network: the extractors take HTML strings.
 
 const assert = require('assert');
-const { extractArticle, extractImages, extractStyled, rewriteCssUrls, pickFromSrcset } = require('./webExtractorService');
+const {
+  extractArticle, extractImages, extractStyled, extractLinks, extractTables, extractMetadata, rewriteCssUrls, pickFromSrcset,
+} = require('./webExtractorService');
 
 const URL_ = 'https://example.com/news/story';
 const longText = (word) => Array.from({ length: 40 }, () => `${word} sentence about the story that goes on.`).join(' ');
@@ -138,6 +140,100 @@ const longText = (word) => Array.from({ length: 40 }, () => `${word} sentence ab
   assert.ok(out.includes('src="https://assets.example.com/v2/real.png"'), 'lazy picture shown');
   assert.ok(out.includes('href="https://assets.example.com/about"') || out.includes('href="https://example.com/about"'), 'link absolute');
   assert.ok(!/<base/i.test(out) && !/http-equiv/i.test(out) && !/<script/i.test(out), 'base, refresh and scripts removed');
+}
+
+// ---- CSS selector: only what is inside the matching boxes, no built-in clean-up, nested matches read once, bad selector refused ----
+{
+  const html = `<html><body><nav>Menu</nav><div class="product-card"><h3>Chair</h3><p>Oak, 4 legs.</p><div class="product-card"><p>inner</p></div></div>
+    <div class="product-card"><h3>Table</h3><p>Pine.</p></div><div class="related"><h2>Related products</h2><p>Lamp</p></div><p>Outside text</p></body></html>`;
+  const r = extractArticle(html, URL_, [], { selector: '.product-card' });
+  assert.strictEqual(r.matchCount, 2, 'the nested card is not counted twice');
+  assert.match(r.text, /# Chair/);
+  assert.match(r.text, /Pine\./);
+  assert.ok(!/Menu|Outside text|Lamp/.test(r.text), 'only the selected boxes');
+  assert.strictEqual((r.text.match(/inner/g) || []).length, 1, 'inner card text appears once');
+  assert.strictEqual(r.notice, '');
+  assert.ok(r.wordCount > 0 && r.readingMinutes >= 1, 'word count and reading time');
+  // the built-in "related" clean-up does not delete a box the person asked for
+  assert.match(extractArticle(html, URL_, [], { selector: '.related' }).text, /Lamp/);
+  assert.match(extractArticle(html, URL_, [], { selector: '.nothing-here' }).notice, /Nothing on the page matches/);
+  assert.throws(() => extractArticle(html, URL_, [], { selector: 'div[' }), /Invalid CSS selector/);
+  // no selector: unchanged behaviour
+  assert.match(extractArticle(html, URL_, [], { selector: '  ' }).text, /Outside text|Chair/);
+  assert.strictEqual(extractArticle('<html><body><article><p>one two three four</p></article></body></html>', URL_).wordCount, 4);
+}
+
+// ---- links: internal / external / email / phone, deduped, www ignored, fragments and javascript skipped, text fallbacks ----
+{
+  const html = `<html><body>
+    <a href="/about">About us</a><a href="https://www.example.com/about">dup</a>
+    <a href="https://other.org/x" rel="nofollow noopener">Other</a>
+    <a href="mailto:hi@example.com">Email</a><a href="tel:+61400000000">Call</a>
+    <a href="#top">Top</a><a href="javascript:void(0)">js</a><a href="ftp://x/y">ftp</a>
+    <a href="/logo"><img alt="Home logo" src="/l.png"></a><a href="/aria" aria-label="Aria words"></a></body></html>`;
+  const r = extractLinks(html, 'https://example.com/page');
+  const by = (href) => r.links.find((l) => l.href === href);
+  assert.strictEqual(by('https://example.com/about').type, 'internal');
+  assert.strictEqual(by('https://www.example.com/about').type, 'internal', 'www is the same site');
+  assert.strictEqual(by('https://other.org/x').type, 'external');
+  assert.strictEqual(by('https://other.org/x').nofollow, true);
+  assert.strictEqual(by('mailto:hi@example.com').type, 'email');
+  assert.strictEqual(by('tel:+61400000000').type, 'phone');
+  assert.strictEqual(by('https://example.com/logo').text, 'Home logo');
+  assert.strictEqual(by('https://example.com/aria').text, 'Aria words');
+  assert.ok(!r.links.some((l) => /javascript|ftp|#top/.test(l.href)), 'fragments, javascript: and other schemes skipped');
+  assert.deepStrictEqual([r.internalCount, r.externalCount, r.otherCount, r.count], [4, 1, 2, 7]);
+  const dup = extractLinks('<html><body><a href="/a">First</a><a href="/a">Second</a><a href="/b"></a></body></html>', 'https://example.com/');
+  assert.strictEqual(dup.count, 2);
+  assert.deepStrictEqual([dup.links[0].text, dup.links[0].occurrences], ['First', 2]);
+  assert.match(extractLinks('<html><body></body></html>', 'https://example.com/').notice, /No links/);
+}
+
+// ---- tables: header row split off, nested and layout tables skipped, caption kept ----
+{
+  const html = `<html><body>
+    <table><caption>Prices</caption><tr><th>Item</th><th>Cost</th></tr><tr><td>Pen</td><td>2</td></tr><tr><td></td><td></td></tr><tr><td>Book</td><td>9</td></tr></table>
+    <table><tr><td>Just layout</td></tr></table>
+    <table><tr><td>a</td><td>b</td></tr><tr><td>c</td><td><table><tr><td>x</td><td>y</td></tr></table></td></tr></table></body></html>`;
+  const r = extractTables(html, URL_);
+  assert.strictEqual(r.count, 2, 'layout table skipped, nested table not listed separately');
+  assert.deepStrictEqual(r.tables[0].headers, ['Item', 'Cost']);
+  assert.deepStrictEqual(r.tables[0].rows, [['Pen', '2'], ['Book', '9']], 'blank rows dropped');
+  assert.strictEqual(r.tables[0].caption, 'Prices');
+  assert.strictEqual(r.tables[0].colCount, 2);
+  assert.strictEqual(r.tables[1].headers, null, 'no header row when the first row has data cells');
+  assert.strictEqual(r.tables[1].rows[0][0], 'a');
+  assert.match(extractTables('<html><body><p>none</p></body></html>', URL_).notice, /No tables/);
+}
+
+// ---- metadata: tags, social cards, JSON-LD, dates, headings, and bad JSON-LD does not break it ----
+{
+  const html = `<html lang="en-AU"><head><title>The Story | Site</title>
+    <meta name="description" content="A short summary."><meta name="robots" content="noindex"><meta name="keywords" content="a, b">
+    <meta property="og:title" content="OG Title"><meta property="og:site_name" content="Example News"><meta property="og:image" content="/i.png">
+    <meta name="twitter:card" content="summary_large_image"><meta property="article:published_time" content="2026-05-01T10:00:00Z">
+    <link rel="canonical" href="/story"><link rel="icon" href="/fav.ico">
+    <script type="application/ld+json">{"@type":"NewsArticle","headline":"H","dateModified":"2026-05-02","author":{"@type":"Person","name":"Jo Writer"}}</script>
+    <script type="application/ld+json">{ not json </script></head>
+    <body><h1>The Story</h1><h2>Part one</h2><h2>Part two</h2><h3>Detail</h3></body></html>`;
+  const r = extractMetadata(html, 'https://example.com/news/story');
+  assert.strictEqual(r.title, 'OG Title');
+  assert.strictEqual(r.titleTag, 'The Story | Site');
+  assert.strictEqual(r.description, 'A short summary.');
+  assert.strictEqual(r.canonical, 'https://example.com/story');
+  assert.strictEqual(r.language, 'en-AU');
+  assert.strictEqual(r.robots, 'noindex');
+  assert.strictEqual(r.siteName, 'Example News');
+  assert.strictEqual(r.og.image, '/i.png');
+  assert.strictEqual(r.twitter.card, 'summary_large_image');
+  assert.strictEqual(r.published, '2026-05-01T10:00:00Z');
+  assert.strictEqual(r.modified, '2026-05-02');
+  assert.strictEqual(r.author, 'Jo Writer', 'author from JSON-LD when the page has no author tag');
+  assert.strictEqual(r.jsonLd.length, 1);
+  assert.strictEqual(r.jsonLdSkipped, 1, 'broken JSON-LD is counted, not fatal');
+  assert.deepStrictEqual(r.headings.map((h) => h.level), [1, 2, 2, 3]);
+  assert.strictEqual(r.h1Count, 1);
+  assert.deepStrictEqual(r.icons, ['https://example.com/fav.ico']);
 }
 
 console.log('webExtractorService tests passed');

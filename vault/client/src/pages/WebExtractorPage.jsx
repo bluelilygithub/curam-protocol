@@ -10,7 +10,8 @@ import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { VoiceInput, VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 import WebExtractorTutorChat from './webExtractor/WebExtractorTutorChat';
 import {
-  WEB_EXTRACTOR_TOOLS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, HOW_IT_WORKS, GUIDE_TOOLS, parseSpokenUrl, parseSpokenList,
+  WEB_EXTRACTOR_TOOLS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, HOW_IT_WORKS, GUIDE_TOOLS, parseSpokenUrl, parseSpokenList, parseSpokenSelector,
+  toCsv, tableToObjects, linksToRows, tableToRows,
 } from './webExtractor/webExtractorTools.mjs';
 
 const BUTTON = 'px-3.5 py-1.5 rounded-lg text-sm border transition-all duration-200 hover:opacity-70 disabled:opacity-50';
@@ -40,6 +41,9 @@ export default function WebExtractorPage() {
     return WEB_EXTRACTOR_TOOLS.some((t) => t.id === wanted) ? wanted : 'article';
   });
   const [excludeTerms, setExcludeTerms] = useState('');
+  const [selector, setSelector] = useState('');
+  const [linkType, setLinkType] = useState('all');
+  const [linkQuery, setLinkQuery] = useState('');
   const [loadingMode, setLoadingMode] = useState(null);
   // Each tool keeps its own result while you move between tools.
   const [results, setResults] = useState({});
@@ -91,7 +95,7 @@ export default function WebExtractorPage() {
     setResults((r) => ({ ...r, [runMode]: null }));
     try {
       const excludeSections = excludeTerms.split(',').map((s) => s.trim()).filter(Boolean);
-      const res = await api.post('/api/web-extractor/extract', { url: url.trim(), mode: runMode, excludeSections });
+      const res = await api.post('/api/web-extractor/extract', { url: url.trim(), mode: runMode, excludeSections, selector: selector.trim() });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Extraction failed');
       if (myRequest === requestId.current) setResults((r) => ({ ...r, [runMode]: data }));
@@ -120,6 +124,13 @@ export default function WebExtractorPage() {
     a.click();
     a.remove();
     URL.revokeObjectURL(objectUrl);
+  };
+
+  const downloadText = (text, filename, type) => saveBlob(new Blob([text], { type }), filename);
+  const downloadCsv = (rows, filename) => downloadText(toCsv(rows), filename, 'text/csv;charset=utf-8');
+  // File names from the page address, e.g. example-com-links.csv
+  const hostSlug = (address) => {
+    try { return new URL(address).hostname.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'page'; } catch { return 'page'; }
   };
 
   const failMessage = async (res, fallback) => {
@@ -352,6 +363,28 @@ export default function WebExtractorPage() {
             </div>
           )}
 
+          {mode === 'article' && (
+            <div className="space-y-1">
+              <label htmlFor="web-extractor-selector" className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>
+                Only extract inside… <span>(optional CSS selector, e.g. “.product-card” or “#story”)</span>
+              </label>
+              <Tooltip text="Read only the boxes on the page that match this CSS selector, such as .product-card or #story. Needs the class or id names used in the page (right-click the page and choose Inspect). Leave empty to read the whole article. You can say it: “dot product dash card”.">
+                <div>
+                  <VoiceInput
+                    id="web-extractor-selector"
+                    value={selector}
+                    onChange={setSelector}
+                    parse={parseSpokenSelector}
+                    placeholder=".product-card"
+                    label="CSS selector"
+                    spellCheck={false}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !loading) handleExtract(); }}
+                  />
+                </div>
+              </Tooltip>
+            </div>
+          )}
+
           {loading && (
             <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Fetching the page…</p>
           )}
@@ -366,6 +399,12 @@ export default function WebExtractorPage() {
                 <div className="min-w-0">
                   <p className="text-sm font-semibold break-words" style={{ color: 'var(--color-text)' }}>{result.title || result.url}</p>
                   {result.byline ? <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{result.byline}</p> : null}
+                  {result.wordCount ? (
+                    <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                      {result.wordCount.toLocaleString()} words · about {result.readingMinutes} min read
+                      {typeof result.matchCount === 'number' ? ` · ${result.matchCount} box${result.matchCount === 1 ? '' : 'es'} matched` : ''}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="shrink-0 flex items-center gap-2">
                   <Tooltip text="Copy the extracted text to the clipboard.">
@@ -441,6 +480,187 @@ export default function WebExtractorPage() {
               </div>
             </section>
           )}
+
+          {result?.mode === 'links' && (() => {
+            const typeLabel = { internal: 'This site', external: 'Other site', email: 'Email', phone: 'Phone' };
+            const words = linkQuery.trim().toLowerCase();
+            const shown = result.links.filter((l) => (linkType === 'all' || l.type === linkType || (linkType === 'other' && (l.type === 'email' || l.type === 'phone')))
+              && (!words || l.text.toLowerCase().includes(words) || l.href.toLowerCase().includes(words)));
+            const filters = [
+              ['all', `All (${result.count})`], ['internal', `This site (${result.internalCount})`],
+              ['external', `Other sites (${result.externalCount})`], ['other', `Email and phone (${result.otherCount})`],
+            ];
+            return (
+              <section className="rounded-2xl border p-6 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                    {shown.length === result.count ? `${result.count} link${result.count === 1 ? '' : 's'}` : `${shown.length} of ${result.count} links`}
+                    {result.truncated ? ' (first 2000)' : ''}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Tooltip text="Copy the addresses shown below, one per line.">
+                      <button type="button" onClick={() => copyText(shown.map((l) => l.href).join('\n'))} disabled={!shown.length} className={BUTTON} style={BUTTON_STYLE}>Copy links</button>
+                    </Tooltip>
+                    <Tooltip text="Save the links shown below as a CSV file that opens in Excel or Google Sheets.">
+                      <button type="button" onClick={() => downloadCsv(linksToRows(shown), `${hostSlug(result.url)}-links.csv`)} disabled={!shown.length} className={BUTTON} style={BUTTON_STYLE}>Download CSV</button>
+                    </Tooltip>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {filters.map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setLinkType(id)}
+                      className="px-3 py-1 rounded-lg text-xs border transition-all duration-200 hover:opacity-70"
+                      style={linkType === id
+                        ? { background: 'var(--color-primary)', color: '#fff', borderColor: 'var(--color-primary)' }
+                        : { borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <Tooltip text="Show only links whose words or address contain this. You can say it with the microphone.">
+                  <div className="max-w-sm">
+                    <VoiceInput value={linkQuery} onChange={setLinkQuery} placeholder="Filter links…" label="Filter links" className="!py-1.5 !text-xs !rounded-lg" />
+                  </div>
+                </Tooltip>
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>This lists the links in the page. It does not check that they still work.</p>
+                <ul className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+                  {shown.map((l) => (
+                    <li key={l.href} className="py-2 flex items-start gap-3 min-w-0" style={{ borderColor: 'var(--color-border)' }}>
+                      <span className="shrink-0 w-24 text-xs pt-0.5" style={{ color: 'var(--color-muted)' }}>{typeLabel[l.type] || l.type}</span>
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium break-words" style={{ color: 'var(--color-text)' }}>{l.text || '(no words)'}{l.occurrences > 1 ? ` · ${l.occurrences}×` : ''}{l.nofollow ? ' · nofollow' : ''}</p>
+                        <a href={l.href} target="_blank" rel="noreferrer noopener" className="text-xs break-all transition-opacity duration-200 hover:opacity-70" style={{ color: 'var(--color-primary)' }}>{l.href}</a>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                {!shown.length && result.count > 0 && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No links match that filter.</p>}
+              </section>
+            );
+          })()}
+
+          {result?.mode === 'tables' && (
+            <section className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{result.count} table{result.count === 1 ? '' : 's'}</p>
+                {result.count > 0 && (
+                  <Tooltip text="Save every table in one JSON file. Each row is keyed by its column headings.">
+                    <button
+                      type="button"
+                      onClick={() => downloadText(JSON.stringify(result.tables.map((t) => ({ caption: t.caption, rows: tableToObjects(t) })), null, 2), `${hostSlug(result.url)}-tables.json`, 'application/json')}
+                      className={BUTTON}
+                      style={BUTTON_STYLE}
+                    >
+                      Download all as JSON
+                    </button>
+                  </Tooltip>
+                )}
+              </div>
+              {result.tables.map((t, i) => (
+                <div key={i} className="rounded-2xl border p-4 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
+                      Table {i + 1}{t.caption ? `: ${t.caption}` : ''} <span className="font-normal" style={{ color: 'var(--color-muted)' }}>· {t.rowCount} row{t.rowCount === 1 ? '' : 's'}, {t.colCount} column{t.colCount === 1 ? '' : 's'}</span>
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Tooltip text="Copy this table as CSV text.">
+                        <button type="button" onClick={() => copyText(toCsv(tableToRows(t)).replace(/^\uFEFF/, ''))} className={BUTTON} style={BUTTON_STYLE}>Copy CSV</button>
+                      </Tooltip>
+                      <Tooltip text="Save this table as a CSV file that opens in Excel or Google Sheets.">
+                        <button type="button" onClick={() => downloadCsv(tableToRows(t), `${hostSlug(result.url)}-table-${i + 1}.csv`)} className={BUTTON} style={BUTTON_STYLE}>Download CSV</button>
+                      </Tooltip>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                    <table className="w-full text-xs">
+                      {t.headers && (
+                        <thead>
+                          <tr>{t.headers.map((h, c) => <th key={c} className="text-left px-3 py-1.5 font-semibold border-b whitespace-nowrap" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>{h}</th>)}</tr>
+                        </thead>
+                      )}
+                      <tbody>
+                        {t.rows.slice(0, 200).map((row, r) => (
+                          <tr key={r}>{Array.from({ length: t.colCount }, (_, c) => <td key={c} className="px-3 py-1.5 border-b align-top" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>{row[c] || ''}</td>)}</tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {t.rows.length > 200 && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Showing the first 200 rows here. The CSV and JSON have all {t.rowCount}.</p>}
+                </div>
+              ))}
+            </section>
+          )}
+
+          {result?.mode === 'metadata' && (() => {
+            const facts = [
+              ['Title', result.title], ['Title tag', result.titleTag !== result.title ? result.titleTag : ''], ['Description', result.description],
+              ['Canonical address', result.canonical], ['Author', result.author], ['Published', result.published], ['Updated', result.modified],
+              ['Language', result.language], ['Site name', result.siteName], ['Robots', result.robots], ['Keywords', result.keywords],
+            ].filter(([, v]) => v);
+            const tagRows = (label, obj) => Object.entries(obj || {}).map(([k, v]) => [`${label}:${k}`, v]);
+            const tags = [...tagRows('og', result.og), ...tagRows('twitter', result.twitter), ...tagRows('article', result.article)];
+            const card = { borderColor: 'var(--color-border)', background: 'var(--color-surface)' };
+            return (
+              <section className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Page metadata</p>
+                  <Tooltip text="Copy everything shown here as JSON.">
+                    <button type="button" onClick={() => copyText(JSON.stringify(result, (k, v) => (k === 'notice' || k === 'mode' ? undefined : v), 2))} className={BUTTON} style={BUTTON_STYLE}>Copy JSON</button>
+                  </Tooltip>
+                </div>
+                {result.h1Count !== 1 && (
+                  <p className="text-sm rounded-xl border px-4 py-3" style={NOTICE_STYLE} role="status">
+                    {result.h1Count === 0 ? 'This page has no main heading (H1).' : `This page has ${result.h1Count} main headings (H1); one is usual.`}
+                  </p>
+                )}
+                <div className="rounded-2xl border p-4" style={card}>
+                  <dl className="space-y-2">
+                    {facts.map(([k, v]) => (
+                      <div key={k} className="flex gap-3 text-xs">
+                        <dt className="shrink-0 w-32" style={{ color: 'var(--color-muted)' }}>{k}</dt>
+                        <dd className="min-w-0 break-words" style={{ color: 'var(--color-text)' }}>{v}</dd>
+                      </div>
+                    ))}
+                    {!facts.length && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>The page declares no title, description or dates.</p>}
+                  </dl>
+                </div>
+                {tags.length > 0 && (
+                  <div className="rounded-2xl border p-4 space-y-2" style={card}>
+                    <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Share tags (Open Graph, Twitter, article)</p>
+                    {tags.map(([k, v]) => (
+                      <div key={k} className="flex gap-3 text-xs">
+                        <span className="shrink-0 w-40 break-words" style={{ color: 'var(--color-muted)' }}>{k}</span>
+                        <span className="min-w-0 break-all" style={{ color: 'var(--color-text)' }}>{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {result.headings.length > 0 && (
+                  <div className="rounded-2xl border p-4 space-y-1" style={card}>
+                    <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Headings outline</p>
+                    {result.headings.map((h, i) => (
+                      <p key={i} className="text-xs break-words" style={{ paddingLeft: (h.level - 1) * 14, color: 'var(--color-text)' }}>
+                        <span style={{ color: 'var(--color-muted)' }}>H{h.level}</span> {h.text}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {(result.jsonLd.length > 0 || result.jsonLdSkipped > 0) && (
+                  <div className="rounded-2xl border p-4 space-y-2" style={card}>
+                    <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Structured data (JSON-LD)</p>
+                    {result.jsonLd.map((block, i) => (
+                      <pre key={i} className="text-xs overflow-x-auto rounded-lg p-3" style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}>{JSON.stringify(block, null, 2)}</pre>
+                    ))}
+                    {result.jsonLdSkipped > 0 && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{result.jsonLdSkipped} block{result.jsonLdSkipped === 1 ? ' was' : 's were'} left out (too large, too many, or not valid JSON).</p>}
+                  </div>
+                )}
+              </section>
+            );
+          })()}
 
           {result?.mode === 'styled' && (
             <section className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
