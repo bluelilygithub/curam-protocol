@@ -12,10 +12,15 @@ require(path.join(V, 'services/music/musicProviders')).getMusicProvider = () => 
   describe: () => ({ name: 'smoke', model: 'x', configured: true }),
   generate: async () => Buffer.from('RIFFsmoke'),
 });
-require(path.join(V, 'services/music/musicFit')).fitMusicToDuration = async (_raw, out, durationS) => {
+const fitModule = require(path.join(V, 'services/music/musicFit'));
+fitModule.fitMusicToDuration = async (_raw, out, durationS) => {
   await fsp.writeFile(out, `fit ${durationS}`);
   return { copies: Math.ceil(durationS / 30) };
 };
+fitModule.prepareVoiceover = async (_in, out) => { await fsp.writeFile(out, 'voice'); };
+const mixCalls = [];
+fitModule.mixVoiceIntoMusic = async (a) => { mixCalls.push(a); await fsp.writeFile(a.outPath, 'mixed'); };
+require(path.join(V, 'services/videoFfmpeg')).probeVideo = async () => ({ duration: 3, width: 0, hasAudio: true });
 const express = require('express');
 const router = require(path.join(V, 'routes/music.js'));
 const app = express();
@@ -61,7 +66,24 @@ const s = app.listen(0, async () => {
     r = await fetch(`${base}/jobs/${job.id}/options/0/preview`); check('video preview -> 409 (no video)', r.status === 409, (await r.json()).error);
     r = await fetch(`${base}/jobs/${job.id}/options/0/video`); check('video export -> 409', r.status === 409);
     r = await fetch(`${base}/jobs/${job.id}/options/0/save`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); check('save to library -> 409', r.status === 409);
-    r = await fetch(`${base}/jobs/${job.id}/voiceover`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'hello' }) }); check('voiceover -> 409', r.status === 409, (await r.json()).error);
+    // A voiceover works without a video: it is mixed into the music as audio.
+    r = await fetch(`${base}/jobs/${job.id}/options/0/audio`); const plain = await r.text();
+    check('no voiceover yet: audio is the music alone', r.status === 200 && plain.startsWith('fit 45'), plain);
+    const vfd = new FormData(); vfd.append('voice', new Blob(['recording'], { type: 'audio/wav' }), 'voice.wav');
+    r = await fetch(`${base}/jobs/${job.id}/voiceover`, { method: 'POST', body: vfd });
+    const withVoice = await r.json();
+    check('voiceover accepted without a video', r.status === 201 && withVoice.voice && withVoice.hasVideo === false, String(r.status));
+    r = await fetch(`${base}/jobs/${job.id}/options/0/audio?volume=0.5&ducking=strong&voiceVolume=1.2&voiceStart=4`); const mixed = await r.text();
+    check('audio is now the music with the voice mixed in', r.status === 200 && mixed === 'mixed', mixed);
+    const call = mixCalls[mixCalls.length - 1];
+    check('mix got the settings (volume, ducking, voice level and start, no video)', call && call.durationS === 45 && call.volume === 0.5 && call.ducking === 'strong' && call.voice.volume === 1.2 && call.voice.startS === 4, JSON.stringify(call && { v: call.volume, d: call.ducking, vo: call.voice }));
+    r = await fetch(`${base}/jobs/${job.id}/options/0/audio?volume=0.5&ducking=strong&voiceVolume=1.2&voiceStart=4`); await r.text();
+    check('the same settings reuse the render', mixCalls.length === 1, String(mixCalls.length));
+    r = await fetch(`${base}/jobs/${job.id}/options/0/audio?musicOnly=1`); const bare = await r.text();
+    check('musicOnly=1 is still the music alone', r.status === 200 && bare.startsWith('fit 45'), bare);
+    r = await fetch(`${base}/jobs/${job.id}/options/0/preview`); check('still no video preview -> 409', r.status === 409);
+    r = await fetch(`${base}/jobs/${job.id}/voiceover`, { method: 'DELETE' });
+    r = await fetch(`${base}/jobs/${job.id}/options/0/audio`); check('voiceover removed: music alone again', (await r.text()).startsWith('fit 45'));
 
     r = await fetch(`${base}/jobs/${job.id}/options/9/regenerate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); check('regenerate unknown option -> 404', r.status === 404);
     r = await fetch(`${base}/jobs/${job.id}/options/1/regenerate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seed: '555' }) });

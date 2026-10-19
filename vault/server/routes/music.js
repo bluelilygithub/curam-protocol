@@ -13,7 +13,7 @@ const { askTutor } = require('../services/videoTutor');
 const { MOOD_PRESETS, CUSTOM_ID, buildMusicPrompt } = require('../services/music/musicPrompts');
 const { getMusicProvider } = require('../services/music/musicProviders');
 const {
-  mixMusicWithVideo, normalizeMixSettings, normalizeVoiceSettings, prepareVoiceover,
+  mixMusicWithVideo, mixVoiceIntoMusic, normalizeMixSettings, normalizeVoiceSettings, prepareVoiceover,
 } = require('../services/music/musicFit');
 const {
   MAX_TEXT_CHARS, normalizeSpeech, getVoiceProvider,
@@ -278,12 +278,35 @@ router.post('/jobs/:id/options', aiLimiter, (req, res) => {
   return res.status(202).json(publicJob(job));
 });
 
-// The fitted music alone (WAV), exactly the video's length with fades.
-router.get('/jobs/:id/options/:n/audio', (req, res) => {
+// The fitted music (WAV), exactly the video's (or the chosen) length with fades. For music made without a video that has a
+// voiceover, this is the music with the voice mixed in (volume, ducking, voiceVolume, voiceStart as for the video export);
+// `?musicOnly=1` always gives the music alone, which is what Mix audio and the video exports start from.
+async function ensureAudioMixRender(job, opt, query) {
+  const settings = normalizeMixSettings({ volume: query.volume, ducking: query.ducking });
+  const voice = normalizeVoiceSettings({ voiceVolume: query.voiceVolume, voiceStartS: query.voiceStart }, job.durationS);
+  const tag = `_v${job.voice.rev}_${Math.round(voice.volume * 100)}_${Math.round(voice.startS * 10)}`;
+  const outPath = path.join(job.dir, `audiomix_${opt.n}_r${opt.rev || 0}_${Math.round(settings.volume * 100)}_${settings.ducking}${tag}.wav`);
+  const exists = await fs.access(outPath).then(() => true, () => false);
+  if (!exists) {
+    const partPath = outPath.replace(/\.wav$/, '.part.wav');
+    await mixVoiceIntoMusic({
+      musicPath: opt.fitPath, voicePath: job.voice.path, outPath: partPath, durationS: job.durationS, ...settings, voice,
+    });
+    await fs.rename(partPath, outPath);
+  }
+  return outPath;
+}
+
+router.get('/jobs/:id/options/:n/audio', ffmpegRoute('audio', async (req, res) => {
   const found = findOption(req, res);
   if (!found) return;
-  res.download(found.opt.fitPath, `music-${stamp()}-option${found.opt.n + 1}.wav`);
-});
+  const { job, opt } = found;
+  if (job.mode === 'music-only' && job.voice && !req.query.musicOnly) {
+    const outPath = await ensureAudioMixRender(job, opt, req.query);
+    return res.download(outPath, `music-with-voice-${stamp()}-option${opt.n + 1}.wav`);
+  }
+  return res.download(opt.fitPath, `music-${stamp()}-option${opt.n + 1}.wav`);
+}, { source: 'music', routePrefix: 'music' }));
 
 // Mixed video. `preview=1` renders a small fast copy for the browser; otherwise the full export.
 // Renders are cached per (option, volume, ducking, kind) inside the job's directory.
@@ -333,7 +356,6 @@ router.post('/jobs/:id/voiceover', aiLimiter, voiceUpload.single('voice'), ffmpe
   const job = getJob(req.params.id, req.user.id);
   if (!job) return res.status(404).json({ error: 'That music job was not found or has expired — generate again.' });
   if (job.status !== 'done') return res.status(409).json({ error: 'Wait for the music to finish first.' });
-  if (job.mode === 'music-only') return res.status(409).json({ error: 'A voiceover is mixed over a video, and this music was made without one. Make music for a video to add a voiceover.' });
 
   let srcBuffer;
   let source;

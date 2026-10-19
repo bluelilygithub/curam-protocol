@@ -1235,6 +1235,12 @@ export default function VideosPage() {
   const [mxLead, setMxLead] = useState(0);
   const [mxTail, setMxTail] = useState(3);
   const [mxFormat, setMxFormat] = useState('mp3');
+  // Mix audio: or write a script and have the AI voice (same voices as the Music page's voiceover) make the voice recording.
+  const [mxScript, setMxScript] = useState('');
+  const [mxVoiceId, setMxVoiceId] = useState('');
+  const [mxSpeed, setMxSpeed] = useState(1);
+  const [mxVoices, setMxVoices] = useState(null); // { voices, maxChars, provider } once loaded
+  const [mxSpeaking, setMxSpeaking] = useState(false);
   const mxVoiceInputRef = useRef(null);
   const mxMusicInputRef = useRef(null);
   const mxVoiceUrl = useMemo(() => (mxVoice ? URL.createObjectURL(mxVoice) : ''), [mxVoice]);
@@ -2055,6 +2061,29 @@ export default function VideosPage() {
     a.download = `${base}.${kind === 'srt' ? 'srt' : 'txt'}`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  useEffect(() => {
+    if (tool !== 'mix-audio' || mxVoices) return;
+    api.get('/api/videos/voices').then((r) => (r.ok ? r.json() : null)).then((d) => { if (d) setMxVoices(d); }).catch(() => {});
+  }, [tool, mxVoices]);
+
+  const handleMakeVoice = async () => {
+    setMxSpeaking(true);
+    try {
+      const res = await api.post('/api/videos/speak', { text: mxScript, voice: mxVoiceId || mxVoices?.voices?.[0]?.id, speed: mxSpeed });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'The voice could not be made');
+      }
+      setMxVoice(new File([await res.blob()], 'voice-from-script.wav', { type: 'audio/wav' }));
+      setResultFromBlob(null, null, null);
+      addToast('Voice made — it is in the Voice slot', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setMxSpeaking(false);
+    }
   };
 
   const handleMixAudio = async () => {
@@ -3477,6 +3506,38 @@ export default function VideosPage() {
                     <Tooltip text={`Play the ${key} to check it is the right file.`}>
                       <audio src={url} controls className="w-full" />
                     </Tooltip>
+                  )}
+                  {key === 'voice' && mxVoices?.provider?.configured && (
+                    <details className="pt-1">
+                      <summary className="text-xs cursor-pointer transition-opacity hover:opacity-70" style={{ color: 'var(--color-primary)' }}>…or write a script for an AI voice</summary>
+                      <div className="space-y-2 pt-2">
+                        <Tooltip text={`What the voice should say, up to ${mxVoices.maxChars} characters. About 14 characters is a second of speech. Type it or tap the mic.`}>
+                          <div>
+                            <VoiceInput type="textarea" append rows={3} value={mxScript} onChange={setMxScript} label="Voice script" placeholder="e.g. Welcome to our summer sale." className="!text-xs" />
+                          </div>
+                        </Tooltip>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Tooltip text="The AI voice that reads the script.">
+                            <select value={mxVoiceId || mxVoices.voices[0]?.id || ''} onChange={(e) => setMxVoiceId(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                              {mxVoices.voices.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+                            </select>
+                          </Tooltip>
+                          <Tooltip text="Slower or faster delivery. 1× is natural.">
+                            <input type="range" min={0.7} max={1.3} step={0.05} value={mxSpeed} onChange={(e) => setMxSpeed(Number(e.target.value))} className="w-full" aria-label="Speed" />
+                          </Tooltip>
+                        </div>
+                        <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>{mxScript.length} / {mxVoices.maxChars} characters · speed {mxSpeed.toFixed(2)}×. The AI voice has a small per-use cost.</p>
+                        <Tooltip text="Have the AI voice read the script. The recording replaces anything in the Voice slot.">
+                          <button
+                            type="button" onClick={handleMakeVoice} disabled={mxSpeaking || !mxScript.trim()}
+                            className="px-3 py-2 rounded-xl text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-40"
+                            style={{ background: 'var(--color-primary)', color: '#fff' }}
+                          >
+                            {mxSpeaking ? 'Making the voice…' : 'Make the voice'}
+                          </button>
+                        </Tooltip>
+                      </div>
+                    </details>
                   )}
                 </div>
               ))}

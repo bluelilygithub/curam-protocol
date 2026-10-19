@@ -3004,6 +3004,12 @@
   "POST /api/videos/trim-audio": {
    "class": "authed"
   },
+  "GET /api/videos/voices": {
+   "class": "authed"
+  },
+  "POST /api/videos/speak": {
+   "class": "authed"
+  },
   "POST /api/videos/tutor": {
    "class": "authed"
   },

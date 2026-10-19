@@ -37,7 +37,7 @@ export default function OptionCard({
   const renderPreview = useCallback(async (s) => {
     setRendering(true);
     try {
-      const res = await api.get(hasVideo ? `${base}/preview?${qs(s, voice)}` : `${base}/audio`);
+      const res = await api.get(hasVideo ? `${base}/preview?${qs(s, voice)}` : `${base}/audio?${qs(s, voice)}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Could not render the preview');
@@ -75,16 +75,23 @@ export default function OptionCard({
 
   // Send this option to a Video Tools tool: fetch the file (the music alone, or the video with the music mixed in, using the
   // settings above), leave it for that tool, and go there. The job is kept so the other options are still here on return.
+  // The audio file for this option: the music alone, except for music made without a video that has a voiceover, where
+  // `withVoice` picks the music with the voice mixed in (what is heard in the preview) or the music alone.
+  const audioUrl = (withVoice) => {
+    if (hasVideo || !voice) return `${base}/audio`;
+    return withVoice ? `${base}/audio?${qs(settings, voice)}` : `${base}/audio?musicOnly=1`;
+  };
+
   const finishIn = async (t) => {
     setHanding(t.id);
     try {
-      const res = await api.get(t.kind === 'audio' ? `${base}/audio` : `${base}/video?${qs(settings, voice)}`);
+      const res = await api.get(t.kind === 'audio' ? audioUrl(t.id !== 'mix-audio') : `${base}/video?${qs(settings, voice)}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Could not prepare that file');
       }
       const blob = await res.blob();
-      const name = t.kind === 'audio' ? 'music.wav' : (voice ? 'video-with-music-and-voice.mp4' : 'video-with-music.mp4');
+      const name = t.kind === 'audio' ? (!hasVideo && voice && t.id !== 'mix-audio' ? 'music-with-voice.wav' : 'music.wav') : (voice ? 'video-with-music-and-voice.mp4' : 'video-with-music.mp4');
       setToolHandoff(t.id, new File([blob], name, { type: blob.type || (t.kind === 'audio' ? 'audio/wav' : 'video/mp4') }));
       keepJobForReturn(jobId);
       navigate(`/videos?tool=${t.id}`);
@@ -178,7 +185,7 @@ export default function OptionCard({
         )}
       </div>
 
-      {hasVideo && (
+      {(hasVideo || voice) && (
       <div className="grid grid-cols-2 gap-3">
         <label className="block space-y-1">
           <span className="text-xs" style={muted}>Music volume · {settings.volume}%</span>
@@ -208,7 +215,7 @@ export default function OptionCard({
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        {hasVideo && dirty && (
+        {(hasVideo || voice) && dirty && (
           <Tooltip text="Re-render the preview with the new volume, ducking and voiceover settings.">
             <button
               type="button" onClick={() => renderPreview(settings)} disabled={rendering}
@@ -219,9 +226,9 @@ export default function OptionCard({
             </button>
           </Tooltip>
         )}
-        <Tooltip text={hasVideo ? "Just the music, cut to your video's exact length with fades, as a WAV file." : 'The music, cut to the length you chose with fades, as a WAV file.'}>
+        <Tooltip text={hasVideo ? "Just the music, cut to your video's exact length with fades, as a WAV file." : (voice ? 'The music with your voiceover mixed in, using the settings above, as a WAV file.' : 'The music, cut to the length you chose with fades, as a WAV file.')}>
           <button
-            type="button" onClick={() => exportFile(`${base}/audio`, 'music.wav', 'Audio')}
+            type="button" onClick={() => exportFile(audioUrl(true), !hasVideo && voice ? 'music-with-voice.wav' : 'music.wav', 'Audio')}
             className="px-3 py-1.5 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
           >

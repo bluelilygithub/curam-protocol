@@ -198,8 +198,22 @@ async function mixMusicWithVideo({ videoPath, musicPath, outPath, durationS, has
   }
 }
 
+/**
+ * Music + voiceover as one WAV, no video (a "music from a description" set): the same voice mix as the video export, with a
+ * silent stand-in for the video's own sound. The music is already the right length; the voice starts at `voice.startS`.
+ */
+async function mixVoiceIntoMusic({ musicPath, voicePath, outPath, durationS, volume, ducking, voice }) {
+  const settings = normalizeMixSettings({ volume, ducking });
+  await execFileAsync(FFMPEG, [
+    '-y', '-f', 'lavfi', '-t', durationS.toFixed(3), '-i', `anullsrc=channel_layout=stereo:sample_rate=${SAMPLE_RATE}`,
+    '-i', musicPath, '-i', voicePath,
+    '-filter_complex', buildVoiceMixFilter({ hasAudio: false, ...settings, voice, durationS }),
+    '-map', '[aout]', '-c:a', 'pcm_s16le', '-ar', String(SAMPLE_RATE), '-t', durationS.toFixed(3), outPath,
+  ], 600000);
+}
+
 module.exports = {
   LOOP_CROSSFADE_S, FADE_IN_S, FADE_OUT_S, TARGET_LUFS, DUCKING,
   planLoop, fadeTimes, buildFitFilter, buildMixFilter, buildVoiceMixFilter, normalizeMixSettings, normalizeVoiceSettings,
-  fitMusicToDuration, prepareVoiceover, mixMusicWithVideo,
+  fitMusicToDuration, prepareVoiceover, mixMusicWithVideo, mixVoiceIntoMusic,
 };

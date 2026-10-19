@@ -467,7 +467,7 @@ function MusicPageInner({ videosOk }) {
                 <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>3 · {job.source === 'upload' ? 'Your track' : 'Your options'} · {job.hasVideo === false ? `${formatDuration(job.durationS)} of music` : `video is ${formatDuration(job.durationS)}${job.hasAudio ? '' : ' · no sound of its own'}`}</p>
               </div>
               {job.status === 'failed' && <p className="text-xs" style={{ color: '#ef4444' }}>{job.error || 'Music generation failed.'}</p>}
-              {job.status === 'done' && !job.voice && job.hasVideo !== false && (
+              {job.status === 'done' && !job.voice && (
                 <p className="text-xs" style={muted}>
                   Want narration?{' '}
                   <button
@@ -524,12 +524,12 @@ function MusicPageInner({ videosOk }) {
         {tool === 'voiceover' && (
           <div className="space-y-4">
             <ToolHeader id="voiceover" label="Voiceover" onHelp={setHelpTool} />
-            {job?.status === 'done' && job.hasVideo !== false ? (
+            {job?.status === 'done' ? (
               <>
                 <VoiceoverPanel job={job} status={status} onJobChange={setJob} voiceSettings={voiceSettings} onVoiceSettings={setVoiceSettings} />
                 {job.voice && (
                   <button
-                    type="button" onClick={() => selectTool(job.source === 'upload' ? 'own-track' : 'score')}
+                    type="button" onClick={() => selectTool(job.source === 'upload' ? 'own-track' : (job.hasVideo === false ? 'text' : 'score'))}
                     className="px-3 py-1.5 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
                     style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
                   >
@@ -542,9 +542,7 @@ function MusicPageInner({ videosOk }) {
                 <p className="text-xs" style={muted}>
                   {job?.status === 'running'
                     ? 'Your music is still being made. The voiceover can be added as soon as it is ready.'
-                    : job?.status === 'done' && job.hasVideo === false
-                      ? 'This music was made without a video, and a voiceover is mixed over a video. Make music for a video to add one.'
-                      : 'Make your music first — a voiceover is mixed over it, and the music dips while the voice speaks.'}
+                    : 'Make your music first — a voiceover is mixed over it, and the music dips while the voice speaks.'}
                 </p>
                 <button
                   type="button" onClick={() => selectTool('score')}

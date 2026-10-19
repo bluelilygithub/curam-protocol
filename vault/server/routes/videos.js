@@ -51,6 +51,8 @@ const { normalizeSrt, srtToPlainText, prepareCaptionSrt, parseSrtLoose } = requi
 const { timeScript, hasTimeMarkers } = require('../services/scriptTiming');
 const voiceIsolation = require('../services/voiceIsolation');
 const audioMix = require('../services/audioMix');
+const { getVoiceProvider, normalizeSpeech, MAX_TEXT_CHARS } = require('../services/voiceProviders');
+const { speakToWav } = require('../services/voiceover');
 const extendEndingService = require('../services/extendEnding');
 const replaceSectionService = require('../services/replaceSection');
 const titleCardService = require('../services/titleCard');
@@ -1336,6 +1338,33 @@ router.get('/jobs/:id/result', (req, res) => {
 
 // "Mix audio": a voice (foreground) and a piece of music (background) combined into one audio file. The music is repeated with
 // smooth crossfades or trimmed to fit, dips under the voice (ducking) and fades in and out; the result is levelled for speech.
+// AI voices for scripts (Mix audio's "write a script" box). Same providers as the Music page's voiceover.
+router.get('/voices', (req, res) => {
+  const provider = getVoiceProvider();
+  res.json({ provider: provider.describe(), voices: provider.voices, maxChars: MAX_TEXT_CHARS });
+});
+
+router.post('/speak', ffmpegRoute('speak', async (req, res) => {
+  const provider = getVoiceProvider();
+  let speech;
+  try {
+    speech = normalizeSpeech({ text: req.body?.text, voice: req.body?.voice, speed: req.body?.speed }, provider.voices);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+  const info = provider.describe();
+  if (!info.configured) return res.status(503).json({ error: info.note || 'AI voices are not set up on this server.' });
+  let wav;
+  try {
+    wav = await speakToWav(provider, speech);
+  } catch (err) {
+    getLogger().error({ err }, '[videos/speak]');
+    return res.status(502).json({ error: String(err.message || 'The voice could not be generated').slice(0, 300) });
+  }
+  res.set('Content-Type', 'audio/wav');
+  return res.send(wav);
+}));
+
 router.post('/mix-audio', upload.fields([{ name: 'voice', maxCount: 1 }, { name: 'music', maxCount: 1 }]), ffmpegRoute('mix-audio', async (req, res) => {
   const voiceFile = req.files?.voice?.[0];
   const musicFile = req.files?.music?.[0];

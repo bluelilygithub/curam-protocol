@@ -124,7 +124,7 @@ export default function VoiceoverPanel({ job, status, onJobChange, voiceSettings
           </div>
           {over && (
             <p className="text-xs" style={{ color: '#b45309' }}>
-              The voiceover runs {formatDuration(voice.durationS)} from {voiceSettings.start.toFixed(1)}s, past the end of your {formatDuration(job.durationS)} video — the end will be cut off. Start it earlier or shorten the script.
+              The voiceover runs {formatDuration(voice.durationS)} from {voiceSettings.start.toFixed(1)}s, past the end of your {formatDuration(job.durationS)} {job.hasVideo === false ? 'of music' : 'video'} — the end will be cut off. Start it earlier or shorten the script.
             </p>
           )}
           <p className="text-xs" style={muted}>To change the words or the voice, add a new one below — it replaces this one.</p>

@@ -255,6 +255,18 @@ async function musicJobChecks() {
 (async () => {
   await geminiVoiceChecks();
   await musicJobChecks();
+  {
+    // a script becomes a WAV through the provider, then the shared conversion (faked here: no ffmpeg needed)
+    const { speakToWav } = require('../voiceover');
+    const fs = require('fs/promises');
+    const spoken = [];
+    const provider = { speak: async (a) => { spoken.push(a); return Buffer.from('raw-speech'); } };
+    const wav = await speakToWav(provider, { text: 'hello', voice: 'Kore', speed: 1 }, { prepare: async (src, out) => { await fs.writeFile(out, `wav of ${(await fs.readFile(src)).toString()}`); } });
+    assert.strictEqual(wav.toString(), 'wav of raw-speech');
+    assert.deepStrictEqual(spoken, [{ text: 'hello', voice: 'Kore', speed: 1 }]);
+    await assert.rejects(() => speakToWav({ speak: async () => { throw new Error('quota'); } }, { text: 'x' }, { prepare: async () => {} }), /quota/);
+    passed += 1; console.log('ok - shared voiceover: script -> provider -> WAV');
+  }
   passed += 1; console.log('ok - music jobs: music only, a typed seed, make one again, make another, one failure recovers');
   passed += 1; console.log('ok - Gemini voice: request shape, Australian-accent prompt, WAV result, clear errors');
   const { createReplicateProvider, _clearVersionCache } = require('./musicProviders');

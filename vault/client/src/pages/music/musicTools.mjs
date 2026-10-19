@@ -61,6 +61,7 @@ export const TOOL_HELP = {
       'Not happy with one? Make a new version of just that option, or make another option (up to six)',
       'Seed: the number a version was made from. Type it in the Seed box with the same description to get that exact music back',
       'Compare options by playing each from the same moment',
+      'Add a voiceover (an AI voice with an Australian accent, or your own recording) and download the music with the voice mixed in',
       'Send it to Video Tools to trim it or mix it with a voice recording',
     ],
   },
@@ -76,12 +77,12 @@ export const TOOL_HELP = {
   },
   voiceover: {
     title: 'Voiceover',
-    what: 'Add narration over your music. Make the music first, then come back here.',
+    what: 'Add narration over your music, with or without a video. Make the music first, then come back here.',
     features: [
       'Write a script for an AI voice, or upload your own recording',
       'Choose when the voice starts and how loud it is',
       'The music (and your video\'s own sound) dips underneath the voice',
-      'Every option\'s preview and export includes the voiceover',
+      'Every option\'s preview and export includes the voiceover (for music made without a video, the WAV has the voice mixed in)',
       'AI voices have a small per-use cost',
     ],
   },

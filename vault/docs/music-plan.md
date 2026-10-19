@@ -55,7 +55,7 @@ Server change in `server/services/music/musicJobs.js` and `server/routes/music.j
 
 **Done when:** a track can be made with no video, and one weak option can be replaced without losing the other two.
 
-## Stage 5: Shared voiceover
+## Stage 5: Shared voiceover (built 2026-10-19: shared voices, Mix audio script box, voiceover without a video; script-from-transcript and per-line timing NOT built)
 
 Move text-to-speech into a service both apps use. Mix audio gets "write a script for an AI voice" next to its upload slot.
 
