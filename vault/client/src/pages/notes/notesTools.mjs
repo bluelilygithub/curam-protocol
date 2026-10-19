@@ -3,7 +3,7 @@
 // the guide's Open button does something: the rest are controls inside an open note, so Open only brings the note into view.
 
 export const NOTES_TOOLS = [
-  { id: 'new-note', label: 'New note', open: 'create' },
+  { id: 'new-note', label: 'New note', open: 'chooser' },
   { id: 'new-voice-note', label: 'New voice note', open: 'recorder' },
   { id: 'search', label: 'Search notes', open: 'search' },
   { id: 'dictate', label: 'Dictate', open: 'editor' },

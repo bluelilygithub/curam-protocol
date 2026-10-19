@@ -1,12 +1,21 @@
 # Voice notes
 
-A **mic button** beside "+" (New note) in the Notes list, and a **New Voice Note** button on the empty Notes screen, open a recorder. Talk through a plan, an idea, or a chat across a table; when you press **Stop and make the note**, the words are written into a new note. Notes made this way show an **audio-lines icon** in the list and a "Voice note" chip above the editor.
+Press **+** in the Notes list and choose **Record a voice note** (or use the **New Voice Note** button on the empty Notes screen) to open a recorder. Talk through a plan, an idea, or a chat across a table; when you press **Stop and make the note**, the words are written into a new note. Notes made this way show an **audio-lines icon** in the list and a "Voice note" chip above the editor.
 
 Private-use tool, not a legal record: there is no consent workflow, speaker identification or audit trail. The recorder says "let people know you are recording".
 
+## Starting a note: the + choice
+
+The **+** at the top of the notes list (on a phone it reads **+ New**) opens a small choice (`client/src/pages/notes/NewNoteChooser.jsx`; a sheet from the bottom on a phone, a centred card on a bigger screen): **Write a note** or **Record a voice note**.
+
+- **Write a note** makes the note and opens it with the cursor in the **title** (the word "Untitled" is selected, so typing replaces it), then the text. On a phone, tapping the choice keeps the keyboard up while the note is made (a hidden input is focused inside the tap), so the title is ready to type into.
+- **Record a voice note** opens the recorder. The tidied-up note comes with a title; edit it in the editor.
+
+The empty "Select a note" screen still has direct **New Note** and **New Voice Note** buttons.
+
 ## On a phone
 
-The Notes page has its own phone layout (under 640 px wide). The list opens as a drawer with big **New note** and **Voice note** buttons (words, not two mystery icons). An open note has a clear title field (tapping "Untitled" selects it so typing replaces it), a visible writing box, and a bar at the bottom in thumb reach with **Type** (opens the keyboard) and **Dictate** (speaks into the note; it says **Stop** while listening). The bar leaves room for the guide's round button. The toolbar is icons only (Convert to task, Take to chat). A note that has no title is listed by its first line (`client/src/pages/notes/noteListText.mjs`; display only, nothing is renamed). A phone cannot open its keyboard by itself, which is why Type exists. Checked at 390 px wide in a real browser (Playwright, fake microphone), not on a physical phone.
+The Notes page has its own phone layout (under 640 px wide). The list opens as a drawer. An open note has a clear title field, a visible writing box, and a bar at the bottom in thumb reach with **Type** (opens the keyboard) and **Dictate** (speaks into the note; it says **Stop** while listening). The bar leaves room for the guide's round button. The toolbar is icons only (Convert to task, Take to chat). A note that has no title is listed by its first line (`client/src/pages/notes/noteListText.mjs`; display only, nothing is renamed). Checked at 390 px wide in a real browser (Playwright, fake microphone), not on a physical phone; whether an iPhone keeps its keyboard up through the + choice is not confirmed.
 
 ## What is kept
 

@@ -9,9 +9,9 @@ const { createGuide, REPLY_FORMAT, VERDICT_HELP } = require('./guideCore');
 
 const CATALOG = [
   { id: 'new-note', label: 'New note', group: 'Notes list',
-    does: 'The + button at the top of the notes list (on a phone, the big New note button) makes an empty note called Untitled and opens it. Type a title and write; it saves by itself a moment after you stop typing. On a phone, the Type button at the bottom opens the keyboard, and Dictate beside it speaks into the note. A note with no title is listed by its first line.', notes: 'Notes are plain text: no bold, headings or images.' },
+    does: 'The + button at the top of the notes list (on a phone it says + New) opens a small choice: Write a note, or Record a voice note. Write a note opens a new note with the cursor in the title, where you type the title and then the text; it saves by itself a moment after you stop typing. On a phone, the Type button at the bottom opens the keyboard, and Dictate beside it speaks into the note. A note with no title is listed by its first line.', notes: 'Notes are plain text: no bold, headings or images.' },
   { id: 'new-voice-note', label: 'New voice note', group: 'Notes list',
-    does: 'The mic button beside the + button (on a phone, the Voice note button at the top of the list) records your voice and writes it into a new note. Press Start recording, talk through a plan, an idea or a chat across the table, and Pause or Resume if you need to. Stop and make the note writes your words up. By default it also tidies them into a note with a short title and plain sections (Summary, Ideas, Plan, To do, Open questions, only those that apply); untick the tidy-up to keep your words exactly as spoken. What was said is always kept at the bottom of the note. Voice notes get an audio-lines icon in the list and a "Voice note" tag above the editor.',
+    does: 'Press the + button at the top of the notes list and choose Record a voice note. It records your voice and writes it into a new note. Press Start recording, talk through a plan, an idea or a chat across the table, and Pause or Resume if you need to. Stop and make the note writes your words up. By default it also tidies them into a note with a short title and plain sections (Summary, Ideas, Plan, To do, Open questions, only those that apply); untick the tidy-up to keep your words exactly as spoken. What was said is always kept at the bottom of the note. Voice notes get an audio-lines icon in the list and a "Voice note" tag above the editor.',
     notes: 'Only the words are kept: the recording is turned into text and then deleted, so there is nothing to replay. Up to about an hour per recording. Needs the microphone allowed in the browser and the speech-to-text service set up on the server. Has a small cost per note (the speech-to-text, and the tidy-up). It does not know who is speaking by name. If it fails, the recorder window stays open with the recording kept and a Try again button, so nothing is lost until you press Discard or close the window. Let anyone you are recording know.' },
   { id: 'search', label: 'Search notes', group: 'Notes list',
     does: 'The search box above the list finds notes as you type, by words in the title or the text.', notes: 'It searches your own notes only.' },
@@ -37,8 +37,8 @@ const RULES = [
   'A note is plain text. It can be filed under one project; it can be searched by its title and text.',
   'A voice note is a normal note that began as a recording: you can edit, search, file, convert to a task or delete it like any other. Only its words are kept.',
   'With the tidy-up on, a voice note starts with a short summary and sections, followed by "What was said" (the original words). The tidy-up is only a rewrite of what was said; it does not add facts or tasks that were not spoken.',
-  'The microphone buttons: the one beside + (New voice note) records and writes up a whole recording; the one in the editor toolbar (Dictate) types live into the open note.',
-  'The Open buttons in this chat only open things for you: New voice note opens the recorder window (it does not start recording), Search notes puts the cursor in the search box, and New note makes an empty Untitled note. They never change or delete an existing note.',
+  'The two ways to use the microphone: Record a voice note (from the + choice) records and writes up a whole recording into a new note; Dictate (in an open note) types live into that note.',
+  'The Open buttons in this chat only open things for you: New note opens the Write-or-Record choice, New voice note opens the recorder window (it does not start recording), and Search notes puts the cursor in the search box. They never create, change or delete a note by themselves.',
   'Typing @ in a note opens a menu of things to pull in: projects, open tasks, saved prompts, and searching the web, Gmail and Calendar.',
 ];
 
@@ -60,7 +60,7 @@ Rules:
 - You cannot see any of this person's notes or recordings. Never state or guess what is in them.
 - Be plain and short, as to a friend who is not technical. Avoid jargon.
 - Give steps in order. Each step names exactly one tool by its id and says in a sentence what to do there.
-- Be clear about the two microphone buttons when the person asks about recording or dictating: New voice note (beside +) records, then writes up the whole recording; Dictate (in the editor) types live into the open note.
+- Be clear about the two ways to use the microphone when the person asks about recording or dictating: Record a voice note (choose it after pressing +) records, then writes up the whole recording; Dictate (in an open note) types live into that note.
 - If they ask about recording other people, you may say it is a private tool and that it is courteous to let people know they are being recorded, but do not lecture.
 - If you need one more fact to answer, ask ONE short question and give no steps.
 ${VERDICT_HELP}

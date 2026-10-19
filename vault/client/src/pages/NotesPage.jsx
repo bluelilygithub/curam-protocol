@@ -7,6 +7,7 @@ import AtMentionDropdown from '../components/AtMentionDropdown';
 import MoodDot from '../components/mood/MoodDot';
 import VoiceNoteRecorder from './notes/VoiceNoteRecorder';
 import NotesTutorChat from './notes/NotesTutorChat';
+import NewNoteChooser from './notes/NewNoteChooser';
 import { NOTES_TOOLS } from './notes/notesTools.mjs';
 import { listText } from './notes/noteListText.mjs';
 
@@ -30,6 +31,7 @@ export default function NotesPage() {
   const [dirty, setDirty] = useState(false);
   const [showChatPicker, setShowChatPicker] = useState(false);
   const [showRecorder, setShowRecorder] = useState(false); // the New voice note dialog
+  const [showNewChooser, setShowNewChooser] = useState(false); // what + opens: write a note, or record a voice note
   const [newProjectName, setNewProjectName] = useState('');
   const [creatingProject, setCreatingProject] = useState(false);
   const [convertedNoteIds, setConvertedNoteIds] = useState(new Set());
@@ -37,6 +39,8 @@ export default function NotesPage() {
 
   const autosaveTimer = useRef(null);
   const bodyRef = useRef(null);
+  const keyboardRef = useRef(null); // phones only: focusing this inside the tap keeps the keyboard up while the new note opens
+  const titleRef = useRef(null);
   const searchRef = useRef(null); // the search box above the list (the guide's Open button focuses it)
   const mentionTimerRef = useRef(null);
   const mentionAtIndexRef = useRef(-1);
@@ -262,13 +266,26 @@ export default function NotesPage() {
     }, AUTOSAVE_DELAY);
   }, [search, loadNotes]);
 
-  function selectNote(note) {
+  function selectNote(note, { focusTitle = false } = {}) {
     clearTimeout(autosaveTimer.current);
     setSelected(note);
     setTitle(note.title);
     setBody(note.body);
     setDirty(false);
-    setTimeout(() => bodyRef.current?.focus(), 0);
+    setTimeout(() => {
+      if (focusTitle) { titleRef.current?.focus(); titleRef.current?.select(); } else bodyRef.current?.focus();
+    }, 0);
+  }
+
+  // "Write a note" from the + chooser: make the note and open it with the cursor in the title.
+  async function startWrittenNote() {
+    keyboardRef.current?.focus(); // inside the tap, so a phone keeps its keyboard up while the note is made
+    setShowNewChooser(false);
+    const res = await api.post('/api/notes', { title: 'Untitled', body: '' });
+    const note = await res.json();
+    await loadNotes(search, filterProject);
+    selectNote(note, { focusTitle: true });
+    if (viewportMobile) setMobileListOpen(false);
   }
 
   async function createNote() {
@@ -283,7 +300,7 @@ export default function NotesPage() {
   function openGuideTool(id) {
     const tool = NOTES_TOOLS.find((t) => t.id === id);
     if (!tool) return;
-    if (tool.open === 'create') { createNote(); return; }
+    if (tool.open === 'chooser') { setShowNewChooser(true); return; }
     if (tool.open === 'recorder') { setShowRecorder(true); return; }
     if (tool.open === 'search' || tool.open === 'list') {
       if (viewportMobile) setMobileListOpen(true);
@@ -624,52 +641,21 @@ export default function NotesPage() {
                 {getIcon('x', { size: 14 })}
               </button>
             )}
-            {!viewportMobile ? (
-              <>
-                <button
-                  onClick={() => setShowRecorder(true)}
-                  className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60 transition-opacity"
-                  style={{ color: 'var(--color-primary)' }}
-                  title="New voice note (record your voice)"
-                  aria-label="New voice note"
-                >
-                  {getIcon('mic', { size: 15 })}
-                </button>
-                <button
-                  onClick={createNote}
-                  className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60 transition-opacity"
-                  style={{ color: 'var(--color-primary)' }}
-                  title="New note"
-                >
-                  {getIcon('plus', { size: 16 })}
-                </button>
-              </>
-            ) : null}
-          </div>
-        </div>
-
-        {viewportMobile && (
-          <div className="flex gap-2 px-3 py-2 border-b" style={{ borderColor: 'var(--color-border)' }}>
             <button
-              onClick={createNote}
-              className="flex-1 flex items-center justify-center gap-1.5 text-sm font-medium rounded-xl whitespace-nowrap transition-opacity hover:opacity-80"
-              style={{ minHeight: 44, background: 'var(--color-primary)', color: '#fff' }}
-              title="Write a new note"
+              onClick={() => setShowNewChooser(true)}
+              className={viewportMobile
+                ? 'flex items-center justify-center gap-1.5 text-sm font-medium px-3 rounded-lg transition-opacity hover:opacity-80'
+                : 'w-6 h-6 flex items-center justify-center rounded hover:opacity-60 transition-opacity'}
+              style={viewportMobile
+                ? { minHeight: 40, background: 'var(--color-primary)', color: '#fff' }
+                : { color: 'var(--color-primary)' }}
+              title="New note: write one or record your voice"
               aria-label="New note"
             >
-              {getIcon('plus', { size: 16 })} New note
-            </button>
-            <button
-              onClick={() => setShowRecorder(true)}
-              className="flex-1 flex items-center justify-center gap-1.5 text-sm font-medium rounded-xl whitespace-nowrap border transition-opacity hover:opacity-70"
-              style={{ minHeight: 44, color: 'var(--color-text)', borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
-              title="Record your voice and have it written into a new note"
-              aria-label="New voice note"
-            >
-              {getIcon('mic', { size: 16 })} Voice note
+              {getIcon('plus', { size: viewportMobile ? 18 : 16 })}{viewportMobile && ' New'}
             </button>
           </div>
-        )}
+        </div>
 
         {filterProject && (() => {
           const proj = projects.find(p => String(p.id) === String(filterProject));
@@ -946,6 +932,7 @@ export default function NotesPage() {
 
           {/* Title */}
           <input
+            ref={titleRef}
             value={title}
             onChange={handleTitleChange}
             onFocus={(e) => { if (title === 'Untitled') e.target.select(); }}
@@ -1309,6 +1296,20 @@ export default function NotesPage() {
         </div>
       )}
       {showRecorder && <VoiceNoteRecorder onClose={() => setShowRecorder(false)} onCreated={handleVoiceNote} />}
+      {viewportMobile && (
+        <input
+          ref={keyboardRef} aria-hidden="true" tabIndex={-1} readOnly={false}
+          style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 1, opacity: 0, border: 0, padding: 0, fontSize: 16, pointerEvents: 'none' }}
+        />
+      )}
+      {showNewChooser && (
+        <NewNoteChooser
+          mobile={viewportMobile}
+          onClose={() => setShowNewChooser(false)}
+          onWrite={startWrittenNote}
+          onVoice={() => { setShowNewChooser(false); setShowRecorder(true); }}
+        />
+      )}
       <NotesTutorChat currentTool="" onOpenTool={openGuideTool} />
     </div>
   );

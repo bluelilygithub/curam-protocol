@@ -18,7 +18,7 @@ const {
     assert.ok(t.group && t.does && t.label, `${t.id} is described`);
     assert.strictEqual(t.label, NOTES_TOOLS.find((n) => n.id === t.id).label, `${t.id} uses the page's own name`);
   }
-  assert.ok(NOTES_TOOLS.every((t) => ['create', 'recorder', 'search', 'editor', 'list'].includes(t.open)), 'every control says what Open does');
+  assert.ok(NOTES_TOOLS.every((t) => ['chooser', 'recorder', 'search', 'editor', 'list'].includes(t.open)), 'every control says what Open does');
 
   // ---- the voice-note facts the guide must not get wrong ----
   const voice = CATALOG.find((t) => t.id === 'new-voice-note');
@@ -30,19 +30,20 @@ const {
   assert.match(voice.notes, /small cost/);
   assert.match(voice.notes, /Try again button/);
   assert.match(CATALOG.find((t) => t.id === 'dictate').notes, /different from New voice note/);
+  assert.match(CATALOG.find((t) => t.id === 'new-note').does, /Write a note.*Record a voice note/s, 'the + chooser is described');
   assert.match(CATALOG.find((t) => t.id === 'new-note').does, /Type button at the bottom/, 'the phone layout is described');
   assert.match(CATALOG.find((t) => t.id === 'dictate').does, /Dictate button at the bottom/);
   const gaps = NOT_POSSIBLE.join(' ');
   for (const needle of [/Replaying a voice recording/, /who said what by name/, /Zoom, Teams/, /about an hour/, /legal or evidential/, /Folders, tags or sharing/, /Restoring a deleted note/]) assert.match(gaps, needle);
-  assert.match(RULES.join(' '), /Open buttons .* never change or delete an existing note/);
+  assert.match(RULES.join(' '), /Open buttons .* never create, change or delete a note/);
   assert.match(RULES.join(' '), /two|microphone buttons/);
 
   // ---- safety rules are in the instructions ----
   assert.match(SYSTEM, /cannot see any of this person's notes/);
   assert.match(SYSTEM, /ONLY the tools and rules/);
   assert.match(SYSTEM, /Never invent a button/i);
-  assert.match(SYSTEM, /New voice note \(beside \+\) records/);
-  assert.match(SYSTEM, /Dictate \(in the editor\) types live/);
+  assert.match(SYSTEM, /Record a voice note \(choose it after pressing \+\) records/);
+  assert.match(SYSTEM, /Dictate \(in an open note\) types live/);
 
   // ---- the prompt carries every tool, the rules, the gaps, the conversation ----
   const prompt = buildTutorPrompt({ messages: [{ role: 'user', content: 'record my voice' }], currentTool: 'dictate' });
