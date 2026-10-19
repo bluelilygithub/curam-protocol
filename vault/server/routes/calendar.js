@@ -192,6 +192,45 @@ router.get('/search', calendarSearchLimiter, async (req, res) => {
   }
 });
 
+// GET /api/calendar/upcoming - Home's Calendar tile: events from now to 48 hours ahead.
+// Never an error to the page: not connected or a Google failure just means no tile.
+// Cached for 2 minutes per person so reloading Home does not call Google every time.
+const upcomingCache = new Map();
+router.get('/upcoming', async (req, res) => {
+  const hit = upcomingCache.get(req.user.id);
+  if (hit && Date.now() - hit.at < 2 * 60 * 1000) return res.json(hit.body);
+  let body = { connected: false, events: [] };
+  try {
+    const calendar = await getCalendarClient(req.user.id);
+    const now = new Date();
+    const response = await calendar.events.list({
+      calendarId: 'primary',
+      timeMin: now.toISOString(),
+      timeMax: new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 10,
+    });
+    body = {
+      connected: true,
+      events: (response.data.items || [])
+        .filter((e) => e.status !== 'cancelled')
+        .map((e) => ({
+          id: e.id,
+          title: e.summary || '(untitled)',
+          start: e.start?.dateTime || e.start?.date || null,
+          allDay: !e.start?.dateTime,
+          location: e.location || null,
+          htmlLink: e.htmlLink || null,
+        })),
+    };
+  } catch (err) {
+    console.error('[calendar] upcoming error:', err.message);
+  }
+  upcomingCache.set(req.user.id, { at: Date.now(), body });
+  res.json(body);
+});
+
 // GET /api/calendar/event/:eventId
 router.get('/event/:eventId', async (req, res) => {
   try {

@@ -144,6 +144,54 @@ function OverviewWidget() {
   );
 }
 
+function CalendarWidget() {
+  const [events, setEvents] = useState([]);
+
+  useEffect(() => {
+    api.get('/api/calendar/upcoming')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => setEvents(Array.isArray(data?.events) ? data.events : []))
+      .catch(() => setEvents([]));
+  }, []);
+
+  if (events.length === 0) return null;
+
+  const dayKey = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  const todayKey = dayKey(new Date());
+  const startOf = (e) => (e.allDay ? new Date(`${e.start}T00:00:00`) : new Date(e.start));
+  const groups = [
+    { label: 'Today', items: events.filter((e) => dayKey(startOf(e)) === todayKey) },
+    { label: 'Tomorrow', items: events.filter((e) => dayKey(startOf(e)) !== todayKey) },
+  ].filter((g) => g.items.length > 0);
+
+  return (
+    <div className="mb-6 rounded-2xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+      <div className="text-xs font-semibold mb-2" style={{ color: 'var(--color-muted)' }}>Calendar</div>
+      {groups.map((g) => (
+        <div key={g.label} className="mb-2 last:mb-0">
+          <div className="text-xs font-semibold mb-1" style={{ color: 'var(--color-text)' }}>{g.label}</div>
+          {g.items.map((e) => (
+            <a
+              key={e.id}
+              href={e.htmlLink || undefined}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-baseline gap-3 py-0.5 text-xs transition-opacity hover:opacity-70"
+              style={{ color: 'var(--color-text)' }}
+            >
+              <span className="w-16 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>
+                {e.allDay ? 'All day' : startOf(e).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })}
+              </span>
+              <span className="truncate">{e.title}</span>
+              {e.location && <span className="truncate" style={{ color: 'var(--color-muted)' }}>{e.location}</span>}
+            </a>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function GoalsWidget({ enabled = true }) {
   const getIcon = useIcon();
   const [dashboard, setDashboard] = useState(null);
@@ -956,6 +1004,7 @@ function ProjectList() {
             </div>
 
             <AttentionWidget />
+            <CalendarWidget />
             <OverviewWidget />
 
             {continueSection}
