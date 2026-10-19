@@ -15,13 +15,19 @@
 
 const fs = require('fs');
 const { checkSsrf } = require('../htmlFetch');
+const { BLOCKED_TITLE, titleOfHtml } = require('./pageFetch');
 
 const RENDER_TIMEOUT_MS = 30000;
 const SETTLE_TIMEOUT_MS = 8000;
 const MAX_HTML_CHARS = 5 * 1024 * 1024;
 const MAX_QUEUED = 2;
 const BLOCKED_TYPES = new Set(['media', 'font']);
-const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
+// Who the browser says it is, in order: a site's firewall may turn away one and let another through.
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0',
+  'Mozilla/5.0 (compatible; VaultCSSTool/1.0)',
+];
 
 let availableCache = null;
 let running = 0;
@@ -54,22 +60,13 @@ async function takeSlot() {
   running = 1;
 }
 
-/**
- * @param {string} url  an http(s) address already normalised by the caller
- * @returns {Promise<{html:string, finalUrl:string}>}
- */
-async function renderPage(url) {
-  if (!renderAvailable()) throw new Error('Loading pages that build themselves with JavaScript is not set up on this server.');
-  await takeSlot();
-  let browser = null;
+/** Opens the page once as one identity. Returns what came back, including the status of the page itself. */
+async function renderOnce(browser, userAgent, url) {
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 900 }, locale: 'en-AU', userAgent,
+    acceptDownloads: false, serviceWorkers: 'block', javaScriptEnabled: true,
+  });
   try {
-    const { chromium } = loadPlaywright();
-    browser = await chromium.launch({ headless: true, args: ['--disable-dev-shm-usage'] });
-    const context = await browser.newContext({
-      viewport: { width: 1280, height: 900 }, locale: 'en-AU', userAgent: USER_AGENT,
-      acceptDownloads: false, serviceWorkers: 'block', javaScriptEnabled: true,
-    });
-
     // Every request is checked; the verdict for a host is remembered for this render only.
     const verdicts = new Map();
     const hostAllowed = async (hostname) => {
@@ -87,7 +84,9 @@ async function renderPage(url) {
     });
 
     const page = await context.newPage();
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: RENDER_TIMEOUT_MS });
+    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: RENDER_TIMEOUT_MS });
+    const status = response ? response.status() : 0;
+    if (status >= 400) return { status, html: '', finalUrl: page.url() };
     await page.waitForLoadState('networkidle', { timeout: SETTLE_TIMEOUT_MS }).catch(() => {});
     // Wake up pictures that load as you scroll, then come back to the top.
     await page.evaluate(() => { window.scrollTo(0, document.body ? document.body.scrollHeight : 0); }).catch(() => {});
@@ -101,10 +100,33 @@ async function renderPage(url) {
         try { node.textContent = Array.from(sheet.cssRules).map((r) => r.cssText).join('\n'); } catch { /* cross-origin sheet: has a link, handled separately */ }
       });
     }).catch(() => {});
+    return { status, html: await page.content(), finalUrl: page.url() };
+  } finally {
+    await context.close().catch(() => {});
+  }
+}
 
-    const html = await page.content();
-    if (html.length > MAX_HTML_CHARS) throw new Error('That page is too large to load.');
-    return { html, finalUrl: page.url() };
+/**
+ * @param {string} url  an http(s) address already normalised by the caller
+ * @returns {Promise<{html:string, finalUrl:string}>}
+ */
+async function renderPage(url) {
+  if (!renderAvailable()) throw new Error('Loading pages that build themselves with JavaScript is not set up on this server.');
+  await takeSlot();
+  let browser = null;
+  try {
+    const { chromium } = loadPlaywright();
+    browser = await chromium.launch({ headless: true, args: ['--disable-dev-shm-usage'] });
+    let lastStatus = 0;
+    for (const userAgent of USER_AGENTS) {
+      const out = await renderOnce(browser, userAgent, url);
+      lastStatus = out.status || lastStatus;
+      // refused, or sent to a "robot challenge" page: the next identity may be let in
+      if (out.status >= 400 || BLOCKED_TITLE.test(titleOfHtml(out.html))) { lastStatus = lastStatus || 403; continue; }
+      if (out.html.length > MAX_HTML_CHARS) throw new Error('That page is too large to load.');
+      return { html: out.html, finalUrl: out.finalUrl };
+    }
+    throw new Error(`Server returned ${lastStatus || 403}`);
   } finally {
     if (browser) await browser.close().catch(() => {});
     running = 0;

@@ -94,6 +94,8 @@
     "test:restyle-history": "node server/services/restyle/restyleHistory.test.js",
     "test:restyle-scrape": "node server/services/restyle/restyleScrape.test.js",
     "test:restyle-scrape-model": "node server/services/restyle/restyleScrapeModel.test.js",
+    "test:restyle-fetch": "node server/services/restyle/restyleFetch.test.js",
+    "test:restyle-source": "node server/services/restyle/restyleSource.test.js",
     "test:restyle-edits": "node server/services/restyle/restyleEdits.test.js",
     "e2e:restyle": "node scripts/e2e-restyle.mjs",
     "e2e:tool-pages": "node scripts/e2e-tool-pages.mjs",

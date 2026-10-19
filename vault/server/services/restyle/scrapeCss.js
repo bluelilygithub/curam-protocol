@@ -9,7 +9,7 @@
 // the page in the headless browser first (renderPage.js) for pages built by script. Test: node server/services/restyle/restyleScrape.test.js
 
 const { JSDOM, VirtualConsole } = require('jsdom');
-const { fetchHtml } = require('../htmlFetch');
+const { createPageFetcher } = require('./pageFetch');
 const { rewriteCssUrls } = require('../webExtractorService');
 const { getPageHtml, sheetName } = require('./loadFromUrl');
 const { summariseCss } = require('./cssSettings');
@@ -27,8 +27,8 @@ const IMPORT_RE = /@import\s+(?:url\(\s*)?(['"]?)([^'")\s;]+)\1\s*\)?[^;]*;/gi;
  * @param {{fetchHtml?: Function, render?: Function}} [deps]  replaced in tests
  */
 async function scrapePageCss(rawUrl, opts = {}, deps = {}) {
-  const doFetch = deps.fetchHtml || fetchHtml;
-  const { raw, finalUrl, rendered, url } = await getPageHtml(rawUrl, opts, deps);
+  const doFetch = deps.fetchHtml || createPageFetcher();
+  const { raw, finalUrl, rendered, url } = await getPageHtml(rawUrl, opts, { ...deps, fetchHtml: doFetch });
   const doc = new JSDOM(raw, { url: finalUrl, virtualConsole: new VirtualConsole() }).window.document;
 
   const flags = [];
@@ -55,7 +55,7 @@ async function scrapePageCss(rawUrl, opts = {}, deps = {}) {
     if (seen.has(fileUrl)) return null;
     seen.add(fileUrl);
     try {
-      const { body, statusCode } = await doFetch(fileUrl);
+      const { body, statusCode } = await doFetch(fileUrl, { asset: true });
       if (statusCode >= 400) throw new Error('bad status');
       const text = String(body);
       if (text.length > MAX_FILE_CHARS) { tooBig += 1; return null; }

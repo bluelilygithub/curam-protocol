@@ -77,7 +77,7 @@ function altHostUrl(url) {
   }
 }
 
-function fetchOnce(url, redirectsLeft, timeoutMs, extraHeaders, cookies) {
+function fetchOnce(url, redirectsLeft, timeoutMs, extraHeaders, cookies, baseHeaders = CHROME_HEADERS) {
   return new Promise((resolve, reject) => {
     if (redirectsLeft === 0) return reject(new Error('Too many redirects'));
     let parsed;
@@ -95,7 +95,7 @@ function fetchOnce(url, redirectsLeft, timeoutMs, extraHeaders, cookies) {
         path: parsed.pathname + parsed.search,
         method: 'GET',
         headers: {
-          ...CHROME_HEADERS,
+          ...baseHeaders,
           ...extraHeaders,
           ...(cookie ? { Cookie: cookie } : {}),
         },
@@ -109,14 +109,14 @@ function fetchOnce(url, redirectsLeft, timeoutMs, extraHeaders, cookies) {
         if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
           const next = new URL(res.headers.location, url).toString();
           const hop = { from: url, to: next, status: res.statusCode };
-          return resolve(fetchOnce(next, redirectsLeft - 1, timeoutMs, extraHeaders, jar).then((r) => ({
+          return resolve(fetchOnce(next, redirectsLeft - 1, timeoutMs, extraHeaders, jar, baseHeaders).then((r) => ({
             ...r,
             redirectChain: [hop, ...(r.redirectChain || [])],
           })));
         }
         if (res.statusCode === 202 && res.headers.location) {
           const next = new URL(res.headers.location, url).toString();
-          return resolve(fetchOnce(next, redirectsLeft - 1, timeoutMs, extraHeaders, jar));
+          return resolve(fetchOnce(next, redirectsLeft - 1, timeoutMs, extraHeaders, jar, baseHeaders));
         }
         const chunks = [];
         let bytesReceived = 0;
@@ -545,6 +545,8 @@ async function fetchDirect(url, redirectsLeft = 5, timeoutMs = 12000) {
 
 module.exports = {
   fetchHtml,
+  fetchOnce,
+  CHROME_HEADERS,
   fetchDirect,
   extractTitle,
   htmlToText,

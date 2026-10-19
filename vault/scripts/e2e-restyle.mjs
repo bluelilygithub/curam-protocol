@@ -45,7 +45,8 @@ const base = `http://127.0.0.1:${server.address().port}`;
 // ---- the mocked API ----
 const PAGE_BODY = '<header class="top"><h1>Acme</h1></header><main><p class="intro">Hello there, this is the intro text.</p><div class="card"><h2>Feature card</h2><p>Some words in the card.</p><a class="button" href="#">Learn more</a></div><ul class="menu"><li><a href="#">One</a></li><li><a href="#">Two</a></li></ul></main>';
 const PAGE_CSS = 'body{margin:0;font-family:sans-serif}.card{background:#f5f5f0;padding:20px}.card h2{font-size:20px;color:#bbbbbb}.button{display:inline-block;background:#cc785c;color:#ffffff;padding:8px 16px}.button:hover{background:#b3452c}@media (max-width:480px){.card{padding:8px}}';
-const prepared = (extra = {}) => ({ html: '', headInnerHTML: '<meta charset="utf-8">', bodyInnerHTML: PAGE_BODY, cssFiles: [], changeLog: [], flags: [], ...extra });
+const PAGE_RAW = `<!DOCTYPE html><html><head><title>Acme</title><script>boot()</script><link rel="stylesheet" href="/main.css"></head><body>${PAGE_BODY}<script>track()</script></body></html>`;
+const prepared = (extra = {}) => ({ html: '', headInnerHTML: '<meta charset="utf-8">', bodyInnerHTML: PAGE_BODY, cssFiles: [], changeLog: [], flags: [], rawHtml: PAGE_RAW, rawTruncated: false, ...extra });
 const SCRAPE = {
   url: 'https://example.com/', finalUrl: 'https://example.com/', rendered: false, title: 'Example Shop',
   files: [
@@ -249,6 +250,40 @@ try {
   check((await page.getByRole('button', { name: 'Back to the start' }).isDisabled()), 'and there is nowhere further back');
   await forwards.first().click();
   check(/font-size: 40px !important/.test(await editCss()) && /--brand-colour/.test(await editCss()), 'Go forward to here brings it all back');
+
+  // ---- HTML source ----
+  await openTool('HTML source');
+  const code = page.locator('pre[data-source-view]');
+  await code.waitFor({ timeout: 5000 });
+  check((await page.getByRole('button', { name: 'As fetched' }).isEnabled()) && (await page.getByRole('button', { name: 'Cleaned page' }).isEnabled()), 'the source tool offers the page as fetched and as cleaned');
+  await page.getByRole('button', { name: 'As fetched' }).click();
+  let src = await code.innerText();
+  check(/boot\(\)/.test(src) && /track\(\)/.test(src) && /href="\/main\.css"/.test(src), 'As fetched is exactly what the website sent, scripts and all');
+  check(/\n\s{2,}<div class="card">/.test(src) && src.split('\n').length > 15, 'the HTML is laid out one tag to a line and indented, not one long line');
+  await page.getByRole('button', { name: 'Cleaned page' }).click();
+  src = await code.innerText();
+  check(!/boot\(\)|track\(\)/.test(src) && /<div class="card">/.test(src), 'Cleaned page has no scripts');
+  await page.getByRole('button', { name: 'With your changes' }).click();
+  src = await code.innerText();
+  check(/<style id="restyle-edits">/.test(src) && /font-size:/.test(src) && !/data-restyle-selected|restyle-outline-css/.test(src), 'With your changes has the CSS built in and none of the editor\'s helpers');
+  await page.getByRole('button', { name: 'Your changes (CSS)' }).click();
+  check(/!important/.test(await code.innerText()), 'Your changes (CSS) is the CSS made from the changes');
+  await page.getByRole('button', { name: 'Page CSS' }).click();
+  check(/\.card h2 \{/.test(await code.innerText()), 'Page CSS is laid out one setting to a line');
+  await page.getByRole('button', { name: 'Cleaned page' }).click();
+  const allLines = (await code.innerText()).split('\n').length;
+  await page.getByRole('textbox', { name: 'Filter the source' }).fill('Feature card');
+  const some = await code.innerText();
+  check(some.split('\n').length < allLines && /Feature card/.test(some), 'the filter keeps only the lines that mention it');
+  check(/^\s*\d{1,3}\s/.test(some.trim()) && !/^\s*1\s/.test(some.trim()), 'and keeps their line numbers from the whole source');
+  await page.getByRole('textbox', { name: 'Filter the source' }).fill('no-such-words-anywhere');
+  check((await page.getByText('No line contains').count()) === 1, 'a filter with no match says so');
+  await page.getByRole('textbox', { name: 'Filter the source' }).fill('');
+  const [srcDownload] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download .html' }).click()]);
+  check(/-cleaned\.html$/.test(srcDownload.suggestedFilename()), `Download saves the view you are reading (${srcDownload.suggestedFilename()})`);
+  check((await previewFrame().evaluate(() => !!document.querySelector('.card h2'))), 'the preview stays loaded behind the source view');
+  await openTool('Box');
+  check((await page.locator('iframe[title="Live preview"]').isVisible()), 'and comes back when you leave it');
 
   // ---- accessibility checks ----
   await openTool('Accessibility checks');

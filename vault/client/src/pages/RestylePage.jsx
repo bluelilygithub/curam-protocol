@@ -23,6 +23,8 @@ import {
 } from './restyle/RestylePanels';
 import { AskPanel, ScopePanel, ScopePicker, TextPanel, EnhancePanel, AnimationPanel, BoxPanel } from './restyle/PropertyPanels';
 import { SessionHistoryPanel, ScrapePanel } from './restyle/SessionAndScrapePanels';
+import SourceViewer from './restyle/SourceViewer';
+import { formatHtml, formatCss } from './restyle/sourceView.mjs';
 
 // CSS tool (displayed as "CSS"; the internal feature key, route and files still say "restyle"). The job: restyle a page you already have,
 // without writing code, then take the CSS away and paste it into the real site. See docs/restyle.md.
@@ -74,6 +76,9 @@ export default function RestylePage() {
   const [htmlStatus, setHtmlStatus] = useState({ text: '', kind: '' });
   const [loadingAddress, setLoadingAddress] = useState(false);
   const [sourceUrl, setSourceUrl] = useState('');
+  const [sourceRaw, setSourceRaw] = useState(null); // the page exactly as it came in: { text, truncated }
+  const [source, setSource] = useState({ view: 'clean', query: '', wrap: false });
+  const [previewVersion, setPreviewVersion] = useState(0); // goes up each time the preview is built, so the source view re-reads the page's CSS
   const [cssEntries, setCssEntries] = useState([]); // { id, filename, css, source }
   const cssIdRef = useRef(0);
   const mergedCssRef = useRef('');
@@ -284,6 +289,7 @@ export default function RestylePage() {
     };
     frame.srcdoc = doc;
     setPreviewBuilt(true);
+    setPreviewVersion((v) => v + 1);
   }, [attachIframeInteractivity, resetSelection, syncEditStyle]);
 
   // Accepts an explicit entries list so a loader can build a preview straight away, without waiting for a re-render.
@@ -330,6 +336,7 @@ export default function RestylePage() {
     sanitizedRef.current = { head: data.headInnerHTML, body: data.bodyInnerHTML };
     setHtmlLoaded(true);
     setSourceUrl(url);
+    setSourceRaw(typeof data.rawHtml === 'string' ? { text: data.rawHtml, truncated: !!data.rawTruncated } : null);
     setFlags(data.flags?.length ? data.flags : []);
     const files = (data.cssFiles || []).map((f) => ({ id: ++cssIdRef.current, filename: f.filename, css: f.css, source: 'paste' }));
     const nextEntries = replaceCss ? files : null;
@@ -651,19 +658,49 @@ export default function RestylePage() {
   const copyText = async (text, done) => {
     try { await navigator.clipboard.writeText(text); addToast(done); } catch { addToast('Could not copy', 'error'); }
   };
-  const downloadPage = () => {
+  /** The whole page with the changes built in, as a file: the editor's own helpers are taken out. */
+  const buildExportHtml = () => {
     const idoc = iframeRef.current?.contentDocument;
-    if (!idoc) return;
+    if (!idoc) return '';
     const clone = idoc.cloneNode(true);
     clone.querySelectorAll('[data-restyle-hover],[data-restyle-selected],[data-restyle-scope-preview],[data-restyle-force-hover],[data-restyle-force-focus]').forEach((n) => {
-      ['data-restyle-hover', 'data-restyle-selected', 'data-restyle-scope-preview', 'data-restyle-force-hover', 'data-restyle-force-focus'].forEach((a) => n.removeAttribute(a));
+      ['data-restyle-hover', 'data-restyle-selected', 'data-restyle-scope-preview', 'data-restyle-force-hover', 'data-restyle-force-focus'].forEach((attr) => n.removeAttribute(attr));
     });
     clone.getElementById('restyle-outline-css')?.remove();
     const editTag = clone.getElementById('restyle-edits');
     if (editTag) editTag.textContent = exportCss;
-    saveFile(`<!DOCTYPE html>\n${clone.documentElement.outerHTML}`, `${fileSlug}-restyled.html`, 'text/html');
+    return `<!DOCTYPE html>\n${clone.documentElement.outerHTML}`;
+  };
+  const downloadPage = () => {
+    const html = buildExportHtml();
+    if (html) saveFile(html, `${fileSlug}-restyled.html`, 'text/html');
   };
   const downloadReport = () => saveFile(changeReport(edits, tokens, { title: pageName, sourceUrl, important }), `${fileSlug}-changes.md`, 'text/markdown');
+
+  // ---------- HTML source ----------
+  const sourceViews = [
+    { id: 'raw', label: 'As fetched', tip: 'The page exactly as it came in: for a live page, as the website sent it, before anything was cleaned.', available: !!sourceRaw },
+    { id: 'clean', label: 'Cleaned page', tip: 'The page the editor works on: scripts and anything that could run code removed.', available: htmlLoaded },
+    { id: 'changed', label: 'With your changes', tip: 'The page with your CSS built in, as it would download.', available: previewBuilt },
+    { id: 'css', label: 'Page CSS', tip: 'All the page\'s style files joined, as the preview uses them.', available: previewBuilt },
+    { id: 'edits', label: 'Your changes (CSS)', tip: 'Only the CSS made from your changes.', available: previewBuilt },
+  ];
+  const sourceActive = (sourceViews.find((v) => v.id === source.view && v.available) || sourceViews.find((v) => v.available) || sourceViews[1]).id;
+  const sourceText = useMemo(() => {
+    if (tool !== 'source') return '';
+    switch (sourceActive) {
+      case 'raw': return sourceRaw ? formatHtml(sourceRaw.text) : '';
+      case 'clean': return htmlLoaded ? formatHtml(`<!DOCTYPE html><html><head>${sanitizedRef.current.head}</head><body>${sanitizedRef.current.body}</body></html>`) : '';
+      case 'changed': return previewBuilt ? formatHtml(buildExportHtml()) : '';
+      case 'css': return previewBuilt ? formatCss(mergedCssRef.current) : '';
+      case 'edits': return previewBuilt ? exportCss : '';
+      default: return '';
+    }
+  // buildExportHtml reads the preview itself; the lists below are what make it change
+  }, [tool, sourceActive, sourceRaw, htmlLoaded, previewBuilt, previewVersion, edits, tokens, important, exportCss]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sourceNote = sourceActive === 'raw' && sourceRaw?.truncated ? 'This page is very large: only the first 2 MB is shown here.'
+    : (sourceActive === 'raw' && !sourceRaw ? 'The original is not kept with saved pages. Load the page again to see it.' : '');
+  const sourceFile = { raw: ['source.html', 'text/html'], clean: ['cleaned.html', 'text/html'], changed: ['restyled.html', 'text/html'], css: ['page.css', 'text/css'], edits: ['changes.css', 'text/css'] }[sourceActive];
 
   // ---------- Saved pages, history and sharing ----------
   const loadSavedList = useCallback(() => {
@@ -710,6 +747,7 @@ export default function RestylePage() {
     sanitizedRef.current = { head: saved.head || '', body: saved.body || '' };
     setHtmlLoaded(true);
     setSourceUrl(saved.sourceUrl || '');
+    setSourceRaw(null); // a saved page keeps the cleaned page, not the page as it first came in
     setHtmlStatus({ text: 'Loaded from your saved pages.', kind: 'ok' });
     const entries = Array.isArray(project.cssEntries) ? project.cssEntries : [];
     cssIdRef.current = Math.max(cssIdRef.current, ...entries.map((e) => e.id || 0)) + 1;
@@ -846,6 +884,8 @@ export default function RestylePage() {
         return <PagePanel onFile={(file) => submitHtml({ file })} onPaste={(html) => submitHtml({ html })} onAddress={loadAddress} status={htmlStatus} busy={loadingAddress} renderAvailable={renderAvailable} sourceUrl={sourceUrl} />;
       case 'styles':
         return <StylesPanel entries={cssEntries} onAddFiles={addCssFiles} onAddPaste={addCssPaste} onMove={moveCssEntry} onRemove={removeCssEntry} htmlLoaded={htmlLoaded} onBuild={() => runBuildPreview(cssEntries)} status={cssStatus} flags={flags} />;
+      case 'source':
+        return <p className="text-sm" style={{ color: 'var(--color-muted)' }}>The source fills this space. Choose which version to read along the top.</p>;
       case 'scrape':
         return (
           <ScrapePanel
@@ -944,7 +984,15 @@ export default function RestylePage() {
             </div>
           </div>
 
-          <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
+          {tool === 'source' && (
+            <SourceViewer
+              views={sourceViews} active={sourceActive} onActive={(view) => setSource((st) => ({ ...st, view }))} text={sourceText} note={sourceNote}
+              query={source.query} onQuery={(query) => setSource((st) => ({ ...st, query }))} wrap={source.wrap} onWrap={(wrap) => setSource((st) => ({ ...st, wrap }))}
+              onCopy={() => copyText(sourceText, 'Copied the source')} onDownload={() => saveFile(sourceText, `${fileSlug}-${sourceFile[0]}`, sourceFile[1])} downloadLabel={`Download .${sourceFile[0].split('.').pop()}`}
+              empty={htmlLoaded ? 'Nothing to show for this one yet.' : 'Load a page first (Your page), then read its source here.'}
+            />
+          )}
+          <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0" style={tool === 'source' ? { display: 'none' } : undefined}>
             <div className="lg:w-80 shrink-0 rounded-xl border p-4 overflow-y-auto" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', maxHeight: 'calc(100dvh - 11rem)' }}>
               {renderPanel()}
             </div>

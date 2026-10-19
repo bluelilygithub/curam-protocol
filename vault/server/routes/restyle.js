@@ -50,7 +50,8 @@ function extOf(filename) {
  * as style files, the pictures inlined (see below) and a short plain-English log and list of things worth a look. `linkedCss` are style
  * files fetched from a live page's <link> tags; they come first in the cascade, then the page's own embedded styles, as on the real page.
  */
-async function prepareHtml(rawHtml, { linkedCss = [], extraFlags = [], extraLog = [] } = {}) {
+const MAX_SOURCE_CHARS = 2 * 1024 * 1024; // the HTML source sent back for the source view
+async function prepareHtml(rawHtml, { linkedCss = [], extraFlags = [], extraLog = [], sourceHtml } = {}) {
   const { html, bodyInnerHTML, headInnerHTML, embeddedCss } = sanitizeHtml(rawHtml);
 
   // The preview iframe can't load remote images directly — Vault's own Content-Security-Policy
@@ -82,7 +83,12 @@ async function prepareHtml(rawHtml, { linkedCss = [], extraFlags = [], extraLog 
   const flags = [...extraFlags];
   if (failedCount > 0) flags.push(`${failedCount} image${failedCount === 1 ? '' : 's'} in your page couldn't be loaded (the link may be broken, blocked, or the file too large) — ${failedCount === 1 ? 'it' : 'they'} may not show up in the preview.`);
 
-  return { html, bodyInnerHTML: bodyResult.html, headInnerHTML: headResult.html, cssFiles, changeLog, flags };
+  // The page as it came in (for a live page: as the website sent it), so it can be read in the source view.
+  const original = String(sourceHtml == null ? rawHtml : sourceHtml);
+  return {
+    html, bodyInnerHTML: bodyResult.html, headInnerHTML: headResult.html, cssFiles, changeLog, flags,
+    rawHtml: original.length > MAX_SOURCE_CHARS ? original.slice(0, MAX_SOURCE_CHARS) : original, rawTruncated: original.length > MAX_SOURCE_CHARS,
+  };
 }
 
 // Server-side extension check — the accept="" attribute on the client is only a UX hint,
@@ -137,6 +143,7 @@ function describeLoadError(err) {
   if (/private|DNS|Invalid URL|Only http/i.test(m)) return { status: 400, error: 'That address cannot be loaded. Check it is a public web address starting with http:// or https://.' };
   if (/busy/i.test(m)) return { status: 503, error: m };
   if (/not set up|too large/i.test(m)) return { status: 400, error: m };
+  if (/Server returned (202|401|403|406|429)/i.test(m)) return { status: 502, error: 'That website refused to give us the page (it turns away automatic visitors). If you have the page, open it in your browser, choose File, Save page as, and upload the .html file here instead. The "builds itself with JavaScript" option opens it in a real browser and sometimes gets in.' };
   const code = m.match(/Server returned (\d+)/i);
   if (code) return { status: 502, error: `The website answered with an error (${code[1]}), so the page could not be loaded.` };
   return { status: 502, error: "We couldn't open that page. It may be down, blocking automatic visitors, or taking too long." };
@@ -171,6 +178,7 @@ router.post('/fetch-url', urlLimiter, async (req, res) => {
   try {
     const loaded = await loadPageFromUrl(url.trim(), { render: !!render });
     const prepared = await prepareHtml(loaded.html, {
+      sourceHtml: loaded.rawHtml,
       linkedCss: loaded.cssFiles,
       extraFlags: loaded.flags,
       extraLog: [`Loaded ${loaded.finalUrl}${loaded.rendered ? ' in a browser (its scripts ran first)' : ''}.`],

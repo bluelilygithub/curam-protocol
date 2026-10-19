@@ -92,6 +92,8 @@ const { renderAvailable } = require('./renderPage');
   const loaded = await loadPageFromUrl('https://example.com/shop/', {}, { fetchHtml: fakeFetch });
   assert.strictEqual(loaded.finalUrl, 'https://example.com/shop/');
   assert.strictEqual(loaded.rendered, false);
+  assert.ok(loaded.rawHtml.includes('<script>boot()</script>') && loaded.rawHtml.includes('href="/css/main.css"'), 'the page is also returned exactly as it came, for the source view');
+  assert.ok(!loaded.html.includes('boot()'), 'while the working copy has no scripts');
   assert.ok(!/<script/i.test(loaded.html) && !/rel="stylesheet"/i.test(loaded.html), 'scripts and the linked sheets are taken out of the page');
   assert.match(loaded.html, /src="https:\/\/example\.com\/logo\.png"/, 'addresses are made complete');
   assert.match(loaded.html, /href="https:\/\/example\.com\/shop\/about"/);

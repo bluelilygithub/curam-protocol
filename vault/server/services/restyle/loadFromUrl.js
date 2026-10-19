@@ -10,7 +10,8 @@
 
 const path = require('path');
 const { JSDOM, VirtualConsole } = require('jsdom');
-const { fetchHtml, normaliseHttpUrl } = require('../htmlFetch');
+const { normaliseHttpUrl } = require('../htmlFetch');
+const { createPageFetcher } = require('./pageFetch');
 const { extractStyled, rewriteCssUrls } = require('../webExtractorService');
 
 const MAX_SHEETS = 12;
@@ -38,28 +39,30 @@ function applyMedia(css, media) {
  * @returns {Promise<{raw:string, finalUrl:string, rendered:boolean, url:string}>}
  */
 async function getPageHtml(rawUrl, opts = {}, deps = {}) {
-  const doFetch = deps.fetchHtml || fetchHtml;
+  const doFetch = deps.fetchHtml || createPageFetcher();
   const url = normaliseHttpUrl(rawUrl);
   if (opts.render) {
     const render = deps.render || require('./renderPage').renderPage;
     const out = await render(url);
     return { raw: out.html, finalUrl: out.finalUrl || url, rendered: true, url };
   }
-  const { body, statusCode } = await doFetch(url);
+  const { body, statusCode, finalUrl } = await doFetch(url);
   if (statusCode >= 400) throw new Error(`Server returned ${statusCode}`);
-  return { raw: body, finalUrl: url, rendered: false, url };
+  // After redirects: relative addresses in the page are relative to where it ended up, which can be another site.
+  return { raw: body, finalUrl: finalUrl || url, rendered: false, url };
 }
 
 /**
  * @param {string} rawUrl
  * @param {{render?: boolean}} [opts]
  * @param {{fetchHtml?: Function, render?: Function}} [deps]  replaced in tests
- * @returns {Promise<{html:string, cssFiles:Array<{filename:string, css:string}>, flags:string[], finalUrl:string, rendered:boolean}>}
+ * @returns {Promise<{html:string, rawHtml:string, cssFiles:Array<{filename:string, css:string}>, flags:string[], finalUrl:string, rendered:boolean}>}
  */
 async function loadPageFromUrl(rawUrl, opts = {}, deps = {}) {
-  const doFetch = deps.fetchHtml || fetchHtml;
+  // One fetcher for the page and its style files: the identity that got the page is the one the style files are asked for with.
+  const doFetch = deps.fetchHtml || createPageFetcher();
   const flags = [];
-  const { raw, finalUrl, rendered } = await getPageHtml(rawUrl, opts, deps);
+  const { raw, finalUrl, rendered } = await getPageHtml(rawUrl, opts, { ...deps, fetchHtml: doFetch });
 
   // Every address in the page made complete, scripts removed (the same step Web Extractor's "Exact scrape" uses).
   const absolute = extractStyled(raw, finalUrl).html;
@@ -82,7 +85,7 @@ async function loadPageFromUrl(rawUrl, opts = {}, deps = {}) {
     while (next < wanted.length) {
       const i = next++;
       try {
-        const { body, statusCode } = await doFetch(wanted[i].href);
+        const { body, statusCode } = await doFetch(wanted[i].href, { asset: true });
         if (statusCode >= 400 || String(body).length > MAX_SHEET_CHARS) throw new Error('unusable');
         if (/@import/i.test(body)) imports += (body.match(/@import/gi) || []).length;
         const css = applyMedia(rewriteCssUrls(String(body), wanted[i].href), wanted[i].media);
@@ -96,7 +99,8 @@ async function loadPageFromUrl(rawUrl, opts = {}, deps = {}) {
   if (imports) flags.push('Some style files pull in other style files, which are not loaded. If the preview looks wrong, add those files yourself.');
   if (rendered) flags.push('This page was loaded in a browser that ran its scripts first. The preview is a still copy: scripts do not run in it.');
 
-  return { html, cssFiles: results.filter(Boolean), flags, finalUrl, rendered };
+  // `rawHtml` is the page exactly as it came back (before addresses were made complete and scripts removed), for the source view.
+  return { html, rawHtml: raw, cssFiles: results.filter(Boolean), flags, finalUrl, rendered };
 }
 
 module.exports = { loadPageFromUrl, getPageHtml, applyMedia, sheetName };

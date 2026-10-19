@@ -8,8 +8,43 @@ const { pinnedLookup } = require('../utils/safeFetch');
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
-/** Binary-safe fetch for images — htmlFetch's fetchHtml decodes everything as utf8 text. */
-function fetchBinary(url, redirectsLeft = 5, timeoutMs = 15000) {
+const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
+const FIREFOX_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0';
+const IMAGE_ACCEPT = 'image/avif,image/webp,image/*,*/*;q=0.8';
+
+// Who to say we are, in order. A site's firewall may turn away one identity and accept another, and picture hosts often want to see a
+// request from their own site (hotlink protection), so later tries also send the picture's own site as the Referer.
+const BINARY_PROFILES = [
+  { id: 'chrome', headers: (origin) => ({ 'User-Agent': CHROME_UA, Accept: IMAGE_ACCEPT }) },
+  { id: 'chrome+referer', headers: (origin) => ({ 'User-Agent': CHROME_UA, Accept: IMAGE_ACCEPT, Referer: origin }) },
+  { id: 'firefox+referer', headers: (origin) => ({ 'User-Agent': FIREFOX_UA, Accept: IMAGE_ACCEPT, Referer: origin }) },
+  { id: 'plain', headers: () => ({ 'User-Agent': 'Mozilla/5.0 (compatible; VaultCSSTool/1.0)', Accept: '*/*' }) },
+];
+const REFUSED = /^Server returned (401|403|406|429)$/;
+const winnerByHost = new Map(); // host -> profile id that last worked, so a page with 40 pictures does not repeat the refusals 40 times
+
+/** Binary-safe fetch for images — htmlFetch's fetchHtml decodes everything as utf8 text. Tries other identities when a site refuses one. */
+async function fetchBinary(url, redirectsLeft = 5, timeoutMs = 15000) {
+  let origin = '';
+  let host = '';
+  try { const u = new URL(url); origin = u.origin; host = u.host; } catch { /* the core call reports an invalid address */ }
+  const first = winnerByHost.get(host);
+  const order = first ? [BINARY_PROFILES.find((p) => p.id === first), ...BINARY_PROFILES.filter((p) => p.id !== first)].filter(Boolean) : BINARY_PROFILES;
+  let lastError = null;
+  for (const profile of order) {
+    try {
+      const out = await fetchBinaryOnce(url, redirectsLeft, timeoutMs, profile.headers(origin));
+      if (host) winnerByHost.set(host, profile.id);
+      return out;
+    } catch (err) {
+      lastError = err;
+      if (!REFUSED.test(String(err.message))) throw err; // a missing file, a private address or a timeout will not change with another identity
+    }
+  }
+  throw lastError;
+}
+
+function fetchBinaryOnce(url, redirectsLeft, timeoutMs, identityHeaders) {
   return new Promise((resolve, reject) => {
     if (redirectsLeft === 0) return reject(new Error('Too many redirects'));
     let parsed;
@@ -25,16 +60,13 @@ function fetchBinary(url, redirectsLeft = 5, timeoutMs = 15000) {
         port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
         path: parsed.pathname + parsed.search,
         method: 'GET',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-          Accept: 'image/avif,image/webp,image/*,*/*;q=0.8',
-        },
+        headers: identityHeaders,
         timeout: timeoutMs,
       }, (res) => {
         if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
           const next = new URL(res.headers.location, url).toString();
           res.resume();
-          return resolve(fetchBinary(next, redirectsLeft - 1, timeoutMs));
+          return resolve(fetchBinaryOnce(next, redirectsLeft - 1, timeoutMs, identityHeaders));
         }
         if (res.statusCode >= 400) {
           res.resume();
