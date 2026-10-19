@@ -186,8 +186,76 @@ async function geminiVoiceChecks() {
   }
 }
 
+// Music jobs without ffmpeg or a network: a fake provider and a fake "fit" step stand in for the real ones.
+async function musicJobChecks() {
+  const fs = require('fs/promises');
+  const J = require('./musicJobs');
+  assert.strictEqual(J.normalizeSeed('42'), 42);
+  assert.strictEqual(J.normalizeSeed(''), null);
+  assert.strictEqual(J.normalizeSeed('1.5'), null);
+  assert.strictEqual(J.normalizeSeed(0), null);
+  assert.strictEqual(J.normalizeSeed(2 ** 31), null);
+  assert.strictEqual(J.normalizeMusicLength('30', 300), 30);
+  assert.strictEqual(J.normalizeMusicLength('4', 300), null, 'shorter than the minimum is refused');
+  assert.strictEqual(J.normalizeMusicLength('301', 300), null, 'longer than the maximum is refused');
+  assert.strictEqual(J.normalizeMusicLength('abc', 300), null);
+
+  const calls = [];
+  const provider = { maxClipS: 30, generate: async (a) => { calls.push(a); return Buffer.from('RIFFfake'); } };
+  const deps = {
+    gate: { run: (f) => f() },
+    fit: async (_raw, out, durationS) => { await fs.writeFile(out, `fit ${durationS}`); return { copies: Math.ceil(durationS / 30) }; },
+  };
+  const job = await J.createJob({
+    userId: 7, videoFile: null, durationS: 45, hasAudio: false, seed: 1000,
+    promptInfo: { prompt: 'calm piano', mood: 'custom', bpm: null }, providerName: 'fake',
+  });
+  try {
+    assert.strictEqual(job.mode, 'music-only');
+    assert.strictEqual(job.videoPath, null);
+    assert.deepStrictEqual(job.options.map((o) => o.seed), [1000, 1000 + 7919, 1000 + 2 * 7919], 'a typed seed is the first option\'s seed');
+    await J.runJob(job, provider, deps);
+    assert.strictEqual(job.status, 'done');
+    assert.ok(calls.every((c) => c.durationS === 30 && c.prompt === 'calm piano'), 'clips are capped at the provider\'s limit');
+    const pub = J.publicJob(job);
+    assert.strictEqual(pub.mode, 'music-only');
+    assert.strictEqual(pub.hasVideo, false);
+    assert.deepStrictEqual(pub.options.map((o) => [o.status, o.rev, o.loops]), [['ready', 1, 2], ['ready', 1, 2], ['ready', 1, 2]]);
+
+    const before = job.options.map((o) => o.seed);
+    await J.regenerateOption(job, provider, 1, { seed: 555, deps });
+    assert.strictEqual(job.options[1].seed, 555, 'the seed given is used');
+    assert.strictEqual(job.options[1].rev, 2, 'a new version bumps the revision so cached previews are not reused');
+    assert.deepStrictEqual([job.options[0].seed, job.options[2].seed], [before[0], before[2]], 'other options are untouched');
+    assert.strictEqual(job.status, 'done');
+    await assert.rejects(() => J.regenerateOption(job, provider, 9, { deps }), /Unknown option/);
+
+    await J.addOption(job, provider, { deps });
+    assert.strictEqual(job.options.length, 4);
+    assert.strictEqual(job.options[3].status, 'ready');
+    await J.addOption(job, provider, { deps });
+    await J.addOption(job, provider, { deps });
+    assert.strictEqual(job.options.length, J.MAX_OPTIONS);
+    await assert.rejects(() => J.addOption(job, provider, { deps }), /most options/);
+
+    // One failing option never sinks the set, and making it again can recover it.
+    const flaky = { maxClipS: 30, generate: async ({ seed }) => { if (seed === 777) throw new Error('model error'); return Buffer.from('x'); } };
+    await J.regenerateOption(job, flaky, 0, { seed: 777, deps });
+    assert.strictEqual(job.options[0].status, 'failed');
+    assert.match(job.options[0].error, /model error/);
+    assert.strictEqual(job.status, 'done', 'other options are still ready');
+    await J.regenerateOption(job, provider, 0, { seed: 778, deps });
+    assert.strictEqual(job.options[0].status, 'ready');
+    assert.strictEqual(job.options[0].error, null);
+  } finally {
+    await J.removeJob(job);
+  }
+}
+
 (async () => {
   await geminiVoiceChecks();
+  await musicJobChecks();
+  passed += 1; console.log('ok - music jobs: music only, a typed seed, make one again, make another, one failure recovers');
   passed += 1; console.log('ok - Gemini voice: request shape, Australian-accent prompt, WAV result, clear errors');
   const { createReplicateProvider, _clearVersionCache } = require('./musicProviders');
   const realFetch = global.fetch;

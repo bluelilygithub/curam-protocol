@@ -48,8 +48,12 @@ function MusicPageInner({ videosOk }) {
   const [job, setJob] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [trackFile, setTrackFile] = useState(null);
+  const [lengthS, setLengthS] = useState(30); // "Music from a description": how long, in seconds
+  const [seed, setSeed] = useState('');
   const [voiceSettings, setVoiceSettings] = useState({ volume: 100, start: 0 });
   const trackInputRef = useRef(null);
+  const mediaRef = useRef({}); // option number -> its <video>/<audio>, for "play from the same moment"
+  const lastPlayedRef = useRef(null);
   const jobIdRef = useRef(null);
   const inputRef = useRef(null);
   const startedAtRef = useRef(0);
@@ -163,14 +167,19 @@ function MusicPageInner({ videosOk }) {
 
   // "Use my own track" is its own tool; the Score a video tool generates.
   const ownTrackMode = tool === 'own-track';
-  const scoreVisible = tool === 'score' || tool === 'own-track';
+  const textMode = tool === 'text'; // no video: the music is made to a length
+  const scoreVisible = tool === 'score' || tool === 'own-track' || tool === 'text';
+  const toolLabel = TOOL_GROUPS.flatMap((g) => g.tools).find((t) => t.id === tool)?.label || 'Score a video';
+  const minLen = status?.musicOnly?.minSec ?? 5;
+  const maxLen = status?.musicOnly?.maxSec ?? 300;
+  const lengthOk = Number.isFinite(lengthS) && lengthS >= minLen && lengthS <= maxLen;
   const moods = status?.moods || [];
   const presetBpm = moods.find((m) => m.id === mood)?.defaultBpm;
   const providerOk = status ? (ownTrackMode || status.provider?.configured) : true;
   const ffmpegOk = status ? status.ffmpeg : true;
   const tooLong = status && clientDuration && clientDuration > status.maxVideoSec;
-  const canGenerate = Boolean(file) && providerOk && ffmpegOk && !submitting && job?.status !== 'running'
-    && (ownTrackMode ? Boolean(trackFile) : (mood !== 'custom' || customPrompt.trim())) && !tooLong;
+  const canGenerate = (textMode ? lengthOk : Boolean(file)) && providerOk && ffmpegOk && !submitting && job?.status !== 'running'
+    && (ownTrackMode ? Boolean(trackFile) : (mood !== 'custom' || customPrompt.trim())) && !(tooLong && !textMode);
 
   // Cancel from the progress modal: stop waiting and delete the job. The modal itself closes after this.
   // The provider has usually already been asked to compose, so that spend can't be undone.
@@ -188,21 +197,23 @@ function MusicPageInner({ videosOk }) {
     setSubmitting(true);
     cancelledRef.current = false;
     startedAtRef.current = Date.now();
-    startProcessing(ownTrackMode ? 'Fitting your track…' : 'Creating your music…', 'Uploading your video…', { onCancel: cancelGeneration });
-    setProcessingSteps(musicProgressSteps(null).map((st, i) => (i === 0
-      ? { ...st, label: 'Uploading your video…', status: 'active' }
+    startProcessing(ownTrackMode ? 'Fitting your track…' : 'Creating your music…', textMode ? 'Starting…' : 'Uploading your video…', { onCancel: cancelGeneration });
+    setProcessingSteps(musicProgressSteps(textMode ? { mode: 'music-only' } : null).map((st, i) => (i === 0
+      ? { ...st, label: textMode ? 'Sending your description…' : 'Uploading your video…', status: 'active' }
       : { ...st, status: 'pending' })));
     try {
       if (jobIdRef.current) api.delete(`/api/music/jobs/${jobIdRef.current}`).catch(() => {});
       setJob(null);
       const fd = new FormData();
-      fd.append('video', file);
+      if (textMode) fd.append('durationS', String(lengthS));
+      else fd.append('video', file);
       if (ownTrackMode) {
         fd.append('track', trackFile);
       } else {
         fd.append('mood', mood);
         if (customPrompt.trim()) fd.append('prompt', customPrompt.trim());
         if (bpm) fd.append('bpm', String(bpm));
+        if (seed.trim()) fd.append('seed', seed.trim());
       }
       const res = await api.postForm('/api/music/jobs', fd);
       const data = await res.json().catch(() => ({}));
@@ -222,6 +233,38 @@ function MusicPageInner({ videosOk }) {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // Make one option again, or add one more (same description). The job goes back to "running" and the poll above picks it up.
+  const changeOptions = async (url, body, title) => {
+    cancelledRef.current = false;
+    startedAtRef.current = Date.now();
+    startProcessing(title, 'Starting…');
+    try {
+      const res = await api.post(url, body);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not start that');
+      setJob(data);
+      setProcessingSteps(musicProgressSteps(data));
+    } catch (err) {
+      stopProcessing();
+      addToast(err.message, 'error');
+    }
+  };
+  const remakeOption = (n) => changeOptions(`/api/music/jobs/${job.id}/options/${n}/regenerate`, {}, `Making a new version of option ${n + 1}…`);
+  const addAnotherOption = () => changeOptions(`/api/music/jobs/${job.id}/options`, {}, 'Making another option…');
+
+  // "Play from the same moment": start option n where the one that was playing is up to.
+  const registerMedia = useCallback((n, el) => { if (el) mediaRef.current[n] = el; else delete mediaRef.current[n]; }, []);
+  const markPlayed = useCallback((n) => { lastPlayedRef.current = n; }, []);
+  const playFromHere = (n) => {
+    const to = mediaRef.current[n];
+    if (!to) return;
+    const from = mediaRef.current[lastPlayedRef.current];
+    const t = from ? from.currentTime : 0;
+    if (from && from !== to) from.pause();
+    try { to.currentTime = Number.isFinite(to.duration) ? Math.min(t, to.duration) : t; } catch (_) { /* not seekable yet */ }
+    to.play().catch(() => {});
   };
 
   const startTour = () => {
@@ -268,12 +311,40 @@ function MusicPageInner({ videosOk }) {
 
         {/* Kept mounted (just hidden) while another tool is open, so the video, the previews and the job are still there on return. */}
         <div className={scoreVisible ? 'space-y-5' : 'hidden'}>
-          <ToolHeader
-            id={tool === 'own-track' ? 'own-track' : 'score'}
-            label={ownTrackMode ? 'Use my own track' : 'Score a video'}
-            onHelp={setHelpTool}
-          />
+          <ToolHeader id={tool} label={toolLabel} onHelp={setHelpTool} />
 
+          {textMode && (
+            <section className="rounded-2xl border p-4 space-y-3" style={card} data-tour="music-video">
+              <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>1 · How long</p>
+              <div className="flex flex-wrap items-center gap-2">
+                {[15, 30, 60, 120].filter((n) => n <= maxLen).map((n) => (
+                  <button
+                    key={n} type="button" onClick={() => setLengthS(n)}
+                    className="px-3 py-1.5 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
+                    style={{
+                      borderColor: lengthS === n ? 'var(--color-primary)' : 'var(--color-border)',
+                      color: lengthS === n ? 'var(--color-primary)' : 'var(--color-muted)',
+                    }}
+                  >
+                    {n >= 60 ? `${n / 60} min` : `${n} sec`}
+                  </button>
+                ))}
+                <Tooltip text={`How many seconds of music, from ${minLen} up to ${maxLen}. The music is cut to exactly this length with a fade in and out.`}>
+                  <input
+                    type="number" min={minLen} max={maxLen} value={lengthS}
+                    onChange={(e) => setLengthS(e.target.value === '' ? NaN : Number(e.target.value))}
+                    aria-label="Length in seconds"
+                    className="w-24 px-2 py-1.5 rounded-xl border text-xs" style={field}
+                  />
+                </Tooltip>
+                <span className="text-xs" style={muted}>seconds</span>
+              </div>
+              {!lengthOk && <p className="text-xs" style={{ color: '#ef4444' }}>Choose a length from {minLen} seconds to {formatDuration(maxLen)}.</p>}
+              <p className="text-xs" style={muted}>Cut to exactly this length with a fade in and out. Clips are about 30 seconds, so a longer length loops with smooth crossfades.</p>
+            </section>
+          )}
+
+          {!textMode && (
           <section className="rounded-2xl border p-4 space-y-3" style={card} data-tour="music-video">
             <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>1 · Your video</p>
             <input
@@ -306,6 +377,7 @@ function MusicPageInner({ videosOk }) {
               </p>
             )}
           </section>
+          )}
 
           <section className="rounded-2xl border p-4 space-y-3" style={card} data-tour="music-mood">
             <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>2 · The music</p>
@@ -364,7 +436,19 @@ function MusicPageInner({ videosOk }) {
                   </div>
                 </Tooltip>
               </label>
-              <p className="text-xs" style={muted}>Always instrumental — no vocals. Three variations are generated so you can compare.</p>
+              <label className="block space-y-1">
+                <span className="text-xs" style={muted}>Seed (optional)</span>
+                <Tooltip text="Leave blank for a fresh random result each time. To get a version you liked back, type its seed (shown on its card) with the same description and tempo: it comes back as option 1.">
+                  <input
+                    inputMode="numeric" value={seed} onChange={(e) => setSeed(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    placeholder="e.g. 482913" className="w-full sm:w-48 px-2 py-2 rounded-xl border text-xs" style={field}
+                  />
+                </Tooltip>
+              </label>
+              <p className="text-xs" style={muted}>
+                Always instrumental — no vocals. Three variations are generated so you can compare.
+                {status?.costPerRunUsd ? ` Roughly $${(status.costPerRunUsd * 3).toFixed(2)} for the three.` : ''}
+              </p>
             </>)}
             <Tooltip text={ownTrackMode ? "Fit your track to your video's length and preview it mixed in. Quick, and no generation cost." : "Generate three instrumental options cut to your video's length. Takes about a minute and a small per-generation cost."}>
               <button
@@ -380,10 +464,10 @@ function MusicPageInner({ videosOk }) {
           {job && (
             <section className="space-y-3" data-tour="music-options">
               <div className="flex items-baseline justify-between gap-2">
-                <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>3 · {job.source === 'upload' ? 'Your track' : 'Your options'} · video is {formatDuration(job.durationS)}{job.hasAudio ? '' : ' · no sound of its own'}</p>
+                <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>3 · {job.source === 'upload' ? 'Your track' : 'Your options'} · {job.hasVideo === false ? `${formatDuration(job.durationS)} of music` : `video is ${formatDuration(job.durationS)}${job.hasAudio ? '' : ' · no sound of its own'}`}</p>
               </div>
               {job.status === 'failed' && <p className="text-xs" style={{ color: '#ef4444' }}>{job.error || 'Music generation failed.'}</p>}
-              {job.status === 'done' && !job.voice && (
+              {job.status === 'done' && !job.voice && job.hasVideo !== false && (
                 <p className="text-xs" style={muted}>
                   Want narration?{' '}
                   <button
@@ -395,14 +479,43 @@ function MusicPageInner({ videosOk }) {
                   </button>
                 </p>
               )}
+              {job.options.filter((o) => o.status === 'ready').length > 1 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs" style={muted}>Compare, from the same moment:</span>
+                  {job.options.filter((o) => o.status === 'ready').map((o) => (
+                    <Tooltip key={o.n} text={`Stop what is playing and start option ${o.n + 1} at the same point, so you can hear the difference.`}>
+                      <button
+                        type="button" onClick={() => playFromHere(o.n)}
+                        className="px-2.5 py-1 rounded-lg text-xs border transition-opacity duration-200 hover:opacity-70"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                      >
+                        Play option {o.n + 1}
+                      </button>
+                    </Tooltip>
+                  ))}
+                </div>
+              )}
               <div className="grid grid-cols-1 gap-3">
                 {job.options.map((o) => (
                   <OptionCard
                     key={`${job.id}-${o.n}`} jobId={job.id} option={o} hasAudio={job.hasAudio} durationS={job.durationS} source={job.source}
                     voice={job.voice} voiceSettings={voiceSettings} videosOk={videosOk}
+                    hasVideo={job.hasVideo !== false} canRemake={job.source === 'generated' && job.status !== 'running'}
+                    onRemake={remakeOption} onMedia={registerMedia} onPlayed={markPlayed}
                   />
                 ))}
               </div>
+              {job.source === 'generated' && job.status === 'done' && job.options.length < (status?.maxOptions || 6) && (
+                <Tooltip text="Make one more option from the same description, with a new random seed. The ones you have stay as they are. Has a small cost.">
+                  <button
+                    type="button" onClick={addAnotherOption}
+                    className="px-3 py-1.5 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    Make another option
+                  </button>
+                </Tooltip>
+              )}
               <p className="text-xs" style={muted}>Results are kept for about 90 minutes, then deleted — export or save what you want to keep.</p>
             </section>
           )}
@@ -411,7 +524,7 @@ function MusicPageInner({ videosOk }) {
         {tool === 'voiceover' && (
           <div className="space-y-4">
             <ToolHeader id="voiceover" label="Voiceover" onHelp={setHelpTool} />
-            {job?.status === 'done' ? (
+            {job?.status === 'done' && job.hasVideo !== false ? (
               <>
                 <VoiceoverPanel job={job} status={status} onJobChange={setJob} voiceSettings={voiceSettings} onVoiceSettings={setVoiceSettings} />
                 {job.voice && (
@@ -429,7 +542,9 @@ function MusicPageInner({ videosOk }) {
                 <p className="text-xs" style={muted}>
                   {job?.status === 'running'
                     ? 'Your music is still being made. The voiceover can be added as soon as it is ready.'
-                    : 'Make your music first — a voiceover is mixed over it, and the music dips while the voice speaks.'}
+                    : job?.status === 'done' && job.hasVideo === false
+                      ? 'This music was made without a video, and a voiceover is mixed over a video. Make music for a video to add one.'
+                      : 'Make your music first — a voiceover is mixed over it, and the music dips while the voice speaks.'}
                 </p>
                 <button
                   type="button" onClick={() => selectTool('score')}

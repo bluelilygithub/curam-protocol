@@ -16,7 +16,10 @@ const FINISH_TOOLS = [
   { id: 'export-social', kind: 'video', label: 'Export for Social', tip: 'Open Export for Social in Video Tools with your video and this music mixed in, to make tall, square and widescreen versions.' },
 ];
 
-export default function OptionCard({ jobId, option, hasAudio, durationS, source, voice, voiceSettings, videosOk = false }) {
+export default function OptionCard({
+  jobId, option, hasAudio, durationS, source, voice, voiceSettings, videosOk = false,
+  hasVideo = true, canRemake = false, onRemake, onMedia, onPlayed,
+}) {
   const navigate = useNavigate();
   const [handing, setHanding] = useState('');
   const addToast = useToastStore((s) => s.addToast);
@@ -34,7 +37,7 @@ export default function OptionCard({ jobId, option, hasAudio, durationS, source,
   const renderPreview = useCallback(async (s) => {
     setRendering(true);
     try {
-      const res = await api.get(`${base}/preview?${qs(s, voice)}`);
+      const res = await api.get(hasVideo ? `${base}/preview?${qs(s, voice)}` : `${base}/audio`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Could not render the preview');
@@ -49,13 +52,13 @@ export default function OptionCard({ jobId, option, hasAudio, durationS, source,
     } finally {
       setRendering(false);
     }
-  }, [base, addToast, voice]);
+  }, [base, addToast, voice, hasVideo]);
 
   // First render when the option is ready; again when a voiceover is added, replaced or removed.
   useEffect(() => {
     if (option.status === 'ready') renderPreview(settings);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [option.status, jobId, voice?.rev]);
+  }, [option.status, option.rev, jobId, voice?.rev]);
   useEffect(() => () => { if (urlRef.current) URL.revokeObjectURL(urlRef.current); }, []);
 
   const dirty = rendered && (rendered.volume !== settings.volume || rendered.ducking !== settings.ducking
@@ -110,6 +113,7 @@ export default function OptionCard({ jobId, option, hasAudio, durationS, source,
     }
   };
 
+  const finishTools = hasVideo ? FINISH_TOOLS : FINISH_TOOLS.filter((t) => t.kind === 'audio');
   const ownTrack = source === 'upload';
   const title = ownTrack ? 'Your track' : `Option ${option.n + 1}`;
 
@@ -118,6 +122,15 @@ export default function OptionCard({ jobId, option, hasAudio, durationS, source,
       <div className="rounded-2xl border p-4" style={card}>
         <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{title}</p>
         <p className="text-xs mt-1" style={{ color: '#ef4444' }}>This one failed: {option.error || 'unknown error'}</p>
+        {canRemake && onRemake && (
+          <button
+            type="button" onClick={() => onRemake(option.n)}
+            className="mt-2 px-2.5 py-1 rounded-lg text-xs border transition-opacity duration-200 hover:opacity-70"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            Try again
+          </button>
+        )}
       </div>
     );
   }
@@ -126,7 +139,7 @@ export default function OptionCard({ jobId, option, hasAudio, durationS, source,
       <div className="rounded-2xl border p-4" style={card}>
         <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{title}</p>
         <p className="text-xs mt-1" style={muted}>
-          {option.status === 'fitting' ? 'Cutting to your video length…' : 'Composing…'}
+          {option.status === 'fitting' ? (hasVideo ? 'Cutting to your video length…' : 'Cutting to length…') : 'Composing…'}
         </p>
       </div>
     );
@@ -138,18 +151,34 @@ export default function OptionCard({ jobId, option, hasAudio, durationS, source,
         <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{title}</p>
         <p className="text-xs" style={muted}>
           {formatDuration(durationS)}{option.loops > 1 ? ` · loops ${option.loops}× with crossfades` : ''}
+          {!ownTrack && option.seed ? (
+            <Tooltip text="The number this version was made from. Type it in the Seed box with the same description to get this exact music back as option 1.">
+              <span> · seed {option.seed}</span>
+            </Tooltip>
+          ) : null}
         </p>
       </div>
 
-      <div className="rounded-xl overflow-hidden relative" style={{ background: '#000' }}>
-        {previewUrl
-          ? <video src={previewUrl} controls className="w-full max-h-72" />
-          : <div className="h-40 flex items-center justify-center text-xs" style={{ color: '#fff' }}>Rendering preview…</div>}
+      <div className="rounded-xl overflow-hidden relative" style={{ background: hasVideo ? '#000' : 'var(--color-bg)' }}>
+        {previewUrl && hasVideo && (
+          <video
+            ref={(el) => onMedia?.(option.n, el)} onPlay={() => onPlayed?.(option.n)}
+            src={previewUrl} controls className="w-full max-h-72"
+          />
+        )}
+        {previewUrl && !hasVideo && (
+          <audio
+            ref={(el) => onMedia?.(option.n, el)} onPlay={() => onPlayed?.(option.n)}
+            src={previewUrl} controls className="w-full"
+          />
+        )}
+        {!previewUrl && <div className="h-40 flex items-center justify-center text-xs" style={{ color: hasVideo ? '#fff' : 'var(--color-muted)' }}>{hasVideo ? 'Rendering preview…' : 'Loading…'}</div>}
         {rendering && previewUrl && (
           <div className="absolute inset-0 flex items-center justify-center text-xs" style={{ background: 'rgba(0,0,0,0.55)', color: '#fff' }}>Updating preview…</div>
         )}
       </div>
 
+      {hasVideo && (
       <div className="grid grid-cols-2 gap-3">
         <label className="block space-y-1">
           <span className="text-xs" style={muted}>Music volume · {settings.volume}%</span>
@@ -176,9 +205,10 @@ export default function OptionCard({ jobId, option, hasAudio, durationS, source,
           </Tooltip>
         </label>
       </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
-        {dirty && (
+        {hasVideo && dirty && (
           <Tooltip text="Re-render the preview with the new volume, ducking and voiceover settings.">
             <button
               type="button" onClick={() => renderPreview(settings)} disabled={rendering}
@@ -189,7 +219,7 @@ export default function OptionCard({ jobId, option, hasAudio, durationS, source,
             </button>
           </Tooltip>
         )}
-        <Tooltip text="Just the music, cut to your video's exact length with fades, as a WAV file.">
+        <Tooltip text={hasVideo ? "Just the music, cut to your video's exact length with fades, as a WAV file." : 'The music, cut to the length you chose with fades, as a WAV file.'}>
           <button
             type="button" onClick={() => exportFile(`${base}/audio`, 'music.wav', 'Audio')}
             className="px-3 py-1.5 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
@@ -198,6 +228,7 @@ export default function OptionCard({ jobId, option, hasAudio, durationS, source,
             Export audio (WAV)
           </button>
         </Tooltip>
+        {hasVideo && (
         <Tooltip text="Your video with this music (and the voiceover, if you added one) mixed in, using the settings above. The picture is not re-encoded where possible.">
           <button
             type="button" onClick={() => exportFile(`${base}/video?${qs(settings, voice)}`, voice ? 'video-with-music-and-voice.mp4' : 'video-with-music.mp4', 'Video')}
@@ -207,6 +238,8 @@ export default function OptionCard({ jobId, option, hasAudio, durationS, source,
             Export video (MP4)
           </button>
         </Tooltip>
+        )}
+        {hasVideo && (
         <Tooltip text="Store this video with the music in Saved media, so you can caption, join or annotate it in Video Tools. Uses the volume and ducking above.">
           <button
             type="button" onClick={saveToLibrary} disabled={saving || saved}
@@ -216,12 +249,24 @@ export default function OptionCard({ jobId, option, hasAudio, durationS, source,
             {saving ? 'Saving…' : saved ? 'Saved to Saved media' : 'Save to Saved media'}
           </button>
         </Tooltip>
+        )}
+        {canRemake && onRemake && (
+          <Tooltip text="Make this option again with a new random seed. The other options stay as they are. Has a small cost.">
+            <button
+              type="button" onClick={() => onRemake(option.n)}
+              className="px-3 py-1.5 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              Make a new version
+            </button>
+          </Tooltip>
+        )}
       </div>
 
       {videosOk && (
         <div className="flex flex-wrap items-center gap-2" data-tour="music-finish">
           <span className="text-xs" style={muted}>Finish in Video Tools:</span>
-          {FINISH_TOOLS.map((t) => (
+          {finishTools.map((t) => (
             <Tooltip key={t.id} text={t.tip}>
               <button
                 type="button" onClick={() => finishIn(t)} disabled={Boolean(handing)}

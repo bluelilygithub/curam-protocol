@@ -1876,6 +1876,12 @@
   "POST /api/music/tutor": {
    "class": "authed"
   },
+  "POST /api/music/jobs/:id/options": {
+   "class": "authed"
+  },
+  "POST /api/music/jobs/:id/options/:n/regenerate": {
+   "class": "authed"
+  },
   "POST /api/music/jobs": {
    "class": "authed"
   },

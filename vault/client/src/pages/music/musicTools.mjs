@@ -11,6 +11,7 @@ export const TOOL_GROUPS = [
     label: 'Make',
     tools: [
       { id: 'score', label: 'Score a video', desc: 'Pick a video and a mood, get three music options cut to its length' },
+      { id: 'text', label: 'Music from a description', desc: 'No video needed: describe the music and choose how long it should be' },
       { id: 'own-track', label: 'Use my own track', desc: 'Fit a music file you already have to your video' },
     ],
   },
@@ -26,6 +27,7 @@ export const TOOL_GROUPS = [
 // Hover text for every item in the list: what the tool does, in plain words.
 export const TOOL_TIPS = {
   score: "Choose a video and a mood (or describe the music yourself) and get three instrumental options, each cut to your video's exact length. Costs a small amount per go.",
+  text: 'No video needed. Describe the music or pick a mood, choose how long it should be, and get three instrumental options you can listen to and download.',
   'own-track': "Bring a music file you already have. It is looped or trimmed to your video's length, faded and mixed in. No generation, no cost.",
   voiceover: 'Add narration. Type a script for an AI voice with an Australian accent, or upload a recording. The music dips while the voice speaks.',
 };
@@ -45,8 +47,21 @@ export const TOOL_HELP = {
       'Pick a mood, or choose Custom prompt and describe the music; tempo is optional',
       'Three options are made so you can compare them, each previewed against your video',
       'Set the music volume and let it dip while people talk (ducking)',
+      'Not happy with one? Make a new version of just that option, or make another option (up to six); compare options from the same moment',
       'Export the music as WAV, your video with the music as MP4, or save it to Saved media',
       'Or send an option on to Video Tools to normalize, trim, mix or export for social media; your other options are still here when you come back',
+    ],
+  },
+  text: {
+    title: 'Music from a description',
+    what: 'Make instrumental music of a length you choose, without a video.',
+    features: [
+      'Pick a mood or describe the music, set the length (5 seconds up to the limit shown), and get three options',
+      'Listen to each one and download it as a WAV file',
+      'Not happy with one? Make a new version of just that option, or make another option (up to six)',
+      'Seed: the number a version was made from. Type it in the Seed box with the same description to get that exact music back',
+      'Compare options by playing each from the same moment',
+      'Send it to Video Tools to trim it or mix it with a voice recording',
     ],
   },
   'own-track': {

@@ -7,7 +7,7 @@
 const FALLBACK_COUNT = 3;
 
 /** One row per option, driven by the server's real per-option status. */
-function optionStep(option, source) {
+function optionStep(option, source, musicOnly = false) {
   const n = option.n + 1;
   if (source === 'upload') {
     // The user's own track: one option, nothing is composed.
@@ -20,7 +20,7 @@ function optionStep(option, source) {
   switch (option.status) {
     case 'ready': return { id: `option-${option.n}`, label: `Option ${n} is ready`, status: 'done' };
     case 'failed': return { id: `option-${option.n}`, label: `Option ${n} failed${option.error ? `: ${String(option.error).slice(0, 90)}` : ''}`, status: 'error' };
-    case 'fitting': return { id: `option-${option.n}`, label: `Cutting option ${n} to your video's length…`, status: 'active' };
+    case 'fitting': return { id: `option-${option.n}`, label: musicOnly ? `Cutting option ${n} to length…` : `Cutting option ${n} to your video's length…`, status: 'active' };
     case 'generating': return { id: `option-${option.n}`, label: `Composing option ${n}…`, status: 'active' };
     default: return { id: `option-${option.n}`, label: `Option ${n} — waiting to start`, status: 'pending' };
   }
@@ -35,11 +35,16 @@ export function musicProgressSteps(job) {
     : Array.from({ length: FALLBACK_COUNT }, (_, n) => ({ n, status: 'pending' }));
   const settled = options.filter((o) => o.status === 'ready' || o.status === 'failed').length;
   const length = Number.isFinite(job?.durationS) ? `${Math.round(job.durationS)}s` : null;
+  const musicOnly = job?.mode === 'music-only'; // made from a description, no video
 
   return [
-    { id: 'upload', label: 'Video uploaded', status: 'done' },
-    { id: 'length', label: length ? `Video length read (${length})${job?.hasAudio ? '' : ' — no sound of its own'}` : 'Reading video length…', status: length ? 'done' : 'active' },
-    ...options.map((o) => optionStep(o, job?.source)),
+    musicOnly
+      ? { id: 'upload', label: 'Description received', status: 'done' }
+      : { id: 'upload', label: 'Video uploaded', status: 'done' },
+    musicOnly
+      ? { id: 'length', label: length ? `Length set (${length})` : 'Setting the length…', status: length ? 'done' : 'active' }
+      : { id: 'length', label: length ? `Video length read (${length})${job?.hasAudio ? '' : ' — no sound of its own'}` : 'Reading video length…', status: length ? 'done' : 'active' },
+    ...options.map((o) => optionStep(o, job?.source, musicOnly)),
     {
       id: 'finish',
       label: settled === options.length ? 'Finishing up' : 'Preparing previews',

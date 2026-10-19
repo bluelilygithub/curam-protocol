@@ -19,7 +19,10 @@ const {
   MAX_TEXT_CHARS, normalizeSpeech, getVoiceProvider,
 } = require('../services/music/voiceProviders');
 const { videoJobGate } = require('../services/videoJobGate');
-const { createJob, runJob, runUploadedTrackJob, getJob, removeJob, publicJob } = require('../services/music/musicJobs');
+const {
+  createJob, runJob, regenerateOption, addOption, runUploadedTrackJob, getJob, removeJob, publicJob,
+  normalizeSeed, normalizeMusicLength, MIN_MUSIC_ONLY_S, MAX_OPTIONS,
+} = require('../services/music/musicJobs');
 const { saveAsset, getUserUsageBytes, LIBRARY_QUOTA_BYTES } = require('../services/videoLibraryService');
 
 const router = express.Router();
@@ -36,12 +39,15 @@ function stamp() {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
-function findOption(req, res, { needFit = true } = {}) {
+const NO_VIDEO_MSG = 'This music was made without a video, so there is no video to mix it with. Download the audio, or make music for a video.';
+
+function findOption(req, res, { needFit = true, needVideo = false } = {}) {
   const job = getJob(req.params.id, req.user.id);
   if (!job) { res.status(404).json({ error: 'That music job was not found or has expired — generate again.' }); return null; }
   const opt = job.options[Number(req.params.n)];
   if (!opt) { res.status(404).json({ error: 'Unknown option' }); return null; }
   if (needFit && opt.status !== 'ready') { res.status(409).json({ error: 'That option is not ready' }); return null; }
+  if (needVideo && job.mode === 'music-only') { res.status(409).json({ error: NO_VIDEO_MSG }); return null; }
   return { job, opt };
 }
 
@@ -100,6 +106,10 @@ router.get('/status', async (req, res) => {
     provider,
     maxUploadMb: Math.round(MAX_VIDEO_BYTES / (1024 * 1024)),
     maxVideoSec: MAX_VIDEO_SEC,
+    musicOnly: { minSec: MIN_MUSIC_ONLY_S, maxSec: MAX_VIDEO_SEC },
+    maxOptions: MAX_OPTIONS,
+    // Shown before Generate only when the owner sets MUSIC_COST_PER_RUN_USD (what one generation costs on the provider); never guessed.
+    costPerRunUsd: Number(process.env.MUSIC_COST_PER_RUN_USD) > 0 ? Number(process.env.MUSIC_COST_PER_RUN_USD) : null,
     voice: { provider: voiceProvider, voices: voiceBackend.voices, maxChars: MAX_TEXT_CHARS, maxUploadMb: Math.round(MAX_VOICE_BYTES / (1024 * 1024)) },
     moods: [...MOOD_PRESETS.map((m) => ({ id: m.id, label: m.label, defaultBpm: m.defaultBpm })), { id: CUSTOM_ID, label: 'Custom prompt' }],
   });
@@ -116,8 +126,15 @@ function audioExt(file) {
 router.post('/jobs', aiLimiter, upload.fields([{ name: 'video', maxCount: 1 }, { name: 'track', maxCount: 1 }]), ffmpegRoute('jobs', async (req, res) => {
   const file = req.files?.video?.[0];
   const trackFile = req.files?.track?.[0] || null;
-  if (!file?.buffer?.length) return res.status(400).json({ error: 'Choose a video file first' });
+  // No video but a length = music only ("from a description"): nothing to mix with, the options are audio.
+  const musicOnly = !file && !trackFile && req.body?.durationS !== undefined && req.body?.durationS !== '';
+  if (!musicOnly && !file?.buffer?.length) return res.status(400).json({ error: 'Choose a video file first' });
   if (trackFile && !trackFile.buffer?.length) return res.status(400).json({ error: 'That music file is empty' });
+  let lengthS = null;
+  if (musicOnly) {
+    lengthS = normalizeMusicLength(req.body.durationS, MAX_VIDEO_SEC);
+    if (!lengthS) return res.status(400).json({ error: `Choose a length from ${MIN_MUSIC_ONLY_S} seconds to ${Math.round(MAX_VIDEO_SEC / 60)} minutes.` });
+  }
 
   const provider = getMusicProvider();
   const info = provider.describe();
@@ -136,9 +153,10 @@ router.post('/jobs', aiLimiter, upload.fields([{ name: 'video', maxCount: 1 }, {
   try {
     job = await createJob({
       userId: req.user.id,
-      videoFile: { buffer: file.buffer, ext: extensionForMime(file.mimetype) },
-      durationS: 0,
+      videoFile: musicOnly ? null : { buffer: file.buffer, ext: extensionForMime(file.mimetype) },
+      durationS: musicOnly ? lengthS : 0,
       hasAudio: false,
+      seed: normalizeSeed(req.body?.seed),
       promptInfo,
       providerName: trackFile ? 'your own track' : info.name,
       trackFile: trackFile ? { buffer: trackFile.buffer, ext: audioExt(trackFile) } : null,
@@ -146,6 +164,16 @@ router.post('/jobs', aiLimiter, upload.fields([{ name: 'video', maxCount: 1 }, {
   } catch (err) {
     if (err.code === 'MUSIC_BUSY') return res.status(429).json({ error: err.message });
     throw err;
+  }
+
+  if (musicOnly) {
+    runJob(job, provider).catch((err) => {
+      getLogger().error({ err }, '[music/jobs music-only]');
+      job.status = 'failed';
+      job.stage = 'Failed';
+      job.error = String(err.message || err).slice(0, 300);
+    });
+    return res.status(202).json(publicJob(job));
   }
 
   // Probe after the file is on disk: the real duration decides everything downstream.
@@ -210,6 +238,46 @@ router.delete('/jobs/:id', async (req, res) => {
   res.json({ ok: true });
 });
 
+// Make one option again (new seed, or the seed given), or add one more from the same description. Only for generated
+// music, and only when nothing else is running on the job. Answers at once; the page polls like for a new job.
+function findIdleGeneratedJob(req, res) {
+  const job = getJob(req.params.id, req.user.id);
+  if (!job) { res.status(404).json({ error: 'That music job was not found or has expired — generate again.' }); return null; }
+  if (job.source !== 'generated') { res.status(409).json({ error: 'Your own track has nothing to make again.' }); return null; }
+  if (job.status === 'running') { res.status(409).json({ error: 'Wait for the music to finish first.' }); return null; }
+  const provider = getMusicProvider();
+  const info = provider.describe();
+  if (!info.configured) { res.status(503).json({ error: info.note || 'Music generation is not set up on this server.' }); return null; }
+  return { job, provider };
+}
+
+router.post('/jobs/:id/options/:n/regenerate', aiLimiter, (req, res) => {
+  const found = findIdleGeneratedJob(req, res);
+  if (!found) return;
+  const { job, provider } = found;
+  const n = Number(req.params.n);
+  if (!job.options[n]) return res.status(404).json({ error: 'Unknown option' });
+  regenerateOption(job, provider, n, { seed: normalizeSeed(req.body?.seed) }).catch((err) => {
+    getLogger().error({ err }, '[music/regenerate]');
+    job.status = 'done';
+    job.stage = 'Ready';
+  });
+  return res.status(202).json(publicJob(job));
+});
+
+router.post('/jobs/:id/options', aiLimiter, (req, res) => {
+  const found = findIdleGeneratedJob(req, res);
+  if (!found) return;
+  const { job, provider } = found;
+  if (job.options.length >= MAX_OPTIONS) return res.status(409).json({ error: `That is the most options one set can have (${MAX_OPTIONS}). Make a new set instead.` });
+  addOption(job, provider, { seed: normalizeSeed(req.body?.seed) }).catch((err) => {
+    getLogger().error({ err }, '[music/add-option]');
+    job.status = 'done';
+    job.stage = 'Ready';
+  });
+  return res.status(202).json(publicJob(job));
+});
+
 // The fitted music alone (WAV), exactly the video's length with fades.
 router.get('/jobs/:id/options/:n/audio', (req, res) => {
   const found = findOption(req, res);
@@ -226,7 +294,7 @@ async function ensureMixRender(job, opt, kind, query) {
   // A voiceover changes the render, so its identity (rev), level and start are part of the cache name.
   const voice = job.voice ? normalizeVoiceSettings({ voiceVolume: query.voiceVolume, voiceStartS: query.voiceStart }, job.durationS) : null;
   const voiceTag = voice ? `_v${job.voice.rev}_${Math.round(voice.volume * 100)}_${Math.round(voice.startS * 10)}` : '';
-  const outPath = path.join(job.dir, `${kind}_${opt.n}_${Math.round(settings.volume * 100)}_${settings.ducking}${voiceTag}.mp4`);
+  const outPath = path.join(job.dir, `${kind}_${opt.n}_r${opt.rev || 0}_${Math.round(settings.volume * 100)}_${settings.ducking}${voiceTag}.mp4`);
   const exists = await fs.access(outPath).then(() => true, () => false);
   if (!exists) {
     // Render to a temp name then rename, so two requests for the same render never read a half-written file.
@@ -250,7 +318,7 @@ async function ensureMixRender(job, opt, kind, query) {
 function mixedVideoRoute(kind) {
   const preview = kind === 'preview';
   return ffmpegRoute(`${kind}`, async (req, res) => {
-    const found = findOption(req, res);
+    const found = findOption(req, res, { needVideo: true });
     if (!found) return;
     const { job, opt } = found;
     const { outPath } = await ensureMixRender(job, opt, kind, req.query);
@@ -265,6 +333,7 @@ router.post('/jobs/:id/voiceover', aiLimiter, voiceUpload.single('voice'), ffmpe
   const job = getJob(req.params.id, req.user.id);
   if (!job) return res.status(404).json({ error: 'That music job was not found or has expired — generate again.' });
   if (job.status !== 'done') return res.status(409).json({ error: 'Wait for the music to finish first.' });
+  if (job.mode === 'music-only') return res.status(409).json({ error: 'A voiceover is mixed over a video, and this music was made without one. Make music for a video to add a voiceover.' });
 
   let srcBuffer;
   let source;
@@ -341,7 +410,7 @@ router.get('/jobs/:id/options/:n/video', mixedVideoRoute('export'));
 // Save the full-quality mixed video to Saved media (Video Tools' library), so it can be captioned,
 // joined, annotated and so on. Body: { title?, volume?, ducking? } (same settings as the export).
 router.post('/jobs/:id/options/:n/save', ffmpegRoute('save', async (req, res) => {
-  const found = findOption(req, res);
+  const found = findOption(req, res, { needVideo: true });
   if (!found) return;
   const { job, opt } = found;
   const { outPath, settings, voice } = await ensureMixRender(job, opt, 'export', req.body || {});

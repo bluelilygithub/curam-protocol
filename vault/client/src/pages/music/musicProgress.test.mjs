@@ -61,4 +61,13 @@ test('elapsed formatting', () => {
   assert.strictEqual(formatElapsed(-5), '0s');
 });
 
+// music from a description (no video): no video wording
+{
+  const steps = musicProgressSteps({ mode: 'music-only', durationS: 30, options: [{ n: 0, status: 'fitting' }, { n: 1, status: 'ready' }] });
+  assert.strictEqual(steps[0].label, 'Description received');
+  assert.strictEqual(steps[1].label, 'Length set (30s)');
+  assert.ok(!steps.some((st) => /video/i.test(st.label)), 'no video wording when there is no video');
+  assert.strictEqual(steps[2].label, 'Cutting option 1 to length…');
+}
+
 console.log(`\n${passed} passed`);

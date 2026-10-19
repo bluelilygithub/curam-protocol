@@ -43,10 +43,10 @@ Extend the Video Tools guide rather than adding a second one. Add Music tools to
 
 **Done when:** a generated track reaches Normalize and Trim audio without re-upload, and back.
 
-## Stage 4: Music-only mode and variations
+## Stage 4: Music-only mode and variations (built 2026-10-19; server logic and routes tested with fakes, UI not checked in a browser, not tried with real MusicGen)
 
 - **Music from text**: no video. Set a length (up to the provider's limits, looped with the existing crossfade fit), choose mood or description. Reuses the generate pipeline; the job takes a duration instead of a video.
-- **Regenerate one option** and **More like this** (use the chosen option as the seed or prompt base). Keep the options you like, re-roll the rest.
+- **Regenerate one option** and **Make another** (add one more from the same description). Built as those two; a true "more like this" that conditions on a chosen option's audio was not built (it needs a verified audio-input feature on the music model).
 - **Seed lock** so a good result can be reproduced.
 - **A/B compare**: play two options from the same timestamp.
 - **Cost estimate** shown before Generate.
