@@ -55,6 +55,95 @@ function AttentionWidget() {
   );
 }
 
+const STAGE_LABELS = { lead: 'Lead', qualified: 'Qualified', proposal: 'Proposal', negotiation: 'Negotiation' };
+const aud = (n) => `$${Math.round(n).toLocaleString('en-AU')}`;
+
+function OverviewTile({ title, to, children }) {
+  return (
+    <Link
+      to={to}
+      className="rounded-2xl border p-4 transition-opacity hover:opacity-70 block"
+      style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+    >
+      <div className="text-xs font-semibold mb-2" style={{ color: 'var(--color-muted)' }}>{title}</div>
+      {children}
+    </Link>
+  );
+}
+
+function OverviewWidget() {
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    api.get('/api/dashboard/overview')
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setData)
+      .catch(() => setData(null));
+  }, []);
+
+  if (!data) return null;
+  const { money, shares, pipeline } = data;
+  const hasPipeline = pipeline && (pipeline.stages.length > 0 || pipeline.followUpsDue > 0);
+  const hasMoney = money && (money.outstandingCount > 0 || money.bas);
+  if (!hasMoney && !shares && !hasPipeline) return null;
+
+  const basDays = money?.bas ? Math.round((new Date(money.bas.due) - new Date()) / 86400000) : null;
+  const down = shares?.change != null && shares.change < 0;
+
+  return (
+    <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {hasMoney && (
+        <OverviewTile title="Money" to="/finance">
+          <div className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{aud(money.outstandingTotal)}</div>
+          <div className="text-xs mt-1" style={{ color: 'var(--color-text)' }}>
+            outstanding, {money.outstandingCount} invoice{money.outstandingCount === 1 ? '' : 's'}
+          </div>
+          {money.bas && (
+            <div className="text-xs mt-2" style={{ color: basDays < 0 ? '#ef4444' : basDays <= 14 ? '#f59e0b' : 'var(--color-muted)' }}>
+              BAS to {money.bas.to} ({money.bas.status}), due about {money.bas.due}
+            </div>
+          )}
+        </OverviewTile>
+      )}
+      {shares && (
+        <OverviewTile title="Shares" to="/shares">
+          <div className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{aud(shares.value)}</div>
+          {shares.change != null ? (
+            <div className="text-xs mt-1" style={{ color: down ? '#ef4444' : '#22c55e' }}>
+              {down ? '' : '+'}{aud(shares.change)} ({shares.changePct.toFixed(1)}%) since the last day's close
+            </div>
+          ) : (
+            <div className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Portfolio value</div>
+          )}
+        </OverviewTile>
+      )}
+      {hasPipeline && (
+        <OverviewTile title="Pipeline" to="/pipeline">
+          {pipeline.stages.length > 0 ? (
+            <div className="flex flex-col gap-0.5">
+              {pipeline.stages.map((st) => (
+                <div key={st.stage} className="flex justify-between text-xs" style={{ color: 'var(--color-text)' }}>
+                  <span>{STAGE_LABELS[st.stage]} ({st.count})</span>
+                  <span style={{ color: 'var(--color-muted)' }}>{st.totalValue > 0 ? aud(st.totalValue) : ''}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-xs" style={{ color: 'var(--color-muted)' }}>No open deals</div>
+          )}
+          {(pipeline.closingSoon > 0 || pipeline.followUpsDue > 0) && (
+            <div className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
+              {pipeline.closingSoon > 0 && `${pipeline.closingSoon} closing within 2 weeks`}
+              {pipeline.closingSoon > 0 && pipeline.followUpsDue > 0 && ' - '}
+              {pipeline.followUpsDue > 0 && `${pipeline.followUpsDue} follow-up${pipeline.followUpsDue === 1 ? '' : 's'} due this week`}
+            </div>
+          )}
+        </OverviewTile>
+      )}
+    </div>
+  );
+}
+
 function GoalsWidget({ enabled = true }) {
   const getIcon = useIcon();
   const [dashboard, setDashboard] = useState(null);
@@ -867,6 +956,7 @@ function ProjectList() {
             </div>
 
             <AttentionWidget />
+            <OverviewWidget />
 
             {continueSection}
 

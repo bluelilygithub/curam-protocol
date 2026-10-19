@@ -78,4 +78,102 @@ router.get('/attention', async (req, res) => {
   }
 });
 
+// GET /api/dashboard/overview - Home's Money and Pipeline tiles. Stored data only: no live
+// quote or Gmail calls, so Home stays fast. A section is left out when the person cannot use
+// that feature.
+router.get('/overview', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const flags = await loadFeatureAccess(userId);
+    const can = (key) => req.user.isAdmin || flags[key] !== false;
+    const today = new Date().toISOString().slice(0, 10);
+    const out = {};
+
+    if (can('finance')) {
+      const { rows: inv } = await pool.query(
+        `SELECT COUNT(*)::int AS count, COALESCE(SUM(total),0) AS total
+           FROM fin_invoices
+          WHERE "userId"=$1 AND status='sent' AND COALESCE("docType",'invoice')='invoice'`,
+        [userId]
+      );
+      // Earliest quarter not yet paid. The ATO due date is 28 days after quarter end; shown as a guide.
+      const { rows: bas } = await pool.query(
+        `SELECT to_char(from_date,'YYYY-MM-DD') AS "from", to_char(to_date,'YYYY-MM-DD') AS "to",
+                to_char(to_date + 28,'YYYY-MM-DD') AS due, status
+           FROM fin_bas_quarters
+          WHERE "userId"=$1 AND status <> 'paid'
+          ORDER BY to_date ASC LIMIT 1`,
+        [userId]
+      );
+      out.money = {
+        outstandingCount: inv[0].count,
+        outstandingTotal: Number(inv[0].total),
+        bas: bas[0] || null,
+      };
+    }
+
+    if (can('shares')) {
+      // Latest snapshot against the last one recorded before the latest snapshot's calendar day.
+      const { rows } = await pool.query(
+        `WITH latest AS (
+           SELECT "totalValueAud", "recordedAt" FROM share_portfolio_snapshots
+            WHERE "userId"=$1 ORDER BY "recordedAt" DESC LIMIT 1)
+         SELECT l."totalValueAud" AS now, l."recordedAt" AS "at",
+                (SELECT p."totalValueAud" FROM share_portfolio_snapshots p
+                  WHERE p."userId"=$1 AND p."recordedAt" < date_trunc('day', l."recordedAt")
+                  ORDER BY p."recordedAt" DESC LIMIT 1) AS before
+           FROM latest l`,
+        [userId]
+      );
+      if (rows[0]) {
+        const now = Number(rows[0].now);
+        const before = rows[0].before == null ? null : Number(rows[0].before);
+        out.shares = {
+          value: now,
+          change: before == null ? null : now - before,
+          changePct: before ? ((now - before) / before) * 100 : null,
+          at: rows[0].at,
+        };
+      }
+    }
+
+    if (can('clients')) {
+      const { rows: stages } = await pool.query(
+        `SELECT stage, COUNT(*)::int AS count, COALESCE(SUM(value),0) AS "totalValue"
+           FROM client_deals
+          WHERE "userId"=$1 AND stage NOT IN ('won','lost')
+          GROUP BY stage`,
+        [userId]
+      );
+      const { rows: closing } = await pool.query(
+        `SELECT COUNT(*)::int AS count FROM client_deals
+          WHERE "userId"=$1 AND stage NOT IN ('won','lost') AND "expectedCloseDate" IS NOT NULL
+            AND "expectedCloseDate" <= ($2::date + 14)`,
+        [userId, today]
+      );
+      // Follow-ups = open tasks linked straight to a client (the CRM "+ Follow up" button).
+      const { rows: follow } = await pool.query(
+        `SELECT COUNT(*)::int AS count FROM tasks
+          WHERE "userId"=$1 AND "clientId" IS NOT NULL AND "parentTaskId" IS NULL
+            AND status IN ('todo','in-progress') AND "dueDate" IS NOT NULL AND "dueDate" <= to_char($2::date + 7,'YYYY-MM-DD')`,
+        [userId, today]
+      );
+      const order = ['lead', 'qualified', 'proposal', 'negotiation'];
+      out.pipeline = {
+        stages: order
+          .map((stage) => stages.find((r) => r.stage === stage))
+          .filter(Boolean)
+          .map((r) => ({ stage: r.stage, count: r.count, totalValue: Number(r.totalValue) })),
+        closingSoon: closing[0].count,
+        followUpsDue: follow[0].count,
+      };
+    }
+
+    res.json(out);
+  } catch (err) {
+    getLogger().error({ err }, 'dashboard overview failed');
+    res.status(500).json({ error: 'Could not load dashboard' });
+  }
+});
+
 module.exports = router;
