@@ -77,6 +77,16 @@ const { JSDOM } = require('jsdom');
   assert.ok(short.includes('data:text/plain,short'), 'a short one is left alone');
   assert.strictEqual(S.shortenDataUris(''), '');
 
+  // ---- a page with its pictures built in: the real cause of "the source is one long line" ----
+  const bigPage = `<html><head><style>.a{background:url(data:image/png;base64,${'B'.repeat(2_000_000)})}</style></head><body><div class="a"><img src="data:image/png;base64,${'A'.repeat(3_000_000)}" alt=""><p>Hello</p></div></body></html>`;
+  assert.strictEqual(S.formatHtml(bigPage).split('\n').length, 1, 'text past the size limit is left exactly as it is (so it was one line)');
+  const readable = S.formatHtml(S.shortenDataUris(bigPage));
+  assert.ok(readable.length < 2000 && readable.split('\n').length >= 10, 'shortened first, it is laid out one tag to a line');
+  assert.ok(readable.split('\n').some((l) => l.trim() === 'Hello'), 'and the words are still there');
+  assert.strictEqual(S.shortenDataUris(bigPage).replace(/…\(\d+ KB left out\)/g, '').includes('AAAAAAAAAA'), false, 'none of the picture data is left');
+  const cssPic = S.formatCss(S.shortenDataUris(`.a{background:url(data:image/png;base64,${'B'.repeat(2_000_000)})}.b{color:red}`));
+  assert.ok(cssPic.split('\n').length >= 6, 'the same goes for CSS with a picture built in');
+
   // ---- numbered lines and the filter ----
   const text3 = 'alpha\nBeta\ngamma\nbeta again';
   const all = S.sourceLines(text3);
@@ -86,11 +96,12 @@ const { JSDOM } = require('jsdom');
   const filtered = S.sourceLines(text3, { query: 'BETA' });
   assert.deepStrictEqual(filtered.rows, [{ number: 2, text: 'Beta' }, { number: 4, text: 'beta again' }], 'a filter keeps the line numbers of the whole text, and ignores case');
   assert.strictEqual(filtered.matches, 2);
-  const big = S.sourceLines(Array.from({ length: 10000 }, (_, i) => `line ${i}`).join('\n'));
+  const many = Array.from({ length: 25000 }, (_, i) => `line ${i}`).join('\n');
+  const big = S.sourceLines(many);
   assert.strictEqual(big.rows.length, S.MAX_SHOWN_LINES);
   assert.strictEqual(big.truncated, true);
-  assert.strictEqual(big.total, 10000);
-  assert.strictEqual(S.sourceLines(Array.from({ length: 10000 }, (_, i) => `line ${i}`).join('\n'), { query: 'line 9999' }).rows[0].number, 10000, 'a match past the cap is still found when filtered');
+  assert.strictEqual(big.total, 25000);
+  assert.strictEqual(S.sourceLines(many, { query: 'line 24999' }).rows[0].number, 25000, 'a match past the cap is still found when filtered');
   assert.deepStrictEqual(S.sourceLines('').rows, [{ number: 1, text: '' }]);
 
   console.log('restyle source-view tests passed');

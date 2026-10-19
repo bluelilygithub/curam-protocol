@@ -24,7 +24,7 @@ import {
 import { AskPanel, ScopePanel, ScopePicker, TextPanel, EnhancePanel, AnimationPanel, BoxPanel } from './restyle/PropertyPanels';
 import { SessionHistoryPanel, ScrapePanel } from './restyle/SessionAndScrapePanels';
 import SourceViewer from './restyle/SourceViewer';
-import { formatHtml, formatCss } from './restyle/sourceView.mjs';
+import { formatHtml, formatCss, shortenDataUris } from './restyle/sourceView.mjs';
 
 // CSS tool (displayed as "CSS"; the internal feature key, route and files still say "restyle"). The job: restyle a page you already have,
 // without writing code, then take the CSS away and paste it into the real site. See docs/restyle.md.
@@ -686,18 +686,24 @@ export default function RestylePage() {
     { id: 'edits', label: 'Your changes (CSS)', tip: 'Only the CSS made from your changes.', available: previewBuilt },
   ];
   const sourceActive = (sourceViews.find((v) => v.id === source.view && v.available) || sourceViews.find((v) => v.available) || sourceViews[1]).id;
-  const sourceText = useMemo(() => {
-    if (tool !== 'source') return '';
-    switch (sourceActive) {
-      case 'raw': return sourceRaw ? formatHtml(sourceRaw.text) : '';
-      case 'clean': return htmlLoaded ? formatHtml(`<!DOCTYPE html><html><head>${sanitizedRef.current.head}</head><body>${sanitizedRef.current.body}</body></html>`) : '';
-      case 'changed': return previewBuilt ? formatHtml(buildExportHtml()) : '';
-      case 'css': return previewBuilt ? formatCss(mergedCssRef.current) : '';
+  /**
+   * The text of one view. `forReading` shortens the pictures copied into the page (data: addresses can be hundreds of kilobytes on one
+   * line, which is what used to leave a whole page unformatted) before laying it out; copy and download use the whole thing.
+   */
+  const buildSource = (viewId, forReading) => {
+    const tidy = (text) => (forReading ? shortenDataUris(text) : text);
+    switch (viewId) {
+      case 'raw': return sourceRaw ? formatHtml(tidy(sourceRaw.text)) : '';
+      case 'clean': return htmlLoaded ? formatHtml(tidy(`<!DOCTYPE html><html><head>${sanitizedRef.current.head}</head><body>${sanitizedRef.current.body}</body></html>`)) : '';
+      case 'changed': return previewBuilt ? formatHtml(tidy(buildExportHtml())) : '';
+      case 'css': return previewBuilt ? formatCss(tidy(mergedCssRef.current)) : '';
       case 'edits': return previewBuilt ? exportCss : '';
       default: return '';
     }
-  // buildExportHtml reads the preview itself; the lists below are what make it change
-  }, [tool, sourceActive, sourceRaw, htmlLoaded, previewBuilt, previewVersion, edits, tokens, important, exportCss]); // eslint-disable-line react-hooks/exhaustive-deps
+  };
+  const sourceText = useMemo(() => (tool === 'source' ? buildSource(sourceActive, true) : ''),
+    // buildSource reads the preview itself; the lists below are what make it change
+    [tool, sourceActive, sourceRaw, htmlLoaded, previewBuilt, previewVersion, edits, tokens, important, exportCss]); // eslint-disable-line react-hooks/exhaustive-deps
   const sourceNote = sourceActive === 'raw' && sourceRaw?.truncated ? 'This page is very large: only the first 2 MB is shown here.'
     : (sourceActive === 'raw' && !sourceRaw ? 'The original is not kept with saved pages. Load the page again to see it.' : '');
   const sourceFile = { raw: ['source.html', 'text/html'], clean: ['cleaned.html', 'text/html'], changed: ['restyled.html', 'text/html'], css: ['page.css', 'text/css'], edits: ['changes.css', 'text/css'] }[sourceActive];
@@ -988,7 +994,7 @@ export default function RestylePage() {
             <SourceViewer
               views={sourceViews} active={sourceActive} onActive={(view) => setSource((st) => ({ ...st, view }))} text={sourceText} note={sourceNote}
               query={source.query} onQuery={(query) => setSource((st) => ({ ...st, query }))} wrap={source.wrap} onWrap={(wrap) => setSource((st) => ({ ...st, wrap }))}
-              onCopy={() => copyText(sourceText, 'Copied the source')} onDownload={() => saveFile(sourceText, `${fileSlug}-${sourceFile[0]}`, sourceFile[1])} downloadLabel={`Download .${sourceFile[0].split('.').pop()}`}
+              onCopy={() => copyText(buildSource(sourceActive, false), 'Copied the source')} onDownload={() => saveFile(buildSource(sourceActive, false), `${fileSlug}-${sourceFile[0]}`, sourceFile[1])} downloadLabel={`Download .${sourceFile[0].split('.').pop()}`}
               empty={htmlLoaded ? 'Nothing to show for this one yet.' : 'Load a page first (Your page), then read its source here.'}
             />
           )}

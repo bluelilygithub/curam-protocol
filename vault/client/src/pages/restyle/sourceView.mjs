@@ -2,8 +2,8 @@
 // by line, and can be filtered to the lines that mention something. Pure functions, tested in server/services/restyle/restyleSource.test.js.
 // Nothing here changes what the page is: it is only how the text is shown.
 
-export const MAX_FORMAT_CHARS = 1_500_000; // past this the text is shown as it is: laying it out would freeze the page
-export const MAX_SHOWN_LINES = 5000;
+export const MAX_FORMAT_CHARS = 3_000_000; // past this the text is shown as it is: laying it out would freeze the page
+export const MAX_SHOWN_LINES = 10000;
 
 const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
 const RAW = /^<(script|style|pre|textarea)\b/i;

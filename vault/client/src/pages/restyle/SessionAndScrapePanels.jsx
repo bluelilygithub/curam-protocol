@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import { PRIMARY, Status } from './RestylePanels';
@@ -20,6 +21,24 @@ const spokenAddress = (t) => {
   const joined = String(t || '').replace(/\b(dot|slash|colon|dash|hyphen|underscore)\b/gi, (w) => symbols[w.toLowerCase()]).replace(/\s+/g, '').replace(/\.+$/, '');
   return joined ? joined.toLowerCase() : null;
 };
+
+/** A small square button with just an icon: the words are its tooltip and its name for screen readers. */
+function IconButton({ icon, label, tip, onClick }) {
+  const getIcon = useIcon();
+  return (
+    <Tooltip text={tip}>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={label}
+        className="w-7 h-7 inline-flex items-center justify-center rounded-lg border transition-opacity duration-200 hover:opacity-60"
+        style={OUTLINE}
+      >
+        {getIcon(icon, { size: 14 })}
+      </button>
+    </Tooltip>
+  );
+}
 
 /** Every change made in this session, with a way back to any point, forward again, or to take back just one. */
 export function SessionHistoryPanel({ entries, cursor, onGoTo, onRevert, onUndo, onRedo }) {
@@ -46,17 +65,19 @@ export function SessionHistoryPanel({ entries, cursor, onGoTo, onRevert, onUndo,
           return (
             <React.Fragment key={entry.id}>
               {rowIndex === (hereAt === -1 ? rows.length : hereAt) && here}
-              <li className="rounded-lg border px-2.5 py-2 text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', opacity: applied ? 1 : 0.55 }}>
-                <p className="font-semibold break-words" style={{ color: 'var(--color-text)' }}>{entry.label}</p>
-                <p style={MUTED}>{clock(entry.at)} · {entry.changes.length} thing{entry.changes.length === 1 ? '' : 's'}{applied ? '' : ' · undone'}</p>
-                <div className="flex flex-wrap gap-2 mt-1.5">
+              <li className="rounded-lg border px-2.5 py-2 text-xs flex items-start gap-2" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', opacity: applied ? 1 : 0.55 }}>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold break-words" style={{ color: 'var(--color-text)' }}>{entry.label}</p>
+                  <p style={MUTED}>{clock(entry.at)} · {entry.changes.length} thing{entry.changes.length === 1 ? '' : 's'}{applied ? '' : ' · undone'}</p>
+                </div>
+                <div className="flex gap-1 shrink-0">
                   {applied ? (
                     <>
-                      <Tooltip text="Put everything back as it was just before this change. Later changes stay in the list, so you can come forward again."><button className={SMALL_BTN} style={OUTLINE} onClick={() => onGoTo(index)}>Go back to before this</button></Tooltip>
-                      <Tooltip text="Take back only this change and keep the ones made after it. If a later change touched the same thing, that later one is kept."><button className={SMALL_BTN} style={OUTLINE} onClick={() => onRevert(index)}>Take back just this</button></Tooltip>
+                      <IconButton icon="rotate-ccw" label="Go back to before this" tip="Put everything back as it was just before this change. Later changes stay in the list, so you can come forward again." onClick={() => onGoTo(index)} />
+                      <IconButton icon="eraser" label="Take back just this" tip="Take back only this change and keep the ones made after it. If a later change touched the same thing, that later one is kept." onClick={() => onRevert(index)} />
                     </>
                   ) : (
-                    <Tooltip text="Go forward to the page as it was just after this change."><button className={SMALL_BTN} style={OUTLINE} onClick={() => onGoTo(index + 1)}>Go forward to here</button></Tooltip>
+                    <IconButton icon="rotate-cw" label="Go forward to here" tip="Go forward to the page as it was just after this change." onClick={() => onGoTo(index + 1)} />
                   )}
                 </div>
               </li>
