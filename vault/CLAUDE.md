@@ -63,6 +63,7 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `server/routes/webExtractor.js` — Web Extractor API (`POST /api/web-extractor/extract`), 3 modes: article / images / styled
 - `server/routes/youtube.js` — YouTube search/history/favourites API; `server/services/youtubeTranscript.js` — caption fetch (used elsewhere too, e.g. Video Tools' Generate reference flow); no download feature — see `docs/youtube-agent.md`
 - `server/services/webExtractorService.js` — jsdom-based extraction: article text (strips ads/nav/header/footer/sidebar/images), image list, exact-scrape (absolute-URL rewrite, original inline styles kept)
+- `client/src/pages/WebExtractorPage.jsx` + `client/src/pages/webExtractor/` + `server/services/webExtractorTutor.js` — **Web Extractor UI** copies the Graphics/Video Tools layout: grouped tool list with search and hover tips, (i) how-it-works box, mic on every field, and a **guide chat** (`POST /api/web-extractor-tutor`, `guideId` `web-extractor`). Update `webExtractorTools.mjs` and the guide `CATALOG` together (`npm run test:web-extractor-tutor`). See **`docs/web-extractor.md`**; extraction tests `npm run test:web-extractor`.
 - `server/routes/gsc.js` — Search Console OAuth + snapshots (`/api/gsc/*`; callback before requireAuth)
 - `server/services/gscService.js` — Search Console sites + 28-day searchanalytics
 - `server/routes/videos.js` — Video Tools API (`/api/videos/*`): ffmpeg tools, generate queue, library CRUD + captioned burn

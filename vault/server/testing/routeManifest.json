@@ -3034,6 +3034,9 @@
   "POST /api/videos/youtube-preview": {
    "class": "authed"
   },
+  "POST /api/web-extractor-tutor": {
+   "class": "authed"
+  },
   "POST /api/web-extractor/download-image": {
    "class": "authed"
   },

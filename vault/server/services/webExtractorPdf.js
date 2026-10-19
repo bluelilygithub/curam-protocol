@@ -45,10 +45,26 @@ function buildDocument(deps, { title, byline, url, text }) {
   );
 }
 
+// The PDF uses the built-in Helvetica, which only has the Western (WinAnsi) letters. Anything else (Chinese, emoji, ...) would come
+// out as blanks or garbage, so it is replaced with "?" and the caller is told how many were replaced.
+const WIN_ANSI_EXTRA = new Set('‘’‚“”„–—•…€™†‡‰ŒœŠšŸŽžƒˆ˜‹›');
+
+function winAnsiSafe(input) {
+  let replaced = 0;
+  let out = '';
+  for (const ch of String(input || '')) {
+    const code = ch.codePointAt(0);
+    if (ch === '\n' || ch === '\t' || (code >= 0x20 && code <= 0x7e) || (code >= 0xa0 && code <= 0xff) || WIN_ANSI_EXTRA.has(ch)) out += ch;
+    else if (code < 0x20 || code === 0x7f || (code >= 0x200b && code <= 0x200f) || code === 0xfeff) continue; // control / zero-width: drop quietly
+    else { out += '?'; replaced += 1; }
+  }
+  return { text: out, replaced };
+}
+
 async function generateArticlePdf(article) {
   const deps = await import('@react-pdf/renderer');
   const element = buildDocument(deps, article);
   return deps.renderToBuffer(element);
 }
 
-module.exports = { generateArticlePdf };
+module.exports = { generateArticlePdf, winAnsiSafe };

@@ -2,7 +2,7 @@
 
 const http = require('http');
 const https = require('https');
-const { JSDOM } = require('jsdom');
+const { JSDOM, VirtualConsole } = require('jsdom');
 const { fetchHtml, normaliseHttpUrl, checkSsrf } = require('./htmlFetch');
 const { pinnedLookup } = require('../utils/safeFetch');
 
@@ -63,10 +63,15 @@ function fetchBinary(url, redirectsLeft = 5, timeoutMs = 15000) {
   });
 }
 
+const MAIN_SELECTOR = 'article, main, [role="main"]';
+
+// jsdom prints every piece of CSS it cannot parse to the server console; a scraped page is full of them and none matter here.
+const parseDom = (html, url) => new JSDOM(html, { url, virtualConsole: new VirtualConsole() });
+
 const JUNK_SELECTORS = [
   'script', 'style', 'noscript', 'iframe', 'svg', 'canvas',
   'header', 'footer', 'nav', 'aside',
-  'form', 'button',
+  'button',
   '[role="banner"]', '[role="navigation"]', '[role="contentinfo"]', '[role="complementary"]',
   '[class*="cookie"]', '[id*="cookie"]',
   '[class*="advert" i]', '[id*="advert" i]', '[class*="ads-" i]', '[class*="-ads" i]',
@@ -77,6 +82,10 @@ const JUNK_SELECTORS = [
   '[class*="related" i]', '[class*="recommend" i]',
   '[class*="comment" i]', '[id*="comment" i]',
 ];
+
+// A <form> is page chrome (search box, sign-up) unless it is the wrapper around the article, which is how ASP.NET WebForms
+// sites are built. It is only dropped when it holds little running text.
+const FORM_KEEP_PARAGRAPH_CHARS = 400;
 
 // Heading/label text that flags a block as supplementary (not article body),
 // even though it sits inside <article>/<main> and survives JUNK_SELECTORS.
@@ -93,11 +102,45 @@ const JUNK_HEADING_PATTERNS = [
 const HEADING_LIKE_SELECTOR = 'h1, h2, h3, h4, h5, h6, [class*="heading" i], [class*="title" i]';
 // A block-level container worth removing wholesale when its heading matches.
 const REMOVABLE_ANCESTOR_SELECTOR = 'section, aside, div, ul, nav';
+// A container this big is the article itself (or its wrapper), not a "related stories" box: remove only the heading.
+const MAX_REMOVABLE_CHARS = 2500;
+const MAX_REMOVABLE_PARAGRAPHS = 8;
 
 function textMatchesAny(text, patterns) {
   const t = (text || '').replace(/\s+/g, ' ').trim();
   if (!t) return false;
-  return patterns.some((p) => (p instanceof RegExp ? p.test(t) : t.toLowerCase().includes(String(p).toLowerCase())));
+  return patterns.some((p) => p.test(t));
+}
+
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * A term the person typed ("Author") matches a heading that IS that term or starts with it as a whole word
+ * ("Author", "Author: Jo") - never one that merely contains the letters ("Candidate", "Updates" for "Date").
+ */
+function customTermPattern(term) {
+  return new RegExp(`^${escapeRegExp(String(term).trim())}(?![\\p{L}\\p{N}])`, 'iu');
+}
+
+function holdsMain(el, mainEls) {
+  return mainEls.some((m) => el === m || el.contains(m));
+}
+
+function removeJunk(document) {
+  const mainEls = Array.from(document.querySelectorAll(MAIN_SELECTOR));
+  JUNK_SELECTORS.forEach((sel) => {
+    document.querySelectorAll(sel).forEach((el) => {
+      if (!el.isConnected || holdsMain(el, mainEls)) return;
+      // The headline often lives in the article's own <header>; only the page header is chrome.
+      if (el.tagName === 'HEADER' && el.closest(MAIN_SELECTOR)) return;
+      el.remove();
+    });
+  });
+  document.querySelectorAll('form').forEach((form) => {
+    if (!form.isConnected || holdsMain(form, mainEls)) return;
+    const paragraphChars = Array.from(form.querySelectorAll('p')).reduce((n, p) => n + (p.textContent || '').length, 0);
+    if (paragraphChars < FORM_KEEP_PARAGRAPH_CHARS) form.remove();
+  });
 }
 
 /**
@@ -106,9 +149,8 @@ function textMatchesAny(text, patterns) {
  * terms). Walks up from the matching heading to the nearest reasonably-scoped
  * block ancestor and drops that whole subtree.
  */
-function removeSupplementarySections(document, domWindow, customTerms = []) {
-  const patterns = [...JUNK_HEADING_PATTERNS, ...customTerms.filter(Boolean)];
-  if (!patterns.length) return;
+function removeSupplementarySections(document, customTerms = []) {
+  const patterns = [...JUNK_HEADING_PATTERNS, ...customTerms.filter(Boolean).map(customTermPattern)];
 
   document.querySelectorAll(HEADING_LIKE_SELECTOR).forEach((el) => {
     if (!el.isConnected) return; // already removed as part of an earlier match
@@ -116,8 +158,12 @@ function removeSupplementarySections(document, domWindow, customTerms = []) {
     if (!textMatchesAny(label, patterns)) return;
 
     let target = el.closest(REMOVABLE_ANCESTOR_SELECTOR) || el;
-    // Don't nuke the whole document/body if the selector matched too broadly.
-    if (target === document.body || target === document.documentElement) target = el;
+    const mainEls = Array.from(document.querySelectorAll(MAIN_SELECTOR));
+    const tooBig = (target.textContent || '').length > MAX_REMOVABLE_CHARS || target.querySelectorAll('p').length > MAX_REMOVABLE_PARAGRAPHS;
+    // Only a box that the heading LEADS is "its" section; a wrapper with other headings or text before it is shared with the article.
+    const leads = target === el || target.querySelector(HEADING_LIKE_SELECTOR) === el;
+    // Don't nuke the document, the article or a page-sized wrapper if the selector matched too broadly.
+    if (target === document.body || target === document.documentElement || tooBig || !leads || holdsMain(target, mainEls)) target = el;
     target.remove();
   });
 }
@@ -127,43 +173,54 @@ function absoluteUrl(src, base) {
   try { return new URL(src, base).toString(); } catch { return null; }
 }
 
+/** Where relative URLs resolve from: the page's <base href> if it has one, else the page address. */
+const baseOf = (document, url) => document.baseURI || url;
+
 /** Pick the element most likely to hold the article body. */
 function findMainCandidate(doc) {
-  const direct = doc.querySelector('article, main, [role="main"]');
-  if (direct) return direct;
-
+  // The biggest article/main wins (a listing page has many small <article> cards and one big <main>).
   let best = null;
+  let bestLen = 0;
+  doc.querySelectorAll(MAIN_SELECTOR).forEach((el) => {
+    const len = (el.textContent || '').trim().length;
+    if (len > bestLen) { best = el; bestLen = len; }
+  });
+  if (best && bestLen >= 200) return best;
+
+  // No usable article/main: take the block with the most text in its OWN paragraphs. (Total text would always pick the
+  // outermost wrapper, i.e. the whole page.)
+  let bestOwn = null;
   let bestScore = 0;
   doc.querySelectorAll('div, section').forEach((el) => {
-    const text = el.textContent || '';
-    const pCount = el.querySelectorAll('p').length;
-    const score = text.trim().length * (pCount > 2 ? 1.4 : 1);
-    if (pCount >= 2 && score > bestScore) {
-      bestScore = score;
-      best = el;
-    }
+    const paragraphs = Array.from(el.children).filter((c) => c.tagName === 'P');
+    if (paragraphs.length < 2) return;
+    const score = paragraphs.reduce((n, p) => n + (p.textContent || '').trim().length, 0);
+    if (score > bestScore) { bestScore = score; bestOwn = el; }
   });
-  return best || doc.body;
+  return bestOwn || best || doc.body;
 }
 
 const HEADING_LEVEL = { h1: 1, h2: 2, h3: 3, h4: 4, h5: 5, h6: 6 };
 const BLOCK_TAGS = new Set([
-  'p', 'div', 'section', 'article', 'li', 'blockquote', 'pre',
-  'tr', 'table', 'ul', 'ol', 'br', 'hr',
+  'p', 'div', 'section', 'article', 'blockquote', 'pre',
+  'tr', 'table', 'ul', 'ol', 'br', 'hr', 'figcaption', 'dl', 'dt', 'dd',
 ]);
+const CELL_TAGS = new Set(['td', 'th']);
+const EMPTY_LIST_ITEM = /^(•|\d+\.)$/;
 
 /**
  * Walk an element tree to plain text, inserting blank lines around block
  * elements and marking headings with a markdown-style `#` prefix + a blank
  * line on each side, so heading breaks survive the flatten to text/PDF.
+ * List items start with a bullet or number; table cells are separated by " | ".
  */
 function blockToText(root, domWindow) {
   const lines = [];
   let current = '';
 
   const flushCurrent = () => {
-    const t = current.replace(/[ \t]+/g, ' ').trim();
-    if (t) lines.push(t);
+    const t = current.replace(/[ \t]+/g, ' ').replace(/\s*\|\s*$/, '').trim();
+    if (t && !EMPTY_LIST_ITEM.test(t)) lines.push(t);
     current = '';
   };
 
@@ -189,6 +246,23 @@ function blockToText(root, domWindow) {
       return;
     }
 
+    if (tag === 'li') {
+      flushCurrent();
+      const parent = node.parentElement;
+      const ordered = parent && parent.tagName.toLowerCase() === 'ol';
+      const n = ordered ? Array.from(parent.children).filter((c) => c.tagName === 'LI').indexOf(node) + 1 : 0;
+      current = ordered ? `${n}. ` : '• ';
+      for (const child of node.childNodes) walk(child);
+      flushCurrent();
+      return;
+    }
+
+    if (CELL_TAGS.has(tag)) {
+      for (const child of node.childNodes) walk(child);
+      current += ' | ';
+      return;
+    }
+
     const isBlock = BLOCK_TAGS.has(tag);
     if (isBlock) flushCurrent();
     for (const child of node.childNodes) walk(child);
@@ -200,114 +274,183 @@ function blockToText(root, domWindow) {
   return lines.join('\n\n');
 }
 
+const clean = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+const metaContent = (document, selector) => clean(document.querySelector(selector)?.getAttribute('content'));
+const MAX_BYLINE_CHARS = 120;
+
+/** Page title without the " | Site Name" tail: the social-card title, else the first headline, else <title>. */
+function pageTitle(document) {
+  return metaContent(document, 'meta[property="og:title"]')
+    || clean(document.querySelector('article h1, main h1, [role="main"] h1')?.textContent) // the page header's h1 is often the site name
+    || clean(document.querySelector('h1')?.textContent)
+    || clean(document.querySelector('title')?.textContent);
+}
+
+/** Author name: the meta tag, else the first author-ish element short enough to be a name (not a whole bio block). */
+function pageByline(document) {
+  const fromMeta = metaContent(document, 'meta[name="author"]');
+  if (fromMeta) return fromMeta;
+  for (const el of document.querySelectorAll('[rel="author"], [itemprop="author"], [class*="byline" i], .author')) {
+    const t = clean(el.textContent);
+    if (t && t.length <= MAX_BYLINE_CHARS) return t;
+  }
+  return '';
+}
+
+// Too little text to be an article usually means the page builds itself with JavaScript, which this tool does not run.
+const THIN_TEXT_CHARS = 200;
+const JS_PAGE_NOTICE = 'Very little came back. The page probably loads its content with JavaScript, which this tool cannot run, or it blocked the request.';
+
 /**
- * Mode 1 — article text only: strip chrome (nav/header/footer/ads/sidebars/images),
+ * Mode 1 - article text only: strip chrome (nav/header/footer/ads/sidebars/images),
  * return the readable body text (with heading line breaks) plus a lightly-cleaned HTML fragment.
  */
 function extractArticle(html, url, customExcludes = []) {
-  const dom = new JSDOM(html, { url });
+  const dom = parseDom(html, url);
   const { document } = dom.window;
 
-  const title = (document.querySelector('title')?.textContent || '').trim();
-  const byline = document.querySelector('[rel="author"], .author, [class*="byline" i]')?.textContent?.trim() || '';
+  const title = pageTitle(document);
+  const byline = pageByline(document);
 
-  JUNK_SELECTORS.forEach((sel) => {
-    document.querySelectorAll(sel).forEach((el) => el.remove());
-  });
+  removeJunk(document);
   // Images are excluded from this mode by request.
   document.querySelectorAll('img, picture, figure, video, source').forEach((el) => el.remove());
-  // "Most read" / "related stories" / user-named sections — supplementary, not article body.
-  removeSupplementarySections(document, dom.window, customExcludes);
+  // "Most read" / "related stories" / user-named sections - supplementary, not article body.
+  removeSupplementarySections(document, customExcludes);
 
   const main = findMainCandidate(document);
   const html_ = main ? main.innerHTML : '';
   const text = blockToText(main || document.body, dom.window);
 
-  return { title, byline, text, html: html_ };
+  return { title, byline, text, html: html_, notice: text.length < THIN_TEXT_CHARS ? JS_PAGE_NOTICE : '' };
 }
 
-/** Mode 2 — every image on the page, deduped, with alt text and absolute URLs. */
+/** Largest candidate in a srcset ("a.jpg 480w, b.jpg 1080w" or "a.jpg 1x, b.jpg 2x"); the first one is usually the smallest. */
+function pickFromSrcset(val) {
+  const candidates = String(val || '').split(/,\s+/).map((part) => part.trim()).filter(Boolean).map((part) => {
+    const [u, descriptor] = part.split(/\s+/);
+    const n = parseFloat(descriptor);
+    let weight = 0;
+    if (descriptor && Number.isFinite(n)) weight = /w$/i.test(descriptor) ? n : n * 1000;
+    return { u, weight };
+  }).filter((c) => c.u);
+  if (!candidates.length) return '';
+  return candidates.reduce((best, c) => (c.weight > best.weight ? c : best)).u;
+}
+
+const CSS_URL = /url\(\s*(['"]?)([^'")]+?)\1\s*\)/gi;
+
+/** Mode 2 - every image on the page, deduped, with alt text and absolute URLs. */
 function extractImages(html, url) {
-  const dom = new JSDOM(html, { url });
+  const dom = parseDom(html, url);
   const { document } = dom.window;
+  const base = baseOf(document, url);
 
   const seen = new Set();
   const images = [];
-
-  const firstSrcsetUrl = (val) => (val || '').split(',')[0]?.trim().split(/\s+/)[0];
+  const add = (raw, alt = '', width = null, height = null, front = false) => {
+    if (!raw || /^data:/i.test(raw)) return;
+    const abs = absoluteUrl(raw, base);
+    if (!abs || seen.has(abs)) return;
+    seen.add(abs);
+    const entry = { src: abs, alt, width, height };
+    if (front) images.unshift(entry); else images.push(entry);
+  };
 
   document.querySelectorAll('img').forEach((img) => {
     // Lazy-load attrs hold the real image; plain src is often a tiny placeholder
-    // (base64 blur-up or 1x1 gif) — prefer the lazy attrs when present.
+    // (base64 blur-up or 1x1 gif) - prefer the lazy attrs when present.
     const raw = img.getAttribute('data-src')
       || img.getAttribute('data-lazy-src')
       || img.getAttribute('data-original')
-      || firstSrcsetUrl(img.getAttribute('data-srcset'))
-      || firstSrcsetUrl(img.getAttribute('srcset'))
+      || pickFromSrcset(img.getAttribute('data-srcset'))
+      || pickFromSrcset(img.getAttribute('srcset'))
       || img.getAttribute('src');
-    if (!raw || raw.startsWith('data:')) return;
-    const abs = absoluteUrl(raw, url);
-    if (!abs || seen.has(abs)) return;
-    seen.add(abs);
-    images.push({
-      src: abs,
-      alt: img.getAttribute('alt') || '',
-      width: img.getAttribute('width') || null,
-      height: img.getAttribute('height') || null,
-    });
+    const w = parseInt(img.getAttribute('width'), 10);
+    const h = parseInt(img.getAttribute('height'), 10);
+    if ((w > 0 && w <= 2) || (h > 0 && h <= 2)) return; // tracking pixel
+    add(raw, img.getAttribute('alt') || '', img.getAttribute('width') || null, img.getAttribute('height') || null);
   });
 
   // <picture><source srcset></picture> images not duplicated by a sibling <img> above.
-  document.querySelectorAll('picture source[srcset]').forEach((source) => {
-    const raw = firstSrcsetUrl(source.getAttribute('srcset'));
-    if (!raw || raw.startsWith('data:')) return;
-    const abs = absoluteUrl(raw, url);
-    if (!abs || seen.has(abs)) return;
-    seen.add(abs);
-    images.push({ src: abs, alt: '', width: null, height: null });
+  document.querySelectorAll('picture source[srcset]').forEach((source) => add(pickFromSrcset(source.getAttribute('srcset'))));
+  document.querySelectorAll('video[poster]').forEach((v) => add(v.getAttribute('poster'), 'video poster'));
+  document.querySelectorAll('[style]').forEach((el) => {
+    for (const m of (el.getAttribute('style') || '').matchAll(CSS_URL)) add(m[2], 'background');
   });
 
-  const og = document.querySelector('meta[property="og:image"]')?.getAttribute('content');
-  const ogAbs = absoluteUrl(og, url);
-  if (ogAbs && !seen.has(ogAbs)) {
-    seen.add(ogAbs);
-    images.unshift({ src: ogAbs, alt: 'og:image', width: null, height: null });
-  }
+  // Social-card images go first: they are the page's chosen picture.
+  add(metaContent(document, 'meta[name="twitter:image"], meta[name="twitter:image:src"]'), 'twitter:image', null, null, true);
+  add(metaContent(document, 'meta[property="og:image"]'), 'og:image', null, null, true);
 
-  return { images, count: images.length };
+  return {
+    images,
+    count: images.length,
+    notice: images.length ? '' : 'No pictures found in the page source. If the page draws its pictures with JavaScript, this tool cannot see them.',
+  };
+}
+
+/** Rewrite url(...) and @import in CSS text to absolute addresses (data: and #fragment references are left alone). */
+function rewriteCssUrls(css, base) {
+  return String(css || '')
+    .replace(CSS_URL, (m, q, u) => {
+      if (/^(data:|#|about:|blob:)/i.test(u.trim())) return m;
+      const abs = absoluteUrl(u.trim(), base);
+      return abs ? `url(${q}${abs}${q})` : m;
+    })
+    .replace(/@import\s+(['"])([^'"]+)\1/gi, (m, q, u) => {
+      const abs = absoluteUrl(u.trim(), base);
+      return abs ? `@import ${q}${abs}${q}` : m;
+    });
 }
 
 /**
- * Mode 3 — verbatim scrape: original HTML with every relative link/asset URL
+ * Mode 3 - verbatim scrape: original HTML with every relative link/asset URL
  * rewritten absolute so it renders the same when sandboxed (all original
- * inline styles and <style> blocks are left untouched).
+ * inline styles and <style> blocks are kept; only the addresses inside them are made absolute).
  */
 function extractStyled(html, url) {
-  const dom = new JSDOM(html, { url });
+  const dom = parseDom(html, url);
   const { document } = dom.window;
+  const base = baseOf(document, url);
 
   document.querySelectorAll('[src]').forEach((el) => {
-    const abs = absoluteUrl(el.getAttribute('src'), url);
+    const abs = absoluteUrl(el.getAttribute('src'), base);
     if (abs) el.setAttribute('src', abs);
   });
   document.querySelectorAll('[href]').forEach((el) => {
-    const abs = absoluteUrl(el.getAttribute('href'), url);
+    const abs = absoluteUrl(el.getAttribute('href'), base);
     if (abs) el.setAttribute('href', abs);
   });
-  document.querySelectorAll('[srcset]').forEach((el) => {
-    const rewritten = el.getAttribute('srcset')
-      .split(',')
-      .map((part) => {
-        const [u, size] = part.trim().split(/\s+/);
-        const abs = absoluteUrl(u, url);
-        return [abs || u, size].filter(Boolean).join(' ');
-      })
-      .join(', ');
-    el.setAttribute('srcset', rewritten);
+  document.querySelectorAll('[poster]').forEach((el) => {
+    const abs = absoluteUrl(el.getAttribute('poster'), base);
+    if (abs) el.setAttribute('poster', abs);
   });
+  ['srcset', 'data-srcset'].forEach((attr) => {
+    document.querySelectorAll(`[${attr}]`).forEach((el) => {
+      const rewritten = el.getAttribute(attr)
+        .split(/,\s+/)
+        .map((part) => {
+          const [u, size] = part.trim().split(/\s+/);
+          const abs = absoluteUrl(u, base);
+          return [abs || u, size].filter(Boolean).join(' ');
+        })
+        .join(', ');
+      el.setAttribute(attr, rewritten);
+    });
+  });
+  // Lazy-load attributes: show the real picture, not the blur-up placeholder, since no script runs to swap it in.
+  document.querySelectorAll('img[data-src]').forEach((img) => {
+    const abs = absoluteUrl(img.getAttribute('data-src'), base);
+    if (abs) img.setAttribute('src', abs);
+  });
+  document.querySelectorAll('style').forEach((el) => { el.textContent = rewriteCssUrls(el.textContent, base); });
+  document.querySelectorAll('[style]').forEach((el) => { el.setAttribute('style', rewriteCssUrls(el.getAttribute('style'), base)); });
 
-  // Scripts stripped — this is a static visual snapshot, not a live re-execution of the page.
+  // Scripts stripped - this is a static visual snapshot, not a live re-execution of the page.
   document.querySelectorAll('script').forEach((el) => el.remove());
+  // Everything is absolute now, and a redirect inside the preview frame would replace the snapshot with the live page.
+  document.querySelectorAll('base, meta[http-equiv="refresh" i]').forEach((el) => el.remove());
 
   return { html: dom.serialize() };
 }
@@ -322,4 +465,4 @@ async function runExtraction(rawUrl, mode, customExcludes = []) {
   return { url, mode: 'article', ...extractArticle(body, url, customExcludes) };
 }
 
-module.exports = { runExtraction, extractArticle, extractImages, extractStyled, fetchBinary };
+module.exports = { runExtraction, extractArticle, extractImages, extractStyled, fetchBinary, rewriteCssUrls, pickFromSrcset };

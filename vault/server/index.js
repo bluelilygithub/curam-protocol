@@ -223,6 +223,7 @@ app.use('/api/seo', requireFeature('seo'), aiLimiter, require('./routes/seoAudit
 app.use('/api/html', requireFeature('html'), require('./routes/htmlAudit'));
 app.use('/api/fitness', requireFeature('fitness'), require('./routes/fitness'));
 app.use('/api/web-extractor', requireFeature('webExtractor'), require('./routes/webExtractor'));
+app.use('/api/web-extractor-tutor', requireFeature('webExtractor'), aiLimiter, require('./routes/webExtractorTutor')); // the Web Extractor guide chat (reads no pages)
 app.use('/api/browser-agent', requireFeature('browserAgent'), require('./routes/browserAgent'));
 app.use('/api/wellbeing', requireFeature('wellbeing'), require('./routes/wellbeing'));
 app.use('/api/translate', requireFeature('translate'), aiLimiter, require('./routes/translate'));

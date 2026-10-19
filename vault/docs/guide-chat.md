@@ -35,6 +35,10 @@ The **Music tutor** (`guideId` `music`, `POST /api/music/tutor`, `client/src/pag
 
 The **Notes guide** (`guideId` `notes`, `POST /api/notes-tutor`, `server/services/notesTutor.js` on `guideCore.js`, `server/routes/notesTutor.js` on `guideRouter.js`, wrapper `client/src/pages/notes/NotesTutorChat.jsx`) knows the controls Notes really has: New note, New voice note, Search notes, Dictate, the @ menu, Project, Convert to task, Open as chat and Delete. It knows the two microphone buttons apart (New voice note records and writes up a whole recording; Dictate types live into the open note), that only the words of a voice note are kept, and the limits (about an hour per recording, no speaker names, no replay, no folders or sharing, not a legal record). It sees no notes. `client/src/pages/notes/notesTools.mjs` is the list of controls the page can show and what each Open button does (create / open the recorder / focus the search box / bring the open note into focus; none changes or deletes a note); `npm run test:notes-tutor` fails if that list and the guide's catalogue drift apart. When a Notes control is added or changed, update `notesTools.mjs` and `CATALOG` together.
 
+## The Web Extractor guide
+
+The **Web Extractor guide** (`guideId` `web-extractor`, `POST /api/web-extractor-tutor`, `server/services/webExtractorTutor.js` on `guideCore.js`, wrapper `client/src/pages/webExtractor/WebExtractorTutorChat.jsx`) knows the three tools (Article content, Extract images, Exact scrape) and their buttons. It sees no page or result. `client/src/pages/webExtractor/webExtractorTools.mjs` lists the tools, tips and the controls the Open buttons can switch to; `npm run test:web-extractor-tutor` fails if that list and the catalogue drift. See `docs/web-extractor.md`.
+
 ## Behaviour changes belong in the shared files
 
 Change how all guides look or behave in `TutorChat.jsx` (client) or `tutorEmail.js` (server), never in a wrapper. Tooltip behaviour belongs in `Tooltip.jsx` and applies to the whole app.
