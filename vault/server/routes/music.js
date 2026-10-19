@@ -15,7 +15,7 @@ const {
   mixMusicWithVideo, normalizeMixSettings, normalizeVoiceSettings, prepareVoiceover,
 } = require('../services/music/musicFit');
 const {
-  VOICES, MAX_TEXT_CHARS, normalizeSpeech, getVoiceProvider,
+  MAX_TEXT_CHARS, normalizeSpeech, getVoiceProvider,
 } = require('../services/music/voiceProviders');
 const { videoJobGate } = require('../services/videoJobGate');
 const { createJob, runJob, runUploadedTrackJob, getJob, removeJob, publicJob } = require('../services/music/musicJobs');
@@ -47,7 +47,8 @@ function findOption(req, res, { needFit = true } = {}) {
 router.get('/status', async (req, res) => {
   const ffmpeg = await checkFfmpeg();
   const provider = getMusicProvider().describe();
-  const voiceProvider = getVoiceProvider().describe();
+  const voiceBackend = getVoiceProvider();
+  const voiceProvider = voiceBackend.describe();
   await captureIf(!ffmpeg, {
     userId: req.user.id,
     source: 'music',
@@ -71,7 +72,7 @@ router.get('/status', async (req, res) => {
     provider,
     maxUploadMb: Math.round(MAX_VIDEO_BYTES / (1024 * 1024)),
     maxVideoSec: MAX_VIDEO_SEC,
-    voice: { provider: voiceProvider, voices: VOICES, maxChars: MAX_TEXT_CHARS, maxUploadMb: Math.round(MAX_VOICE_BYTES / (1024 * 1024)) },
+    voice: { provider: voiceProvider, voices: voiceBackend.voices, maxChars: MAX_TEXT_CHARS, maxUploadMb: Math.round(MAX_VOICE_BYTES / (1024 * 1024)) },
     moods: [...MOOD_PRESETS.map((m) => ({ id: m.id, label: m.label, defaultBpm: m.defaultBpm })), { id: CUSTOM_ID, label: 'Custom prompt' }],
   });
 });
@@ -244,12 +245,12 @@ router.post('/jobs/:id/voiceover', aiLimiter, voiceUpload.single('voice'), ffmpe
     srcBuffer = req.file.buffer;
     source = 'upload';
   } else {
+    const provider = getVoiceProvider();
     try {
-      speech = normalizeSpeech({ text: req.body?.text, voice: req.body?.voice, speed: req.body?.speed });
+      speech = normalizeSpeech({ text: req.body?.text, voice: req.body?.voice, speed: req.body?.speed }, provider.voices);
     } catch (err) {
       return res.status(400).json({ error: err.message });
     }
-    const provider = getVoiceProvider();
     const info = provider.describe();
     if (!info.configured) return res.status(503).json({ error: info.note || 'AI voices are not set up on this server.' });
     try {

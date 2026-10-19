@@ -380,7 +380,7 @@ function VoiceoverPanel({ job, status, onJobChange, voiceSettings, onVoiceSettin
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="block space-y-1">
               <span className="text-xs" style={muted}>Voice</span>
-              <Tooltip text="The AI voice that reads the script. English voices only — there is no Australian accent yet.">
+              <Tooltip text="The AI voice that reads the script.">
                 <select value={voiceId || voices[0]?.id || ''} onChange={(e) => setVoiceId(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={field}>
                   {voices.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
                 </select>

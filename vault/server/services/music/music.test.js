@@ -7,7 +7,9 @@ const { MOOD_PRESETS, buildMusicPrompt, parseBpm, INSTRUMENTAL_SUFFIX } = requir
 const {
   planLoop, fadeTimes, buildFitFilter, buildMixFilter, normalizeMixSettings, normalizeVoiceSettings, DUCKING,
 } = require('./musicFit');
-const { normalizeSpeech, VOICES, MAX_TEXT_CHARS } = require('./voiceProviders');
+const {
+  normalizeSpeech, VOICES, GEMINI_VOICES, MAX_TEXT_CHARS, pickVoiceProviderName, createGeminiVoiceProvider,
+} = require('./voiceProviders');
 const { isReplicateAudioUrl } = require('./musicProviders');
 
 let passed = 0;
@@ -129,6 +131,19 @@ test('voiceover settings and script are clamped to safe values', () => {
   assert.throws(() => normalizeSpeech({ text: 'a'.repeat(MAX_TEXT_CHARS + 1) }), /under/);
 });
 
+test('script voice falls back to the chosen provider\'s own first voice', () => {
+  assert.strictEqual(normalizeSpeech({ text: 'x', voice: 'af_nicole' }, GEMINI_VOICES).voice, 'Kore');
+  assert.strictEqual(normalizeSpeech({ text: 'x', voice: 'Charon' }, GEMINI_VOICES).voice, 'Charon');
+});
+
+test('voice backend: forced name wins, fake follows the music fake, else Gemini when it has a key', () => {
+  assert.strictEqual(pickVoiceProviderName({ GEMINI_API_KEY: 'k' }), 'gemini');
+  assert.strictEqual(pickVoiceProviderName({}), 'replicate');
+  assert.strictEqual(pickVoiceProviderName({ GEMINI_API_KEY: 'k', VOICE_PROVIDER: 'replicate' }), 'replicate');
+  assert.strictEqual(pickVoiceProviderName({ MUSIC_PROVIDER: 'fake', GEMINI_API_KEY: 'k' }), 'fake');
+  assert.strictEqual(pickVoiceProviderName({ VOICE_PROVIDER: 'gemini', MUSIC_PROVIDER: 'fake' }), 'gemini');
+});
+
 test('only Replicate https hosts are accepted as audio download URLs', () => {
   assert.ok(isReplicateAudioUrl('https://replicate.delivery/pbxt/abc/out.wav'));
   assert.ok(isReplicateAudioUrl('https://pbxt.replicate.delivery/x.wav'));
@@ -137,7 +152,43 @@ test('only Replicate https hosts are accepted as audio download URLs', () => {
   }
 });
 
+async function geminiVoiceChecks() {
+  const realFetch = global.fetch;
+  const savedKey = process.env.GEMINI_API_KEY;
+  process.env.GEMINI_API_KEY = 'test-key';
+  const pcm = Buffer.alloc(48000); // 1 s of silence at 24 kHz, 16-bit mono
+  let seen = null;
+  try {
+    global.fetch = async (url, init) => {
+      seen = { url, init };
+      return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ inlineData: { data: pcm.toString('base64') } }] } }] }) };
+    };
+    const wav = await createGeminiVoiceProvider().speak({ text: 'G\'day mate', voice: 'Kore', speed: 1 });
+    assert.ok(seen.url.includes('generateContent'));
+    assert.strictEqual(seen.init.headers['x-goog-api-key'], 'test-key'); // key in a header, never the URL
+    assert.ok(!seen.url.includes('test-key'));
+    const body = JSON.parse(seen.init.body);
+    assert.ok(body.contents[0].parts[0].text.includes('Australian accent'));
+    assert.ok(body.contents[0].parts[0].text.endsWith('G\'day mate'));
+    assert.strictEqual(body.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName, 'Kore');
+    assert.strictEqual(wav.subarray(0, 4).toString(), 'RIFF');
+    assert.strictEqual(wav.length, 44 + pcm.length);
+
+    global.fetch = async () => ({ ok: false, status: 429, json: async () => ({ error: { message: 'quota' } }) });
+    await assert.rejects(() => createGeminiVoiceProvider().speak({ text: 'x', voice: 'Kore', speed: 1 }), /busy or over its limit/);
+    global.fetch = async () => ({ ok: true, status: 200, json: async () => ({ candidates: [] }) });
+    await assert.rejects(() => createGeminiVoiceProvider().speak({ text: 'x', voice: 'Kore', speed: 1 }), /returned no audio/);
+    delete process.env.GEMINI_API_KEY;
+    await assert.rejects(() => createGeminiVoiceProvider().speak({ text: 'x', voice: 'Kore', speed: 1 }), /GEMINI_API_KEY/);
+  } finally {
+    global.fetch = realFetch;
+    if (savedKey === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = savedKey;
+  }
+}
+
 (async () => {
+  await geminiVoiceChecks();
+  passed += 1; console.log('ok - Gemini voice: request shape, Australian-accent prompt, WAV result, clear errors');
   const { createReplicateProvider, _clearVersionCache } = require('./musicProviders');
   const realFetch = global.fetch;
   const saved = process.env.REPLICATE_API_TOKEN;
