@@ -119,13 +119,13 @@ router.get('/overview', async (req, res) => {
     }
 
     if (can('shares')) {
-      // Latest snapshot against the last one recorded before the latest snapshot's calendar day.
+      // Holdings only (cash can be wildly off when deposits were not recorded). Latest snapshot against the last one recorded before the latest snapshot's calendar day.
       const { rows } = await pool.query(
         `WITH latest AS (
-           SELECT "totalValueAud", "recordedAt" FROM share_portfolio_snapshots
+           SELECT "holdingsValueAud", "recordedAt" FROM share_portfolio_snapshots
             WHERE "userId"=$1 ORDER BY "recordedAt" DESC LIMIT 1)
-         SELECT l."totalValueAud" AS now, l."recordedAt" AS "at",
-                (SELECT p."totalValueAud" FROM share_portfolio_snapshots p
+         SELECT l."holdingsValueAud" AS now, l."recordedAt" AS "at",
+                (SELECT p."holdingsValueAud" FROM share_portfolio_snapshots p
                   WHERE p."userId"=$1 AND p."recordedAt" < date_trunc('day', l."recordedAt")
                   ORDER BY p."recordedAt" DESC LIMIT 1) AS before
            FROM latest l`,

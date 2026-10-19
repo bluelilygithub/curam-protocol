@@ -110,10 +110,15 @@ function OverviewWidget() {
           <div className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>{aud(shares.value)}</div>
           {shares.change != null ? (
             <div className="text-xs mt-1" style={{ color: down ? '#ef4444' : '#22c55e' }}>
-              {down ? '' : '+'}{aud(shares.change)} ({shares.changePct.toFixed(1)}%) since the last day's close
+              {down ? '' : '+'}{aud(shares.change)} ({shares.changePct.toFixed(1)}%) since the previous day
             </div>
           ) : (
-            <div className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Portfolio value</div>
+            <div className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Value of holdings</div>
+          )}
+          {shares.at && (
+            <div className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+              as at {new Date(shares.at).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
+            </div>
           )}
         </OverviewTile>
       )}
