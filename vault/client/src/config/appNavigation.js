@@ -5,9 +5,9 @@ export const APP_NAV_GROUPS = [
     id: 'workspace',
     label: 'Workspace',
     items: [
-      { id: 'personas', label: 'Personas', path: '/personas', icon: 'user', featureKey: null },
-      { id: 'memory', label: 'Memory', path: '/memory', icon: 'brain', featureKey: null },
-      { id: 'prompts', label: 'Prompt Library', path: '/prompts', icon: 'book', featureKey: null },
+      { id: 'personas', label: 'Personas', path: '/personas', icon: 'user', featureKey: 'personas' },
+      { id: 'memory', label: 'Memory', path: '/memory', icon: 'brain', featureKey: 'memory' },
+      { id: 'prompts', label: 'Prompt Library', path: '/prompts', icon: 'book', featureKey: 'prompts' },
       { id: 'guide', label: 'User Guide', path: '/guide', icon: 'help-circle', featureKey: null },
       { id: 'showcase', label: 'Client Showcase', path: 'https://claude.ai/artifact/STxyMcZUUHCVBZniFbxhtP', icon: 'external-link', featureKey: null, external: true },
     ],

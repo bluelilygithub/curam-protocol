@@ -146,6 +146,7 @@ app.use('/api/fetch-url', require('./routes/fetchUrl'));
 app.use('/api/web-search', require('./routes/webSearch'));
 app.use('/api/memory', require('./routes/memory'));
 app.use('/api/suggestions', require('./routes/suggestions'));
+app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/prompts', require('./routes/prompts'));
 app.use('/api/folders', require('./routes/folders'));
 app.use('/api/personas', require('./routes/personas'));

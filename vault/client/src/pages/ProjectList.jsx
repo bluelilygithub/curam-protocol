@@ -16,6 +16,45 @@ const EMOTION_COLOURS = {
   sadness: '#5B6FAD', disgust: '#8A5C8A', anger: '#A85C5C', anticipation: '#C48B3C',
 };
 
+function AttentionWidget() {
+  const [items, setItems] = useState([]);
+
+  useEffect(() => {
+    api.get('/api/dashboard/attention')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => setItems(Array.isArray(data?.items) ? data.items : []))
+      .catch(() => setItems([]));
+  }, []);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="mb-6">
+      <h2 className="text-base font-semibold mb-3" style={{ color: 'var(--color-text)' }}>Needs attention</h2>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {items.map((item) => (
+          <Link
+            key={item.key}
+            to={item.path}
+            className="rounded-2xl border p-4 transition-opacity hover:opacity-70"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+          >
+            <div className="text-2xl font-semibold" style={{ color: item.urgent ? '#ef4444' : 'var(--color-text)' }}>
+              {item.count}
+            </div>
+            <div className="text-xs mt-1" style={{ color: 'var(--color-text)' }}>{item.label}</div>
+            {item.detail > 0 && (
+              <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                ${item.detail.toLocaleString('en-AU', { maximumFractionDigits: 0 })}
+              </div>
+            )}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function GoalsWidget({ enabled = true }) {
   const getIcon = useIcon();
   const [dashboard, setDashboard] = useState(null);
@@ -826,6 +865,8 @@ function ProjectList() {
                 New chat
               </button>
             </div>
+
+            <AttentionWidget />
 
             {continueSection}
 
