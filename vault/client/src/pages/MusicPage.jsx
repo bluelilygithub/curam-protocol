@@ -56,6 +56,9 @@ function MusicPageInner({ videosOk }) {
   const [seed, setSeed] = useState('');
   const [tune, setTune] = useState(DEFAULT_TUNE); // fades + where the music starts, as set on the sliders (applied with the button)
   const [snapToCuts, setSnapToCuts] = useState(true);
+  const [aboutVideo, setAboutVideo] = useState(''); // "Not sure which mood?": a sentence about the video
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestion, setSuggestion] = useState(null); // { mood, label, bpm, why } from the last suggestion
   const [cutsFor, setCutsFor] = useState({ jobId: null, cuts: null }); // picture cuts of the current job's video
   const [voiceSettings, setVoiceSettings] = useState({ volume: 100, start: 0 });
   const trackInputRef = useRef(null);
@@ -292,6 +295,22 @@ function MusicPageInner({ videosOk }) {
     to.play().catch(() => {});
   };
 
+  const suggestMood = async () => {
+    setSuggesting(true);
+    try {
+      const res = await api.post('/api/music/suggest-mood', { description: aboutVideo });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not suggest a mood');
+      setMood(data.mood);
+      if (data.bpm) setBpm(String(data.bpm));
+      setSuggestion(data);
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
   const tuneChanged = ['fadeInS', 'fadeOutS', 'startS'].some((k) => Math.abs((tune[k] ?? 0) - (appliedFit[k] ?? 0)) > 0.04);
   const applyTune = () => changeOptions(`/api/music/jobs/${job.id}/fit`, tune, 'Applying your fades…');
   const cuts = cutsFor.jobId === job?.id ? cutsFor.cuts : null;
@@ -437,6 +456,34 @@ function MusicPageInner({ videosOk }) {
               </div>
             )}
             {!ownTrackMode && (<>
+              <div className="space-y-2">
+                <Tooltip text="Not sure which mood to pick? Say what your video is about and the assistant chooses the closest mood and a tempo for you. You can still change them. It only reads your words, not the video.">
+                  <div>
+                    <VoiceInput
+                      type="textarea" append rows={2} value={aboutVideo} onChange={setAboutVideo}
+                      label="Not sure which mood? Say what your video is about"
+                      placeholder="e.g. a calm tour of our new skincare shop, with soft close-ups"
+                      className="!text-xs"
+                    />
+                  </div>
+                </Tooltip>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Tooltip text="Pick the closest mood and tempo from what you wrote. Has a very small cost.">
+                    <button
+                      type="button" onClick={suggestMood} disabled={suggesting || aboutVideo.trim().length < 3}
+                      className="px-3 py-1.5 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+                      style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+                    >
+                      {suggesting ? 'Thinking…' : 'Suggest a mood'}
+                    </button>
+                  </Tooltip>
+                  {suggestion && (
+                    <span className="text-xs" style={muted}>
+                      Suggested <strong style={{ color: 'var(--color-text)' }}>{suggestion.label}</strong>{suggestion.bpm ? ` at ${suggestion.bpm} BPM` : ''}{suggestion.why ? ` — ${suggestion.why}` : ''}
+                    </span>
+                  )}
+                </div>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block space-y-1">
                   <span className="text-xs" style={muted}>Mood</span>

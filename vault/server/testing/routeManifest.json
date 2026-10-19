@@ -1873,6 +1873,9 @@
   "GET /api/music/jobs/:id": {
    "class": "authed"
   },
+  "POST /api/music/suggest-mood": {
+   "class": "authed"
+  },
   "POST /api/music/tutor": {
    "class": "authed"
   },

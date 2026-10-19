@@ -67,7 +67,7 @@ Move text-to-speech into a service both apps use. Mix audio gets "write a script
 
 **Done when:** one script can become a voice in either app, and the Music voiceover works without a video.
 
-## Stage 6: Smarter fit
+## Stage 6: Smarter fit (built 2026-10-19; logic tested with ffmpeg faked, UI not checked in a browser; frame/transcript mood suggestion NOT built, ducking regions NOT drawn)
 
 - **Cut-snapping**: detect scene cuts with ffmpeg scene detection, offer to land musical changes on them.
 - **Timeline**: reuse `ClipTimeline.jsx` to show the video, ducking regions and the voiceover bar; drag the voice start.

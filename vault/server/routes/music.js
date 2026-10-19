@@ -10,6 +10,7 @@ const { ffmpegRoute } = require('../middleware/ffmpegRoute');
 const { captureIf, makeFingerprint } = require('../services/SuggestionService');
 const { checkFfmpeg, MAX_VIDEO_BYTES, extensionForMime, probeVideo } = require('../services/videoFfmpeg');
 const { askTutor } = require('../services/videoTutor');
+const { suggestMood } = require('../services/music/moodSuggest');
 const { MOOD_PRESETS, CUSTOM_ID, buildMusicPrompt } = require('../services/music/musicPrompts');
 const { getMusicProvider } = require('../services/music/musicProviders');
 const {
@@ -76,6 +77,16 @@ router.post('/tutor', aiLimiter, async (req, res) => {
   } catch (err) {
     getLogger().error({ err }, '[music/tutor]');
     res.status(err.status || 500).json({ error: err.status === 400 ? err.message : 'The tutor could not answer just now. Try again in a moment.' });
+  }
+});
+
+// "Not sure which mood?": a sentence about the video in, one of the ready-made moods (and a tempo) out.
+router.post('/suggest-mood', aiLimiter, async (req, res) => {
+  try {
+    res.json(await suggestMood(req.user.id, req.body?.description));
+  } catch (err) {
+    if (!err.status) getLogger().error({ err }, '[music/suggest-mood]');
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'Could not suggest a mood just now. Try again, or choose one yourself.' });
   }
 });
 

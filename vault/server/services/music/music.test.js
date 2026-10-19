@@ -158,6 +158,27 @@ test('fine-tuned fades and start are made safe; the start delays the music insid
   assert.deepStrictEqual(parseSceneCuts('', 30), []);
 });
 
+async function moodChecks() {
+  const { normalizeMoodReply, suggestMood, cleanDescription } = require('./moodSuggest');
+  assert.deepStrictEqual(normalizeMoodReply('{"mood":"calm-corporate","bpm":96.4,"why":"  Soft and steady.  "}'), { mood: 'calm-corporate', label: 'Calm corporate', bpm: 96, why: 'Soft and steady.' });
+  assert.deepStrictEqual(normalizeMoodReply('```json\n{"mood":"suspense","bpm":999}\n```'), { mood: 'suspense', label: 'Suspense', bpm: null, why: '' }, 'a fenced reply works; a silly tempo is dropped');
+  assert.strictEqual(normalizeMoodReply('{"mood":"death-metal","bpm":100}'), null, 'an invented mood is refused');
+  assert.strictEqual(normalizeMoodReply('not json at all'), null);
+  assert.strictEqual(normalizeMoodReply(null), null);
+  assert.strictEqual(cleanDescription('  a   calm\n video '), 'a calm video');
+  const deps = (text) => ({
+    getModels: async () => ({ light: 'light-model' }),
+    callModel: async (model, prompt) => { deps.seen = { model, prompt }; return { text, model, inputTokens: 1, outputTokens: 1 }; },
+    logUsage: () => {},
+  });
+  const ok = await suggestMood(1, 'a drone trip across the coast', deps('{"mood":"travel-montage","bpm":110,"why":"Open horizons."}'));
+  assert.strictEqual(ok.mood, 'travel-montage');
+  assert.strictEqual(deps.seen.model, 'light-model', 'uses the workspace light model, not a hardcoded one');
+  assert.match(deps.seen.prompt, /drone trip/);
+  await assert.rejects(() => suggestMood(1, 'hi', deps('{}')), /a little about your video/);
+  await assert.rejects(() => suggestMood(1, 'a long calm video', deps('{"mood":"nope"}')), /could not pick a mood/);
+}
+
 test('only Replicate https hosts are accepted as audio download URLs', () => {
   assert.ok(isReplicateAudioUrl('https://replicate.delivery/pbxt/abc/out.wav'));
   assert.ok(isReplicateAudioUrl('https://pbxt.replicate.delivery/x.wav'));
@@ -286,6 +307,8 @@ async function musicJobChecks() {
 (async () => {
   await geminiVoiceChecks();
   await musicJobChecks();
+  await moodChecks();
+  passed += 1; console.log('ok - mood suggestion: only a known mood, a sane tempo and a short reason survive');
   {
     // a script becomes a WAV through the provider, then the shared conversion (faked here: no ffmpeg needed)
     const { speakToWav } = require('../voiceover');
