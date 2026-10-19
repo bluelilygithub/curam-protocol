@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../../utils/apiClient';
 import { loadGoogleFontPreview } from './loadGoogleFontPreview';
+import { MicButton } from '../../components/voiceInput/VoiceInput';
 
 let catalogCache = null; // module-level — shared across mounts within this tab session, avoids refetch on every open
 
@@ -74,6 +75,7 @@ export default function FontPicker({ value, onChange, onSelect, placeholder = 'e
 
   return (
     <div ref={containerRef} className="relative">
+      <div className="relative">
       <input
         value={value}
         onChange={(e) => { onChange(e.target.value); setOpen(true); }}
@@ -85,9 +87,17 @@ export default function FontPicker({ value, onChange, onSelect, placeholder = 'e
           }
         }}
         placeholder={placeholder}
-        className="w-full rounded px-2 py-1.5 text-sm"
+        className="w-full rounded px-2 py-1.5 pr-9 text-sm"
         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+        aria-label="Search Google Fonts"
       />
+      <div className="absolute right-1 top-1/2 -translate-y-1/2">
+        <MicButton
+          label="Say the name of a font"
+          onFinal={(text) => { onChange(String(text || '').trim().replace(/[.,!?]+$/, '')); setOpen(true); }}
+        />
+      </div>
+      </div>
       {loadErr && (
         <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
           Search unavailable ({loadErr}) — you can still type an exact family name.

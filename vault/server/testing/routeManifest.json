@@ -1951,6 +1951,12 @@
   "GET /api/notes": {
    "class": "authed"
   },
+  "POST /api/measurements-tutor": {
+   "class": "authed"
+  },
+  "POST /api/fonts-tutor": {
+   "class": "authed"
+  },
   "POST /api/notes-tutor": {
    "class": "authed"
   },
@@ -3032,6 +3038,9 @@
    "class": "authed"
   },
   "POST /api/videos/youtube-preview": {
+   "class": "authed"
+  },
+  "POST /api/restyle-tutor": {
    "class": "authed"
   },
   "POST /api/web-extractor-tutor": {

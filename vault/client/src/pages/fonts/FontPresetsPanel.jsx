@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
+import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 
 export default function FontPresetsPanel({ presets, onSave, onApply, onDelete }) {
   const getIcon = useIcon();
@@ -15,14 +16,10 @@ export default function FontPresetsPanel({ presets, onSave, onApply, onDelete })
   return (
     <div className="space-y-3" data-tour="fonts-presets-panel">
       <div className="flex items-center gap-2">
-        <Tooltip text="Name this combination of Transforms + Kerning settings so you can reapply it later, to this or any other font.">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Display Heavy"
-            className="flex-1 rounded px-2 py-1.5 text-sm"
-            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-          />
+        <Tooltip text="Name this combination of Transforms + Kerning settings so you can reapply it later, to this or any other font. You can say the name with the microphone.">
+          <div className="flex-1 min-w-0">
+            <VoiceInput value={name} onChange={setName} placeholder="e.g. Display Heavy" label="Name for these settings" onKeyDown={(e) => { if (e.key === 'Enter') save(); }} />
+          </div>
         </Tooltip>
         <button
           onClick={save}

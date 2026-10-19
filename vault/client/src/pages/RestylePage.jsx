@@ -3,7 +3,12 @@ import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
-import { useVoice } from '../hooks/useVoice';
+import Tooltip from '../components/Tooltip';
+import ToolSidebar from '../components/ToolSidebar';
+import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
+import { VoiceInput, VoiceInputProvider } from '../components/voiceInput/VoiceInput';
+import RestyleTutorChat from './restyle/RestyleTutorChat';
+import { RESTYLE_TOOLS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, HOW_IT_WORKS, GUIDE_TOOLS } from './restyle/restyleTools.mjs';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 
 // CSS tool (displayed as "CSS"; internal feature key/route/files still say "restyle" — pure
@@ -226,15 +231,26 @@ const FIELD = {
   color: 'var(--color-text)',
 };
 
+// A labelled control with a hover tip on its label.
+function Field({ label, tip, children }) {
+  return (
+    <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
+      <Tooltip text={tip}><span className="w-fit">{label}</span></Tooltip>
+      {children}
+    </label>
+  );
+}
+
 export default function RestylePage() {
   const getIcon = useIcon();
   const { user } = useAuthStore();
   const isAdmin = user?.isAdmin;
   const addToast = useToastStore((s) => s.addToast);
-  const { isSTTAvailable, isLocalSTTAvailable, isListening, isTranscribing, transcript, interimText, voiceError, startListening, stopListening } = useVoice();
 
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
   const canUse = isAdmin || featureAccess.restyle !== false;
+  const [tool, setTool] = useState('page');
+  const info = useToolInfoModal('vault_css_info_seen');
 
   useEffect(() => {
     api.get('/api/settings/feature-access')
@@ -243,12 +259,6 @@ export default function RestylePage() {
       .catch(() => {});
   }, []);
 
-  // Voice input for the plain-English request box — same useVoice() hook as chat elsewhere.
-  useEffect(() => {
-    if (transcript) {
-      setAiRequest((prev) => (prev.trim() ? prev.trim() + ' ' + transcript.trim() : transcript.trim()));
-    }
-  }, [transcript]);
 
   // ---------- HTML input ----------
   const [htmlTab, setHtmlTab] = useState('file');
@@ -391,6 +401,10 @@ export default function RestylePage() {
   };
 
   // ---------- Build preview ----------
+  // Once the preview is built, or something in it is clicked, move on from the set-up tools to the editing ones.
+  useEffect(() => { if (previewBuilt) setTool((t) => (t === 'page' || t === 'styles' ? 'ask' : t)); }, [previewBuilt]);
+  useEffect(() => { if (hasSelection) setTool((t) => (t === 'page' || t === 'styles' || t === 'saved' ? 'ask' : t)); }, [hasSelection]);
+
   const resetSelection = useCallback(() => {
     selectedElRef.current = null;
     undoStackRef.current = [];
@@ -862,57 +876,79 @@ export default function RestylePage() {
   }
 
   const tabBtn = (active) => ({
-    flex: 1, padding: '6px 8px', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem',
+    flex: 1, padding: '6px 8px', borderRadius: 8, cursor: 'pointer', fontSize: '0.8rem',
     border: `1px solid var(--color-border)`,
     background: active ? 'var(--color-primary)' : 'var(--color-bg)',
     color: active ? '#fff' : 'var(--color-muted)',
   });
+  const statusColour = (kind) => (kind === 'error' ? '#b3452c' : kind === 'ok' ? '#2f7a3d' : 'var(--color-muted)');
+  const outlineBtn = 'px-3 py-1.5 rounded-lg text-sm border transition-all duration-200 hover:opacity-70 disabled:opacity-50';
+  const outlineStyle = { borderColor: 'var(--color-border)', color: 'var(--color-text)' };
+  const smallBtn = 'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-opacity duration-200 hover:opacity-70 disabled:opacity-50';
+  const primaryStyle = { background: 'var(--color-primary)', color: '#fff' };
 
-  return (
-    <div className="flex flex-col h-full" style={{ background: 'var(--color-bg)' }}>
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Roboto:wght@400;700&family=Merriweather:wght@400;700&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
+  const menu = GROUPS.map((label) => ({
+    label,
+    tip: GROUP_TIPS[label],
+    tools: RESTYLE_TOOLS.filter((t) => t.group === label).map((t) => ({
+      ...t,
+      tip: TOOL_TIPS[t.id],
+      hint: t.needsSelection && !hasSelection ? (previewBuilt ? 'Click something first' : 'Build the preview first') : undefined,
+    })),
+  }));
+  const currentTool = RESTYLE_TOOLS.find((t) => t.id === tool);
 
-      <div className="flex items-baseline gap-3 px-5 py-3 border-b flex-wrap" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-        <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>CSS</h1>
-        <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Change how your website looks — no code needed.</p>
-        <div className="ml-auto flex items-center gap-2">
-          <button className="px-3 py-2 rounded-md text-sm font-semibold border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }} onClick={loadDemo}>Load a demo</button>
-          <div className="relative">
-            <button className="px-3 py-2 rounded-md text-sm font-semibold border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }} onClick={() => setSavedListOpen((v) => !v)}>My saved pages ({savedProjects.length})</button>
-            {savedListOpen && (
-              <div className="absolute right-0 mt-1 rounded-lg border shadow-lg z-20" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: 260 }}>
-                {savedProjects.length === 0 ? (
-                  <p className="text-xs p-3" style={{ color: 'var(--color-muted)' }}>Nothing saved yet. Build a preview, then use "Save this page" below.</p>
-                ) : (
-                  <ul className="max-h-64 overflow-y-auto">
-                    {savedProjects.map((p) => (
-                      <li key={p.id} className="flex items-center gap-2 px-3 py-2 text-sm border-b last:border-b-0" style={{ borderColor: 'var(--color-border)' }}>
-                        <button className="flex-1 text-left truncate hover:opacity-70" style={{ color: 'var(--color-text)' }} disabled={loadingProjectId === p.id} onClick={() => handleLoadProject(p.id)}>
-                          {loadingProjectId === p.id ? 'Loading…' : p.name}
-                        </button>
-                        <button className="hover:opacity-60" title="Delete" style={{ color: 'var(--color-muted)' }} onClick={() => handleDeleteProject(p.id, p.name)}>{getIcon('x', { size: 14 })}</button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <div className="flex gap-1 p-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
-                  <input type="text" className="flex-1 text-xs rounded-md border p-1.5" style={FIELD} placeholder="Name this page…" value={saveNameInput} onChange={(e) => setSaveNameInput(e.target.value)} />
-                  <button className="px-2 py-1 rounded-md text-xs font-semibold" style={{ background: 'var(--color-primary)', color: '#fff', opacity: previewBuilt && !savingProject ? 1 : 0.45 }} disabled={!previewBuilt || savingProject} onClick={handleSaveProject}>{savingProject ? 'Saving…' : 'Save this page'}</button>
-                </div>
-              </div>
-            )}
-          </div>
-          <button className="px-3 py-2 rounded-md text-sm font-semibold border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', opacity: canUndo ? 1 : 0.45 }} disabled={!canUndo} onClick={handleUndo}>Undo last change</button>
-          <button className="px-3 py-2 rounded-md text-sm font-semibold" style={{ background: 'var(--color-primary)', color: '#fff', opacity: previewBuilt ? 1 : 0.45 }} disabled={!previewBuilt} onClick={handleExport}>Download my page</button>
-        </div>
-      </div>
+  // The guide's "Open" buttons: switch to the tool, exactly as clicking it in the list would.
+  const openToolById = (id) => {
+    const target = GUIDE_TOOLS.find((t) => t.id === id);
+    if (target) setTool(target.tool);
+  };
 
-      <div className="grid gap-4 p-4 flex-1" style={{ gridTemplateColumns: '320px 1fr 300px', minHeight: 0 }}>
-        {/* LEFT: source panel */}
-        <aside className="rounded-xl border p-3 flex flex-col gap-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', maxHeight: 'calc(100vh - 140px)', overflowY: 'auto' }}>
+  const colourPicks = (property, explanation) => (detectedAssets.colors.length > 0 && (
+    <div className="flex flex-wrap gap-1 mt-1">
+      {detectedAssets.colors.map((c) => (
+        <Tooltip key={c} text={`Used in your files: ${c}`}>
+          <button
+            type="button"
+            className="w-5 h-5 rounded border"
+            aria-label={`Use ${c}`}
+            style={{ background: c, borderColor: 'var(--color-border)' }}
+            onClick={() => applyQuickPick(property, c, explanation, { [property]: toHex(c) || c })}
+          />
+        </Tooltip>
+      ))}
+    </div>
+  ));
+  const sizePicks = (list, property, explanation) => (list.length > 0 && (
+    <div className="flex flex-wrap gap-1 mt-1">
+      {list.map((size) => (
+        <Tooltip key={size} text={`Used in your files: ${size}`}>
+          <button
+            type="button"
+            className="px-1.5 py-0.5 rounded border text-xs"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-bg)' }}
+            onClick={() => applyQuickPick(property, size, explanation, { [property]: parseFloat(size) || ctrl[property] })}
+          >{size}</button>
+        </Tooltip>
+      ))}
+    </div>
+  ));
+
+  const needBuild = (
+    <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+      Build the preview first (Your page, then Style files), then click something in it.
+    </p>
+  );
+  const needClick = (
+    <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Click something in the preview on the right first. It gets an outline, and this tool changes it.</p>
+  );
+
+  const renderPanel = () => {
+    if (currentTool?.needsSelection && !hasSelection) return previewBuilt ? needClick : needBuild;
+    switch (tool) {
+      case 'page':
+        return (
           <section>
-            <h2 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>1. Your page's HTML</h2>
             <div className="flex gap-1 mb-2">
               <button style={tabBtn(htmlTab === 'file')} onClick={() => setHtmlTab('file')}>Upload a file</button>
               <button style={tabBtn(htmlTab === 'paste')} onClick={() => setHtmlTab('paste')}>Paste it in</button>
@@ -923,7 +959,7 @@ export default function RestylePage() {
                 onDragOver={(e) => { e.preventDefault(); setHtmlDragOver(true); }}
                 onDragLeave={() => setHtmlDragOver(false)}
                 onDrop={(e) => { e.preventDefault(); setHtmlDragOver(false); handleHtmlFile(e.dataTransfer.files[0]); }}
-                className="rounded-lg border-2 border-dashed p-6 text-center text-sm cursor-pointer"
+                className="rounded-xl border-2 border-dashed p-6 text-center text-sm cursor-pointer transition-all duration-200"
                 style={{ borderColor: htmlDragOver ? 'var(--color-primary)' : 'var(--color-border)', color: 'var(--color-muted)' }}
               >
                 <p>Drop your .html file here, or click to choose one</p>
@@ -932,16 +968,18 @@ export default function RestylePage() {
             )}
             {htmlTab === 'paste' && (
               <div>
-                <textarea className="w-full text-sm rounded-md border p-2 mb-2" style={{ ...FIELD, minHeight: 90 }} placeholder="Paste your page's HTML here..." value={htmlPaste} onChange={(e) => setHtmlPaste(e.target.value)} />
-                <button className="px-3 py-1.5 rounded-md text-xs font-semibold border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }} onClick={() => submitHtml({ html: htmlPaste })}>Use this HTML</button>
+                <textarea className="w-full text-sm rounded-xl border p-2 mb-2" style={{ ...FIELD, minHeight: 110 }} aria-label="Your page's HTML" placeholder="Paste your page's HTML here..." value={htmlPaste} onChange={(e) => setHtmlPaste(e.target.value)} />
+                <button className={smallBtn} style={outlineStyle} onClick={() => submitHtml({ html: htmlPaste })}>Use this HTML</button>
               </div>
             )}
-            {htmlStatus.text && <p className="text-xs mt-1.5" style={{ color: htmlStatus.kind === 'error' ? '#b3452c' : htmlStatus.kind === 'ok' ? '#2f7a3d' : 'var(--color-muted)' }}>{htmlStatus.text}</p>}
+            {htmlStatus.text && <p className="text-xs mt-2" style={{ color: statusColour(htmlStatus.kind) }}>{htmlStatus.text}</p>}
+            <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>No page handy? Use “Load a demo” above the preview to practise.</p>
           </section>
-
+        );
+      case 'styles':
+        return (
           <section>
-            <h2 className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>2. Your style files</h2>
-            <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>Add one or more. Reorder with the arrows — styles lower in the list win if two files disagree.</p>
+            <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>Add one or more. Reorder with the arrows — styles lower in the list win if two files disagree. They are optional.</p>
             <div className="flex gap-1 mb-2">
               <button style={tabBtn(cssTab === 'file')} onClick={() => setCssTab('file')}>Upload files</button>
               <button style={tabBtn(cssTab === 'paste')} onClick={() => setCssTab('paste')}>Paste a snippet</button>
@@ -952,7 +990,7 @@ export default function RestylePage() {
                 onDragOver={(e) => { e.preventDefault(); setCssDragOver(true); }}
                 onDragLeave={() => setCssDragOver(false)}
                 onDrop={(e) => { e.preventDefault(); setCssDragOver(false); addCssFiles(e.dataTransfer.files); }}
-                className="rounded-lg border-2 border-dashed p-4 text-center text-sm cursor-pointer"
+                className="rounded-xl border-2 border-dashed p-4 text-center text-sm cursor-pointer transition-all duration-200"
                 style={{ borderColor: cssDragOver ? 'var(--color-primary)' : 'var(--color-border)', color: 'var(--color-muted)' }}
               >
                 <p>Drop one or more .css files here, or click to choose</p>
@@ -960,287 +998,292 @@ export default function RestylePage() {
               </div>
             ) : (
               <div>
-                <input type="text" className="w-full text-sm rounded-md border p-2 mb-1.5" style={FIELD} placeholder="Give it a name, e.g. 'Homepage styles'" value={cssPasteName} onChange={(e) => setCssPasteName(e.target.value)} />
-                <textarea className="w-full text-sm rounded-md border p-2 mb-2" style={{ ...FIELD, minHeight: 90 }} placeholder="Paste a CSS snippet here..." value={cssPasteText} onChange={(e) => setCssPasteText(e.target.value)} />
-                <button className="px-3 py-1.5 rounded-md text-xs font-semibold border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }} onClick={addCssPaste}>Add this snippet</button>
+                <div className="mb-1.5">
+                  <VoiceInput value={cssPasteName} onChange={setCssPasteName} placeholder="Give it a name, e.g. 'Homepage styles'" label="Name for the pasted styles" />
+                </div>
+                <textarea className="w-full text-sm rounded-xl border p-2 mb-2" style={{ ...FIELD, minHeight: 110 }} aria-label="Style snippet" placeholder="Paste a style snippet here..." value={cssPasteText} onChange={(e) => setCssPasteText(e.target.value)} />
+                <button className={smallBtn} style={outlineStyle} onClick={addCssPaste}>Add this snippet</button>
               </div>
             )}
 
-            <ul className="flex flex-col gap-1.5 my-2">
+            <ul className="flex flex-col gap-1.5 my-3">
               {cssEntries.map((entry, i) => (
-                <li key={entry.id} className="flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>
+                <li key={entry.id} className="flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>
                   <span className="flex-1 truncate" style={{ color: 'var(--color-text)' }}>{entry.filename}</span>
-                  <button className="hover:opacity-60" title="Move earlier (lower priority)" disabled={i === 0} onClick={() => moveCssEntry(i, -1)} style={{ color: 'var(--color-muted)', opacity: i === 0 ? 0.3 : 1 }}>{getIcon('chevron-up', { size: 14 })}</button>
-                  <button className="hover:opacity-60" title="Move later (higher priority)" disabled={i === cssEntries.length - 1} onClick={() => moveCssEntry(i, 1)} style={{ color: 'var(--color-muted)', opacity: i === cssEntries.length - 1 ? 0.3 : 1 }}>{getIcon('chevron-down', { size: 14 })}</button>
-                  <button className="hover:opacity-60" title="Remove" onClick={() => removeCssEntry(entry.id)} style={{ color: 'var(--color-muted)' }}>{getIcon('x', { size: 14 })}</button>
+                  <Tooltip text="Move earlier (lower priority)"><button className="hover:opacity-60" aria-label="Move earlier" disabled={i === 0} onClick={() => moveCssEntry(i, -1)} style={{ color: 'var(--color-muted)', opacity: i === 0 ? 0.3 : 1 }}>{getIcon('chevron-up', { size: 14 })}</button></Tooltip>
+                  <Tooltip text="Move later (higher priority)"><button className="hover:opacity-60" aria-label="Move later" disabled={i === cssEntries.length - 1} onClick={() => moveCssEntry(i, 1)} style={{ color: 'var(--color-muted)', opacity: i === cssEntries.length - 1 ? 0.3 : 1 }}>{getIcon('chevron-down', { size: 14 })}</button></Tooltip>
+                  <Tooltip text="Remove this file"><button className="hover:opacity-60" aria-label="Remove" onClick={() => removeCssEntry(entry.id)} style={{ color: 'var(--color-muted)' }}>{getIcon('x', { size: 14 })}</button></Tooltip>
                 </li>
               ))}
             </ul>
 
-            <button
-              className="px-3 py-1.5 rounded-md text-xs font-semibold"
-              style={{ background: 'var(--color-primary)', color: '#fff', opacity: htmlLoaded ? 1 : 0.45 }}
-              disabled={!htmlLoaded}
-              title={!htmlLoaded ? 'Add your HTML above first' : undefined}
-              onClick={buildPreview}
-            >Build the preview</button>
-            {!htmlLoaded && (
-              <p className="text-xs mt-1.5" style={{ color: 'var(--color-muted)' }}>Add your HTML above to enable this — style files are optional.</p>
-            )}
-            {cssStatus.text && <p className="text-xs mt-1.5" style={{ color: cssStatus.kind === 'error' ? '#b3452c' : cssStatus.kind === 'ok' ? '#2f7a3d' : 'var(--color-muted)' }}>{cssStatus.text}</p>}
-          </section>
+            <Tooltip text={htmlLoaded ? 'Put your page and style files together in a live preview you can click to change.' : 'Add your page first (the Your page tool).'}>
+              <button className="px-4 py-2 rounded-xl text-sm font-medium transition-opacity duration-200 hover:opacity-80 disabled:opacity-45" style={primaryStyle} disabled={!htmlLoaded} onClick={buildPreview}>Build the preview</button>
+            </Tooltip>
+            {!htmlLoaded && <p className="text-xs mt-1.5" style={{ color: 'var(--color-muted)' }}>Add your page first to enable this — style files are optional.</p>}
+            {cssStatus.text && <p className="text-xs mt-1.5" style={{ color: statusColour(cssStatus.kind) }}>{cssStatus.text}</p>}
 
-          {flags.length > 0 && (
-            <section>
-              <h2 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Things worth a look</h2>
-              <ul className="flex flex-col gap-1.5 max-h-56 overflow-y-auto">
-                {flags.map((flag, i) => (
-                  <li key={i} className="text-xs rounded-md p-1.5 pl-2" style={{ background: '#fdf3ea', borderLeft: '3px solid #d99a3f', color: '#5a4322' }}>{flag}</li>
-                ))}
-              </ul>
-            </section>
-          )}
-        </aside>
-
-        {/* CENTER: preview */}
-        <section className="flex flex-col gap-2" style={{ minHeight: 'calc(100vh - 140px)' }}>
-          <div className="rounded-lg border px-3 py-2 text-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
-            {selectionLabel}
-          </div>
-          <div className="relative flex-1 rounded-xl border overflow-hidden" style={{ background: '#fff', borderColor: 'var(--color-border)' }}>
-            <iframe ref={iframeRef} title="Live preview" sandbox="allow-same-origin" style={{ width: '100%', height: '100%', border: 'none', display: previewBuilt ? 'block' : 'none' }} />
-            {!previewBuilt && (
-              <div className="absolute inset-0 flex items-center justify-center text-center p-5" style={{ color: 'var(--color-muted)', background: 'var(--color-surface)' }}>
-                <p>Add your HTML above, then click "Build the preview." Style files are optional.</p>
+            {flags.length > 0 && (
+              <div className="mt-4">
+                <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Things worth a look</h3>
+                <ul className="flex flex-col gap-1.5 max-h-56 overflow-y-auto">
+                  {flags.map((flag, i) => (
+                    <li key={i} className="text-xs rounded-md p-1.5 pl-2" style={{ background: '#fdf3ea', borderLeft: '3px solid #d99a3f', color: '#5a4322' }}>{flag}</li>
+                  ))}
+                </ul>
               </div>
             )}
-          </div>
-        </section>
-
-        {/* RIGHT: property panel */}
-        <aside className="rounded-xl border p-3 flex flex-col gap-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', maxHeight: 'calc(100vh - 140px)', overflowY: 'auto' }}>
-          {hasSelection && (
-            <section className="rounded-lg border p-2.5" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-              <h2 className="text-sm font-semibold mb-1.5" style={{ color: 'var(--color-text)' }}>What should changes apply to?</h2>
-              <label className="flex items-center gap-1.5 text-xs mb-1" style={{ color: 'var(--color-text)' }}>
-                <input type="radio" name="editScope" checked={!editScopeSelector} onChange={() => { setEditScopeSelector(''); setEditScopeLabel(''); }} />
-                Just this element
-              </label>
-              {scopeOptions.length > 0 ? (
-                scopeOptions.map((opt) => (
-                  <label key={opt.selector} className="flex items-center gap-1.5 text-xs mb-1" style={{ color: 'var(--color-text)' }}>
-                    <input type="radio" name="editScope" checked={editScopeSelector === opt.selector} onChange={() => { setEditScopeSelector(opt.selector); setEditScopeLabel(opt.label); }} />
-                    {opt.label}
-                  </label>
-                ))
-              ) : (
-                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>This element (and nothing around it) has a class, so it can only be edited on its own.</p>
-              )}
-              {editScopeSelector && (
-                <p className="text-xs mt-1" style={{ color: '#b3452c' }}>Changes below will apply to every matching element on the page, not just this one.</p>
-              )}
-              <button
-                type="button"
-                className="text-xs font-semibold px-2 py-1 rounded-md border mt-2"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                title="Clear every change made here, back to how it looked when the preview was built"
-                onClick={handleResetSelection}
-              >Reset {editScopeSelector ? editScopeLabel.replace(/^Every/, 'every') : 'this element'}</button>
-            </section>
-          )}
-
-          <section>
-            <h2 className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Plain-English request</h2>
-            <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>Click something in the preview first, then describe what you want.</p>
-            <textarea
-              className="w-full text-sm rounded-md border p-2 mb-1"
-              style={{ ...FIELD, minHeight: 70 }}
-              placeholder="e.g. make this bigger and give it rounded corners"
-              disabled={!hasSelection || isListening || isTranscribing}
-              // While listening/transcribing, show the live caption directly in the box (appended
-              // to whatever was already typed) so it's obvious speech is actually being captured —
-              // previously this only appeared in a separate line below, which read as "nothing is
-              // being input." The box is read-only during this (see disabled above); typing resumes
-              // once the mic is stopped and the final transcript has been merged into aiRequest.
-              value={(isListening || isTranscribing) ? (aiRequest ? `${aiRequest} ${interimText}` : interimText) : aiRequest}
-              onChange={(e) => setAiRequest(e.target.value)}
-            />
-            <div className="flex items-center gap-2 mb-2">
-              {(isSTTAvailable || isLocalSTTAvailable) && (
-                <button
-                  type="button"
-                  onClick={isListening ? stopListening : startListening}
-                  disabled={!hasSelection || isTranscribing}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg relative"
-                  style={{ color: isListening || isTranscribing ? '#ef4444' : 'var(--color-muted)', background: 'transparent', opacity: hasSelection ? 1 : 0.4 }}
-                  title={isListening ? 'Stop listening and use what was said' : 'Speak your request'}
-                >
-                  {getIcon('mic', { size: 14 })}
-                  {(isListening || isTranscribing) && <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full animate-pulse" style={{ background: '#ef4444' }} />}
-                </button>
-              )}
-              {isListening && (
-                <button type="button" onClick={stopListening} className="text-xs font-semibold px-2 py-1 rounded-md" style={{ background: '#fee2e2', color: '#ef4444' }}>Stop &amp; use this</button>
-              )}
-              {isTranscribing && <span className="text-xs" style={{ color: '#ef4444' }}>Transcribing…</span>}
-              {!isListening && voiceError && <span className="text-xs truncate" style={{ color: '#b3452c' }} title={voiceError}>{voiceError}</span>}
-            </div>
-            <button
-              className="px-3 py-1.5 rounded-md text-xs font-semibold"
-              style={{ background: 'var(--color-primary)', color: '#fff', opacity: hasSelection && !aiBusy && !isListening && !isTranscribing ? 1 : 0.45 }}
-              disabled={!hasSelection || aiBusy || isListening || isTranscribing}
-              title={isListening ? 'Stop the mic first to use what was said' : undefined}
-              onClick={handleAiRequest}
-            >{aiBusy ? 'Asking…' : 'Ask for this change'}</button>
-            {aiStatus.text && <p className="text-xs mt-1.5" style={{ color: aiStatus.kind === 'error' ? '#b3452c' : aiStatus.kind === 'ok' ? '#2f7a3d' : 'var(--color-muted)' }}>{aiStatus.text}</p>}
           </section>
+        );
+      case 'saved':
+        return (
+          <section className="space-y-3">
+            <div className="space-y-2">
+              <Tooltip text="A name to find this page by later. You can say it with the microphone.">
+                <div>
+                  <VoiceInput value={saveNameInput} onChange={setSaveNameInput} placeholder="Name this page…" label="Name for this page" onKeyDown={(e) => { if (e.key === 'Enter' && previewBuilt && !savingProject) handleSaveProject(); }} />
+                </div>
+              </Tooltip>
+              <Tooltip text={previewBuilt ? 'Keep the page exactly as it looks now, with all your changes, in your account.' : 'Build the preview first, then save.'}>
+                <button className="px-3 py-1.5 rounded-lg text-sm font-semibold transition-opacity duration-200 hover:opacity-80 disabled:opacity-45" style={primaryStyle} disabled={!previewBuilt || savingProject} onClick={handleSaveProject}>{savingProject ? 'Saving…' : 'Save this page'}</button>
+              </Tooltip>
+            </div>
+            {savedProjects.length === 0 ? (
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Nothing saved yet. Build a preview, then save it here.</p>
+            ) : (
+              <ul className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+                {savedProjects.map((p) => (
+                  <li key={p.id} className="flex items-center gap-2 px-3 py-2 text-sm border-b last:border-b-0" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                    <Tooltip text="Open this page with all your saved changes.">
+                      <button className="flex-1 text-left truncate transition-opacity duration-200 hover:opacity-70" style={{ color: 'var(--color-text)' }} disabled={loadingProjectId === p.id} onClick={() => handleLoadProject(p.id)}>
+                        {loadingProjectId === p.id ? 'Loading…' : p.name}
+                      </button>
+                    </Tooltip>
+                    <Tooltip text="Delete this saved page.">
+                      <button className="hover:opacity-60" aria-label={`Delete ${p.name}`} style={{ color: 'var(--color-muted)' }} onClick={() => handleDeleteProject(p.id, p.name)}>{getIcon('x', { size: 14 })}</button>
+                    </Tooltip>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        );
+      case 'ask':
+        return (
+          <section>
+            <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>Describe what you want done to the thing you clicked. Type it, or tap the microphone and say it.</p>
+            <VoiceInput
+              type="textarea"
+              append
+              rows={4}
+              value={aiRequest}
+              onChange={setAiRequest}
+              placeholder="e.g. make this bigger and give it rounded corners"
+              label="Your request, in plain English"
+            />
+            <div className="mt-2">
+              <Tooltip text="Turn your words into changes to the look of the clicked item. You can undo it.">
+                <button
+                  className="px-3 py-1.5 rounded-lg text-sm font-semibold transition-opacity duration-200 hover:opacity-80 disabled:opacity-45"
+                  style={primaryStyle}
+                  disabled={aiBusy || !aiRequest.trim()}
+                  onClick={handleAiRequest}
+                >{aiBusy ? 'Asking…' : 'Ask for this change'}</button>
+              </Tooltip>
+            </div>
+            {aiStatus.text && <p className="text-xs mt-2" style={{ color: statusColour(aiStatus.kind) }}>{aiStatus.text}</p>}
+          </section>
+        );
+      case 'scope':
+        return (
+          <section>
+            <label className="flex items-center gap-1.5 text-xs mb-1" style={{ color: 'var(--color-text)' }}>
+              <input type="radio" name="editScope" checked={!editScopeSelector} onChange={() => { setEditScopeSelector(''); setEditScopeLabel(''); }} />
+              Just this element
+            </label>
+            {scopeOptions.length > 0 ? (
+              scopeOptions.map((opt) => (
+                <label key={opt.selector} className="flex items-center gap-1.5 text-xs mb-1" style={{ color: 'var(--color-text)' }}>
+                  <input type="radio" name="editScope" checked={editScopeSelector === opt.selector} onChange={() => { setEditScopeSelector(opt.selector); setEditScopeLabel(opt.label); }} />
+                  {opt.label}
+                </label>
+              ))
+            ) : (
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>This element (and nothing around it) has a class, so it can only be edited on its own.</p>
+            )}
+            {editScopeSelector && (
+              <p className="text-xs mt-1" style={{ color: '#b3452c' }}>Changes will apply to every matching element on the page, not just this one. They are outlined in amber.</p>
+            )}
+            <Tooltip text="Clear every change made here, back to how it looked when the preview was built.">
+              <button type="button" className={`${smallBtn} mt-3`} style={outlineStyle} onClick={handleResetSelection}>
+                Reset {editScopeSelector ? editScopeLabel.replace(/^Every/, 'every') : 'this element'}
+              </button>
+            </Tooltip>
+          </section>
+        );
+      case 'text':
+        return (
+          <section className="flex flex-col gap-3">
+            <Field label="Font" tip="The typeface of the clicked item. Fonts your own files already use are listed too.">
+              <select className="rounded-lg border p-1.5" style={FIELD} value={ctrl.fontFamily} onChange={(e) => handleCtrlChange('fontFamily', e.target.value, null, e.target.value ? 'Changed the font.' : 'Changed the font back to the default.')}>
+                {FONT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                {detectedAssets.fonts.filter((f) => !FONT_OPTIONS.some((o) => o.value === f.value)).map((f) => (
+                  <option key={f.value} value={f.value}>{f.label} (used in your files)</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Size" tip="How big the text is, in pixels.">
+              <input type="range" min={8} max={96} step={1} value={ctrl.fontSize} onChange={(e) => handleCtrlChange('fontSize', Number(e.target.value), 'px', `Changed the text size to ${e.target.value}px.`)} />
+              <span style={{ color: 'var(--color-text)' }}>{ctrl.fontSize}px</span>
+              {sizePicks(detectedAssets.sizes, 'fontSize', 'Changed the text size.')}
+            </Field>
+            <Field label="Weight" tip="How light or bold the text is.">
+              <select className="rounded-lg border p-1.5" style={FIELD} value={ctrl.fontWeight} onChange={(e) => handleCtrlChange('fontWeight', e.target.value, null, 'Changed how bold the text is.')}>
+                <option value="400">Normal</option>
+                <option value="600">Semi-bold</option>
+                <option value="700">Bold</option>
+                <option value="300">Light</option>
+              </select>
+            </Field>
+            <Field label="Text color" tip="The colour of the text. Colours your files already use are offered below.">
+              <input type="color" style={{ width: '100%', height: 32, border: '1px solid var(--color-border)', borderRadius: 6 }} value={ctrl.color} onChange={(e) => handleCtrlChange('color', e.target.value, null, 'Changed the text color.')} />
+              {colourPicks('color', 'Changed the text color.')}
+            </Field>
+            <Field label="Space between lines" tip="How much room there is between lines of text.">
+              <input type="range" min={0.8} max={3} step={0.1} value={ctrl.lineHeight} onChange={(e) => handleCtrlChange('lineHeight', Number(e.target.value), null, 'Changed the spacing between lines of text.')} />
+              <span style={{ color: 'var(--color-text)' }}>{ctrl.lineHeight}</span>
+            </Field>
+          </section>
+        );
+      case 'enhance':
+        return (
+          <section className="flex flex-col gap-3">
+            <Field label="Capitalization" tip="Show the text as normal, in ALL CAPS, all lowercase or Title Case, without retyping it.">
+              <select className="rounded-lg border p-1.5" style={FIELD} value={ctrl.textTransform} onChange={(e) => handleCtrlChange('textTransform', e.target.value, null, e.target.value === 'none' ? 'Changed the text capitalization back to normal.' : 'Changed the text capitalization.')}>
+                {TEXT_TRANSFORM_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Space between letters" tip="Pull the letters closer together or spread them apart.">
+              <input type="range" min={-2} max={12} step={0.5} value={ctrl.letterSpacing} onChange={(e) => handleCtrlChange('letterSpacing', Number(e.target.value), 'px', 'Changed the spacing between letters.')} />
+              <span style={{ color: 'var(--color-text)' }}>{ctrl.letterSpacing}px</span>
+            </Field>
+            <Field label="Alignment" tip="Line the text up on the left, centre or right, or spread it to fill the width.">
+              <select className="rounded-lg border p-1.5" style={FIELD} value={ctrl.textAlign} onChange={(e) => handleCtrlChange('textAlign', e.target.value, null, 'Changed the text alignment.')}>
+                {TEXT_ALIGN_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </Field>
+          </section>
+        );
+      case 'animation':
+        return (
+          <section className="flex flex-col gap-3">
+            <Field label="Effect" tip="A short movement when the item appears: fade in, slide up, pop in, pulse or bounce.">
+              <select className="rounded-lg border p-1.5" style={FIELD} value={ctrl.animation} onChange={(e) => handleAnimationChange(e.target.value, e.target.selectedOptions[0]?.text || '')}>
+                {ANIMATION_PRESETS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </Field>
+          </section>
+        );
+      case 'box':
+        return (
+          <section className="flex flex-col gap-3">
+            <Field label="Background color" tip="The colour behind the item. Colours your files already use are offered below.">
+              <input type="color" style={{ width: '100%', height: 32, border: '1px solid var(--color-border)', borderRadius: 6 }} value={ctrl.backgroundColor} onChange={(e) => handleCtrlChange('backgroundColor', e.target.value, null, 'Changed the background color.')} />
+              {colourPicks('backgroundColor', 'Changed the background color.')}
+            </Field>
+            <Field label="Rounded corners" tip="How rounded the corners of the item are, in pixels.">
+              <input type="range" min={0} max={60} step={1} value={ctrl.borderRadius} onChange={(e) => handleCtrlChange('borderRadius', Number(e.target.value), 'px', 'Changed the rounded corners.')} />
+              <span style={{ color: 'var(--color-text)' }}>{ctrl.borderRadius}px</span>
+              {sizePicks(detectedAssets.radii, 'borderRadius', 'Changed the rounded corners.')}
+            </Field>
+            <Field label="Space around the content" tip="How much room there is between the item's edge and what is inside it, in pixels.">
+              <input type="range" min={0} max={80} step={1} value={ctrl.padding} onChange={(e) => handleCtrlChange('padding', Number(e.target.value), 'px', 'Changed the space around the content.')} />
+              <span style={{ color: 'var(--color-text)' }}>{ctrl.padding}px</span>
+              {sizePicks(detectedAssets.paddings, 'padding', 'Changed the space around the content.')}
+            </Field>
+            <Field label="Shadow" tip="A shadow or glow around the item, from subtle to strong.">
+              <select className="rounded-lg border p-1.5" style={FIELD} value={SHADOW_OPTIONS.some((o) => o.value === ctrl.boxShadow) ? ctrl.boxShadow : 'none'} onChange={(e) => handleCtrlChange('boxShadow', e.target.value, null, 'Changed the shadow.')}>
+                {SHADOW_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </Field>
+          </section>
+        );
+      default:
+        return null;
+    }
+  };
 
-          {hasSelection && (
-            <section className="flex flex-col gap-3">
-              <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Text</h2>
-              <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
-                Font
-                <select className="rounded-md border p-1.5" style={FIELD} value={ctrl.fontFamily} onChange={(e) => handleCtrlChange('fontFamily', e.target.value, null, e.target.value ? 'Changed the font.' : 'Changed the font back to the default.')}>
-                  {FONT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  {detectedAssets.fonts.filter((f) => !FONT_OPTIONS.some((o) => o.value === f.value)).map((f) => (
-                    <option key={f.value} value={f.value}>{f.label} (used in your files)</option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
-                Size
-                <input type="range" min={8} max={96} step={1} value={ctrl.fontSize} onChange={(e) => handleCtrlChange('fontSize', Number(e.target.value), 'px', `Changed the text size to ${e.target.value}px.`)} />
-                <span style={{ color: 'var(--color-text)' }}>{ctrl.fontSize}px</span>
-                {detectedAssets.sizes.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {detectedAssets.sizes.map((size) => (
-                      <button key={size} type="button"
-                        className="px-1.5 py-0.5 rounded border text-xs"
-                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-bg)' }}
-                        title={`Used in your files: ${size}`}
-                        onClick={() => applyQuickPick('fontSize', size, `Changed the text size to ${size}.`, { fontSize: parseFloat(size) || ctrl.fontSize })}
-                      >{size}</button>
-                    ))}
-                  </div>
-                )}
-              </label>
-              <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
-                Weight
-                <select className="rounded-md border p-1.5" style={FIELD} value={ctrl.fontWeight} onChange={(e) => handleCtrlChange('fontWeight', e.target.value, null, 'Changed how bold the text is.')}>
-                  <option value="400">Normal</option>
-                  <option value="600">Semi-bold</option>
-                  <option value="700">Bold</option>
-                  <option value="300">Light</option>
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
-                Text color
-                <input type="color" style={{ width: '100%', height: 32, border: '1px solid var(--color-border)', borderRadius: 6 }} value={ctrl.color} onChange={(e) => handleCtrlChange('color', e.target.value, null, 'Changed the text color.')} />
-                {detectedAssets.colors.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {detectedAssets.colors.map((c) => (
-                      <button key={c} type="button" title={`Used in your files: ${c}`}
-                        className="w-5 h-5 rounded border"
-                        style={{ background: c, borderColor: 'var(--color-border)' }}
-                        onClick={() => applyQuickPick('color', c, 'Changed the text color.', { color: toHex(c) || c })}
-                      />
-                    ))}
-                  </div>
-                )}
-              </label>
-              <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
-                Space between lines
-                <input type="range" min={0.8} max={3} step={0.1} value={ctrl.lineHeight} onChange={(e) => handleCtrlChange('lineHeight', Number(e.target.value), null, 'Changed the spacing between lines of text.')} />
-                <span style={{ color: 'var(--color-text)' }}>{ctrl.lineHeight}</span>
-              </label>
+  return (
+    <VoiceInputProvider lang="en-AU">
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Roboto:wght@400;700&family=Merriweather:wght@400;700&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
 
-              <h2 className="text-sm font-semibold mt-2" style={{ color: 'var(--color-text)' }}>Text enhancements</h2>
-              <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
-                Capitalization
-                <select className="rounded-md border p-1.5" style={FIELD} value={ctrl.textTransform} onChange={(e) => handleCtrlChange('textTransform', e.target.value, null, e.target.value === 'none' ? 'Changed the text capitalization back to normal.' : 'Changed the text capitalization.')}>
-                  {TEXT_TRANSFORM_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
-                Space between letters
-                <input type="range" min={-2} max={12} step={0.5} value={ctrl.letterSpacing} onChange={(e) => handleCtrlChange('letterSpacing', Number(e.target.value), 'px', 'Changed the spacing between letters.')} />
-                <span style={{ color: 'var(--color-text)' }}>{ctrl.letterSpacing}px</span>
-              </label>
-              <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
-                Alignment
-                <select className="rounded-md border p-1.5" style={FIELD} value={ctrl.textAlign} onChange={(e) => handleCtrlChange('textAlign', e.target.value, null, 'Changed the text alignment.')}>
-                  {TEXT_ALIGN_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </label>
+      <div className="flex flex-col sm:flex-row min-h-[calc(100dvh-3rem)]">
+        <ToolSidebar
+          title="CSS"
+          icon="palette"
+          groups={menu}
+          current={tool}
+          onSelect={setTool}
+          onInfo={info.open}
+          infoTip="How this tool works, and what it cannot do."
+        />
 
-              <h2 className="text-sm font-semibold mt-2" style={{ color: 'var(--color-text)' }}>Animation</h2>
-              <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
-                Effect
-                <select className="rounded-md border p-1.5" style={FIELD} value={ctrl.animation} onChange={(e) => handleAnimationChange(e.target.value, e.target.selectedOptions[0]?.text || '')}>
-                  {ANIMATION_PRESETS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </label>
+        <main className="flex-1 min-w-0 p-4 sm:p-5 flex flex-col gap-3" style={{ background: 'var(--color-bg)' }}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{currentTool?.label}</h2>
+              <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>{TOOL_BLURBS[tool]}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Tooltip text="Load a small practice page and build its preview, so you can try clicking and changing things.">
+                <button className={outlineBtn} style={outlineStyle} onClick={loadDemo}>Load a demo</button>
+              </Tooltip>
+              <Tooltip text="Take back your last change. A change to many items at once is one undo.">
+                <button className={outlineBtn} style={outlineStyle} disabled={!canUndo} onClick={handleUndo}>Undo last change</button>
+              </Tooltip>
+              <Tooltip text="Save the finished page, with all your changes built in, as one .html file.">
+                <button className="px-3 py-1.5 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-80 disabled:opacity-45" style={primaryStyle} disabled={!previewBuilt} onClick={handleExport}>Download my page</button>
+              </Tooltip>
+            </div>
+          </div>
 
-              <h2 className="text-sm font-semibold mt-2" style={{ color: 'var(--color-text)' }}>Box</h2>
-              <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
-                Background color
-                <input type="color" style={{ width: '100%', height: 32, border: '1px solid var(--color-border)', borderRadius: 6 }} value={ctrl.backgroundColor} onChange={(e) => handleCtrlChange('backgroundColor', e.target.value, null, 'Changed the background color.')} />
-                {detectedAssets.colors.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {detectedAssets.colors.map((c) => (
-                      <button key={c} type="button" title={`Used in your files: ${c}`}
-                        className="w-5 h-5 rounded border"
-                        style={{ background: c, borderColor: 'var(--color-border)' }}
-                        onClick={() => applyQuickPick('backgroundColor', c, 'Changed the background color.', { backgroundColor: toHex(c) || c })}
-                      />
-                    ))}
+          <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
+            <div className="lg:w-80 shrink-0 rounded-xl border p-4 overflow-y-auto" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', maxHeight: 'calc(100dvh - 11rem)' }}>
+              {renderPanel()}
+            </div>
+
+            <section className="flex-1 min-w-0 flex flex-col gap-2" style={{ minHeight: 'calc(100dvh - 14rem)' }}>
+              <div className="rounded-lg border px-3 py-2 text-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                {selectionLabel}
+              </div>
+              <div className="relative flex-1 rounded-xl border overflow-hidden" style={{ background: '#fff', borderColor: 'var(--color-border)' }}>
+                <iframe ref={iframeRef} title="Live preview" sandbox="allow-same-origin" style={{ width: '100%', height: '100%', border: 'none', display: previewBuilt ? 'block' : 'none' }} />
+                {!previewBuilt && (
+                  <div className="absolute inset-0 flex items-center justify-center text-center p-5" style={{ color: 'var(--color-muted)', background: 'var(--color-surface)' }}>
+                    <p>Add your page (Your page), then press “Build the preview” (Style files). Or load a demo above.</p>
                   </div>
                 )}
-              </label>
-              <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
-                Rounded corners
-                <input type="range" min={0} max={60} step={1} value={ctrl.borderRadius} onChange={(e) => handleCtrlChange('borderRadius', Number(e.target.value), 'px', 'Changed the rounded corners.')} />
-                <span style={{ color: 'var(--color-text)' }}>{ctrl.borderRadius}px</span>
-                {detectedAssets.radii.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {detectedAssets.radii.map((size) => (
-                      <button key={size} type="button"
-                        className="px-1.5 py-0.5 rounded border text-xs"
-                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-bg)' }}
-                        title={`Used in your files: ${size}`}
-                        onClick={() => applyQuickPick('borderRadius', size, 'Changed the rounded corners.', { borderRadius: parseFloat(size) || ctrl.borderRadius })}
-                      >{size}</button>
-                    ))}
-                  </div>
-                )}
-              </label>
-              <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
-                Space around the content
-                <input type="range" min={0} max={80} step={1} value={ctrl.padding} onChange={(e) => handleCtrlChange('padding', Number(e.target.value), 'px', 'Changed the space around the content.')} />
-                <span style={{ color: 'var(--color-text)' }}>{ctrl.padding}px</span>
-                {detectedAssets.paddings.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {detectedAssets.paddings.map((size) => (
-                      <button key={size} type="button"
-                        className="px-1.5 py-0.5 rounded border text-xs"
-                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-bg)' }}
-                        title={`Used in your files: ${size}`}
-                        onClick={() => applyQuickPick('padding', size, 'Changed the space around the content.', { padding: parseFloat(size) || ctrl.padding })}
-                      >{size}</button>
-                    ))}
-                  </div>
-                )}
-              </label>
-              <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
-                Shadow
-                <select className="rounded-md border p-1.5" style={FIELD} value={SHADOW_OPTIONS.some(o => o.value === ctrl.boxShadow) ? ctrl.boxShadow : 'none'} onChange={(e) => handleCtrlChange('boxShadow', e.target.value, null, 'Changed the shadow.')}>
-                  {SHADOW_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </label>
+              </div>
             </section>
-          )}
-        </aside>
+          </div>
+        </main>
       </div>
-    </div>
+
+      {info.show && (
+        <ToolInfoModal title="How CSS Works" onClose={info.close}>
+          <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+            Change how your website looks without writing any code. Work down the list on the left: bring in your page, build the preview, then click things in it and change them. Hover any tool for a plain explanation. Not sure what to do? Press the round button at the bottom right and tell the guide what you want.
+          </p>
+          <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+            {HOW_IT_WORKS.map(([heading, text]) => (
+              <p key={heading} style={{ color: 'var(--color-text)' }}><strong>{heading}</strong> — {text}</p>
+            ))}
+          </div>
+        </ToolInfoModal>
+      )}
+
+      <RestyleTutorChat currentTool={tool} onOpenTool={openToolById} />
+    </VoiceInputProvider>
   );
 }

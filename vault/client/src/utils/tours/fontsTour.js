@@ -29,8 +29,8 @@ function safeBeforeShow(tour, stepId, selector) {
   }
 }
 
-/** Single-screen tool now — one linear tour, no mode-switching needed. */
-export function startFontsTour() {
+/** goTool(toolId) opens that tool in the page's left-hand menu (font | my-fonts | shape | kerning | effect | save | settings | download). */
+export function startFontsTour(goTool = () => {}) {
   if (Shepherd.activeTour) Shepherd.activeTour.cancel();
 
   const tour = new Shepherd.Tour({
@@ -47,6 +47,10 @@ export function startFontsTour() {
   const btnSecondary = (text, action) => ({ text, action, classes: 'vault-tour-btn-secondary' });
   const btnBack = () => btnSecondary('← Back', () => tour.back());
   const btnNext = { text: 'Next →', action: () => tour.next() };
+  const showTool = (tool, stepId, selector) => () => new Promise((resolve) => {
+    goTool(tool);
+    setTimeout(() => { safeBeforeShow(tour, stepId, selector); resolve(); }, 350);
+  });
 
   tour.addStep({
     id: 'fonts-welcome',
@@ -64,14 +68,7 @@ export function startFontsTour() {
     title: 'Search & Load a Font',
     text: "Type a few letters, pick a match (OFL-licensed only), or press Enter/click Load to fetch it. A variable font is automatically frozen to a static instance before editing — this step takes a few seconds since it's a real fetch from Google Fonts.",
     attachTo: { element: '[data-tour="fonts-search"]', on: 'bottom' },
-    beforeShowPromise() {
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          safeBeforeShow(tour, 'fonts-search', '[data-tour="fonts-search"]');
-          resolve();
-        }, 200);
-      });
-    },
+    beforeShowPromise: showTool('font', 'fonts-search', '[data-tour="fonts-search"]'),
     when: { show() { injectStepCounter(2); } },
     buttons: [btnBack(), btnNext],
   });
@@ -99,6 +96,7 @@ export function startFontsTour() {
     title: 'Transforms — Reshape the Letterforms',
     text: "Stem Thickness, Proportional Width, Extend Ascenders/Descenders, Counter Width. Hover any label for exactly what it does. Each change triggers the real preview above after a short pause.",
     attachTo: { element: '[data-tour="fonts-transforms-panel"]', on: 'left' },
+    beforeShowPromise: showTool('shape', 'fonts-transforms-panel', '[data-tour="fonts-transforms-panel"]'),
     when: { show() { injectStepCounter(5); } },
     buttons: [btnBack(), btnNext],
   });
@@ -108,6 +106,7 @@ export function startFontsTour() {
     title: 'Kerning — Fix Loose Spacing',
     text: "Check a group (e.g. diagonal caps like AV/AW) then use Visual Balance & Rhythm to tighten or loosen every pair in that group. Advanced Pairs below lets you override one specific pair manually.",
     attachTo: { element: '[data-tour="fonts-kerning-panel"]', on: 'left' },
+    beforeShowPromise: showTool('kerning', 'fonts-kerning-panel', '[data-tour="fonts-kerning-panel"]'),
     when: { show() { injectStepCounter(6); } },
     buttons: [btnBack(), btnNext],
   });
@@ -117,14 +116,17 @@ export function startFontsTour() {
     title: 'Text Effect (Optional)',
     text: "A small set of Google's own CSS text effects — fire, neon, emboss, outline, layered shadow — applied on top of the preview. Pure CSS, saved with the font project below, never baked into the exported file itself.",
     attachTo: { element: '[data-tour="fonts-effect"]', on: 'left' },
+    beforeShowPromise: showTool('effect', 'fonts-effect', '[data-tour="fonts-effect"]'),
     when: { show() { injectStepCounter(7); } },
     buttons: [btnBack(), btnNext],
   });
 
   tour.addStep({
     id: 'fonts-my-fonts',
-    title: 'My Fonts — Save & Come Back Later',
-    text: "\"Save this font\" (below) stores the Google Font + your Transforms/Kerning/Effect to your account for real — reopen it anytime from My Fonts, above the search box, on any device. Unlike the browser-only preset below it, this remembers WHICH font too, not just the slider values.",
+    title: 'Save this font — Come Back Later',
+    text: "\"Save this font\" stores the Google Font + your Transforms/Kerning/Effect to your account for real — reopen it anytime from My Fonts, in the menu on the left, on any device. Unlike the browser-only Saved settings, this remembers WHICH font too, not just the slider values.",
+    attachTo: { element: '[data-tour="fonts-save-project"]', on: 'left' },
+    beforeShowPromise: showTool('save', 'fonts-my-fonts', '[data-tour="fonts-save-project"]'),
     when: { show() { injectStepCounter(8); } },
     buttons: [btnBack(), btnNext],
   });
@@ -134,6 +136,7 @@ export function startFontsTour() {
     title: 'Download — Give It a Real Name',
     text: "Type a genuinely new family name (required — the font's OFL license forbids redistributing it under its own name) and download. This reuses the settings you're already previewing — no transform is re-run, just the final rename + your chosen file formats. Nothing is downloaded automatically, so do this before you navigate away.",
     attachTo: { element: '[data-tour="fonts-download"]', on: 'left' },
+    beforeShowPromise: showTool('download', 'fonts-download', '[data-tour="fonts-download"]'),
     when: { show() { injectStepCounter(9); } },
     buttons: [btnBack(), btnNext],
   });
@@ -142,6 +145,8 @@ export function startFontsTour() {
     id: 'fonts-presets',
     title: 'Saved Settings (Browser-Only, Optional)',
     text: "Save your current Transforms + Kerning as a named preset under \"Saved settings\" — recipe only, no font, stored in this browser. Reapplicable to any font you load. For something that follows you across devices, use \"Save this font\" / My Fonts instead.",
+    attachTo: { element: '[data-tour="fonts-presets-panel"]', on: 'left' },
+    beforeShowPromise: showTool('settings', 'fonts-presets', '[data-tour="fonts-presets-panel"]'),
     when: { show() { injectStepCounter(10); } },
     buttons: [
       btnBack(),

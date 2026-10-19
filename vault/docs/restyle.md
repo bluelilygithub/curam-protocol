@@ -64,9 +64,13 @@ After every successful build (upload, demo, or reloading a saved page), `scanCss
 
 "Load a demo" (top bar) runs a canned Header/Paragraph/Card/Image page (`DEMO_HTML`/`DEMO_CSS` constants in `RestylePage.jsx`) through the exact same `/upload-html` → `/process-css` → render pipeline a real upload goes through — no separate demo code path. Lets a first-time user try selecting and editing something without needing their own files first.
 
-## Voice input
+## Layout, guide and voice (2026-10)
 
-The plain-English request box reuses the same `useVoice()` hook (`client/src/hooks/useVoice.js`) as chat and other Vault pages — same mic button, browser Speech Recognition with local-recording fallback, same error messages. Transcribed text appends to whatever's already typed; nothing new was built for speech-to-text here.
+The page uses the shared tool menu (`components/ToolSidebar.jsx`) like Graphics and Video Tools. Tools (`client/src/pages/restyle/restyleTools.mjs`): **Your page** group — Your page (upload/paste HTML), Style files (upload/paste CSS, reorder, **Build the preview**, "Things worth a look"), My saved pages (name + save, open, delete; each save is a new copy); **Change it** group — Ask in plain English, What it applies to (scope + Reset), Text, Text enhancements, Animation, Box. The live preview stays beside the open tool; **Load a demo**, **Undo last change** and **Download my page** sit above it. Building the preview, or clicking something in it, moves the open tool on from the set-up tools to Ask in plain English. Tools that need a click show "Click something first" in the menu and in their panel.
+
+A **CSS guide** (round button, `POST /api/restyle-tutor`, `server/services/restyleTutor.js`, `guideId` `css`) points at those tools and buttons; it uses plain words only and sees no page. Keep `restyleTools.mjs` and the guide `CATALOG` together (`npm run test:restyle-tutor`).
+
+Voice: the plain-English box (continuous dictation), the pasted-style name, the saved-page name and the tool search use the shared `VoiceInput` mic (`components/voiceInput/VoiceInput.jsx`). The pasted HTML and pasted style boxes have no mic (they hold code, not speech).
 
 ## Text enhancements + animation
 

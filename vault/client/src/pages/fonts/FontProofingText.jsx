@@ -1,6 +1,7 @@
 import React from 'react';
 import { PROOFING_PRESETS } from './proofingPresets';
 import Tooltip from '../../components/Tooltip';
+import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 
 const PRESET_TOOLTIPS = {
   'kerning-spacing': 'Exposes uneven letter spacing — watch the gaps between letter pairs as you adjust Kerning.',
@@ -42,13 +43,14 @@ export default function FontProofingText({ activePresetId, customText, onSelectP
         </Tooltip>
       </div>
       {activePresetId === 'custom' && (
-        <textarea
+        <VoiceInput
+          type="textarea"
+          append
           value={customText}
-          onChange={(e) => onCustomTextChange(e.target.value)}
+          onChange={onCustomTextChange}
           rows={2}
-          placeholder="Type your own proofing text…"
-          className="w-full rounded px-3 py-2 text-sm"
-          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+          placeholder="Type or say your own proofing text…"
+          label="Your own proofing text"
         />
       )}
     </div>

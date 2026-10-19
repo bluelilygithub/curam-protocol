@@ -195,7 +195,9 @@ app.use('/api/youtube', requireFeature('youtube'), require('./routes/youtube'));
 app.use('/api/graphics', requireFeature('graphics'), aiLimiter, require('./routes/graphics'));
 app.use('/api/graphics-tutor', requireFeature('graphics'), aiLimiter, require('./routes/graphicsTutor'));
 app.use('/api/fonts', requireFeature('fonts'), require('./routes/fonts'));
+app.use('/api/fonts-tutor', requireFeature('fonts'), aiLimiter, require('./routes/fontsTutor')); // the Font Customizer guide chat (sees no fonts)
 app.use('/api/restyle', requireFeature('restyle'), require('./routes/restyle'));
+app.use('/api/restyle-tutor', requireFeature('restyle'), aiLimiter, require('./routes/restyleTutor')); // the CSS guide chat (sees no pages)
 app.use('/api/room-projects', requireFeature('roomPlanner'), require('./routes/roomProjects'));
 app.use('/api/garden-projects', requireFeature('gardenPlanner'), require('./routes/gardenProjects'));
 app.use('/api/cellar-projects', requireFeature('cellarPlanner'), require('./routes/cellarProjects'));
@@ -222,6 +224,7 @@ app.use('/api/google-ads', requireFeature('googleAds'), aiLimiter, require('./ro
 app.use('/api/seo', requireFeature('seo'), aiLimiter, require('./routes/seoAudit'));
 app.use('/api/html', requireFeature('html'), require('./routes/htmlAudit'));
 app.use('/api/fitness', requireFeature('fitness'), require('./routes/fitness'));
+app.use('/api/measurements-tutor', requireFeature('measurements'), aiLimiter, require('./routes/measurementsTutor')); // the Measurements guide chat (sees no values or documents)
 app.use('/api/web-extractor', requireFeature('webExtractor'), require('./routes/webExtractor'));
 app.use('/api/web-extractor-tutor', requireFeature('webExtractor'), aiLimiter, require('./routes/webExtractorTutor')); // the Web Extractor guide chat (reads no pages)
 app.use('/api/browser-agent', requireFeature('browserAgent'), require('./routes/browserAgent'));

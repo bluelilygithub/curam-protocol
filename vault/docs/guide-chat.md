@@ -39,6 +39,18 @@ The **Notes guide** (`guideId` `notes`, `POST /api/notes-tutor`, `server/service
 
 The **Web Extractor guide** (`guideId` `web-extractor`, `POST /api/web-extractor-tutor`, `server/services/webExtractorTutor.js` on `guideCore.js`, wrapper `client/src/pages/webExtractor/WebExtractorTutorChat.jsx`) knows the six tools (Article content with its CSS selector, Extract images, Links, Tables, Metadata, Exact scrape) and their buttons. It sees no page or result. `client/src/pages/webExtractor/webExtractorTools.mjs` lists the tools, tips and the controls the Open buttons can switch to; `npm run test:web-extractor-tutor` fails if that list and the catalogue drift. See `docs/web-extractor.md`.
 
+## The Font Customizer, Measurements and CSS guides
+
+Three more page guides on `guideCore.js`/`guideRouter.js`, each with a tools list the page and the guide share (`client/src/pages/fonts/fontsTools.mjs`, `measurements/measurementsTools.mjs`, `restyle/restyleTools.mjs`: the left-hand menu, hover tips, blurbs, the (i) text and `GUIDE_TOOLS`, the controls the Open buttons can switch to):
+
+| Guide | `guideId` | Endpoint | Service | Test |
+|---|---|---|---|---|
+| Font Customizer guide | `fonts` | `/api/fonts-tutor` (flag `fonts`) | `server/services/fontsTutor.js` | `npm run test:fonts-tutor` |
+| Measurements guide | `measurements` | `/api/measurements-tutor` (flag `measurements`) | `server/services/measurementsTutor.js` | `npm run test:measurements-tutor` |
+| CSS guide | `css` | `/api/restyle-tutor` (flag `restyle`) | `server/services/restyleTutor.js` | `npm run test:restyle-tutor` |
+
+They see no fonts, values, documents or pages. The CSS guide follows that tool's rule of no code words in anything a person reads (its test checks the catalogue, rules and page wording). The three tests use `server/services/guideTestKit.js` (`checkGuide`), which also checks the page's menu against the catalogue (every menu tool has a tip, a blurb and the same group in the guide); use it for the next page guide. The pages' menu is the shared `client/src/components/ToolSidebar.jsx` (see client/DESIGN.md).
+
 ## Behaviour changes belong in the shared files
 
 Change how all guides look or behave in `TutorChat.jsx` (client) or `tutorEmail.js` (server), never in a wrapper. Tooltip behaviour belongs in `Tooltip.jsx` and applies to the whole app.

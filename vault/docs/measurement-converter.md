@@ -37,3 +37,7 @@ Fixtures are **text equivalents** of a text PDF, scanned PDF, phone photo, recip
 ## Known gaps / not in v1
 
 Currency, time zones, clothing/shoe sizes, measuring drawn lines on plans (needs a user-set scale), no opt-in server-side processing, no micro-prefix units beyond µm, no per-document language choice for OCR (English only), the OCR language model is fetched from Tesseract's CDN on first use.
+
+## Layout and guide (2026-10)
+
+The page uses the shared tool menu (`client/src/components/ToolSidebar.jsx`), like Graphics and Video Tools: **Convert** (Converter), **Look up** (Formulas), **Documents** (Document scanner), a tool search with a mic, hover tips (`client/src/pages/measurements/measurementsTools.mjs`), the compass tour and the (i) box. The three tools stay mounted (hidden) so a typed value or a scanned document survives switching. `?tab=convert|formulas|scan` and `?tour=1` still work. A **Measurements guide** (round button, `POST /api/measurements-tutor`, `server/services/measurementsTutor.js`, `guideId` `measurements`) points at the tools and controls and sees no values or documents; keep `measurementsTools.mjs` and its `CATALOG` together (`npm run test:measurements-tutor`).
