@@ -60,6 +60,7 @@ export function scopeOptionsFor(el, max = 8) {
   const doc = el.ownerDocument;
   const tag = el.tagName.toLowerCase();
   const options = usefulClasses(el).map((c) => ({ selector: `.${cssEscape(c)}`, label: `Every element with class .${c}` }));
+  const own = new Set(options.map((o) => o.selector));
   const seen = new Set();
   let ancestor = el.parentElement;
   while (ancestor && ancestor !== doc.body && options.length < max) {
@@ -70,5 +71,12 @@ export function scopeOptionsFor(el, max = 8) {
     });
     ancestor = ancestor.parentElement;
   }
-  return options;
+  // Every item of the same kind (every paragraph, every link), for things with no class to go on.
+  if (!own.has(tag)) options.push({ selector: tag, label: `Every <${tag}> on the page` });
+  // How many items each choice reaches, so the person can see "3 of them" before choosing.
+  return options.map((o) => {
+    let count = 0;
+    try { count = doc.querySelectorAll(o.selector).length; } catch { /* a selector the browser rejects reaches nothing */ }
+    return { ...o, count };
+  });
 }

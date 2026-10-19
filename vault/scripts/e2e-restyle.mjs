@@ -43,7 +43,7 @@ await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}`;
 
 // ---- the mocked API ----
-const PAGE_BODY = '<header class="top"><h1>Acme</h1></header><main><p class="intro">Hello there, this is the intro text.</p><div class="card"><h2>Feature card</h2><p>Some words in the card.</p><a class="button" href="#">Learn more</a></div></main>';
+const PAGE_BODY = '<header class="top"><h1>Acme</h1></header><main><p class="intro">Hello there, this is the intro text.</p><div class="card"><h2>Feature card</h2><p>Some words in the card.</p><a class="button" href="#">Learn more</a></div><ul class="menu"><li><a href="#">One</a></li><li><a href="#">Two</a></li></ul></main>';
 const PAGE_CSS = 'body{margin:0;font-family:sans-serif}.card{background:#f5f5f0;padding:20px}.card h2{font-size:20px;color:#bbbbbb}.button{display:inline-block;background:#cc785c;color:#ffffff;padding:8px 16px}.button:hover{background:#b3452c}@media (max-width:480px){.card{padding:8px}}';
 const prepared = (extra = {}) => ({ html: '', headInnerHTML: '<meta charset="utf-8">', bodyInnerHTML: PAGE_BODY, cssFiles: [], changeLog: [], flags: [], ...extra });
 const SCRAPE = {
@@ -176,6 +176,27 @@ try {
   await openTool('Box');
   await page.locator('input[type=range]').first().fill('30');
   check(/\.button \{[\s\S]*border-radius: 30px !important/.test(await editCss()), 'a class-wide change writes the class rule');
+
+  // ---- the same item more than once: just this one, or every one like it, offered with each change tool ----
+  await frame.locator('.menu li a').first().click();
+  await openTool('Box');
+  const picker = page.getByLabel('Apply the change to');
+  check((await picker.count()) === 1, 'a link that appears more than once offers "Apply the change to" with the change controls');
+  const choices = await picker.locator('option').allInnerTexts();
+  check(choices[0] === 'Just this one' && choices.some((c) => /Every <a> inside \.menu \(2\)/.test(c)) && choices.some((c) => /Every <a> on the page \(3\)/.test(c)), `the choices say how many items each reaches (${choices.join(' | ')})`);
+  await openTool('Text');
+  check((await page.getByLabel('Apply the change to').count()) === 1, 'it is there in Text too, not only in What it applies to');
+  await page.getByLabel('Apply the change to').selectOption({ label: 'Every <a> inside .menu (2)' });
+  check((await previewFrame().evaluate(() => Array.from(document.querySelectorAll('.menu a')).every((a) => a.hasAttribute('data-restyle-scope-preview')))), 'choosing all of them outlines every one in amber');
+  check((await page.getByText('Applies to all 2 of them').count()) === 1, 'and says how many will change');
+  await page.locator('input[type=range]').first().fill('22');
+  check(/\.menu a \{[\s\S]*font-size: 22px !important/.test(await editCss()), 'the change is written for all of them');
+  await page.getByLabel('Apply the change to').selectOption('');
+  await page.locator('input[type=range]').first().fill('18');
+  check(/\.menu > li:nth-of-type\(1\) > a \{[\s\S]*font-size: 18px|\.menu li:nth-of-type\(1\) a \{[\s\S]*font-size: 18px|:nth-of-type\(1\)[^{]*a[^{]*\{[^}]*font-size: 18px/.test(await editCss()), 'just this one is written for that one link only');
+  await frame.locator('header h1').click();
+  await openTool('Box');
+  check((await page.getByLabel('Apply the change to').count()) === 0, 'a one-off item (the only heading) shows no picker, since there is nothing else to apply it to');
 
   // ---- brand colours ----
   await openTool('Brand colours and fonts');

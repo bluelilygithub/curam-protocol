@@ -80,6 +80,30 @@ function ColourPicks({ property, explanation, detected, tokens, onQuick, onBrand
   );
 }
 
+/**
+ * "Just this one, or every one like it": at the top of every panel that changes the clicked item, so it is not something to go and look for.
+ * Lists only the choices that reach more than one item; the full list, with the screen size and look, is in the What it applies to tool.
+ */
+export function ScopePicker({ scopeOptions, scope, onScope }) {
+  const wider = scopeOptions.filter((o) => o.count > 1);
+  if (!wider.length) return null;
+  const chosen = wider.find((o) => o.selector === scope.selector);
+  return (
+    <div className="mb-3 rounded-lg border p-2.5 space-y-1.5" style={{ borderColor: scope.selector ? '#f59e0b' : 'var(--color-border)', background: 'var(--color-bg)' }}>
+      <Tooltip text="This item appears more than once on the page. Choose whether your change applies to just the one you clicked, or to all the ones like it. The matching ones are outlined in amber in the preview.">
+        <label className="flex flex-col gap-1 text-xs" style={MUTED}>
+          Apply the change to
+          <select aria-label="Apply the change to" className="rounded-lg border p-1.5" style={FIELD} value={chosen ? chosen.selector : ''} onChange={(e) => { const o = wider.find((x) => x.selector === e.target.value); onScope(o ? o.selector : '', o ? o.label : ''); }}>
+            <option value="">Just this one</option>
+            {wider.map((o) => <option key={o.selector} value={o.selector}>{o.label} ({o.count})</option>)}
+          </select>
+        </label>
+      </Tooltip>
+      {scope.selector && <p className="text-xs" style={{ color: '#b3452c' }}>Applies to all {chosen ? chosen.count : 'matching'} of them, not just the one you clicked.</p>}
+    </div>
+  );
+}
+
 export function AskPanel({ value, onChange, onAsk, busy, status }) {
   return (
     <section>
@@ -107,9 +131,9 @@ export function ScopePanel({ scopeOptions, scope, onScope, media, onMedia, state
         {scopeOptions.length > 0 ? scopeOptions.map((opt) => (
           <label key={opt.selector} className="flex items-center gap-1.5 text-xs mb-1" style={{ color: 'var(--color-text)' }}>
             <input type="radio" name="editScope" checked={scope.selector === opt.selector} onChange={() => onScope(opt.selector, opt.label)} />
-            {opt.label}
+            {opt.label} <span style={MUTED}>({opt.count})</span>
           </label>
-        )) : <p className="text-xs" style={MUTED}>This element (and nothing around it) has a class, so it can only be edited on its own.</p>}
+        )) : <p className="text-xs" style={MUTED}>Nothing else on the page matches this, so it can only be edited on its own.</p>}
         {scope.selector && <p className="text-xs mt-1" style={{ color: '#b3452c' }}>Changes will apply to every matching element on the page, not just this one. They are outlined in amber.</p>}
       </div>
 

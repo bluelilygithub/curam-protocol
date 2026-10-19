@@ -121,9 +121,13 @@ const load = (f) => import(pathToFileURL(path.join(__dirname, '../../../client/s
   assert.strictEqual(S.cssEscape('a b'), 'a\\ b');
   assert.strictEqual(S.labelFor(titles[0]), 'h2.title');
   const scopes = S.scopeOptionsFor(titles[0]);
-  assert.deepStrictEqual(scopes.map((o) => o.selector), ['.title', '.card h2', '.wrap h2']);
-  assert.ok(scopes.every((o) => doc.querySelectorAll(o.selector).length >= 1));
-  assert.ok(S.scopeOptionsFor(doc.querySelector('section')).length === 0, 'nothing to widen to when there are no classes');
+  assert.deepStrictEqual(scopes.map((o) => o.selector), ['.title', '.card h2', '.wrap h2', 'h2'], 'its own class, the class of each parent, and every item of its kind');
+  assert.deepStrictEqual(scopes.map((o) => o.count), [2, 2, 2, 2], 'each choice says how many items it reaches');
+  assert.ok(scopes.every((o) => o.count === doc.querySelectorAll(o.selector).length));
+  assert.strictEqual(scopes.find((o) => o.selector === 'h2').label, 'Every <h2> on the page');
+  assert.strictEqual(S.scopeOptionsFor(doc.querySelector('.menu li a')).find((o) => o.selector === 'a').count, 2, 'a plain link with no class can still be widened to every link');
+  const alone = S.scopeOptionsFor(doc.querySelector('section'));
+  assert.ok(alone.every((o) => o.count <= 1), 'a one-off item has nothing to widen to (the picker hides choices that reach only one item)');
   // edits made with a unique selector reach only that element; a scope selector reaches them all
   const style = doc.createElement('style');
   style.textContent = E.generateCss(E.setProps([], { selector: S.uniqueSelector(titles[0]), label: 'x', state: '', media: '' }, [{ prop: 'color', value: '#123456' }]), [], { comments: false });

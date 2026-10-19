@@ -30,6 +30,7 @@ checkGuide({
     ['device', 'does', /768px.*390px/s, 'the preview sizes are stated'],
     ['ask', 'notes', /AI model/, 'the plain English box uses an AI model'],
     ['scope', 'does', /amber/, 'matching items are outlined in amber'],
+    ['scope', 'does', /Apply the change to.*Just this one/s, 'the picker with the change controls is named as on the page'],
     ['screen-and-look', 'does', /768px.*480px/s, 'the screen sizes are stated'],
     ['screen-and-look', 'notes', /goes back to normal each time you click/, 'the look resets on a new click'],
     ['text', 'notes', /4\.5 to 1/, 'the readability standard is stated'],

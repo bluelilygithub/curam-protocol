@@ -40,7 +40,10 @@ Once CSS with inlined base64 background images got sent from the client to `/pro
 - `multer({ limits: { fieldSize: 25 * 1024 * 1024 } })` — 25MB comfortably covers a real page's CSS even with several inlined images.
 - The `JSON.parse()` catch block no longer swallows the failure — it 400s with a clear message and logs the field length server-side.
 
-## Scope: this element, its own class, OR an ancestor's class, and Reset
+## Scope: this element, its own class, an ancestor's class, or every item of its kind, and Reset
+
+**Where it shows (2026-10):** besides the full **What it applies to** tool, an **"Apply the change to"** picker (`ScopePicker` in `PropertyPanels.jsx`) sits at the top of Ask in plain English, Text, Text enhancements, Animation and Box whenever the clicked item appears more than once on the page: *Just this one* or each wider choice with how many items it reaches, e.g. "Every <a> inside .menu (2)". `scopeOptionsFor` (`selectors.mjs`) now returns a `count` for each choice and adds "Every <tag> on the page" for items with no class to go on; the picker hides choices that reach only one item, the full tool lists them all. The chosen items are outlined in amber and the picker says how many will change.
+
 
 When something is selected, a "What should changes apply to?" panel appears above the request box: **Just this element** (default, always resets to this on a fresh selection — never carried over from a previous one), plus one radio option per class found — both the element's **own** classes ("Every element with class `.foo`") and classes on any **ancestor**, combined with this element's tag ("Every `<a>` inside `.greenboxsection`"). `getScopeTargets()` is the single choke point every change goes through — panel controls, detected-asset quick picks, animation presets, and AI edits alike — so scope applies uniformly regardless of how the change was made; nothing bypasses it. Choosing any option beyond "Just this element" shows an explicit warning line since it's a materially bigger action than editing one element.
 

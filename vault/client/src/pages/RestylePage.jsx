@@ -21,7 +21,7 @@ import { DEMO_HTML, DEMO_CSS, OUTLINE_CSS, matchFontOption, normalizeWeight, par
 import {
   PagePanel, StylesPanel, BrandPanel, ChangesPanel, ChecksPanel, ExportPanel, SavedPanel, HistoryPanel, SharePanel,
 } from './restyle/RestylePanels';
-import { AskPanel, ScopePanel, TextPanel, EnhancePanel, AnimationPanel, BoxPanel } from './restyle/PropertyPanels';
+import { AskPanel, ScopePanel, ScopePicker, TextPanel, EnhancePanel, AnimationPanel, BoxPanel } from './restyle/PropertyPanels';
 import { SessionHistoryPanel, ScrapePanel } from './restyle/SessionAndScrapePanels';
 
 // CSS tool (displayed as "CSS"; the internal feature key, route and files still say "restyle"). The job: restyle a page you already have,
@@ -836,6 +836,11 @@ export default function RestylePage() {
     if (currentTool?.needs === 'selection' && !hasSelection) {
       return <p className="text-sm" style={{ color: 'var(--color-muted)' }}>{previewBuilt ? 'Click something in the preview first. It gets an outline, and this tool changes it.' : 'Build the preview first (Your page, then Style files), then click something in it.'}</p>;
     }
+    // Above the panels that change the clicked item: apply to just this one, or all the ones like it.
+    const withScope = (panel) => (<>
+      <ScopePicker scopeOptions={scopeOptions} scope={scope} onScope={setScope} />
+      {panel}
+    </>);
     switch (tool) {
       case 'page':
         return <PagePanel onFile={(file) => submitHtml({ file })} onPaste={(html) => submitHtml({ html })} onAddress={loadAddress} status={htmlStatus} busy={loadingAddress} renderAvailable={renderAvailable} sourceUrl={sourceUrl} />;
@@ -858,17 +863,17 @@ export default function RestylePage() {
       case 'session':
         return <SessionHistoryPanel entries={history.entries} cursor={history.cursor} onGoTo={goToPoint} onRevert={takeBackOne} onUndo={handleUndo} onRedo={handleRedo} />;
       case 'ask':
-        return <AskPanel value={aiRequest} onChange={setAiRequest} onAsk={handleAiRequest} busy={aiBusy} status={aiStatus} />;
+        return withScope(<AskPanel value={aiRequest} onChange={setAiRequest} onAsk={handleAiRequest} busy={aiBusy} status={aiStatus} />);
       case 'scope':
         return <ScopePanel scopeOptions={scopeOptions} scope={scope} onScope={setScope} media={editMedia} onMedia={setEditMedia} state={editState} onState={setEditState} onReset={handleResetSelection} />;
       case 'text':
-        return <TextPanel ctrl={ctrl} onCtrl={handleCtrlChange} onQuick={applyQuickPick} onBrand={applyBrandColour} detected={detectedAssets} tokens={tokens} contrast={contrast} />;
+        return withScope(<TextPanel ctrl={ctrl} onCtrl={handleCtrlChange} onQuick={applyQuickPick} onBrand={applyBrandColour} detected={detectedAssets} tokens={tokens} contrast={contrast} />);
       case 'enhance':
-        return <EnhancePanel ctrl={ctrl} onCtrl={handleCtrlChange} />;
+        return withScope(<EnhancePanel ctrl={ctrl} onCtrl={handleCtrlChange} />);
       case 'animation':
-        return <AnimationPanel ctrl={ctrl} onAnimation={handleAnimationChange} />;
+        return withScope(<AnimationPanel ctrl={ctrl} onAnimation={handleAnimationChange} />);
       case 'box':
-        return <BoxPanel ctrl={ctrl} onCtrl={handleCtrlChange} onQuick={applyQuickPick} onBrand={applyBrandColour} detected={detectedAssets} tokens={tokens} contrast={contrast} />;
+        return withScope(<BoxPanel ctrl={ctrl} onCtrl={handleCtrlChange} onQuick={applyQuickPick} onBrand={applyBrandColour} detected={detectedAssets} tokens={tokens} contrast={contrast} />);
       case 'brand':
         return <BrandPanel tokens={tokens} detectedFonts={detectedAssets.fonts} onAdd={addToken} onUpdate={updateToken} onRemove={removeToken} onDetect={detectBrandColours} onApply={applyBrandEverywhere} previewBuilt={previewBuilt} />;
       case 'changes':
