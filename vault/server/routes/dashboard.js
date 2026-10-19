@@ -96,15 +96,21 @@ router.get('/overview', async (req, res) => {
           WHERE "userId"=$1 AND status='sent' AND COALESCE("docType",'invoice')='invoice'`,
         [userId]
       );
-      // Earliest quarter not yet paid. The ATO due date is 28 days after quarter end; shown as a guide.
-      const { rows: bas } = await pool.query(
+      // No BAS line once GST registration is switched off (Finance settings), and only a
+      // recent unpaid quarter otherwise: old quarters that were never closed off are
+      // housekeeping, not something to show as a live deadline. The ATO due date is 28 days
+      // after quarter end; shown as a guide.
+      const { rows: reg } = await pool.query(
+        `SELECT value FROM settings WHERE "userId"=$1 AND key='fin_gst_registered'`, [userId]);
+      const gstRegistered = reg[0]?.value !== 'false';
+      const { rows: bas } = gstRegistered ? await pool.query(
         `SELECT to_char(from_date,'YYYY-MM-DD') AS "from", to_char(to_date,'YYYY-MM-DD') AS "to",
                 to_char(to_date + 28,'YYYY-MM-DD') AS due, status
            FROM fin_bas_quarters
-          WHERE "userId"=$1 AND status <> 'paid'
+          WHERE "userId"=$1 AND status <> 'paid' AND to_date >= ($2::date - 120)
           ORDER BY to_date ASC LIMIT 1`,
-        [userId]
-      );
+        [userId, today]
+      ) : { rows: [] };
       out.money = {
         outstandingCount: inv[0].count,
         outstandingTotal: Number(inv[0].total),

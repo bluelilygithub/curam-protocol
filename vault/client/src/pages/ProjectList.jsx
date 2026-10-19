@@ -159,9 +159,12 @@ function CalendarWidget() {
   const dayKey = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
   const todayKey = dayKey(new Date());
   const startOf = (e) => (e.allDay ? new Date(`${e.start}T00:00:00`) : new Date(e.start));
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowKey = dayKey(tomorrow);
   const groups = [
     { label: 'Today', items: events.filter((e) => dayKey(startOf(e)) === todayKey) },
-    { label: 'Tomorrow', items: events.filter((e) => dayKey(startOf(e)) !== todayKey) },
+    { label: 'Tomorrow', items: events.filter((e) => dayKey(startOf(e)) === tomorrowKey) },
   ].filter((g) => g.items.length > 0);
 
   return (
