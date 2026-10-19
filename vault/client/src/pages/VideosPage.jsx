@@ -173,6 +173,7 @@ const TOOL_HELP = {
       'The music dips while the voice speaks, and comes back up in the gaps (light, strong or off)',
       'Short music repeats smoothly; long music is trimmed; it fades in and out',
       'Optional lead-in before the voice and tail after it; saves as MP3 or WAV',
+      'No recording? Write a script and have an AI voice read it into the Voice slot (small cost per use)',
     ],
   },
   'isolate-voice': {
