@@ -34,6 +34,23 @@ function applyMedia(css, media) {
 }
 
 /**
+ * The page's HTML, by a plain fetch or (render) by a headless browser that has run the page's scripts. Shared with scrapeCss.js.
+ * @returns {Promise<{raw:string, finalUrl:string, rendered:boolean, url:string}>}
+ */
+async function getPageHtml(rawUrl, opts = {}, deps = {}) {
+  const doFetch = deps.fetchHtml || fetchHtml;
+  const url = normaliseHttpUrl(rawUrl);
+  if (opts.render) {
+    const render = deps.render || require('./renderPage').renderPage;
+    const out = await render(url);
+    return { raw: out.html, finalUrl: out.finalUrl || url, rendered: true, url };
+  }
+  const { body, statusCode } = await doFetch(url);
+  if (statusCode >= 400) throw new Error(`Server returned ${statusCode}`);
+  return { raw: body, finalUrl: url, rendered: false, url };
+}
+
+/**
  * @param {string} rawUrl
  * @param {{render?: boolean}} [opts]
  * @param {{fetchHtml?: Function, render?: Function}} [deps]  replaced in tests
@@ -41,19 +58,8 @@ function applyMedia(css, media) {
  */
 async function loadPageFromUrl(rawUrl, opts = {}, deps = {}) {
   const doFetch = deps.fetchHtml || fetchHtml;
-  const url = normaliseHttpUrl(rawUrl);
   const flags = [];
-
-  let raw; let finalUrl = url; let rendered = false;
-  if (opts.render) {
-    const render = deps.render || require('./renderPage').renderPage;
-    const out = await render(url);
-    raw = out.html; finalUrl = out.finalUrl || url; rendered = true;
-  } else {
-    const { body, statusCode } = await doFetch(url);
-    if (statusCode >= 400) throw new Error(`Server returned ${statusCode}`);
-    raw = body;
-  }
+  const { raw, finalUrl, rendered } = await getPageHtml(rawUrl, opts, deps);
 
   // Every address in the page made complete, scripts removed (the same step Web Extractor's "Exact scrape" uses).
   const absolute = extractStyled(raw, finalUrl).html;
@@ -93,4 +99,4 @@ async function loadPageFromUrl(rawUrl, opts = {}, deps = {}) {
   return { html, cssFiles: results.filter(Boolean), flags, finalUrl, rendered };
 }
 
-module.exports = { loadPageFromUrl, applyMedia, sheetName };
+module.exports = { loadPageFromUrl, getPageHtml, applyMedia, sheetName };

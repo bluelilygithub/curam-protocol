@@ -2374,6 +2374,9 @@
   "DELETE /api/restyle/projects/:id/share": {
    "class": "authed"
   },
+  "POST /api/restyle/scrape-css": {
+   "class": "authed"
+  },
   "POST /api/restyle/upload-html": {
    "class": "authed"
   },

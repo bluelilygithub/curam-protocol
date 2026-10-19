@@ -76,12 +76,12 @@ The page uses the shared tool menu (`components/ToolSidebar.jsx`) like Graphics 
 
 | Group | Tools |
 |---|---|
-| **Your page** | Your page (web address / upload / paste), Style files (+ Build the preview, "Things worth a look") |
+| **Your page** | Your page (web address / upload / paste), Style files (+ Build the preview, "Things worth a look"), Download a page's CSS |
 | **Change it** | Ask in plain English, What it applies to (scope, screen size, mouse-over look, Reset), Text, Text enhancements, Animation, Box, Brand colours and fonts |
-| **Check and compare** | Changes so far, Accessibility checks |
+| **Check and compare** | Changes so far, History of this session, Accessibility checks |
 | **Keep and share** | Export the CSS, My saved pages, Page history, Share a preview |
 
-The live preview stays beside the open tool. Above it: **Load a demo**, **Undo last change**, **Export the CSS (n)**; over the preview: **Desktop / Tablet / Phone**, **With changes / Original**, and the "Editing: ..." line. Building the preview, or clicking something in it, moves the open tool on from the set-up tools to Ask in plain English. Tools that need a click, a built preview or a saved page say so under their name in the menu and in their panel.
+The live preview stays beside the open tool. Above it: **Load a demo**, **Undo last change**, **Redo**, **History (n)**, **Export the CSS (n)**; over the preview: **Desktop / Tablet / Phone**, **With changes / Original**, and the "Editing: ..." line. Building the preview, or clicking something in it, moves the open tool on from the set-up tools to Ask in plain English. Tools that need a click, a built preview or a saved page say so under their name in the menu and in their panel.
 
 Code: `RestylePage.jsx` (state and logic) with the panels in `restyle/RestylePanels.jsx` (page, styles, brand, changes, checks, export, saved, history, share) and `restyle/PropertyPanels.jsx` (ask, scope, text, enhance, animation, box); pure logic in `restyle/editModel.mjs` (changes, CSS generation, report), `selectors.mjs` (unique and scope selectors) and `a11y.mjs` (contrast and the page scan).
 
@@ -97,7 +97,7 @@ Voice: the plain-English box (continuous dictation), the web address, the pasted
 
 ## Changes are rules, not inline styles
 
-Each change is a rule in one list (`edits`: `{ selector, label, state, media, props: { fontSize: { value, was } } }`, `restyle/editModel.mjs`). A change goes to a **unique selector** for the clicked item (its id, or tag and classes, climbing the parents until it points at one item **and contains an id or a class**, so it is not just "span:nth-of-type(2)", which would hit every page of the site it is pasted into), or to the **scope selector** when "every matching item" is chosen. The preview, the export, Changes so far and the shared preview are all made from that list, so what you see is the CSS you export. Undo is a stack of snapshots of the list (one per action; brand colour add/remove also snapshots the brand list). `!important` is added by default so the changes win over the page's own styles, with a switch in Export.
+Each change is a rule in one list (`edits`: `{ selector, label, state, media, props: { fontSize: { value, was } } }`, `restyle/editModel.mjs`). A change goes to a **unique selector** for the clicked item (its id, or tag and classes, climbing the parents until it points at one item **and contains an id or a class**, so it is not just "span:nth-of-type(2)", which would hit every page of the site it is pasted into), or to the **scope selector** when "every matching item" is chosen. The preview, the export, Changes so far and the shared preview are all made from that list, so what you see is the CSS you export. Undo, redo and the session history are described under "History of this session" below. `!important` is added by default so the changes win over the page's own styles, with a switch in Export.
 
 ## Screen sizes and mouse-over looks
 
@@ -114,6 +114,23 @@ Colour and font tokens (`--brand-<name>` in a `:root` block of the generated CSS
 ## Export
 
 CSS (copy / `.css`), the whole page with the changes built in (`.html`; the editor's helper attributes and outline style are stripped), and a **developer report** (`changeReport`: every change with where and what it was, the brand values, and the CSS, as Markdown). Animations bring their `@keyframes` with them, only the ones used.
+
+## History of this session
+
+Every change is an entry in a history kept in memory for the session (`client/src/pages/restyle/history.mjs`, pure functions, `npm run test:restyle-history`): a label in plain words ("The text size of h2: 40px", "Asked: “make it bigger”", "Added a brand colour: Colour"), the time, and the state (changes and brand colours) before and after. **History of this session** lists them newest first. From there:
+
+- **Go back to before this** restores the state before an entry; the later entries stay in the list, greyed out, so **Go forward to here** (or **Redo**) brings them back. A "You are here" line marks the position. Going back and then making a new change drops the entries that were gone back over (a new line of history). **Back to the start** goes to the page as loaded.
+- **Take back just this** removes only what that entry did and keeps the entries made after it. A change is only taken back if it is still as that entry left it; if a later entry changed the same property of the same item again, that later change is kept and the person is told ("Kept 1 thing a later change had changed again"). If nothing can be taken back it says so. A brand colour that something still uses is not taken away. The take-back itself is a new entry, so it can be undone.
+- Changes with the same `mergeKey` within 1.5 s are one entry (a dragged slider or the colour box is one step, not dozens; dragging back to where it started leaves no entry); the AI box, quick picks, Reset, removing from the change list and brand actions are separate entries. At most 200 entries are kept.
+- It is **not saved**: loading another page, opening a saved page or version, or reloading starts a new history (a saved page keeps its changes, and Page history keeps its earlier saved versions). The Undo, Redo and History buttons above the preview and the Undo last in Changes so far all use this one history.
+
+## Download a page's CSS
+
+`POST /api/restyle/scrape-css` `{ url, render }` (`server/services/restyle/scrapeCss.js`, summary in `cssSettings.js`, same per-person limits as `/fetch-url`: 40 an hour, 8 rendered) returns the style files a live page depends on and a summary of the design settings they set. Nothing is changed, saved or run.
+
+- **Files**: the page's `<link rel="stylesheet">` files and `<style>` blocks in document order, up to 25 files, 1.5 MB each, 6 MB in all; each `@import` is followed (two levels deep) and the imported file placed just before the file that imports it, whose `@import` line becomes a note. Every address inside a file is made complete (`url()` and imports) so it works saved on its own. A file that fails, or is too big, is reported. `render: true` opens the page in the headless browser first (styles added by script are included).
+- **Summary** (PostCSS, never throws; a file that cannot be parsed is counted): colours (hex and rgb/hsl, normalised and counted, variable declarations not counted as uses), font families, font sizes, weights, line heights, spacing (margin, padding, gap values), rounded corners, shadows, custom properties with how often `var()` uses them, screen-size breakpoints, `@font-face` families with their font files, animation names, imports, and totals.
+- **The tool** (`ScrapePanel`, `restyle/scrapeModel.mjs`): file list with where each came from, Copy and Download .css per file; **Download all (.zip)** (the files as `01-name.css`..., `all-in-one.css`, `design-settings.md`, `design-settings.json`; file names are cut to letters, digits and dashes so a name from a page can never climb out of a folder), **One combined .css** (page order, each under a comment saying where it came from), **Settings report (.md)** and **Settings (.json)**; **Restyle this page** loads the same address into the editor and **Use its colours as brand colours** adds the page's most-used plain colours as brand colours. Tests: `npm run test:restyle-scrape` (server), `test:restyle-scrape-model` (downloads).
 
 ## Saved pages, history and the preview link
 

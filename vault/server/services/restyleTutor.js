@@ -23,6 +23,9 @@ const CATALOG = [
   { id: 'styles', label: 'Style files', group: 'Your page',
     does: 'The style files that make the page look the way it does. A page loaded by its address brings its own. You can add more: drop .css files on the box or choose them, or choose Paste a snippet, give it a name and press Add this snippet. The up and down arrows put them in order (files lower in the list win when two disagree) and the cross removes one. A box lists things worth a look.',
     notes: 'Style files are optional. If your page already has its styles inside it, you may not need any.' },
+  { id: 'scrape', label: 'Download a page\'s CSS', group: 'Your page',
+    does: 'Type the address of any live page and press Fetch the CSS (tick "This page builds itself with JavaScript" if its styles are added by script). You get every style file the page depends on: the ones it links, the ones those import, and the styles written inside the page, each with its addresses made complete so it works saved on its own. Download all gives a .zip (the files, one combined .css and the settings report); you can also copy or download each file, or get one combined .css. Below that is a summary of the page\'s design settings: its colours, fonts, font files, text sizes, spacing, rounded corners, shadows, variables, screen-size breakpoints and animations, with how often each is used, as a report (.md) or as data (.json). Restyle this page loads it into the editor, and Use its colours as brand colours adds its most-used colours as brand colours.',
+    notes: 'Public pages only. Up to 25 style files and 6 MB; a file that imports another is followed two levels. It reads the CSS the page uses, not the page\'s pictures. Nothing is changed or saved on the site or in your account. The JavaScript option is limited to 8 an hour and may be greyed out.' },
   { id: 'build-preview', label: 'Build the preview', group: 'Your page',
     does: 'The Build the preview button (under the style files) puts the page and its style files together in the live preview, which is where you click things to change them. A page loaded by its address is built for you; use this after adding or reordering style files.',
     notes: 'Your changes are kept when you rebuild, and still apply wherever they still match.' },
@@ -61,14 +64,17 @@ const CATALOG = [
 
   // ---- Check and compare ----
   { id: 'changes', label: 'Changes so far', group: 'Check and compare',
-    does: 'Every change made so far, in plain words, grouped by what it was made to, with what it was before and what it is now, and for which screen size or look. The cross takes one change back; Undo last and Clear all are at the top.',
+    does: 'Every change made so far, in plain words, grouped by what it was made to, with what it was before and what it is now, and for which screen size or look. The cross takes one change back; Undo last and Clear all are at the top. For a step-by-step history of the session, use History of this session.',
     notes: 'It is the same list the exported CSS is made from.' },
   { id: 'compare', label: 'Original or with changes', group: 'Check and compare',
     does: 'The With changes and Original buttons above the preview flip between your version of the page and the page as it was before any change, so you can compare. Making a change switches back to With changes.',
     notes: 'The Original view is for looking only. It does not remove your changes.' },
-  { id: 'undo', label: 'Undo last change', group: 'Check and compare',
-    does: 'The Undo last change button above the preview takes back your last action. A change to many items at once, or a plain-English request with several changes, is one action, so one click undoes all of it.',
-    notes: 'It goes back through changes made in this session. Changes to a brand colour\'s value are not part of Undo (use Changes so far or change the colour back).' },
+  { id: 'session', label: 'History of this session', group: 'Check and compare',
+    does: 'Every change you make in this session is listed here, newest first, with the time and a plain description. On any entry you can press Go back to before this (everything goes back to just before it; the later entries stay in the list, greyed out, so you can come forward again with Go forward to here), or Take back just this (only that change is taken back and the ones made after it are kept). If a later change touched the same thing, that later change is kept and you are told. Undo one step, Redo one step and Back to the start are at the top, and a "You are here" line shows where you are. A slider you drag is one entry, not dozens.',
+    notes: 'The history is for this session only: it starts again when you load another page or reload. Saving a page keeps its changes, but not the step-by-step history. Making a new change after going back drops the entries you went back over.' },
+  { id: 'undo', label: 'Undo and redo', group: 'Check and compare',
+    does: 'The Undo last change and Redo buttons above the preview step back and forward through the history of this session one action at a time. A change to many items at once, or a plain-English request with several changes, is one action, so one click undoes all of it. Changing a brand colour or font is part of the history too.',
+    notes: 'For going back further, or taking back one change from the middle, use History of this session.' },
   { id: 'checks', label: 'Accessibility checks', group: 'Check and compare',
     does: 'Press Check the page and it looks over every piece of text and every picture for the three most common problems: text that is hard to read against its background, pictures with no description for screen readers, and tiny text. Click a problem in the list and it is selected in the preview and scrolled into view, so you can fix it.',
     notes: 'It checks the preview as it looks right now, so run it again after fixing things. It is a quick check, not a full audit of the page.' },
@@ -94,6 +100,7 @@ const RULES = [
   'A change affects only the clicked item unless What it applies to is set to every matching item, which is outlined in amber first. A change is for all screen sizes and the normal look unless the screen size or look is chosen in What it applies to.',
   'Changes are kept as a list, not written into the page. The preview, the exported CSS, Changes so far and the shared preview all come from that one list, so what you see is what you export.',
   'Plain English changes are made by an AI model, but only to the look of an item, from a fixed list: font, size, weight, colour, line spacing, background, rounded corners, space around, shadow, capitals, letter spacing, alignment and the six animations.',
+  'Every change made in a session is kept as a step in History of this session: the person can go back to any point and forward again, or take back one change and keep the later ones. That history is for the session only.',
   'Brand colours and fonts are set once in Brand colours and fonts; any change that uses one follows it if it is changed later.',
   'The CSS is exported for the person to paste into their own site. The tool does not change the live website.',
   'Save this page keeps the page and all its changes in the account; Update replaces a saved page and keeps the old version in Page history; Share a preview makes a link anyone can open to see the saved page.',
@@ -102,6 +109,8 @@ const RULES = [
 
 const NOT_POSSIBLE = [
   'Changing the live website itself, or publishing to it. The tool gives you CSS to paste into your site\'s own custom CSS box (or to hand to a developer); it cannot log in to your site or edit it.',
+  'Keeping the step-by-step history after the page is reloaded or another page is loaded: it is for the current session only (the saved page keeps its changes and its earlier saved versions).',
+  'Downloading a page\'s pictures, scripts or the page itself with Download a page\'s CSS: it fetches the style files and a summary of their settings only.',
   'Loading pages behind a sign-in, a paywall or a bot check. Save the page from your browser and upload it instead.',
   'Changing the words, the pictures or the layout structure of the page, or adding and removing items. It changes the look of the items already there.',
   'Running the page\'s own scripts in the preview: menus, sliders and anything else that needs them will not work there. A page that builds itself with JavaScript can be loaded with the browser option, but the preview is still a still copy.',
@@ -118,7 +127,7 @@ Rules:
 - You cannot see their page. Never state or guess what is on it.
 - Use plain words, as to a friend who has never written code. Say "the space around it", "the rounded corners", "style files", never code words such as padding, border-radius, selector, class, stylesheet or cascade. "CSS" itself is fine: it is the name of the tool and of what they take away.
 - Give steps in order. Each step names exactly one tool by its id and says in a sentence what to do there.
-- Keep to the tool's job. The usual order is: load the page, build the preview, click something in it, change it, check it, export the CSS. If they want the result on their website, the answer is Export the CSS and pasting it into their site's custom CSS box; the tool cannot publish it.
+- Keep to the tool's job. The usual order is: load the page, build the preview, click something in it, change it, check it, export the CSS. If they only want the CSS or the design settings (colours, fonts, sizes) of a live page, that is Download a page's CSS, with no editing needed. If they want to go back on something they did, that is History of this session (or Undo and redo for one step). If they want the result on their website, the answer is Export the CSS and pasting it into their site's custom CSS box; the tool cannot publish it.
 - If they ask for something that is not a change to how things look (new words, a new menu, a different layout, editing the live site, a page behind a sign-in), say plainly it is not possible here and say what they could do instead.
 - If you need one more fact to answer, ask ONE short question and give no steps.
 ${VERDICT_HELP}

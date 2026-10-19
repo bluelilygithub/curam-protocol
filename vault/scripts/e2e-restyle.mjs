@@ -46,6 +46,21 @@ const base = `http://127.0.0.1:${server.address().port}`;
 const PAGE_BODY = '<header class="top"><h1>Acme</h1></header><main><p class="intro">Hello there, this is the intro text.</p><div class="card"><h2>Feature card</h2><p>Some words in the card.</p><a class="button" href="#">Learn more</a></div></main>';
 const PAGE_CSS = 'body{margin:0;font-family:sans-serif}.card{background:#f5f5f0;padding:20px}.card h2{font-size:20px;color:#bbbbbb}.button{display:inline-block;background:#cc785c;color:#ffffff;padding:8px 16px}.button:hover{background:#b3452c}@media (max-width:480px){.card{padding:8px}}';
 const prepared = (extra = {}) => ({ html: '', headInnerHTML: '<meta charset="utf-8">', bodyInnerHTML: PAGE_BODY, cssFiles: [], changeLog: [], flags: [], ...extra });
+const SCRAPE = {
+  url: 'https://example.com/', finalUrl: 'https://example.com/', rendered: false, title: 'Example Shop',
+  files: [
+    { filename: 'base.css', url: 'https://example.com/css/base.css', source: 'imported', importedBy: 'main.css', media: '', bytes: 22, css: 'body { margin: 0 }' },
+    { filename: 'main.css', url: 'https://example.com/css/main.css', source: 'linked', media: '', bytes: 30, css: '.hero { color: #cc785c; background: url(https://example.com/h.jpg) }' },
+    { filename: 'Styles inside the page', url: '', source: 'embedded', media: '', bytes: 24, css: '.x { color: #333; padding: 8px }' },
+  ],
+  summary: {
+    colors: [{ value: '#cc785c', count: 2 }, { value: '#333', count: 1 }], fontFamilies: [{ value: "'Inter', sans-serif", count: 3 }], fontSizes: [{ value: '16px', count: 4 }],
+    fontWeights: [], lineHeights: [], spacing: [{ value: '8px', count: 2 }], radii: [{ value: '8px', count: 1 }], shadows: [],
+    variables: [{ name: '--brand', value: '#cc785c', uses: 2 }], breakpoints: [{ value: 'max-width: 768px', count: 1 }], fontFaces: [{ family: 'Brand Sans', weight: '400', style: '', sources: ['/f.woff2'] }],
+    keyframes: [], imports: ['base.css'], stats: { files: 3, bytes: 76, rules: 4, declarations: 6, unreadable: 0 },
+  },
+  flags: ['1 style file could not be fetched (blocked, missing or timed out).'],
+};
 const calls = [];
 const respond = (route, body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
@@ -66,6 +81,7 @@ await context.route('**/api/**', async (route) => {
   if (pathname === '/api/restyle/upload-html') return respond(route, prepared());
   if (pathname === '/api/restyle/process-css') return respond(route, { css: PAGE_CSS, changeLog: [], flags: [] });
   if (pathname === '/api/restyle/fetch-url') return respond(route, prepared({ sourceUrl: 'https://example.com/', rendered: false, cssFiles: [{ filename: 'main.css', css: PAGE_CSS }], flags: ['1 of the page\'s style files could not be loaded.'] }));
+  if (pathname === '/api/restyle/scrape-css') return respond(route, SCRAPE);
   if (pathname === '/api/restyle/ai-edit') return respond(route, { changes: [{ property: 'fontSize', value: '44px', explanation: 'Made it bigger.' }, { property: 'borderRadius', value: '12px', explanation: 'Rounded the corners.' }] });
   if (pathname === '/api/restyle/projects' && method === 'GET') return respond(route, { projects: [] });
   if (pathname === '/api/restyle/projects' && method === 'POST') return respond(route, { project: { id: 5, name: JSON.parse(req.postData()).name, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } });
@@ -183,6 +199,36 @@ try {
   const after = (await page.getByText(/^\d+ changes?$/).first().innerText());
   check(before !== after, `Undo takes the last change back (${before} -> ${after})`);
 
+  // ---- history of this session ----
+  check((await page.getByRole('button', { name: /^History \(\d+\)$/ }).count()) === 1, 'the History button shows how many changes there are');
+  await openTool('History of this session');
+  const backs = page.getByRole('button', { name: 'Go back to before this' });
+  const forwards = page.getByRole('button', { name: 'Go forward to here' });
+  const takeBacks = page.getByRole('button', { name: 'Take back just this' });
+  const applied = await backs.count();
+  check(applied >= 6, `every change is an entry in the history (${applied})`);
+  check((await forwards.count()) === 1 && (await page.getByText('You are here').count()) >= 1, 'the change undone earlier is still listed, greyed out, with a "You are here" line');
+  check((await page.getByText(/The text size of h2: 4\dpx/).count()) >= 1 &&(await page.getByText('Asked: “make it bigger and rounded”').count()) === 1, 'entries are described in plain words');
+  await page.getByRole('button', { name: 'Redo one step' }).click();
+  check((await forwards.count()) === 0 && /h1, h2, h3, h4, h5, h6 \{[\s\S]*color: var\(--brand-colour\)/.test(await editCss()), 'Redo brings the undone change back');
+
+  // take back the oldest entry (the first text size): a later entry changed the size again, so nothing can be taken back and it says so
+  await takeBacks.last().click();
+  await page.getByText(/Nothing to take back/).waitFor({ timeout: 5000 });
+  check(true, 'taking back a change a later one has changed again is refused, with a reason');
+  // take back the plain-English entry (second oldest): its size goes back to what it was and the rounded corners go, the rest stays
+  await takeBacks.nth((await takeBacks.count()) - 2).click();
+  await page.waitForFunction(() => document.body.innerText.includes('Took back: Asked'), null, { timeout: 5000 });
+  css = await editCss();
+  check(/font-size: 40px !important/.test(css) && !/border-radius: 12px/.test(css), 'taking back one entry undoes just that one');
+  check(/--brand-colour/.test(css) && /color: #112233/.test(css), 'and keeps the entries made after it');
+  // go back to before the first entry: everything is as loaded
+  await backs.last().click();
+  check(!/!important/.test(await editCss()) && !/--brand-colour/.test(await editCss()), 'Go back to before this returns the page to as it was loaded');
+  check((await page.getByRole('button', { name: 'Back to the start' }).isDisabled()), 'and there is nowhere further back');
+  await forwards.first().click();
+  check(/font-size: 40px !important/.test(await editCss()) && /--brand-colour/.test(await editCss()), 'Go forward to here brings it all back');
+
   // ---- accessibility checks ----
   await openTool('Accessibility checks');
   await page.getByRole('button', { name: 'Check the page' }).click();
@@ -217,6 +263,31 @@ try {
   await openTool('Page history');
   await page.getByText('No earlier versions yet').waitFor({ timeout: 8000 });
   check(true, 'history opens for the saved page');
+
+  // ---- download a page's CSS ----
+  await openTool("Download a page's CSS");
+  await page.getByRole('textbox', { name: 'Address of the page to read' }).fill('example.com');
+  await page.getByRole('button', { name: 'Fetch the CSS' }).click();
+  await page.getByText('Found 3 style files.').waitFor({ timeout: 8000 });
+  check(calls.includes('POST /api/restyle/scrape-css'), 'fetching the CSS calls the server');
+  check((await page.getByText('main.css').count()) >= 1 && (await page.getByText('imported by another style file (main.css)').count()) === 1, 'the style files are listed with where each came from');
+  check((await page.getByText('Colours').count()) >= 1 && (await page.getByText('Variables').count()) >= 1 && (await page.getByText('Font files').count()) >= 1, 'the design settings are summarised');
+  check((await page.getByText(/1 style file could not be fetched/).count()) === 1, 'a file that could not be fetched is reported');
+  const JSZip = require('jszip');
+  const [zipDownload] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download all (.zip)' }).click()]);
+  check(zipDownload.suggestedFilename() === 'example-com-css.zip', `the zip is named after the site (${zipDownload.suggestedFilename()})`);
+  const zip = await JSZip.loadAsync(fs.readFileSync(await zipDownload.path()));
+  const names = Object.keys(zip.files).sort();
+  check(['01-base.css', '02-main.css', '03-Styles-inside-the-page.css', 'all-in-one.css', 'design-settings.json', 'design-settings.md'].every((n) => names.includes(n)), `the zip holds every file, the combined file and the reports (${names.length} files)`);
+  check(/===== base\.css[\s\S]*===== main\.css/.test(await zip.file('all-in-one.css').async('string')), 'the combined file is in page order');
+  const [combinedDownload] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'One combined .css' }).click()]);
+  check(/===== main\.css/.test(fs.readFileSync(await combinedDownload.path(), 'utf8')), 'One combined .css downloads the combined file');
+  const [reportDownload] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Settings report (.md)' }).click()]);
+  check(/^# Design settings of Example Shop/.test(fs.readFileSync(await reportDownload.path(), 'utf8')), 'the settings report downloads');
+  const brandBefore = await page.getByRole("textbox", { name: /Name of this brand colour/ }).count();
+  await page.getByRole('button', { name: 'Use its colours as brand colours' }).click();
+  await openTool('Brand colours and fonts');
+  check((await page.getByRole('textbox', { name: /Name of this brand/ }).count()) > brandBefore, "the page's colours become brand colours");
 
   // ---- load by address ----
   await openTool('Your page');

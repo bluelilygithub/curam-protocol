@@ -14,12 +14,15 @@ import {
   PLAIN, MEDIA_OPTIONS, DEVICES, setProps, clearSelector, removeProp, generateCss, changeRows, changeReport, tokenRef, uniqueTokenName, toHex,
 } from './restyle/editModel.mjs';
 import { uniqueSelector, labelFor, scopeOptionsFor } from './restyle/selectors.mjs';
+import * as H from './restyle/history.mjs';
+import { combineCss, fileNameFor, settingsJson, settingsMarkdown, sizeLabel, sourceLabel, topColours } from './restyle/scrapeModel.mjs';
 import { checkTextContrast, scanDocument } from './restyle/a11y.mjs';
 import { DEMO_HTML, DEMO_CSS, OUTLINE_CSS, matchFontOption, normalizeWeight, parseLineHeight, scanCssAssets, TEXT_ALIGN_OPTIONS } from './restyle/pageHelpers.mjs';
 import {
   PagePanel, StylesPanel, BrandPanel, ChangesPanel, ChecksPanel, ExportPanel, SavedPanel, HistoryPanel, SharePanel,
 } from './restyle/RestylePanels';
 import { AskPanel, ScopePanel, TextPanel, EnhancePanel, AnimationPanel, BoxPanel } from './restyle/PropertyPanels';
+import { SessionHistoryPanel, ScrapePanel } from './restyle/SessionAndScrapePanels';
 
 // CSS tool (displayed as "CSS"; the internal feature key, route and files still say "restyle"). The job: restyle a page you already have,
 // without writing code, then take the CSS away and paste it into the real site. See docs/restyle.md.
@@ -34,8 +37,10 @@ const DEFAULT_CTRL = {
   fontFamily: '', fontSize: 16, fontWeight: '400', color: '#000000', lineHeight: 1.2, backgroundColor: '#ffffff', borderRadius: 0, padding: 0,
   boxShadow: 'none', textTransform: 'none', letterSpacing: 0, textAlign: 'left', animation: 'none',
 };
-const MAX_UNDO = 100;
 const OUTLINE = { borderColor: 'var(--color-border)', color: 'var(--color-text)' };
+
+const cap = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+const clip = (text, n = 48) => (text.length > n ? `${text.slice(0, n)}…` : text);
 
 const mediaQueryOf = (id) => MEDIA_OPTIONS.find((m) => m.id === id)?.query || '';
 
@@ -109,8 +114,8 @@ export default function RestylePage() {
   const importantRef = useRef(true);
   const [showOriginal, setShowOriginalState] = useState(false);
   const showOriginalRef = useRef(false);
-  const undoStackRef = useRef([]);
-  const [canUndo, setCanUndo] = useState(false);
+  const historyRef = useRef(H.emptyHistory());
+  const [history, setHistory] = useState(historyRef.current);
   const setImportant = (v) => { importantRef.current = v; setImportantState(v); syncEditStyle(); };
   const setShowOriginal = (v) => { showOriginalRef.current = v; setShowOriginalState(v); syncEditStyle(); };
 
@@ -150,17 +155,27 @@ export default function RestylePage() {
     syncEditStyle();
   }, [syncEditStyle]);
 
-  const pushUndo = useCallback(({ withTokens = false } = {}) => {
-    undoStackRef.current.push({ edits: editsRef.current, ...(withTokens ? { tokens: tokensRef.current } : {}) });
-    if (undoStackRef.current.length > MAX_UNDO) undoStackRef.current.shift();
-    setCanUndo(true);
+  /**
+   * Makes a change to the changes (or to the brand colours and fonts) AND records it in the history of this session. Changes with the same
+   * mergeKey made close together (a slider being dragged) become one entry.
+   */
+  const change = useCallback((label, nextEdits, nextTokens, mergeKey = null) => {
+    const before = { edits: editsRef.current, tokens: tokensRef.current };
+    const after = { edits: nextEdits, tokens: nextTokens || before.tokens };
+    historyRef.current = H.record(historyRef.current, { label, before, after, at: Date.now(), mergeKey });
+    setHistory(historyRef.current);
+    commit(nextEdits, nextTokens);
+  }, [commit]);
+
+  const resetHistory = useCallback(() => {
+    historyRef.current = H.emptyHistory();
+    setHistory(historyRef.current);
   }, []);
 
   const resetChanges = useCallback(() => {
-    undoStackRef.current = [];
-    setCanUndo(false);
+    resetHistory();
     commit([]);
-  }, [commit]);
+  }, [commit, resetHistory]);
 
   // ---------- Selection ----------
   const refreshContrast = useCallback((el) => {
@@ -407,8 +422,11 @@ export default function RestylePage() {
   });
 
   // ---------- Making a change ----------
-  /** Records changes to the clicked item (or everything in scope), for the chosen screen size and look. One undo step for the lot. */
-  const applyChanges = useCallback((list) => {
+  /**
+   * Records changes to the clicked item (or everything in scope), for the chosen screen size and look, as one entry in the history.
+   * `merge` is for controls that fire again and again (sliders, the colour box): those within a moment of each other become one entry.
+   */
+  const applyChanges = useCallback((list, { label, merge = false } = {}) => {
     const el = selectedElRef.current;
     if (!el || !list.length) return;
     const cs = el.ownerDocument.defaultView.getComputedStyle(el);
@@ -420,16 +438,22 @@ export default function RestylePage() {
       media: mediaQueryOf(editMediaRef.current),
     };
     const changes = list.map((c) => ({ prop: c.property, value: c.value, was: wasValue(cs, c.property) }));
-    pushUndo();
+    const where = [target.state ? 'mouse-over' : '', target.media ? (MEDIA_OPTIONS.find((m) => m.query === target.media)?.id === 'phone' ? 'phones' : 'tablets') : ''].filter(Boolean);
+    const shown = (v) => { const t = tokensRef.current.find((x) => v === tokenRef(x)); return t ? `brand “${t.name}”` : clip(String(v), 30); };
+    const text = label || (list.length === 1
+      ? `${cap(PLAIN[list[0].property] || list[0].property)} of ${target.label}: ${shown(list[0].value)}`
+      : `${list.length} changes to ${target.label}`);
+    const labelled = where.length ? `${text} (${where.join(', ')})` : text;
+    const mergeKey = merge ? `${target.selector}|${target.state}|${target.media}|${list.map((c) => c.property).join(',')}` : null;
     if (showOriginalRef.current) { showOriginalRef.current = false; setShowOriginalState(false); }
-    commit(setProps(editsRef.current, target, changes));
+    change(labelled, setProps(editsRef.current, target, changes), undefined, mergeKey);
     setTimeout(() => refreshContrast(el), 0);
-  }, [commit, pushUndo, refreshContrast]);
+  }, [change, refreshContrast]);
 
   const handleCtrlChange = (property, rawValue, unit) => {
     if (suppressControlEvents.current) return;
     setCtrl((prev) => ({ ...prev, [property]: rawValue }));
-    applyChanges([{ property, value: unit ? `${rawValue}${unit}` : rawValue }]);
+    applyChanges([{ property, value: unit ? `${rawValue}${unit}` : rawValue }], { merge: true });
   };
   // The quick picks hand over the exact value (e.g. "1.2rem", "rgba(0,0,0,0.5)") rather than a slider number and a unit.
   const applyQuickPick = (property, value, explanation, ctrlUpdates) => {
@@ -453,25 +477,40 @@ export default function RestylePage() {
     if (!el) return;
     const selector = scopeRef.current.selector || uniqueSelector(el);
     if (!editsRef.current.some((e) => e.selector === selector)) { addToast('Nothing to reset: no changes have been made to this yet.'); return; }
-    pushUndo();
-    commit(clearSelector(editsRef.current, selector));
+    change(`Reset ${scopeRef.current.selector ? scopeRef.current.label.replace(/^Every/, 'every') : labelFor(el)}`, clearSelector(editsRef.current, selector));
     populateControlsFromComputed(el);
   };
 
-  const handleUndo = () => {
-    const entry = undoStackRef.current.pop();
-    if (!entry) return;
-    commit(entry.edits, entry.tokens);
-    if (selectedElRef.current) populateControlsFromComputed(selectedElRef.current);
-    setCanUndo(undoStackRef.current.length > 0);
+  // ---------- Going back and forward through the history of this session ----------
+  const refreshAfterJump = () => { if (selectedElRef.current) populateControlsFromComputed(selectedElRef.current); };
+  /** Applies what a history step returns: the new history and the state to show. */
+  const takeStep = (result) => {
+    if (!result) return false;
+    historyRef.current = result.history;
+    setHistory(result.history);
+    if (showOriginalRef.current) { showOriginalRef.current = false; setShowOriginalState(false); }
+    commit(result.state.edits, result.state.tokens);
+    refreshAfterJump();
+    return true;
+  };
+  const handleUndo = () => { takeStep(H.undo(historyRef.current)); };
+  const handleRedo = () => { takeStep(H.redo(historyRef.current)); };
+  const goToPoint = (cursor) => { takeStep(H.goTo(historyRef.current, cursor)); };
+  /** Takes back just one entry, keeping the later ones; a change a later entry touched again is kept and said so. */
+  const takeBackOne = (index) => {
+    const entry = historyRef.current.entries[index];
+    const out = H.revertEntry(historyRef.current, index, { edits: editsRef.current, tokens: tokensRef.current });
+    if (!out.reverted) { addToast('Nothing to take back: a later change has already changed all of it.', 'error'); return; }
+    change(`Took back: ${clip(entry.label, 60)}`, out.state.edits, out.state.tokens);
+    refreshAfterJump();
+    addToast(out.kept.length ? `Took that back. Kept ${out.kept.length} thing${out.kept.length === 1 ? '' : 's'} a later change had changed again (${clip(out.kept.join(', '), 60)}).` : 'Took that change back. The later ones are kept.');
   };
 
   const removeChange = (row) => {
-    pushUndo();
-    commit(removeProp(editsRef.current, row.target, row.prop));
-    if (selectedElRef.current) populateControlsFromComputed(selectedElRef.current);
+    change(`Took back ${row.what} of ${row.where}`, removeProp(editsRef.current, row.target, row.prop));
+    refreshAfterJump();
   };
-  const clearAllChanges = () => { pushUndo(); commit([]); if (selectedElRef.current) populateControlsFromComputed(selectedElRef.current); };
+  const clearAllChanges = () => { change('Cleared all changes', []); refreshAfterJump(); };
 
   const handleAiRequest = async () => {
     const target = selectedElRef.current;
@@ -493,7 +532,7 @@ export default function RestylePage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "The AI editor couldn't make that change.");
-      applyChanges(data.changes.map((c) => ({ property: c.property, value: c.value })));
+      applyChanges(data.changes.map((c) => ({ property: c.property, value: c.value })), { label: `Asked: “${clip(text, 60)}”` });
       setTimeout(() => populateControlsFromComputed(target), 0);
       setAiStatus({ text: `Done: ${data.changes.map((c) => PLAIN[c.property] || c.property).join(', ')}.`, kind: 'ok' });
       setAiRequest('');
@@ -508,23 +547,23 @@ export default function RestylePage() {
   const addToken = (kind) => {
     tokenIdRef.current += 1;
     const t = { id: tokenIdRef.current, kind, name: uniqueTokenName(tokensRef.current, kind === 'color' ? 'Colour' : 'Font'), value: kind === 'color' ? '#cc785c' : "'Inter', sans-serif" };
-    pushUndo({ withTokens: true });
-    commit(editsRef.current, [...tokensRef.current, t]);
+    change(`Added a brand ${kind === 'color' ? 'colour' : 'font'}: ${t.name}`, editsRef.current, [...tokensRef.current, t]);
   };
   const updateToken = (id, patch) => {
     const next = tokensRef.current.map((t) => (t.id === id ? { ...t, ...patch, ...(patch.name !== undefined ? { name: uniqueTokenName(tokensRef.current, patch.name, id) } : {}) } : t));
-    commit(editsRef.current, next);
+    const old = tokensRef.current.find((t) => t.id === id);
+    if (!old) return;
+    change(`Changed the brand ${old.kind === 'color' ? 'colour' : 'font'} “${old.name}”${patch.name !== undefined ? ` (name: ${clip(patch.name, 30)})` : `: ${clip(String(patch.value), 30)}`}`, editsRef.current, next, `token-${id}`);
   };
   const removeToken = (id) => {
     const token = tokensRef.current.find((t) => t.id === id);
     if (!token) return;
     const ref = tokenRef(token);
-    pushUndo({ withTokens: true });
     // A change that used this brand colour or font has nothing left to point at, so it goes with it.
     const cleaned = editsRef.current
       .map((e) => ({ ...e, props: Object.fromEntries(Object.entries(e.props).filter(([, v]) => v.value !== ref)) }))
       .filter((e) => Object.keys(e.props).length > 0);
-    commit(cleaned, tokensRef.current.filter((t) => t.id !== id));
+    change(`Removed the brand ${token.kind === 'color' ? 'colour' : 'font'} “${token.name}”`, cleaned, tokensRef.current.filter((t) => t.id !== id));
   };
   const detectBrandColours = () => {
     const have = new Set(tokensRef.current.filter((t) => t.kind === 'color').map((t) => t.value.toLowerCase()));
@@ -533,13 +572,56 @@ export default function RestylePage() {
     if (!found.length) { addToast('No new colours found in the page.'); return; }
     let list = tokensRef.current;
     found.slice(0, 6).forEach((hex) => { tokenIdRef.current += 1; list = [...list, { id: tokenIdRef.current, kind: 'color', name: uniqueTokenName(list, `Colour ${list.filter((t) => t.kind === 'color').length + 1}`), value: hex }]; });
-    pushUndo({ withTokens: true });
-    commit(editsRef.current, list);
+    change(`Added ${Math.min(found.length, 6)} brand colour${Math.min(found.length, 6) === 1 ? '' : 's'} from the page`, editsRef.current, list);
   };
   const applyBrandEverywhere = (token, target) => {
-    pushUndo();
-    commit(setProps(editsRef.current, { selector: target.selector, label: target.label, state: '', media: '' }, [{ prop: target.prop, value: tokenRef(token), was: '' }]));
+    change(`${target.label}: use “${token.name}”`, setProps(editsRef.current, { selector: target.selector, label: target.label, state: '', media: '' }, [{ prop: target.prop, value: tokenRef(token), was: '' }]));
     addToast(`${target.label}: now uses “${token.name}”.`);
+  };
+
+  // ---------- Download a page's CSS ----------
+  const [scrape, setScrape] = useState({ result: null, busy: false, status: { text: '', kind: '' } });
+  const scrapeSlug = (scrape.result ? (() => { try { return new URL(scrape.result.finalUrl).hostname; } catch { return 'page'; } })() : 'page').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'page';
+  const saveBlob = (blob, filename) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  };
+  const scrapeCss = async (url, render) => {
+    setScrape((st) => ({ ...st, busy: true, status: { text: render ? 'Opening the page in a browser… this can take half a minute.' : 'Fetching the page and its style files…', kind: '' } }));
+    try {
+      const res = await api.post('/api/restyle/scrape-css', { url, render: !!render });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "We couldn't read that page.");
+      setScrape({ result: data, busy: false, status: { text: `Found ${data.files.length} style file${data.files.length === 1 ? '' : 's'}.`, kind: data.files.length ? 'ok' : '' } });
+    } catch (err) {
+      setScrape((st) => ({ ...st, busy: false, status: { text: err.message, kind: 'error' } }));
+    }
+  };
+  const downloadScrapeZip = async () => {
+    const { result } = scrape;
+    if (!result) return;
+    try {
+      const { default: JSZip } = await import('jszip');
+      const zip = new JSZip();
+      result.files.forEach((file, i) => zip.file(fileNameFor(file, i), file.css));
+      zip.file('all-in-one.css', combineCss(result.files, { url: result.finalUrl, title: result.title }));
+      zip.file('design-settings.md', settingsMarkdown(result));
+      zip.file('design-settings.json', settingsJson(result));
+      saveBlob(await zip.generateAsync({ type: 'blob' }), `${scrapeSlug}-css.zip`);
+    } catch (err) {
+      addToast(`Could not make the zip: ${err.message}`, 'error');
+    }
+  };
+  const addBrandFromScrape = () => {
+    const have = new Set(tokensRef.current.filter((t) => t.kind === 'color').map((t) => t.value.toLowerCase()));
+    const found = topColours(scrape.result.summary, 6).filter((hex) => !have.has(hex));
+    if (!found.length) { addToast('Those colours are already brand colours.'); return; }
+    let list = tokensRef.current;
+    found.forEach((hex) => { tokenIdRef.current += 1; list = [...list, { id: tokenIdRef.current, kind: 'color', name: uniqueTokenName(list, `Colour ${list.filter((t) => t.kind === 'color').length + 1}`), value: hex }]; });
+    change(`Added ${found.length} brand colour${found.length === 1 ? '' : 's'} from ${scrapeSlug}`, editsRef.current, list);
+    addToast(`Added ${found.length} brand colour${found.length === 1 ? '' : 's'}. They are in Brand colours and fonts.`);
   };
 
   // ---------- Checks ----------
@@ -633,8 +715,7 @@ export default function RestylePage() {
     cssIdRef.current = Math.max(cssIdRef.current, ...entries.map((e) => e.id || 0)) + 1;
     setCssEntries(entries);
     setFlags([]);
-    undoStackRef.current = [];
-    setCanUndo(false);
+    resetHistory();
     tokenIdRef.current = Math.max(tokenIdRef.current, ...(saved.tokens || []).map((t) => t.id || 0));
     importantRef.current = saved.important !== false;
     setImportantState(importantRef.current);
@@ -760,6 +841,22 @@ export default function RestylePage() {
         return <PagePanel onFile={(file) => submitHtml({ file })} onPaste={(html) => submitHtml({ html })} onAddress={loadAddress} status={htmlStatus} busy={loadingAddress} renderAvailable={renderAvailable} sourceUrl={sourceUrl} />;
       case 'styles':
         return <StylesPanel entries={cssEntries} onAddFiles={addCssFiles} onAddPaste={addCssPaste} onMove={moveCssEntry} onRemove={removeCssEntry} htmlLoaded={htmlLoaded} onBuild={() => runBuildPreview(cssEntries)} status={cssStatus} flags={flags} />;
+      case 'scrape':
+        return (
+          <ScrapePanel
+            result={scrape.result} busy={scrape.busy} status={scrape.status} renderAvailable={renderAvailable}
+            onScrape={scrapeCss} onUseInEditor={(url, render) => loadAddress(url, render)} onAddBrand={addBrandFromScrape}
+            onCopyFile={(file) => copyText(file.css, `Copied ${file.filename}`)}
+            onDownloadFile={(file, i) => saveFile(file.css, fileNameFor(file, i), 'text/css')}
+            onDownloadZip={downloadScrapeZip}
+            onDownloadCombined={() => saveFile(combineCss(scrape.result.files, { url: scrape.result.finalUrl, title: scrape.result.title }), `${scrapeSlug}-all.css`, 'text/css')}
+            onDownloadReport={() => saveFile(settingsMarkdown(scrape.result), `${scrapeSlug}-design-settings.md`, 'text/markdown')}
+            onDownloadJson={() => saveFile(settingsJson(scrape.result), `${scrapeSlug}-design-settings.json`, 'application/json')}
+            sizeLabel={sizeLabel} sourceLabel={sourceLabel}
+          />
+        );
+      case 'session':
+        return <SessionHistoryPanel entries={history.entries} cursor={history.cursor} onGoTo={goToPoint} onRevert={takeBackOne} onUndo={handleUndo} onRedo={handleRedo} />;
       case 'ask':
         return <AskPanel value={aiRequest} onChange={setAiRequest} onAsk={handleAiRequest} busy={aiBusy} status={aiStatus} />;
       case 'scope':
@@ -775,7 +872,7 @@ export default function RestylePage() {
       case 'brand':
         return <BrandPanel tokens={tokens} detectedFonts={detectedAssets.fonts} onAdd={addToken} onUpdate={updateToken} onRemove={removeToken} onDetect={detectBrandColours} onApply={applyBrandEverywhere} previewBuilt={previewBuilt} />;
       case 'changes':
-        return <ChangesPanel rows={changeRows(edits)} tokens={tokens} onRemove={removeChange} onClear={clearAllChanges} onUndo={handleUndo} canUndo={canUndo} />;
+        return <ChangesPanel rows={changeRows(edits)} tokens={tokens} onRemove={removeChange} onClear={clearAllChanges} onUndo={handleUndo} canUndo={H.canUndo(history)} />;
       case 'checks':
         return previewBuilt ? <ChecksPanel result={checks} onRun={runChecks} onPick={pickIssue} showingOriginal={showOriginal} /> : <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Build the preview first, then check it.</p>;
       case 'export':
@@ -826,7 +923,13 @@ export default function RestylePage() {
                 <button className="px-3 py-1.5 rounded-lg text-sm border transition-all duration-200 hover:opacity-70" style={OUTLINE} onClick={loadDemo}>Load a demo</button>
               </Tooltip>
               <Tooltip text="Take back your last change. A change to many items at once is one undo.">
-                <button className="px-3 py-1.5 rounded-lg text-sm border transition-all duration-200 hover:opacity-70 disabled:opacity-50" style={OUTLINE} disabled={!canUndo} onClick={handleUndo}>Undo last change</button>
+                <button className="px-3 py-1.5 rounded-lg text-sm border transition-all duration-200 hover:opacity-70 disabled:opacity-50" style={OUTLINE} disabled={!H.canUndo(history)} onClick={handleUndo}>Undo last change</button>
+              </Tooltip>
+              <Tooltip text="Put back the change you just undid.">
+                <button className="px-3 py-1.5 rounded-lg text-sm border transition-all duration-200 hover:opacity-70 disabled:opacity-50" style={OUTLINE} disabled={!H.canRedo(history)} onClick={handleRedo}>Redo</button>
+              </Tooltip>
+              <Tooltip text="Every change in this session, with a way back to any point.">
+                <button className="px-3 py-1.5 rounded-lg text-sm border transition-all duration-200 hover:opacity-70" style={OUTLINE} onClick={() => setTool('session')}>History{history.entries.length ? ` (${history.entries.length})` : ''}</button>
               </Tooltip>
               <Tooltip text="Get the CSS to paste into your real site, or the page as a file.">
                 <button className="px-3 py-1.5 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-80 disabled:opacity-45" style={{ background: 'var(--color-primary)', color: '#fff' }} disabled={!previewBuilt} onClick={() => setTool('export')}>

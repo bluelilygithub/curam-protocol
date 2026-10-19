@@ -17,6 +17,7 @@ const { requestAiEdit } = require('../services/restyle/aiEdit');
 const { inlineImagesInHtmlFragment, inlineImagesInCss } = require('../services/restyle/inlineImages');
 const { loadPageFromUrl } = require('../services/restyle/loadFromUrl');
 const { renderAvailable } = require('../services/restyle/renderPage');
+const { scrapePageCss } = require('../services/restyle/scrapeCss');
 
 const router = express.Router();
 
@@ -140,6 +141,23 @@ function describeLoadError(err) {
   if (code) return { status: 502, error: `The website answered with an error (${code[1]}), so the page could not be loaded.` };
   return { status: 502, error: "We couldn't open that page. It may be down, blocking automatic visitors, or taking too long." };
 }
+
+// ── Download a page's CSS ────────────────────────────────────────────────────────────────────────────────────────────────
+// The style files a live page depends on (linked, imported, and written inside the page), with their addresses made complete, plus a
+// summary of the design settings they set. Returns text only: nothing is changed, saved or run. Same limits and render rules as /fetch-url.
+router.post('/scrape-css', urlLimiter, async (req, res) => {
+  const { url, render } = req.body || {};
+  if (typeof url !== 'string' || !url.trim()) return res.status(400).json({ error: 'Type the address of the page first.' });
+  if (render && !renderAvailable()) return res.status(400).json({ error: 'Loading pages that build themselves with JavaScript is not set up on this server.' });
+  if (render && !renderAllowed(req.user.id)) return res.status(429).json({ error: `You can load ${RENDERS_PER_HOUR} pages that way an hour. Try the normal load, or wait a little.` });
+  try {
+    res.json(await scrapePageCss(url.trim(), { render: !!render }));
+  } catch (err) {
+    getLogger().error({ err: { message: err.message } }, '[restyle/scrape-css]');
+    const { status, error } = describeLoadError(err);
+    res.status(status).json({ error });
+  }
+});
 
 router.get('/capabilities', (req, res) => {
   res.json({ render: renderAvailable() });
