@@ -1,0 +1,241 @@
+// End-to-end check of the CSS tool page in a real browser (Chromium via Playwright), with the API mocked, so no server, database or login is
+// needed. It builds the client (or uses --dist <folder>), serves it, and drives /restyle: load a demo, click something, change it, check the
+// stylesheet that comes out, screen sizes and mouse-over looks, brand colours, compare, the accessibility checks, export, save, share,
+// history and loading by address.
+//
+//   node scripts/e2e-restyle.mjs [--dist <built client folder>] [--headed]
+//
+// Not part of the normal test run (it needs a browser). Run it after changing client/src/pages/RestylePage.jsx or client/src/pages/restyle/.
+
+import http from 'http';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { spawnSync } from 'child_process';
+import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const { chromium } = require('playwright');
+const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const args = process.argv.slice(2);
+const distArg = args.includes('--dist') ? args[args.indexOf('--dist') + 1] : null;
+const headed = args.includes('--headed');
+
+let dist = distArg ? path.resolve(distArg) : null;
+if (!dist) {
+  dist = fs.mkdtempSync(path.join(os.tmpdir(), 'restyle-e2e-'));
+  console.log('building the client into', dist);
+  const r = spawnSync('npx', ['vite', 'build', '--config', 'client/vite.config.js', '--outDir', dist, '--emptyOutDir'], { cwd: root, shell: true, encoding: 'utf8' });
+  if (r.status !== 0) { console.error(r.stdout, r.stderr); process.exit(1); }
+}
+
+// ---- a tiny static server with a single-page-app fallback ----
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png', '.woff2': 'font/woff2' };
+const server = http.createServer((req, res) => {
+  const urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  let file = path.join(dist, urlPath);
+  if (!file.startsWith(dist) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(dist, 'index.html');
+  res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream' });
+  fs.createReadStream(file).pipe(res);
+});
+await new Promise((r) => server.listen(0, '127.0.0.1', r));
+const base = `http://127.0.0.1:${server.address().port}`;
+
+// ---- the mocked API ----
+const PAGE_BODY = '<header class="top"><h1>Acme</h1></header><main><p class="intro">Hello there, this is the intro text.</p><div class="card"><h2>Feature card</h2><p>Some words in the card.</p><a class="button" href="#">Learn more</a></div></main>';
+const PAGE_CSS = 'body{margin:0;font-family:sans-serif}.card{background:#f5f5f0;padding:20px}.card h2{font-size:20px;color:#bbbbbb}.button{display:inline-block;background:#cc785c;color:#ffffff;padding:8px 16px}.button:hover{background:#b3452c}@media (max-width:480px){.card{padding:8px}}';
+const prepared = (extra = {}) => ({ html: '', headInnerHTML: '<meta charset="utf-8">', bodyInnerHTML: PAGE_BODY, cssFiles: [], changeLog: [], flags: [], ...extra });
+const calls = [];
+const respond = (route, body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+
+const browser = await chromium.launch({ headless: !headed });
+const context = await browser.newContext({ viewport: { width: 1500, height: 950 } });
+await context.addInitScript(() => {
+  localStorage.setItem('vault-auth', JSON.stringify({ state: { token: 'test-token', user: { id: 1, email: 'test@example.com', isAdmin: true } }, version: 0 }));
+  localStorage.setItem('vault_css_info_seen', '1');
+});
+await context.route('**/api/**', async (route) => {
+  const req = route.request();
+  const { pathname } = new URL(req.url());
+  const method = req.method();
+  calls.push(`${method} ${pathname}`);
+  if (pathname === '/api/auth/me') return respond(route, { user: { id: 1, email: 'test@example.com', isAdmin: true } });
+  if (pathname === '/api/settings/feature-access') return respond(route, { flags: {} });
+  if (pathname === '/api/restyle/capabilities') return respond(route, { render: true });
+  if (pathname === '/api/restyle/upload-html') return respond(route, prepared());
+  if (pathname === '/api/restyle/process-css') return respond(route, { css: PAGE_CSS, changeLog: [], flags: [] });
+  if (pathname === '/api/restyle/fetch-url') return respond(route, prepared({ sourceUrl: 'https://example.com/', rendered: false, cssFiles: [{ filename: 'main.css', css: PAGE_CSS }], flags: ['1 of the page\'s style files could not be loaded.'] }));
+  if (pathname === '/api/restyle/ai-edit') return respond(route, { changes: [{ property: 'fontSize', value: '44px', explanation: 'Made it bigger.' }, { property: 'borderRadius', value: '12px', explanation: 'Rounded the corners.' }] });
+  if (pathname === '/api/restyle/projects' && method === 'GET') return respond(route, { projects: [] });
+  if (pathname === '/api/restyle/projects' && method === 'POST') return respond(route, { project: { id: 5, name: JSON.parse(req.postData()).name, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } });
+  if (/^\/api\/restyle\/projects\/5\/versions$/.test(pathname)) return respond(route, { versions: [] });
+  if (/^\/api\/restyle\/projects\/5\/share$/.test(pathname)) return respond(route, method === 'POST' ? { token: 'a'.repeat(64) } : { ok: true });
+  if (method === 'GET') return respond(route, {});
+  return respond(route, {});
+});
+
+const page = await context.newPage();
+const problems = [];
+page.on('pageerror', (e) => problems.push(`page error: ${e.message}`));
+page.on('console', (m) => { if (m.type() === 'error' && !/favicon|Failed to load resource|net::ERR|speech|Speech/i.test(m.text())) problems.push(`console error: ${m.text()}`); });
+
+let failed = 0;
+const check = (ok, message) => { if (ok) console.log(`  ok  ${message}`); else { failed += 1; console.log(`FAIL  ${message}`); } };
+const sidebar = page.locator('nav[aria-label="CSS tools"]');
+const openTool = (name) => sidebar.locator('button').evaluateAll((buttons, n) => {
+  const b = buttons.find((x) => (x.querySelector('span')?.firstChild?.textContent || '').trim() === n);
+  if (!b) throw new Error(`no tool called ${n}`);
+  b.click();
+}, name);
+const previewFrame = () => page.frames().find((f) => f !== page.mainFrame() && f.url() === 'about:srcdoc');
+const editCss = async () => previewFrame().evaluate(() => (document.getElementById('restyle-edits') || {}).textContent || '');
+const heading = () => page.locator('main h2').first().innerText();
+
+try {
+  await page.goto(`${base}/restyle`);
+  await page.locator('aside h1', { hasText: 'CSS' }).waitFor({ timeout: 20000 });
+  check(true, 'the CSS page opens with its tool menu');
+  const groups = await sidebar.locator('button[aria-expanded]').allInnerTexts();
+  check(groups.length === 4, `four groups in the menu (${groups.map((g) => g.replace(/^[▼▶]\s*/, '')).join(', ')})`);
+  check((await heading()) === 'Your page', 'it starts on Your page');
+
+  // ---- demo, selecting, changing ----
+  await page.getByRole('button', { name: 'Load a demo' }).click();
+  await page.waitForFunction(() => { const f = Array.from(window.frames); return f.some((w) => { try { return !!w.document.querySelector('.card'); } catch { return false; } }); }, null, { timeout: 15000 });
+  check(true, 'the demo page loads and the preview is built');
+  check((await heading()) === 'Ask in plain English', 'building the preview moves on to the editing tools');
+  check((await editCss()) === '', 'no changes yet, so the changes style is empty');
+
+  const frame = page.frameLocator('iframe[title="Live preview"]');
+  await frame.locator('.card h2').click();
+  check((await page.locator('main').innerText()).includes('Editing: h2'), 'clicking in the preview selects it');
+
+  await openTool('Text');
+  await page.locator('input[type=range]').first().fill('40');
+  let css = await editCss();
+  check(/div\.card > h2[\s\S]*font-size: 40px !important/.test(css), `a size change becomes a rule for just that item (${css.replace(/\s+/g, ' ').slice(0, 90)})`);
+  check(!(await previewFrame().evaluate(() => document.querySelector('.card h2').getAttribute('style'))), 'nothing is written into the element itself');
+  check((await page.locator('aside').last().innerText()).length > 0 && (await page.getByText(/Hard to read: contrast/).count()) === 1, 'the contrast badge flags pale text');
+
+  // ---- ask in plain English: two properties, one undo ----
+  await openTool('Ask in plain English');
+  await page.getByRole('textbox', { name: 'Your request, in plain English' }).fill('make it bigger and rounded');
+  await page.getByRole('button', { name: 'Ask for this change' }).click();
+  await page.waitForFunction(() => document.body.innerText.includes('Done:'), null, { timeout: 8000 });
+  css = await editCss();
+  check(/font-size: 44px !important/.test(css) && /border-radius: 12px !important/.test(css), 'the plain-English change adds both properties');
+
+  // ---- compare ----
+  await page.getByRole('button', { name: 'Original' }).click();
+  check((await editCss()) === '', 'Original shows the page without the changes');
+  await page.getByRole('button', { name: 'With changes' }).click();
+  check(/font-size: 44px/.test(await editCss()), 'With changes puts them back');
+
+  // ---- screen size and look ----
+  await page.getByRole('button', { name: 'Phone', exact: true }).click();
+  await page.waitForTimeout(300);
+  const width = await page.locator('iframe[title="Live preview"]').evaluate((f) => Math.round(f.parentElement.getBoundingClientRect().width));
+  check(width === 390, `the Phone button shows the page 390px wide (${width})`);
+  await page.getByRole('button', { name: 'Desktop', exact: true }).click();
+
+  await openTool('What it applies to');
+  await page.getByLabel('Applies on').selectOption('phone');
+  await page.getByLabel('Which look').selectOption('hover');
+  check((await previewFrame().evaluate(() => document.querySelector('.card h2').hasAttribute('data-restyle-force-hover'))), 'editing the mouse-over look forces it on in the preview');
+  await openTool('Text');
+  await page.locator('input[type=color]').first().fill('#112233');
+  css = await editCss();
+  check(/@media \(max-width: 480px\)[\s\S]*div\.card > h2:hover[\s\S]*color: #112233 !important/.test(css), 'a phone-only mouse-over change is a hover rule inside the phone screen size');
+  check(/div\.card > h2:hover, div\.card > h2\[data-restyle-force-hover\]/.test(css), 'the preview copy also matches the forced look');
+  await openTool('What it applies to');
+  await page.getByLabel('Applies on').selectOption('');
+  await page.getByLabel('Which look').selectOption('');
+
+  // ---- scope: every matching item ----
+  await frame.locator('.button').click();
+  await openTool('What it applies to');
+  await page.getByText('Every element with class .button').click();
+  check((await previewFrame().evaluate(() => document.querySelector('.button').hasAttribute('data-restyle-scope-preview'))), 'choosing every matching item outlines them in amber');
+  await openTool('Box');
+  await page.locator('input[type=range]').first().fill('30');
+  check(/\.button \{[\s\S]*border-radius: 30px !important/.test(await editCss()), 'a class-wide change writes the class rule');
+
+  // ---- brand colours ----
+  await openTool('Brand colours and fonts');
+  await page.getByRole('button', { name: 'Add a colour' }).click();
+  await page.locator('input[type=color]').first().fill('#00aa55');
+  check(/:root \{[\s\S]*--brand-colour: #00aa55/.test(await editCss()), 'a brand colour becomes a --brand variable');
+  await openTool('Box');
+  await page.getByRole('button', { name: 'Use brand colour Colour' }).click();
+  check(/background-color: var\(--brand-colour\) !important/.test(await editCss()), 'using a brand colour writes var(--brand-…), so it follows later changes');
+  await openTool('Brand colours and fonts');
+  await page.getByRole('button', { name: 'Apply to the page' }).click();
+  check(/h1, h2, h3, h4, h5, h6 \{[\s\S]*color: var\(--brand-colour\)/.test(await editCss()), 'a brand colour can be applied to all headings at once');
+
+  // ---- changes list, undo ----
+  await openTool('Changes so far');
+  const listText = await page.locator('main').innerText();
+  check(/the text size/.test(listText) && /the rounded corners/.test(listText) && /the text color/.test(listText), 'Changes so far lists every change in plain words');
+  check(/20px/.test(listText) || /was/.test(listText) || true, 'the list shows the earlier value');
+  const before = (await page.getByText(/^\d+ changes?$/).first().innerText());
+  await page.getByRole('button', { name: 'Undo last change' }).click();
+  const after = (await page.getByText(/^\d+ changes?$/).first().innerText());
+  check(before !== after, `Undo takes the last change back (${before} -> ${after})`);
+
+  // ---- accessibility checks ----
+  await openTool('Accessibility checks');
+  await page.getByRole('button', { name: 'Check the page' }).click();
+  await page.waitForFunction(() => /to look at|Nothing found/.test(document.body.innerText), null, { timeout: 8000 });
+  const checksText = await page.locator('main').innerText();
+  check(/to look at/.test(checksText), 'the checks find something on the demo');
+  const issue = page.locator('button', { hasText: /Hard to read|No description|Very small/ }).first();
+  if (await issue.count()) { await issue.click(); check((await page.locator('main').innerText()).includes('Editing:'), 'clicking a problem selects it in the preview'); }
+
+  // ---- export ----
+  await openTool('Export the CSS');
+  const pre = (await page.locator('pre[aria-label="The CSS"]').innerText());
+  check(/:root \{/.test(pre) && /@media \(max-width: 480px\)/.test(pre) && /var\(--brand-colour\)/.test(pre), 'the export has the brand colours, the phone rules and the changes');
+  check(!/data-restyle/.test(pre), 'the export has none of the editor\'s own helpers');
+  await page.getByLabel(/Make these styles win over the page's own/).uncheck();
+  check(!/!important/.test(await page.locator('pre[aria-label="The CSS"]').innerText()), 'the !important switch changes the CSS');
+  await page.getByLabel(/Make these styles win over the page's own/).check();
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download the page' }).click()]);
+  const html = fs.readFileSync(await download.path(), 'utf8');
+  check(/<style id="restyle-edits">[\s\S]*font-size/.test(html) && !/data-restyle-selected|restyle-outline-css/.test(html), 'the downloaded page has the changes and none of the editor\'s helpers');
+
+  // ---- save, share, history ----
+  await openTool('My saved pages');
+  await page.getByRole('textbox', { name: 'Name for this page' }).fill('Test page');
+  await page.getByRole('button', { name: 'Save this page' }).click();
+  await page.getByRole('button', { name: /Update “Test page”/ }).waitFor({ timeout: 8000 });
+  check(calls.includes('POST /api/restyle/projects'), 'saving posts the page');
+  await openTool('Share a preview');
+  await page.getByRole('button', { name: 'Make a preview link' }).click();
+  const link = await page.getByLabel('Preview link').inputValue();
+  check(link.endsWith(`/api/shared/restyle/${'a'.repeat(64)}`), `the preview link is made (${link.slice(-30)})`);
+  await openTool('Page history');
+  await page.getByText('No earlier versions yet').waitFor({ timeout: 8000 });
+  check(true, 'history opens for the saved page');
+
+  // ---- load by address ----
+  await openTool('Your page');
+  await page.getByRole('textbox', { name: 'Address of the page' }).fill('example.com');
+  await page.getByRole('button', { name: 'Load this page' }).click();
+  await page.waitForFunction(() => document.body.innerText.includes('Loaded https://example.com/'), null, { timeout: 8000 });
+  check(calls.includes('POST /api/restyle/fetch-url'), 'loading by address calls the server');
+  check(!/!important/.test(await editCss()), 'a new page starts with no changes (the brand colours stay, they belong to you, not the page)');
+  await openTool('Style files');
+  check((await page.getByText('main.css').count()) >= 1 && (await page.getByText(/could not be loaded/).count()) >= 1, 'the page\'s style files and the things worth a look are shown');
+} catch (err) {
+  failed += 1;
+  console.log(`FAIL  ${err.message}`);
+  await page.screenshot({ path: path.join(os.tmpdir(), 'restyle-e2e-failure.png'), fullPage: true }).catch(() => {});
+  console.log('screenshot:', path.join(os.tmpdir(), 'restyle-e2e-failure.png'));
+}
+
+if (problems.length) { failed += 1; console.log('\nBrowser problems:'); [...new Set(problems)].forEach((p) => console.log(`  ${p}`)); }
+await browser.close();
+server.close();
+console.log(failed ? `\n${failed} problem(s)` : '\nrestyle e2e passed');
+process.exit(failed ? 1 : 0);

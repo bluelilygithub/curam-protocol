@@ -111,6 +111,7 @@ async function seedInitialUser() {
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/shared/restyle', require('./routes/restyleShared')); // public read-only preview of a shared CSS-tool page (own CSP, no scripts)
 app.use('/api/shared', require('./routes/sharedTasks'));
 app.use('/api/gmail', require('./routes/gmail'));
 app.use('/api/gsc', require('./routes/gsc'));

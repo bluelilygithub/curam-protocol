@@ -917,6 +917,22 @@ async function initSchema() {
         "updatedAt"     TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    // CSS tool: a public read-only preview link per saved page (random token; null = not shared), and the version history kept each time a
+    // saved page is updated in place (newest 20 per page, see server/routes/restyle.js).
+    await client.query(`ALTER TABLE restyle_projects ADD COLUMN IF NOT EXISTS "shareToken" TEXT`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_restyle_projects_share_token ON restyle_projects ("shareToken") WHERE "shareToken" IS NOT NULL`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS restyle_project_versions (
+        id              SERIAL PRIMARY KEY,
+        "projectId"     INTEGER NOT NULL REFERENCES restyle_projects(id) ON DELETE CASCADE,
+        "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name            TEXT NOT NULL,
+        html            JSONB NOT NULL DEFAULT '{}',
+        "cssEntries"    JSONB NOT NULL DEFAULT '[]',
+        "createdAt"     TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_restyle_versions_project ON restyle_project_versions ("projectId", "createdAt" DESC)`);
 
     // ── Room Planner project library ─────────────────────────────────────────
     // Each user's saved planner projects: the planner's whole project JSON (all rooms) in one JSONB column.

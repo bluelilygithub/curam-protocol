@@ -4,9 +4,15 @@ Non-technical-friendly CSS editor, displayed in the UI as **"CSS"** (nav, featur
 
 Stateless, same pattern as PDF Tools/Web Extractor — every request carries its own HTML/CSS; nothing persists server-side, nothing written to disk (multer memory storage only), except the real per-user saved-page persistence described below.
 
-**Two source options only: upload a file, or paste it in.** A third "load from a web address" option (server-side scrape + auto-discovered stylesheets) was built and then removed per user feedback after repeated rounds of trying to fix its fidelity/reliability — it kept producing a materially worse result than pasting real page source, and the user asked for it to be dropped rather than debugged further. Don't re-add it without being asked.
+**Three ways to bring a page in: a live page by its web address, an uploaded file, or pasted HTML.** An earlier "load from a web address" (a server-side scrape that tried to guess the page's stylesheets) was removed after repeated fidelity problems; the 2026-10 version below replaces it and is built differently (the page's `<link>` style files are fetched and handed back as ordinary style files, and a headless browser is available for pages built by script).
 
 **Images from remote URLs are a known, accepted limitation, not actively being worked.** See "Remote images" below for what was tried; per user instruction, this is being left as-is rather than continuing to iterate on it.
+
+## What the tool is for (2026-10 rework)
+
+**Restyle a page you already have, without writing code, and take the CSS away to paste into the real site.** The flow: load the page (best of all a live one, by its address), click things and change them (by hand or in plain English), check the result, export the CSS. It never edits the live website: it hands over CSS for the site's own "Additional CSS" / custom CSS box (WordPress, Shopify, Squarespace...) or for a developer.
+
+What the rework added to the original click-and-edit tool: a clean **stylesheet output** (changes are rules, not inline styles), **loading a live page by address** (with a headless-browser option for pages built by script), **Desktop / Tablet / Phone previews** with **screen-size and mouse-over/focus** rules, **brand colours and fonts** used everywhere, a **Changes so far** list with an **Original / With changes** compare, **accessibility checks**, **export** (CSS, page, developer report), **update in place with version history**, and a **public preview link**.
 
 ## No CSS jargon anywhere
 
@@ -64,13 +70,57 @@ After every successful build (upload, demo, or reloading a saved page), `scanCss
 
 "Load a demo" (top bar) runs a canned Header/Paragraph/Card/Image page (`DEMO_HTML`/`DEMO_CSS` constants in `RestylePage.jsx`) through the exact same `/upload-html` → `/process-css` → render pipeline a real upload goes through — no separate demo code path. Lets a first-time user try selecting and editing something without needing their own files first.
 
-## Layout, guide and voice (2026-10)
+## Layout, tools, guide and voice (2026-10)
 
-The page uses the shared tool menu (`components/ToolSidebar.jsx`) like Graphics and Video Tools. Tools (`client/src/pages/restyle/restyleTools.mjs`): **Your page** group — Your page (upload/paste HTML), Style files (upload/paste CSS, reorder, **Build the preview**, "Things worth a look"), My saved pages (name + save, open, delete; each save is a new copy); **Change it** group — Ask in plain English, What it applies to (scope + Reset), Text, Text enhancements, Animation, Box. The live preview stays beside the open tool; **Load a demo**, **Undo last change** and **Download my page** sit above it. Building the preview, or clicking something in it, moves the open tool on from the set-up tools to Ask in plain English. Tools that need a click show "Click something first" in the menu and in their panel.
+The page uses the shared tool menu (`components/ToolSidebar.jsx`) like Graphics and Video Tools. Tools (`client/src/pages/restyle/restyleTools.mjs`, the single list the page, the menu tips and the guide share):
 
-A **CSS guide** (round button, `POST /api/restyle-tutor`, `server/services/restyleTutor.js`, `guideId` `css`) points at those tools and buttons; it uses plain words only and sees no page. Keep `restyleTools.mjs` and the guide `CATALOG` together (`npm run test:restyle-tutor`).
+| Group | Tools |
+|---|---|
+| **Your page** | Your page (web address / upload / paste), Style files (+ Build the preview, "Things worth a look") |
+| **Change it** | Ask in plain English, What it applies to (scope, screen size, mouse-over look, Reset), Text, Text enhancements, Animation, Box, Brand colours and fonts |
+| **Check and compare** | Changes so far, Accessibility checks |
+| **Keep and share** | Export the CSS, My saved pages, Page history, Share a preview |
 
-Voice: the plain-English box (continuous dictation), the pasted-style name, the saved-page name and the tool search use the shared `VoiceInput` mic (`components/voiceInput/VoiceInput.jsx`). The pasted HTML and pasted style boxes have no mic (they hold code, not speech).
+The live preview stays beside the open tool. Above it: **Load a demo**, **Undo last change**, **Export the CSS (n)**; over the preview: **Desktop / Tablet / Phone**, **With changes / Original**, and the "Editing: ..." line. Building the preview, or clicking something in it, moves the open tool on from the set-up tools to Ask in plain English. Tools that need a click, a built preview or a saved page say so under their name in the menu and in their panel.
+
+Code: `RestylePage.jsx` (state and logic) with the panels in `restyle/RestylePanels.jsx` (page, styles, brand, changes, checks, export, saved, history, share) and `restyle/PropertyPanels.jsx` (ask, scope, text, enhance, animation, box); pure logic in `restyle/editModel.mjs` (changes, CSS generation, report), `selectors.mjs` (unique and scope selectors) and `a11y.mjs` (contrast and the page scan).
+
+A **CSS guide** (round button, `POST /api/restyle-tutor`, `server/services/restyleTutor.js`, `guideId` `css`) is focused on the tool's one job (restyle a page, take the CSS away) and covers every tool and control above; it uses plain words only, never says the tool can publish to a site, and sees no page. Keep `restyleTools.mjs` and the guide `CATALOG` together (`npm run test:restyle-tutor`).
+
+Voice: the plain-English box (continuous dictation), the web address, the pasted-style name, the saved-page name, brand colour and font names and the tool search use the shared `VoiceInput` mic. The pasted HTML and pasted style boxes have no mic (they hold code, not speech).
+
+## Loading a page by its address
+
+`POST /api/restyle/fetch-url` `{ url, render }` (`server/services/restyle/loadFromUrl.js`): fetches the page through `htmlFetch.fetchHtml` (same SSRF checks, redirect limits and 2 MB cap as Web Extractor), makes every address in it complete (Web Extractor's `extractStyled`), takes the `<link rel="stylesheet">` files out and fetches them (up to 12, 1.5 MB each, 4 at a time; addresses inside each resolved against that file; print-only files skipped; files for some screens only are wrapped in `@media`), then runs the page through the same clean-up and picture inlining as an upload (`prepareHtml` in `routes/restyle.js`). The linked files come back as `cssFiles` first, then the page's own embedded styles, which is the order a real page applies them. A page's `@import`ed files are not loaded (a note says so), and a failed file is reported.
+
+**`render: true`** ("This page builds itself with JavaScript") opens the address in a headless Chromium first (`services/restyle/renderPage.js`, Playwright, installed in the Docker image) so script-built pages have their content; styles added by script through the style API are copied into their `<style>` elements. Every request the page makes is checked with `checkSsrf`; one render at a time with a short queue; 30 s limit; 5 MB limit; no downloads, service workers, media or fonts. Known limit: the browser looks names up itself, so a DNS record that changes between our check and its lookup is not covered (the same limit the Browser Agent has). `GET /api/restyle/capabilities` says whether the browser is installed (it often is not on a laptop); the tick box is greyed out when it is not. Limits per person: 40 loads an hour, 8 of them rendered.
+
+## Changes are rules, not inline styles
+
+Each change is a rule in one list (`edits`: `{ selector, label, state, media, props: { fontSize: { value, was } } }`, `restyle/editModel.mjs`). A change goes to a **unique selector** for the clicked item (its id, or tag and classes, climbing the parents until it points at one item **and contains an id or a class**, so it is not just "span:nth-of-type(2)", which would hit every page of the site it is pasted into), or to the **scope selector** when "every matching item" is chosen. The preview, the export, Changes so far and the shared preview are all made from that list, so what you see is the CSS you export. Undo is a stack of snapshots of the list (one per action; brand colour add/remove also snapshots the brand list). `!important` is added by default so the changes win over the page's own styles, with a switch in Export.
+
+## Screen sizes and mouse-over looks
+
+In **What it applies to**: *Applies on* (all screen sizes, tablets and smaller up to 768px, phones only up to 480px) and *Which look* (normal, mouse-over, focus). Rules are grouped by media query (wide before narrow, so a phone rule beats a tablet one) and a look becomes `:hover` / `:focus`. In the preview only, a forced-state attribute (`data-restyle-force-hover`) stands in for the mouse so the look can be edited; the export never carries it. The Desktop / Tablet / Phone buttons only resize the preview (the page's own media queries respond to the frame width, 390px for Phone). The look goes back to normal on each new click; the screen size stays.
+
+## Brand colours and fonts
+
+Colour and font tokens (`--brand-<name>` in a `:root` block of the generated CSS). They appear as quick picks in Text and Box (written as `var(--brand-x)`, so changing a token changes every use), "Find the page's colours" seeds them from the page, and **Use it across the page** applies one in a single step to all headings, body text, all links, all buttons, the page background, or the heading / body font (`BRAND_TARGETS`). Removing a token takes back the changes that used it. Tokens belong to the person, not the page: they stay when a different page is loaded, and are saved with a saved page.
+
+## Changes so far, compare, accessibility checks
+
+*Changes so far* lists every property changed (plain words, what it was, what it is, for which screen size or look) with a cross per change, Undo last and Clear all (inline Yes/No). *With changes / Original* blanks the changes style in the preview to compare (making a change switches back). *Accessibility checks* (`restyle/a11y.mjs`): WCAG contrast of text against its real background (opaque background found by walking up, see-through ones laid over it; 4.5:1, or 3:1 for large text), pictures with no `alt`, and text under 12px; click a problem to select and scroll to it. A contrast note also shows live in Text and Box for the clicked item.
+
+## Export
+
+CSS (copy / `.css`), the whole page with the changes built in (`.html`; the editor's helper attributes and outline style are stripped), and a **developer report** (`changeReport`: every change with where and what it was, the brand values, and the CSS, as Markdown). Animations bring their `@keyframes` with them, only the ones used.
+
+## Saved pages, history and the preview link
+
+Saved pages: table `restyle_projects` (`name`, `html` JSONB, `cssEntries` JSONB, `"shareToken"`), `restyle_project_versions` (`"projectId"`, `name`, `html`, `"cssEntries"`, `"createdAt"`). `html` is `{ head, body, edits, tokens, important, sourceUrl, pageCss, editsCss }`: the ORIGINAL cleaned page plus the list of changes (the old format stored the edited DOM with inline styles; those pages still open, with the changes inside the markup, and just have no change list). A page can be saved with no style files (the old rule that blocked that is gone).
+
+- `POST /api/restyle/projects` makes a new saved page; `PUT /api/restyle/projects/:id` **updates in place and first copies what was there into the page's history** (transaction; newest 20 kept). `GET /projects/:id/versions` and `/versions/:vid` list and read the history; the editor opens a version after an inline Yes/No and **Update** makes it the saved page again.
+- **Preview link**: `POST /api/restyle/projects/:id/share` makes (or keeps) a 32-byte hex token, `DELETE` turns it off at once. `GET /api/shared/restyle/:token` (no login, `routes/restyleShared.js`, mounted before `requireAuth`, 60 a minute per IP) builds the page on the server (`services/restyle/sharePage.js`): the saved head and body are cleaned again (the saved project is only as clean as what the browser sent), the saved page CSS and the generated changes CSS go through `services/restyle/sanitizeCss.js` (changes CSS: only the properties the tool manages, `--brand-*`, plain rules, `@media` and the tool's own keyframes, no `url()`; page CSS: no `@import`, behaviours or script hooks), and it is served with `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src data: https: http:; ...`, **no script of any kind**, `frame-ancestors 'none'`, `noindex`, `no-referrer`, `no-store`. A bar at the top switches between "With the changes" and "Original" (`?view=original`). The link shows the page **as last saved**.
 
 ## Text enhancements + animation
 
@@ -80,20 +130,13 @@ Beyond the original Text/Box groups, the property panel has:
 
 All four properties are in `aiEdit.js`'s `ALLOWED_PROPERTIES`, so the plain-English AI box can use them too — `animation`'s value is additionally checked against the literal set of preset strings (`ALLOWED_ANIMATION_VALUES`, kept in sync with the client's `ANIMATION_PRESETS`) since a model-invented keyframe name would silently do nothing.
 
-## Saved pages (revisit later)
-
-Real per-user persistence — the one place this feature isn't stateless. Table `restyle_projects` (`server/db.js`): `name`, `html` (JSONB `{head, body}` — the LIVE edited DOM at save time, inline-style edits included, not the original upload), `cssEntries` (JSONB, the ordered list as uploaded/pasted). Routes: `GET/POST /api/restyle/projects`, `GET/PUT/DELETE /api/restyle/projects/:id`. Reopening a saved page re-runs its `cssEntries` through `/process-css` (so auto-fixes/flags are recomputed, never stale) and re-renders the saved `html` — a genuine reload, not a rendered snapshot.
-
 ## Frontend flow
 
-1. Upload/paste HTML and one or more CSS files (drag-to-reorder via up/down buttons — last in the list wins the cascade).
-2. "Build the preview" posts to `/process-css` (skipped entirely if no CSS was added), then renders the merged HTML+CSS in `<iframe sandbox="allow-same-origin">` (deliberately no `allow-scripts` — sanitization is the real defense, not the sandbox attribute alone).
-3. A separate `<style id="restyle-outline-css">` tag, injected only inside the iframe, handles hover/selected outlines — the user's own merged CSS is never touched to show selection state.
-4. Clicking an element selects it; the property panel initializes from `getComputedStyle()` so it reflects the page's real current appearance rather than a fixed default.
-5. Panel controls and the AI request box both write directly to the selected element's inline style and push `{target, property, previousValue}` onto an undo stack.
-6. **Export** clones the iframe's current DOM (edits included), strips the selection-outline style tag, and downloads a standalone `.html` file with the merged, auto-fixed CSS inlined in a `<style>` tag.
-
-Rebuilding the preview (re-running "Build the preview") resets the selection and undo stack, since the previous DOM nodes are gone once the iframe's document is replaced.
+1. Load the page (address, upload or paste) and, if needed, add style files (drag order by the arrows: last in the list wins).
+2. "Build the preview" posts to `/process-css` (skipped if there is no CSS), then renders the page and merged CSS in `<iframe sandbox="allow-same-origin">` (no `allow-scripts`: the clean-up is the real defence, not the sandbox alone). The iframe also holds `<style id="restyle-edits">` (the generated changes) and `<style id="restyle-outline-css">` (selection outlines, never mixed into the person's CSS).
+3. Clicking selects an item; the panels start from `getComputedStyle()`, so they show the page's real appearance, including changes already made.
+4. Every control and the AI box call `applyChanges()`, which records rules (unique or scope selector, chosen screen size and look) and redraws `#restyle-edits` straight away.
+5. Rebuilding keeps the changes (they are rules, so they apply wherever they still match) and clears the selection; loading a different page starts a fresh list.
 
 ## Limits
 

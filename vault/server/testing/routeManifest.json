@@ -2356,6 +2356,24 @@
   "POST /api/restyle/projects": {
    "class": "authed"
   },
+  "GET /api/restyle/capabilities": {
+   "class": "authed"
+  },
+  "POST /api/restyle/fetch-url": {
+   "class": "authed"
+  },
+  "GET /api/restyle/projects/:id/versions": {
+   "class": "authed"
+  },
+  "GET /api/restyle/projects/:id/versions/:vid": {
+   "class": "authed"
+  },
+  "POST /api/restyle/projects/:id/share": {
+   "class": "authed"
+  },
+  "DELETE /api/restyle/projects/:id/share": {
+   "class": "authed"
+  },
   "POST /api/restyle/upload-html": {
    "class": "authed"
   },
@@ -2511,6 +2529,9 @@
   },
   "POST /api/settings": {
    "class": "authed"
+  },
+  "GET /api/shared/restyle/:token": {
+   "class": "public"
   },
   "GET /api/shared/task/:token": {
    "class": "public"

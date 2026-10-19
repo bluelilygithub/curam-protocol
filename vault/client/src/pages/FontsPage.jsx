@@ -489,7 +489,7 @@ export default function FontsPage() {
           tourTip="Take the guided tour of the Font Customizer."
         />
 
-        <main className="flex-1 min-w-0 flex flex-col lg:flex-row" style={{ background: 'var(--color-bg)' }}>
+        <div className="flex-1 min-w-0 flex flex-col lg:flex-row" style={{ background: 'var(--color-bg)' }}>
           <div className="flex-1 min-w-0 p-6 space-y-5">
             <p className="text-sm" style={{ color: 'var(--color-muted)' }}>{TOOL_BLURBS[tool]}</p>
 
@@ -662,7 +662,7 @@ export default function FontsPage() {
               {renderPanel()}
             </div>
           )}
-        </main>
+        </div>
       </div>
 
       {showTutorial && <FontTutorialModal onClose={closeTutorial} onRunDemo={runDramaticDemo} />}

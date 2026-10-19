@@ -96,14 +96,14 @@ export default function MeasurementsPage() {
           tourTip="Take the guided tour of Measurements."
         />
 
-        <main className="flex-1 min-w-0 overflow-y-auto p-6 space-y-4 max-w-5xl" style={{ background: 'var(--color-bg)' }} data-tour="measure-tabs">
+        <div className="flex-1 min-w-0 overflow-y-auto p-6 space-y-4 max-w-5xl" style={{ background: 'var(--color-bg)' }} data-tour="measure-tabs">
           <p className="text-sm" style={{ color: 'var(--color-muted)' }}>{TOOL_BLURBS[tab]}</p>
           {!loaded && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading your saved choices…</p>}
           {/* All three stay mounted (just hidden) so a typed value or a scanned document survives switching tools */}
           <div style={{ display: tab === 'convert' ? 'block' : 'none' }}><ConverterTab prefs={prefs} update={update} history={history} addHistory={addHistory} clearHistory={clearHistory} onOpenFormula={openFormula} /></div>
           <div style={{ display: tab === 'formulas' ? 'block' : 'none' }}><FormulasTab prefs={prefs} focusUnit={focusUnit} onUseInConverter={useInConverter} /></div>
           <div style={{ display: tab === 'scan' ? 'block' : 'none' }}><ScannerTab prefs={prefs} update={update} /></div>
-        </main>
+        </div>
       </div>
 
       {info.show && (
