@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
-import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
 import useProcessingStore from '../store/processingStore';
@@ -12,429 +11,29 @@ import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { startMusicTour, TOUR_KEY as MUSIC_TOUR_KEY } from '../utils/tours/musicTour';
 import { musicProgressSteps, formatElapsed } from './music/musicProgress.mjs';
 import { takeVideoHandoff } from '../utils/videoHandoff';
+import OptionCard from './music/OptionCard';
+import VoiceoverPanel from './music/VoiceoverPanel';
+import MusicSidebar from './music/MusicSidebar';
+import { ToolHeader, ToolHelpModal } from './music/ToolHeader';
+import { TOOL_GROUPS, DEFAULT_TOOL, groupOfTool } from './music/musicTools.mjs';
+import { POLL_MS, card, field, muted, formatDuration } from './music/musicShared';
 
 // Music (/music): pick a video, choose a mood (or describe the music), get 3 instrumental options
 // cut to the video's exact length, preview each against the video, then export the audio (WAV) or the
 // video with the music mixed in (ducked under speech). Generation runs on the server as a job; this
-// page polls it. Docs: docs/music.md.
-
-const POLL_MS = 2000;
-const DEFAULT_SETTINGS = { volume: 70, ducking: 'light' };
-const DUCKING_OPTIONS = [['off', 'Off'], ['light', 'Light'], ['strong', 'Strong']];
-
-const card = { borderColor: 'var(--color-border)', background: 'var(--color-surface)' };
-const field = { background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' };
-const muted = { color: 'var(--color-muted)' };
-
-function formatDuration(s) {
-  if (!Number.isFinite(s)) return '';
-  const m = Math.floor(s / 60);
-  const sec = Math.round(s - m * 60);
-  return m ? `${m}m ${String(sec).padStart(2, '0')}s` : `${s.toFixed(1)}s`;
-}
-
-// `voice` = job.voice; its level/start only travel with the request when there is a voiceover.
-const qs = (s, voice) => `volume=${(s.volume / 100).toFixed(2)}&ducking=${s.ducking}`
-  + (voice ? `&voiceVolume=${(s.voiceVolume / 100).toFixed(2)}&voiceStart=${s.voiceStart}` : '');
-
-function OptionCard({ jobId, option, hasAudio, durationS, source, voice, voiceSettings }) {
-  const addToast = useToastStore((s) => s.addToast);
-  const [musicSettings, setSettings] = useState(DEFAULT_SETTINGS);
-  const settings = { ...musicSettings, voiceVolume: voiceSettings.volume, voiceStart: voiceSettings.start };
-  const [rendered, setRendered] = useState(null); // settings the current preview was rendered with
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [rendering, setRendering] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const urlRef = useRef(null);
-
-  const base = `/api/music/jobs/${jobId}/options/${option.n}`;
-
-  const renderPreview = useCallback(async (s) => {
-    setRendering(true);
-    try {
-      const res = await api.get(`${base}/preview?${qs(s, voice)}`);
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Could not render the preview');
-      }
-      const url = URL.createObjectURL(await res.blob());
-      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
-      urlRef.current = url;
-      setPreviewUrl(url);
-      setRendered(s);
-    } catch (err) {
-      addToast(err.message, 'error');
-    } finally {
-      setRendering(false);
-    }
-  }, [base, addToast, voice]);
-
-  // First render when the option is ready; again when a voiceover is added, replaced or removed.
-  useEffect(() => {
-    if (option.status === 'ready') renderPreview(settings);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [option.status, jobId, voice?.rev]);
-  useEffect(() => () => { if (urlRef.current) URL.revokeObjectURL(urlRef.current); }, []);
-
-  const dirty = rendered && (rendered.volume !== settings.volume || rendered.ducking !== settings.ducking
-    || (voice && (rendered.voiceVolume !== settings.voiceVolume || rendered.voiceStart !== settings.voiceStart)));
-
-  const exportFile = async (url, name, label) => {
-    try {
-      await api.download(url, name);
-      addToast(`${label} saved`, 'success');
-    } catch (err) {
-      addToast(err.message, 'error');
-    }
-  };
-
-  const saveToLibrary = async () => {
-    setSaving(true);
-    try {
-      const res = await api.post(`${base}/save`, {
-        volume: settings.volume / 100,
-        ducking: settings.ducking,
-        ...(voice ? { voiceVolume: settings.voiceVolume / 100, voiceStart: settings.voiceStart } : {}),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Could not save the video');
-      setSaved(true);
-      addToast('Saved to Saved media (Video Tools)', 'success');
-    } catch (err) {
-      addToast(err.message, 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const ownTrack = source === 'upload';
-  const title = ownTrack ? 'Your track' : `Option ${option.n + 1}`;
-
-  if (option.status === 'failed') {
-    return (
-      <div className="rounded-2xl border p-4" style={card}>
-        <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{title}</p>
-        <p className="text-xs mt-1" style={{ color: '#ef4444' }}>This one failed: {option.error || 'unknown error'}</p>
-      </div>
-    );
-  }
-  if (option.status !== 'ready') {
-    return (
-      <div className="rounded-2xl border p-4" style={card}>
-        <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{title}</p>
-        <p className="text-xs mt-1" style={muted}>
-          {option.status === 'fitting' ? 'Cutting to your video length…' : 'Composing…'}
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-2xl border p-4 space-y-3" style={card}>
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{title}</p>
-        <p className="text-xs" style={muted}>
-          {formatDuration(durationS)}{option.loops > 1 ? ` · loops ${option.loops}× with crossfades` : ''}
-        </p>
-      </div>
-
-      <div className="rounded-xl overflow-hidden relative" style={{ background: '#000' }}>
-        {previewUrl
-          ? <video src={previewUrl} controls className="w-full max-h-72" />
-          : <div className="h-40 flex items-center justify-center text-xs" style={{ color: '#fff' }}>Rendering preview…</div>}
-        {rendering && previewUrl && (
-          <div className="absolute inset-0 flex items-center justify-center text-xs" style={{ background: 'rgba(0,0,0,0.55)', color: '#fff' }}>Updating preview…</div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block space-y-1">
-          <span className="text-xs" style={muted}>Music volume · {settings.volume}%</span>
-          <Tooltip text="How loud the music is relative to the video's own sound. The final mix is levelled to about -14 LUFS.">
-            <input
-              type="range" min={0} max={150} step={5} value={settings.volume}
-              onChange={(e) => setSettings((s) => ({ ...s, volume: Number(e.target.value) }))}
-              className="w-full"
-            />
-          </Tooltip>
-        </label>
-        <label className="block space-y-1">
-          <span className="text-xs" style={muted}>Ducking under speech</span>
-          <Tooltip text={hasAudio || voice ? 'Lowers the music while people (or your voiceover) are talking. Strong dips it much further.' : 'This video has no sound of its own and no voiceover, so there is nothing to duck under.'}>
-            <select
-              value={settings.ducking}
-              disabled={!hasAudio && !voice}
-              onChange={(e) => setSettings((s) => ({ ...s, ducking: e.target.value }))}
-              className="w-full px-2 py-1.5 rounded-xl border text-xs disabled:opacity-40"
-              style={field}
-            >
-              {DUCKING_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-          </Tooltip>
-        </label>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        {dirty && (
-          <Tooltip text="Re-render the preview with the new volume, ducking and voiceover settings.">
-            <button
-              type="button" onClick={() => renderPreview(settings)} disabled={rendering}
-              className="px-3 py-1.5 rounded-xl text-xs font-medium transition-opacity duration-200 hover:opacity-80 disabled:opacity-40"
-              style={{ background: 'var(--color-primary)', color: '#fff' }}
-            >
-              Update preview
-            </button>
-          </Tooltip>
-        )}
-        <Tooltip text="Just the music, cut to your video's exact length with fades, as a WAV file.">
-          <button
-            type="button" onClick={() => exportFile(`${base}/audio`, 'music.wav', 'Audio')}
-            className="px-3 py-1.5 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-          >
-            Export audio (WAV)
-          </button>
-        </Tooltip>
-        <Tooltip text="Your video with this music (and the voiceover, if you added one) mixed in, using the settings above. The picture is not re-encoded where possible.">
-          <button
-            type="button" onClick={() => exportFile(`${base}/video?${qs(settings, voice)}`, voice ? 'video-with-music-and-voice.mp4' : 'video-with-music.mp4', 'Video')}
-            className="px-3 py-1.5 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-          >
-            Export video (MP4)
-          </button>
-        </Tooltip>
-        <Tooltip text="Store this video with the music in Saved media, so you can caption, join or annotate it in Video Tools. Uses the volume and ducking above.">
-          <button
-            type="button" onClick={saveToLibrary} disabled={saving || saved}
-            className="px-3 py-1.5 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
-            style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
-          >
-            {saving ? 'Saving…' : saved ? 'Saved to Saved media' : 'Save to Saved media'}
-          </button>
-        </Tooltip>
-      </div>
-    </div>
-  );
-}
-
-// Voiceover for the whole job: type a script for an AI voice, or upload a recording. It is mixed over
-// the music (which dips under it) in every option's preview and export.
-function VoiceoverPanel({ job, status, onJobChange, voiceSettings, onVoiceSettings }) {
-  const addToast = useToastStore((s) => s.addToast);
-  const voiceInfo = status?.voice;
-  const ttsOk = Boolean(voiceInfo?.provider?.configured);
-  const voices = voiceInfo?.voices || [];
-  const [mode, setMode] = useState('script'); // 'script' | 'upload'
-  const [text, setText] = useState('');
-  const [voiceId, setVoiceId] = useState('');
-  const [speed, setSpeed] = useState(1);
-  const [recording, setRecording] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [listenUrl, setListenUrl] = useState(null);
-  const recInputRef = useRef(null);
-  const voice = job.voice;
-
-  useEffect(() => { if (!ttsOk && voiceInfo) setMode('upload'); }, [ttsOk, voiceInfo]);
-
-  // The voiceover on its own, for a quick listen (needs the auth header, so fetched as a blob).
-  useEffect(() => {
-    let url = null;
-    let live = true;
-    setListenUrl(null);
-    if (voice) {
-      api.get(`/api/music/jobs/${job.id}/voiceover/audio`)
-        .then((r) => (r.ok ? r.blob() : null))
-        .then((b) => { if (b && live) { url = URL.createObjectURL(b); setListenUrl(url); } })
-        .catch(() => {});
-    }
-    return () => { live = false; if (url) URL.revokeObjectURL(url); };
-  }, [job.id, voice?.rev]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const add = async () => {
-    setBusy(true);
-    try {
-      let res;
-      if (mode === 'upload') {
-        const fd = new FormData();
-        fd.append('voice', recording);
-        res = await api.postForm(`/api/music/jobs/${job.id}/voiceover`, fd);
-      } else {
-        res = await api.post(`/api/music/jobs/${job.id}/voiceover`, { text, voice: voiceId || undefined, speed });
-      }
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Could not add the voiceover');
-      onJobChange(data);
-      onVoiceSettings({ volume: 100, start: 0 });
-      addToast('Voiceover added — previews are updating', 'success');
-    } catch (err) {
-      addToast(err.message, 'error');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const remove = async () => {
-    setBusy(true);
-    try {
-      const res = await api.delete(`/api/music/jobs/${job.id}/voiceover`);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Could not remove the voiceover');
-      onJobChange(data);
-    } catch (err) {
-      addToast(err.message, 'error');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const canAdd = !busy && (mode === 'upload' ? Boolean(recording) : text.trim() && ttsOk);
-  const over = voice && voice.durationS + voiceSettings.start > job.durationS + 0.25;
-
-  return (
-    <section className="rounded-2xl border p-4 space-y-3" style={card} data-tour="music-voiceover">
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Voiceover (optional)</p>
-        {voice && (
-          <button
-            type="button" onClick={remove} disabled={busy}
-            className="text-xs transition-opacity duration-200 hover:opacity-60 disabled:opacity-40"
-            style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}
-          >
-            Remove voiceover
-          </button>
-        )}
-      </div>
-
-      {voice ? (
-        <div className="space-y-3">
-          <p className="text-xs" style={muted}>
-            {voice.source === 'tts' ? `AI voice (${voices.find((v) => v.id === voice.voice)?.label || voice.voice})` : 'Your recording'} · {formatDuration(voice.durationS)}
-            {voice.text ? ` · “${voice.text.length > 90 ? `${voice.text.slice(0, 90)}…` : voice.text}”` : ''}
-          </p>
-          {listenUrl && <audio src={listenUrl} controls className="w-full h-8" />}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="block space-y-1">
-              <span className="text-xs" style={muted}>Voice volume · {voiceSettings.volume}%</span>
-              <Tooltip text="How loud the voiceover is. The music and the video's own sound dip underneath it, and the final mix is levelled to about -14 LUFS.">
-                <input
-                  type="range" min={0} max={200} step={5} value={voiceSettings.volume}
-                  onChange={(e) => onVoiceSettings({ ...voiceSettings, volume: Number(e.target.value) })}
-                  className="w-full"
-                />
-              </Tooltip>
-            </label>
-            <label className="block space-y-1">
-              <span className="text-xs" style={muted}>Starts at · {voiceSettings.start.toFixed(1)}s</span>
-              <Tooltip text="Where in the video the voice begins. Use the sliders and then Update preview on an option to hear the change.">
-                <input
-                  type="range" min={0} max={Math.max(0, Math.floor((job.durationS - 0.5) * 2) / 2)} step={0.5} value={voiceSettings.start}
-                  onChange={(e) => onVoiceSettings({ ...voiceSettings, start: Number(e.target.value) })}
-                  className="w-full"
-                />
-              </Tooltip>
-            </label>
-          </div>
-          {over && (
-            <p className="text-xs" style={{ color: '#b45309' }}>
-              The voiceover runs {formatDuration(voice.durationS)} from {voiceSettings.start.toFixed(1)}s, past the end of your {formatDuration(job.durationS)} video — the end will be cut off. Start it earlier or shorten the script.
-            </p>
-          )}
-          <p className="text-xs" style={muted}>To change the words or the voice, add a new one below — it replaces this one.</p>
-        </div>
-      ) : (
-        <p className="text-xs" style={muted}>Add narration: type a script for an AI voice, or upload a recording. The music dips under it automatically.</p>
-      )}
-
-      <div className="flex gap-2">
-        {[['script', 'Write a script'], ['upload', 'Upload a recording']].map(([id, label]) => (
-          <button
-            key={id} type="button" onClick={() => setMode(id)}
-            className="px-3 py-1.5 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
-            style={{
-              borderColor: mode === id ? 'var(--color-primary)' : 'var(--color-border)',
-              color: mode === id ? 'var(--color-primary)' : 'var(--color-muted)',
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {mode === 'script' ? (
-        <div className="space-y-2">
-          {!ttsOk && (
-            <p className="text-xs" style={{ color: '#b45309' }}>{voiceInfo?.provider?.note || 'AI voices are not set up on this server.'} You can still upload a recording.</p>
-          )}
-          <Tooltip text={`What the voice should say, up to ${voiceInfo?.maxChars || 1500} characters. About 14 characters is a second of speech. Type it or tap the mic.`}>
-            <div>
-              <VoiceInput
-                type="textarea" append rows={3} value={text} onChange={setText}
-                label="Voiceover script"
-                placeholder="e.g. Welcome to our summer sale — everything must go this weekend."
-                className="!text-xs"
-              />
-            </div>
-          </Tooltip>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="block space-y-1">
-              <span className="text-xs" style={muted}>Voice</span>
-              <Tooltip text="The AI voice that reads the script.">
-                <select value={voiceId || voices[0]?.id || ''} onChange={(e) => setVoiceId(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={field}>
-                  {voices.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-                </select>
-              </Tooltip>
-            </label>
-            <label className="block space-y-1">
-              <span className="text-xs" style={muted}>Speed · {speed.toFixed(2)}×</span>
-              <Tooltip text="Slower or faster delivery. 1× is natural.">
-                <input type="range" min={0.7} max={1.3} step={0.05} value={speed} onChange={(e) => setSpeed(Number(e.target.value))} className="w-full" />
-              </Tooltip>
-            </label>
-          </div>
-          <p className="text-xs" style={muted}>{text.length} / {voiceInfo?.maxChars || 1500} characters · about {Math.max(1, Math.round(text.length / 14))}s spoken. The AI voice has a small per-use cost.</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <input
-            ref={recInputRef} type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.webm" className="hidden"
-            onChange={(e) => { setRecording(e.target.files?.[0] || null); e.target.value = ''; }}
-          />
-          <div className="flex flex-wrap items-center gap-3">
-            <Tooltip text="Choose a recording of the narration (MP3, WAV, M4A…). Record it on your phone or computer first.">
-              <button
-                type="button" onClick={() => recInputRef.current?.click()}
-                className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              >
-                {recording ? 'Choose a different recording' : 'Choose recording'}
-              </button>
-            </Tooltip>
-            {recording && <span className="text-xs" style={muted}>{recording.name}</span>}
-          </div>
-        </div>
-      )}
-
-      <Tooltip text={mode === 'upload' ? 'Add this recording to the mix.' : 'Have the AI voice read the script and add it to the mix.'}>
-        <button
-          type="button" onClick={add} disabled={!canAdd}
-          className="px-4 py-2 rounded-xl text-sm font-medium transition-opacity duration-200 hover:opacity-80 disabled:opacity-40"
-          style={{ background: 'var(--color-primary)', color: '#fff' }}
-        >
-          {busy ? 'Working…' : voice ? 'Replace voiceover' : mode === 'upload' ? 'Add recording' : 'Add voiceover'}
-        </button>
-      </Tooltip>
-    </section>
-  );
-}
+// page polls it. Laid out like Video Tools: a tool list on the left, one tool at a time on the right.
+// The job lives here, so it survives switching tools. Docs: docs/music.md, docs/music-plan.md.
 
 function MusicPageInner() {
-  const getIcon = useIcon();
   const addToast = useToastStore((s) => s.addToast);
   const info = useToolInfoModal('vault_music_info_seen');
   const { startProcessing, stopProcessing, setProcessingSteps, updateProcessingDetail } = useProcessingStore();
   const [searchParams] = useSearchParams();
+
+  const [tool, setTool] = useState(DEFAULT_TOOL);
+  const [openGroup, setOpenGroup] = useState(groupOfTool(TOOL_GROUPS, DEFAULT_TOOL));
+  const [search, setSearch] = useState('');
+  const [helpTool, setHelpTool] = useState(null);
 
   const [status, setStatus] = useState(null);
   const [file, setFile] = useState(null);
@@ -445,7 +44,6 @@ function MusicPageInner() {
   const [bpm, setBpm] = useState('');
   const [job, setJob] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [musicSource, setMusicSource] = useState('generate'); // 'generate' | 'upload'
   const [trackFile, setTrackFile] = useState(null);
   const [voiceSettings, setVoiceSettings] = useState({ volume: 100, start: 0 });
   const trackInputRef = useRef(null);
@@ -453,6 +51,12 @@ function MusicPageInner() {
   const inputRef = useRef(null);
   const startedAtRef = useRef(0);
   const cancelledRef = useRef(false);
+
+  const selectTool = useCallback((id) => {
+    setTool(id);
+    const g = groupOfTool(TOOL_GROUPS, id);
+    if (g) setOpenGroup(g);
+  }, []);
 
   useEffect(() => {
     api.get('/api/music/status').then((r) => r.json()).then(setStatus).catch(() => {});
@@ -523,9 +127,11 @@ function MusicPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // "Use my own track" is its own tool; the Score a video tool generates.
+  const ownTrackMode = tool === 'own-track';
+  const scoreVisible = tool === 'score' || tool === 'own-track';
   const moods = status?.moods || [];
   const presetBpm = moods.find((m) => m.id === mood)?.defaultBpm;
-  const ownTrackMode = musicSource === 'upload';
   const providerOk = status ? (ownTrackMode || status.provider?.configured) : true;
   const ffmpegOk = status ? status.ffmpeg : true;
   const tooLong = status && clientDuration && clientDuration > status.maxVideoSec;
@@ -584,64 +190,41 @@ function MusicPageInner() {
     }
   };
 
-  return (
-    <div className="flex-1 min-h-0 flex flex-col">
-      <div
-        className="flex items-center justify-between gap-2 px-4 py-3 border-b shrink-0"
-        style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
-      >
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-bg)', color: 'var(--color-primary)' }}>
-            {getIcon('music', { size: 16 })}
-          </div>
-          <h1 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Music</h1>
-          <Tooltip text="Take a short guided tour of this page.">
-            <button
-              type="button"
-              aria-label="Take the Music tour"
-              onClick={() => { try { localStorage.removeItem(MUSIC_TOUR_KEY); } catch (_) { /* ignore */ } startMusicTour(); }}
-              className="hover:opacity-60 transition-opacity duration-200"
-              style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-            >
-              {getIcon('compass', { size: 13 })}
-            </button>
-          </Tooltip>
-          <Tooltip text="How Music works.">
-            <button
-              type="button"
-              aria-label="How Music works"
-              onClick={info.open}
-              className="hover:opacity-60 transition-opacity duration-200"
-              style={{ color: 'var(--color-muted)', lineHeight: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-            >
-              {getIcon('info', { size: 13 })}
-            </button>
-          </Tooltip>
-        </div>
-        <p className="text-xs hidden sm:block" style={muted}>Instrumental background music cut to your video's exact length</p>
-      </div>
-        {info.show && (
-          <ToolInfoModal title="How Music Works" onClose={info.close}>
-            <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-              Music writes instrumental background music for a video you provide, cut to its exact length — so it can end on your last frame instead of cutting off.
-            </p>
-            <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-              <p style={{ color: 'var(--color-text)' }}><strong>1 · Your video</strong> — choose the file. It is only used to read its length and to preview the mix. Up to five minutes.</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>2 · The music</strong> — pick a mood (upbeat vlog, cinematic tension, calm corporate, travel montage, suspense, documentary, lo-fi chill) or write your own description, with an optional tempo. Always instrumental — no vocals. You can speak the description with the mic.</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>3 · Three options</strong> — three variations are made so you can compare. Each fades in over about half a second and fades out over the last two seconds, and is previewed against your video.</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Volume and ducking</strong> — set how loud the music is, and let it dip while people are talking (light or strong). The final mix is levelled to about -14 LUFS. Ducking needs a video that has its own sound.</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Your own track</strong> — switch to "Use my own track" to fit music you already have instead: it is looped or trimmed to your video, faded, and mixed the same way. No generation cost. Use music you have the rights to.</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Voiceover</strong> — once your music is ready, add narration: type a script for an AI voice (small per-use cost), or upload a recording. Choose when it starts and how loud it is; the music and the video's own sound dip underneath it, and every option's preview and export includes it.</p>
-              <p style={{ color: 'var(--color-text)' }}><strong>Export or save</strong> — the music alone as a WAV, your video with the music as an MP4, or save the video to Saved media to keep editing it in Video Tools.</p>
-            </div>
-            <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-              Good to know: the music is created by an AI model through Replicate, so each generation has a small cost. Clips are about 30 seconds long, so for longer videos the music loops with smooth crossfades. Your video and the results are kept for about 90 minutes and then deleted — export what you want to keep.
-            </p>
-          </ToolInfoModal>
-        )}
-      <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-5">
+  const startTour = () => {
+    try { localStorage.removeItem(MUSIC_TOUR_KEY); } catch (_) { /* ignore */ }
+    startMusicTour();
+  };
 
+  return (
+    <div className="flex flex-col sm:flex-row min-h-[calc(100dvh-3rem)]">
+      <MusicSidebar
+        tool={tool} onSelect={selectTool}
+        search={search} onSearch={setSearch}
+        openGroup={openGroup} onOpenGroup={setOpenGroup}
+        onTour={startTour} onInfo={info.open}
+      />
+
+      {info.show && (
+        <ToolInfoModal title="How Music Works" onClose={info.close}>
+          <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+            Music writes instrumental background music for a video you provide, cut to its exact length — so it can end on your last frame instead of cutting off. The list on the left is arranged by what you are doing; hover over any item for a plain explanation, and press the (?) beside a title for more.
+          </p>
+          <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+            <p style={{ color: 'var(--color-text)' }}><strong>1 · Your video</strong> — choose the file. It is only used to read its length and to preview the mix. Up to five minutes.</p>
+            <p style={{ color: 'var(--color-text)' }}><strong>2 · The music</strong> — pick a mood (upbeat vlog, cinematic tension, calm corporate, travel montage, suspense, documentary, lo-fi chill) or write your own description, with an optional tempo. Always instrumental — no vocals. You can speak the description with the mic.</p>
+            <p style={{ color: 'var(--color-text)' }}><strong>3 · Three options</strong> — three variations are made so you can compare. Each fades in over about half a second and fades out over the last two seconds, and is previewed against your video.</p>
+            <p style={{ color: 'var(--color-text)' }}><strong>Volume and ducking</strong> — set how loud the music is, and let it dip while people are talking (light or strong). The final mix is levelled to about -14 LUFS. Ducking needs a video that has its own sound.</p>
+            <p style={{ color: 'var(--color-text)' }}><strong>Use my own track</strong> — fit music you already have instead: it is looped or trimmed to your video, faded, and mixed the same way. No generation cost. Use music you have the rights to.</p>
+            <p style={{ color: 'var(--color-text)' }}><strong>Voiceover</strong> — once your music is ready, add narration: type a script for an AI voice (small per-use cost), or upload a recording. Choose when it starts and how loud it is; the music and the video's own sound dip underneath it, and every option's preview and export includes it.</p>
+            <p style={{ color: 'var(--color-text)' }}><strong>Export or save</strong> — the music alone as a WAV, your video with the music as an MP4, or save the video to Saved media to keep editing it in Video Tools.</p>
+          </div>
+          <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+            Good to know: the music is created by an AI model through Replicate, so each generation has a small cost. Clips are about 30 seconds long, so for longer videos the music loops with smooth crossfades. Your video and the results are kept for about 90 minutes and then deleted — export what you want to keep.
+          </p>
+        </ToolInfoModal>
+      )}
+
+      <main className="flex-1 overflow-y-auto p-6 space-y-4 max-w-2xl">
         {status && !ffmpegOk && (
           <p className="text-xs rounded-xl border p-3" style={{ borderColor: '#f59e0b', color: '#b45309' }}>ffmpeg is not available on this server, so music can't be fitted or mixed.</p>
         )}
@@ -649,147 +232,185 @@ function MusicPageInner() {
           <p className="text-xs rounded-xl border p-3" style={{ borderColor: '#f59e0b', color: '#b45309' }}>{status.provider?.note || 'Music generation is not set up on this server.'}</p>
         )}
 
-        <section className="rounded-2xl border p-4 space-y-3" style={card} data-tour="music-video">
-          <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>1 · Your video</p>
-          <input
-            ref={inputRef} type="file" accept="video/*,.mp4,.mov,.m4v,.webm,.mkv" className="hidden"
-            onChange={(e) => { setFile(e.target.files?.[0] || null); setJob(null); e.target.value = ''; }}
+        {/* Kept mounted (just hidden) while another tool is open, so the video, the previews and the job are still there on return. */}
+        <div className={scoreVisible ? 'space-y-5' : 'hidden'}>
+          <ToolHeader
+            id={tool === 'own-track' ? 'own-track' : 'score'}
+            label={ownTrackMode ? 'Use my own track' : 'Score a video'}
+            onHelp={setHelpTool}
           />
-          <div className="flex flex-wrap items-center gap-3">
-            <Tooltip text="Choose the video you want music for. It is only used to read its length and to preview the mix.">
-              <button
-                type="button" onClick={() => inputRef.current?.click()}
-                className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              >
-                {file ? 'Choose a different video' : 'Choose video'}
-              </button>
-            </Tooltip>
-            {file && <span className="text-xs" style={muted}>{file.name}{clientDuration ? ` · ${formatDuration(clientDuration)}` : ''}</span>}
-          </div>
-          {videoUrl && (
-            <Tooltip text="Your video, exactly as you chose it — the music is not added to this preview.">
-              <video
-                src={videoUrl} controls className="w-full max-h-64 rounded-xl" style={{ background: '#000' }}
-                onLoadedMetadata={(e) => setClientDuration(e.currentTarget.duration)}
-              />
-            </Tooltip>
-          )}
-          {tooLong && (
-            <p className="text-xs" style={{ color: '#ef4444' }}>
-              That video is {formatDuration(clientDuration)} — the limit is {formatDuration(status.maxVideoSec)}. Trim it first (Video Tools → Clip / trim).
-            </p>
-          )}
-        </section>
 
-        <section className="rounded-2xl border p-4 space-y-3" style={card} data-tour="music-mood">
-          <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>2 · The music</p>
-          <div className="flex gap-2">
-            {[['generate', 'Generate with AI'], ['upload', 'Use my own track']].map(([id, label]) => (
-              <Tooltip key={id} text={id === 'generate' ? 'Compose three instrumental options from a mood or your own description.' : 'Bring a track you already have (MP3, WAV, M4A). It is looped or trimmed to your video and faded — no generation, no cost.'}>
+          <section className="rounded-2xl border p-4 space-y-3" style={card} data-tour="music-video">
+            <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>1 · Your video</p>
+            <input
+              ref={inputRef} type="file" accept="video/*,.mp4,.mov,.m4v,.webm,.mkv" className="hidden"
+              onChange={(e) => { setFile(e.target.files?.[0] || null); setJob(null); e.target.value = ''; }}
+            />
+            <div className="flex flex-wrap items-center gap-3">
+              <Tooltip text="Choose the video you want music for. It is only used to read its length and to preview the mix.">
                 <button
-                  type="button" onClick={() => setMusicSource(id)}
-                  className="px-3 py-1.5 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
-                  style={{
-                    borderColor: musicSource === id ? 'var(--color-primary)' : 'var(--color-border)',
-                    color: musicSource === id ? 'var(--color-primary)' : 'var(--color-muted)',
-                  }}
+                  type="button" onClick={() => inputRef.current?.click()}
+                  className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                 >
-                  {label}
+                  {file ? 'Choose a different video' : 'Choose video'}
                 </button>
               </Tooltip>
-            ))}
-          </div>
-          {ownTrackMode && (
-            <div className="space-y-2">
-              <input
-                ref={trackInputRef} type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac" className="hidden"
-                onChange={(e) => { setTrackFile(e.target.files?.[0] || null); e.target.value = ''; }}
-              />
-              <div className="flex flex-wrap items-center gap-3">
-                <Tooltip text="Choose a music file you have the rights to use. If it is shorter than the video it loops with smooth crossfades; if longer it is trimmed and faded out.">
-                  <button
-                    type="button" onClick={() => trackInputRef.current?.click()}
-                    className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
-                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  >
-                    {trackFile ? 'Choose a different track' : 'Choose music file'}
-                  </button>
-                </Tooltip>
-                {trackFile && <span className="text-xs" style={muted}>{trackFile.name}</span>}
-              </div>
-              <p className="text-xs" style={muted}>Looped or trimmed to your video's exact length with a short fade in and a 2 second fade out. Use music you have the rights to.</p>
+              {file && <span className="text-xs" style={muted}>{file.name}{clientDuration ? ` · ${formatDuration(clientDuration)}` : ''}</span>}
             </div>
-          )}
-          {!ownTrackMode && (<>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="block space-y-1">
-              <span className="text-xs" style={muted}>Mood</span>
-              <Tooltip text="A ready-made description of the style. Choose Custom prompt to describe it yourself.">
-                <select value={mood} onChange={(e) => setMood(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={field}>
-                  {(moods.length ? moods : [{ id: 'lofi-chill', label: 'Lo-fi chill' }]).map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-                </select>
-              </Tooltip>
-            </label>
-            <label className="block space-y-1">
-              <span className="text-xs" style={muted}>Tempo in BPM (optional)</span>
-              <Tooltip text="Leave blank to let the style decide. 40-220.">
-                <input
-                  type="number" min={40} max={220} value={bpm} onChange={(e) => setBpm(e.target.value)}
-                  placeholder={presetBpm ? `e.g. ${presetBpm}` : 'e.g. 100'}
-                  className="w-full px-2 py-2 rounded-xl border text-xs" style={field}
+            {videoUrl && (
+              <Tooltip text="Your video, exactly as you chose it — the music is not added to this preview.">
+                <video
+                  src={videoUrl} controls className="w-full max-h-64 rounded-xl" style={{ background: '#000' }}
+                  onLoadedMetadata={(e) => setClientDuration(e.currentTarget.duration)}
                 />
               </Tooltip>
-            </label>
-          </div>
-          <label className="block space-y-1">
-            <span className="text-xs" style={muted}>{mood === 'custom' ? 'Describe the music' : 'Extra direction (optional)'}</span>
-            <Tooltip text={mood === 'custom' ? 'Describe the music you want — instruments, feel, pace. Type it or tap the mic and say it.' : 'Add anything the mood should also include or avoid. Optional — type it or tap the mic.'}>
-              <div>
-                <VoiceInput
-                  type="textarea" append rows={2} value={customPrompt} onChange={setCustomPrompt}
-                  label="Describe the music"
-                  placeholder={mood === 'custom' ? 'e.g. slow, dreamy harp and soft strings, spacious and warm' : 'e.g. with soft rain sounds, no drums'}
-                  className="!text-xs"
-                />
-              </div>
-            </Tooltip>
-          </label>
-          <p className="text-xs" style={muted}>Always instrumental — no vocals. Three variations are generated so you can compare.</p>
-          </>)}
-          <Tooltip text={ownTrackMode ? "Fit your track to your video's length and preview it mixed in. Quick, and no generation cost." : "Generate three instrumental options cut to your video's length. Takes about a minute and a small per-generation cost."}>
-            <button
-              type="button" onClick={generate} disabled={!canGenerate} data-tour="music-generate"
-              className="px-4 py-2 rounded-xl text-sm font-medium transition-opacity duration-200 hover:opacity-80 disabled:opacity-40"
-              style={{ background: 'var(--color-primary)', color: '#fff' }}
-            >
-              {submitting ? 'Starting…' : job?.status === 'running' ? (ownTrackMode ? 'Fitting…' : 'Generating…') : ownTrackMode ? 'Fit my track' : job ? 'Generate again' : 'Generate 3 options'}
-            </button>
-          </Tooltip>
-        </section>
-
-        {job && (
-          <section className="space-y-3" data-tour="music-options">
-            <div className="flex items-baseline justify-between gap-2">
-              <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>3 · {job.source === 'upload' ? 'Your track' : 'Your options'} · video is {formatDuration(job.durationS)}{job.hasAudio ? '' : ' · no sound of its own'}</p>
-            </div>
-            {job.status === 'failed' && <p className="text-xs" style={{ color: '#ef4444' }}>{job.error || 'Music generation failed.'}</p>}
-            {job.status === 'done' && (
-              <VoiceoverPanel job={job} status={status} onJobChange={setJob} voiceSettings={voiceSettings} onVoiceSettings={setVoiceSettings} />
             )}
-            <div className="grid grid-cols-1 lg:grid-cols-1 gap-3">
-              {job.options.map((o) => (
-                <OptionCard
-                  key={`${job.id}-${o.n}`} jobId={job.id} option={o} hasAudio={job.hasAudio} durationS={job.durationS} source={job.source}
-                  voice={job.voice} voiceSettings={voiceSettings}
-                />
-              ))}
-            </div>
-            <p className="text-xs" style={muted}>Results are kept for about 90 minutes, then deleted — export or save what you want to keep.</p>
+            {tooLong && (
+              <p className="text-xs" style={{ color: '#ef4444' }}>
+                That video is {formatDuration(clientDuration)} — the limit is {formatDuration(status.maxVideoSec)}. Trim it first (Video Tools → Clip / trim).
+              </p>
+            )}
           </section>
+
+          <section className="rounded-2xl border p-4 space-y-3" style={card} data-tour="music-mood">
+            <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>2 · The music</p>
+            {ownTrackMode && (
+              <div className="space-y-2">
+                <input
+                  ref={trackInputRef} type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac" className="hidden"
+                  onChange={(e) => { setTrackFile(e.target.files?.[0] || null); e.target.value = ''; }}
+                />
+                <div className="flex flex-wrap items-center gap-3">
+                  <Tooltip text="Choose a music file you have the rights to use. If it is shorter than the video it loops with smooth crossfades; if longer it is trimmed and faded out.">
+                    <button
+                      type="button" onClick={() => trackInputRef.current?.click()}
+                      className="px-3 py-2 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                    >
+                      {trackFile ? 'Choose a different track' : 'Choose music file'}
+                    </button>
+                  </Tooltip>
+                  {trackFile && <span className="text-xs" style={muted}>{trackFile.name}</span>}
+                </div>
+                <p className="text-xs" style={muted}>Looped or trimmed to your video's exact length with a short fade in and a 2 second fade out. Use music you have the rights to.</p>
+              </div>
+            )}
+            {!ownTrackMode && (<>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="block space-y-1">
+                  <span className="text-xs" style={muted}>Mood</span>
+                  <Tooltip text="A ready-made description of the style. Choose Custom prompt to describe it yourself.">
+                    <select value={mood} onChange={(e) => setMood(e.target.value)} className="w-full px-2 py-2 rounded-xl border text-xs" style={field}>
+                      {(moods.length ? moods : [{ id: 'lofi-chill', label: 'Lo-fi chill' }]).map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                    </select>
+                  </Tooltip>
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-xs" style={muted}>Tempo in BPM (optional)</span>
+                  <Tooltip text="Leave blank to let the style decide. 40-220.">
+                    <input
+                      type="number" min={40} max={220} value={bpm} onChange={(e) => setBpm(e.target.value)}
+                      placeholder={presetBpm ? `e.g. ${presetBpm}` : 'e.g. 100'}
+                      className="w-full px-2 py-2 rounded-xl border text-xs" style={field}
+                    />
+                  </Tooltip>
+                </label>
+              </div>
+              <label className="block space-y-1">
+                <span className="text-xs" style={muted}>{mood === 'custom' ? 'Describe the music' : 'Extra direction (optional)'}</span>
+                <Tooltip text={mood === 'custom' ? 'Describe the music you want — instruments, feel, pace. Type it or tap the mic and say it.' : 'Add anything the mood should also include or avoid. Optional — type it or tap the mic.'}>
+                  <div>
+                    <VoiceInput
+                      type="textarea" append rows={2} value={customPrompt} onChange={setCustomPrompt}
+                      label="Describe the music"
+                      placeholder={mood === 'custom' ? 'e.g. slow, dreamy harp and soft strings, spacious and warm' : 'e.g. with soft rain sounds, no drums'}
+                      className="!text-xs"
+                    />
+                  </div>
+                </Tooltip>
+              </label>
+              <p className="text-xs" style={muted}>Always instrumental — no vocals. Three variations are generated so you can compare.</p>
+            </>)}
+            <Tooltip text={ownTrackMode ? "Fit your track to your video's length and preview it mixed in. Quick, and no generation cost." : "Generate three instrumental options cut to your video's length. Takes about a minute and a small per-generation cost."}>
+              <button
+                type="button" onClick={generate} disabled={!canGenerate} data-tour="music-generate"
+                className="px-4 py-2 rounded-xl text-sm font-medium transition-opacity duration-200 hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)', color: '#fff' }}
+              >
+                {submitting ? 'Starting…' : job?.status === 'running' ? (ownTrackMode ? 'Fitting…' : 'Generating…') : ownTrackMode ? 'Fit my track' : job ? 'Generate again' : 'Generate 3 options'}
+              </button>
+            </Tooltip>
+          </section>
+
+          {job && (
+            <section className="space-y-3" data-tour="music-options">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>3 · {job.source === 'upload' ? 'Your track' : 'Your options'} · video is {formatDuration(job.durationS)}{job.hasAudio ? '' : ' · no sound of its own'}</p>
+              </div>
+              {job.status === 'failed' && <p className="text-xs" style={{ color: '#ef4444' }}>{job.error || 'Music generation failed.'}</p>}
+              {job.status === 'done' && !job.voice && (
+                <p className="text-xs" style={muted}>
+                  Want narration?{' '}
+                  <button
+                    type="button" onClick={() => selectTool('voiceover')}
+                    className="underline transition-opacity duration-200 hover:opacity-60"
+                    style={{ color: 'var(--color-primary)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
+                  >
+                    Add a voiceover
+                  </button>
+                </p>
+              )}
+              <div className="grid grid-cols-1 gap-3">
+                {job.options.map((o) => (
+                  <OptionCard
+                    key={`${job.id}-${o.n}`} jobId={job.id} option={o} hasAudio={job.hasAudio} durationS={job.durationS} source={job.source}
+                    voice={job.voice} voiceSettings={voiceSettings}
+                  />
+                ))}
+              </div>
+              <p className="text-xs" style={muted}>Results are kept for about 90 minutes, then deleted — export or save what you want to keep.</p>
+            </section>
+          )}
+        </div>
+
+        {tool === 'voiceover' && (
+          <div className="space-y-4">
+            <ToolHeader id="voiceover" label="Voiceover" onHelp={setHelpTool} />
+            {job?.status === 'done' ? (
+              <>
+                <VoiceoverPanel job={job} status={status} onJobChange={setJob} voiceSettings={voiceSettings} onVoiceSettings={setVoiceSettings} />
+                {job.voice && (
+                  <button
+                    type="button" onClick={() => selectTool(job.source === 'upload' ? 'own-track' : 'score')}
+                    className="px-3 py-1.5 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
+                    style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+                  >
+                    Hear it in the options →
+                  </button>
+                )}
+              </>
+            ) : (
+              <section className="rounded-2xl border p-4 space-y-3" style={card}>
+                <p className="text-xs" style={muted}>
+                  {job?.status === 'running'
+                    ? 'Your music is still being made. The voiceover can be added as soon as it is ready.'
+                    : 'Make your music first — a voiceover is mixed over it, and the music dips while the voice speaks.'}
+                </p>
+                <button
+                  type="button" onClick={() => selectTool('score')}
+                  className="px-3 py-1.5 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  Go to Score a video
+                </button>
+              </section>
+            )}
+          </div>
         )}
-      </div>
-      </div>
+      </main>
+
+      <ToolHelpModal toolId={helpTool} onClose={() => setHelpTool(null)} />
     </div>
   );
 }

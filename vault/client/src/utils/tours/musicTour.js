@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_music_completed';
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 7;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -64,12 +64,22 @@ export function startMusicTour() {
   });
 
   tour.addStep({
+    id: 'music-sidebar',
+    title: 'The tool list',
+    text: "Everything in Music is in this list, arranged by what you are doing: Score a video, Use my own track, and Voiceover. Hover over any item for a plain explanation, and press the (?) beside a tool's title for more. Your video and music stay put while you move between tools.",
+    attachTo: { element: '[data-tour="music-sidebar"]', on: 'right' },
+    beforeShowPromise: () => new Promise((resolve) => { before('music-sidebar', '[data-tour="music-sidebar"]')(); resolve(); }),
+    when: { show() { injectStepCounter(2); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  tour.addStep({
     id: 'music-video',
     title: 'Your video',
     text: "Choose the video you want music for. It's only used to read its length — so the music ends exactly on your last frame — and to preview the mix. Videos up to five minutes are supported; trim longer ones first in Video Tools.",
     attachTo: { element: '[data-tour="music-video"]', on: 'bottom' },
     beforeShowPromise: () => new Promise((resolve) => { before('music-video', '[data-tour="music-video"]')(); resolve(); }),
-    when: { show() { injectStepCounter(2); } },
+    when: { show() { injectStepCounter(3); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -79,7 +89,7 @@ export function startMusicTour() {
     text: "Pick a ready-made mood — upbeat vlog, cinematic tension, calm corporate, travel montage, suspense, documentary or lo-fi chill — or choose Custom prompt and describe it. Tempo (BPM) is optional. You can type, or tap the mic and say it. It is always instrumental — no vocals.",
     attachTo: { element: '[data-tour="music-mood"]', on: 'top' },
     beforeShowPromise: () => new Promise((resolve) => { before('music-mood', '[data-tour="music-mood"]')(); resolve(); }),
-    when: { show() { injectStepCounter(3); } },
+    when: { show() { injectStepCounter(4); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -89,7 +99,7 @@ export function startMusicTour() {
     text: "Each press makes three variations with different random seeds so you can compare. It takes about a minute and each generation has a small cost from the music provider. Progress shows as each option arrives, and options are kept for about 90 minutes.",
     attachTo: { element: '[data-tour="music-generate"]', on: 'top' },
     beforeShowPromise: () => new Promise((resolve) => { before('music-generate', '[data-tour="music-generate"]')(); resolve(); }),
-    when: { show() { injectStepCounter(4); } },
+    when: { show() { injectStepCounter(5); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -99,7 +109,7 @@ export function startMusicTour() {
     text: "Every option plays against your video. Music volume sets how loud the music sits, and Ducking lowers it while people are talking (off, light or strong — it needs a video with its own sound). Change a setting, then press Update preview to hear it. The final mix is levelled to about -14 LUFS. If your video is longer than one 30-second clip, the music loops with smooth crossfades.",
     attachTo: { element: '[data-tour="music-options"]', on: 'top' },
     beforeShowPromise: () => new Promise((resolve) => { before('music-options', '[data-tour="music-options"]')(); resolve(); }),
-    when: { show() { injectStepCounter(5); } },
+    when: { show() { injectStepCounter(6); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -107,7 +117,7 @@ export function startMusicTour() {
     id: 'music-export',
     title: 'Export what you like',
     text: "Export audio (WAV) gives you just the music, cut to length with fades. Export video (MP4) gives you your video with the music mixed in, using the volume and ducking you chose. Nothing is stored permanently — download what you want to keep.",
-    when: { show() { injectStepCounter(6); } },
+    when: { show() { injectStepCounter(7); } },
     buttons: [
       btnBack(),
       { text: 'Finish Tour ✓', action() { markDone(); tour.complete(); } },

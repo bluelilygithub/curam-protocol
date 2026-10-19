@@ -11,7 +11,11 @@ Built from a spec for a standalone local Python/Gradio tool, adapted to live ins
 3. `GET .../options/:n/preview?volume=&ducking=` renders a small 480p MP4 with the music mixed in (cached per setting inside the job). `GET .../options/:n/video?...` is the full-quality export (picture stream-copied where possible, re-encoded if the source codec can't go into MP4). `GET .../options/:n/audio` is the fitted WAV.
 4. `DELETE /api/music/jobs/:id` removes the files (the page does this on leaving, and when generating again).
 
-Files: `server/routes/music.js`, `server/services/music/` (`musicPrompts.js`, `musicProviders.js`, `musicFit.js`, `musicJobs.js`), shared `server/middleware/ffmpegRoute.js` (also used by Video Tools), client `client/src/pages/MusicPage.jsx`.
+Files: `server/routes/music.js`, `server/services/music/` (`musicPrompts.js`, `musicProviders.js`, `musicFit.js`, `musicJobs.js`), shared `server/middleware/ffmpegRoute.js` (also used by Video Tools), client `client/src/pages/MusicPage.jsx` (page + job state) with its pieces in `client/src/pages/music/`.
+
+## Page layout
+
+Laid out like Video Tools: a tool list on the left (`MusicSidebar.jsx`: search, collapsible groups, hover tip on every item), one tool at a time on the right with a title and a (?) help button (`ToolHeader.jsx`). The list is `TOOL_GROUPS` in `music/musicTools.mjs` with `TOOL_TIPS`, `GROUP_TIPS` and `TOOL_HELP` beside it; `node client/src/pages/music/musicTools.test.mjs` (in `npm run test:music`) fails if a tool has no tip or help, or one is left over. Tools: **Make** → Score a video, Use my own track; **Voice** → Voiceover (needs finished music). The page owns the video, job and voiceover settings, and the Score/Own-track body stays mounted (hidden) while another tool is open, so previews and the job survive switching tools. Per-option card is `OptionCard.jsx`, voiceover is `VoiceoverPanel.jsx`.
 
 ## Backend (swappable)
 
@@ -79,7 +83,7 @@ Scene-cut detection (PySceneDetect) to place changes on cuts; energy markers on 
 
 - **Tooltips** (`components/Tooltip`) on every control: choose video, the video preview, mood, BPM, the description box, Generate, volume, ducking, Update preview, both export buttons, and the header buttons.
 - **How Music Works** modal (`ToolInfoModal`, (i) in the header, opens once automatically — localStorage key `vault_music_info_seen`).
-- **Tour** (Shepherd, compass in the header, `client/src/utils/tours/musicTour.js`, key `vault_tour_music_completed`, 6 steps); retake from **Settings → Music Tour** (opens `/music?tour=1`). Steps whose target isn't on screen yet (the options appear only after generating) show centred.
+- **Tour** (Shepherd, compass in the header, `client/src/utils/tours/musicTour.js`, key `vault_tour_music_completed`, 7 steps, the second one points at the tool list); retake from **Settings → Music Tour** (opens `/music?tour=1`). Steps whose target isn't on screen yet (the options appear only after generating) show centred.
 
 ## Progress modal
 

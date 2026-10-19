@@ -1,0 +1,85 @@
+// The Music sidebar: one list of tools, arranged by what the person is doing (same idea as Video Tools'
+// TOOL_GROUPS). Pure data + a filter, so a test can check it without a browser (musicTools.test.mjs).
+// Add a new tool to the group where a person would look for it, then add its TOOL_TIPS and TOOL_HELP entry;
+// the test fails if any of the three is missing. Docs: docs/music-plan.md.
+
+export const DEFAULT_TOOL = 'score';
+
+export const TOOL_GROUPS = [
+  {
+    id: 'make',
+    label: 'Make',
+    tools: [
+      { id: 'score', label: 'Score a video', desc: 'Pick a video and a mood, get three music options cut to its length' },
+      { id: 'own-track', label: 'Use my own track', desc: 'Fit a music file you already have to your video' },
+    ],
+  },
+  {
+    id: 'voice',
+    label: 'Voice',
+    tools: [
+      { id: 'voiceover', label: 'Voiceover', desc: 'Add narration over the music: write a script or upload a recording' },
+    ],
+  },
+];
+
+// Hover text for every item in the list: what the tool does, in plain words.
+export const TOOL_TIPS = {
+  score: "Choose a video and a mood (or describe the music yourself) and get three instrumental options, each cut to your video's exact length. Costs a small amount per go.",
+  'own-track': "Bring a music file you already have. It is looped or trimmed to your video's length, faded and mixed in. No generation, no cost.",
+  voiceover: 'Add narration. Type a script for an AI voice with an Australian accent, or upload a recording. The music dips while the voice speaks.',
+};
+
+export const GROUP_TIPS = {
+  make: 'Start here: get music that fits your video, made for you or from a file you have.',
+  voice: 'Put a voice over the music, and choose where it starts and how loud it is.',
+};
+
+// Opened by the (?) beside each tool title.
+export const TOOL_HELP = {
+  score: {
+    title: 'Score a video',
+    what: "Write instrumental background music for a video, cut to its exact length so it ends on your last frame.",
+    features: [
+      'Choose your video (up to five minutes). It is only used to read its length and to preview the mix',
+      'Pick a mood, or choose Custom prompt and describe the music; tempo is optional',
+      'Three options are made so you can compare them, each previewed against your video',
+      'Set the music volume and let it dip while people talk (ducking)',
+      'Export the music as WAV, your video with the music as MP4, or save it to Saved media',
+    ],
+  },
+  'own-track': {
+    title: 'Use my own track',
+    what: 'Fit music you already have to your video.',
+    features: [
+      'Choose your video, then a music file (MP3, WAV, M4A)',
+      'A short track is looped with smooth crossfades; a long one is trimmed',
+      'It fades in and out, then is previewed, mixed and exported like generated music',
+      'Free to use, but only use music you have the rights to',
+    ],
+  },
+  voiceover: {
+    title: 'Voiceover',
+    what: 'Add narration over your music. Make the music first, then come back here.',
+    features: [
+      'Write a script for an AI voice, or upload your own recording',
+      'Choose when the voice starts and how loud it is',
+      'The music (and your video\'s own sound) dips underneath the voice',
+      'Every option\'s preview and export includes the voiceover',
+      'AI voices have a small per-use cost',
+    ],
+  },
+};
+
+/** Groups and tools matching `query` (name or description); everything when the query is empty. */
+export function filterGroups(groups, query) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return groups;
+  return groups
+    .map((g) => ({ ...g, tools: g.tools.filter((t) => t.label.toLowerCase().includes(q) || t.desc.toLowerCase().includes(q)) }))
+    .filter((g) => g.tools.length > 0);
+}
+
+export function groupOfTool(groups, toolId) {
+  return groups.find((g) => g.tools.some((t) => t.id === toolId))?.id || null;
+}
