@@ -69,6 +69,14 @@ const { JSDOM } = require('jsdom');
   assert.doesNotThrow(() => S.formatHtml('</div></div></div>'));
   assert.doesNotThrow(() => S.formatHtml('<script>never closed'));
 
+  // ---- pictures copied into a page are shortened for reading ----
+  const long = 'A'.repeat(5000);
+  const page = `<img src="data:image/png;base64,${long}"><div style="background:url(data:image/jpeg;base64,${long})"></div><a href="data:text/plain,short">x</a>`;
+  const short = S.shortenDataUris(page);
+  assert.ok(short.length < 400 && /data:image\/png;base64,…\(\d+ KB left out\)/.test(short), 'a long data: address becomes a note');
+  assert.ok(short.includes('data:text/plain,short'), 'a short one is left alone');
+  assert.strictEqual(S.shortenDataUris(''), '');
+
   // ---- numbered lines and the filter ----
   const text3 = 'alpha\nBeta\ngamma\nbeta again';
   const all = S.sourceLines(text3);

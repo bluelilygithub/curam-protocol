@@ -8,6 +8,8 @@ import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import Tooltip from '../components/Tooltip';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { VoiceInput, VoiceInputProvider } from '../components/voiceInput/VoiceInput';
+import SourceViewer from './restyle/SourceViewer';
+import { formatHtml, shortenDataUris } from './restyle/sourceView.mjs';
 import WebExtractorTutorChat from './webExtractor/WebExtractorTutorChat';
 import {
   WEB_EXTRACTOR_TOOLS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, HOW_IT_WORKS, GUIDE_TOOLS, parseSpokenUrl, parseSpokenList, parseSpokenSelector,
@@ -56,6 +58,9 @@ export default function WebExtractorPage() {
   const urlRef = useRef(null);
   const requestId = useRef(0);
 
+  // Exact scrape: the preview, or the page's HTML source (as fetched, or the self-contained copy)
+  const [styledView, setStyledView] = useState('preview');
+  const [styledSource, setStyledSource] = useState({ view: 'raw', query: '', wrap: false });
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [downloadingSrc, setDownloadingSrc] = useState(null);
   const [downloadingAll, setDownloadingAll] = useState(false);
@@ -93,6 +98,7 @@ export default function WebExtractorPage() {
     const myRequest = ++requestId.current;
     setLoadingMode(runMode);
     setResults((r) => ({ ...r, [runMode]: null }));
+    if (runMode === 'styled') setStyledView('preview');
     try {
       const excludeSections = excludeTerms.split(',').map((s) => s.trim()).filter(Boolean);
       const res = await api.post('/api/web-extractor/extract', { url: url.trim(), mode: runMode, excludeSections, selector: selector.trim() });
@@ -305,7 +311,7 @@ export default function WebExtractorPage() {
         </aside>
 
         {/* ── Main panel ──────────────────────────────────────────────── */}
-        <main className="flex-1 min-w-0 overflow-y-auto p-6 space-y-4 max-w-5xl">
+        <div className="flex-1 min-w-0 overflow-y-auto p-6 space-y-4 max-w-5xl">
           <div>
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{current?.label}</h2>
             <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>{TOOL_BLURBS[mode]}</p>
@@ -662,25 +668,54 @@ export default function WebExtractorPage() {
             );
           })()}
 
-          {result?.mode === 'styled' && (
-            <section className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
-              <div className="flex items-center justify-between gap-3 px-4 py-2 border-b" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Safe preview: the page as a still snapshot, nothing on it can run</p>
-                <Tooltip text="Copy the snapshot's code. Scripts are removed and addresses are made complete so pictures and styles still load.">
-                  <button type="button" onClick={() => copyText(result.html)} className={BUTTON} style={BUTTON_STYLE}>Copy HTML</button>
-                </Tooltip>
-              </div>
-              <iframe
-                title="Exact scrape preview"
-                srcDoc={result.html}
-                sandbox=""
-                referrerPolicy="no-referrer"
-                className="w-full"
-                style={{ height: '70vh', background: '#fff' }}
-              />
-            </section>
-          )}
-        </main>
+          {result?.mode === 'styled' && (() => {
+            const views = [
+              { id: 'raw', label: 'As fetched', tip: 'The page exactly as the website sent it, before anything was done to it.', available: !!result.sourceHtml },
+              { id: 'page', label: 'The copy', tip: 'The copy shown in the preview: scripts removed, addresses made complete, style files and pictures copied in (pictures are shortened here).', available: true },
+            ];
+            const view = (views.find((v) => v.id === styledSource.view && v.available) || views[1]).id;
+            const text = view === 'raw' ? formatHtml(result.sourceHtml || '') : formatHtml(shortenDataUris(result.html));
+            const seg = (on, first, last) => ({ padding: '5px 12px', fontSize: '0.8rem', cursor: 'pointer', border: '1px solid var(--color-border)', background: on ? 'var(--color-primary)' : 'var(--color-bg)', color: on ? '#fff' : 'var(--color-text)', borderRadius: first ? '8px 0 0 8px' : last ? '0 8px 8px 0' : 0 });
+            return (
+              <>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex" role="group" aria-label="Preview or source">
+                    <Tooltip text="The page as it looks, in a safe preview where nothing can run."><button type="button" aria-pressed={styledView === 'preview'} onClick={() => setStyledView('preview')} className="transition-opacity duration-200 hover:opacity-70" style={seg(styledView === 'preview', true, false)}>Preview</button></Tooltip>
+                    <Tooltip text="Read the page's HTML, laid out so it is readable. Choose the page as fetched, or the copy shown in the preview."><button type="button" aria-pressed={styledView === 'source'} onClick={() => setStyledView('source')} className="transition-opacity duration-200 hover:opacity-70" style={seg(styledView === 'source', false, true)}>HTML source</button></Tooltip>
+                  </div>
+                  {result.stats && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{result.stats.cssInlined} style file{result.stats.cssInlined === 1 ? '' : 's'} and {result.stats.imagesInlined} picture{result.stats.imagesInlined === 1 ? '' : 's'} copied in.</p>}
+                </div>
+                {styledView === 'source' ? (
+                  <SourceViewer
+                    views={views} active={view} onActive={(v) => setStyledSource((st) => ({ ...st, view: v }))} text={text}
+                    note={view === 'raw' && result.sourceTruncated ? 'This page is very large: only the first 2 MB is shown here.' : ''}
+                    query={styledSource.query} onQuery={(query) => setStyledSource((st) => ({ ...st, query }))} wrap={styledSource.wrap} onWrap={(wrap) => setStyledSource((st) => ({ ...st, wrap }))}
+                    onCopy={() => copyText(view === 'raw' ? result.sourceHtml : result.html)}
+                    onDownload={() => saveBlob(new Blob([view === 'raw' ? result.sourceHtml : result.html], { type: 'text/html' }), `${(() => { try { return new URL(result.url).hostname.replace(/[^a-z0-9]+/gi, '-'); } catch { return 'page'; } })()}-${view === 'raw' ? 'source' : 'copy'}.html`)}
+                    downloadLabel="Download .html" empty="Nothing to show."
+                  />
+                ) : (
+                  <section className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+                    <div className="flex items-center justify-between gap-3 px-4 py-2 border-b" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                      <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Safe preview: the page as a still copy, with its styles and pictures built in. Nothing on it can run</p>
+                      <Tooltip text="Copy the copy's code: one self-contained page with its styles and pictures built in.">
+                        <button type="button" onClick={() => copyText(result.html)} className={BUTTON} style={BUTTON_STYLE}>Copy HTML</button>
+                      </Tooltip>
+                    </div>
+                    <iframe
+                      title="Exact scrape preview"
+                      srcDoc={result.html}
+                      sandbox=""
+                      referrerPolicy="no-referrer"
+                      className="w-full"
+                      style={{ height: '70vh', background: '#fff' }}
+                    />
+                  </section>
+                )}
+              </>
+            );
+          })()}
+        </div>
       </div>
 
       <WebExtractorTutorChat currentTool={mode} onOpenTool={openToolById} />

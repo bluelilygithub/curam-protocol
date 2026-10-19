@@ -40,6 +40,21 @@ function isRealPage(result) {
 /** Is this response a usable style file or asset? */
 const isRealAsset = (result) => !!result && result.statusCode === 200 && String(result.body || '').length > 0;
 
+// A connection that fails outright (TLS refused, reset, not found, no answer) says nothing about the page itself: the site may only answer
+// on its "www." name, or only on plain http. Those are tried once each after the address as typed.
+const NETWORK_ERROR = /socket|TLS|SSL|ECONN|ENOTFOUND|EAI_AGAIN|EPROTO|certificate|hang up/i; // not "timed out": a slow site is not a wrong address
+
+/** The other ways the same site might be reached: with or without "www.", and the other scheme. */
+function alternateUrls(url) {
+  let u;
+  try { u = new URL(url); } catch { return []; }
+  const withOrWithoutWww = new URL(url);
+  withOrWithoutWww.hostname = u.hostname.startsWith('www.') ? u.hostname.slice(4) : `www.${u.hostname}`;
+  const otherScheme = new URL(url);
+  otherScheme.protocol = u.protocol === 'https:' ? 'http:' : 'https:';
+  return [withOrWithoutWww.toString(), otherScheme.toString()].filter((x) => x !== url);
+}
+
 /**
  * @param {{fetchOnce?: Function}} [deps]  replaced in tests
  * @returns {(url: string, opts?: {asset?: boolean}) => Promise<{body:string, statusCode:number, finalUrl:string, profile:string}>}
@@ -49,8 +64,9 @@ function createPageFetcher(deps = {}) {
   const fetchOnce = deps.fetchOnce || htmlFetch.fetchOnce;
   let winner = null; // the identity that last worked for this job
 
-  return async function fetchPage(url, { asset = false } = {}) {
-    const order = winner ? [winner, ...PROFILES.filter((p) => p.id !== winner.id)] : PROFILES;
+  async function attempt(url, asset, { oneIdentity = false } = {}) {
+    const all = winner ? [winner, ...PROFILES.filter((p) => p.id !== winner.id)] : PROFILES;
+    const order = oneIdentity ? all.slice(0, 1) : all; // the other addresses are a long shot: one try each, not the whole list
     let lastStatus = 0;
     let lastError = null;
     for (const profile of order) {
@@ -71,7 +87,19 @@ function createPageFetcher(deps = {}) {
     }
     if (lastStatus) throw new Error(`Server returned ${lastStatus}`);
     throw lastError || new Error('Request timed out');
+  }
+
+  return async function fetchPage(url, { asset = false } = {}) {
+    try {
+      return await attempt(url, asset);
+    } catch (err) {
+      if (!NETWORK_ERROR.test(String(err.message)) || /private|Invalid URL|Only http/i.test(String(err.message))) throw err;
+      for (const alt of alternateUrls(url)) {
+        try { return await attempt(alt, asset, { oneIdentity: true }); } catch (altErr) { if (/private|Invalid URL|Only http/i.test(String(altErr.message))) throw altErr; }
+      }
+      throw err; // the address as typed is the one the person knows, so its error is the one they see
+    }
   };
 }
 
-module.exports = { createPageFetcher, isRealPage, titleOfHtml, PROFILES, BLOCKED_TITLE };
+module.exports = { createPageFetcher, isRealPage, titleOfHtml, alternateUrls, PROFILES, BLOCKED_TITLE };

@@ -41,8 +41,10 @@ const respond = (route, body, status = 200) => route.fulfill({ status, contentTy
 const browser = await chromium.launch({ headless: !headed });
 const context = await browser.newContext({ viewport: { width: 1500, height: 950 } });
 await context.addInitScript(() => {
+  try {
   localStorage.setItem('vault-auth', JSON.stringify({ state: { token: 'test-token', user: { id: 1, email: 'test@example.com', isAdmin: true } }, version: 0 }));
-  ['vault_fonts_info_seen', 'vault_measurements_info_seen', 'vault_css_info_seen', 'vault:fonts-tutorial-seen', 'vault_tour_fonts_completed', 'vault_tour_measurements_completed'].forEach((k) => localStorage.setItem(k, '1'));
+  ['vault_fonts_info_seen', 'vault_web_extractor_info_seen', 'vault_measurements_info_seen', 'vault_css_info_seen', 'vault:fonts-tutorial-seen', 'vault_tour_fonts_completed', 'vault_tour_measurements_completed'].forEach((k) => localStorage.setItem(k, '1'));
+  } catch { /* a sandboxed preview frame has no storage: nothing to set there */ }
 });
 const asked = [];
 await context.route('**/api/**', async (route) => {
@@ -57,6 +59,15 @@ await context.route('**/api/**', async (route) => {
   if (pathname === '/api/fonts-tutor' || pathname === '/api/measurements-tutor' || pathname === '/api/restyle-tutor') {
     asked.push(pathname);
     return respond(route, { verdict: 'doable', answer: 'Use the tool.', steps: [{ tool: pathname.includes('fonts') ? 'shape' : pathname.includes('measurements') ? 'scan' : 'export', do: 'Open it.' }] });
+  }
+  if (pathname === '/api/web-extractor/extract') {
+    const long = 'A'.repeat(4000);
+    return respond(route, {
+      mode: 'styled', url: 'https://example.com/shop/', requestedUrl: 'https://example.com/shop/',
+      html: `<!DOCTYPE html><html><head><style data-from="x">.card{background:#eee;padding:12px}</style></head><body><div class="card"><h2>Styled copy</h2><img src="data:image/png;base64,${long}" alt=""></div></body></html>`,
+      sourceHtml: '<!DOCTYPE html><html><head><script>boot()</script><link rel="stylesheet" href="/main.css"></head><body><div class="card"><h2>Styled copy</h2></div></body></html>',
+      sourceTruncated: false, stats: { cssInlined: 1, cssFailed: 0, imagesInlined: 1, imagesFailed: 0 }, notice: '',
+    });
   }
   if (pathname === '/api/restyle/projects') return respond(route, { projects: [] });
   if (pathname === '/api/restyle/capabilities') return respond(route, { render: false });
@@ -130,6 +141,28 @@ try {
   await openTool('Font Customizer', 'Choose a font');
   check((await page.getByRole('button', { name: 'Say the name of a font' }).count()) === 1, 'the font search has a microphone');
   await askGuide('Font Customizer guide', 'make it bolder', 'Shape');
+
+  // ---------------- Web Extractor: Exact scrape ----------------
+  console.log('Web Extractor');
+  await page.goto(`${base}/web-extractor`);
+  await page.locator('aside h1', { hasText: 'Web Extractor' }).waitFor({ timeout: 20000 });
+  await page.locator('aside button', { hasText: 'Exact scrape' }).first().click();
+  await page.getByRole('textbox', { name: 'Webpage address' }).fill('example.com/shop/');
+  await page.getByRole('button', { name: 'Extract', exact: true }).click();
+  await page.locator('iframe[title="Exact scrape preview"]').waitFor({ timeout: 8000 });
+  check(true, 'Exact scrape shows the copy in a preview');
+  check((await page.getByText('1 style file and 1 picture copied in.').count()) === 1, 'it says what was copied in');
+  await page.getByRole('button', { name: 'HTML source' }).click();
+  const we = page.locator('pre[data-source-view]');
+  await we.waitFor({ timeout: 5000 });
+  check(/boot\(\)/.test(await we.innerText()), 'the HTML source starts with the page as the website sent it, scripts and all');
+  await page.getByRole('button', { name: 'The copy' }).click();
+  const copy = await we.innerText();
+  check(/data:image\/png;base64,…\(\d+ KB left out\)/.test(copy) && !/AAAAAAAAAAAAAAAAAAAA/.test(copy), 'the copy is shown with its long picture addresses shortened');
+  check(/\n\s{2,}<div class="card">/.test(copy), 'and laid out for reading');
+  await page.getByRole('button', { name: 'Preview' }).click();
+  await page.locator('iframe[title="Exact scrape preview"]').waitFor({ timeout: 5000 });
+  check(true, 'Preview brings the page back');
 
   // ---------------- CSS ----------------
   console.log('CSS');

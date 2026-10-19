@@ -33,6 +33,8 @@ const {
 
   // ---- the facts the guide must not get wrong ----
   assert.match(CATALOG.find((t) => t.id === 'exclude-sections').does, /whole heading word/);
+  assert.match(CATALOG.find((t) => t.id === 'styled').does, /HTML source.*As fetched.*The copy/s, 'Exact scrape offers the HTML source');
+  assert.match(CATALOG.find((t) => t.id === 'styled').notes, /rather than showing a words-only copy/, 'a refused page is not replaced by a words-only copy');
   assert.match(CATALOG.find((t) => t.id === 'download-images').does, /up to 60/);
   assert.match(CATALOG.find((t) => t.id === 'download-pdf').notes, /show as \?/);
   const gaps = NOT_POSSIBLE.join(' ');

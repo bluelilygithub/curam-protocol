@@ -90,6 +90,11 @@ export function formatHtml(html) {
   return out.join('\n');
 }
 
+/** Pictures copied into a page as data: addresses are thousands of characters long; for reading they are shortened to a note. */
+export function shortenDataUris(html) {
+  return String(html || '').replace(/data:[a-z0-9.+/-]+;base64,[A-Za-z0-9+/=]{200,}/gi, (m) => `${m.slice(0, m.indexOf(',') + 1)}…(${Math.max(1, Math.round(m.length / 1024))} KB left out)`);
+}
+
 /** The text as numbered lines. `query` keeps only the lines containing it (still numbered as in the whole text). */
 export function sourceLines(text, { query = '', max = MAX_SHOWN_LINES } = {}) {
   const all = String(text || '').split('\n');

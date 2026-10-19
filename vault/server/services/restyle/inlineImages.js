@@ -30,6 +30,8 @@
 const { JSDOM } = require('jsdom');
 const { fetchBinary } = require('../webExtractorService');
 
+const MAX_INLINE_IMAGE_BYTES = 2.5 * 1024 * 1024; // one picture bigger than this stays a link (counted as not loaded)
+const MAX_INLINE_TOTAL_BYTES = 12 * 1024 * 1024; // and a page's pictures together are held to this, so the response stays a sensible size
 const MAX_IMAGES = 40; // cap total fetches per call so a page with hundreds of images can't hang the request
 const CSS_URL_RE = /url\(\s*(['"]?)([^'")]+)\1\s*\)/gi;
 
@@ -45,6 +47,7 @@ function resolveUrl(raw, baseUrl) {
 
 async function toDataUri(url) {
   const { buffer, contentType } = await fetchBinary(url);
+  if (buffer.length > MAX_INLINE_IMAGE_BYTES) throw new Error('Image too large to inline');
   const type = contentType.split(';')[0].trim() || 'application/octet-stream';
   return `data:${type};base64,${buffer.toString('base64')}`;
 }
@@ -53,9 +56,13 @@ async function fetchAllAsDataUris(urls) {
   const urlToDataUri = new Map();
   let inlinedCount = 0;
   let failedCount = 0;
+  let totalBytes = 0;
   await Promise.all(urls.slice(0, MAX_IMAGES).map(async (url) => {
     try {
-      urlToDataUri.set(url, await toDataUri(url));
+      const uri = await toDataUri(url);
+      if (totalBytes + uri.length > MAX_INLINE_TOTAL_BYTES) throw new Error('Over the total');
+      totalBytes += uri.length;
+      urlToDataUri.set(url, uri);
       inlinedCount++;
     } catch {
       failedCount++;

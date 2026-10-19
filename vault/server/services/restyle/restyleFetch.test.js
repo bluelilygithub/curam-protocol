@@ -93,5 +93,23 @@ function fakeSite({ accepts, refuseWith = 403, page = PAGE, css = '.a{color:red}
   fetchPage = createPageFetcher({ fetchOnce: async (u) => ({ body: '', statusCode: 200, finalUrl: u }) });
   await assert.rejects(fetchPage('https://example.com/empty.css', { asset: true }), /Server returned 200/, 'an empty style file is not a style file');
 
+  // ---- a connection that fails outright: the www / http alternates are tried, in that order, and the original error is kept if none works ----
+  const { alternateUrls } = require('./pageFetch');
+  assert.deepStrictEqual(alternateUrls('https://example.com/a?b=1'), ['https://www.example.com/a?b=1', 'http://example.com/a?b=1']);
+  assert.deepStrictEqual(alternateUrls('http://www.example.com/'), ['http://example.com/', 'https://www.example.com/']);
+  assert.deepStrictEqual(alternateUrls('not a url'), []);
+  const tried = [];
+  const onlyWww = createPageFetcher({ fetchOnce: async (url) => { tried.push(url); if (url.startsWith('https://www.')) return { body: PAGE, statusCode: 200, finalUrl: url }; throw new Error('Client network socket disconnected before secure TLS connection was established'); } });
+  got = await onlyWww('https://example.com/');
+  assert.strictEqual(got.finalUrl, 'https://www.example.com/', 'a site that only answers on its www name is found');
+  assert.ok(tried.indexOf('https://www.example.com/') > tried.indexOf('https://example.com/'), 'the address as typed comes first');
+  tried.length = 0;
+  const dead = createPageFetcher({ fetchOnce: async (url) => { tried.push(url); throw new Error(url.startsWith('https://example.com') ? 'getaddrinfo ENOTFOUND example.com' : 'ECONNRESET'); } });
+  await assert.rejects(dead('https://example.com/'), /ENOTFOUND example\.com/, 'when nothing works the error for the address typed is the one shown');
+  assert.ok(tried.some((u) => u.startsWith('http://example.com')) && tried.some((u) => u.startsWith('https://www.example.com')), 'both alternates were tried');
+  tried.length = 0;
+  await assert.rejects(createPageFetcher({ fetchOnce: async (url) => { tried.push(url); return { body: 'no', statusCode: 403, finalUrl: url }; } })('https://example.com/'), /Server returned 403/);
+  assert.ok(tried.every((u) => u === 'https://example.com/'), 'a refusal (the site answered) does not go looking for other addresses');
+
   console.log('restyle fetch tests passed');
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -43,6 +43,8 @@ function imageFilename(src, index, contentType) {
 }
 
 /** What went wrong, as an HTTP status: the person's address (400), the other website (502), or us (500). */
+const REFUSED_MESSAGE = 'That website refused to give us the page (it turns away automatic visitors). If you have the page, open it in your browser, choose File, Save page as, and use the .html file in the CSS tool instead. Article content can sometimes still read the text.';
+
 function statusFor(err) {
   const m = String((err && err.message) || '');
   if (/private|DNS|too large|Invalid URL|Only http|Invalid CSS selector/i.test(m)) return 400;
@@ -77,7 +79,8 @@ router.post('/extract', async (req, res) => {
     res.json(result);
   } catch (err) {
     getLogger().error({ err }, '[web-extractor/extract]');
-    res.status(statusFor(err)).json({ error: err.message });
+    const refused = /Server returned (202|401|403|406|429)\b/.test(String(err.message));
+    res.status(statusFor(err)).json({ error: refused ? REFUSED_MESSAGE : err.message });
   }
 });
 

@@ -26,7 +26,7 @@ export const TOOL_TIPS = {
   links: 'Every link on the page with its words, split into this site, other sites, and email or phone. Filter them, copy them or download a CSV.',
   tables: 'Every table on the page as a grid. Copy one or download it as CSV, or download all of them as JSON.',
   metadata: 'What the page says about itself: title, description, author, dates, social-card tags, structured data and its headings outline.',
-  styled: 'The page as it looks on the site, in a safe preview where nothing can run. Copy its code to use elsewhere.',
+  styled: 'The page as it looks on the site, with its styles and pictures copied in, in a safe preview where nothing can run. Switch to the HTML source to read it. Copy its code to use elsewhere.',
 };
 
 // One short line shown under the page title for the open tool.
@@ -46,7 +46,7 @@ export const HOW_IT_WORKS = [
   ['Links', 'Every link with its words, marked This site, Other site, Email or Phone. Filter by type or by words, copy the list, or download it as a CSV for a spreadsheet. It does not check whether the links still work.'],
   ['Tables', 'Each table on the page as a grid, with its header row when it has one. Copy or download a table as CSV, or download all of them as JSON.'],
   ['Metadata', 'The page\'s title, description, canonical address, author, dates, language, share-card tags, structured data (JSON-LD) and the outline of its headings, with a note if it has no single main heading.'],
-  ['Exact scrape', 'Shows the page as the website has it. It is a still snapshot: nothing on it can run, and the page may look a little different from the live site. Copy HTML gives you its code.'],
+  ['Exact scrape', 'Shows the page as the website has it, with its style files and pictures copied in so the copy stands on its own. It is a still snapshot: nothing on it can run, and the page may look a little different from the live site. The HTML source switch shows the page as the website sent it, or the copy; Copy HTML gives you the copy\'s code. If a website refuses automatic visitors you get a clear message, not a words-only copy.'],
   ['What it cannot do', 'It reads the page the way a search engine does, so pages that build themselves with JavaScript, sit behind a sign-in, or block automatic visitors come back empty or thin. It only reads public pages, one at a time.'],
 ];
 

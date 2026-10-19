@@ -675,17 +675,63 @@ function extractStyled(html, url) {
   return { html: dom.serialize() };
 }
 
-async function runExtraction(rawUrl, mode, customExcludes = [], options = {}) {
-  const url = normaliseHttpUrl(rawUrl);
-  const { body, statusCode } = await fetchHtml(url);
-  if (statusCode >= 400) throw new Error(`Server returned ${statusCode}`);
+const MAX_SOURCE_CHARS = 2 * 1024 * 1024; // the page as fetched, sent back for the HTML source view of Exact scrape
+const TEXT_ONLY_NOTICE = 'The website would not give us its page, so this text comes from a reading service and may be missing parts.';
 
-  if (mode === 'images') return { url, mode, ...extractImages(body, url) };
-  if (mode === 'styled') return { url, mode, ...extractStyled(body, url) };
-  if (mode === 'links') return { url, mode, ...extractLinks(body, url) };
-  if (mode === 'tables') return { url, mode, ...extractTables(body, url) };
-  if (mode === 'metadata') return { url, mode, ...extractMetadata(body, url) };
-  return { url, mode: 'article', ...extractArticle(body, url, customExcludes, options) };
+/**
+ * Reads a page and runs one tool on it.
+ *
+ * The page is fetched the way the CSS tool fetches one (restyle/pageFetch.js: other identities when a site's firewall refuses the first,
+ * never a text-only copy). Only Article content makes do with the old text-only fallbacks, because words are all it needs; every other tool
+ * needs the real markup, and for those a refusal is an honest error rather than a page of unstyled text pretending to be the site.
+ * `deps` replaces the network in tests.
+ */
+async function runExtraction(rawUrl, mode, customExcludes = [], options = {}, deps = {}) {
+  const url = normaliseHttpUrl(rawUrl);
+  // Required here, not at the top: the restyle files this uses require this module.
+  const { createPageFetcher } = require('./restyle/pageFetch');
+  const fetcher = deps.fetcher || createPageFetcher();
+
+  let body;
+  let pageUrl = url;
+  let notice = '';
+  try {
+    const got = await fetcher(url);
+    body = got.body;
+    pageUrl = got.finalUrl || url;
+  } catch (err) {
+    if (mode !== 'article') throw err;
+    const got = await (deps.fetchHtml || fetchHtml)(url);
+    if (got.statusCode >= 400) throw err;
+    body = got.body;
+    if (got.via && got.via !== 'direct') notice = TEXT_ONLY_NOTICE;
+  }
+
+  let result;
+  if (mode === 'images') result = extractImages(body, pageUrl);
+  else if (mode === 'links') result = extractLinks(body, pageUrl);
+  else if (mode === 'tables') result = extractTables(body, pageUrl);
+  else if (mode === 'metadata') result = extractMetadata(body, pageUrl);
+  else if (mode === 'styled') {
+    // One page that shows properly anywhere: style files and pictures copied in (restyle/selfContainedPage.js).
+    const built = await require('./restyle/selfContainedPage').buildSelfContainedPage(body, pageUrl, { fetcher, inlineFragment: deps.inlineFragment });
+    const problems = [
+      built.cssFailed ? `${built.cssFailed} style file${built.cssFailed === 1 ? '' : 's'} could not be loaded` : '',
+      built.imagesFailed ? `${built.imagesFailed} picture${built.imagesFailed === 1 ? '' : 's'} could not be copied in (missing, too large or blocked)` : '',
+    ].filter(Boolean);
+    result = {
+      html: built.html,
+      sourceHtml: body.length > MAX_SOURCE_CHARS ? body.slice(0, MAX_SOURCE_CHARS) : body,
+      sourceTruncated: body.length > MAX_SOURCE_CHARS,
+      stats: { cssInlined: built.cssInlined, cssFailed: built.cssFailed, imagesInlined: built.imagesInlined, imagesFailed: built.imagesFailed },
+      notice: problems.length ? `${problems.join('; ')}, so the copy may look different from the live page.` : '',
+    };
+  } else {
+    result = extractArticle(body, pageUrl, customExcludes, options);
+    mode = 'article'; // eslint-disable-line no-param-reassign
+  }
+  if (notice) result.notice = result.notice ? `${notice} ${result.notice}` : notice;
+  return { url: pageUrl, requestedUrl: url, mode, ...result };
 }
 
 module.exports = { runExtraction, extractArticle, extractImages, extractStyled, extractLinks, extractTables, extractMetadata, fetchBinary, rewriteCssUrls, pickFromSrcset };
