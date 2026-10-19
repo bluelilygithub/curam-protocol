@@ -4,6 +4,10 @@ A **mic button** beside "+" (New note) in the Notes list, and a **New Voice Note
 
 Private-use tool, not a legal record: there is no consent workflow, speaker identification or audit trail. The recorder says "let people know you are recording".
 
+## On a phone
+
+The Notes page has its own phone layout (under 640 px wide). The list opens as a drawer with big **New note** and **Voice note** buttons (words, not two mystery icons). An open note has a clear title field (tapping "Untitled" selects it so typing replaces it), a visible writing box, and a bar at the bottom in thumb reach with **Type** (opens the keyboard) and **Dictate** (speaks into the note; it says **Stop** while listening). The bar leaves room for the guide's round button. The toolbar is icons only (Convert to task, Take to chat). A note that has no title is listed by its first line (`client/src/pages/notes/noteListText.mjs`; display only, nothing is renamed). A phone cannot open its keyboard by itself, which is why Type exists. Checked at 390 px wide in a real browser (Playwright, fake microphone), not on a physical phone.
+
 ## What is kept
 
 **Only the text.** The recording is held in memory while it is turned into text, then discarded (the temporary folder is removed after the request). No audio is stored, so the icon means "made from a recording", not "has audio to play". If you ever want replayable audio, that is a new storage decision (attachments quota, `server/utils/attachments.js`).

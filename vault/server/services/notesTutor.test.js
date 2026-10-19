@@ -30,6 +30,8 @@ const {
   assert.match(voice.notes, /small cost/);
   assert.match(voice.notes, /Try again button/);
   assert.match(CATALOG.find((t) => t.id === 'dictate').notes, /different from New voice note/);
+  assert.match(CATALOG.find((t) => t.id === 'new-note').does, /Type button at the bottom/, 'the phone layout is described');
+  assert.match(CATALOG.find((t) => t.id === 'dictate').does, /Dictate button at the bottom/);
   const gaps = NOT_POSSIBLE.join(' ');
   for (const needle of [/Replaying a voice recording/, /who said what by name/, /Zoom, Teams/, /about an hour/, /legal or evidential/, /Folders, tags or sharing/, /Restoring a deleted note/]) assert.match(gaps, needle);
   assert.match(RULES.join(' '), /Open buttons .* never change or delete an existing note/);

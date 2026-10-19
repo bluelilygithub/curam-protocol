@@ -8,6 +8,7 @@ import MoodDot from '../components/mood/MoodDot';
 import VoiceNoteRecorder from './notes/VoiceNoteRecorder';
 import NotesTutorChat from './notes/NotesTutorChat';
 import { NOTES_TOOLS } from './notes/notesTools.mjs';
+import { listText } from './notes/noteListText.mjs';
 
 const NOTE_BODY_LIMIT = 500;
 
@@ -623,25 +624,52 @@ export default function NotesPage() {
                 {getIcon('x', { size: 14 })}
               </button>
             )}
-            <button
-              onClick={() => setShowRecorder(true)}
-              className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60 transition-opacity"
-              style={{ color: 'var(--color-primary)' }}
-              title="New voice note (record your voice)"
-              aria-label="New voice note"
-            >
-              {getIcon('mic', { size: 15 })}
-            </button>
-            <button
-              onClick={createNote}
-              className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60 transition-opacity"
-              style={{ color: 'var(--color-primary)' }}
-              title="New note"
-            >
-              {getIcon('plus', { size: 16 })}
-            </button>
+            {!viewportMobile ? (
+              <>
+                <button
+                  onClick={() => setShowRecorder(true)}
+                  className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60 transition-opacity"
+                  style={{ color: 'var(--color-primary)' }}
+                  title="New voice note (record your voice)"
+                  aria-label="New voice note"
+                >
+                  {getIcon('mic', { size: 15 })}
+                </button>
+                <button
+                  onClick={createNote}
+                  className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60 transition-opacity"
+                  style={{ color: 'var(--color-primary)' }}
+                  title="New note"
+                >
+                  {getIcon('plus', { size: 16 })}
+                </button>
+              </>
+            ) : null}
           </div>
         </div>
+
+        {viewportMobile && (
+          <div className="flex gap-2 px-3 py-2 border-b" style={{ borderColor: 'var(--color-border)' }}>
+            <button
+              onClick={createNote}
+              className="flex-1 flex items-center justify-center gap-1.5 text-sm font-medium rounded-xl whitespace-nowrap transition-opacity hover:opacity-80"
+              style={{ minHeight: 44, background: 'var(--color-primary)', color: '#fff' }}
+              title="Write a new note"
+              aria-label="New note"
+            >
+              {getIcon('plus', { size: 16 })} New note
+            </button>
+            <button
+              onClick={() => setShowRecorder(true)}
+              className="flex-1 flex items-center justify-center gap-1.5 text-sm font-medium rounded-xl whitespace-nowrap border transition-opacity hover:opacity-70"
+              style={{ minHeight: 44, color: 'var(--color-text)', borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+              title="Record your voice and have it written into a new note"
+              aria-label="New voice note"
+            >
+              {getIcon('mic', { size: 16 })} Voice note
+            </button>
+          </div>
+        )}
 
         {filterProject && (() => {
           const proj = projects.find(p => String(p.id) === String(filterProject));
@@ -702,10 +730,10 @@ export default function NotesPage() {
                         {getIcon('audio-lines', { size: 13 })}
                       </span>
                     )}
-                    <div className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{note.title}</div>
+                    <div className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{listText(note).title}</div>
                   </div>
                   <div className="text-xs truncate mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                    {note.body ? note.body.slice(0, 60) : <span className="italic">empty</span>}
+                    {listText(note).preview || (note.body ? '\u00a0' : <span className="italic">empty</span>)}
                   </div>
                 </div>
                 <div className="flex items-center gap-1 ml-1 mt-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100">
@@ -760,7 +788,8 @@ export default function NotesPage() {
                 value={selected.project_id || ''}
                 onChange={handleProjectChange}
                 className="text-xs rounded px-2 py-1 outline-none"
-                style={{ background: 'var(--color-surface-2)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+                style={{ background: 'var(--color-surface-2)', color: 'var(--color-muted)', border: '1px solid var(--color-border)', ...(viewportMobile ? { maxWidth: 120, minHeight: 36 } : {}) }}
+                aria-label="Project"
               >
                 <option value="">No project</option>
                 {projects.map(p => (
@@ -782,10 +811,11 @@ export default function NotesPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              {micSupported && (
+              {micSupported && !viewportMobile && (
                 <button
                   onClick={toggleMic}
-                  className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity flex-shrink-0"
+                  className={`${viewportMobile ? 'w-9 h-9' : 'w-7 h-7'} flex items-center justify-center rounded-md hover:opacity-60 transition-opacity flex-shrink-0`}
+                  aria-label={isListening ? 'Stop dictation' : 'Dictate into this note'}
                   style={{
                     color: isListening ? '#ef4444' : 'var(--color-muted)',
                     background: isListening ? '#fee2e2' : undefined,
@@ -798,23 +828,25 @@ export default function NotesPage() {
               )}
               <button
                 onClick={(e) => convertToTask(selected, e)}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity hover:opacity-80"
-                style={{ background: 'var(--color-surface-2)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity hover:opacity-80 whitespace-nowrap"
+                style={{ background: 'var(--color-surface-2)', color: 'var(--color-text)', border: '1px solid var(--color-border)', ...(viewportMobile ? { minHeight: 36 } : {}) }}
                 title="Convert to task"
+                aria-label="Convert to task"
               >
-                {getIcon('list-checks', { size: 12 })}
-                Convert to Task
+                {getIcon('list-checks', { size: viewportMobile ? 16 : 12 })}
+                {!viewportMobile && 'Convert to Task'}
               </button>
 
             <div className="relative">
               <button
                 onClick={() => { setShowChatPicker(v => !v); setNewProjectName(''); setCreatingProject(false); }}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity hover:opacity-80"
-                style={{ background: 'var(--color-primary)', color: '#fff' }}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity hover:opacity-80 whitespace-nowrap"
+                style={{ background: 'var(--color-primary)', color: '#fff', ...(viewportMobile ? { minHeight: 36 } : {}) }}
                 title="Open this note as a chat"
+                aria-label="Take to chat"
               >
-                {getIcon('chat', { size: 12 })}
-                Take to Chat
+                {getIcon('chat', { size: viewportMobile ? 16 : 12 })}
+                {!viewportMobile && 'Take to Chat'}
                 {getIcon('chevron-down', { size: 11 })}
               </button>
 
@@ -916,9 +948,11 @@ export default function NotesPage() {
           <input
             value={title}
             onChange={handleTitleChange}
+            onFocus={(e) => { if (title === 'Untitled') e.target.select(); }}
             placeholder="Title"
-            className="px-4 pt-4 pb-1 text-xl font-semibold bg-transparent outline-none flex-shrink-0"
-            style={{ color: 'var(--color-text)' }}
+            aria-label="Note title"
+            className={`px-4 ${viewportMobile ? 'pt-3 pb-3 border-b' : 'pt-4 pb-1'} text-xl font-semibold bg-transparent outline-none flex-shrink-0`}
+            style={{ color: 'var(--color-text)', ...(viewportMobile ? { borderColor: 'var(--color-border)' } : {}) }}
           />
 
           {/* Body */}
@@ -950,9 +984,14 @@ export default function NotesPage() {
               value={body}
               onChange={handleBodyChange}
               onKeyDown={e => { if (e.key === 'Escape' && showMention) { setShowMention(false); e.preventDefault(); } }}
-              placeholder="Start writing… type @ to search emails, calendar, tasks & web"
+              placeholder={viewportMobile ? 'Tap here to type, or press Dictate below and speak…' : 'Start writing… type @ to search emails, calendar, tasks & web'}
+              aria-label="Note text"
               className="flex-1 px-4 py-2 bg-transparent outline-none resize-none text-sm leading-relaxed"
-              style={{ color: 'var(--color-text)' }}
+              style={{
+                color: 'var(--color-text)',
+                // 16px stops iPhones zooming the page when the keyboard opens
+                ...(viewportMobile ? { margin: '10px 12px', padding: '12px 14px', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 12, fontSize: 16 } : {}),
+              }}
             />
 
             {/* @mention dropdown */}
@@ -1208,6 +1247,33 @@ export default function NotesPage() {
               </div>
             )}
           </div>
+          {viewportMobile && (
+            <div
+              className="flex-shrink-0 flex gap-3 px-3 pt-3 border-t"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', paddingBottom: 'max(12px, env(safe-area-inset-bottom))', paddingRight: 84 /* the guide button sits bottom-right */ }}
+            >
+              <button
+                type="button"
+                onClick={() => bodyRef.current?.focus()}
+                className="flex-1 flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-opacity hover:opacity-80"
+                style={{ minHeight: 48, background: 'var(--color-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
+                aria-label="Type into this note"
+              >
+                {getIcon('pen-line', { size: 16 })} Type
+              </button>
+              {micSupported && (
+                <button
+                  type="button"
+                  onClick={toggleMic}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-opacity hover:opacity-80"
+                  style={{ minHeight: 48, background: isListening ? '#fee2e2' : 'var(--color-primary)', color: isListening ? '#b91c1c' : '#fff' }}
+                  aria-label={isListening ? 'Stop dictation' : 'Dictate into this note'}
+                >
+                  {getIcon('mic', { size: 16 })} {isListening ? 'Stop' : 'Dictate'}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex-1 flex items-center justify-center" style={{ color: 'var(--color-muted)' }}>
