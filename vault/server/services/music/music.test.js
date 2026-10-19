@@ -144,6 +144,20 @@ test('voice backend: forced name wins, fake follows the music fake, else Gemini 
   assert.strictEqual(pickVoiceProviderName({ VOICE_PROVIDER: 'gemini', MUSIC_PROVIDER: 'fake' }), 'gemini');
 });
 
+test('fine-tuned fades and start are made safe; the start delays the music inside the full length', () => {
+  const { normalizeFitSettings, buildFitFilter, sceneCutArgs, parseSceneCuts } = require('./musicFit');
+  assert.deepStrictEqual(normalizeFitSettings({}, 30), { fadeInS: 0.5, fadeOutS: 2, startS: 0 }, 'blank means the defaults');
+  assert.deepStrictEqual(normalizeFitSettings({ fadeInS: '1', fadeOutS: 99, startS: '5' }, 30), { fadeInS: 1, fadeOutS: 12.5, startS: 5 }, 'a fade is never more than half the music');
+  assert.deepStrictEqual(normalizeFitSettings({ fadeInS: -3, fadeOutS: 'x', startS: 999 }, 30), { fadeInS: 0, fadeOutS: 0.5, startS: 29 }, 'negative, junk and too-late values are corrected; at least a second of music remains, and its fade fits in it');
+  const f = buildFitFilter({ copies: 1, crossfadeS: 0, targetS: 25, fades: {}, startS: 5, totalS: 30 });
+  assert.ok(f.includes('adelay=5000:all=1') && f.includes('apad=whole_dur=30.000') && f.endsWith('atrim=0:30.000[fit]'), f);
+  assert.ok(!buildFitFilter({ copies: 1, crossfadeS: 0, targetS: 25, fades: {} }).includes('adelay'), 'no start, no delay: the filter is as before');
+  assert.ok(sceneCutArgs('v.mp4', 0.4).join(' ').includes("select='gt(scene,0.4)',showinfo"));
+  const out = 'frame pts_time:0.2 x pts_time:3.5 y pts_time:3.9 z pts_time:10.123 w pts_time:29.9';
+  assert.deepStrictEqual(parseSceneCuts(out, 30), [3.5, 10.12], 'ends and near-duplicates are dropped');
+  assert.deepStrictEqual(parseSceneCuts('', 30), []);
+});
+
 test('only Replicate https hosts are accepted as audio download URLs', () => {
   assert.ok(isReplicateAudioUrl('https://replicate.delivery/pbxt/abc/out.wav'));
   assert.ok(isReplicateAudioUrl('https://pbxt.replicate.delivery/x.wav'));
@@ -189,6 +203,7 @@ async function geminiVoiceChecks() {
 // Music jobs without ffmpeg or a network: a fake provider and a fake "fit" step stand in for the real ones.
 async function musicJobChecks() {
   const fs = require('fs/promises');
+  const path = require('path');
   const J = require('./musicJobs');
   assert.strictEqual(J.normalizeSeed('42'), 42);
   assert.strictEqual(J.normalizeSeed(''), null);
@@ -247,6 +262,22 @@ async function musicJobChecks() {
     await J.regenerateOption(job, provider, 0, { seed: 778, deps });
     assert.strictEqual(job.options[0].status, 'ready');
     assert.strictEqual(job.options[0].error, null);
+
+    // Fine-tuning fades / start fits every ready option again from its own clip, with no generation.
+    const genCalls = calls.length;
+    const fitCalls = [];
+    const spyDeps = { gate: deps.gate, fit: async (raw, out, durationS, fades) => { fitCalls.push({ raw: path.basename(raw), fades }); return deps.fit(raw, out, durationS, fades); } };
+    const revs = job.options.map((o) => o.rev);
+    await J.refitJob(job, { fadeInS: 1, fadeOutS: 4, startS: 5 }, spyDeps);
+    assert.strictEqual(calls.length, genCalls, 'no new music is generated');
+    assert.strictEqual(fitCalls.length, 6);
+    assert.ok(fitCalls.every((c) => c.fades.startS === 5 && /^raw_\d\.wav$/.test(c.raw)), 'each option is fitted from its own clip');
+    assert.deepStrictEqual(job.options.map((o) => o.rev), revs.map((r) => r + 1), 'cached previews are not reused');
+    assert.deepStrictEqual(J.publicJob(job).fit, { fadeInS: 1, fadeOutS: 4, startS: 5 });
+    assert.strictEqual(job.status, 'done');
+    // a later new version keeps the settings
+    await J.regenerateOption(job, provider, 2, { seed: 9, deps: { gate: deps.gate, fit: async (raw, out, d, fades) => { fitCalls.push({ raw: 'again', fades }); return deps.fit(raw, out, d, fades); } } });
+    assert.deepStrictEqual(fitCalls[fitCalls.length - 1].fades, { fadeInS: 1, fadeOutS: 4, startS: 5 }, 'making an option again keeps the fades and start');
   } finally {
     await J.removeJob(job);
   }

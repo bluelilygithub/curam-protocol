@@ -14,13 +14,14 @@ const { MOOD_PRESETS, CUSTOM_ID, buildMusicPrompt } = require('../services/music
 const { getMusicProvider } = require('../services/music/musicProviders');
 const {
   mixMusicWithVideo, mixVoiceIntoMusic, normalizeMixSettings, normalizeVoiceSettings, prepareVoiceover,
+  normalizeFitSettings, detectSceneCuts,
 } = require('../services/music/musicFit');
 const {
   MAX_TEXT_CHARS, normalizeSpeech, getVoiceProvider,
 } = require('../services/music/voiceProviders');
 const { videoJobGate } = require('../services/videoJobGate');
 const {
-  createJob, runJob, regenerateOption, addOption, runUploadedTrackJob, getJob, removeJob, publicJob,
+  createJob, runJob, regenerateOption, addOption, refitJob, runUploadedTrackJob, getJob, removeJob, publicJob,
   normalizeSeed, normalizeMusicLength, MIN_MUSIC_ONLY_S, MAX_OPTIONS,
 } = require('../services/music/musicJobs');
 const { saveAsset, getUserUsageBytes, LIBRARY_QUOTA_BYTES } = require('../services/videoLibraryService');
@@ -277,6 +278,30 @@ router.post('/jobs/:id/options', aiLimiter, (req, res) => {
   });
   return res.status(202).json(publicJob(job));
 });
+
+// Change the fades and where the music starts, for every ready option, without generating anything (no cost): they are fitted
+// again from the clip they came from. Answers at once; the page polls like for a new job.
+router.post('/jobs/:id/fit', (req, res) => {
+  const job = getJob(req.params.id, req.user.id);
+  if (!job) return res.status(404).json({ error: 'That music job was not found or has expired — generate again.' });
+  if (job.status === 'running') return res.status(409).json({ error: 'Wait for the music to finish first.' });
+  const settings = normalizeFitSettings(req.body || {}, job.durationS);
+  refitJob(job, settings).catch((err) => {
+    getLogger().error({ err }, '[music/fit]');
+    job.status = 'done';
+    job.stage = 'Ready';
+  });
+  return res.status(202).json(publicJob(job));
+});
+
+// Where the picture cuts in the video (seconds), for placing the voice and the music start. Found once and kept with the job.
+router.get('/jobs/:id/cuts', ffmpegRoute('cuts', async (req, res) => {
+  const job = getJob(req.params.id, req.user.id);
+  if (!job) return res.status(404).json({ error: 'That music job was not found or has expired — generate again.' });
+  if (job.mode === 'music-only' || !job.videoPath) return res.json({ cuts: [] });
+  if (!job.cuts) job.cuts = await detectSceneCuts(job.videoPath, job.durationS);
+  return res.json({ cuts: job.cuts });
+}, { source: 'music', routePrefix: 'music' }));
 
 // The fitted music (WAV), exactly the video's (or the chosen) length with fades. For music made without a video that has a
 // voiceover, this is the music with the voice mixed in (volume, ducking, voiceVolume, voiceStart as for the video export);

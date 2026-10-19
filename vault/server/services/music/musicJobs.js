@@ -50,6 +50,7 @@ function publicJob(job) {
     source: job.source,
     mode: job.mode,
     hasVideo: job.mode !== 'music-only',
+    fit: job.fit || null,
     voice: job.voice ? {
       source: job.voice.source,
       durationS: job.voice.durationS,
@@ -128,6 +129,8 @@ async function createJob({ userId, videoFile, durationS, hasAudio, promptInfo, p
     hasAudio,
     source: trackFile ? 'upload' : 'generated',
     mode: videoFile ? 'video' : 'music-only',
+    fit: null, // { fadeInS, fadeOutS, startS } once the person has fine-tuned the fades / start; null = the defaults
+    cuts: null, // picture cuts of the video (seconds), found on demand
     trackPath,
     voice: null, // { path, source, durationS, text?, voiceId?, rev } once a voiceover is added
     prompt: promptInfo?.prompt || null,
@@ -168,7 +171,7 @@ async function runOption(job, provider, opt, deps = {}) {
     const rawPath = path.join(job.dir, `raw_${opt.n}.wav`);
     await fs.writeFile(rawPath, wav);
     const fitPath = path.join(job.dir, `option_${opt.n}.wav`);
-    const result = await gate.run(() => fit(rawPath, fitPath, job.durationS));
+    const result = await gate.run(() => fit(rawPath, fitPath, job.durationS, job.fit || undefined));
     opt.fitPath = fitPath;
     opt.loops = result.copies;
     opt.rev = (opt.rev || 0) + 1;
@@ -205,6 +208,32 @@ async function runJob(job, provider, deps = {}) {
   settleJob(job);
 }
 
+/**
+ * Fit every ready option again with new fades / start (from the clip it was first made from; nothing is generated, so no cost).
+ * Options that failed are left alone. `deps` ({ fit, gate }) lets tests run it without ffmpeg.
+ */
+async function refitJob(job, settings, deps = {}) {
+  const fit = deps.fit || fitMusicToDuration;
+  const gate = deps.gate || videoJobGate;
+  job.fit = settings;
+  job.status = 'running';
+  job.stage = 'Applying your fades…';
+  await Promise.all(job.options.filter((o) => o.status === 'ready').map(async (opt) => {
+    const rawPath = job.source === 'upload' ? job.trackPath : path.join(job.dir, `raw_${opt.n}.wav`);
+    opt.status = 'fitting';
+    try {
+      const result = await gate.run(() => fit(rawPath, opt.fitPath, job.durationS, settings));
+      opt.loops = result.copies;
+      opt.rev = (opt.rev || 0) + 1;
+      opt.status = 'ready';
+    } catch (err) {
+      opt.status = 'failed';
+      opt.error = String(err.message || err).slice(0, 300);
+    }
+  }));
+  settleJob(job);
+}
+
 /** Make option `n` again with a fresh (or the given) seed; the other options are left alone. */
 async function regenerateOption(job, provider, n, { seed = null, deps = {} } = {}) {
   const opt = job.options[n];
@@ -236,7 +265,7 @@ async function runUploadedTrackJob(job) {
   opt.status = 'fitting';
   try {
     const fitPath = path.join(job.dir, 'option_0.wav');
-    const fit = await videoJobGate.run(() => fitMusicToDuration(job.trackPath, fitPath, job.durationS));
+    const fit = await videoJobGate.run(() => fitMusicToDuration(job.trackPath, fitPath, job.durationS, job.fit || undefined));
     opt.fitPath = fitPath;
     opt.loops = fit.copies;
     opt.status = 'ready';
@@ -278,6 +307,6 @@ sweep().catch(() => {});
 
 module.exports = {
   OPTION_COUNT, MAX_OPTIONS, MIN_MUSIC_ONLY_S, JOB_TTL_MS,
-  createJob, runJob, runOption, regenerateOption, addOption, runUploadedTrackJob, getJob, removeJob, publicJob, sweep, jobRoot,
+  createJob, runJob, runOption, regenerateOption, addOption, refitJob, runUploadedTrackJob, getJob, removeJob, publicJob, sweep, jobRoot,
   normalizeSeed, normalizeMusicLength,
 };

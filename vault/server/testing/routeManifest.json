@@ -1882,6 +1882,12 @@
   "POST /api/music/jobs/:id/options/:n/regenerate": {
    "class": "authed"
   },
+  "POST /api/music/jobs/:id/fit": {
+   "class": "authed"
+  },
+  "GET /api/music/jobs/:id/cuts": {
+   "class": "authed"
+  },
   "POST /api/music/jobs": {
    "class": "authed"
   },

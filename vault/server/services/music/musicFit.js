@@ -60,8 +60,11 @@ function fadeTimes(targetS, override = {}) {
   return { fadeIn, fadeOut, fadeOutStart: Math.max(0, targetS - fadeOut) };
 }
 
-/** filter_complex that loops `copies` inputs (all the same clip), trims to length and fades. */
-function buildFitFilter({ copies, crossfadeS, targetS, fades }) {
+/**
+ * filter_complex that loops `copies` inputs (all the same clip), trims to length and fades. `targetS` is the length of the MUSIC;
+ * with `startS` > 0 the music begins that many seconds in (silence before it) and the result is padded to `totalS`.
+ */
+function buildFitFilter({ copies, crossfadeS, targetS, fades, startS = 0, totalS = targetS }) {
   const { fadeIn, fadeOut, fadeOutStart } = fadeTimes(targetS, fades);
   const parts = [];
   let last = '[0:a]';
@@ -77,23 +80,74 @@ function buildFitFilter({ copies, crossfadeS, targetS, fades }) {
   parts.push(
     `${last}atrim=0:${targetS.toFixed(3)},asetpts=PTS-STARTPTS,`
     + `${fadeFilters.map((f) => `${f},`).join('')}`
-    + `aformat=sample_rates=${SAMPLE_RATE}:channel_layouts=stereo[fit]`
+    + `aformat=sample_rates=${SAMPLE_RATE}:channel_layouts=stereo`
+    + (startS > 0.001
+      ? `,adelay=${Math.round(startS * 1000)}:all=1,apad=whole_dur=${totalS.toFixed(3)},atrim=0:${totalS.toFixed(3)}[fit]`
+      : '[fit]')
   );
   return parts.join(';');
 }
 
-/** Loop/trim `clipPath` to exactly `targetS` seconds with fade in/out → WAV at `outPath`. */
+/**
+ * Loop/trim `clipPath` to exactly `targetS` seconds with fade in/out → WAV at `outPath`.
+ * `fades` ({ fadeInS, fadeOutS, startS }, all optional) overrides the fades and lets the music start `startS` seconds in; the
+ * result is still exactly `targetS` long.
+ */
 async function fitMusicToDuration(clipPath, outPath, targetS, fades, opts = {}) {
   const probe = await probeVideo(clipPath);
-  const { copies, crossfadeS } = planLoop(probe.duration, targetS);
+  const startS = Math.max(0, Math.min(Number(fades?.startS) || 0, targetS - 1));
+  const musicS = targetS - startS;
+  const { copies, crossfadeS } = planLoop(probe.duration, musicS);
   const inputs = Array.from({ length: copies }, () => ['-i', clipPath]).flat();
   await execFileAsync(FFMPEG, [
     '-y', ...inputs,
-    '-filter_complex', buildFitFilter({ copies, crossfadeS, targetS, fades }),
+    '-filter_complex', buildFitFilter({ copies, crossfadeS, targetS: musicS, fades, startS, totalS: targetS }),
     '-map', '[fit]', '-t', targetS.toFixed(3),
     '-c:a', 'pcm_s16le', outPath,
   ], 900000, opts);
   return { copies, clipS: probe.duration };
+}
+
+/**
+ * Fade lengths and where the music starts, as asked for by the person, made safe: fade in 0-10 s, fade out 0-15 s (neither longer
+ * than half the music), start 0 to (length - 1) s. Missing values mean the defaults (0.5 s in, 2 s out, starts at 0).
+ */
+function normalizeFitSettings({ fadeInS, fadeOutS, startS } = {}, durationS) {
+  const num = (v, fallback) => {
+    const n = v === undefined || v === null || v === '' ? NaN : Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  };
+  const start = clamp(num(startS, 0), 0, Math.max(0, Number(durationS) - 1));
+  const musicS = Math.max(1, Number(durationS) - start);
+  return {
+    fadeInS: Math.round(clamp(num(fadeInS, FADE_IN_S), 0, Math.min(10, musicS / 2)) * 10) / 10,
+    fadeOutS: Math.round(clamp(num(fadeOutS, FADE_OUT_S), 0, Math.min(15, musicS / 2)) * 10) / 10,
+    startS: Math.round(start * 10) / 10,
+  };
+}
+
+/** ffmpeg arguments that print the time of every scene change (picture cut) to stderr. */
+function sceneCutArgs(videoPath, threshold = 0.3) {
+  return ['-hide_banner', '-nostats', '-i', videoPath, '-an', '-vf', `select='gt(scene,${threshold})',showinfo`, '-f', 'null', '-'];
+}
+
+/** Cut times (seconds) from showinfo output: not within `edgeS` of either end, merged when closer than `minGapS`, at most `max`. */
+function parseSceneCuts(stderr, durationS, { edgeS = 0.5, minGapS = 0.8, max = 60 } = {}) {
+  const times = [...String(stderr || '').matchAll(/pts_time:(\d+(?:\.\d+)?)/g)].map((m) => Number(m[1])).filter(Number.isFinite).sort((a, b) => a - b);
+  const out = [];
+  for (const t of times) {
+    if (t < edgeS || t > durationS - edgeS) continue;
+    if (out.length && t - out[out.length - 1] < minGapS) continue;
+    out.push(Math.round(t * 100) / 100);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+/** Where the picture cuts in a video (needs ffmpeg). A guide for placing music changes and the voice, not frame-exact editing. */
+async function detectSceneCuts(videoPath, durationS, { threshold = 0.3 } = {}) {
+  const { stderr } = await execFileAsync(FFMPEG, sceneCutArgs(videoPath, threshold), 600000);
+  return parseSceneCuts(stderr, durationS);
 }
 
 function normalizeMixSettings({ volume, ducking } = {}) {
@@ -216,4 +270,5 @@ module.exports = {
   LOOP_CROSSFADE_S, FADE_IN_S, FADE_OUT_S, TARGET_LUFS, DUCKING,
   planLoop, fadeTimes, buildFitFilter, buildMixFilter, buildVoiceMixFilter, normalizeMixSettings, normalizeVoiceSettings,
   fitMusicToDuration, prepareVoiceover, mixMusicWithVideo, mixVoiceIntoMusic,
+  normalizeFitSettings, sceneCutArgs, parseSceneCuts, detectSceneCuts,
 };

@@ -20,7 +20,9 @@ fitModule.fitMusicToDuration = async (_raw, out, durationS) => {
 fitModule.prepareVoiceover = async (_in, out) => { await fsp.writeFile(out, 'voice'); };
 const mixCalls = [];
 fitModule.mixVoiceIntoMusic = async (a) => { mixCalls.push(a); await fsp.writeFile(a.outPath, 'mixed'); };
-require(path.join(V, 'services/videoFfmpeg')).probeVideo = async () => ({ duration: 3, width: 0, hasAudio: true });
+require(path.join(V, 'services/videoFfmpeg')).probeVideo = async () => ({ duration: 12, width: 320, hasAudio: true });
+let cutRuns = 0;
+fitModule.detectSceneCuts = async () => { cutRuns += 1; return [3.2, 8]; };
 const express = require('express');
 const router = require(path.join(V, 'routes/music.js'));
 const app = express();
@@ -103,7 +105,25 @@ const s = app.listen(0, async () => {
     check('add a 7th option -> 409', r.status === 409, (await r.json()).error);
     const final = await (await fetch(`${base}/jobs/${job.id}`)).json();
     check('six options, all ready', final.options.length === 6 && final.options.every((o) => o.status === 'ready'));
+    // fades / start: fitted again, nothing generated
+    r = await fetch(`${base}/jobs/${job.id}/fit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fadeInS: 1, fadeOutS: 99, startS: 5 }) });
+    const refit = await r.json();
+    check('fit accepted, values made safe', r.status === 202 && refit.fit.fadeInS === 1 && refit.fit.fadeOutS === 15 && refit.fit.startS === 5, JSON.stringify(refit.fit));
+    const refitted = await waitDone(base, job.id);
+    check('every option fitted again (rev 2+), all ready', refitted.options.every((o) => o.status === 'ready' && o.rev >= 2), JSON.stringify(refitted.options.map((o) => o.rev)));
+    r = await fetch(`${base}/jobs/9999/fit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); check('fit on an unknown job -> 404', r.status === 404);
+    r = await fetch(`${base}/jobs/${job.id}/cuts`); check('music-only has no cuts', (await r.json()).cuts.length === 0 && cutRuns === 0);
     r = await fetch(`${base}/jobs/${job.id}`, { method: 'DELETE' }); check('delete', r.status === 200);
+
+    // a job with a video: the picture cuts are found once and kept
+    const vfd2 = new FormData(); vfd2.append('video', new Blob(['v'], { type: 'video/mp4' }), 'v.mp4'); vfd2.append('mood', 'lofi-chill');
+    r = await fetch(`${base}/jobs`, { method: 'POST', body: vfd2 }); const vjob = await r.json();
+    check('video job accepted', r.status === 202 && vjob.hasVideo === true && vjob.durationS === 12, String(r.status));
+    await waitDone(base, vjob.id);
+    r = await fetch(`${base}/jobs/${vjob.id}/cuts`); const c1 = await r.json();
+    r = await fetch(`${base}/jobs/${vjob.id}/cuts`); await r.json();
+    check('cuts found once, then kept', c1.cuts.join() === '3.2,8' && cutRuns === 1, `${c1.cuts} runs=${cutRuns}`);
+    await fetch(`${base}/jobs/${vjob.id}`, { method: 'DELETE' });
   } catch (e) {
     console.log('ERROR', e);
     results.push(false);

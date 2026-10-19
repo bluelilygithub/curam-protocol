@@ -48,6 +48,7 @@ export const TOOL_HELP = {
       'Three options are made so you can compare them, each previewed against your video',
       'Set the music volume and let it dip while people talk (ducking)',
       'Not happy with one? Make a new version of just that option, or make another option (up to six); compare options from the same moment',
+      'The timeline shows where the picture cuts, the music and the voice. Drag the voice or the start of the music (it can snap to a cut), and change the fades, then apply them to every option with no new cost',
       'Export the music as WAV, your video with the music as MP4, or save it to Saved media',
       'Or send an option on to Video Tools to normalize, trim, mix or export for social media; your other options are still here when you come back',
     ],

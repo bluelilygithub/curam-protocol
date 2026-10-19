@@ -16,6 +16,8 @@ import { shouldKeepJob, takeKeptJob } from './music/jobMemory.mjs';
 import VoiceoverPanel from './music/VoiceoverPanel';
 import MusicSidebar from './music/MusicSidebar';
 import MusicTutorChat from './music/MusicTutorChat';
+import MusicTimeline from './music/MusicTimeline';
+import { clampMusicStart, snapTime } from './music/timelineMath.mjs';
 import { ToolHeader, ToolHelpModal } from './music/ToolHeader';
 import { TOOL_GROUPS, DEFAULT_TOOL, groupOfTool } from './music/musicTools.mjs';
 import { POLL_MS, card, field, muted, formatDuration } from './music/musicShared';
@@ -25,6 +27,8 @@ import { POLL_MS, card, field, muted, formatDuration } from './music/musicShared
 // video with the music mixed in (ducked under speech). Generation runs on the server as a job; this
 // page polls it. Laid out like Video Tools: a tool list on the left, one tool at a time on the right.
 // The job lives here, so it survives switching tools. Docs: docs/music.md, docs/music-plan.md.
+
+const DEFAULT_TUNE = { fadeInS: 0.5, fadeOutS: 2, startS: 0 };
 
 function MusicPageInner({ videosOk }) {
   const addToast = useToastStore((s) => s.addToast);
@@ -50,6 +54,9 @@ function MusicPageInner({ videosOk }) {
   const [trackFile, setTrackFile] = useState(null);
   const [lengthS, setLengthS] = useState(30); // "Music from a description": how long, in seconds
   const [seed, setSeed] = useState('');
+  const [tune, setTune] = useState(DEFAULT_TUNE); // fades + where the music starts, as set on the sliders (applied with the button)
+  const [snapToCuts, setSnapToCuts] = useState(true);
+  const [cutsFor, setCutsFor] = useState({ jobId: null, cuts: null }); // picture cuts of the current job's video
   const [voiceSettings, setVoiceSettings] = useState({ volume: 100, start: 0 });
   const trackInputRef = useRef(null);
   const mediaRef = useRef({}); // option number -> its <video>/<audio>, for "play from the same moment"
@@ -107,6 +114,24 @@ function MusicPageInner({ videosOk }) {
     setVideoUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [file]);
+
+  // The fine-tune sliders start from what the job has applied (or the defaults) whenever the job or its applied settings change.
+  const appliedFit = job?.fit || DEFAULT_TUNE;
+  useEffect(() => {
+    setTune({ ...DEFAULT_TUNE, ...(job?.fit || {}) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job?.id, JSON.stringify(job?.fit || null)]);
+
+  // Where the video's picture cuts, once the music is done (found on the server once and kept).
+  useEffect(() => {
+    if (!job || job.status !== 'done' || job.hasVideo === false || cutsFor.jobId === job.id) return;
+    let live = true;
+    api.get(`/api/music/jobs/${job.id}/cuts`)
+      .then((r) => (r.ok ? r.json() : { cuts: [] }))
+      .then((d) => { if (live) setCutsFor({ jobId: job.id, cuts: Array.isArray(d.cuts) ? d.cuts : [] }); })
+      .catch(() => { if (live) setCutsFor({ jobId: job.id, cuts: [] }); });
+    return () => { live = false; };
+  }, [job?.id, job?.status, job?.hasVideo, cutsFor.jobId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Poll the running job.
   useEffect(() => {
@@ -265,6 +290,15 @@ function MusicPageInner({ videosOk }) {
     if (from && from !== to) from.pause();
     try { to.currentTime = Number.isFinite(to.duration) ? Math.min(t, to.duration) : t; } catch (_) { /* not seekable yet */ }
     to.play().catch(() => {});
+  };
+
+  const tuneChanged = ['fadeInS', 'fadeOutS', 'startS'].some((k) => Math.abs((tune[k] ?? 0) - (appliedFit[k] ?? 0)) > 0.04);
+  const applyTune = () => changeOptions(`/api/music/jobs/${job.id}/fit`, tune, 'Applying your fades…');
+  const cuts = cutsFor.jobId === job?.id ? cutsFor.cuts : null;
+  const snapNow = () => {
+    // one click: move the voice (and the music start, if it is not at the very start) onto the closest cut
+    if (job?.voice) setVoiceSettings((v) => ({ ...v, start: snapTime(v.start, cuts, { withinS: 3 }) }));
+    if (tune.startS > 0) setTune((t) => ({ ...t, startS: clampMusicStart(snapTime(t.startS, cuts, { withinS: 3 }), job.durationS) }));
   };
 
   const startTour = () => {
@@ -494,6 +528,76 @@ function MusicPageInner({ videosOk }) {
                     </Tooltip>
                   ))}
                 </div>
+              )}
+              {job.status === 'done' && (
+                <details className="rounded-2xl border p-4 space-y-3" style={card} open>
+                  <summary className="text-xs font-semibold cursor-pointer" style={{ color: 'var(--color-text)' }}>Timeline and fine-tuning</summary>
+                  <div className="space-y-3 pt-3">
+                    <MusicTimeline
+                      durationS={job.durationS} cuts={cuts} tune={tune}
+                      voice={job.voice} voiceStart={voiceSettings.start} snap={snapToCuts && Boolean(cuts?.length)}
+                      onVoiceStart={job.voice ? (t) => setVoiceSettings((v) => ({ ...v, start: t })) : undefined}
+                      onMusicStart={(t) => setTune((x) => ({ ...x, startS: t }))}
+                    />
+                    {job.hasVideo !== false && (
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Tooltip text="While dragging the voice or the start of the music, jump onto a picture cut when one is close, so a change lands on a cut.">
+                          <label className="flex items-center gap-1.5 text-xs" style={muted}>
+                            <input type="checkbox" checked={snapToCuts} onChange={(e) => setSnapToCuts(e.target.checked)} /> Snap to cuts
+                          </label>
+                        </Tooltip>
+                        <Tooltip text="Move the voice (and the music start, if it is not at the very start) onto the closest picture cut within a few seconds.">
+                          <button
+                            type="button" onClick={snapNow} disabled={!cuts?.length}
+                            className="px-2.5 py-1 rounded-lg text-xs border transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+                            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                          >
+                            Snap to nearest cut
+                          </button>
+                        </Tooltip>
+                        <span className="text-xs" style={muted}>
+                          {cuts === null ? 'Looking for picture cuts…' : cuts.length ? `${cuts.length} picture cut${cuts.length === 1 ? '' : 's'} found` : 'No picture cuts found (a single shot)'}
+                        </span>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {[
+                        ['fadeInS', 'Fade in', 0, 10, 'How long the music takes to come up at its start.'],
+                        ['fadeOutS', 'Fade out', 0, 15, 'How long the music takes to fade away at the end. It always ends exactly on the last frame.'],
+                        ['startS', 'Music starts at', 0, Math.max(0, Math.floor((job.durationS - 1) * 10) / 10), 'Leave a quiet gap before the music begins. Drag the left edge of the Music bar above, or set it here.'],
+                      ].map(([key, label, min, max, tip]) => (
+                        <label key={key} className="block space-y-1">
+                          <span className="text-xs" style={muted}>{label} · {(tune[key] ?? 0).toFixed(1)}s</span>
+                          <Tooltip text={tip}>
+                            <input
+                              type="range" min={min} max={max} step={0.1} value={Math.min(max, tune[key] ?? 0)}
+                              onChange={(e) => setTune((t) => ({ ...t, [key]: Number(e.target.value) }))}
+                              className="w-full"
+                            />
+                          </Tooltip>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Tooltip text="Fit every option again with these fades and start. Nothing new is made, so there is no cost; the previews update.">
+                        <button
+                          type="button" onClick={applyTune} disabled={!tuneChanged}
+                          className="px-3 py-1.5 rounded-xl text-xs font-medium transition-opacity duration-200 hover:opacity-80 disabled:opacity-40"
+                          style={{ background: 'var(--color-primary)', color: '#fff' }}
+                        >
+                          Apply to all options
+                        </button>
+                      </Tooltip>
+                      <button
+                        type="button" onClick={() => setTune({ ...DEFAULT_TUNE })} disabled={['fadeInS', 'fadeOutS', 'startS'].every((k) => tune[k] === DEFAULT_TUNE[k])}
+                        className="px-3 py-1.5 rounded-xl text-xs border transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                      >
+                        Back to the defaults
+                      </button>
+                    </div>
+                  </div>
+                </details>
               )}
               <div className="grid grid-cols-1 gap-3">
                 {job.options.map((o) => (
