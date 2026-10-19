@@ -777,6 +777,9 @@ async function initSchema() {
     // belongs to the same user, so this table never depends on the clients table).
     await client.query(`ALTER TABLE notes ADD COLUMN IF NOT EXISTS client_id INTEGER DEFAULT NULL`);
 
+    // How a note was made: 'text' (typed) or 'voice' (recorded; only the words are kept, never the audio). The list shows an icon for 'voice'.
+    await client.query(`ALTER TABLE notes ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'text'`);
+
     // ── Full-text search placeholder ──────────────────────────────────────────
     // The SQLite FTS5 virtual table is replaced with a plain table for now.
     // Phase 5 adds GIN indexes and converts queries to tsvector / plainto_tsquery.

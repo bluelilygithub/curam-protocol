@@ -162,6 +162,7 @@ app.use('/api/task-templates', require('./routes/taskTemplates'));
 app.use('/api/goals', requireFeature('goals'), require('./routes/goals'));
 app.use('/api/mission', requireFeature('goals'), require('./routes/mission'));
 app.use('/api/notes', require('./routes/notes'));
+app.use('/api/notes-tutor', aiLimiter, require('./routes/notesTutor')); // the Notes guide chat (reads no notes)
 app.use('/api/session-files', require('./routes/sessionFiles'));
 app.use('/api/chains', requireFeature('chains'), require('./routes/chains'));
 app.use('/api/bookmarks', require('./routes/bookmarks'));

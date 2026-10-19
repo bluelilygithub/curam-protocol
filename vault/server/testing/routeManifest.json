@@ -1951,6 +1951,12 @@
   "GET /api/notes": {
    "class": "authed"
   },
+  "POST /api/notes-tutor": {
+   "class": "authed"
+  },
+  "POST /api/notes/voice": {
+   "class": "authed"
+  },
   "POST /api/notes": {
    "class": "authed"
   },

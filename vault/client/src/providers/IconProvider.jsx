@@ -211,6 +211,8 @@ const semanticMap = {
   'move': { lucide: 'Move' },
   ruler: { lucide: 'Ruler' },
   'mic-off': { lucide: 'MicOff' },
+  'audio-lines': { lucide: 'AudioLines' },
+  pause: { lucide: 'Pause' },
   'arrow-left-right': { lucide: 'ArrowLeftRight' },
   'scan-text': { lucide: 'ScanText' },
   'crop': { lucide: 'Crop' },

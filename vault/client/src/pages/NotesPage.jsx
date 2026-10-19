@@ -5,6 +5,9 @@ import { useIcon } from '../providers/IconProvider';
 import useProjectStore from '../store/projectStore';
 import AtMentionDropdown from '../components/AtMentionDropdown';
 import MoodDot from '../components/mood/MoodDot';
+import VoiceNoteRecorder from './notes/VoiceNoteRecorder';
+import NotesTutorChat from './notes/NotesTutorChat';
+import { NOTES_TOOLS } from './notes/notesTools.mjs';
 
 const NOTE_BODY_LIMIT = 500;
 
@@ -25,6 +28,7 @@ export default function NotesPage() {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [showChatPicker, setShowChatPicker] = useState(false);
+  const [showRecorder, setShowRecorder] = useState(false); // the New voice note dialog
   const [newProjectName, setNewProjectName] = useState('');
   const [creatingProject, setCreatingProject] = useState(false);
   const [convertedNoteIds, setConvertedNoteIds] = useState(new Set());
@@ -32,6 +36,7 @@ export default function NotesPage() {
 
   const autosaveTimer = useRef(null);
   const bodyRef = useRef(null);
+  const searchRef = useRef(null); // the search box above the list (the guide's Open button focuses it)
   const mentionTimerRef = useRef(null);
   const mentionAtIndexRef = useRef(-1);
   const recognitionRef = useRef(null);
@@ -268,6 +273,28 @@ export default function NotesPage() {
   async function createNote() {
     const res = await api.post('/api/notes', { title: 'Untitled', body: '' });
     const note = await res.json();
+    await loadNotes(search, filterProject);
+    selectNote(note);
+    if (viewportMobile) setMobileListOpen(false);
+  }
+
+  // The guide's Open buttons only bring something into view (see notes/notesTools.mjs); none of them changes or deletes a note.
+  function openGuideTool(id) {
+    const tool = NOTES_TOOLS.find((t) => t.id === id);
+    if (!tool) return;
+    if (tool.open === 'create') { createNote(); return; }
+    if (tool.open === 'recorder') { setShowRecorder(true); return; }
+    if (tool.open === 'search' || tool.open === 'list') {
+      if (viewportMobile) setMobileListOpen(true);
+      setTimeout(() => searchRef.current?.focus(), 60);
+      return;
+    }
+    if (viewportMobile && !selected) setMobileListOpen(true);
+    setTimeout(() => bodyRef.current?.focus(), 60); // the controls inside a note: bring the open note into focus
+  }
+
+  // A voice note was just made (the server saved it): show it in the list and open it.
+  async function handleVoiceNote(note) {
     await loadNotes(search, filterProject);
     selectNote(note);
     if (viewportMobile) setMobileListOpen(false);
@@ -597,6 +624,15 @@ export default function NotesPage() {
               </button>
             )}
             <button
+              onClick={() => setShowRecorder(true)}
+              className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60 transition-opacity"
+              style={{ color: 'var(--color-primary)' }}
+              title="New voice note (record your voice)"
+              aria-label="New voice note"
+            >
+              {getIcon('mic', { size: 15 })}
+            </button>
+            <button
               onClick={createNote}
               className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60 transition-opacity"
               style={{ color: 'var(--color-primary)' }}
@@ -633,6 +669,7 @@ export default function NotesPage() {
             <input
               value={search}
               onChange={handleSearchChange}
+              ref={searchRef}
               placeholder="Search notes…"
               className="bg-transparent text-xs outline-none flex-1"
               style={{ color: 'var(--color-text)' }}
@@ -659,7 +696,14 @@ export default function NotesPage() {
             >
               <div className="flex items-start justify-between px-3 py-2">
                 <div className="min-w-0">
-                  <div className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{note.title}</div>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {note.source === 'voice' && (
+                      <span className="flex-shrink-0" style={{ color: 'var(--color-primary)' }} title="Voice note (made from a recording)" aria-label="Voice note">
+                        {getIcon('audio-lines', { size: 13 })}
+                      </span>
+                    )}
+                    <div className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{note.title}</div>
+                  </div>
                   <div className="text-xs truncate mt-0.5" style={{ color: 'var(--color-muted)' }}>
                     {note.body ? note.body.slice(0, 60) : <span className="italic">empty</span>}
                   </div>
@@ -724,6 +768,15 @@ export default function NotesPage() {
                 ))}
               </select>
 
+              {selected.source === 'voice' && (
+                <span
+                  className="flex items-center gap-1 text-xs px-2 py-1 rounded-md"
+                  style={{ color: 'var(--color-primary)', border: '1px solid var(--color-border)' }}
+                  title="This note was made from a recording. Only the words were kept, not the audio."
+                >
+                  {getIcon('audio-lines', { size: 12 })} Voice note
+                </span>
+              )}
               {saving && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Saving…</span>}
               {!saving && !dirty && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Saved</span>}
             </div>
@@ -1178,10 +1231,19 @@ export default function NotesPage() {
               >
                 New Note
               </button>
+              <button
+                onClick={() => setShowRecorder(true)}
+                className="text-sm px-4 py-2 rounded-md hover:opacity-80 transition-opacity flex items-center gap-1.5"
+                style={{ background: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
+              >
+                {getIcon('mic', { size: 14 })} New Voice Note
+              </button>
             </div>
           </div>
         </div>
       )}
+      {showRecorder && <VoiceNoteRecorder onClose={() => setShowRecorder(false)} onCreated={handleVoiceNote} />}
+      <NotesTutorChat currentTool="" onOpenTool={openGuideTool} />
     </div>
   );
 }

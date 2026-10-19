@@ -1,0 +1,80 @@
+'use strict';
+
+// The Notes guide (the round button on Vault's /notes page): a person says what they want to do ("record my voice", "turn this into a
+// task", "find the note about the budget") and the guide points at the real controls, in order, or says plainly that Notes does not do
+// it. It only knows what is written here (the controls Notes really has) and it never sees any note. Built on guideCore.js; the ids are
+// Notes' own, listed in client/src/pages/notes/notesTools.mjs (a test keeps the two in step). See docs/guide-chat.md and docs/voice-notes.md.
+
+const { createGuide, REPLY_FORMAT, VERDICT_HELP } = require('./guideCore');
+
+const CATALOG = [
+  { id: 'new-note', label: 'New note', group: 'Notes list',
+    does: 'The + button at the top of the notes list makes an empty note called Untitled and opens it. Type a title and write; it saves by itself a moment after you stop typing.', notes: 'Notes are plain text: no bold, headings or images.' },
+  { id: 'new-voice-note', label: 'New voice note', group: 'Notes list',
+    does: 'The mic button beside the + button records your voice and writes it into a new note. Press Start recording, talk through a plan, an idea or a chat across the table, and Pause or Resume if you need to. Stop and make the note writes your words up. By default it also tidies them into a note with a short title and plain sections (Summary, Ideas, Plan, To do, Open questions, only those that apply); untick the tidy-up to keep your words exactly as spoken. What was said is always kept at the bottom of the note. Voice notes get an audio-lines icon in the list and a "Voice note" tag above the editor.',
+    notes: 'Only the words are kept: the recording is turned into text and then deleted, so there is nothing to replay. Up to about an hour per recording. Needs the microphone allowed in the browser and the speech-to-text service set up on the server. Has a small cost per note (the speech-to-text, and the tidy-up). It does not know who is speaking by name. If it fails, the recorder window stays open with the recording kept and a Try again button, so nothing is lost until you press Discard or close the window. Let anyone you are recording know.' },
+  { id: 'search', label: 'Search notes', group: 'Notes list',
+    does: 'The search box above the list finds notes as you type, by words in the title or the text.', notes: 'It searches your own notes only.' },
+  { id: 'dictate', label: 'Dictate', group: 'Editor',
+    does: 'The mic button in the editor toolbar types what you say straight into the open note while you speak, using the browser\'s own speech recognition. Press it again to stop.',
+    notes: 'This is different from New voice note: Dictate types live into a note you already have open and keeps no recording and does no tidy-up. It needs a browser that has speech recognition.' },
+  { id: 'at-menu', label: 'Pull things in with @', group: 'Editor',
+    does: 'Typing @ in a note opens a menu with your projects, your open tasks and your saved prompts, plus Search the web, Search Gmail and Search Calendar. Choose one to put that text into the note.',
+    notes: 'Searching Gmail or Calendar needs them to be connected to Vault.' },
+  { id: 'project', label: 'Project', group: 'Editor',
+    does: 'The drop-down at the top of an open note files it under one of your projects, or No project. Opening Notes from a project shows only that project\'s notes, with a Clear link to show them all.', notes: 'A note belongs to at most one project. There are no folders or tags.' },
+  { id: 'convert-task', label: 'Convert to task', group: 'Editor',
+    does: 'The tick-list button (in the list when you hover a note, and in the editor toolbar) opens Quick Capture with the note\'s title and the start of its text filled in, so it can become a task. A "task created" tag then shows on the note.',
+    notes: 'Only the first 500 characters of the note go into the task. The note itself is not changed or removed.' },
+  { id: 'open-as-chat', label: 'Open as chat', group: 'Editor',
+    does: 'The chat button in the editor toolbar sends the note\'s text to a chat as the first message to edit and send. Choose an existing project, make a new project, or use a general chat.', notes: 'It copies the note into the chat; the note stays as it is.' },
+  { id: 'delete', label: 'Delete', group: 'Notes list',
+    does: 'The bin button (in the list when you hover a note) deletes the note.', notes: 'Deleting is permanent: there is no bin to restore from.' },
+];
+
+const RULES = [
+  'Notes saves by itself a moment after you stop typing. There is no Save button.',
+  'A note is plain text. It can be filed under one project; it can be searched by its title and text.',
+  'A voice note is a normal note that began as a recording: you can edit, search, file, convert to a task or delete it like any other. Only its words are kept.',
+  'With the tidy-up on, a voice note starts with a short summary and sections, followed by "What was said" (the original words). The tidy-up is only a rewrite of what was said; it does not add facts or tasks that were not spoken.',
+  'The microphone buttons: the one beside + (New voice note) records and writes up a whole recording; the one in the editor toolbar (Dictate) types live into the open note.',
+  'The Open buttons in this chat only open things for you: New voice note opens the recorder window (it does not start recording), Search notes puts the cursor in the search box, and New note makes an empty Untitled note. They never change or delete an existing note.',
+  'Typing @ in a note opens a menu of things to pull in: projects, open tasks, saved prompts, and searching the web, Gmail and Calendar.',
+];
+
+const NOT_POSSIBLE = [
+  'Replaying a voice recording. The audio is deleted once it has been turned into text; only the words are kept.',
+  'Knowing who said what by name, or live captions and transcripts of an online meeting (Zoom, Teams). Voice notes record the microphone only: a chat across a table, or your own voice.',
+  'Recordings longer than about an hour in one go (record in parts).',
+  'Rich formatting (bold, headings, lists that format themselves), images, files or attachments on a note.',
+  'Folders, tags or sharing a note with another person. A note can only be filed under one project and is private to the person who wrote it.',
+  'Reminders or due dates on a note. A note can be converted to a task, and tasks have the dates.',
+  'Restoring a deleted note, or an edit history to go back to.',
+  'Being a legal or evidential record of a conversation: there is no consent step, speaker identification or audit trail. It is a private tool for dictating plans and ideas.',
+];
+
+const SYSTEM = `You are the guide to Notes in Vault for one person who uses it privately to write notes and to record their voice for plans and ideas. They say, in everyday words, what they want to do. You point them to the right control(s), in order, and explain how each works.
+
+Rules:
+- Use ONLY the tools and rules given below. Never invent a button or a feature, and never promise something the notes say Notes cannot do.
+- You cannot see any of this person's notes or recordings. Never state or guess what is in them.
+- Be plain and short, as to a friend who is not technical. Avoid jargon.
+- Give steps in order. Each step names exactly one tool by its id and says in a sentence what to do there.
+- Be clear about the two microphone buttons when the person asks about recording or dictating: New voice note (beside +) records, then writes up the whole recording; Dictate (in the editor) types live into the open note.
+- If they ask about recording other people, you may say it is a private tool and that it is courteous to let people know they are being recorded, but do not lecture.
+- If you need one more fact to answer, ask ONE short question and give no steps.
+${VERDICT_HELP}
+
+${REPLY_FORMAT}`;
+
+const guide = createGuide({
+  name: 'Notes guide', feature: 'notes_guide', catalog: CATALOG, rules: RULES, notPossible: NOT_POSSIBLE, system: SYSTEM,
+  toolWord: 'tool', sectionTitle: 'NOTES CONTROLS',
+  fallbackAnswer: 'Sorry, I could not work that out. Could you say again what you want to do with your notes, in a sentence?',
+});
+
+module.exports = {
+  CATALOG, RULES, NOT_POSSIBLE, SYSTEM, VERDICTS: guide.VERDICTS,
+  buildTutorPrompt: guide.buildPrompt, cleanMessages: guide.cleanMessages, normalizeTutorReply: guide.normalizeReply,
+  askNotesTutor: guide.ask,
+};
