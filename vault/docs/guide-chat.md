@@ -27,6 +27,10 @@ PDF Tools, Graphics, Video Tools and Finance each have a round button at the bot
 
 Nothing about tooltips or email needs wiring: the wrapper hands its `CONFIG` to the shared component and both are already there.
 
+## One brain, two pages: Video Tools and Music
+
+The **Music tutor** (`guideId` `music`, `POST /api/music/tutor`, `client/src/pages/music/MusicTutorChat.jsx`) has its own wrapper and registry entry (the guards require one wrapper per guide) but uses the **same server brain and catalogue as the Video Tools tutor** (`server/services/videoTutor.js`). That catalogue lists the Music page's tools (ids `music-score`, `music-own-track`, `music-voiceover`, group `Music`) beside the Video Tools ones, so either chat can send a person to a tool on the other page: an Open button for a Music tool on `/videos` goes to `/music?tool=<id>`, and a Video Tools tool from `/music` goes to `/videos?tool=<id>`. When a Music tool is added to `music/musicTools.mjs`, add its `music-` entry to `CATALOG` (`videoTutor.test.js` fails otherwise).
+
 ## Behaviour changes belong in the shared files
 
 Change how all guides look or behave in `TutorChat.jsx` (client) or `tutorEmail.js` (server), never in a wrapper. Tooltip behaviour belongs in `Tooltip.jsx` and applies to the whole app.

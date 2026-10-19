@@ -9,19 +9,30 @@ const page = fs.readFileSync(path.join(__dirname, '../../client/src/pages/Videos
 const block = page.slice(page.indexOf('const TOOL_GROUPS = ['), page.indexOf('\n];', page.indexOf('const TOOL_GROUPS = [')));
 const sidebarIds = [...block.matchAll(/\{ id: '([a-z-]+)', label: '/g)].map((m) => m[1]).sort();
 assert.ok(sidebarIds.length >= 20, 'found the sidebar tools');
-assert.deepStrictEqual(CATALOG.map((t) => t.id).sort(), sidebarIds, 'tutor catalogue matches the Video Tools sidebar');
+const videoCatalog = CATALOG.filter((t) => t.group !== 'Music');
+assert.deepStrictEqual(videoCatalog.map((t) => t.id).sort(), sidebarIds, 'tutor catalogue matches the Video Tools sidebar');
 // ...and files each tool under the same group heading the menu does
 const groupOf = {};
 for (const m of block.matchAll(/\r?\n  \{\r?\n    id: '([a-z]+)',\r?\n    label: '([^']+)',\r?\n    tools: \[([\s\S]*?)\r?\n    \],/g)) {
   for (const tool of m[3].matchAll(/\{ id: '([a-z-]+)', label:/g)) groupOf[tool[1]] = m[2];
 }
 assert.strictEqual(Object.keys(groupOf).length, sidebarIds.length, 'every sidebar tool is in exactly one group');
-for (const tl of CATALOG) assert.strictEqual(tl.group, groupOf[tl.id], `tutor files ${tl.id} under the menu's heading`);
+for (const tl of videoCatalog) assert.strictEqual(tl.group, groupOf[tl.id], `tutor files ${tl.id} under the menu's heading`);
 for (const t of CATALOG) {
   assert.ok(t.label && t.group && t.does && t.needs && t.makes, `${t.id} is fully described`);
 }
 assert.strictEqual(new Set(CATALOG.map((t) => t.id)).size, CATALOG.length, 'no duplicate ids');
 assert.ok(NOT_POSSIBLE.length >= 5);
+
+// ---- the same tutor also knows the Music page's tools (client/src/pages/music/musicTools.mjs) ----
+import(require('url').pathToFileURL(path.join(__dirname, '../../client/src/pages/music/musicTools.mjs')).href).then(({ TOOL_GROUPS }) => {
+  const musicIds = TOOL_GROUPS.flatMap((g) => g.tools.map((t) => `music-${t.id}`)).sort();
+  const catalogMusic = CATALOG.filter((t) => t.group === 'Music');
+  assert.deepStrictEqual(catalogMusic.map((t) => t.id).sort(), musicIds, 'tutor catalogue matches the Music sidebar');
+  assert.ok(catalogMusic.every((t) => /Music page/.test(t.label)), 'Music tools say which page they are on');
+  assert.ok(buildTutorPrompt({ messages: [{ role: 'user', content: 'x' }], currentTool: 'music-voiceover' }).includes('"Voiceover (Music page)" tool open'), 'the tutor knows when the person is on a Music tool');
+  console.log('ok - tutor catalogue matches the Music sidebar');
+}).catch((e) => { console.error(e); process.exit(1); });
 
 // ---- every sidebar tool and group has hover text (fails when a tool is added without one) ----
 const tipsBlock = page.slice(page.indexOf('const TOOL_TIPS = {'), page.indexOf('\n};', page.indexOf('const TOOL_TIPS = {')));

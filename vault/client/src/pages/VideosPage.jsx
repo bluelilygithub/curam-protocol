@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { setVideoHandoff } from '../utils/videoHandoff';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
@@ -2556,13 +2556,22 @@ export default function VideosPage() {
 
   // The tutor's "Open <tool>" buttons: open the tool's group and the tool, exactly as clicking it in the sidebar would.
   const openToolById = useCallback((id) => {
+    if (id.startsWith('music-')) { navigate(`/music?tool=${encodeURIComponent(id.slice(6))}`); return; } // a Music page tool
     const group = TOOL_GROUPS.find((g) => g.tools.some((t) => t.id === id));
     const entry = group?.tools.find((t) => t.id === id);
     if (!entry) return;
     if (entry.link) { openMusicWith(sourceFile); return; }
     setOpenGroup(group.id);
     setTool(id);
-  }, [openMusicWith, sourceFile]);
+  }, [openMusicWith, sourceFile, navigate]);
+
+  // /videos?tool=clip opens that tool (used when the Music tutor points here).
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    const wanted = searchParams.get('tool');
+    const group = wanted && TOOL_GROUPS.find((g) => g.tools.some((t) => t.id === wanted && !t.link));
+    if (group) { setOpenGroup(group.id); setTool(wanted); }
+  }, [searchParams]);
 
   const handleAddMusicFromResult = useCallback(() => {
     const blob = resultBlobRef.current;

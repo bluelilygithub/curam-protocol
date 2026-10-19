@@ -81,6 +81,8 @@ Scene-cut detection (PySceneDetect) to place changes on cuts; energy markers on 
 
 ## Help, like the other Vault apps
 
+- **Music tutor** (round button bottom right, `music/MusicTutorChat.jsx`, `POST /api/music/tutor`): the same tutor as Video Tools'. It knows the Music tools and the Video Tools ones, says which page each is on, and its Open buttons switch tool or page. Missing-tool answers land in the Suggestions inbox (`musicTutor`). See `docs/guide-chat.md`.
+
 - **Tooltips** (`components/Tooltip`) on every control: choose video, the video preview, mood, BPM, the description box, Generate, volume, ducking, Update preview, both export buttons, and the header buttons.
 - **How Music Works** modal (`ToolInfoModal`, (i) in the header, opens once automatically — localStorage key `vault_music_info_seen`).
 - **Tour** (Shepherd, compass in the header, `client/src/utils/tours/musicTour.js`, key `vault_tour_music_completed`, 7 steps, the second one points at the tool list); retake from **Settings → Music Tour** (opens `/music?tour=1`). Steps whose target isn't on screen yet (the options appear only after generating) show centred.

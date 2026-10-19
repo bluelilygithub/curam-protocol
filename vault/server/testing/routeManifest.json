@@ -1873,6 +1873,9 @@
   "GET /api/music/jobs/:id": {
    "class": "authed"
   },
+  "POST /api/music/tutor": {
+   "class": "authed"
+  },
   "POST /api/music/jobs": {
    "class": "authed"
   },

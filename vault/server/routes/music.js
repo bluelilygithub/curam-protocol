@@ -9,6 +9,7 @@ const { aiLimiter } = require('../middleware/aiRateLimit');
 const { ffmpegRoute } = require('../middleware/ffmpegRoute');
 const { captureIf, makeFingerprint } = require('../services/SuggestionService');
 const { checkFfmpeg, MAX_VIDEO_BYTES, extensionForMime, probeVideo } = require('../services/videoFfmpeg');
+const { askTutor } = require('../services/videoTutor');
 const { MOOD_PRESETS, CUSTOM_ID, buildMusicPrompt } = require('../services/music/musicPrompts');
 const { getMusicProvider } = require('../services/music/musicProviders');
 const {
@@ -43,6 +44,33 @@ function findOption(req, res, { needFit = true } = {}) {
   if (needFit && opt.status !== 'ready') { res.status(409).json({ error: 'That option is not ready' }); return null; }
   return { job, opt };
 }
+
+// The Music tutor (the round button on the Music page). It is the Video Tools tutor's brain and catalogue (services/videoTutor.js),
+// so one answer can point at tools on either page; only the wording on the client differs. A "missing"/"partly" answer is also
+// noted in the Suggestions inbox, once per distinct gap.
+router.post('/tutor', aiLimiter, async (req, res) => {
+  try {
+    const { messages, currentTool } = req.body || {};
+    const reply = await askTutor(req.user.id, { messages, currentTool: typeof currentTool === 'string' ? currentTool : '' });
+    if ((reply.verdict === 'missing' || reply.verdict === 'partly') && reply.missing) {
+      const asked = [...(Array.isArray(messages) ? messages : [])].reverse().find((m) => m?.role === 'user')?.content || '';
+      const key = reply.missing.toLowerCase().replace(/[^a-z0-9 ]+/g, '').split(' ').filter(Boolean).slice(0, 12).join(' ');
+      captureIf(true, {
+        userId: req.user.id,
+        source: 'musicTutor',
+        category: 'other',
+        fingerprint: makeFingerprint('musicTutor', `gap:${key}`),
+        title: `Music: people want "${reply.missing.slice(0, 70)}"`,
+        body: `The Music tutor could not fully help.\n\nAsked: "${String(asked).slice(0, 300)}"\nMissing: ${reply.missing}\n\nWorth considering as a new tool or an addition to an existing one.`,
+        context: 'server/routes/music.js /tutor',
+      }).catch(() => {});
+    }
+    res.json(reply);
+  } catch (err) {
+    getLogger().error({ err }, '[music/tutor]');
+    res.status(err.status || 500).json({ error: err.status === 400 ? err.message : 'The tutor could not answer just now. Try again in a moment.' });
+  }
+});
 
 router.get('/status', async (req, res) => {
   const ffmpeg = await checkFfmpeg();

@@ -14,6 +14,7 @@ const GUIDES = {
   pdf: { name: 'PDF guide', endpoint: '/api/pdf-tutor' },
   graphics: { name: 'Graphics guide', endpoint: '/api/graphics-tutor' },
   video: { name: 'Video Tools tutor', endpoint: '/api/videos/tutor' },
+  music: { name: 'Music tutor', endpoint: '/api/music/tutor' },
   finance: { name: 'Finance guide', endpoint: '/api/finance-tutor' },
   cellar: { name: 'Cellar Planner guide', endpoint: '/api/cellar-tutor' },
   route: { name: 'Route Tracer guide', endpoint: '/api/route-tutor' },

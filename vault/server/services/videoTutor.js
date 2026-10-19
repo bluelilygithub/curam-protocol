@@ -1,11 +1,11 @@
 'use strict';
 
-// The Video Tools tutor: a person says what they want to make ("add my script as captions to a video"), and the tutor works out
+// The Video Tools and Music tutor (one catalogue, two pages): a person says what they want to make ("add my script as captions to a video"), and the tutor works out
 // which of the tools that really exist to use, in what order, or says plainly that a piece is missing or that the job is
-// outside what Video Tools does.
+// outside what Video Tools and Music do.
 //
 // The tutor only knows what is in CATALOG below. A test (videoTutor.test.js) fails if a tool is added to or removed from the
-// sidebar (client TOOL_GROUPS) without this file being updated, so the advice cannot quietly go stale. The model's answer is
+// Video Tools sidebar (client TOOL_GROUPS) or the Music sidebar (client/src/pages/music/musicTools.mjs) without this file being updated, so the advice cannot quietly go stale. The model's answer is
 // treated as untrusted: it is parsed, trimmed and every tool id is checked against the catalogue before anything is shown.
 
 const { callModel } = require('./callModel');
@@ -81,8 +81,19 @@ const CATALOG = [
     needs: 'two audio files: a voice and music', makes: 'one audio file (MP3 or WAV)',
     notes: 'One voice and one music track only, not a multi-track editor. If the voice recording already has music under it, use Isolate voice first. To put the mixed audio on a video, use Mute / replace audio. Free (no AI cost).' },
   { id: 'add-music', label: 'Add music (Music page)', group: 'Audio', link: '/music',
-    does: 'Opens the separate Music page: pick a mood to generate background music cut to the exact length of your video (fade in and out), optionally with a spoken voiceover from a script that the music ducks under, and export as WAV or MP4.',
+    does: 'Opens the separate Music page (see the three Music page tools below): pick a mood to generate background music cut to the exact length of your video, optionally with a spoken voiceover, and export as WAV or MP4.',
     needs: 'a video', makes: 'music or a video with music', notes: 'AI music and voices cost a small amount per run.' },
+  { id: 'music-score', label: 'Score a video (Music page)', group: 'Music',
+    does: 'On the Music page: choose a video and a mood (upbeat vlog, cinematic tension, calm corporate, travel montage, suspense, documentary, lo-fi chill) or describe the music in words, with an optional tempo, and get three instrumental options cut to the exact length of the video with a fade in and out. Each is previewed against the video, with a music volume and a ducking setting (the music dips while people talk). Export the music as WAV, the video with the music as MP4, or save it to Saved media.',
+    needs: 'a video (up to five minutes)', makes: 'three music options; WAV audio or an MP4 video with the music',
+    notes: 'AI music costs a small amount per go and takes about a minute. Always instrumental, no singing. Clips are about 30 seconds and loop with smooth crossfades for a longer video. Results are kept for about 90 minutes, then deleted. For a video longer than five minutes, trim it first in Clip / trim.' },
+  { id: 'music-own-track', label: 'Use my own track (Music page)', group: 'Music',
+    does: 'On the Music page: fits a music file you already have (MP3, WAV, M4A) to a video. A short track loops with smooth crossfades, a long one is trimmed, and it fades in and out. Then it is previewed, mixed (volume, ducking) and exported like generated music.',
+    needs: 'a video and a music file', makes: 'one music option; WAV audio or an MP4 video with the music', notes: 'No AI cost. Only for music the person has the rights to.' },
+  { id: 'music-voiceover', label: 'Voiceover (Music page)', group: 'Music',
+    does: 'On the Music page, after music has been made: adds narration over it. Type a script (up to 1500 characters) for an AI voice with an Australian accent, or upload a recording. Choose when the voice starts and how loud it is; the music and the video\'s own sound dip underneath it, and every option\'s preview and export includes it.',
+    needs: 'finished music from Score a video or Use my own track, and a script or a recording', makes: 'the options with the voiceover mixed in',
+    notes: 'One voiceover per set of music; adding another replaces it. A voice that runs past the end of the video is cut off. The AI voice costs a small amount per use and has a choice of two voices. Not for translating or cloning a voice.' },
   { id: 'saved-library', label: 'Saved media', group: 'Library and info',
     does: 'Lists the videos and images you saved from other tools, to preview, rename, delete or send back into Caption studio.', needs: 'nothing', makes: 'nothing new', notes: '' },
   { id: 'info', label: 'File info', group: 'Library and info',
@@ -102,6 +113,8 @@ const NOT_POSSIBLE = [
   'Cutting a section out of the middle of a VIDEO (audio can do this in Trim audio); speeding up only part of a video.',
   'Uploading directly to YouTube/Instagram/TikTok (files are downloaded and posted by hand).',
   'Videos longer than the upload limit of the server (about 80 MB per file) in most tools.',
+  'Music with singing or lyrics, music copied from a named song or artist, or editing the music after it is made (changing the tune, moving a section); a new set of options has to be made instead.',
+  'Voiceovers in languages other than English, or in a voice cloned from a recording.',
 ];
 
 const VERDICTS = ['doable', 'partly', 'missing', 'beyond', 'question'];
@@ -112,7 +125,7 @@ function catalogText() {
   return CATALOG.map((t) => `- id "${t.id}" (${t.group}) — ${t.label}: ${t.does} Needs: ${t.needs}. Makes: ${t.makes}.${t.notes ? ` Note: ${t.notes}` : ''}`).join('\n');
 }
 
-const SYSTEM = `You are the tutor for the Video Tools section of Vault. People tell you what they want to make or fix, in everyday words, and you tell them which of the tools below to use and in what order.
+const SYSTEM = `You are the tutor for the Video Tools and Music sections of Vault. The tools marked "Music page" live on the separate Music page; the rest are in Video Tools. Say which page a tool is on when it is not the one the person has open. People tell you what they want to make or fix, in everyday words, and you tell them which of the tools below to use and in what order.
 
 Rules:
 - Use ONLY the tools in the catalogue. Never invent a tool or a feature, and never promise something a tool's notes say it cannot do.
@@ -124,7 +137,7 @@ Rules:
   "doable"   = the job can be done fully with these tools.
   "partly"   = some of it can be done; one piece cannot. Give the steps that are possible and explain in "missing" what is not.
   "missing"  = it sounds like something Video Tools should do, but no tool does it yet. In "missing", say clearly what tool or feature would be needed. Give any steps that still help.
-  "beyond"   = this is not something Video Tools is for (see the list of things it does not do). Say so clearly and kindly in "answer"; do not suggest a workaround that does not exist. You may name the kind of program that does this job.
+  "beyond"   = this is not something Video Tools is for (see the list of things Video Tools and Music do not do). Say so clearly and kindly in "answer"; do not suggest a workaround that does not exist. You may name the kind of program that does this job.
   "question" = you need to ask something first.
 
 Reply with ONLY a JSON object, no other text:

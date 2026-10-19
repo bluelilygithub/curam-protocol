@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Navigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
@@ -14,6 +14,7 @@ import { takeVideoHandoff } from '../utils/videoHandoff';
 import OptionCard from './music/OptionCard';
 import VoiceoverPanel from './music/VoiceoverPanel';
 import MusicSidebar from './music/MusicSidebar';
+import MusicTutorChat from './music/MusicTutorChat';
 import { ToolHeader, ToolHelpModal } from './music/ToolHeader';
 import { TOOL_GROUPS, DEFAULT_TOOL, groupOfTool } from './music/musicTools.mjs';
 import { POLL_MS, card, field, muted, formatDuration } from './music/musicShared';
@@ -29,6 +30,7 @@ function MusicPageInner() {
   const info = useToolInfoModal('vault_music_info_seen');
   const { startProcessing, stopProcessing, setProcessingSteps, updateProcessingDetail } = useProcessingStore();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const [tool, setTool] = useState(DEFAULT_TOOL);
   const [openGroup, setOpenGroup] = useState(groupOfTool(TOOL_GROUPS, DEFAULT_TOOL));
@@ -57,6 +59,22 @@ function MusicPageInner() {
     const g = groupOfTool(TOOL_GROUPS, id);
     if (g) setOpenGroup(g);
   }, []);
+
+  // The tutor's "Open" buttons. A Music tool opens here; anything else is a Video Tools tool, opened on /videos.
+  const openToolById = useCallback((id) => {
+    const musicTool = id === 'add-music' ? 'score' : (id.startsWith('music-') ? id.slice(6) : null);
+    if (musicTool) {
+      if (TOOL_GROUPS.some((g) => g.tools.some((t) => t.id === musicTool))) selectTool(musicTool);
+      return;
+    }
+    navigate(`/videos?tool=${encodeURIComponent(id)}`);
+  }, [navigate, selectTool]);
+
+  // /music?tool=voiceover opens that tool (used when the Video Tools tutor points here).
+  useEffect(() => {
+    const wanted = searchParams.get('tool');
+    if (wanted && TOOL_GROUPS.some((g) => g.tools.some((t) => t.id === wanted))) selectTool(wanted);
+  }, [searchParams, selectTool]);
 
   useEffect(() => {
     api.get('/api/music/status').then((r) => r.json()).then(setStatus).catch(() => {});
@@ -411,6 +429,7 @@ function MusicPageInner() {
       </main>
 
       <ToolHelpModal toolId={helpTool} onClose={() => setHelpTool(null)} />
+      <MusicTutorChat currentTool={`music-${tool}`} onOpenTool={openToolById} />
     </div>
   );
 }

@@ -23,11 +23,11 @@ Job state must survive switching tools in the sidebar (lift it into the page or 
 
 **Done when:** the existing flow works end to end in the new shell, test passes, tour still runs.
 
-## Stage 2: One tutor for both apps
+## Stage 2: One tutor for both apps (built 2026-10-19, not yet tried against the live model)
 
 Extend the Video Tools guide rather than adding a second one. Add Music tools to `CATALOG` in `server/services/videoTutor.js`, and put the same `TutorChat` (draggable, email-this-chat) on the Music page. Register it per `server/config/guides.js` and `docs/guide-chat.md`; `npm run test:guides` must pass.
 
-**Check first:** how the guide registry handles one guide shown on two pages. If it assumes one page per guide, give Music its own `guideId` that reuses the same `CATALOG`.
+**Built as:** the registry allows one wrapper per guide, so Music has its own guide id (`music`, `/api/music/tutor`) that calls the same `askTutor` and `CATALOG` as Video Tools. Cross-page Open buttons use `?tool=` on `/videos` and `/music`.
 
 **Done when:** asking the tutor "add music to my video" or "make a voiceover" points at the right Music tool, and asking about trimming points at Video Tools.
 
