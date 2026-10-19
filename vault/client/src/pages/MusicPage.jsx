@@ -17,6 +17,7 @@ import VoiceoverPanel from './music/VoiceoverPanel';
 import MusicSidebar from './music/MusicSidebar';
 import MusicTutorChat from './music/MusicTutorChat';
 import MusicTimeline from './music/MusicTimeline';
+import { negationTip } from './music/promptTips.mjs';
 import { clampMusicStart, snapTime } from './music/timelineMath.mjs';
 import { ToolHeader, ToolHelpModal } from './music/ToolHeader';
 import { TOOL_GROUPS, DEFAULT_TOOL, groupOfTool } from './music/musicTools.mjs';
@@ -302,6 +303,7 @@ function MusicPageInner({ videosOk }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Could not suggest a mood');
       setMood(data.mood);
+      if (data.mood === 'custom') setCustomPrompt(data.prompt); // no ready-made mood fits: the description is written for them
       if (data.bpm) setBpm(String(data.bpm));
       setSuggestion(data);
     } catch (err) {
@@ -456,30 +458,34 @@ function MusicPageInner({ videosOk }) {
               </div>
             )}
             {!ownTrackMode && (<>
-              <div className="space-y-2">
-                <Tooltip text="Not sure which mood to pick? Say what your video is about and the assistant chooses the closest mood and a tempo for you. You can still change them. It only reads your words, not the video.">
+              <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Need help choosing? (optional)</p>
+                <p className="text-xs" style={muted}>Say what your video is about, or the sound you are after, and the assistant fills in the mood and tempo below, or writes the description for you. This box does not make music by itself.</p>
+                <Tooltip text="Say what your video is about, or the sound you want, for example a slow cello in a cathedral. The assistant picks a mood, or writes a description if none of the moods fits, and fills them in below. You can change them. It only reads your words, not the video.">
                   <div>
                     <VoiceInput
                       type="textarea" append rows={2} value={aboutVideo} onChange={setAboutVideo}
-                      label="Not sure which mood? Say what your video is about"
-                      placeholder="e.g. a calm tour of our new skincare shop, with soft close-ups"
+                      label="Describe your video, or the sound you are after"
+                      placeholder="e.g. a rainy day, I'd like something like a slow cello in a cathedral"
                       className="!text-xs"
                     />
                   </div>
                 </Tooltip>
                 <div className="flex flex-wrap items-center gap-3">
-                  <Tooltip text="Pick the closest mood and tempo from what you wrote. Has a very small cost.">
+                  <Tooltip text="Fill in the mood and tempo below, or write the description, from what you wrote. Has a very small cost.">
                     <button
                       type="button" onClick={suggestMood} disabled={suggesting || aboutVideo.trim().length < 3}
                       className="px-3 py-1.5 rounded-xl text-xs font-medium border transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
                       style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
                     >
-                      {suggesting ? 'Thinking…' : 'Suggest a mood'}
+                      {suggesting ? 'Thinking…' : 'Fill in the mood for me'}
                     </button>
                   </Tooltip>
                   {suggestion && (
                     <span className="text-xs" style={muted}>
-                      Suggested <strong style={{ color: 'var(--color-text)' }}>{suggestion.label}</strong>{suggestion.bpm ? ` at ${suggestion.bpm} BPM` : ''}{suggestion.why ? ` — ${suggestion.why}` : ''}
+                      {suggestion.mood === 'custom'
+                        ? <>Wrote a description below{suggestion.bpm ? ` at ${suggestion.bpm} BPM` : ''}{suggestion.why ? ` — ${suggestion.why}` : ''}</>
+                        : <>Chose <strong style={{ color: 'var(--color-text)' }}>{suggestion.label}</strong>{suggestion.bpm ? ` at ${suggestion.bpm} BPM` : ''}{suggestion.why ? ` — ${suggestion.why}` : ''}</>}
                     </span>
                   )}
                 </div>
@@ -517,6 +523,7 @@ function MusicPageInner({ videosOk }) {
                   </div>
                 </Tooltip>
               </label>
+              {negationTip(customPrompt) && <p className="text-xs" style={{ color: '#b45309' }}>{negationTip(customPrompt)}</p>}
               <label className="block space-y-1">
                 <span className="text-xs" style={muted}>Seed (optional)</span>
                 <Tooltip text="Leave blank for a fresh random result each time. To get a version you liked back, type its seed (shown on its card) with the same description and tempo: it comes back as option 1.">
@@ -531,6 +538,9 @@ function MusicPageInner({ videosOk }) {
                 {status?.costPerRunUsd ? ` Roughly $${(status.costPerRunUsd * 3).toFixed(2)} for the three.` : ''}
               </p>
             </>)}
+            {!ownTrackMode && aboutVideo.trim().length > 2 && !suggestion && (
+              <p className="text-xs" style={{ color: '#b45309' }}>What you wrote in “Need help choosing?” is only used when you press “Fill in the mood for me”. The music is made from the mood and description below.</p>
+            )}
             <Tooltip text={ownTrackMode ? "Fit your track to your video's length and preview it mixed in. Quick, and no generation cost." : "Generate three instrumental options cut to your video's length. Takes about a minute and a small per-generation cost."}>
               <button
                 type="button" onClick={generate} disabled={!canGenerate} data-tour="music-generate"

@@ -159,13 +159,28 @@ test('fine-tuned fades and start are made safe; the start delays the music insid
 });
 
 async function moodChecks() {
-  const { normalizeMoodReply, suggestMood, cleanDescription } = require('./moodSuggest');
-  assert.deepStrictEqual(normalizeMoodReply('{"mood":"calm-corporate","bpm":96.4,"why":"  Soft and steady.  "}'), { mood: 'calm-corporate', label: 'Calm corporate', bpm: 96, why: 'Soft and steady.' });
-  assert.deepStrictEqual(normalizeMoodReply('```json\n{"mood":"suspense","bpm":999}\n```'), { mood: 'suspense', label: 'Suspense', bpm: null, why: '' }, 'a fenced reply works; a silly tempo is dropped');
+  const { normalizeMoodReply, cleanCustomPrompt, suggestMood, cleanDescription, SYSTEM } = require('./moodSuggest');
+  // ready-made moods
+  assert.deepStrictEqual(normalizeMoodReply('{"mood":"calm-corporate","bpm":96.4,"why":"  Soft and steady.  "}'), { mood: 'calm-corporate', label: 'Calm corporate', prompt: '', bpm: 96, why: 'Soft and steady.' });
+  assert.deepStrictEqual(normalizeMoodReply('```json\n{"mood":"suspense","bpm":999}\n```'), { mood: 'suspense', label: 'Suspense', prompt: '', bpm: null, why: '' }, 'a fenced reply works; a silly tempo is dropped');
   assert.strictEqual(normalizeMoodReply('{"mood":"death-metal","bpm":100}'), null, 'an invented mood is refused');
   assert.strictEqual(normalizeMoodReply('not json at all'), null);
   assert.strictEqual(normalizeMoodReply(null), null);
+  // a custom description, for when no ready-made mood fits (a cello in a cathedral)
+  const cello = normalizeMoodReply('{"mood":"custom","prompt":"solo cello, slow warm sustained notes, long stone-cathedral reverb, spacious and quiet","bpm":70,"why":"You named a cello and a cathedral."}');
+  assert.deepStrictEqual(cello, { mood: 'custom', label: 'A description for you', prompt: 'solo cello, slow warm sustained notes, long stone-cathedral reverb, spacious and quiet', bpm: 70, why: 'You named a cello and a cathedral.' });
+  assert.strictEqual(normalizeMoodReply('{"mood":"custom","prompt":"","bpm":null}'), null, 'a custom reply with no description is refused');
+  assert.strictEqual(normalizeMoodReply('{"mood":"custom","prompt":"no drums, without synths"}'), null, 'a description that is only negations is refused');
+  // negations are removed even if the model ignores its instructions
+  assert.strictEqual(cleanCustomPrompt('solo cello, no electronic sounds, warm and slow, without drums, not too loud, cathedral reverb'), 'solo cello, warm and slow, cathedral reverb');
+  assert.strictEqual(cleanCustomPrompt('piano nocturne, nothing fancy'), 'piano nocturne, nothing fancy', '"nothing" is not a negated sound; only whole words like no / without / not');
+  assert.ok(cleanCustomPrompt(Array.from({ length: 60 }, (_, i) => `warm phrase number ${i}`).join(', ')).length <= 400, 'a very long description is cut at a whole phrase');
+  assert.strictEqual(cleanCustomPrompt('a'), '', 'too little left is nothing');
   assert.strictEqual(cleanDescription('  a   calm\n video '), 'a calm video');
+  // the instructions the model gets
+  assert.match(SYSTEM, /custom/);
+  assert.match(SYSTEM, /NEVER use the words no, not, without/);
+  assert.match(SYSTEM, /upbeat-vlog/);
   const deps = (text) => ({
     getModels: async () => ({ light: 'light-model' }),
     callModel: async (model, prompt) => { deps.seen = { model, prompt }; return { text, model, inputTokens: 1, outputTokens: 1 }; },
@@ -175,8 +190,11 @@ async function moodChecks() {
   assert.strictEqual(ok.mood, 'travel-montage');
   assert.strictEqual(deps.seen.model, 'light-model', 'uses the workspace light model, not a hardcoded one');
   assert.match(deps.seen.prompt, /drone trip/);
+  const custom = await suggestMood(1, 'rainy day, a slow cello in a cathedral', deps('{"mood":"custom","prompt":"solo cello, slow and warm, long cathedral reverb","bpm":null,"why":"Named instrument."}'));
+  assert.strictEqual(custom.mood, 'custom');
+  assert.strictEqual(custom.prompt, 'solo cello, slow and warm, long cathedral reverb');
   await assert.rejects(() => suggestMood(1, 'hi', deps('{}')), /a little about your video/);
-  await assert.rejects(() => suggestMood(1, 'a long calm video', deps('{"mood":"nope"}')), /could not pick a mood/);
+  await assert.rejects(() => suggestMood(1, 'a long calm video', deps('{"mood":"nope"}')), /could not work that out/);
 }
 
 test('only Replicate https hosts are accepted as audio download URLs', () => {
@@ -308,7 +326,7 @@ async function musicJobChecks() {
   await geminiVoiceChecks();
   await musicJobChecks();
   await moodChecks();
-  passed += 1; console.log('ok - mood suggestion: only a known mood, a sane tempo and a short reason survive');
+  passed += 1; console.log('ok - mood suggestion: a ready-made mood or a cleaned custom description, nothing else');
   {
     // a script becomes a WAV through the provider, then the shared conversion (faked here: no ffmpeg needed)
     const { speakToWav } = require('../voiceover');

@@ -44,7 +44,7 @@ export const TOOL_HELP = {
     what: "Write instrumental background music for a video, cut to its exact length so it ends on your last frame.",
     features: [
       'Choose your video (up to five minutes). It is only used to read its length and to preview the mix',
-      'Pick a mood, or choose Custom prompt and describe the music; tempo is optional. Not sure? Say what the video is about and press Suggest a mood',
+      'Pick a mood, or choose Custom prompt and describe the music; tempo is optional. Not sure? Say what your video is about, or the sound you want, and press Fill in the mood for me: it picks a mood, or writes the description if none fits',
       'Three options are made so you can compare them, each previewed against your video',
       'Set the music volume and let it dip while people talk (ducking)',
       'Not happy with one? Make a new version of just that option, or make another option (up to six); compare options from the same moment',
