@@ -4,7 +4,8 @@
 //
 // The tool's job: bring in a page (best of all a live one by its address), change how it looks by clicking and asking, check it, and
 // take the CSS away to paste into the real site. `needs` says what a tool waits for: 'selection' (something clicked in the preview),
-// 'preview' (a built preview) or 'saved' (a page saved to the account).
+// 'preview' (a built preview), 'saved' (a page saved to the account), 'edits' (at least one change made) or 'page' (a page loaded).
+// The reason for each is in restyleContext.mjs; an item that is not usable yet is dimmed and says why.
 
 export const RESTYLE_TOOLS = [
   { id: 'page', label: 'Your page', group: 'Your page', icon: 'globe' },
@@ -17,9 +18,9 @@ export const RESTYLE_TOOLS = [
   { id: 'animation', label: 'Animation', group: 'Change it', icon: 'play', needs: 'selection' },
   { id: 'box', label: 'Box', group: 'Change it', icon: 'layout-grid', needs: 'selection' },
   { id: 'brand', label: 'Brand colours and fonts', group: 'Change it', icon: 'swatch' },
-  { id: 'changes', label: 'Changes so far', group: 'Check and compare', icon: 'list-checks' },
-  { id: 'session', label: 'History of this session', group: 'Check and compare', icon: 'history' },
-  { id: 'source', label: 'HTML source', group: 'Check and compare', icon: 'file-text' },
+  { id: 'changes', label: 'Changes so far', group: 'Check and compare', icon: 'list-checks', needs: 'edits' },
+  { id: 'session', label: 'History of this session', group: 'Check and compare', icon: 'history', needs: 'edits' },
+  { id: 'source', label: 'HTML source', group: 'Check and compare', icon: 'file-text', needs: 'page' },
   { id: 'checks', label: 'Accessibility checks', group: 'Check and compare', icon: 'shield-check', needs: 'preview' },
   { id: 'export', label: 'Export the CSS', group: 'Keep and share', icon: 'download', needs: 'preview' },
   { id: 'saved', label: 'My saved pages', group: 'Keep and share', icon: 'folder-open' },

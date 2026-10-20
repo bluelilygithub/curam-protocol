@@ -122,7 +122,7 @@ export default function ToolSidebar({
                 <ul className="pl-2 border-l ml-1 space-y-0.5 mt-1" style={{ borderColor: 'var(--color-border)' }}>
                   {tools.map((t) => (
                     <li key={t.id}>
-                      <Tooltip text={t.tip || t.label} side="right">
+                      <Tooltip text={t.hint ? `${t.hint} ${t.tip || ''}`.trim() : (t.tip || t.label)} side="right">
                         <button
                           type="button"
                           onClick={() => onSelect(t.id)}
@@ -132,6 +132,7 @@ export default function ToolSidebar({
                           style={{
                             background: current === t.id ? 'var(--color-bg)' : 'transparent',
                             color: current === t.id ? 'var(--color-text)' : 'var(--color-muted)',
+                            opacity: t.hint && current !== t.id ? 0.55 : undefined, // not usable yet: dimmed, and the hint says what to do first
                           }}
                         >
                           {t.icon ? getIcon(t.icon, { size: 13 }) : null}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
+import ContextButton from '../../components/ContextButton';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import { PRIMARY, Status } from './RestylePanels';
 
@@ -54,9 +55,9 @@ export function SessionHistoryPanel({ entries, cursor, onGoTo, onRevert, onUndo,
     <section className="space-y-3">
       <p className="text-xs" style={MUTED}>Everything you change in this session, newest first. Go back to any point, go forward again, or take back just one change and keep the ones made after it. It starts again when you load another page or reload this one.</p>
       <div className="flex flex-wrap gap-2">
-        <button className={SMALL_BTN} style={OUTLINE} disabled={cursor === 0} onClick={onUndo}>Undo one step</button>
-        <button className={SMALL_BTN} style={OUTLINE} disabled={cursor >= entries.length} onClick={onRedo}>Redo one step</button>
-        <Tooltip text="Go back to the page as it was loaded, before any of your changes. You can come forward again."><button className={SMALL_BTN} style={OUTLINE} disabled={cursor === 0} onClick={() => onGoTo(0)}>Back to the start</button></Tooltip>
+        <ContextButton reason={cursor === 0 ? 'You are already at the start: nothing to go back to.' : ''} tip="Go back one step." className={SMALL_BTN} style={OUTLINE} onClick={onUndo}>Undo one step</ContextButton>
+        <ContextButton reason={cursor >= entries.length ? 'You are at the latest step: nothing to put back.' : ''} tip="Go forward one step." className={SMALL_BTN} style={OUTLINE} onClick={onRedo}>Redo one step</ContextButton>
+        <ContextButton reason={cursor === 0 ? 'You are already at the start.' : ''} tip="Go back to the page as it was loaded, before any of your changes. You can come forward again." className={SMALL_BTN} style={OUTLINE} onClick={() => onGoTo(0)}>Back to the start</ContextButton>
       </div>
       {entries.length === 0 && <p className="text-sm" style={MUTED}>No changes yet. Make a change and it is listed here.</p>}
       <ol className="flex flex-col gap-1.5">

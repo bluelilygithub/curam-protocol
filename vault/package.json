@@ -97,6 +97,7 @@
     "test:restyle-fetch": "node server/services/restyle/restyleFetch.test.js",
     "test:restyle-source": "node server/services/restyle/restyleSource.test.js",
     "test:scrape-progress": "node client/src/utils/scrapeProgress.test.mjs",
+    "test:restyle-context": "node client/src/pages/restyle/restyleContext.test.mjs",
     "test:restyle-selfcontained": "node server/services/restyle/restyleSelfContained.test.js",
     "test:restyle-edits": "node server/services/restyle/restyleEdits.test.js",
     "e2e:restyle": "node scripts/e2e-restyle.mjs",

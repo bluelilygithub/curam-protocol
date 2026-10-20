@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
+import ContextButton from '../../components/ContextButton';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import { BRAND_TARGETS, tokenRef } from './editModel.mjs';
 import { FONT_OPTIONS } from './pageHelpers.mjs';
@@ -227,9 +228,7 @@ export function BrandPanel({ tokens, detectedFonts, onAdd, onUpdate, onRemove, o
               {targets.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
           </label>
-          <Tooltip text="Make this change everywhere it applies on the page. It shows in Changes so far and can be undone.">
-            <button className={PRIMARY_BTN} style={PRIMARY} disabled={!target || !previewBuilt} onClick={() => onApply(chosen, target)}>Apply to the page</button>
-          </Tooltip>
+          <ContextButton reason={!previewBuilt ? 'Build the preview first.' : (!target ? 'Choose where to use it first.' : '')} tip="Make this change everywhere it applies on the page. It shows in Changes so far and can be undone." className={PRIMARY_BTN} style={PRIMARY} onClick={() => onApply(chosen, target)}>Apply to the page</ContextButton>
           {!previewBuilt && <p className="text-xs" style={MUTED}>Build the preview first to apply it.</p>}
           <p className="text-xs" style={MUTED}>Written as {tokenRef(chosen)}, so changing “{chosen.name}” above changes it everywhere.</p>
         </div>
@@ -239,7 +238,7 @@ export function BrandPanel({ tokens, detectedFonts, onAdd, onUpdate, onRemove, o
 }
 
 /** Every change made so far. */
-export function ChangesPanel({ rows, tokens, onRemove, onClear, onUndo, canUndo }) {
+export function ChangesPanel({ rows, tokens, onRemove, onClear, onUndo, canUndo, reasons = {} }) {
   const getIcon = useIcon();
   const [confirm, setConfirm] = useState(false);
   const show = (value) => {
@@ -251,7 +250,7 @@ export function ChangesPanel({ rows, tokens, onRemove, onClear, onUndo, canUndo 
     <section className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-sm font-semibold flex-1" style={{ color: 'var(--color-text)' }}>{rows.length} change{rows.length === 1 ? '' : 's'}</p>
-        <button className={SMALL_BTN} style={OUTLINE} disabled={!canUndo} onClick={onUndo}>Undo last</button>
+        <ContextButton reason={!canUndo ? reasons.undo : ''} tip="Take back your last change." className={SMALL_BTN} style={OUTLINE} onClick={onUndo}>Undo last</ContextButton>
         {confirm ? (
           <span className="text-xs" style={{ color: 'var(--color-text)' }}>Clear all? <button className="font-semibold hover:opacity-70" style={{ color: '#b3452c' }} onClick={() => { onClear(); setConfirm(false); }}>Yes</button> / <button className="hover:opacity-70" onClick={() => setConfirm(false)}>No</button></span>
         ) : (
@@ -309,7 +308,7 @@ export function ChecksPanel({ result, onRun, onPick, showingOriginal }) {
 }
 
 /** Export: the CSS, the page, a report. */
-export function ExportPanel({ css, important, onImportant, onCopyCss, onDownloadCss, onDownloadPage, onDownloadReport, changeCount }) {
+export function ExportPanel({ css, important, onImportant, onCopyCss, onDownloadCss, onDownloadPage, onDownloadReport, changeCount, reasons = {} }) {
   return (
     <section className="space-y-3">
       <p className="text-xs" style={MUTED}>The CSS below is every change, written as ordinary styles. Paste it where your site takes extra styles: WordPress (Appearance, Customize, Additional CSS), or the custom CSS box in Shopify, Squarespace and most site builders.</p>
@@ -325,10 +324,10 @@ export function ExportPanel({ css, important, onImportant, onCopyCss, onDownload
         <pre className="text-xs rounded-lg border p-2 overflow-auto max-h-64" style={{ ...FIELD, whiteSpace: 'pre-wrap' }} aria-label="The CSS">{css}</pre>
       )}
       <div className="flex flex-wrap gap-2">
-        <Tooltip text="Copy the CSS to the clipboard."><button className={PRIMARY_BTN} style={PRIMARY} disabled={!css} onClick={onCopyCss}>Copy the CSS</button></Tooltip>
-        <Tooltip text="Save the CSS as a .css file."><button className={SMALL_BTN} style={OUTLINE} disabled={!css} onClick={onDownloadCss}>Download .css</button></Tooltip>
+        <ContextButton reason={!css ? reasons.css : ''} tip="Copy the CSS to the clipboard." className={PRIMARY_BTN} style={PRIMARY} onClick={onCopyCss}>Copy the CSS</ContextButton>
+        <ContextButton reason={!css ? reasons.css : ''} tip="Save the CSS as a .css file." className={SMALL_BTN} style={OUTLINE} onClick={onDownloadCss}>Download .css</ContextButton>
         <Tooltip text="Save the whole page, with your changes built in, as one .html file."><button className={SMALL_BTN} style={OUTLINE} onClick={onDownloadPage}>Download the page</button></Tooltip>
-        <Tooltip text="A plain-text list of every change and where it was made, to give a developer."><button className={SMALL_BTN} style={OUTLINE} disabled={!changeCount} onClick={onDownloadReport}>Download a report</button></Tooltip>
+        <ContextButton reason={!changeCount ? reasons.report : ''} tip="A plain-text list of every change and where it was made, to give a developer." className={SMALL_BTN} style={OUTLINE} onClick={onDownloadReport}>Download a report</ContextButton>
       </div>
     </section>
   );
@@ -353,9 +352,11 @@ export function SavedPanel({ projects, active, nameInput, onName, saving, previe
               <button className={PRIMARY_BTN} style={PRIMARY} disabled={!previewBuilt || saving} onClick={onUpdate}>{saving ? 'Saving…' : `Update “${active.name}”`}</button>
             </Tooltip>
           )}
-          <Tooltip text={previewBuilt ? 'Keep the page as it looks now, with all your changes, as a new saved page.' : 'Build the preview first, then save.'}>
-            <button className={active ? SMALL_BTN : PRIMARY_BTN} style={active ? OUTLINE : PRIMARY} disabled={!previewBuilt || saving || !nameInput.trim() || unchangedName} onClick={onSaveNew}>{saving && !active ? 'Saving…' : (active ? 'Save as a new page' : 'Save this page')}</button>
-          </Tooltip>
+          <ContextButton
+            reason={!previewBuilt ? 'Build the preview first, then save.' : saving ? 'Saving…' : !nameInput.trim() ? 'Give the page a name first.' : unchangedName ? 'Change the name to save a separate copy.' : ''}
+            tip="Keep the page as it looks now, with all your changes, as a new saved page."
+            className={active ? SMALL_BTN : PRIMARY_BTN} style={active ? OUTLINE : PRIMARY} onClick={onSaveNew}
+          >{saving && !active ? 'Saving…' : (active ? 'Save as a new page' : 'Save this page')}</ContextButton>
         </div>
         {active && unchangedName && <p className="text-xs" style={MUTED}>Change the name to save a separate copy.</p>}
       </div>

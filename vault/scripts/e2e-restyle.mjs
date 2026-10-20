@@ -119,6 +119,17 @@ try {
   check((await heading()) === 'Your page', 'it starts on Your page');
 
   // ---- demo, selecting, changing ----
+  // ---- context aware: nothing loaded yet, so what cannot be used says why ----
+  const undoBtn = page.getByRole('button', { name: 'Undo last change' });
+  check((await undoBtn.getAttribute('aria-disabled')) === 'true', 'before anything is done, Undo is dimmed');
+  await undoBtn.hover();
+  await page.getByText('Nothing to undo yet. Make a change first.').first().waitFor({ timeout: 3000 });
+  check(true, 'and its tooltip says what to do first');
+  await page.locator('main button, div button', { hasText: /^Export the CSS/ }).last().hover();
+  await page.getByText('Build the preview first: load a page, then press Build the preview.').first().waitFor({ timeout: 3000 });
+  check((await page.locator('main button, div button', { hasText: /^Export the CSS/ }).last().getAttribute('aria-disabled')) === 'true', 'Export waits for a preview, and says so');
+  const dimmed = await page.locator('aside button', { hasText: 'Changes so far' }).first().evaluate((b) => getComputedStyle(b).opacity);
+  check(Number(dimmed) < 1 && (await page.locator('aside button', { hasText: 'Changes so far' }).first().innerText()).includes('No changes yet'), 'the menu dims Changes so far until there is a change');
   await page.getByRole('button', { name: 'Load a demo' }).click();
   await page.waitForFunction(() => { const f = Array.from(window.frames); return f.some((w) => { try { return !!w.document.querySelector('.card'); } catch { return false; } }); }, null, { timeout: 15000 });
   check(true, 'the demo page loads and the preview is built');

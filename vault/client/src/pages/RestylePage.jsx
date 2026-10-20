@@ -7,6 +7,8 @@ import useProcessingStore, { runWithStepLog } from '../store/processingStore';
 import { scrapeProgress, wasCancelled } from '../utils/scrapeProgress.mjs';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import Tooltip from '../components/Tooltip';
+import ContextButton from '../components/ContextButton';
+import { contextReasons, toolReason } from './restyle/restyleContext.mjs';
 import ToolSidebar from '../components/ToolSidebar';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { VoiceInputProvider } from '../components/voiceInput/VoiceInput';
@@ -866,12 +868,11 @@ export default function RestylePage() {
   };
 
   // ---------- The menu and the open tool ----------
-  const needsHint = (t) => {
-    if (t.needs === 'selection' && !hasSelection) return previewBuilt ? 'Click something first' : 'Build the preview first';
-    if (t.needs === 'preview' && !previewBuilt) return 'Build the preview first';
-    if (t.needs === 'saved' && !active) return 'Save the page first';
-    return undefined;
-  };
+  // What can be done right now (restyleContext.mjs): the menu, the buttons above the preview and those in the panels all read this.
+  const changeCount = changeRows(edits).length;
+  const reasons = contextReasons({ pageLoaded: htmlLoaded, previewBuilt, hasSelection, changeCount, canUndo: H.canUndo(history), canRedo: H.canRedo(history), saved: !!active, hasCss: !!exportCss });
+  const HINTS = { selection: previewBuilt ? 'Click something first' : 'Build the preview first', preview: 'Build the preview first', saved: 'Save the page first', edits: 'No changes yet', page: 'Load a page first' };
+  const needsHint = (t) => (toolReason(t, reasons) ? HINTS[t.needs] : undefined);
   const menu = GROUPS.map((label) => ({
     label,
     tip: GROUP_TIPS[label],
@@ -887,7 +888,6 @@ export default function RestylePage() {
 
   const screen = previewScreen(device, orientation);
   const deviceWidth = screen.width;
-  const changeCount = changeRows(edits).length;
 
   const renderPanel = () => {
     if (currentTool?.needs === 'selection' && !hasSelection) {
@@ -936,12 +936,12 @@ export default function RestylePage() {
       case 'brand':
         return <BrandPanel tokens={tokens} detectedFonts={detectedAssets.fonts} onAdd={addToken} onUpdate={updateToken} onRemove={removeToken} onDetect={detectBrandColours} onApply={applyBrandEverywhere} previewBuilt={previewBuilt} />;
       case 'changes':
-        return <ChangesPanel rows={changeRows(edits)} tokens={tokens} onRemove={removeChange} onClear={clearAllChanges} onUndo={handleUndo} canUndo={H.canUndo(history)} />;
+        return <ChangesPanel rows={changeRows(edits)} tokens={tokens} onRemove={removeChange} onClear={clearAllChanges} onUndo={handleUndo} canUndo={H.canUndo(history)} reasons={reasons} />;
       case 'checks':
         return previewBuilt ? <ChecksPanel result={checks} onRun={runChecks} onPick={pickIssue} showingOriginal={showOriginal} /> : <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Build the preview first, then check it.</p>;
       case 'export':
         return previewBuilt
-          ? <ExportPanel css={exportCss} important={important} onImportant={setImportant} changeCount={changeCount} onCopyCss={() => copyText(exportCss, 'Copied the CSS')} onDownloadCss={() => saveFile(exportCss, `${fileSlug}-changes.css`, 'text/css')} onDownloadPage={downloadPage} onDownloadReport={downloadReport} />
+          ? <ExportPanel reasons={reasons} css={exportCss} important={important} onImportant={setImportant} changeCount={changeCount} onCopyCss={() => copyText(exportCss, 'Copied the CSS')} onDownloadCss={() => saveFile(exportCss, `${fileSlug}-changes.css`, 'text/css')} onDownloadPage={downloadPage} onDownloadReport={downloadReport} />
           : <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Build the preview first, then export.</p>;
       case 'saved':
         return <SavedPanel projects={savedProjects} active={active} nameInput={saveNameInput} onName={setSaveNameInput} saving={savingProject} previewBuilt={previewBuilt} onSaveNew={() => saveProject('new')} onUpdate={() => saveProject('update')} onOpen={openProject} onDelete={deleteProject} loadingId={loadingProjectId} />;
@@ -986,20 +986,14 @@ export default function RestylePage() {
               <Tooltip text="Load a small practice page and build its preview, so you can try clicking and changing things.">
                 <button className="px-3 py-1.5 rounded-lg text-sm border transition-all duration-200 hover:opacity-70" style={OUTLINE} onClick={loadDemo}>Load a demo</button>
               </Tooltip>
-              <Tooltip text="Take back your last change. A change to many items at once is one undo.">
-                <button className="px-3 py-1.5 rounded-lg text-sm border transition-all duration-200 hover:opacity-70 disabled:opacity-50" style={OUTLINE} disabled={!H.canUndo(history)} onClick={handleUndo}>Undo last change</button>
-              </Tooltip>
-              <Tooltip text="Put back the change you just undid.">
-                <button className="px-3 py-1.5 rounded-lg text-sm border transition-all duration-200 hover:opacity-70 disabled:opacity-50" style={OUTLINE} disabled={!H.canRedo(history)} onClick={handleRedo}>Redo</button>
-              </Tooltip>
+              <ContextButton reason={reasons.undo} tip="Take back your last change. A change to many items at once is one undo." className="px-3 py-1.5 rounded-lg text-sm border transition-all duration-200 hover:opacity-70" style={OUTLINE} onClick={handleUndo}>Undo last change</ContextButton>
+              <ContextButton reason={reasons.redo} tip="Put back the change you just undid." className="px-3 py-1.5 rounded-lg text-sm border transition-all duration-200 hover:opacity-70" style={OUTLINE} onClick={handleRedo}>Redo</ContextButton>
               <Tooltip text="Every change in this session, with a way back to any point.">
                 <button className="px-3 py-1.5 rounded-lg text-sm border transition-all duration-200 hover:opacity-70" style={OUTLINE} onClick={() => setTool('session')}>History{history.entries.length ? ` (${history.entries.length})` : ''}</button>
               </Tooltip>
-              <Tooltip text="Get the CSS to paste into your real site, or the page as a file.">
-                <button className="px-3 py-1.5 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-80 disabled:opacity-45" style={{ background: 'var(--color-primary)', color: '#fff' }} disabled={!previewBuilt} onClick={() => setTool('export')}>
-                  Export the CSS{changeCount ? ` (${changeCount})` : ''}
-                </button>
-              </Tooltip>
+              <ContextButton reason={reasons.preview} tip="Get the CSS to paste into your real site, or the page as a file." className="px-3 py-1.5 rounded-lg text-sm font-medium transition-opacity duration-200 hover:opacity-80" style={{ background: 'var(--color-primary)', color: '#fff' }} onClick={() => setTool('export')}>
+                Export the CSS{changeCount ? ` (${changeCount})` : ''}
+              </ContextButton>
             </div>
           </div>
 
