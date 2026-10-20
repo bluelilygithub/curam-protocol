@@ -1604,6 +1604,7 @@ function ExpensesTab({ from, to }) {
       } else {
         const res = await api.post('/api/finance/expenses', form);
         const body = await res.json();
+        if (!res.ok) throw new Error(body.error || 'The expense could not be saved');
         addToast('Expense saved');
         // Split-purchase check — identical items bought the same day under $300 each that add
         // up past it may need treating as one capital purchase, not several immediate deductions.
@@ -1743,13 +1744,15 @@ function ExpensesTab({ from, to }) {
       message: `Remove receipt for "${exp.description}"?`,
       onConfirm: async () => {
         setConfirmModal(null);
-        await api.delete(`/api/finance/expenses/${exp.id}/receipt`);
-        addToast('Receipt removed');
-        if (viewReceiptModal?.expense?.id === exp.id) {
-          URL.revokeObjectURL(viewReceiptModal.url);
-          setViewReceiptModal(null);
-        }
-        load();
+        try {
+          await okOrThrow(await api.delete(`/api/finance/expenses/${exp.id}/receipt`));
+          addToast('Receipt removed');
+          if (viewReceiptModal?.expense?.id === exp.id) {
+            URL.revokeObjectURL(viewReceiptModal.url);
+            setViewReceiptModal(null);
+          }
+          load();
+        } catch (e) { addToast(e.message, 'error'); }
       },
     });
   };
@@ -2670,7 +2673,7 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
 
   const deleteTrip = async (id) => {
     try {
-      await api.delete(`/api/finance/vehicle-trip-log/${id}`);
+      await okOrThrow(await api.delete(`/api/finance/vehicle-trip-log/${id}`));
       addToast('Trip deleted');
       setDeleteTripConfirmId(null);
       loadVTrips();
@@ -2741,7 +2744,7 @@ function VehicleHomeOfficeTab({ onGoToSettings }) {
 
   const deleteHEvidence = async (category) => {
     try {
-      await api.delete(`/api/finance/home-office-evidence/${category}`);
+      await okOrThrow(await api.delete(`/api/finance/home-office-evidence/${category}`));
       loadHEvidence();
     } catch (e) { addToast(e.message, 'error'); }
   };
@@ -3655,10 +3658,10 @@ function AccountsTab() {
     setSaving(true); setError('');
     try {
       if (editing) {
-        await api.put(`/api/finance/accounts/${editing.id}`, form);
+        await okOrThrow(await api.put(`/api/finance/accounts/${editing.id}`, form));
         addToast('Account updated');
       } else {
-        await api.post('/api/finance/accounts', form);
+        await okOrThrow(await api.post('/api/finance/accounts', form));
         addToast('Account added');
       }
       load(); cancelForm();
@@ -3827,11 +3830,11 @@ function JournalTab({ from, to }) {
     if (!balanced) { setError(`Entry is not balanced — debits ${fmt(totalDebits)}, credits ${fmt(totalCredits)}`); return; }
     setSaving(true); setError('');
     try {
-      await api.post('/api/finance/journal', {
+      await okOrThrow(await api.post('/api/finance/journal', {
         date: form.date,
         description: form.description,
         lines: lines.map(l => ({ accountId: parseInt(l.accountId), debit: parseFloat(l.debit) || 0, credit: parseFloat(l.credit) || 0 })),
-      });
+      }));
       addToast('Journal entry recorded');
       loadEntries();
       cancelForm();
@@ -4913,7 +4916,7 @@ function VehicleHomeOfficeSettingsSection({ sectionRef, rates, onChangeRate, sav
   const lockMethod = async (endpoint, key, year, method, setMap, onDone) => {
     setLocking(key);
     try {
-      await api.post(endpoint, { year, method });
+      await okOrThrow(await api.post(endpoint, { year, method }));
       setMap(p => ({ ...p, [year]: method }));
       addToast(`Method locked for FY${year}`);
       if (onDone) onDone();
@@ -5207,7 +5210,7 @@ function SettingsTab({ onHistoryReset, focusSection, onFocusHandled }) {
 
   const saveRate = async (key, value) => {
     try {
-      await api.put('/api/finance/settings', { [key]: value });
+      await okOrThrow(await api.put('/api/finance/settings', { [key]: value }));
       addToast('Rate saved');
     } catch (e) { addToast(e.message, 'error'); }
   };
@@ -5623,10 +5626,10 @@ function SuppliersTab() {
     setSaving(true); setError('');
     try {
       if (editing) {
-        await api.put(`/api/finance/suppliers/${editing.id}`, form);
+        await okOrThrow(await api.put(`/api/finance/suppliers/${editing.id}`, form));
         addToast('Supplier updated');
       } else {
-        await api.post('/api/finance/suppliers', form);
+        await okOrThrow(await api.post('/api/finance/suppliers', form));
         addToast('Supplier added');
       }
       load(); cancelForm();
@@ -5635,8 +5638,8 @@ function SuppliersTab() {
   };
 
   const toggleActive = async (s) => {
-    await api.patch(`/api/finance/suppliers/${s.id}`);
-    load();
+    try { await okOrThrow(await api.patch(`/api/finance/suppliers/${s.id}`)); load(); }
+    catch (e) { addToast(e.message, 'error'); }
   };
 
   const del = (s) => {
@@ -5644,9 +5647,11 @@ function SuppliersTab() {
       message: `Delete supplier "${s.name}"?`,
       onConfirm: async () => {
         setConfirmModal(null);
-        await api.delete(`/api/finance/suppliers/${s.id}`);
-        setSuppliers(prev => prev.filter(x => x.id !== s.id));
-        addToast('Supplier deleted');
+        try {
+          await okOrThrow(await api.delete(`/api/finance/suppliers/${s.id}`));
+          setSuppliers(prev => prev.filter(x => x.id !== s.id));
+          addToast('Supplier deleted');
+        } catch (e) { addToast(e.message, 'error'); }
       },
     });
   };
@@ -5766,10 +5771,10 @@ function CodesTab() {
     setSaving(true); setError('');
     try {
       if (editing) {
-        await api.put(`/api/finance/tx-codes/${editing.id}`, form);
+        await okOrThrow(await api.put(`/api/finance/tx-codes/${editing.id}`, form));
         addToast('Code updated');
       } else {
-        await api.post('/api/finance/tx-codes', form);
+        await okOrThrow(await api.post('/api/finance/tx-codes', form));
         addToast('Code added');
       }
       load(); cancelForm();
@@ -5778,8 +5783,8 @@ function CodesTab() {
   };
 
   const toggleActive = async (c) => {
-    await api.patch(`/api/finance/tx-codes/${c.id}`);
-    load();
+    try { await okOrThrow(await api.patch(`/api/finance/tx-codes/${c.id}`)); load(); }
+    catch (e) { addToast(e.message, 'error'); }
   };
 
   const del = (c) => {
@@ -5788,9 +5793,11 @@ function CodesTab() {
       message: `Delete code "${c.code} — ${c.name}"?`,
       onConfirm: async () => {
         setConfirmModal(null);
-        await api.delete(`/api/finance/tx-codes/${c.id}`);
-        setCodes(prev => prev.filter(x => x.id !== c.id));
-        addToast('Code deleted');
+        try {
+          await okOrThrow(await api.delete(`/api/finance/tx-codes/${c.id}`));
+          setCodes(prev => prev.filter(x => x.id !== c.id));
+          addToast('Code deleted');
+        } catch (e) { addToast(e.message, 'error'); }
       },
     });
   };
@@ -6211,15 +6218,17 @@ function RecurringTab() {
   };
 
   const del = async (id) => {
-    await api.delete(`/api/finance/recurring/${id}`);
-    await load();
-    setConfirm(null);
-    addToast('Recurring schedule deleted.', 'success');
+    try {
+      await okOrThrow(await api.delete(`/api/finance/recurring/${id}`));
+      await load();
+      setConfirm(null);
+      addToast('Recurring schedule deleted.', 'success');
+    } catch (e) { addToast(e.message, 'error'); }
   };
 
   const toggle = async (rec) => {
-    await api.put(`/api/finance/recurring/${rec.id}`, { ...rec, active: !rec.active });
-    await load();
+    try { await okOrThrow(await api.put(`/api/finance/recurring/${rec.id}`, { ...rec, active: !rec.active })); await load(); }
+    catch (e) { addToast(e.message, 'error'); }
   };
 
   const setTpl = (key, val) => setForm(p => ({ ...p, template: { ...p.template, [key]: val } }));
