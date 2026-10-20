@@ -184,6 +184,12 @@ const READ_COLS = `r.id, r."documentId", r.vendor, r."documentKind", r."invoiceN
   r."periodStart"::text AS "periodStart", r."periodEnd"::text AS "periodEnd", r.currency, r.subtotal::float AS subtotal, r.tax::float AS tax,
   r.total::float AS total, r."taxKind", r."taxLabel", r."taxRatePct"::float AS "taxRatePct", r."supplierTaxId", r.description, r.status, r.problems, r."pairKey"`;
 
+// Documents the reader may look at: filed as invoice/receipt/other, or filed as a statement by mistake but
+// named like a vendor document and with no bank/card statement lines loaded from it.
+const READABLE = `d."mimeType"='application/pdf' AND (d.kind IN ('invoice','receipt','other')
+  OR (d.kind='statement' AND d."originalName" ~* '^(invoice|receipt)[-_ ]'
+      AND NOT EXISTS (SELECT 1 FROM fin_statements s WHERE s."documentId" = d.id)))`;
+
 router.get('/reads', wrap(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT ${READ_COLS}, d.title, d."originalName",
@@ -192,7 +198,7 @@ router.get('/reads', wrap(async (req, res) => {
      WHERE r."userId"=$1 ORDER BY r."docDate" DESC NULLS LAST, r.id DESC LIMIT 1000`, [req.user.id]);
   const { rows: [unread] } = await pool.query(
     `SELECT COUNT(*)::int AS n FROM fin_documents d
-     WHERE d."userId"=$1 AND d.kind IN ('invoice','receipt','other') AND d."mimeType"='application/pdf'
+     WHERE d."userId"=$1 AND ${READABLE}
        AND NOT EXISTS (SELECT 1 FROM fin_document_reads r WHERE r."documentId" = d.id)`, [req.user.id]);
   res.json({ reads: rows, unreadCount: unread.n });
 }));
@@ -202,7 +208,7 @@ router.get('/reads', wrap(async (req, res) => {
 router.get('/reads/unread', wrap(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT d.id FROM fin_documents d
-     WHERE d."userId"=$1 AND d.kind IN ('invoice','receipt','other') AND d."mimeType"='application/pdf'
+     WHERE d."userId"=$1 AND ${READABLE}
        AND NOT EXISTS (SELECT 1 FROM fin_document_reads r WHERE r."documentId" = d.id)
      ORDER BY d.id`, [req.user.id]);
   res.json({ ids: rows.map(r => r.id) });
