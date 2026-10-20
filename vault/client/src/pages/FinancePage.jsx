@@ -6885,12 +6885,16 @@ function VendorReceiptsPanel({ reloadKey, onChanged }) {
   const [progress, setProgress] = useState(null); // { done, total } while reading
   const [open, setOpen] = useState(null);         // read id whose matching expenses are showing
   const [cands, setCands] = useState([]);
+  const [loadError, setLoadError] = useState('');
 
   const load = useCallback(async () => {
     try {
-      const b = await (await api.get('/api/finance/documents/reads')).json();
-      if (b.reads) { setReads(b.reads); setUnread(b.unreadCount || 0); }
-    } catch { /* panel is optional; the library below still works */ }
+      const res = await api.get('/api/finance/documents/reads');
+      const b = await res.json();
+      if (!res.ok) throw new Error(b.error || `HTTP ${res.status}`);
+      setLoadError('');
+      setReads(b.reads || []); setUnread(b.unreadCount || 0);
+    } catch (e) { setLoadError(e.message); }
   }, []);
   useEffect(() => { load(); }, [load, reloadKey]);
 
@@ -6927,6 +6931,9 @@ function VendorReceiptsPanel({ reloadKey, onChanged }) {
   const taxText = (r) => (r.taxKind === 'none' ? 'No tax' : `${r.taxKind === 'gst' ? 'GST' : 'Foreign tax'} ${r.tax.toFixed(2)}`);
   const needCheck = reads.filter(r => r.status === 'check').length;
 
+  if (loadError) {
+    return <div className="rounded-xl border px-4 py-3 text-sm" style={{ borderColor: '#ef4444', color: '#ef4444' }}>Vendor receipts could not be loaded: {loadError}</div>;
+  }
   if (!reads.length && !unread) return null;
   return (
     <div className="rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
@@ -6984,6 +6991,7 @@ function VendorReceiptsPanel({ reloadKey, onChanged }) {
 
 function DocumentsTab() {
   const addToast = useToastStore(s => s.addToast);
+  const { startProcessing, stopProcessing } = useProcessingStore();
   const [fy, setFy] = useState(finYearForDate(todayStr()));
   const [kindFilter, setKindFilter] = useState('');
   const [search, setSearch] = useState('');
@@ -7039,8 +7047,26 @@ function DocumentsTab() {
       const body = await send(files, { kind: meta.kind, supplier: meta.supplier, docDate: meta.docDate, notes: meta.notes, fy: meta.docDate ? '' : fy });
       addToast(`${body.documents.length} document${body.documents.length === 1 ? '' : 's'} uploaded`);
       setFiles([]); if (pickRef.current) pickRef.current.value = '';
+      // vendor invoices/receipts are read straight away: vendor, date, currency, tax and total fill in
+      const readable = body.documents.filter(d => d.mimeType === 'application/pdf'
+        && (['invoice', 'receipt', 'other'].includes(d.kind) || /^(invoice|receipt)[-_ ]/i.test(d.originalName)));
+      if (readable.length) await readVendorDocs(readable.map(d => d.id));
       load();
     } catch (e) { addToast(e.message, 'error'); } finally { setUploading(false); }
+  };
+
+  const readVendorDocs = async (ids) => {
+    const problems = [];
+    startProcessing('Reading your receipts and invoices…', `0 of ${ids.length} done.`);
+    try {
+      for (let i = 0; i < ids.length; i++) {
+        startProcessing('Reading your receipts and invoices…', `${i + 1} of ${ids.length}.`);
+        try { await okOrThrow(await api.post(`/api/finance/documents/${ids[i]}/read`)); }
+        catch (e) { problems.push(e.message); }
+      }
+    } finally { stopProcessing(); }
+    if (problems.length) addToast(`${problems.length} of ${ids.length} could not be read: ${problems[0]}`, 'error');
+    else addToast(`${ids.length} read — see Vendor receipts and invoices above the file list`);
   };
 
   const uploadForMissing = async (fileList) => {
