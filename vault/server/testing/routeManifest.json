@@ -130,6 +130,9 @@
   "GET /api/calendar/status": {
    "class": "authed"
   },
+  "GET /api/calendar/upcoming": {
+   "class": "authed"
+  },
   "POST /api/cases/:id/log": {
    "class": "authed"
   },
@@ -157,10 +160,10 @@
   "POST /api/cellar-lite/enquiry": {
    "class": "public"
   },
-  "POST /api/cellar-lite/guide": {
+  "POST /api/cellar-lite/guide/email": {
    "class": "public"
   },
-  "POST /api/cellar-lite/guide/email": {
+  "POST /api/cellar-lite/guide": {
    "class": "public"
   },
   "GET /api/cellar-planner/catalogue": {
@@ -191,6 +194,9 @@
    "class": "authed"
   },
   "POST /api/cellar-projects": {
+   "class": "authed"
+  },
+  "POST /api/cellar-tutor": {
    "class": "authed"
   },
   "POST /api/chains/:id/run": {
@@ -502,6 +508,12 @@
   "GET /api/contract-review/search": {
    "class": "authed"
   },
+  "GET /api/dashboard/attention": {
+   "class": "authed"
+  },
+  "GET /api/dashboard/overview": {
+   "class": "authed"
+  },
   "PUT /api/deals/:id/contacts": {
    "class": "authed"
   },
@@ -748,13 +760,25 @@
   "PUT /api/finance/documents/:id/links": {
    "class": "authed"
   },
+  "POST /api/finance/documents/:id/read": {
+   "class": "authed"
+  },
   "DELETE /api/finance/documents/:id": {
    "class": "authed"
   },
   "PATCH /api/finance/documents/:id": {
    "class": "authed"
   },
+  "POST /api/finance/documents/link-matches": {
+   "class": "authed"
+  },
   "GET /api/finance/documents/missing": {
+   "class": "authed"
+  },
+  "GET /api/finance/documents/to-match": {
+   "class": "authed"
+  },
+  "GET /api/finance/documents/unread": {
    "class": "authed"
   },
   "GET /api/finance/documents": {
@@ -1294,6 +1318,9 @@
   "POST /api/folders": {
    "class": "authed"
   },
+  "POST /api/fonts-tutor": {
+   "class": "authed"
+  },
   "POST /api/fonts/catalog/refresh": {
    "class": "authed"
   },
@@ -1753,6 +1780,9 @@
   "GET /api/map-tiles/status": {
    "class": "authed"
   },
+  "POST /api/measurements-tutor": {
+   "class": "authed"
+  },
   "DELETE /api/memory/:id": {
    "class": "authed"
   },
@@ -1846,16 +1876,28 @@
   "GET /api/mood/summary/project/:projectId": {
    "class": "authed"
   },
+  "GET /api/music/jobs/:id/cuts": {
+   "class": "authed"
+  },
+  "POST /api/music/jobs/:id/fit": {
+   "class": "authed"
+  },
   "GET /api/music/jobs/:id/options/:n/audio": {
    "class": "authed"
   },
   "GET /api/music/jobs/:id/options/:n/preview": {
    "class": "authed"
   },
+  "POST /api/music/jobs/:id/options/:n/regenerate": {
+   "class": "authed"
+  },
   "POST /api/music/jobs/:id/options/:n/save": {
    "class": "authed"
   },
   "GET /api/music/jobs/:id/options/:n/video": {
+   "class": "authed"
+  },
+  "POST /api/music/jobs/:id/options": {
    "class": "authed"
   },
   "GET /api/music/jobs/:id/voiceover/audio": {
@@ -1873,28 +1915,16 @@
   "GET /api/music/jobs/:id": {
    "class": "authed"
   },
-  "POST /api/music/suggest-mood": {
-   "class": "authed"
-  },
-  "POST /api/music/tutor": {
-   "class": "authed"
-  },
-  "POST /api/music/jobs/:id/options": {
-   "class": "authed"
-  },
-  "POST /api/music/jobs/:id/options/:n/regenerate": {
-   "class": "authed"
-  },
-  "POST /api/music/jobs/:id/fit": {
-   "class": "authed"
-  },
-  "GET /api/music/jobs/:id/cuts": {
-   "class": "authed"
-  },
   "POST /api/music/jobs": {
    "class": "authed"
   },
   "GET /api/music/status": {
+   "class": "authed"
+  },
+  "POST /api/music/suggest-mood": {
+   "class": "authed"
+  },
+  "POST /api/music/tutor": {
    "class": "authed"
   },
   "PUT /api/news-digest/context/:topicId": {
@@ -1939,6 +1969,9 @@
   "GET /api/news-digest": {
    "class": "authed"
   },
+  "POST /api/notes-tutor": {
+   "class": "authed"
+  },
   "DELETE /api/notes/:id": {
    "class": "authed"
   },
@@ -1948,32 +1981,50 @@
   "PUT /api/notes/:id": {
    "class": "authed"
   },
-  "GET /api/notes": {
-   "class": "authed"
-  },
-  "POST /api/measurements-tutor": {
-   "class": "authed"
-  },
-  "POST /api/fonts-tutor": {
-   "class": "authed"
-  },
-  "POST /api/notes-tutor": {
-   "class": "authed"
-  },
   "POST /api/notes/voice": {
+   "class": "authed"
+  },
+  "GET /api/notes": {
    "class": "authed"
   },
   "POST /api/notes": {
    "class": "authed"
   },
-  "POST /api/tutor-email": {
-   "class": "authed"
+  "POST /api/pc-health-tutor": {
+   "class": "admin"
   },
-  "POST /api/route-tutor": {
-   "class": "authed"
+  "GET /api/pc-health/helper-script": {
+   "class": "admin"
   },
-  "POST /api/cellar-tutor": {
-   "class": "authed"
+  "DELETE /api/pc-health/helper-token": {
+   "class": "admin"
+  },
+  "POST /api/pc-health/helper-token": {
+   "class": "admin"
+  },
+  "POST /api/pc-health/scans/:id/cancel": {
+   "class": "admin"
+  },
+  "GET /api/pc-health/scans/:id": {
+   "class": "admin"
+  },
+  "GET /api/pc-health/scans": {
+   "class": "admin"
+  },
+  "POST /api/pc-health/scans": {
+   "class": "admin"
+  },
+  "GET /api/pc-health/status": {
+   "class": "admin"
+  },
+  "POST /api/pc-helper/poll": {
+   "class": "public"
+  },
+  "POST /api/pc-helper/scans/:id/fail": {
+   "class": "public"
+  },
+  "POST /api/pc-helper/scans/:id/report": {
+   "class": "public"
   },
   "POST /api/pdf-tutor": {
    "class": "authed"
@@ -2006,9 +2057,6 @@
    "class": "authed"
   },
   "POST /api/pdf/google-to-pdf": {
-   "class": "authed"
-  },
-  "POST /api/pdf/voice-command": {
    "class": "authed"
   },
   "POST /api/pdf/headerfooter": {
@@ -2060,6 +2108,9 @@
    "class": "authed"
   },
   "POST /api/pdf/unprotect": {
+   "class": "authed"
+  },
+  "POST /api/pdf/voice-command": {
    "class": "authed"
   },
   "POST /api/pdf/watermark": {
@@ -2335,10 +2386,31 @@
   "POST /api/recipes/suggest": {
    "class": "authed"
   },
+  "POST /api/restyle-tutor": {
+   "class": "authed"
+  },
   "POST /api/restyle/ai-edit": {
    "class": "authed"
   },
+  "GET /api/restyle/capabilities": {
+   "class": "authed"
+  },
+  "POST /api/restyle/fetch-url": {
+   "class": "authed"
+  },
   "POST /api/restyle/process-css": {
+   "class": "authed"
+  },
+  "DELETE /api/restyle/projects/:id/share": {
+   "class": "authed"
+  },
+  "POST /api/restyle/projects/:id/share": {
+   "class": "authed"
+  },
+  "GET /api/restyle/projects/:id/versions/:vid": {
+   "class": "authed"
+  },
+  "GET /api/restyle/projects/:id/versions": {
    "class": "authed"
   },
   "DELETE /api/restyle/projects/:id": {
@@ -2354,24 +2426,6 @@
    "class": "authed"
   },
   "POST /api/restyle/projects": {
-   "class": "authed"
-  },
-  "GET /api/restyle/capabilities": {
-   "class": "authed"
-  },
-  "POST /api/restyle/fetch-url": {
-   "class": "authed"
-  },
-  "GET /api/restyle/projects/:id/versions": {
-   "class": "authed"
-  },
-  "GET /api/restyle/projects/:id/versions/:vid": {
-   "class": "authed"
-  },
-  "POST /api/restyle/projects/:id/share": {
-   "class": "authed"
-  },
-  "DELETE /api/restyle/projects/:id/share": {
    "class": "authed"
   },
   "POST /api/restyle/scrape-css": {
@@ -2410,9 +2464,6 @@
   "POST /api/route-tracks/ask": {
    "class": "authed"
   },
-  "GET /api/route-tracks/diagnose": {
-   "class": "authed"
-  },
   "GET /api/route-tracks/config": {
    "class": "authed"
   },
@@ -2420,6 +2471,9 @@
    "class": "authed"
   },
   "POST /api/route-tracks/detour": {
+   "class": "authed"
+  },
+  "GET /api/route-tracks/diagnose": {
    "class": "authed"
   },
   "POST /api/route-tracks/email": {
@@ -2441,6 +2495,9 @@
    "class": "authed"
   },
   "POST /api/route-tracks": {
+   "class": "authed"
+  },
+  "POST /api/route-tutor": {
    "class": "authed"
   },
   "GET /api/search": {
@@ -2896,6 +2953,9 @@
   "GET /api/translate/memory/stats": {
    "class": "authed"
   },
+  "POST /api/tutor-email": {
+   "class": "authed"
+  },
   "GET /api/usage/log": {
    "class": "authed"
   },
@@ -3022,6 +3082,9 @@
   "POST /api/videos/slideshow": {
    "class": "authed"
   },
+  "POST /api/videos/speak": {
+   "class": "authed"
+  },
   "POST /api/videos/speed": {
    "class": "authed"
   },
@@ -3049,22 +3112,16 @@
   "POST /api/videos/trim-audio": {
    "class": "authed"
   },
-  "GET /api/videos/voices": {
-   "class": "authed"
-  },
-  "POST /api/videos/speak": {
-   "class": "authed"
-  },
   "POST /api/videos/tutor": {
    "class": "authed"
   },
   "POST /api/videos/voice-command": {
    "class": "authed"
   },
-  "POST /api/videos/youtube-preview": {
+  "GET /api/videos/voices": {
    "class": "authed"
   },
-  "POST /api/restyle-tutor": {
+  "POST /api/videos/youtube-preview": {
    "class": "authed"
   },
   "POST /api/web-extractor-tutor": {

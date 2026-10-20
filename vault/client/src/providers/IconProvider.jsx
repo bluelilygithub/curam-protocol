@@ -69,6 +69,7 @@ const semanticMap = {
   'folder-open': { lucide: 'FolderOpen' },
   'folder-plus': { lucide: 'FolderPlus' },
   cpu: { lucide: 'Cpu' },
+  'hard-drive': { lucide: 'HardDrive' },
   files: { lucide: 'Files' },
   compare: { lucide: 'GitCompare' },
   debate: { lucide: 'Swords' },

@@ -119,6 +119,9 @@ app.use('/api/calendar', require('./routes/calendar'));
 // The stop-these-emails link in Fitness reminders: public (the person's own token is the proof), so before requireAuth.
 app.use('/api/fitness/unsubscribe', require('./routes/fitnessUnsubscribe'));
 
+// The PC Health helper on the admin's own PC has no login: it proves itself with its own token (see routes/pcHealth.js), so before requireAuth.
+app.use('/api/pc-helper', require('./routes/pcHealth').helperRouter);
+
 const { requireAuth, requireAdmin, requireFeature, requireAnyFeature } = require('./middleware/auth');
 app.use('/api', requireAuth);
 
@@ -226,6 +229,8 @@ app.use('/api/seo', requireFeature('seo'), aiLimiter, require('./routes/seoAudit
 app.use('/api/html', requireFeature('html'), require('./routes/htmlAudit'));
 app.use('/api/fitness', requireFeature('fitness'), require('./routes/fitness'));
 app.use('/api/measurements-tutor', requireFeature('measurements'), aiLimiter, require('./routes/measurementsTutor')); // the Measurements guide chat (sees no values or documents)
+app.use('/api/pc-health', requireAdmin, require('./routes/pcHealth')); // PC Health agent (admin only, read-only report on the admin's own PC)
+app.use('/api/pc-health-tutor', requireAdmin, aiLimiter, require('./routes/pcHealthTutor')); // the PC Health guide chat (sees no scan data)
 app.use('/api/web-extractor', requireFeature('webExtractor'), require('./routes/webExtractor'));
 app.use('/api/web-extractor-tutor', requireFeature('webExtractor'), aiLimiter, require('./routes/webExtractorTutor')); // the Web Extractor guide chat (reads no pages)
 app.use('/api/browser-agent', requireFeature('browserAgent'), require('./routes/browserAgent'));

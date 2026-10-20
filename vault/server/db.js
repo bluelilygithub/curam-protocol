@@ -1231,6 +1231,33 @@ async function initSchema() {
         UNIQUE ("userId", kind, "inputHash")
       )
     `);
+    // PC Health agent (admin only): the helper token (stored as a hash) and the queue + reports of scans of the admin's own PC.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pc_health_helpers (
+        "userId"     INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        "tokenHash"  TEXT NOT NULL,
+        hostname     TEXT,
+        "createdAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "lastSeenAt" TIMESTAMPTZ
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_pc_health_helpers_token ON pc_health_helpers ("tokenHash")`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pc_health_scans (
+        id            SERIAL PRIMARY KEY,
+        "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        status        TEXT NOT NULL DEFAULT 'queued',
+        options       JSONB NOT NULL DEFAULT '{}',
+        report        JSONB,
+        findings      JSONB,
+        summary       JSONB,
+        error         TEXT,
+        "requestedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "startedAt"   TIMESTAMPTZ,
+        "finishedAt"  TIMESTAMPTZ
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_pc_health_scans_user ON pc_health_scans ("userId", id DESC)`);
     // Tracing pictures are stored apart from the garden design (a garden references one by underlay.imageId = 'srv-<id>')
     await client.query(`
       CREATE TABLE IF NOT EXISTS garden_images (

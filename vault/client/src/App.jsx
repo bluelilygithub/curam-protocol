@@ -41,6 +41,7 @@ import VideosPage from './pages/VideosPage';
 import MusicPage from './pages/MusicPage';
 import RecipesPage from './pages/RecipesPage';
 import MeasurementsPage from './pages/MeasurementsPage';
+import PcHealthPage from './pages/PcHealthPage';
 import PdfPage from './pages/PdfPage';
 import DomainsPage from './pages/DomainsPage';
 import ProductScoutPage from './pages/ProductScoutPage';
@@ -185,6 +186,7 @@ function App() {
               <Route path="/music" element={<MusicPage />} />
               <Route path="/recipes" element={<RecipesPage />} />
               <Route path="/measurements" element={<MeasurementsPage />} />
+              <Route path="/pc-health" element={<PcHealthPage />} />
               <Route path="/pdf" element={<PdfPage />} />
               <Route path="/domains" element={<DomainsPage />} />
               <Route path="/product-scout" element={<ProductScoutPage />} />
