@@ -61,6 +61,7 @@ await context.route('**/api/**', async (route) => {
     return respond(route, { verdict: 'doable', answer: 'Use the tool.', steps: [{ tool: pathname.includes('fonts') ? 'shape' : pathname.includes('measurements') ? 'scan' : 'export', do: 'Open it.' }] });
   }
   if (pathname === '/api/web-extractor/extract') {
+    await new Promise((r) => setTimeout(r, 700)); // slow enough to see the progress window
     const long = 'A'.repeat(4000);
     return respond(route, {
       mode: 'styled', url: 'https://example.com/shop/', requestedUrl: 'https://example.com/shop/',
@@ -149,6 +150,8 @@ try {
   await page.locator('aside button', { hasText: 'Exact scrape' }).first().click();
   await page.getByRole('textbox', { name: 'Webpage address' }).fill('example.com/shop/');
   await page.getByRole('button', { name: 'Extract', exact: true }).click();
+  await page.getByRole('dialog').waitFor({ timeout: 3000 });
+  check(/Copying the page from example.com/.test(await page.getByRole('dialog').innerText()), 'Exact scrape shows a progress window naming the site');
   await page.locator('iframe[title="Exact scrape preview"]').waitFor({ timeout: 8000 });
   check(true, 'Exact scrape shows the copy in a preview');
   check((await page.getByText('1 style file and 1 picture copied in.').count()) === 1, 'it says what was copied in');

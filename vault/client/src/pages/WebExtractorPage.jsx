@@ -4,6 +4,8 @@ import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
+import useProcessingStore, { runWithStepLog } from '../store/processingStore';
+import { scrapeProgress, wasCancelled } from '../utils/scrapeProgress.mjs';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import Tooltip from '../components/Tooltip';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
@@ -101,12 +103,22 @@ export default function WebExtractorPage() {
     if (runMode === 'styled') setStyledView('preview');
     try {
       const excludeSections = excludeTerms.split(',').map((s) => s.trim()).filter(Boolean);
-      const res = await api.post('/api/web-extractor/extract', { url: url.trim(), mode: runMode, excludeSections, selector: selector.trim() });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Extraction failed');
+      const stop = new AbortController();
+      const ask = async () => {
+        const res = await api.post('/api/web-extractor/extract', { url: url.trim(), mode: runMode, excludeSections, selector: selector.trim() }, { signal: stop.signal });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error || 'Extraction failed');
+        return body;
+      };
+      // Exact scrape fetches the style files and copies the pictures in, which can take a while: it gets the progress window.
+      // The other tools answer in a moment and keep their own spinner.
+      const progress = scrapeProgress('exact', { url });
+      const data = runMode === 'styled'
+        ? await runWithStepLog(useProcessingStore.getState(), progress.title, progress.detail, progress.steps, ask, { onCancel: () => stop.abort() })
+        : await ask();
       if (myRequest === requestId.current) setResults((r) => ({ ...r, [runMode]: data }));
     } catch (err) {
-      addToast(err.message, 'error');
+      if (!wasCancelled(err)) addToast(err.message, 'error');
     } finally {
       if (myRequest === requestId.current) setLoadingMode(null);
     }

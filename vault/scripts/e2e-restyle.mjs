@@ -62,6 +62,7 @@ const SCRAPE = {
   },
   flags: ['1 style file could not be fetched (blocked, missing or timed out).'],
 };
+let slowLoadMs = 900; // how long the next page load takes, so the progress window can be seen
 const calls = [];
 const respond = (route, body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
@@ -81,7 +82,7 @@ await context.route('**/api/**', async (route) => {
   if (pathname === '/api/restyle/capabilities') return respond(route, { render: true });
   if (pathname === '/api/restyle/upload-html') return respond(route, prepared());
   if (pathname === '/api/restyle/process-css') return respond(route, { css: PAGE_CSS, changeLog: [], flags: [] });
-  if (pathname === '/api/restyle/fetch-url') return respond(route, prepared({ sourceUrl: 'https://example.com/', rendered: false, cssFiles: [{ filename: 'main.css', css: PAGE_CSS }], flags: ['1 of the page\'s style files could not be loaded.'] }));
+  if (pathname === '/api/restyle/fetch-url') { const wait = slowLoadMs; slowLoadMs = 900; return new Promise((r) => setTimeout(r, wait)).then(() => respond(route, prepared({ sourceUrl: 'https://example.com/', rendered: false, cssFiles: [{ filename: 'main.css', css: PAGE_CSS }], flags: ['1 of the page\'s style files could not be loaded.'] }))); }
   if (pathname === '/api/restyle/scrape-css') return respond(route, SCRAPE);
   if (pathname === '/api/restyle/ai-edit') return respond(route, { changes: [{ property: 'fontSize', value: '44px', explanation: 'Made it bigger.' }, { property: 'borderRadius', value: '12px', explanation: 'Rounded the corners.' }] });
   if (pathname === '/api/restyle/projects' && method === 'GET') return respond(route, { projects: [] });
@@ -357,8 +358,21 @@ try {
   await openTool('Your page');
   await page.getByRole('textbox', { name: 'Address of the page' }).fill('example.com');
   await page.getByRole('button', { name: 'Load this page' }).click();
+  const busy = page.getByRole('dialog');
+  await busy.waitFor({ timeout: 3000 });
+  check(/Loading the page from example.com/.test(await busy.innerText()), 'a progress window names the site while the page loads');
+  check((await busy.innerText()).includes('Asking the website for the page') && (await busy.innerText()).includes('Building the preview'), 'and lists the steps');
   await page.waitForFunction(() => document.body.innerText.includes('Loaded https://example.com/'), null, { timeout: 8000 });
   check(calls.includes('POST /api/restyle/fetch-url'), 'loading by address calls the server');
+  await page.getByRole('dialog').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+  check((await page.getByRole('dialog').count()) === 0, 'the progress window closes when the page is loaded');
+  // Cancel stops a slow load and says so
+  slowLoadMs = 8000;
+  await openTool('Your page');
+  await page.getByRole('button', { name: 'Load this page' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+  await page.waitForFunction(() => document.body.innerText.includes('Cancelled. Nothing was loaded.'), null, { timeout: 4000 });
+  check((await page.getByRole('dialog').count()) === 0, 'Cancel closes the progress window and says nothing was loaded');
   check(!/!important/.test(await editCss()), 'a new page starts with no changes (the brand colours stay, they belong to you, not the page)');
   await openTool('Style files');
   check((await page.getByText('main.css').count()) >= 1 && (await page.getByText(/could not be loaded/).count()) >= 1, 'the page\'s style files and the things worth a look are shown');

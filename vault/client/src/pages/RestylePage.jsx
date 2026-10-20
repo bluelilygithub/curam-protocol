@@ -3,6 +3,8 @@ import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
+import useProcessingStore, { runWithStepLog } from '../store/processingStore';
+import { scrapeProgress, wasCancelled } from '../utils/scrapeProgress.mjs';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import Tooltip from '../components/Tooltip';
 import ToolSidebar from '../components/ToolSidebar';
@@ -373,15 +375,19 @@ export default function RestylePage() {
   const loadAddress = async (url, render) => {
     setLoadingAddress(true);
     setHtmlStatus({ text: render ? 'Opening the page in a browser… this can take half a minute.' : 'Loading the page…', kind: '' });
+    const stop = new AbortController();
+    const progress = scrapeProgress('load', { render, url });
     try {
-      const res = await api.post('/api/restyle/fetch-url', { url, render: !!render });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'We couldn\'t load that page.');
-      const entries = applyLoadedPage(data, { replaceCss: true, url: data.sourceUrl || url });
-      setHtmlStatus({ text: `Loaded ${data.sourceUrl || url}${data.cssFiles?.length ? ` with ${data.cssFiles.length} style file${data.cssFiles.length === 1 ? '' : 's'}` : ''}.`, kind: 'ok' });
-      await runBuildPreview(entries);
+      await runWithStepLog(useProcessingStore.getState(), progress.title, progress.detail, progress.steps, async () => {
+        const res = await api.post('/api/restyle/fetch-url', { url, render: !!render }, { signal: stop.signal });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'We couldn\'t load that page.');
+        const entries = applyLoadedPage(data, { replaceCss: true, url: data.sourceUrl || url });
+        setHtmlStatus({ text: `Loaded ${data.sourceUrl || url}${data.cssFiles?.length ? ` with ${data.cssFiles.length} style file${data.cssFiles.length === 1 ? '' : 's'}` : ''}.`, kind: 'ok' });
+        await runBuildPreview(entries);
+      }, { onCancel: () => stop.abort() });
     } catch (err) {
-      setHtmlStatus({ text: err.message, kind: 'error' });
+      setHtmlStatus(wasCancelled(err) ? { text: 'Cancelled. Nothing was loaded.', kind: '' } : { text: err.message, kind: 'error' });
     } finally {
       setLoadingAddress(false);
     }
@@ -598,13 +604,18 @@ export default function RestylePage() {
   };
   const scrapeCss = async (url, render) => {
     setScrape((st) => ({ ...st, busy: true, status: { text: render ? 'Opening the page in a browser… this can take half a minute.' : 'Fetching the page and its style files…', kind: '' } }));
+    const stop = new AbortController();
+    const progress = scrapeProgress('css', { render, url });
     try {
-      const res = await api.post('/api/restyle/scrape-css', { url, render: !!render });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "We couldn't read that page.");
+      const data = await runWithStepLog(useProcessingStore.getState(), progress.title, progress.detail, progress.steps, async () => {
+        const res = await api.post('/api/restyle/scrape-css', { url, render: !!render }, { signal: stop.signal });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error || "We couldn't read that page.");
+        return body;
+      }, { onCancel: () => stop.abort() });
       setScrape({ result: data, busy: false, status: { text: `Found ${data.files.length} style file${data.files.length === 1 ? '' : 's'}.`, kind: data.files.length ? 'ok' : '' } });
     } catch (err) {
-      setScrape((st) => ({ ...st, busy: false, status: { text: err.message, kind: 'error' } }));
+      setScrape((st) => ({ ...st, busy: false, status: wasCancelled(err) ? { text: 'Cancelled.', kind: '' } : { text: err.message, kind: 'error' } }));
     }
   };
   const downloadScrapeZip = async () => {
