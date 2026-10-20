@@ -45,13 +45,13 @@ const upload = multer({
       cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safe}`);
     },
   }),
-  limits: { fileSize: MAX_BYTES, files: 20 },
+  limits: { fileSize: MAX_BYTES, files: 100 },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (!EXTENSIONS.includes(ext)) return cb(new Error(`File type not accepted (${ext || 'no extension'}). Allowed: ${EXTENSIONS.join(' ')}`));
     cb(null, true);
   },
-}).array('files', 20);
+}).array('files', 100);
 
 const isDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s + 'T00:00:00Z'));
 const isFy = (s) => {
@@ -174,6 +174,96 @@ router.get('/missing', wrap(async (req, res) => {
        ORDER BY a."datePurchased", a.id`, [req.user.id, b.from, b.to, min]),
   ]);
   res.json({ fy, minTotal: min, expenses: exp.rows, assets: ast.rows });
+}));
+
+// ---- vendor invoice/receipt reads ------------------------------------------------------------
+// The reader fills fields from a PDF (model) and checks them in code; the person confirms the match to
+// an expense. Reading never links anything or posts to the journal.
+
+const READ_COLS = `r.id, r."documentId", r.vendor, r."documentKind", r."invoiceNumber", r."receiptNumber", r."docDate"::text AS "docDate",
+  r."periodStart"::text AS "periodStart", r."periodEnd"::text AS "periodEnd", r.currency, r.subtotal::float AS subtotal, r.tax::float AS tax,
+  r.total::float AS total, r."taxKind", r."taxLabel", r."taxRatePct"::float AS "taxRatePct", r."supplierTaxId", r.description, r.status, r.problems, r."pairKey"`;
+
+router.get('/reads', wrap(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT ${READ_COLS}, d.title, d."originalName",
+            EXISTS (SELECT 1 FROM fin_document_links l WHERE l."documentId" = d.id) AS linked
+     FROM fin_document_reads r JOIN fin_documents d ON d.id = r."documentId"
+     WHERE r."userId"=$1 ORDER BY r."docDate" DESC NULLS LAST, r.id DESC LIMIT 1000`, [req.user.id]);
+  const { rows: [unread] } = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM fin_documents d
+     WHERE d."userId"=$1 AND d.kind IN ('invoice','receipt','other') AND d."mimeType"='application/pdf'
+       AND NOT EXISTS (SELECT 1 FROM fin_document_reads r WHERE r."documentId" = d.id)`, [req.user.id]);
+  res.json({ reads: rows, unreadCount: unread.n });
+}));
+
+// Documents the reader has not looked at yet (the client reads them one at a time so one slow file never
+// holds up the rest and the gateway time limit is never reached).
+router.get('/reads/unread', wrap(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT d.id FROM fin_documents d
+     WHERE d."userId"=$1 AND d.kind IN ('invoice','receipt','other') AND d."mimeType"='application/pdf'
+       AND NOT EXISTS (SELECT 1 FROM fin_document_reads r WHERE r."documentId" = d.id)
+     ORDER BY d.id`, [req.user.id]);
+  res.json({ ids: rows.map(r => r.id) });
+}));
+
+router.post('/:id/read', wrap(async (req, res) => {
+  const userId = req.user.id;
+  const { rows: [doc] } = await pool.query(`SELECT id, "storedName", "mimeType", "originalName" FROM fin_documents WHERE id=$1 AND "userId"=$2`, [req.params.id, userId]);
+  if (!doc) return res.status(404).json({ error: 'Not found' });
+  if (doc.mimeType !== 'application/pdf') return res.status(400).json({ error: 'Only PDF files can be read' });
+  const p = fileOf(userId, doc.storedName);
+  if (!p || !fs.existsSync(p)) return res.status(404).json({ error: 'The file is missing from storage' });
+
+  const { readVendorDocument } = require('../services/vendorDocument/read');
+  const { pairKey } = require('../services/vendorDocument/normalise');
+  const out = await readVendorDocument(userId, fs.readFileSync(p));
+  const r = out.record;
+  const key = pairKey(r);
+  const params = [userId, doc.id, r.vendor, r.documentKind, r.invoiceNumber, r.receiptNumber, r.docDate, r.periodStart, r.periodEnd, r.currency,
+    r.subtotal, r.tax, r.total, r.taxKind, r.taxLabel, r.taxRatePct, r.supplierTaxId, r.description, out.ok ? 'ok' : 'check', JSON.stringify(out.problems), key];
+  const { rows: [saved] } = await pool.query(
+    `INSERT INTO fin_document_reads ("userId","documentId",vendor,"documentKind","invoiceNumber","receiptNumber","docDate","periodStart","periodEnd",currency,
+       subtotal,tax,total,"taxKind","taxLabel","taxRatePct","supplierTaxId",description,status,problems,"pairKey")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21)
+     ON CONFLICT ("documentId") DO UPDATE SET vendor=EXCLUDED.vendor, "documentKind"=EXCLUDED."documentKind", "invoiceNumber"=EXCLUDED."invoiceNumber",
+       "receiptNumber"=EXCLUDED."receiptNumber", "docDate"=EXCLUDED."docDate", "periodStart"=EXCLUDED."periodStart", "periodEnd"=EXCLUDED."periodEnd",
+       currency=EXCLUDED.currency, subtotal=EXCLUDED.subtotal, tax=EXCLUDED.tax, total=EXCLUDED.total, "taxKind"=EXCLUDED."taxKind", "taxLabel"=EXCLUDED."taxLabel",
+       "taxRatePct"=EXCLUDED."taxRatePct", "supplierTaxId"=EXCLUDED."supplierTaxId", description=EXCLUDED.description, status=EXCLUDED.status,
+       problems=EXCLUDED.problems, "pairKey"=EXCLUDED."pairKey"
+     RETURNING id`, params);
+  // the library entry takes the vendor, date and type from the document, so search/filter/FY work
+  if (r.vendor && r.docDate) {
+    const title = `${r.vendor} ${r.docDate}${r.total ? ` ${r.currency || ''} ${r.total.toFixed(2)}` : ''}`.replace(/\s+/g, ' ').slice(0, 200);
+    await pool.query(
+      `UPDATE fin_documents SET kind=$3, supplier=$4, "docDate"=$5, fy=$6, title=$7 WHERE id=$1 AND "userId"=$2`,
+      [doc.id, userId, r.documentKind, r.vendor.slice(0, 200), r.docDate, finYearForDate(r.docDate), title]);
+    await ensureSupplier(userId, r.vendor);
+  }
+  const { rows: [row] } = await pool.query(`SELECT ${READ_COLS} FROM fin_document_reads r WHERE r.id=$1`, [saved.id]);
+  res.json(row);
+}));
+
+// Expenses that could be the charge this document is the proof of: same vendor name or same total,
+// within a week of the date. The amount is compared only when the document names its currency as AUD.
+router.get('/:id/candidates', wrap(async (req, res) => {
+  const { rows: [r] } = await pool.query(
+    `SELECT r.vendor, r."docDate", r.total::float AS total, r.currency FROM fin_document_reads r WHERE r."documentId"=$1 AND r."userId"=$2`, [req.params.id, req.user.id]);
+  if (!r || !r.docDate) return res.json({ expenses: [] });
+  const word = String(r.vendor || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(' ').filter(w => w.length >= 4)[0] || null;
+  const { rows } = await pool.query(
+    `SELECT e.id, e.date::text AS date, e.description, e.supplier, (e.amount + e.gst)::float AS total,
+            EXISTS (SELECT 1 FROM fin_document_links l WHERE l."expenseId" = e.id) AS "hasDocument"
+     FROM fin_expenses e
+     WHERE e."userId"=$1 AND e.date BETWEEN ($2::date - 7) AND ($2::date + 7)
+     ORDER BY ABS(e.date - $2::date), e.id LIMIT 50`, [req.user.id, r.docDate]);
+  const out = rows.map((e) => {
+    const named = !!word && `${e.supplier || ''} ${e.description || ''}`.toLowerCase().includes(word);
+    const sameTotal = r.currency === 'AUD' && Math.abs(e.total - r.total) < 0.005;
+    return { ...e, named, sameTotal };
+  }).filter(e => e.named || e.sameTotal);
+  res.json({ expenses: out });
 }));
 
 router.post('/', (req, res) => {

@@ -290,3 +290,13 @@ Finance → Documents → **Review lines** on a bank-statement PDF reads its tra
   - Still visible on purpose: **Minimum Monthly Payment, Credit Limit** and the **Minimum Repayment Warning** table (its figures are derived from the closing balance); say if those should go too (`SUMMARY_LABELS` / a rectangle list in `cardRedact.js`).
   - Bank (account) statements are not redacted yet. PyMuPDF is AGPL-licensed; it is run as an external tool for this private app. Installed in the image via `server/services/pdfRedact/requirements.txt` (Dockerfile). Locally: `pip install pymupdf`.
 - **Not built yet:** redaction of bank-account statements; reading statements from other banks/layouts; a "partly business" percentage on a line.
+
+## Vendor invoices and receipts (2026-10-20)
+
+Finance → **Documents** has a **Vendor receipts and invoices** panel. Upload the PDFs (up to 100 at once), press **Read n documents**: the `light` model reads vendor, invoice/receipt number, date (date PAID on a receipt), currency, subtotal, tax and total (`server/services/vendorDocument/read.js`), and `normalise.js` re-checks them in code (subtotal + tax = total, stated rate vs tax). Anything that fails shows **Check** with the reason and is never filed silently. Rows live in `fin_document_reads`; the library entry takes the vendor, date, type and FY from the read.
+
+- **Currency** is left blank when a document shows only "$" (Replit, fal, DeepSeek); it is not guessed.
+- **Tax kind**: `gst` (Australian GST), `foreign` (e.g. China VAT, never a GST credit), `none`. Stored as a split so ticking **Registered for GST** later needs no re-entry; while unregistered the whole amount is the expense.
+- An invoice and its receipt share `pairKey` (vendor + invoice number): one purchase. One of the two is enough.
+- **Find expense** lists expenses within 7 days naming the vendor (or the same total when the document is AUD); the person attaches the receipt, nothing links automatically.
+- Not built yet: matching to card-statement lines, vendor rules (category/GST per vendor), prompt to attach a receipt when posting an expense, month-end missing-receipt alert, What to do next. Tests: `node server/services/vendorDocument/normalise.test.js`.

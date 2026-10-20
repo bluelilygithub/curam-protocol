@@ -5104,6 +5104,44 @@ function AssetsSettingsSection() {
   );
 }
 
+// Collapsible Settings block. Open/closed is remembered per browser; `forceOpen` (a changing number)
+// opens it when something elsewhere sends the person to a control inside it.
+function SettingsBlock({ id, title, hint, defaultOpen = false, forceOpen, children }) {
+  const getIcon = useIcon();
+  const storageKey = `vault:finance-settings-open:${id}`;
+  const [open, setOpen] = useState(() => {
+    try {
+      const v = localStorage.getItem(storageKey);
+      return v === null ? defaultOpen : v === '1';
+    } catch { return defaultOpen; }
+  });
+  useEffect(() => { if (forceOpen) setOpen(true); }, [forceOpen]);
+  const toggle = () => {
+    setOpen(o => {
+      try { localStorage.setItem(storageKey, o ? '0' : '1'); } catch { /* storage blocked: still works */ }
+      return !o;
+    });
+  };
+  return (
+    <div className="rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:opacity-70"
+        style={{ color: 'var(--color-text)', transition: 'opacity 200ms' }}
+      >
+        <span>
+          <span className="text-sm font-semibold">{title}</span>
+          {hint && <span className="block text-xs" style={{ color: 'var(--color-muted)' }}>{hint}</span>}
+        </span>
+        {getIcon(open ? 'chevron-down' : 'chevron-right', { size: 16 })}
+      </button>
+      {open && <div className="px-4 pb-4 flex flex-col gap-3">{children}</div>}
+    </div>
+  );
+}
+
 function SettingsTab({ onHistoryReset, focusSection, onFocusHandled }) {
   const [form, setForm] = useState({
     fin_biz_name: '', fin_abn: '', fin_address: '', fin_website: '',
@@ -5127,14 +5165,20 @@ function SettingsTab({ onHistoryReset, focusSection, onFocusHandled }) {
       .catch(() => {});
   }, []);
 
+  const [forceOpenVho, setForceOpenVho] = useState(0);
+  const [forceOpenExportMap, setForceOpenExportMap] = useState(0);
+
   useEffect(() => {
-    if (focusSection === 'vehicleHomeOffice' && vhoSectionRef.current) {
-      vhoSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (focusSection === 'vehicleHomeOffice') setForceOpenVho(n => n + 1);
+    else if (focusSection === 'exportAccountMap') setForceOpenExportMap(n => n + 1);
+    else return;
+    // wait a frame so the block has opened and its content exists before scrolling to it
+    const t = setTimeout(() => {
+      const el = focusSection === 'vehicleHomeOffice' ? vhoSectionRef.current : exportMapSectionRef.current;
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       onFocusHandled?.();
-    } else if (focusSection === 'exportAccountMap' && exportMapSectionRef.current) {
-      exportMapSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      onFocusHandled?.();
-    }
+    }, 50);
+    return () => clearTimeout(t);
   }, [focusSection]);
 
   const set = (key) => (v) => setForm(p => ({ ...p, [key]: v }));
@@ -5188,6 +5232,7 @@ function SettingsTab({ onHistoryReset, focusSection, onFocusHandled }) {
     <div className="p-6 max-w-3xl">
       <h2 className="font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Finance Settings</h2>
       <div className="flex flex-col gap-3">
+        <SettingsBlock id="business" title="Business details" hint="Name, ABN, address and the bank details printed on invoices" defaultOpen>
         <Field label="Business Name"><Tooltip text="Shown on invoices, quotes, and emails sent to clients"><Input value={f('fin_biz_name')} onChange={set('fin_biz_name')} placeholder="Your Business Name Pty Ltd" /></Tooltip></Field>
         <Field label="ABN"><Tooltip text="Your Australian Business Number — printed on every invoice/quote"><Input value={f('fin_abn')} onChange={set('fin_abn')} placeholder="12 345 678 901" /></Tooltip></Field>
         <Field label="Business Address"><Tooltip text="Printed on invoices and quotes"><Input value={f('fin_address')} onChange={set('fin_address')} placeholder="Street, City, State, Postcode" /></Tooltip></Field>
@@ -5202,8 +5247,10 @@ function SettingsTab({ onHistoryReset, focusSection, onFocusHandled }) {
             <Field label="Account Number"><Tooltip text="Bank account number for receiving payments"><Input value={f('fin_account_number')} onChange={set('fin_account_number')} placeholder="123456789" /></Tooltip></Field>
           </div>
         </div>
+        </SettingsBlock>
 
-        <div className="border-t pt-3 mt-1" style={{ borderColor: 'var(--color-border)' }}>
+        <SettingsBlock id="gst" title="GST and payment terms" hint="Registration, cash or accrual basis, days until an invoice is due">
+        <div>
           <Field label="Default Payment Terms">
             <Tooltip text="Default number of days until an invoice is due, and used when converting a quote to an invoice">
               <Sel value={f('fin_payment_terms')} onChange={set('fin_payment_terms')}>
@@ -5242,9 +5289,10 @@ function SettingsTab({ onHistoryReset, focusSection, onFocusHandled }) {
             </div>
           )}
         </div>
+        </SettingsBlock>
 
-        <div className="border-t pt-3 mt-1" style={{ borderColor: 'var(--color-border)' }}>
-          <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-muted)' }}>Email & Reminders</p>
+        <SettingsBlock id="email" title="Email and reminders" hint="Admin copy of sent invoices and the Monday overdue summary">
+        <div>
           <div className="flex flex-col gap-3">
             <Field label="Admin CC email">
               <Tooltip text="Receives a copy of every sent invoice/quote plus the weekly overdue summary."><Input value={f('fin_admin_email')} onChange={set('fin_admin_email')} type="email" placeholder="admin@yourdomain.com" /></Tooltip>
@@ -5273,35 +5321,38 @@ function SettingsTab({ onHistoryReset, focusSection, onFocusHandled }) {
             </p>
           </div>
         </div>
+        </SettingsBlock>
 
-        <div className="pt-2">
-          <Tooltip text="Save all Finance settings above."><Btn onClick={save} disabled={saving}>{saved ? 'Saved!' : saving ? 'Saving…' : 'Save Settings'}</Btn></Tooltip>
+        <div className="pt-1">
+          <Tooltip text="Saves the Business details, GST and Email blocks above. The blocks below save themselves."><Btn onClick={save} disabled={saving}>{saved ? 'Saved!' : saving ? 'Saving…' : 'Save Settings'}</Btn></Tooltip>
         </div>
 
-        <VehicleHomeOfficeSettingsSection
-          sectionRef={vhoSectionRef}
-          rates={{ fin_vehicle_rate_per_km: f('fin_vehicle_rate_per_km'), fin_home_office_rate_per_hour: f('fin_home_office_rate_per_hour') }}
-          onChangeRate={(key, v) => set(key)(v)}
-          saveRate={saveRate}
-        />
+        <SettingsBlock id="vho" title="Vehicle and home office" hint="Rates and evidence for the ATO deduction methods" forceOpen={forceOpenVho}>
+          <VehicleHomeOfficeSettingsSection
+            sectionRef={vhoSectionRef}
+            rates={{ fin_vehicle_rate_per_km: f('fin_vehicle_rate_per_km'), fin_home_office_rate_per_hour: f('fin_home_office_rate_per_hour') }}
+            onChangeRate={(key, v) => set(key)(v)}
+            saveRate={saveRate}
+          />
+        </SettingsBlock>
 
-        <AssetsSettingsSection />
+        <SettingsBlock id="assets" title="Assets and depreciation" hint="Thresholds and methods for the assets register">
+          <AssetsSettingsSection />
+        </SettingsBlock>
 
-        {/* Export account mapping */}
-        <div ref={exportMapSectionRef} className="border-t pt-3 mt-1" style={{ borderColor: 'var(--color-border)' }}>
-          <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>Export Account Mapping</p>
-          <ExportAccountMapPanel />
-        </div>
+        <SettingsBlock id="export-map" title="Accountant export mapping" hint="Match your accounts to the accountant's codes for MYOB and Xero" forceOpen={forceOpenExportMap}>
+          <div ref={exportMapSectionRef}>
+            <ExportAccountMapPanel />
+          </div>
+        </SettingsBlock>
 
-        {/* Export history — nuclear option */}
-        <div className="border-t pt-3 mt-1" style={{ borderColor: 'var(--color-border)' }}>
-          <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>Export History</p>
-          <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
+        <SettingsBlock id="export-history" title="Export history" hint="Cutoff dates that stop duplicate imports. Change only after checking with your accountant">
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
             Each export locks a cutoff date to prevent duplicate imports into MYOB, Xero, Excel, or Google Sheets.
-            Use the controls below to override a specific format's cutoff, or clear all at once. Only do this after confirming with your accountant.
+            Use the controls below to override a specific format's cutoff, or clear all at once.
           </p>
           <ExportHistoryPanel onChanged={onHistoryReset} />
-        </div>
+        </SettingsBlock>
       </div>
     </div>
   );
@@ -6825,6 +6876,112 @@ const fyOptions = () => {
   return Array.from({ length: 8 }, (_, i) => { const y = cur - i; return `${y}-${String((y + 1) % 100).padStart(2, '0')}`; });
 };
 
+// Vendor invoices/receipts (Anthropic, Railway, Cursor...): the reader fills vendor, date, currency, tax and
+// total from each PDF; the person only fixes the ones marked "Check" and confirms the matching expense.
+function VendorReceiptsPanel({ reloadKey, onChanged }) {
+  const addToast = useToastStore(s => s.addToast);
+  const [reads, setReads] = useState([]);
+  const [unread, setUnread] = useState(0);
+  const [progress, setProgress] = useState(null); // { done, total } while reading
+  const [open, setOpen] = useState(null);         // read id whose matching expenses are showing
+  const [cands, setCands] = useState([]);
+
+  const load = useCallback(async () => {
+    try {
+      const b = await (await api.get('/api/finance/documents/reads')).json();
+      if (b.reads) { setReads(b.reads); setUnread(b.unreadCount || 0); }
+    } catch { /* panel is optional; the library below still works */ }
+  }, []);
+  useEffect(() => { load(); }, [load, reloadKey]);
+
+  const readAll = async () => {
+    try {
+      const { ids } = await (await api.get('/api/finance/documents/reads/unread')).json();
+      let failed = 0;
+      setProgress({ done: 0, total: ids.length });
+      for (let i = 0; i < ids.length; i++) {
+        try { await okOrThrow(await api.post(`/api/finance/documents/${ids[i]}/read`)); } catch { failed++; }
+        setProgress({ done: i + 1, total: ids.length });
+      }
+      if (failed) addToast(`${failed} document${failed === 1 ? '' : 's'} could not be read`, 'error');
+      else addToast(`${ids.length} document${ids.length === 1 ? '' : 's'} read`);
+      await load(); onChanged?.();
+    } catch (e) { addToast(e.message, 'error'); } finally { setProgress(null); }
+  };
+
+  const showMatches = async (r) => {
+    if (open === r.id) { setOpen(null); return; }
+    try {
+      const b = await (await api.get(`/api/finance/documents/${r.documentId}/candidates`)).json();
+      setCands(b.expenses || []); setOpen(r.id);
+    } catch (e) { addToast(e.message, 'error'); }
+  };
+  const link = async (r, expenseId) => {
+    try {
+      await okOrThrow(await api.put(`/api/finance/documents/${r.documentId}/links`, { expenseIds: [expenseId], assetIds: [] }));
+      addToast('Receipt attached to the expense'); setOpen(null); await load(); onChanged?.();
+    } catch (e) { addToast(e.message, 'error'); }
+  };
+
+  const money = (r) => `${r.currency || '$'}${r.currency ? ' ' : ''}${(r.total ?? 0).toFixed(2)}`;
+  const taxText = (r) => (r.taxKind === 'none' ? 'No tax' : `${r.taxKind === 'gst' ? 'GST' : 'Foreign tax'} ${r.tax.toFixed(2)}`);
+  const needCheck = reads.filter(r => r.status === 'check').length;
+
+  if (!reads.length && !unread) return null;
+  return (
+    <div className="rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
+        <div>
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Vendor receipts and invoices</h3>
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+            {unread ? `${unread} not read yet. ` : ''}{needCheck ? `${needCheck} need checking. ` : ''}A receipt and invoice with the same number count as one purchase. A "$" with no currency stays blank until the card line settles it.
+          </p>
+        </div>
+        <Tooltip text="Reads vendor, date, currency, tax and total from each unread PDF invoice/receipt. Nothing is linked or posted until you confirm.">
+          <Btn onClick={readAll} disabled={!!progress || !unread}>{progress ? `Reading ${progress.done} of ${progress.total}…` : `Read ${unread || 'new'} document${unread === 1 ? '' : 's'}`}</Btn>
+        </Tooltip>
+      </div>
+      {reads.length > 0 && (
+        <table className="w-full text-sm">
+          <tbody>
+            {reads.map(r => (
+              <React.Fragment key={r.id}>
+                <tr className="border-b last:border-0" style={{ borderColor: 'var(--color-border)' }}>
+                  <td className="py-2 px-4 text-xs" style={{ color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>{r.docDate ? fmtDate(r.docDate) : '—'}</td>
+                  <td className="py-2 px-2" style={{ color: 'var(--color-text)' }}>
+                    {r.vendor || r.title}
+                    <span className="text-xs" style={{ color: 'var(--color-muted)' }}> · {r.documentKind}{r.description ? ` · ${r.description}` : ''}</span>
+                    {r.status === 'check' && <div className="text-xs" style={{ color: '#f59e0b' }}>Check: {(r.problems || []).join('; ')}</div>}
+                  </td>
+                  <td className="py-2 px-2 font-medium" style={{ color: 'var(--color-text)', whiteSpace: 'nowrap' }}>{money(r)}</td>
+                  <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>{taxText(r)}</td>
+                  <td className="py-2 px-4 text-right" style={{ whiteSpace: 'nowrap' }}>
+                    {r.linked
+                      ? <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Attached</span>
+                      : <Tooltip text="Show expenses of about the same date and vendor, then attach this receipt to one."><button className="text-xs hover:opacity-60" style={{ color: 'var(--color-primary)' }} onClick={() => showMatches(r)}>Find expense</button></Tooltip>}
+                  </td>
+                </tr>
+                {open === r.id && (
+                  <tr><td colSpan={5} className="px-4 pb-3 text-xs" style={{ color: 'var(--color-muted)' }}>
+                    {cands.length === 0 && 'No expense within a week of this date matches the vendor. Add the expense first, then come back.'}
+                    {cands.map(c => (
+                      <div key={c.id} className="flex items-center gap-3 py-1">
+                        <span>{fmtDate(c.date)}</span><span style={{ color: 'var(--color-text)' }}>{c.description}</span><span>{fmt(c.total)}</span>
+                        <span>{c.sameTotal ? 'same total' : 'vendor named'}</span>
+                        <button className="hover:opacity-60" style={{ color: 'var(--color-primary)' }} onClick={() => link(r, c.id)}>Attach here</button>
+                      </div>
+                    ))}
+                  </td></tr>
+                )}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 function DocumentsTab() {
   const addToast = useToastStore(s => s.addToast);
   const [fy, setFy] = useState(finYearForDate(todayStr()));
@@ -6960,6 +7117,8 @@ function DocumentsTab() {
           <Tooltip text="Upload the chosen files to this library."><Btn onClick={doUpload} disabled={uploading || !files.length}>{uploading ? 'Uploading…' : `Upload${files.length ? ` ${files.length} file${files.length === 1 ? '' : 's'}` : ''}`}</Btn></Tooltip>
         </div>
       </div>
+
+      <VendorReceiptsPanel reloadKey={data.documents.length} onChanged={load} />
 
       {/* Missing evidence */}
       <div className="rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
