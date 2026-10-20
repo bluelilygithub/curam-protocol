@@ -1816,7 +1816,7 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange, disposal
       ],
       sections: [{
         title: 'Activity',
-        columns: [{ key: 'when', label: 'When', format: 'datetime' }, cText('event', 'Event'), cText('detail', 'Detail'), cText('type', 'Type'), cDate('entryDate', 'Entry date'), cMoney('amount', 'Amount'), cText('result', 'Result')],
+        columns: [{ key: 'when', label: 'When', format: 'datetime' }, { ...cText('event', 'Event'), wide: true }, { ...cText('detail', 'Detail'), wide: true }, cText('type', 'Type'), cDate('entryDate', 'Entry date'), cMoney('amount', 'Amount'), cText('result', 'Result')],
         rows: events,
       }],
     });

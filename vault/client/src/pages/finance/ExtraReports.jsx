@@ -161,6 +161,9 @@ function LabelledField({ label, children }) {
   );
 }
 
+// dates, times and money stay on one line; a column marked `wide` by the report gets room to breathe
+const NO_WRAP_FORMATS = ['money', 'date', 'datetime', 'int'];
+
 function ReportSection({ sec }) {
   return (
     <div className="mb-6">
@@ -171,7 +174,7 @@ function ReportSection({ sec }) {
           <thead>
             <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
               {sec.columns.map(c => (
-                <th key={c.key} className={`py-2 px-2 text-xs font-semibold whitespace-nowrap ${c.align === 'right' ? 'text-right' : 'text-left'}`} style={{ color: 'var(--color-muted)' }}>{c.label}</th>
+                <th key={c.key} className={`py-2 px-2 text-xs font-semibold whitespace-nowrap ${c.align === 'right' ? 'text-right' : 'text-left'}`} style={{ color: 'var(--color-muted)', minWidth: c.wide ? '16rem' : undefined }}>{c.label}</th>
               ))}
             </tr>
           </thead>
@@ -182,7 +185,7 @@ function ReportSection({ sec }) {
             {sec.rows.map((r, i) => (
               <tr key={i} style={{ borderTop: '1px solid var(--color-border)' }}>
                 {sec.columns.map(c => (
-                  <td key={c.key} className={`py-1.5 px-2 ${c.align === 'right' ? 'text-right tabular-nums' : ''} ${r._bold ? 'font-semibold' : ''}`} style={{ color: 'var(--color-text)' }}>
+                  <td key={c.key} className={`py-1.5 px-2 ${c.align === 'right' ? 'text-right tabular-nums' : ''} ${r._bold ? 'font-semibold' : ''} ${NO_WRAP_FORMATS.includes(c.format) ? 'whitespace-nowrap' : ''} ${c.wide ? 'break-words' : ''}`} style={{ color: 'var(--color-text)' }}>
                     {fmtCell(r[c.key], c.format)}
                   </td>
                 ))}
@@ -351,8 +354,11 @@ export default function ExtraReport({ name, config }) {
     }
   };
 
+  // a report with many columns (the Audit Trail has seven) uses the whole width instead of a narrow strip
+  const wideReport = (report?.sections || []).some(sec => sec.columns.length >= 6);
+
   return (
-    <div className="max-w-4xl">
+    <div className={wideReport ? 'w-full' : 'max-w-4xl'}>
       <div className="flex flex-wrap items-end gap-3 mb-4">
         {config.mode === 'range' && (
           <>
