@@ -17,6 +17,9 @@ checkGuide({
   exampleStepId: 'helper',
   facts: [
     ['overview', 'notes', /no delete, clean or fix button/, 'the overview has no fix button'],
+    ['overview', 'does', /Copy with explanations/, 'the copy buttons are named as on the page'],
+    ['overview', 'does', /More info toggle/, 'the More info toggle is named as on the page'],
+    ['overview', 'notes', /advice for you to weigh, never actions/, 'advice is not an action'],
     ['scan', 'does', /Waiting for the helper/, 'the waiting state is named as on the page'],
     ['scan-scope', 'does', /Large-file size.*Time limit/s, 'the scan settings are named as on the page'],
     ['logs', 'notes', /Windows manages the hibernation and page files/, 'system files are not offered as removals'],

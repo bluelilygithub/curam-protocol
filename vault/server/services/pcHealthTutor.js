@@ -10,8 +10,8 @@ const { createGuide, REPLY_FORMAT, VERDICT_HELP } = require('./guideCore');
 
 const CATALOG = [
   { id: 'overview', label: 'Overview', group: 'Report',
-    does: 'The newest finished scan on one page: how many things are marked High and Watch, the findings in order of importance, and a card each for drives, memory and processor. Each finding says what was found and why it matters, and names the file or folder where there is one.',
-    notes: 'It only reports. It has no delete, clean or fix button, and no finding carries a command to run. Nothing shows until the first scan has finished.' },
+    does: 'The newest finished scan on one page: how many things are marked High and Watch, the findings in order of importance, and a card each for drives, memory and processor. Each finding says what was found and why it matters, and names the file or folder where there is one. Every finding has a More info toggle that opens what the item is, why it matters, what you could consider doing (your decision) and what to check first. Under the scan details, Copy report copies the whole report as plain text, and Copy with explanations does the same with every More info written out, so it can be pasted into a chat or email.',
+    notes: 'It only reports and explains; the More info options are advice for you to weigh, never actions it takes. It has no delete, clean or fix button, and no finding carries a command to run. Nothing shows until the first scan has finished.' },
   { id: 'scan', label: 'Run a scan', group: 'Report',
     does: 'The Run a scan button asks the helper on the PC for a fresh look. The page shows Waiting for the helper, then Scanning, then the report opens by itself. Cancel stops a request that has not finished. Only one scan runs at a time.',
     notes: 'It needs the helper running on the PC (see Set up the helper). If the helper is not running the request waits until it is, and is dropped after a day.' },
@@ -22,10 +22,10 @@ const CATALOG = [
     does: 'Every drive with a bar showing how full it is and the free space, then the biggest folders found (up to three levels deep) with their sizes.',
     notes: 'Folder sizes only cover the places the scan looked at. Windows keeps some folders private, so a few sizes can be too low.' },
   { id: 'files', label: 'Large files', group: 'Findings',
-    does: 'The largest files the scan found, biggest first, with size, when each was last changed and its full location. A search box narrows the list.',
+    does: 'The largest files the scan found, biggest first, with size, when each was last changed and its full location. A search box narrows the list, Copy location copies the location of a file so you can look at it in File Explorer, and More info on each file says what it probably is (Docker or WSL disk, installer, archive, editor database and so on) and what you could consider.',
     notes: 'It lists files; it does not say whether a file is safe to remove. That is for the person to decide. Only files above the large-file size are listed.' },
   { id: 'logs', label: 'Logs and leftovers', group: 'Findings',
-    does: 'Two lists. Log files: how many were found, their total size, and the biggest (log, trace and event-trace files). Left behind: crash dumps, the Windows and user temp folders, caches (Windows Update, browsers, npm, pip, Yarn, NuGet), the Recycle Bin, an old Windows install, installers and disk images in a Downloads folder, and large Windows system files such as the hibernation and page files, each with a note about what it is.',
+    does: 'Four lists. Worth a look: the logs and leftovers large enough to flag, each with More info. Log files: how many were found, their total size, and the biggest (log, trace and event-trace files). Left behind: crash dumps, the Windows and user temp folders, caches (Windows Update, browsers, npm, pip, Yarn, NuGet), the Recycle Bin, an old Windows install, installers and disk images in a Downloads folder, and large Windows system files such as the hibernation and page files, each with a note about what it is.',
     notes: 'Windows manages the hibernation and page files itself; they are listed so the disk space is explained, not as something to remove. The Recycle Bin size can be too low because other accounts\' bins are private.' },
   { id: 'growth', label: 'Growth', group: 'Findings',
     does: 'Folders that grew since the previous scan, or large folders that are new, with how much they grew and about how much per day.',

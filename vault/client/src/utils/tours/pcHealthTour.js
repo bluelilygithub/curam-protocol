@@ -91,7 +91,7 @@ export function startPcHealthTour(goTab) {
   tour.addStep({
     id: 'pch-overview',
     title: 'The overview',
-    text: 'Findings are marked High or Watch by fixed rules, most important first, each with what was found and why it matters. Use Copy location to look at a file yourself in File Explorer.',
+    text: 'Findings are marked High or Watch by fixed rules, most important first, each with what was found and why it matters. Press More info on a finding for what it is and what you could do, and Copy location to look at a file yourself in File Explorer. Copy report puts the whole report on your clipboard as text.',
     attachTo: { element: '[data-tour="pch-overview"]', on: 'top' },
     beforeShowPromise: showTab('overview', 'pch-overview', '[data-tour="pch-overview"]'),
     when: { show() { injectStepCounter(5); } },

@@ -24,6 +24,10 @@ Limits: Windows keeps some folders private (a few sizes are too low, notably oth
 
 `pcHealth.analyse()` is pure code with thresholds in `THRESHOLDS`, so the same report always gives the same findings (the model is not involved). High/Watch rules: drive free below 20% / 10%; memory used above 70% / 85%; a program using over 1.5 GB / 4 GB or 25% / 60% of the processor; a file over the chosen size (5 GB = High); logs over 200 MB / 1 GB total and any single log over 100 MB; leftovers over 500 MB / 5 GB; folders that grew 500 MB or 25% (and at least 100 MB) since the previous scan, and new folders over 1 GB / 5 GB. High findings file one Suggestions-inbox alert per distinct set (`source: pcHealth`).
 
+## More info and Copy report
+
+Every finding has a **More info** toggle (what it is, why it matters, what you could consider, what to check first). The text comes from `server/services/pcHealthAdvice.js`: fixed rules on the finding's id and path (Docker and WSL disks, the Claude app's VM files, archives and installers in Downloads, editor databases, MySQL binlogs, Git packs, WordPress debug logs, browsers, node, caches, the Recycle Bin and so on), added when a scan is read so wording changes also apply to old scans. It names no command, and says plainly when deleting the thing would be harmful (a test checks both). **Copy report** / **Copy with explanations** (Overview) build a plain-text version in `client/src/pages/pcHealth/reportText.mjs` for pasting into a chat or email.
+
 ## Pieces
 
 | Piece | Where |
@@ -33,7 +37,7 @@ Limits: Windows keeps some folders private (a few sizes are too low, notably oth
 | Tour | `client/src/utils/tours/pcHealthTour.js` (compass icon; `/pc-health?tour=1`) |
 | Admin API | `server/routes/pcHealth.js` at `/api/pc-health` (`requireAdmin`) |
 | Helper API | same file, `helperRouter` at `/api/pc-helper` (token) |
-| Logic | `server/services/pcHealth.js` |
+| Logic | `server/services/pcHealth.js`, advice wording `server/services/pcHealthAdvice.js`, copy text `client/src/pages/pcHealth/reportText.mjs` |
 | Helper program | `server/assets/pc-health-helper.ps1` |
 | Guide chat | `server/services/pcHealthTutor.js`, `server/routes/pcHealthTutor.js` (`/api/pc-health-tutor`, `requireAdmin`), `client/src/pages/pcHealth/PcHealthTutorChat.jsx`, `guideId` `pc-health`. Sees no scan data. |
 | Tables | `pc_health_helpers`, `pc_health_scans` in `server/db.js` |

@@ -15,6 +15,7 @@ const { pool } = require('../db');
 const { getLogger } = require('../middleware/requestContext');
 const { captureIf, makeFingerprint } = require('../services/SuggestionService');
 const { sanitizeReport, cleanScanOptions, analyse, summarise } = require('../services/pcHealth');
+const { withAdvice } = require('../services/pcHealthAdvice');
 
 const HELPER_ONLINE_MS = 90 * 1000;     // the helper polls every 30s by default
 const RUNNING_TIMEOUT_MIN = 45;         // a scan the helper never finished
@@ -121,7 +122,7 @@ router.get('/scans/:id', async (req, res, next) => {
     const { rows } = await pool.query(
       `SELECT ${SCAN_LIST_COLS}, report, findings FROM pc_health_scans WHERE id=$1 AND "userId"=$2`, [req.params.id, req.user.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Scan not found.' });
-    res.json(rows[0]);
+    res.json({ ...rows[0], findings: withAdvice(rows[0].findings) }); // "More info" wording is added here, so it also applies to older scans
   } catch (err) { next(err); }
 });
 

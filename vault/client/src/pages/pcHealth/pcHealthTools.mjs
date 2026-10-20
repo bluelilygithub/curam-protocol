@@ -23,10 +23,10 @@ export const GROUP_TIPS = {
 };
 
 export const TOOL_TIPS = {
-  overview: 'The newest scan in one page: what needs a look first, then the numbers for disk, memory and processor.',
+  overview: 'The newest scan in one page: what needs a look first, then the numbers for disk, memory and processor. Each finding has a More info toggle, and Copy report copies it all as text to paste elsewhere.',
   scan: 'Ask your PC for a fresh look. Pick a quick check of the usual places, or the whole drive, and see when the helper has picked it up.',
   disk: 'How full each drive is, and the biggest folders on it.',
-  files: 'The largest files found, newest scan first, with when each was last changed. Look only; nothing is deleted.',
+  files: 'The largest files found, biggest first, with when each was last changed and a More info toggle on each. Look only; nothing is deleted.',
   logs: 'Log files that keep growing, plus crash dumps, temporary files, caches, old installers and other things left behind.',
   growth: 'Folders that grew since the previous scan, and big new folders. Needs at least two scans.',
   performance: 'Memory in use and which programs use the most memory and processor time.',
@@ -51,6 +51,7 @@ export const TOOL_BLURBS = {
 export const HOW_IT_WORKS = [
   ['What it does', 'PC Health looks at your own computer and writes a report: how full each drive is, memory and processor use and which programs use the most, the largest files, the biggest folders, log files that keep growing, and things that look left behind (crash dumps, temporary files, caches, old installers).'],
   ['It never fixes anything', 'This tool only reports. It does not delete, move, rename, clean or change any file, and it does not stop any program. Every finding is for you to look at and decide about yourself.'],
+  ['More info and Copy report', 'Each finding has a More info toggle: what the item is, why it matters, what you could consider doing and what to check first. The options are advice, never something PC Health does. Copy report copies the whole report as plain text (Copy with explanations adds every More info), ready to paste into a chat or email.'],
   ['How it reaches your PC', 'Vault runs on the internet and cannot see inside your PC. So a small helper program runs on your PC and checks Vault every 30 seconds. When you press Run a scan, the helper does the looking and sends the report back. The helper only reads; it writes no files on your PC.'],
   ['Growth', 'Each scan is compared with your previous one, so folders that are growing show up. The first scan has nothing to compare with.'],
   ['Limits', 'Windows keeps some folders private even from programs you run, so a few sizes can be too low (the Recycle Bin, for example). A long scan stops at its time limit and says so. A processor reading is a few seconds of activity, not an average over the day.'],

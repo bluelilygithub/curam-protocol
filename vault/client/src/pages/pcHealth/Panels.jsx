@@ -3,7 +3,8 @@ import Tooltip from '../../components/Tooltip';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
 import { parseSpokenNumber } from '../../utils/units/numbers.mjs';
 import { Card, PrimaryButton, SecondaryButton, FOCUS_RING } from '../measurements/shared';
-import { fmtMB, fmtGB, fmtWhen, fmtDay, SEVERITY, LEFTOVER_LABEL, STATUS_LABEL } from './format';
+import { fmtMB, fmtGB, fmtWhen, fmtDay, SEVERITY, LEFTOVER_LABEL, STATUS_LABEL } from './format.mjs';
+import { buildReportText } from './reportText.mjs';
 
 // Every panel here only DISPLAYS a report. Nothing on this page deletes, moves or changes a file on the PC.
 
@@ -39,7 +40,25 @@ function CopyPath({ path }) {
   );
 }
 
+function MoreInfo({ more }) {
+  return (
+    <div className="mt-2 rounded-xl p-3 space-y-2 text-xs" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', ...text }}>
+      <p><strong>What it is.</strong> {more.what}</p>
+      <p><strong>Why it matters.</strong> {more.why}</p>
+      {more.options?.length > 0 && (
+        <div>
+          <p><strong>What you could do</strong> <span style={muted}>(your decision; PC Health never does it for you)</span></p>
+          <ul className="list-disc pl-5 mt-1 space-y-0.5">{more.options.map((o) => <li key={o}>{o}</li>)}</ul>
+        </div>
+      )}
+      {more.caution && <p style={{ color: '#f59e0b' }}><strong>Check first.</strong> {more.caution}</p>}
+    </div>
+  );
+}
+
 function FindingRow({ f }) {
+  const [open, setOpen] = useState(false);
+  const hasMore = !!f.more?.what;
   return (
     <li className="py-2.5 flex gap-3 items-start border-b last:border-b-0" style={{ borderColor: 'var(--color-border)' }}>
       <Badge severity={f.severity} />
@@ -48,6 +67,22 @@ function FindingRow({ f }) {
         <p className="text-xs mt-0.5" style={muted}>{f.detail}</p>
         {f.path && (
           <p className="text-[11px] mt-1 font-mono break-all" style={muted}>{f.path} <span className="ml-1 font-sans"><CopyPath path={f.path} /></span></p>
+        )}
+        {hasMore && (
+          <>
+            <Tooltip text="What this is, why it matters, and what you could consider doing. It only explains; nothing is changed for you.">
+              <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                aria-expanded={open}
+                className={`mt-1.5 text-[11px] font-medium hover:opacity-60 transition-opacity duration-200 ${FOCUS_RING}`}
+                style={{ color: 'var(--color-primary)' }}
+              >
+                {open ? '▼ Less info' : '▶ More info'}
+              </button>
+            </Tooltip>
+            {open && <MoreInfo more={f.more} />}
+          </>
         )}
       </div>
     </li>
@@ -68,6 +103,23 @@ function Bar({ pct, color }) {
 }
 
 const barColor = (usedPct) => (usedPct >= 90 ? '#ef4444' : usedPct >= 80 ? '#f59e0b' : null);
+
+function CopyReport({ scan }) {
+  const [done, setDone] = useState('');
+  const copy = (withMore, key) => {
+    navigator.clipboard?.writeText(buildReportText(scan, { withMore })).then(() => { setDone(key); setTimeout(() => setDone(''), 1800); }).catch(() => {});
+  };
+  return (
+    <div className="flex flex-wrap gap-2" data-tour="pch-copy">
+      <Tooltip text="Copies this report as plain text so you can paste it into a chat, an email or a note. Findings, drives, memory, biggest folders and top programs.">
+        <SecondaryButton onClick={() => copy(false, 'short')}>{done === 'short' ? 'Copied ✓' : 'Copy report'}</SecondaryButton>
+      </Tooltip>
+      <Tooltip text="The same report, with each finding's explanation and options written out. Longer, and best for asking someone what to do about it.">
+        <SecondaryButton onClick={() => copy(true, 'full')}>{done === 'full' ? 'Copied ✓' : 'Copy with explanations'}</SecondaryButton>
+      </Tooltip>
+    </div>
+  );
+}
 
 function NoScan({ goTo }) {
   return (
@@ -117,6 +169,7 @@ export function OverviewPanel({ scan, goTo }) {
     <div className="space-y-4" data-tour="pch-overview">
       <Card>
         <ScanHeader scan={scan} />
+        <CopyReport scan={scan} />
         <div data-tour="pch-findings">
           <FindingList findings={shown} empty="Nothing needs a look in this scan." />
           {important.length > 12 && (
@@ -302,19 +355,19 @@ function PathTable({ rows, head }) {
 
 export function FilesPanel({ scan, goTo }) {
   const [q, setQ] = useState('');
-  const files = scan?.report?.largeFiles || [];
+  const all = (scan?.findings?.findings || []).filter((f) => f.area === 'files');
   const shown = useMemo(() => {
     const t = q.trim().toLowerCase();
-    return (t ? files.filter((f) => f.path.toLowerCase().includes(t)) : files).slice(0, 200);
-  }, [files, q]);
+    return (t ? all.filter((f) => String(f.path || '').toLowerCase().includes(t)) : all).slice(0, 200);
+  }, [all, q]);
   if (!scan) return <NoScan goTo={goTo} />;
   return (
     <Card>
-      <p className="text-xs" style={muted}>Files of {fmtMB(scan.options?.largeFileMB || 500)} or more. This lists them only; whether a file is safe to remove is for you to decide.</p>
+      <p className="text-xs" style={muted}>Files of {fmtMB(scan.options?.largeFileMB || 500)} or more, biggest first. Open More info on any file for what it probably is and what you could consider. Whether it is safe to remove is for you to decide; PC Health never removes anything.</p>
       <Tooltip text="Narrow the list by part of a file name or folder. You can say it instead of typing.">
         <div><VoiceInput value={q} onChange={setQ} placeholder="Search by name or folder" label="Search large files" /></div>
       </Tooltip>
-      <PathTable head={['File', 'Last changed', 'Size']} rows={shown.map((f) => [f.path, fmtDay(f.modified), fmtMB(f.sizeMB)])} />
+      <FindingList findings={shown} empty={all.length ? 'Nothing matches that search.' : 'No file was above the large-file size.'} />
     </Card>
   );
 }
@@ -326,8 +379,13 @@ export function LogsPanel({ scan, goTo }) {
   const { logs, leftovers } = scan.report;
   const byKind = {};
   leftovers.forEach((l) => { (byKind[l.kind] = byKind[l.kind] || []).push(l); });
+  const flagged = (scan.findings?.findings || []).filter((f) => f.area === 'logs');
   return (
     <div className="space-y-4">
+      <Card>
+        <p className="text-xs font-semibold" style={muted}>Worth a look</p>
+        <FindingList findings={flagged} empty="No log or leftover was large enough to flag." />
+      </Card>
       <Card>
         <p className="text-xs font-semibold" style={muted}>Log files</p>
         <p className="text-sm" style={text}>{logs.count.toLocaleString('en-AU')} log files, {fmtMB(logs.totalMB)} in total.</p>
