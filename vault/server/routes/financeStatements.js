@@ -34,7 +34,8 @@ const wrap = (fn) => async (req, res) => {
 
 const LINE_COLS = `l.id, l."statementId", l."lineNo", l.date::text AS date, l.description, l.amount::float AS amount, l.balance::float AS balance,
   l.decision, l."matchInvoiceId", l."matchExpenseId", l."matchStrength", l."matchNote",
-  i.number AS "invoiceNumber", e.description AS "expenseDescription"`;
+  i.number AS "invoiceNumber", e.description AS "expenseDescription",
+  ((SELECT COUNT(*) FROM fin_document_links dl WHERE dl."expenseId" = l."matchExpenseId") + CASE WHEN e.receipt_path IS NOT NULL THEN 1 ELSE 0 END)::int AS receipts`;
 const LINE_FROM = `fin_statement_lines l LEFT JOIN fin_invoices i ON i.id = l."matchInvoiceId" LEFT JOIN fin_expenses e ON e.id = l."matchExpenseId"`;
 
 async function loadStatement(userId, id) {

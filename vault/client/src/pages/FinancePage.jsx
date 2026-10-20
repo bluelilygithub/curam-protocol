@@ -6876,126 +6876,113 @@ const fyOptions = () => {
   return Array.from({ length: 8 }, (_, i) => { const y = cur - i; return `${y}-${String((y + 1) % 100).padStart(2, '0')}`; });
 };
 
-// Vendor invoices/receipts (Anthropic, Railway, Cursor...): the reader fills vendor, date, currency, tax and
-// total from each PDF; the person only fixes the ones marked "Check" and confirms the matching expense.
-function VendorReceiptsPanel({ reloadKey, onChanged }) {
+// Receipts that are read but not yet attached to an expense, each with the expense it is probably the proof
+// of (found through the card statement line: the receipt's total is the foreign amount on the line, and the
+// line's AUD amount is the expense). Nothing is attached until the person presses Link.
+function ReceiptsToMatchPanel({ reloadKey, onChanged }) {
   const addToast = useToastStore(s => s.addToast);
-  const [reads, setReads] = useState([]);
-  const [unread, setUnread] = useState(0);
+  const [data, setData] = useState({ items: [], unreadCount: 0 });
   const [progress, setProgress] = useState(null); // { done, total } while reading
-  const [open, setOpen] = useState(null);         // read id whose matching expenses are showing
-  const [cands, setCands] = useState({ expenses: [], lines: [] });
   const [loadError, setLoadError] = useState('');
 
   const load = useCallback(async () => {
     try {
-      const res = await api.get('/api/finance/documents/reads');
+      const res = await api.get('/api/finance/documents/to-match');
       const b = await res.json();
       if (!res.ok) throw new Error(b.error || `HTTP ${res.status}`);
-      setLoadError('');
-      setReads(b.reads || []); setUnread(b.unreadCount || 0);
+      setLoadError(''); setData({ items: b.items || [], unreadCount: b.unreadCount || 0 });
     } catch (e) { setLoadError(e.message); }
   }, []);
   useEffect(() => { load(); }, [load, reloadKey]);
 
   const readAll = async () => {
     try {
-      const { ids } = await (await api.get('/api/finance/documents/reads/unread')).json();
-      let failed = 0;
+      const { ids } = await (await api.get('/api/finance/documents/unread')).json();
+      let failed = 0; let firstError = '';
       setProgress({ done: 0, total: ids.length });
       for (let i = 0; i < ids.length; i++) {
-        try { await okOrThrow(await api.post(`/api/finance/documents/${ids[i]}/read`)); } catch { failed++; }
+        try { await okOrThrow(await api.post(`/api/finance/documents/${ids[i]}/read`)); } catch (e) { failed++; firstError = firstError || e.message; }
         setProgress({ done: i + 1, total: ids.length });
       }
-      if (failed) addToast(`${failed} document${failed === 1 ? '' : 's'} could not be read`, 'error');
-      else addToast(`${ids.length} document${ids.length === 1 ? '' : 's'} read`);
+      if (failed) addToast(`${failed} of ${ids.length} could not be read: ${firstError}`, 'error');
       await load(); onChanged?.();
     } catch (e) { addToast(e.message, 'error'); } finally { setProgress(null); }
   };
 
-  const showMatches = async (r) => {
-    if (open === r.id) { setOpen(null); return; }
+  const link = async (items, done) => {
     try {
-      const b = await (await api.get(`/api/finance/documents/${r.documentId}/candidates`)).json();
-      setCands({ expenses: b.expenses || [], lines: b.lines || [] }); setOpen(r.id);
-    } catch (e) { addToast(e.message, 'error'); }
-  };
-  const linkLine = async (r, lineId) => {
-    try {
-      await okOrThrow(await api.put(`/api/finance/documents/${r.documentId}/line-link`, { lineId }));
-      addToast(lineId ? 'Receipt matched to the card line' : 'Match removed'); setOpen(null); await load(); onChanged?.();
-    } catch (e) { addToast(e.message, 'error'); }
-  };
-  const link = async (r, expenseId) => {
-    try {
-      await okOrThrow(await api.put(`/api/finance/documents/${r.documentId}/links`, { expenseIds: [expenseId], assetIds: [] }));
-      addToast('Receipt attached to the expense'); setOpen(null); await load(); onChanged?.();
+      const res = await api.post('/api/finance/documents/link-matches', { items });
+      const b = await res.json();
+      if (!res.ok) throw new Error(b.error || 'Could not link');
+      addToast(done || `${b.linked} receipt${b.linked === 1 ? '' : 's'} linked`);
+      await load(); onChanged?.();
     } catch (e) { addToast(e.message, 'error'); }
   };
 
-  const money = (r) => `${r.currency || '$'}${r.currency ? ' ' : ''}${(r.total ?? 0).toFixed(2)}`;
-  const taxText = (r) => (r.taxKind === 'none' ? 'No tax' : `${r.taxKind === 'gst' ? 'GST' : 'Foreign tax'} ${r.tax.toFixed(2)}`);
-  const needCheck = reads.filter(r => r.status === 'check').length;
+  const clear = data.items.filter(i => i.match?.status === 'clear');
+  const money = (i) => `${i.currency || '$'}${i.currency ? ' ' : ''}${(i.total ?? 0).toFixed(2)}`;
+  const expText = (e) => `${fmtDate(e.date)} · ${e.description} · ${fmt(e.total)}`;
+  const linkOne = (i, expenseId) => link([{ documentId: i.id, expenseId, lineId: i.match?.line?.lineId }], 'Receipt linked');
 
-  if (loadError) {
-    return <div className="rounded-xl border px-4 py-3 text-sm" style={{ borderColor: '#ef4444', color: '#ef4444' }}>Vendor receipts could not be loaded: {loadError}</div>;
-  }
-  if (!reads.length && !unread) return null;
+  if (loadError) return <div className="rounded-xl border px-4 py-3 text-sm" style={{ borderColor: '#ef4444', color: '#ef4444' }}>Receipts could not be loaded: {loadError}</div>;
+  if (!data.items.length && !data.unreadCount) return null;
   return (
     <div className="rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
         <div>
-          <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Vendor receipts and invoices</h3>
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Receipts to match</h3>
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-            {unread ? `${unread} not read yet. ` : ''}{needCheck ? `${needCheck} need checking. ` : ''}A receipt and invoice with the same number count as one purchase. A "$" with no currency stays blank until the card line settles it.
+            {data.items.length} read, not yet attached to an expense{data.unreadCount ? `; ${data.unreadCount} not read yet` : ''}. Each is matched through your card statement: the receipt's total is the foreign amount on the card line, and the line's AUD amount is your expense.
           </p>
         </div>
-        <Tooltip text="Reads vendor, date, currency, tax and total from each unread PDF invoice/receipt. Nothing is linked or posted until you confirm.">
-          <Btn onClick={readAll} disabled={!!progress || !unread}>{progress ? `Reading ${progress.done} of ${progress.total}…` : `Read ${unread || 'new'} document${unread === 1 ? '' : 's'}`}</Btn>
-        </Tooltip>
+        <div className="flex gap-2">
+          {data.unreadCount > 0 && (
+            <Tooltip text="Reads vendor, date, currency and total from each PDF not read yet. Nothing is linked.">
+              <Btn variant="secondary" onClick={readAll} disabled={!!progress}>{progress ? `Reading ${progress.done} of ${progress.total}…` : `Read ${data.unreadCount} document${data.unreadCount === 1 ? '' : 's'}`}</Btn>
+            </Tooltip>
+          )}
+          {clear.length > 0 && (
+            <Tooltip text="Links every receipt whose card line (amount and vendor) and expense agree. The rest are left for you.">
+              <Btn onClick={() => link(clear.map(i => ({ documentId: i.id, expenseId: i.match.expense.id, lineId: i.match.line?.lineId })))}>{`Link ${clear.length} clear match${clear.length === 1 ? '' : 'es'}`}</Btn>
+            </Tooltip>
+          )}
+        </div>
       </div>
-      {reads.length > 0 && (
+      {data.items.length > 0 && (
         <table className="w-full text-sm">
           <tbody>
-            {reads.map(r => (
-              <React.Fragment key={r.id}>
-                <tr className="border-b last:border-0" style={{ borderColor: 'var(--color-border)' }}>
-                  <td className="py-2 px-4 text-xs" style={{ color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>{r.docDate ? fmtDate(r.docDate) : '—'}</td>
-                  <td className="py-2 px-2" style={{ color: 'var(--color-text)' }}>
-                    {r.vendor || r.title}
-                    <span className="text-xs" style={{ color: 'var(--color-muted)' }}> · {r.documentKind}{r.description ? ` · ${r.description}` : ''}</span>
-                    {r.status === 'check' && <div className="text-xs" style={{ color: '#f59e0b' }}>Check: {(r.problems || []).join('; ')}</div>}
-                  </td>
-                  <td className="py-2 px-2 font-medium" style={{ color: 'var(--color-text)', whiteSpace: 'nowrap' }}>{money(r)}</td>
-                  <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>{taxText(r)}</td>
-                  <td className="py-2 px-4 text-right" style={{ whiteSpace: 'nowrap' }}>
-                    {r.statementLineId
-                      ? <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Card line {fmtDate(r.lineDate)} {fmt(Math.abs(r.lineAmount))} <button className="ml-2 hover:opacity-60" style={{ color: 'var(--color-primary)' }} onClick={() => linkLine(r, null)}>Undo</button></span>
-                      : r.linked
-                        ? <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Attached to an expense</span>
-                        : <Tooltip text="Find the card statement line (or expense) this is the proof of, then confirm it."><button className="text-xs hover:opacity-60" style={{ color: 'var(--color-primary)' }} onClick={() => showMatches(r)}>Find the charge</button></Tooltip>}
-                  </td>
-                </tr>
-                {open === r.id && (
-                  <tr><td colSpan={5} className="px-4 pb-3 text-xs" style={{ color: 'var(--color-muted)' }}>
-                    {cands.lines.length === 0 && cands.expenses.length === 0 && 'No card line or expense within a week of this date matches. Load the card statement for that month (Review lines) first, then come back.'}
-                    {cands.lines.map(c => (
-                      <div key={`l${c.lineId}`} className="flex flex-wrap items-center gap-3 py-1">
-                        <span>{fmtDate(c.date)}</span><span style={{ color: 'var(--color-text)' }}>{c.description}</span><span>{fmt(Math.abs(c.amount))}</span>
-                        <span>{c.strength === 'exact' ? 'Likely: ' : 'Possible: '}{c.note}</span>
-                        <button className="hover:opacity-60" style={{ color: 'var(--color-primary)' }} onClick={() => linkLine(r, c.lineId)}>This is it</button>
-                      </div>
-                    ))}
-                    {cands.expenses.map(c => (
-                      <div key={c.id} className="flex items-center gap-3 py-1">
-                        <span>{fmtDate(c.date)}</span><span style={{ color: 'var(--color-text)' }}>{c.description}</span><span>{fmt(c.total)}</span>
-                        <span>{c.sameTotal ? 'same total' : 'vendor named'}</span>
-                        <button className="hover:opacity-60" style={{ color: 'var(--color-primary)' }} onClick={() => link(r, c.id)}>Attach here</button>
-                      </div>
-                    ))}
-                  </td></tr>
-                )}
-              </React.Fragment>
+            {data.items.map(i => (
+              <tr key={i.id} className="border-b last:border-0 align-top" style={{ borderColor: 'var(--color-border)' }}>
+                <td className="py-2 px-4 text-xs" style={{ color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>{i.docDate ? fmtDate(i.docDate) : '—'}</td>
+                <td className="py-2 px-2" style={{ color: 'var(--color-text)' }}>
+                  {i.vendor || i.title}
+                  {i.readCheck && <div className="text-xs" style={{ color: '#f59e0b' }}>Check the figures: {i.readCheck}</div>}
+                </td>
+                <td className="py-2 px-2 font-medium" style={{ color: 'var(--color-text)', whiteSpace: 'nowrap' }}>{money(i)}</td>
+                <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                  {!i.match && 'No date or total could be read'}
+                  {i.match?.status === 'clear' && <span>Expense {expText(i.match.expense)}{i.match.line ? ` · card line ${fmtDate(i.match.line.date)}` : ''}</span>}
+                  {i.match?.status === 'check' && (
+                    <div>
+                      <div>{i.match.note}{i.match.line ? ` · card line ${fmtDate(i.match.line.date)} ${fmt(Math.abs(i.match.line.amount))}` : ''}</div>
+                      {i.match.candidates.expenses.map(e => (
+                        <div key={e.id} className="flex flex-wrap items-center gap-2 mt-1">
+                          <span style={{ color: 'var(--color-text)' }}>{expText(e)}</span>
+                          <button className="hover:opacity-60" style={{ color: 'var(--color-primary)' }} onClick={() => linkOne(i, e.id)}>Link to this</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {i.match?.status === 'none' && i.match.note}
+                </td>
+                <td className="py-2 px-4 text-right" style={{ whiteSpace: 'nowrap' }}>
+                  {i.match?.status === 'clear' && (
+                    <Tooltip text="Attach this receipt to the expense shown.">
+                      <button className="text-xs hover:opacity-60" style={{ color: 'var(--color-primary)' }} onClick={() => linkOne(i, i.match.expense.id)}>Link</button>
+                    </Tooltip>
+                  )}
+                </td>
+              </tr>
             ))}
           </tbody>
         </table>
@@ -7081,7 +7068,7 @@ function DocumentsTab() {
       }
     } finally { stopProcessing(); }
     if (problems.length) addToast(`${problems.length} of ${ids.length} could not be read: ${problems[0]}`, 'error');
-    else addToast(`${ids.length} read — see Vendor receipts and invoices above the file list`);
+    else addToast(`${ids.length} read — see Receipts to match above the file list`);
   };
 
   const uploadForMissing = async (fileList) => {
@@ -7159,7 +7146,7 @@ function DocumentsTab() {
         </div>
       </div>
 
-      <VendorReceiptsPanel reloadKey={data.documents.length} onChanged={load} />
+      <ReceiptsToMatchPanel reloadKey={data.documents.length} onChanged={load} />
 
       {/* Missing evidence */}
       <div className="rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>

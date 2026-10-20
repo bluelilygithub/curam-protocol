@@ -73,13 +73,6 @@ function normaliseVendorRead(raw) {
   };
 }
 
-// Same vendor + same invoice number = the invoice and its receipt: one purchase.
-function pairKey(rec) {
-  const v = String(rec.vendor || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const n = String(rec.invoiceNumber || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  return v && n ? `${v}:${n}` : null;
-}
-
 // Pull the first JSON object out of a model reply (it may add fences or a sentence around it).
 function parseModelJson(text) {
   const s = String(text || '').replace(/```json?/gi, '').replace(/```/g, '');
@@ -89,4 +82,4 @@ function parseModelJson(text) {
   try { return JSON.parse(s.slice(a, b + 1)); } catch { return null; }
 }
 
-module.exports = { normaliseVendorRead, pairKey, parseModelJson, taxIdDigits };
+module.exports = { normaliseVendorRead, parseModelJson, taxIdDigits };

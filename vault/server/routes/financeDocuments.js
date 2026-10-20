@@ -176,13 +176,11 @@ router.get('/missing', wrap(async (req, res) => {
   res.json({ fy, minTotal: min, expenses: exp.rows, assets: ast.rows });
 }));
 
-// ---- vendor invoice/receipt reads ------------------------------------------------------------
-// The reader fills fields from a PDF (model) and checks them in code; the person confirms the match to
-// an expense. Reading never links anything or posts to the journal.
-
-const READ_COLS = `r.id, r."documentId", r.vendor, r."documentKind", r."invoiceNumber", r."receiptNumber", r."docDate"::text AS "docDate",
-  r."periodStart"::text AS "periodStart", r."periodEnd"::text AS "periodEnd", r.currency, r.subtotal::float AS subtotal, r.tax::float AS tax,
-  r.total::float AS total, r."taxKind", r."taxLabel", r."taxRatePct"::float AS "taxRatePct", r."supplierTaxId", r.description, r.status, r.problems, r."pairKey"`;
+// ---- vendor invoices/receipts: read, then match to the expense they are the proof of ------------
+// The reader (server/services/vendorDocument/) fills supplier, date, type and the figures from a PDF;
+// the match goes receipt -> card statement line -> expense (lineMatch.js). Reading and matching only
+// suggest: a receipt is linked to an expense (fin_document_links, the same link as everywhere else)
+// when the person confirms. The expense and its journal are never touched.
 
 // Documents the reader may look at: filed as invoice/receipt/other, or filed as a statement by mistake but
 // named like a vendor document and with no bank/card statement lines loaded from it.
@@ -190,110 +188,103 @@ const READABLE = `d."mimeType"='application/pdf' AND (d.kind IN ('invoice','rece
   OR (d.kind='statement' AND d."originalName" ~* '^(invoice|receipt)[-_ ]'
       AND NOT EXISTS (SELECT 1 FROM fin_statements s WHERE s."documentId" = d.id)))`;
 
-router.get('/reads', wrap(async (req, res) => {
-  const { rows } = await pool.query(
-    `SELECT ${READ_COLS}, d.title, d."originalName",
-            (EXISTS (SELECT 1 FROM fin_document_links l WHERE l."documentId" = d.id) OR r."statementLineId" IS NOT NULL) AS linked,
-            r."statementLineId", sl.date::text AS "lineDate", sl.description AS "lineDescription", sl.amount::float AS "lineAmount"
-     FROM fin_document_reads r JOIN fin_documents d ON d.id = r."documentId"
-     LEFT JOIN fin_statement_lines sl ON sl.id = r."statementLineId"
-     WHERE r."userId"=$1 ORDER BY r."docDate" DESC NULLS LAST, r.id DESC LIMIT 1000`, [req.user.id]);
+// Read documents with no expense yet, each with its suggested match; plus how many are not read yet.
+router.get('/to-match', wrap(async (req, res) => {
+  const userId = req.user.id;
+  const { matchReceipt } = require('../services/vendorDocument/lineMatch');
+  const { rows: docs } = await pool.query(
+    `SELECT d.id, d.title, d.supplier AS vendor, d.kind, d."docDate"::text AS "docDate", d."readTotal"::float AS total,
+            d."readCurrency" AS currency, d."readCheck" AS "readCheck", d."originalName"
+     FROM fin_documents d
+     WHERE d."userId"=$1 AND d."readAt" IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM fin_document_links l WHERE l."documentId" = d.id)
+     ORDER BY d."docDate" DESC NULLS LAST, d.id DESC LIMIT 300`, [userId]);
   const { rows: [unread] } = await pool.query(
-    `SELECT COUNT(*)::int AS n FROM fin_documents d
-     WHERE d."userId"=$1 AND ${READABLE}
-       AND NOT EXISTS (SELECT 1 FROM fin_document_reads r WHERE r."documentId" = d.id)`, [req.user.id]);
-  res.json({ reads: rows, unreadCount: unread.n });
+    `SELECT COUNT(*)::int AS n FROM fin_documents d WHERE d."userId"=$1 AND d."readAt" IS NULL AND ${READABLE}`, [userId]);
+
+  const dated = docs.filter(d => d.docDate && d.total > 0);
+  let items = docs.map(d => ({ ...d, match: null }));
+  if (dated.length) {
+    const from = dated.reduce((m, d) => (d.docDate < m ? d.docDate : m), dated[0].docDate);
+    const to = dated.reduce((m, d) => (d.docDate > m ? d.docDate : m), dated[0].docDate);
+    const { rows: lines } = await pool.query(
+      `SELECT id, date::text AS date, description, amount::float AS amount, "matchExpenseId"
+       FROM fin_statement_lines
+       WHERE "userId"=$1 AND decision <> 'personal' AND amount < 0 AND date BETWEEN ($2::date - 8) AND ($3::date + 8)`, [userId, from, to]);
+    const { rows: expenses } = await pool.query(
+      `SELECT id, date::text AS date, description, supplier, (amount + gst)::float AS total
+       FROM fin_expenses
+       WHERE "userId"=$1 AND (date BETWEEN ($2::date - 20) AND ($3::date + 20)
+          OR id = ANY($4::int[]))`, [userId, from, to, lines.map(l => l.matchExpenseId).filter(Boolean)]);
+    items = docs.map(d => ({ ...d, match: d.docDate && d.total > 0 ? matchReceipt(d, lines, expenses) : null }));
+  }
+  res.json({ items, unreadCount: unread.n });
 }));
 
-// Documents the reader has not looked at yet (the client reads them one at a time so one slow file never
-// holds up the rest and the gateway time limit is never reached).
-router.get('/reads/unread', wrap(async (req, res) => {
+// Documents the reader has not looked at yet. The client reads them one at a time, so one slow file never
+// holds up the rest and the gateway time limit is never reached.
+router.get('/unread', wrap(async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT d.id FROM fin_documents d
-     WHERE d."userId"=$1 AND ${READABLE}
-       AND NOT EXISTS (SELECT 1 FROM fin_document_reads r WHERE r."documentId" = d.id)
-     ORDER BY d.id`, [req.user.id]);
+    `SELECT d.id FROM fin_documents d WHERE d."userId"=$1 AND d."readAt" IS NULL AND ${READABLE} ORDER BY d.id`, [req.user.id]);
   res.json({ ids: rows.map(r => r.id) });
+}));
+
+// Link receipts to the expenses the person confirmed: { items: [{ documentId, expenseId, lineId? }] }.
+// A card line that had no expense yet takes this one, so Statement review shows the receipt against it.
+router.post('/link-matches', wrap(async (req, res) => {
+  const userId = req.user.id;
+  const items = Array.isArray(req.body && req.body.items) ? req.body.items.slice(0, 300) : [];
+  if (!items.length) return res.status(400).json({ error: 'Nothing to link' });
+  const client = await pool.connect();
+  let linked = 0;
+  try {
+    await client.query('BEGIN');
+    for (const it of items) {
+      const documentId = Number(it.documentId); const expenseId = Number(it.expenseId);
+      if (!Number.isInteger(documentId) || !Number.isInteger(expenseId)) continue;
+      const { rows: ok } = await client.query(
+        `SELECT 1 FROM fin_documents d, fin_expenses e WHERE d.id=$1 AND d."userId"=$3 AND e.id=$2 AND e."userId"=$3`, [documentId, expenseId, userId]);
+      if (!ok[0]) continue;
+      const { rowCount } = await client.query(
+        `INSERT INTO fin_document_links ("documentId","expenseId")
+         SELECT $1,$2 WHERE NOT EXISTS (SELECT 1 FROM fin_document_links WHERE "documentId"=$1 AND "expenseId"=$2)`, [documentId, expenseId]);
+      linked += rowCount;
+      if (it.lineId) {
+        await client.query(
+          `UPDATE fin_statement_lines SET "matchExpenseId"=$2, "matchStrength"='exact', "matchNote"='Receipt linked'
+           WHERE id=$1 AND "userId"=$3 AND "matchExpenseId" IS NULL`, [Number(it.lineId), expenseId, userId]);
+      }
+    }
+    await client.query('COMMIT');
+  } catch (e) { await client.query('ROLLBACK'); throw e; } finally { client.release(); }
+  res.json({ linked });
 }));
 
 router.post('/:id/read', wrap(async (req, res) => {
   const userId = req.user.id;
-  const { rows: [doc] } = await pool.query(`SELECT id, "storedName", "mimeType", "originalName" FROM fin_documents WHERE id=$1 AND "userId"=$2`, [req.params.id, userId]);
+  const { rows: [doc] } = await pool.query(`SELECT id, "storedName", "mimeType" FROM fin_documents WHERE id=$1 AND "userId"=$2`, [req.params.id, userId]);
   if (!doc) return res.status(404).json({ error: 'Not found' });
   if (doc.mimeType !== 'application/pdf') return res.status(400).json({ error: 'Only PDF files can be read' });
   const p = fileOf(userId, doc.storedName);
   if (!p || !fs.existsSync(p)) return res.status(404).json({ error: 'The file is missing from storage' });
 
   const { readVendorDocument } = require('../services/vendorDocument/read');
-  const { pairKey } = require('../services/vendorDocument/normalise');
   const out = await readVendorDocument(userId, fs.readFileSync(p));
   const r = out.record;
-  const key = pairKey(r);
-  const params = [userId, doc.id, r.vendor, r.documentKind, r.invoiceNumber, r.receiptNumber, r.docDate, r.periodStart, r.periodEnd, r.currency,
-    r.subtotal, r.tax, r.total, r.taxKind, r.taxLabel, r.taxRatePct, r.supplierTaxId, r.description, out.ok ? 'ok' : 'check', JSON.stringify(out.problems), key];
+  const title = r.vendor && r.docDate
+    ? `${r.vendor} ${r.docDate}${r.total ? ` ${r.currency || ''} ${r.total.toFixed(2)}` : ''}`.replace(/\s+/g, ' ').slice(0, 200)
+    : null;
+  // the library entry takes the vendor, date, type and year from the document so search, filters and FY work
   const { rows: [saved] } = await pool.query(
-    `INSERT INTO fin_document_reads ("userId","documentId",vendor,"documentKind","invoiceNumber","receiptNumber","docDate","periodStart","periodEnd",currency,
-       subtotal,tax,total,"taxKind","taxLabel","taxRatePct","supplierTaxId",description,status,problems,"pairKey")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21)
-     ON CONFLICT ("documentId") DO UPDATE SET vendor=EXCLUDED.vendor, "documentKind"=EXCLUDED."documentKind", "invoiceNumber"=EXCLUDED."invoiceNumber",
-       "receiptNumber"=EXCLUDED."receiptNumber", "docDate"=EXCLUDED."docDate", "periodStart"=EXCLUDED."periodStart", "periodEnd"=EXCLUDED."periodEnd",
-       currency=EXCLUDED.currency, subtotal=EXCLUDED.subtotal, tax=EXCLUDED.tax, total=EXCLUDED.total, "taxKind"=EXCLUDED."taxKind", "taxLabel"=EXCLUDED."taxLabel",
-       "taxRatePct"=EXCLUDED."taxRatePct", "supplierTaxId"=EXCLUDED."supplierTaxId", description=EXCLUDED.description, status=EXCLUDED.status,
-       problems=EXCLUDED.problems, "pairKey"=EXCLUDED."pairKey"
-     RETURNING id`, params);
-  // the library entry takes the vendor, date and type from the document, so search/filter/FY work
-  if (r.vendor && r.docDate) {
-    const title = `${r.vendor} ${r.docDate}${r.total ? ` ${r.currency || ''} ${r.total.toFixed(2)}` : ''}`.replace(/\s+/g, ' ').slice(0, 200);
-    await pool.query(
-      `UPDATE fin_documents SET kind=$3, supplier=$4, "docDate"=$5, fy=$6, title=$7 WHERE id=$1 AND "userId"=$2`,
-      [doc.id, userId, r.documentKind, r.vendor.slice(0, 200), r.docDate, finYearForDate(r.docDate), title]);
-    await ensureSupplier(userId, r.vendor);
-  }
-  const { rows: [row] } = await pool.query(`SELECT ${READ_COLS} FROM fin_document_reads r WHERE r.id=$1`, [saved.id]);
-  res.json(row);
-}));
-
-// Expenses that could be the charge this document is the proof of: same vendor name or same total,
-// within a week of the date. The amount is compared only when the document names its currency as AUD.
-router.get('/:id/candidates', wrap(async (req, res) => {
-  const { rows: [r] } = await pool.query(
-    `SELECT r.vendor, r."docDate"::text AS "docDate", r.total::float AS total, r.currency FROM fin_document_reads r WHERE r."documentId"=$1 AND r."userId"=$2`, [req.params.id, req.user.id]);
-  if (!r || !r.docDate) return res.json({ expenses: [], lines: [] });
-  const word = String(r.vendor || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(' ').filter(w => w.length >= 4)[0] || null;
-  const { rows } = await pool.query(
-    `SELECT e.id, e.date::text AS date, e.description, e.supplier, (e.amount + e.gst)::float AS total,
-            EXISTS (SELECT 1 FROM fin_document_links l WHERE l."expenseId" = e.id) AS "hasDocument"
-     FROM fin_expenses e
-     WHERE e."userId"=$1 AND e.date BETWEEN ($2::date - 7) AND ($2::date + 7)
-     ORDER BY ABS(e.date - $2::date), e.id LIMIT 50`, [req.user.id, r.docDate]);
-  const out = rows.map((e) => {
-    const named = !!word && `${e.supplier || ''} ${e.description || ''}`.toLowerCase().includes(word);
-    const sameTotal = r.currency === 'AUD' && Math.abs(e.total - r.total) < 0.005;
-    return { ...e, named, sameTotal };
-  }).filter(e => e.named || e.sameTotal);
-
-  // card/bank statement lines (not marked personal, and not already claimed by another receipt)
-  const { suggestLines } = require('../services/vendorDocument/lineMatch');
-  const { rows: lineRows } = await pool.query(
-    `SELECT l.id, l.date::text AS date, l.description, l.amount::float AS amount, l.decision
-     FROM fin_statement_lines l
-     WHERE l."userId"=$1 AND l.decision <> 'personal' AND l.amount < 0
-       AND l.date BETWEEN ($2::date - 8) AND ($2::date + 8)
-       AND NOT EXISTS (SELECT 1 FROM fin_document_reads x WHERE x."statementLineId" = l.id AND x."documentId" <> $3)`,
-    [req.user.id, r.docDate, Number(req.params.id)]);
-  res.json({ expenses: out, lines: suggestLines(r, lineRows) });
-}));
-
-// Confirm (or clear) the statement line this document is the proof of.
-router.put('/:id/line-link', wrap(async (req, res) => {
-  const lineId = req.body && req.body.lineId ? Number(req.body.lineId) : null;
-  if (lineId) {
-    const { rows } = await pool.query(`SELECT id FROM fin_statement_lines WHERE id=$1 AND "userId"=$2`, [lineId, req.user.id]);
-    if (!rows[0]) return res.status(400).json({ error: 'That statement line does not exist' });
-  }
-  const { rowCount } = await pool.query(`UPDATE fin_document_reads SET "statementLineId"=$3 WHERE "documentId"=$1 AND "userId"=$2`, [req.params.id, req.user.id, lineId]);
-  if (!rowCount) return res.status(404).json({ error: 'Read this document first' });
-  res.json({ ok: true });
+    `UPDATE fin_documents SET "readAt"=NOW(), "readTotal"=$3, "readCurrency"=$4, "readCheck"=$5,
+            kind=COALESCE($6, kind), supplier=COALESCE($7, supplier), "docDate"=COALESCE($8::date, "docDate"),
+            fy=COALESCE($9, fy), title=COALESCE($10, title)
+     WHERE id=$1 AND "userId"=$2
+     RETURNING id, title, supplier, kind, "docDate"::text AS "docDate", "readTotal"::float AS "readTotal", "readCurrency", "readCheck"`,
+    [doc.id, userId, r.total, r.currency, out.ok ? null : out.problems.join('; '), r.documentKind,
+     r.vendor ? r.vendor.slice(0, 200) : null, r.docDate, r.docDate ? finYearForDate(r.docDate) : null, title]);
+  if (r.vendor) await ensureSupplier(userId, r.vendor);
+  res.json({ ...saved, problems: out.problems });
 }));
 
 router.post('/', (req, res) => {

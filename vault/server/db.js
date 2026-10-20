@@ -3426,42 +3426,16 @@ async function initSchema() {
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_fin_statement_lines_stmt ON fin_statement_lines ("statementId", "lineNo")`);
 
-  // ── Finance: vendor invoice/receipt reads (one row per document the reader has looked at) ──
-  // The reader (server/services/vendorDocument/) fills the fields; `status` is 'ok' when subtotal + tax
-  // = total, otherwise 'check' with the reasons in `problems`. `currency` NULL = the document only showed
-  // "$". `pairKey` joins an invoice and its receipt (same vendor + invoice number). Nothing here posts
-  // to the journal.
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS fin_document_reads (
-      id               SERIAL PRIMARY KEY,
-      "userId"         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      "documentId"     INTEGER NOT NULL UNIQUE REFERENCES fin_documents(id) ON DELETE CASCADE,
-      vendor           TEXT,
-      "documentKind"   TEXT NOT NULL DEFAULT 'invoice' CHECK ("documentKind" IN ('invoice','receipt')),
-      "invoiceNumber"  TEXT,
-      "receiptNumber"  TEXT,
-      "docDate"        DATE,
-      "periodStart"    DATE,
-      "periodEnd"      DATE,
-      currency         TEXT,
-      subtotal         NUMERIC(14,2),
-      tax              NUMERIC(14,2) NOT NULL DEFAULT 0,
-      total            NUMERIC(14,2),
-      "taxKind"        TEXT NOT NULL DEFAULT 'none' CHECK ("taxKind" IN ('gst','foreign','none')),
-      "taxLabel"       TEXT,
-      "taxRatePct"     NUMERIC(6,2),
-      "supplierTaxId"  TEXT,
-      description      TEXT,
-      status           TEXT NOT NULL DEFAULT 'check' CHECK (status IN ('ok','check')),
-      problems         JSONB NOT NULL DEFAULT '[]'::jsonb,
-      "pairKey"        TEXT,
-      "createdAt"      TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_fin_document_reads_user ON fin_document_reads ("userId", "docDate")`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_fin_document_reads_pair ON fin_document_reads ("userId", "pairKey")`);
-  // the card/bank statement line this document is the proof of (confirmed by the person)
-  await pool.query(`ALTER TABLE fin_document_reads ADD COLUMN IF NOT EXISTS "statementLineId" INTEGER REFERENCES fin_statement_lines(id) ON DELETE SET NULL`);
+  // ── Finance: what the receipt reader found on a document (server/services/vendorDocument/) ──
+  // Stored on the document itself so nothing else is needed: supplier/docDate/kind/fy/title are filled in
+  // from the document, and these hold the figures the match to an expense uses. readCurrency NULL = the
+  // document only showed "$". readCheck is set when the figures did not add up (shown to the person).
+  await pool.query(`ALTER TABLE fin_documents ADD COLUMN IF NOT EXISTS "readAt" TIMESTAMPTZ`);
+  await pool.query(`ALTER TABLE fin_documents ADD COLUMN IF NOT EXISTS "readTotal" NUMERIC(14,2)`);
+  await pool.query(`ALTER TABLE fin_documents ADD COLUMN IF NOT EXISTS "readCurrency" TEXT`);
+  await pool.query(`ALTER TABLE fin_documents ADD COLUMN IF NOT EXISTS "readCheck" TEXT`);
+  // an earlier version of the reader kept its results in a separate table; it only held derived data
+  await pool.query(`DROP TABLE IF EXISTS fin_document_reads`);
 
   // Editable ATO rate settings — never hardcoded in calculation code. Seed a sensible
   // current-year default once per user's first ensureAccounts() pass (see finance.js).

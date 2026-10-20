@@ -6,7 +6,7 @@
  */
 'use strict';
 const assert = require('assert');
-const { normaliseVendorRead, pairKey, parseModelJson, taxIdDigits } = require('./normalise');
+const { normaliseVendorRead, parseModelJson, taxIdDigits } = require('./normalise');
 
 let n = 0;
 const test = (name, fn) => { fn(); n++; console.log(`  ok   ${name}`); };
@@ -64,13 +64,6 @@ test('missing vendor, date and total are all reported', () => {
   const r = normaliseVendorRead({});
   assert.strictEqual(r.ok, false);
   assert.strictEqual(r.problems.length, 3);
-});
-
-test('an invoice and its receipt share a pair key', () => {
-  const a = pairKey({ vendor: 'Anthropic, PBC', invoiceNumber: 'IWIVT6DN-0001' });
-  const b = pairKey({ vendor: 'Anthropic PBC', invoiceNumber: 'iwivt6dn0001' });
-  assert.strictEqual(a, b);
-  assert.strictEqual(pairKey({ vendor: 'DeepSeek', invoiceNumber: null }), null);
 });
 
 test('model replies with fences or a leading sentence still parse', () => {

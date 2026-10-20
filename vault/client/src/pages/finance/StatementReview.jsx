@@ -142,6 +142,11 @@ export default function StatementReview({ doc, onClose, onChanged, Modal, Btn, f
                             onClick={() => patch(l, { decision: l.decision, matchInvoiceId: null, matchExpenseId: null })}>Not this</button>
                         </span>
                       ) : <span style={{ color: 'var(--color-muted)' }}>—</span>}
+                      {l.decision === 'business' && l.amount < 0 && (
+                        <div style={{ color: l.receipts > 0 ? '#16a34a' : '#f59e0b' }}>
+                          {l.receipts > 0 ? 'Receipt attached' : target ? 'No receipt yet' : 'No expense or receipt yet'}
+                        </div>
+                      )}
                     </td>
                     <td className="py-2 text-right whitespace-nowrap">
                       {choice(l, 'business', 'Business', 'This line belongs to the business.')}{' '}
