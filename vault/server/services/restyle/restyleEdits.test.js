@@ -178,5 +178,12 @@ const load = (f) => import(pathToFileURL(path.join(__dirname, '../../../client/s
   assert.ok(scan.checked >= 5);
   assert.ok(scan.issues.every((i) => typeof i.message === 'string' && i.message.length > 10));
 
+  // ---- phone / tablet upright or on its side ----
+  assert.deepStrictEqual(E.previewScreen('phone', 'portrait'), { width: 390, height: null, canTurn: true });
+  assert.deepStrictEqual(E.previewScreen('phone', 'landscape'), { width: 844, height: 390, canTurn: true }, 'on its side the sizes swap');
+  assert.deepStrictEqual(E.previewScreen('tablet', 'landscape'), { width: 1024, height: 768, canTurn: true });
+  assert.deepStrictEqual(E.previewScreen('desktop', 'landscape'), { width: null, height: null, canTurn: false }, 'a desktop window has no sides');
+  assert.strictEqual(E.previewScreen('nothing', 'portrait').canTurn, false);
+
   console.log('restyle edit-model tests passed');
 })().catch((e) => { console.error(e); process.exit(1); });

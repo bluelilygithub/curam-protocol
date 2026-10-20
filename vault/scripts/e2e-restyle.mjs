@@ -154,7 +154,15 @@ try {
   await page.waitForTimeout(300);
   const width = await page.locator('iframe[title="Live preview"]').evaluate((f) => Math.round(f.parentElement.getBoundingClientRect().width));
   check(width === 390, `the Phone button shows the page 390px wide (${width})`);
+  await page.getByRole('button', { name: 'Turn to landscape' }).click();
+  await page.waitForTimeout(350);
+  const side = await page.locator('iframe[title="Live preview"]').evaluate((f) => { const r = f.parentElement.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; });
+  check(side[0] === 844 && side[1] === 390, `turned on its side the phone is 844 by 390 (${side})`);
+  await page.getByRole('button', { name: 'Turn to portrait' }).click();
+  await page.waitForTimeout(350);
+  check((await page.locator('iframe[title="Live preview"]').evaluate((f) => Math.round(f.parentElement.getBoundingClientRect().width))) === 390, 'and turns back upright');
   await page.getByRole('button', { name: 'Desktop', exact: true }).click();
+  check(await page.getByRole('button', { name: /Turn to (landscape|portrait)/ }).isDisabled(), 'the turn button is off on Desktop');
 
   await openTool('What it applies to');
   await page.getByLabel('Applies on').selectOption('phone');

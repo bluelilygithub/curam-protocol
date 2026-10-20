@@ -84,7 +84,7 @@ The page uses the shared tool menu (`components/ToolSidebar.jsx`) like Graphics 
 | **Check and compare** | Changes so far, History of this session, Accessibility checks |
 | **Keep and share** | Export the CSS, My saved pages, Page history, Share a preview |
 
-The live preview stays beside the open tool. Above it: **Load a demo**, **Undo last change**, **Redo**, **History (n)**, **Export the CSS (n)**; over the preview: **Desktop / Tablet / Phone**, **With changes / Original**, and the "Editing: ..." line. Building the preview, or clicking something in it, moves the open tool on from the set-up tools to Ask in plain English. Tools that need a click, a built preview or a saved page say so under their name in the menu and in their panel.
+The live preview stays beside the open tool. Above it: **Load a demo**, **Undo last change**, **Redo**, **History (n)**, **Export the CSS (n)**; over the preview: **Desktop / Tablet / Phone** (a turn button beside them shows Tablet or Phone upright or on its side, 1024 or 844 px wide; `previewScreen` in `editModel.mjs`), **With changes / Original**, and the "Editing: ..." line. Building the preview, or clicking something in it, moves the open tool on from the set-up tools to Ask in plain English. Tools that need a click, a built preview or a saved page say so under their name in the menu and in their panel.
 
 Code: `RestylePage.jsx` (state and logic) with the panels in `restyle/RestylePanels.jsx` (page, styles, brand, changes, checks, export, saved, history, share) and `restyle/PropertyPanels.jsx` (ask, scope, text, enhance, animation, box); pure logic in `restyle/editModel.mjs` (changes, CSS generation, report), `selectors.mjs` (unique and scope selectors) and `a11y.mjs` (contrast and the page scan).
 

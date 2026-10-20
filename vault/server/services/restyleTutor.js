@@ -35,7 +35,7 @@ const CATALOG = [
     does: 'Move the mouse over the preview and things are outlined with a dotted line; click one and it gets a solid outline, and the line above the preview says what you picked. Everything in Change it works on whatever you clicked.',
     notes: 'You have to click something first, or the change tools say so. Clicking a link in the preview does not follow it.' },
   { id: 'device', label: 'Preview sizes', group: 'Change it',
-    does: 'The Desktop, Tablet and Phone buttons above the preview show the page at the full window width, 768px wide and 390px wide, so you can see how it looks on each. The page changes shape the way it does on those screens.',
+    does: 'The Desktop, Tablet and Phone buttons above the preview show the page at the full window width, 768px wide and 390px wide, so you can see how it looks on each. The page changes shape the way it does on those screens. A turn button beside them (a phone symbol) switches Tablet or Phone between portrait and landscape: a phone on its side is 844px wide, a tablet 1024px.',
     notes: 'They only change how the preview is shown. To make a change for small screens only, choose it in What it applies to.' },
   { id: 'ask', label: 'Ask in plain English', group: 'Change it',
     does: 'After clicking something in the preview, describe the change in your own words, such as "make this bigger and give it rounded corners". Type it, or tap the microphone and say it, then press Ask for this change. It is made for you, can be undone, and is listed in Changes so far.',

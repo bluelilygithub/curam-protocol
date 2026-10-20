@@ -54,8 +54,22 @@ export const STATE_OPTIONS = [
 export const DEVICES = [
   { id: 'desktop', label: 'Desktop', width: null, tip: 'The full width of the window.' },
   { id: 'tablet', label: 'Tablet', width: 768, tip: 'A tablet-sized screen, 768px wide.' },
-  { id: 'phone', label: 'Phone', width: 390, tip: 'A phone-sized screen, 390px wide.' },
+  { id: 'phone', label: 'Phone', width: 390, height: 844, tip: 'A phone-sized screen, 390px wide.' },
 ];
+// (tablet gets its height too, so turning it on its side has a screen to turn)
+DEVICES[1].height = 1024;
+
+/**
+ * The preview's screen for a device held upright (portrait) or on its side (landscape). Desktop has no sides: it is the window.
+ * Landscape swaps the two sizes, so a phone becomes 844 wide and 390 high. Portrait keeps the preview as tall as the window.
+ * @returns {{width:number|null, height:number|null, canTurn:boolean}}
+ */
+export function previewScreen(deviceId, orientation) {
+  const d = DEVICES.find((x) => x.id === deviceId);
+  if (!d || !d.width) return { width: null, height: null, canTurn: false };
+  if (orientation === 'landscape') return { width: d.height, height: d.width, canTurn: true };
+  return { width: d.width, height: null, canTurn: true };
+}
 
 // "Apply a brand colour or font everywhere": what each choice changes, in plain words, and the rule it makes.
 export const BRAND_TARGETS = [

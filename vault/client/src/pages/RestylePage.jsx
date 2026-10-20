@@ -11,7 +11,7 @@ import { VoiceInputProvider } from '../components/voiceInput/VoiceInput';
 import RestyleTutorChat from './restyle/RestyleTutorChat';
 import { RESTYLE_TOOLS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, HOW_IT_WORKS, GUIDE_TOOLS } from './restyle/restyleTools.mjs';
 import {
-  PLAIN, MEDIA_OPTIONS, DEVICES, setProps, clearSelector, removeProp, generateCss, changeRows, changeReport, tokenRef, uniqueTokenName, toHex,
+  PLAIN, MEDIA_OPTIONS, DEVICES, previewScreen, setProps, clearSelector, removeProp, generateCss, changeRows, changeReport, tokenRef, uniqueTokenName, toHex,
 } from './restyle/editModel.mjs';
 import { uniqueSelector, labelFor, scopeOptionsFor } from './restyle/selectors.mjs';
 import * as H from './restyle/history.mjs';
@@ -94,6 +94,7 @@ export default function RestylePage() {
   const [hasSelection, setHasSelection] = useState(false);
   const suppressControlEvents = useRef(false);
   const [device, setDevice] = useState('desktop');
+  const [orientation, setOrientation] = useState('portrait'); // a phone or tablet held upright, or on its side
   const [ctrl, setCtrl] = useState(DEFAULT_CTRL);
   const [contrast, setContrast] = useState(null);
 
@@ -873,7 +874,8 @@ export default function RestylePage() {
     if (target) setTool(target.tool);
   };
 
-  const deviceWidth = DEVICES.find((d) => d.id === device)?.width || null;
+  const screen = previewScreen(device, orientation);
+  const deviceWidth = screen.width;
   const changeCount = changeRows(edits).length;
 
   const renderPanel = () => {
@@ -1012,6 +1014,19 @@ export default function RestylePage() {
                     </Tooltip>
                   ))}
                 </div>
+                <Tooltip text={screen.canTurn ? `Turn the ${device} on its side, or back upright. Now: ${orientation}.` : 'Choose Tablet or Phone first: a desktop window has no sides to turn.'}>
+                  <button
+                    type="button"
+                    onClick={() => setOrientation((o) => (o === 'portrait' ? 'landscape' : 'portrait'))}
+                    disabled={!screen.canTurn}
+                    aria-label={orientation === 'portrait' ? 'Turn to landscape' : 'Turn to portrait'}
+                    aria-pressed={screen.canTurn && orientation === 'landscape'}
+                    className="w-8 h-8 inline-flex items-center justify-center rounded-lg border transition-opacity duration-200 hover:opacity-70 disabled:opacity-40"
+                    style={{ borderColor: 'var(--color-border)', background: screen.canTurn && orientation === 'landscape' ? 'var(--color-primary)' : 'var(--color-bg)', color: screen.canTurn && orientation === 'landscape' ? '#fff' : 'var(--color-text)' }}
+                  >
+                    <span style={{ display: 'inline-flex', transform: orientation === 'landscape' ? 'rotate(90deg)' : 'none', transition: 'transform 200ms' }}>{getIcon('smartphone', { size: 16 })}</span>
+                  </button>
+                </Tooltip>
                 <div className="flex" role="group" aria-label="Show the original or your version">
                   <Tooltip text="The page with your changes.">
                     <button type="button" onClick={() => setShowOriginal(false)} aria-pressed={!showOriginal} className="transition-opacity duration-200 hover:opacity-70" style={{ ...segment(!showOriginal), borderRadius: '8px 0 0 8px' }}>With changes</button>
@@ -1025,7 +1040,7 @@ export default function RestylePage() {
                 </div>
               </div>
               <div className="relative flex-1 rounded-xl border overflow-auto" style={{ background: '#e8e8e2', borderColor: 'var(--color-border)' }}>
-                <div style={{ width: deviceWidth || '100%', maxWidth: '100%', height: '100%', minHeight: 'calc(100dvh - 18rem)', margin: '0 auto', background: '#fff', transition: 'width 200ms' }}>
+                <div style={{ width: deviceWidth || '100%', maxWidth: screen.height ? 'none' : '100%', height: screen.height ? `${screen.height}px` : '100%', minHeight: screen.height ? undefined : 'calc(100dvh - 18rem)', margin: '0 auto', background: '#fff', transition: 'width 200ms, height 200ms' }}>
                   <iframe ref={iframeRef} title="Live preview" sandbox="allow-same-origin" style={{ width: '100%', height: '100%', minHeight: 'inherit', border: 'none', display: previewBuilt ? 'block' : 'none' }} />
                 </div>
                 {!previewBuilt && (
