@@ -6884,7 +6884,7 @@ function VendorReceiptsPanel({ reloadKey, onChanged }) {
   const [unread, setUnread] = useState(0);
   const [progress, setProgress] = useState(null); // { done, total } while reading
   const [open, setOpen] = useState(null);         // read id whose matching expenses are showing
-  const [cands, setCands] = useState([]);
+  const [cands, setCands] = useState({ expenses: [], lines: [] });
   const [loadError, setLoadError] = useState('');
 
   const load = useCallback(async () => {
@@ -6917,7 +6917,13 @@ function VendorReceiptsPanel({ reloadKey, onChanged }) {
     if (open === r.id) { setOpen(null); return; }
     try {
       const b = await (await api.get(`/api/finance/documents/${r.documentId}/candidates`)).json();
-      setCands(b.expenses || []); setOpen(r.id);
+      setCands({ expenses: b.expenses || [], lines: b.lines || [] }); setOpen(r.id);
+    } catch (e) { addToast(e.message, 'error'); }
+  };
+  const linkLine = async (r, lineId) => {
+    try {
+      await okOrThrow(await api.put(`/api/finance/documents/${r.documentId}/line-link`, { lineId }));
+      addToast(lineId ? 'Receipt matched to the card line' : 'Match removed'); setOpen(null); await load(); onChanged?.();
     } catch (e) { addToast(e.message, 'error'); }
   };
   const link = async (r, expenseId) => {
@@ -6963,15 +6969,24 @@ function VendorReceiptsPanel({ reloadKey, onChanged }) {
                   <td className="py-2 px-2 font-medium" style={{ color: 'var(--color-text)', whiteSpace: 'nowrap' }}>{money(r)}</td>
                   <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>{taxText(r)}</td>
                   <td className="py-2 px-4 text-right" style={{ whiteSpace: 'nowrap' }}>
-                    {r.linked
-                      ? <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Attached</span>
-                      : <Tooltip text="Show expenses of about the same date and vendor, then attach this receipt to one."><button className="text-xs hover:opacity-60" style={{ color: 'var(--color-primary)' }} onClick={() => showMatches(r)}>Find expense</button></Tooltip>}
+                    {r.statementLineId
+                      ? <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Card line {fmtDate(r.lineDate)} {fmt(Math.abs(r.lineAmount))} <button className="ml-2 hover:opacity-60" style={{ color: 'var(--color-primary)' }} onClick={() => linkLine(r, null)}>Undo</button></span>
+                      : r.linked
+                        ? <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Attached to an expense</span>
+                        : <Tooltip text="Find the card statement line (or expense) this is the proof of, then confirm it."><button className="text-xs hover:opacity-60" style={{ color: 'var(--color-primary)' }} onClick={() => showMatches(r)}>Find the charge</button></Tooltip>}
                   </td>
                 </tr>
                 {open === r.id && (
                   <tr><td colSpan={5} className="px-4 pb-3 text-xs" style={{ color: 'var(--color-muted)' }}>
-                    {cands.length === 0 && 'No expense within a week of this date matches the vendor. Add the expense first, then come back.'}
-                    {cands.map(c => (
+                    {cands.lines.length === 0 && cands.expenses.length === 0 && 'No card line or expense within a week of this date matches. Load the card statement for that month (Review lines) first, then come back.'}
+                    {cands.lines.map(c => (
+                      <div key={`l${c.lineId}`} className="flex flex-wrap items-center gap-3 py-1">
+                        <span>{fmtDate(c.date)}</span><span style={{ color: 'var(--color-text)' }}>{c.description}</span><span>{fmt(Math.abs(c.amount))}</span>
+                        <span>{c.strength === 'exact' ? 'Likely: ' : 'Possible: '}{c.note}</span>
+                        <button className="hover:opacity-60" style={{ color: 'var(--color-primary)' }} onClick={() => linkLine(r, c.lineId)}>This is it</button>
+                      </div>
+                    ))}
+                    {cands.expenses.map(c => (
                       <div key={c.id} className="flex items-center gap-3 py-1">
                         <span>{fmtDate(c.date)}</span><span style={{ color: 'var(--color-text)' }}>{c.description}</span><span>{fmt(c.total)}</span>
                         <span>{c.sameTotal ? 'same total' : 'vendor named'}</span>

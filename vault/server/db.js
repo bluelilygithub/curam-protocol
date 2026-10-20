@@ -3460,6 +3460,8 @@ async function initSchema() {
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_fin_document_reads_user ON fin_document_reads ("userId", "docDate")`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_fin_document_reads_pair ON fin_document_reads ("userId", "pairKey")`);
+  // the card/bank statement line this document is the proof of (confirmed by the person)
+  await pool.query(`ALTER TABLE fin_document_reads ADD COLUMN IF NOT EXISTS "statementLineId" INTEGER REFERENCES fin_statement_lines(id) ON DELETE SET NULL`);
 
   // Editable ATO rate settings — never hardcoded in calculation code. Seed a sensible
   // current-year default once per user's first ensureAccounts() pass (see finance.js).

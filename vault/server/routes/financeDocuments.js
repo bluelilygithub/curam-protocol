@@ -193,8 +193,10 @@ const READABLE = `d."mimeType"='application/pdf' AND (d.kind IN ('invoice','rece
 router.get('/reads', wrap(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT ${READ_COLS}, d.title, d."originalName",
-            EXISTS (SELECT 1 FROM fin_document_links l WHERE l."documentId" = d.id) AS linked
+            (EXISTS (SELECT 1 FROM fin_document_links l WHERE l."documentId" = d.id) OR r."statementLineId" IS NOT NULL) AS linked,
+            r."statementLineId", sl.date::text AS "lineDate", sl.description AS "lineDescription", sl.amount::float AS "lineAmount"
      FROM fin_document_reads r JOIN fin_documents d ON d.id = r."documentId"
+     LEFT JOIN fin_statement_lines sl ON sl.id = r."statementLineId"
      WHERE r."userId"=$1 ORDER BY r."docDate" DESC NULLS LAST, r.id DESC LIMIT 1000`, [req.user.id]);
   const { rows: [unread] } = await pool.query(
     `SELECT COUNT(*)::int AS n FROM fin_documents d
@@ -255,8 +257,8 @@ router.post('/:id/read', wrap(async (req, res) => {
 // within a week of the date. The amount is compared only when the document names its currency as AUD.
 router.get('/:id/candidates', wrap(async (req, res) => {
   const { rows: [r] } = await pool.query(
-    `SELECT r.vendor, r."docDate", r.total::float AS total, r.currency FROM fin_document_reads r WHERE r."documentId"=$1 AND r."userId"=$2`, [req.params.id, req.user.id]);
-  if (!r || !r.docDate) return res.json({ expenses: [] });
+    `SELECT r.vendor, r."docDate"::text AS "docDate", r.total::float AS total, r.currency FROM fin_document_reads r WHERE r."documentId"=$1 AND r."userId"=$2`, [req.params.id, req.user.id]);
+  if (!r || !r.docDate) return res.json({ expenses: [], lines: [] });
   const word = String(r.vendor || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(' ').filter(w => w.length >= 4)[0] || null;
   const { rows } = await pool.query(
     `SELECT e.id, e.date::text AS date, e.description, e.supplier, (e.amount + e.gst)::float AS total,
@@ -269,7 +271,29 @@ router.get('/:id/candidates', wrap(async (req, res) => {
     const sameTotal = r.currency === 'AUD' && Math.abs(e.total - r.total) < 0.005;
     return { ...e, named, sameTotal };
   }).filter(e => e.named || e.sameTotal);
-  res.json({ expenses: out });
+
+  // card/bank statement lines (not marked personal, and not already claimed by another receipt)
+  const { suggestLines } = require('../services/vendorDocument/lineMatch');
+  const { rows: lineRows } = await pool.query(
+    `SELECT l.id, l.date::text AS date, l.description, l.amount::float AS amount, l.decision
+     FROM fin_statement_lines l
+     WHERE l."userId"=$1 AND l.decision <> 'personal' AND l.amount < 0
+       AND l.date BETWEEN ($2::date - 8) AND ($2::date + 8)
+       AND NOT EXISTS (SELECT 1 FROM fin_document_reads x WHERE x."statementLineId" = l.id AND x."documentId" <> $3)`,
+    [req.user.id, r.docDate, Number(req.params.id)]);
+  res.json({ expenses: out, lines: suggestLines(r, lineRows) });
+}));
+
+// Confirm (or clear) the statement line this document is the proof of.
+router.put('/:id/line-link', wrap(async (req, res) => {
+  const lineId = req.body && req.body.lineId ? Number(req.body.lineId) : null;
+  if (lineId) {
+    const { rows } = await pool.query(`SELECT id FROM fin_statement_lines WHERE id=$1 AND "userId"=$2`, [lineId, req.user.id]);
+    if (!rows[0]) return res.status(400).json({ error: 'That statement line does not exist' });
+  }
+  const { rowCount } = await pool.query(`UPDATE fin_document_reads SET "statementLineId"=$3 WHERE "documentId"=$1 AND "userId"=$2`, [req.params.id, req.user.id, lineId]);
+  if (!rowCount) return res.status(404).json({ error: 'Read this document first' });
+  res.json({ ok: true });
 }));
 
 router.post('/', (req, res) => {
