@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const { pool } = require('../db');
 const { getAppUrl } = require('../utils/appUrl');
+const { logLogin, accessEnded, ownerEmailOf } = require('../services/accountantAccess');
 
 const SALT_ROUNDS = 12;
 const SESSION_HOURS = 24;
@@ -63,13 +64,21 @@ router.post('/login', loginLimiter, async (req, res) => {
       });
     }
 
+    if (user.accountantOfUserId && accessEnded(user)) {
+      return res.status(403).json({ error: 'Access has ended. Ask the account owner.' });
+    }
+    if (user.disabledAt && !user.accountantOfUserId) {
+      return res.status(403).json({ error: 'Account disabled' });
+    }
+
     const token = makeToken();
     await pool.query(
       'INSERT INTO auth_sessions (token, "userId", "expiresAt") VALUES ($1, $2, $3)',
       [token, user.id, makeExpiry()]
     );
     await pool.query('UPDATE users SET "lastLoginAt"=NOW(), "lastActiveAt"=NOW() WHERE id=$1', [user.id]);
-    res.json({ token, user: { id: user.id, email: user.email, isAdmin: !!user.isAdmin } });
+    await logLogin(req, user);
+    res.json({ token, user: { id: user.id, email: user.email, isAdmin: !!user.isAdmin, isAccountant: !!user.accountantOfUserId, ownerEmail: await ownerEmailOf(user) } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -172,11 +181,13 @@ router.get('/me', async (req, res) => {
     }
 
     const { rows: users } = await pool.query(
-      'SELECT id, email, "createdAt", "isAdmin", "mustChangePassword" FROM users WHERE id=$1', [session.userId]
+      'SELECT id, email, "createdAt", "isAdmin", "mustChangePassword", "accountantOfUserId", "accessExpiresAt", "disabledAt" FROM users WHERE id=$1', [session.userId]
     );
     const user = users[0];
     if (!user) return res.status(401).json({ error: 'User not found' });
-    res.json({ user });
+    if (user.accountantOfUserId && accessEnded(user)) return res.status(401).json({ error: 'Access has ended. Ask the account owner.' });
+    const { accountantOfUserId, accessExpiresAt, disabledAt, ...safe } = user;
+    res.json({ user: { ...safe, isAccountant: !!accountantOfUserId, ownerEmail: await ownerEmailOf(user) } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

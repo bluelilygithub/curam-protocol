@@ -2095,6 +2095,37 @@ async function initSchema() {
   // Per-user narrowing of workspace feature access. NULL/empty = inherit workspace defaults fully.
   // Keys present here can only turn a feature OFF for this user — never grant one the workspace has disabled.
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS "featureOverrides" JSONB`);
+  // Accountant login: read-only view of ONE owner's Finance. See server/services/accountantAccess.js.
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS "accountantOfUserId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS "accessExpiresAt" TIMESTAMPTZ`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS "disabledAt" TIMESTAMPTZ`);
+  // Append-only record of everything an accountant does (logins, views, exports, refused attempts).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS accountant_access_log (
+      id          BIGSERIAL PRIMARY KEY,
+      "actorId"   INTEGER NOT NULL,
+      "ownerId"   INTEGER NOT NULL,
+      "actorEmail" TEXT,
+      kind        TEXT NOT NULL CHECK (kind IN ('login','view','export','denied')),
+      method      TEXT,
+      path        TEXT,
+      query       TEXT,
+      status      INTEGER,
+      ip          TEXT,
+      "userAgent" TEXT,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_acc_log_owner_created ON accountant_access_log ("ownerId", "createdAt" DESC)`);
+  await pool.query(`
+    CREATE OR REPLACE FUNCTION accountant_log_immutable() RETURNS trigger AS $$
+    BEGIN
+      RAISE EXCEPTION 'accountant_access_log is append-only';
+    END;
+    $$ LANGUAGE plpgsql
+  `);
+  await pool.query(`DROP TRIGGER IF EXISTS trg_accountant_log_immutable ON accountant_access_log`);
+  await pool.query(`CREATE TRIGGER trg_accountant_log_immutable BEFORE UPDATE OR DELETE ON accountant_access_log FOR EACH ROW EXECUTE FUNCTION accountant_log_immutable()`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS "lastLoginAt" TIMESTAMPTZ`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS "lastActiveAt" TIMESTAMPTZ`);
   // One-off-safe backfill from surviving sessions (only fills blanks)

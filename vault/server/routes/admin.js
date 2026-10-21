@@ -226,9 +226,10 @@ router.put('/users/:id/admin', async (req, res) => {
   if (!userId) return res.status(400).json({ error: 'Invalid user id' });
 
   try {
-    const { rows: targetRows } = await pool.query('SELECT id, "isAdmin" FROM users WHERE id=$1', [userId]);
+    const { rows: targetRows } = await pool.query('SELECT id, "isAdmin", "accountantOfUserId" FROM users WHERE id=$1', [userId]);
     const target = targetRows[0];
     if (!target) return res.status(404).json({ error: 'User not found' });
+    if (target.accountantOfUserId) return res.status(400).json({ error: 'Accountant logins cannot be made admin' });
     if (target.id === req.user.id && !makeAdmin) return res.status(400).json({ error: 'You cannot remove your own admin access' });
 
     if (target.isAdmin && !makeAdmin) {
@@ -328,6 +329,97 @@ router.delete('/users/:id', async (req, res) => {
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
+  }
+});
+
+// ── Accountant logins ─────────────────────────────────────────────────────────
+// Read-only, Finance-only view of the calling admin's own data; every request is written to
+// accountant_access_log (append-only). See server/services/accountantAccess.js.
+
+// GET /api/admin/accountants
+router.get('/accountants', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT u.id, u.email, u."createdAt", u."lastLoginAt", u."lastActiveAt", u."accessExpiresAt", u."disabledAt",
+             COUNT(s.token) FILTER (WHERE s."expiresAt" > NOW())::INT AS "activeSessions"
+      FROM users u
+      LEFT JOIN auth_sessions s ON s."userId" = u.id
+      WHERE u."accountantOfUserId" = $1
+      GROUP BY u.id
+      ORDER BY u."createdAt" ASC`, [req.user.id]);
+    res.json({ accountants: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/accountants { email, password, expiresAt? }
+router.post('/accountants', async (req, res) => {
+  const { email, password, expiresAt } = req.body || {};
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  if (!normalizedEmail || !password) return res.status(400).json({ error: 'email and password required' });
+  if (String(password).length < 12) return res.status(400).json({ error: 'Accountant password must be at least 12 characters' });
+  let expires = null;
+  if (expiresAt) {
+    expires = new Date(expiresAt);
+    if (Number.isNaN(expires.getTime()) || expires < new Date()) return res.status(400).json({ error: 'Expiry must be a future date' });
+  }
+  // Belt and braces: everything except Finance is also switched off in the feature flags.
+  const overrides = {};
+  for (const k of FEATURE_ACCESS_KEYS) if (k !== 'finance') overrides[k] = false;
+  try {
+    const passwordHash = await bcrypt.hash(String(password), SALT_ROUNDS);
+    const { rows } = await pool.query(
+      `INSERT INTO users (email, "passwordHash", "isAdmin", "featureOverrides", "accountantOfUserId", "accessExpiresAt")
+       VALUES ($1, $2, FALSE, $3, $4, $5) RETURNING id, email, "accessExpiresAt", "createdAt"`,
+      [normalizedEmail, passwordHash, JSON.stringify(overrides), req.user.id, expires]
+    );
+    res.status(201).json({ accountant: rows[0] });
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Email already registered' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/admin/accountants/:id { expiresAt?: iso|null, disabled?: boolean }
+router.put('/accountants/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Invalid id' });
+  const body = req.body || {};
+  try {
+    const { rows: found } = await pool.query(
+      'SELECT id FROM users WHERE id=$1 AND "accountantOfUserId"=$2', [id, req.user.id]);
+    if (!found[0]) return res.status(404).json({ error: 'Accountant not found' });
+    if ('expiresAt' in body) {
+      const d = body.expiresAt ? new Date(body.expiresAt) : null;
+      if (body.expiresAt && Number.isNaN(d.getTime())) return res.status(400).json({ error: 'Invalid expiry' });
+      await pool.query('UPDATE users SET "accessExpiresAt"=$1 WHERE id=$2', [d, id]);
+    }
+    if ('disabled' in body) {
+      await pool.query('UPDATE users SET "disabledAt"=$1 WHERE id=$2', [body.disabled ? new Date() : null, id]);
+      if (body.disabled) await pool.query('DELETE FROM auth_sessions WHERE "userId"=$1', [id]);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/accountants/log?limit=200&actorId=&kind=
+router.get('/accountants/log', async (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 200, 1), 1000);
+  const params = [req.user.id];
+  let where = '"ownerId" = $1';
+  if (req.query.actorId) { params.push(Number(req.query.actorId)); where += ` AND "actorId" = $${params.length}`; }
+  if (['login', 'view', 'export', 'denied'].includes(req.query.kind)) { params.push(req.query.kind); where += ` AND kind = $${params.length}`; }
+  params.push(limit);
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, "actorId", "actorEmail", kind, method, path, query, status, ip, "userAgent", "createdAt"
+       FROM accountant_access_log WHERE ${where} ORDER BY "createdAt" DESC, id DESC LIMIT $${params.length}`, params);
+    res.json({ log: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

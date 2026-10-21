@@ -5,6 +5,7 @@ import api from '../utils/apiClient';
 import useAuthStore from '../store/authStore';
 import { relativeTime } from '../utils/relativeTime';
 import UsersAdminPanel from '../components/UsersAdminPanel';
+import AccountantAccessPanel from '../components/AccountantAccessPanel';
 
 // ── Stats helpers ─────────────────────────────────────────────────────────────
 
@@ -973,6 +974,9 @@ function AdminPage() {
 
       {/* ── Users ─────────────────────────────────────────────────────────── */}
       <UsersAdminPanel title="Users" />
+
+      {/* ── Accountant access ─────────────────────────────────────────────── */}
+      <AccountantAccessPanel />
 
       {/* ── Tool Maintenance ──────────────────────────────────────────────── */}
       <div className="rounded-2xl border p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>

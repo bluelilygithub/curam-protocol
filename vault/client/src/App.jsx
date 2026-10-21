@@ -87,6 +87,8 @@ import NewChatModalHost from './components/NewChatModalHost';
 import useAuthStore from './store/authStore';
 
 function HomeRoute() {
+  const isAccountant = useAuthStore((s) => s.user?.isAccountant);
+  if (isAccountant) return <Navigate to="/finance" replace />; // accountant logins only see Finance
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
   return isMobile ? <Navigate to="/mobile-dashboard" replace /> : <ProjectList />;
 }

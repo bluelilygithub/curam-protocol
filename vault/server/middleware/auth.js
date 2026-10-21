@@ -3,6 +3,7 @@
 const { pool } = require('../db');
 const { FEATURE_ACCESS_KEYS, flagsFromSettingRows, applyUserOverrides } = require('../config/featureAccess');
 const { attachUserToLogContext } = require('./requestContext');
+const { applyAccountantScope } = require('../services/accountantAccess');
 
 async function requireAuth(req, res, next) {
   // Skip auth for health check and auth routes
@@ -24,10 +25,11 @@ async function requireAuth(req, res, next) {
     }
 
     const { rows: users } = await pool.query(
-      'SELECT id, email, "isAdmin" FROM users WHERE id=$1', [session.userId]
+      'SELECT id, email, "isAdmin", "accountantOfUserId", "accessExpiresAt", "disabledAt" FROM users WHERE id=$1', [session.userId]
     );
     const user = users[0];
     if (!user) return res.status(401).json({ error: 'User not found' });
+    if (user.disabledAt && !user.accountantOfUserId) return res.status(401).json({ error: 'Account disabled' });
 
     // Throttled "last active" stamp (at most once per 5 min per user); never blocks the request
     pool.query(
@@ -36,7 +38,8 @@ async function requireAuth(req, res, next) {
       [user.id]
     ).catch(() => {});
 
-    req.user = user;
+    // Accountant logins are read-only, Finance-only and logged; everyone else gets req.user as before.
+    if (!(await applyAccountantScope(req, res, user, token))) return;
     attachUserToLogContext(user.id);
     next();
   } catch (err) {
@@ -68,7 +71,8 @@ function requireFeature(featureKey) {
     try {
       if (!FEATURE_ACCESS_KEYS.includes(featureKey)) return next();
       if (req.user?.isAdmin) return next();
-      const access = await loadFeatureAccess(req.user?.id);
+      // An accountant's req.user.id is the owner's (so Finance reads the owner's data); flags are the accountant's own.
+      const access = await loadFeatureAccess(req.featureUserId ?? req.user?.id);
       if (access[featureKey] === false) {
         return res.status(403).json({ error: 'Feature disabled for member accounts' });
       }

@@ -4,8 +4,10 @@ import { Link, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import ConfirmModal from '../components/ConfirmModal';
 import useToastStore from '../store/toastStore';
+import useAuthStore from '../store/authStore';
 import Tooltip from '../components/Tooltip';
 import FinanceTutorChat from './finance/FinanceTutorChat';
+import AccountantWelcome, { ACCOUNTANT_WELCOME_SEEN_KEY } from './finance/AccountantWelcome';
 import { useIcon } from '../providers/IconProvider';
 import useProcessingStore from '../store/processingStore';
 import ExtraReport, { EXTRA_REPORTS, REPORT_GROUPS } from './finance/ExtraReports';
@@ -7376,6 +7378,7 @@ const groupOfTab = (t) => TAB_GROUPS.find(g => g.tabs.includes(t)) || TAB_GROUPS
 const NO_DATE_FILTER_TABS = new Set(['Documents', 'Suppliers', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings', 'Recurring', 'Vehicle/Home Office', 'Reports']);
 
 export default function FinancePage() {
+  const isAccountant = useAuthStore((s) => s.user?.isAccountant); // read-only login: no AI guide (it is refused server side)
   const [searchParams, setSearchParams] = useSearchParams();
   const clientFilter = searchParams.get('clientId') || null;
   const [tab, setTab] = useState(() => searchParams.get('tab') || 'Dashboard');
@@ -7384,6 +7387,15 @@ export default function FinancePage() {
   const [exportModal, setExportModal]   = useState(null); // { type: 'myob'|'xero'|'excel' } | null
   const [exportHistory, setExportHistory] = useState({});
   const [showHelp, setShowHelp] = useState(false);
+  const ownerEmail = useAuthStore((s) => s.user?.ownerEmail);
+  // Accountants get a welcome guide: opens on first visit, reopened from the header button.
+  const [showWelcome, setShowWelcome] = useState(() => {
+    try { return !!isAccountant && !localStorage.getItem(ACCOUNTANT_WELCOME_SEEN_KEY); } catch { return !!isAccountant; }
+  });
+  const closeWelcome = () => {
+    setShowWelcome(false);
+    try { localStorage.setItem(ACCOUNTANT_WELCOME_SEEN_KEY, '1'); } catch { /* private window */ }
+  };
   const [settingsFocusSection, setSettingsFocusSection] = useState(null);
   const addToast = useToastStore(s => s.addToast);
 
@@ -7441,6 +7453,16 @@ export default function FinancePage() {
               </Tooltip>
             </div>
             <div className="flex items-center gap-2">
+              {isAccountant && (
+                <button
+                  type="button"
+                  onClick={() => setShowWelcome(true)}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium text-white hover:opacity-80 transition-opacity"
+                  style={{ background: 'var(--color-primary)' }}
+                >
+                  👋 Accountant guide
+                </button>
+              )}
               <Tooltip text="Download a MYOB-compatible journal CSV for the selected date range — locks a cutoff date to prevent duplicate imports."><Btn variant="secondary" onClick={() => setExportModal({ type: 'myob' })}>Export MYOB</Btn></Tooltip>
               <Tooltip text="Download a Xero-compatible journal CSV for the selected date range — locks a cutoff date to prevent duplicate imports."><Btn variant="secondary" onClick={() => setExportModal({ type: 'xero' })}>Export Xero</Btn></Tooltip>
               <Tooltip text="Download a full Excel export for the selected date range — locks a cutoff date to prevent duplicate imports."><Btn variant="secondary" onClick={() => setExportModal({ type: 'excel' })}>Export Excel</Btn></Tooltip>
@@ -7539,8 +7561,9 @@ export default function FinancePage() {
         />
       )}
 
+      {showWelcome && <AccountantWelcome onClose={closeWelcome} onOpenTab={setTab} ownerEmail={ownerEmail} />}
       {showHelp && <FinanceHelpModal tab={tab} onClose={() => setShowHelp(false)} />}
-      <FinanceTutorChat currentTab={tab} onOpenTab={setTab} />
+      {!isAccountant && <FinanceTutorChat currentTab={tab} onOpenTab={setTab} />}
     </div>
   );
 }
