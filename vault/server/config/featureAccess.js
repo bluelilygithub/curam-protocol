@@ -5,16 +5,9 @@ const FEATURE_ACCESS_DEFAULTS = {
   goals: true,
   habitsSidebar: true,
   memberModelSelection: false,
-  // Rarely used tools: hidden from menus by default. Chat still uses personas, prompts and
-  // memory directly (persona picker, prompt picker, memory recall), so these flags gate only
-  // the menu entries and pages, never the APIs.
-  personas: false,
+  // Rarely used tool: hidden from menus by default. Chat still uses memory directly (memory
+  // recall), so this flag gates only the menu entry and page, never the API.
   memory: false,
-  prompts: false,
-  chains: false,
-  graph: false,
-  debate: false,
-  compare: false,
   finance: true,
   usage: true,
   mood: true,

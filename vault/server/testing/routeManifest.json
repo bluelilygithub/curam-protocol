@@ -199,24 +199,6 @@
   "POST /api/cellar-tutor": {
    "class": "authed"
   },
-  "POST /api/chains/:id/run": {
-   "class": "authed"
-  },
-  "DELETE /api/chains/:id": {
-   "class": "authed"
-  },
-  "GET /api/chains/:id": {
-   "class": "authed"
-  },
-  "PUT /api/chains/:id": {
-   "class": "authed"
-  },
-  "GET /api/chains": {
-   "class": "authed"
-  },
-  "POST /api/chains": {
-   "class": "authed"
-  },
   "GET /api/chat/all-history": {
    "class": "authed"
   },
@@ -412,12 +394,6 @@
   "POST /api/clients": {
    "class": "authed"
   },
-  "POST /api/compare/save": {
-   "class": "authed"
-  },
-  "POST /api/compare": {
-   "class": "authed"
-  },
   "POST /api/contract-review/contracts/:id/ask": {
    "class": "authed"
   },
@@ -533,18 +509,6 @@
    "class": "authed"
   },
   "POST /api/deals": {
-   "class": "authed"
-  },
-  "POST /api/debate/extract": {
-   "class": "authed"
-  },
-  "POST /api/debate/round": {
-   "class": "authed"
-  },
-  "POST /api/debate/start": {
-   "class": "authed"
-  },
-  "POST /api/debate/summary": {
    "class": "authed"
   },
   "POST /api/document-redaction/jobs/:id/apply": {
@@ -1513,18 +1477,6 @@
   "GET /api/google-ads/status": {
    "class": "authed"
   },
-  "POST /api/graph/compute-semantic": {
-   "class": "authed"
-  },
-  "POST /api/graph/insights/refresh": {
-   "class": "authed"
-  },
-  "GET /api/graph/insights": {
-   "class": "authed"
-  },
-  "GET /api/graph": {
-   "class": "authed"
-  },
   "POST /api/graphics-tutor": {
    "class": "authed"
   },
@@ -2131,18 +2083,6 @@
   "POST /api/pdf/watermark": {
    "class": "authed"
   },
-  "DELETE /api/personas/:id": {
-   "class": "authed"
-  },
-  "PUT /api/personas/:id": {
-   "class": "authed"
-  },
-  "GET /api/personas": {
-   "class": "authed"
-  },
-  "POST /api/personas": {
-   "class": "authed"
-  },
   "PATCH /api/pinned-urls/:id/refresh": {
    "class": "authed"
   },
@@ -2252,18 +2192,6 @@
    "class": "authed"
   },
   "POST /api/projects": {
-   "class": "authed"
-  },
-  "DELETE /api/prompts/:id": {
-   "class": "authed"
-  },
-  "PUT /api/prompts/:id": {
-   "class": "authed"
-  },
-  "GET /api/prompts": {
-   "class": "authed"
-  },
-  "POST /api/prompts": {
    "class": "authed"
   },
   "POST /api/property-scenario/advice/ask": {

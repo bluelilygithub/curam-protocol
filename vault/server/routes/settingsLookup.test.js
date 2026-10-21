@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Shared keys read from settings (the Gemini key for debates, the search key and provider for web
+ * Shared keys read from settings (the Gemini key, the search key and provider for web
  * search): the caller's own setting wins, otherwise an administrator's, and a value written by some
  * other member is never used for anyone else. Outside services are replaced by fakes, so nothing leaves
  * the machine.
@@ -22,11 +22,6 @@ const http = require('http');
 const https = require('https');
 const express = require('express');
 
-// Fake Gemini: records which API key each debate call was made with.
-const geminiKeys = [];
-const geminiPath = require.resolve('@google/generative-ai');
-class FakeGenAI { constructor(key) { geminiKeys.push(key); } getGenerativeModel() { return { generateContent: async () => ({ response: { text: () => 'fake answer', usageMetadata: {} } }) }; } }
-require.cache[geminiPath] = { id: geminiPath, filename: geminiPath, loaded: true, exports: { GoogleGenerativeAI: FakeGenAI } };
 // Fake Serper: records which key each web search was made with.
 const serperKeys = [];
 https.request = (opts, cb) => {
@@ -44,7 +39,6 @@ let ADMIN; let M1; let M2;
 const app = express();
 app.use(express.json());
 app.use((req, _res, next) => { req.user = { id: { admin: ADMIN, m1: M1, m2: M2 }[req.headers['x-user'] || 'm2'], isAdmin: req.headers['x-user'] === 'admin' }; next(); });
-app.use('/api/debate', require('./debate'));
 app.use('/api/web-search', require('./webSearch'));
 
 let base;
@@ -59,7 +53,6 @@ const NAMES = ['GEMINI_API_KEY', 'SEARCH_API_KEY', 'SEARCH_PROVIDER'];
 const KEY = (n) => `${'a'.repeat(0)}${n}`;
 const set = (u, key, value) => pool.query(`INSERT INTO settings ("userId",key,value) VALUES ($1,$2,$3) ON CONFLICT ("userId",key) DO UPDATE SET value=EXCLUDED.value`, [u, key, value]);
 const clear = (u, key) => pool.query('DELETE FROM settings WHERE "userId"=$1 AND key=$2', [u, key]);
-const debateKey = async (as) => { const before = geminiKeys.length; const r = await call('POST', '/api/debate/start', as, { topic: 't', modelA: 'gemini-test', modelB: 'gemini-test' }); assert.strictEqual(r.status, 200, JSON.stringify(r.json)); assert.strictEqual(geminiKeys.length, before + 2); return geminiKeys[geminiKeys.length - 1]; };
 const searchKey = async (as) => { const before = serperKeys.length; const r = await call('GET', '/api/web-search?q=hello', as); assert.strictEqual(r.status, 200, JSON.stringify(r.json)); assert.strictEqual(serperKeys.length, before + 1); return serperKeys[serperKeys.length - 1]; };
 const hex = (c) => c.repeat(40); // a 40-character hex key is recognised as a Serper key
 const tests = [];
@@ -77,23 +70,6 @@ test('helper: own value first, then an administrator\'s, never another member\'s
   assert.strictEqual(await getSettingForUser(M2, 'GEMINI_API_KEY'), null, "with no administrator value, M1's is still not handed to M2");
   assert.strictEqual(await getSettingForUser(M1, 'GEMINI_API_KEY'), 'M1-KEY');
   await clear(M1, 'GEMINI_API_KEY');
-});
-
-test("debate: a member's own Gemini key is used for them only; others get the administrator's key, never that member's", async () => {
-  await set(ADMIN, 'GEMINI_API_KEY', 'ADMIN-KEY'); await set(M1, 'GEMINI_API_KEY', 'M1-KEY');
-  assert.strictEqual(await debateKey('m1'), 'M1-KEY');
-  assert.strictEqual(await debateKey('m2'), 'ADMIN-KEY', 'M2 must not run on M1\'s key');
-  assert.strictEqual(await debateKey('admin'), 'ADMIN-KEY');
-});
-
-test('debate: with no administrator key, a member\'s key is still not used for anyone else; the environment key applies', async () => {
-  await clear(ADMIN, 'GEMINI_API_KEY');
-  process.env.GEMINI_API_KEY = 'ENV-KEY';
-  assert.strictEqual(await debateKey('m2'), 'ENV-KEY');
-  assert.strictEqual(await debateKey('m1'), 'M1-KEY', 'M1 still uses their own');
-  process.env.GEMINI_API_KEY = '';
-  const r = await call('POST', '/api/debate/start', 'm2', { topic: 't', modelA: 'gemini-test', modelB: 'gemini-test' });
-  assert.ok(/not configured/.test(r.json.responseA), 'M2 has no key of their own and none is borrowed');
 });
 
 test("web search: the search key and provider come from the caller's own setting, else the administrator's, never another member's", async () => {

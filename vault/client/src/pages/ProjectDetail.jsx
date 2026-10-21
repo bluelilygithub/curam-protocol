@@ -49,7 +49,6 @@ function ProjectDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [filesKey, setFilesKey] = useState(0);
   const [folders, setFolders] = useState([]);
-  const [personas, setPersonas] = useState([]);
   const [emotionalOpen, setEmotionalOpen] = useState(false);
   const [projectEmotions, setProjectEmotions] = useState([]);
   const [showSessions, setShowSessions] = useState(false);
@@ -75,7 +74,6 @@ function ProjectDetail() {
     fetchProjects();
     setActive(Number(id));
     api.get('/api/folders').then(r => r.json()).then(setFolders).catch(() => {});
-    api.get('/api/personas').then(r => r.json()).then(setPersonas).catch(() => {});
     api.get('/api/settings/feature-access').then(r => r.json()).then(data => {
       if (data?.flags && typeof data.flags === 'object') {
         setFeatureAccess({ ...DEFAULT_FEATURE_ACCESS, ...data.flags });
@@ -525,7 +523,7 @@ function ProjectDetail() {
         )}
 
         {/* Organisation */}
-        {(folders.length > 0 || personas.length > 0) && (
+        {folders.length > 0 && (
           <div className="mt-8 pt-8 border-t" style={{ borderColor: 'var(--color-border)' }}>
             <h2 className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--color-muted)' }}>Organisation</h2>
             <div className="grid grid-cols-2 gap-4">
@@ -540,20 +538,6 @@ function ProjectDetail() {
                   >
                     <option value="">No collection</option>
                     {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                  </select>
-                </div>
-              )}
-              {personas.length > 0 && (
-                <div>
-                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>Default Persona</label>
-                  <select
-                    value={form.personaId || ''}
-                    onChange={e => setForm({ ...form, personaId: e.target.value ? Number(e.target.value) : null })}
-                    className="w-full px-3 py-2 rounded-xl border text-sm outline-none"
-                    style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  >
-                    <option value="">No persona</option>
-                    {personas.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </div>
               )}

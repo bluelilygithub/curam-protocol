@@ -177,11 +177,11 @@ async function generateAndStoreSessionSummary(sid, userId, modelHint = null) {
 
 // Returns { blocks, ragFallbackActive }.
 // blocks — array of Anthropic system content blocks with cache_control layering.
-// Stable blocks (persona, brief, memory, files, URLs) each carry cache_control so
+// Stable blocks (project name, brief, memory, files, URLs) each carry cache_control so
 // Anthropic can serve them from cache across turns. The date and web-search notice
 // are appended last with no cache_control so they are always evaluated fresh.
 // Anthropic supports up to 4 cache breakpoints per call; we use exactly 4:
-//   [1] persona + base, [2] project brief, [3] memory, [4] file/URL context (combined).
+//   [1] project name, [2] project brief, [3] memory, [4] file/URL context (combined).
 // The date block is the 5th block and intentionally has no cache_control.
 //
 // Pinned files are always sent in full (no RAG selection) so the block content is
@@ -189,7 +189,7 @@ async function generateAndStoreSessionSummary(sid, userId, modelHint = null) {
 // ~10% on cache reads after the first message.
 //
 // Callers on the Gemini path should join blocks: blocks.map(b => b.text).join('\n')
-async function buildSystemPrompt(project, personaId, sid = null, webSearch = false, userMessage = '', userId = null, userTimezone = null) {
+async function buildSystemPrompt(project, sid = null, webSearch = false, userMessage = '', userId = null, userTimezone = null) {
   // Helper — only pushes non-empty blocks
   const blocks = [];
   let ragFallbackActive = false;
@@ -200,16 +200,10 @@ async function buildSystemPrompt(project, personaId, sid = null, webSearch = fal
     blocks.push(block);
   }
 
-  // ── Block 1: Persona + base instructions (cache_control) ────────────────────
+  // ── Block 1: Project name (cache_control) ────────────────────
   {
     const parts = [];
     if (project) parts.push(`Project: "${project.name}"`);
-    const resolvedPersonaId = personaId || project?.personaId;
-    if (resolvedPersonaId) {
-      const { rows } = await pool.query('SELECT * FROM personas WHERE id=$1', [resolvedPersonaId]);
-      const persona = rows[0];
-      if (persona?.systemPrompt) parts.push(`\nPersona — ${persona.name}:\n${persona.systemPrompt}`);
-    }
     pushBlock(parts.join('\n'), true);
   }
 
@@ -600,7 +594,7 @@ router.post('/test-model', async (req, res) => {
 
 // POST /api/chat
 router.post('/', chatLimiter, async (req, res) => {
-  const { messages, projectId, sessionId, attachmentIds, urlAttachments, inlineImages, model: reqModel, temperature: reqTemp, personaId, reasoning, webSearch, userTimezone, studentCards: bodyStudentCards } = req.body;
+  const { messages, projectId, sessionId, attachmentIds, urlAttachments, inlineImages, model: reqModel, temperature: reqTemp, reasoning, webSearch, userTimezone, studentCards: bodyStudentCards } = req.body;
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'messages array required' });
   }
@@ -642,7 +636,7 @@ router.post('/', chatLimiter, async (req, res) => {
   // joined to a plain string for Gemini (which does not support content-block system params).
   const { blocks: systemBlocks, ragFallbackActive } = studentCards
     ? await buildStudentCardsSystemBlocks(req.user?.id ?? null, userTimezone || null)
-    : await buildSystemPrompt(project, personaId, sid, effectiveWebSearch, userMessage, req.user?.id ?? null, userTimezone || null);
+    : await buildSystemPrompt(project, sid, effectiveWebSearch, userMessage, req.user?.id ?? null, userTimezone || null);
 
   // Load all project Files API documents (PDFs uploaded to Anthropic) for persistent context
   const projectFileBlocks = [];
@@ -1901,20 +1895,8 @@ router.post('/analyse-prompt', async (req, res) => {
   };
 
   try {
-    const { prompt, currentModelId, personaModelHint } = req.body;
+    const { prompt, currentModelId } = req.body;
     console.log('[ModelAdvisor] analyse-prompt hit', { currentModelId, prompt: prompt?.slice(0, 50) });
-
-    // Persona hint overrides complexity analysis
-    if (personaModelHint && currentModelId !== personaModelHint) {
-      return res.json({
-        complexity: null,
-        needsImage: false,
-        reason: "This project's persona is configured for a different model.",
-        suggestedTier: null,
-        mismatch: true,
-        suggestedModels: [],
-      });
-    }
 
     // Fetch live model list from settings, fall back to defaults
     let enabledModels = FALLBACK_MODELS;

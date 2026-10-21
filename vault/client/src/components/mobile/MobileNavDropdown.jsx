@@ -38,10 +38,6 @@ export default function MobileNavDropdown({ onClose, isAdmin = false }) {
       const featureByNavId = {
         clients: 'clients',
         goals: 'goals',
-        chains: 'chains',
-        graph: 'graph',
-        debate: 'debate',
-        compare: 'compare',
         finance: 'finance',
         shares: 'shares',
         youtube: 'youtube',

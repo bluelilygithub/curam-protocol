@@ -4,7 +4,6 @@
     "api/calendar/event/:eventId": null,
     "api/cases/:id": "client_cases",
     "api/cellar-planner/leads/:id": "cellar_leads",
-    "api/chains/:id": "prompt_chains",
     "api/chat/history/:sessionId": "sessions",
     "api/chat/sessions/:projectId": "projects",
     "api/client-projects/:id": "projects",

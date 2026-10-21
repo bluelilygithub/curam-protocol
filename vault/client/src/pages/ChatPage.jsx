@@ -24,9 +24,7 @@ import { useModels } from '../hooks/useModels';
 import SelectionToolbar from '../components/SelectionToolbar';
 import useToastStore from '../store/toastStore';
 import OverflowMenu from '../components/OverflowMenu';
-import PromptVariableModal from '../components/PromptVariableModal';
 import ConfirmModal from '../components/ConfirmModal';
-import { extractVariables } from '../utils/promptVariables';
 import ModelAdvisorModal from '../components/ModelAdvisorModal';
 import CheckinModal from '../components/mood/CheckinModal';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
@@ -239,13 +237,7 @@ function ChatPage({ general = false }) {
   const [branchResponseError, setBranchResponseError] = useState('');
   const [branchFolders, setBranchFolders] = useState([]);
 
-  // Prompt picker
-  const [showPromptPicker, setShowPromptPicker] = useState(false);
-  const [prompts, setPrompts] = useState([]);
-  const [promptSearch, setPromptSearch] = useState('');
 
-  // Prompt variable modal — { content, onInsert } or null
-  const [promptVarModal, setPromptVarModal] = useState(null);
 
   // Bookmarks — { [messageId]: true } map for current session
   const [bookmarkedMap, setBookmarkedMap] = useState({});
@@ -260,10 +252,6 @@ function ChatPage({ general = false }) {
   const [modelStatus, setModelStatus] = useState({ anthropic: null, gemini: null, deepseek: null, ollama: null });
   const [preflightError, setPreflightError] = useState(null);
 
-  // Persona picker
-  const [personas, setPersonas] = useState([]);
-  const [selectedPersonaId, setSelectedPersonaId] = useState(null);
-  const [showPersonaPicker, setShowPersonaPicker] = useState(false);
 
   // Project feeling
   const [projectDominant, setProjectDominant] = useState(null);
@@ -475,11 +463,6 @@ function ChatPage({ general = false }) {
     }
   }, [general, projectId]);
 
-  const loadPrompts = async () => {
-    const res = await api.get(`/api/prompts${projectId ? `?projectId=${projectId}` : ''}`);
-    setPrompts(await res.json());
-  };
-
   // Load bookmark state for the active session
   useEffect(() => {
     if (!sessionId) { setBookmarkedMap({}); return; }
@@ -505,11 +488,6 @@ function ChatPage({ general = false }) {
     // Notify Layout to refresh badge
     window.dispatchEvent(new CustomEvent('vault:bookmark-changed'));
   }, [sessionId]);
-
-  const loadPersonas = async () => {
-    const res = await api.get('/api/personas');
-    setPersonas(await res.json());
-  };
 
   useEffect(() => {
     if (!projectId) { setProjectDominant(null); return; }
@@ -587,13 +565,12 @@ function ChatPage({ general = false }) {
     setCalendarQuery('');
     setCalendarResults([]);
     setCalendarAttached([]);
-    setShowPromptPicker(false);
     clearAttachments();
     clearUrls();
     setInlineImages([]);
     setSuggestions([]);
     setActiveArtifacts(null);
-    await sendMessage(text, ids, meta, effectiveModel || null, readyUrls, temperature, selectedPersonaId, reasoning, imgPayload, webSearch);
+    await sendMessage(text, ids, meta, effectiveModel || null, readyUrls, temperature, null, reasoning, imgPayload, webSearch);
     setTimeout(fetchSessions, 2000);
   };
 
@@ -637,14 +614,11 @@ function ChatPage({ general = false }) {
     const text = input.trim();
     if (!text && inlineImages.length === 0) { handleSend(); return; }
     if (isStreaming) { handleSend(); return; }
-    const currentPersona = personas.find(p => p.id === selectedPersonaId);
-    const personaModelHint = currentPersona?.model || undefined;
     try {
       const res = await api.post('/api/chat/analyse-prompt', {
         prompt: text,
         currentModelId: effectiveModel,
         sessionId,
-        ...(personaModelHint ? { personaModelHint } : {}),
       });
       const data = await res.json();
       if (data?.mismatch) {
@@ -685,29 +659,6 @@ function ChatPage({ general = false }) {
     setInput(input.slice(0, atIndex) + replacement + input.slice(cursorPos));
     setShowMention(false);
     textareaRef.current?.focus();
-  };
-
-  // Resolve a prompt's content: if it has {{variables}}, open the fill-in modal;
-  // otherwise insert it immediately. The onInsert callback handles what to do with the text.
-  const resolvePrompt = (content, onInsert) => {
-    if (extractVariables(content).length > 0) {
-      setPromptVarModal({ content, onInsert });
-    } else {
-      onInsert(content);
-    }
-  };
-
-  // Called when user picks a prompt from the @mention dropdown
-  const handlePromptMentionSelect = (prompt) => {
-    setShowMention(false);
-    const cursorPos = textareaRef.current?.selectionStart || input.length;
-    const atIndex = input.lastIndexOf('@', cursorPos);
-    const before = input.slice(0, atIndex);
-    const after = input.slice(cursorPos);
-    resolvePrompt(prompt.content, (filled) => {
-      setInput(before + filled + after);
-      textareaRef.current?.focus();
-    });
   };
 
   const handleOpenSearch = () => {
@@ -1047,10 +998,6 @@ function ChatPage({ general = false }) {
     ? `${formatTokens(sessionUsage.inputTokens + sessionUsage.outputTokens)} tokens · ${formatCost(calcCost(sessionUsage.model || effectiveModel, sessionUsage.inputTokens, sessionUsage.outputTokens))}`
     : null;
 
-  const filteredPrompts = promptSearch
-    ? prompts.filter(p => p.title.toLowerCase().includes(promptSearch.toLowerCase()) || p.content.toLowerCase().includes(promptSearch.toLowerCase()))
-    : prompts;
-
   const sessionListLabel = (s) => {
     const base = formatSessionLabel(s);
     return `${s.starred ? '⭐ ' : ''}${base}${s.isSummarized ? ' ✦' : ''}`;
@@ -1061,7 +1008,6 @@ function ChatPage({ general = false }) {
     setShowModelPicker(false);
     setShowTempPicker(false);
     setShowVoicePicker(false);
-    setShowPersonaPicker(false);
     setShowSessionPicker(false);
   };
 
@@ -1227,12 +1173,11 @@ function ChatPage({ general = false }) {
           </button>
         )}
 
-        {/* Chat settings — model, temperature, persona, etc. */}
+        {/* Chat settings — model, temperature, etc. */}
         <div className="relative hidden sm:block">
           <button
             onClick={() => {
               setShowChatSettings(v => !v);
-              if (!showChatSettings) loadPersonas();
             }}
             className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors hover:opacity-70"
             style={{
@@ -1332,21 +1277,6 @@ function ChatPage({ general = false }) {
                       Reasoning {reasoning ? 'on' : 'off'}
                     </button>
                   )}
-                </div>
-
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-wide mb-1.5 px-1" style={{ color: 'var(--color-muted)' }}>Persona</div>
-                  <select
-                    value={selectedPersonaId ?? ''}
-                    onChange={(e) => setSelectedPersonaId(e.target.value ? Number(e.target.value) : null)}
-                    className="w-full px-2 py-1.5 rounded-lg border text-xs outline-none"
-                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  >
-                    <option value="">No persona</option>
-                    {personas.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
                 </div>
 
                 {isTTSAvailable && (
@@ -1596,7 +1526,7 @@ function ChatPage({ general = false }) {
                   {project ? `Chat with ${project.name}` : 'Quick chat'}
                 </p>
                 <p className="text-sm max-w-xs" style={{ color: 'var(--color-muted)' }}>
-                  {project ? 'Uses your project brief, files, and pinned URLs.' : 'Ask anything — no project files or brief. Global memory and persona still apply.'}
+                  {project ? 'Uses your project brief, files, and pinned URLs.' : 'Ask anything — no project files or brief. Global memory still applies.'}
                 </p>
                 {!sessionId && (
                   <div className="mt-4 flex flex-col items-center gap-1.5">
@@ -1989,49 +1919,10 @@ function ChatPage({ general = false }) {
                   </div>
                 )}
 
-                {/* Prompt picker */}
-                {showPromptPicker && (
-                  <div className="fixed inset-0 z-40" onClick={() => { setShowPromptPicker(false); setPromptSearch(''); }} />
-                )}
-                {showPromptPicker && (
-                  <div
-                    className="absolute bottom-full mb-2 left-0 z-50 rounded-xl border shadow-lg overflow-hidden"
-                    style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '340px', maxHeight: '300px' }}
-                  >
-                    <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--color-border)' }}>
-                      <input
-                        autoFocus
-                        value={promptSearch}
-                        onChange={e => setPromptSearch(e.target.value)}
-                        placeholder="Search prompts…"
-                        className="w-full bg-transparent outline-none text-xs"
-                        style={{ color: 'var(--color-text)' }}
-                      />
-                    </div>
-                    <div className="overflow-y-auto" style={{ maxHeight: '240px' }}>
-                      {filteredPrompts.length === 0 ? (
-                        <p className="text-xs px-3 py-4 text-center" style={{ color: 'var(--color-muted)' }}>
-                          {prompts.length === 0 ? 'No saved prompts. Add some in the Prompt Library.' : 'No matches.'}
-                        </p>
-                      ) : filteredPrompts.map(p => (
-                        <button
-                          key={p.id}
-                          onClick={() => { setShowPromptPicker(false); setPromptSearch(''); resolvePrompt(p.content, (filled) => { setInput(filled); textareaRef.current?.focus(); }); }}
-                          className="w-full text-left px-3 py-2.5 hover:opacity-70 transition-opacity border-b last:border-0"
-                          style={{ borderColor: 'var(--color-border)' }}
-                        >
-                          <div className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>{p.title}</div>
-                          <div className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>{p.content}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* Mention dropdown */}
                 {showMention && (
                   <div className="absolute bottom-full mb-2 left-0 w-56 z-50">
-                    <AtMentionDropdown query={mentionQuery} onSelect={handleMentionSelect} onSearch={handleOpenSearch} onGmailSearch={handleOpenGmailSearch} onCalendarSearch={handleOpenCalendarSearch} onPromptSelect={handlePromptMentionSelect} onClose={() => setShowMention(false)} />
+                    <AtMentionDropdown query={mentionQuery} onSelect={handleMentionSelect} onSearch={handleOpenSearch} onGmailSearch={handleOpenGmailSearch} onCalendarSearch={handleOpenCalendarSearch} onClose={() => setShowMention(false)} />
                   </div>
                 )}
 
@@ -2083,7 +1974,7 @@ function ChatPage({ general = false }) {
                     <div className="flex items-center gap-1">
                       {/* File picker */}
                       <button
-                        onClick={() => { setShowFilePicker(v => !v); setShowUrlInput(false); setShowPromptPicker(false); }}
+                        onClick={() => { setShowFilePicker(v => !v); setShowUrlInput(false); }}
                         className="relative w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
                         style={{ color: showFilePicker || attachments.length > 0 ? 'var(--color-primary)' : 'var(--color-muted)', background: showFilePicker ? 'var(--color-bg)' : 'transparent' }}
                         title="Attach file"
@@ -2099,7 +1990,7 @@ function ChatPage({ general = false }) {
                       {/* URL attachment */}
                       <button
                         type="button"
-                        onClick={() => { setShowUrlInput(v => !v); setShowFilePicker(false); setShowPromptPicker(false); }}
+                        onClick={() => { setShowUrlInput(v => !v); setShowFilePicker(false); }}
                         className="relative w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
                         style={{ color: showUrlInput || urlAttachments.length > 0 ? 'var(--color-primary)' : 'var(--color-muted)', background: showUrlInput ? 'var(--color-bg)' : 'transparent' }}
                         title="Attach a web page"
@@ -2110,17 +2001,6 @@ function ChatPage({ general = false }) {
                             {urlAttachments.length}
                           </span>
                         )}
-                      </button>
-
-                      {/* Prompt library */}
-                      <button
-                        type="button"
-                        onClick={() => { setShowPromptPicker(v => !v); if (!showPromptPicker) loadPrompts(); setShowFilePicker(false); setShowUrlInput(false); }}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
-                        style={{ color: showPromptPicker ? 'var(--color-primary)' : 'var(--color-muted)', background: showPromptPicker ? 'var(--color-bg)' : 'transparent' }}
-                        title="Prompt library"
-                      >
-                        {getIcon('book', { size: 14 })}
                       </button>
 
                       {(isSTTAvailable || isLocalSTTAvailable) && (
@@ -2242,15 +2122,6 @@ function ChatPage({ general = false }) {
           </div>
         )}
       </div>
-
-      {/* Prompt variable fill-in modal */}
-      {promptVarModal && (
-        <PromptVariableModal
-          content={promptVarModal.content}
-          onInsert={(filled) => { promptVarModal.onInsert(filled); setPromptVarModal(null); }}
-          onClose={() => setPromptVarModal(null)}
-        />
-      )}
 
       {branchResponseTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>

@@ -16,13 +16,11 @@ const SECTIONS = [
   { id: 'artifacts',       label: 'Artifacts' },
   { id: 'memory',          label: 'Memory' },
   { id: 'suggestions',     label: 'Suggestions' },
-  { id: 'prompts',         label: 'Prompt Library' },
   { id: 'search',          label: 'Search' },
   { id: 'export',          label: 'Export & Share' },
   { id: 'voice',           label: 'Voice' },
   { id: 'settings',        label: 'Settings' },
   { id: 'shortcuts',       label: 'Keyboard Shortcuts' },
-  { id: 'personas',        label: 'Personas' },
   { id: 'pinned-context',  label: 'Pinned Context' },
   { id: 'folders',         label: 'Collections' },
   { id: 'branching',       label: 'Conversation Branching' },
@@ -30,13 +28,11 @@ const SECTIONS = [
   { id: 'reasoning',       label: 'Reasoning Mode' },
   { id: 'tasks',           label: 'Tasks' },
   { id: 'goals',           label: 'Goals' },
-  { id: 'chains',          label: 'Prompt Chains' },
   { id: 'pdf-tools',       label: 'PDF Tools' },
   { id: 'video-tools',     label: 'Video Tools' },
   { id: 'graphics',        label: 'Graphics' },
   { id: 'translate',       label: 'Translate' },
   { id: 'document-redaction', label: 'Document Redaction' },
-  { id: 'ai-tools-apps',   label: 'AI Tools' },
   { id: 'more-content-tools', label: 'More Content Tools' },
   { id: 'website-tools',   label: 'Website Tools' },
   { id: 'finance',         label: 'Finance' },
@@ -238,9 +234,7 @@ function UserGuidePage() {
           <FeatureCard emoji="🔍" title="Web Search" desc="Type @search in chat to fetch live web results and attach them as context before sending." />
           <FeatureCard emoji="🧠" title="Memory" desc="Semantic personal notes — relevant facts recalled per message, not the full list every turn." />
           <FeatureCard emoji="📥" title="Suggestions" desc="Automatic findings from crons and services — triage rules, skills, automations, and alerts." />
-          <FeatureCard emoji="📖" title="Prompt Library" desc="Save your best prompts, tag them, and insert them into any chat in one click." />
           <FeatureCard emoji="⬡" title="Artifacts" desc="Code and HTML from Claude renders in a live side panel — preview, copy, or iterate." />
-          <FeatureCard emoji="🎭" title="Personas" desc="Give Claude a custom personality per project — Tech Lead, Copywriter, Devil's Advocate — with a reusable system prompt." />
           <FeatureCard emoji="📌" title="Pinned Context" desc="Pin files and web pages to a project so their content is always injected into every chat, automatically." />
           <FeatureCard emoji="🗂️" title="Collections" desc="Group projects in the sidebar (folder-plus icon). Collections organise projects only — not individual chats." />
           <FeatureCard emoji="🌿" title="Branching" desc="Fork any conversation at any message to explore alternative paths without losing the original thread." />
@@ -509,7 +503,7 @@ function UserGuidePage() {
         </P>
 
         <Callout type="tip">
-          Quick chat still respects your active Persona and global Memory — preferences apply even without project context.
+          Quick chat still respects your global Memory — preferences apply even without project context.
         </Callout>
 
         <Divider />
@@ -820,41 +814,6 @@ function UserGuidePage() {
 
         <Divider />
 
-        {/* ── Prompt Library ── */}
-        <SectionHeading id="prompts">Prompt Library</SectionHeading>
-        <P>
-          The Prompt Library is a personal collection of reusable prompts. Save prompts you
-          reach for repeatedly and insert them into any chat in one click.
-        </P>
-
-        <SubHeading>Accessing the library</SubHeading>
-        <P>
-          Click the <strong>📖 book icon</strong> in the top navigation bar (or navigate to <code>/prompts</code>).
-        </P>
-
-        <SubHeading>Saving a prompt</SubHeading>
-        <P>Click <strong>+ New Prompt</strong> and fill in:</P>
-        <UL>
-          <LI><strong>Title</strong> — a short name to identify the prompt (e.g. "Code review checklist").</LI>
-          <LI><strong>Prompt text</strong> — the full prompt content.</LI>
-          <LI><strong>Tags</strong> — optional comma-separated keywords for filtering (e.g. <code>dev, review, checklist</code>).</LI>
-        </UL>
-
-        <SubHeading>Using a prompt in chat</SubHeading>
-        <P>
-          Click the <strong>book icon</strong> in the chat input toolbar. A picker opens above
-          the input showing all your saved prompts. Type to filter by title or content.
-          Click any prompt to load it into the message input — you can then edit it before sending.
-        </P>
-
-        <SubHeading>Copying a prompt</SubHeading>
-        <P>
-          On the Prompts page, hover over a prompt card and click the <strong>copy icon</strong>
-          that appears. The prompt text is copied to the clipboard.
-        </P>
-
-        <Divider />
-
         {/* ── Search ── */}
         <SectionHeading id="search">Search</SectionHeading>
         <P>
@@ -1009,34 +968,6 @@ function UserGuidePage() {
             <ShortcutRow keys={['Esc']} desc="Close palette" />
           </div>
         </div>
-
-        <Divider />
-
-        {/* ── Personas ── */}
-        <SectionHeading id="personas">Personas</SectionHeading>
-        <P>
-          A <strong>Persona</strong> is a reusable AI personality with a custom system prompt. Personas let you
-          switch Claude's role, tone, and focus area without rewriting context every time.
-        </P>
-
-        <SubHeading>Creating a Persona</SubHeading>
-        <UL>
-          <LI>Navigate to <strong>Personas</strong> via the person icon in the top nav bar.</LI>
-          <LI>Click <strong>New Persona</strong> and provide a name, an optional short description, and the system prompt.</LI>
-          <LI>Example: <em>Name: "Tech Lead"</em>, <em>System Prompt: "You are a senior software architect. Always think about scalability, security, and maintainability first. Prefer typed languages and enforce code review standards."</em></LI>
-        </UL>
-
-        <SubHeading>Using a Persona</SubHeading>
-        <UL>
-          <LI>In any chat, click the <strong>Persona</strong> button in the chat header to pick a persona for that session.</LI>
-          <LI>The selected persona overrides the project's default for the duration of the chat.</LI>
-          <LI>Assign a <strong>default persona</strong> to a project in the project detail page — it will be applied automatically to every new chat in that project.</LI>
-          <LI>Personas are additive: the persona prompt is appended to the project context, not replacing it.</LI>
-        </UL>
-
-        <Callout type="tip">
-          Great use cases: "Rubber duck" for debugging sessions, "Copywriter" for marketing projects, "Code reviewer" for PRs, "Devil's Advocate" for strategy work.
-        </Callout>
 
         <Divider />
 
@@ -1409,55 +1340,6 @@ function UserGuidePage() {
           The overall progress % on an Objective is the simple average of all its Key Results' individual progress percentages — not weighted by target value.
         </Callout>
 
-        {/* ── Prompt Chains ── */}
-        <SectionHeading id="chains">Prompt Chains</SectionHeading>
-        <P>
-          Prompt Chains (<strong>/chains</strong>) let you build reusable multi-step AI pipelines where the output of each
-          step automatically becomes the input for the next. Use them for complex workflows that would be tedious to
-          run manually — blog posts, code reviews, meeting note processing, and more.
-        </P>
-
-        <SubHeading>Creating a Chain</SubHeading>
-        <P>
-          Click <strong>+</strong> in the Chains sidebar to create a new chain, or pick one of the three built-in
-          starter templates (Blog Post Generator, Code Review Pipeline, Meeting Notes Processor) that appear when
-          your list is empty. Give the chain a name, an optional description, and add steps using the <strong>Add step</strong> button.
-        </P>
-
-        <SubHeading>Building Steps</SubHeading>
-        <P>Each step has three fields:</P>
-        <UL>
-          <LI><strong>Label</strong> — a short name shown during the run (optional but helpful).</LI>
-          <LI><strong>Prompt</strong> — the instruction for this step. Use template variables to pass context between steps.</LI>
-          <LI><strong>Model</strong> — choose any available Claude or Gemini model per step. Use a faster/cheaper model for straightforward steps and a more capable model for complex ones.</LI>
-        </UL>
-        <P>
-          Reorder steps with the ↑ / ↓ arrows, or remove a step with ✕. Changes are saved when you click <strong>Save</strong>.
-        </P>
-
-        <SubHeading>Template Variables</SubHeading>
-        <UL>
-          <LI><strong>{'{{input}}'}</strong> — the initial content you provide when running the chain (available in every step).</LI>
-          <LI><strong>{'{{output}}'}</strong> — the full output of the immediately preceding step.</LI>
-          <LI><strong>{'{{step_1}}'}</strong>, <strong>{'{{step_2}}'}</strong>… — the output of a specific step by its position number. Useful when a later step needs to combine outputs from multiple earlier steps.</LI>
-        </UL>
-
-        <SubHeading>Running a Chain</SubHeading>
-        <P>
-          Click <strong>▶ Run</strong> in the editor toolbar to open the run modal. Paste or type your initial input,
-          then click <strong>Run Chain</strong>. Each step streams its output live — you can see progress in real time
-          as the chain works through every stage. When a step finishes, its output card shows a <strong>Copy</strong>
-          button so you can grab the result immediately. After the final step completes, a green <em>Chain complete ✓</em>
-          banner appears. Use <strong>Run Again</strong> to re-run with the same or different input.
-        </P>
-
-        <Callout type="tip">
-          Mix models within a chain — for example, use Claude Sonnet for complex reasoning steps and Claude Haiku for
-          fast formatting or summarisation steps to keep costs low and speed high.
-        </Callout>
-
-        <Divider />
-
         {/* ── PDF Tools ── */}
         <SectionHeading id="pdf-tools">PDF Tools</SectionHeading>
         <P>
@@ -1679,38 +1561,6 @@ function UserGuidePage() {
           The final export includes the redacted document and an <strong>INTERNAL-ONLY audit trail</strong> —
           a gated download that may contain original values, intended for your own compliance records, not for
           sharing alongside the redacted document itself.
-        </P>
-
-        <Divider />
-
-        {/* ── AI Tools (grouped) ── */}
-        <SectionHeading id="ai-tools-apps">AI Tools</SectionHeading>
-        <P>
-          A handful of specialised AI tools live under Apps → AI tools, alongside Prompt Chains and Document
-          Redaction covered above.
-        </P>
-
-        <SubHeading>Knowledge Graph</SubHeading>
-        <P>
-          Visualises the semantic relationships between your notes and chat sessions — nodes connected when their
-          content is similar enough to be meaningfully related (cosine similarity above a fixed threshold on their
-          embeddings). Useful for spotting recurring themes or duplicated thinking across projects that you
-          wouldn't otherwise notice were connected.
-        </P>
-
-        <SubHeading>Multi-Model Debate</SubHeading>
-        <P>
-          Pick a topic (or upload a document to extract one from), then have multiple models argue different
-          sides across several rounds, followed by a synthesised summary of the strongest points from each side.
-          Useful for stress-testing a decision or seeing an issue from angles you might not think to ask for
-          yourself.
-        </P>
-
-        <SubHeading>Document Compare</SubHeading>
-        <P>
-          Upload two documents and choose a comparison mode: a detailed <strong>diff</strong>, a <strong>summary</strong>
-          of key differences, a <strong>reconciled</strong> single version combining the best of both, or a list of
-          pure <strong>conflicts</strong> between them. Works with both Claude and Gemini models.
         </P>
 
         <Divider />

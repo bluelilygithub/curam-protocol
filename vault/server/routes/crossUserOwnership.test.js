@@ -38,8 +38,8 @@ const WRITES_BY_DESIGN = {
 const REF_ALIASES = {
   projects: ['projectId'], sessions: ['sessionId'], clients: ['clientId', 'clientRef'], tasks: ['taskId', 'parentId'],
   objectives: ['goalId', 'objectiveId'], key_results: ['krId', 'keyResultId'], fin_invoices: ['invoiceId'], fin_suppliers: ['supplierId'],
-  client_deals: ['dealId'], client_cases: ['caseId'], files: ['fileId'], notes: ['noteId'], folders: ['folderId'], personas: ['personaId'],
-  messages: ['messageId'], prompts: ['promptId'], memory: ['memoryId'], client_contacts: ['contactId'], client_touchpoints: ['touchpointId'],
+  client_deals: ['dealId'], client_cases: ['caseId'], files: ['fileId'], notes: ['noteId'], folders: ['folderId'],
+  messages: ['messageId'], memory: ['memoryId'], client_contacts: ['contactId'], client_touchpoints: ['touchpointId'],
 };
 
 (async () => {

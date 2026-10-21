@@ -3,7 +3,6 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useIcon } from '../providers/IconProvider';
 import { startGoalsTour, TOUR_KEY as GOALS_TOUR_KEY } from '../utils/tours/goalsTour';
 import { startTasksTour, TOUR_KEY as TASKS_TOUR_KEY } from '../utils/tours/tasksTour';
-import { startChainsTour, TOUR_KEY as CHAINS_TOUR_KEY } from '../utils/tours/chainsTour';
 import { startRagTour, TOUR_KEY as RAG_TOUR_KEY } from '../utils/tours/ragTour';
 import { startIntegrationsTour, TOUR_KEY as INTEGRATIONS_TOUR_KEY } from '../utils/tours/integrationsTour';
 import { startGettingStartedTour, TOUR_KEY as GETTING_STARTED_TOUR_KEY } from '../utils/tours/gettingStartedTour';
@@ -20,7 +19,6 @@ export default function TourButton() {
 
   const isGoals = location.pathname.startsWith('/goals');
   const isTasks = location.pathname.startsWith('/tasks');
-  const isChains = location.pathname.startsWith('/chains');
   const isProject = /^\/projects\/\d+$/.test(location.pathname);
   const isSettings = location.pathname === '/settings';
   const isProductScout = location.pathname.startsWith('/product-scout');
@@ -28,7 +26,7 @@ export default function TourButton() {
   const isPropertyScenario = location.pathname.startsWith('/property-scenario');
   const isContractReview = location.pathname.startsWith('/contract-review');
 
-  if (!isGoals && !isTasks && !isChains && !isProject && !isSettings && !isProductScout && !isRecipes && !isPropertyScenario && !isContractReview) return null;
+  if (!isGoals && !isTasks && !isProject && !isSettings && !isProductScout && !isRecipes && !isPropertyScenario && !isContractReview) return null;
 
   // On /goals: Getting Started tour takes priority while pending, then Goals tour
   const isGettingStartedPending = isGoals && !localStorage.getItem(GETTING_STARTED_TOUR_KEY);
@@ -37,7 +35,6 @@ export default function TourButton() {
   if (isGettingStartedPending) tourKey = GETTING_STARTED_TOUR_KEY;
   else if (isGoals) tourKey = GOALS_TOUR_KEY;
   else if (isTasks) tourKey = TASKS_TOUR_KEY;
-  else if (isChains) tourKey = CHAINS_TOUR_KEY;
   else if (isProject) tourKey = RAG_TOUR_KEY;
   else if (isSettings) tourKey = INTEGRATIONS_TOUR_KEY;
   else if (isProductScout) tourKey = PRODUCT_SCOUT_TOUR_KEY;
@@ -51,7 +48,6 @@ export default function TourButton() {
     if (isGettingStartedPending) startGettingStartedTour(navigate);
     else if (isGoals) startGoalsTour(navigate);
     else if (isTasks) startTasksTour(navigate);
-    else if (isChains) startChainsTour(navigate);
     else if (isProject) startRagTour(navigate, params.id);
     else if (isSettings) startIntegrationsTour(navigate);
     else if (isProductScout) startProductScoutTour(navigate);
@@ -64,7 +60,6 @@ export default function TourButton() {
   if (isGettingStartedPending) label = 'Getting Started Tour';
   else if (isGoals) label = 'Goals Tour';
   else if (isTasks) label = 'Tasks Tour';
-  else if (isChains) label = 'Chains Tour';
   else if (isProject) label = 'Project Tour';
   else if (isSettings) label = 'Integrations Tour';
   else if (isProductScout) label = 'Amazon Search Tour';

@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 /**
- * Three small ownership gaps: goal key results (edit/delete), project re-ordering, and saving a comparison
- * under a project. Another user gets the same 404 as for a missing record (or, for re-ordering, the same
+ * Two small ownership gaps: goal key results (edit/delete), and project re-ordering. Another user gets the same 404 as for a missing record (or, for re-ordering, the same
  * "skipped like a missing id"), and nothing is changed.
  * Integration test: needs a real Postgres. Uses two throwaway users, deleted afterwards.
  *
@@ -26,7 +25,6 @@ app.use(express.json());
 app.use((req, _res, next) => { req.user = { id: req.headers['x-user'] === 'B' ? B : A, isAdmin: false }; next(); });
 app.use('/api/goals', require('./goals'));
 app.use('/api/projects', require('./projects'));
-app.use('/api/compare', require('./compare'));
 
 let base;
 async function call(method, url, as, body) {
@@ -70,21 +68,6 @@ test("project re-ordering: only the caller's own projects change; someone else's
   assert.strictEqual(await sortOf(ids.projA), 1, 'the owner re-orders their own');
   assert.strictEqual(await sortOf(ids.projB), 1, "and B's is untouched by A's request");
   assert.strictEqual((await call('PATCH', '/api/projects/reorder', undefined, { ids: 'nope' })).status, 400, 'input check unchanged');
-});
-
-test("saving a comparison: another user cannot file one under someone else's project; the owner and an unfiled save still work", async () => {
-  const marker = `cmp-${run}`;
-  const saved = async () => (await q('SELECT "projectId" FROM comparisons WHERE "docAName"=$1', [marker]));
-  const r = await call('POST', '/api/compare/save', 'B', { projectId: ids.projA, docAName: marker, docBName: 'b', mode: 'diff', model: 'm', result: 'r' });
-  assert.strictEqual(r.status, 404); assert.deepStrictEqual(r.json, { error: 'Not found' });
-  assert.strictEqual((await saved()).length, 0, 'nothing was filed in the other project');
-  const missing = await call('POST', '/api/compare/save', 'B', { projectId: 999999999, docAName: marker, result: 'r' });
-  assert.deepStrictEqual(missing.json, r.json); assert.strictEqual(missing.status, 404);
-  assert.strictEqual((await call('POST', '/api/compare/save', undefined, { projectId: ids.projA, docAName: marker, result: 'r' })).status, 200);
-  assert.strictEqual((await call('POST', '/api/compare/save', 'B', { docAName: marker, result: 'r' })).status, 200, 'no project: unchanged');
-  assert.deepStrictEqual((await saved()).map((x) => x.projectId).sort(), [null, ids.projA].sort());
-  assert.strictEqual((await call('POST', '/api/compare/save', 'B', { docAName: marker })).status, 400, 'input check unchanged');
-  await pool.query('DELETE FROM comparisons WHERE "docAName"=$1', [marker]);
 });
 
 (async () => {

@@ -13,7 +13,6 @@ import CalendarConnect from '../components/CalendarConnect';
 import DriveConnect from '../components/DriveConnect';
 import { startGoalsTour, TOUR_KEY } from '../utils/tours/goalsTour';
 import { startTasksTour, TOUR_KEY as TASKS_TOUR_KEY } from '../utils/tours/tasksTour';
-import { startChainsTour, TOUR_KEY as CHAINS_TOUR_KEY } from '../utils/tours/chainsTour';
 import { startRagTour, TOUR_KEY as RAG_TOUR_KEY } from '../utils/tours/ragTour';
 import { startIntegrationsTour, TOUR_KEY as INTEGRATIONS_TOUR_KEY } from '../utils/tours/integrationsTour';
 import { startGettingStartedTour, TOUR_KEY as GETTING_STARTED_TOUR_KEY } from '../utils/tours/gettingStartedTour';
@@ -22,7 +21,6 @@ import { startFinanceTour, TOUR_KEY as FINANCE_TOUR_KEY } from '../utils/tours/f
 import { startMoodTour, TOUR_KEY as MOOD_TOUR_KEY } from '../utils/tours/moodTour';
 import { startNewsDigestTour, TOUR_KEY as NEWS_DIGEST_TOUR_KEY } from '../utils/tours/newsDigestTour';
 import { startCalendarTour, TOUR_KEY as CALENDAR_TOUR_KEY } from '../utils/tours/calendarTour';
-import { startGraphTour, TOUR_KEY as GRAPH_TOUR_KEY } from '../utils/tours/graphTour';
 import { startProductScoutTour, TOUR_KEY as PRODUCT_SCOUT_TOUR_KEY } from '../utils/tours/productScoutTour';
 import { startRecipesTour, TOUR_KEY as RECIPES_TOUR_KEY } from '../utils/tours/recipesTour';
 import { TOUR_KEY as MEASUREMENTS_TOUR_KEY } from '../utils/tours/measurementsTour';
@@ -2426,25 +2424,6 @@ function SettingsPage() {
           </div>
           <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
             <div>
-              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Prompt Chains Tour</p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                6-step walkthrough of building, editing, and running multi-step AI pipelines
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                localStorage.removeItem(CHAINS_TOUR_KEY);
-                navigate('/chains');
-                setTimeout(() => startChainsTour(navigate), 800);
-              }}
-              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
-              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
-            >
-              Retake Tour
-            </button>
-          </div>
-          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-            <div>
               <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Project Context & RAG Tour</p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
                 6-step walkthrough of project context fields, AI model selection, pinned URLs, and file uploads
@@ -2533,24 +2512,6 @@ function SettingsPage() {
               style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
             >
               {localStorage.getItem(CALENDAR_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
-            </button>
-          </div>
-          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-            <div>
-              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Knowledge Graph Tour</p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                7-step tour — navigation, semantic connections, AI insights, node types, project focus
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                localStorage.removeItem(GRAPH_TOUR_KEY);
-                setTimeout(() => startGraphTour(navigate), 200);
-              }}
-              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
-              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
-            >
-              {localStorage.getItem(GRAPH_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
             </button>
           </div>
           <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>

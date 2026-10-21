@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * Found by the cross-user route test:
- *  - PUT /api/folders/:id, /api/personas/:id, /api/prompts/:id updated only the caller's own row but then
- *    read the row back by id alone, so any member got another member's folder / persona / prompt back.
+ *  - PUT /api/folders/:id updated only the caller's own row but then
+ *    read the row back by id alone, so any member got another member's folder back.
  *  - POST /api/finance/invoices and PUT /api/finance/invoices/:id accepted any client id; the invoice
  *    views join the client's name and billing details, so any member could read another member's client.
  * Now: a stranger gets 404 and nothing is stored or returned; the owner's own use is unchanged.
@@ -32,8 +32,6 @@ const app = express();
 app.use(express.json());
 app.use((req, _res, next) => { req.user = { id: req.headers['x-user'] === 'B' ? B : A, isAdmin: false }; next(); });
 app.use('/api/folders', require('./folders'));
-app.use('/api/personas', require('./personas'));
-app.use('/api/prompts', require('./prompts'));
 app.use('/api/finance', require('./finance'));
 app.use('/api/translate', require('./translate'));
 
@@ -56,24 +54,6 @@ test('folders: a stranger cannot rename or read another member\'s folder; the ow
   const own = await call('PUT', `/api/folders/${f}`, 'A', { name: 'renamed' });
   assert.strictEqual(own.status, 200); assert.strictEqual(own.json.name, 'renamed');
   assert.strictEqual((await call('PUT', '/api/folders/999999999', 'A', { name: 'x' })).status, 404);
-});
-
-test('personas: same', async () => {
-  const p = (await pool.query(`INSERT INTO personas (name,description,"systemPrompt","userId") VALUES ('n','d',$1,$2) RETURNING id`, [SECRET, A])).rows[0].id;
-  const r = await call('PUT', `/api/personas/${p}`, 'B', { name: 'x', systemPrompt: 'hijacked' });
-  assert.strictEqual(r.status, 404); assert.ok(!r.text.includes(SECRET));
-  assert.strictEqual((await pool.query('SELECT "systemPrompt" s FROM personas WHERE id=$1', [p])).rows[0].s, SECRET, 'not changed');
-  const own = await call('PUT', `/api/personas/${p}`, 'A', { name: 'n2', systemPrompt: 'new' });
-  assert.strictEqual(own.status, 200); assert.strictEqual(own.json.systemPrompt, 'new');
-});
-
-test('prompts: same, and a stranger\'s update never borrows the owner\'s text', async () => {
-  const p = (await pool.query(`INSERT INTO prompts (title,content,"userId") VALUES ('t',$1,$2) RETURNING id`, [SECRET, A])).rows[0].id;
-  const r = await call('PUT', `/api/prompts/${p}`, 'B', { title: 'hijacked' });
-  assert.strictEqual(r.status, 404); assert.ok(!r.text.includes(SECRET));
-  assert.strictEqual((await pool.query('SELECT content c, title t FROM prompts WHERE id=$1', [p])).rows[0].c, SECRET);
-  const own = await call('PUT', `/api/prompts/${p}`, 'A', { title: 'mine now' });
-  assert.strictEqual(own.status, 200); assert.strictEqual(own.json.title, 'mine now'); assert.strictEqual(own.json.content, SECRET, 'unsent fields keep the owner\'s values');
 });
 
 test('translate: only the owner can mark a translation job failed', async () => {

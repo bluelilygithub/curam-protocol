@@ -5,9 +5,7 @@ export const APP_NAV_GROUPS = [
     id: 'workspace',
     label: 'Workspace',
     items: [
-      { id: 'personas', label: 'Personas', path: '/personas', icon: 'user', featureKey: 'personas' },
       { id: 'memory', label: 'Memory', path: '/memory', icon: 'brain', featureKey: 'memory' },
-      { id: 'prompts', label: 'Prompt Library', path: '/prompts', icon: 'book', featureKey: 'prompts' },
       { id: 'guide', label: 'User Guide', path: '/guide', icon: 'help-circle', featureKey: null },
       { id: 'showcase', label: 'Client Showcase', path: 'https://claude.ai/artifact/STxyMcZUUHCVBZniFbxhtP', icon: 'external-link', featureKey: null, external: true },
     ],
@@ -46,10 +44,6 @@ export const APP_NAV_GROUPS = [
     id: 'ai-tools',
     label: 'AI tools',
     items: [
-      { id: 'chains', label: 'Prompt Chains', path: '/chains', icon: 'chains', featureKey: 'chains' },
-      { id: 'graph', label: 'Knowledge Graph', path: '/graph', icon: 'share-2', featureKey: 'graph' },
-      { id: 'debate', label: 'Multi-Model Debate', path: '/debate', icon: 'debate', featureKey: 'debate' },
-      { id: 'compare', label: 'Document Compare', path: '/compare', icon: 'compare', featureKey: 'compare' },
       { id: 'documentRedaction', label: 'Redaction', path: '/document-redaction', icon: 'file-pen', featureKey: 'documentRedaction', matchPrefix: true },
       { id: 'contractReview', label: 'Contract Review', path: '/contract-review', icon: 'clipboard-list', featureKey: 'contractReview', matchPrefix: true },
     ],

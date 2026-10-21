@@ -69,9 +69,7 @@ Key tables: `users`, `auth_sessions`, `projects`, `files`, `messages`, `sessions
 - Settings API: `GET /api/settings` returns all keys, `POST /api/settings { key, value }` upserts (empty value deletes)
 
 ## Features Implemented (version-7)
-- Projects, chat, files, personas, prompts, memory, folders, pinned URLs
-- Document Compare (`/compare`) — SSE streaming, 4 modes, vault file selection, save to project
-- Multi-Model Debate (`/debate`) — Anthropic + Gemini models, multi-file context upload, round history navigation, NO_CHANGE detection, synthesis summary, save to project with project selector
+- Projects, chat, files, memory, folders, pinned URLs
 - Password reset flow (`/reset-password`) — email token, 1-hour expiry
 - Eye/password visibility toggles on login + settings password fields
 - Admin Dashboard (`/admin`) — stat cards for projects, sessions, messages, searches, debates, comparisons, tokens; period selector (Today/Week/Month/Last month/6m/12m/Custom); plus **Users** panel for create/list/reset-password/promote/demote/delete

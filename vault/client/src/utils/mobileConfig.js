@@ -46,12 +46,6 @@ export const DEFAULT_TILES = [
   { id: 'mood',          label: 'Mood',             enabled: true },
   { id: 'wellbeing',     label: 'Wellbeing Check',  enabled: true },
   { id: 'memory',        label: 'Memory',           enabled: true },
-  { id: 'prompts',       label: 'Prompts',          enabled: true },
-  { id: 'personas',      label: 'Personas',         enabled: true },
-  { id: 'compare',       label: 'Doc Compare',      enabled: true },
-  { id: 'debate',        label: 'Debate',           enabled: true },
-  { id: 'chains',        label: 'Prompt Chains',    enabled: true },
-  { id: 'graph',         label: 'Knowledge Graph',  enabled: true },
   { id: 'usage',         label: 'Usage & Cost',     enabled: true },
 ];
 
@@ -95,12 +89,6 @@ export const APP_TILES = {
   mood:          { path: '/mood',          icon: 'mood',           description: 'Mood check-ins' },
   wellbeing:     { path: '/wellbeing',     icon: 'heart-pulse',    description: 'Wellbeing check' },
   memory:        { path: '/memory',        icon: 'brain',          description: 'What Vault remembers' },
-  prompts:       { path: '/prompts',       icon: 'book',           description: 'Saved prompts' },
-  personas:      { path: '/personas',      icon: 'user',           description: 'AI personas' },
-  compare:       { path: '/compare',       icon: 'compare',        description: 'Compare two documents' },
-  debate:        { path: '/debate',        icon: 'debate',         description: 'Multi-model debate' },
-  chains:        { path: '/chains',        icon: 'chains',         description: 'Run prompt chains' },
-  graph:         { path: '/graph',         icon: 'share-2',        description: 'Knowledge graph' },
   usage:         { path: '/usage',         icon: 'usage',          description: 'AI usage and cost' },
 };
 
@@ -143,13 +131,7 @@ export const FEATURE_BY_TILE_ID = {
   expenseReview: 'gmailIntel',
   news: 'newsDigest',
   mood: 'mood',
-  compare: 'compare',
-  debate: 'debate',
-  personas: 'personas',
   memory: 'memory',
-  prompts: 'prompts',
-  chains: 'chains',
-  graph: 'graph',
   usage: 'usage',
 };
 
@@ -197,12 +179,6 @@ export const DEFAULT_NAV_ITEMS = [
   { id: 'pipeline',  label: 'Pipeline',        path: '/pipeline',    enabled: true },
   { id: 'memory',    label: 'Memory',          path: '/memory',      enabled: true },
   { id: 'suggestions', label: 'Suggestions',   path: '/suggestions', enabled: true },
-  { id: 'prompts',   label: 'Prompts',         path: '/prompts',     enabled: true },
-  { id: 'personas',  label: 'Personas',        path: '/personas',    enabled: true },
-  { id: 'compare',   label: 'Doc Compare',     path: '/compare',     enabled: true },
-  { id: 'debate',    label: 'Debate',          path: '/debate',      enabled: true },
-  { id: 'chains',    label: 'Prompt Chains',   path: '/chains',      enabled: true },
-  { id: 'graph',     label: 'Knowledge Graph', path: '/graph',       enabled: true },
   { id: 'news',      label: 'News Digest',     path: '/news-digest', enabled: true },
   { id: 'mood',      label: 'Mood',            path: '/mood',        enabled: true },
   { id: 'usage',     label: 'Usage & Cost',    path: '/usage',       enabled: true },

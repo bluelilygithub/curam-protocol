@@ -10,19 +10,13 @@ import ChatPage from './pages/ChatPage';
 import SettingsPage from './pages/SettingsPage';
 import MemoryPage from './pages/MemoryPage';
 import SuggestionsPage from './pages/SuggestionsPage';
-import PromptsPage from './pages/PromptsPage';
 import UserGuidePage from './pages/UserGuidePage';
-import PersonasPage from './pages/PersonasPage';
-import ComparisonPage from './pages/ComparisonPage';
-import DebatePage from './pages/DebatePage';
 import AdminPage from './pages/AdminPage';
 import MobileDashboard from './pages/MobileDashboard';
 import ChatHistoryPage from './pages/ChatHistoryPage';
 import TasksPage from './pages/TasksPage';
 import GoalsPage from './pages/GoalsPage';
 import NotesPage from './pages/NotesPage';
-import ChainsPage from './pages/ChainsPage';
-import GraphPage from './pages/GraphPage';
 import FinancePage from './pages/FinancePage';
 import ClientsPage from './pages/ClientsPage';
 import PipelinePage from './pages/PipelinePage';
@@ -176,18 +170,12 @@ function App() {
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/memory" element={<FeatureRoute feature="memory"><MemoryPage /></FeatureRoute>} />
               <Route path="/suggestions" element={<SuggestionsPage />} />
-              <Route path="/prompts" element={<FeatureRoute feature="prompts"><PromptsPage /></FeatureRoute>} />
               <Route path="/guide" element={<UserGuidePage />} />
-              <Route path="/personas" element={<FeatureRoute feature="personas"><PersonasPage /></FeatureRoute>} />
-              <Route path="/compare" element={<FeatureRoute feature="compare"><ComparisonPage /></FeatureRoute>} />
-              <Route path="/debate" element={<FeatureRoute feature="debate"><DebatePage /></FeatureRoute>} />
               <Route path="/admin" element={<AdminRoute />} />
               <Route path="/history" element={<ChatHistoryPage />} />
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/goals" element={<GoalsPage />} />
               <Route path="/notes" element={<NotesPage />} />
-              <Route path="/chains" element={<FeatureRoute feature="chains"><ChainsPage /></FeatureRoute>} />
-              <Route path="/graph" element={<FeatureRoute feature="graph"><GraphPage /></FeatureRoute>} />
               <Route path="/clients" element={<ClientsPage />} />
               <Route path="/clients/:id" element={<ClientDetailPage />} />
               <Route path="/client-projects" element={<ClientProjectsPage />} />
