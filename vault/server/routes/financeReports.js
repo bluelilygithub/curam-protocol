@@ -1715,7 +1715,7 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange, disposal
     let map = {};
     try { map = mapRow.rows[0] ? JSON.parse(mapRow.rows[0].value) || {} : {}; } catch { map = {}; }
     const m = (code) => map[code] || {};
-    const aRows = accts.rows.map(a => ({ code: a.code, name: a.name, type: a.type, accCode: m(a.code).code || '', accName: m(a.code).name || '', myob: m(a.code).myobTax || '', xero: m(a.code).xeroTax || '' }));
+    const aRows = accts.rows.map(a => ({ code: a.code, name: a.name, type: a.type, accCode: m(a.code).code || '', accName: m(a.code).name || '' }));
     const cRows = codes.rows.map(c => ({ code: c.code, name: c.name, type: c.type, active: c.active === false ? 'No' : 'Yes', accCode: m(c.code).code || '', accName: m(c.code).name || '' }));
     const mapped = aRows.filter(a => a.accCode || a.accName).length + cRows.filter(c => c.accCode || c.accName).length;
     res.json({
@@ -1726,7 +1726,7 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange, disposal
       ],
       summary: [{ label: 'Accounts', value: aRows.length, format: 'int' }, { label: 'Income/expense codes', value: cRows.length, format: 'int' }, { label: 'Mapped', value: mapped, format: 'int' }],
       sections: [
-        { title: 'Accounts', columns: [cText('code', `${biz} code`), cText('name', `${biz} name`), cText('type', 'Type'), cText('accCode', 'Accountant code'), cText('accName', 'Accountant label'), cText('myob', 'MYOB tax'), cText('xero', 'Xero tax')], rows: aRows },
+        { title: 'Accounts', columns: [cText('code', `${biz} code`), cText('name', `${biz} name`), cText('type', 'Type'), cText('accCode', 'Accountant code'), cText('accName', 'Accountant label')], rows: aRows },
         { title: 'Income & expense codes', columns: [cText('code', `${biz} code`), cText('name', `${biz} name`), cText('type', 'Type'), cText('active', 'Active'), cText('accCode', 'Accountant code'), cText('accName', 'Accountant label')], rows: cRows },
       ],
     });

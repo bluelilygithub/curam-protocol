@@ -66,7 +66,7 @@ const CATALOG = [
     does: 'The formal reports an accountant needs, each with a CSV export: Profit & Loss, Balance Sheet, Trial Balance, Cash Flow, General Ledger, aged receivables and payables, GST summary and BAS worksheet, depreciation schedule, Tax Time Summary, Cash Book, Income Received, Expense Listing, and more. "Things to Review" is a checklist of items worth fixing before the year is handed over. "Export FY pack" builds a PDF, an Excel workbook and a zip of the supporting documents for a financial year.',
     notes: 'These show what has been recorded. They do not tell the person whether the treatment of something is right for tax.' },
   { id: 'Settings', group: 'Setup',
-    does: 'Business name, ABN, address and bank details printed on invoices; default payment terms; GST registration and GST basis (cash or accrual); the real GST cancellation date; vehicle and home-office methods and rates for each financial year; weekly reminder email; export account mapping; and the export history lock that prevents duplicate MYOB, Xero, Excel or Sheets imports.',
+    does: 'Business name, ABN, address and bank details printed on invoices; default payment terms; GST registration and GST basis (cash or accrual); the real GST cancellation date; vehicle and home-office methods and rates for each financial year; weekly reminder email; and the accountant label mapping that the reports show beside your account names.',
     notes: 'Un-ticking "Registered for GST" stops GST on invoices and purchase credits from that date. Nothing already created is rewritten, and lodged quarters stay locked.' },
 ];
 

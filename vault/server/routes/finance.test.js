@@ -824,10 +824,10 @@ test('tax-time-summary: shows income on a received basis and PAYG instalments pa
 test('chart-of-accounts: lists accounts and codes with the accountant’s mapped labels', async () => {
   await pool.query(
     `INSERT INTO settings ("userId", key, value) VALUES ($1,'fin_export_account_map',$2) ON CONFLICT ("userId", key) DO UPDATE SET value=EXCLUDED.value`,
-    [userId, JSON.stringify({ '1000': { code: '1-1100', name: 'Cheque account', myobTax: 'N-T' }, 'EXP-100': { code: '6-4000', name: 'Advertising' } })]);
+    [userId, JSON.stringify({ '1000': { code: '1-1100', name: 'Cheque account' }, 'EXP-100': { code: '6-4000', name: 'Advertising' } })]);
   const rep = await report('chart-of-accounts', '');
   const bank = secRows(rep, 'Accounts').find((a) => a.code === '1000');
-  assert.strictEqual(bank.accCode, '1-1100'); assert.strictEqual(bank.accName, 'Cheque account'); assert.strictEqual(bank.myob, 'N-T');
+  assert.strictEqual(bank.accCode, '1-1100'); assert.strictEqual(bank.accName, 'Cheque account');
   const adv = secRows(rep, 'Income & expense').find((c) => c.code === 'EXP-100');
   assert.strictEqual(adv.accName, 'Advertising');
   assert.ok(/2 mapped/.test(rep.subtitle), rep.subtitle);

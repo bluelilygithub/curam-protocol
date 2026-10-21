@@ -169,7 +169,7 @@ All four reports read `fin_journal_entries`/`fin_journal_lines` directly (the jo
 - `GET /reports/gst-summary?from=&to=` — extends the existing `/bas` cash-basis calculation with a breakdown by tx code, instead of reimplementing GST logic.
 - `GET /reports/trial-balance?asOf=` — every account's debit/credit balance as of a date; `isBalanced` is a direct consequence of the A1 guarantee.
 
-Client: "Reports" tab, each report with a date picker and a CSV export button (`downloadCsv()` helper, same blob-download pattern as the existing MYOB/Xero/Sheets exports).
+Client: "Reports" tab, each report with a date picker and a CSV export button (`downloadCsv()` helper, same blob-download pattern as the FY pack).
 
 **Date-range bug fixed (2026-09-30):** these four queries used to `LEFT JOIN fin_journal_entries ... AND e.date BETWEEN ...` but summed `l.debit`/`l.credit` from the lines table regardless, so lines from entries outside the range were still counted — P&L, Balance Sheet (as-of) and Trial Balance (as-of) effectively ignored their date pickers and showed all-time totals. Sums are now `CASE WHEN e.id IS NOT NULL THEN … END`. Any new report that filters by entry date must inner-join entries (as `financeReports.js` does) or use the same guard.
 
@@ -250,7 +250,7 @@ Settings → **Registered for GST** (`fin_gst_registered`) is now enforced, not 
 
 ## Accountant hand-over: documents, new reports and the FY pack (2026-10-13)
 
-Built for an accountant who won't import MYOB/Xero files and works from reports and source documents. The MYOB/Xero/Excel/Sheets exports are unchanged and optional.
+Built for an accountant who works from reports and source documents, not imported accounting files. The date-range exports (journal CSVs, Excel, Google Sheets) and their cutoff-date "export history" lock were removed on 2026-10-21; the FY pack is the one hand-over route.
 
 ### Documents (evidence library)
 - **Tables**: `fin_documents` (kind, title, supplier, `fy`, `docDate`, original and stored file name, size) and `fin_document_links` (a document links to expenses and/or assets; each link row has exactly one of `expenseId` / `assetId`, cascades on delete). Files live in `UPLOAD_DIR/finance-docs/<userId>/`, private to the login (no public URL; the browser never receives the stored file name).
@@ -262,7 +262,7 @@ Built for an accountant who won't import MYOB/Xero files and works from reports 
 **Income Received** (cash basis, reconciled to invoiced with opening/closing debtors), **Tax Payments & Credits** (BAS payments with the PAYG split, quarters, and tax-looking payments booked as expenses: supplier ATO, code EXP-300, category Tax or "BAS" in the description), **Cash Book** (bank, card and bills with running balances, to tick against statements), **Capital & Related Parties** (equity entries, drawings, user-added loan accounts; warns when no opening balance/capital exists), **Expense Listing** (evidence status per expense, accountant label when mapped), **Things to Review** (checklist: unpaid BAS quarters, tax booked as expense, wages without PAYG, GST after cancellation, uncategorised expenses, missing evidence, assets not depreciated, no opening position, negative bank balance, manual journals), **Chart of Accounts & Codes** (with mapped labels) and **Supporting Documents Index**. The **Tax Time Summary** now also shows income on a received basis and PAYG instalments paid.
 
 ### Mapping
-The export account map (`fin_export_account_map`, Settings → Export account mapping) now covers the user's own accounts and the income/expense codes (`GET /export/account-map` returns `accounts`, `txCodes`, `map`; `PUT` accepts any of those keys). Mapped codes/labels appear beside Vault's names in the P&L, Balance Sheets, Trial Balance, Expense Listing and Chart of Accounts. **The FY pack never prompts for mapping**; the MYOB/Xero export modal still does.
+The export account map (`fin_export_account_map`, Settings → Export account mapping) now covers the user's own accounts and the income/expense codes (`GET /export/account-map` returns `accounts`, `txCodes`, `map`; `PUT` accepts any of those keys). Mapped codes/labels appear beside Vault's names in the P&L, Balance Sheets, Trial Balance, Expense Listing and Chart of Accounts. **The FY pack never prompts for mapping**.
 
 ### FY pack (`financePack.js`, `services/financePack/`)
 `GET /api/finance/pack/preview|pdf|xlsx|zip?fy=2025-26[&documents=1]`. `collect.js` runs the reports in-process through `router.runReport()` (so the pack equals the Reports tab) and adapts the four older reports; a failing report becomes an "not produced" entry instead of failing the pack. `pdf.js` renders a landscape A4 PDF (cover with the items-to-check count, contents, every report; stray symbols like arrows are replaced because the built-in font lacks them); `xlsx.js` writes the workbook (cover, linked contents, a sheet per report with numeric/date cells, and raw data sheets for invoices, expenses, journal lines, assets, wages, drawings); the zip adds the supporting documents with a README index. One build per user at a time (429 otherwise). UI: **Reports → Export FY pack**.

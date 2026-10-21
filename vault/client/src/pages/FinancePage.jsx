@@ -201,12 +201,11 @@ const TOOL_HELP = {
   },
   Settings: {
     title: 'Finance Settings',
-    description: 'Business details shown on invoices, bank details for client payments, GST/payment-term defaults, reminder emails, and the export-history safety lock.',
+    description: 'Business details shown on invoices, bank details for client payments, GST/payment-term defaults, and reminder emails.',
     features: [
       'Business name, ABN, address, and bank details printed on invoices/quotes',
       'Default payment terms and GST-registered toggle',
       'Weekly overdue-items reminder email, with a test-send button',
-      'Export History — the safety lock preventing duplicate MYOB/Xero/Excel/Sheets imports; only override or clear after checking with your accountant',
     ],
   },
 };
@@ -1147,7 +1146,7 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
                 const voidCount = filtered.length - counted.length;
                 return (
                   <tr data-testid="invoice-total-row" style={{ borderTop: '2px solid var(--color-border)' }}>
-                    <td className="py-2 px-2 text-xs font-semibold" colSpan={5} style={{ color: 'var(--color-muted)' }}>
+                    <td className="py-2 px-2 text-xs font-semibold" colSpan={3} style={{ color: 'var(--color-muted)' }}>
                       Total of {counted.length} {isQuoteTab ? (counted.length === 1 ? 'quote' : 'quotes') : (counted.length === 1 ? 'invoice' : 'invoices')}
                       {voidCount > 0 ? ` (${voidCount} void not counted)` : ''}
                     </td>
@@ -4496,192 +4495,9 @@ function BASTab() {
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
-// ── Export History Panel (nuclear option) ────────────────────────────────────
-const EXPORT_FORMATS = [
-  { key: 'myob',   label: 'MYOB' },
-  { key: 'xero',   label: 'Xero' },
-  { key: 'excel',  label: 'Excel' },
-  { key: 'sheets', label: 'Google Sheets' },
-];
-
-function ExportHistoryPanel({ onChanged }) {
-  const [history, setHistory]     = useState({});
-  const [loading, setLoading]     = useState(true);
-  const [editing, setEditing]     = useState(null);   // key being edited
-  const [editDate, setEditDate]   = useState('');
-  const [saving, setSaving]       = useState(false);
-  const [confirmAll, setConfirmAll] = useState(false);
-  const [clearingAll, setClearingAll] = useState(false);
-  const addToast = useToastStore(s => s.addToast);
-
-  const load = () => {
-    setLoading(true);
-    api.get('/api/finance/settings')
-      .then(r => r.json())
-      .then(data => {
-        try { setHistory(data.fin_export_history ? JSON.parse(data.fin_export_history) : {}); }
-        catch { setHistory({}); }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => { load(); }, []);
-
-  const fmtAU = (s) => {
-    if (!s) return '—';
-    const [y, m, d] = s.split('-');
-    return `${d}/${m}/${y}`;
-  };
-
-  const saveOverride = async (key, lastTo) => {
-    setSaving(true);
-    try {
-      const res = await api.put('/api/finance/export/history', { type: key, lastTo: lastTo || null });
-      if (!res.ok) throw new Error('Save failed');
-      const body = await res.json();
-      setHistory(body.history || {});
-      onChanged?.(body.history || {});
-      addToast(`${EXPORT_FORMATS.find(f => f.key === key)?.label} cutoff updated.`, 'success');
-    } catch (e) {
-      addToast(e.message, 'error');
-    } finally {
-      setSaving(false);
-      setEditing(null);
-    }
-  };
-
-  const clearAll = async () => {
-    setClearingAll(true);
-    try {
-      const res = await api.put('/api/finance/export/history', { type: 'all', lastTo: null });
-      if (!res.ok) throw new Error('Clear failed');
-      setHistory({});
-      onChanged?.({});
-      addToast('All export cutoffs cleared.', 'success');
-    } catch (e) {
-      addToast(e.message, 'error');
-    } finally {
-      setClearingAll(false);
-      setConfirmAll(false);
-    }
-  };
-
-  if (loading) return <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
-
-  return (
-    <div className="flex flex-col gap-3">
-      {EXPORT_FORMATS.map(({ key, label }) => {
-        const h = history[key];
-        const isEditing = editing === key;
-        return (
-          <div key={key} className="rounded-lg p-3 text-sm border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <span className="font-medium" style={{ color: 'var(--color-text)' }}>{label}</span>
-                {h ? (
-                  <span className="ml-2 text-xs" style={{ color: 'var(--color-muted)' }}>
-                    locked from <strong>{fmtAU(h.lastTo)}</strong>
-                    {h.manualOverride && <span className="ml-1 italic">(manual override)</span>}
-                  </span>
-                ) : (
-                  <span className="ml-2 text-xs" style={{ color: 'var(--color-muted)' }}>no cutoff — unrestricted</span>
-                )}
-              </div>
-              {!isEditing && (
-                <Tooltip text={`Manually change or clear the export cutoff date for ${label} — risks duplicate imports if lowered, so only do this in agreement with your accountant.`}>
-                  <button
-                    onClick={() => { setEditing(key); setEditDate(h?.lastTo || ''); }}
-                    className="text-xs px-2 py-1 rounded border"
-                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'transparent' }}
-                  >
-                    Override
-                  </button>
-                </Tooltip>
-              )}
-            </div>
-
-            {isEditing && (
-              <div className="mt-2 flex flex-col gap-2">
-                <div className="rounded p-2 text-xs" style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)', color: 'var(--color-text)' }}>
-                  Set a new cutoff date for {label}. Future exports must start <strong>after</strong> this date. Leave blank to remove the restriction entirely.
-                </div>
-                <div className="flex items-center gap-2">
-                  <Tooltip text="The new cutoff date — future exports for this format can only start after this date.">
-                    <input
-                      type="date"
-                      value={editDate}
-                      onChange={e => setEditDate(e.target.value)}
-                      className="text-sm px-2 py-1 rounded border"
-                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
-                    />
-                  </Tooltip>
-                  <Tooltip text="Save this cutoff override.">
-                    <button
-                      onClick={() => saveOverride(key, editDate)}
-                      disabled={saving}
-                      className="text-xs px-3 py-1 rounded font-medium"
-                      style={{ background: '#ef4444', color: '#fff', opacity: saving ? 0.6 : 1 }}
-                    >
-                      {saving ? 'Saving…' : 'Apply'}
-                    </button>
-                  </Tooltip>
-                  <Tooltip text="Discard without changing the cutoff.">
-                    <button
-                      onClick={() => setEditing(null)}
-                      className="text-xs px-2 py-1 rounded border"
-                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'transparent' }}
-                    >
-                      Cancel
-                    </button>
-                  </Tooltip>
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
-
-      {/* Clear all */}
-      <div className="pt-1">
-        {!confirmAll ? (
-          <Tooltip text="Remove the export cutoff date for every format at once — a high-risk action, see the warning after clicking.">
-            <button
-              onClick={() => setConfirmAll(true)}
-              className="text-xs px-3 py-1.5 rounded border font-medium"
-              style={{ borderColor: 'rgba(239,68,68,0.4)', color: '#ef4444', background: 'rgba(239,68,68,0.06)' }}
-            >
-              Clear all cutoffs
-            </button>
-          </Tooltip>
-        ) : (
-          <div className="rounded-lg p-3 flex flex-col gap-2" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
-            <p className="text-sm font-semibold" style={{ color: '#ef4444' }}>Clear all export cutoffs?</p>
-            <p className="text-xs" style={{ color: 'var(--color-text)' }}>
-              This removes the date lock for every format. Your next exports will have no restrictions — any period can be re-exported, which risks duplicate imports. Only proceed after confirming with your accountant.
-            </p>
-            <div className="flex gap-2 mt-1">
-              <Tooltip text="Back out without clearing anything.">
-                <button onClick={() => setConfirmAll(false)} className="text-xs px-3 py-1.5 rounded border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}>
-                  Cancel
-                </button>
-              </Tooltip>
-              <Tooltip text="Confirm — clears every format's cutoff date.">
-                <button onClick={clearAll} disabled={clearingAll} className="text-xs px-3 py-1.5 rounded font-medium" style={{ background: '#ef4444', color: '#fff', opacity: clearingAll ? 0.6 : 1 }}>
-                  {clearingAll ? 'Clearing…' : 'Yes, clear all'}
-                </button>
-              </Tooltip>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ── Export Account Mapping Panel ───────────────────────────────────────────────
-// Entered once, reused on every future MYOB/Xero export automatically — no re-typing the
-// accountant's real account codes / tax codes into an export wizard each time.
+// Entered once: the accountant's own codes and labels, shown next to Vault's names in the reports
+// and the financial-year pack.
 function ExportAccountMapPanel() {
   const [accounts, setAccounts] = useState([]);
   const [txCodes, setTxCodes]   = useState([]);
@@ -4717,14 +4533,12 @@ function ExportAccountMapPanel() {
   const save = async () => {
     setSaving(true);
     try {
-      // Drop entries that are entirely blank so they fall back to auto-detected behaviour.
+      // Drop entries that are entirely blank so Vault's own names are used.
       const cleaned = {};
       for (const [code, entry] of Object.entries(draft)) {
         const row = {};
         if (entry?.code?.trim())    row.code    = entry.code.trim();
         if (entry?.name?.trim())    row.name    = entry.name.trim();
-        if (entry?.myobTax?.trim()) row.myobTax = entry.myobTax.trim();
-        if (entry?.xeroTax?.trim()) row.xeroTax = entry.xeroTax.trim();
         if (Object.keys(row).length) cleaned[code] = row;
       }
       const res = await api.put('/api/finance/export/account-map', { map: cleaned });
@@ -4732,7 +4546,7 @@ function ExportAccountMapPanel() {
       const body = await res.json();
       setMap(body.map || {});
       setDraft(body.map || {});
-      addToast('Export account mapping saved — applies to every future MYOB/Xero export.', 'success');
+      addToast('Accountant mapping saved.', 'success');
     } catch (e) {
       addToast(e.message || 'Save failed', 'error');
     } finally {
@@ -4745,9 +4559,8 @@ function ExportAccountMapPanel() {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-        Get your accountant's real account code (and, for Xero, the exact tax rate name they use)
-        for each row below. Left blank, that row exports using the app's internal code and an
-        auto-detected tax code — which your accountant's file almost certainly won't already have.
+        Enter your accountant's code and label for each row below. Left blank, Vault's own code
+        and name are shown.
         {mappedCount > 0 && <span> {mappedCount} of {accounts.length + txCodes.length} accounts and codes mapped.</span>}
         {' '}Your accountant's code and label also appear next to Vault's names in the financial-year pack (PDF and Excel), which never asks you to map anything first — blank just means Vault's name is used.
       </p>
@@ -4758,8 +4571,6 @@ function ExportAccountMapPanel() {
               <th className="pb-1 pr-2">Internal account</th>
               <th className="pb-1 pr-2">Accountant's code</th>
               <th className="pb-1 pr-2">Accountant's label</th>
-              <th className="pb-1 pr-2">MYOB tax code</th>
-              <th className="pb-1 pr-2">Xero tax type</th>
             </tr>
           </thead>
           <tbody>
@@ -4771,7 +4582,7 @@ function ExportAccountMapPanel() {
                     {a.code} — {a.name}
                   </td>
                   <td className="py-1 pr-2">
-                    <Tooltip text="The account code your accountant uses for this line in MYOB/Xero. Leave blank to use Vault's own code.">
+                    <Tooltip text="The account code your accountant uses for this line. Leave blank to use Vault's own code.">
                       <input
                         value={row.code || ''}
                         onChange={e => updateDraft(a.code, 'code', e.target.value)}
@@ -4782,7 +4593,7 @@ function ExportAccountMapPanel() {
                     </Tooltip>
                   </td>
                   <td className="py-1 pr-2">
-                    <Tooltip text="The account name to export for this line. Leave blank to use Vault's own name.">
+                    <Tooltip text="The account name your accountant uses for this line. Leave blank to use Vault's own name.">
                       <input
                         value={row.name || ''}
                         onChange={e => updateDraft(a.code, 'name', e.target.value)}
@@ -4792,33 +4603,11 @@ function ExportAccountMapPanel() {
                       />
                     </Tooltip>
                   </td>
-                  <td className="py-1 pr-2">
-                    <Tooltip text="The MYOB tax code for this account (for example GST or N-T). Leave blank to let Vault choose.">
-                      <input
-                        value={row.myobTax || ''}
-                        onChange={e => updateDraft(a.code, 'myobTax', e.target.value)}
-                        placeholder="GST / N-T"
-                        className="text-xs px-1.5 py-1 rounded border w-20"
-                        style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
-                      />
-                    </Tooltip>
-                  </td>
-                  <td className="py-1 pr-2">
-                    <Tooltip text="The Xero tax type for this account (INPUT, OUTPUT or BASEXCLUDED). Leave blank to let Vault choose.">
-                      <input
-                        value={row.xeroTax || ''}
-                        onChange={e => updateDraft(a.code, 'xeroTax', e.target.value)}
-                        placeholder="INPUT / OUTPUT / BASEXCLUDED"
-                        className="text-xs px-1.5 py-1 rounded border w-40"
-                        style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
-                      />
-                    </Tooltip>
-                  </td>
                 </tr>
               );
             })}
             {txCodes.length > 0 && (
-              <tr><td colSpan={5} className="pt-3 pb-1 font-semibold" style={{ color: 'var(--color-text)' }}>Income &amp; expense codes (the categories on your tax summary)</td></tr>
+              <tr><td colSpan={3} className="pt-3 pb-1 font-semibold" style={{ color: 'var(--color-text)' }}>Income &amp; expense codes (the categories on your tax summary)</td></tr>
             )}
             {txCodes.map(c => {
               const row = draft[c.code] || {};
@@ -4839,7 +4628,6 @@ function ExportAccountMapPanel() {
                         style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
                     </Tooltip>
                   </td>
-                  <td className="py-1 pr-2" /><td className="py-1 pr-2" />
                 </tr>
               );
             })}
@@ -4847,7 +4635,7 @@ function ExportAccountMapPanel() {
         </table>
       </div>
       <div className="flex items-center gap-2 pt-1">
-        <Tooltip text="Save this mapping — every future MYOB/Xero export uses it automatically.">
+        <Tooltip text="Save this mapping — the reports and the financial-year pack use it.">
           <button
             onClick={save}
             disabled={saving || !hasChanges}
@@ -5147,7 +4935,7 @@ function SettingsBlock({ id, title, hint, defaultOpen = false, forceOpen, childr
   );
 }
 
-function SettingsTab({ onHistoryReset, focusSection, onFocusHandled }) {
+function SettingsTab({ focusSection, onFocusHandled }) {
   const [form, setForm] = useState({
     fin_biz_name: '', fin_abn: '', fin_address: '', fin_website: '',
     fin_bank_name: '', fin_account_name: '', fin_bsb: '', fin_account_number: '',
@@ -5345,262 +5133,16 @@ function SettingsTab({ onHistoryReset, focusSection, onFocusHandled }) {
           <AssetsSettingsSection />
         </SettingsBlock>
 
-        <SettingsBlock id="export-map" title="Accountant export mapping" hint="Match your accounts to the accountant's codes for MYOB and Xero" forceOpen={forceOpenExportMap}>
+        <SettingsBlock id="export-map" title="Accountant code mapping" hint="Match your accounts to the accountant's codes and labels" forceOpen={forceOpenExportMap}>
           <div ref={exportMapSectionRef}>
             <ExportAccountMapPanel />
           </div>
         </SettingsBlock>
 
-        <SettingsBlock id="export-history" title="Export history" hint="Cutoff dates that stop duplicate imports. Change only after checking with your accountant">
-          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-            Each export locks a cutoff date to prevent duplicate imports into MYOB, Xero, Excel, or Google Sheets.
-            Use the controls below to override a specific format's cutoff, or clear all at once.
-          </p>
-          <ExportHistoryPanel onChanged={onHistoryReset} />
-        </SettingsBlock>
       </div>
     </div>
   );
 }
-
-// ── Export Modal ──────────────────────────────────────────────────────────────
-function ExportModal({ type, history, onClose, onSuccess, onGoToAccountMap }) {
-  const typeHistory = history[type] || null;
-  const minFrom = typeHistory?.lastTo ? plusDays(typeHistory.lastTo, 1) : null;
-  const defaultFrom = minFrom || `${new Date().getFullYear()}-01-01`;
-
-  const [from, setFrom]       = useState(defaultFrom);
-  const [to, setTo]           = useState(todayStr());
-  const [stage, setStage]     = useState('setup'); // 'setup' | 'confirm'
-  const [loading, setLoading] = useState(false);
-  const [accountMap, setAccountMap]         = useState(null); // null while loading
-  const [totalAccounts, setTotalAccounts]   = useState(0);
-  const [accountCodes, setAccountCodes]     = useState(new Set());
-  const addToast = useToastStore(s => s.addToast);
-  const { startProcessing, stopProcessing } = useProcessingStore();
-
-  const typeName = type === 'myob' ? 'MYOB' : type === 'xero' ? 'Xero' : type === 'sheets' ? 'Google Sheets' : 'Excel';
-  const cutoffBlocked = minFrom && from < minFrom;
-  const needsAccountMap = type === 'myob' || type === 'xero';
-
-  useEffect(() => {
-    if (!needsAccountMap) return;
-    api.get('/api/finance/export/account-map')
-      .then(r => r.json())
-      .then(data => {
-        setAccountMap(data.map || {});
-        setTotalAccounts((data.accounts || []).length);
-        setAccountCodes(new Set((data.accounts || []).map(a => a.code)));
-      })
-      .catch(() => setAccountMap({}));
-  }, [needsAccountMap]);
-
-  // only accounts count here: income/expense codes are mapped in the same list but aren't part of a journal export
-  const mappedCount = accountMap ? Object.entries(accountMap).filter(([k, v]) => accountCodes.has(k) && v && v.code).length : 0;
-  const unmappedCount = totalAccounts - mappedCount;
-
-  const fmtAU = (dateStr) => {
-    if (!dateStr) return '—';
-    const [y, m, d] = dateStr.split('-');
-    return `${d}/${m}/${y}`;
-  };
-
-  const handleExport = async () => {
-    setLoading(true);
-    startProcessing(`Building your ${typeName} export…`, 'Please don\'t navigate away while this generates.');
-    try {
-      const params = new URLSearchParams({ from, to });
-      const endpoint = type === 'myob' ? 'myob' : type === 'xero' ? 'xero' : type === 'sheets' ? 'sheets' : 'excel';
-      const res = await api.get(`/api/finance/export/${endpoint}?${params}`);
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || 'Export failed');
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = type === 'myob'
-        ? `myob-journal-${from.replace(/-/g,'')}-${to.replace(/-/g,'')}.csv`
-        : type === 'xero'
-        ? `xero-journals-${from.replace(/-/g,'')}-${to.replace(/-/g,'')}.csv`
-        : type === 'sheets'
-        ? `finance-sheets-${from.replace(/-/g,'')}-${to.replace(/-/g,'')}.csv`
-        : `finance-export-${from.replace(/-/g,'')}-${to.replace(/-/g,'')}.xlsx`;
-      a.click();
-      URL.revokeObjectURL(url);
-      onSuccess(type, to);
-      onClose();
-    } catch (e) {
-      addToast(e.message || 'Export failed', 'error');
-      setStage('setup');
-    } finally {
-      setLoading(false);
-      stopProcessing();
-    }
-  };
-
-  if (stage === 'confirm') {
-    return (
-      <Modal title={`Confirm ${typeName} Export`} onClose={() => setStage('setup')}>
-        <div className="flex flex-col gap-4">
-          <div className="rounded-lg p-4" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
-            <p className="text-sm font-semibold mb-1" style={{ color: '#ef4444' }}>Important — read before proceeding</p>
-            <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-              You are about to export {typeName} journals from <strong>{fmtAU(from)}</strong> to <strong>{fmtAU(to)}</strong>.
-            </p>
-            <p className="text-sm mt-2" style={{ color: 'var(--color-text)' }}>
-              Once confirmed, <strong>future exports will be locked from {fmtAU(plusDays(to, 1))} onward</strong> to prevent duplicate journal imports. You will not be able to export any period ending before {fmtAU(to)} without an explicit history reset in Settings.
-            </p>
-          </div>
-          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-            If you need to re-export a corrected period after this, use "Reset export history" in Finance Settings.
-          </p>
-          <div className="flex gap-2 justify-end">
-            <Tooltip text="Go back and change the date range.">
-              <button
-                onClick={() => setStage('setup')}
-                className="px-4 py-2 text-sm rounded-lg border"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}
-              >
-                Back
-              </button>
-            </Tooltip>
-            <Tooltip text="Download the file and lock this cutoff date — the period up to today can't be re-exported afterward without a reset.">
-              <button
-                onClick={handleExport}
-                disabled={loading}
-                className="px-4 py-2 text-sm rounded-lg font-medium"
-                style={{ background: '#ef4444', color: '#fff', opacity: loading ? 0.6 : 1 }}
-              >
-                {loading ? 'Exporting…' : `Yes, export ${typeName}`}
-              </button>
-            </Tooltip>
-          </div>
-        </div>
-      </Modal>
-    );
-  }
-
-  return (
-    <Modal title={`Export ${typeName}`} onClose={onClose}>
-      <div className="flex flex-col gap-4">
-        {/* Last export status */}
-        {typeHistory ? (
-          <div className="rounded-lg p-3 text-sm" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-            <span className="font-medium" style={{ color: 'var(--color-text)' }}>Last export: </span>
-            <span style={{ color: 'var(--color-muted)' }}>
-              up to <strong>{fmtAU(typeHistory.lastTo)}</strong> — exported {new Date(typeHistory.exportedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
-            </span>
-          </div>
-        ) : (
-          <div className="rounded-lg p-3 text-sm" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-            <span style={{ color: 'var(--color-muted)' }}>No previous export — no date restrictions apply.</span>
-          </div>
-        )}
-
-        {type === 'sheets' && (
-          <div className="rounded-lg p-3 text-sm" style={{ background: 'rgba(66,133,244,0.08)', border: '1px solid rgba(66,133,244,0.3)' }}>
-            <p className="font-medium mb-1" style={{ color: '#4285f4' }}>Google Sheets format</p>
-            <p style={{ color: 'var(--color-text)' }}>
-              Downloads a single CSV file combining all invoices, expenses, and wages in date order. Import it into Google Sheets via <strong>File → Import</strong>, then select "Replace spreadsheet" or "Insert new sheet".
-            </p>
-          </div>
-        )}
-
-        {/* Unmapped account codes nag */}
-        {needsAccountMap && accountMap !== null && unmappedCount > 0 && (
-          <div className="rounded-lg p-3 text-sm" style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.4)' }}>
-            <p className="font-medium mb-1" style={{ color: '#a16207' }}>
-              {unmappedCount} of {totalAccounts} accounts not mapped to your accountant's codes
-            </p>
-            <p style={{ color: 'var(--color-text)' }}>
-              This export will use the app's internal account codes and an auto-detected tax code —
-              your accountant's {typeName} file almost certainly won't already have those and will
-              likely need to map or reject some lines. Map your accounts once and every future export
-              uses it automatically.
-            </p>
-            <Tooltip text="Open the account mapping so exports use your accountant's real account codes and tax types.">
-              <button
-                onClick={onGoToAccountMap}
-                className="mt-2 text-xs px-3 py-1.5 rounded font-medium"
-                style={{ background: '#a16207', color: '#fff' }}
-              >
-                Map accounts now
-              </button>
-            </Tooltip>
-          </div>
-        )}
-
-        {/* Cutoff warning */}
-        {minFrom && (
-          <div className="rounded-lg p-3 text-sm" style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.4)' }}>
-            <p className="font-medium mb-1" style={{ color: '#a16207' }}>Date range locked</p>
-            <p style={{ color: 'var(--color-text)' }}>
-              To prevent duplicate imports, the start date cannot be set earlier than <strong>{fmtAU(minFrom)}</strong> (the day after your last export cutoff).
-            </p>
-          </div>
-        )}
-
-        <div className="flex gap-3">
-          <Field label="From date">
-            <Tooltip text="Start of the export period — can't be earlier than your last export's cutoff, to prevent duplicate imports.">
-              <input
-                type="date"
-                value={from}
-                min={minFrom || undefined}
-                onChange={e => setFrom(e.target.value)}
-                className="text-sm px-3 py-2 rounded-lg border w-full"
-                style={{ background: 'var(--color-surface)', borderColor: cutoffBlocked ? '#ef4444' : 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
-              />
-            </Tooltip>
-          </Field>
-          <Field label="To date">
-            <Tooltip text="End of the export period — this date becomes the new cutoff once you confirm the export.">
-              <input
-                type="date"
-                value={to}
-                onChange={e => setTo(e.target.value)}
-                className="text-sm px-3 py-2 rounded-lg border w-full"
-                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
-              />
-            </Tooltip>
-          </Field>
-        </div>
-
-        {cutoffBlocked && (
-          <p className="text-xs" style={{ color: '#ef4444' }}>
-            Start date cannot be before {fmtAU(minFrom)} — this period was already exported.
-          </p>
-        )}
-
-        <div className="flex gap-2 justify-end">
-          <Tooltip text="Close without exporting.">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm rounded-lg border"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}
-            >
-              Cancel
-            </button>
-          </Tooltip>
-          <Tooltip text="See a summary of what will be exported and confirm before downloading.">
-            <button
-              onClick={() => setStage('confirm')}
-              disabled={!from || !to || !!cutoffBlocked}
-              className="px-4 py-2 text-sm rounded-lg font-medium"
-              style={{ background: 'var(--color-primary)', color: '#fff', opacity: (!from || !to || !!cutoffBlocked) ? 0.5 : 1 }}
-            >
-              Review & Export
-            </button>
-          </Tooltip>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-
 
 const BLANK_SUPPLIER = { name: '', email: '', phone: '', abn: '', website: '', notes: '' };
 
@@ -5981,7 +5523,7 @@ function BalancesTab() {
               return (
                 <React.Fragment key={type}>
                   <tr style={{ background: 'var(--color-surface)', borderTop: '1px solid var(--color-border)' }}>
-                    <td colSpan={5} className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>
+                    <td colSpan={3} className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>
                       {TYPE_LABELS[type]}
                     </td>
                   </tr>
@@ -6388,7 +5930,7 @@ function RecurringTab() {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-// ── CSV download helper (client-side, mirrors ExportModal's blob-download pattern) ──
+// ── CSV download helper (client-side, blob download then temporary link) ──
 function downloadCsv(filename, rows) {
   const esc = (v) => {
     const s = String(v ?? '');
@@ -7383,9 +6925,6 @@ export default function FinancePage() {
   const clientFilter = searchParams.get('clientId') || null;
   const [tab, setTab] = useState(() => searchParams.get('tab') || 'Dashboard');
   const [dateRange, setDateRange] = useState(() => ({ preset: 'month', ...getPresetRange('month') }));
-  const [exporting, setExporting] = useState(null);
-  const [exportModal, setExportModal]   = useState(null); // { type: 'myob'|'xero'|'excel' } | null
-  const [exportHistory, setExportHistory] = useState({});
   const [showHelp, setShowHelp] = useState(false);
   const ownerEmail = useAuthStore((s) => s.user?.ownerEmail);
   // Accountants get a welcome guide: opens on first visit, reopened from the header button.
@@ -7414,9 +6953,6 @@ export default function FinancePage() {
     api.get('/api/finance/settings')
       .then(r => r.json())
       .then(data => {
-        try {
-          if (data.fin_export_history) setExportHistory(JSON.parse(data.fin_export_history));
-        } catch {}
       })
       .catch(() => {});
   }, []);
@@ -7463,10 +6999,6 @@ export default function FinancePage() {
                   👋 Accountant guide
                 </button>
               )}
-              <Tooltip text="Download a MYOB-compatible journal CSV for the selected date range — locks a cutoff date to prevent duplicate imports."><Btn variant="secondary" onClick={() => setExportModal({ type: 'myob' })}>Export MYOB</Btn></Tooltip>
-              <Tooltip text="Download a Xero-compatible journal CSV for the selected date range — locks a cutoff date to prevent duplicate imports."><Btn variant="secondary" onClick={() => setExportModal({ type: 'xero' })}>Export Xero</Btn></Tooltip>
-              <Tooltip text="Download a full Excel export for the selected date range — locks a cutoff date to prevent duplicate imports."><Btn variant="secondary" onClick={() => setExportModal({ type: 'excel' })}>Export Excel</Btn></Tooltip>
-              <Tooltip text="Download a single combined CSV for Google Sheets — locks a cutoff date to prevent duplicate imports."><Btn variant="secondary" onClick={() => setExportModal({ type: 'sheets' })}>Export Google Sheets</Btn></Tooltip>
             </div>
           </div>
           <div data-tour="finance-tabs">
@@ -7541,25 +7073,8 @@ export default function FinancePage() {
         {tab === 'Position'  && <PositionTab />}
         {tab === 'Balances'  && <BalancesTab />}
         {tab === 'Reports'   && <ReportsTab />}
-        {tab === 'Settings'  && <SettingsTab onHistoryReset={(h) => setExportHistory(h || {})} focusSection={settingsFocusSection} onFocusHandled={() => setSettingsFocusSection(null)} />}
+        {tab === 'Settings'  && <SettingsTab focusSection={settingsFocusSection} onFocusHandled={() => setSettingsFocusSection(null)} />}
       </div>
-
-      {exportModal && (
-        <ExportModal
-          type={exportModal.type}
-          history={exportHistory}
-          onClose={() => setExportModal(null)}
-          onSuccess={(type, lastTo) => setExportHistory(prev => ({
-            ...prev,
-            [type]: { lastTo, exportedAt: new Date().toISOString() },
-          }))}
-          onGoToAccountMap={() => {
-            setExportModal(null);
-            setSettingsFocusSection('exportAccountMap');
-            setTab('Settings');
-          }}
-        />
-      )}
 
       {showWelcome && <AccountantWelcome onClose={closeWelcome} onOpenTab={setTab} ownerEmail={ownerEmail} />}
       {showHelp && <FinanceHelpModal tab={tab} onClose={() => setShowHelp(false)} />}
