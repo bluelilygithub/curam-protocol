@@ -86,9 +86,26 @@ import ProcessingModal from './components/ProcessingModal';
 import NewChatModalHost from './components/NewChatModalHost';
 import useAuthStore from './store/authStore';
 
+// Where Vault opens, set by an admin per member or for everyone (user.landing from /api/auth/me): an app path
+// or an https link. Used once per sign-in per tab, so the logo and Home still get you back to the home page.
+const LANDING_DONE_KEY = 'vault:landing-done';
+function landingPending(landing, token) {
+  if (!landing) return false;
+  try { return sessionStorage.getItem(LANDING_DONE_KEY) !== token; } catch { return false; }
+}
+
 function HomeRoute() {
   const isAccountant = useAuthStore((s) => s.user?.isAccountant);
+  const landing = useAuthStore((s) => s.user?.landing);
+  const token = useAuthStore((s) => s.token);
+  const pending = landingPending(landing, token);
+  useEffect(() => {
+    if (!pending) return;
+    try { sessionStorage.setItem(LANDING_DONE_KEY, token); } catch { /* private window */ }
+    if (!landing.startsWith('/')) window.location.replace(landing);
+  }, [pending, landing, token]);
   if (isAccountant) return <Navigate to="/finance" replace />; // accountant logins only see Finance
+  if (pending) return landing.startsWith('/') ? <Navigate to={landing} replace /> : null;
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
   return isMobile ? <Navigate to="/mobile-dashboard" replace /> : <ProjectList />;
 }

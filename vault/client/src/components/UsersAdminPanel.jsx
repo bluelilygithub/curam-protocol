@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import api from '../utils/apiClient';
 import { relativeTime } from '../utils/relativeTime';
 import { FEATURE_ACCESS_OPTIONS } from '../utils/featureAccess';
+import LandingPicker from './LandingPicker';
 
 export default function UsersAdminPanel({ title = 'Members' }) {
   const [users, setUsers] = useState([]);
@@ -17,6 +18,27 @@ export default function UsersAdminPanel({ title = 'Members' }) {
   const [featuresState, setFeaturesState] = useState(null); // { workspaceFlags, overrides }
   const [featuresLoading, setFeaturesLoading] = useState(false);
   const [featuresSaving, setFeaturesSaving] = useState(false);
+  const [workspaceLanding, setWorkspaceLanding] = useState('');
+
+  const loadWorkspaceLanding = useCallback(async () => {
+    try {
+      const res = await api.get('/api/admin/landing');
+      const data = await res.json();
+      if (res.ok) setWorkspaceLanding(data.workspaceDefault || '');
+    } catch { /* leave blank */ }
+  }, []);
+
+  const saveLanding = async (url, path, after) => {
+    setError('');
+    try {
+      const res = await api.put(url, { path });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save');
+      await after();
+    } catch (err) {
+      setError(err.message || 'Failed to save');
+    }
+  };
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -33,7 +55,7 @@ export default function UsersAdminPanel({ title = 'Members' }) {
     }
   }, []);
 
-  useEffect(() => { loadUsers(); }, [loadUsers]);
+  useEffect(() => { loadUsers(); loadWorkspaceLanding(); }, [loadUsers, loadWorkspaceLanding]);
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
@@ -160,6 +182,22 @@ export default function UsersAdminPanel({ title = 'Members' }) {
         </p>
       </div>
 
+      <div
+        className="rounded-2xl border p-4 space-y-2"
+        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+      >
+        <div className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Opens at (everyone)</div>
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          Where Vault takes members when they open it or sign in. Pick an app or paste a link. You can set a different one for a single member in the table below.
+          It happens once each time they sign in; the logo and Home still go to the home page.
+        </p>
+        <LandingPicker
+          value={workspaceLanding}
+          emptyLabel="Home page (no redirect)"
+          onSave={(p) => saveLanding('/api/admin/landing', p, loadWorkspaceLanding)}
+        />
+      </div>
+
       <form
         onSubmit={handleCreateUser}
         className="rounded-2xl border p-4 space-y-3"
@@ -214,10 +252,10 @@ export default function UsersAdminPanel({ title = 'Members' }) {
         </div>
       ) : (
         <div className="rounded-2xl border overflow-x-auto" style={{ borderColor: 'var(--color-border)' }}>
-          <table className="w-full text-xs min-w-[640px]" style={{ borderCollapse: 'collapse' }}>
+          <table className="w-full text-xs min-w-[820px]" style={{ borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
-                {['User', 'Role', 'Created', 'Last login', 'Last active', 'Actions'].map((h) => (
+                {['User', 'Role', 'Opens at', 'Created', 'Last login', 'Last active', 'Actions'].map((h) => (
                   <th key={h} className="px-3 py-2.5 text-left font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>{h}</th>
                 ))}
               </tr>
@@ -241,6 +279,13 @@ export default function UsersAdminPanel({ title = 'Members' }) {
                   </td>
                   <td className="px-3 py-2.5" style={{ color: user.isAdmin ? 'var(--color-primary)' : 'var(--color-muted)' }}>
                     {user.isAdmin ? 'Admin' : 'User'}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <LandingPicker
+                      value={user.landingPath || ''}
+                      emptyLabel={workspaceLanding ? "Everyone's default" : 'Home page'}
+                      onSave={(p) => saveLanding(`/api/admin/users/${user.id}/landing`, p, loadUsers)}
+                    />
                   </td>
                   <td className="px-3 py-2.5" style={{ color: 'var(--color-muted)' }}>
                     {new Date(user.createdAt).toLocaleDateString()}

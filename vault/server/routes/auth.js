@@ -8,6 +8,7 @@ const rateLimit = require('express-rate-limit');
 const { pool } = require('../db');
 const { getAppUrl } = require('../utils/appUrl');
 const { logLogin, accessEnded, ownerEmailOf } = require('../services/accountantAccess');
+const { landingFor } = require('../utils/landing');
 
 const SALT_ROUNDS = 12;
 const SESSION_HOURS = 24;
@@ -78,7 +79,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     );
     await pool.query('UPDATE users SET "lastLoginAt"=NOW(), "lastActiveAt"=NOW() WHERE id=$1', [user.id]);
     await logLogin(req, user);
-    res.json({ token, user: { id: user.id, email: user.email, isAdmin: !!user.isAdmin, isAccountant: !!user.accountantOfUserId, ownerEmail: await ownerEmailOf(user) } });
+    res.json({ token, user: { id: user.id, email: user.email, isAdmin: !!user.isAdmin, isAccountant: !!user.accountantOfUserId, ownerEmail: await ownerEmailOf(user), landing: await landingFor(user) } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -181,13 +182,13 @@ router.get('/me', async (req, res) => {
     }
 
     const { rows: users } = await pool.query(
-      'SELECT id, email, "createdAt", "isAdmin", "mustChangePassword", "accountantOfUserId", "accessExpiresAt", "disabledAt" FROM users WHERE id=$1', [session.userId]
+      'SELECT id, email, "createdAt", "isAdmin", "mustChangePassword", "accountantOfUserId", "accessExpiresAt", "disabledAt", "landingPath" FROM users WHERE id=$1', [session.userId]
     );
     const user = users[0];
     if (!user) return res.status(401).json({ error: 'User not found' });
     if (user.accountantOfUserId && accessEnded(user)) return res.status(401).json({ error: 'Access has ended. Ask the account owner.' });
-    const { accountantOfUserId, accessExpiresAt, disabledAt, ...safe } = user;
-    res.json({ user: { ...safe, isAccountant: !!accountantOfUserId, ownerEmail: await ownerEmailOf(user) } });
+    const { accountantOfUserId, accessExpiresAt, disabledAt, landingPath, ...safe } = user;
+    res.json({ user: { ...safe, isAccountant: !!accountantOfUserId, ownerEmail: await ownerEmailOf(user), landing: await landingFor(user) } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

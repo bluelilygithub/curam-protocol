@@ -2098,6 +2098,8 @@ async function initSchema() {
   // Accountant login: read-only view of ONE owner's Finance. See server/services/accountantAccess.js.
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS "accountantOfUserId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS "accessExpiresAt" TIMESTAMPTZ`);
+  // Where Vault opens for this member (in-app path or https link). NULL = use the workspace default. See server/utils/landing.js.
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS "landingPath" TEXT`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS "disabledAt" TIMESTAMPTZ`);
   // Append-only record of everything an accountant does (logins, views, exports, refused attempts).
   await pool.query(`

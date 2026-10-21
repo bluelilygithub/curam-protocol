@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs');
 const { pool } = require('../db');
 const { FEATURE_ACCESS_KEYS, flagsFromSettingRows, applyUserOverrides } = require('../config/featureAccess');
 const sentryStats = require('../services/sentryStats');
+const { cleanLanding, getWorkspaceLanding, setWorkspaceLanding } = require('../utils/landing');
 const SALT_ROUNDS = 12;
 
 async function getAdminCount(client = pool) {
@@ -169,6 +170,7 @@ router.get('/users', async (_req, res) => {
         u."createdAt",
         u."lastLoginAt",
         u."lastActiveAt",
+        u."landingPath",
         COUNT(*) FILTER (WHERE s."expiresAt" > NOW())::INT AS "activeSessions"
       FROM users u
       LEFT JOIN auth_sessions s ON s."userId" = u.id
@@ -329,6 +331,43 @@ router.delete('/users/:id', async (req, res) => {
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
+  }
+});
+
+// ── Landing page: where Vault opens (in-app path or https link) ──────────────
+// GET /api/admin/landing -> { workspaceDefault }
+router.get('/landing', async (_req, res) => {
+  try {
+    res.json({ workspaceDefault: await getWorkspaceLanding() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/admin/landing { path }  (empty = none) -- default for every member without their own
+router.put('/landing', async (req, res) => {
+  const v = cleanLanding(req.body?.path);
+  if (v === null) return res.status(400).json({ error: 'Use an app path such as /finance, or a full https:// link' });
+  try {
+    await setWorkspaceLanding(v);
+    res.json({ ok: true, workspaceDefault: v });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/admin/users/:id/landing { path }  (empty = use the workspace default)
+router.put('/users/:id/landing', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Invalid user id' });
+  const v = cleanLanding(req.body?.path);
+  if (v === null) return res.status(400).json({ error: 'Use an app path such as /finance, or a full https:// link' });
+  try {
+    const r = await pool.query('UPDATE users SET "landingPath"=$1 WHERE id=$2 RETURNING id', [v || null, id]);
+    if (!r.rows[0]) return res.status(404).json({ error: 'User not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
