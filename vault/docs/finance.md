@@ -300,3 +300,24 @@ How the existing pieces fit: an **expense** is entered (by hand, or by approving
 - **Routes** (`financeDocuments.js`): `GET /to-match` (read receipts with no expense yet, each with its suggestion, plus the unread count), `GET /unread`, `POST /:id/read`, `POST /link-matches` (`{ items: [{ documentId, expenseId, lineId? }] }`: adds the link; a card line with no expense takes it, so Statement review shows the receipt). Linking never changes the expense or its journal.
 - **UI**: Documents -> **Receipts to match** (Read n documents, Link n clear matches, Link on each row, candidates for unclear ones). Statement review shows **Receipt attached / No receipt yet** under each business charge (`receipts` on the line = linked documents + the older per-expense receipt).
 - Not built: a month-end reminder for charges without a receipt (Things to Review, Missing evidence and the Monday email already cover part of it), creating an expense from a receipt (Invoice Review does that for emailed invoices), reading scanned images.
+
+## Resume here (session notes, 2026-10-21)
+
+**Deployed on `version-7` this session** (latest `fa801eb4`): collapsible Settings blocks; receipts read from PDFs and matched receipt -> card line -> expense (**Documents -> Receipts to match**, **Statement review -> Receipt attached / No receipt yet**); every save/delete/toggle on the Finance page now shows the server's reason when refused (Add Expense used to say "Expense saved" when it had been refused); Audit Trail uses the full page width. See the two sections above for how matching works.
+
+**Open items for the owner (not code), updated 2026-10-21 later in the day**
+
+Settled:
+- GST cancellation date entered (Settings now shows effective to 2026-08-01). The July 2026 invoice (INV-2026003, $300 GST) is correct: still registered then.
+- Both Lovable expenses (#52 Dec 2025, #54 1 Apr 2026) edited to no GST ($39.15 each, still card-settled, no unsettle needed because the card total did not change). Their invoices are linked (doc #74 -> #52, doc #80 -> #54). Doc #79 is a duplicate of #74, left in place (deleting needs a confirm).
+
+Waiting on the accountant (nothing changed in the books):
+1. **Expense #26 "ATO, 2,359.22 For BAS" (2 Jun 2026).** The bank statement (Flex Saver, 30 Jun) shows that day's $2,359.22 as **BPAY TO ANZ CARDS #255609**, a credit card repayment, not a payment to the ATO. So either the BAS was paid on the card and the BPAY is the card repayment, or #26 is wrong. The owner says the $2,359.22 = Jan-Mar BAS ($1,980.00) + $379.22 for the quarter after it; that does not match Apr-Jun, which shows $273.86 net owing. The BAS "Paid" action can only post a payment from the bank, so a card-paid BAS needs a different posting; agree the treatment with the accountant first.
+2. **Jan-Mar 2026 BAS quarter is "reconciled"** ($1,980.00 net GST owing, not lodged or paid). No reopen button; status only moves forward. Needs lodged/paid dates once the accountant confirms.
+3. Statement reviews created while checking: statements for docs #5 and #6 (post nothing; "Forget review" removes them). The May bank statement (doc #4) fails to read: "12 BPAY TO ANZ CARDS #954345: printed amount 39.25 does not match the balance change -73.25" (reader refuses rather than guess).
+
+**To verify on Railway:** press *Read* on the nine sample PDFs in Receipts to match and check each vendor/date/total/currency, especially Railway and Replit (scrambled text layouts); the reader could not be tried against a live model locally (the local key was rejected). Confirm DeepSeek 21.20 matches the $30.84 expense.
+
+**Ideas not built (ask first, the owner dislikes extra machinery):** remember each supplier's GST tick on the Add Expense form; suggest the AUD amount in Invoice Review from the card line; an "add a PDF" route into Invoice Review for receipts that never arrive by email; offer an expense equal to the sum of two receipts from one vendor; a month-end "charges without a receipt" reminder. Unknown: whether Gmail/Invoice Review is connected and catching emailed invoices.
+
+**Working rule:** trace the whole existing flow before adding anything (this session rebuilt part of Invoice Review by mistake; it was removed). Test with `DATABASE_URL=postgresql://vault@127.0.0.1:15433/vault_local npm run test:finance` (55 tests), `node server/services/vendorDocument/*.test.js`.
