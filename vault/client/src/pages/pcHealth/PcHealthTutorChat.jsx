@@ -15,7 +15,7 @@ const CONFIG = {
   name: 'PC Health guide',
   shortName: 'guide',
   subtitle: 'Tell me what you want to find out about your PC',
-  intro: 'Hi! Tell me what you want to know about your computer, in your own words: is the disk filling up, what is using the memory, are there logs or files left behind. I will check what PC Health can do and give you the steps. PC Health only reports, it never fixes or deletes anything, and I cannot see your scan results.',
+  intro: 'Hi! Tell me what you want to know about your computer, in your own words: is the disk filling up, what is using the memory, are there logs or files left behind. I will check what PC Health can do and give you the steps. PC Health reports and explains; the only thing it can ever clear is a short fixed list of caches in Safe clean-up, and I cannot see your scan results.',
   starters: [
     'How do I get my first report?',
     'Find out what is filling my disk',
@@ -29,7 +29,7 @@ const CONFIG = {
     missing: { label: 'Not in PC Health yet', color: '#f59e0b' },
     beyond: { label: 'Beyond PC Health', color: null },
   },
-  buttonTip: 'Ask the PC Health guide. Tell it what you want to find out about your computer, by typing or talking, and it tells you which tool and controls to use and in what order. It cannot see your scan results, and PC Health never changes anything on your PC.',
+  buttonTip: 'Ask the PC Health guide. Tell it what you want to find out about your computer, by typing or talking, and it tells you which tool and controls to use and in what order. It cannot see your scan results, and apart from Safe clean-up PC Health never changes anything on your PC.',
   openTip: (label) => `Show ${label} in PC Health. This chat stays open so you can keep following the steps.`,
   busyText: 'Checking PC Health…',
   placeholder: 'Type or tap the mic: what do you want to find out? (Enter sends, Shift+Enter adds a line)',

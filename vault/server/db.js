@@ -1258,6 +1258,22 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_pc_health_scans_user ON pc_health_scans ("userId", id DESC)`);
+    // Safe clean-up (the only thing PC Health can change): whether the helper was started with -AllowCleanup, and each request + result.
+    await client.query(`ALTER TABLE pc_health_helpers ADD COLUMN IF NOT EXISTS "canClean" BOOLEAN NOT NULL DEFAULT FALSE`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pc_health_cleanups (
+        id            SERIAL PRIMARY KEY,
+        "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        status        TEXT NOT NULL DEFAULT 'queued',
+        items         JSONB NOT NULL DEFAULT '[]',
+        results       JSONB,
+        error         TEXT,
+        "requestedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "startedAt"   TIMESTAMPTZ,
+        "finishedAt"  TIMESTAMPTZ
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_pc_health_cleanups_user ON pc_health_cleanups ("userId", id DESC)`);
     // Tracing pictures are stored apart from the garden design (a garden references one by underlay.imageId = 'srv-<id>')
     await client.query(`
       CREATE TABLE IF NOT EXISTS garden_images (

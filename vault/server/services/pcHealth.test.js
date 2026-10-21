@@ -99,15 +99,37 @@ assert.strictEqual(g.findings.find((x) => x.id.startsWith('growth:') && /newbig/
 assert.strictEqual(analyse(now).hadPrevious, false, 'the first scan has nothing to compare with');
 assert.strictEqual(analyse(now).growth.length, 0);
 
-// ---- the agent only reports: nothing in the findings or the helper offers a way to change the PC ----
+// ---- findings never carry a command; the helper is read-only everywhere except the one marked Safe clean-up section ----
 const words = JSON.stringify([f, g.findings]);
 assert.ok(!/\b(rm|del|rmdir|Remove-Item|format)\b/i.test(words.replace(/title|detail/g, '')), 'no finding carries a delete command');
-const helper = fs.readFileSync(path.join(__dirname, '../assets/pc-health-helper.ps1'), 'utf8')
-  .replace(/<#[\s\S]*?#>/, '').split('\n').filter((l) => !l.trim().startsWith('#')).join('\n').replace(/'[^'\n]*'|"[^"\n]*"/g, '""');
-for (const bad of ['Remove-Item', 'Set-Content', 'Add-Content', 'Out-File', 'New-Item', 'Move-Item', 'Rename-Item', 'Copy-Item', 'Clear-', 'Stop-Process', 'Stop-Service',
-  'Set-ItemProperty', 'Compress-', 'Expand-', 'Start-Process', 'Invoke-Expression', 'iex ', 'Invoke-Command', '.Delete(', '[System.IO.File]::Write', '[IO.File]::Write', 'WriteAll']) {
-  assert.ok(!helper.includes(bad), `the helper must stay read-only: found ${bad}`);
+const full = fs.readFileSync(path.join(__dirname, '../assets/pc-health-helper.ps1'), 'utf8');
+const BEGIN = '# ==== BEGIN SAFE CLEAN-UP'; const END = '# ==== END SAFE CLEAN-UP';
+assert.strictEqual(full.split(BEGIN).length, 2, 'exactly one clean-up section');
+assert.strictEqual(full.split(END).length, 2);
+const section = full.slice(full.indexOf(BEGIN), full.indexOf(END));
+const strip = (s) => s.replace(/<#[\s\S]*?#>/, '').split('\n').filter((l) => !l.trim().startsWith('#')).join('\n').replace(/'[^'\n]*'|"[^"\n]*"/g, '""');
+const scanning = strip(full.slice(0, full.indexOf(BEGIN)) + full.slice(full.indexOf(END)));
+for (const bad of ['Remove-Item', 'Set-Content', 'Add-Content', 'Out-File', 'New-Item', 'Move-Item', 'Rename-Item', 'Copy-Item', 'Clear-Content', 'Clear-Item', 'Stop-Process', 'Stop-Service',
+  'Set-ItemProperty', 'Compress-', 'Expand-', 'Start-Process', 'Invoke-Expression', 'iex ', 'Invoke-Command', '.Delete(', '[System.IO.File]::Write', '[IO.File]::Write', 'WriteAll', 'Clear-RecycleBin']) {
+  assert.ok(!scanning.includes(bad), `outside the clean-up section the helper must stay read-only: found ${bad}`);
 }
-assert.ok(/Get-CimInstance/.test(helper) && /EnumerateFiles/.test(helper));
+assert.ok(/Get-CimInstance/.test(scanning) && /EnumerateFiles/.test(scanning));
+
+// inside the clean-up section: only the two .NET deletes, never a recursive or cmdlet delete, never a path from Vault, and gated by -AllowCleanup
+const sec = strip(section);
+for (const bad of ['Remove-Item', '-Recurse', 'Clear-RecycleBin', 'rmdir', 'del ', 'Invoke-Expression', 'Start-Process', 'cmd.exe', 'Directory]::Delete($dirs[$i], $true)', 'Delete(\$x, $true)']) {
+  assert.ok(!sec.includes(bad), `the clean-up section must not use ${bad}`);
+}
+const deletes = sec.match(/\[System\.IO\.(File|Directory)\]::Delete\([^)]*\)/g) || [];
+assert.strictEqual(deletes.length, 2, 'exactly two delete calls: one file, one empty folder');
+assert.ok(deletes.every((d) => d.includes('$false') || d.includes('File]::Delete($f.FullName)')), 'folders are only removed when empty');
+assert.ok(!/\$reply|\$options|\$cleanup\.|\$items\b[^;]*\.Root/.test(sec.replace('Invoke-Cleanup($items)', '').replace(/@\(\$items\)/, '')), 'no path is taken from what Vault sent');
+assert.match(full, /if \(\$reply\.cleanup -and \$AllowCleanup\)/, 'a clean-up only runs when the helper was started with -AllowCleanup');
+assert.match(full, /canClean = \[bool\]\$AllowCleanup/);
+// the helper's own list is exactly the server's list, with the same expected locations
+const { CLEANABLE, CLEANABLE_IDS } = require('./pcHealthCleanup');
+const helperIds = [...section.matchAll(/^\s+'([a-z-]+)'\s+= @\{ Root/gm)].map((m) => m[1]);
+assert.deepStrictEqual(helperIds.sort(), [...CLEANABLE_IDS].sort(), 'the helper cleans exactly the names the server can offer');
+for (const id of CLEANABLE_IDS) assert.ok(CLEANABLE[id].removes && CLEANABLE[id].safe && CLEANABLE[id].after, `${id} is explained`);
 
 console.log('pcHealth tests passed');

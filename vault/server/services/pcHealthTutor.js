@@ -1,7 +1,7 @@
 'use strict';
 
 // The PC Health guide (the round button on Vault's /pc-health page, admin only): the admin says what they want to know about their
-// PC ("why is it slow", "what is eating my disk", "how do I get a fresh report") and the guide points at the real tools and controls
+// PC ("why is it slow", "what is eating my disk", "how do I get a fresh report", "how do I clear the caches") and the guide points at the real tools and controls
 // on the page, in order, or says plainly that PC Health does not do it. It only knows what is written here: it never sees a scan,
 // a file name or a number from the PC. Built on guideCore.js; the ids are the page's own, listed in
 // client/src/pages/pcHealth/pcHealthTools.mjs (a test keeps the two in step). See docs/guide-chat.md and docs/pc-health.md.
@@ -37,12 +37,18 @@ const CATALOG = [
     does: 'The last 30 scans with date, status and how many High and Watch findings each had. Open one to read it again.',
     notes: 'Older scans are removed automatically. A failed or cancelled scan is listed with the reason.' },
   { id: 'helper', label: 'Set up the helper', group: 'History and setup',
-    does: 'Shows whether the helper is connected (and when it last checked in). Create helper key makes a new secret key, shown once; Download helper saves the PowerShell program; the page shows the one command to run it on the PC. Create a new key to replace the old one (the old helper stops working), or Remove key to switch the helper off.',
-    notes: 'The helper is read-only: it looks and reports and writes no files on the PC. It must be running on the PC for scans to start. The key is shown only once, so keep the command it is in somewhere safe.' },
+    does: 'A six-step quick start: Download helper, put the file in a folder such as C:\\Tools\\pc-health, Create helper key (shown once), open PowerShell and paste the two lines shown (a cd line to move into the folder, then the command), leave the window open until the page shows Connected, then press Run a scan. A tick box adds -AllowCleanup to the command for Safe clean-up. Below that are Day to day notes and an If something goes wrong list covering the usual errors (file not found because PowerShell is in the wrong folder, could not reach Vault, a 401 from an old key, scripts disabled, not checked in lately). Make a new key replaces the old one (the old helper stops working), and Remove key switches the helper off.',
+    notes: 'Scanning is read-only: when it scans it only looks and reports and writes no files on the PC. It must be running on the PC for scans to start. The key is shown only once, so keep the command it is in somewhere safe.' },
+  { id: 'cleanup', label: 'Safe clean-up', group: 'Clean-up',
+    does: 'The only tool that can change the PC. It lists what the latest scan found from a short fixed list: your Temp folder (files over a day old) and the npm, pip and Yarn download caches, each with its size, what would be removed, why that is safe and what happens afterwards. Switch on the items you want (each has an on/off switch, all off to start), press Clear selected, and confirm with Yes. The result shows how much was freed per item.',
+    notes: 'Nothing else is ever offered or removed: no Downloads, archives, Docker, WSL, logs, Recycle Bin or installers. Deleting is permanent and does not use the Recycle Bin. It needs a recent scan, and the helper must have been started with -AllowCleanup. Caches fill up again with use, so it frees space only for now, and on its own it will not fix a nearly full drive.' },
+  { id: 'cleanup-allow', label: 'Allow clean-up on the helper', group: 'Clean-up',
+    does: 'As a second lock, the helper only carries out a clean-up if it was started with the extra word -AllowCleanup after the usual command. The Safe clean-up page shows the yellow box with the exact command when the helper is not allowed, and updates by itself when the helper is restarted that way.',
+    notes: 'Stop the helper with Ctrl+C in its window first, then run the command again with -AllowCleanup added. Without it the helper never deletes anything, even if you press the button.' },
 ];
 
 const RULES = [
-  'PC Health only reports. It never deletes, moves, renames, cleans or changes a file, and never stops a program. Say so plainly whenever someone asks it to fix or clear something.',
+  'PC Health reports and explains. The only thing it can ever change is the short fixed list in Safe clean-up (Temp and the npm, pip and Yarn caches), and only for items the person switches on and confirms, with the helper started with -AllowCleanup. Everything else it finds is for the person to deal with themselves; say so plainly whenever someone asks it to fix or clear anything else.',
   'Vault cannot see inside the PC itself. A small read-only helper running on the PC does the looking when Run a scan is pressed, and sends the report to Vault.',
   'Scans only ever cover the PC the helper is running on, and only the admin account can use this page.',
   'The usual places are checked quickly; the whole drive takes much longer and stops at the time limit.',
@@ -52,7 +58,8 @@ const RULES = [
 ];
 
 const NOT_POSSIBLE = [
-  'Deleting, moving, cleaning up or fixing anything: PC Health only reports, so anything to remove has to be dealt with by the person themselves.',
+  'Deleting, moving, cleaning up or fixing anything other than the fixed Safe clean-up list (Temp and the npm, pip and Yarn caches): everything else it finds has to be dealt with by the person themselves.',
+  'Recovering anything Safe clean-up removed: it does not use the Recycle Bin.',
   'Scanning a different computer, a phone, or the Vault server itself.',
   'Watching the PC all day or alerting in real time: it looks only when a scan is run.',
   'Telling whether a particular file is safe to delete, or removing malware or checking for viruses.',
@@ -66,7 +73,7 @@ const SYSTEM = `You are the guide to PC Health in Vault for the one admin who us
 Rules:
 - Use ONLY the tools and rules given below. Never invent a button or a feature, and never promise something the notes say PC Health cannot do.
 - You cannot see any scan, file name, size or number from their PC. Never state or guess what is on their PC; point at the tool that shows it.
-- PC Health never fixes anything. If they ask you to delete, clean or fix something, say it only reports and that they have to decide and act themselves, and never give a delete or cleanup command.
+- PC Health never fixes anything except through Safe clean-up, which only clears Temp and the npm, pip and Yarn caches. If they ask you to delete, clean or fix anything else, say PC Health only reports on that and that they have to decide and act themselves, and never give a delete or cleanup command. Never promise that Safe clean-up will fix a full drive.
 - Be plain and short, as to a friend who is not technical. Avoid jargon.
 - Give steps in order. Each step names exactly one tool by its id and says in a sentence what to do there.
 - If they have not run a scan yet, or the helper is not connected, start with Set up the helper, then Run a scan.

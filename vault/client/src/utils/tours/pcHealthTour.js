@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_pc_health_completed';
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 8;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -54,7 +54,7 @@ export function startPcHealthTour(goTab) {
   tour.addStep({
     id: 'pch-welcome',
     title: 'PC Health — Quick Tour',
-    text: 'Check your own computer for a full disk, memory or processor problems, large or growing files and logs left behind. It only reports. It never deletes or changes anything.',
+    text: 'Check your own computer for a full disk, memory or processor problems, large or growing files and logs left behind. It reports and explains. The only thing it can change is the small Safe clean-up list, and only when you say so.',
     when: { show() { injectStepCounter(1); } },
     buttons: [btnSecondary('Skip Tour', () => tour.cancel()), { text: 'Start Tour →', action: () => tour.next() }],
   });
@@ -71,7 +71,7 @@ export function startPcHealthTour(goTab) {
   tour.addStep({
     id: 'pch-helper',
     title: 'First, the helper',
-    text: 'Vault runs on the internet and cannot see inside your PC. A small read-only helper runs on your PC and does the looking. Download it, make its key, and run the one command shown. You do this once.',
+    text: 'Vault runs on the internet and cannot see inside your PC. A small helper runs on your PC and does the looking (scanning only reads). Download it, make its key, and run the one command shown. You do this once.',
     attachTo: { element: '[data-tour="pch-helper-steps"]', on: 'top' },
     beforeShowPromise: showTab('helper', 'pch-helper', '[data-tour="pch-helper-steps"]'),
     when: { show() { injectStepCounter(3); } },
@@ -108,10 +108,20 @@ export function startPcHealthTour(goTab) {
   });
 
   tour.addStep({
+    id: 'pch-cleanup',
+    title: 'Safe clean-up',
+    text: 'The one place PC Health can change anything. It lists a short fixed set of caches that rebuild themselves (your Temp folder and the npm, pip and Yarn caches). You switch on the ones you want and confirm. It needs the helper started with the extra word -AllowCleanup, and deleting is permanent.',
+    attachTo: { element: '[data-tour="pch-cleanup-note"]', on: 'bottom' },
+    beforeShowPromise: showTab('cleanup', 'pch-cleanup', '[data-tour="pch-cleanup-note"]'),
+    when: { show() { injectStepCounter(7); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  tour.addStep({
     id: 'pch-guide',
     title: 'Ask the guide',
-    text: 'Not sure where something is? Press the round button at the bottom right and say what you want to know. The guide points you to the right tool. It cannot see your results, and PC Health never fixes anything for you.',
-    when: { show() { injectStepCounter(7); } },
+    text: 'Not sure where something is? Press the round button at the bottom right and say what you want to know. The guide points you to the right tool. It cannot see your results, and apart from Safe clean-up PC Health never changes anything for you.',
+    when: { show() { injectStepCounter(8); } },
     buttons: [
       btnBack(),
       { text: 'Finish Tour ✓', action() { try { localStorage.setItem(TOUR_KEY, '1'); } catch (_) { /* ignore */ } tour.complete(); } },

@@ -11,6 +11,7 @@ import PcHealthTutorChat from './pcHealth/PcHealthTutorChat';
 import {
   OverviewPanel, ScanPanel, DiskPanel, FilesPanel, LogsPanel, GrowthPanel, PerformancePanel, HistoryPanel, HelperPanel,
 } from './pcHealth/Panels';
+import CleanupPanel from './pcHealth/CleanupPanel';
 import {
   PC_HEALTH_TOOLS, GROUPS, GROUP_TIPS, TOOL_TIPS, TOOL_BLURBS, HOW_IT_WORKS, GUIDE_TOOLS,
 } from './pcHealth/pcHealthTools.mjs';
@@ -24,7 +25,7 @@ const MENU = GROUPS.map((label) => ({
 const toast = (message, type = 'error') => useToastStore.getState().addToast(message, type);
 
 /**
- * PC Health (/pc-health, admin only). Reports on the admin's OWN computer: a small read-only helper running on that PC picks up a
+ * PC Health (/pc-health, admin only). Reports on the admin's OWN computer: a small helper running on that PC (read-only unless started with -AllowCleanup) picks up a
  * queued scan and posts the report; this page shows it. Nothing here deletes, moves or changes anything. docs/pc-health.md.
  */
 export default function PcHealthPage() {
@@ -172,6 +173,7 @@ export default function PcHealthPage() {
           {tab === 'growth' && <GrowthPanel scan={scan} goTo={setTab} />}
           {tab === 'performance' && <PerformancePanel scan={scan} goTo={setTab} />}
           {tab === 'history' && <HistoryPanel scans={scans} openId={openId} onOpen={openScan} />}
+          {tab === 'cleanup' && <CleanupPanel status={status} goTo={setTab} />}
           {tab === 'helper' && <HelperPanel status={status} onCreateKey={createKey} onRemoveKey={removeKey} onDownload={downloadHelper} />}
         </div>
       </div>
@@ -179,7 +181,7 @@ export default function PcHealthPage() {
       {info.show && (
         <ToolInfoModal title="How PC Health Works" onClose={info.close}>
           <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-            Check your own computer for a full disk, memory or processor problems, and large, growing or left-behind files. It only reports; it never deletes or changes anything. Pick a tool in the list on the left; hover any tool for a plain explanation. Not sure where to start? Press the round button at the bottom right and tell the guide what you want to know.
+            Check your own computer for a full disk, memory or processor problems, and large, growing or left-behind files. It reports and explains; the only thing it can change is the small Safe clean-up list, and only when you switch it on. Pick a tool in the list on the left; hover any tool for a plain explanation. Not sure where to start? Press the round button at the bottom right and tell the guide what you want to know.
           </p>
           <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
             {HOW_IT_WORKS.map(([heading, body]) => (

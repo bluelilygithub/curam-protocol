@@ -89,7 +89,7 @@
     "test:notes-tutor": "node server/services/notesTutor.test.js",
     "test:fonts-tutor": "node server/services/fontsTutor.test.js",
     "test:measurements-tutor": "node server/services/measurementsTutor.test.js",
-    "test:pc-health": "node server/services/pcHealth.test.js && node server/services/pcHealthAdvice.test.js && node client/src/pages/pcHealth/reportText.test.mjs",
+    "test:pc-health": "node server/services/pcHealth.test.js && node server/services/pcHealthAdvice.test.js && node server/services/pcHealthCleanup.test.js && node client/src/pages/pcHealth/reportText.test.mjs",
     "test:pc-health-tutor": "node server/services/pcHealthTutor.test.js",
     "test:restyle-tutor": "node server/services/restyleTutor.test.js",
     "test:restyle-server": "node server/services/restyle/restyleLoad.test.js",

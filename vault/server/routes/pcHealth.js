@@ -16,6 +16,7 @@ const { getLogger } = require('../middleware/requestContext');
 const { captureIf, makeFingerprint } = require('../services/SuggestionService');
 const { sanitizeReport, cleanScanOptions, analyse, summarise } = require('../services/pcHealth');
 const { withAdvice } = require('../services/pcHealthAdvice');
+const { candidatesFor, cleanItemIds, sanitizeResults } = require('../services/pcHealthCleanup');
 
 const HELPER_ONLINE_MS = 90 * 1000;     // the helper polls every 30s by default
 const RUNNING_TIMEOUT_MIN = 45;         // a scan the helper never finished
@@ -26,7 +27,15 @@ const SCRIPT_PATH = path.join(__dirname, '../assets/pc-health-helper.ps1');
 const hashToken = (t) => crypto.createHash('sha256').update(String(t)).digest('hex');
 const SCAN_LIST_COLS = 'id, status, options, summary, error, "requestedAt", "startedAt", "finishedAt"';
 
+const CLEANUP_COLS = 'id, status, items, results, error, "requestedAt", "startedAt", "finishedAt"';
+
 async function expireStale(userId) {
+  await pool.query(
+    `UPDATE pc_health_cleanups SET status='failed', error='The helper did not finish this clean-up in time.', "finishedAt"=NOW()
+     WHERE "userId"=$1 AND status='running' AND "startedAt" < NOW() - ($2 || ' minutes')::interval`, [userId, String(RUNNING_TIMEOUT_MIN)]);
+  await pool.query(
+    `UPDATE pc_health_cleanups SET status='cancelled', error='Nobody picked this request up.', "finishedAt"=NOW()
+     WHERE "userId"=$1 AND status='queued' AND "requestedAt" < NOW() - ($2 || ' hours')::interval`, [userId, String(QUEUED_TIMEOUT_HOURS)]);
   await pool.query(
     `UPDATE pc_health_scans SET status='failed', error='The helper did not finish this scan in time.', "finishedAt"=NOW()
      WHERE "userId"=$1 AND status='running' AND "startedAt" < NOW() - ($2 || ' minutes')::interval`, [userId, String(RUNNING_TIMEOUT_MIN)]);
@@ -43,7 +52,7 @@ router.get('/status', async (req, res, next) => {
   try {
     const userId = req.user.id;
     await expireStale(userId);
-    const { rows: h } = await pool.query('SELECT "createdAt", "lastSeenAt", hostname FROM pc_health_helpers WHERE "userId"=$1', [userId]);
+    const { rows: h } = await pool.query('SELECT "createdAt", "lastSeenAt", hostname, "canClean" FROM pc_health_helpers WHERE "userId"=$1', [userId]);
     const { rows: active } = await pool.query(
       `SELECT ${SCAN_LIST_COLS} FROM pc_health_scans WHERE "userId"=$1 AND status IN ('queued','running') ORDER BY id DESC LIMIT 1`, [userId]);
     const { rows: latest } = await pool.query(
@@ -51,7 +60,7 @@ router.get('/status', async (req, res, next) => {
     const seen = h[0]?.lastSeenAt ? new Date(h[0].lastSeenAt) : null;
     res.json({
       helper: {
-        configured: !!h[0], createdAt: h[0]?.createdAt || null, lastSeenAt: seen, hostname: h[0]?.hostname || null,
+        configured: !!h[0], createdAt: h[0]?.createdAt || null, lastSeenAt: seen, hostname: h[0]?.hostname || null, canClean: !!h[0]?.canClean,
         online: !!seen && Date.now() - seen.getTime() < HELPER_ONLINE_MS,
       },
       active: active[0] || null,
@@ -126,6 +135,58 @@ router.get('/scans/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── Safe clean-up (admin) ──────────────────────────────────────────────────────────────────────────────────────────────────
+
+async function latestScanReport(userId) {
+  const { rows } = await pool.query(`SELECT id, report FROM pc_health_scans WHERE "userId"=$1 AND status='done' ORDER BY id DESC LIMIT 1`, [userId]);
+  return rows[0] || null;
+}
+
+router.get('/cleanup', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    await expireStale(userId);
+    const scan = await latestScanReport(userId);
+    const { rows: h } = await pool.query('SELECT "canClean" FROM pc_health_helpers WHERE "userId"=$1', [userId]);
+    const { rows: active } = await pool.query(`SELECT ${CLEANUP_COLS} FROM pc_health_cleanups WHERE "userId"=$1 AND status IN ('queued','running') ORDER BY id DESC LIMIT 1`, [userId]);
+    const { rows: history } = await pool.query(`SELECT ${CLEANUP_COLS} FROM pc_health_cleanups WHERE "userId"=$1 AND status NOT IN ('queued','running') ORDER BY id DESC LIMIT 10`, [userId]);
+    res.json({
+      scanId: scan ? scan.id : null,
+      candidates: scan ? candidatesFor(scan.report) : [],
+      helperAllowsCleanup: !!(h[0] && h[0].canClean),
+      active: active[0] || null,
+      history,
+    });
+  } catch (err) { next(err); }
+});
+
+router.post('/cleanups', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    if (!req.body || req.body.confirm !== true) return res.status(400).json({ error: 'Clean-up needs your confirmation.' });
+    await expireStale(userId);
+    const { rows: active } = await pool.query(`SELECT id FROM pc_health_cleanups WHERE "userId"=$1 AND status IN ('queued','running') LIMIT 1`, [userId]);
+    if (active[0]) return res.status(409).json({ error: 'A clean-up is already waiting or running.' });
+    const scan = await latestScanReport(userId);
+    const allowed = new Set((scan ? candidatesFor(scan.report) : []).map((c) => c.id));
+    const items = cleanItemIds(req.body.items).filter((id) => allowed.has(id));
+    if (!items.length) return res.status(400).json({ error: 'Nothing on the safe list was selected. Run a new scan if the list looks out of date.' });
+    const { rows } = await pool.query(`INSERT INTO pc_health_cleanups ("userId", status, items) VALUES ($1,'queued',$2) RETURNING ${CLEANUP_COLS}`, [userId, JSON.stringify(items)]);
+    getLogger().info({ userId, items, cleanupId: rows[0].id }, '[pc-health] clean-up requested');
+    res.status(201).json(rows[0]);
+  } catch (err) { next(err); }
+});
+
+router.post('/cleanups/:id/cancel', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE pc_health_cleanups SET status='cancelled', error='Cancelled before it started.', "finishedAt"=NOW()
+       WHERE id=$1 AND "userId"=$2 AND status='queued' RETURNING ${CLEANUP_COLS}`, [req.params.id, req.user.id]);
+    if (!rows[0]) return res.status(409).json({ error: 'Only a clean-up that has not started yet can be cancelled.' });
+    res.json(rows[0]);
+  } catch (err) { next(err); }
+});
+
 // ── Helper side ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 const helperRouter = express.Router();
@@ -147,13 +208,21 @@ helperRouter.post('/poll', async (req, res, next) => {
   try {
     const userId = req.helperUserId;
     const hostname = String(req.body?.hostname || '').replace(/[^\w.\- ]/g, '').slice(0, 80) || null;
-    await pool.query('UPDATE pc_health_helpers SET "lastSeenAt"=NOW(), hostname=COALESCE($2, hostname) WHERE "userId"=$1', [userId, hostname]);
+    const canClean = !!(req.body && req.body.canClean === true);
+    await pool.query('UPDATE pc_health_helpers SET "lastSeenAt"=NOW(), hostname=COALESCE($2, hostname), "canClean"=$3 WHERE "userId"=$1', [userId, hostname, canClean]);
     await expireStale(userId);
+    if (canClean) { // a helper started without -AllowCleanup is never handed a clean-up
+      const { rows: c } = await pool.query(
+        `UPDATE pc_health_cleanups SET status='running', "startedAt"=NOW()
+         WHERE id = (SELECT id FROM pc_health_cleanups WHERE "userId"=$1 AND status='queued' ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED)
+         RETURNING id, items`, [userId]);
+      if (c[0]) return res.json({ scan: null, cleanup: { id: c[0].id, items: cleanItemIds(c[0].items) } });
+    }
     const { rows } = await pool.query(
       `UPDATE pc_health_scans SET status='running', "startedAt"=NOW()
        WHERE id = (SELECT id FROM pc_health_scans WHERE "userId"=$1 AND status='queued' ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED)
        RETURNING id, options`, [userId]);
-    res.json({ scan: rows[0] ? { id: rows[0].id, options: rows[0].options } : null });
+    res.json({ scan: rows[0] ? { id: rows[0].id, options: rows[0].options } : null, cleanup: null });
   } catch (err) { next(err); }
 });
 
@@ -197,6 +266,28 @@ helperRouter.post('/scans/:id/fail', async (req, res, next) => {
       `UPDATE pc_health_scans SET status='failed', error=$3, "finishedAt"=NOW() WHERE id=$1 AND "userId"=$2 AND status='running' RETURNING id`,
       [req.params.id, req.helperUserId, msg]);
     if (!rows[0]) return res.status(409).json({ error: 'That scan is not running.' });
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+helperRouter.post('/cleanups/:id/result', async (req, res, next) => {
+  try {
+    const { rows: own } = await pool.query(`SELECT id, status, items FROM pc_health_cleanups WHERE id=$1 AND "userId"=$2`, [req.params.id, req.helperUserId]);
+    if (!own[0]) return res.status(404).json({ error: 'Clean-up not found.' });
+    if (own[0].status !== 'running') return res.status(409).json({ error: `This clean-up is ${own[0].status}, so the result was ignored.` });
+    const results = sanitizeResults(req.body, cleanItemIds(own[0].items));
+    await pool.query(`UPDATE pc_health_cleanups SET status='done', results=$1, error=NULL, "finishedAt"=NOW() WHERE id=$2`, [JSON.stringify(results), own[0].id]);
+    getLogger().info({ userId: req.helperUserId, cleanupId: own[0].id, freedMB: results.reduce((a, r) => a + r.freedMB, 0) }, '[pc-health] clean-up finished');
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+helperRouter.post('/cleanups/:id/fail', async (req, res, next) => {
+  try {
+    const msg = String((req.body && req.body.error) || 'The helper could not finish the clean-up.').replace(/[\u0000-\u001f]/g, ' ').slice(0, 300);
+    const { rows } = await pool.query(
+      `UPDATE pc_health_cleanups SET status='failed', error=$3, "finishedAt"=NOW() WHERE id=$1 AND "userId"=$2 AND status='running' RETURNING id`, [req.params.id, req.helperUserId, msg]);
+    if (!rows[0]) return res.status(409).json({ error: 'That clean-up is not running.' });
     res.json({ ok: true });
   } catch (err) { next(err); }
 });

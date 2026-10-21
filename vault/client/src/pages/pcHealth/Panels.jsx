@@ -121,6 +121,23 @@ function CopyReport({ scan }) {
   );
 }
 
+function Kbd({ children }) {
+  return <kbd className="px-1.5 py-0.5 rounded-md border text-[11px] font-mono font-semibold" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', ...text }}>{children}</kbd>;
+}
+
+// A reminder that stays on the page: Chrome's own Task Manager shows which tab or extension is behind a browser memory finding.
+function ChromeTip() {
+  return (
+    <div className="rounded-2xl border-l-4 p-4 space-y-1" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-primary)', border: '1px solid var(--color-border)', borderLeft: '4px solid var(--color-primary)' }} role="note" data-tour="pch-chrome-tip">
+      <p className="text-sm font-semibold" style={text}>Remember: <Kbd>Shift</Kbd> + <Kbd>Esc</Kbd> in Chrome</p>
+      <p className="text-xs" style={muted}>
+        Press it while Chrome is the active window to open Chrome's own Task Manager. Click <strong>Memory footprint</strong> to sort by the biggest, and you can see exactly which tab or extension is using the memory.
+        (No shortcut? Chrome menu, <strong>More tools</strong>, <strong>Task manager</strong>.) Chrome ends a process only if you choose <strong>End process</strong>; PC Health never does.
+      </p>
+    </div>
+  );
+}
+
 function NoScan({ goTo }) {
   return (
     <Card>
@@ -165,8 +182,10 @@ export function OverviewPanel({ scan, goTo }) {
   const shown = all ? important : important.slice(0, 12);
   const r = scan.report;
   const used = r.machine.ramTotalMB ? ((r.machine.ramTotalMB - r.machine.ramFreeMB) / r.machine.ramTotalMB) * 100 : 0;
+  const browserFinding = findings.some((f) => /^ram:(chrome|msedge|firefox|brave|opera)/.test(f.id));
   return (
     <div className="space-y-4" data-tour="pch-overview">
+      {browserFinding && <ChromeTip />}
       <Card>
         <ScanHeader scan={scan} />
         <CopyReport scan={scan} />
@@ -436,6 +455,7 @@ export function PerformancePanel({ scan, goTo }) {
   const byCpu = [...r.processes].filter((p) => p.cpuPct > 0).sort((a, b) => b.cpuPct - a.cpuPct).slice(0, 10);
   return (
     <div className="space-y-4">
+      <ChromeTip />
       <Card>
         <FindingList findings={findings} empty="Memory and processor use looked normal." />
         <p className="text-sm" style={text}>Memory: {fmtMB(r.machine.ramTotalMB - r.machine.ramFreeMB)} used of {fmtMB(r.machine.ramTotalMB)} ({Math.round(used)}%)</p>
@@ -485,15 +505,39 @@ export function HistoryPanel({ scans, openId, onOpen }) {
 
 // ── Set up the helper ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
+const HELPER_FOLDER = 'C:\\Tools\\pc-health';
+
+const TROUBLE = [
+  ['"The argument .\\pc-health-helper.ps1 to the -File parameter does not exist"',
+    'PowerShell is not in the folder that holds the file. ".\\" means "this folder". Run the first line of the command (the cd line) first, or put the full path in front of the file name. If you saved the file under another name, such as "pc-health-helper (1).ps1", rename it to pc-health-helper.ps1. To see what is in the folder, type: dir'],
+  ['"Could not reach Vault" in the window',
+    'The PC could not connect to Vault: check the internet, and that the address after -Server starts with https:// and is your Vault address. If Vault was just updated, wait a couple of minutes and the helper will try again by itself (it keeps retrying).'],
+  ['"Not authenticated" or a 401 message',
+    'The key does not match. This happens if you made a new key after starting the helper (a new key replaces the old one), or the key was copied only in part. Make one new key, copy the whole command and run it. Do not press "Make a new key" again unless you mean to.'],
+  ['"Running scripts is disabled on this system"',
+    'Use the command exactly as shown: it includes -ExecutionPolicy Bypass, which lets this one script run. If your PC is locked down by an employer, that setting may be blocked and the script cannot be run.'],
+  ['The page says "The helper has not checked in lately"',
+    'The window was closed, the PC went to sleep or restarted, or the page is simply a few seconds behind. Look at the helper window: it should still be open and showing the "Vault PC Health helper" line. Press Ctrl+F5 on this page, or run the command again.'],
+  ['The scan says "Waiting for the helper" for more than a minute',
+    'The helper checks every 30 seconds, so up to a minute is normal. If it stays longer, the helper is not running or is using an old key. Look at its window for an error message.'],
+  ['A scan stops early or sizes look too low',
+    'The scan reached its time limit (raise it on Run a scan), or Windows keeps some folders private (the report says how many it could not read). Whole-drive scans take much longer than the usual places.'],
+];
+
 export function HelperPanel({ status, onCreateKey, onRemoveKey, onDownload }) {
   const [token, setToken] = useState(null);
   const [confirm, setConfirm] = useState(null); // 'replace' | 'remove'
   const [copied, setCopied] = useState(false);
+  const [allowClean, setAllowClean] = useState(false);
   const helper = status?.helper;
-  const command = token ? `powershell -ExecutionPolicy Bypass -File .\\pc-health-helper.ps1 -Server ${window.location.origin} -Token ${token}` : '';
+  const run = (key) => `powershell -ExecutionPolicy Bypass -File .\\pc-health-helper.ps1 -Server ${window.location.origin} -Token ${key}${allowClean ? ' -AllowCleanup' : ''}`;
+  const command = token ? `cd ${HELPER_FOLDER}\n${run(token)}` : '';
+  const template = `cd ${HELPER_FOLDER}\n${run('<your key>')}`;
 
   const create = async () => { setConfirm(null); setToken(await onCreateKey()); };
   const remove = async () => { setConfirm(null); setToken(null); await onRemoveKey(); };
+  const copy = (value) => { navigator.clipboard?.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => {}); };
+  const pre = { background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' };
 
   return (
     <div className="space-y-4">
@@ -504,18 +548,22 @@ export function HelperPanel({ status, onCreateKey, onRemoveKey, onDownload }) {
           {helper?.configured && !helper.online && 'A key exists, but the helper is not running right now.'}
         </p>
         {helper?.lastSeenAt && <p className="text-xs" style={muted}>Last checked in {fmtWhen(helper.lastSeenAt)}.</p>}
-        <p className="text-xs" style={muted}>The helper is a small PowerShell program that runs on your PC. It only reads: it measures the drive, memory and processor and lists large files and logs, then sends that report here. It does not delete, move, rename or change anything, and it writes no files.</p>
+        {helper?.online && <p className="text-xs" style={muted}>Safe clean-up on this PC: {helper.canClean ? 'allowed (started with -AllowCleanup)' : 'not allowed (scans only)'}.</p>}
+        <p className="text-xs" style={muted}>The helper is a small PowerShell program that runs on your PC. When it scans it only reads: it measures the drive, memory and processor and lists large files and logs, then sends that report here, and it writes no files. It can clear a short fixed list of caches (Safe clean-up), but only if you start it with the extra word -AllowCleanup and then switch items on and confirm in Vault.</p>
       </Card>
 
       <Card data-tour="pch-helper-steps">
-        <p className="text-xs font-semibold" style={muted}>Steps</p>
-        <ol className="text-sm space-y-3" style={text}>
+        <p className="text-xs font-semibold" style={muted}>Quick start (you do this once)</p>
+        <ol className="text-sm space-y-4" style={text}>
           <li>
-            1. Download the helper to a folder on your PC.
-            <div className="mt-1"><Tooltip text="Saves pc-health-helper.ps1. Open it in Notepad first if you want to read what it does; it is short and read-only."><SecondaryButton onClick={onDownload}>Download helper</SecondaryButton></Tooltip></div>
+            <strong>1. Download the helper.</strong>
+            <div className="mt-1"><Tooltip text="Saves pc-health-helper.ps1. Open it in Notepad first if you want to read what it does; the only part that can delete anything is marked SAFE CLEAN-UP."><SecondaryButton onClick={onDownload}>Download helper</SecondaryButton></Tooltip></div>
           </li>
           <li>
-            2. Make its key. The key is shown once, so you copy the command below straight away.
+            <strong>2. Put it in a folder you will remember.</strong> A good place is <code className="font-mono">{HELPER_FOLDER}</code>: in File Explorer create the folder, then move the downloaded file into it. If the file is called something like "pc-health-helper (1).ps1", rename it to <code className="font-mono">pc-health-helper.ps1</code>.
+          </li>
+          <li>
+            <strong>3. Make its key.</strong> The key is shown once, so copy the command below straight away.
             <div className="mt-1 flex flex-wrap items-center gap-2">
               {confirm === 'replace' ? (
                 <span className="text-xs" style={text}>Replace the key? The helper using the old one stops working. <button type="button" className={`underline ${FOCUS_RING}`} onClick={create}>Yes</button> / <button type="button" className={`underline ${FOCUS_RING}`} onClick={() => setConfirm(null)}>No</button></span>
@@ -529,18 +577,56 @@ export function HelperPanel({ status, onCreateKey, onRemoveKey, onDownload }) {
               ))}
             </div>
           </li>
-          {token && (
-            <li>
-              3. In PowerShell, in the folder you downloaded to, run this. Leave the window open; it waits for your scans. Press Ctrl+C to stop it.
-              <pre className="mt-1 p-3 rounded-xl text-[11px] whitespace-pre-wrap break-all" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>{command}</pre>
-              <div className="mt-1 flex items-center gap-2">
-                <SecondaryButton onClick={() => { navigator.clipboard?.writeText(command).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => {}); }}>{copied ? 'Copied ✓' : 'Copy command'}</SecondaryButton>
-                <span className="text-xs" style={{ color: '#f59e0b' }}>This key will not be shown again. Keep the command somewhere private.</span>
-              </div>
-            </li>
-          )}
-          {!token && helper?.configured && <li className="text-xs" style={muted}>3. Run the command you saved when you made the key. If you lost it, make a new key.</li>}
+          <li>
+            <strong>4. Open PowerShell and run the command.</strong> Click Start, type <em>PowerShell</em>, open it, paste both lines below (the first line moves PowerShell into the folder) and press Enter.
+            <label className="mt-2 flex items-start gap-2 text-xs cursor-pointer" style={text}>
+              <input type="checkbox" checked={allowClean} onChange={(e) => setAllowClean(e.target.checked)} className="mt-0.5" />
+              <span><strong>Also allow Safe clean-up</strong> (adds <code className="font-mono">-AllowCleanup</code>). Leave this off if you only want scans. You can stop the helper and start it again with it on later.</span>
+            </label>
+            {token ? (
+              <>
+                <pre className="mt-2 p-3 rounded-xl text-[11px] whitespace-pre-wrap break-all" style={pre}>{command}</pre>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <SecondaryButton onClick={() => copy(command)}>{copied ? 'Copied ✓' : 'Copy both lines'}</SecondaryButton>
+                  <span className="text-xs" style={{ color: '#f59e0b' }}>This key will not be shown again. Keep these lines somewhere private.</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <pre className="mt-2 p-3 rounded-xl text-[11px] whitespace-pre-wrap break-all" style={pre}>{template}</pre>
+                <p className="text-xs mt-1" style={muted}>{helper?.configured ? 'Replace <your key> with the key you saved. If you lost it, make a new key in step 3.' : 'Make a key in step 3 and this shows the full command, ready to copy.'}</p>
+              </>
+            )}
+          </li>
+          <li>
+            <strong>5. Leave the PowerShell window open.</strong> You should see <em>Vault PC Health helper 1.1</em>. Within a minute this page shows <em>Connected</em> at the top.
+          </li>
+          <li>
+            <strong>6. Press Run a scan</strong> in the list on the left. The helper picks it up within 30 seconds and the report opens by itself.
+          </li>
         </ol>
+      </Card>
+
+      <Card>
+        <p className="text-xs font-semibold" style={muted}>Day to day</p>
+        <ul className="text-sm space-y-1.5 list-disc pl-5" style={text}>
+          <li>The helper only works while its PowerShell window is open. If you close the window, restart the PC or it goes to sleep, start it again with the same two lines.</li>
+          <li>It does nothing on its own: it looks only when you press <strong>Run a scan</strong>, and clears only what you switch on and confirm in <strong>Safe clean-up</strong>.</li>
+          <li>To stop it, click the window and press <strong>Ctrl+C</strong>. To switch between scans only and scans plus clean-up, stop it and start it again with or without <code className="font-mono">-AllowCleanup</code>.</li>
+          <li>You only need a new key if you lose the command or want to switch the helper off. Making a new one stops the old one working.</li>
+        </ul>
+      </Card>
+
+      <Card>
+        <p className="text-xs font-semibold" style={muted}>If something goes wrong</p>
+        <div className="space-y-1">
+          {TROUBLE.map(([problem, fix]) => (
+            <details key={problem} className="rounded-xl border px-3 py-2" style={{ borderColor: 'var(--color-border)' }}>
+              <summary className={`text-sm cursor-pointer ${FOCUS_RING}`} style={text}>{problem}</summary>
+              <p className="text-xs mt-1.5" style={muted}>{fix}</p>
+            </details>
+          ))}
+        </div>
       </Card>
     </div>
   );

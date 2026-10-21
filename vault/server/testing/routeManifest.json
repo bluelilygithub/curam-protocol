@@ -1993,6 +1993,15 @@
   "POST /api/pc-health-tutor": {
    "class": "admin"
   },
+  "GET /api/pc-health/cleanup": {
+   "class": "admin"
+  },
+  "POST /api/pc-health/cleanups/:id/cancel": {
+   "class": "admin"
+  },
+  "POST /api/pc-health/cleanups": {
+   "class": "admin"
+  },
   "GET /api/pc-health/helper-script": {
    "class": "admin"
   },
@@ -2016,6 +2025,12 @@
   },
   "GET /api/pc-health/status": {
    "class": "admin"
+  },
+  "POST /api/pc-helper/cleanups/:id/fail": {
+   "class": "public"
+  },
+  "POST /api/pc-helper/cleanups/:id/result": {
+   "class": "public"
   },
   "POST /api/pc-helper/poll": {
    "class": "public"

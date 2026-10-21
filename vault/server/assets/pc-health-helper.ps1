@@ -1,20 +1,27 @@
 <#
 .SYNOPSIS
-  Vault PC Health helper. READ-ONLY: it looks at this PC and sends a report to your Vault. It never deletes, moves, renames,
-  edits, compresses or cleans anything, and it writes no files.
+  Vault PC Health helper. READ-ONLY by default: it looks at this PC and sends a report to your Vault. Unless you start it with
+  -AllowCleanup it never deletes, moves, renames, edits, compresses or cleans anything, and it writes no files.
 
 .DESCRIPTION
   Run this on the PC you want checked (Windows PowerShell 5.1 or later). It asks your Vault, every 30 seconds, whether you have
   pressed "Run a scan" on the PC Health page. When you have, it measures:
     - disk space per drive, memory and processor use, and which programs use the most of each
     - the largest files, the biggest folders, log files, crash dumps, temp/cache folders and other things left behind
-  and posts the result to your Vault only. The only things it uses are Get-CimInstance, Get-Process, read-only .NET directory
+  and posts the result to your Vault only. The scanning part only uses Get-CimInstance, Get-Process, read-only .NET directory
   listings and one HTTPS call to the server you give it.
+
+  SAFE CLEAN-UP (off unless you add -AllowCleanup): when you have switched items on and confirmed them on the PC Health page, the
+  helper can empty four rebuildable folders and nothing else: your Temp folder (files older than a day), and the npm, pip and Yarn
+  download caches. The locations are written in this script (Vault only sends which of the four names to clean, never a path), it
+  refuses any location that is not exactly the expected one, never follows shortcuts or junctions, skips anything in use, and
+  reports what it removed. Look for the section marked SAFE CLEAN-UP below; nothing outside it can delete anything.
 
 .PARAMETER Server  Your Vault address, e.g. https://vault.curam-ai.com.au
 .PARAMETER Token   The helper token from the PC Health page (or set the PC_HEALTH_TOKEN environment variable instead).
 .PARAMETER Once    Check for a waiting scan once and stop (instead of waiting for scans).
 .PARAMETER Interval  Seconds between checks (default 30).
+.PARAMETER AllowCleanup  Let this helper carry out the Safe clean-up you request in Vault. Without it nothing is ever deleted.
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File .\pc-health-helper.ps1 -Server https://vault.curam-ai.com.au -Token <token>
@@ -23,10 +30,11 @@ param(
   [Parameter(Mandatory = $true)][string]$Server,
   [string]$Token = $env:PC_HEALTH_TOKEN,
   [switch]$Once,
+  [switch]$AllowCleanup,
   [ValidateRange(10, 600)][int]$Interval = 30
 )
 
-$HelperVersion = '1.0'
+$HelperVersion = '1.1'
 $ErrorActionPreference = 'Stop'
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
 
@@ -244,10 +252,83 @@ function Invoke-Scan($options) {
   }
 }
 
-Write-Host "Vault PC Health helper $HelperVersion (read-only). Server: $Server"
+# ==== BEGIN SAFE CLEAN-UP ====================================================================================================
+# The ONLY code in this script that deletes anything. It runs only when the helper was started with -AllowCleanup, only for the four
+# names below, and only on the locations written here (never a path from Vault). Files are removed one by one with .NET's File.Delete
+# (no recursive delete, so a junction can never be followed into another folder), empty folders with Directory.Delete(path, $false).
+function Get-CleanTargets {
+  $local = $env:LOCALAPPDATA
+  @{
+    'temp-user'  = @{ Root = $env:TEMP;                         MinAgeDays = 1; Expect = '^[A-Za-z]:\\Users\\[^\\]+\\AppData\\Local\\Temp$' }
+    'npm-cache'  = @{ Root = (Join-Path $local 'npm-cache');    MinAgeDays = 0; Expect = '^[A-Za-z]:\\Users\\[^\\]+\\AppData\\Local\\npm-cache$' }
+    'pip-cache'  = @{ Root = (Join-Path $local 'pip\Cache');    MinAgeDays = 0; Expect = '^[A-Za-z]:\\Users\\[^\\]+\\AppData\\Local\\pip\\Cache$' }
+    'yarn-cache' = @{ Root = (Join-Path $local 'Yarn\Cache');   MinAgeDays = 0; Expect = '^[A-Za-z]:\\Users\\[^\\]+\\AppData\\Local\\Yarn\\Cache$' }
+  }
+}
+
+function Clear-OneFolder([string]$root, [double]$minAgeDays) {
+  $cutoff = (Get-Date).AddDays(-$minAgeDays)
+  [double]$freed = 0; [long]$removed = 0; [long]$skipped = 0
+  $dirs = New-Object System.Collections.Generic.List[string]
+  $stack = New-Object System.Collections.Generic.Stack[string]
+  $stack.Push($root)
+  while ($stack.Count -gt 0) {
+    $dir = $stack.Pop(); $dirs.Add($dir)
+    try {
+      $di = New-Object System.IO.DirectoryInfo $dir
+      foreach ($f in $di.EnumerateFiles()) {
+        # a link is never followed or removed; a file changed more recently than the cutoff is left alone
+        if (($f.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -or $f.LastWriteTime -gt $cutoff) { $skipped++; continue }
+        try { $len = [double]$f.Length; [System.IO.File]::Delete($f.FullName); $freed += $len; $removed++ } catch { $skipped++ }
+      }
+      foreach ($s in $di.EnumerateDirectories()) {
+        if ($s.Attributes -band [System.IO.FileAttributes]::ReparsePoint) { $skipped++; continue }
+        $stack.Push($s.FullName)
+      }
+    } catch { $skipped++ }
+  }
+  # now-empty folders, deepest first, never the root itself; Directory.Delete(path, $false) refuses a folder that still has anything in it
+  for ($i = $dirs.Count - 1; $i -ge 1; $i--) {
+    try { if ((New-Object System.IO.DirectoryInfo $dirs[$i]).CreationTime -le $cutoff) { [System.IO.Directory]::Delete($dirs[$i], $false) } } catch { }
+  }
+  [pscustomobject]@{ freedMB = [math]::Round($freed / 1MB, 1); filesRemoved = $removed; skipped = $skipped }
+}
+
+function Invoke-Cleanup($items) {
+  $targets = Get-CleanTargets
+  $results = foreach ($id in @($items)) {
+    $t = $targets[[string]$id]
+    if (-not $t) { [pscustomobject]@{ id = [string]$id; ok = $false; freedMB = 0; filesRemoved = 0; skipped = 0; note = 'Not on this helper''s list, so it was ignored.' }; continue }
+    try {
+      $full = [System.IO.Path]::GetFullPath([string]$t.Root).TrimEnd('\')
+      if ($full -notmatch $t.Expect) { [pscustomobject]@{ id = [string]$id; ok = $false; freedMB = 0; filesRemoved = 0; skipped = 0; note = "Refused: $full is not the expected location."}; continue }
+      if (-not (Test-Path -LiteralPath $full -PathType Container)) { [pscustomobject]@{ id = [string]$id; ok = $true; freedMB = 0; filesRemoved = 0; skipped = 0; note = 'Folder not found, nothing to clean.' }; continue }
+      if ((Get-Item -LiteralPath $full -Force).Attributes -band [System.IO.FileAttributes]::ReparsePoint) { [pscustomobject]@{ id = [string]$id; ok = $false; freedMB = 0; filesRemoved = 0; skipped = 0; note = 'Refused: the folder is a link.' }; continue }
+      $r = Clear-OneFolder $full ([double]$t.MinAgeDays)
+      [pscustomobject]@{ id = [string]$id; ok = $true; freedMB = $r.freedMB; filesRemoved = $r.filesRemoved; skipped = $r.skipped; note = $(if ($r.skipped -gt 0) { 'Some items were in use or too new and were left alone.' } else { '' }) }
+    } catch {
+      [pscustomobject]@{ id = [string]$id; ok = $false; freedMB = 0; filesRemoved = 0; skipped = 0; note = [string]$_.Exception.Message }
+    }
+  }
+  [pscustomobject]@{ results = @($results) }
+}
+# ==== END SAFE CLEAN-UP ======================================================================================================
+
+Write-Host "Vault PC Health helper $HelperVersion ($(if ($AllowCleanup) { 'READ-ONLY scans; Safe clean-up ALLOWED' } else { 'read-only' })). Server: $Server"
 do {
   try {
-    $reply = Send-Json '/api/pc-helper/poll' @{ helperVersion = $HelperVersion; hostname = $env:COMPUTERNAME }
+    $reply = Send-Json '/api/pc-helper/poll' @{ helperVersion = $HelperVersion; hostname = $env:COMPUTERNAME; canClean = [bool]$AllowCleanup }
+    if ($reply.cleanup -and $AllowCleanup) {
+      Write-Host "$(Get-Date -Format T) Clean-up $($reply.cleanup.id) confirmed in Vault: $(@($reply.cleanup.items) -join ', ')"
+      try {
+        $out = Invoke-Cleanup $reply.cleanup.items
+        $null = Send-Json "/api/pc-helper/cleanups/$($reply.cleanup.id)/result" $out
+        Write-Host "$(Get-Date -Format T) Clean-up done: $([math]::Round((@($out.results) | Measure-Object -Property freedMB -Sum).Sum, 1)) MB removed."
+      } catch {
+        Write-Host "Clean-up failed: $($_.Exception.Message)"
+        try { $null = Send-Json "/api/pc-helper/cleanups/$($reply.cleanup.id)/fail" @{ error = [string]$_.Exception.Message } } catch { }
+      }
+    }
     if ($reply.scan) {
       Write-Host "$(Get-Date -Format T) Scan $($reply.scan.id) requested. Looking at this PC (nothing will be changed)..."
       try {
