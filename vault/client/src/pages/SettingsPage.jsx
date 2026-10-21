@@ -38,6 +38,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import SettingsNav from '../components/SettingsNav';
 import { visibleGroups, allowedTabIds } from '../utils/settingsGroups.mjs';
 import UsersAdminPanel from '../components/UsersAdminPanel';
+import AccountantAccessPanel from '../components/AccountantAccessPanel';
 import NavLayoutEditor from '../components/settings/NavLayoutEditor';
 import { DEFAULT_TILES, DEFAULT_NAV_ITEMS, mergeWithDefaults } from '../utils/mobileConfig';
 import { DEFAULT_FEATURE_ACCESS, FEATURE_ACCESS_GROUPS } from '../utils/featureAccess';
@@ -3082,8 +3083,9 @@ function SettingsPage() {
 
       {/* Members (admin) */}
       {tab === 'Members' && user?.isAdmin && (
-      <section>
+      <section className="space-y-8">
         <UsersAdminPanel />
+        <AccountantAccessPanel />
       </section>
       )}
 
