@@ -49,6 +49,10 @@ function parseAnzPlusStatement(rawText) {
   let body = text.slice(tIdx).replace(/^Transactions Date Description Credit Debit Balance\s*/i, '');
   const stop = body.search(/Opening Balance \$[\d,]+\.\d{2}|Please check your statement/i);
   if (stop >= 0) body = body.slice(0, stop);
+  // A table that runs onto a second page repeats a footer and header mid-table:
+  // "... $21,738.72 ANZ Plus Flex Saver Account Statement 1 April 2026 - 30 April 2026 ... Page 2 of 2 Date Description Credit Debit Balance 07 Apr ..."
+  // Left in, the row before the break is not followed by a date and is silently dropped.
+  body = body.replace(/ANZ Plus [A-Za-z ]+? Account Statement[^$]*?Page \d+ of \d+(?: Date Description Credit Debit Balance)?/gi, ' ').replace(/\s+/g, ' ');
 
   // "31 Aug CREDIT INTEREST PAID $53.22 $29,182.00"
   const rowRe = /(\d{1,2}) ([A-Z][a-z]{2}) (.+?) \$([\d,]+\.\d{2}) \$([\d,]+\.\d{2})(?= \d{1,2} [A-Z][a-z]{2} |\s*$)/g;

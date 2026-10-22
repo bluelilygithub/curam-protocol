@@ -52,6 +52,16 @@ test('a missing row fails the opening + rows = closing proof', () => {
   assert.ok(r.problems.length >= 1);
 });
 
+test('a table that runs onto a second page keeps the row before the page break', () => {
+  const t = AUG.replace('24 Aug   TRANSFER FROM SOMEONE 2026004   $8,500.00   $29,128.78  ',
+    '24 Aug   TRANSFER FROM SOMEONE 2026004   $8,500.00   $29,128.78  '
+    + 'ANZ Plus Flex Saver Account Statement 1 August 2026 - 31 August 2026 Australia and New Zealand Banking Group Limited (ANZ) ABN 11 005 357 522. AFSL 234527. Page 2 of 2  '
+    + 'Date Description Credit Debit Balance  ');
+  const r = parseAnzPlusStatement(t);
+  assert.deepStrictEqual(r.problems, []);
+  assert.deepStrictEqual(r.lines.map((l) => l.amount), [-201.65, 8500, 53.22]);
+});
+
 test('a statement across New Year gets the right years', () => {
   const t = AUG.replace('1 August 2026 - 31 August 2026', '1 December 2026 - 15 January 2027')
     .replace('31 Aug', '15 Jan').replace('24 Aug', '02 Jan').replace('21 Aug', '28 Dec');
