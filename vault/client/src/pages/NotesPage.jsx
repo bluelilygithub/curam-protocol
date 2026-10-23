@@ -5,6 +5,9 @@ import { useIcon } from '../providers/IconProvider';
 import useProjectStore from '../store/projectStore';
 import useToastStore from '../store/toastStore';
 import AtMentionDropdown from '../components/AtMentionDropdown';
+import Tooltip from '../components/Tooltip';
+import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
+import { startNotesTour, TOUR_KEY as NOTES_TOUR_KEY } from '../utils/tours/notesTour';
 import VoiceNoteRecorder from './notes/VoiceNoteRecorder';
 import NotesTutorChat from './notes/NotesTutorChat';
 import NewNoteChooser from './notes/NewNoteChooser';
@@ -13,6 +16,10 @@ import InsertSourceModal from './notes/InsertSourceModal';
 import NoteAiPanel from './notes/NoteAiPanel';
 import NoteMarkdownView from './notes/NoteMarkdownView';
 import NoteTagsEditor from './notes/NoteTagsEditor';
+import NoteReminderPanel from './notes/NoteReminderPanel';
+import { NOTE_TIPS } from './notes/noteTips.mjs';
+import { NOTES_INTRO, HOW_IT_WORKS, NOTES_NOT } from './notes/notesInfo.mjs';
+import { reminderState, formatReminder } from './notes/noteReminders.mjs';
 import TemplatePicker from './notes/TemplatePicker';
 import RecentlyDeletedModal from './notes/RecentlyDeletedModal';
 import { dailyPayload, templateToNote } from './notes/noteTemplates.mjs';
@@ -36,7 +43,7 @@ function readMode() {
 export default function NotesPage() {
   const getIcon = useIcon();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { projects, fetchProjects, create: createProject } = useProjectStore();
   const addToast = useToastStore((s) => s.addToast);
 
@@ -72,6 +79,8 @@ export default function NotesPage() {
   const [showTemplates, setShowTemplates] = useState(false);
   const [templates, setTemplates] = useState(null); // the person's own; null while loading
   const [showBin, setShowBin] = useState(false);
+  const [showReminder, setShowReminder] = useState(false);
+  const info = useToolInfoModal('vault_notes_info_seen'); // the (i) box opens by itself the first time, like the other tools
   const [views, setViews] = useState([]); // saved views: [{ id, name, filters }]
   const [appliedViewId, setAppliedViewId] = useState(null); // the view last opened, so changes to it can be saved back
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
@@ -572,6 +581,66 @@ export default function NotesPage() {
     }
   }
 
+  // ── Reminders ─────────────────────────────────────────────────────────────
+  // Filing, like pinning and tags: saved at once, and the note's own text is left alone.
+  const mergeReminder = useCallback((r) => {
+    const fields = { remind_at: r.remind_at, remind_email: r.remind_email, reminder_done_at: r.reminder_done_at };
+    setSelected((prev) => (prev && prev.id === r.id ? { ...prev, ...fields } : prev));
+    patchNote({ id: r.id, ...fields });
+  }, [patchNote]);
+
+  // Returns '' when it worked, or the message to show in the dialog.
+  async function saveReminder(iso, email) {
+    const note = selectedRef.current;
+    if (!note) return 'Open a note first.';
+    try {
+      const res = await api.put(`/api/notes/${note.id}/reminder`, { remindAt: iso, email });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return data.error || 'The reminder could not be saved.';
+      mergeReminder(data);
+      addToast(iso ? `Reminder set for ${formatReminder(data.remind_at)} ✓` : 'Reminder removed.', 'success');
+      return '';
+    } catch { return 'The reminder could not be saved. Try again.'; }
+  }
+
+  async function finishReminder() {
+    const note = selectedRef.current;
+    if (!note) return;
+    try {
+      const res = await api.post(`/api/notes/${note.id}/reminder/done`);
+      if (!res.ok) throw new Error('done failed');
+      mergeReminder(await res.json());
+      addToast('Reminder marked done ✓', 'success');
+    } catch { addToast('The reminder could not be marked done. Try again.', 'error'); }
+  }
+
+  // ── Tour ──────────────────────────────────────────────────────────────────
+  // The tour only looks: it brings the list or an open note into view (opening the first note if none is open) and creates nothing.
+  const notesRef = useRef([]);
+  const mobileRef = useRef(false);
+  notesRef.current = list.notes;
+  mobileRef.current = viewportMobile;
+  const tourControls = {
+    list: () => { if (mobileRef.current && selectedRef.current) closeNote(); },
+    editor: async () => {
+      if (selectedRef.current) return;
+      const first = notesRef.current[0];
+      if (first) await selectNote(first);
+    },
+  };
+  const startTour = () => {
+    try { localStorage.removeItem(NOTES_TOUR_KEY); } catch (_) { /* ignore */ }
+    startNotesTour(tourControls);
+  };
+  // Settings -> Tours -> Notes Tour opens /notes?tour=1
+  useEffect(() => {
+    if (!searchParams.get('tour')) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('tour');
+    setSearchParams(next, { replace: true });
+    setTimeout(() => startNotesTour(tourControls), 500);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Pin ───────────────────────────────────────────────────────────────────
   async function togglePin(note) {
     try {
@@ -781,6 +850,8 @@ export default function NotesPage() {
             onConvert={convertToTask}
             onDelete={deleteNote}
             onPin={togglePin}
+            onInfo={info.open}
+            onTour={startTour}
             allTags={allTags}
             onManageTags={() => setShowTagManager(true)}
             viewsApi={viewsApi}
@@ -793,46 +864,56 @@ export default function NotesPage() {
       {showEditor && (selected ? (
         <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
           {/* Toolbar */}
-          <div className="flex items-center justify-between gap-x-2 gap-y-1 flex-wrap px-3 sm:px-4 py-2 border-b flex-shrink-0" style={border}>
+          <div className="flex items-center justify-between gap-x-2 gap-y-1 flex-wrap px-3 sm:px-4 py-2 border-b flex-shrink-0" style={border} data-tour="notes-toolbar">
             <div className="flex items-center gap-2 min-w-0">
               {viewportMobile && (
-                <button type="button" onClick={closeNote} aria-label="Back to all notes" className="flex items-center gap-1 text-sm px-2 rounded-lg hover:opacity-70 transition-opacity duration-200 flex-shrink-0" style={{ color: 'var(--color-primary)', minHeight: 44 }}>
-                  {getIcon('arrow-left', { size: 18 })} Notes
-                </button>
+                <Tooltip text={NOTE_TIPS.back} side="bottom">
+                  <button type="button" onClick={closeNote} aria-label="Back to all notes" className="flex items-center gap-1 text-sm px-2 rounded-lg hover:opacity-70 transition-opacity duration-200 flex-shrink-0" style={{ color: 'var(--color-primary)', minHeight: 44 }}>
+                    {getIcon('arrow-left', { size: 18 })} Notes
+                  </button>
+                </Tooltip>
               )}
               {selected.source === 'voice' && (
-                <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-md flex-shrink-0" style={{ color: 'var(--color-primary)', border: '1px solid var(--color-border)' }} title="This note was made from a recording. Only the words were kept, not the audio.">
-                  {getIcon('audio-lines', { size: 12 })}{!viewportMobile && ' Voice note'}
-                </span>
+                <Tooltip text={NOTE_TIPS.rowVoice} side="bottom">
+                  <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-md flex-shrink-0" style={{ color: 'var(--color-primary)', border: '1px solid var(--color-border)' }}>
+                    {getIcon('audio-lines', { size: 12 })}{!viewportMobile && ' Voice note'}
+                  </span>
+                </Tooltip>
               )}
               {saveState === 'error' ? (
                 <span className="text-xs flex items-center gap-1.5 min-w-0" style={{ color: '#ef4444' }} role="alert">
                   Not saved
-                  <button type="button" onClick={runSave} className="underline hover:opacity-70 transition-opacity duration-200">Try again</button>
+                  <Tooltip text={NOTE_TIPS.retrySave} side="bottom"><button type="button" onClick={runSave} className="underline hover:opacity-70 transition-opacity duration-200">Try again</button></Tooltip>
                 </span>
               ) : (
-                <span className="text-xs" style={{ color: 'var(--color-muted)' }} aria-live="polite">{statusText}</span>
+                <Tooltip text={NOTE_TIPS.saveState} side="bottom"><span className="text-xs" style={{ color: 'var(--color-muted)' }} aria-live="polite">{statusText}</span></Tooltip>
               )}
             </div>
 
             <div className="flex items-center gap-2 flex-wrap justify-end">
               {aiBackup && aiBackup.id === selected.id && (
-                <button type="button" onClick={undoAi} className="flex items-center gap-1 text-xs px-2.5 rounded-md hover:opacity-70 transition-opacity duration-200" style={{ ...toolBtn, minHeight: viewportMobile ? 40 : 28 }}>
-                  {getIcon('rotate-ccw', { size: 12 })} Undo AI change
-                </button>
+                <Tooltip text={NOTE_TIPS.undoAi} side="bottom">
+                  <button type="button" onClick={undoAi} className="flex items-center gap-1 text-xs px-2.5 rounded-md hover:opacity-70 transition-opacity duration-200" style={{ ...toolBtn, minHeight: viewportMobile ? 40 : 28 }}>
+                    {getIcon('rotate-ccw', { size: 12 })} Undo AI change
+                  </button>
+                </Tooltip>
               )}
-              <button
-                type="button" onClick={() => togglePin(selected)}
-                className="flex items-center justify-center rounded-md hover:opacity-60 transition-opacity duration-200"
-                style={{ color: selected.pinned_at ? 'var(--color-primary)' : 'var(--color-muted)', width: viewportMobile ? 40 : 28, height: viewportMobile ? 40 : 28 }}
-                title={selected.pinned_at ? 'Unpin' : 'Pin to the top of the list'} aria-label={selected.pinned_at ? 'Unpin note' : 'Pin note'} aria-pressed={!!selected.pinned_at}
-              >{getIcon('pin', { size: 16 })}</button>
-              <div className="relative">
+              <Tooltip text={NOTE_TIPS.pin} side="bottom">
                 <button
-                  type="button" onClick={() => setAiMenuOpen((v) => !v)} aria-expanded={aiMenuOpen} aria-haspopup="menu"
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity duration-200 hover:opacity-80 whitespace-nowrap" style={toolBtn}
-                  title="AI actions for this note: summarise, pull out to-dos, tidy up, suggest a title" aria-label="AI actions"
-                >{getIcon('wand', { size: viewportMobile ? 18 : 12 })}{!viewportMobile && 'AI'}{getIcon('chevron-down', { size: 11 })}</button>
+                  type="button" onClick={() => togglePin(selected)}
+                  className="flex items-center justify-center rounded-md hover:opacity-60 transition-opacity duration-200"
+                  style={{ color: selected.pinned_at ? 'var(--color-primary)' : 'var(--color-muted)', width: viewportMobile ? 40 : 28, height: viewportMobile ? 40 : 28 }}
+                  aria-label={selected.pinned_at ? 'Unpin note' : 'Pin note'} aria-pressed={!!selected.pinned_at}
+                >{getIcon('pin', { size: 16 })}</button>
+              </Tooltip>
+              <div className="relative" data-tour="notes-ai">
+                <Tooltip text={NOTE_TIPS.ai} side="bottom">
+                  <button
+                    type="button" onClick={() => setAiMenuOpen((v) => !v)} aria-expanded={aiMenuOpen} aria-haspopup="menu"
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity duration-200 hover:opacity-80 whitespace-nowrap" style={toolBtn}
+                    aria-label="AI actions"
+                  >{getIcon('wand', { size: viewportMobile ? 18 : 12 })}{!viewportMobile && 'AI'}{getIcon('chevron-down', { size: 11 })}</button>
+                </Tooltip>
                 {aiMenuOpen && (
                   <>
                     <div className="fixed inset-0 z-30" style={viewportMobile ? { background: 'rgba(0,0,0,0.4)' } : undefined} onClick={() => setAiMenuOpen(false)} />
@@ -860,23 +941,28 @@ export default function NotesPage() {
                 )}
               </div>
               {dictation.supported && !viewportMobile && (
-                <button
-                  type="button"
-                  onClick={() => (dictation.listening ? dictation.stop() : dictation.start(selected.id))}
-                  className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity duration-200 flex-shrink-0"
-                  aria-label={dictation.listening ? 'Stop dictation' : 'Dictate into this note'}
-                  style={{ color: dictation.listening ? '#ef4444' : 'var(--color-muted)', background: dictation.listening ? '#fee2e2' : undefined, animation: dictation.listening ? 'pulse 1.2s ease-in-out infinite' : undefined }}
-                  title={dictation.listening ? 'Stop dictation' : 'Dictate (voice input)'}
-                >{getIcon('mic', { size: 16 })}</button>
+                <Tooltip text={dictation.listening ? 'Stop dictating. What you said is added to the note.' : NOTE_TIPS.dictate} side="bottom">
+                  <button
+                    type="button"
+                    onClick={() => (dictation.listening ? dictation.stop() : dictation.start(selected.id))}
+                    className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity duration-200 flex-shrink-0"
+                    aria-label={dictation.listening ? 'Stop dictation' : 'Dictate into this note'}
+                    style={{ color: dictation.listening ? '#ef4444' : 'var(--color-muted)', background: dictation.listening ? '#fee2e2' : undefined, animation: dictation.listening ? 'pulse 1.2s ease-in-out infinite' : undefined }}
+                  >{getIcon('mic', { size: 16 })}</button>
+                </Tooltip>
               )}
-              <button type="button" onClick={() => convertToTask({ ...selected, title, body })} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity duration-200 hover:opacity-80 whitespace-nowrap" style={toolBtn} title="Convert to task" aria-label="Convert to task">
-                {getIcon('list-checks', { size: viewportMobile ? 18 : 12 })}{!viewportMobile && 'Convert to Task'}
-              </button>
+              <Tooltip text={NOTE_TIPS.convertTask} side="bottom">
+                <button type="button" onClick={() => convertToTask({ ...selected, title, body })} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity duration-200 hover:opacity-80 whitespace-nowrap" style={toolBtn} aria-label="Convert to task">
+                  {getIcon('list-checks', { size: viewportMobile ? 18 : 12 })}{!viewportMobile && 'Convert to Task'}
+                </button>
+              </Tooltip>
 
               <div className="relative">
-                <button type="button" onClick={() => { setShowChatPicker((v) => !v); setNewProjectName(''); setCreatingProject(false); }} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity duration-200 hover:opacity-80 whitespace-nowrap" style={{ background: 'var(--color-primary)', color: '#fff', minHeight: viewportMobile ? 40 : undefined }} title="Open this note as a chat" aria-label="Take to chat">
-                  {getIcon('chat', { size: viewportMobile ? 18 : 12 })}{!viewportMobile && 'Take to Chat'}{getIcon('chevron-down', { size: 11 })}
-                </button>
+                <Tooltip text={NOTE_TIPS.takeToChat} side="bottom">
+                  <button type="button" onClick={() => { setShowChatPicker((v) => !v); setNewProjectName(''); setCreatingProject(false); }} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity duration-200 hover:opacity-80 whitespace-nowrap" style={{ background: 'var(--color-primary)', color: '#fff', minHeight: viewportMobile ? 40 : undefined }} aria-label="Take to chat">
+                    {getIcon('chat', { size: viewportMobile ? 18 : 12 })}{!viewportMobile && 'Take to Chat'}{getIcon('chevron-down', { size: 11 })}
+                  </button>
+                </Tooltip>
                 {showChatPicker && (
                   <>
                     <div className="fixed inset-0 z-30" onClick={() => setShowChatPicker(false)} />
@@ -930,51 +1016,89 @@ export default function NotesPage() {
                   <button type="button" onClick={() => setConfirmDelete(false)} className="px-2.5 rounded-md hover:opacity-70 transition-opacity duration-200" style={{ ...toolBtn, minHeight: viewportMobile ? 40 : 28 }}>No</button>
                 </span>
               ) : (
-                <button type="button" onClick={() => setConfirmDelete(true)} className="flex items-center justify-center rounded-md hover:opacity-60 transition-opacity duration-200" style={{ color: 'var(--color-muted)', width: viewportMobile ? 40 : 28, height: viewportMobile ? 40 : 28 }} title="Delete note" aria-label="Delete note">
-                  {getIcon('trash', { size: 16 })}
-                </button>
+                <Tooltip text={NOTE_TIPS.deleteNote} side="bottom">
+                  <button type="button" onClick={() => setConfirmDelete(true)} className="flex items-center justify-center rounded-md hover:opacity-60 transition-opacity duration-200" style={{ color: 'var(--color-muted)', width: viewportMobile ? 40 : 28, height: viewportMobile ? 40 : 28 }} aria-label="Delete note">
+                    {getIcon('trash', { size: 16 })}
+                  </button>
+                </Tooltip>
               )}
             </div>
           </div>
 
           {/* Title */}
-          <input
-            ref={titleRef}
-            value={title}
-            onChange={handleTitleChange}
-            onFocus={(e) => { if (title === 'Untitled') e.target.select(); }}
-            placeholder="Title"
-            aria-label="Note title"
-            readOnly={bodyLoading}
-            className={`px-4 ${viewportMobile ? 'pt-3 pb-2' : 'pt-4 pb-1'} text-xl font-semibold bg-transparent outline-none flex-shrink-0`}
-            style={{ color: 'var(--color-text)' }}
-          />
+          <Tooltip text={NOTE_TIPS.title}>
+            <input
+              ref={titleRef}
+              value={title}
+              onChange={handleTitleChange}
+              onFocus={(e) => { if (title === 'Untitled') e.target.select(); }}
+              placeholder="Title"
+              aria-label="Note title"
+              readOnly={bodyLoading}
+              className={`px-4 ${viewportMobile ? 'pt-3 pb-2' : 'pt-4 pb-1'} text-xl font-semibold bg-transparent outline-none flex-shrink-0`}
+              style={{ color: 'var(--color-text)' }}
+            />
+          </Tooltip>
 
           {/* Filing: project and client */}
-          <div className="px-4 pb-2 border-b flex-shrink-0 space-y-2" style={border}>
-            <div className="flex items-center gap-2">
-            <select value={selected.project_id || ''} onChange={handleProjectChange} aria-label="Project" className="rounded px-2 outline-none min-w-0 flex-1 sm:flex-none sm:max-w-[180px]" style={selectStyle}>
-              <option value="">No project</option>
-              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-            <select value={selected.client_id || ''} onChange={handleClientChange} onFocus={ensureClients} onMouseDown={ensureClients} aria-label="Client" className="rounded px-2 outline-none min-w-0 flex-1 sm:flex-none sm:max-w-[180px]" style={selectStyle}>
-              <option value="">No client</option>
-              {clientOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+          <div className="px-4 pb-2 border-b flex-shrink-0 space-y-2" style={border} data-tour="notes-filing">
+            <div className="flex items-center gap-2 flex-wrap">
+            <Tooltip text={NOTE_TIPS.projectPick}>
+              <select value={selected.project_id || ''} onChange={handleProjectChange} aria-label="Project" className="rounded px-2 outline-none min-w-0 flex-1 sm:flex-none sm:max-w-[180px]" style={selectStyle}>
+                <option value="">No project</option>
+                {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </Tooltip>
+            <Tooltip text={NOTE_TIPS.clientPick}>
+              <select value={selected.client_id || ''} onChange={handleClientChange} onFocus={ensureClients} onMouseDown={ensureClients} aria-label="Client" className="rounded px-2 outline-none min-w-0 flex-1 sm:flex-none sm:max-w-[180px]" style={selectStyle}>
+                <option value="">No client</option>
+                {clientOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </Tooltip>
+            {(() => {
+              const rs = reminderState(selected);
+              const live = rs === 'due' || rs === 'upcoming';
+              const text = live ? formatReminder(selected.remind_at) : '';
+              return (
+                <Tooltip text={live ? NOTE_TIPS.reminderChip(text, rs === 'due') : NOTE_TIPS.reminderButton}>
+                  <button
+                    type="button" onClick={() => setShowReminder(true)} data-tour="notes-reminder" aria-label={live ? `Reminder: ${text}` : 'Set a reminder'}
+                    className="flex items-center gap-1.5 text-xs px-2.5 rounded transition-opacity duration-200 hover:opacity-70 flex-shrink-0"
+                    style={{ ...selectStyle, color: rs === 'due' ? '#f59e0b' : live ? 'var(--color-primary)' : 'var(--color-muted)', borderColor: rs === 'due' ? '#f59e0b' : 'var(--color-border)' }}
+                  >{getIcon('clock', { size: 13 })}{live ? text : 'Remind me'}</button>
+                </Tooltip>
+              );
+            })()}
             </div>
             <NoteTagsEditor tags={selected.tags || []} allTags={allTags} mobile={viewportMobile} onChange={changeTags} />
           </div>
 
           {/* Write / Preview */}
+          {reminderState(selected) === 'due' && (
+            <div className="flex items-center justify-between gap-2 flex-wrap px-4 py-2 text-xs flex-shrink-0" style={{ background: '#f59e0b22', borderBottom: '1px solid #f59e0b', color: 'var(--color-text)' }} role="status">
+              <span className="flex items-center gap-1.5">{getIcon('clock', { size: 13 })} Reminder due: {formatReminder(selected.remind_at)}</span>
+              <span className="flex items-center gap-2">
+                <Tooltip text={NOTE_TIPS.reminderDone}>
+                  <button type="button" onClick={finishReminder} className="px-3 rounded-lg font-medium hover:opacity-80 transition-opacity duration-200" style={{ background: 'var(--color-primary)', color: '#fff', minHeight: viewportMobile ? 40 : 28 }}>Done</button>
+                </Tooltip>
+                <Tooltip text={NOTE_TIPS.reminderSnooze}>
+                  <button type="button" onClick={() => setShowReminder(true)} className="px-3 rounded-lg hover:opacity-70 transition-opacity duration-200" style={{ ...toolBtn, minHeight: viewportMobile ? 40 : 28 }}>Snooze…</button>
+                </Tooltip>
+              </span>
+            </div>
+          )}
+
+          {/* Write / Preview */}
           <div className="flex items-center justify-between gap-2 px-4 py-1.5 flex-shrink-0">
-            <div className="flex rounded-lg overflow-hidden" role="group" aria-label="How to show this note" style={{ border: '1px solid var(--color-border)' }}>
+            <div className="flex rounded-lg overflow-hidden" role="group" aria-label="How to show this note" style={{ border: '1px solid var(--color-border)' }} data-tour="notes-mode">
               {[['write', 'Write', 'pen-line'], ['preview', 'Preview', 'eye']].map(([id, label, icon]) => (
-                <button
-                  key={id} type="button" onClick={() => setMode(id)} aria-pressed={mode === id}
-                  className="flex items-center gap-1.5 text-xs px-3 transition-opacity duration-200 hover:opacity-80"
-                  style={{ minHeight: viewportMobile ? 36 : 26, background: mode === id ? 'var(--color-primary)' : 'var(--color-bg)', color: mode === id ? '#fff' : 'var(--color-text)' }}
-                  title={id === 'write' ? 'Edit the text' : 'See it formatted: headings, bold, lists, links and tick-boxes'}
-                >{getIcon(icon, { size: 12 })}{label}</button>
+                <Tooltip key={id} text={NOTE_TIPS[id]}>
+                  <button
+                    type="button" onClick={() => setMode(id)} aria-pressed={mode === id}
+                    className="flex items-center gap-1.5 text-xs px-3 transition-opacity duration-200 hover:opacity-80"
+                    style={{ minHeight: viewportMobile ? 36 : 26, background: mode === id ? 'var(--color-primary)' : 'var(--color-bg)', color: mode === id ? '#fff' : 'var(--color-text)' }}
+                  >{getIcon(icon, { size: 12 })}{label}</button>
+                </Tooltip>
               ))}
             </div>
             {(() => {
@@ -1058,13 +1182,17 @@ export default function NotesPage() {
 
           {viewportMobile && (
             <div className="flex-shrink-0 flex gap-3 px-3 pt-3 border-t" style={{ ...border, background: 'var(--color-surface)', paddingBottom: 'max(12px, env(safe-area-inset-bottom))', paddingRight: 84 /* the guide button sits bottom-right */ }}>
-              <button type="button" onClick={() => (mode === 'preview' ? setMode('write') : bodyRef.current?.focus())} className="flex-1 flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-opacity duration-200 hover:opacity-80" style={{ minHeight: 48, background: 'var(--color-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }} aria-label="Type into this note">
-                {getIcon('pen-line', { size: 16 })} Type
-              </button>
-              {dictation.supported && (
-                <button type="button" onClick={() => (dictation.listening ? dictation.stop() : dictation.start(selected.id))} className="flex-1 flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-opacity duration-200 hover:opacity-80" style={{ minHeight: 48, background: dictation.listening ? '#fee2e2' : 'var(--color-primary)', color: dictation.listening ? '#b91c1c' : '#fff' }} aria-label={dictation.listening ? 'Stop dictation' : 'Dictate into this note'}>
-                  {getIcon('mic', { size: 16 })} {dictation.listening ? 'Stop' : 'Dictate'}
+              <Tooltip text={NOTE_TIPS.typeButton}>
+                <button type="button" onClick={() => (mode === 'preview' ? setMode('write') : bodyRef.current?.focus())} className="flex-1 flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-opacity duration-200 hover:opacity-80" style={{ minHeight: 48, background: 'var(--color-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }} aria-label="Type into this note">
+                  {getIcon('pen-line', { size: 16 })} Type
                 </button>
+              </Tooltip>
+              {dictation.supported && (
+                <Tooltip text={dictation.listening ? 'Stop dictating. What you said is added to the note.' : NOTE_TIPS.dictate}>
+                  <button type="button" onClick={() => (dictation.listening ? dictation.stop() : dictation.start(selected.id))} className="flex-1 flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-opacity duration-200 hover:opacity-80" style={{ minHeight: 48, background: dictation.listening ? '#fee2e2' : 'var(--color-primary)', color: dictation.listening ? '#b91c1c' : '#fff' }} aria-label={dictation.listening ? 'Stop dictation' : 'Dictate into this note'}>
+                    {getIcon('mic', { size: 16 })} {dictation.listening ? 'Stop' : 'Dictate'}
+                  </button>
+                </Tooltip>
               )}
             </div>
           )}
@@ -1113,6 +1241,18 @@ export default function NotesPage() {
           onUse={createFromTemplate} onSave={saveAsTemplate} onDelete={deleteTemplate} onClose={() => setShowTemplates(false)}
         />
       )}
+      {info.show && (
+        <ToolInfoModal title="How Notes Works" onClose={info.close}>
+          <p className="text-sm" style={{ color: 'var(--color-text)' }}>{NOTES_INTRO}</p>
+          <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+            {HOW_IT_WORKS.map(([heading, text]) => (
+              <p key={heading} style={{ color: 'var(--color-text)' }}><strong>{heading}</strong> — {text}</p>
+            ))}
+          </div>
+          <p className="text-sm" style={{ color: 'var(--color-text)' }}>{NOTES_NOT}</p>
+        </ToolInfoModal>
+      )}
+      {showReminder && selected && <NoteReminderPanel note={selected} mobile={viewportMobile} onSet={saveReminder} onClear={() => saveReminder(null, false)} onDone={finishReminder} onClose={() => setShowReminder(false)} />}
       {showBin && <RecentlyDeletedModal mobile={viewportMobile} onRestored={() => { list.reload(); refreshTags(); }} onClose={() => setShowBin(false)} />}
       <NotesTutorChat currentTool="" onOpenTool={openGuideTool} />
     </div>

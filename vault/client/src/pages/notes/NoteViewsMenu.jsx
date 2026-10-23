@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useIcon } from '../../providers/IconProvider';
+import Tooltip from '../../components/Tooltip';
+import { NOTE_TIPS } from './noteTips.mjs';
 
 /**
  * Saved views: pick one to bring back its search, dates, project, client, tags and grouping; save the current ones under a name;
@@ -97,6 +99,7 @@ export default function NoteViewsMenu({ api, mobile, onClose }) {
                 </div>
               ) : (
                 <div className="flex items-stretch">
+                  <Tooltip text={NOTE_TIPS.viewApply} side="right">
                   <button
                     type="button" onClick={() => { api.apply(v); onClose(); }}
                     className="flex-1 min-w-0 text-left px-2 py-2.5 flex items-start gap-2 hover:opacity-70 transition-opacity duration-200"
@@ -108,8 +111,13 @@ export default function NoteViewsMenu({ api, mobile, onClose }) {
                       <span className="block text-xs" style={{ color: 'var(--color-muted)', overflowWrap: 'anywhere' }}>{api.summaryFor(v)}</span>
                     </span>
                   </button>
-                  <button type="button" onClick={() => { setRenaming({ id: v.id, draft: v.name }); setError(''); }} aria-label={`Rename view ${v.name}`} title="Rename" className="flex items-center justify-center hover:opacity-60 transition-opacity duration-200 flex-shrink-0" style={{ color: 'var(--color-muted)', width: mobile ? 40 : 28 }}>{getIcon('edit', { size: 13 })}</button>
-                  <button type="button" onClick={() => setConfirmId(v.id)} aria-label={`Delete view ${v.name}`} title="Delete" className="flex items-center justify-center hover:opacity-60 transition-opacity duration-200 flex-shrink-0" style={{ color: 'var(--color-muted)', width: mobile ? 40 : 28 }}>{getIcon('trash', { size: 13 })}</button>
+                  </Tooltip>
+                  <Tooltip text={NOTE_TIPS.viewRename}>
+                    <button type="button" onClick={() => { setRenaming({ id: v.id, draft: v.name }); setError(''); }} aria-label={`Rename view ${v.name}`} className="flex items-center justify-center hover:opacity-60 transition-opacity duration-200 flex-shrink-0" style={{ color: 'var(--color-muted)', width: mobile ? 40 : 28 }}>{getIcon('edit', { size: 13 })}</button>
+                  </Tooltip>
+                  <Tooltip text={NOTE_TIPS.viewDelete}>
+                    <button type="button" onClick={() => setConfirmId(v.id)} aria-label={`Delete view ${v.name}`} className="flex items-center justify-center hover:opacity-60 transition-opacity duration-200 flex-shrink-0" style={{ color: 'var(--color-muted)', width: mobile ? 40 : 28 }}>{getIcon('trash', { size: 13 })}</button>
+                  </Tooltip>
                 </div>
               )}
             </div>
@@ -120,11 +128,13 @@ export default function NoteViewsMenu({ api, mobile, onClose }) {
           {api.changedView && (
             <div className="rounded-lg px-2.5 py-2 text-xs" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
               You changed the filters since opening "{api.changedView.name}".
+              <Tooltip text={NOTE_TIPS.viewUpdate}>
               <button
                 type="button" disabled={busy}
                 onClick={async () => { const msg = await guarded(() => api.update(api.changedView)); if (msg) setError(msg); }}
                 className="block mt-1.5 text-xs font-medium px-3 rounded-lg hover:opacity-80 transition-opacity duration-200 disabled:opacity-40" style={{ ...primary, minHeight: mobile ? 40 : 28 }}
               >Update "{api.changedView.name}" with these</button>
+              </Tooltip>
             </div>
           )}
           <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
@@ -137,7 +147,9 @@ export default function NoteViewsMenu({ api, mobile, onClose }) {
               className="flex-1 min-w-0 rounded-lg px-3 outline-none disabled:opacity-50"
               style={{ background: 'var(--color-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)', fontSize: 16, minHeight: mobile ? 44 : 32 }}
             />
-            <button type="button" disabled={!api.canSave || !name.trim() || busy} onClick={saveNew} className="text-sm font-medium px-4 rounded-lg hover:opacity-80 transition-opacity duration-200 disabled:opacity-40" style={primary}>Save</button>
+            <Tooltip text={NOTE_TIPS.viewSave}>
+              <button type="button" disabled={!api.canSave || !name.trim() || busy} onClick={saveNew} className="text-sm font-medium px-4 rounded-lg hover:opacity-80 transition-opacity duration-200 disabled:opacity-40" style={primary}>Save</button>
+            </Tooltip>
           </div>
           {error && <p className="text-xs" style={{ color: '#ef4444' }} role="alert">{error}</p>}
         </div>

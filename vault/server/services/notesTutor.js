@@ -18,6 +18,9 @@ const CATALOG = [
   { id: 'group-notes', label: 'Group notes', group: 'Notes list',
     does: 'The Group by buttons under the search box (Date, Project, Client, Tag) split the list into labelled sections. By Date the sections are Today, Yesterday, Previous 7 days, Previous 30 days, then one section per month. By Project or Client each project or client is a section, with notes that are not filed under one at the bottom. By Tag a note with several tags is listed under each of them, and notes with no tags are under Untagged at the bottom. Your choice is remembered on this device.',
     notes: 'This only changes how the list is laid out; it never moves or changes a note.' },
+  { id: 'reminders', label: 'Reminders', group: 'Editor',
+    does: 'The clock button beside the project and client drop-downs in an open note (it says Remind me) sets a reminder for that note. Pick In 1 hour, This evening, Tomorrow 9 am or Next Monday 9 am, or choose your own date and time, and tick Also email me if you want an email as well as the reminder in Notes. Once a reminder is set the button shows when it is due. When the time comes the note appears under Reminders due at the top of the list, with a banner in the note that has Done and Snooze: Done marks it finished, Snooze opens the same choices to remind you again later. The filter button has a Reminders choice (Due now, Coming up, With a reminder). To remove a reminder, open the clock button and press Remove the reminder.',
+    notes: 'A note has one reminder at a time. A reminder must be in the future and within five years. The email is sent to your own login address, once, within about five minutes of the time, and only if email is set up on the server; a reminder never changes the note or its edited date. Reminders do not repeat.' },
   { id: 'saved-views', label: 'Saved views', group: 'Notes list',
     does: 'The layers button beside the filter button, above the list, opens Views. Pick a saved view to bring back its search, date range, project, client, tags and grouping in one tap, or pick All notes to clear the search and filters. To make a view, set up the search, filters and grouping you want, open Views, type a name at the bottom and press Save. If you change the filters after opening a view, Views offers to update that view with the new ones, or to save them as a new view. A view can be renamed with the pencil or deleted with the bin; a deleted view is kept 30 days in Recently deleted, and the message that appears has an Undo. The list shows the name of the view you are in.',
     notes: 'You can keep up to 30 views, each with a different name. A date range such as 30 days stays relative, so a view saved with 30 days always means the last 30 days from today. If the project or client in a view has been deleted since, that part is left out and you are told.' },
@@ -73,6 +76,8 @@ const RULES = [
   'Typing @ in a note opens a menu of things to pull in: projects, open tasks, saved prompts, and searching the web, Gmail and Calendar.',
   'A saved view brings back a whole set of filters and the grouping in one tap.',
   'Deleted notes, templates and saved views stay in Recently deleted for 30 days and can be restored, then they are removed for good.',
+  'Notes has a compass button beside its title for a step-by-step tour, an (i) button that explains how Notes works, and a hover tip on every control. When someone seems lost, point them to those as well as to the right buttons.',
+  'A reminder on a note shows under Reminders due at the top of the list once its time comes, and can be emailed to the person too. It can be marked done or snoozed. Reminders do not repeat.',
   'Pinned notes sit in a Pinned section at the top of the list. The AI actions (Summarise, Pull out to-dos, Tidy up, Suggest tags, Suggest a title) only propose: the person chooses what to use, and nothing is changed or created before that.',
 ];
 
@@ -82,7 +87,7 @@ const NOT_POSSIBLE = [
   'Recordings longer than about an hour in one go (record in parts).',
   'Formatting buttons (a toolbar for bold or headings), images, files or attachments on a note. Formatting is typed as markdown symbols and shown in Preview.',
   'Folders, or sharing a note with another person. A note can only be filed under one project and one client (it can have many tags), and is private to the person who wrote it.',
-  'Reminders or due dates on a note. A note can be converted to a task, and tasks have the dates.',
+  'Repeating reminders, or reminders sent anywhere but the person\'s own login email. A note can have one reminder at a time, and a note can be converted to a task when it needs a due date and a place in the task list.',
   'An edit history to go back to. A deleted note can be restored for 30 days, but changes made inside a note cannot be undone step by step afterwards.',
   'Being a legal or evidential record of a conversation: there is no consent step, speaker identification or audit trail. It is a private tool for dictating plans and ideas.',
 ];

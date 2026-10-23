@@ -277,6 +277,7 @@ const { startExpenseReviewCron }    = require('./cron/expenseReviewCron');
 const { startWeeklyDigestCron }     = require('./cron/weeklyDigestCron');
 const { startFitnessCron, startFitnessTasksSync } = require('./cron/fitnessCron');
 const { startRecycleBinPurge } = require('./cron/recycleBinCron');
+const { startNoteRemindersCron } = require('./cron/noteRemindersCron');
 
 // Poll until schema is ready, then seed and start listening
 async function start() {
@@ -309,6 +310,7 @@ async function start() {
     startExpenseReviewCron();
     startWeeklyDigestCron();
     startFitnessCron();
+    startNoteRemindersCron(); // emails note reminders that have fallen due
   }
 
   // API key presence checks — visible in Railway logs

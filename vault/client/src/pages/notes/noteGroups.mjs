@@ -72,7 +72,8 @@ export function dateBucket(value, now = new Date()) {
 
 /**
  * Split notes (already newest-first) into sections for display. Order inside a section is kept.
- *   Pinned notes (pinned_at set) always come first, in one "Pinned" section, whatever the mode.
+ *   Notes whose reminder is due come first, in one "Reminders due" section; then pinned notes (pinned_at set) in one "Pinned" section;
+ *   both whatever the mode, and a note shows in only one section there.
  *   mode 'date'    -> by `field` (updated_at / created_at) as Today, Yesterday, ... then months
  *   mode 'project' -> by project name, busiest-recent first, "No project" last
  *   mode 'client'  -> by client name, same, "No client" last
@@ -80,7 +81,10 @@ export function dateBucket(value, now = new Date()) {
  * Returns [{ key, label, notes }].
  */
 export function groupNotes(notes, { mode = 'date', field = 'updated', now = new Date() } = {}) {
-  const all = Array.isArray(notes) ? notes : [];
+  const everything = Array.isArray(notes) ? notes : [];
+  const isDue = (n) => n.remind_at && !n.reminder_done_at && new Date(n.remind_at) <= now;
+  const due = everything.filter(isDue);
+  const all = due.length ? everything.filter((n) => !isDue(n)) : everything;
   const pinned = all.filter((n) => n.pinned_at);
   const list = pinned.length ? all.filter((n) => !n.pinned_at) : all;
   const dateKey = field === 'created' ? 'created_at' : 'updated_at';
@@ -107,14 +111,17 @@ export function groupNotes(notes, { mode = 'date', field = 'updated', now = new 
   }
 
   const out = [...sections.values()];
-  const head = pinned.length ? [{ key: 'pinned', label: 'Pinned', notes: pinned }] : [];
+  const head = [
+    ...(due.length ? [{ key: 'due', label: 'Reminders due', notes: due }] : []),
+    ...(pinned.length ? [{ key: 'pinned', label: 'Pinned', notes: pinned }] : []),
+  ];
   if (mode === 'date') return [...head, ...out.map(({ order, ...s }) => s)]; // already newest-first, so insertion order is date order
   // named groups keep the order their newest note first appeared in; the catch-all goes last
   return [...head, ...out.map(({ last, ...s }) => ({ ...s, _last: !!last })).sort((a, b) => Number(a._last) - Number(b._last)).map(({ _last, ...s }) => s)];
 }
 
 /** A short label for the active filters, for the "N notes" line and the empty state. */
-export function filtersSummary({ preset, custom, search, project, client, tags }) {
+export function filtersSummary({ preset, custom, search, project, client, tags, reminder }) {
   const parts = [];
   if (search) parts.push(`matching "${search}"`);
   if (preset && preset !== 'all') {
@@ -127,5 +134,6 @@ export function filtersSummary({ preset, custom, search, project, client, tags }
   if (project) parts.push('in this project');
   if (client) parts.push('for this client');
   if (Array.isArray(tags) && tags.length) parts.push(`tagged ${tags.join(' + ')}`);
+  if (reminder) parts.push({ any: 'with a reminder', due: 'reminders due', upcoming: 'reminders coming up' }[reminder] || '');
   return parts.join(', ');
 }

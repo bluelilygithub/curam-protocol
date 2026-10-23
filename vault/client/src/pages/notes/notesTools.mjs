@@ -9,6 +9,7 @@ export const NOTES_TOOLS = [
   { id: 'group-notes', label: 'Group notes', open: 'list' },
   { id: 'filter-notes', label: 'Filter notes', open: 'list' },
   { id: 'saved-views', label: 'Saved views', open: 'list' },
+  { id: 'reminders', label: 'Reminders', open: 'editor' },
   { id: 'dictate', label: 'Dictate', open: 'editor' },
   { id: 'pin-note', label: 'Pin a note', open: 'list' },
   { id: 'templates', label: 'Templates', open: 'chooser' },

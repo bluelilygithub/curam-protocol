@@ -11,11 +11,20 @@ Page `client/src/pages/NotesPage.jsx` (`/notes`), API `server/routes/notes.js` (
 - **Templates**: built in (`noteTemplates.mjs`, filled with `{{date}}`, `{{isodate}}`, `{{weekday}}`, `{{time}}`) and the person's own (table `note_templates`, up to 50, saved from an open note). New note → From a template.
 - **Daily note**: the calendar-tick button. `POST /api/notes/daily { date, title, body }` (the person's own day, sent by the browser): returns the existing note for that day or makes it, tagged `daily`, carrying over the unticked to-dos of the most recent earlier daily note (`server/services/noteDaily.js`). One per person per day (`notes.daily_date` unique index plus an advisory lock so two devices cannot make two).
 - **Saved views**: a name for a combination of search, date range, project, client, tags and grouping (table `note_views`, up to 30, unique names). The server decides what a view may hold (`server/services/noteViews.js`: known fields and values only); the browser compares and describes them (`client/src/pages/notes/noteViews.mjs`). Date ranges stay relative. A view whose project or client has been deleted drops that part with a message. Changing the filters after opening a view offers Update. The Views button sits beside Filters (`NoteViewsMenu.jsx`).
+- **Reminders**: one per note (`notes.remind_at`, `remind_email`, `reminder_sent_at`, `reminder_done_at`). The clock button beside project/client sets it (quick times or a date and time, optional "also email me"). When it falls due the note shows under **Reminders due** at the top of the list (the browser decides this from the date, so it works with no server job) with a Done / Snooze banner; `PUT /api/notes/:id/reminder`, `POST /:id/reminder/done`, and `?reminder=due|upcoming|any` on the list (also part of saved views). Emails: `server/cron/noteRemindersCron.js` every five minutes (skipped where `DISABLE_EXTERNAL_CRON` is set) runs `runNoteReminders` in `server/services/noteReminders.js`: it claims each due reminder in the database first (`FOR UPDATE SKIP LOCKED`), mails the person's own login address once, puts a failed one back for the next run (not after a day late), and tells the Suggestions inbox when a send fails. Reminders are filing, so they do not change `updated_at`, and they do not repeat.
 - **Recently deleted**: deleting a note, a template or a saved view goes through the shared recycle bin (`docs/recycle-bin.md`) for 30 days, with Undo in the toast and a Recently deleted window; the same items show in Settings → Recycle bin.
+
+## Same conventions as the other tools (Video Tools, Measurements)
+
+- **Tooltips**: the shared `components/Tooltip.jsx` on every control, never a native `title=""`. The wording is in one file, `client/src/pages/notes/noteTips.mjs`; add a tip there when you add a control.
+- **(i) box**: `ToolInfoModal` "How Notes Works" (words in `notesInfo.mjs`), opens once per browser (`vault_notes_info_seen`), reachable from the (i) beside the title.
+- **Tour**: `client/src/utils/tours/notesTour.js` (Shepherd, 14 steps, key `vault_tour_notes_completed`), the compass beside the title, and Settings -> Tours -> Notes Tour (`/notes?tour=1`). Steps point at `data-tour="notes-..."` attributes; on a phone the tour closes or opens a note as the step needs and creates nothing.
+- **Guide chat**: `NotesTutorChat` (shared `TutorChat`), `server/services/notesTutor.js`; update the `CATALOG` and `notesTools.mjs` together.
+- `client/src/pages/notes/noteTips.test.mjs` enforces all of this: no native titles, every tip used, every tour step points at something real, the step count is right, the Settings card and the guide exist.
 
 ## Rules worth remembering
 
-- A note's tags, pin and filing (project/client) are *filing*, not editing: they do not change `updated_at`.
+- A note's tags, pin, reminder and filing (project/client) are *filing*, not editing: they do not change `updated_at`.
 - `project_id` and `client_id` are checked to be the caller's own on every write.
 - `daily_date` is a SQL `DATE`: always cast with `::text` (pg returns a JS Date at local midnight otherwise).
 - Named routes before `/:id` in `notes.js` (`/tags`, `/templates`, `/daily`, `/options`, `/voice`).
@@ -27,4 +36,4 @@ Page `client/src/pages/NotesPage.jsx` (`/notes`), API `server/routes/notes.js` (
 
 ## Not built (ideas)
 
-Reminders on a note, "ask your notes" chat, links between notes, attachments, version history, export.
+"Ask your notes" chat, repeating reminders, links between notes, attachments, version history, export.

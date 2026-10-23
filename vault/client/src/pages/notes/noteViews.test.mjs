@@ -4,7 +4,7 @@ import { DEFAULT_FILTERS, snapshot, sameFilters, isPlain, describeFilters } from
 // the plain state is plain, and any one change makes it not plain
 assert.ok(isPlain(DEFAULT_FILTERS));
 assert.ok(isPlain({}), 'missing fields mean the defaults');
-for (const change of [{ search: 'a' }, { preset: '7d' }, { projectId: '3' }, { clientId: '4' }, { tags: ['x'] }, { groupMode: 'tag' }, { field: 'created' }]) {
+for (const change of [{ search: 'a' }, { preset: '7d' }, { projectId: '3' }, { clientId: '4' }, { tags: ['x'] }, { groupMode: 'tag' }, { field: 'created' }, { reminder: 'due' }]) {
   assert.ok(!isPlain({ ...DEFAULT_FILTERS, ...change }), `not plain: ${JSON.stringify(change)}`);
 }
 
@@ -17,7 +17,7 @@ assert.ok(!sameFilters({ ...DEFAULT_FILTERS, preset: 'custom', custom: { from: '
 assert.ok(!sameFilters({ ...DEFAULT_FILTERS, tags: ['a'] }, { ...DEFAULT_FILTERS, tags: ['a', 'b'] }));
 
 // unknown values fall back, so a bad saved value cannot break the screen
-assert.deepStrictEqual(snapshot({ preset: 'forever', groupMode: 'colour', field: 'deleted', tags: 'nope' }), snapshot(DEFAULT_FILTERS));
+assert.deepStrictEqual(snapshot({ preset: 'forever', groupMode: 'colour', field: 'deleted', tags: 'nope', reminder: 'soon' }), snapshot(DEFAULT_FILTERS));
 
 // in words
 assert.strictEqual(describeFilters(DEFAULT_FILTERS), 'Every note, newest first');
@@ -28,5 +28,6 @@ assert.strictEqual(describeFilters({ ...DEFAULT_FILTERS, projectId: '2' }), 'a p
 assert.strictEqual(describeFilters({ ...DEFAULT_FILTERS, preset: 'custom', custom: { from: '2026-10-01', to: '2026-10-31' }, field: 'created' }), '2026-10-01 to 2026-10-31 · by created date');
 assert.strictEqual(describeFilters({ ...DEFAULT_FILTERS, preset: 'custom', custom: { from: '2026-10-01', to: '' } }), 'from 2026-10-01');
 assert.strictEqual(describeFilters({ ...DEFAULT_FILTERS, field: 'created' }), 'Every note, newest first', '"created" only matters with a date range');
+assert.strictEqual(describeFilters({ ...DEFAULT_FILTERS, reminder: 'due', tags: ['work'] }), 'tagged work · reminders due');
 
 console.log('ok - note views: compare current filters with a saved view, describe it in words');

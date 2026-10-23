@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
+import Tooltip from './Tooltip';
 import useToastStore from '../store/toastStore';
 import { daysLeftText, deletedAgoText, kindsIn } from '../utils/recycleBin.mjs';
 
@@ -124,7 +125,9 @@ export default function RecycleBinPanel({ types, onRestored, emptyHint }) {
                 <button type="button" onClick={() => setConfirmEmpty(false)} className="px-3 rounded-lg hover:opacity-70 transition-opacity duration-200" style={{ ...btn, minHeight: 36 }}>No</button>
               </span>
             ) : (
-              <button type="button" onClick={() => setConfirmEmpty(true)} className="text-xs hover:opacity-70 transition-opacity duration-200" style={{ color: '#ef4444', minHeight: 36 }}>Empty recycle bin</button>
+              <Tooltip text="Delete everything shown here for good.">
+                <button type="button" onClick={() => setConfirmEmpty(true)} className="text-xs hover:opacity-70 transition-opacity duration-200" style={{ color: '#ef4444', minHeight: 36 }}>Empty recycle bin</button>
+              </Tooltip>
             )}
           </div>
 
@@ -150,12 +153,16 @@ export default function RecycleBinPanel({ types, onRestored, emptyHint }) {
                     </div>
                   ) : (
                     <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <Tooltip text="Put this back as it was.">
                       <button type="button" disabled={busyId === item.id} onClick={() => restore(item)} className="flex items-center gap-1.5 text-xs font-medium px-3 rounded-lg hover:opacity-80 transition-opacity duration-200 disabled:opacity-40" style={{ background: 'var(--color-primary)', color: '#fff', minHeight: 40 }}>
                         {getIcon('rotate-ccw', { size: 13 })} Restore
                       </button>
-                      <button type="button" onClick={() => setConfirmId(item.id)} aria-label={`Delete ${item.title || 'item'} for good`} title="Delete for good" className="flex items-center justify-center rounded-lg hover:opacity-70 transition-opacity duration-200" style={{ ...btn, color: '#ef4444', minWidth: 40 }}>
+                      </Tooltip>
+                      <Tooltip text="Delete this for good. It cannot be restored afterwards.">
+                      <button type="button" onClick={() => setConfirmId(item.id)} aria-label={`Delete ${item.title || 'item'} for good`} className="flex items-center justify-center rounded-lg hover:opacity-70 transition-opacity duration-200" style={{ ...btn, color: '#ef4444', minWidth: 40 }}>
                         {getIcon('trash', { size: 14 })}
                       </button>
+                      </Tooltip>
                     </div>
                   )}
                 </div>

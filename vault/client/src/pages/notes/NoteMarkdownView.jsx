@@ -3,6 +3,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { mdComponents } from '../../utils/mdComponents';
+import Tooltip from '../../components/Tooltip';
+import { NOTE_TIPS } from './noteTips.mjs';
 
 // react-markdown does not render raw HTML by default, so a pasted <script> or <img onerror> shows as text, never runs.
 // remark-breaks keeps a single line break as a line break, so notes typed as plain text look the same here as in the editor.
@@ -15,13 +17,15 @@ const TaskLine = createContext(null);
 function TaskCheckbox({ checked, onToggle }) {
   const line = useContext(TaskLine);
   return (
-    <input
-      type="checkbox"
-      checked={!!checked}
-      onChange={() => line && onToggle?.(line)}
-      aria-label="To-do"
-      style={{ width: 18, height: 18, marginRight: 8, verticalAlign: 'text-bottom', accentColor: 'var(--color-primary)', cursor: 'pointer' }}
-    />
+    <Tooltip text={NOTE_TIPS.todoBox}>
+      <input
+        type="checkbox"
+        checked={!!checked}
+        onChange={() => line && onToggle?.(line)}
+        aria-label="To-do"
+        style={{ width: 18, height: 18, marginRight: 8, verticalAlign: 'text-bottom', accentColor: 'var(--color-primary)', cursor: 'pointer' }}
+      />
+    </Tooltip>
   );
 }
 

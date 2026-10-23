@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
+import Tooltip from '../../components/Tooltip';
+import { NOTE_TIPS } from './noteTips.mjs';
 import { normalizeTag, MAX_TAG_LENGTH } from './noteTags.mjs';
 
 /**
@@ -88,8 +90,12 @@ export default function TagManager({ tags, mobile, onChanged, onClose }) {
                 <div className="flex items-center gap-2">
                   <span className="flex-1 min-w-0 truncate text-sm" style={{ color: 'var(--color-text)' }}>{tag}</span>
                   <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{count} note{count === 1 ? '' : 's'}</span>
-                  <button type="button" onClick={() => { setRenaming(tag); setDraft(tag); setConfirming(null); setError(''); }} className="text-xs px-3 rounded-lg hover:opacity-70 transition-opacity duration-200" style={btn} aria-label={`Rename tag ${tag}`}>Rename</button>
-                  <button type="button" onClick={() => { setConfirming(tag); setRenaming(null); setError(''); }} className="flex items-center justify-center rounded-lg hover:opacity-70 transition-opacity duration-200" style={{ ...btn, color: '#ef4444', minWidth: mobile ? 40 : 28 }} aria-label={`Remove tag ${tag} from all notes`} title="Remove from all notes">{getIcon('trash', { size: 14 })}</button>
+                  <Tooltip text={NOTE_TIPS.tagRename}>
+                    <button type="button" onClick={() => { setRenaming(tag); setDraft(tag); setConfirming(null); setError(''); }} className="text-xs px-3 rounded-lg hover:opacity-70 transition-opacity duration-200" style={btn} aria-label={`Rename tag ${tag}`}>Rename</button>
+                  </Tooltip>
+                  <Tooltip text={NOTE_TIPS.tagDelete}>
+                    <button type="button" onClick={() => { setConfirming(tag); setRenaming(null); setError(''); }} className="flex items-center justify-center rounded-lg hover:opacity-70 transition-opacity duration-200" style={{ ...btn, color: '#ef4444', minWidth: mobile ? 40 : 28 }} aria-label={`Remove tag ${tag} from all notes`}>{getIcon('trash', { size: 14 })}</button>
+                  </Tooltip>
                 </div>
               )}
             </li>

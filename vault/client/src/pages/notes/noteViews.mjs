@@ -5,8 +5,15 @@
 import { DATE_PRESETS, GROUP_MODES } from './noteGroups.mjs';
 
 export const DEFAULT_FILTERS = {
-  search: '', preset: 'all', custom: { from: '', to: '' }, field: 'updated', projectId: '', clientId: '', tags: [], groupMode: 'date',
+  search: '', preset: 'all', custom: { from: '', to: '' }, field: 'updated', projectId: '', clientId: '', tags: [], reminder: '', groupMode: 'date',
 };
+
+export const REMINDER_FILTERS = [
+  { id: '', label: 'Any' },
+  { id: 'due', label: 'Due now' },
+  { id: 'upcoming', label: 'Coming up' },
+  { id: 'any', label: 'With a reminder' },
+];
 
 /** The filters in one fixed shape, so two of them can be compared: trimmed search, dates only for "Pick dates", tags sorted. */
 export function snapshot(f) {
@@ -20,6 +27,7 @@ export function snapshot(f) {
     projectId: x.projectId ? String(x.projectId) : '',
     clientId: x.clientId ? String(x.clientId) : '',
     tags: [...new Set(Array.isArray(x.tags) ? x.tags : [])].sort(),
+    reminder: REMINDER_FILTERS.some((r) => r.id === x.reminder) ? x.reminder : '',
     groupMode: GROUP_MODES.some((m) => m.id === x.groupMode) ? x.groupMode : 'date',
   };
 }
@@ -42,6 +50,7 @@ export function describeFilters(filters, names = {}) {
   }
   if (f.preset !== 'all' && f.field === 'created') parts.push('by created date');
   if (f.tags.length) parts.push(`tagged ${f.tags.join(' + ')}`);
+  if (f.reminder) parts.push({ any: 'with a reminder', due: 'reminders due', upcoming: 'reminders coming up' }[f.reminder]);
   if (f.projectId) parts.push(names.projectName || 'a project');
   if (f.clientId) parts.push(names.clientName || 'a client');
   if (f.groupMode !== 'date') parts.push(`grouped by ${GROUP_MODES.find((m) => m.id === f.groupMode).label.toLowerCase()}`);

@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useIcon } from '../../providers/IconProvider';
+import Tooltip from '../../components/Tooltip';
+import { NOTE_TIPS } from './noteTips.mjs';
 import { BUILT_IN_TEMPLATES } from './noteTemplates.mjs';
 
 /**
@@ -24,11 +26,13 @@ export default function TemplatePicker({ templates, mobile, canSave, onUse, onSa
   const border = { borderColor: 'var(--color-border)' };
   const row = (key, title, hint, tags, onPick, extra) => (
     <li key={key} className="flex items-stretch border-b last:border-b-0" style={border}>
+      <Tooltip text={NOTE_TIPS.templateUse} side="right">
       <button type="button" onClick={onPick} className="flex-1 min-w-0 text-left px-3 py-3 hover:opacity-70 transition-opacity duration-200" style={{ minHeight: 56 }}>
         <span className="block text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{title}</span>
         {hint && <span className="block text-xs truncate mt-0.5" style={{ color: 'var(--color-muted)' }}>{hint}</span>}
         {tags && tags.length > 0 && <span className="block text-xs truncate mt-0.5" style={{ color: 'var(--color-primary)' }}>{tags.join(' · ')}</span>}
       </button>
+      </Tooltip>
       {extra}
     </li>
   );
@@ -69,7 +73,9 @@ export default function TemplatePicker({ templates, mobile, canSave, onUse, onSa
                       <button type="button" onClick={() => setConfirmId(null)} className="px-3 rounded-lg hover:opacity-70 transition-opacity duration-200" style={{ background: 'var(--color-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)', minHeight: 36 }}>No</button>
                     </div>
                   ) : (
-                    <button type="button" onClick={() => setConfirmId(t.id)} aria-label={`Delete template ${t.name}`} title="Delete this template (kept 30 days in the recycle bin)" className="flex items-center justify-center hover:opacity-60 transition-opacity duration-200 flex-shrink-0" style={{ color: 'var(--color-muted)', width: 44 }}>{getIcon('trash', { size: 14 })}</button>
+                    <Tooltip text={NOTE_TIPS.templateDelete}>
+                      <button type="button" onClick={() => setConfirmId(t.id)} aria-label={`Delete template ${t.name}`} className="flex items-center justify-center hover:opacity-60 transition-opacity duration-200 flex-shrink-0" style={{ color: 'var(--color-muted)', width: 44 }}>{getIcon('trash', { size: 14 })}</button>
+                    </Tooltip>
                   )
                 ))}
               </ul>
@@ -94,7 +100,9 @@ export default function TemplatePicker({ templates, mobile, canSave, onUse, onSa
                 className="flex-1 min-w-0 rounded-lg px-3 outline-none"
                 style={{ background: 'var(--color-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)', fontSize: 16, minHeight: mobile ? 44 : 34 }}
               />
-              <button type="button" disabled={!name.trim() || saving} onClick={save} className="text-sm font-medium px-4 rounded-lg hover:opacity-80 transition-opacity duration-200 disabled:opacity-40" style={{ background: 'var(--color-primary)', color: '#fff', minHeight: mobile ? 44 : 34 }}>{saving ? 'Saving…' : 'Save'}</button>
+              <Tooltip text={NOTE_TIPS.templateSave}>
+                <button type="button" disabled={!name.trim() || saving} onClick={save} className="text-sm font-medium px-4 rounded-lg hover:opacity-80 transition-opacity duration-200 disabled:opacity-40" style={{ background: 'var(--color-primary)', color: '#fff', minHeight: mobile ? 44 : 34 }}>{saving ? 'Saving…' : 'Save'}</button>
+              </Tooltip>
             </div>
             <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Keeps its title, text and tags. Dates written as {'{{date}}'} are filled in each time it is used.</p>
           </div>

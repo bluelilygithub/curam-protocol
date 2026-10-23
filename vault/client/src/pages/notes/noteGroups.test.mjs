@@ -90,10 +90,26 @@ assert.deepStrictEqual(groupNotes(tagged, { mode: 'tag' }).map((g) => [g.label, 
 ]);
 assert.deepStrictEqual(groupNotes([{ id: 5 }], { mode: 'tag' }).map((g) => g.label), ['Untagged'], 'a row with no tags field is untagged');
 
+// reminders that are due lead, above pinned; one that is done or still to come is an ordinary note
+const rnow = new Date(2026, 9, 23, 12, 0);
+const withReminders = [
+  { id: 1, updated_at: at(2026, 9, 23, 9), remind_at: at(2026, 9, 23, 8) },                                  // due
+  { id: 2, updated_at: at(2026, 9, 22), pinned_at: at(2026, 9, 1), remind_at: at(2026, 9, 23, 9) },          // due and pinned: due wins, shown once
+  { id: 3, updated_at: at(2026, 9, 21), pinned_at: at(2026, 9, 2) },                                          // pinned
+  { id: 4, updated_at: at(2026, 9, 20), remind_at: at(2026, 9, 25, 9) },                                      // still to come
+  { id: 5, updated_at: at(2026, 9, 19), remind_at: at(2026, 9, 20, 9), reminder_done_at: at(2026, 9, 20, 10) }, // done
+];
+const g = groupNotes(withReminders, { mode: 'date', now: rnow });
+assert.deepStrictEqual(g.slice(0, 2).map((x) => [x.label, x.notes.map((n) => n.id)]), [['Reminders due', [1, 2]], ['Pinned', [3]]]);
+assert.deepStrictEqual(g.slice(2).flatMap((x) => x.notes.map((n) => n.id)).sort(), [4, 5], 'upcoming and done reminders are ordinary notes');
+assert.strictEqual(g.flatMap((x) => x.notes).length, 5, 'each note appears once');
+assert.deepStrictEqual(groupNotes(withReminders, { mode: 'tag', now: rnow })[0].label, 'Reminders due', 'in every grouping');
+
 // summary
 assert.strictEqual(filtersSummary({ preset: 'all' }), '');
 assert.strictEqual(filtersSummary({ preset: '7d', search: 'tax' }), 'matching "tax", 7 days');
 assert.strictEqual(filtersSummary({ preset: 'all', tags: ['budget', 'q3'] }), 'tagged budget + q3');
+assert.strictEqual(filtersSummary({ preset: 'all', reminder: 'due' }), 'reminders due');
 assert.strictEqual(filtersSummary({ preset: 'custom', custom: { from: '2026-10-01', to: '2026-10-05' } }), '2026-10-01 to 2026-10-05');
 
 console.log('ok - note groups: date ranges, date/project/client sections');

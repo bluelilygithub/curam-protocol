@@ -16,6 +16,7 @@ const noteAi = require('../services/noteAi'); // called as noteAi.runNoteAction 
 const { normalizeTag, normalizeTags } = require('../services/noteTags');
 const noteDaily = require('../services/noteDaily');
 const noteViews = require('../services/noteViews');
+const noteReminders = require('../services/noteReminders');
 const bin = require('../services/recycleBin'); // deleted notes and templates wait here for 30 days
 bin.loadAdapters();
 
@@ -41,7 +42,7 @@ const DATE_COLUMNS = { updated: 'n.updated_at', created: 'n.created_at' };
 
 // GET /api/notes  — a light list: no full body, just a short `preview`. The editor loads one note in full with GET /:id.
 //   ?q=search (title, text, project and client name)  &project_id=N  &client_id=N  &unfiled=1 (no project and no client)
-//   &tags=a,b (notes that have ALL these tags)  &untagged=1  &from=ISO&to=ISO (to is exclusive)  &field=updated|created (which date from/to apply to; also the sort)
+//   &reminder=due|upcoming|any (due now / still to come / either, never the ones marked done)  &tags=a,b (notes that have ALL these tags)  &untagged=1  &from=ISO&to=ISO (to is exclusive)  &field=updated|created (which date from/to apply to; also the sort)
 //   &limit=N (default 100, max 300)  &offset=N   — header X-Has-More: 1 when there are more after this page.
 router.get('/', async (req, res) => {
   const userId = req.user.id;
@@ -58,6 +59,12 @@ router.get('/', async (req, res) => {
   if (client_id) where.push(`n.client_id=${add(Number(client_id) || 0)}`);
   if (unfiled === '1') where.push('n.project_id IS NULL AND n.client_id IS NULL');
   if (untagged === '1') where.push('NOT EXISTS (SELECT 1 FROM note_tags nt WHERE nt.note_id = n.id)');
+  const reminderFilter = {
+    due: 'n.remind_at <= NOW() AND n.reminder_done_at IS NULL',
+    upcoming: 'n.remind_at > NOW() AND n.reminder_done_at IS NULL',
+    any: 'n.remind_at IS NOT NULL AND n.reminder_done_at IS NULL',
+  }[req.query.reminder];
+  if (reminderFilter) where.push(reminderFilter);
   const wantTags = req.query.tags ? normalizeTags(String(req.query.tags).split(',')) : [];
   if (wantTags.length) {
     // every one of the tags, not any of them: more tags narrows the list
@@ -78,7 +85,7 @@ router.get('/', async (req, res) => {
 
   const sql = `
     SELECT n.id, n.title, left(n.body, 240) AS preview, n.project_id, n.client_id, n.source,
-           n.created_at, n.updated_at, n.pinned_at, p.name AS project_name, c.name AS client_name,
+           n.created_at, n.updated_at, n.pinned_at, n.remind_at, n.remind_email, n.reminder_done_at, p.name AS project_name, c.name AS client_name,
            COALESCE((SELECT array_agg(nt.tag ORDER BY nt.tag) FROM note_tags nt WHERE nt.note_id = n.id), '{}') AS tags
       FROM notes n
       LEFT JOIN projects p ON p.id = n.project_id AND p."userId" = n.user_id
@@ -533,6 +540,47 @@ router.put('/:id/tags', async (req, res) => {
   }
 });
 
+// PUT /api/notes/:id/reminder  { remindAt: ISO instant | null, email?: boolean }
+// Set, change (snooze) or clear (null) the note's reminder. A new time starts afresh: not emailed yet, not done. Like pinning and tags this is
+// filing, not editing, so updated_at is left alone.
+router.put('/:id/reminder', async (req, res) => {
+  const noteId = Number(req.params.id) || 0;
+  try {
+    let result;
+    if (req.body?.remindAt === null) {
+      result = await pool.query(
+        `UPDATE notes SET remind_at=NULL, remind_email=FALSE, reminder_sent_at=NULL, reminder_done_at=NULL
+          WHERE id=$1 AND user_id=$2 RETURNING id, remind_at, remind_email, reminder_done_at`, [noteId, req.user.id]);
+    } else {
+      const when = noteReminders.parseRemindAt(req.body?.remindAt);
+      result = await pool.query(
+        `UPDATE notes SET remind_at=$3, remind_email=$4, reminder_sent_at=NULL, reminder_done_at=NULL
+          WHERE id=$1 AND user_id=$2 RETURNING id, remind_at, remind_email, reminder_done_at`,
+        [noteId, req.user.id, when.toISOString(), req.body?.email === true]);
+    }
+    if (!result.rows[0]) return res.status(404).json({ error: 'Not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    if (err instanceof noteReminders.ReminderError) return res.status(err.status).json({ error: err.message });
+    getLogger().error({ err }, '[notes reminder]');
+    res.status(500).json({ error: 'Could not save the reminder. Try again.' });
+  }
+});
+
+// POST /api/notes/:id/reminder/done  — mark the reminder done: it leaves "Reminders due" and is never emailed
+router.post('/:id/reminder/done', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE notes SET reminder_done_at=NOW() WHERE id=$1 AND user_id=$2 AND remind_at IS NOT NULL
+        RETURNING id, remind_at, remind_email, reminder_done_at`, [Number(req.params.id) || 0, req.user.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    getLogger().error({ err }, '[notes reminder done]');
+    res.status(500).json({ error: 'Could not mark the reminder done. Try again.' });
+  }
+});
+
 // PATCH /api/notes/:id/pin  { pinned: true|false } — pinned notes sort to the top of the list. Does not touch updated_at.
 router.patch('/:id/pin', async (req, res) => {
   if (typeof req.body?.pinned !== 'boolean') return res.status(400).json({ error: 'pinned must be true or false' });
@@ -574,7 +622,8 @@ router.delete('/:id', async (req, res) => {
   try {
     await db.query('BEGIN');
     const { rows } = await db.query(
-      `SELECT id, title, body, project_id, client_id, source, pinned_at, created_at, updated_at, daily_date::text AS daily_date
+      `SELECT id, title, body, project_id, client_id, source, pinned_at, created_at, updated_at, daily_date::text AS daily_date,
+              remind_at, remind_email, reminder_sent_at, reminder_done_at
          FROM notes WHERE id=$1 AND user_id=$2 FOR UPDATE`,
       [Number(req.params.id) || 0, req.user.id]
     );

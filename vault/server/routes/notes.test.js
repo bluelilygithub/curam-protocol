@@ -394,7 +394,7 @@ test('saved views: save, list, rename, replace filters, delete to the bin and re
   const made = await call('POST', '/api/notes/views', { name: '  Acme   last month ', filters });
   assert.strictEqual(made.status, 201, JSON.stringify(made.json));
   assert.strictEqual(made.json.name, 'Acme last month');
-  assert.deepStrictEqual(made.json.filters, { search: 'quote', preset: '30d', custom: { from: '', to: '' }, field: 'created', projectId: String(projectA), clientId: String(clientA), tags: ['budget'], groupMode: 'tag' }, 'cut down to the known fields');
+  assert.deepStrictEqual(made.json.filters, { search: 'quote', preset: '30d', custom: { from: '', to: '' }, field: 'created', projectId: String(projectA), clientId: String(clientA), tags: ['budget'], reminder: '', groupMode: 'tag' }, 'cut down to the known fields');
   const vid = made.json.id;
 
   assert.deepStrictEqual((await call('GET', '/api/notes/views')).json.map((v) => v.name), ['Acme last month']);
@@ -438,6 +438,107 @@ test('saved views: save, list, rename, replace filters, delete to the bin and re
   await pool.query("INSERT INTO note_views (user_id, name) SELECT $1, 'filler ' || g FROM generate_series(1, 30) g", [userA]);
   assert.strictEqual((await call('POST', '/api/notes/views', { name: 'one too many', filters: {} })).status, 400);
   await pool.query('DELETE FROM note_views WHERE user_id=$1', [userA]);
+});
+
+test('reminders: set, snooze, clear, done; filing not editing; validation and ownership', async () => {
+  const made = await call('POST', '/api/notes', { title: 'Call Sam', body: 'about the quote' });
+  const id = made.json.id;
+  const before = (await call('GET', `/api/notes/${id}`)).json.updated_at;
+  const inHours = (h) => new Date(Date.now() + h * 3600 * 1000).toISOString();
+
+  const set = await call('PUT', `/api/notes/${id}/reminder`, { remindAt: inHours(2), email: true });
+  assert.strictEqual(set.status, 200, JSON.stringify(set.json));
+  assert.deepStrictEqual({ email: set.json.remind_email, done: set.json.reminder_done_at }, { email: true, done: null });
+  assert.ok(set.json.remind_at);
+  const one = (await call('GET', `/api/notes/${id}`)).json;
+  assert.strictEqual(one.remind_at, set.json.remind_at);
+  assert.strictEqual(one.updated_at, before, 'a reminder is filing: the edited date does not move');
+  const inList = (await call('GET', '/api/notes')).json.find((n) => n.id === id);
+  assert.deepStrictEqual({ at: inList.remind_at, email: inList.remind_email, done: inList.reminder_done_at }, { at: set.json.remind_at, email: true, done: null }, 'the list carries it');
+
+  // the time must make sense
+  const past = await call('PUT', `/api/notes/${id}/reminder`, { remindAt: inHours(-2) });
+  assert.deepStrictEqual({ s: past.status, e: past.json.error }, { s: 400, e: 'Pick a time in the future.' });
+  assert.strictEqual((await call('PUT', `/api/notes/${id}/reminder`, { remindAt: 'tomorrow-ish' })).status, 400);
+  assert.strictEqual((await call('PUT', `/api/notes/${id}/reminder`, {})).status, 400, 'nothing to set');
+  assert.strictEqual((await call('PUT', `/api/notes/${id}/reminder`, { remindAt: inHours(24 * 366 * 6) })).status, 400, 'more than five years away');
+  assert.strictEqual((await call('GET', `/api/notes/${id}`)).json.remind_at, set.json.remind_at, 'a refused change leaves the reminder as it was');
+
+  // someone else's note
+  assert.strictEqual((await call('PUT', `/api/notes/${id}/reminder`, { remindAt: inHours(1) }, 'B')).status, 404);
+  assert.strictEqual((await call('POST', `/api/notes/${id}/reminder/done`, undefined, 'B')).status, 404);
+  assert.strictEqual((await call('PUT', `/api/notes/${id}/reminder`, { remindAt: null }, 'B')).status, 404);
+
+  // done, then snooze starts it afresh, then email defaults to off when not asked for
+  const done = await call('POST', `/api/notes/${id}/reminder/done`);
+  assert.ok(done.json.reminder_done_at);
+  const snoozed = await call('PUT', `/api/notes/${id}/reminder`, { remindAt: inHours(24) });
+  assert.deepStrictEqual({ done: snoozed.json.reminder_done_at, email: snoozed.json.remind_email }, { done: null, email: false });
+
+  // cleared
+  const cleared = await call('PUT', `/api/notes/${id}/reminder`, { remindAt: null });
+  assert.deepStrictEqual({ at: cleared.json.remind_at, email: cleared.json.remind_email }, { at: null, email: false });
+  assert.strictEqual((await call('POST', `/api/notes/${id}/reminder/done`)).status, 404, 'nothing to mark done');
+  await call('DELETE', `/api/notes/${id}`);
+});
+
+test('reminder filter: due now, still to come, any (never the ones marked done); and it rides along in the recycle bin', async () => {
+  const mk = async (title, remindAt, extra = '') => (await pool.query(`INSERT INTO notes (user_id, title, remind_at ${extra ? ', ' + extra.split('=')[0] : ''}) VALUES ($1,$2,$3 ${extra ? ', ' + extra.split('=')[1] : ''}) RETURNING id`, [userA, title, remindAt])).rows[0].id;
+  const hr = (h) => new Date(Date.now() + h * 3600 * 1000).toISOString();
+  const dueId = await mk('R due', hr(-3));
+  const soonId = await mk('R soon', hr(5));
+  const doneId = await mk('R done', hr(-1), 'reminder_done_at=NOW()');
+  const plainId = await mk('R none', null);
+  const titles = async (qs) => (await call('GET', `/api/notes?${qs}`)).json.map((n) => n.title).filter((t) => t.startsWith('R ')).sort();
+  assert.deepStrictEqual(await titles('reminder=due'), ['R due']);
+  assert.deepStrictEqual(await titles('reminder=upcoming'), ['R soon']);
+  assert.deepStrictEqual(await titles('reminder=any'), ['R due', 'R soon']);
+  assert.deepStrictEqual(await titles('reminder=nonsense'), ['R done', 'R due', 'R none', 'R soon'], 'an unknown value filters nothing');
+  assert.deepStrictEqual(await titles(`reminder=due&q=${encodeURIComponent('due')}`), ['R due'], 'combines with search');
+
+  const del = await call('DELETE', `/api/notes/${soonId}`);
+  const back = await call('POST', `/api/recycle-bin/${del.json.binId}/restore`);
+  assert.strictEqual(back.status, 200, JSON.stringify(back.json));
+  const row = (await call('GET', `/api/notes/${soonId}`)).json;
+  assert.ok(row.remind_at, 'the reminder came back with the note');
+  await pool.query('DELETE FROM notes WHERE id = ANY($1::int[])', [[dueId, soonId, doneId, plainId]]);
+});
+
+test('the reminder job against the real database: emails what is due once, skips done / not-asked / too late, tries again after a failure', async () => {
+  const { runNoteReminders } = require('../services/noteReminders');
+  const hr = (h) => new Date(Date.now() + h * 3600 * 1000).toISOString();
+  const mk = async (title, hours, { email = true, done = false } = {}) => (await pool.query(
+    `INSERT INTO notes (user_id, title, body, remind_at, remind_email, reminder_done_at) VALUES ($1,$2,'body text',$3,$4,${done ? 'NOW()' : 'NULL'}) RETURNING id`,
+    [userA, title, hr(hours), email])).rows[0].id;
+  const due = await mk('J due', -0.5);
+  const notAsked = await mk('J no email', -0.5, { email: false });
+  const marked = await mk('J done', -0.5, { done: true });
+  const late = await mk('J too late', -30);
+  const future = await mk('J future', 3);
+  await pool.query("UPDATE users SET email=$2 WHERE id=$1", [userA, `rem-a-${Date.now()}@example.test`]);
+
+  const sent = [];
+  let failNext = false;
+  const deps = { sendEmail: async (m) => { if (failNext) throw new Error('smtp down'); sent.push(m); return { ok: true }; }, capture: async () => {}, makeFingerprint: (...p) => p.join(':'), appUrl: 'https://v.example' };
+  const first = await runNoteReminders(new Date(), deps);
+  assert.deepStrictEqual({ due: first.due, sent: first.sent }, { due: 1, sent: 1 });
+  assert.match(sent[0].subject, /J due/);
+  assert.match(sent[0].html, new RegExp(`notes\\?note=${due}`));
+  assert.ok(sent[0].to.startsWith('rem-a-'));
+  assert.strictEqual((await runNoteReminders(new Date(), deps)).sent, 0, 'once only: a second run sends nothing');
+  const flags = (await pool.query('SELECT id, reminder_sent_at FROM notes WHERE id = ANY($1::int[])', [[due, notAsked, marked, late, future]])).rows;
+  const byId = Object.fromEntries(flags.map((r) => [r.id, !!r.reminder_sent_at]));
+  assert.deepStrictEqual(byId, { [due]: true, [notAsked]: false, [marked]: false, [late]: false, [future]: false });
+
+  // a failure is released, so the next run tries again; snoozing makes it fresh
+  const retry = await mk('J retry', -0.2);
+  failNext = true;
+  const bad = await runNoteReminders(new Date(), deps);
+  assert.deepStrictEqual({ due: bad.due, sent: bad.sent, failed: bad.failed }, { due: 1, sent: 0, failed: 1 });
+  assert.strictEqual((await pool.query('SELECT reminder_sent_at FROM notes WHERE id=$1', [retry])).rows[0].reminder_sent_at, null, 'put back to try again');
+  failNext = false;
+  assert.strictEqual((await runNoteReminders(new Date(), deps)).sent, 1, 'and it goes out next time');
+  await pool.query('DELETE FROM notes WHERE id = ANY($1::int[])', [[due, notAsked, marked, late, future, retry]]);
 });
 
 async function cleanup(userIds) {

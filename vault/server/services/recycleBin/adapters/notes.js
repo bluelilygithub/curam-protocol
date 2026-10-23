@@ -20,10 +20,12 @@ register('note', {
     // A daily note for that day may have been made again since: the restored one is then an ordinary note.
     const dailyTaken = n.daily_date && await exists(db, 'SELECT 1 FROM notes WHERE user_id=$1 AND daily_date=$2::date', [userId, n.daily_date]);
     const { rows } = await db.query(
-      `INSERT INTO notes (${idTaken ? '' : 'id, '}user_id, project_id, client_id, title, body, source, pinned_at, daily_date, created_at, updated_at)
-       VALUES (${idTaken ? '' : '$11, '}$1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+      `INSERT INTO notes (${idTaken ? '' : 'id, '}user_id, project_id, client_id, title, body, source, pinned_at, daily_date, created_at, updated_at,
+                          remind_at, remind_email, reminder_sent_at, reminder_done_at)
+       VALUES (${idTaken ? '' : '$15, '}$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
       [userId, project ? n.project_id : null, client ? n.client_id : null, n.title || 'Untitled', n.body || '', n.source || 'text',
         n.pinned_at || null, dailyTaken ? null : (n.daily_date || null), n.created_at || new Date().toISOString(), n.updated_at || new Date().toISOString(),
+        n.remind_at || null, !!n.remind_email, n.reminder_sent_at || null, n.reminder_done_at || null,
         ...(idTaken ? [] : [n.id])]
     );
     for (const tag of Array.isArray(payload.tags) ? payload.tags : []) {

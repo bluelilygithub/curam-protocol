@@ -40,6 +40,7 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
   const [projectId, setProjectId] = useState(String(initialProjectId || ''));
   const [clientId, setClientId] = useState('');
   const [tags, setTags] = useState([]); // the notes must have ALL of these
+  const [reminder, setReminder] = useState(''); // '' | 'due' | 'upcoming' | 'any'
   const [{ groupMode, field }, setView] = useState(readView);
 
   const seq = useRef(0);
@@ -62,13 +63,14 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
     if (projectId) p.set('project_id', projectId);
     if (clientId) p.set('client_id', clientId);
     if (tags.length) p.set('tags', tags.join(','));
+    if (reminder) p.set('reminder', reminder);
     const r = rangeFor(preset, custom);
     if (r.from) p.set('from', r.from);
     if (r.to) p.set('to', r.to);
     p.set('field', field);
     return p;
     // `preset` 'today'/'7d'... are re-read at the moment of loading, so a tab left open overnight shows the new day on the next change
-  }, [debouncedSearch, projectId, clientId, tagsKey, preset, custom.from, custom.to, field]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, projectId, clientId, tagsKey, reminder, preset, custom.from, custom.to, field]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchPage = useCallback(async (offset) => {
     const mine = ++seq.current;
@@ -132,8 +134,8 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
   const removeNote = useCallback((id) => setNotes((prev) => prev.filter((n) => n.id !== id)), []);
 
   // Everything a saved view holds, as it is right now (the search as typed, not as last sent).
-  const filters = useMemo(() => ({ search: search.trim(), preset, custom, field, projectId, clientId, tags, groupMode }),
-    [search, preset, custom, field, projectId, clientId, tags, groupMode]);
+  const filters = useMemo(() => ({ search: search.trim(), preset, custom, field, projectId, clientId, tags, reminder, groupMode }),
+    [search, preset, custom, field, projectId, clientId, tags, reminder, groupMode]);
 
   const applyFilters = useCallback((f) => {
     const text = String(f.search || '');
@@ -144,18 +146,19 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
     setProjectId(f.projectId ? String(f.projectId) : '');
     setClientId(f.clientId ? String(f.clientId) : '');
     setTags(Array.isArray(f.tags) ? f.tags : []);
+    setReminder(['due', 'upcoming', 'any'].includes(f.reminder) ? f.reminder : '');
     setView({ groupMode: ['date', 'project', 'client', 'tag'].includes(f.groupMode) ? f.groupMode : 'date', field: f.field === 'created' ? 'created' : 'updated' });
   }, []);
 
-  const filtersActive = !!(debouncedSearch || projectId || clientId || tags.length || preset !== 'all');
+  const filtersActive = !!(debouncedSearch || projectId || clientId || tags.length || reminder || preset !== 'all');
   const clearFilters = useCallback(() => {
-    setSearch(''); setDebouncedSearch(''); setPreset('all'); setCustom({ from: '', to: '' }); setProjectId(''); setClientId(''); setTags([]);
+    setSearch(''); setDebouncedSearch(''); setPreset('all'); setCustom({ from: '', to: '' }); setProjectId(''); setClientId(''); setTags([]); setReminder('');
   }, []);
 
   return {
     notes, loading, loadingMore, hasMore, error, reload, loadMore, patchNote, removeNote,
     search, setSearch, searching: search.trim() !== debouncedSearch,
-    preset, setPreset, custom, setCustom, projectId, setProjectId, clientId, setClientId, tags, setTags,
+    preset, setPreset, custom, setCustom, projectId, setProjectId, clientId, setClientId, tags, setTags, reminder, setReminder,
     groupMode, setGroupMode, field, setField, filtersActive, clearFilters, filters, applyFilters,
   };
 }

@@ -783,6 +783,13 @@ async function initSchema() {
     // Pinned notes sort to the top of the list; pinning never changes updated_at. NULL = not pinned.
     await client.query(`ALTER TABLE notes ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMPTZ DEFAULT NULL`);
 
+    // A reminder on a note (server/services/noteReminders.js): when, whether to also email, when the email went, when it was marked done.
+    await client.query(`ALTER TABLE notes ADD COLUMN IF NOT EXISTS remind_at TIMESTAMPTZ DEFAULT NULL`);
+    await client.query(`ALTER TABLE notes ADD COLUMN IF NOT EXISTS remind_email BOOLEAN NOT NULL DEFAULT FALSE`);
+    await client.query(`ALTER TABLE notes ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ DEFAULT NULL`);
+    await client.query(`ALTER TABLE notes ADD COLUMN IF NOT EXISTS reminder_done_at TIMESTAMPTZ DEFAULT NULL`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_notes_remind ON notes(remind_at) WHERE remind_at IS NOT NULL AND reminder_done_at IS NULL`);
+
     // Tags on notes: one row per (note, tag). Tags are stored normalised (server/services/noteTags.js), so a tag is its own key.
     // user_id is kept here too so tag lists and renames never have to join through notes.
     await client.query(`
