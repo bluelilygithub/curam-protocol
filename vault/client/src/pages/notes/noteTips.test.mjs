@@ -74,7 +74,7 @@ for (let n = 1; n <= stepCount; n++) assert.ok(new RegExp(`injectStepCounter\\($
 
 // ---- the info box says what Notes does and what it does not
 assert.ok(NOTES_INTRO.length > 80 && NOTES_NOT.length > 40);
-for (const heading of ['Write', 'Find', 'Reminders', 'AI actions', 'Recently deleted']) assert.ok(HOW_IT_WORKS.some(([h]) => h === heading), `the info box covers ${heading}`);
+for (const heading of ['Write', 'Find', 'Reminders', 'AI actions', 'Ask your notes', 'Recently deleted']) assert.ok(HOW_IT_WORKS.some(([h]) => h === heading), `the info box covers ${heading}`);
 assert.ok(HOW_IT_WORKS.every(([h, t]) => h && t.length > 40), 'each section says something');
 
 console.log('ok - notes follows the tool conventions: shared tooltips, (i) box, tour, guide');

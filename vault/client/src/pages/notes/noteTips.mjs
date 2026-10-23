@@ -7,6 +7,7 @@ export const NOTE_TIPS = {
   // header of the list
   info: 'How Notes works: what each part does, what is private, and what Notes does not do.',
   tour: 'Take the guided tour of Notes, step by step.',
+  ask: 'Ask your notes: ask a question in your own words and get an answer taken from your notes, with the notes it used.',
   today: "Open today's note. If there is not one yet it is made for you, with any to-dos you left unticked last time carried over.",
   bin: 'Recently deleted: notes, templates and saved views you deleted in the last 30 days. Restore them from here.',
   newNote: 'Start a new note: write one, record your voice, or begin from a template.',
@@ -87,6 +88,21 @@ export const NOTE_TIPS = {
   reminderChip: (text, due) => (due ? `The reminder for this note is due: ${text}. Click to mark it done or snooze it.` : `Reminder set for ${text}. Click to change or clear it.`),
   reminderDone: 'Mark this reminder done. It leaves Reminders due and no email is sent.',
   reminderSnooze: 'Remind me again at the time you choose.',
+
+  // ask your notes
+  askScope: {
+    all: 'Look through every one of your notes.',
+    filters: 'Look only through the notes in the list as it is now, with its search and filters.',
+    note: 'Look only at the note that is open.',
+  },
+  askScopeNoNote: 'Open a note first to ask about just that note.',
+  askInput: 'Type your question. Enter sends it; Shift+Enter starts a new line.',
+  askSend: 'Look through your notes and answer. The text of the notes it reads is sent to the AI.',
+  askMic: 'Dictate your question: speak and it is typed in. Press again to stop.',
+  askClear: 'Clear this conversation. Your notes are not touched.',
+  askForget: 'Remove this question and answer.',
+  askSource: 'Open this note: it is one the answer was taken from.',
+  askStarter: 'Ask this question.',
 
   // dialogs
   viewSave: 'Save the current search, filters and grouping under this name.',

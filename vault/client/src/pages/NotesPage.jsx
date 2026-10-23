@@ -17,6 +17,7 @@ import NoteAiPanel from './notes/NoteAiPanel';
 import NoteMarkdownView from './notes/NoteMarkdownView';
 import NoteTagsEditor from './notes/NoteTagsEditor';
 import NoteReminderPanel from './notes/NoteReminderPanel';
+import AskNotesPanel from './notes/AskNotesPanel';
 import { NOTE_TIPS } from './notes/noteTips.mjs';
 import { NOTES_INTRO, HOW_IT_WORKS, NOTES_NOT } from './notes/notesInfo.mjs';
 import { reminderState, formatReminder } from './notes/noteReminders.mjs';
@@ -80,6 +81,7 @@ export default function NotesPage() {
   const [templates, setTemplates] = useState(null); // the person's own; null while loading
   const [showBin, setShowBin] = useState(false);
   const [showReminder, setShowReminder] = useState(false);
+  const [showAsk, setShowAsk] = useState(false);
   const info = useToolInfoModal('vault_notes_info_seen'); // the (i) box opens by itself the first time, like the other tools
   const [views, setViews] = useState([]); // saved views: [{ id, name, filters }]
   const [appliedViewId, setAppliedViewId] = useState(null); // the view last opened, so changes to it can be saved back
@@ -800,6 +802,7 @@ export default function NotesPage() {
     if (!tool) return;
     if (tool.open === 'chooser') { setShowNewChooser(true); return; }
     if (tool.open === 'recorder') { setShowRecorder(true); return; }
+    if (tool.open === 'ask') { setShowAsk(true); return; }
     if (tool.open === 'search' || tool.open === 'list') {
       if (viewportMobile) closeNote();
       setTimeout(() => searchRef.current?.focus(), 60);
@@ -852,6 +855,7 @@ export default function NotesPage() {
             onPin={togglePin}
             onInfo={info.open}
             onTour={startTour}
+            onAsk={() => setShowAsk(true)}
             allTags={allTags}
             onManageTags={() => setShowTagManager(true)}
             viewsApi={viewsApi}
@@ -1251,6 +1255,13 @@ export default function NotesPage() {
           </div>
           <p className="text-sm" style={{ color: 'var(--color-text)' }}>{NOTES_NOT}</p>
         </ToolInfoModal>
+      )}
+      {showAsk && (
+        <AskNotesPanel
+          scopeQuery={list.scopeQuery} openNoteId={selected?.id ?? null} listCount={list.hasMore ? null : list.notes.length} mobile={viewportMobile}
+          onOpenNote={(id) => { setShowAsk(false); selectNote({ id, title: '', project_id: null, client_id: null }); }}
+          onClose={() => setShowAsk(false)}
+        />
       )}
       {showReminder && selected && <NoteReminderPanel note={selected} mobile={viewportMobile} onSet={saveReminder} onClear={() => saveReminder(null, false)} onDone={finishReminder} onClose={() => setShowReminder(false)} />}
       {showBin && <RecentlyDeletedModal mobile={viewportMobile} onRestored={() => { list.reload(); refreshTags(); }} onClose={() => setShowBin(false)} />}

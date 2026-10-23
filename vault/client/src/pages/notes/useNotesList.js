@@ -137,6 +137,21 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
   const filters = useMemo(() => ({ search: search.trim(), preset, custom, field, projectId, clientId, tags, reminder, groupMode }),
     [search, preset, custom, field, projectId, clientId, tags, reminder, groupMode]);
 
+  // The list's current filters as the parameters the server understands (what "Ask your notes" means by "this list").
+  const scopeQuery = useMemo(() => {
+    const q = {};
+    if (debouncedSearch) q.q = debouncedSearch;
+    if (projectId) q.project_id = projectId;
+    if (clientId) q.client_id = clientId;
+    if (tags.length) q.tags = tags.join(',');
+    if (reminder) q.reminder = reminder;
+    const r = rangeFor(preset, custom);
+    if (r.from) q.from = r.from;
+    if (r.to) q.to = r.to;
+    q.field = field;
+    return q;
+  }, [debouncedSearch, projectId, clientId, tagsKey, reminder, preset, custom.from, custom.to, field]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const applyFilters = useCallback((f) => {
     const text = String(f.search || '');
     setSearch(text);
@@ -159,6 +174,6 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
     notes, loading, loadingMore, hasMore, error, reload, loadMore, patchNote, removeNote,
     search, setSearch, searching: search.trim() !== debouncedSearch,
     preset, setPreset, custom, setCustom, projectId, setProjectId, clientId, setClientId, tags, setTags, reminder, setReminder,
-    groupMode, setGroupMode, field, setField, filtersActive, clearFilters, filters, applyFilters,
+    groupMode, setGroupMode, field, setField, filtersActive, clearFilters, filters, applyFilters, scopeQuery,
   };
 }

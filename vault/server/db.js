@@ -832,6 +832,22 @@ async function initSchema() {
     `);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_note_views_user_name ON note_views(user_id, lower(name))`);
 
+    // "Ask your notes": the questions asked and the answers given, kept so a conversation can be read again (newest 100 per person).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS note_qa (
+        id         SERIAL PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        question   TEXT NOT NULL,
+        answer     TEXT NOT NULL,
+        sources    JSONB NOT NULL DEFAULT '[]',
+        scope      TEXT NOT NULL DEFAULT '',
+        searched   TEXT NOT NULL DEFAULT '',
+        stage      TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_note_qa_user ON note_qa(user_id, id DESC)`);
+
     // The shared recycle bin (server/services/recycleBin, docs/recycle-bin.md). A snapshot of whatever a tool deleted, kept 30 days.
     await client.query(`
       CREATE TABLE IF NOT EXISTS recycle_bin (

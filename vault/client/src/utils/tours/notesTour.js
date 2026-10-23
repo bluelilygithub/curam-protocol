@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_notes_completed';
 
-const TOTAL_STEPS = 14;
+const TOTAL_STEPS = 15;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -85,13 +85,15 @@ export function startNotesTour(show = {}) {
   step('notes-reminder', 12, 'Reminders', 'Remind yourself about a note at a time you choose, and tick "also email me" if you want an email as well. A reminder that has come due appears at the top of the list, where you can mark it done or snooze it.', '[data-tour="notes-reminder"]', 'editor');
   step('notes-ai', 13, 'AI actions', 'Summarise the note, pull out its to-dos as tasks, tidy it up, or suggest tags and a title. The AI only proposes: nothing changes until you choose.', '[data-tour="notes-ai"]', 'editor');
 
+  step('notes-ask', 14, 'Ask your notes', 'Ask a question in your own words, such as "what did I agree with Acme in October?". It looks through your notes, reads the ones that fit and answers only from them, showing which notes it used so you can open them. It never changes a note.', '[data-tour="notes-ask"]', 'list');
+
   tour.addStep({
     id: 'notes-bin',
     title: 'Recently deleted, and getting help',
     text: 'Deleted notes, templates and views wait 30 days in Recently deleted, so a slip is never final. Stuck? Press the round button at the bottom right and say what you want to do, and the Notes guide will point you to the right buttons. The (i) beside the title explains it all again.',
     attachTo: { element: '[data-tour="notes-bin"]', on: 'bottom' },
     beforeShowPromise: inView('list', 'notes-bin', '[data-tour="notes-bin"]'),
-    when: { show() { injectStepCounter(14); } },
+    when: { show() { injectStepCounter(15); } },
     buttons: [
       btnBack(),
       { text: 'Finish Tour ✓', action() { try { localStorage.setItem(TOUR_KEY, '1'); } catch (_) { /* ignore */ } tour.complete(); } },

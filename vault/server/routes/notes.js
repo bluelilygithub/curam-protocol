@@ -16,6 +16,8 @@ const noteAi = require('../services/noteAi'); // called as noteAi.runNoteAction 
 const { normalizeTag, normalizeTags } = require('../services/noteTags');
 const noteDaily = require('../services/noteDaily');
 const noteViews = require('../services/noteViews');
+const noteQuery = require('../services/noteQuery');
+const noteAsk = require('../services/noteAsk'); // called as noteAsk.askNotes, with noteAsk.routeDeps, so tests can swap the models
 const noteReminders = require('../services/noteReminders');
 const bin = require('../services/recycleBin'); // deleted notes and templates wait here for 30 days
 bin.loadAdapters();
@@ -38,7 +40,6 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX
 
 const LIST_DEFAULT = 100;
 const LIST_MAX = 300;
-const DATE_COLUMNS = { updated: 'n.updated_at', created: 'n.created_at' };
 
 // GET /api/notes  — a light list: no full body, just a short `preview`. The editor loads one note in full with GET /:id.
 //   ?q=search (title, text, project and client name)  &project_id=N  &client_id=N  &unfiled=1 (no project and no client)
@@ -46,50 +47,17 @@ const DATE_COLUMNS = { updated: 'n.updated_at', created: 'n.created_at' };
 //   &limit=N (default 100, max 300)  &offset=N   — header X-Has-More: 1 when there are more after this page.
 router.get('/', async (req, res) => {
   const userId = req.user.id;
-  const { q, project_id, client_id, unfiled, untagged, from, to } = req.query;
-  const dateCol = DATE_COLUMNS[req.query.field] || DATE_COLUMNS.updated;
+  const filters = noteQuery.buildFilters(userId, req.query); // shared with "Ask your notes": the same meaning of "the notes in this view"
+  if (filters.error) return res.status(400).json({ error: filters.error });
+  const { where, params, dateCol } = filters;
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || LIST_DEFAULT, 1), LIST_MAX);
   const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
-
-  const where = ['n.user_id=$1'];
-  const params = [userId];
-  const add = (value) => { params.push(value); return `$${params.length}`; };
-
-  if (project_id) where.push(`n.project_id=${add(Number(project_id) || 0)}`);
-  if (client_id) where.push(`n.client_id=${add(Number(client_id) || 0)}`);
-  if (unfiled === '1') where.push('n.project_id IS NULL AND n.client_id IS NULL');
-  if (untagged === '1') where.push('NOT EXISTS (SELECT 1 FROM note_tags nt WHERE nt.note_id = n.id)');
-  const reminderFilter = {
-    due: 'n.remind_at <= NOW() AND n.reminder_done_at IS NULL',
-    upcoming: 'n.remind_at > NOW() AND n.reminder_done_at IS NULL',
-    any: 'n.remind_at IS NOT NULL AND n.reminder_done_at IS NULL',
-  }[req.query.reminder];
-  if (reminderFilter) where.push(reminderFilter);
-  const wantTags = req.query.tags ? normalizeTags(String(req.query.tags).split(',')) : [];
-  if (wantTags.length) {
-    // every one of the tags, not any of them: more tags narrows the list
-    where.push(`n.id IN (SELECT note_id FROM note_tags WHERE user_id=$1 AND tag = ANY(${add(wantTags)}::text[]) GROUP BY note_id HAVING COUNT(DISTINCT tag) = ${wantTags.length})`);
-  }
-  for (const [value, op, label] of [[from, '>=', 'from'], [to, '<', 'to']]) {
-    if (!value) continue;
-    const when = new Date(value);
-    if (Number.isNaN(when.getTime())) return res.status(400).json({ error: `${label} is not a valid date` });
-    where.push(`${dateCol} ${op} ${add(when.toISOString())}`);
-  }
-  if (q) {
-    // % and _ typed by the person are text, not wildcards
-    const term = add(`%${String(q).replace(/[\\%_]/g, '\\$&')}%`);
-    where.push(`(n.title ILIKE ${term} OR n.body ILIKE ${term} OR p.name ILIKE ${term} OR c.name ILIKE ${term}
-      OR EXISTS (SELECT 1 FROM note_tags nt WHERE nt.note_id = n.id AND nt.tag ILIKE ${term}))`);
-  }
 
   const sql = `
     SELECT n.id, n.title, left(n.body, 240) AS preview, n.project_id, n.client_id, n.source,
            n.created_at, n.updated_at, n.pinned_at, n.remind_at, n.remind_email, n.reminder_done_at, p.name AS project_name, c.name AS client_name,
            COALESCE((SELECT array_agg(nt.tag ORDER BY nt.tag) FROM note_tags nt WHERE nt.note_id = n.id), '{}') AS tags
-      FROM notes n
-      LEFT JOIN projects p ON p.id = n.project_id AND p."userId" = n.user_id
-      LEFT JOIN clients  c ON c.id = n.client_id AND c."userId" = n.user_id
+      ${noteQuery.NOTE_JOINS}
      WHERE ${where.join(' AND ')}
      ORDER BY (n.pinned_at IS NOT NULL) DESC, n.pinned_at DESC NULLS LAST, ${dateCol} DESC, n.id DESC
      LIMIT ${limit + 1} OFFSET ${offset}`;
@@ -333,6 +301,67 @@ router.delete('/views/:id', async (req, res) => {
     res.status(500).json({ error: 'Could not delete the view. Try again.' });
   } finally {
     db.release();
+  }
+});
+
+// ── Ask your notes: a chat grounded only in the person's own notes (server/services/noteAsk.js). Named routes: before /:id. ─────────────
+
+const QA_KEEP = 100; // answers kept per person
+
+// GET /api/notes/ask  — the recent questions and answers, oldest first (the conversation as it was)
+router.get('/ask', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT id, question, answer, sources, scope, searched, stage, created_at FROM note_qa WHERE user_id=$1 ORDER BY id DESC LIMIT 30', [req.user.id]);
+    res.json(rows.reverse());
+  } catch (err) {
+    getLogger().error({ err }, '[notes ask history]');
+    res.status(500).json({ error: 'Could not load your earlier questions. Try again.' });
+  }
+});
+
+// POST /api/notes/ask  { question, history?: [{role, content}], scope?: { mode: 'all'|'filters'|'note', query?, noteId? }, today?, tzOffset? }
+// Reads notes (never changes one), sends the text of the most relevant ones to the AI, and returns the answer with the notes it used.
+router.post('/ask', aiLimiter, async (req, res) => {
+  try {
+    const result = await noteAsk.askNotes(req.user.id, req.body || {}, noteAsk.routeDeps);
+    let id = null;
+    if (!result.noModel) {
+      const keep = result.sources.map((s) => ({ n: s.n, id: s.id, title: s.title, updated: s.updated, cited: s.cited }));
+      const ins = await pool.query(
+        'INSERT INTO note_qa (user_id, question, answer, sources, scope, searched, stage) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7) RETURNING id, created_at',
+        [req.user.id, String(req.body.question).replace(/\s+/g, ' ').trim(), result.answer, JSON.stringify(keep), result.scope, result.searched || '', result.stage]);
+      id = ins.rows[0].id;
+      result.createdAt = ins.rows[0].created_at;
+      await pool.query('DELETE FROM note_qa WHERE user_id=$1 AND id NOT IN (SELECT id FROM note_qa WHERE user_id=$1 ORDER BY id DESC LIMIT $2)', [req.user.id, QA_KEEP]);
+    }
+    res.json({ id, ...result });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    getLogger().error({ err }, '[notes ask]');
+    res.status(500).json({ error: 'The AI could not answer just now.' });
+  }
+});
+
+// DELETE /api/notes/ask/:id  — forget one answer
+router.delete('/ask/:id', async (req, res) => {
+  try {
+    const r = await pool.query('DELETE FROM note_qa WHERE id=$1 AND user_id=$2', [Number(req.params.id) || 0, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    getLogger().error({ err }, '[notes ask delete]');
+    res.status(500).json({ error: 'Could not remove that answer. Try again.' });
+  }
+});
+
+// DELETE /api/notes/ask  — forget the whole conversation history (the notes themselves are untouched)
+router.delete('/ask', async (req, res) => {
+  try {
+    const r = await pool.query('DELETE FROM note_qa WHERE user_id=$1', [req.user.id]);
+    res.json({ removed: r.rowCount });
+  } catch (err) {
+    getLogger().error({ err }, '[notes ask clear]');
+    res.status(500).json({ error: 'Could not clear the history. Try again.' });
   }
 });
 

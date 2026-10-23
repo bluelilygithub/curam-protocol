@@ -24,7 +24,7 @@ const fmtShort = (value) => {
  */
 export default function NotesListPanel({
   list, projects, clients, onNeedClients, selectedId, mobile, moodMap, convertedIds,
-  onSelect, onNew, onToday, onBin, onConvert, onDelete, onPin, onInfo, onTour, allTags, onManageTags, viewsApi, searchRef, bottomPad,
+  onSelect, onNew, onToday, onBin, onConvert, onDelete, onPin, onInfo, onTour, onAsk, allTags, onManageTags, viewsApi, searchRef, bottomPad,
 }) {
   const getIcon = useIcon();
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -168,6 +168,9 @@ export default function NotesListPanel({
           </Tooltip>
         </div>
         <div className="flex items-center gap-1">
+          <Tooltip text={NOTE_TIPS.ask} side="bottom">
+            <button type="button" onClick={onAsk} data-tour="notes-ask" className="flex items-center justify-center rounded-lg hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-primary)', ...headerBtn }} aria-label="Ask your notes">{getIcon('message-circle', { size: mobile ? 20 : 15 })}</button>
+          </Tooltip>
           <Tooltip text={NOTE_TIPS.today} side="bottom">
             <button type="button" onClick={onToday} data-tour="notes-today" className="flex items-center justify-center gap-1 rounded-lg hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-primary)', ...headerBtn, fontSize: 12 }} aria-label="Today's note">{getIcon('calendar-check', { size: mobile ? 20 : 15 })}</button>
           </Tooltip>

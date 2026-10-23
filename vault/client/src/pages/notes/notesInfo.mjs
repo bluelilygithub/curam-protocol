@@ -10,6 +10,7 @@ export const HOW_IT_WORKS = [
   ['Keep tidy', 'File a note under a project and a client, add tags, and pin the ones you want at the top. Manage tags renames or removes a tag everywhere.'],
   ['Reminders', 'Set a reminder on a note and choose whether to be emailed too. When it is due the note appears under Reminders due, where you can mark it done or snooze it.'],
   ['AI actions', 'Summarise, pull out to-dos as tasks, tidy up, suggest tags or a title. They only propose: nothing changes until you say so, and the note\'s text is sent to the AI only when you press one.'],
+  ['Ask your notes', 'Press the speech-bubble button at the top of the list and ask a question in your own words, such as "what did I agree with Acme in October?". It looks through your notes (all of them, the ones in the current list, or just the open note), reads the ones that fit and answers only from them, with numbered notes you can open. If your notes do not say, it says so. The text of the notes it reads is sent to the AI to answer, and nothing is changed.'],
   ['Recently deleted', 'Deleted notes, templates and views are kept 30 days and can be restored (Undo appears straight after a delete).'],
 ];
 

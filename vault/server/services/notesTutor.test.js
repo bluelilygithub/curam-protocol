@@ -18,7 +18,7 @@ const {
     assert.ok(t.group && t.does && t.label, `${t.id} is described`);
     assert.strictEqual(t.label, NOTES_TOOLS.find((n) => n.id === t.id).label, `${t.id} uses the page's own name`);
   }
-  assert.ok(NOTES_TOOLS.every((t) => ['chooser', 'recorder', 'search', 'editor', 'list'].includes(t.open)), 'every control says what Open does');
+  assert.ok(NOTES_TOOLS.every((t) => ['chooser', 'recorder', 'search', 'editor', 'list', 'ask'].includes(t.open)), 'every control says what Open does');
 
   // ---- the voice-note facts the guide must not get wrong ----
   const voice = CATALOG.find((t) => t.id === 'new-voice-note');
