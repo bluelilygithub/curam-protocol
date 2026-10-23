@@ -16,6 +16,8 @@ import InsertSourceModal from './notes/InsertSourceModal';
 import NoteAiPanel from './notes/NoteAiPanel';
 import NoteMarkdownView from './notes/NoteMarkdownView';
 import NoteTagsEditor from './notes/NoteTagsEditor';
+import NoteFilesStrip from './notes/NoteFilesStrip';
+import useNoteAttachments from './notes/useNoteAttachments';
 import NoteReminderPanel from './notes/NoteReminderPanel';
 import AskNotesPanel from './notes/AskNotesPanel';
 import { NOTE_TIPS } from './notes/noteTips.mjs';
@@ -81,6 +83,7 @@ export default function NotesPage() {
   const [templates, setTemplates] = useState(null); // the person's own; null while loading
   const [showBin, setShowBin] = useState(false);
   const [showReminder, setShowReminder] = useState(false);
+  const [dragging, setDragging] = useState(false); // files are being dragged over the open note
   const [showAsk, setShowAsk] = useState(false);
   const info = useToolInfoModal('vault_notes_info_seen'); // the (i) box opens by itself the first time, like the other tools
   const [views, setViews] = useState([]); // saved views: [{ id, name, filters }]
@@ -583,6 +586,18 @@ export default function NotesPage() {
     }
   }
 
+  // ── Files on the note ─────────────────────────────────────────────────────
+  // Filing, like tags and reminders: saved at once, and the note's own text and edited date are left alone.
+  const updateAttachments = useCallback((noteId, update) => {
+    setSelected((prev) => (prev && prev.id === noteId ? { ...prev, attachments: update(Array.isArray(prev.attachments) ? prev.attachments : []) } : prev));
+  }, []);
+  const files = useNoteAttachments({ noteId: selected?.id, attachments: Array.isArray(selected?.attachments) ? selected.attachments : [], onChange: updateAttachments });
+  const attachCount = Array.isArray(selected?.attachments) ? selected.attachments.length : null;
+  useEffect(() => { // the paperclip count on the list row follows
+    if (selected && attachCount !== null) patchNote({ id: selected.id, attachment_count: attachCount });
+  }, [selected?.id, attachCount]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dragFiles = (e) => Array.from(e.dataTransfer?.types || []).includes('Files');
+
   // ── Reminders ─────────────────────────────────────────────────────────────
   // Filing, like pinning and tags: saved at once, and the note's own text is left alone.
   const mergeReminder = useCallback((r) => {
@@ -867,7 +882,18 @@ export default function NotesPage() {
       )}
 
       {showEditor && (selected ? (
-        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        <div
+          className="flex-1 min-w-0 flex flex-col overflow-hidden relative"
+          onDragEnter={(e) => { if (dragFiles(e)) { e.preventDefault(); setDragging(true); } }}
+          onDragOver={(e) => { if (dragFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
+          onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragging(false); }}
+          onDrop={(e) => { if (dragFiles(e)) { e.preventDefault(); setDragging(false); files.upload(e.dataTransfer.files); } }}
+        >
+          {dragging && (
+            <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none" style={{ background: 'rgba(0,0,0,0.25)' }} aria-hidden="true">
+              <p className="px-4 py-3 rounded-xl text-sm font-medium" style={{ background: 'var(--color-surface)', color: 'var(--color-text)', border: '2px dashed var(--color-primary)' }}>Drop files to attach them to this note</p>
+            </div>
+          )}
           {/* Toolbar */}
           <div className="flex items-center justify-between gap-x-2 gap-y-1 flex-wrap px-3 sm:px-4 py-2 border-b flex-shrink-0" style={border} data-tour="notes-toolbar">
             <div className="flex items-center gap-2 min-w-0">
@@ -1077,6 +1103,7 @@ export default function NotesPage() {
             })()}
             </div>
             <NoteTagsEditor tags={selected.tags || []} allTags={allTags} mobile={viewportMobile} onChange={changeTags} />
+            <NoteFilesStrip attachments={selected.attachments} uploading={files.uploading} error={files.error} mobile={viewportMobile} onPick={files.upload} onRemove={files.remove} onClearError={files.clearError} />
           </div>
 
           {/* Write / Preview */}
@@ -1157,6 +1184,7 @@ export default function NotesPage() {
               onChange={handleBodyChange}
               readOnly={bodyLoading || !!loadError}
               onKeyDown={(e) => { if (e.key === 'Escape' && showMention) { setShowMention(false); e.preventDefault(); } }}
+              onPaste={(e) => { const pasted = Array.from(e.clipboardData?.files || []); if (pasted.length && !bodyLoading) { e.preventDefault(); files.upload(pasted); } }}
               placeholder={bodyLoading ? 'Opening…' : viewportMobile ? 'Tap here to type, or press Dictate below and speak…' : 'Start writing… type @ to search emails, calendar, tasks & web'}
               aria-label="Note text"
               className="flex-1 px-4 py-2 bg-transparent outline-none resize-none text-sm leading-relaxed"

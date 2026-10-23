@@ -7,6 +7,7 @@
  */
 'use strict';
 process.env.LOG_LEVEL = process.env.LOG_LEVEL || 'silent';
+process.env.UPLOAD_DIR = require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'vault-notes-test-')); // uploaded test files never touch the real uploads folder
 if (!process.env.DATABASE_URL) {
   console.log('SKIP notes.test.js: set DATABASE_URL to a local Postgres (see docs/local-dev-windows.md)');
   process.exit(0);
@@ -24,6 +25,7 @@ app.use(express.json());
 app.use((req, _res, next) => { req.user = { id: req.headers['x-user'] === 'B' ? userB : userA, isAdmin: true }; next(); });
 app.use('/api/notes', require('./notes'));
 app.use('/api/recycle-bin', require('./recycleBin'));
+app.use('/api/attachments', require('./attachments'));
 
 let base;
 async function call(method, url, body, as) {
@@ -641,6 +643,113 @@ test('the reminder job and repeating reminders: an unhandled one moves to the la
   assert.strictEqual(sent.filter((m) => /Daily due/.test(m.subject)).length, 1, 'and not again at the next run');
   assert.ok(again.advanced >= 0);
   await pool.query('DELETE FROM notes WHERE id = ANY($1::int[])', [[weeklyBehind, dailyJustDue, doneOne]]);
+});
+
+test('attachments: attach, list, open, remove; safe types only; private; searchable by file name; they follow the note through the recycle bin and go when it is gone for good', async () => {
+  const fs = require('fs');
+  const bin = require('../services/recycleBin');
+  const send = async (id, name, bytes, type, as) => {
+    const form = new FormData();
+    form.append('file', new Blob([bytes], { type }), name);
+    const res = await fetch(`${base}/api/notes/${id}/attachments`, { method: 'POST', headers: as === 'B' ? { 'x-user': 'B' } : {}, body: form });
+    return { status: res.status, json: await res.json().catch(() => null) };
+  };
+  const id = (await call('POST', '/api/notes', { title: 'Site visit', body: 'photos and the quote' })).json.id;
+  const before = (await call('GET', `/api/notes/${id}`)).json.updated_at;
+
+  // attach: the file is stored, listed with the note, counted in the list, and the edited date does not move
+  const quote = await send(id, 'Quote v2.txt', 'Total: $4,000', 'text/plain');
+  assert.strictEqual(quote.status, 201, JSON.stringify(quote.json));
+  assert.deepStrictEqual({ name: quote.json.filename, type: quote.json.mimeType, size: quote.json.sizeBytes, kind: quote.json.entityType }, { name: 'Quote v2.txt', type: 'text/plain', size: 13, kind: 'note' });
+  const one = (await call('GET', `/api/notes/${id}`)).json;
+  assert.deepStrictEqual(one.attachments.map((a) => a.filename), ['Quote v2.txt'], 'the open note carries its files');
+  assert.ok(!('storedPath' in one.attachments[0]), 'and never the place on the server disk');
+  assert.strictEqual(one.updated_at, before, 'attaching is filing, not editing');
+  const listed = (await call('GET', `/api/notes?q=${encodeURIComponent('Site visit')}`)).json.find((n) => n.id === id);
+  assert.strictEqual(listed.attachment_count, 1, 'the list shows how many');
+  assert.strictEqual((await call('GET', '/api/notes?q=nothing-at-all-xyz')).json.length, 0);
+
+  // search finds a note by the name of a file on it
+  assert.ok((await call('GET', `/api/notes?q=${encodeURIComponent('quote v2')}`)).json.some((n) => n.id === id), 'searching a file name finds the note');
+
+  // open: the shared download route, for the owner only
+  const dl = await fetch(`${base}/api/attachments/${quote.json.id}/download`);
+  assert.strictEqual(dl.status, 200);
+  assert.strictEqual(await dl.text(), 'Total: $4,000');
+  assert.strictEqual((await fetch(`${base}/api/attachments/${quote.json.id}/download`, { headers: { 'x-user': 'B' } })).status, 404, "another person cannot open it");
+  assert.strictEqual((await fetch(`${base}/api/attachments/${quote.json.id}`, { method: 'DELETE', headers: { 'x-user': 'B' } })).status, 404, "or remove it");
+  assert.strictEqual((await send(id, 'x.txt', 'hi', 'text/plain', 'B')).status, 404, "or attach to a note that is not theirs");
+  assert.strictEqual((await send(999999999, 'x.txt', 'hi', 'text/plain')).status, 404, 'or to one that does not exist');
+
+  // what cannot be attached: a program, a script, an executable renamed to look like a PDF; nothing is left on disk
+  const folder = require('path').join(process.env.UPLOAD_DIR, 'attachments', 'notes', String(id));
+  const onDisk = () => fs.readdirSync(folder).length;
+  assert.strictEqual(onDisk(), 1);
+  const exe = await send(id, 'setup.exe', 'MZ....', 'application/octet-stream');
+  assert.strictEqual(exe.status, 400);
+  assert.match(exe.json.error, /cannot be attached/);
+  const disguised = await send(id, 'invoice.pdf', Buffer.concat([Buffer.from([0x4d, 0x5a]), Buffer.from('....')]), 'application/pdf');
+  assert.strictEqual(disguised.status, 400, 'an executable renamed .pdf is refused');
+  assert.match(disguised.json.error, /does not match/);
+  assert.strictEqual((await send(id, 'a.sh', '#!/bin/sh', 'text/plain')).status, 400, 'a script with an unknown extension is refused');
+  assert.strictEqual(onDisk(), 1, 'refused files are not kept');
+  assert.strictEqual((await call('GET', `/api/notes/${id}`)).json.attachments.length, 1);
+  const noFile = await fetch(`${base}/api/notes/${id}/attachments`, { method: 'POST', body: new FormData() });
+  assert.strictEqual(noFile.status, 400);
+
+  // a limit on the number of files on one note
+  for (let i = 0; i < 18; i += 1) await pool.query(`INSERT INTO attachments ("userId","entityType","entityId",filename,"storedPath","mimeType","sizeBytes") VALUES ($1,'note',$2,$3,'/nowhere','text/plain',1)`, [userA, id, `filler-${i}.txt`]);
+  assert.strictEqual((await send(id, 'twentieth.txt', 'x', 'text/plain')).status, 201, 'the twentieth file fits');
+  const over = await send(id, 'twenty-first.txt', 'x', 'text/plain');
+  assert.strictEqual(over.status, 400);
+  assert.match(over.json.error, /up to 20 files/);
+  await pool.query(`DELETE FROM attachments WHERE "entityType"='note' AND "entityId"=$1 AND filename LIKE 'filler-%'`, [id]);
+
+  // remove one: the row and the file go
+  const extra = await send(id, 'scrap.txt', 'bin me', 'text/plain');
+  const extraPath = (await pool.query('SELECT "storedPath" FROM attachments WHERE id=$1', [extra.json.id])).rows[0].storedPath;
+  assert.ok(fs.existsSync(extraPath));
+  assert.strictEqual((await fetch(`${base}/api/attachments/${extra.json.id}`, { method: 'DELETE' })).status, 200);
+  assert.ok(!fs.existsSync(extraPath), 'the file is removed from disk');
+  assert.strictEqual(Number((await pool.query('SELECT COUNT(*) FROM attachments WHERE id=$1', [extra.json.id])).rows[0].count), 0);
+  await pool.query(`DELETE FROM attachments WHERE "entityType"='note' AND "entityId"=$1 AND filename = 'twentieth.txt'`, [id]);
+
+  // delete the note: the files wait with it in the bin (and cannot be opened); restore brings them back
+  const gone = await call('DELETE', `/api/notes/${id}`);
+  assert.strictEqual(gone.status, 200);
+  assert.strictEqual((await fetch(`${base}/api/attachments/${quote.json.id}/download`)).status, 404, 'a deleted note\'s files cannot be opened');
+  assert.ok(fs.existsSync(extraPath) === false && onDisk() >= 1, 'but the file is still on disk, kept with the note');
+  const restored = await call('POST', `/api/recycle-bin/${gone.json.binId}/restore`);
+  assert.strictEqual(restored.status, 200, JSON.stringify(restored.json));
+  const newId = Number(restored.json.entityId);
+  assert.strictEqual((await fetch(`${base}/api/attachments/${quote.json.id}/download`)).status, 200, 'restored: the file opens again');
+  assert.deepStrictEqual((await call('GET', `/api/notes/${newId}`)).json.attachments.map((a) => a.filename), ['Quote v2.txt'], 'and is on the note');
+
+  // delete again and empty the bin: now the files go for good
+  const again = await call('DELETE', `/api/notes/${newId}`);
+  const storedPath = (await pool.query('SELECT "storedPath" FROM attachments WHERE id=$1', [quote.json.id])).rows[0].storedPath;
+  assert.ok(fs.existsSync(storedPath));
+  assert.strictEqual((await call('DELETE', `/api/recycle-bin/${again.json.binId}`)).status, 200);
+  assert.ok(!fs.existsSync(storedPath), 'deleted forever: the file is removed from disk');
+  assert.strictEqual(Number((await pool.query('SELECT COUNT(*) FROM attachments WHERE id=$1', [quote.json.id])).rows[0].count), 0, 'and its row');
+
+  // a bin item that expires takes its files too
+  const timed = (await call('POST', '/api/notes', { title: 'Timed', body: '' })).json.id;
+  const timedFile = await send(timed, 'old.txt', 'old', 'text/plain');
+  const timedPath = (await pool.query('SELECT "storedPath" FROM attachments WHERE id=$1', [timedFile.json.id])).rows[0].storedPath;
+  const timedBin = (await call('DELETE', `/api/notes/${timed}`)).json.binId;
+  await pool.query(`UPDATE recycle_bin SET "expiresAt" = NOW() - INTERVAL '1 day' WHERE id=$1`, [timedBin]);
+  await bin.purgeExpired();
+  assert.ok(!fs.existsSync(timedPath), 'after 30 days the files are removed too');
+  assert.strictEqual(Number((await pool.query('SELECT COUNT(*) FROM attachments WHERE id=$1', [timedFile.json.id])).rows[0].count), 0);
+
+  // emptying the bin does the same
+  const empt = (await call('POST', '/api/notes', { title: 'Emptied', body: '' })).json.id;
+  const emptFile = await send(empt, 'e.txt', 'e', 'text/plain');
+  const emptPath = (await pool.query('SELECT "storedPath" FROM attachments WHERE id=$1', [emptFile.json.id])).rows[0].storedPath;
+  await call('DELETE', `/api/notes/${empt}`);
+  await call('DELETE', '/api/recycle-bin');
+  assert.ok(!fs.existsSync(emptPath), 'empty the bin: the files go');
 });
 
 test('ask your notes: finds the right notes in the database, only this person\'s, and cites them; a fake model stands in for the AI', async () => {

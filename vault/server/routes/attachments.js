@@ -39,6 +39,14 @@ async function loadOwnedAttachment(attachmentId, userId) {
     return ok ? attachment : null;
   }
 
+  if (attachment.entityType === 'note') {
+    const { rows: [ok] } = await pool.query(
+      `SELECT 1 FROM notes WHERE id=$1 AND user_id=$2`,
+      [attachment.entityId, userId]
+    );
+    return ok ? attachment : null; // a note in the recycle bin has no row, so its files cannot be opened until it is restored
+  }
+
   // Addendum 3 (docs/crm-activity-model.md): client-level attachments
   // (e.g. registration documents), entityId = clients.id directly.
   if (attachment.entityType === 'client') {

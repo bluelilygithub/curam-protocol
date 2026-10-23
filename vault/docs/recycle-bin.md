@@ -53,6 +53,10 @@ register('goal', {
 
 4. **Test it** like `server/routes/recycleBin.test.js` does with a made-up tool: delete, list, restore, failed restore leaves the item in the bin, another person cannot see it.
 
+## Cleaning up what the bin does not hold (optional `discard`)
+
+If the thing has files (or anything else outside the snapshot), register `discard(db, userId, payload)` next to `restore`. It is called once the item is gone for good (30 days passed, Delete forever, Empty bin) and should remove those files; it must not throw (errors are logged and swallowed). Notes uses it for attached files.
+
 ## Rules for adapters
 
 - **Snapshot everything that disappears with the row** (children with `ON DELETE CASCADE`, join rows, tags). A restore must not need anything that is gone.

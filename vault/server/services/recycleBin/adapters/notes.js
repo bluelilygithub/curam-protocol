@@ -3,6 +3,7 @@
 // How the recycle bin puts back what Notes deletes: a note (with its tags) and a note template.
 // The route that deletes them calls moveToBin(); this file only knows how to restore.
 
+const fs = require('fs');
 const { register } = require('../index');
 
 const exists = async (db, sql, params) => (await db.query(sql, params)).rows.length > 0;
@@ -32,7 +33,22 @@ register('note', {
     for (const tag of Array.isArray(payload.tags) ? payload.tags : []) {
       await db.query('INSERT INTO note_tags (note_id, user_id, tag) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [rows[0].id, userId, tag]);
     }
+    // The files stayed where they were while the note was in the bin; point them at the note again (it may have a new number).
+    const fileIds = Array.isArray(payload.attachmentIds) ? payload.attachmentIds.filter(Number.isInteger) : [];
+    if (fileIds.length) {
+      await db.query(`UPDATE attachments SET "entityId"=$1 WHERE id = ANY($2::int[]) AND "userId"=$3 AND "entityType"='note'`, [rows[0].id, fileIds, userId]);
+    }
     return { entityId: rows[0].id };
+  },
+  // Gone for good (30 days, deleted forever, bin emptied): remove the files too.
+  async discard(db, userId, payload) {
+    const fileIds = Array.isArray(payload?.attachmentIds) ? payload.attachmentIds.filter(Number.isInteger) : [];
+    if (!fileIds.length) return;
+    const { rows } = await db.query(`SELECT id, "storedPath" FROM attachments WHERE id = ANY($1::int[]) AND "userId"=$2 AND "entityType"='note'`, [fileIds, userId]);
+    for (const a of rows) {
+      try { if (fs.existsSync(a.storedPath)) fs.unlinkSync(a.storedPath); } catch { /* the row goes anyway */ }
+    }
+    await db.query(`DELETE FROM attachments WHERE id = ANY($1::int[]) AND "userId"=$2 AND "entityType"='note'`, [rows.map((r) => r.id), userId]);
   },
 });
 

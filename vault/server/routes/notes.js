@@ -20,11 +20,16 @@ const noteQuery = require('../services/noteQuery');
 const noteEmbeddings = require('../services/noteEmbeddings'); // meaning-based search: a note is embedded a little after it is saved
 const noteAsk = require('../services/noteAsk'); // called as noteAsk.askNotes, with noteAsk.routeDeps, so tests can swap the models
 const noteReminders = require('../services/noteReminders');
+const {
+  createAttachmentUpload, rejectIfDisguisedExecutable, assertWithinQuota, insertAttachment, attachmentsForEntity, MAX_FILE_BYTES,
+} = require('../utils/attachments'); // the same upload policy as task and CRM attachments
 const noteRepeat = require('../services/noteRepeat');
 const bin = require('../services/recycleBin'); // deleted notes and templates wait here for 30 days
 bin.loadAdapters();
 
 const MAX_TEMPLATES = 50;
+const MAX_FILES_PER_NOTE = 20;
+const uploadNoteFile = createAttachmentUpload((req) => `notes/${Number(req.params.id) || 0}`);
 const MAX_TEMPLATE_BODY = 20000;
 
 // One note in full: its text, project and client names, tags, and daily_date as plain text (a DATE would arrive as a JS Date).
@@ -58,6 +63,7 @@ router.get('/', async (req, res) => {
   const sql = `
     SELECT n.id, n.title, left(n.body, 240) AS preview, n.project_id, n.client_id, n.source,
            n.created_at, n.updated_at, n.pinned_at, n.remind_at, n.remind_email, n.remind_repeat, n.reminder_done_at, p.name AS project_name, c.name AS client_name,
+           (SELECT COUNT(*)::int FROM attachments a WHERE a."entityType"='note' AND a."entityId" = n.id) AS attachment_count,
            COALESCE((SELECT array_agg(nt.tag ORDER BY nt.tag) FROM note_tags nt WHERE nt.note_id = n.id), '{}') AS tags
       ${noteQuery.NOTE_JOINS}
      WHERE ${where.join(' AND ')}
@@ -469,7 +475,7 @@ router.get('/:id', async (req, res) => {
       [Number(req.params.id) || 0, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-    res.json(rows[0]);
+    res.json({ ...rows[0], attachments: await attachmentsForEntity('note', rows[0].id) });
   } catch (err) {
     getLogger().error({ err }, '[notes read]');
     res.status(500).json({ error: 'Could not load the note. Try again.' });
@@ -547,6 +553,42 @@ router.put('/:id', async (req, res) => {
     getLogger().error({ err }, '[notes update]');
     res.status(500).json({ error: 'Could not save the note. Try again.' });
   }
+});
+
+// POST /api/notes/:id/attachments  (multipart, one `file`) — attach a file to the note. Same types, size cap (50 MB) and disguised-executable check as
+// task and CRM attachments, the person's shared storage quota, and at most MAX_FILES_PER_NOTE files on a note. Attaching is filing, not editing:
+// updated_at is left alone. Download and remove are the shared /api/attachments/:id routes (they check the note is the caller's).
+router.post('/:id/attachments', async (req, res) => {
+  const noteId = Number(req.params.id) || 0;
+  try {
+    // checked before the upload is read, so a refused request writes nothing to disk
+    const own = await pool.query('SELECT (SELECT COUNT(*)::int FROM attachments WHERE "entityType"=\'note\' AND "entityId"=$1) AS files FROM notes WHERE id=$1 AND user_id=$2', [noteId, req.user.id]);
+    if (!own.rows[0]) return res.status(404).json({ error: 'Not found' });
+    if (own.rows[0].files >= MAX_FILES_PER_NOTE) return res.status(400).json({ error: `A note can have up to ${MAX_FILES_PER_NOTE} files. Remove one first.` });
+  } catch (err) {
+    getLogger().error({ err }, '[notes attach check]');
+    return res.status(500).json({ error: 'Could not attach the file. Try again.' });
+  }
+  uploadNoteFile.single('file')(req, res, async (uploadErr) => {
+    const dropFile = () => { try { if (req.file?.path) require('fs').unlinkSync(req.file.path); } catch { /* nothing left to remove */ } };
+    if (uploadErr) {
+      dropFile();
+      const tooBig = uploadErr.code === 'LIMIT_FILE_SIZE';
+      return res.status(tooBig ? 413 : 400).json({ error: tooBig ? `That file is over ${MAX_FILE_BYTES / (1024 * 1024)} MB.` : uploadErr.message === 'File type not accepted' ? 'That kind of file cannot be attached. PDF, images, text, CSV and Office documents can.' : 'The file could not be attached.' });
+    }
+    try {
+      if (!req.file) return res.status(400).json({ error: 'Choose a file to attach.' });
+      await assertWithinQuota(req.user.id, req.file.size);
+      await rejectIfDisguisedExecutable(req.file.path);
+      const attachment = await insertAttachment({ userId: req.user.id, entityType: 'note', entityId: noteId, file: req.file });
+      res.status(201).json(attachment);
+    } catch (err) {
+      dropFile();
+      if (err.statusCode) return res.status(err.statusCode).json({ error: err.statusCode === 413 ? err.message : 'That file cannot be attached: its content does not match its type.' });
+      getLogger().error({ err }, '[notes attach]');
+      res.status(500).json({ error: 'Could not attach the file. Try again.' });
+    }
+  });
 });
 
 // PUT /api/notes/:id/tags  { tags: [...] } — replace the note's tags (normalised, repeats dropped, at most 20). Like pinning, this is
@@ -688,10 +730,12 @@ router.delete('/:id', async (req, res) => {
     if (!rows[0]) { await db.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
     const note = rows[0];
     const tags = (await db.query('SELECT tag FROM note_tags WHERE note_id=$1 ORDER BY tag', [note.id])).rows.map((r) => r.tag);
+    // The files stay on disk and in `attachments` while the note waits in the bin; the bin remembers which they are so a restore reconnects them.
+    const attachmentIds = (await db.query(`SELECT id FROM attachments WHERE "entityType"='note' AND "entityId"=$1 ORDER BY id`, [note.id])).rows.map((r) => r.id);
     const binId = await bin.moveToBin(db, {
       userId: req.user.id, type: 'note', id: note.id, title: note.title,
       detail: String(note.body || '').replace(/\s+/g, ' ').trim().slice(0, 200) || null,
-      payload: { note, tags },
+      payload: { note, tags, attachmentIds },
     });
     await db.query('DELETE FROM notes WHERE id=$1 AND user_id=$2', [note.id, req.user.id]);
     await db.query('COMMIT');

@@ -30,6 +30,7 @@ const semanticMap = {
   receipt: { lucide: 'Receipt' },
   'file-image': { lucide: 'FileImage' },
   image: { lucide: 'Image' },
+  paperclip: { lucide: 'Paperclip' },
   palette: { lucide: 'Palette' },
   brush: { lucide: 'Brush' },
   send: { lucide: 'Send' },

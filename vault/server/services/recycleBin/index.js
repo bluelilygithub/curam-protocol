@@ -21,10 +21,14 @@ class RestoreError extends Error {
   constructor(message, status = 409) { super(message); this.status = status; }
 }
 
-/** Teach the bin how to put one kind of thing back. `restore(db, userId, payload)` runs inside a transaction and returns { entityId }. */
-function register(type, { label, restore }) {
+/**
+ * Teach the bin how to put one kind of thing back. `restore(db, userId, payload)` runs inside a transaction and returns { entityId }.
+ * Optional `discard(db, userId, payload)` is called after an item is gone for good (30 days passed, deleted forever, bin emptied) so a tool can
+ * remove what the bin does not hold itself, such as uploaded files. It must not throw; if it does the error is swallowed.
+ */
+function register(type, { label, restore, discard }) {
   if (!type || typeof restore !== 'function') throw new Error('register(type, { label, restore }) needs a type and a restore function');
-  adapters.set(type, { label: label || type, restore });
+  adapters.set(type, { label: label || type, restore, discard: typeof discard === 'function' ? discard : null });
 }
 
 const labelFor = (type) => adapters.get(type)?.label || type;
@@ -47,8 +51,18 @@ async function moveToBin(db, { userId, type, id, title, detail, payload }) {
 
 /** Remove everything past its 30 days. Safe to call any time; the list does it too, so the bin is right even if the schedule never ran. */
 async function purgeExpired(db = pool) {
-  const r = await db.query('DELETE FROM recycle_bin WHERE "expiresAt" < NOW()');
+  const r = await db.query('DELETE FROM recycle_bin WHERE "expiresAt" < NOW() RETURNING "userId", "entityType", payload');
+  await discardAll(r.rows);
   return r.rowCount;
+}
+
+/** Tell each tool that these items are gone for good. Best effort: one tool failing never stops the bin. */
+async function discardAll(rows) {
+  for (const row of rows || []) {
+    const adapter = adapters.get(row.entityType);
+    if (!adapter?.discard) continue;
+    try { await adapter.discard(pool, row.userId, row.payload); } catch (err) { console.warn(`[recycle-bin] discard ${row.entityType} failed:`, err.message); }
+  }
 }
 
 /** The person's bin, newest first. `types` (array) limits it to some kinds of thing. Each row says how many days are left. */
@@ -91,7 +105,8 @@ async function restoreItem(userId, binId) {
 
 /** Delete one item for good. Returns true if it was there. */
 async function deleteForever(userId, binId) {
-  const r = await pool.query('DELETE FROM recycle_bin WHERE id=$1 AND "userId"=$2', [Number(binId) || 0, userId]);
+  const r = await pool.query('DELETE FROM recycle_bin WHERE id=$1 AND "userId"=$2 RETURNING "userId", "entityType", payload', [Number(binId) || 0, userId]);
+  await discardAll(r.rows);
   return r.rowCount > 0;
 }
 
@@ -100,7 +115,8 @@ async function emptyBin(userId, { types } = {}) {
   const params = [userId];
   let where = '"userId" = $1';
   if (Array.isArray(types) && types.length) { params.push(types); where += ` AND "entityType" = ANY($2::text[])`; }
-  const r = await pool.query(`DELETE FROM recycle_bin WHERE ${where}`, params);
+  const r = await pool.query(`DELETE FROM recycle_bin WHERE ${where} RETURNING "userId", "entityType", payload`, params);
+  await discardAll(r.rows);
   return r.rowCount;
 }
 

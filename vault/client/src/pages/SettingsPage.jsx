@@ -2582,7 +2582,7 @@ function SettingsPage() {
             <div>
               <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Notes Tour</p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                15-step tour — new notes and templates, today's note, search, views, filters, tags, reminders, AI actions, ask your notes, recently deleted
+                16-step tour — new notes and templates, today's note, search, views, filters, tags, reminders, attached files, AI actions, ask your notes, recently deleted
               </p>
             </div>
             <button

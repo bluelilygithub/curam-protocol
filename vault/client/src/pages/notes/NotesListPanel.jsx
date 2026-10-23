@@ -78,6 +78,9 @@ export default function NotesListPanel({
                 {note.pinned_at && (
                   <Tooltip text={NOTE_TIPS.rowPinned}><span className="flex-shrink-0" style={{ color: 'var(--color-primary)' }} aria-label="Pinned">{getIcon('pin', { size: 12 })}</span></Tooltip>
                 )}
+                {note.attachment_count > 0 && (
+                  <Tooltip text={NOTE_TIPS.rowAttachments(note.attachment_count)}><span className="flex-shrink-0" style={{ color: 'var(--color-muted)' }} aria-label={`${note.attachment_count} attached file${note.attachment_count === 1 ? '' : 's'}`}>{getIcon('paperclip', { size: 12 })}</span></Tooltip>
+                )}
                 {note.source === 'voice' && (
                   <Tooltip text={NOTE_TIPS.rowVoice}><span className="flex-shrink-0" style={{ color: 'var(--color-primary)' }} aria-label="Voice note">{getIcon('audio-lines', { size: 13 })}</span></Tooltip>
                 )}
