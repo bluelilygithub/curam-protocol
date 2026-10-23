@@ -2,6 +2,8 @@
 // listed as "Untitled"; show its first line instead, and the rest of the text as the preview. Display only: nothing is saved
 // or renamed. Unit-tested: node client/src/pages/notes/noteListText.test.mjs
 
+import { stripMarkdown } from './noteMarkdown.mjs';
+
 const TITLE_MAX = 60;
 const PREVIEW_MAX = 60;
 
@@ -10,7 +12,7 @@ const isUntitled = (title) => !String(title || '').trim() || String(title).trim(
 /** { title, preview } for one row of the list. `preview` is '' when there is nothing more to show. */
 export function listText(note) {
   // The list sends a short `preview` instead of the whole `body`; an open note has the full body. Either reads the same here.
-  const body = String(note?.body ?? note?.preview ?? '');
+  const body = stripMarkdown(String(note?.body ?? note?.preview ?? '')); // "# Plan" lists as "Plan"
   const title = String(note?.title || '').trim();
   if (isUntitled(title)) {
     const first = body.split('\n').map((l) => l.trim()).find(Boolean);

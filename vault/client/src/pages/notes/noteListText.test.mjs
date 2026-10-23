@@ -20,4 +20,9 @@ assert.strictEqual(listText({ title: 'T', body: 'x'.repeat(500) }).preview.lengt
 // a real title is never replaced by the text
 assert.strictEqual(listText({ title: 'Budget', body: 'something else' }).title, 'Budget');
 
+// markdown symbols are not shown in the list: a "# Heading" first line lists as "Heading", a to-do as its words
+assert.deepStrictEqual(listText({ title: 'Untitled', body: '# Launch plan\n- [ ] Call Sam\n**Important**' }), { title: 'Launch plan', preview: 'Call Sam Important' });
+assert.strictEqual(listText({ title: 'Plan', body: '**Bold** start' }).preview, 'Bold start');
+assert.strictEqual(listText({ title: 'Untitled', preview: '## From the list preview' }).title, 'From the list preview', 'works on the short preview the list sends');
+
 console.log('ok - note list text: first line stands in for "Untitled", real titles are kept');

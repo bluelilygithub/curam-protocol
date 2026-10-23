@@ -11,6 +11,8 @@ import NewNoteChooser from './notes/NewNoteChooser';
 import NotesListPanel from './notes/NotesListPanel';
 import InsertSourceModal from './notes/InsertSourceModal';
 import NoteAiPanel from './notes/NoteAiPanel';
+import NoteMarkdownView from './notes/NoteMarkdownView';
+import { toggleTaskLine, taskCounts } from './notes/noteMarkdown.mjs';
 import { AI_ACTIONS, applyText } from './notes/noteAiActions.mjs';
 import useNotesList, { toRow } from './notes/useNotesList';
 import useDictation from './notes/useDictation';
@@ -18,6 +20,11 @@ import { NOTES_TOOLS } from './notes/notesTools.mjs';
 
 const NOTE_BODY_LIMIT = 500;
 const AUTOSAVE_DELAY = 1000; // ms after the last keystroke
+const MODE_KEY = 'vault:notes:mode'; // 'write' | 'preview', remembered on this device
+
+function readMode() {
+  try { return localStorage.getItem(MODE_KEY) === 'preview' ? 'preview' : 'write'; } catch { return 'write'; }
+}
 
 export default function NotesPage() {
   const getIcon = useIcon();
@@ -52,6 +59,7 @@ export default function NotesPage() {
   const [showMention, setShowMention] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
   const [clients, setClients] = useState([]);
+  const [mode, setModeState] = useState(readMode); // Write (the text box) or Preview (formatted)
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
   const [aiAction, setAiAction] = useState(null); // which AI action's panel is open
   const [aiBackup, setAiBackup] = useState(null); // { id, title, body } from just before an AI change, for Undo
@@ -290,6 +298,25 @@ export default function NotesPage() {
       setCreatingProject(false);
     }
   }
+
+  // ── Write / Preview ───────────────────────────────────────────────────────
+  const setMode = useCallback((next) => {
+    setModeState(next);
+    try { localStorage.setItem(MODE_KEY, next); } catch { /* not remembered in a private window */ }
+    if (next === 'write') setTimeout(() => bodyRef.current?.focus(), 0);
+  }, []);
+
+  // A to-do ticked in Preview is written back into the note's text like any other edit.
+  const toggleTask = useCallback((line) => {
+    const id = selectedRef.current?.id;
+    if (!id) return;
+    const next = toggleTaskLine(bodyValueRef.current, line);
+    if (next === bodyValueRef.current) return;
+    setAiBackup(null);
+    bodyValueRef.current = next;
+    setBody(next);
+    scheduleSave(id, titleValueRef.current, next);
+  }, [scheduleSave]);
 
   // ── Pin ───────────────────────────────────────────────────────────────────
   async function togglePin(note) {
@@ -667,6 +694,27 @@ export default function NotesPage() {
             </select>
           </div>
 
+          {/* Write / Preview */}
+          <div className="flex items-center justify-between gap-2 px-4 py-1.5 flex-shrink-0">
+            <div className="flex rounded-lg overflow-hidden" role="group" aria-label="How to show this note" style={{ border: '1px solid var(--color-border)' }}>
+              {[['write', 'Write', 'pen-line'], ['preview', 'Preview', 'eye']].map(([id, label, icon]) => (
+                <button
+                  key={id} type="button" onClick={() => setMode(id)} aria-pressed={mode === id}
+                  className="flex items-center gap-1.5 text-xs px-3 transition-opacity duration-200 hover:opacity-80"
+                  style={{ minHeight: viewportMobile ? 36 : 26, background: mode === id ? 'var(--color-primary)' : 'var(--color-bg)', color: mode === id ? '#fff' : 'var(--color-text)' }}
+                  title={id === 'write' ? 'Edit the text' : 'See it formatted: headings, bold, lists, links and tick-boxes'}
+                >{getIcon(icon, { size: 12 })}{label}</button>
+              ))}
+            </div>
+            {(() => {
+              const c = taskCounts(body);
+              if (c.total) return <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{c.done} of {c.total} done</span>;
+              return !viewportMobile && mode === 'write'
+                ? <span className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>Formatting works: # heading, **bold**, - list, - [ ] to-do</span>
+                : null;
+            })()}
+          </div>
+
           {/* Body */}
           <div className="flex-1 relative overflow-hidden flex flex-col min-h-0">
             <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
@@ -688,6 +736,20 @@ export default function NotesPage() {
                 <button type="button" onClick={() => selectNote(selected)} className="underline hover:opacity-70 transition-opacity duration-200">Try again</button>
               </div>
             )}
+            {mode === 'preview' ? (
+              <div
+                className="flex-1 overflow-y-auto px-4 py-2 text-sm leading-relaxed"
+                style={viewportMobile ? { margin: '10px 12px', padding: '12px 14px', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 12, fontSize: 16 } : undefined}
+                onDoubleClick={() => { if (!viewportMobile && !window.getSelection()?.toString()) setMode('write'); }}
+                aria-label="Note preview"
+              >
+                {bodyLoading
+                  ? <p style={{ color: 'var(--color-muted)' }}>Opening…</p>
+                  : body.trim()
+                    ? <NoteMarkdownView body={body} onToggleTask={toggleTask} />
+                    : <p style={{ color: 'var(--color-muted)' }}>Nothing to preview yet. Switch to Write and start typing.</p>}
+              </div>
+            ) : (
             <textarea
               ref={bodyRef}
               value={body}
@@ -703,6 +765,7 @@ export default function NotesPage() {
                 ...(viewportMobile ? { margin: '10px 12px', padding: '12px 14px', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 12, fontSize: 16 } : {}),
               }}
             />
+            )}
 
             {showMention && (
               <>
@@ -724,7 +787,7 @@ export default function NotesPage() {
 
           {viewportMobile && (
             <div className="flex-shrink-0 flex gap-3 px-3 pt-3 border-t" style={{ ...border, background: 'var(--color-surface)', paddingBottom: 'max(12px, env(safe-area-inset-bottom))', paddingRight: 84 /* the guide button sits bottom-right */ }}>
-              <button type="button" onClick={() => bodyRef.current?.focus()} className="flex-1 flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-opacity duration-200 hover:opacity-80" style={{ minHeight: 48, background: 'var(--color-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }} aria-label="Type into this note">
+              <button type="button" onClick={() => (mode === 'preview' ? setMode('write') : bodyRef.current?.focus())} className="flex-1 flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-opacity duration-200 hover:opacity-80" style={{ minHeight: 48, background: 'var(--color-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }} aria-label="Type into this note">
                 {getIcon('pen-line', { size: 16 })} Type
               </button>
               {dictation.supported && (

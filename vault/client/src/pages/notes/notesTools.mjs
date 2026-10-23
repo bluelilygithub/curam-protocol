@@ -10,6 +10,7 @@ export const NOTES_TOOLS = [
   { id: 'filter-notes', label: 'Filter notes', open: 'list' },
   { id: 'dictate', label: 'Dictate', open: 'editor' },
   { id: 'pin-note', label: 'Pin a note', open: 'list' },
+  { id: 'preview', label: 'Write and Preview', open: 'editor' },
   { id: 'ai-actions', label: 'AI actions', open: 'editor' },
   { id: 'at-menu', label: 'Pull things in with @', open: 'editor' },
   { id: 'project', label: 'Project', open: 'editor' },

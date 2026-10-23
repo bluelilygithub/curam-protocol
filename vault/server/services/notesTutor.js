@@ -9,7 +9,7 @@ const { createGuide, REPLY_FORMAT, VERDICT_HELP } = require('./guideCore');
 
 const CATALOG = [
   { id: 'new-note', label: 'New note', group: 'Notes list',
-    does: 'The + button at the top of the notes list (on a phone it says + New) opens a small choice: Write a note, or Record a voice note. Write a note opens a new note with the cursor in the title, where you type the title and then the text; it saves by itself a moment after you stop typing. On a phone, the Type button at the bottom opens the keyboard, and Dictate beside it speaks into the note. A note with no title is listed by its first line.', notes: 'Notes are plain text: no bold, headings or images.' },
+    does: 'The + button at the top of the notes list (on a phone it says + New) opens a small choice: Write a note, or Record a voice note. Write a note opens a new note with the cursor in the title, where you type the title and then the text; it saves by itself a moment after you stop typing. On a phone, the Type button at the bottom opens the keyboard, and Dictate beside it speaks into the note. A note with no title is listed by its first line.', notes: 'Notes are text with simple markdown symbols (see Write and Preview): no formatting buttons or images.' },
   { id: 'new-voice-note', label: 'New voice note', group: 'Notes list',
     does: 'Press the + button at the top of the notes list and choose Record a voice note. It records your voice and writes it into a new note. Press Start recording, talk through a plan, an idea or a chat across the table, and Pause or Resume if you need to. Stop and make the note writes your words up. By default it also tidies them into a note with a short title and plain sections (Summary, Ideas, Plan, To do, Open questions, only those that apply); untick the tidy-up to keep your words exactly as spoken. What was said is always kept at the bottom of the note. Voice notes get an audio-lines icon in the list and a "Voice note" tag above the editor.',
     notes: 'Only the words are kept: the recording is turned into text and then deleted, so there is nothing to replay. Up to about an hour per recording. Needs the microphone allowed in the browser and the speech-to-text service set up on the server. Has a small cost per note (the speech-to-text, and the tidy-up). It does not know who is speaking by name. If it fails, the recorder window stays open with the recording kept and a Try again button, so nothing is lost until you press Discard or close the window. Let anyone you are recording know.' },
@@ -21,6 +21,9 @@ const CATALOG = [
   { id: 'filter-notes', label: 'Filter notes', group: 'Notes list',
     does: 'The filter button (sliders icon) beside the search box opens the filters: a date range (Today, 7 days, 30 days, This year, or Pick dates for your own from and to days), whether the dates mean Last edited or Created, and a project and a client. Several filters work together. The number on the button shows how many are on, and Clear all filters turns them off. The list shows the most recent 100 notes at a time, with a Show more notes button at the bottom.',
     notes: 'The date range applies to the Last edited date unless you switch it to Created.' },
+  { id: 'preview', label: 'Write and Preview', group: 'Editor',
+    does: 'Above the text of an open note are two buttons, Write and Preview. Write is the plain text box where you type. Preview shows the same note formatted. You can type simple markdown symbols: a line starting with # is a heading (## a smaller one), **bold**, *italic*, a line starting with - is a bullet, 1. is a numbered list, [words](https://link) is a link, a line starting with > is a quote, and - [ ] makes a to-do with a tick-box. In Preview you can tick the to-dos, and the tick is saved into the note; a count such as 2 of 5 done shows beside the buttons. On a computer, double-click the preview to go back to editing. The list shows words only, without the symbols. Your choice of Write or Preview is remembered on that device.',
+    notes: 'The note is still saved as plain text with the symbols in it, so search finds the words. There are no formatting buttons, images or attachments; the formatting is typed. Web searches, emails and calendar events you pull in with @ are added with bold headings and links, which show properly in Preview. Pasted HTML is shown as text, never run.' },
   { id: 'pin-note', label: 'Pin a note', group: 'Notes list',
     does: 'The pin button keeps a note at the top of the list in its own Pinned section, above every other group. In the list it shows when you hover a note (on a phone, tap the ⋯ button beside the note and choose Pin); in an open note it is the pin button in the toolbar. Press it again to unpin. Pinned notes show a small pin.',
     notes: 'Pinning does not change the note or its edited date. Search and filters still apply, so a pinned note that does not match them is not shown.' },
@@ -46,7 +49,7 @@ const CATALOG = [
 
 const RULES = [
   'Notes saves by itself a moment after you stop typing. There is no Save button.',
-  'A note is plain text. It can be filed under one project and one client; it can be searched by its title and text, grouped by date, project or client, and filtered by date range, project and client.',
+  'A note is stored as text, with optional markdown symbols for headings, bold, lists, links and to-do tick-boxes that show formatted in Preview. It can be filed under one project and one client; it can be searched by its title and text, grouped by date, project or client, and filtered by date range, project and client.',
   'On a phone the Notes screen is the list first; tapping a note opens it full screen, and the Notes button at the top left goes back to the list.',
   'A voice note is a normal note that began as a recording: you can edit, search, file, convert to a task or delete it like any other. Only its words are kept.',
   'With the tidy-up on, a voice note starts with a short summary and sections, followed by "What was said" (the original words). The tidy-up is only a rewrite of what was said; it does not add facts or tasks that were not spoken.',
@@ -60,7 +63,7 @@ const NOT_POSSIBLE = [
   'Replaying a voice recording. The audio is deleted once it has been turned into text; only the words are kept.',
   'Knowing who said what by name, or live captions and transcripts of an online meeting (Zoom, Teams). Voice notes record the microphone only: a chat across a table, or your own voice.',
   'Recordings longer than about an hour in one go (record in parts).',
-  'Rich formatting (bold, headings, lists that format themselves), images, files or attachments on a note.',
+  'Formatting buttons (a toolbar for bold or headings), images, files or attachments on a note. Formatting is typed as markdown symbols and shown in Preview.',
   'Folders, tags or sharing a note with another person. A note can only be filed under one project and one client, and is private to the person who wrote it.',
   'Reminders or due dates on a note. A note can be converted to a task, and tasks have the dates.',
   'Restoring a deleted note, or an edit history to go back to.',
