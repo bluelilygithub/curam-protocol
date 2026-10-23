@@ -1618,6 +1618,10 @@ module.exports = function createFinanceReportsRouter({ gstPaidForRange, disposal
     for (const q of qs) {
       if (q.status !== 'paid' && gstAppliesOn(reg, q.from_date)) add('Check', 'BAS', `Quarter ${ds(q.from_date)} to ${ds(q.to_date)} is ${q.status}, not paid`, 'Record it as reconciled, lodged and paid on the BAS tab once it has been done.');
     }
+    // The owner's own lines for the accountant (settings key fin_pack_notes, one point per line), e.g. what the
+    // books cannot know about a BAS lodged online. Shown as information, in the pack and on this report.
+    const { rows: [pn] } = await pool.query(`SELECT value FROM settings WHERE "userId"=$1 AND key='fin_pack_notes'`, [userId]);
+    for (const line of String((pn && pn.value) || '').split('\n').map(s => s.trim()).filter(Boolean)) add('Info', 'Owner note', line, '');
     // tax paid through expenses
     const { rows: [tx] } = await pool.query(
       `SELECT COUNT(*)::int AS n, COALESCE(SUM(e.amount + e.gst),0) AS total FROM fin_expenses e LEFT JOIN fin_tx_codes t ON t.id = e."txCodeId"
