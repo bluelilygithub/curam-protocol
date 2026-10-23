@@ -232,6 +232,7 @@ function UserGuidePage() {
           <FeatureCard emoji="🕐" title="Chat History" desc="Browse every session across all projects and Quick chat, filtered by date range or searched by content." />
           <FeatureCard emoji="📎" title="Files & URLs" desc="Attach PDFs, images, documents, and live web pages directly into the conversation." />
           <FeatureCard emoji="🔍" title="Web Search" desc="Type @search in chat to fetch live web results and attach them as context before sending." />
+          <FeatureCard emoji="📝" title="Notes" desc="Where things are written down first: type or record your voice, file notes under projects and clients, turn to-dos into linked tasks, search by words and meaning, and let a chat read them when you switch it on." />
           <FeatureCard emoji="🧠" title="Memory" desc="Semantic personal notes — relevant facts recalled per message, not the full list every turn." />
           <FeatureCard emoji="📥" title="Suggestions" desc="Automatic findings from crons and services — triage rules, skills, automations, and alerts." />
           <FeatureCard emoji="⬡" title="Artifacts" desc="Code and HTML from Claude renders in a live side panel — preview, copy, or iterate." />

@@ -2,6 +2,17 @@
 
 Page `client/src/pages/NotesPage.jsx` (`/notes`), API `server/routes/notes.js` (`/api/notes`), table `notes`. Private to the person who wrote them (no sharing). Voice notes: `docs/voice-notes.md`.
 
+## Overview (2026-10-24)
+
+Notes is the foundation tool of Vault: where things are written down first, then filed, searched and worked on.
+
+- **Capture**: type; **voice notes** (choose a write-up style, keep the audio for 7 days or until deleted if wanted, saved on the device while recording, to-dos offered as tasks, a Record button on the phone home screen); **dictate** into an open note; templates; attach files; save a chat reply or a whole chat from Chat.
+- **Edit**: autosave; **Write / Rich / Preview** (Rich is an on-demand enhanced editor that still saves plain Markdown); tick-boxes that work in Preview and Rich; `@` pull-ins (web, Gmail, Calendar, tasks, projects); AI actions that only propose (summarise, to-dos, tidy up, tags, title).
+- **Organise**: project, client, tags, pinning; saved views; filters (date, project, client, tags, reminders, files); grouping; Recently deleted (30 days, shared recycle bin).
+- **Find**: search by words (title, text, tags, project, client, file names, text inside files) and **Ask your notes** (by words and by meaning, answers with numbered citations, maps the linked projects, clients, tasks, deals and contact).
+- **Connect to other tools**: **live to-dos** (a to-do line is a task: Make tasks, kept in step both ways, chip in Preview, "From note" on the task); Convert to task (one task from a whole note); reminders (in-app and email, repeating); **Chat reads Notes** when "My notes" is on for that chat; Take to chat / Open as chat; notes filed under projects and clients appear on them.
+- **Help built in**: a hover tip on every control (`noteTips.mjs`), the (i) "How Notes works" box (`notesInfo.mjs`), a 15-step compass tour (`notesTour.js`), and the Notes guide chat (`notesTutor.js`). **When a feature changes, update all four and this file together**: `noteTips.test.mjs` and `notesTutor.test.js` fail if the guide, the tools list, the tips or the tour drift apart.
+
 ## What it does
 
 - **List**: `GET /api/notes` sends a short `preview`, never the whole text; 100 at a time (`X-Has-More`). Filters: search (title, text, project, client, tag, file name, text inside files), date range (edited or created), project, client, files (`files=with|without`: has / has no attached files, `noteQuery.js`; also in saved views and "This list" in Ask), tags (a note must have ALL picked tags), `untagged`. Group by Date, Project, Client or Tag (`client/src/pages/notes/noteGroups.mjs`, pure and tested). Pinned notes lead in their own section.
@@ -43,4 +54,4 @@ Page `client/src/pages/NotesPage.jsx` (`/notes`), API `server/routes/notes.js` (
 
 ## Not built (ideas)
 
-A slash menu in the Rich editor, `@` pull-ins in Rich, images in notes, custom repeat schedules and end dates for reminders, reading text inside photos and scanned pages (OCR), meaning-based search over file text, chunked embeddings for very long notes, goals/emails in the map, links between notes, version history, export.
+Links between notes (`[[ ]]`, backlinks, unlinked mentions), entity pages (everything about a client or project in one timeline), a pre-meeting brief, a live refresh of an open note when a task changes elsewhere, a slash menu in the Rich editor, `@` pull-ins in Rich, images in notes, custom repeat schedules and end dates for reminders, reading text inside photos and scanned pages (OCR), meaning-based search over file text, chunked embeddings for very long notes, goals/emails in the map, links between notes, version history, export.

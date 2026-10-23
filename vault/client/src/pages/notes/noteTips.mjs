@@ -59,12 +59,12 @@ export const NOTE_TIPS = {
   // rows
   row: 'Open this note.',
   rowPin: 'Pin this note to the top of the list, or unpin it.',
-  rowTask: 'Make a task from this note. The note itself is not changed.',
+  rowTask: 'Make one task from this whole note. The note itself is not changed. To turn separate to-do lines into tasks that stay linked to them, open the note and press Make tasks.',
   rowDelete: 'Delete this note. It is kept for 30 days in Recently deleted, so you can restore it.',
   rowMenu: 'More actions for this note: pin, make a task, delete.',
   rowAttachments: (n) => `${n} file${n === 1 ? '' : 's'} attached to this note. Open the note to see ${n === 1 ? 'it' : 'them'}.`,
   rowPinned: 'Pinned to the top of the list.',
-  rowVoice: 'A voice note: made from a recording. Only the words were kept, not the audio.',
+  rowVoice: 'A voice note: made from a recording. The audio is only kept if you chose to keep it; open the note to play it.',
   rowReminder: (text, due) => (due ? `Its reminder is due: ${text}. Open the note to mark it done or snooze it.` : `Reminder: ${text}.`),
   showMore: 'Load the next 100 notes.',
 
@@ -73,7 +73,7 @@ export const NOTE_TIPS = {
   pin: 'Pin this note to the top of the list, or unpin it.',
   ai: 'AI actions for this note: summarise, pull out to-dos, tidy up, suggest tags or a title. Nothing changes until you choose.',
   dictate: 'Dictate: speak and your words are typed into this note. Press again to stop.',
-  convertTask: 'Make a task from this note. The note itself is not changed.',
+  convertTask: 'Make one task from this whole note (its title and the start of its text). The note itself is not changed. For separate to-do lines, use Make tasks instead.',
   takeToChat: 'Open this note as the first message of a chat, in a project or a general chat.',
   deleteNote: 'Delete this note. It is kept for 30 days in Recently deleted, so you can restore it.',
   undoAi: 'Put the note back as it was before the AI change.',
