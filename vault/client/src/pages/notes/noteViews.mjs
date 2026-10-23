@@ -5,8 +5,14 @@
 import { DATE_PRESETS, GROUP_MODES } from './noteGroups.mjs';
 
 export const DEFAULT_FILTERS = {
-  search: '', preset: 'all', custom: { from: '', to: '' }, field: 'updated', projectId: '', clientId: '', tags: [], reminder: '', groupMode: 'date',
+  search: '', preset: 'all', custom: { from: '', to: '' }, field: 'updated', projectId: '', clientId: '', tags: [], reminder: '', files: '', groupMode: 'date',
 };
+
+export const FILES_FILTERS = [
+  { id: '', label: 'Any' },
+  { id: 'with', label: 'Has files' },
+  { id: 'without', label: 'No files' },
+];
 
 export const REMINDER_FILTERS = [
   { id: '', label: 'Any' },
@@ -28,6 +34,7 @@ export function snapshot(f) {
     clientId: x.clientId ? String(x.clientId) : '',
     tags: [...new Set(Array.isArray(x.tags) ? x.tags : [])].sort(),
     reminder: REMINDER_FILTERS.some((r) => r.id === x.reminder) ? x.reminder : '',
+    files: FILES_FILTERS.some((r) => r.id === x.files) ? x.files : '',
     groupMode: GROUP_MODES.some((m) => m.id === x.groupMode) ? x.groupMode : 'date',
   };
 }
@@ -51,6 +58,7 @@ export function describeFilters(filters, names = {}) {
   if (f.preset !== 'all' && f.field === 'created') parts.push('by created date');
   if (f.tags.length) parts.push(`tagged ${f.tags.join(' + ')}`);
   if (f.reminder) parts.push({ any: 'with a reminder', due: 'reminders due', upcoming: 'reminders coming up' }[f.reminder]);
+  if (f.files) parts.push(f.files === 'with' ? 'with files' : 'without files');
   if (f.projectId) parts.push(names.projectName || 'a project');
   if (f.clientId) parts.push(names.clientName || 'a client');
   if (f.groupMode !== 'date') parts.push(`grouped by ${GROUP_MODES.find((m) => m.id === f.groupMode).label.toLowerCase()}`);

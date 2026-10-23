@@ -397,7 +397,7 @@ test('saved views: save, list, rename, replace filters, delete to the bin and re
   const made = await call('POST', '/api/notes/views', { name: '  Acme   last month ', filters });
   assert.strictEqual(made.status, 201, JSON.stringify(made.json));
   assert.strictEqual(made.json.name, 'Acme last month');
-  assert.deepStrictEqual(made.json.filters, { search: 'quote', preset: '30d', custom: { from: '', to: '' }, field: 'created', projectId: String(projectA), clientId: String(clientA), tags: ['budget'], reminder: '', groupMode: 'tag' }, 'cut down to the known fields');
+  assert.deepStrictEqual(made.json.filters, { search: 'quote', preset: '30d', custom: { from: '', to: '' }, field: 'created', projectId: String(projectA), clientId: String(clientA), tags: ['budget'], reminder: '', files: '', groupMode: 'tag' }, 'cut down to the known fields');
   const vid = made.json.id;
 
   assert.deepStrictEqual((await call('GET', '/api/notes/views')).json.map((v) => v.name), ['Acme last month']);
@@ -671,6 +671,17 @@ test('attachments: attach, list, open, remove; safe types only; private; searcha
 
   // search finds a note by the name of a file on it
   assert.ok((await call('GET', `/api/notes?q=${encodeURIComponent('quote v2')}`)).json.some((n) => n.id === id), 'searching a file name finds the note');
+
+  // the "has files" filter: with / without, combined with search, unknown value filters nothing
+  const withFiles = async (v, extra = '') => (await call('GET', `/api/notes?files=${v}${extra}`)).json.map((n) => n.id);
+  assert.ok((await withFiles('with')).includes(id), 'files=with lists a note that has a file');
+  assert.ok(!(await withFiles('without')).includes(id), 'files=without leaves it out');
+  assert.deepStrictEqual(await withFiles('with', `&q=${encodeURIComponent('site visit')}`), [id], 'combines with search');
+  assert.ok((await withFiles('whatever')).includes(id), 'an unknown value filters nothing');
+  const bare = (await call('POST', '/api/notes', { title: 'No files here' })).json.id;
+  assert.ok((await withFiles('without')).includes(bare) && !(await withFiles('with')).includes(bare), 'a note with no file is "without"');
+  assert.strictEqual((await call('GET', `/api/notes?files=with`, undefined, 'B')).json.some((n) => n.id === id), false, "another person's files never show");
+  await call('DELETE', `/api/notes/${bare}`);
 
   // open: the shared download route, for the owner only
   const dl = await fetch(`${base}/api/attachments/${quote.json.id}/download`);

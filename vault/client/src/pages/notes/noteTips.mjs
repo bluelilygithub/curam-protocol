@@ -46,6 +46,11 @@ export const NOTE_TIPS = {
     upcoming: 'Only notes with a reminder still to come.',
     any: 'Only notes with a reminder that is not done, due or coming up.',
   },
+  filesFilter: {
+    '': 'Do not filter by attached files.',
+    with: 'Only notes that have at least one attached file.',
+    without: 'Only notes with no attached files.',
+  },
   tagChip: 'Show only notes with this tag. Pick several to see notes that have all of them.',
   manageTags: 'Rename a tag everywhere, or take it off every note. Your notes are never deleted.',
   projectFilter: 'Show only the notes filed under this project.',

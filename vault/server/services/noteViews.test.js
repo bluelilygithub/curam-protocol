@@ -8,18 +8,20 @@ const { normalizeFilters, normalizeName, MAX_NAME, MAX_SEARCH } = require('./not
 // a full, valid view passes through unchanged (tags tidied)
 assert.deepStrictEqual(
   normalizeFilters({ search: '  quote ', preset: '30d', custom: { from: '2026-01-01' }, field: 'created', projectId: '12', clientId: 7, tags: ['#Budget', 'budget', 'Q3'], groupMode: 'tag' }),
-  { search: 'quote', preset: '30d', custom: { from: '', to: '' }, field: 'created', projectId: '12', clientId: '7', tags: ['budget', 'q3'], reminder: '', groupMode: 'tag' },
+  { search: 'quote', preset: '30d', custom: { from: '', to: '' }, field: 'created', projectId: '12', clientId: '7', tags: ['budget', 'q3'], reminder: '', files: '', groupMode: 'tag' },
   'custom dates are only kept for the custom preset',
 );
 assert.deepStrictEqual(normalizeFilters({ preset: 'custom', custom: { from: '2026-10-01', to: '2026-10-31' } }).custom, { from: '2026-10-01', to: '2026-10-31' });
 assert.deepStrictEqual(normalizeFilters({ preset: 'custom', custom: { from: '2026-02-30', to: 'junk' } }).custom, { from: '', to: '' }, 'impossible or junk dates are dropped');
 
 // an empty or unknown view becomes the plain defaults, never something odd
-const plain = { search: '', preset: 'all', custom: { from: '', to: '' }, field: 'updated', projectId: '', clientId: '', tags: [], reminder: '', groupMode: 'date' };
+const plain = { search: '', preset: 'all', custom: { from: '', to: '' }, field: 'updated', projectId: '', clientId: '', tags: [], reminder: '', files: '', groupMode: 'date' };
 assert.deepStrictEqual(normalizeFilters({}), plain);
 assert.deepStrictEqual(normalizeFilters({ preset: 'forever', field: 'deleted', groupMode: 'colour', projectId: 'abc', clientId: '1; DROP', tags: 'nope', search: 5 }), plain);
 
 assert.strictEqual(normalizeFilters({ reminder: 'due' }).reminder, 'due');
+assert.strictEqual(normalizeFilters({ files: 'with' }).files, 'with');
+assert.strictEqual(normalizeFilters({ files: 'some' }).files, '', 'an unknown files filter is dropped');
 assert.strictEqual(normalizeFilters({ reminder: 'soon' }).reminder, '', 'an unknown reminder filter is dropped');
 
 // not an object -> null so the route can say 400

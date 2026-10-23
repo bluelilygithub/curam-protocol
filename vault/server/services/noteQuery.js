@@ -1,7 +1,7 @@
 'use strict';
 
 // The filters of the Notes list as one reusable piece, so the list and "Ask your notes" mean exactly the same by "the notes in this
-// view". Builds the WHERE for a query made of the list's parameters (q, project_id, client_id, unfiled, untagged, reminder, tags,
+// view". Builds the WHERE for a query made of the list's parameters (q, project_id, client_id, unfiled, untagged, reminder, files, tags,
 // from, to, field). The SQL it makes expects the aliases n (notes), p (projects) and c (clients) from NOTE_JOINS.
 
 const { normalizeTags } = require('./noteTags');
@@ -33,6 +33,9 @@ function buildFilters(userId, query = {}) {
     any: 'n.remind_at IS NOT NULL AND n.reminder_done_at IS NULL',
   }[query.reminder];
   if (reminderFilter) where.push(reminderFilter);
+  const HAS_FILES = `EXISTS (SELECT 1 FROM attachments a WHERE a."entityType"='note' AND a."entityId" = n.id)`;
+  if (query.files === 'with') where.push(HAS_FILES);
+  else if (query.files === 'without') where.push(`NOT ${HAS_FILES}`);
   const wantTags = query.tags ? normalizeTags(String(query.tags).split(',')) : [];
   if (wantTags.length) {
     // every one of the tags, not any of them: more tags narrows the list

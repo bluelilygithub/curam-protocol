@@ -11,6 +11,7 @@ const PRESETS = ['all', 'today', '7d', '30d', 'year', 'custom'];
 const GROUP_MODES = ['date', 'project', 'client', 'tag'];
 const DATE_FIELDS = ['updated', 'created'];
 const REMINDERS = ['', 'any', 'due', 'upcoming']; // '' = not filtered by reminder
+const FILES = ['', 'with', 'without']; // '' = not filtered by attached files
 const MAX_NAME = 40;
 const MAX_SEARCH = 200;
 const MAX_VIEWS = 30;
@@ -32,6 +33,7 @@ function normalizeFilters(input) {
     clientId: id(input.clientId),
     tags: normalizeTags(input.tags) || [],
     reminder: REMINDERS.includes(input.reminder) ? input.reminder : '',
+    files: FILES.includes(input.files) ? input.files : '',
     groupMode: GROUP_MODES.includes(input.groupMode) ? input.groupMode : 'date',
   };
 }
@@ -41,4 +43,4 @@ function normalizeName(value) {
   return typeof value === 'string' ? value.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_NAME).trim() : '';
 }
 
-module.exports = { PRESETS, GROUP_MODES, DATE_FIELDS, REMINDERS, MAX_NAME, MAX_SEARCH, MAX_VIEWS, normalizeFilters, normalizeName };
+module.exports = { PRESETS, GROUP_MODES, DATE_FIELDS, REMINDERS, FILES, MAX_NAME, MAX_SEARCH, MAX_VIEWS, normalizeFilters, normalizeName };

@@ -50,7 +50,7 @@ const LIST_MAX = 300;
 
 // GET /api/notes  — a light list: no full body, just a short `preview`. The editor loads one note in full with GET /:id.
 //   ?q=search (title, text, project and client name)  &project_id=N  &client_id=N  &unfiled=1 (no project and no client)
-//   &reminder=due|upcoming|any (due now / still to come / either, never the ones marked done)  &tags=a,b (notes that have ALL these tags)  &untagged=1  &from=ISO&to=ISO (to is exclusive)  &field=updated|created (which date from/to apply to; also the sort)
+//   &reminder=due|upcoming|any (due now / still to come / either, never the ones marked done)  &tags=a,b (notes that have ALL these tags)  &untagged=1  &files=with|without (has / has no attached files)  &from=ISO&to=ISO (to is exclusive)  &field=updated|created (which date from/to apply to; also the sort)
 //   &limit=N (default 100, max 300)  &offset=N   — header X-Has-More: 1 when there are more after this page.
 router.get('/', async (req, res) => {
   const userId = req.user.id;

@@ -4,7 +4,7 @@ import Tooltip from '../../components/Tooltip';
 import MoodDot from '../../components/mood/MoodDot';
 import { DATE_PRESETS, GROUP_MODES, groupNotes, filtersSummary } from './noteGroups.mjs';
 import { listText } from './noteListText.mjs';
-import { REMINDER_FILTERS } from './noteViews.mjs';
+import { REMINDER_FILTERS, FILES_FILTERS } from './noteViews.mjs';
 import { reminderState, reminderText } from './noteReminders.mjs';
 import { NOTE_TIPS } from './noteTips.mjs';
 import NoteViewsMenu from './NoteViewsMenu';
@@ -35,11 +35,11 @@ export default function NotesListPanel({
   const {
     notes, loading, loadingMore, hasMore, error, reload, loadMore, search, setSearch, searching,
     preset, setPreset, custom, setCustom, projectId, setProjectId, clientId, setClientId,
-    groupMode, setGroupMode, field, setField, filtersActive, clearFilters, tags, setTags, reminder, setReminder,
+    groupMode, setGroupMode, field, setField, filtersActive, clearFilters, tags, setTags, reminder, setReminder, files, setFiles,
   } = list;
 
   const sections = useMemo(() => groupNotes(notes, { mode: groupMode, field }), [notes, groupMode, field]);
-  const activeCount = (preset !== 'all' ? 1 : 0) + (projectId ? 1 : 0) + (clientId ? 1 : 0) + (tags.length ? 1 : 0) + (reminder ? 1 : 0);
+  const activeCount = (preset !== 'all' ? 1 : 0) + (projectId ? 1 : 0) + (clientId ? 1 : 0) + (tags.length ? 1 : 0) + (reminder ? 1 : 0) + (files ? 1 : 0);
   const activeViewName = viewsApi.activeId ? viewsApi.views.find((v) => v.id === viewsApi.activeId)?.name : null;
   const border = { borderColor: 'var(--color-border)' };
   const chip = (on) => ({
@@ -155,7 +155,7 @@ export default function NotesListPanel({
     );
   }
 
-  const summary = filtersSummary({ preset, custom, search: search.trim(), project: projectId, client: clientId, tags, reminder });
+  const summary = filtersSummary({ preset, custom, search: search.trim(), project: projectId, client: clientId, tags, reminder, files });
 
   return (
     <div className="flex flex-col h-full min-h-0" style={{ background: 'var(--color-surface)' }}>
@@ -280,6 +280,14 @@ export default function NotesListPanel({
               {REMINDER_FILTERS.map((r) => (
                 <Tooltip key={r.id || 'none'} text={NOTE_TIPS.reminderFilter[r.id]}>
                   <button type="button" onClick={() => setReminder(r.id)} aria-pressed={reminder === r.id} className="text-xs px-2.5 rounded-full transition-opacity duration-200 hover:opacity-80" style={chip(reminder === r.id)}>{r.label}</button>
+                </Tooltip>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Attached files">
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Files</span>
+              {FILES_FILTERS.map((r) => (
+                <Tooltip key={r.id || 'none'} text={NOTE_TIPS.filesFilter[r.id]}>
+                  <button type="button" onClick={() => setFiles(r.id)} aria-pressed={files === r.id} className="text-xs px-2.5 rounded-full transition-opacity duration-200 hover:opacity-80" style={chip(files === r.id)}>{r.label}</button>
                 </Tooltip>
               ))}
             </div>

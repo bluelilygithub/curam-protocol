@@ -4,7 +4,7 @@ import { DEFAULT_FILTERS, snapshot, sameFilters, isPlain, describeFilters } from
 // the plain state is plain, and any one change makes it not plain
 assert.ok(isPlain(DEFAULT_FILTERS));
 assert.ok(isPlain({}), 'missing fields mean the defaults');
-for (const change of [{ search: 'a' }, { preset: '7d' }, { projectId: '3' }, { clientId: '4' }, { tags: ['x'] }, { groupMode: 'tag' }, { field: 'created' }, { reminder: 'due' }]) {
+for (const change of [{ search: 'a' }, { preset: '7d' }, { projectId: '3' }, { clientId: '4' }, { tags: ['x'] }, { groupMode: 'tag' }, { field: 'created' }, { reminder: 'due' }, { files: 'with' }, { files: 'without' }]) {
   assert.ok(!isPlain({ ...DEFAULT_FILTERS, ...change }), `not plain: ${JSON.stringify(change)}`);
 }
 
@@ -17,7 +17,7 @@ assert.ok(!sameFilters({ ...DEFAULT_FILTERS, preset: 'custom', custom: { from: '
 assert.ok(!sameFilters({ ...DEFAULT_FILTERS, tags: ['a'] }, { ...DEFAULT_FILTERS, tags: ['a', 'b'] }));
 
 // unknown values fall back, so a bad saved value cannot break the screen
-assert.deepStrictEqual(snapshot({ preset: 'forever', groupMode: 'colour', field: 'deleted', tags: 'nope', reminder: 'soon' }), snapshot(DEFAULT_FILTERS));
+assert.deepStrictEqual(snapshot({ preset: 'forever', groupMode: 'colour', field: 'deleted', tags: 'nope', reminder: 'soon', files: 'maybe' }), snapshot(DEFAULT_FILTERS));
 
 // in words
 assert.strictEqual(describeFilters(DEFAULT_FILTERS), 'Every note, newest first');
@@ -31,3 +31,6 @@ assert.strictEqual(describeFilters({ ...DEFAULT_FILTERS, field: 'created' }), 'E
 assert.strictEqual(describeFilters({ ...DEFAULT_FILTERS, reminder: 'due', tags: ['work'] }), 'tagged work · reminders due');
 
 console.log('ok - note views: compare current filters with a saved view, describe it in words');
+
+assert.strictEqual(describeFilters({ ...DEFAULT_FILTERS, files: 'with', tags: ['work'] }), 'tagged work · with files');
+assert.strictEqual(describeFilters({ ...DEFAULT_FILTERS, files: 'without' }), 'without files');

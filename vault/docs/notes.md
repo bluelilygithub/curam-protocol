@@ -4,7 +4,7 @@ Page `client/src/pages/NotesPage.jsx` (`/notes`), API `server/routes/notes.js` (
 
 ## What it does
 
-- **List**: `GET /api/notes` sends a short `preview`, never the whole text; 100 at a time (`X-Has-More`). Filters: search (title, text, project, client, tag), date range (edited or created), project, client, tags (a note must have ALL picked tags), `untagged`. Group by Date, Project, Client or Tag (`client/src/pages/notes/noteGroups.mjs`, pure and tested). Pinned notes lead in their own section.
+- **List**: `GET /api/notes` sends a short `preview`, never the whole text; 100 at a time (`X-Has-More`). Filters: search (title, text, project, client, tag), date range (edited or created), project, client, files (`files=with|without`: has / has no attached files, `noteQuery.js`; also in saved views and "This list" in Ask), tags (a note must have ALL picked tags), `untagged`. Group by Date, Project, Client or Tag (`client/src/pages/notes/noteGroups.mjs`, pure and tested). Pinned notes lead in their own section.
 - **Editor**: autosave (queued, flushes on switching notes / hiding the tab), Write / Preview (markdown through the shared `react-markdown`; tick-boxes in Preview write back into the text), project and client, tags, dictation, `@` pull-ins (web, Gmail, Calendar), AI actions (summary, to-dos to tasks, tidy up, tags, title — they only propose, `server/services/noteAi.js`).
 - **Phone**: the list is the whole screen; a note opens full screen with a back arrow; filters and the AI menu are bottom sheets.
 - **Tags**: table `note_tags (note_id, user_id, tag)`. One rule for what a tag is (`server/services/noteTags.js`, copied in `client/src/pages/notes/noteTags.mjs`, a test keeps them equal). Rename (merges) and remove everywhere from Manage tags.
@@ -39,4 +39,4 @@ Page `client/src/pages/NotesPage.jsx` (`/notes`), API `server/routes/notes.js` (
 
 ## Not built (ideas)
 
-Custom repeat schedules and end dates for reminders, reading inside attached files (text extraction), chunked embeddings for very long notes, goals/emails in the map, links between notes, attachments, version history, export.
+Custom repeat schedules and end dates for reminders, reading inside attached files (text extraction), chunked embeddings for very long notes, goals/emails in the map, links between notes, version history, export.

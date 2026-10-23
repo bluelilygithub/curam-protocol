@@ -41,6 +41,7 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
   const [clientId, setClientId] = useState('');
   const [tags, setTags] = useState([]); // the notes must have ALL of these
   const [reminder, setReminder] = useState(''); // '' | 'due' | 'upcoming' | 'any'
+  const [files, setFiles] = useState(''); // '' | 'with' | 'without' (attached files)
   const [{ groupMode, field }, setView] = useState(readView);
 
   const seq = useRef(0);
@@ -64,13 +65,14 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
     if (clientId) p.set('client_id', clientId);
     if (tags.length) p.set('tags', tags.join(','));
     if (reminder) p.set('reminder', reminder);
+    if (files) p.set('files', files);
     const r = rangeFor(preset, custom);
     if (r.from) p.set('from', r.from);
     if (r.to) p.set('to', r.to);
     p.set('field', field);
     return p;
     // `preset` 'today'/'7d'... are re-read at the moment of loading, so a tab left open overnight shows the new day on the next change
-  }, [debouncedSearch, projectId, clientId, tagsKey, reminder, preset, custom.from, custom.to, field]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, projectId, clientId, tagsKey, reminder, files, preset, custom.from, custom.to, field]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchPage = useCallback(async (offset) => {
     const mine = ++seq.current;
@@ -134,8 +136,8 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
   const removeNote = useCallback((id) => setNotes((prev) => prev.filter((n) => n.id !== id)), []);
 
   // Everything a saved view holds, as it is right now (the search as typed, not as last sent).
-  const filters = useMemo(() => ({ search: search.trim(), preset, custom, field, projectId, clientId, tags, reminder, groupMode }),
-    [search, preset, custom, field, projectId, clientId, tags, reminder, groupMode]);
+  const filters = useMemo(() => ({ search: search.trim(), preset, custom, field, projectId, clientId, tags, reminder, files, groupMode }),
+    [search, preset, custom, field, projectId, clientId, tags, reminder, files, groupMode]);
 
   // The list's current filters as the parameters the server understands (what "Ask your notes" means by "this list").
   const scopeQuery = useMemo(() => {
@@ -145,12 +147,13 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
     if (clientId) q.client_id = clientId;
     if (tags.length) q.tags = tags.join(',');
     if (reminder) q.reminder = reminder;
+    if (files) q.files = files;
     const r = rangeFor(preset, custom);
     if (r.from) q.from = r.from;
     if (r.to) q.to = r.to;
     q.field = field;
     return q;
-  }, [debouncedSearch, projectId, clientId, tagsKey, reminder, preset, custom.from, custom.to, field]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, projectId, clientId, tagsKey, reminder, files, preset, custom.from, custom.to, field]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const applyFilters = useCallback((f) => {
     const text = String(f.search || '');
@@ -162,18 +165,19 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
     setClientId(f.clientId ? String(f.clientId) : '');
     setTags(Array.isArray(f.tags) ? f.tags : []);
     setReminder(['due', 'upcoming', 'any'].includes(f.reminder) ? f.reminder : '');
+    setFiles(['with', 'without'].includes(f.files) ? f.files : '');
     setView({ groupMode: ['date', 'project', 'client', 'tag'].includes(f.groupMode) ? f.groupMode : 'date', field: f.field === 'created' ? 'created' : 'updated' });
   }, []);
 
-  const filtersActive = !!(debouncedSearch || projectId || clientId || tags.length || reminder || preset !== 'all');
+  const filtersActive = !!(debouncedSearch || projectId || clientId || tags.length || reminder || files || preset !== 'all');
   const clearFilters = useCallback(() => {
-    setSearch(''); setDebouncedSearch(''); setPreset('all'); setCustom({ from: '', to: '' }); setProjectId(''); setClientId(''); setTags([]); setReminder('');
+    setSearch(''); setDebouncedSearch(''); setPreset('all'); setCustom({ from: '', to: '' }); setProjectId(''); setClientId(''); setTags([]); setReminder(''); setFiles('');
   }, []);
 
   return {
     notes, loading, loadingMore, hasMore, error, reload, loadMore, patchNote, removeNote,
     search, setSearch, searching: search.trim() !== debouncedSearch,
-    preset, setPreset, custom, setCustom, projectId, setProjectId, clientId, setClientId, tags, setTags, reminder, setReminder,
+    preset, setPreset, custom, setCustom, projectId, setProjectId, clientId, setClientId, tags, setTags, reminder, setReminder, files, setFiles,
     groupMode, setGroupMode, field, setField, filtersActive, clearFilters, filters, applyFilters, scopeQuery,
   };
 }

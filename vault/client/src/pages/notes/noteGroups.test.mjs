@@ -113,3 +113,6 @@ assert.strictEqual(filtersSummary({ preset: 'all', reminder: 'due' }), 'reminder
 assert.strictEqual(filtersSummary({ preset: 'custom', custom: { from: '2026-10-01', to: '2026-10-05' } }), '2026-10-01 to 2026-10-05');
 
 console.log('ok - note groups: date ranges, date/project/client sections');
+
+assert.strictEqual(filtersSummary({ preset: 'all', files: 'with' }), 'with attached files');
+assert.strictEqual(filtersSummary({ preset: 'all', files: '' }), '');

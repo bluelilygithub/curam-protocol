@@ -277,7 +277,7 @@ function scopeToQuery(scope) {
   if (mode === 'filters') {
     const q = scope.query && typeof scope.query === 'object' ? scope.query : {};
     const keep = {};
-    for (const key of ['q', 'project_id', 'client_id', 'unfiled', 'untagged', 'reminder', 'tags', 'from', 'to', 'field']) if (q[key] !== undefined && q[key] !== null && q[key] !== '') keep[key] = String(q[key]).slice(0, 400);
+    for (const key of ['q', 'project_id', 'client_id', 'unfiled', 'untagged', 'reminder', 'files', 'tags', 'from', 'to', 'field']) if (q[key] !== undefined && q[key] !== null && q[key] !== '') keep[key] = String(q[key]).slice(0, 400);
     return { mode: 'filters', query: keep, label: 'the notes in the current list' };
   }
   if (mode === 'note') {

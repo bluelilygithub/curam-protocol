@@ -121,7 +121,7 @@ export function groupNotes(notes, { mode = 'date', field = 'updated', now = new 
 }
 
 /** A short label for the active filters, for the "N notes" line and the empty state. */
-export function filtersSummary({ preset, custom, search, project, client, tags, reminder }) {
+export function filtersSummary({ preset, custom, search, project, client, tags, reminder, files }) {
   const parts = [];
   if (search) parts.push(`matching "${search}"`);
   if (preset && preset !== 'all') {
@@ -135,5 +135,6 @@ export function filtersSummary({ preset, custom, search, project, client, tags, 
   if (client) parts.push('for this client');
   if (Array.isArray(tags) && tags.length) parts.push(`tagged ${tags.join(' + ')}`);
   if (reminder) parts.push({ any: 'with a reminder', due: 'reminders due', upcoming: 'reminders coming up' }[reminder] || '');
+  if (files === 'with' || files === 'without') parts.push(`${files} attached files`);
   return parts.join(', ');
 }
