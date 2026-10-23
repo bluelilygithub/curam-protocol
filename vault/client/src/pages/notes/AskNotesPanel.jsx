@@ -259,7 +259,7 @@ export default function AskNotesPanel({ scopeQuery, openNoteId, listCount, mobil
                       )}
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                          {m.looked != null || m.sources.length ? `Read ${m.looked ?? m.sources.length} note${(m.looked ?? m.sources.length) === 1 ? '' : 's'}` : ''}{m.scope ? ` from ${m.scope}` : ''}{m.searched ? ` · looked for ${m.searched}` : ''}{m.stage === 'wider' ? ' · searched wider' : ''}{m.stage === 'recent' ? ' · nothing matched, so the latest notes' : ''}{m.unindexed > 0 ? ` · ${m.unindexed} note${m.unindexed === 1 ? ' is' : 's are'} still being prepared for search by meaning` : ''}
+                          {m.looked != null || m.sources.length ? `Read ${m.looked ?? m.sources.length} note${(m.looked ?? m.sources.length) === 1 ? '' : 's'}` : ''}{m.scope ? ` from ${m.scope}` : ''}{m.searched ? ` · looked for ${m.searched}` : ''}{m.stage === 'wider' ? ' · searched wider' : ''}{m.stage === 'recent' ? ' · nothing matched, so the latest notes' : ''}{m.unindexed > 0 ? ` · ${m.unindexed} note${m.unindexed === 1 ? ' is' : 's are'} still being prepared for search by meaning` : ''}{(() => { const n = m.sources.reduce((sum, s) => sum + (Array.isArray(s.files) ? s.files.length : 0), 0); return n > 0 ? ` · read inside ${n} attached file${n === 1 ? '' : 's'}` : ''; })()}{m.filesPending > 0 ? ` · ${m.filesPending} attached file${m.filesPending === 1 ? ' is' : 's are'} still being read, so ask again in a minute` : ''}
                         </p>
                         <span className="flex items-center gap-2">
                           {others.length > 0 && (

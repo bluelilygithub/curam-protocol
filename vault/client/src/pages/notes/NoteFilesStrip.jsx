@@ -3,7 +3,7 @@ import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
 import { NOTE_TIPS } from './noteTips.mjs';
-import { ACCEPT, MAX_FILES, formatSize, isViewable, kindOf, ICONS } from './noteAttachments.mjs';
+import { ACCEPT, MAX_FILES, formatSize, isViewable, kindOf, ICONS, askCanRead } from './noteAttachments.mjs';
 
 /** A small picture of an image file. The picture is fetched with the sign-in header (an <img src> cannot carry it) and dropped when the chip goes. */
 function Thumb({ att, size }) {
@@ -60,7 +60,7 @@ function FileChip({ att, mobile, onRemove }) {
   }
   return (
     <span className="inline-flex items-center rounded-lg text-xs min-w-0" style={{ ...chip, maxWidth: '100%' }}>
-      <Tooltip text={NOTE_TIPS.attachOpen(att.filename, formatSize(att.sizeBytes), isViewable(att))}>
+      <Tooltip text={NOTE_TIPS.attachOpen(att.filename, formatSize(att.sizeBytes), isViewable(att), askCanRead(att))}>
         <button type="button" onClick={() => openFile(att)} className="inline-flex items-center gap-1.5 pl-2 pr-1.5 min-w-0 hover:opacity-70 transition-opacity duration-200" style={{ minHeight: height }}>
           {kind === 'image' ? <Thumb att={att} size={mobile ? 24 : 18} /> : null}
           <span className="flex-shrink-0" style={{ color: 'var(--color-primary)' }}>{kind === 'image' ? null : getIcon(ICONS[kind], { size: 13 })}</span>

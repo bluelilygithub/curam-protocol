@@ -92,7 +92,7 @@ export const NOTE_TIPS = {
   todoBox: 'Tick or untick this to-do. The change is saved into the note.',
   attach: 'Attach files to this note: PDF, images, text, CSV or Office documents, up to 50 MB each. You can also drop files onto the note or paste an image into the text.',
   attachFull: 'This note already has the most files it can hold (20). Remove one to attach another.',
-  attachOpen: (name, size, view) => `${name}${size ? `, ${size}` : ''}. Click to ${view ? 'open it in a new tab' : 'save it to your computer'}.`,
+  attachOpen: (name, size, view, askReads) => `${name}${size ? `, ${size}` : ''}. Click to ${view ? 'open it in a new tab' : 'save it to your computer'}. ${askReads ? 'Ask your notes can read the text inside it.' : 'Ask your notes cannot read inside this file, only its name.'}`,
   attachRemove: 'Remove this file from the note. It is deleted for good, not kept in Recently deleted.',
   reminderButton: 'Set a reminder for this note: pick a time, choose whether it repeats, and whether to email you too.',
   reminderRepeat: 'How often this reminder comes round again: every day, weekday, week, 2 weeks, month or year. It keeps the time of day you pick, even when the clocks change.',

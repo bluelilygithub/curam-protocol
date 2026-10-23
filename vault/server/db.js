@@ -2047,6 +2047,21 @@ async function initSchema() {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_attachments_entity ON attachments("entityType","entityId")`);
 
+    // The text inside files attached to notes, so "Ask your notes" can find and quote it (server/services/noteFileText.js). One row per
+    // attachment, removed with it. status 'none' = nothing to read (a photo, a scan, an old .doc), recorded so it is not tried again.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS attachment_text (
+        attachment_id INTEGER PRIMARY KEY REFERENCES attachments(id) ON DELETE CASCADE,
+        user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        status        TEXT NOT NULL,
+        text          TEXT NOT NULL DEFAULT '',
+        tsv           TSVECTOR,
+        chars         INTEGER NOT NULL DEFAULT 0,
+        updated_at    TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_attachment_text_user ON attachment_text(user_id)`);
+
     // ── clients / fin_clients merge — see docs/crm-migration.md (complete: ──
     // fin_clients dropped, fin_invoices links to clients via "clientRef") ──
 

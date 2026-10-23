@@ -6,6 +6,8 @@ export const MAX_FILES = 20;
 export const MAX_BYTES = 50 * 1024 * 1024;
 export const ALLOWED_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.webp', '.txt', '.json', '.csv', '.md', '.xlsx', '.xls', '.docx', '.doc', '.pptx', '.ppt'];
 export const ACCEPT = ALLOWED_EXTENSIONS.join(',');
+// The kinds whose text Ask your notes can read (server/services/noteFileText.js); photos, scans and old .doc / .ppt files cannot be read.
+export const READABLE_EXTENSIONS = ['.txt', '.md', '.json', '.csv', '.pdf', '.docx', '.xlsx', '.xls', '.pptx'];
 
 const extensionOf = (name) => { const m = /\.[^.\\/]+$/.exec(String(name || '').toLowerCase()); return m ? m[0] : ''; };
 
@@ -27,6 +29,9 @@ export function fileProblem(file, have = 0) {
   if (!ALLOWED_EXTENSIONS.includes(extensionOf(file.name))) return 'that kind of file cannot be attached. PDF, images, text, CSV and Office documents can.';
   return '';
 }
+
+/** Whether Ask your notes can (or could) read inside this file: what the server found if it has looked (`readable`), else by the kind of file. */
+export const askCanRead = (att) => (typeof att?.readable === 'boolean' ? att.readable : READABLE_EXTENSIONS.includes(extensionOf(att?.filename)));
 
 /** 'image' | 'pdf' | 'sheet' | 'doc' | 'slides' | 'text' | 'file', from the file's type or name. */
 export function kindOf(att) {

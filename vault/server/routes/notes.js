@@ -19,6 +19,7 @@ const noteViews = require('../services/noteViews');
 const noteQuery = require('../services/noteQuery');
 const noteEmbeddings = require('../services/noteEmbeddings'); // meaning-based search: a note is embedded a little after it is saved
 const noteAsk = require('../services/noteAsk'); // called as noteAsk.askNotes, with noteAsk.routeDeps, so tests can swap the models
+const noteFileText = require('../services/noteFileText'); // reads the text inside attached files (for Ask)
 const noteReminders = require('../services/noteReminders');
 const {
   createAttachmentUpload, rejectIfDisguisedExecutable, assertWithinQuota, insertAttachment, attachmentsForEntity, MAX_FILE_BYTES,
@@ -334,7 +335,7 @@ router.post('/ask', aiLimiter, async (req, res) => {
     const result = await noteAsk.askNotes(req.user.id, req.body || {}, noteAsk.routeDeps);
     let id = null;
     if (!result.noModel) {
-      const keep = result.sources.map((s) => ({ n: s.n, id: s.id, title: s.title, updated: s.updated, cited: s.cited }));
+      const keep = result.sources.map((s) => ({ n: s.n, id: s.id, title: s.title, updated: s.updated, cited: s.cited, files: s.files }));
       const ins = await pool.query(
         'INSERT INTO note_qa (user_id, question, answer, sources, scope, searched, stage, related) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8::jsonb) RETURNING id, created_at',
         [req.user.id, String(req.body.question).replace(/\s+/g, ' ').trim(), result.answer, JSON.stringify(keep), result.scope, result.searched || '', result.stage, JSON.stringify(result.related || [])]);
@@ -475,7 +476,10 @@ router.get('/:id', async (req, res) => {
       [Number(req.params.id) || 0, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-    res.json({ ...rows[0], attachments: await attachmentsForEntity('note', rows[0].id) });
+    const files = await attachmentsForEntity('note', rows[0].id);
+    // readable: true / false once the file's text has been looked at, null while that is still to happen
+    const seen = files.length ? new Map((await pool.query('SELECT attachment_id, status FROM attachment_text WHERE attachment_id = ANY($1::int[])', [files.map((f) => f.id)])).rows.map((r) => [r.attachment_id, r.status])) : new Map();
+    res.json({ ...rows[0], attachments: files.map((f) => ({ ...f, readable: seen.has(f.id) ? seen.get(f.id) === 'ok' : null })) });
   } catch (err) {
     getLogger().error({ err }, '[notes read]');
     res.status(500).json({ error: 'Could not load the note. Try again.' });
@@ -581,6 +585,7 @@ router.post('/:id/attachments', async (req, res) => {
       await assertWithinQuota(req.user.id, req.file.size);
       await rejectIfDisguisedExecutable(req.file.path);
       const attachment = await insertAttachment({ userId: req.user.id, entityType: 'note', entityId: noteId, file: req.file });
+      noteFileText.queueExtract({ id: attachment.id, userId: req.user.id, filename: attachment.filename, storedPath: req.file.path });
       res.status(201).json(attachment);
     } catch (err) {
       dropFile();

@@ -1,6 +1,7 @@
 import assert from 'node:assert';
 import fs from 'node:fs';
-import { MAX_FILES, MAX_BYTES, ALLOWED_EXTENSIONS, ACCEPT, formatSize, fileProblem, kindOf, isViewable, ICONS } from './noteAttachments.mjs';
+import { createRequire } from 'node:module';
+import { MAX_FILES, READABLE_EXTENSIONS, askCanRead, MAX_BYTES, ALLOWED_EXTENSIONS, ACCEPT, formatSize, fileProblem, kindOf, isViewable, ICONS } from './noteAttachments.mjs';
 
 // the screen offers exactly the file types the server accepts
 const serverSource = fs.readFileSync(new URL('../../../../server/utils/attachments.js', import.meta.url), 'utf8');
@@ -10,6 +11,16 @@ assert.strictEqual(ACCEPT, ALLOWED_EXTENSIONS.join(','));
 assert.ok(serverSource.includes('50 * 1024 * 1024') && MAX_BYTES === 50 * 1024 * 1024, 'same size cap');
 const routeSource = fs.readFileSync(new URL('../../../../server/routes/notes.js', import.meta.url), 'utf8');
 assert.ok(routeSource.includes(`MAX_FILES_PER_NOTE = ${MAX_FILES}`), 'same number of files per note');
+
+const serverReadable = [...createRequire(import.meta.url)('../../../../server/services/noteFileText.js').READABLE].sort();
+assert.deepStrictEqual([...READABLE_EXTENSIONS].sort(), serverReadable, 'the screen knows the same readable kinds as the server');
+assert.ok(READABLE_EXTENSIONS.every((e) => ALLOWED_EXTENSIONS.includes(e)), 'and only kinds that can be attached');
+assert.strictEqual(askCanRead({ filename: 'a.PDF' }), true);
+assert.strictEqual(askCanRead({ filename: 'photo.jpg' }), false);
+assert.strictEqual(askCanRead({ filename: 'old.doc' }), false);
+assert.strictEqual(askCanRead({ filename: 'a.pdf', readable: false }), false, 'what the server found (a scan with no text) wins');
+assert.strictEqual(askCanRead({ filename: 'a.pdf', readable: null }), true, 'not looked at yet: by the kind of file');
+assert.strictEqual(askCanRead(null), false);
 
 assert.strictEqual(formatSize(1), '1 byte');
 assert.strictEqual(formatSize(13), '13 bytes');
