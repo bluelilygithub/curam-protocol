@@ -16,6 +16,7 @@ const assert = require('assert');
 const http = require('http');
 const express = require('express');
 const { pool } = require('../db');
+require('../services/noteEmbeddings').control.enabled = false; // saves would otherwise queue embedding work after the test ends
 
 let userA; let userB;
 const app = express();
@@ -563,6 +564,7 @@ test('ask your notes: finds the right notes in the database, only this person\'s
       return { text: model === 'light-m' ? planner : 'The quokka was $4,000 [1]. Another note mentions a spreadsheet [3].', model, inputTokens: 1, outputTokens: 1 };
     },
     logUsage: () => {},
+    embed: async () => ({ vector: null }), background: false,
   };
   try {
     const r = await call('POST', '/api/notes/ask', { question: 'What quokka did we agree?', today: '2026-10-23', scope: { mode: 'all' } });
@@ -632,6 +634,7 @@ test('ask your notes: the conversation is kept (newest 100), listed in order, ca
     getModels: async () => ({ light: 'l', standard: 's' }),
     callModel: async (model, prompt) => ({ text: model === 'l' ? '{"keywords":["quarterly"]}' : `Answer to: ${prompt.split('QUESTION: ')[1]} [1]`, model }),
     logUsage: () => {},
+    embed: async () => ({ vector: null }), background: false,
   };
   try {
     await pool.query('DELETE FROM note_qa WHERE user_id = ANY($1::int[])', [[userA, userB]]);
@@ -660,6 +663,127 @@ test('ask your notes: the conversation is kept (newest 100), listed in order, ca
     assert.ok(cleared.json.removed >= 100);
     assert.deepStrictEqual((await call('GET', '/api/notes/ask')).json, []);
   } finally { noteAsk.routeDeps = {}; await pool.query('DELETE FROM notes WHERE id=$1', [n]); }
+});
+
+test('ask your notes: finds by meaning as well as words, indexes lazily, and maps the linked projects, clients, tasks, deals and contact', async () => {
+  const noteAsk = require('../services/noteAsk');
+  // a fake embedding model: money-ish text points one way, travel-ish text another, everything else a third
+  const embedded = [];
+  const fakeEmbed = async (text) => {
+    embedded.push(text);
+    const t = text.toLowerCase();
+    const vector = /invoice|payment|money|owed|price|quote/.test(t) ? [1, 0, 0.1] : /holiday|flights|tasmania|travel/.test(t) ? [0, 1, 0.1] : [0, 0, 1];
+    return { vector, sourceKey: 'fake:1' };
+  };
+  const mk = (uid, title, body, extra = {}) => pool.query('INSERT INTO notes (user_id, title, body, project_id, client_id) VALUES ($1,$2,$3,$4,$5) RETURNING id', [uid, title, body, extra.project || null, extra.client || null]).then((r) => r.rows[0].id);
+  const invoice = await mk(userA, 'Acme invoice', 'Sent the invoice, payment due Friday.', { project: projectA, client: clientA });
+  const holiday = await mk(userA, 'Trip', 'Flights to Tasmania in autumn.');
+  const theirs = await mk(userB, 'B invoice', 'Sent the invoice to B client, payment overdue.');
+
+  // records linked to A's project and client; and ones that must never appear
+  const task = (uid, title, status, extra = {}) => pool.query(
+    `INSERT INTO tasks (title, status, priority, "projectId", "clientId", "userId", "dueDate", "updatedAt") VALUES ($1,$2,'high',$3,$4,$5,$6, COALESCE($7::timestamptz, NOW())) RETURNING id`,
+    [title, status, extra.project || null, extra.client || null, uid, extra.due || null, extra.updated || null]).then((r) => r.rows[0].id);
+  const open = await task(userA, 'Chase the Acme payment', 'todo', { project: projectA, due: '2026-10-30' });
+  const longDone = await task(userA, 'Ancient finished job', 'done', { project: projectA, updated: '2026-01-01T00:00:00Z' });
+  const bTask = await task(userB, 'B secret task on A client', 'todo', { client: clientA });
+  const deal = (await pool.query(`INSERT INTO client_deals ("userId", "clientId", title, stage, value) VALUES ($1,$2,'Acme retainer','proposal',12000) RETURNING id`, [userA, clientA])).rows[0].id;
+  const touch = (await pool.query(`INSERT INTO client_interactions ("clientId", "userId", type, title, date) VALUES ($1,$2,'call','Kickoff call', NOW()) RETURNING id`, [clientA, userA])).rows[0].id;
+  await pool.query('UPDATE projects SET "clientId"=$1 WHERE id=$2', [clientA, projectA]);
+
+  const prompts = [];
+  let reply = 'You are owed payment [1]. Chase it [T1] on the Acme project [P1] (and a made up [T9][D7]).';
+  noteAsk.routeDeps = {
+    getModels: async () => ({ light: 'l', standard: 's' }),
+    callModel: async (model, prompt, opts) => { prompts.push({ model, prompt, system: opts.system }); return { text: model === 'l' ? (prompt.includes('travelling') ? '{"keywords":["travel"]}' : '{"keywords":["money"]}') : reply, model }; },
+    logUsage: () => {},
+    embed: fakeEmbed,
+    background: false,
+  };
+  try {
+    const r = await call('POST', '/api/notes/ask', { question: 'How much money are we owed?', today: '2026-10-23' });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+    // meaning: "money" is not a word in any note, yet the invoice note is found; the trip and B's invoice are not
+    const found = r.json.sources.map((s) => s.id);
+    assert.ok(found.includes(invoice), 'found by what it is about, not by its words');
+    assert.ok(!found.includes(holiday) && !found.includes(theirs), 'the trip is about something else, and the other invoice belongs to someone else');
+    const invoiceN = found.indexOf(invoice) + 1;
+    assert.strictEqual(r.json.semantic, true);
+    assert.strictEqual(r.json.stage, 'matched');
+    assert.match(r.json.searched, /by meaning too/);
+    assert.strictEqual(r.json.unindexed, 0);
+    // notes were indexed on the way, only A's, and only once
+    const rowsFor = async (uid) => Number((await pool.query('SELECT COUNT(*) FROM note_embeddings WHERE user_id=$1', [uid])).rows[0].count);
+    assert.ok((await rowsFor(userA)) >= 2, 'the notes in scope were embedded');
+    assert.strictEqual(await rowsFor(userB), 0, "B's note was never embedded by A's question");
+    const embeddedInvoice = () => embedded.filter((t) => t.includes('Sent the invoice, payment due Friday')).length;
+    assert.strictEqual(embeddedInvoice(), 1);
+    await call('POST', '/api/notes/ask', { question: 'How much money are we owed?', today: '2026-10-23' });
+    assert.strictEqual(embeddedInvoice(), 1, 'an unchanged note is not embedded again');
+    await call('PUT', `/api/notes/${invoice}`, { body: 'Sent the invoice, payment due next Friday instead.' });
+    await call('POST', '/api/notes/ask', { question: 'How much money are we owed?', today: '2026-10-23' });
+    assert.strictEqual(embeddedInvoice(), 1, 'the old text is not embedded again');
+    assert.strictEqual(embedded.filter((t) => t.includes('next Friday instead')).length, 1, 'an edited note is embedded again, once');
+
+    // the map: what is linked to the note's project and client, this person's only
+    const labels = r.json.related.map((i) => `${i.key}:${i.label}`);
+    assert.ok(labels.includes('C1:Client A') && labels.includes('P1:Project A'), JSON.stringify(labels));
+    const byLabel = Object.fromEntries(r.json.related.map((i) => [i.label, i]));
+    assert.strictEqual(byLabel['Chase the Acme payment'].key, 'T1');
+    assert.strictEqual(byLabel['Chase the Acme payment'].parent, 'P1', 'a task hangs on its project');
+    assert.strictEqual(byLabel['Project A'].parent, 'C1');
+    assert.deepStrictEqual(byLabel['Project A'].notes, [invoiceN], 'and says which note sits there');
+    assert.ok(byLabel['Acme retainer'] && byLabel['Kickoff call'], 'deals and recent contact');
+    assert.ok(!byLabel['Ancient finished job'], 'a task finished long ago is left off');
+    assert.ok(!byLabel['B secret task on A client'], "another person's task, even on the same client id, never appears");
+    // citations: the real keys stay (and are marked), the invented ones go
+    assert.match(r.json.answer, /\[1\]/);
+    assert.ok(!/T9|D7/.test(r.json.answer), 'a made-up record is removed');
+    assert.ok(/\[T1\]/.test(r.json.answer) && /\[P1\]/.test(r.json.answer));
+    assert.strictEqual(byLabel['Chase the Acme payment'].cited, true);
+    assert.strictEqual(byLabel['Acme retainer'].cited, false);
+    const ans = prompts.filter((p) => p.model === 's')[0];
+    assert.match(ans.prompt, /LINKED RECORDS:/);
+    assert.match(ans.prompt, /\[T1\] task "Chase the Acme payment"/);
+    assert.ok(!ans.prompt.includes('B secret task'), "B's task never reached the model");
+    assert.ok(!ans.prompt.includes('B client'), "B's note never reached the model");
+    assert.match(ans.system, /LINKED RECORDS/, 'the rules for linked records are in the instructions');
+
+    // the history keeps the map
+    const hist = (await call('GET', '/api/notes/ask')).json;
+    assert.ok(hist.at(-1).related.some((i) => i.key === 'T1' && i.cited), 'the saved answer still has its map');
+
+    // turning it off: no linked records read, none sent, none shown
+    prompts.length = 0;
+    reply = 'You are owed payment [1].';
+    const off = await call('POST', '/api/notes/ask', { question: 'How much money are we owed?', today: '2026-10-23', related: false });
+    assert.deepStrictEqual(off.json.related, []);
+    assert.ok(!prompts.find((p) => p.model === 's').prompt.includes('LINKED RECORDS'));
+    assert.ok(!prompts.find((p) => p.model === 's').system.includes('LINKED RECORDS'));
+
+    // a question about a travel idea finds the trip by meaning
+    const trip = await call('POST', '/api/notes/ask', { question: 'Where did I think of travelling?', today: '2026-10-23', scope: { mode: 'all' } });
+    assert.ok(trip.json.sources.some((s) => s.id === holiday) && !trip.json.sources.some((s) => s.id === invoice), 'a different question reaches a different note');
+    assert.deepStrictEqual(trip.json.related, [], 'a note with no project or client has nothing linked');
+
+    // no embedding model set up (or it is down): the word search still works, quietly
+    noteAsk.routeDeps.embed = async () => ({ vector: null });
+    noteAsk.routeDeps.callModel = async (model) => ({ text: model === 'l' ? '{"keywords":["invoice"]}' : 'ok [1]', model });
+    const words = await call('POST', '/api/notes/ask', { question: 'invoice?', today: '2026-10-23' });
+    assert.strictEqual(words.status, 200);
+    assert.strictEqual(words.json.semantic, false);
+    assert.ok(words.json.sources.some((s) => s.id === invoice));
+    noteAsk.routeDeps.embed = async () => { throw new Error('embedding service down'); };
+    assert.strictEqual((await call('POST', '/api/notes/ask', { question: 'invoice?', today: '2026-10-23' })).status, 200, 'a failing embedding service never breaks Ask');
+  } finally {
+    noteAsk.routeDeps = {};
+    await pool.query('DELETE FROM notes WHERE id = ANY($1::int[])', [[invoice, holiday, theirs]]);
+    await pool.query('DELETE FROM tasks WHERE id = ANY($1::int[])', [[open, longDone, bTask]]);
+    await pool.query('DELETE FROM client_deals WHERE id=$1', [deal]);
+    await pool.query('DELETE FROM client_interactions WHERE id=$1', [touch]);
+    await pool.query('UPDATE projects SET "clientId"=NULL WHERE id=$1', [projectA]);
+  }
+  assert.strictEqual(Number((await pool.query('SELECT COUNT(*) FROM note_embeddings WHERE note_id = ANY($1::int[])', [[invoice, holiday, theirs]])).rows[0].count), 0, 'deleting a note takes its embedding with it');
 });
 
 async function cleanup(userIds) {

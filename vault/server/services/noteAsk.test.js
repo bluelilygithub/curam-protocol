@@ -90,8 +90,17 @@ const A = require('./noteAsk');
   assert.match(A.buildPlannerPrompt({ question: 'q', today: '2026-10-23', lookups: { tags: [{ tag: 'budget' }], clients: [{ name: 'Acme' }], projects: [] } }), /TAGS: budget[\s\S]*CLIENTS: Acme[\s\S]*PROJECTS: \(none\)/);
 
   // ---- the answer is checked: citations outside the notes given are removed
-  assert.deepStrictEqual(A.normalizeAnswer('Sam agreed [1][3]. Also [7] and [0] and [2].', 3), { answer: 'Sam agreed [1][3]. Also and and [2].', cited: [1, 2, 3] });
-  assert.deepStrictEqual(A.normalizeAnswer('  No notes cover that.  ', 4), { answer: 'No notes cover that.', cited: [] });
+  assert.deepStrictEqual(A.normalizeAnswer('Sam agreed [1][3]. Also [7] and [0] and [2].', 3), { answer: 'Sam agreed [1][3]. Also and and [2].', cited: [1, 2, 3], citedRelated: [] });
+  assert.deepStrictEqual(A.normalizeAnswer('  No notes cover that.  ', 4), { answer: 'No notes cover that.', cited: [], citedRelated: [] });
+  // linked records are cited by letter and number; one that was not given is removed, like a note number that does not exist
+  assert.deepStrictEqual(A.normalizeAnswer('Chase it [T1][P1] and [T9] and [C2] and [1].', 2, ['T1', 'P1', 'C1']),
+    { answer: 'Chase it [T1][P1] and and and [1].', cited: [1], citedRelated: ['T1', 'P1'] });
+  assert.strictEqual(A.normalizeAnswer('See [T1].', 2).answer, 'See.');
+  assert.match(A.RELATED_RULES, /DATA too/);
+  assert.match(A.RELATED_RULES, /Never say a task, deal or project exists unless it is listed/);
+  const withRelated = A.buildAnswerPrompt({ question: 'q', sources: [], today: '2026-10-23', found: 'x', related: '[T1] task "Chase invoice"' });
+  assert.match(withRelated, /LINKED RECORDS:\n\[T1\] task "Chase invoice"/);
+  assert.ok(!/LINKED RECORDS/.test(A.buildAnswerPrompt({ question: 'q', sources: [], today: 'x', found: 'x' })), 'no section when there is nothing linked');
   assert.strictEqual(A.normalizeAnswer('x'.repeat(20000), 1).answer.length, 8000);
   assert.strictEqual(A.normalizeAnswer(null, 1).answer, '');
   assert.strictEqual(A.describePlan({ keywords: ['budget'], from: '2026-10-01', to: '2026-10-07', tags: ['q3'] }, { client: 'Acme' }), 'budget · 2026-10-01 to 2026-10-07 · tagged q3 · Acme');
@@ -104,6 +113,7 @@ const A = require('./noteAsk');
         seen.sql.push({ sql, params });
         if (/SELECT COUNT\(\*\)/.test(sql)) return { rows: [{ count }] };
         if (/FROM note_tags WHERE user_id=\$1 GROUP BY tag/.test(sql)) return { rows: [{ tag: 'budget', count: 3 }, { tag: 'meeting', count: 2 }] };
+        if (/FROM tasks|FROM client_deals|FROM client_interactions/.test(sql)) return { rows: [] };
         if (/FROM clients WHERE/.test(sql)) return { rows: [{ id: 9, name: 'Acme Pty Ltd' }] };
         if (/FROM projects WHERE/.test(sql)) return { rows: [{ id: 4, name: 'Website relaunch' }] };
         if (/SELECT n\.id, n\.title, n\.body/.test(sql)) return { rows: typeof matchRows === 'function' ? matchRows(sql, params) : matchRows };
@@ -119,6 +129,8 @@ const A = require('./noteAsk');
         return { text: answerReply, model };
       },
       logUsage: (u) => seen.logged.push(u),
+      embed: async () => ({ vector: null }), // no embedding model: the word search stands alone
+      background: false,
     };
     return { deps, seen };
   };

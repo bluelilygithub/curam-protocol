@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import api from '../../utils/apiClient';
@@ -7,9 +8,41 @@ import Tooltip from '../../components/Tooltip';
 import { mdComponents } from '../../utils/mdComponents';
 import useDictation from './useDictation';
 import { NOTE_TIPS } from './noteTips.mjs';
-import { citeLinks, historyFor, STARTERS, SCOPES } from './askNotes.mjs';
+import { citeLinks, historyFor, buildMap, STARTERS, SCOPES, RELATED_KINDS } from './askNotes.mjs';
 
 const MARKDOWN_PLUGINS = [remarkBreaks];
+const RELATED_KEY = 'vault:notes-ask-related';
+const readRelatedPref = () => { try { return localStorage.getItem(RELATED_KEY) !== '0'; } catch { return true; } };
+
+/** One line of the map: a record you can open, with the notes filed on it and the records hanging off it. */
+function MapNode({ node, depth, sources, getIcon, onOpenNote, onGo }) {
+  const { item } = node;
+  const kind = RELATED_KINDS[item.kind] || RELATED_KINDS.task;
+  const noteLinks = (item.notes || []).map((n) => sources.find((s) => s.n === n)).filter(Boolean);
+  return (
+    <li>
+      <div className="flex items-start gap-1.5 py-0.5" style={{ paddingLeft: depth * 14 }}>
+        <span className="mt-0.5 flex-shrink-0" style={{ color: item.cited ? 'var(--color-primary)' : 'var(--color-muted)' }}>{getIcon(kind.icon, { size: 13 })}</span>
+        <div className="min-w-0 text-xs" style={{ overflowWrap: 'anywhere' }}>
+          <Tooltip text={NOTE_TIPS.askMapItem}>
+            <button type="button" onClick={() => onGo(item.href)} className="text-left font-medium hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-text)' }}>
+              <span style={{ color: 'var(--color-muted)', fontWeight: 400 }}>{kind.noun} </span>{item.label}
+            </button>
+          </Tooltip>
+          {item.detail && <span style={{ color: 'var(--color-muted)' }}> · {item.detail}</span>}
+          {noteLinks.map((s) => (
+            <Tooltip key={s.n} text={NOTE_TIPS.askMapNote}>
+              <button type="button" onClick={() => onOpenNote(s.id)} className="ml-1.5 px-1.5 rounded-md hover:opacity-70 transition-opacity duration-200" style={{ background: 'var(--color-surface-2)', color: 'var(--color-primary)', border: '1px solid var(--color-border)' }}>note {s.n}</button>
+            </Tooltip>
+          ))}
+        </div>
+      </div>
+      {node.children.length > 0 && (
+        <ul>{node.children.map((c) => <MapNode key={c.item.key} node={c} depth={depth + 1} sources={sources} getIcon={getIcon} onOpenNote={onOpenNote} onGo={onGo} />)}</ul>
+      )}
+    </li>
+  );
+}
 
 /**
  * "Ask your notes": a chat that answers from your own notes only, with numbered notes to open. It reads notes and changes none.
@@ -20,6 +53,9 @@ const MARKDOWN_PLUGINS = [remarkBreaks];
  */
 export default function AskNotesPanel({ scopeQuery, openNoteId, listCount, mobile, onOpenNote, onClose }) {
   const getIcon = useIcon();
+  const navigate = useNavigate();
+  const [relatedOn, setRelatedOn] = useState(readRelatedPref);
+  const [mapOpen, setMapOpen] = useState(null); // message id whose map is open
   const [messages, setMessages] = useState([]); // { id, question, answer, sources, scope, searched, stage, pending?, error? }
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
@@ -40,7 +76,7 @@ export default function AskNotesPanel({ scopeQuery, openNoteId, listCount, mobil
   const loadHistory = useCallback(async () => {
     try {
       const res = await api.get('/api/notes/ask');
-      if (res.ok) setMessages((await res.json()).map((m) => ({ ...m, sources: Array.isArray(m.sources) ? m.sources : [] })));
+      if (res.ok) setMessages((await res.json()).map((m) => ({ ...m, sources: Array.isArray(m.sources) ? m.sources : [], related: Array.isArray(m.related) ? m.related : [] })));
     } catch { /* the chat just starts empty */ }
     setLoading(false);
   }, []);
@@ -64,6 +100,7 @@ export default function AskNotesPanel({ scopeQuery, openNoteId, listCount, mobil
         scope: scopeId === 'note' ? { mode: 'note', noteId: openNoteId } : scopeId === 'filters' ? { mode: 'filters', query: scopeQuery } : { mode: 'all' },
         today: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
         tzOffset: now.getTimezoneOffset(),
+        related: relatedOn,
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'The answer could not be found just now.');
@@ -74,6 +111,12 @@ export default function AskNotesPanel({ scopeQuery, openNoteId, listCount, mobil
       setBusy(false);
       setTimeout(() => inputRef.current?.focus(), 0);
     }
+  }
+
+  function toggleRelated() {
+    const next = !relatedOn;
+    setRelatedOn(next);
+    try { localStorage.setItem(RELATED_KEY, next ? '1' : '0'); } catch { /* the choice just is not remembered */ }
   }
 
   async function forget(m) {
@@ -128,6 +171,9 @@ export default function AskNotesPanel({ scopeQuery, openNoteId, listCount, mobil
                 <button type="button" disabled={s.disabled} onClick={() => setScopeId(s.id)} aria-pressed={scopeId === s.id} className="text-xs px-2.5 rounded-full transition-opacity duration-200 hover:opacity-80 disabled:opacity-40" style={chip(scopeId === s.id)}>{s.label}</button>
               </Tooltip>
             ))}
+            <Tooltip text={NOTE_TIPS.askRelated} side="bottom">
+              <button type="button" onClick={toggleRelated} aria-pressed={relatedOn} className="text-xs px-2.5 rounded-full transition-opacity duration-200 hover:opacity-80 inline-flex items-center gap-1.5 sm:ml-2" style={chip(relatedOn)}>{getIcon('link', { size: 12 })}Linked records</button>
+            </Tooltip>
           </div>
         </div>
 
@@ -136,7 +182,7 @@ export default function AskNotesPanel({ scopeQuery, openNoteId, listCount, mobil
           {loading && <p className="text-sm text-center py-6" style={{ color: 'var(--color-muted)' }}>Loading…</p>}
           {!loading && messages.length === 0 && (
             <div className="py-4">
-              <p className="text-sm" style={{ color: 'var(--color-text)' }}>Ask a question in your own words. I will look through your notes, read the ones that fit, and answer from them, showing which notes I used.</p>
+              <p className="text-sm" style={{ color: 'var(--color-text)' }}>Ask a question in your own words. I will look through your notes by their words and by what they are about, read the ones that fit, and answer from them, showing which notes I used. With Linked records on, I also map the projects, clients, tasks and deals tied to those notes.</p>
               <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>I only use what is written in your notes. If it is not there, I will say so. Nothing in your notes is changed.</p>
               <div className="flex flex-wrap gap-2 mt-3" role="group" aria-label="Questions to try">
                 {STARTERS.map((q) => (
@@ -151,6 +197,8 @@ export default function AskNotesPanel({ scopeQuery, openNoteId, listCount, mobil
           {messages.map((m) => {
             const cited = m.sources.filter((s) => s.cited);
             const others = m.sources.filter((s) => !s.cited);
+            const related = Array.isArray(m.related) ? m.related : [];
+            const map = related.length ? buildMap(related) : [];
             return (
               <div key={m.id} className="space-y-2">
                 <div className="flex justify-end">
@@ -171,6 +219,16 @@ export default function AskNotesPanel({ scopeQuery, openNoteId, listCount, mobil
                         components={{
                           ...mdComponents,
                           a: ({ href, children }) => {
+                            const relKey = /^#rel-([CPTDA]\d+)$/.exec(href || '')?.[1];
+                            if (relKey) {
+                              const rec = related.find((i) => i.key === relKey);
+                              if (!rec) return null; // a citation of a record that is not on the map is not displayed
+                              return (
+                                <Tooltip text={NOTE_TIPS.askMapItem}>
+                                  <button type="button" onClick={() => navigate(rec.href)} className="align-baseline text-xs font-semibold px-1.5 mx-0.5 rounded-md hover:opacity-70 transition-opacity duration-200" style={{ background: 'var(--color-surface-2)', color: 'var(--color-primary)', border: '1px solid var(--color-border)' }}>{relKey}</button>
+                                </Tooltip>
+                              );
+                            }
                             const n = /^#src-(\d+)$/.exec(href || '')?.[1];
                             const src = n && m.sources.find((s) => s.n === Number(n));
                             if (n && !src) return null; // a citation that matches none of the notes shown is not displayed
@@ -201,7 +259,7 @@ export default function AskNotesPanel({ scopeQuery, openNoteId, listCount, mobil
                       )}
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                          {m.looked != null || m.sources.length ? `Read ${m.looked ?? m.sources.length} note${(m.looked ?? m.sources.length) === 1 ? '' : 's'}` : ''}{m.scope ? ` from ${m.scope}` : ''}{m.searched ? ` · looked for ${m.searched}` : ''}{m.stage === 'wider' ? ' · searched wider' : ''}{m.stage === 'recent' ? ' · nothing matched, so the latest notes' : ''}
+                          {m.looked != null || m.sources.length ? `Read ${m.looked ?? m.sources.length} note${(m.looked ?? m.sources.length) === 1 ? '' : 's'}` : ''}{m.scope ? ` from ${m.scope}` : ''}{m.searched ? ` · looked for ${m.searched}` : ''}{m.stage === 'wider' ? ' · searched wider' : ''}{m.stage === 'recent' ? ' · nothing matched, so the latest notes' : ''}{m.unindexed > 0 ? ` · ${m.unindexed} note${m.unindexed === 1 ? ' is' : 's are'} still being prepared for search by meaning` : ''}
                         </p>
                         <span className="flex items-center gap-2">
                           {others.length > 0 && (
@@ -212,6 +270,20 @@ export default function AskNotesPanel({ scopeQuery, openNoteId, listCount, mobil
                           </Tooltip>
                         </span>
                       </div>
+                      {map.length > 0 && (
+                        <div>
+                          <Tooltip text={NOTE_TIPS.askMap}>
+                            <button type="button" onClick={() => setMapOpen(mapOpen === m.id ? null : m.id)} aria-expanded={mapOpen === m.id} className="text-xs inline-flex items-center gap-1 hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-primary)', minHeight: mobile ? 32 : 22 }}>
+                              {getIcon(mapOpen === m.id ? 'chevron-down' : 'chevron-right', { size: 13 })}Around these notes ({related.length})
+                            </button>
+                          </Tooltip>
+                          {mapOpen === m.id && (
+                            <ul className="mt-1 rounded-xl px-2.5 py-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+                              {map.map((node) => <MapNode key={node.item.key} node={node} depth={0} sources={m.sources} getIcon={getIcon} onOpenNote={onOpenNote} onGo={(href) => navigate(href)} />)}
+                            </ul>
+                          )}
+                        </div>
+                      )}
                       {showAll === m.id && (
                         <ul className="space-y-1">
                           {others.map((s) => (
@@ -250,7 +322,7 @@ export default function AskNotesPanel({ scopeQuery, openNoteId, listCount, mobil
               <button type="button" disabled={busy || !text.trim()} onClick={() => send()} className="text-sm font-medium px-4 rounded-xl hover:opacity-80 transition-opacity duration-200 disabled:opacity-40" style={{ background: 'var(--color-primary)', color: '#fff', minHeight: mobile ? 48 : 40 }}>{busy ? '…' : 'Ask'}</button>
             </Tooltip>
           </div>
-          <p className="text-xs mt-1.5" style={{ color: 'var(--color-muted)' }}>The text of the notes it reads is sent to the AI to answer, and has a small cost each time. Your notes are not changed.</p>
+          <p className="text-xs mt-1.5" style={{ color: 'var(--color-muted)' }}>The text of the notes it reads is sent to the AI to answer, with a small cost each time. Notes are also sent once to the embedding service so they can be found by meaning. Nothing is changed.</p>
         </div>
       </div>
     </div>

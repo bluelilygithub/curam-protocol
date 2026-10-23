@@ -85,7 +85,7 @@ export function startNotesTour(show = {}) {
   step('notes-reminder', 12, 'Reminders', 'Remind yourself about a note at a time you choose, and tick "also email me" if you want an email as well. A reminder that has come due appears at the top of the list, where you can mark it done or snooze it.', '[data-tour="notes-reminder"]', 'editor');
   step('notes-ai', 13, 'AI actions', 'Summarise the note, pull out its to-dos as tasks, tidy it up, or suggest tags and a title. The AI only proposes: nothing changes until you choose.', '[data-tour="notes-ai"]', 'editor');
 
-  step('notes-ask', 14, 'Ask your notes', 'Ask a question in your own words, such as "what did I agree with Acme in October?". It looks through your notes, reads the ones that fit and answers only from them, showing which notes it used so you can open them. It never changes a note.', '[data-tour="notes-ask"]', 'list');
+  step('notes-ask', 14, 'Ask your notes', 'Ask a question in your own words, such as "what did I agree with Acme in October?". It finds notes by their words and by what they are about, reads the ones that fit and answers only from them, showing which notes it used so you can open them. With Linked records on it also maps the projects, clients, tasks and deals tied to those notes. It never changes a note.', '[data-tour="notes-ask"]', 'list');
 
   tour.addStep({
     id: 'notes-bin',

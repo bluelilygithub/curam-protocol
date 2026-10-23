@@ -17,6 +17,7 @@ const { normalizeTag, normalizeTags } = require('../services/noteTags');
 const noteDaily = require('../services/noteDaily');
 const noteViews = require('../services/noteViews');
 const noteQuery = require('../services/noteQuery');
+const noteEmbeddings = require('../services/noteEmbeddings'); // meaning-based search: a note is embedded a little after it is saved
 const noteAsk = require('../services/noteAsk'); // called as noteAsk.askNotes, with noteAsk.routeDeps, so tests can swap the models
 const noteReminders = require('../services/noteReminders');
 const bin = require('../services/recycleBin'); // deleted notes and templates wait here for 30 days
@@ -311,7 +312,7 @@ const QA_KEEP = 100; // answers kept per person
 // GET /api/notes/ask  — the recent questions and answers, oldest first (the conversation as it was)
 router.get('/ask', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, question, answer, sources, scope, searched, stage, created_at FROM note_qa WHERE user_id=$1 ORDER BY id DESC LIMIT 30', [req.user.id]);
+    const { rows } = await pool.query('SELECT id, question, answer, sources, scope, searched, stage, related, created_at FROM note_qa WHERE user_id=$1 ORDER BY id DESC LIMIT 30', [req.user.id]);
     res.json(rows.reverse());
   } catch (err) {
     getLogger().error({ err }, '[notes ask history]');
@@ -328,8 +329,8 @@ router.post('/ask', aiLimiter, async (req, res) => {
     if (!result.noModel) {
       const keep = result.sources.map((s) => ({ n: s.n, id: s.id, title: s.title, updated: s.updated, cited: s.cited }));
       const ins = await pool.query(
-        'INSERT INTO note_qa (user_id, question, answer, sources, scope, searched, stage) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7) RETURNING id, created_at',
-        [req.user.id, String(req.body.question).replace(/\s+/g, ' ').trim(), result.answer, JSON.stringify(keep), result.scope, result.searched || '', result.stage]);
+        'INSERT INTO note_qa (user_id, question, answer, sources, scope, searched, stage, related) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8::jsonb) RETURNING id, created_at',
+        [req.user.id, String(req.body.question).replace(/\s+/g, ' ').trim(), result.answer, JSON.stringify(keep), result.scope, result.searched || '', result.stage, JSON.stringify(result.related || [])]);
       id = ins.rows[0].id;
       result.createdAt = ins.rows[0].created_at;
       await pool.query('DELETE FROM note_qa WHERE user_id=$1 AND id NOT IN (SELECT id FROM note_qa WHERE user_id=$1 ORDER BY id DESC LIMIT $2)', [req.user.id, QA_KEEP]);
@@ -503,6 +504,7 @@ router.post('/', async (req, res) => {
       [req.user.id, project_id || null, client_id || null, title.trim() || 'Untitled', body]
     );
     const { rows: note } = await pool.query('SELECT * FROM notes WHERE id=$1', [rows[0].id]);
+    noteEmbeddings.queueEmbed(req.user.id, rows[0].id);
     res.status(201).json(note[0]);
   } catch (err) {
     getLogger().error({ err }, '[notes create]');
@@ -538,6 +540,7 @@ router.put('/:id', async (req, res) => {
     );
 
     const { rows: updated } = await pool.query('SELECT * FROM notes WHERE id=$1', [req.params.id]);
+    noteEmbeddings.queueEmbed(req.user.id, Number(req.params.id));
     res.json(updated[0]);
   } catch (err) {
     getLogger().error({ err }, '[notes update]');
@@ -559,6 +562,7 @@ router.put('/:id/tags', async (req, res) => {
     await db.query('DELETE FROM note_tags WHERE note_id=$1', [noteId]);
     for (const tag of tags) await db.query('INSERT INTO note_tags (note_id, user_id, tag) VALUES ($1,$2,$3)', [noteId, req.user.id, tag]);
     await db.query('COMMIT');
+    noteEmbeddings.queueEmbed(req.user.id, noteId);
     res.json({ id: noteId, tags });
   } catch (err) {
     await db.query('ROLLBACK').catch(() => {});

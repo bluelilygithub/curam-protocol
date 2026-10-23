@@ -847,6 +847,22 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_note_qa_user ON note_qa(user_id, id DESC)`);
+    // The linked projects, clients, tasks, deals and contact shown as a map under an answer (server/services/noteRelated.js).
+    await client.query(`ALTER TABLE note_qa ADD COLUMN IF NOT EXISTS related JSONB NOT NULL DEFAULT '[]'`);
+
+    // Meaning-based search for notes (server/services/noteEmbeddings.js): one embedding per note, as 32-bit floats in bytes (not a pgvector
+    // column, so it works everywhere). content_hash = md5 of title + text when it was made; source = which embedding model made it.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS note_embeddings (
+        note_id      INTEGER PRIMARY KEY REFERENCES notes(id) ON DELETE CASCADE,
+        user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        source       TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        embedding    BYTEA NOT NULL,
+        updated_at   TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_note_embeddings_user ON note_embeddings(user_id)`);
 
     // The shared recycle bin (server/services/recycleBin, docs/recycle-bin.md). A snapshot of whatever a tool deleted, kept 30 days.
     await client.query(`

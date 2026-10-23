@@ -103,6 +103,10 @@ export const NOTE_TIPS = {
   askForget: 'Remove this question and answer.',
   askSource: 'Open this note: it is one the answer was taken from.',
   askStarter: 'Ask this question.',
+  askRelated: 'Also read what is linked to the notes it finds: their project and client, and the tasks, deals and recent contact on them. Switch off to answer from the notes alone.',
+  askMap: 'Show or hide the map: the projects, clients, tasks, deals and recent contact linked to the notes it read.',
+  askMapItem: 'Open this record.',
+  askMapNote: 'Open the note that is filed here.',
 
   // dialogs
   viewSave: 'Save the current search, filters and grouping under this name.',
