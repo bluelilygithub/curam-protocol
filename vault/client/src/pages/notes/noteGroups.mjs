@@ -71,13 +71,16 @@ export function dateBucket(value, now = new Date()) {
 
 /**
  * Split notes (already newest-first) into sections for display. Order inside a section is kept.
+ *   Pinned notes (pinned_at set) always come first, in one "Pinned" section, whatever the mode.
  *   mode 'date'    -> by `field` (updated_at / created_at) as Today, Yesterday, ... then months
  *   mode 'project' -> by project name, busiest-recent first, "No project" last
  *   mode 'client'  -> by client name, same, "No client" last
  * Returns [{ key, label, notes }].
  */
 export function groupNotes(notes, { mode = 'date', field = 'updated', now = new Date() } = {}) {
-  const list = Array.isArray(notes) ? notes : [];
+  const all = Array.isArray(notes) ? notes : [];
+  const pinned = all.filter((n) => n.pinned_at);
+  const list = pinned.length ? all.filter((n) => !n.pinned_at) : all;
   const dateKey = field === 'created' ? 'created_at' : 'updated_at';
   const sections = new Map();
   const put = (key, label, note, meta = {}) => {
@@ -98,9 +101,10 @@ export function groupNotes(notes, { mode = 'date', field = 'updated', now = new 
   }
 
   const out = [...sections.values()];
-  if (mode === 'date') return out.map(({ order, ...s }) => s); // already newest-first, so insertion order is date order
+  const head = pinned.length ? [{ key: 'pinned', label: 'Pinned', notes: pinned }] : [];
+  if (mode === 'date') return [...head, ...out.map(({ order, ...s }) => s)]; // already newest-first, so insertion order is date order
   // named groups keep the order their newest note first appeared in; the catch-all goes last
-  return out.map(({ last, ...s }) => ({ ...s, _last: !!last })).sort((a, b) => Number(a._last) - Number(b._last)).map(({ _last, ...s }) => s);
+  return [...head, ...out.map(({ last, ...s }) => ({ ...s, _last: !!last })).sort((a, b) => Number(a._last) - Number(b._last)).map(({ _last, ...s }) => s)];
 }
 
 /** A short label for the active filters, for the "N notes" line and the empty state. */

@@ -12,6 +12,7 @@ const { getLogger } = require('../middleware/requestContext');
 const { toSpeechMp3, withTempDir } = require('../services/videoFfmpeg');
 const { transcribeAudioWithGemini, isGeminiTranscribeAvailable } = require('../services/videoGenerateService');
 const { buildVoiceNote } = require('../services/voiceNote');
+const noteAi = require('../services/noteAi'); // called as noteAi.runNoteAction so tests can swap it
 
 // A recording is held in memory only while it is turned into text; it is never written anywhere that outlives the request.
 const MAX_RECORDING_BYTES = 60 * 1024 * 1024;
@@ -54,12 +55,12 @@ router.get('/', async (req, res) => {
 
   const sql = `
     SELECT n.id, n.title, left(n.body, 240) AS preview, n.project_id, n.client_id, n.source,
-           n.created_at, n.updated_at, p.name AS project_name, c.name AS client_name
+           n.created_at, n.updated_at, n.pinned_at, p.name AS project_name, c.name AS client_name
       FROM notes n
       LEFT JOIN projects p ON p.id = n.project_id AND p."userId" = n.user_id
       LEFT JOIN clients  c ON c.id = n.client_id AND c."userId" = n.user_id
      WHERE ${where.join(' AND ')}
-     ORDER BY ${dateCol} DESC, n.id DESC
+     ORDER BY (n.pinned_at IS NOT NULL) DESC, n.pinned_at DESC NULLS LAST, ${dateCol} DESC, n.id DESC
      LIMIT ${limit + 1} OFFSET ${offset}`;
   try {
     const { rows } = await pool.query(sql, params);
@@ -218,6 +219,37 @@ router.put('/:id', async (req, res) => {
   } catch (err) {
     getLogger().error({ err }, '[notes update]');
     res.status(500).json({ error: 'Could not save the note. Try again.' });
+  }
+});
+
+// PATCH /api/notes/:id/pin  { pinned: true|false } — pinned notes sort to the top of the list. Does not touch updated_at.
+router.patch('/:id/pin', async (req, res) => {
+  if (typeof req.body?.pinned !== 'boolean') return res.status(400).json({ error: 'pinned must be true or false' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE notes SET pinned_at = ${req.body.pinned ? 'NOW()' : 'NULL'} WHERE id=$1 AND user_id=$2 RETURNING id, pinned_at`,
+      [Number(req.params.id) || 0, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    getLogger().error({ err }, '[notes pin]');
+    res.status(500).json({ error: 'Could not pin the note. Try again.' });
+  }
+});
+
+// POST /api/notes/:id/ai  { action: 'summary'|'todos'|'tidy'|'title', today?: 'YYYY-MM-DD' }
+// Reads the SAVED note (the screen saves first), returns a proposal and changes nothing. Behind the AI rate limit.
+router.post('/:id/ai', aiLimiter, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT title, body FROM notes WHERE id=$1 AND user_id=$2', [Number(req.params.id) || 0, req.user.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    const result = await noteAi.runNoteAction(req.user.id, req.body?.action, { title: rows[0].title, body: rows[0].body, today: req.body?.today });
+    res.json({ action: req.body.action, ...result });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    getLogger().error({ err }, '[notes ai]');
+    res.status(500).json({ error: 'The AI could not do that just now. Try again.' });
   }
 });
 

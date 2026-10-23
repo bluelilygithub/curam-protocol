@@ -10,6 +10,8 @@ import NotesTutorChat from './notes/NotesTutorChat';
 import NewNoteChooser from './notes/NewNoteChooser';
 import NotesListPanel from './notes/NotesListPanel';
 import InsertSourceModal from './notes/InsertSourceModal';
+import NoteAiPanel from './notes/NoteAiPanel';
+import { AI_ACTIONS, applyText } from './notes/noteAiActions.mjs';
 import useNotesList, { toRow } from './notes/useNotesList';
 import useDictation from './notes/useDictation';
 import { NOTES_TOOLS } from './notes/notesTools.mjs';
@@ -50,6 +52,9 @@ export default function NotesPage() {
   const [showMention, setShowMention] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
   const [clients, setClients] = useState([]);
+  const [aiMenuOpen, setAiMenuOpen] = useState(false);
+  const [aiAction, setAiAction] = useState(null); // which AI action's panel is open
+  const [aiBackup, setAiBackup] = useState(null); // { id, title, body } from just before an AI change, for Undo
 
   const pendingConvertNoteIdRef = useRef(null);
   const bodyRef = useRef(null);
@@ -159,6 +164,8 @@ export default function NotesPage() {
     dictation.stop();
     setConfirmDelete(false);
     setShowChatPicker(false);
+    setAiMenuOpen(false);
+    setAiBackup(null);
     const token = ++selectToken.current;
     const needsBody = row.body === undefined;
     setSelected(row);
@@ -192,6 +199,7 @@ export default function NotesPage() {
     runSave();
     dictation.stop();
     selectToken.current++;
+    setAiBackup(null);
     setSelected(null);
     setTitle('');
     setBody('');
@@ -283,6 +291,59 @@ export default function NotesPage() {
     }
   }
 
+  // ── Pin ───────────────────────────────────────────────────────────────────
+  async function togglePin(note) {
+    try {
+      const res = await api.patch(`/api/notes/${note.id}/pin`, { pinned: !note.pinned_at });
+      if (!res.ok) throw new Error('pin failed');
+      const { pinned_at } = await res.json();
+      patchNote({ id: note.id, pinned_at });
+      setSelected((prev) => (prev && prev.id === note.id ? { ...prev, pinned_at } : prev));
+    } catch {
+      addToast('The note could not be pinned. Try again.', 'error');
+    }
+  }
+
+  // ── AI actions ────────────────────────────────────────────────────────────
+  // The panel only proposes. These run when the person chooses to use what it proposed, and keep the old text for one Undo.
+  const ensureSaved = useCallback(async () => {
+    await runSave();
+    if (pending.current) throw new Error('unsaved'); // a failed save would make the AI read old text
+  }, [runSave]);
+
+  function applyAiText(mode, text) {
+    const id = selectedRef.current.id;
+    setAiBackup({ id, title: titleValueRef.current, body: bodyValueRef.current });
+    const next = applyText(bodyValueRef.current, mode, text);
+    bodyValueRef.current = next;
+    setBody(next);
+    scheduleSave(id, titleValueRef.current, next);
+  }
+
+  function applyAiTitle(next) {
+    const id = selectedRef.current.id;
+    setAiBackup({ id, title: titleValueRef.current, body: bodyValueRef.current });
+    titleValueRef.current = next;
+    setTitle(next);
+    scheduleSave(id, next, bodyValueRef.current);
+  }
+
+  function undoAi() {
+    if (!aiBackup || aiBackup.id !== selectedRef.current?.id) return;
+    setTitle(aiBackup.title);
+    setBody(aiBackup.body);
+    titleValueRef.current = aiBackup.title;
+    bodyValueRef.current = aiBackup.body;
+    scheduleSave(aiBackup.id, aiBackup.title, aiBackup.body);
+    setAiBackup(null);
+  }
+
+  function tasksMade(n) {
+    addToast(`${n} task${n === 1 ? '' : 's'} created from this note ✓`, 'success');
+    const id = selectedRef.current?.id;
+    if (id) setConvertedNoteIds((prev) => new Set([...prev, id]));
+  }
+
   // ── Project / client of the open note ─────────────────────────────────────
   const ensureClients = useCallback(async () => {
     if (clients.length) return;
@@ -316,12 +377,14 @@ export default function NotesPage() {
 
   // ── Typing ────────────────────────────────────────────────────────────────
   function handleTitleChange(e) {
+    setAiBackup(null);
     setTitle(e.target.value);
     scheduleSave(selected.id, e.target.value, body);
   }
 
   function handleBodyChange(e) {
     const val = e.target.value;
+    setAiBackup(null);
     setBody(val);
     scheduleSave(selected.id, title, val);
 
@@ -425,6 +488,7 @@ export default function NotesPage() {
             onNew={() => setShowNewChooser(true)}
             onConvert={convertToTask}
             onDelete={deleteNote}
+            onPin={togglePin}
             searchRef={searchRef}
             bottomPad={viewportMobile ? 84 : 0 /* the guide button sits bottom-right on a phone */}
           />
@@ -434,7 +498,7 @@ export default function NotesPage() {
       {showEditor && (selected ? (
         <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
           {/* Toolbar */}
-          <div className="flex items-center justify-between gap-2 px-3 sm:px-4 py-2 border-b flex-shrink-0" style={border}>
+          <div className="flex items-center justify-between gap-x-2 gap-y-1 flex-wrap px-3 sm:px-4 py-2 border-b flex-shrink-0" style={border}>
             <div className="flex items-center gap-2 min-w-0">
               {viewportMobile && (
                 <button type="button" onClick={closeNote} aria-label="Back to all notes" className="flex items-center gap-1 text-sm px-2 rounded-lg hover:opacity-70 transition-opacity duration-200 flex-shrink-0" style={{ color: 'var(--color-primary)', minHeight: 44 }}>
@@ -456,7 +520,50 @@ export default function NotesPage() {
               )}
             </div>
 
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {aiBackup && aiBackup.id === selected.id && (
+                <button type="button" onClick={undoAi} className="flex items-center gap-1 text-xs px-2.5 rounded-md hover:opacity-70 transition-opacity duration-200" style={{ ...toolBtn, minHeight: viewportMobile ? 40 : 28 }}>
+                  {getIcon('rotate-ccw', { size: 12 })} Undo AI change
+                </button>
+              )}
+              <button
+                type="button" onClick={() => togglePin(selected)}
+                className="flex items-center justify-center rounded-md hover:opacity-60 transition-opacity duration-200"
+                style={{ color: selected.pinned_at ? 'var(--color-primary)' : 'var(--color-muted)', width: viewportMobile ? 40 : 28, height: viewportMobile ? 40 : 28 }}
+                title={selected.pinned_at ? 'Unpin' : 'Pin to the top of the list'} aria-label={selected.pinned_at ? 'Unpin note' : 'Pin note'} aria-pressed={!!selected.pinned_at}
+              >{getIcon('pin', { size: 16 })}</button>
+              <div className="relative">
+                <button
+                  type="button" onClick={() => setAiMenuOpen((v) => !v)} aria-expanded={aiMenuOpen} aria-haspopup="menu"
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity duration-200 hover:opacity-80 whitespace-nowrap" style={toolBtn}
+                  title="AI actions for this note: summarise, pull out to-dos, tidy up, suggest a title" aria-label="AI actions"
+                >{getIcon('wand', { size: viewportMobile ? 18 : 12 })}{!viewportMobile && 'AI'}{getIcon('chevron-down', { size: 11 })}</button>
+                {aiMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" style={viewportMobile ? { background: 'rgba(0,0,0,0.4)' } : undefined} onClick={() => setAiMenuOpen(false)} />
+                    <div
+                      className={viewportMobile ? 'fixed left-0 right-0 bottom-0 z-40 rounded-t-2xl border shadow-xl overflow-hidden' : 'absolute right-0 top-full mt-1 z-40 rounded-xl border shadow-xl overflow-hidden'}
+                      role="menu"
+                      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', ...(viewportMobile ? { paddingBottom: 'max(12px, env(safe-area-inset-bottom))' } : { minWidth: 230 }) }}
+                    >
+                      {AI_ACTIONS.map((a) => (
+                        <button
+                          key={a.id} type="button" role="menuitem"
+                          onClick={() => { setAiMenuOpen(false); setAiAction(a.id); }}
+                          className="w-full text-left px-4 py-3 flex items-start gap-3 hover:opacity-70 transition-opacity duration-200"
+                        >
+                          <span className="mt-0.5" style={{ color: 'var(--color-primary)' }}>{getIcon(a.icon, { size: 15 })}</span>
+                          <span className="min-w-0">
+                            <span className="block text-sm" style={{ color: 'var(--color-text)' }}>{a.label}</span>
+                            <span className="block text-xs" style={{ color: 'var(--color-muted)' }}>{a.hint}</span>
+                          </span>
+                        </button>
+                      ))}
+                      <p className="px-3 py-2 text-xs border-t" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>Sends this note's text to the AI. Nothing changes until you choose.</p>
+                    </div>
+                  </>
+                )}
+              </div>
               {dictation.supported && !viewportMobile && (
                 <button
                   type="button"
@@ -643,6 +750,19 @@ export default function NotesPage() {
         </div>
       ))}
 
+      {aiAction && selected && (
+        <NoteAiPanel
+          key={`${selected.id}:${aiAction}`}
+          action={aiAction}
+          note={{ id: selected.id, title: titleValueRef.current, project_id: selected.project_id, client_id: selected.client_id }}
+          mobile={viewportMobile}
+          ensureSaved={ensureSaved}
+          onApplyText={applyAiText}
+          onApplyTitle={applyAiTitle}
+          onTasksMade={tasksMade}
+          onClose={() => setAiAction(null)}
+        />
+      )}
       {insertKind && <InsertSourceModal kind={insertKind} onInsert={appendToBody} onClose={() => { setInsertKind(null); setTimeout(() => bodyRef.current?.focus(), 0); }} />}
       {showRecorder && <VoiceNoteRecorder onClose={() => setShowRecorder(false)} onCreated={handleVoiceNote} />}
       {viewportMobile && (

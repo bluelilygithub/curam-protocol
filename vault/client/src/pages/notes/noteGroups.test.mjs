@@ -68,6 +68,16 @@ assert.deepStrictEqual(groupNotes(owned, { mode: 'client' }).map((g) => [g.label
 assert.deepStrictEqual(groupNotes(null), []);
 assert.deepStrictEqual(groupNotes([]), []);
 
+// pinned notes lead in their own section in every mode and are not repeated below
+const withPin = [
+  { id: 1, updated_at: at(2026, 9, 23, 9) },
+  { id: 2, updated_at: at(2026, 7, 2), pinned_at: at(2026, 9, 1) },
+  { id: 3, updated_at: at(2026, 9, 22), pinned_at: at(2026, 9, 5) },
+];
+assert.deepStrictEqual(groupNotes(withPin, { mode: 'date', now }).map((g) => [g.label, g.notes.map((n) => n.id)]), [['Pinned', [2, 3]], ['Today', [1]]]);
+assert.deepStrictEqual(groupNotes([{ id: 9, pinned_at: at(2026, 9, 1), project_id: 3, project_name: 'Launch' }], { mode: 'project' }).map((g) => g.label), ['Pinned']);
+assert.deepStrictEqual(groupNotes(notes, { mode: 'date', now }).map((g) => g.label), ['Today', 'Yesterday', 'September 2026', 'August 2026'], 'no pinned section when nothing is pinned');
+
 // summary
 assert.strictEqual(filtersSummary({ preset: 'all' }), '');
 assert.strictEqual(filtersSummary({ preset: '7d', search: 'tax' }), 'matching "tax", 7 days');

@@ -142,6 +142,57 @@ test("other people's notes are invisible", async () => {
   assert.deepStrictEqual((await call('GET', '/api/notes/options', undefined, 'B')).json.clients.map((c) => c.name), ['Client B']);
 });
 
+test('pinning: pinned notes lead the list, pin leaves the edited date alone, only the owner can pin', async () => {
+  const before = (await call('GET', `/api/notes/${ids['Old budget']}`)).json.updated_at;
+  const pin = await call('PATCH', `/api/notes/${ids['Old budget']}/pin`, { pinned: true });
+  assert.strictEqual(pin.status, 200);
+  assert.ok(pin.json.pinned_at);
+  const list = (await call('GET', '/api/notes')).json;
+  assert.strictEqual(list[0].title, 'Old budget', 'pinned note is first even though it is the oldest');
+  assert.ok(list[0].pinned_at);
+  assert.strictEqual((await call('GET', `/api/notes/${ids['Old budget']}`)).json.updated_at, before, 'pinning does not count as an edit');
+  // a later pin sorts above an earlier one
+  await call('PATCH', `/api/notes/${ids['March call']}/pin`, { pinned: true });
+  assert.deepStrictEqual((await call('GET', '/api/notes')).json.slice(0, 2).map((n) => n.title), ['March call', 'Old budget']);
+  // editing a pinned note keeps it pinned
+  await call('PUT', `/api/notes/${ids['Old budget']}`, { body: 'tax and budget, edited' });
+  assert.ok((await call('GET', `/api/notes/${ids['Old budget']}`)).json.pinned_at);
+  // unpin
+  assert.strictEqual((await call('PATCH', `/api/notes/${ids['March call']}/pin`, { pinned: false })).json.pinned_at, null);
+  assert.strictEqual((await call('PATCH', `/api/notes/${ids['Old budget']}/pin`, { pinned: 'yes' })).status, 400);
+  assert.strictEqual((await call('PATCH', `/api/notes/${ids['Old budget']}/pin`, { pinned: false }, 'B')).status, 404, "not someone else's note");
+  assert.strictEqual((await call('GET', '/api/notes')).json.find((n) => n.title === 'Old budget').pinned_at, (await call('GET', `/api/notes/${ids['Old budget']}`)).json.pinned_at, 'B did not unpin it');
+  await call('PATCH', `/api/notes/${ids['Old budget']}/pin`, { pinned: false });
+});
+
+test('AI actions: read the saved note, return the proposal, change nothing, refuse other people and empty notes', async () => {
+  const noteAi = require('../services/noteAi');
+  const real = noteAi.runNoteAction;
+  let seen = null;
+  noteAi.runNoteAction = async (userId, action, note) => { seen = { userId, action, note }; return { text: 'A summary.' }; };
+  try {
+    const before = (await call('GET', `/api/notes/${ids['March call']}`)).json;
+    const r = await call('POST', `/api/notes/${ids['March call']}/ai`, { action: 'summary', today: '2026-10-23' });
+    assert.strictEqual(r.status, 200);
+    assert.deepStrictEqual({ action: r.json.action, text: r.json.text }, { action: 'summary', text: 'A summary.' });
+    assert.strictEqual(seen.userId, userA);
+    assert.strictEqual(seen.note.body, 'call with Acme', 'the server reads the saved text, not text sent by the browser');
+    assert.strictEqual(seen.note.today, '2026-10-23');
+    const after = (await call('GET', `/api/notes/${ids['March call']}`)).json;
+    assert.deepStrictEqual({ t: after.title, b: after.body, u: after.updated_at }, { t: before.title, b: before.body, u: before.updated_at }, 'the note is untouched');
+    seen = null;
+    assert.strictEqual((await call('POST', `/api/notes/${ids['March call']}/ai`, { action: 'summary' }, 'B')).status, 404);
+    assert.strictEqual(seen, null, "another person's note never reaches the model");
+    noteAi.runNoteAction = async () => { throw Object.assign(new Error('This note is empty. Write something first.'), { status: 400 }); };
+    const empty = await call('POST', `/api/notes/${ids['March call']}/ai`, { action: 'summary' });
+    assert.deepStrictEqual({ s: empty.status, e: empty.json.error }, { s: 400, e: 'This note is empty. Write something first.' });
+    noteAi.runNoteAction = async () => { throw new Error('secret internals'); };
+    const boom = await call('POST', `/api/notes/${ids['March call']}/ai`, { action: 'summary' });
+    assert.strictEqual(boom.status, 500);
+    assert.ok(!/secret/.test(boom.json.error), 'internal errors are not shown');
+  } finally { noteAi.runNoteAction = real; }
+});
+
 async function cleanup(userIds) {
   await pool.query('DELETE FROM users WHERE id = ANY($1::int[])', [userIds]);
 }

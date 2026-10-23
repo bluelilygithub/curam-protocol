@@ -21,6 +21,12 @@ const CATALOG = [
   { id: 'filter-notes', label: 'Filter notes', group: 'Notes list',
     does: 'The filter button (sliders icon) beside the search box opens the filters: a date range (Today, 7 days, 30 days, This year, or Pick dates for your own from and to days), whether the dates mean Last edited or Created, and a project and a client. Several filters work together. The number on the button shows how many are on, and Clear all filters turns them off. The list shows the most recent 100 notes at a time, with a Show more notes button at the bottom.',
     notes: 'The date range applies to the Last edited date unless you switch it to Created.' },
+  { id: 'pin-note', label: 'Pin a note', group: 'Notes list',
+    does: 'The pin button keeps a note at the top of the list in its own Pinned section, above every other group. In the list it shows when you hover a note (on a phone, tap the ⋯ button beside the note and choose Pin); in an open note it is the pin button in the toolbar. Press it again to unpin. Pinned notes show a small pin.',
+    notes: 'Pinning does not change the note or its edited date. Search and filters still apply, so a pinned note that does not match them is not shown.' },
+  { id: 'ai-actions', label: 'AI actions', group: 'Editor',
+    does: 'The AI button in the toolbar of an open note (the wand on a phone) has four actions. Summarise writes a few sentences you can add to the top of the note. Pull out to-dos lists the things to do in the note; you tick the ones you want, can change the wording and due date, and press Create to make them tasks (filed under the same project and client as the note). Tidy up fixes spelling, repeats and layout, and you choose to replace the text of the note or add the tidied version below. Suggest a title offers a short title you can edit and use. After Summarise, Tidy up or a new title, an Undo AI change button appears until you type again.',
+    notes: 'The AI only proposes: nothing in the note changes and no task is made until you press the button for it. It sends the note\'s text to the AI service and has a small cost each time. It only works from what is written in the note and only gives a due date when the note states one. Very long notes (about 60,000 characters) and empty notes are refused. It does not see other notes.' },
   { id: 'dictate', label: 'Dictate', group: 'Editor',
     does: 'The mic button in the editor toolbar (on a phone, the Dictate button at the bottom of the open note) types what you say straight into the open note while you speak, using the browser\'s own speech recognition. Press it again (it says Stop) to stop.',
     notes: 'This is different from New voice note: Dictate types live into a note you already have open and keeps no recording and does no tidy-up. It needs a browser that has speech recognition.' },
@@ -47,6 +53,7 @@ const RULES = [
   'The two ways to use the microphone: Record a voice note (from the + choice) records and writes up a whole recording into a new note; Dictate (in an open note) types live into that note.',
   'The Open buttons in this chat only open things for you: New note opens the Write-or-Record choice, New voice note opens the recorder window (it does not start recording), and Search notes puts the cursor in the search box. They never create, change or delete a note by themselves.',
   'Typing @ in a note opens a menu of things to pull in: projects, open tasks, saved prompts, and searching the web, Gmail and Calendar.',
+  'Pinned notes sit in a Pinned section at the top of the list. The AI actions (Summarise, Pull out to-dos, Tidy up, Suggest a title) only propose: the person chooses what to use, and nothing is changed or created before that.',
 ];
 
 const NOT_POSSIBLE = [

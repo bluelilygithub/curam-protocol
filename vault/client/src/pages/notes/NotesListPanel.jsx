@@ -18,7 +18,7 @@ const fmtShort = (value) => {
  */
 export default function NotesListPanel({
   list, projects, clients, onNeedClients, selectedId, mobile, moodMap, convertedIds,
-  onSelect, onNew, onConvert, onDelete, searchRef, bottomPad,
+  onSelect, onNew, onConvert, onDelete, onPin, searchRef, bottomPad,
 }) {
   const getIcon = useIcon();
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -62,6 +62,9 @@ export default function NotesListPanel({
             style={{ paddingTop: mobile ? 12 : 8, paddingBottom: mobile ? 12 : 8, minHeight: mobile ? 56 : undefined }}
           >
             <div className="flex items-center gap-1.5 min-w-0">
+              {note.pinned_at && (
+                <span className="flex-shrink-0" style={{ color: 'var(--color-primary)' }} title="Pinned" aria-label="Pinned">{getIcon('pin', { size: 12 })}</span>
+              )}
               {note.source === 'voice' && (
                 <span className="flex-shrink-0" style={{ color: 'var(--color-primary)' }} title="Voice note (made from a recording)" aria-label="Voice note">{getIcon('audio-lines', { size: 13 })}</span>
               )}
@@ -90,6 +93,7 @@ export default function NotesListPanel({
           ) : (
             <div className="flex items-center gap-1 pr-2 flex-shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200">
               {moodMap && <MoodDot entityType="note" entityId={note.id} entityTitle={note.title} dominantEmotion={moodMap[`note:${note.id}`]} />}
+              <button type="button" onClick={() => onPin(note)} className="p-1 hover:opacity-60 transition-opacity duration-200" style={{ color: note.pinned_at ? 'var(--color-primary)' : 'var(--color-muted)' }} title={note.pinned_at ? 'Unpin' : 'Pin to the top'} aria-label={note.pinned_at ? 'Unpin note' : 'Pin note'}>{getIcon('pin', { size: 14 })}</button>
               <button type="button" onClick={() => onConvert(note)} className="p-1 hover:opacity-60 transition-opacity duration-200" style={{ color: 'var(--color-primary)' }} title="Convert to task" aria-label="Convert to task">{getIcon('list-checks', { size: 14 })}</button>
               <button type="button" onClick={() => setConfirmId(note.id)} className="p-1 hover:opacity-60 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }} title="Delete" aria-label="Delete note">{getIcon('trash', { size: 14 })}</button>
             </div>
@@ -97,7 +101,7 @@ export default function NotesListPanel({
         </div>
 
         {(showActions || confirming) && (
-          <div className="flex items-center gap-2 px-3 pb-2" style={{ paddingTop: 2 }}>
+          <div className="flex flex-wrap items-center gap-2 px-3 pb-2" style={{ paddingTop: 2 }}>
             {confirming ? (
               <>
                 <span className="text-xs" style={{ color: 'var(--color-text)' }}>Delete this note for good?</span>
@@ -106,6 +110,7 @@ export default function NotesListPanel({
               </>
             ) : (
               <>
+                <button type="button" onClick={() => { setMenuId(null); onPin(note); }} className="flex items-center gap-1.5 text-xs px-3 rounded-lg hover:opacity-70 transition-opacity duration-200" style={chip(false)}>{getIcon('pin', { size: 14 })} {note.pinned_at ? 'Unpin' : 'Pin'}</button>
                 <button type="button" onClick={() => { setMenuId(null); onConvert(note); }} className="flex items-center gap-1.5 text-xs px-3 rounded-lg hover:opacity-70 transition-opacity duration-200" style={chip(false)}>{getIcon('list-checks', { size: 14 })} Make a task</button>
                 <button type="button" onClick={() => setConfirmId(note.id)} className="flex items-center gap-1.5 text-xs px-3 rounded-lg hover:opacity-70 transition-opacity duration-200" style={{ ...chip(false), color: '#ef4444' }}>{getIcon('trash', { size: 14 })} Delete</button>
               </>

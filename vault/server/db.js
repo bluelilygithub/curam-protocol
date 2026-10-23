@@ -780,6 +780,9 @@ async function initSchema() {
     // How a note was made: 'text' (typed) or 'voice' (recorded; only the words are kept, never the audio). The list shows an icon for 'voice'.
     await client.query(`ALTER TABLE notes ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'text'`);
 
+    // Pinned notes sort to the top of the list; pinning never changes updated_at. NULL = not pinned.
+    await client.query(`ALTER TABLE notes ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMPTZ DEFAULT NULL`);
+
     // ── Full-text search placeholder ──────────────────────────────────────────
     // The SQLite FTS5 virtual table is replaced with a plain table for now.
     // Phase 5 adds GIN indexes and converts queries to tsvector / plainto_tsquery.

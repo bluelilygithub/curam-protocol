@@ -119,7 +119,10 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
     setNotes((prev) => {
       const has = prev.some((n) => n.id === row.id);
       const next = has ? prev.map((n) => (n.id === row.id ? { ...n, ...row } : n)) : [row, ...prev];
-      return next.sort((a, b) => (new Date(b[dateKey]) - new Date(a[dateKey])) || (b.id - a.id));
+      // same order as the server: pinned first (latest pin on top), then by date
+      return next.sort((a, b) => (Number(!!b.pinned_at) - Number(!!a.pinned_at))
+        || (a.pinned_at && b.pinned_at ? new Date(b.pinned_at) - new Date(a.pinned_at) : 0)
+        || (new Date(b[dateKey]) - new Date(a[dateKey])) || (b.id - a.id));
     });
   }, [field]);
 
