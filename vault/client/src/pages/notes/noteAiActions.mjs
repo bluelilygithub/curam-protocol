@@ -4,6 +4,7 @@ export const AI_ACTIONS = [
   { id: 'summary', label: 'Summarise', icon: 'file-text', working: 'Reading your note and writing a short summary…', hint: 'A few sentences you can add to the top' },
   { id: 'todos', label: 'Pull out to-dos', icon: 'list-checks', working: 'Looking for things to do in your note…', hint: 'Pick which become tasks' },
   { id: 'tidy', label: 'Tidy up', icon: 'wand', working: 'Tidying your note. This can take a few seconds…', hint: 'Fix spelling, repeats and layout' },
+  { id: 'tags', label: 'Suggest tags', icon: 'tag', working: 'Choosing tags…', hint: 'Reuses the tags you already have' },
   { id: 'title', label: 'Suggest a title', icon: 'pen-line', working: 'Thinking of a title…', hint: 'A short title from the text' },
 ];
 

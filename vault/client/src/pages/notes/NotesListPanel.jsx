@@ -18,7 +18,7 @@ const fmtShort = (value) => {
  */
 export default function NotesListPanel({
   list, projects, clients, onNeedClients, selectedId, mobile, moodMap, convertedIds,
-  onSelect, onNew, onConvert, onDelete, onPin, searchRef, bottomPad,
+  onSelect, onNew, onConvert, onDelete, onPin, allTags, onManageTags, searchRef, bottomPad,
 }) {
   const getIcon = useIcon();
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -28,11 +28,11 @@ export default function NotesListPanel({
   const {
     notes, loading, loadingMore, hasMore, error, reload, loadMore, search, setSearch, searching,
     preset, setPreset, custom, setCustom, projectId, setProjectId, clientId, setClientId,
-    groupMode, setGroupMode, field, setField, filtersActive, clearFilters,
+    groupMode, setGroupMode, field, setField, filtersActive, clearFilters, tags, setTags,
   } = list;
 
   const sections = useMemo(() => groupNotes(notes, { mode: groupMode, field }), [notes, groupMode, field]);
-  const activeCount = (preset !== 'all' ? 1 : 0) + (projectId ? 1 : 0) + (clientId ? 1 : 0);
+  const activeCount = (preset !== 'all' ? 1 : 0) + (projectId ? 1 : 0) + (clientId ? 1 : 0) + (tags.length ? 1 : 0);
   const border = { borderColor: 'var(--color-border)' };
   const chip = (on) => ({
     background: on ? 'var(--color-primary)' : 'var(--color-bg)',
@@ -47,6 +47,7 @@ export default function NotesListPanel({
     const selected = selectedId === note.id;
     const confirming = confirmId === note.id;
     const showActions = mobile ? menuId === note.id : false;
+    const noteTags = Array.isArray(note.tags) ? note.tags : [];
     const tag = groupMode === 'project' ? note.client_name : groupMode === 'client' ? note.project_name : (note.project_name || note.client_name);
     return (
       <div
@@ -74,9 +75,13 @@ export default function NotesListPanel({
             <div className={`${mobile ? 'text-sm' : 'text-xs'} truncate mt-0.5`} style={{ color: 'var(--color-muted)' }}>
               {preview || (note.preview ? ' ' : <span className="italic">empty</span>)}
             </div>
-            {(tag || convertedIds.has(note.id)) && (
-              <div className="flex items-center gap-1.5 mt-1 min-w-0">
-                {tag && <span className="text-xs truncate rounded px-1.5 py-0.5" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)', border: '1px solid var(--color-border)', maxWidth: '70%' }}>{tag}</span>}
+            {(tag || noteTags.length > 0 || convertedIds.has(note.id)) && (
+              <div className="flex flex-wrap items-center gap-1.5 mt-1 min-w-0">
+                {tag && <span className="text-xs truncate rounded px-1.5 py-0.5" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)', border: '1px solid var(--color-border)', maxWidth: '100%' }}>{tag}</span>}
+                {noteTags.slice(0, 3).map((t) => (
+                  <span key={t} className="text-xs truncate rounded-full px-2 py-0.5" style={{ color: 'var(--color-primary)', border: '1px solid var(--color-border)', maxWidth: '100%' }}>{t}</span>
+                ))}
+                {noteTags.length > 3 && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>+{noteTags.length - 3}</span>}
                 {convertedIds.has(note.id) && <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-primary)22', color: 'var(--color-primary)' }}>↳ task created</span>}
               </div>
             )}
@@ -121,7 +126,7 @@ export default function NotesListPanel({
     );
   }
 
-  const summary = filtersSummary({ preset, custom, search: search.trim(), project: projectId, client: clientId });
+  const summary = filtersSummary({ preset, custom, search: search.trim(), project: projectId, client: clientId, tags });
 
   return (
     <div className="flex flex-col h-full min-h-0" style={{ background: 'var(--color-surface)' }}>
@@ -157,7 +162,7 @@ export default function NotesListPanel({
           </button>
         </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto" role="group" aria-label="Group notes by">
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Group notes by">
           <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-muted)' }}>Group by</span>
           {GROUP_MODES.map((m) => (
             <button key={m.id} type="button" onClick={() => setGroupMode(m.id)} aria-pressed={groupMode === m.id} className="text-xs px-2.5 rounded-full flex-shrink-0 transition-opacity duration-200 hover:opacity-80" style={chip(groupMode === m.id)}>{m.label}</button>
@@ -198,6 +203,25 @@ export default function NotesListPanel({
                 <button key={id} type="button" onClick={() => setField(id)} aria-pressed={field === id} className="text-xs px-2.5 rounded-full transition-opacity duration-200 hover:opacity-80" style={chip(field === id)}>{label}</button>
               ))}
             </div>
+            {(allTags.length > 0 || tags.length > 0) && (
+              <div role="group" aria-label="Tags">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Tags {tags.length > 1 ? '(notes with all of these)' : ''}</span>
+                  <button type="button" onClick={onManageTags} className="text-xs hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-primary)', minHeight: mobile ? 32 : undefined }}>Manage tags</button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {[...new Set([...tags, ...allTags.map((t) => t.tag)])].slice(0, 40).map((t) => {
+                    const on = tags.includes(t);
+                    const count = allTags.find((x) => x.tag === t)?.count;
+                    return (
+                      <button key={t} type="button" aria-pressed={on} onClick={() => setTags(on ? tags.filter((x) => x !== t) : [...tags, t])} className="text-xs px-2.5 rounded-full transition-opacity duration-200 hover:opacity-80" style={chip(on)}>
+                        {t}{count != null && <span style={{ opacity: 0.6 }}> {count}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <select value={projectId} onChange={(e) => setProjectId(e.target.value)} aria-label="Filter by project" className="flex-1 min-w-0 rounded px-2 outline-none" style={field_}>
                 <option value="">All projects</option>

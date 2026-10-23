@@ -9,9 +9,10 @@ import { AI_ACTIONS, todayLocal, taskPayload } from './noteAiActions.mjs';
  *   ensureSaved()          saves the note first, so the AI reads what is on screen
  *   onApplyText(mode, t)   mode 'top' | 'replace' | 'bottom'
  *   onApplyTitle(t)
+ *   onApplyTags(tags)      the chosen new tags (the page adds them to the note's tags)
  *   onTasksMade(n)         after tasks were created from the to-do list
  */
-export default function NoteAiPanel({ action, note, mobile, ensureSaved, onApplyText, onApplyTitle, onTasksMade, onClose }) {
+export default function NoteAiPanel({ action, note, mobile, ensureSaved, onApplyText, onApplyTitle, onApplyTags, onTasksMade, onClose }) {
   const getIcon = useIcon();
   const meta = AI_ACTIONS.find((a) => a.id === action);
   const [state, setState] = useState('working'); // working | ready | error
@@ -19,6 +20,7 @@ export default function NoteAiPanel({ action, note, mobile, ensureSaved, onApply
   const [result, setResult] = useState(null);
   const [titleDraft, setTitleDraft] = useState('');
   const [items, setItems] = useState([]); // to-dos: { title, due, who, on, made }
+  const [off, setOff] = useState([]); // suggested tags the person unticked
   const [making, setMaking] = useState(false);
   const [copied, setCopied] = useState(false);
   const run = useRef(0);
@@ -52,6 +54,9 @@ export default function NoteAiPanel({ action, note, mobile, ensureSaved, onApply
 
   const text = result?.text ?? result?.body ?? '';
   const chosen = items.filter((i) => i.on && !i.made && i.title.trim());
+  // suggested tags the note does not have yet, minus any the person unticked
+  const tagChoices = (result?.tags || []).filter((t) => !(note.tags || []).includes(t));
+  const tagPicks = tagChoices.filter((t) => !off.includes(t));
   const madeCount = items.filter((i) => i.made).length;
 
   async function makeTasks() {
@@ -157,6 +162,28 @@ export default function NoteAiPanel({ action, note, mobile, ensureSaved, onApply
               </ul>
             )
           )}
+          {state === 'ready' && action === 'tags' && (
+            tagChoices.length === 0 ? (
+              <p className="text-sm py-4 text-center" style={{ color: 'var(--color-muted)' }}>This note already has the tags that fit.</p>
+            ) : (
+              <>
+                <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>Untick any you do not want. Tags you already use are reused where they fit.</p>
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Suggested tags">
+                  {tagChoices.map((t) => {
+                    const on = !off.includes(t);
+                    return (
+                      <button
+                        key={t} type="button" aria-pressed={on}
+                        onClick={() => setOff((prev) => (on ? [...prev, t] : prev.filter((x) => x !== t)))}
+                        className="text-sm px-3 rounded-full transition-opacity duration-200 hover:opacity-80"
+                        style={{ minHeight: mobile ? 40 : 30, background: on ? 'var(--color-primary)' : 'var(--color-bg)', color: on ? '#fff' : 'var(--color-text)', border: `1px solid ${on ? 'var(--color-primary)' : 'var(--color-border)'}` }}
+                      >{on ? '✓ ' : ''}{t}</button>
+                    );
+                  })}
+                </div>
+              </>
+            )
+          )}
           {state === 'ready' && error && <p className="text-xs mt-2" style={{ color: '#ef4444' }} role="alert">{error}</p>}
         </div>
 
@@ -184,6 +211,16 @@ export default function NoteAiPanel({ action, note, mobile, ensureSaved, onApply
             <>
               <button type="button" onClick={onClose} className={btnClass} style={btn(false)}>Cancel</button>
               <button type="button" disabled={!titleDraft.trim()} onClick={() => { onApplyTitle(titleDraft.trim()); onClose(); }} className={btnClass} style={btn(true)}>Use this title</button>
+            </>
+          )}
+          {state === 'ready' && action === 'tags' && (
+            <>
+              <button type="button" onClick={onClose} className={btnClass} style={btn(false)}>Cancel</button>
+              {tagChoices.length > 0 && (
+                <button type="button" disabled={tagPicks.length === 0} onClick={() => { onApplyTags(tagPicks); onClose(); }} className={btnClass} style={btn(true)}>
+                  Add {tagPicks.length} tag{tagPicks.length === 1 ? '' : 's'}
+                </button>
+              )}
             </>
           )}
           {state === 'ready' && action === 'todos' && (

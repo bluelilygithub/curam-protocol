@@ -783,6 +783,18 @@ async function initSchema() {
     // Pinned notes sort to the top of the list; pinning never changes updated_at. NULL = not pinned.
     await client.query(`ALTER TABLE notes ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMPTZ DEFAULT NULL`);
 
+    // Tags on notes: one row per (note, tag). Tags are stored normalised (server/services/noteTags.js), so a tag is its own key.
+    // user_id is kept here too so tag lists and renames never have to join through notes.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS note_tags (
+        note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        tag     TEXT NOT NULL,
+        PRIMARY KEY (note_id, tag)
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_note_tags_user_tag ON note_tags(user_id, tag)`);
+
     // ── Full-text search placeholder ──────────────────────────────────────────
     // The SQLite FTS5 virtual table is replaced with a plain table for now.
     // Phase 5 adds GIN indexes and converts queries to tsvector / plainto_tsquery.

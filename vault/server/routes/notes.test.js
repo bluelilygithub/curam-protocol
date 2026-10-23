@@ -193,6 +193,88 @@ test('AI actions: read the saved note, return the proposal, change nothing, refu
   } finally { noteAi.runNoteAction = real; }
 });
 
+test('tags: set, normalise, list, filter (all of them), untagged, search, edit date untouched', async () => {
+  const before = (await call('GET', `/api/notes/${ids['Old budget']}`)).json.updated_at;
+  const set = await call('PUT', `/api/notes/${ids['Old budget']}/tags`, { tags: ['#Budget', 'budget', ' Tax  Time ', '', 'Q3'] });
+  assert.strictEqual(set.status, 200);
+  assert.deepStrictEqual(set.json.tags, ['budget', 'tax time', 'q3'], 'normalised, repeats and blanks dropped, order kept');
+  await call('PUT', `/api/notes/${ids['March call']}/tags`, { tags: ['budget', 'meeting'] });
+  await call('PUT', `/api/notes/${ids['October plan']}/tags`, { tags: ['ideas'] });
+
+  const one = (await call('GET', `/api/notes/${ids['Old budget']}`)).json;
+  assert.deepStrictEqual(one.tags, ['budget', 'q3', 'tax time'], 'the open note carries its tags (sorted)');
+  assert.strictEqual(one.updated_at, before, 'tagging is filing, not editing');
+  const list = (await call('GET', '/api/notes')).json;
+  assert.deepStrictEqual(list.find((n) => n.title === 'Old budget').tags, ['budget', 'q3', 'tax time']);
+  assert.deepStrictEqual(list.find((n) => n.title === 'Edited late').tags, [], 'no tags is an empty list, not null');
+
+  const titles = async (qs) => (await call('GET', `/api/notes?${qs}`)).json.map((n) => n.title).filter((t) => ids[t]);
+  assert.deepStrictEqual((await titles('tags=budget')).sort(), ['March call', 'Old budget']);
+  assert.deepStrictEqual(await titles('tags=budget,meeting'), ['March call'], 'two tags means both');
+  assert.deepStrictEqual(await titles(`tags=${encodeURIComponent('#Budget')},ideas`), [], 'no note has both');
+  assert.deepStrictEqual(await titles('untagged=1'), ['Edited late']);
+  assert.deepStrictEqual((await titles('q=meeting')), ['March call'], 'search finds a note by its tag');
+  assert.deepStrictEqual((await titles(`tags=budget&project_id=${projectA}`)), ['Old budget'], 'tags combine with other filters');
+
+  const bad = await call('PUT', `/api/notes/${ids['Old budget']}/tags`, { tags: 'budget' });
+  assert.strictEqual(bad.status, 400);
+  const many = await call('PUT', `/api/notes/${ids['Old budget']}/tags`, { tags: Array.from({ length: 40 }, (_, i) => `t${i}`) });
+  assert.strictEqual(many.json.tags.length, 20, 'capped at 20 per note');
+  await call('PUT', `/api/notes/${ids['Old budget']}/tags`, { tags: ['budget', 'tax time', 'q3'] });
+  assert.strictEqual((await call('PUT', `/api/notes/${ids['Old budget']}/tags`, { tags: ['x'] }, 'B')).status, 404, "not someone else's note");
+  assert.deepStrictEqual((await call('GET', `/api/notes/${ids['Old budget']}`)).json.tags, ['budget', 'q3', 'tax time'], "B changed nothing");
+});
+
+test('tag list with counts; rename (and merge) and delete across all notes; isolated per person', async () => {
+  const all = (await call('GET', '/api/notes/tags')).json;
+  assert.deepStrictEqual(all.find((t) => t.tag === 'budget'), { tag: 'budget', count: 2 });
+  assert.strictEqual(all[0].tag, 'budget', 'most used first');
+  assert.deepStrictEqual((await call('GET', '/api/notes/tags', undefined, 'B')).json, [], "B sees none of A's tags");
+
+  // rename to a new name moves every note
+  assert.strictEqual((await call('POST', '/api/notes/tags/rename', { from: 'Q3', to: 'quarter three' })).status, 200);
+  assert.deepStrictEqual((await call('GET', `/api/notes/${ids['Old budget']}`)).json.tags, ['budget', 'quarter three', 'tax time']);
+  // rename onto an existing tag merges, and a note that had both keeps one
+  await call('PUT', `/api/notes/${ids['March call']}/tags`, { tags: ['budget', 'meeting', 'quarter three'] });
+  assert.strictEqual((await call('POST', '/api/notes/tags/rename', { from: 'quarter three', to: 'budget' })).status, 200);
+  assert.deepStrictEqual((await call('GET', `/api/notes/${ids['March call']}`)).json.tags, ['budget', 'meeting']);
+  assert.deepStrictEqual((await call('GET', `/api/notes/${ids['Old budget']}`)).json.tags, ['budget', 'tax time']);
+  assert.strictEqual((await call('POST', '/api/notes/tags/rename', { from: '', to: 'x' })).status, 400);
+  // B renaming A's tag name does nothing to A
+  await call('POST', '/api/notes/tags/rename', { from: 'budget', to: 'hax' }, 'B');
+  assert.deepStrictEqual((await call('GET', `/api/notes/${ids['Old budget']}`)).json.tags, ['budget', 'tax time']);
+
+  // delete takes the tag off the notes and leaves the notes
+  const del = await call('DELETE', '/api/notes/tags/Meeting');
+  assert.deepStrictEqual(del.json, { tag: 'meeting', removedFrom: 1 });
+  assert.deepStrictEqual((await call('GET', `/api/notes/${ids['March call']}`)).json.tags, ['budget']);
+  assert.strictEqual((await call('GET', `/api/notes/${ids['March call']}`)).status, 200, 'the note is still there');
+  await call('DELETE', '/api/notes/tags/ideas');
+  await call('DELETE', '/api/notes/tags/tax%20time');
+  assert.deepStrictEqual((await call('GET', '/api/notes/tags')).json, [{ tag: 'budget', count: 2 }]);
+});
+
+test('deleting a note removes its tags; the AI tag action is given the existing tags', async () => {
+  const made = await call('POST', '/api/notes', { title: 'Temp', body: 'temp body' });
+  await call('PUT', `/api/notes/${made.json.id}/tags`, { tags: ['gone soon'] });
+  assert.ok((await call('GET', '/api/notes/tags')).json.some((t) => t.tag === 'gone soon'));
+  await call('DELETE', `/api/notes/${made.json.id}`);
+  assert.ok(!(await call('GET', '/api/notes/tags')).json.some((t) => t.tag === 'gone soon'), 'tags go with the note');
+
+  const noteAi = require('../services/noteAi');
+  const real = noteAi.runNoteAction;
+  let seen = null;
+  noteAi.runNoteAction = async (_u, action, note) => { seen = { action, note }; return { tags: ['budget'] }; };
+  try {
+    const r = await call('POST', `/api/notes/${ids['March call']}/ai`, { action: 'tags' });
+    assert.deepStrictEqual(r.json.tags, ['budget']);
+    assert.deepStrictEqual(seen.note.existingTags, ['budget'], "the person's own tags, nobody else's");
+    seen = null;
+    await call('POST', `/api/notes/${ids['March call']}/ai`, { action: 'summary' });
+    assert.deepStrictEqual(seen.note.existingTags, [], 'other actions do not look the tags up');
+  } finally { noteAi.runNoteAction = real; }
+});
+
 async function cleanup(userIds) {
   await pool.query('DELETE FROM users WHERE id = ANY($1::int[])', [userIds]);
 }

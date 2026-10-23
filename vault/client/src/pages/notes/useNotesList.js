@@ -10,7 +10,7 @@ function readView() {
   try {
     const v = JSON.parse(localStorage.getItem(VIEW_KEY) || '{}');
     return {
-      groupMode: ['date', 'project', 'client'].includes(v.groupMode) ? v.groupMode : 'date',
+      groupMode: ['date', 'project', 'client', 'tag'].includes(v.groupMode) ? v.groupMode : 'date',
       field: v.field === 'created' ? 'created' : 'updated',
     };
   } catch { return { groupMode: 'date', field: 'updated' }; }
@@ -39,6 +39,7 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
   const [custom, setCustom] = useState({ from: '', to: '' });
   const [projectId, setProjectId] = useState(String(initialProjectId || ''));
   const [clientId, setClientId] = useState('');
+  const [tags, setTags] = useState([]); // the notes must have ALL of these
   const [{ groupMode, field }, setView] = useState(readView);
 
   const seq = useRef(0);
@@ -54,18 +55,20 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
     try { localStorage.setItem(VIEW_KEY, JSON.stringify({ groupMode, field })); } catch { /* private window: it just isn't remembered */ }
   }, [groupMode, field]);
 
+  const tagsKey = tags.join(',');
   const query = useMemo(() => {
     const p = new URLSearchParams();
     if (debouncedSearch) p.set('q', debouncedSearch);
     if (projectId) p.set('project_id', projectId);
     if (clientId) p.set('client_id', clientId);
+    if (tags.length) p.set('tags', tags.join(','));
     const r = rangeFor(preset, custom);
     if (r.from) p.set('from', r.from);
     if (r.to) p.set('to', r.to);
     p.set('field', field);
     return p;
     // `preset` 'today'/'7d'... are re-read at the moment of loading, so a tab left open overnight shows the new day on the next change
-  }, [debouncedSearch, projectId, clientId, preset, custom.from, custom.to, field]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, projectId, clientId, tagsKey, preset, custom.from, custom.to, field]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchPage = useCallback(async (offset) => {
     const mine = ++seq.current;
@@ -128,15 +131,15 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
 
   const removeNote = useCallback((id) => setNotes((prev) => prev.filter((n) => n.id !== id)), []);
 
-  const filtersActive = !!(debouncedSearch || projectId || clientId || preset !== 'all');
+  const filtersActive = !!(debouncedSearch || projectId || clientId || tags.length || preset !== 'all');
   const clearFilters = useCallback(() => {
-    setSearch(''); setDebouncedSearch(''); setPreset('all'); setCustom({ from: '', to: '' }); setProjectId(''); setClientId('');
+    setSearch(''); setDebouncedSearch(''); setPreset('all'); setCustom({ from: '', to: '' }); setProjectId(''); setClientId(''); setTags([]);
   }, []);
 
   return {
     notes, loading, loadingMore, hasMore, error, reload, loadMore, patchNote, removeNote,
     search, setSearch, searching: search.trim() !== debouncedSearch,
-    preset, setPreset, custom, setCustom, projectId, setProjectId, clientId, setClientId,
+    preset, setPreset, custom, setCustom, projectId, setProjectId, clientId, setClientId, tags, setTags,
     groupMode, setGroupMode, field, setField, filtersActive, clearFilters,
   };
 }

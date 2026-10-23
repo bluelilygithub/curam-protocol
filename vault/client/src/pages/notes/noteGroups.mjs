@@ -15,6 +15,7 @@ export const GROUP_MODES = [
   { id: 'date', label: 'Date' },
   { id: 'project', label: 'Project' },
   { id: 'client', label: 'Client' },
+  { id: 'tag', label: 'Tag' },
 ];
 
 const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -75,6 +76,7 @@ export function dateBucket(value, now = new Date()) {
  *   mode 'date'    -> by `field` (updated_at / created_at) as Today, Yesterday, ... then months
  *   mode 'project' -> by project name, busiest-recent first, "No project" last
  *   mode 'client'  -> by client name, same, "No client" last
+ *   mode 'tag'     -> by tag; a note with several tags is listed under each of them, one with none under "Untagged" (last)
  * Returns [{ key, label, notes }].
  */
 export function groupNotes(notes, { mode = 'date', field = 'updated', now = new Date() } = {}) {
@@ -89,7 +91,11 @@ export function groupNotes(notes, { mode = 'date', field = 'updated', now = new 
   };
 
   for (const note of list) {
-    if (mode === 'project' || mode === 'client') {
+    if (mode === 'tag') {
+      const tags = Array.isArray(note.tags) ? note.tags : [];
+      if (tags.length) for (const t of tags) put(`tag:${t}`, t, note);
+      else put('tag:none', 'Untagged', note, { last: true });
+    } else if (mode === 'project' || mode === 'client') {
       const name = mode === 'project' ? note.project_name : note.client_name;
       const id = mode === 'project' ? note.project_id : note.client_id;
       if (name && id != null) put(`${mode}:${id}`, name, note);
@@ -108,7 +114,7 @@ export function groupNotes(notes, { mode = 'date', field = 'updated', now = new 
 }
 
 /** A short label for the active filters, for the "N notes" line and the empty state. */
-export function filtersSummary({ preset, custom, search, project, client }) {
+export function filtersSummary({ preset, custom, search, project, client, tags }) {
   const parts = [];
   if (search) parts.push(`matching "${search}"`);
   if (preset && preset !== 'all') {
@@ -120,5 +126,6 @@ export function filtersSummary({ preset, custom, search, project, client }) {
   }
   if (project) parts.push('in this project');
   if (client) parts.push('for this client');
+  if (Array.isArray(tags) && tags.length) parts.push(`tagged ${tags.join(' + ')}`);
   return parts.join(', ');
 }

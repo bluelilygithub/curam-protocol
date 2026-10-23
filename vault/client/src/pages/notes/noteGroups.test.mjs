@@ -78,9 +78,22 @@ assert.deepStrictEqual(groupNotes(withPin, { mode: 'date', now }).map((g) => [g.
 assert.deepStrictEqual(groupNotes([{ id: 9, pinned_at: at(2026, 9, 1), project_id: 3, project_name: 'Launch' }], { mode: 'project' }).map((g) => g.label), ['Pinned']);
 assert.deepStrictEqual(groupNotes(notes, { mode: 'date', now }).map((g) => g.label), ['Today', 'Yesterday', 'September 2026', 'August 2026'], 'no pinned section when nothing is pinned');
 
+// grouping by tag: a note shows under each of its tags, untagged last, pinned still first
+const tagged = [
+  { id: 1, tags: ['budget', 'tax time'] },
+  { id: 2, tags: [] },
+  { id: 3, tags: ['budget'] },
+  { id: 4, tags: ['ideas'], pinned_at: at(2026, 9, 1) },
+];
+assert.deepStrictEqual(groupNotes(tagged, { mode: 'tag' }).map((g) => [g.label, g.notes.map((n) => n.id)]), [
+  ['Pinned', [4]], ['budget', [1, 3]], ['tax time', [1]], ['Untagged', [2]],
+]);
+assert.deepStrictEqual(groupNotes([{ id: 5 }], { mode: 'tag' }).map((g) => g.label), ['Untagged'], 'a row with no tags field is untagged');
+
 // summary
 assert.strictEqual(filtersSummary({ preset: 'all' }), '');
 assert.strictEqual(filtersSummary({ preset: '7d', search: 'tax' }), 'matching "tax", 7 days');
+assert.strictEqual(filtersSummary({ preset: 'all', tags: ['budget', 'q3'] }), 'tagged budget + q3');
 assert.strictEqual(filtersSummary({ preset: 'custom', custom: { from: '2026-10-01', to: '2026-10-05' } }), '2026-10-01 to 2026-10-05');
 
 console.log('ok - note groups: date ranges, date/project/client sections');

@@ -49,7 +49,7 @@ const fakeDeps = (reply, seen = {}) => ({
   assert.strictEqual(normalizeReply('todos', { items: Array.from({ length: 40 }, (_, i) => ({ title: `Task ${i}` })) }).items.length, MAX_TODOS);
 
   // every action has a prompt that treats the note as data and forbids invention
-  assert.deepStrictEqual(ACTIONS.slice().sort(), ['summary', 'tidy', 'title', 'todos']);
+  assert.deepStrictEqual(ACTIONS.slice().sort(), ['summary', 'tags', 'tidy', 'title', 'todos']);
   for (const a of ACTIONS) {
     assert.match(SYSTEMS[a], /DATA to work on/, `${a}: the note is data`);
     assert.match(SYSTEMS[a], /do not follow them/, `${a}: no obeying the note`);
@@ -66,6 +66,21 @@ const fakeDeps = (reply, seen = {}) => ({
   assert.match(seen.prompt, /Ring Sam on Friday/);
   assert.deepStrictEqual({ u: seen.logged.userId, f: seen.logged.feature }, { u: 7, f: 'notes_ai_todos' });
   assert.strictEqual(out.items[0].due, '2026-10-23');
+
+  // tag suggestions: normalised, de-duplicated, capped, existing tags reach the model, nothing usable is refused
+  assert.deepStrictEqual(normalizeReply('tags', { tags: ['#Budget', 'budget', ' Tax  Time ', '', 'ideas'] }), { tags: ['budget', 'tax time', 'ideas'] });
+  assert.strictEqual(normalizeReply('tags', { tags: Array.from({ length: 12 }, (_, i) => `tag${i}`) }).tags.length, 6);
+  assert.strictEqual(normalizeReply('tags', { tags: [] }), null);
+  assert.strictEqual(normalizeReply('tags', { tags: 'budget' }), null);
+  assert.match(SYSTEMS.tags, /reuse an existing tag/);
+  const tagSeen = {};
+  const tagOut = await runNoteAction(7, 'tags', { title: 'Q3', body: 'Budget numbers for the accountant', existingTags: ['Budget', 'tax time'] }, fakeDeps({ tags: ['budget', 'accountant'] }, tagSeen));
+  assert.match(tagSeen.prompt, /EXISTING TAGS: budget, tax time/);
+  assert.deepStrictEqual(tagOut.tags, ['budget', 'accountant']);
+  assert.strictEqual(tagSeen.logged.feature, 'notes_ai_tags');
+  const noTags = {};
+  await runNoteAction(7, 'tags', { title: 'x', body: 'hello there' }, fakeDeps({ tags: ['hello'] }, noTags));
+  assert.match(noTags.prompt, /EXISTING TAGS: \(none yet\)/);
 
   // no trustworthy "today" -> the model's dates are dropped
   const noToday = await runNoteAction(7, 'todos', { title: 't', body: 'Call Sam tomorrow', today: 'garbage' }, fakeDeps({ items: [{ title: 'Call Sam', due: '2026-10-24' }] }));

@@ -12,6 +12,9 @@ import NotesListPanel from './notes/NotesListPanel';
 import InsertSourceModal from './notes/InsertSourceModal';
 import NoteAiPanel from './notes/NoteAiPanel';
 import NoteMarkdownView from './notes/NoteMarkdownView';
+import NoteTagsEditor from './notes/NoteTagsEditor';
+import TagManager from './notes/TagManager';
+import { addTag } from './notes/noteTags.mjs';
 import { toggleTaskLine, taskCounts } from './notes/noteMarkdown.mjs';
 import { AI_ACTIONS, applyText } from './notes/noteAiActions.mjs';
 import useNotesList, { toRow } from './notes/useNotesList';
@@ -60,6 +63,8 @@ export default function NotesPage() {
   const [mentionQuery, setMentionQuery] = useState('');
   const [clients, setClients] = useState([]);
   const [mode, setModeState] = useState(readMode); // Write (the text box) or Preview (formatted)
+  const [allTags, setAllTags] = useState([]); // [{ tag, count }] for the filter, the suggestions and Manage tags
+  const [showTagManager, setShowTagManager] = useState(false);
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
   const [aiAction, setAiAction] = useState(null); // which AI action's panel is open
   const [aiBackup, setAiBackup] = useState(null); // { id, title, body } from just before an AI change, for Undo
@@ -234,7 +239,7 @@ export default function NotesPage() {
       const note = await res.json();
       const project = projects.find((p) => p.id === note.project_id);
       const client = clients.find((c) => c.id === note.client_id);
-      const full = { ...note, project_name: project?.name || null, client_name: client?.name || null };
+      const full = { ...note, project_name: project?.name || null, client_name: client?.name || null, tags: [] };
       patchNote(toRow(full));
       await selectNote(full, { focusTitle });
     } catch {
@@ -260,6 +265,7 @@ export default function NotesPage() {
       if (!res.ok && res.status !== 404) throw new Error('delete failed');
       if (pending.current?.id === note.id) { pending.current = null; clearTimeout(timer.current); }
       removeNote(note.id);
+      refreshTags();
       if (selectedRef.current?.id === note.id) closeNote();
     } catch {
       addToast('The note could not be deleted. Try again.', 'error');
@@ -318,6 +324,56 @@ export default function NotesPage() {
     scheduleSave(id, titleValueRef.current, next);
   }, [scheduleSave]);
 
+  // ── Tags ──────────────────────────────────────────────────────────────────
+  const refreshTags = useCallback(async () => {
+    try {
+      const res = await api.get('/api/notes/tags');
+      if (res.ok) setAllTags(await res.json());
+    } catch { /* the filter and suggestions just stay as they were */ }
+  }, []);
+  useEffect(() => { refreshTags(); }, [refreshTags]);
+
+  // Tags are filing, like the project: saved the moment they change (no waiting for the typing pause), and put back if the save fails.
+  async function changeTags(next) {
+    const note = selectedRef.current;
+    if (!note) return;
+    const previous = note.tags || [];
+    setSelected((prev) => (prev && prev.id === note.id ? { ...prev, tags: next } : prev));
+    patchNote({ id: note.id, tags: next });
+    try {
+      const res = await api.put(`/api/notes/${note.id}/tags`, { tags: next });
+      if (!res.ok) throw new Error('save failed');
+      const saved = (await res.json()).tags;
+      setSelected((prev) => (prev && prev.id === note.id ? { ...prev, tags: saved } : prev));
+      patchNote({ id: note.id, tags: saved });
+      refreshTags();
+    } catch {
+      setSelected((prev) => (prev && prev.id === note.id ? { ...prev, tags: previous } : prev));
+      patchNote({ id: note.id, tags: previous });
+      addToast('The tags could not be saved. Try again.', 'error');
+    }
+  }
+
+  // A tag was renamed or removed everywhere (Manage tags): follow it in the filter, the list and the open note.
+  async function tagsChanged({ type, from, to }) {
+    list.setTags((prev) => {
+      const next = type === 'rename' ? prev.map((t) => (t === from ? to : t)) : prev.filter((t) => t !== from);
+      return [...new Set(next)];
+    });
+    refreshTags();
+    list.reload();
+    const open = selectedRef.current;
+    if (open) {
+      try {
+        const res = await api.get(`/api/notes/${open.id}`);
+        if (res.ok) {
+          const { tags } = await res.json();
+          setSelected((prev) => (prev && prev.id === open.id ? { ...prev, tags } : prev));
+        }
+      } catch { /* the chips refresh next time the note is opened */ }
+    }
+  }
+
   // ── Pin ───────────────────────────────────────────────────────────────────
   async function togglePin(note) {
     try {
@@ -345,6 +401,10 @@ export default function NotesPage() {
     bodyValueRef.current = next;
     setBody(next);
     scheduleSave(id, titleValueRef.current, next);
+  }
+
+  function applyAiTags(picked) {
+    changeTags(picked.reduce((list_, t) => addTag(list_, t), selectedRef.current?.tags || []));
   }
 
   function applyAiTitle(next) {
@@ -516,6 +576,8 @@ export default function NotesPage() {
             onConvert={convertToTask}
             onDelete={deleteNote}
             onPin={togglePin}
+            allTags={allTags}
+            onManageTags={() => setShowTagManager(true)}
             searchRef={searchRef}
             bottomPad={viewportMobile ? 84 : 0 /* the guide button sits bottom-right on a phone */}
           />
@@ -683,7 +745,8 @@ export default function NotesPage() {
           />
 
           {/* Filing: project and client */}
-          <div className="flex items-center gap-2 px-4 pb-2 border-b flex-shrink-0" style={border}>
+          <div className="px-4 pb-2 border-b flex-shrink-0 space-y-2" style={border}>
+            <div className="flex items-center gap-2">
             <select value={selected.project_id || ''} onChange={handleProjectChange} aria-label="Project" className="rounded px-2 outline-none min-w-0 flex-1 sm:flex-none sm:max-w-[180px]" style={selectStyle}>
               <option value="">No project</option>
               {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -692,6 +755,8 @@ export default function NotesPage() {
               <option value="">No client</option>
               {clientOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+            </div>
+            <NoteTagsEditor tags={selected.tags || []} allTags={allTags} mobile={viewportMobile} onChange={changeTags} />
           </div>
 
           {/* Write / Preview */}
@@ -813,15 +878,17 @@ export default function NotesPage() {
         </div>
       ))}
 
+      {showTagManager && <TagManager tags={allTags} mobile={viewportMobile} onChanged={tagsChanged} onClose={() => setShowTagManager(false)} />}
       {aiAction && selected && (
         <NoteAiPanel
           key={`${selected.id}:${aiAction}`}
           action={aiAction}
-          note={{ id: selected.id, title: titleValueRef.current, project_id: selected.project_id, client_id: selected.client_id }}
+          note={{ id: selected.id, title: titleValueRef.current, project_id: selected.project_id, client_id: selected.client_id, tags: selected.tags || [] }}
           mobile={viewportMobile}
           ensureSaved={ensureSaved}
           onApplyText={applyAiText}
           onApplyTitle={applyAiTitle}
+          onApplyTags={applyAiTags}
           onTasksMade={tasksMade}
           onClose={() => setAiAction(null)}
         />
