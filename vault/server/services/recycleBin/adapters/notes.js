@@ -48,3 +48,23 @@ register('note-template', {
     return { entityId: rows[0].id };
   },
 });
+
+register('note-view', {
+  label: 'Notes view',
+  async restore(db, userId, payload) {
+    const v = payload?.view;
+    if (!v) throw new Error('This deleted view has nothing to restore.');
+    const idTaken = await exists(db, 'SELECT 1 FROM note_views WHERE id=$1', [v.id]);
+    // The name may have been used again since: the restored view gets "(restored)" rather than failing.
+    let name = v.name;
+    for (let n = 1; await exists(db, 'SELECT 1 FROM note_views WHERE user_id=$1 AND lower(name)=lower($2)', [userId, name]); n++) {
+      name = `${String(v.name).slice(0, 28)} (restored${n > 1 ? ` ${n}` : ''})`;
+    }
+    const { rows } = await db.query(
+      `INSERT INTO note_views (${idTaken ? '' : 'id, '}user_id, name, filters, created_at, updated_at)
+       VALUES (${idTaken ? '' : '$6, '}$1, $2, $3::jsonb, $4, $5) RETURNING id`,
+      [userId, name, JSON.stringify(v.filters || {}), v.created_at || new Date().toISOString(), v.updated_at || new Date().toISOString(), ...(idTaken ? [] : [v.id])]
+    );
+    return { entityId: rows[0].id };
+  },
+});

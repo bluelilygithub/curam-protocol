@@ -10,7 +10,8 @@ Page `client/src/pages/NotesPage.jsx` (`/notes`), API `server/routes/notes.js` (
 - **Tags**: table `note_tags (note_id, user_id, tag)`. One rule for what a tag is (`server/services/noteTags.js`, copied in `client/src/pages/notes/noteTags.mjs`, a test keeps them equal). Rename (merges) and remove everywhere from Manage tags.
 - **Templates**: built in (`noteTemplates.mjs`, filled with `{{date}}`, `{{isodate}}`, `{{weekday}}`, `{{time}}`) and the person's own (table `note_templates`, up to 50, saved from an open note). New note → From a template.
 - **Daily note**: the calendar-tick button. `POST /api/notes/daily { date, title, body }` (the person's own day, sent by the browser): returns the existing note for that day or makes it, tagged `daily`, carrying over the unticked to-dos of the most recent earlier daily note (`server/services/noteDaily.js`). One per person per day (`notes.daily_date` unique index plus an advisory lock so two devices cannot make two).
-- **Recently deleted**: deleting a note or a template goes through the shared recycle bin (`docs/recycle-bin.md`) for 30 days, with Undo in the toast and a Recently deleted window; the same items show in Settings → Recycle bin.
+- **Saved views**: a name for a combination of search, date range, project, client, tags and grouping (table `note_views`, up to 30, unique names). The server decides what a view may hold (`server/services/noteViews.js`: known fields and values only); the browser compares and describes them (`client/src/pages/notes/noteViews.mjs`). Date ranges stay relative. A view whose project or client has been deleted drops that part with a message. Changing the filters after opening a view offers Update. The Views button sits beside Filters (`NoteViewsMenu.jsx`).
+- **Recently deleted**: deleting a note, a template or a saved view goes through the shared recycle bin (`docs/recycle-bin.md`) for 30 days, with Undo in the toast and a Recently deleted window; the same items show in Settings → Recycle bin.
 
 ## Rules worth remembering
 
@@ -26,4 +27,4 @@ Page `client/src/pages/NotesPage.jsx` (`/notes`), API `server/routes/notes.js` (
 
 ## Not built (ideas)
 
-Reminders on a note, "ask your notes" chat, saved views, links between notes, attachments, version history, export.
+Reminders on a note, "ask your notes" chat, links between notes, attachments, version history, export.

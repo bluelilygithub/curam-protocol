@@ -17,6 +17,7 @@ import TemplatePicker from './notes/TemplatePicker';
 import RecentlyDeletedModal from './notes/RecentlyDeletedModal';
 import { dailyPayload, templateToNote } from './notes/noteTemplates.mjs';
 import TagManager from './notes/TagManager';
+import { DEFAULT_FILTERS, sameFilters, isPlain, describeFilters } from './notes/noteViews.mjs';
 import { addTag } from './notes/noteTags.mjs';
 import { toggleTaskLine, taskCounts } from './notes/noteMarkdown.mjs';
 import { AI_ACTIONS, applyText } from './notes/noteAiActions.mjs';
@@ -71,6 +72,8 @@ export default function NotesPage() {
   const [showTemplates, setShowTemplates] = useState(false);
   const [templates, setTemplates] = useState(null); // the person's own; null while loading
   const [showBin, setShowBin] = useState(false);
+  const [views, setViews] = useState([]); // saved views: [{ id, name, filters }]
+  const [appliedViewId, setAppliedViewId] = useState(null); // the view last opened, so changes to it can be saved back
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
   const [aiAction, setAiAction] = useState(null); // which AI action's panel is open
   const [aiBackup, setAiBackup] = useState(null); // { id, title, body } from just before an AI change, for Undo
@@ -438,6 +441,87 @@ export default function NotesPage() {
     scheduleSave(id, titleValueRef.current, next);
   }, [scheduleSave]);
 
+  // ── Saved views ───────────────────────────────────────────────────────────
+  const loadViews = useCallback(async () => {
+    try {
+      const res = await api.get('/api/notes/views');
+      if (res.ok) setViews(await res.json());
+    } catch { /* the Views menu just starts empty */ }
+  }, []);
+  useEffect(() => { loadViews(); }, [loadViews]);
+
+  const current = list.filters;
+  const activeView = views.find((v) => sameFilters(v.filters, current)) || null;
+  const appliedView = views.find((v) => v.id === appliedViewId) || null;
+  const changedView = appliedView && !activeView ? appliedView : null; // opened a view, then changed something
+  const nameOfProject = (id) => projects.find((p) => String(p.id) === String(id))?.name;
+  const nameOfClient = (id) => clients.find((c) => String(c.id) === String(id))?.name;
+
+  const viewsApi = {
+    views,
+    activeId: activeView?.id ?? null,
+    plain: isPlain(current),
+    changedView,
+    canSave: !isPlain(current),
+    summaryFor: (v) => describeFilters(v.filters, { projectName: nameOfProject(v.filters.projectId), clientName: nameOfClient(v.filters.clientId) }),
+    clear() { list.clearFilters(); setAppliedViewId(null); },
+    async apply(view) {
+      const f = { ...DEFAULT_FILTERS, ...view.filters };
+      const left = [];
+      // a project or client deleted since the view was saved would show nothing: leave it out and say so
+      if (f.projectId && projects.length > 0 && !projects.some((p) => String(p.id) === f.projectId)) { f.projectId = ''; left.push('project'); }
+      if (f.clientId) {
+        const known = await ensureClients();
+        if (known.length > 0 && !known.some((c) => String(c.id) === f.clientId)) { f.clientId = ''; left.push('client'); }
+      }
+      list.applyFilters(f);
+      setAppliedViewId(view.id);
+      if (left.length) addToast(`The ${left.join(' and ')} in this view no longer exists, so it was left out.`, 'warn');
+    },
+    async save(name) {
+      try {
+        const res = await api.post('/api/notes/views', { name, filters: current });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) return data.error || 'The view could not be saved.';
+        setViews((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+        setAppliedViewId(data.id);
+        addToast(`View "${data.name}" saved ✓`, 'success');
+        return '';
+      } catch { return 'The view could not be saved. Try again.'; }
+    },
+    async update(view) {
+      try {
+        const res = await api.put(`/api/notes/views/${view.id}`, { filters: current });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) return data.error || 'The view could not be updated.';
+        setViews((prev) => prev.map((v) => (v.id === data.id ? data : v)));
+        addToast(`View "${data.name}" updated ✓`, 'success');
+        return '';
+      } catch { return 'The view could not be updated. Try again.'; }
+    },
+    async rename(id, name) {
+      try {
+        const res = await api.put(`/api/notes/views/${id}`, { name });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) return data.error || 'The view could not be renamed.';
+        setViews((prev) => prev.map((v) => (v.id === data.id ? data : v)).sort((a, b) => a.name.localeCompare(b.name)));
+        return '';
+      } catch { return 'The view could not be renamed. Try again.'; }
+    },
+    async remove(view) {
+      try {
+        const res = await api.delete(`/api/notes/views/${view.id}`);
+        if (!res.ok) throw new Error('delete failed');
+        const { binId } = await res.json();
+        setViews((prev) => prev.filter((v) => v.id !== view.id));
+        if (appliedViewId === view.id) setAppliedViewId(null);
+        addToast(`View "${view.name}" deleted. Kept 30 days.`, 'success', undefined, { label: 'Undo', onClick: () => undoDelete(binId, 'View restored ✓', loadViews) });
+      } catch {
+        addToast('The view could not be deleted. Try again.', 'error');
+      }
+    },
+  };
+
   // ── Tags ──────────────────────────────────────────────────────────────────
   const refreshTags = useCallback(async () => {
     try {
@@ -547,12 +631,17 @@ export default function NotesPage() {
 
   // ── Project / client of the open note ─────────────────────────────────────
   const ensureClients = useCallback(async () => {
-    if (clients.length) return;
+    if (clients.length) return clients;
     try {
       const res = await api.get('/api/notes/options');
-      if (res.ok) setClients((await res.json()).clients || []);
+      if (res.ok) {
+        const found = (await res.json()).clients || [];
+        setClients(found);
+        return found;
+      }
     } catch { /* the pickers just stay short */ }
-  }, [clients.length]);
+    return [];
+  }, [clients]);
 
   async function changeFiling(changes, names) {
     if (!selected) return;
@@ -694,6 +783,7 @@ export default function NotesPage() {
             onPin={togglePin}
             allTags={allTags}
             onManageTags={() => setShowTagManager(true)}
+            viewsApi={viewsApi}
             searchRef={searchRef}
             bottomPad={viewportMobile ? 84 : 0 /* the guide button sits bottom-right on a phone */}
           />

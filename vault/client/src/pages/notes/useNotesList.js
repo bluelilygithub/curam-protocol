@@ -131,6 +131,22 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
 
   const removeNote = useCallback((id) => setNotes((prev) => prev.filter((n) => n.id !== id)), []);
 
+  // Everything a saved view holds, as it is right now (the search as typed, not as last sent).
+  const filters = useMemo(() => ({ search: search.trim(), preset, custom, field, projectId, clientId, tags, groupMode }),
+    [search, preset, custom, field, projectId, clientId, tags, groupMode]);
+
+  const applyFilters = useCallback((f) => {
+    const text = String(f.search || '');
+    setSearch(text);
+    setDebouncedSearch(text.trim()); // no waiting for the typing pause: a view should appear at once
+    setPreset(f.preset || 'all');
+    setCustom({ from: f.custom?.from || '', to: f.custom?.to || '' });
+    setProjectId(f.projectId ? String(f.projectId) : '');
+    setClientId(f.clientId ? String(f.clientId) : '');
+    setTags(Array.isArray(f.tags) ? f.tags : []);
+    setView({ groupMode: ['date', 'project', 'client', 'tag'].includes(f.groupMode) ? f.groupMode : 'date', field: f.field === 'created' ? 'created' : 'updated' });
+  }, []);
+
   const filtersActive = !!(debouncedSearch || projectId || clientId || tags.length || preset !== 'all');
   const clearFilters = useCallback(() => {
     setSearch(''); setDebouncedSearch(''); setPreset('all'); setCustom({ from: '', to: '' }); setProjectId(''); setClientId(''); setTags([]);
@@ -140,6 +156,6 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
     notes, loading, loadingMore, hasMore, error, reload, loadMore, patchNote, removeNote,
     search, setSearch, searching: search.trim() !== debouncedSearch,
     preset, setPreset, custom, setCustom, projectId, setProjectId, clientId, setClientId, tags, setTags,
-    groupMode, setGroupMode, field, setField, filtersActive, clearFilters,
+    groupMode, setGroupMode, field, setField, filtersActive, clearFilters, filters, applyFilters,
   };
 }

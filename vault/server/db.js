@@ -812,6 +812,19 @@ async function initSchema() {
     await client.query(`ALTER TABLE notes ADD COLUMN IF NOT EXISTS daily_date DATE DEFAULT NULL`);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_user_daily ON notes(user_id, daily_date) WHERE daily_date IS NOT NULL`);
 
+    // Saved views on Notes: a named combination of search, dates, project, client, tags and grouping (server/services/noteViews.js).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS note_views (
+        id         SERIAL PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name       TEXT NOT NULL,
+        filters    JSONB NOT NULL DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_note_views_user_name ON note_views(user_id, lower(name))`);
+
     // The shared recycle bin (server/services/recycleBin, docs/recycle-bin.md). A snapshot of whatever a tool deleted, kept 30 days.
     await client.query(`
       CREATE TABLE IF NOT EXISTS recycle_bin (

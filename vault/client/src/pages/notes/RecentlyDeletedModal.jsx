@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { useIcon } from '../../providers/IconProvider';
 import RecycleBinPanel from '../../components/RecycleBinPanel';
 
-/** Notes' window onto the shared recycle bin: only notes and note templates, so it stays about Notes. Everything else is in Settings. */
+/** Notes' window onto the shared recycle bin: only notes, note templates and saved views, so it stays about Notes. Everything else is in Settings. */
 export default function RecentlyDeletedModal({ mobile, onRestored, onClose }) {
   const getIcon = useIcon();
   useEffect(() => {
@@ -23,7 +23,7 @@ export default function RecentlyDeletedModal({ mobile, onRestored, onClose }) {
           <button type="button" onClick={onClose} aria-label="Close" className="hover:opacity-60 transition-opacity duration-200" style={{ color: 'var(--color-muted)', minWidth: 40, minHeight: 40 }}>{getIcon('x', { size: 18 })}</button>
         </div>
         <div className="px-4 pb-4 overflow-y-auto flex-1 min-h-0">
-          <RecycleBinPanel types={['note', 'note-template']} onRestored={onRestored} emptyHint="No deleted notes or templates. They wait here for 30 days after you delete them." />
+          <RecycleBinPanel types={['note', 'note-template', 'note-view']} onRestored={onRestored} emptyHint="No deleted notes, templates or views. They wait here for 30 days after you delete them." />
         </div>
       </div>
     </div>

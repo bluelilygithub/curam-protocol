@@ -15,6 +15,7 @@ const { buildVoiceNote } = require('../services/voiceNote');
 const noteAi = require('../services/noteAi'); // called as noteAi.runNoteAction so tests can swap it
 const { normalizeTag, normalizeTags } = require('../services/noteTags');
 const noteDaily = require('../services/noteDaily');
+const noteViews = require('../services/noteViews');
 const bin = require('../services/recycleBin'); // deleted notes and templates wait here for 30 days
 bin.loadAdapters();
 
@@ -245,6 +246,84 @@ router.delete('/templates/:id', async (req, res) => {
     await db.query('ROLLBACK').catch(() => {});
     getLogger().error({ err }, '[notes template delete]');
     res.status(500).json({ error: 'Could not delete the template. Try again.' });
+  } finally {
+    db.release();
+  }
+});
+
+// ── Saved views: a name for a combination of filters and grouping. Named routes: before /:id. ────────────────────────────────────────
+
+const VIEW_NAME_TAKEN = 'You already have a view with that name.';
+
+// GET /api/notes/views
+router.get('/views', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT id, name, filters FROM note_views WHERE user_id=$1 ORDER BY lower(name), id', [req.user.id]);
+    res.json(rows);
+  } catch (err) {
+    getLogger().error({ err }, '[notes views]');
+    res.status(500).json({ error: 'Could not load your saved views. Try again.' });
+  }
+});
+
+// POST /api/notes/views  { name, filters }
+router.post('/views', async (req, res) => {
+  const name = noteViews.normalizeName(req.body?.name);
+  const filters = noteViews.normalizeFilters(req.body?.filters);
+  if (!name) return res.status(400).json({ error: 'Give the view a name.' });
+  if (!filters) return res.status(400).json({ error: 'filters must be an object' });
+  try {
+    const count = Number((await pool.query('SELECT COUNT(*) FROM note_views WHERE user_id=$1', [req.user.id])).rows[0].count);
+    if (count >= noteViews.MAX_VIEWS) return res.status(400).json({ error: `You can keep up to ${noteViews.MAX_VIEWS} saved views. Delete one first.` });
+    const { rows } = await pool.query('INSERT INTO note_views (user_id, name, filters) VALUES ($1,$2,$3::jsonb) RETURNING id, name, filters', [req.user.id, name, JSON.stringify(filters)]);
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: VIEW_NAME_TAKEN });
+    getLogger().error({ err }, '[notes view create]');
+    res.status(500).json({ error: 'Could not save the view. Try again.' });
+  }
+});
+
+// PUT /api/notes/views/:id  { name?, filters? }  — rename it, and/or replace its filters with the current ones
+router.put('/views/:id', async (req, res) => {
+  const hasName = req.body?.name !== undefined;
+  const hasFilters = req.body?.filters !== undefined;
+  if (!hasName && !hasFilters) return res.status(400).json({ error: 'Nothing to change.' });
+  const name = hasName ? noteViews.normalizeName(req.body.name) : null;
+  const filters = hasFilters ? noteViews.normalizeFilters(req.body.filters) : null;
+  if (hasName && !name) return res.status(400).json({ error: 'Give the view a name.' });
+  if (hasFilters && !filters) return res.status(400).json({ error: 'filters must be an object' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE note_views SET name = COALESCE($3, name), filters = COALESCE($4::jsonb, filters), updated_at = NOW()
+        WHERE id=$1 AND user_id=$2 RETURNING id, name, filters`,
+      [Number(req.params.id) || 0, req.user.id, name, filters ? JSON.stringify(filters) : null]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: VIEW_NAME_TAKEN });
+    getLogger().error({ err }, '[notes view update]');
+    res.status(500).json({ error: 'Could not save the view. Try again.' });
+  }
+});
+
+// DELETE /api/notes/views/:id  — to the recycle bin (30 days)
+router.delete('/views/:id', async (req, res) => {
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const { rows } = await db.query('SELECT * FROM note_views WHERE id=$1 AND user_id=$2 FOR UPDATE', [Number(req.params.id) || 0, req.user.id]);
+    if (!rows[0]) { await db.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
+    const v = rows[0];
+    const binId = await bin.moveToBin(db, { userId: req.user.id, type: 'note-view', id: v.id, title: v.name, detail: 'Saved view in Notes', payload: { view: v } });
+    await db.query('DELETE FROM note_views WHERE id=$1', [v.id]);
+    await db.query('COMMIT');
+    res.json({ ok: true, binId, retentionDays: bin.RETENTION_DAYS });
+  } catch (err) {
+    await db.query('ROLLBACK').catch(() => {});
+    getLogger().error({ err }, '[notes view delete]');
+    res.status(500).json({ error: 'Could not delete the view. Try again.' });
   } finally {
     db.release();
   }

@@ -389,6 +389,57 @@ test("daily note: one per day, from the template, with the last day's open to-do
   assert.strictEqual(Number((await pool.query("SELECT COUNT(*) FROM notes WHERE user_id=$1 AND daily_date='2026-10-23'", [userA])).rows[0].count), 1);
 });
 
+test('saved views: save, list, rename, replace filters, delete to the bin and restore; names, limits and ownership', async () => {
+  const filters = { search: ' quote ', preset: '30d', field: 'created', projectId: String(projectA), clientId: String(clientA), tags: ['#Budget', 'budget'], groupMode: 'tag', evil: '<script>' };
+  const made = await call('POST', '/api/notes/views', { name: '  Acme   last month ', filters });
+  assert.strictEqual(made.status, 201, JSON.stringify(made.json));
+  assert.strictEqual(made.json.name, 'Acme last month');
+  assert.deepStrictEqual(made.json.filters, { search: 'quote', preset: '30d', custom: { from: '', to: '' }, field: 'created', projectId: String(projectA), clientId: String(clientA), tags: ['budget'], groupMode: 'tag' }, 'cut down to the known fields');
+  const vid = made.json.id;
+
+  assert.deepStrictEqual((await call('GET', '/api/notes/views')).json.map((v) => v.name), ['Acme last month']);
+  assert.deepStrictEqual((await call('GET', '/api/notes/views', undefined, 'B')).json, [], "B sees none of A's views");
+
+  // names: needed, unique ignoring case, per person
+  assert.strictEqual((await call('POST', '/api/notes/views', { name: '  ', filters })).status, 400);
+  assert.strictEqual((await call('POST', '/api/notes/views', { name: 'x', filters: 'nope' })).status, 400);
+  const dup = await call('POST', '/api/notes/views', { name: 'ACME LAST MONTH', filters });
+  assert.deepStrictEqual({ s: dup.status, e: dup.json.error }, { s: 409, e: 'You already have a view with that name.' });
+  assert.strictEqual((await call('POST', '/api/notes/views', { name: 'Acme last month', filters }, 'B')).status, 201, "B can use the same name");
+
+  // rename, and replace the filters with new ones
+  const renamed = await call('PUT', `/api/notes/views/${vid}`, { name: 'Acme recent' });
+  assert.deepStrictEqual({ name: renamed.json.name, preset: renamed.json.filters.preset }, { name: 'Acme recent', preset: '30d' }, 'only the name changed');
+  const refiled = await call('PUT', `/api/notes/views/${vid}`, { filters: { preset: '7d', groupMode: 'date' } });
+  assert.deepStrictEqual({ name: refiled.json.name, preset: refiled.json.filters.preset, tags: refiled.json.filters.tags }, { name: 'Acme recent', preset: '7d', tags: [] });
+  assert.strictEqual((await call('PUT', `/api/notes/views/${vid}`, {})).status, 400);
+  assert.strictEqual((await call('PUT', `/api/notes/views/${vid}`, { name: '' })).status, 400);
+  assert.strictEqual((await call('PUT', `/api/notes/views/${vid}`, { name: 'hax' }, 'B')).status, 404);
+  await call('POST', '/api/notes/views', { name: 'Other', filters: {} });
+  assert.strictEqual((await call('PUT', `/api/notes/views/${vid}`, { name: 'other' })).status, 409, 'renaming onto another name is refused too');
+
+  // delete -> recycle bin -> restore
+  const del = await call('DELETE', `/api/notes/views/${vid}`);
+  assert.strictEqual(del.status, 200);
+  assert.strictEqual((await call('DELETE', `/api/notes/views/${vid}`)).status, 404);
+  assert.deepStrictEqual((await call('GET', '/api/notes/views')).json.map((v) => v.name), ['Other']);
+  const item = (await call('GET', '/api/recycle-bin?types=note-view')).json.items[0];
+  assert.deepStrictEqual({ label: item.label, title: item.title }, { label: 'Notes view', title: 'Acme recent' });
+  // the name gets used again meanwhile: the restored view is renamed rather than refused
+  await call('POST', '/api/notes/views', { name: 'Acme recent', filters: {} });
+  const back = await call('POST', `/api/recycle-bin/${del.json.binId}/restore`);
+  assert.strictEqual(back.status, 200, JSON.stringify(back.json));
+  const names = (await call('GET', '/api/notes/views')).json.map((v) => v.name);
+  assert.ok(names.includes('Acme recent') && names.includes('Acme recent (restored)'), names.join(' | '));
+  assert.strictEqual(Number(back.json.entityId), vid, 'same id');
+
+  // at most 30
+  await pool.query('DELETE FROM note_views WHERE user_id=$1', [userA]);
+  await pool.query("INSERT INTO note_views (user_id, name) SELECT $1, 'filler ' || g FROM generate_series(1, 30) g", [userA]);
+  assert.strictEqual((await call('POST', '/api/notes/views', { name: 'one too many', filters: {} })).status, 400);
+  await pool.query('DELETE FROM note_views WHERE user_id=$1', [userA]);
+});
+
 async function cleanup(userIds) {
   await pool.query('DELETE FROM users WHERE id = ANY($1::int[])', [userIds]);
 }

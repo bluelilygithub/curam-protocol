@@ -3,6 +3,7 @@ import { useIcon } from '../../providers/IconProvider';
 import MoodDot from '../../components/mood/MoodDot';
 import { DATE_PRESETS, GROUP_MODES, groupNotes, filtersSummary } from './noteGroups.mjs';
 import { listText } from './noteListText.mjs';
+import NoteViewsMenu from './NoteViewsMenu';
 
 const fmtShort = (value) => {
   const d = new Date(value);
@@ -18,10 +19,11 @@ const fmtShort = (value) => {
  */
 export default function NotesListPanel({
   list, projects, clients, onNeedClients, selectedId, mobile, moodMap, convertedIds,
-  onSelect, onNew, onToday, onBin, onConvert, onDelete, onPin, allTags, onManageTags, searchRef, bottomPad,
+  onSelect, onNew, onToday, onBin, onConvert, onDelete, onPin, allTags, onManageTags, viewsApi, searchRef, bottomPad,
 }) {
   const getIcon = useIcon();
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [viewsOpen, setViewsOpen] = useState(false);
   const [menuId, setMenuId] = useState(null); // phone: the row whose actions are showing
   const [confirmId, setConfirmId] = useState(null); // the row asking "Delete? Yes / No"
 
@@ -156,7 +158,7 @@ export default function NotesListPanel({
       </div>
 
       {/* Search + view controls */}
-      <div className="px-2 py-2 border-b flex-shrink-0 space-y-2" style={border}>
+      <div className="px-2 py-2 border-b flex-shrink-0 space-y-2 relative" style={border}>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 rounded px-2 flex-1 min-w-0" style={{ background: 'var(--color-surface-2)', minHeight: mobile ? 40 : 28 }}>
             <span style={{ color: 'var(--color-muted)' }}>{getIcon('search', { size: 14 })}</span>
@@ -168,7 +170,14 @@ export default function NotesListPanel({
             {search && <button type="button" aria-label="Clear search" onClick={() => setSearch('')} className="hover:opacity-60 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }}>{getIcon('x', { size: 14 })}</button>}
           </div>
           <button
-            type="button" onClick={() => { setFiltersOpen((v) => !v); onNeedClients(); }} aria-expanded={filtersOpen} aria-label="Filters"
+            type="button" onClick={() => { setViewsOpen((v) => !v); setFiltersOpen(false); }} aria-expanded={viewsOpen} aria-label="Saved views"
+            className="relative flex items-center justify-center rounded text-xs hover:opacity-70 transition-opacity duration-200 flex-shrink-0"
+            style={{ ...chip(viewsOpen || !!viewsApi.activeId), minWidth: mobile ? 44 : 32, paddingInline: 8 }}
+            title={viewsApi.activeId ? `Saved view: ${viewsApi.views.find((v) => v.id === viewsApi.activeId)?.name}` : 'Saved views: bring back a set of filters in one tap'}
+          >{getIcon('layers', { size: 14 })}</button>
+          {viewsOpen && <NoteViewsMenu api={viewsApi} mobile={mobile} onClose={() => setViewsOpen(false)} />}
+          <button
+            type="button" onClick={() => { setFiltersOpen((v) => !v); setViewsOpen(false); onNeedClients(); }} aria-expanded={filtersOpen} aria-label="Filters"
             className="relative flex items-center justify-center gap-1 rounded text-xs hover:opacity-70 transition-opacity duration-200 flex-shrink-0"
             style={{ ...chip(filtersOpen || activeCount > 0), minWidth: mobile ? 44 : 32, paddingInline: 8 }} title="Filter by date, project or client"
           >
@@ -289,7 +298,7 @@ export default function NotesListPanel({
 
         {notes.length > 0 && (
           <p className="px-3 pt-2 pb-1 text-xs" style={{ color: 'var(--color-muted)', opacity: searching || loading ? 0.5 : 1 }}>
-            {notes.length}{hasMore ? '+' : ''} note{notes.length === 1 ? '' : 's'}{summary ? `, ${summary}` : ''}
+            {viewsApi.activeId ? `${viewsApi.views.find((v) => v.id === viewsApi.activeId)?.name} · ` : ''}{notes.length}{hasMore ? '+' : ''} note{notes.length === 1 ? '' : 's'}{summary ? `, ${summary}` : ''}
           </p>
         )}
         <div style={{ opacity: loading && notes.length > 0 ? 0.5 : 1, transition: 'opacity 200ms' }}>

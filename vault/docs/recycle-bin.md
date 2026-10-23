@@ -64,7 +64,7 @@ register('goal', {
 
 ## Used by
 
-- **Notes**: `note` (with its tags) and `note-template`. Delete a note or a template and it lands here. See `docs/notes.md`.
+- **Notes**: `note` (with its tags), `note-template` and `note-view` (a saved view). Delete a note or a template and it lands here. See `docs/notes.md`.
 
 Candidates to adopt next (not done): tasks, goals, saved CSS pages, recipes, Room/Garden/Cellar planner projects, Finance documents, saved fonts. Each needs the three steps above; for planner projects the whole project JSON is the payload.
 
