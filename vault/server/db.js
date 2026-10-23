@@ -3442,6 +3442,26 @@ async function initSchema() {
     )
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_fin_documents_user_fy ON fin_documents ("userId", fy)`);
+
+  // Shares source documents (broker EOFY statements etc.) for the accountant pack. Kept apart from
+  // fin_documents on purpose: the private trading account is not part of the business books.
+  // Files live under UPLOAD_DIR/shares-docs/<userId>/.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS share_documents (
+      id             SERIAL PRIMARY KEY,
+      "userId"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title          TEXT NOT NULL,
+      fy             TEXT NOT NULL,
+      "docDate"      DATE,
+      notes          TEXT,
+      "originalName" TEXT NOT NULL,
+      "storedName"   TEXT NOT NULL,
+      "mimeType"     TEXT,
+      "sizeBytes"    BIGINT NOT NULL DEFAULT 0,
+      "createdAt"    TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_share_documents_user_fy ON share_documents ("userId", fy)`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS fin_document_links (
       id           SERIAL PRIMARY KEY,

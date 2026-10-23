@@ -8,6 +8,7 @@ import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import SharesChartsTab from '../components/shares/SharesChartsTab';
 import SharesCgtTab from '../components/shares/SharesCgtTab';
 import SharesStatementsTab from '../components/shares/SharesStatementsTab';
+import SharesPackTab from '../components/shares/SharesPackTab';
 import { useIcon } from '../providers/IconProvider';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 
@@ -17,6 +18,7 @@ const TABS = [
   { id: 'cash', label: 'Cash' },
   { id: 'cgt', label: 'CGT' },
   { id: 'statements', label: 'Statements' },
+  { id: 'pack', label: 'Accountant pack' },
   { id: 'charts', label: 'Charts' },
   { id: 'news', label: 'News' },
   { id: 'questions', label: 'Questions' },
@@ -1347,6 +1349,8 @@ export default function SharesPage() {
             )}
 
             {tab === 'cgt' && <SharesCgtTab positions={dashboard?.positions || []} />}
+
+            {tab === 'pack' && <SharesPackTab />}
 
             {tab === 'statements' && (
               <SharesStatementsTab onImported={loadAll} />

@@ -118,8 +118,10 @@ async function renderPackXlsx(pack, userId) {
   // cover
   const coverRows = [
     [str(c.title)], [str(c.business)], [str(c.abn ? `ABN ${c.abn}` : '')], [str(c.address)], [],
-    [str('Period'), str(c.period)], [str('GST'), str(`${c.gstStatus} · ${c.gstBasis} basis`)], [str('Generated'), str(c.generatedAt)],
-    [str('Items flagged to check'), c.itemsToCheck === null || c.itemsToCheck === undefined ? null : cell(c.itemsToCheck, 'int')], [],
+    [str('Period'), str(c.period)],
+    ...(c.gstStatus ? [[str('GST'), str(`${c.gstStatus} · ${c.gstBasis} basis`)]] : []),
+    [str('Generated'), str(c.generatedAt)],
+    ...(c.hideChecks ? [] : [[str('Items flagged to check'), c.itemsToCheck === null || c.itemsToCheck === undefined ? null : cell(c.itemsToCheck, 'int')]]), [],
     ...c.notes.map(n => [str(n)]),
     ...(c.failed.length ? [[], [str(`Not produced: ${c.failed.join(' | ')}`)]] : []),
   ];
@@ -127,7 +129,7 @@ async function renderPackXlsx(pack, userId) {
 
   // sheet names first, so contents can link to them
   const reportSheets = pack.reports.map((r, i) => ({ r, i, name: safeName(SHORT[r.key] || r.title, used) }));
-  const data = await rawData(userId, pack.bounds);
+  const data = pack.dataSheets || await rawData(userId, pack.bounds); // other packs (Shares) bring their own raw data
   const dataSheets = data.map(d => ({ d, name: safeName(d.name, used) }));
 
   const tocRows = [[str('Contents')], [str('Click a name to jump to it.')], []];

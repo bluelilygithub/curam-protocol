@@ -133,10 +133,10 @@ function buildDocument(deps, pack) {
     c.abn ? h(Text, { style: s.coverMeta }, clean(`ABN ${c.abn}`)) : null,
     c.address ? h(Text, { style: s.coverMeta }, clean(c.address)) : null,
     h(Text, { style: [s.coverMeta, { marginTop: 8 }] }, `Period: ${fmtDate(pack.bounds.from)} to ${fmtDate(pack.bounds.to)}`),
-    h(Text, { style: s.coverMeta }, clean(`GST: ${c.gstStatus} · ${c.gstBasis} basis`)),
+    c.gstStatus ? h(Text, { style: s.coverMeta }, clean(`GST: ${c.gstStatus} · ${c.gstBasis} basis`)) : null,
     h(Text, { style: s.coverMeta }, `Generated ${c.generatedAt}`),
     h(View, { style: s.coverBox },
-      c.itemsToCheck === null || c.itemsToCheck === undefined
+      c.hideChecks ? null : c.itemsToCheck === null || c.itemsToCheck === undefined
         ? h(Text, { style: { fontSize: 10 } }, 'Items to check could not be worked out.')
         : h(Text, { style: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: c.itemsToCheck ? RED : INK } }, c.itemsToCheck ? clean(`${c.itemsToCheck} item${c.itemsToCheck === 1 ? '' : 's'} flagged to check — see “Things to Review” (report 1).`) : 'Nothing flagged in “Things to Review”.'),
       ...c.notes.map((n, i) => h(Text, { key: i, style: s.coverNote }, clean(n))),

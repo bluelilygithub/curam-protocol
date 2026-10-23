@@ -47,6 +47,7 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `server/services/marketData.js` — Shares quote fetching: Finnhub (NYSE/NASDAQ) + Alpha Vantage (ASX) + Frankfurter FX
 - `server/services/sharesPortfolio.js` — `computeHoldingsAndRealized()`, `buildDashboard()`, quote cache, exchange-filtered snapshots
 - `server/services/sharesNewsService.js` — daily briefings + monthly summaries: Finnhub/web search → AI → `share_news_briefings`
+- `server/routes/sharesPack.js` + `server/routes/sharesDocuments.js` + `server/services/sharesPack/collect.js` + `client/src/components/shares/SharesPackTab.jsx` — **Shares accountant pack** (Shares → Accountant pack): PDF + Excel + zip (with source documents such as the CMC EOFY statement) for one financial year, rendered by the Finance pack's PDF/Excel code; accountant logins can read it when the owner switches Shares on for them (Admin → Accountant access). See **`docs/shares-pack.md`**.
 - `server/services/sharesStatementImport.js` + `server/routes/sharesStatements.js` — broker PDF statement upload → LLM extraction → review-queue reconciliation against `share_trades`/`share_cash_ledger`, nothing auto-applied. See **`docs/shares-statement-import.md`**.
 - `server/routes/productScout.js` — Product Scout run/history/settings API
 - `server/services/productScoutService.js` — comparison pipeline (Rainforest + callModel + web search)

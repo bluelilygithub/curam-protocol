@@ -187,6 +187,8 @@ app.use('/api/shares/news', requireFeature('shares'), require('./routes/sharesNe
 // share that budget (found via a real 429 that crashed the list view, since
 // it starved plain page-loads whenever the AI budget was used up elsewhere).
 app.use('/api/shares/statements', requireFeature('shares'), require('./routes/sharesStatements'));
+app.use('/api/shares/documents', requireFeature('shares'), require('./routes/sharesDocuments'));
+app.use('/api/shares/pack', requireFeature('shares'), require('./routes/sharesPack'));
 app.use('/api/shares', requireFeature('shares'), require('./routes/shares'));
 app.use('/api/metals', requireFeature('shares'), require('./routes/metals'));
 app.use('/api/youtube', requireFeature('youtube'), require('./routes/youtube'));
