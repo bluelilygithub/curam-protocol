@@ -32,13 +32,14 @@ async function describe(db, table) {
 
 const q = (name) => `"${String(name).replace(/"/g, '""')}"`;
 
-async function insertRow(db, table, row, { userId, override = {}, keepId = true } = {}) {
+// `idColumn` is the table's key when it is not called id (sessions use "sessionId"); it is the value returned.
+async function insertRow(db, table, row, { userId, override = {}, keepId = true, idColumn = 'id' } = {}) {
   const { cols, fks } = await describe(db, table);
   const values = {};
   for (const [k, v] of Object.entries(row || {})) if (cols.has(k)) values[k] = v;
-  if (cols.has('id') && values.id != null) {
-    const taken = !keepId || (await db.query(`SELECT 1 FROM ${q(table)} WHERE id = $1`, [values.id])).rows.length > 0;
-    if (taken) delete values.id;
+  if (cols.has(idColumn) && values[idColumn] != null) {
+    const taken = !keepId || (await db.query(`SELECT 1 FROM ${q(table)} WHERE ${q(idColumn)} = $1`, [values[idColumn]])).rows.length > 0;
+    if (taken) delete values[idColumn];
   }
   if (userId != null && cols.has('userId')) values.userId = userId;
   for (const [col, fk] of fks) {
@@ -49,7 +50,7 @@ async function insertRow(db, table, row, { userId, override = {}, keepId = true 
   for (const [k, v] of Object.entries(override)) if (cols.has(k)) values[k] = v;
   const keys = Object.keys(values);
   const { rows } = await db.query(
-    `INSERT INTO ${q(table)} (${keys.map(q).join(', ')}) VALUES (${keys.map((_, i) => `$${i + 1}`).join(', ')}) RETURNING id`,
+    `INSERT INTO ${q(table)} (${keys.map(q).join(', ')}) VALUES (${keys.map((_, i) => `$${i + 1}`).join(', ')}) RETURNING ${q(idColumn)} AS id`,
     keys.map((k) => values[k]));
   return rows[0].id;
 }

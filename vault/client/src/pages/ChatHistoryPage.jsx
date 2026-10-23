@@ -6,6 +6,7 @@ import MoodDot from '../components/mood/MoodDot';
 import useProjectStore from '../store/projectStore';
 import { formatSessionLabel, formatSessionLocation } from '../utils/sessionDisplay';
 import { openNewChatModal } from '../utils/openNewChatModal';
+import RecycleBinPanel from '../components/RecycleBinPanel';
 
 function getPeriodDates(key) {
   const now = new Date();
@@ -492,8 +493,18 @@ export default function ChatHistoryPage() {
       {tab === 'deleted' && (
         <>
           <div className="rounded-2xl border px-4 py-3 text-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
-            Deleted chats are hidden from projects, folders, search, and chat context. Restore a chat to put it back where it was.
+            Chats you delete now stay in the recycle bin for 30 days, then are removed for good. They are listed first, below; you will find them in Settings, Recycle bin too.
+            Deleted chats are hidden from projects, folders, search, and chat context.
           </div>
+
+          <RecycleBinPanel
+            types={['chat']}
+            emptyHint="No chats in the recycle bin."
+            onRestored={() => { loadHistory(); document.dispatchEvent(new CustomEvent('vault:sessions-changed')); }}
+          />
+
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Deleted before the recycle bin</h3>
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>These were deleted earlier and are kept until you restore them. They are not removed after 30 days.</p>
 
           <div className="flex flex-wrap gap-2">
             {PERIODS.map(p => (

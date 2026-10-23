@@ -37,10 +37,11 @@ const labelFor = (type) => adapters.get(type)?.label || type;
  * Keep a copy of something that is about to be deleted. `db` is the pool or (better) the client of the transaction that deletes it,
  * so the copy and the delete succeed or fail together. Returns the bin id.
  */
-async function moveToBin(db, { userId, type, id, title, detail, payload }) {
+async function moveToBin(db, { userId, type, id, title, detail, payload, maxBytes }) {
   if (!adapters.has(type)) throw new Error(`recycle bin: no adapter registered for "${type}"`);
   const json = JSON.stringify(payload ?? {});
-  if (Buffer.byteLength(json) > MAX_PAYLOAD_BYTES) throw new Error('recycle bin: this item is too large to keep');
+  // `maxBytes` lets a kind of item that is naturally big (a long chat) ask for more than the default; code TOO_LARGE lets the caller decide what to do.
+  if (Buffer.byteLength(json) > (maxBytes || MAX_PAYLOAD_BYTES)) throw Object.assign(new Error('recycle bin: this item is too large to keep'), { code: 'TOO_LARGE' });
   const { rows } = await db.query(
     `INSERT INTO recycle_bin ("userId", "entityType", "entityId", title, detail, payload, "expiresAt")
      VALUES ($1, $2, $3, $4, $5, $6::jsonb, NOW() + ($7 || ' days')::interval) RETURNING id`,

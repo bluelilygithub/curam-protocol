@@ -7,6 +7,8 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const rateLimit = require('express-rate-limit');
 const { pool } = require('../db');
+const bin = require('../services/recycleBin');
+const { snapshotChat, removeChat, CHAT_MAX_BYTES } = require('../services/recycleBin/adapters/chats');
 const { buildTypeConfigPrompt } = require('../typePrompts');
 const { calculateCost } = require('../services/costCalculator');
 const { getModelsForUser, getVaultModelsConfigForUser } = require('../services/modelResolver');
@@ -1731,25 +1733,34 @@ router.post('/sessions/:sessionId/restore', async (req, res) => {
   }
 });
 
-// DELETE /api/chat/sessions/:sessionId — move session to Deleted Chats
+// DELETE /api/chat/sessions/:sessionId — the chat goes to the shared 30-day recycle bin (docs/recycle-bin.md): the session, its messages,
+// bookmarks, attached files and linked study decks are kept whole and Undo / Settings -> Recycle bin puts it back. Nothing is hidden by a
+// deletedAt flag any more. A chat too big for the bin (over 25 MB of text) falls back to the old Deleted list in Chat History instead of
+// being refused. Chats already in that list stay there and can still be restored from it.
 router.delete('/sessions/:sessionId', async (req, res) => {
+  const db = await pool.connect();
   try {
-    const { rows } = await pool.query(
-      `UPDATE sessions s
-       SET "deletedAt"=NOW(), "updatedAt"=NOW()
-       WHERE s."sessionId"=$1
-         AND s."deletedAt" IS NULL
-         AND (
-           s."userId"=$2
-           OR EXISTS (SELECT 1 FROM projects p WHERE p.id=s."projectId" AND p."userId"=$2)
-         )
-       RETURNING "sessionId"`,
-      [req.params.sessionId, req.user.id]
-    );
-    if (!rows[0]) return res.status(404).json({ error: 'Chat not found' });
-    res.json({ ok: true });
+    await db.query('BEGIN');
+    const snap = await snapshotChat(db, req.user.id, req.params.sessionId);
+    if (!snap) { await db.query('ROLLBACK'); return res.status(404).json({ error: 'Chat not found' }); }
+    let binId;
+    try {
+      binId = await bin.moveToBin(db, { userId: req.user.id, type: 'chat', id: req.params.sessionId, title: snap.title, detail: snap.detail, payload: snap.payload, maxBytes: CHAT_MAX_BYTES });
+    } catch (err) {
+      if (err.code !== 'TOO_LARGE') throw err;
+      await db.query('ROLLBACK');
+      await pool.query(`UPDATE sessions SET "deletedAt"=NOW(), "updatedAt"=NOW() WHERE "sessionId"=$1`, [req.params.sessionId]);
+      return res.json({ ok: true, binId: null, legacy: true });
+    }
+    await removeChat(db, req.params.sessionId);
+    await db.query('COMMIT');
+    res.json({ ok: true, binId, retentionDays: bin.RETENTION_DAYS });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    await db.query('ROLLBACK').catch(() => {});
+    console.error('[chat delete]', err);
+    res.status(500).json({ error: 'The chat could not be deleted. Try again.' });
+  } finally {
+    db.release();
   }
 });
 

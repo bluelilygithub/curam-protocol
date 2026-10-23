@@ -30,6 +30,7 @@ import CheckinModal from '../components/mood/CheckinModal';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { formatSessionLabel } from '../utils/sessionDisplay';
 import { openRecentSession } from '../utils/chatNavigation';
+import { offerUndo } from '../utils/binUndo';
 
 const EMOTION_COLOURS = {
   joy: '#C9A84C', trust: '#6B9E70', fear: '#507A60', surprise: '#6B97B5',
@@ -839,19 +840,36 @@ function ChatPage({ general = false }) {
     fetchSessions();
   };
 
+  // A deleted chat is kept 30 days in the shared recycle bin, with Undo; one too big for the bin goes to Chat History -> Deleted instead.
+  const deleteChat = async (sid) => {
+    let data = null;
+    try {
+      const res = await api.delete(`/api/chat/sessions/${sid}`);
+      try { data = await res.json(); } catch { /* no body */ }
+      if (!res.ok) throw new Error(data?.error || 'delete failed');
+    } catch (err) {
+      addToast(err.message || 'The chat could not be deleted. Try again.', 'error');
+      return false;
+    }
+    const refresh = () => { fetchSessions(); document.dispatchEvent(new CustomEvent('vault:sessions-changed')); };
+    if (data?.legacy) addToast('Chat deleted. It was too big for the recycle bin, so it is under Chat History, Deleted.', 'success');
+    else offerUndo({ message: 'Chat deleted. Kept 30 days in the recycle bin.', binIds: [data?.binId], restoredMessage: 'Chat restored ✓', after: refresh });
+    return true;
+  };
+
   const handleDeleteSession = async () => {
     if (!sessionId) return;
-    await api.delete(`/api/chat/sessions/${sessionId}`);
-    clearMessages();
     setConfirmDeleteSession(false);
+    if (!(await deleteChat(sessionId))) return;
+    clearMessages();
     fetchSessions();
     document.dispatchEvent(new CustomEvent('vault:sessions-changed'));
   };
 
   const handleDeleteSessionById = async (sid) => {
-    await api.delete(`/api/chat/sessions/${sid}`);
-    if (sid === sessionId) clearMessages();
     setConfirmDeleteSid(null);
+    if (!(await deleteChat(sid))) return;
+    if (sid === sessionId) clearMessages();
     fetchSessions();
     document.dispatchEvent(new CustomEvent('vault:sessions-changed'));
   };
@@ -1115,7 +1133,7 @@ function ChatPage({ general = false }) {
                     >
                       {confirmDeleteSid === s.sessionId ? (
                         <div className="flex items-center gap-2 flex-1">
-                          <span className="text-xs text-red-500 flex-1">Move to Deleted?</span>
+                          <span className="text-xs text-red-500 flex-1">Delete this chat?</span>
                           <button onClick={() => handleDeleteSessionById(s.sessionId)} className="text-xs px-2 py-0.5 rounded bg-red-500 text-white">Yes</button>
                           <button onClick={() => setConfirmDeleteSid(null)} className="text-xs" style={{ color: 'var(--color-muted)' }}>No</button>
                         </div>
@@ -1349,7 +1367,7 @@ function ChatPage({ general = false }) {
               }] : []),
               { label: 'Download', icon: 'file-down', onClick: () => downloadChatMd(messages, sessionTitle || sessionId, project?.name) },
               { divider: true, key: 'sep' },
-              { label: 'Move to Deleted', icon: 'trash', danger: true, onClick: () => setConfirmDeleteSession(true) },
+              { label: 'Delete chat', icon: 'trash', danger: true, onClick: () => setConfirmDeleteSession(true) },
             ]}
           />
         )}
@@ -1358,8 +1376,8 @@ function ChatPage({ general = false }) {
       {/* Banners */}
       {confirmDeleteSession && (
         <div className="flex-shrink-0 mx-4 mt-3 px-4 py-3 rounded-xl border flex items-center gap-3" style={{ background: '#fff1f2', borderColor: '#fca5a5' }}>
-          <span className="text-sm text-red-700 flex-1">Move this chat to Deleted? You can restore it from Chat History.</span>
-          <button onClick={handleDeleteSession} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-red-500">Move to Deleted</button>
+          <span className="text-sm text-red-700 flex-1">Delete this chat? It stays in the recycle bin for 30 days, and you can restore it from Chat History.</span>
+          <button onClick={handleDeleteSession} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-red-500">Delete</button>
           <button onClick={() => setConfirmDeleteSession(false)} className="text-xs" style={{ color: 'var(--color-muted)' }}>Cancel</button>
         </div>
       )}
