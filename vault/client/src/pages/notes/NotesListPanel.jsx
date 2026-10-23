@@ -5,7 +5,7 @@ import MoodDot from '../../components/mood/MoodDot';
 import { DATE_PRESETS, GROUP_MODES, groupNotes, filtersSummary } from './noteGroups.mjs';
 import { listText } from './noteListText.mjs';
 import { REMINDER_FILTERS } from './noteViews.mjs';
-import { reminderState, formatReminder } from './noteReminders.mjs';
+import { reminderState, reminderText } from './noteReminders.mjs';
 import { NOTE_TIPS } from './noteTips.mjs';
 import NoteViewsMenu from './NoteViewsMenu';
 
@@ -59,7 +59,7 @@ export default function NotesListPanel({
     const noteTags = Array.isArray(note.tags) ? note.tags : [];
     const tag = groupMode === 'project' ? note.client_name : groupMode === 'client' ? note.project_name : (note.project_name || note.client_name);
     const rState = reminderState(note);
-    const rText = rState === 'due' || rState === 'upcoming' ? formatReminder(note.remind_at) : '';
+    const rText = rState === 'due' || rState === 'upcoming' ? reminderText(note) : '';
     return (
       <div
         key={note.id}

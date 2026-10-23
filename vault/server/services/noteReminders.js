@@ -2,13 +2,15 @@
 
 // Reminders on notes. A note can carry one reminder: a moment in time and whether to also email the person. When it falls due the
 // note appears under "Reminders due" in Notes (that needs nothing from the server but the date); if "email me" was ticked, a
-// five-minute job sends one email to the person's own address. Snoozing sets a new time; Done stops it.
+// five-minute job sends one email to the person's own address. Snoozing sets a new time; Done stops it. A reminder can also repeat
+// (noteRepeat.js): Done then moves it to its next time instead of ending it, and the job moves one nobody marked on to the latest time.
 // Unit-tested without a database or a mail server: node server/services/noteReminders.test.js
 
 const MAX_YEARS_AHEAD = 5;
 const PAST_GRACE_MS = 60 * 1000; // a clock a little behind the server's is not a mistake
 const MAX_EMAIL_AGE_MS = 24 * 60 * 60 * 1000; // after a long outage, do not email reminders that are more than a day late
 const BATCH = 100;
+const noteRepeat = require('./noteRepeat');
 
 class ReminderError extends Error {
   constructor(message) { super(message); this.status = 400; }
@@ -27,7 +29,8 @@ function parseRemindAt(value, now = new Date()) {
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 /** The email for one due reminder: the note's title and the start of its text, and a link that opens the note. All text escaped. */
-function buildReminderEmail({ id, title, body, appUrl }) {
+function buildReminderEmail({ id, title, body, appUrl, repeat }) {
+  const every = repeat && repeat !== 'none' && noteRepeat.LABELS[repeat] ? noteRepeat.LABELS[repeat].toLowerCase() : '';
   const name = String(title || '').trim() && String(title).trim().toLowerCase() !== 'untitled' ? String(title).trim() : 'a note of yours';
   const preview = String(body || '').replace(/\s+/g, ' ').trim().slice(0, 300);
   const link = `${String(appUrl || '').replace(/\/+$/, '')}/notes?note=${encodeURIComponent(id)}`;
@@ -38,9 +41,32 @@ function buildReminderEmail({ id, title, body, appUrl }) {
   <h2 style="margin:0 0 8px;font-size:18px">${esc(name === 'a note of yours' ? 'Your note' : name)}</h2>
   ${preview ? `<p style="margin:0 0 16px;color:#333;line-height:1.5">${esc(preview)}${String(body || '').replace(/\s+/g, ' ').trim().length > 300 ? '…' : ''}</p>` : ''}
   <p style="margin:0"><a href="${esc(link)}" style="display:inline-block;padding:10px 16px;background:#CC785C;color:#fff;border-radius:8px;text-decoration:none">Open the note</a></p>
-  <p style="margin:16px 0 0;color:#888;font-size:12px">In Notes you can mark it done or snooze it. Turn off "email me" on the note to stop these emails.</p>
+  <p style="margin:16px 0 0;color:#888;font-size:12px">${every ? `This reminder repeats (${esc(every)}). Marking it done moves it to the next time. ` : ''}In Notes you can mark it done or snooze it. Turn off "email me" on the note to stop these emails.</p>
 </div>`,
   };
+}
+
+/**
+ * A reminder that repeats and has gone unhandled while its next time arrived moves on to the most recent time, so it is due once (not once for
+ * every time missed) and the email for it can go out. Marking done moves it on at once; this is for the ones nobody marked. Never throws.
+ */
+async function advanceRepeating(pool, now) {
+  let moved = 0;
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, remind_at, remind_repeat, remind_tz, remind_day FROM notes
+        WHERE remind_repeat <> 'none' AND remind_at IS NOT NULL AND remind_at <= $1 AND reminder_done_at IS NULL ORDER BY remind_at LIMIT 200`, [now.toISOString()]);
+    for (const r of rows) {
+      const latest = noteRepeat.latestOccurrence(r.remind_at, r.remind_repeat, r.remind_tz, r.remind_day, now);
+      if (latest.getTime() > new Date(r.remind_at).getTime()) {
+        const res = await pool.query('UPDATE notes SET remind_at=$2, reminder_sent_at=NULL WHERE id=$1 AND remind_at < $2 AND reminder_done_at IS NULL', [r.id, latest.toISOString()]); // only ever forward, never over a change made meanwhile
+        moved += res.rowCount || 0;
+      }
+    }
+  } catch (err) {
+    console.warn('[note-reminders] could not move repeating reminders on:', err.message);
+  }
+  return moved;
 }
 
 /**
@@ -56,6 +82,7 @@ async function runNoteReminders(now = new Date(), deps = {}) {
   const makeFingerprint = deps.makeFingerprint || suggestions?.makeFingerprint || ((...parts) => parts.join(':'));
   const appUrl = deps.appUrl || process.env.APP_URL || 'http://localhost:5173';
   const result = { due: 0, sent: 0, failed: 0 };
+  result.advanced = await advanceRepeating(pool, now);
 
   let claimed;
   try {
@@ -65,7 +92,7 @@ async function runNoteReminders(now = new Date(), deps = {}) {
                       WHERE remind_email AND remind_at <= $1 AND remind_at > $2
                         AND reminder_done_at IS NULL AND reminder_sent_at IS NULL
                       ORDER BY remind_at LIMIT ${BATCH} FOR UPDATE SKIP LOCKED)
-        RETURNING id, user_id, title, body`,
+        RETURNING id, user_id, title, body, remind_repeat`,
       [now.toISOString(), new Date(now.getTime() - MAX_EMAIL_AGE_MS).toISOString()]
     );
     claimed = r.rows;
@@ -79,7 +106,7 @@ async function runNoteReminders(now = new Date(), deps = {}) {
     try {
       const { rows } = await pool.query('SELECT email FROM users WHERE id=$1', [note.user_id]);
       if (!rows[0]?.email) throw new Error('this person has no email address');
-      const res = await sendEmail({ to: rows[0].email, ...buildReminderEmail({ id: note.id, title: note.title, body: note.body, appUrl }) });
+      const res = await sendEmail({ to: rows[0].email, ...buildReminderEmail({ id: note.id, title: note.title, body: note.body, appUrl, repeat: note.remind_repeat }) });
       if (res && res.ok === false) throw new Error(res.reason || 'the email was not sent');
       result.sent += 1;
     } catch (err) {
@@ -98,4 +125,4 @@ async function runNoteReminders(now = new Date(), deps = {}) {
   return result;
 }
 
-module.exports = { ReminderError, MAX_YEARS_AHEAD, MAX_EMAIL_AGE_MS, parseRemindAt, buildReminderEmail, runNoteReminders };
+module.exports = { advanceRepeating, ReminderError, MAX_YEARS_AHEAD, MAX_EMAIL_AGE_MS, parseRemindAt, buildReminderEmail, runNoteReminders };

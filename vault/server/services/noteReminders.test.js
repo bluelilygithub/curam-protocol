@@ -3,7 +3,7 @@
 // node server/services/noteReminders.test.js   (part of npm run test:notes). No database, no mail server.
 
 const assert = require('assert');
-const { ReminderError, parseRemindAt, buildReminderEmail, runNoteReminders, MAX_EMAIL_AGE_MS } = require('./noteReminders');
+const { advanceRepeating, ReminderError, parseRemindAt, buildReminderEmail, runNoteReminders, MAX_EMAIL_AGE_MS } = require('./noteReminders');
 
 (async () => {
   const now = new Date('2026-10-23T05:00:00.000Z');
@@ -32,6 +32,7 @@ const { ReminderError, parseRemindAt, buildReminderEmail, runNoteReminders, MAX_
   const emails = { 7: 'a@example.test', 8: 'b@example.test', 9: null };
   const pool = {
     async query(sql, params) {
+      if (/remind_repeat <> 'none'/.test(sql)) return { rows: [] }; // nothing repeating here
       if (/UPDATE notes SET reminder_sent_at = \$1/.test(sql)) { calls.claim = { sql, params }; return { rows }; }
       if (/SELECT email FROM users/.test(sql)) return { rows: emails[params[0]] ? [{ email: emails[params[0]] }] : [] };
       if (/reminder_sent_at = NULL/.test(sql)) { calls.released.push(params[0]); return { rows: [] }; }
@@ -43,7 +44,7 @@ const { ReminderError, parseRemindAt, buildReminderEmail, runNoteReminders, MAX_
     sendEmail: async (m) => { calls.sent.push(m.to); if (m.to === 'b@example.test') throw new Error('smtp down'); return { ok: true }; },
     capture: async (s) => { calls.captured.push(s); },
   });
-  assert.deepStrictEqual(result, { due: 3, sent: 1, failed: 2 });
+  assert.deepStrictEqual(result, { due: 3, sent: 1, failed: 2, advanced: 0 });
   assert.deepStrictEqual(calls.sent, ['a@example.test', 'b@example.test'], 'one email each; a person with no address is not mailed');
   assert.deepStrictEqual(calls.released.sort(), [2, 3], 'failed ones are released so the next run tries again');
   assert.strictEqual(calls.captured.length, 2);
@@ -58,13 +59,35 @@ const { ReminderError, parseRemindAt, buildReminderEmail, runNoteReminders, MAX_
   // a "not sent" reply from the mail helper counts as a failure; a broken database never throws out of the job
   const calls2 = { released: [] };
   const r2 = await runNoteReminders(now, {
-    pool: { async query(sql, p) { if (/UPDATE notes SET reminder_sent_at = \$1/.test(sql)) return { rows: [rows[0]] }; if (/SELECT email/.test(sql)) return { rows: [{ email: 'a@example.test' }] }; calls2.released.push(p[0]); return { rows: [] }; } },
+    pool: { async query(sql, p) { if (/remind_repeat <> 'none'/.test(sql)) return { rows: [] }; if (/UPDATE notes SET reminder_sent_at = \$1/.test(sql)) return { rows: [rows[0]] }; if (/SELECT email/.test(sql)) return { rows: [{ email: 'a@example.test' }] }; calls2.released.push(p[0]); return { rows: [] }; } },
     sendEmail: async () => ({ ok: false, skipped: true, reason: 'email is not set up' }), capture: async () => {},
   });
-  assert.deepStrictEqual(r2, { due: 1, sent: 0, failed: 1 });
+  assert.deepStrictEqual(r2, { due: 1, sent: 0, failed: 1, advanced: 0 });
   assert.deepStrictEqual(calls2.released, [1]);
   const r3 = await runNoteReminders(now, { pool: { async query() { throw new Error('db down'); } }, sendEmail: async () => ({ ok: true }), capture: async () => {} });
   assert.strictEqual(r3.failed, 1);
+
+  // ---- repeating reminders: the email says so, and one nobody marked done moves on to the latest time
+  const repeatMail = buildReminderEmail({ id: 4, title: 'Water the plants', body: '', appUrl: 'https://v.example', repeat: 'weekly' });
+  assert.match(repeatMail.html, /This reminder repeats \(every week\)\. Marking it done moves it to the next time\./);
+  assert.ok(!/This reminder repeats/.test(buildReminderEmail({ id: 4, title: 'x', body: '', appUrl: 'https://v.example', repeat: 'none' }).html), 'a one-off says nothing about repeating');
+  assert.ok(!/This reminder repeats/.test(buildReminderEmail({ id: 4, title: 'x', body: '', appUrl: 'https://v.example' }).html));
+
+  const updates = [];
+  const repeating = [
+    { id: 10, remind_at: '2026-10-01T23:00:00.000Z', remind_repeat: 'weekly', remind_tz: 'Australia/Brisbane', remind_day: 2 },   // three weeks behind
+    { id: 11, remind_at: '2026-10-19T23:00:00.000Z', remind_repeat: 'weekly', remind_tz: 'Australia/Brisbane', remind_day: 20 },  // its next time has not come yet
+  ];
+  const nowRep = new Date('2026-10-22T05:00:00Z');
+  const moved = await advanceRepeating({
+    async query(sql, params) {
+      if (/remind_repeat <> 'none'/.test(sql)) { assert.match(sql, /reminder_done_at IS NULL/, 'one marked done is left alone'); return { rows: repeating }; }
+      updates.push(params); return { rowCount: 1 };
+    },
+  }, nowRep);
+  assert.strictEqual(moved, 1, 'only the one whose next time had come');
+  assert.deepStrictEqual(updates, [[10, '2026-10-15T23:00:00.000Z']], 'it lands on the latest time, not every one missed');
+  assert.strictEqual(await advanceRepeating({ async query() { throw new Error('db down'); } }, nowRep), 0, 'a broken database never throws out of the job');
 
   console.log('noteReminders tests passed');
 })().catch((e) => { console.error(e); process.exit(1); });

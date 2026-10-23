@@ -20,6 +20,7 @@ const noteQuery = require('../services/noteQuery');
 const noteEmbeddings = require('../services/noteEmbeddings'); // meaning-based search: a note is embedded a little after it is saved
 const noteAsk = require('../services/noteAsk'); // called as noteAsk.askNotes, with noteAsk.routeDeps, so tests can swap the models
 const noteReminders = require('../services/noteReminders');
+const noteRepeat = require('../services/noteRepeat');
 const bin = require('../services/recycleBin'); // deleted notes and templates wait here for 30 days
 bin.loadAdapters();
 
@@ -56,7 +57,7 @@ router.get('/', async (req, res) => {
 
   const sql = `
     SELECT n.id, n.title, left(n.body, 240) AS preview, n.project_id, n.client_id, n.source,
-           n.created_at, n.updated_at, n.pinned_at, n.remind_at, n.remind_email, n.reminder_done_at, p.name AS project_name, c.name AS client_name,
+           n.created_at, n.updated_at, n.pinned_at, n.remind_at, n.remind_email, n.remind_repeat, n.reminder_done_at, p.name AS project_name, c.name AS client_name,
            COALESCE((SELECT array_agg(nt.tag ORDER BY nt.tag) FROM note_tags nt WHERE nt.note_id = n.id), '{}') AS tags
       ${noteQuery.NOTE_JOINS}
      WHERE ${where.join(' AND ')}
@@ -573,8 +574,9 @@ router.put('/:id/tags', async (req, res) => {
   }
 });
 
-// PUT /api/notes/:id/reminder  { remindAt: ISO instant | null, email?: boolean }
-// Set, change (snooze) or clear (null) the note's reminder. A new time starts afresh: not emailed yet, not done. Like pinning and tags this is
+// PUT /api/notes/:id/reminder  { remindAt: ISO instant | null, email?: boolean, repeat?: 'none'|'daily'|'weekdays'|'weekly'|'fortnightly'|'monthly'|'yearly', tz?: IANA zone }
+// Set, change (snooze) or clear (null) the note's reminder. `repeat` (with the person's `tz`, so the time of day holds across daylight saving) makes it come round again;
+// leaving `repeat` out keeps whatever the note had. A new time starts afresh: not emailed yet, not done. Like pinning and tags this is
 // filing, not editing, so updated_at is left alone.
 router.put('/:id/reminder', async (req, res) => {
   const noteId = Number(req.params.id) || 0;
@@ -582,14 +584,25 @@ router.put('/:id/reminder', async (req, res) => {
     let result;
     if (req.body?.remindAt === null) {
       result = await pool.query(
-        `UPDATE notes SET remind_at=NULL, remind_email=FALSE, reminder_sent_at=NULL, reminder_done_at=NULL
-          WHERE id=$1 AND user_id=$2 RETURNING id, remind_at, remind_email, reminder_done_at`, [noteId, req.user.id]);
+        `UPDATE notes SET remind_at=NULL, remind_email=FALSE, reminder_sent_at=NULL, reminder_done_at=NULL, remind_repeat='none', remind_tz=NULL, remind_day=NULL
+          WHERE id=$1 AND user_id=$2 RETURNING id, remind_at, remind_email, remind_repeat, reminder_done_at`, [noteId, req.user.id]);
     } else {
       const when = noteReminders.parseRemindAt(req.body?.remindAt);
+      let repeat = 'none';
+      let tz = noteRepeat.cleanZone(req.body?.tz);
+      if (req.body?.repeat === undefined) {
+        // an older screen that does not know about repeating: keep what the note has
+        const cur = (await pool.query('SELECT remind_repeat, remind_tz FROM notes WHERE id=$1 AND user_id=$2', [noteId, req.user.id])).rows[0];
+        if (cur) { repeat = cur.remind_repeat || 'none'; tz = noteRepeat.cleanZone(cur.remind_tz); }
+      } else {
+        repeat = noteRepeat.parseRepeat(req.body.repeat);
+        if (!repeat) return res.status(400).json({ error: 'Pick how often it repeats from the list.' });
+      }
+      const day = repeat === 'none' ? null : noteRepeat.dayOfMonth(when, tz);
       result = await pool.query(
-        `UPDATE notes SET remind_at=$3, remind_email=$4, reminder_sent_at=NULL, reminder_done_at=NULL
-          WHERE id=$1 AND user_id=$2 RETURNING id, remind_at, remind_email, reminder_done_at`,
-        [noteId, req.user.id, when.toISOString(), req.body?.email === true]);
+        `UPDATE notes SET remind_at=$3, remind_email=$4, reminder_sent_at=NULL, reminder_done_at=NULL, remind_repeat=$5, remind_tz=$6, remind_day=$7
+          WHERE id=$1 AND user_id=$2 RETURNING id, remind_at, remind_email, remind_repeat, reminder_done_at`,
+        [noteId, req.user.id, when.toISOString(), req.body?.email === true, repeat, repeat === 'none' ? null : tz, day]);
     }
     if (!result.rows[0]) return res.status(404).json({ error: 'Not found' });
     res.json(result.rows[0]);
@@ -600,12 +613,24 @@ router.put('/:id/reminder', async (req, res) => {
   }
 });
 
-// POST /api/notes/:id/reminder/done  — mark the reminder done: it leaves "Reminders due" and is never emailed
+// POST /api/notes/:id/reminder/done  — mark the reminder done: it leaves "Reminders due" and is never emailed.
+// A reminder that repeats is done for this time only: it moves on to its next time (`advanced: true`) and stays set until it is removed.
 router.post('/:id/reminder/done', async (req, res) => {
   try {
+    const noteId = Number(req.params.id) || 0;
+    const cur = (await pool.query('SELECT remind_at, remind_repeat, remind_tz, remind_day FROM notes WHERE id=$1 AND user_id=$2 AND remind_at IS NOT NULL', [noteId, req.user.id])).rows[0];
+    if (cur && cur.remind_repeat && cur.remind_repeat !== 'none') {
+      const next = noteRepeat.nextOccurrence(cur.remind_at, cur.remind_repeat, cur.remind_tz, cur.remind_day, new Date());
+      if (next) {
+        const moved = await pool.query(
+          `UPDATE notes SET remind_at=$3, reminder_sent_at=NULL, reminder_done_at=NULL WHERE id=$1 AND user_id=$2
+            RETURNING id, remind_at, remind_email, remind_repeat, reminder_done_at`, [noteId, req.user.id, next.toISOString()]);
+        return res.json({ ...moved.rows[0], advanced: true });
+      }
+    }
     const { rows } = await pool.query(
       `UPDATE notes SET reminder_done_at=NOW() WHERE id=$1 AND user_id=$2 AND remind_at IS NOT NULL
-        RETURNING id, remind_at, remind_email, reminder_done_at`, [Number(req.params.id) || 0, req.user.id]);
+        RETURNING id, remind_at, remind_email, remind_repeat, reminder_done_at`, [noteId, req.user.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
   } catch (err) {
@@ -656,7 +681,7 @@ router.delete('/:id', async (req, res) => {
     await db.query('BEGIN');
     const { rows } = await db.query(
       `SELECT id, title, body, project_id, client_id, source, pinned_at, created_at, updated_at, daily_date::text AS daily_date,
-              remind_at, remind_email, reminder_sent_at, reminder_done_at
+              remind_at, remind_email, reminder_sent_at, reminder_done_at, remind_repeat, remind_tz, remind_day
          FROM notes WHERE id=$1 AND user_id=$2 FOR UPDATE`,
       [Number(req.params.id) || 0, req.user.id]
     );

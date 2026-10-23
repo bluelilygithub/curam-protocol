@@ -20,7 +20,7 @@ import NoteReminderPanel from './notes/NoteReminderPanel';
 import AskNotesPanel from './notes/AskNotesPanel';
 import { NOTE_TIPS } from './notes/noteTips.mjs';
 import { NOTES_INTRO, HOW_IT_WORKS, NOTES_NOT } from './notes/notesInfo.mjs';
-import { reminderState, formatReminder } from './notes/noteReminders.mjs';
+import { reminderState, reminderText, repeatOf, localZone } from './notes/noteReminders.mjs';
 import TemplatePicker from './notes/TemplatePicker';
 import RecentlyDeletedModal from './notes/RecentlyDeletedModal';
 import { dailyPayload, templateToNote } from './notes/noteTemplates.mjs';
@@ -586,21 +586,21 @@ export default function NotesPage() {
   // ── Reminders ─────────────────────────────────────────────────────────────
   // Filing, like pinning and tags: saved at once, and the note's own text is left alone.
   const mergeReminder = useCallback((r) => {
-    const fields = { remind_at: r.remind_at, remind_email: r.remind_email, reminder_done_at: r.reminder_done_at };
+    const fields = { remind_at: r.remind_at, remind_email: r.remind_email, remind_repeat: r.remind_repeat || 'none', reminder_done_at: r.reminder_done_at };
     setSelected((prev) => (prev && prev.id === r.id ? { ...prev, ...fields } : prev));
     patchNote({ id: r.id, ...fields });
   }, [patchNote]);
 
   // Returns '' when it worked, or the message to show in the dialog.
-  async function saveReminder(iso, email) {
+  async function saveReminder(iso, email, repeat) {
     const note = selectedRef.current;
     if (!note) return 'Open a note first.';
     try {
-      const res = await api.put(`/api/notes/${note.id}/reminder`, { remindAt: iso, email });
+      const res = await api.put(`/api/notes/${note.id}/reminder`, { remindAt: iso, email, repeat: repeat || 'none', tz: localZone() });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) return data.error || 'The reminder could not be saved.';
       mergeReminder(data);
-      addToast(iso ? `Reminder set for ${formatReminder(data.remind_at)} ✓` : 'Reminder removed.', 'success');
+      addToast(iso ? `Reminder set for ${reminderText(data)} ✓` : 'Reminder removed.', 'success');
       return '';
     } catch { return 'The reminder could not be saved. Try again.'; }
   }
@@ -611,8 +611,9 @@ export default function NotesPage() {
     try {
       const res = await api.post(`/api/notes/${note.id}/reminder/done`);
       if (!res.ok) throw new Error('done failed');
-      mergeReminder(await res.json());
-      addToast('Reminder marked done ✓', 'success');
+      const data = await res.json();
+      mergeReminder(data);
+      addToast(data.advanced ? `Done for this time. Next: ${reminderText(data)} ✓` : 'Reminder marked done ✓', 'success');
     } catch { addToast('The reminder could not be marked done. Try again.', 'error'); }
   }
 
@@ -1062,14 +1063,15 @@ export default function NotesPage() {
             {(() => {
               const rs = reminderState(selected);
               const live = rs === 'due' || rs === 'upcoming';
-              const text = live ? formatReminder(selected.remind_at) : '';
+              const text = live ? reminderText(selected) : '';
+              const repeats = live && repeatOf(selected) !== 'none';
               return (
                 <Tooltip text={live ? NOTE_TIPS.reminderChip(text, rs === 'due') : NOTE_TIPS.reminderButton}>
                   <button
                     type="button" onClick={() => setShowReminder(true)} data-tour="notes-reminder" aria-label={live ? `Reminder: ${text}` : 'Set a reminder'}
                     className="flex items-center gap-1.5 text-xs px-2.5 rounded transition-opacity duration-200 hover:opacity-70 flex-shrink-0"
                     style={{ ...selectStyle, color: rs === 'due' ? '#f59e0b' : live ? 'var(--color-primary)' : 'var(--color-muted)', borderColor: rs === 'due' ? '#f59e0b' : 'var(--color-border)' }}
-                  >{getIcon('clock', { size: 13 })}{live ? text : 'Remind me'}</button>
+                  >{getIcon(repeats ? 'rotate-ccw' : 'clock', { size: 13 })}{live ? text : 'Remind me'}</button>
                 </Tooltip>
               );
             })()}
@@ -1080,7 +1082,7 @@ export default function NotesPage() {
           {/* Write / Preview */}
           {reminderState(selected) === 'due' && (
             <div className="flex items-center justify-between gap-2 flex-wrap px-4 py-2 text-xs flex-shrink-0" style={{ background: '#f59e0b22', borderBottom: '1px solid #f59e0b', color: 'var(--color-text)' }} role="status">
-              <span className="flex items-center gap-1.5">{getIcon('clock', { size: 13 })} Reminder due: {formatReminder(selected.remind_at)}</span>
+              <span className="flex items-center gap-1.5">{getIcon('clock', { size: 13 })} Reminder due: {reminderText(selected)}</span>
               <span className="flex items-center gap-2">
                 <Tooltip text={NOTE_TIPS.reminderDone}>
                   <button type="button" onClick={finishReminder} className="px-3 rounded-lg font-medium hover:opacity-80 transition-opacity duration-200" style={{ background: 'var(--color-primary)', color: '#fff', minHeight: viewportMobile ? 40 : 28 }}>Done</button>

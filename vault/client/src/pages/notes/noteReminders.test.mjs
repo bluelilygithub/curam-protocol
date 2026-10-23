@@ -51,3 +51,24 @@ assert.strictEqual(dueCount([{ remind_at: local(2026, 10, 23, 9).toISOString() }
 assert.strictEqual(dueCount(undefined, now), 0);
 
 console.log('ok - note reminders: state, wording, quick times, datetime-local');
+
+// ---- repeating reminders
+{
+  const { REPEATS, repeatOf, reminderText, localZone } = await import('./noteReminders.mjs');
+  const { createRequire } = await import('node:module');
+  const server = createRequire(import.meta.url)('../../../../server/services/noteRepeat.js');
+  assert.deepStrictEqual(REPEATS.map((r) => r.id), server.REPEATS, 'the screen offers exactly what the server accepts, in the same order');
+  assert.deepStrictEqual(REPEATS.map((r) => r.label), server.REPEATS.map((id) => server.LABELS[id]), 'with the same names');
+  assert.strictEqual(repeatOf({ remind_repeat: 'weekly' }), 'weekly');
+  for (const bad of [{ remind_repeat: 'hourly' }, {}, null, undefined]) assert.strictEqual(repeatOf(bad), 'none');
+  const now = new Date(2026, 9, 23, 8, 0);
+  const at = new Date(2026, 9, 23, 17, 0).toISOString();
+  assert.strictEqual(reminderText({ remind_at: at, remind_repeat: 'none' }, now), 'Today, 5:00 pm', 'a one-off reads as before');
+  assert.strictEqual(reminderText({ remind_at: at }, now), 'Today, 5:00 pm');
+  assert.strictEqual(reminderText({ remind_at: at, remind_repeat: 'weekly' }, now), 'Today, 5:00 pm, repeats weekly');
+  assert.strictEqual(reminderText({ remind_at: at, remind_repeat: 'weekdays' }, now), 'Today, 5:00 pm, repeats on weekdays');
+  assert.strictEqual(reminderText({ remind_at: at, remind_repeat: 'fortnightly' }, now), 'Today, 5:00 pm, repeats every 2 weeks');
+  assert.strictEqual(reminderText({ remind_at: null, remind_repeat: 'weekly' }, now), '', 'nothing to say with no time');
+  assert.strictEqual(typeof localZone(), 'string');
+  console.log('ok - repeating reminders: the choices match the server, and the wording');
+}

@@ -2,19 +2,20 @@ import React, { useEffect, useState } from 'react';
 import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
 import { NOTE_TIPS } from './noteTips.mjs';
-import { reminderState, formatReminder, quickOptions, toLocalInput, fromLocalInput } from './noteReminders.mjs';
+import { reminderState, reminderText, repeatOf, REPEATS, quickOptions, toLocalInput, fromLocalInput } from './noteReminders.mjs';
 
 /**
  * Set, snooze, clear or finish a note's reminder. A phone gets a bottom sheet, a bigger screen a centred card (like the other Notes dialogs).
  *   note        { remind_at, remind_email, reminder_done_at }
- *   onSet(iso, email)  save a time; returns '' when it worked or an error message to show
+ *   onSet(iso, email, repeat)  save a time (and how often it repeats); returns '' when it worked or an error message to show
  *   onClear()          remove the reminder
- *   onDone()           mark it done
+ *   onDone()           mark it done (a repeating reminder moves on to its next time instead)
  */
 export default function NoteReminderPanel({ note, mobile, onSet, onClear, onDone, onClose }) {
   const getIcon = useIcon();
   const state = reminderState(note);
   const [email, setEmail] = useState(state === 'none' || state === 'done' ? true : !!note.remind_email);
+  const [repeat, setRepeat] = useState(() => repeatOf(note));
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const options = quickOptions();
@@ -29,7 +30,7 @@ export default function NoteReminderPanel({ note, mobile, onSet, onClear, onDone
   async function choose(when) {
     setBusy(true); setError('');
     try {
-      const msg = await onSet(when.toISOString(), email);
+      const msg = await onSet(when.toISOString(), email, repeat);
       if (msg) setError(msg); else onClose();
     } finally { setBusy(false); }
   }
@@ -43,6 +44,7 @@ export default function NoteReminderPanel({ note, mobile, onSet, onClear, onDone
 
   const btn = { background: 'var(--color-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)', minHeight: mobile ? 48 : 36 };
   const primary = { background: 'var(--color-primary)', color: '#fff', minHeight: mobile ? 48 : 36 };
+  const repeating = repeatOf(note) !== 'none';
   const heading = state === 'due' ? 'Snooze until' : state === 'upcoming' ? 'Change the time' : 'Remind me';
 
   return (
@@ -62,19 +64,33 @@ export default function NoteReminderPanel({ note, mobile, onSet, onClear, onDone
         <div className="px-4 pb-3 overflow-y-auto flex-1 min-h-0 space-y-3">
           {state === 'due' && (
             <div className="rounded-lg p-3 text-sm" style={{ background: 'var(--color-bg)', border: '1px solid #f59e0b', color: 'var(--color-text)' }}>
-              <p className="font-medium" style={{ color: '#f59e0b' }}>This reminder is due: {formatReminder(note.remind_at)}</p>
+              <p className="font-medium" style={{ color: '#f59e0b' }}>This reminder is due: {reminderText(note)}</p>
               <Tooltip text={NOTE_TIPS.reminderDone}>
-                <button type="button" disabled={busy} onClick={async () => { setBusy(true); await onDone(); setBusy(false); onClose(); }} className="mt-2 text-sm font-medium px-4 rounded-lg hover:opacity-80 transition-opacity duration-200 disabled:opacity-40" style={primary}>Mark done</button>
+                <button type="button" disabled={busy} onClick={async () => { setBusy(true); await onDone(); setBusy(false); onClose(); }} className="mt-2 text-sm font-medium px-4 rounded-lg hover:opacity-80 transition-opacity duration-200 disabled:opacity-40" style={primary}>{repeating ? 'Done for this time' : 'Mark done'}</button>
               </Tooltip>
             </div>
           )}
-          {state === 'upcoming' && <p className="text-sm" style={{ color: 'var(--color-text)' }}>Set for <strong>{formatReminder(note.remind_at)}</strong>{note.remind_email ? ', and an email will be sent.' : '.'}</p>}
+          {state === 'upcoming' && <p className="text-sm" style={{ color: 'var(--color-text)' }}>Set for <strong>{reminderText(note)}</strong>{note.remind_email ? ', and an email will be sent.' : '.'}</p>}
           {state === 'done' && <p className="text-sm" style={{ color: 'var(--color-muted)' }}>The last reminder was marked done. Set a new one below.</p>}
 
           <label className="flex items-center gap-2.5 text-sm cursor-pointer" style={{ color: 'var(--color-text)', minHeight: mobile ? 44 : undefined }}>
             <input type="checkbox" checked={email} onChange={(e) => setEmail(e.target.checked)} style={{ width: 18, height: 18, accentColor: 'var(--color-primary)' }} />
             Also email me when it is due
           </label>
+
+          <div>
+            <label htmlFor="note-reminder-repeat" className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: 'var(--color-muted)' }}>Repeat</label>
+            <Tooltip text={NOTE_TIPS.reminderRepeat}>
+              <select
+                id="note-reminder-repeat" value={repeat} onChange={(e) => setRepeat(e.target.value)}
+                className="w-full rounded-lg px-2 outline-none"
+                style={{ background: 'var(--color-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)', fontSize: 16, minHeight: mobile ? 48 : 36 }}
+              >
+                {REPEATS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+              </select>
+            </Tooltip>
+            {repeat !== 'none' && <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>It keeps the time of day you pick. Marking it done moves it to the next time.</p>}
+          </div>
 
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: 'var(--color-muted)' }}>{heading}</p>
@@ -104,7 +120,7 @@ export default function NoteReminderPanel({ note, mobile, onSet, onClear, onDone
 
         {(state === 'upcoming' || state === 'due' || state === 'done') && (
           <div className="px-4 pt-2 flex-shrink-0">
-            <button type="button" disabled={busy} onClick={async () => { setBusy(true); await onClear(); setBusy(false); onClose(); }} className="text-sm hover:opacity-70 transition-opacity duration-200 disabled:opacity-40" style={{ color: '#ef4444', minHeight: mobile ? 44 : 32 }}>Remove the reminder</button>
+            <button type="button" disabled={busy} onClick={async () => { setBusy(true); await onClear(); setBusy(false); onClose(); }} className="text-sm hover:opacity-70 transition-opacity duration-200 disabled:opacity-40" style={{ color: '#ef4444', minHeight: mobile ? 44 : 32 }}>{repeating ? 'Remove the reminder and stop repeating' : 'Remove the reminder'}</button>
           </div>
         )}
       </div>

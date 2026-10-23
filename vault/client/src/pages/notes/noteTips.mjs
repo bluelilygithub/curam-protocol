@@ -84,9 +84,10 @@ export const NOTE_TIPS = {
   preview: 'Preview: see the note formatted, with headings, bold, lists, links and tick-boxes you can tick.',
   typeButton: 'Open the keyboard and type into this note.',
   todoBox: 'Tick or untick this to-do. The change is saved into the note.',
-  reminderButton: 'Set a reminder for this note: pick a time, and choose whether to email you too.',
+  reminderButton: 'Set a reminder for this note: pick a time, choose whether it repeats, and whether to email you too.',
+  reminderRepeat: 'How often this reminder comes round again: every day, weekday, week, 2 weeks, month or year. It keeps the time of day you pick, even when the clocks change.',
   reminderChip: (text, due) => (due ? `The reminder for this note is due: ${text}. Click to mark it done or snooze it.` : `Reminder set for ${text}. Click to change or clear it.`),
-  reminderDone: 'Mark this reminder done. It leaves Reminders due and no email is sent.',
+  reminderDone: 'Mark this reminder done. It leaves Reminders due and no email is sent. If it repeats, it moves on to its next time and stays set.',
   reminderSnooze: 'Remind me again at the time you choose.',
 
   // ask your notes

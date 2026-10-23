@@ -789,6 +789,12 @@ async function initSchema() {
     await client.query(`ALTER TABLE notes ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ DEFAULT NULL`);
     await client.query(`ALTER TABLE notes ADD COLUMN IF NOT EXISTS reminder_done_at TIMESTAMPTZ DEFAULT NULL`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_notes_remind ON notes(remind_at) WHERE remind_at IS NOT NULL AND reminder_done_at IS NULL`);
+    // A reminder that repeats (server/services/noteRepeat.js): how often ('none' | daily | weekdays | weekly | fortnightly | monthly | yearly), the
+    // person's IANA time zone (so 9 am stays 9 am when the clocks change) and the day of the month it was set on (monthly/yearly keep it).
+    await client.query(`ALTER TABLE notes ADD COLUMN IF NOT EXISTS remind_repeat TEXT NOT NULL DEFAULT 'none'`);
+    await client.query(`ALTER TABLE notes ADD COLUMN IF NOT EXISTS remind_tz TEXT DEFAULT NULL`);
+    await client.query(`ALTER TABLE notes ADD COLUMN IF NOT EXISTS remind_day SMALLINT DEFAULT NULL`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_notes_remind_repeat ON notes(remind_at) WHERE remind_repeat <> 'none' AND reminder_done_at IS NULL`);
 
     // Tags on notes: one row per (note, tag). Tags are stored normalised (server/services/noteTags.js), so a tag is its own key.
     // user_id is kept here too so tag lists and renames never have to join through notes.

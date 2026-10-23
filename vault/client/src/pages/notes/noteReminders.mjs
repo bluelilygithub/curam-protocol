@@ -68,3 +68,30 @@ export function fromLocalInput(value) {
 
 /** How many notes in a list have a reminder that is due now. */
 export const dueCount = (notes, now = new Date()) => (Array.isArray(notes) ? notes : []).filter((n) => reminderState(n, now) === 'due').length;
+
+/** How a reminder can repeat: what the server accepts (server/services/noteRepeat.js), and the words for the choice. */
+export const REPEATS = [
+  { id: 'none', label: 'Does not repeat', words: '' },
+  { id: 'daily', label: 'Every day', words: 'daily' },
+  { id: 'weekdays', label: 'Every weekday', words: 'on weekdays' },
+  { id: 'weekly', label: 'Every week', words: 'weekly' },
+  { id: 'fortnightly', label: 'Every 2 weeks', words: 'every 2 weeks' },
+  { id: 'monthly', label: 'Every month', words: 'monthly' },
+  { id: 'yearly', label: 'Every year', words: 'yearly' },
+];
+
+/** The repeat a note has, as one of the ids above ('none' for anything else). */
+export const repeatOf = (note) => (REPEATS.some((r) => r.id === note?.remind_repeat) ? note.remind_repeat : 'none');
+
+/** "Today, 9:00 am" for a one-off, "Today, 9:00 am, repeats weekly" for one that comes round again. */
+export function reminderText(note, now = new Date()) {
+  if (!note?.remind_at) return '';
+  const base = formatReminder(note.remind_at, now);
+  const words = REPEATS.find((r) => r.id === repeatOf(note))?.words;
+  return base && words ? `${base}, repeats ${words}` : base;
+}
+
+/** The person's own time zone, so a repeat keeps its time of day when the clocks change ('' if the browser will not say). */
+export function localZone() {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch { return ''; }
+}

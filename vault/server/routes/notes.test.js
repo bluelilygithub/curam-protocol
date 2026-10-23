@@ -542,6 +542,107 @@ test('the reminder job against the real database: emails what is due once, skips
   await pool.query('DELETE FROM notes WHERE id = ANY($1::int[])', [[due, notAsked, marked, late, future, retry]]);
 });
 
+test('repeating reminders: set, Done moves on instead of ending, snooze keeps the repeat, validation, ownership, clear', async () => {
+  const noteRepeat = require('../services/noteRepeat');
+  const id = (await call('POST', '/api/notes', { title: 'Water the plants', body: 'front and back' })).json.id;
+  const inHours = (h) => new Date(Date.now() + h * 3600 * 1000);
+  const tz = 'Australia/Brisbane';
+
+  const set = await call('PUT', `/api/notes/${id}/reminder`, { remindAt: inHours(2).toISOString(), email: true, repeat: 'weekly', tz });
+  assert.strictEqual(set.status, 200, JSON.stringify(set.json));
+  assert.strictEqual(set.json.remind_repeat, 'weekly');
+  const stored = (await pool.query('SELECT remind_repeat, remind_tz, remind_day FROM notes WHERE id=$1', [id])).rows[0];
+  assert.deepStrictEqual({ repeat: stored.remind_repeat, tz: stored.remind_tz }, { repeat: 'weekly', tz }, 'how often and in whose time zone');
+  assert.strictEqual(stored.remind_day, noteRepeat.dayOfMonth(new Date(set.json.remind_at), tz), 'and the local day of the month');
+  const listed = (await call('GET', `/api/notes?q=${encodeURIComponent('Water the plants')}`)).json.find((n) => n.id === id);
+  assert.strictEqual(listed.remind_repeat, 'weekly', 'the list carries it');
+
+  // validation: an unknown repeat is refused and the note keeps what it had; a nonsense zone falls back rather than failing
+  const bad = await call('PUT', `/api/notes/${id}/reminder`, { remindAt: inHours(3).toISOString(), repeat: 'hourly' });
+  assert.strictEqual(bad.status, 400);
+  assert.match(bad.json.error, /how often/i);
+  assert.strictEqual((await call('GET', `/api/notes/${id}`)).json.remind_at, set.json.remind_at, 'a refused change leaves the reminder as it was');
+  const oddZone = await call('PUT', `/api/notes/${id}/reminder`, { remindAt: inHours(2).toISOString(), repeat: 'daily', tz: 'Mars/Olympus' });
+  assert.strictEqual(oddZone.status, 200);
+  assert.strictEqual((await pool.query('SELECT remind_tz FROM notes WHERE id=$1', [id])).rows[0].remind_tz, 'UTC');
+
+  // a screen that does not send `repeat` (an older one) keeps the repeat the note has
+  const keep = await call('PUT', `/api/notes/${id}/reminder`, { remindAt: inHours(5).toISOString(), email: true });
+  assert.strictEqual(keep.json.remind_repeat, 'daily');
+
+  // Done on a repeating reminder: moves to the next time, stays set, is not "done"
+  await pool.query("UPDATE notes SET remind_at = NOW() - INTERVAL '1 hour', remind_repeat='weekly', remind_tz=$2, remind_day=$3 WHERE id=$1", [id, tz, 1]);
+  const before = (await pool.query('SELECT remind_at FROM notes WHERE id=$1', [id])).rows[0].remind_at;
+  const done = await call('POST', `/api/notes/${id}/reminder/done`);
+  assert.strictEqual(done.status, 200, JSON.stringify(done.json));
+  assert.strictEqual(done.json.advanced, true);
+  assert.strictEqual(done.json.reminder_done_at, null, 'not finished: it will come round again');
+  const gap = new Date(done.json.remind_at).getTime() - new Date(before).getTime();
+  assert.ok(Math.abs(gap - 7 * 86400 * 1000) <= 3600 * 1000, `a week on from the time it was due (${gap / 3600000} hours)`);
+  assert.ok(new Date(done.json.remind_at) > new Date(), 'and in the future');
+  assert.strictEqual((await call('GET', `/api/notes?reminder=upcoming&q=${encodeURIComponent('Water the plants')}`)).json.length, 1, 'it is "coming up" again, not due');
+  assert.strictEqual((await pool.query('SELECT reminder_sent_at FROM notes WHERE id=$1', [id])).rows[0].reminder_sent_at, null, 'and its email is still to come');
+
+  // snoozing keeps the repeat (the panel sends it back); changing it to "does not repeat" makes Done end it
+  const snooze = await call('PUT', `/api/notes/${id}/reminder`, { remindAt: inHours(1).toISOString(), repeat: 'weekly', tz });
+  assert.strictEqual(snooze.json.remind_repeat, 'weekly');
+  const once = await call('PUT', `/api/notes/${id}/reminder`, { remindAt: inHours(1).toISOString(), repeat: 'none', tz });
+  assert.strictEqual(once.json.remind_repeat, 'none');
+  assert.strictEqual((await pool.query('SELECT remind_tz, remind_day FROM notes WHERE id=$1', [id])).rows[0].remind_tz, null, 'a one-off keeps no repeat details');
+  const ended = await call('POST', `/api/notes/${id}/reminder/done`);
+  assert.ok(ended.json.reminder_done_at, 'a one-off reminder is done for good');
+  assert.ok(!ended.json.advanced);
+
+  // other people cannot touch it; clearing removes the repeat too
+  await call('PUT', `/api/notes/${id}/reminder`, { remindAt: inHours(4).toISOString(), repeat: 'monthly', tz });
+  assert.strictEqual((await call('POST', `/api/notes/${id}/reminder/done`, undefined, 'B')).status, 404);
+  assert.strictEqual((await call('PUT', `/api/notes/${id}/reminder`, { remindAt: inHours(4).toISOString(), repeat: 'daily' }, 'B')).status, 404);
+  assert.strictEqual((await pool.query('SELECT remind_repeat FROM notes WHERE id=$1', [id])).rows[0].remind_repeat, 'monthly', "B's attempts changed nothing");
+  const cleared = await call('PUT', `/api/notes/${id}/reminder`, { remindAt: null });
+  assert.strictEqual(cleared.json.remind_repeat, 'none');
+  assert.deepStrictEqual((await pool.query('SELECT remind_tz, remind_day FROM notes WHERE id=$1', [id])).rows[0], { remind_tz: null, remind_day: null });
+
+  // the repeat travels with the note through the recycle bin
+  await call('PUT', `/api/notes/${id}/reminder`, { remindAt: inHours(6).toISOString(), repeat: 'fortnightly', tz });
+  const bin = await call('DELETE', `/api/notes/${id}`);
+  assert.strictEqual(bin.status, 200);
+  const restored = await call('POST', `/api/recycle-bin/${bin.json.binId}/restore`);
+  assert.strictEqual(restored.status, 200, JSON.stringify(restored.json));
+  const back = (await pool.query('SELECT remind_repeat, remind_tz FROM notes WHERE id=$1', [restored.json.entityId || id])).rows[0];
+  assert.deepStrictEqual({ repeat: back.remind_repeat, tz: back.remind_tz }, { repeat: 'fortnightly', tz }, 'restored with its repeat');
+  await pool.query('DELETE FROM notes WHERE id=$1', [restored.json.entityId || id]);
+});
+
+test('the reminder job and repeating reminders: an unhandled one moves to the latest time and is emailed once for it', async () => {
+  const { runNoteReminders } = require('../services/noteReminders');
+  const tz = 'Australia/Brisbane';
+  await pool.query('UPDATE users SET email=$2 WHERE id=$1', [userA, `rep-a-${Date.now()}@example.test`]);
+  const weeklyBehind = (await pool.query(
+    `INSERT INTO notes (user_id, title, body, remind_at, remind_email, remind_repeat, remind_tz, remind_day)
+     VALUES ($1,'Weekly behind','b', NOW() - INTERVAL '15 days' - INTERVAL '10 minutes', TRUE, 'weekly', $2, 1) RETURNING id`, [userA, tz])).rows[0].id;
+  const dailyJustDue = (await pool.query(
+    `INSERT INTO notes (user_id, title, body, remind_at, remind_email, remind_repeat, remind_tz, remind_day)
+     VALUES ($1,'Daily due','b', NOW() - INTERVAL '10 minutes', TRUE, 'daily', $2, 1) RETURNING id`, [userA, tz])).rows[0].id;
+  const doneOne = (await pool.query(
+    `INSERT INTO notes (user_id, title, body, remind_at, remind_email, remind_repeat, remind_tz, remind_day, reminder_done_at)
+     VALUES ($1,'Marked done','b', NOW() - INTERVAL '15 days', TRUE, 'weekly', $2, 1, NOW()) RETURNING id`, [userA, tz])).rows[0].id;
+  const sent = [];
+  const deps = { sendEmail: async (m) => { sent.push(m); return { ok: true }; }, capture: async () => {}, appUrl: 'https://v.example' };
+  const r1 = await runNoteReminders(new Date(), deps);
+  assert.ok(r1.advanced >= 1, 'the one that was behind moved on');
+  const behind = (await pool.query('SELECT remind_at FROM notes WHERE id=$1', [weeklyBehind])).rows[0].remind_at;
+  assert.ok(new Date(behind) <= new Date() && new Date(behind) > new Date(Date.now() - 7 * 86400 * 1000), 'to its latest time that has come, not every one missed');
+  assert.strictEqual((await pool.query('SELECT remind_at FROM notes WHERE id=$1', [doneOne])).rows[0].remind_at.toISOString(), (await pool.query('SELECT remind_at FROM notes WHERE id=$1', [doneOne])).rows[0].remind_at.toISOString());
+  assert.ok(new Date((await pool.query('SELECT remind_at FROM notes WHERE id=$1', [doneOne])).rows[0].remind_at) < new Date(Date.now() - 14 * 86400 * 1000), 'one marked done is left alone');
+  const mine = sent.filter((m) => /Daily due/.test(m.subject));
+  assert.strictEqual(mine.length, 1, 'the daily one that came due was emailed');
+  assert.match(mine[0].html, /repeats \(every day\)/);
+  const again = await runNoteReminders(new Date(), deps);
+  assert.strictEqual(sent.filter((m) => /Daily due/.test(m.subject)).length, 1, 'and not again at the next run');
+  assert.ok(again.advanced >= 0);
+  await pool.query('DELETE FROM notes WHERE id = ANY($1::int[])', [[weeklyBehind, dailyJustDue, doneOne]]);
+});
+
 test('ask your notes: finds the right notes in the database, only this person\'s, and cites them; a fake model stands in for the AI', async () => {
   const noteAsk = require('../services/noteAsk');
   const mk = async (uid, title, body, { tags = [], updated = null } = {}) => {
