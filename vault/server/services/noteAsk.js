@@ -15,7 +15,7 @@
 // node server/services/noteAsk.test.js
 
 const { normalizeTags } = require('./noteTags');
-const { validDay } = require('./noteDaily');
+const { validDay } = require('./noteDay');
 const noteQuery = require('./noteQuery');
 const noteEmbeddings = require('./noteEmbeddings');
 const noteRelated = require('./noteRelated');

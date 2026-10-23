@@ -351,46 +351,15 @@ test('templates: make, list, change, delete to the bin, restore; limits and owne
   await pool.query('DELETE FROM note_templates WHERE user_id=$1', [userA]);
 });
 
-test("daily note: one per day, from the template, with the last day's open to-dos carried over", async () => {
-  const day1 = await call('POST', '/api/notes/daily', { date: '2026-10-22', title: 'Daily note, Thu 22 Oct', body: '# Thu 22 Oct\n\nTop 3:\n- [ ] \n' });
-  assert.strictEqual(day1.status, 201);
-  assert.deepStrictEqual({ created: day1.json.created, carried: day1.json.carried, tags: day1.json.note.tags, daily: day1.json.note.daily_date }, { created: true, carried: 0, tags: ['daily'], daily: '2026-10-22' });
-
-  // the person writes some to-dos during the day
-  await call('PUT', `/api/notes/${day1.json.note.id}`, { body: '# Thu 22 Oct\n- [ ] Call Sam\n- [x] Send quote\n- [ ] Book flights\n' });
-
-  const again = await call('POST', '/api/notes/daily', { date: '2026-10-22', title: 'ignored', body: 'ignored' });
-  assert.strictEqual(again.status, 200);
-  assert.deepStrictEqual({ created: again.json.created, id: again.json.note.id }, { created: false, id: day1.json.note.id }, 'asking again opens the same note');
-  assert.match(again.json.note.body, /Call Sam/, 'and does not overwrite it');
-
-  const day2 = await call('POST', '/api/notes/daily', { date: '2026-10-23', title: 'Daily note, Fri 23 Oct', body: '# Fri 23 Oct\n' });
-  assert.strictEqual(day2.status, 201);
-  assert.strictEqual(day2.json.carried, 2);
-  assert.strictEqual(day2.json.note.body, '# Fri 23 Oct\n\nCarried over from 2026-10-22:\n- [ ] Call Sam\n- [ ] Book flights\n');
-  assert.match((await call('GET', `/api/notes/${day1.json.note.id}`)).json.body, /Call Sam/, 'yesterday is left exactly as it was');
-
-  // two devices opening the same new day at once still make one note
-  const [x, y] = await Promise.all([1, 2].map(() => call('POST', '/api/notes/daily', { date: '2026-10-24', title: 'Daily note', body: 'x' })));
-  assert.strictEqual(x.json.note.id, y.json.note.id);
-  assert.strictEqual(Number((await pool.query("SELECT COUNT(*) FROM notes WHERE user_id=$1 AND daily_date='2026-10-24'", [userA])).rows[0].count), 1);
-
-  // bad input, and each person has their own days
-  assert.strictEqual((await call('POST', '/api/notes/daily', { date: '2026-02-30', title: 'x', body: '' })).status, 400);
-  assert.strictEqual((await call('POST', '/api/notes/daily', { date: '2026-10-23', title: 5, body: '' })).status, 400);
-  const other = await call('POST', '/api/notes/daily', { date: '2026-10-23', title: 'B day', body: 'b' }, 'B');
-  assert.strictEqual(other.json.created, true);
-  assert.notStrictEqual(other.json.note.id, day2.json.note.id);
-
-  // delete today's note, make it again, then restore the old one: it comes back as an ordinary note, not a second daily note
-  const del = await call('DELETE', `/api/notes/${day2.json.note.id}`);
-  const remade = await call('POST', '/api/notes/daily', { date: '2026-10-23', title: 'Daily note, Fri 23 Oct', body: '# new' });
-  assert.strictEqual(remade.json.created, true);
-  assert.notStrictEqual(remade.json.note.id, day2.json.note.id);
+test('the daily note is gone: no route, and an old daily note still deletes and restores like any other', async () => {
+  assert.strictEqual((await call('POST', '/api/notes/daily', { date: '2026-10-22', title: 'x', body: 'x' })).status, 404);
+  const id = (await pool.query("INSERT INTO notes (user_id, title, body, daily_date) VALUES ($1, 'Daily note, Thu 22 Oct', '# Thu 22 Oct\n- [ ] Call Sam', '2026-10-22') RETURNING id", [userA])).rows[0].id;
+  const del = await call('DELETE', `/api/notes/${id}`);
+  assert.strictEqual(del.status, 200);
   assert.strictEqual((await call('POST', `/api/recycle-bin/${del.json.binId}/restore`)).status, 200);
-  const old = (await call('GET', `/api/notes/${day2.json.note.id}`)).json;
-  assert.strictEqual(old.daily_date, null);
-  assert.strictEqual(Number((await pool.query("SELECT COUNT(*) FROM notes WHERE user_id=$1 AND daily_date='2026-10-23'", [userA])).rows[0].count), 1);
+  const back = (await call('GET', `/api/notes/${id}`)).json;
+  assert.match(back.body, /Call Sam/);
+  assert.strictEqual(back.title, 'Daily note, Thu 22 Oct');
 });
 
 test('saved views: save, list, rename, replace filters, delete to the bin and restore; names, limits and ownership', async () => {

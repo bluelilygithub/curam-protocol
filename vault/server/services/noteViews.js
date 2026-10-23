@@ -5,7 +5,7 @@
 // these fields with known values, so a view can never hold anything else. Unit-tested: node server/services/noteViews.test.js
 
 const { normalizeTags } = require('./noteTags');
-const { validDay } = require('./noteDaily');
+const { validDay } = require('./noteDay');
 
 const PRESETS = ['all', 'today', '7d', '30d', 'year', 'custom'];
 const GROUP_MODES = ['date', 'project', 'client', 'tag'];

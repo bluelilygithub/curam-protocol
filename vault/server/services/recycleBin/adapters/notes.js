@@ -18,14 +18,12 @@ register('note', {
     // The project or client may have been deleted since: the note comes back without it rather than not at all.
     const project = n.project_id && await exists(db, 'SELECT 1 FROM projects WHERE id=$1 AND "userId"=$2', [n.project_id, userId]);
     const client = n.client_id && await exists(db, 'SELECT 1 FROM clients WHERE id=$1 AND "userId"=$2', [n.client_id, userId]);
-    // A daily note for that day may have been made again since: the restored one is then an ordinary note.
-    const dailyTaken = n.daily_date && await exists(db, 'SELECT 1 FROM notes WHERE user_id=$1 AND daily_date=$2::date', [userId, n.daily_date]);
     const { rows } = await db.query(
-      `INSERT INTO notes (${idTaken ? '' : 'id, '}user_id, project_id, client_id, title, body, source, pinned_at, daily_date, created_at, updated_at,
+      `INSERT INTO notes (${idTaken ? '' : 'id, '}user_id, project_id, client_id, title, body, source, pinned_at, created_at, updated_at,
                           remind_at, remind_email, reminder_sent_at, reminder_done_at, remind_repeat, remind_tz, remind_day)
-       VALUES (${idTaken ? '' : '$18, '}$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id`,
+       VALUES (${idTaken ? '' : '$17, '}$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id`,
       [userId, project ? n.project_id : null, client ? n.client_id : null, n.title || 'Untitled', n.body || '', n.source || 'text',
-        n.pinned_at || null, dailyTaken ? null : (n.daily_date || null), n.created_at || new Date().toISOString(), n.updated_at || new Date().toISOString(),
+        n.pinned_at || null, n.created_at || new Date().toISOString(), n.updated_at || new Date().toISOString(),
         n.remind_at || null, !!n.remind_email, n.reminder_sent_at || null, n.reminder_done_at || null,
         ['daily', 'weekdays', 'weekly', 'fortnightly', 'monthly', 'yearly'].includes(n.remind_repeat) ? n.remind_repeat : 'none', n.remind_tz || null, n.remind_day || null,
         ...(idTaken ? [] : [n.id])]

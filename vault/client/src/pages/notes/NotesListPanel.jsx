@@ -24,7 +24,7 @@ const fmtShort = (value) => {
  */
 export default function NotesListPanel({
   list, projects, clients, onNeedClients, selectedId, mobile, moodMap, convertedIds,
-  onSelect, onNew, onToday, onBin, onConvert, onDelete, onPin, onInfo, onTour, onAsk, allTags, onManageTags, viewsApi, searchRef, bottomPad,
+  onSelect, onNew, onBin, onConvert, onDelete, onPin, onInfo, onTour, onAsk, allTags, onManageTags, viewsApi, searchRef, bottomPad,
 }) {
   const getIcon = useIcon();
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -159,7 +159,7 @@ export default function NotesListPanel({
 
   return (
     <div className="flex flex-col h-full min-h-0" style={{ background: 'var(--color-surface)' }}>
-      {/* Header: the title with (i) and the tour, then today / recently deleted / new */}
+      {/* Header: the title with (i) and the tour, then recently deleted / new */}
       <div className="flex items-center justify-between px-3 py-2 border-b flex-shrink-0" style={border}>
         <div className="flex items-center gap-2 min-w-0">
           <span className={`${mobile ? 'text-lg' : 'text-sm'} font-semibold`} style={{ color: 'var(--color-text)' }}>Notes</span>
@@ -173,9 +173,6 @@ export default function NotesListPanel({
         <div className="flex items-center gap-1">
           <Tooltip text={NOTE_TIPS.ask} side="bottom">
             <button type="button" onClick={onAsk} data-tour="notes-ask" className="flex items-center justify-center rounded-lg hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-primary)', ...headerBtn }} aria-label="Ask your notes">{getIcon('message-circle', { size: mobile ? 20 : 15 })}</button>
-          </Tooltip>
-          <Tooltip text={NOTE_TIPS.today} side="bottom">
-            <button type="button" onClick={onToday} data-tour="notes-today" className="flex items-center justify-center gap-1 rounded-lg hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-primary)', ...headerBtn, fontSize: 12 }} aria-label="Today's note">{getIcon('calendar-check', { size: mobile ? 20 : 15 })}</button>
           </Tooltip>
           <Tooltip text={NOTE_TIPS.bin} side="bottom">
             <button type="button" onClick={onBin} data-tour="notes-bin" className="flex items-center justify-center rounded-lg hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-muted)', ...headerBtn }} aria-label="Recently deleted">{getIcon('trash', { size: mobile ? 19 : 14 })}</button>

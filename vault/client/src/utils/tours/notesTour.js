@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_notes_completed';
 
-const TOTAL_STEPS = 16;
+const TOTAL_STEPS = 15;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -73,20 +73,19 @@ export function startNotesTour(show = {}) {
   });
 
   step('notes-new', 2, 'Start a note', 'The + button starts a new note: write one, record your voice and have it written up, or begin from a template such as Meeting notes or Client call.', '[data-tour="notes-new"]', 'list');
-  step('notes-today', 3, "Today's note", "The calendar-tick button opens today's note, and makes it if it is not there yet. Anything you left unticked in your last daily note is carried over.", '[data-tour="notes-today"]', 'list');
-  step('notes-search', 4, 'Search', 'Finds notes by words in the title or text, and by the name of a project, client or tag.', '[data-tour="notes-search"]', 'list');
-  step('notes-views', 5, 'Saved views', 'Set up a search, dates, tags and grouping you use often, then save it here under a name. One tap brings it all back.', '[data-tour="notes-views"]', 'list');
-  step('notes-filters', 6, 'Filters', 'Filter by date range, reminders, tags, project or client. The number on the button shows how many are on.', '[data-tour="notes-filters"]', 'list');
-  step('notes-group', 7, 'Group the list', 'Group by date, project, client or tag. Reminders that are due and pinned notes always lead the list.', '[data-tour="notes-group"]', 'list');
-  step('notes-list', 8, 'Your notes', 'Click a note to open it. Hover a note for pin, make-a-task and delete (on a phone, tap the three dots). Voice notes, tags, reminders and the project show on each row.', '[data-tour="notes-list"]', 'list', 'right');
-  step('notes-toolbar', 9, 'Working on a note', 'Pin it, run AI actions, dictate, make a task or take it to a chat. Notes save by themselves a moment after you stop typing.', '[data-tour="notes-toolbar"]', 'editor');
-  step('notes-filing', 10, 'File it', 'Put the note under a project and a client, and add tags. Tags you already use are offered as you type.', '[data-tour="notes-filing"]', 'editor');
-  step('notes-mode', 11, 'Write and Preview', 'Write is the text box. Preview shows headings, bold, lists and links formatted, and you can tick to-dos right there. Type "- [ ] " to make a to-do.', '[data-tour="notes-mode"]', 'editor');
-  step('notes-reminder', 12, 'Reminders', 'Remind yourself about a note at a time you choose, choose whether it repeats, and tick "also email me" if you want an email as well. A reminder that has come due appears at the top of the list, where you can mark it done or snooze it. A repeating one moves to its next time when you mark it done.', '[data-tour="notes-reminder"]', 'editor');
-  step('notes-attach', 13, 'Attach files', 'Attach a PDF, photo, spreadsheet or document to the note: press Attach files, drop files onto the note, or paste an image into the text. Click a file to open it. Files are private to you, and searching by a file name finds the note.', '[data-tour="notes-attach"]', 'editor');
-  step('notes-ai', 14, 'AI actions', 'Summarise the note, pull out its to-dos as tasks, tidy it up, or suggest tags and a title. The AI only proposes: nothing changes until you choose.', '[data-tour="notes-ai"]', 'editor');
+  step('notes-search', 3, 'Search', 'Finds notes by words in the title or text, and by the name of a project, client or tag.', '[data-tour="notes-search"]', 'list');
+  step('notes-views', 4, 'Saved views', 'Set up a search, dates, tags and grouping you use often, then save it here under a name. One tap brings it all back.', '[data-tour="notes-views"]', 'list');
+  step('notes-filters', 5, 'Filters', 'Filter by date range, reminders, tags, project or client. The number on the button shows how many are on.', '[data-tour="notes-filters"]', 'list');
+  step('notes-group', 6, 'Group the list', 'Group by date, project, client or tag. Reminders that are due and pinned notes always lead the list.', '[data-tour="notes-group"]', 'list');
+  step('notes-list', 7, 'Your notes', 'Click a note to open it. Hover a note for pin, make-a-task and delete (on a phone, tap the three dots). Voice notes, tags, reminders and the project show on each row.', '[data-tour="notes-list"]', 'list', 'right');
+  step('notes-toolbar', 8, 'Working on a note', 'Pin it, run AI actions, dictate, make a task or take it to a chat. Notes save by themselves a moment after you stop typing.', '[data-tour="notes-toolbar"]', 'editor');
+  step('notes-filing', 9, 'File it', 'Put the note under a project and a client, and add tags. Tags you already use are offered as you type.', '[data-tour="notes-filing"]', 'editor');
+  step('notes-mode', 10, 'Write, Rich and Preview', 'Write is the plain text box. Rich is the enhanced editor: it shows the formatting as you type and has a toolbar for headings, lists, to-dos, links and tables. Preview shows the note formatted so you can tick to-dos.', '[data-tour="notes-mode"]', 'editor');
+  step('notes-reminder', 11, 'Reminders', 'Remind yourself about a note at a time you choose, choose whether it repeats, and tick "also email me" if you want an email as well. A reminder that has come due appears at the top of the list, where you can mark it done or snooze it. A repeating one moves to its next time when you mark it done.', '[data-tour="notes-reminder"]', 'editor');
+  step('notes-attach', 12, 'Attach files', 'Attach a PDF, photo, spreadsheet or document to the note: press Attach files, drop files onto the note, or paste an image into the text. Click a file to open it. Files are private to you, and searching by a file name finds the note.', '[data-tour="notes-attach"]', 'editor');
+  step('notes-ai', 13, 'AI actions', 'Summarise the note, pull out its to-dos as tasks, tidy it up, or suggest tags and a title. The AI only proposes: nothing changes until you choose.', '[data-tour="notes-ai"]', 'editor');
 
-  step('notes-ask', 15, 'Ask your notes', 'Ask a question in your own words, such as "what did I agree with Acme in October?". It finds notes by their words and by what they are about, reads the ones that fit and answers only from them, showing which notes it used so you can open them. With Linked records on it also maps the projects, clients, tasks and deals tied to those notes. It never changes a note.', '[data-tour="notes-ask"]', 'list');
+  step('notes-ask', 14, 'Ask your notes', 'Ask a question in your own words, such as "what did I agree with Acme in October?". It finds notes by their words and by what they are about, reads the ones that fit and answers only from them, showing which notes it used so you can open them. With Linked records on it also maps the projects, clients, tasks and deals tied to those notes. It never changes a note.', '[data-tour="notes-ask"]', 'list');
 
   tour.addStep({
     id: 'notes-bin',
@@ -94,7 +93,7 @@ export function startNotesTour(show = {}) {
     text: 'Deleted notes, templates and views wait 30 days in Recently deleted, so a slip is never final. Stuck? Press the round button at the bottom right and say what you want to do, and the Notes guide will point you to the right buttons. The (i) beside the title explains it all again.',
     attachTo: { element: '[data-tour="notes-bin"]', on: 'bottom' },
     beforeShowPromise: inView('list', 'notes-bin', '[data-tour="notes-bin"]'),
-    when: { show() { injectStepCounter(16); } },
+    when: { show() { injectStepCounter(15); } },
     buttons: [
       btnBack(),
       { text: 'Finish Tour ✓', action() { try { localStorage.setItem(TOUR_KEY, '1'); } catch (_) { /* ignore */ } tour.complete(); } },

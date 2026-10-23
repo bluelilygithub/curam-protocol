@@ -1,4 +1,4 @@
-// Built-in note templates, the daily note's starting text, and filling in {{date}}-style placeholders.
+// Built-in note templates and filling in {{date}}-style placeholders.
 // Pure (no React, no fetch) so it is unit-tested: node client/src/pages/notes/noteTemplates.test.mjs
 // The person's own templates are saved on the server (/api/notes/templates); these ones ship with the app.
 
@@ -7,7 +7,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 
 const pad = (n) => String(n).padStart(2, '0');
 
-/** The person's own calendar day as YYYY-MM-DD (not UTC), which is what identifies a daily note. */
+/** The person's own calendar day as YYYY-MM-DD (not UTC). */
 export function localDay(now = new Date()) {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
@@ -26,16 +26,6 @@ function formatTime(now) {
 export function fillTemplate(text, now = new Date()) {
   const values = { date: formatDay(now), isodate: localDay(now), weekday: WEEKDAYS[now.getDay()], time: formatTime(now) };
   return String(text ?? '').replace(/\{\{\s*(date|isodate|weekday|time)\s*\}\}/gi, (_, key) => values[key.toLowerCase()]);
-}
-
-export const DAILY_TEMPLATE = {
-  title: 'Daily note, {{date}}',
-  body: '# {{date}}\n\nTop 3 for today:\n- [ ] \n- [ ] \n- [ ] \n\nNotes:\n',
-};
-
-/** What to send to POST /api/notes/daily for the given moment. */
-export function dailyPayload(now = new Date()) {
-  return { date: localDay(now), title: fillTemplate(DAILY_TEMPLATE.title, now), body: fillTemplate(DAILY_TEMPLATE.body, now) };
 }
 
 export const BUILT_IN_TEMPLATES = [

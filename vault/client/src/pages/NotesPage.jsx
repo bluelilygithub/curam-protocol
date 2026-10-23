@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, lazy, Suspense } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
@@ -25,7 +25,7 @@ import { NOTES_INTRO, HOW_IT_WORKS, NOTES_NOT } from './notes/notesInfo.mjs';
 import { reminderState, reminderText, repeatOf, localZone } from './notes/noteReminders.mjs';
 import TemplatePicker from './notes/TemplatePicker';
 import RecentlyDeletedModal from './notes/RecentlyDeletedModal';
-import { dailyPayload, templateToNote } from './notes/noteTemplates.mjs';
+import { templateToNote } from './notes/noteTemplates.mjs';
 import TagManager from './notes/TagManager';
 import { DEFAULT_FILTERS, sameFilters, isPlain, describeFilters } from './notes/noteViews.mjs';
 import { addTag } from './notes/noteTags.mjs';
@@ -37,10 +37,12 @@ import { NOTES_TOOLS } from './notes/notesTools.mjs';
 
 const NOTE_BODY_LIMIT = 500;
 const AUTOSAVE_DELAY = 1000; // ms after the last keystroke
-const MODE_KEY = 'vault:notes:mode'; // 'write' | 'preview', remembered on this device
+const MODE_KEY = 'vault:notes:mode'; // 'write' | 'rich' | 'preview', remembered on this device
+// The enhanced editor and Tiptap are only downloaded the first time Rich is picked.
+const RichNoteEditor = lazy(() => import('./notes/RichNoteEditor'));
 
 function readMode() {
-  try { return localStorage.getItem(MODE_KEY) === 'preview' ? 'preview' : 'write'; } catch { return 'write'; }
+  try { const m = localStorage.getItem(MODE_KEY); return m === 'preview' || m === 'rich' ? m : 'write'; } catch { return 'write'; }
 }
 
 export default function NotesPage() {
@@ -76,7 +78,7 @@ export default function NotesPage() {
   const [showMention, setShowMention] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
   const [clients, setClients] = useState([]);
-  const [mode, setModeState] = useState(readMode); // Write (the text box) or Preview (formatted)
+  const [mode, setModeState] = useState(readMode); // Write (the text box), Rich (the enhanced editor) or Preview (formatted, read-only)
   const [allTags, setAllTags] = useState([]); // [{ tag, count }] for the filter, the suggestions and Manage tags
   const [showTagManager, setShowTagManager] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -277,7 +279,7 @@ export default function NotesPage() {
     await createNote({ focusTitle: true });
   }
 
-  // ── Templates and the daily note ──────────────────────────────────────────
+  // ── Templates ─────────────────────────────────────────────────────────────
   async function loadTemplates() {
     try {
       const res = await api.get('/api/notes/templates');
@@ -314,7 +316,7 @@ export default function NotesPage() {
       const client = clients.find((c) => c.id === note.client_id);
       const full = { ...note, project_name: project?.name || null, client_name: client?.name || null, tags };
       patchNote(toRow(full));
-      setMode('write');
+      setModeState((m) => (m === 'preview' ? 'write' : m)); // Preview cannot be typed into; Write and Rich can
       await selectNote(full, { focusTitle: /\s$/.test(spec.title) ? 'end' : false });
     } catch {
       addToast('The note could not be made from that template. Try again.', 'error');
@@ -348,23 +350,6 @@ export default function NotesPage() {
       addToast(`Template "${template.name}" deleted. Kept 30 days.`, 'success', undefined, { label: 'Undo', onClick: () => undoDelete(binId, 'Template restored ✓', loadTemplates) });
     } catch {
       addToast('The template could not be deleted. Try again.', 'error');
-    }
-  }
-
-  // Today's note: opened if it exists, otherwise made for today with last time's unfinished to-dos carried over.
-  async function openDaily() {
-    runSave();
-    try {
-      const res = await api.post('/api/notes/daily', dailyPayload());
-      if (!res.ok) throw new Error('daily failed');
-      const { note, created, carried } = await res.json();
-      patchNote(toRow(note));
-      if (created) setMode('write');
-      await selectNote(note);
-      refreshTags();
-      if (carried) addToast(`Carried over ${carried} unfinished to-do${carried === 1 ? '' : 's'} from your last daily note.`, 'success');
-    } catch {
-      addToast("Today's note could not be opened. Try again.", 'error');
     }
   }
 
@@ -759,6 +744,14 @@ export default function NotesPage() {
     scheduleSave(selected.id, e.target.value, body);
   }
 
+  // The Rich editor hands back the whole note as Markdown after each edit; it is saved like typed text.
+  function handleRichChange(md) {
+    if (!selected) return;
+    setAiBackup(null);
+    setBody(md);
+    scheduleSave(selected.id, title, md);
+  }
+
   function handleBodyChange(e) {
     const val = e.target.value;
     setAiBackup(null);
@@ -864,7 +857,6 @@ export default function NotesPage() {
             convertedIds={convertedNoteIds}
             onSelect={(row) => selectNote(row)}
             onNew={() => setShowNewChooser(true)}
-            onToday={openDaily}
             onBin={() => setShowBin(true)}
             onConvert={convertToTask}
             onDelete={deleteNote}
@@ -1124,7 +1116,7 @@ export default function NotesPage() {
           {/* Write / Preview */}
           <div className="flex items-center justify-between gap-2 px-4 py-1.5 flex-shrink-0">
             <div className="flex rounded-lg overflow-hidden" role="group" aria-label="How to show this note" style={{ border: '1px solid var(--color-border)' }} data-tour="notes-mode">
-              {[['write', 'Write', 'pen-line'], ['preview', 'Preview', 'eye']].map(([id, label, icon]) => (
+              {[['write', 'Write', 'pen-line'], ['rich', 'Rich', 'type'], ['preview', 'Preview', 'eye']].map(([id, label, icon]) => (
                 <Tooltip key={id} text={NOTE_TIPS[id]}>
                   <button
                     type="button" onClick={() => setMode(id)} aria-pressed={mode === id}
@@ -1177,6 +1169,23 @@ export default function NotesPage() {
                     ? <NoteMarkdownView body={body} onToggleTask={toggleTask} />
                     : <p style={{ color: 'var(--color-muted)' }}>Nothing to preview yet. Switch to Write and start typing.</p>}
               </div>
+            ) : mode === 'rich' ? (
+              bodyLoading
+                ? <p className="px-4 py-2 text-sm" style={{ color: 'var(--color-muted)' }}>Opening…</p>
+                : (
+                  <Suspense fallback={<p className="px-4 py-2 text-sm" style={{ color: 'var(--color-muted)' }}>Opening the editor…</p>}>
+                    <RichNoteEditor
+                      key={selected.id}
+                      value={body}
+                      onChange={handleRichChange}
+                      readOnly={!!loadError}
+                      mobile={viewportMobile}
+                      placeholder={viewportMobile ? 'Tap here to type…' : 'Start writing…'}
+                      onPasteFiles={(pasted) => files.upload(pasted)}
+                      onUseWrite={() => setMode('write')}
+                    />
+                  </Suspense>
+                )
             ) : (
             <textarea
               ref={bodyRef}

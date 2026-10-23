@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { localDay, formatDay, fillTemplate, dailyPayload, DAILY_TEMPLATE, BUILT_IN_TEMPLATES, templateToNote } from './noteTemplates.mjs';
+import { localDay, formatDay, fillTemplate, BUILT_IN_TEMPLATES, templateToNote } from './noteTemplates.mjs';
 
 const friday = new Date(2026, 9, 23, 15, 30); // Fri 23 Oct 2026, 3:30 pm local
 const morning = new Date(2026, 0, 5, 0, 5);
@@ -18,13 +18,6 @@ assert.strictEqual(fillTemplate('keep {{unknown}} and {single}', friday), 'keep 
 assert.strictEqual(fillTemplate(null, friday), '');
 assert.strictEqual(fillTemplate('{{date}} and {{date}}', friday), 'Fri 23 Oct 2026 and Fri 23 Oct 2026');
 
-// the daily note: the day it is for, a dated title, a heading and empty to-dos to fill in
-const daily = dailyPayload(friday);
-assert.strictEqual(daily.date, '2026-10-23');
-assert.strictEqual(daily.title, 'Daily note, Fri 23 Oct 2026');
-assert.ok(daily.body.startsWith('# Fri 23 Oct 2026\n'));
-assert.ok(!daily.body.includes('{{'), 'no placeholder is left in what is sent');
-assert.match(DAILY_TEMPLATE.body, /Top 3/);
 
 // built-in templates are all usable: named, hinted, unique, and every placeholder is one we fill
 const ids = BUILT_IN_TEMPLATES.map((t) => t.id);
@@ -40,4 +33,4 @@ assert.deepStrictEqual(templateToNote({ title: 'Call with ', body: 'x', tags: ['
 assert.strictEqual(templateToNote({ title: '', body: '', tags: undefined }, friday).title, 'Untitled');
 assert.deepStrictEqual(templateToNote({ title: 'T', body: 'B' }, friday).tags, []);
 
-console.log('ok - note templates: local day, placeholders, built-ins, daily payload');
+console.log('ok - note templates: local day, placeholders, built-ins');

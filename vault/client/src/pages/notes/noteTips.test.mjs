@@ -41,10 +41,15 @@ for (const [file, text] of Object.entries(sources)) {
 // ---- every tip is used (no orphans), and the ones looked up by id are covered
 const usesDynamic = /NOTE_TIPS\[id\]/.test(all);
 for (const key of Object.keys(NOTE_TIPS)) {
-  const used = new RegExp(`NOTE_TIPS\\.${key}\\b`).test(all) || (usesDynamic && (key === 'write' || key === 'preview'));
+  const used = new RegExp(`NOTE_TIPS\\.${key}\\b`).test(all) || (usesDynamic && (key === 'write' || key === 'preview' || key === 'rich'));
   assert.ok(used, `NOTE_TIPS.${key} is written but never used`);
 }
 for (const id of ['date', 'project', 'client', 'tag']) assert.ok(NOTE_TIPS.groupBy[id], `a tip for grouping by ${id}`);
+// every button of the Rich editor's toolbar has a tip (each is looked up as NOTE_TIPS.richBar[id])
+const richIds = [...sources['pages/notes/RichNoteEditor.jsx'].matchAll(/id: '([A-Za-z0-9]+)'/g)].map((m) => m[1]);
+assert.ok(richIds.length >= 15, 'the Rich toolbar is found');
+for (const id of richIds) assert.ok(NOTE_TIPS.richBar[id], `the Rich toolbar button "${id}" has a tip`);
+for (const id of Object.keys(NOTE_TIPS.richBar)) assert.ok(new RegExp(`'${id}'`).test(sources['pages/notes/RichNoteEditor.jsx']) || sources['pages/notes/RichNoteEditor.jsx'].includes(`richBar.${id}`), `the Rich tip "${id}" is used`);
 
 // ---- the tooltip and the page conventions of the other tools
 assert.match(sources['pages/NotesPage.jsx'], /import ToolInfoModal, \{ useToolInfoModal \}/, 'the (i) box is the shared ToolInfoModal');
