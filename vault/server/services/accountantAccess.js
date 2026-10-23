@@ -1,7 +1,8 @@
 'use strict';
 
 // Accountant login: a normal user row with "accountantOfUserId" set. It can only READ the owner's
-// Finance (GET /api/finance/*); everything it does is written to accountant_access_log.
+// Finance (GET /api/finance/*), and Shares when the owner has opted that accountant in;
+// everything it does is written to accountant_access_log.
 // Flow: requireAuth calls applyAccountantScope() right after loading the user.
 
 const { pool } = require('../db');
@@ -14,6 +15,17 @@ const EXPORT_RE = /export|pdf|csv|xlsx|zip|pack|download|statement|\/file/i;
 
 function isFinancePath(p) {
   return p === '/finance' || p.startsWith('/finance/');
+}
+
+// Shares (the owner's private trading account) is opt-in per accountant: the owner ticks it in
+// Admin -> Accountant access, which stores featureOverrides.shares = true (off = false, the default).
+// Read-only, and the Questions history (/shares/ask) stays private.
+function isSharesPath(p) {
+  return (p === '/shares' || p.startsWith('/shares/')) && p !== '/shares/ask' && !p.startsWith('/shares/ask/');
+}
+
+function hasSharesAccess(user) {
+  return user.featureOverrides?.shares === true;
 }
 
 function isOwnGetPath(p) {
@@ -71,15 +83,16 @@ async function applyAccountantScope(req, res, user, token) {
   const p = req.path; // relative to /api
   const readOnly = req.method === 'GET' || req.method === 'HEAD';
 
-  if (!readOnly || !(isFinancePath(p) || isOwnGetPath(p))) {
+  const sharesOk = isSharesPath(p) && hasSharesAccess(user);
+  if (!readOnly || !(isFinancePath(p) || sharesOk || isOwnGetPath(p))) {
     // /auth/* never reaches here (skipped earlier); logout is a POST handled there too.
     await logAccess(req, actor, 'denied', 403);
-    res.status(403).json({ error: 'Accountant access is read-only and limited to Finance.' });
+    res.status(403).json({ error: 'Accountant access is read-only and limited to the sections the account owner has shared.' });
     return false;
   }
 
-  if (isFinancePath(p)) {
-    // Finance code reads req.user.id everywhere: point it at the owner's data. Never admin.
+  if (isFinancePath(p) || sharesOk) {
+    // Finance and Shares code read req.user.id everywhere: point it at the owner's data. Never admin.
     req.user = {
       id: user.accountantOfUserId,
       email: user.email,
@@ -110,4 +123,4 @@ async function ownerEmailOf(user) {
   return rows[0]?.email;
 }
 
-module.exports = { applyAccountantScope, logLogin, accessEnded, logAccess, ownerEmailOf };
+module.exports = { isSharesPath, hasSharesAccess, applyAccountantScope, logLogin, accessEnded, logAccess, ownerEmailOf };

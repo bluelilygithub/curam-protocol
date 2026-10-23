@@ -380,6 +380,7 @@ router.get('/accountants', async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT u.id, u.email, u."createdAt", u."lastLoginAt", u."lastActiveAt", u."accessExpiresAt", u."disabledAt",
+             COALESCE((u."featureOverrides"->>'shares') = 'true', FALSE) AS "sharesAccess",
              COUNT(s.token) FILTER (WHERE s."expiresAt" > NOW())::INT AS "activeSessions"
       FROM users u
       LEFT JOIN auth_sessions s ON s."userId" = u.id
@@ -394,7 +395,7 @@ router.get('/accountants', async (req, res) => {
 
 // POST /api/admin/accountants { email, password, expiresAt? }
 router.post('/accountants', async (req, res) => {
-  const { email, password, expiresAt } = req.body || {};
+  const { email, password, expiresAt, shares } = req.body || {};
   const normalizedEmail = String(email || '').trim().toLowerCase();
   if (!normalizedEmail || !password) return res.status(400).json({ error: 'email and password required' });
   if (String(password).length < 12) return res.status(400).json({ error: 'Accountant password must be at least 12 characters' });
@@ -406,6 +407,8 @@ router.post('/accountants', async (req, res) => {
   // Belt and braces: everything except Finance is also switched off in the feature flags.
   const overrides = {};
   for (const k of FEATURE_ACCESS_KEYS) if (k !== 'finance') overrides[k] = false;
+  // Shares (the owner's private trading account) is opt-in: read-only, see accountantAccess.js.
+  if (shares === true) overrides.shares = true;
   try {
     const passwordHash = await bcrypt.hash(String(password), SALT_ROUNDS);
     const { rows } = await pool.query(
@@ -420,7 +423,7 @@ router.post('/accountants', async (req, res) => {
   }
 });
 
-// PUT /api/admin/accountants/:id { expiresAt?: iso|null, disabled?: boolean }
+// PUT /api/admin/accountants/:id { expiresAt?: iso|null, disabled?: boolean, shares?: boolean }
 router.put('/accountants/:id', async (req, res) => {
   const id = Number(req.params.id);
   if (!id) return res.status(400).json({ error: 'Invalid id' });
@@ -433,6 +436,12 @@ router.put('/accountants/:id', async (req, res) => {
       const d = body.expiresAt ? new Date(body.expiresAt) : null;
       if (body.expiresAt && Number.isNaN(d.getTime())) return res.status(400).json({ error: 'Invalid expiry' });
       await pool.query('UPDATE users SET "accessExpiresAt"=$1 WHERE id=$2', [d, id]);
+    }
+    if ('shares' in body) {
+      await pool.query(
+        `UPDATE users SET "featureOverrides" = jsonb_set(COALESCE("featureOverrides", '{}'::jsonb), '{shares}', $1::jsonb) WHERE id=$2`,
+        [body.shares === true ? 'true' : 'false', id]
+      );
     }
     if ('disabled' in body) {
       await pool.query('UPDATE users SET "disabledAt"=$1 WHERE id=$2', [body.disabled ? new Date() : null, id]);

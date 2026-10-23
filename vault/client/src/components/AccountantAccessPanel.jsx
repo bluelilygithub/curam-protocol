@@ -71,7 +71,7 @@ export default function AccountantAccessPanel() {
       <div>
         <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Accountant access</h2>
         <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>
-          Read-only view of your Finance, nothing else. Every sign-in, page view, export and refused attempt is recorded below and cannot be edited or deleted.
+          Read-only view of your Finance, and of your Shares if you turn that on for them, nothing else. Every sign-in, page view, export and refused attempt is recorded below and cannot be edited or deleted.
         </p>
       </div>
 
@@ -118,10 +118,17 @@ export default function AccountantAccessPanel() {
                     {a.activeSessions > 0 && ` · ${a.activeSessions} active session${a.activeSessions === 1 ? '' : 's'}`}
                   </div>
                 </div>
-                <button disabled={busy} className={btn} style={btnStyle}
-                  onClick={() => call(() => api.put(`/api/admin/accountants/${a.id}`, { disabled: !a.disabledAt }))}>
-                  {a.disabledAt ? 'Re-enable' : 'Disable now'}
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button disabled={busy} className={btn} style={btnStyle}
+                    title="Read-only view of your Shares: portfolio, trades, cash and dividends, CGT, statements. Your Questions history stays private."
+                    onClick={() => call(() => api.put(`/api/admin/accountants/${a.id}`, { shares: !a.sharesAccess }))}>
+                    {a.sharesAccess ? 'Shares: on (turn off)' : 'Shares: off (turn on)'}
+                  </button>
+                  <button disabled={busy} className={btn} style={btnStyle}
+                    onClick={() => call(() => api.put(`/api/admin/accountants/${a.id}`, { disabled: !a.disabledAt }))}>
+                    {a.disabledAt ? 'Re-enable' : 'Disable now'}
+                  </button>
+                </div>
               </div>
             );
           })}

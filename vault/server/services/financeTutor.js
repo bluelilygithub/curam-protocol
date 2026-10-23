@@ -82,7 +82,7 @@ const RULES = [
   'Vehicle and home-office deduction methods are fixed per financial year, not per entry.',
   'Receipts and statements should be kept for five years. Uploading them to the Documents tab keeps them with the books and in the accountant\'s FY pack.',
   'The financial year runs 1 July to 30 June, for example 2025-26 is 1 July 2025 to 30 June 2026.',
-  'The owner can give their accountant a login in Admin, under Accountant access. It is read-only and limited to Finance: the accountant can look at every tab and report and download exports, but cannot add, change or delete anything and cannot open any other part of the app. The panel gives a direct link that signs the accountant in and opens Finance, an optional end date, and a Disable now button that ends their access straight away.',
+  'The owner can give their accountant a login in Admin, under Accountant access. It is read-only and limited to Finance: the accountant can look at every tab and report and download exports, but cannot add, change or delete anything and cannot open any other part of the app (the owner can also switch on a read-only view of their private Shares for that accountant). The panel gives a direct link that signs the accountant in and opens Finance, an optional end date, and a Disable now button that ends their access straight away.',
   'Everything the accountant does is recorded in an activity log in the same Admin panel: each sign-in, each page they look at, each download or export, and each attempt that was refused, with the time and their IP address. The log cannot be edited or deleted. Separately, the Audit Trail report shows every change made to the books themselves.',
 ];
 

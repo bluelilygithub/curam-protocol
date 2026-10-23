@@ -25,7 +25,7 @@ async function requireAuth(req, res, next) {
     }
 
     const { rows: users } = await pool.query(
-      'SELECT id, email, "isAdmin", "accountantOfUserId", "accessExpiresAt", "disabledAt" FROM users WHERE id=$1', [session.userId]
+      'SELECT id, email, "isAdmin", "accountantOfUserId", "accessExpiresAt", "disabledAt", "featureOverrides" FROM users WHERE id=$1', [session.userId]
     );
     const user = users[0];
     if (!user) return res.status(401).json({ error: 'User not found' });
