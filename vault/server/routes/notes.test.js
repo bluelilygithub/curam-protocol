@@ -22,6 +22,7 @@ const app = express();
 app.use(express.json());
 app.use((req, _res, next) => { req.user = { id: req.headers['x-user'] === 'B' ? userB : userA, isAdmin: true }; next(); });
 app.use('/api/notes', require('./notes'));
+app.use('/api/recycle-bin', require('./recycleBin'));
 
 let base;
 async function call(method, url, body, as) {
@@ -273,6 +274,119 @@ test('deleting a note removes its tags; the AI tag action is given the existing 
     await call('POST', `/api/notes/${ids['March call']}/ai`, { action: 'summary' });
     assert.deepStrictEqual(seen.note.existingTags, [], 'other actions do not look the tags up');
   } finally { noteAi.runNoteAction = real; }
+});
+
+test('deleting a note keeps it for 30 days; restoring brings back text, tags, pin, dates and the same id', async () => {
+  const made = await call('POST', '/api/notes', { title: 'Keep me', body: '# Plan\n- [ ] one', project_id: projectA, client_id: clientA });
+  const id = made.json.id;
+  await call('PUT', `/api/notes/${id}/tags`, { tags: ['alpha', 'beta'] });
+  await call('PATCH', `/api/notes/${id}/pin`, { pinned: true });
+  const before = (await call('GET', `/api/notes/${id}`)).json;
+
+  const del = await call('DELETE', `/api/notes/${id}`);
+  assert.strictEqual(del.status, 200);
+  assert.strictEqual(del.json.retentionDays, 30);
+  assert.ok(del.json.binId);
+  assert.strictEqual((await call('GET', `/api/notes/${id}`)).status, 404, 'gone from Notes');
+  assert.ok(!(await call('GET', '/api/notes')).json.some((n) => n.id === id));
+  assert.ok(!(await call('GET', '/api/notes/tags')).json.some((t) => t.tag === 'alpha'), 'its tags left the tag list too');
+
+  const inBin = (await call('GET', '/api/recycle-bin?types=note')).json.items.find((i) => i.id === del.json.binId);
+  assert.deepStrictEqual({ type: inBin.entityType, label: inBin.label, title: inBin.title, daysLeft: inBin.daysLeft }, { type: 'note', label: 'Note', title: 'Keep me', daysLeft: 30 });
+  assert.match(inBin.detail, /Plan/);
+  assert.strictEqual((await call('POST', `/api/recycle-bin/${del.json.binId}/restore`, undefined, 'B')).status, 404, "B cannot restore A's note");
+
+  const back = await call('POST', `/api/recycle-bin/${del.json.binId}/restore`);
+  assert.strictEqual(back.status, 200, JSON.stringify(back.json));
+  assert.strictEqual(Number(back.json.entityId), id, 'the same note number, so anything that pointed at it still does');
+  const after = (await call('GET', `/api/notes/${id}`)).json;
+  for (const k of ['title', 'body', 'project_id', 'client_id', 'pinned_at', 'created_at', 'updated_at', 'source']) assert.deepStrictEqual(after[k], before[k], `${k} came back as it was`);
+  assert.deepStrictEqual(after.tags, ['alpha', 'beta']);
+  assert.ok((await call('GET', '/api/notes/tags')).json.some((t) => t.tag === 'alpha'));
+  await call('DELETE', `/api/notes/${id}`);
+});
+
+test('restoring a note whose project was deleted since brings it back without the project', async () => {
+  const proj = (await pool.query("INSERT INTO projects (name, \"userId\", model, \"projectType\") VALUES ('Short lived',$1,'m','writing') RETURNING id", [userA])).rows[0].id;
+  const made = await call('POST', '/api/notes', { title: 'Orphan', body: 'x', project_id: proj });
+  const del = await call('DELETE', `/api/notes/${made.json.id}`);
+  await pool.query('DELETE FROM projects WHERE id=$1', [proj]);
+  const back = await call('POST', `/api/recycle-bin/${del.json.binId}/restore`);
+  assert.strictEqual(back.status, 200);
+  assert.strictEqual((await call('GET', `/api/notes/${made.json.id}`)).json.project_id, null);
+  await call('DELETE', `/api/notes/${made.json.id}`);
+});
+
+test('templates: make, list, change, delete to the bin, restore; limits and ownership', async () => {
+  const made = await call('POST', '/api/notes/templates', { name: ' Weekly review ', title: 'Review, {{date}}', body: '- [ ] one\n- [ ] two', tags: ['#Review', 'review', 'weekly'] });
+  assert.strictEqual(made.status, 201);
+  assert.deepStrictEqual({ name: made.json.name, title: made.json.title, tags: made.json.tags }, { name: 'Weekly review', title: 'Review, {{date}}', tags: ['review', 'weekly'] });
+  const tid = made.json.id;
+  assert.deepStrictEqual((await call('GET', '/api/notes/templates')).json.map((t) => t.name), ['Weekly review']);
+  assert.deepStrictEqual((await call('GET', '/api/notes/templates', undefined, 'B')).json, [], "B sees none of A's templates");
+
+  const put = await call('PUT', `/api/notes/templates/${tid}`, { name: 'Weekly reset' });
+  assert.deepStrictEqual({ name: put.json.name, body: put.json.body }, { name: 'Weekly reset', body: '- [ ] one\n- [ ] two' }, 'only the named field changed');
+  assert.strictEqual((await call('PUT', `/api/notes/templates/${tid}`, { name: 'hax' }, 'B')).status, 404);
+  assert.strictEqual((await call('PUT', `/api/notes/templates/${tid}`, { body: 5 })).status, 400);
+  assert.strictEqual((await call('POST', '/api/notes/templates', { name: '  ' })).status, 400, 'a name is needed');
+  assert.strictEqual((await call('POST', '/api/notes/templates', { name: 'x', tags: 'nope' })).status, 400);
+
+  const del = await call('DELETE', `/api/notes/templates/${tid}`);
+  assert.strictEqual(del.status, 200);
+  assert.deepStrictEqual((await call('GET', '/api/notes/templates')).json, []);
+  const item = (await call('GET', '/api/recycle-bin?types=note-template')).json.items[0];
+  assert.deepStrictEqual({ label: item.label, title: item.title }, { label: 'Note template', title: 'Weekly reset' });
+  const back = await call('POST', `/api/recycle-bin/${del.json.binId}/restore`);
+  assert.strictEqual(back.status, 200);
+  const restored = (await call('GET', '/api/notes/templates')).json[0];
+  assert.deepStrictEqual({ id: restored.id, name: restored.name, tags: restored.tags }, { id: tid, name: 'Weekly reset', tags: ['review', 'weekly'] });
+
+  await pool.query("INSERT INTO note_templates (user_id, name) SELECT $1, 'filler ' || g FROM generate_series(1, 49) g", [userA]);
+  assert.strictEqual((await call('POST', '/api/notes/templates', { name: 'one too many' })).status, 400, 'at most 50');
+  await pool.query('DELETE FROM note_templates WHERE user_id=$1', [userA]);
+});
+
+test("daily note: one per day, from the template, with the last day's open to-dos carried over", async () => {
+  const day1 = await call('POST', '/api/notes/daily', { date: '2026-10-22', title: 'Daily note, Thu 22 Oct', body: '# Thu 22 Oct\n\nTop 3:\n- [ ] \n' });
+  assert.strictEqual(day1.status, 201);
+  assert.deepStrictEqual({ created: day1.json.created, carried: day1.json.carried, tags: day1.json.note.tags, daily: day1.json.note.daily_date }, { created: true, carried: 0, tags: ['daily'], daily: '2026-10-22' });
+
+  // the person writes some to-dos during the day
+  await call('PUT', `/api/notes/${day1.json.note.id}`, { body: '# Thu 22 Oct\n- [ ] Call Sam\n- [x] Send quote\n- [ ] Book flights\n' });
+
+  const again = await call('POST', '/api/notes/daily', { date: '2026-10-22', title: 'ignored', body: 'ignored' });
+  assert.strictEqual(again.status, 200);
+  assert.deepStrictEqual({ created: again.json.created, id: again.json.note.id }, { created: false, id: day1.json.note.id }, 'asking again opens the same note');
+  assert.match(again.json.note.body, /Call Sam/, 'and does not overwrite it');
+
+  const day2 = await call('POST', '/api/notes/daily', { date: '2026-10-23', title: 'Daily note, Fri 23 Oct', body: '# Fri 23 Oct\n' });
+  assert.strictEqual(day2.status, 201);
+  assert.strictEqual(day2.json.carried, 2);
+  assert.strictEqual(day2.json.note.body, '# Fri 23 Oct\n\nCarried over from 2026-10-22:\n- [ ] Call Sam\n- [ ] Book flights\n');
+  assert.match((await call('GET', `/api/notes/${day1.json.note.id}`)).json.body, /Call Sam/, 'yesterday is left exactly as it was');
+
+  // two devices opening the same new day at once still make one note
+  const [x, y] = await Promise.all([1, 2].map(() => call('POST', '/api/notes/daily', { date: '2026-10-24', title: 'Daily note', body: 'x' })));
+  assert.strictEqual(x.json.note.id, y.json.note.id);
+  assert.strictEqual(Number((await pool.query("SELECT COUNT(*) FROM notes WHERE user_id=$1 AND daily_date='2026-10-24'", [userA])).rows[0].count), 1);
+
+  // bad input, and each person has their own days
+  assert.strictEqual((await call('POST', '/api/notes/daily', { date: '2026-02-30', title: 'x', body: '' })).status, 400);
+  assert.strictEqual((await call('POST', '/api/notes/daily', { date: '2026-10-23', title: 5, body: '' })).status, 400);
+  const other = await call('POST', '/api/notes/daily', { date: '2026-10-23', title: 'B day', body: 'b' }, 'B');
+  assert.strictEqual(other.json.created, true);
+  assert.notStrictEqual(other.json.note.id, day2.json.note.id);
+
+  // delete today's note, make it again, then restore the old one: it comes back as an ordinary note, not a second daily note
+  const del = await call('DELETE', `/api/notes/${day2.json.note.id}`);
+  const remade = await call('POST', '/api/notes/daily', { date: '2026-10-23', title: 'Daily note, Fri 23 Oct', body: '# new' });
+  assert.strictEqual(remade.json.created, true);
+  assert.notStrictEqual(remade.json.note.id, day2.json.note.id);
+  assert.strictEqual((await call('POST', `/api/recycle-bin/${del.json.binId}/restore`)).status, 200);
+  const old = (await call('GET', `/api/notes/${day2.json.note.id}`)).json;
+  assert.strictEqual(old.daily_date, null);
+  assert.strictEqual(Number((await pool.query("SELECT COUNT(*) FROM notes WHERE user_id=$1 AND daily_date='2026-10-23'", [userA])).rows[0].count), 1);
 });
 
 async function cleanup(userIds) {

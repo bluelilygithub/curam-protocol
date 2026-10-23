@@ -6,7 +6,7 @@ import { useIcon } from '../../providers/IconProvider';
  * entered; "Record a voice note" opens the recorder (the words, tidied up, become the note). On a phone it slides up from the bottom
  * like a sheet, on a bigger screen it is a centred card.
  */
-export default function NewNoteChooser({ onWrite, onVoice, onClose, mobile }) {
+export default function NewNoteChooser({ onWrite, onVoice, onTemplate, onClose, mobile }) {
   const getIcon = useIcon();
 
   useEffect(() => {
@@ -60,6 +60,7 @@ export default function NewNoteChooser({ onWrite, onVoice, onClose, mobile }) {
         </div>
         {option('pen-line', 'Write a note', 'Type it, or speak it as you go. You add the title on the next screen.', onWrite, true)}
         {option('mic', 'Record a voice note', 'Talk it through. Your words are written up into a note for you.', onVoice, false)}
+        {onTemplate && option('file-text', 'From a template', 'Meeting notes, a client call, a weekly review, or one of your own.', onTemplate, false)}
       </div>
     </div>
   );

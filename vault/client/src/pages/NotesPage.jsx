@@ -13,6 +13,9 @@ import InsertSourceModal from './notes/InsertSourceModal';
 import NoteAiPanel from './notes/NoteAiPanel';
 import NoteMarkdownView from './notes/NoteMarkdownView';
 import NoteTagsEditor from './notes/NoteTagsEditor';
+import TemplatePicker from './notes/TemplatePicker';
+import RecentlyDeletedModal from './notes/RecentlyDeletedModal';
+import { dailyPayload, templateToNote } from './notes/noteTemplates.mjs';
 import TagManager from './notes/TagManager';
 import { addTag } from './notes/noteTags.mjs';
 import { toggleTaskLine, taskCounts } from './notes/noteMarkdown.mjs';
@@ -65,6 +68,9 @@ export default function NotesPage() {
   const [mode, setModeState] = useState(readMode); // Write (the text box) or Preview (formatted)
   const [allTags, setAllTags] = useState([]); // [{ tag, count }] for the filter, the suggestions and Manage tags
   const [showTagManager, setShowTagManager] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [templates, setTemplates] = useState(null); // the person's own; null while loading
+  const [showBin, setShowBin] = useState(false);
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
   const [aiAction, setAiAction] = useState(null); // which AI action's panel is open
   const [aiBackup, setAiBackup] = useState(null); // { id, title, body } from just before an AI change, for Undo
@@ -204,7 +210,8 @@ export default function NotesPage() {
     }
     if (token !== selectToken.current) return;
     setTimeout(() => {
-      if (focusTitle) { titleRef.current?.focus(); titleRef.current?.select(); } else if (!viewportMobile) bodyRef.current?.focus();
+      if (focusTitle === 'end') { const el = titleRef.current; el?.focus(); el?.setSelectionRange(el.value.length, el.value.length); }
+      else if (focusTitle) { titleRef.current?.focus(); titleRef.current?.select(); } else if (!viewportMobile) bodyRef.current?.focus();
     }, 0);
   }, [runSave, dictation, viewportMobile]);
 
@@ -253,6 +260,111 @@ export default function NotesPage() {
     await createNote({ focusTitle: true });
   }
 
+  // ── Templates and the daily note ──────────────────────────────────────────
+  async function loadTemplates() {
+    try {
+      const res = await api.get('/api/notes/templates');
+      setTemplates(res.ok ? await res.json() : []);
+    } catch { setTemplates([]); }
+  }
+
+  function openTemplates() {
+    setShowNewChooser(false);
+    setTemplates(null);
+    setShowTemplates(true);
+    loadTemplates();
+  }
+
+  async function createFromTemplate(template) {
+    setShowTemplates(false);
+    runSave();
+    const spec = templateToNote(template);
+    try {
+      const res = await api.post('/api/notes', {
+        title: spec.title, body: spec.body,
+        project_id: list.projectId ? Number(list.projectId) : null, // like a new blank note: filed under what you are looking at
+        client_id: list.clientId ? Number(list.clientId) : null,
+      });
+      if (!res.ok) throw new Error('create failed');
+      const note = await res.json();
+      let tags = [];
+      if (spec.tags.length) {
+        const r2 = await api.put(`/api/notes/${note.id}/tags`, { tags: spec.tags });
+        if (r2.ok) tags = (await r2.json()).tags;
+        refreshTags();
+      }
+      const project = projects.find((p) => p.id === note.project_id);
+      const client = clients.find((c) => c.id === note.client_id);
+      const full = { ...note, project_name: project?.name || null, client_name: client?.name || null, tags };
+      patchNote(toRow(full));
+      setMode('write');
+      await selectNote(full, { focusTitle: /\s$/.test(spec.title) ? 'end' : false });
+    } catch {
+      addToast('The note could not be made from that template. Try again.', 'error');
+    }
+  }
+
+  // The open note becomes a template: its title, text and tags as they are now ({{date}} written in it is filled in each use).
+  async function saveAsTemplate(name) {
+    const open = selectedRef.current;
+    if (!open) return false;
+    try { await ensureSaved(); } catch { addToast('Save the note first, then try again.', 'error'); return false; }
+    try {
+      const res = await api.post('/api/notes/templates', { name, title: titleValueRef.current, body: bodyValueRef.current, tags: open.tags || [] });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { addToast(data.error || 'The template could not be saved.', 'error'); return false; }
+      setTemplates((prev) => [...(prev || []), data].sort((a, b) => a.name.localeCompare(b.name)));
+      addToast(`Template "${name}" saved ✓`, 'success');
+      return true;
+    } catch {
+      addToast('The template could not be saved. Try again.', 'error');
+      return false;
+    }
+  }
+
+  async function deleteTemplate(template) {
+    try {
+      const res = await api.delete(`/api/notes/templates/${template.id}`);
+      if (!res.ok) throw new Error('delete failed');
+      const { binId } = await res.json();
+      setTemplates((prev) => (prev || []).filter((t) => t.id !== template.id));
+      addToast(`Template "${template.name}" deleted. Kept 30 days.`, 'success', undefined, { label: 'Undo', onClick: () => undoDelete(binId, 'Template restored ✓', loadTemplates) });
+    } catch {
+      addToast('The template could not be deleted. Try again.', 'error');
+    }
+  }
+
+  // Today's note: opened if it exists, otherwise made for today with last time's unfinished to-dos carried over.
+  async function openDaily() {
+    runSave();
+    try {
+      const res = await api.post('/api/notes/daily', dailyPayload());
+      if (!res.ok) throw new Error('daily failed');
+      const { note, created, carried } = await res.json();
+      patchNote(toRow(note));
+      if (created) setMode('write');
+      await selectNote(note);
+      refreshTags();
+      if (carried) addToast(`Carried over ${carried} unfinished to-do${carried === 1 ? '' : 's'} from your last daily note.`, 'success');
+    } catch {
+      addToast("Today's note could not be opened. Try again.", 'error');
+    }
+  }
+
+  // Undo from a "deleted" toast, or any restore done outside the Recently deleted window.
+  async function undoDelete(binId, message = 'Note restored ✓', after) {
+    try {
+      const res = await api.post(`/api/recycle-bin/${binId}/restore`);
+      if (!res.ok) throw new Error('restore failed');
+      list.reload();
+      refreshTags();
+      after?.();
+      addToast(message, 'success');
+    } catch {
+      addToast('That could not be restored. Look in Recently deleted.', 'error');
+    }
+  }
+
   async function handleVoiceNote(note) {
     patchNote(toRow(note));
     selectNote(note);
@@ -263,10 +375,12 @@ export default function NotesPage() {
     try {
       const res = await api.delete(`/api/notes/${note.id}`);
       if (!res.ok && res.status !== 404) throw new Error('delete failed');
+      const { binId } = await res.json().catch(() => ({}));
       if (pending.current?.id === note.id) { pending.current = null; clearTimeout(timer.current); }
       removeNote(note.id);
       refreshTags();
       if (selectedRef.current?.id === note.id) closeNote();
+      if (binId) addToast('Note deleted. Kept 30 days in Recently deleted.', 'success', undefined, { label: 'Undo', onClick: () => undoDelete(binId) });
     } catch {
       addToast('The note could not be deleted. Try again.', 'error');
     }
@@ -573,6 +687,8 @@ export default function NotesPage() {
             convertedIds={convertedNoteIds}
             onSelect={(row) => selectNote(row)}
             onNew={() => setShowNewChooser(true)}
+            onToday={openDaily}
+            onBin={() => setShowBin(true)}
             onConvert={convertToTask}
             onDelete={deleteNote}
             onPin={togglePin}
@@ -899,8 +1015,15 @@ export default function NotesPage() {
         <input ref={keyboardRef} aria-hidden="true" tabIndex={-1} style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 1, opacity: 0, border: 0, padding: 0, fontSize: 16, pointerEvents: 'none' }} />
       )}
       {showNewChooser && (
-        <NewNoteChooser mobile={viewportMobile} onClose={() => setShowNewChooser(false)} onWrite={startWrittenNote} onVoice={() => { setShowNewChooser(false); setShowRecorder(true); }} />
+        <NewNoteChooser mobile={viewportMobile} onClose={() => setShowNewChooser(false)} onWrite={startWrittenNote} onVoice={() => { setShowNewChooser(false); setShowRecorder(true); }} onTemplate={openTemplates} />
       )}
+      {showTemplates && (
+        <TemplatePicker
+          templates={templates} mobile={viewportMobile} canSave={!!selected}
+          onUse={createFromTemplate} onSave={saveAsTemplate} onDelete={deleteTemplate} onClose={() => setShowTemplates(false)}
+        />
+      )}
+      {showBin && <RecentlyDeletedModal mobile={viewportMobile} onRestored={() => { list.reload(); refreshTags(); }} onClose={() => setShowBin(false)} />}
       <NotesTutorChat currentTool="" onOpenTool={openGuideTool} />
     </div>
   );

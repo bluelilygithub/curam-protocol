@@ -162,6 +162,7 @@ app.use('/api/task-templates', require('./routes/taskTemplates'));
 app.use('/api/goals', requireFeature('goals'), require('./routes/goals'));
 app.use('/api/mission', requireFeature('goals'), require('./routes/mission'));
 app.use('/api/notes', require('./routes/notes'));
+app.use('/api/recycle-bin', require('./routes/recycleBin')); // the shared 30-day bin: any tool can use it, see docs/recycle-bin.md
 app.use('/api/notes-tutor', aiLimiter, require('./routes/notesTutor')); // the Notes guide chat (reads no notes)
 app.use('/api/session-files', require('./routes/sessionFiles'));
 app.use('/api/bookmarks', require('./routes/bookmarks'));
@@ -275,6 +276,7 @@ const { startRecurringCron }        = require('./cron/recurringCron');
 const { startExpenseReviewCron }    = require('./cron/expenseReviewCron');
 const { startWeeklyDigestCron }     = require('./cron/weeklyDigestCron');
 const { startFitnessCron, startFitnessTasksSync } = require('./cron/fitnessCron');
+const { startRecycleBinPurge } = require('./cron/recycleBinCron');
 
 // Poll until schema is ready, then seed and start listening
 async function start() {
@@ -295,6 +297,7 @@ async function start() {
   runStartupChecks().catch(err => console.warn('[startup] suggestion checks:', err.message));
 
   startFitnessTasksSync(); // sends nothing, so it runs on staging too
+  startRecycleBinPurge(); // removes bin items older than 30 days; sends nothing, so it runs everywhere
 
   if (runtimeConfig.disableExternalCron) {
     console.log('[runtime] External cron jobs disabled by DISABLE_EXTERNAL_CRON');

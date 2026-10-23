@@ -14,6 +14,20 @@ const { transcribeAudioWithGemini, isGeminiTranscribeAvailable } = require('../s
 const { buildVoiceNote } = require('../services/voiceNote');
 const noteAi = require('../services/noteAi'); // called as noteAi.runNoteAction so tests can swap it
 const { normalizeTag, normalizeTags } = require('../services/noteTags');
+const noteDaily = require('../services/noteDaily');
+const bin = require('../services/recycleBin'); // deleted notes and templates wait here for 30 days
+bin.loadAdapters();
+
+const MAX_TEMPLATES = 50;
+const MAX_TEMPLATE_BODY = 20000;
+
+// One note in full: its text, project and client names, tags, and daily_date as plain text (a DATE would arrive as a JS Date).
+const FULL_NOTE_SQL = `SELECT n.*, n.daily_date::text AS daily_date, p.name AS project_name, c.name AS client_name,
+       COALESCE((SELECT array_agg(nt.tag ORDER BY nt.tag) FROM note_tags nt WHERE nt.note_id = n.id), '{}') AS tags
+  FROM notes n
+  LEFT JOIN projects p ON p.id = n.project_id AND p."userId" = n.user_id
+  LEFT JOIN clients  c ON c.id = n.client_id AND c."userId" = n.user_id
+ WHERE n.id=$1 AND n.user_id=$2`;
 
 // A recording is held in memory only while it is turned into text; it is never written anywhere that outlives the request.
 const MAX_RECORDING_BYTES = 60 * 1024 * 1024;
@@ -142,6 +156,143 @@ router.delete('/tags/:tag', async (req, res) => {
   }
 });
 
+// ── Templates: the person's own (the built-in ones are in the browser) ───────────────────────────────────────────────────────────────
+// Named routes: before /:id.
+
+// Validate and tidy template fields. `partial` lets PUT leave a field out. Returns { error } or { value }.
+function cleanTemplate(input, { partial = false } = {}) {
+  const out = {};
+  const b = input || {};
+  if (!partial || b.name !== undefined) {
+    if (typeof b.name !== 'string' || !b.name.trim()) return { error: 'Give the template a name.' };
+    out.name = b.name.trim().slice(0, 60);
+  }
+  for (const [key, max] of [['title', 200], ['body', MAX_TEMPLATE_BODY]]) {
+    if (!partial || b[key] !== undefined) {
+      if (b[key] !== undefined && typeof b[key] !== 'string') return { error: `${key} must be text` };
+      out[key] = String(b[key] ?? '').slice(0, max);
+    }
+  }
+  if (!partial || b.tags !== undefined) {
+    const tags = b.tags === undefined ? [] : normalizeTags(b.tags);
+    if (!tags) return { error: 'tags must be a list' };
+    out.tags = tags;
+  }
+  return { value: out };
+}
+
+// GET /api/notes/templates
+router.get('/templates', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT id, name, title, body, tags FROM note_templates WHERE user_id=$1 ORDER BY lower(name), id', [req.user.id]);
+    res.json(rows);
+  } catch (err) {
+    getLogger().error({ err }, '[notes templates]');
+    res.status(500).json({ error: 'Could not load your templates. Try again.' });
+  }
+});
+
+// POST /api/notes/templates  { name, title?, body?, tags? }
+router.post('/templates', async (req, res) => {
+  const { error, value } = cleanTemplate(req.body);
+  if (error) return res.status(400).json({ error });
+  try {
+    const count = Number((await pool.query('SELECT COUNT(*) FROM note_templates WHERE user_id=$1', [req.user.id])).rows[0].count);
+    if (count >= MAX_TEMPLATES) return res.status(400).json({ error: `You can keep up to ${MAX_TEMPLATES} templates. Delete one first.` });
+    const { rows } = await pool.query(
+      'INSERT INTO note_templates (user_id, name, title, body, tags) VALUES ($1,$2,$3,$4,$5::text[]) RETURNING id, name, title, body, tags',
+      [req.user.id, value.name, value.title, value.body, value.tags]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    getLogger().error({ err }, '[notes template create]');
+    res.status(500).json({ error: 'Could not save the template. Try again.' });
+  }
+});
+
+// PUT /api/notes/templates/:id  — change any of name, title, body, tags
+router.put('/templates/:id', async (req, res) => {
+  const { error, value } = cleanTemplate(req.body, { partial: true });
+  if (error) return res.status(400).json({ error });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE note_templates SET name = COALESCE($3, name), title = COALESCE($4, title), body = COALESCE($5, body),
+              tags = COALESCE($6::text[], tags), updated_at = NOW()
+        WHERE id=$1 AND user_id=$2 RETURNING id, name, title, body, tags`,
+      [Number(req.params.id) || 0, req.user.id, value.name ?? null, value.title ?? null, value.body ?? null, value.tags ?? null]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    getLogger().error({ err }, '[notes template update]');
+    res.status(500).json({ error: 'Could not save the template. Try again.' });
+  }
+});
+
+// DELETE /api/notes/templates/:id  — to the recycle bin (30 days), not gone for good
+router.delete('/templates/:id', async (req, res) => {
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const { rows } = await db.query('SELECT * FROM note_templates WHERE id=$1 AND user_id=$2 FOR UPDATE', [Number(req.params.id) || 0, req.user.id]);
+    if (!rows[0]) { await db.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
+    const t = rows[0];
+    const binId = await bin.moveToBin(db, { userId: req.user.id, type: 'note-template', id: t.id, title: t.name, detail: t.title || null, payload: { template: t } });
+    await db.query('DELETE FROM note_templates WHERE id=$1', [t.id]);
+    await db.query('COMMIT');
+    res.json({ ok: true, binId, retentionDays: bin.RETENTION_DAYS });
+  } catch (err) {
+    await db.query('ROLLBACK').catch(() => {});
+    getLogger().error({ err }, '[notes template delete]');
+    res.status(500).json({ error: 'Could not delete the template. Try again.' });
+  } finally {
+    db.release();
+  }
+});
+
+// POST /api/notes/daily  { date: 'YYYY-MM-DD' (the person's own day), title, body (the template, already filled in) }
+// Today's note: the existing one if there is one, otherwise a new one made from `body` with the unfinished to-dos from the most
+// recent earlier daily note carried over (that note is not changed). One per person per day, even if two devices ask at once.
+router.post('/daily', async (req, res) => {
+  const date = noteDaily.validDay(req.body?.date);
+  const title = req.body?.title;
+  const body = req.body?.body ?? '';
+  if (!date) return res.status(400).json({ error: 'date must be a real day, like 2026-10-23' });
+  if (typeof title !== 'string' || typeof body !== 'string' || body.length > MAX_TEMPLATE_BODY) return res.status(400).json({ error: 'title and body must be text' });
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    await db.query('SELECT pg_advisory_xact_lock($1, $2)', [req.user.id, Number(date.replace(/-/g, ''))]);
+    let id;
+    let created = false;
+    let carried = 0;
+    const found = await db.query('SELECT id FROM notes WHERE user_id=$1 AND daily_date=$2::date', [req.user.id, date]);
+    if (found.rows[0]) {
+      id = found.rows[0].id;
+    } else {
+      const prev = (await db.query('SELECT daily_date::text AS day, body FROM notes WHERE user_id=$1 AND daily_date < $2::date ORDER BY daily_date DESC LIMIT 1', [req.user.id, date])).rows[0];
+      const carry = prev ? noteDaily.extractOpenTodos(prev.body) : [];
+      carried = carry.length;
+      const ins = await db.query(
+        'INSERT INTO notes (user_id, title, body, daily_date) VALUES ($1, $2, $3, $4::date) RETURNING id',
+        [req.user.id, title.trim().slice(0, 200) || 'Daily note', noteDaily.composeDailyBody(body, carry, prev?.day), date]
+      );
+      id = ins.rows[0].id;
+      await db.query("INSERT INTO note_tags (note_id, user_id, tag) VALUES ($1, $2, 'daily') ON CONFLICT DO NOTHING", [id, req.user.id]);
+      created = true;
+    }
+    await db.query('COMMIT');
+    const note = (await pool.query(FULL_NOTE_SQL, [id, req.user.id])).rows[0];
+    res.status(created ? 201 : 200).json({ note, created, carried });
+  } catch (err) {
+    await db.query('ROLLBACK').catch(() => {});
+    getLogger().error({ err }, '[notes daily]');
+    res.status(500).json({ error: 'Could not open today\'s note. Try again.' });
+  } finally {
+    db.release();
+  }
+});
+
 // POST /api/notes/voice  (multipart: audio, optional tidy = 'false' to keep the words exactly as spoken)
 // A recording in, a note out. The audio is turned into text and then discarded; only the text is kept. Named route: before /:id.
 router.post('/voice', aiLimiter, upload.single('audio'), ffmpegRoute('voice-note', async (req, res) => {
@@ -192,7 +343,7 @@ router.post('/voice', aiLimiter, upload.single('audio'), ffmpegRoute('voice-note
 router.get('/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT n.*, p.name AS project_name, c.name AS client_name,
+      `SELECT n.*, n.daily_date::text AS daily_date, p.name AS project_name, c.name AS client_name,
               COALESCE((SELECT array_agg(nt.tag ORDER BY nt.tag) FROM note_tags nt WHERE nt.note_id = n.id), '{}') AS tags
          FROM notes n
          LEFT JOIN projects p ON p.id = n.project_id AND p."userId" = n.user_id
@@ -338,18 +489,33 @@ router.post('/:id/ai', aiLimiter, async (req, res) => {
   }
 });
 
-// DELETE /api/notes/:id
+// DELETE /api/notes/:id  — to the recycle bin: restorable for 30 days (Settings -> Recycle bin, or Notes -> Recently deleted)
 router.delete('/:id', async (req, res) => {
+  const db = await pool.connect();
   try {
-    const result = await pool.query(
-      'DELETE FROM notes WHERE id=$1 AND user_id=$2',
-      [req.params.id, req.user.id]
+    await db.query('BEGIN');
+    const { rows } = await db.query(
+      `SELECT id, title, body, project_id, client_id, source, pinned_at, created_at, updated_at, daily_date::text AS daily_date
+         FROM notes WHERE id=$1 AND user_id=$2 FOR UPDATE`,
+      [Number(req.params.id) || 0, req.user.id]
     );
-    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
-    res.json({ ok: true });
+    if (!rows[0]) { await db.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
+    const note = rows[0];
+    const tags = (await db.query('SELECT tag FROM note_tags WHERE note_id=$1 ORDER BY tag', [note.id])).rows.map((r) => r.tag);
+    const binId = await bin.moveToBin(db, {
+      userId: req.user.id, type: 'note', id: note.id, title: note.title,
+      detail: String(note.body || '').replace(/\s+/g, ' ').trim().slice(0, 200) || null,
+      payload: { note, tags },
+    });
+    await db.query('DELETE FROM notes WHERE id=$1 AND user_id=$2', [note.id, req.user.id]);
+    await db.query('COMMIT');
+    res.json({ ok: true, binId, retentionDays: bin.RETENTION_DAYS });
   } catch (err) {
+    await db.query('ROLLBACK').catch(() => {});
     getLogger().error({ err }, '[notes delete]');
     res.status(500).json({ error: 'Could not delete the note. Try again.' });
+  } finally {
+    db.release();
   }
 });
 

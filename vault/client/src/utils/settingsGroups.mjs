@@ -7,6 +7,7 @@ export const SETTINGS_GROUPS = [
     { id: 'Appearance', tip: 'Theme, font, icons and how Vault looks for you.' },
     { id: 'Profile', tip: 'Your name, details and password.' },
     { id: 'Tasks', tip: 'How your tasks behave.' },
+    { id: 'Recycle bin', tip: 'Things you deleted in the last 30 days, ready to put back.' },
     { id: 'Goals', tip: 'Goals and reviews.', admin: true },
     { id: 'Tours', tip: 'Replay the guided tours of each part of Vault.', admin: true },
   ] },

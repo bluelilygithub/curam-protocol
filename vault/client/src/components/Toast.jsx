@@ -46,7 +46,7 @@ export default function Toast() {
             <>
               {' '}
               <span
-                onClick={(e) => { e.stopPropagation(); removeToast(t.id); navigate(t.action.href); }}
+                onClick={(e) => { e.stopPropagation(); removeToast(t.id); if (t.action.onClick) t.action.onClick(); else navigate(t.action.href); }}
                 style={{ textDecoration: 'underline', fontWeight: 700 }}
               >
                 {t.action.label}

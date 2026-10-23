@@ -27,6 +27,15 @@ const CATALOG = [
   { id: 'tags', label: 'Tags', group: 'Editor',
     does: 'Under the title of an open note, below the project and client, is the tags row. Type a word and press Enter or a comma to add a tag, and tap the x on a tag to remove it. Tags you already use are offered as you type. A note can have up to 20 tags of up to 30 characters, and capital letters do not matter (Budget and budget are the same tag). In the list a note shows its first three tags. The filter button has a Tags section: pick tags to see only notes that have all of them, and use Manage tags there to rename a tag everywhere (naming it after an existing tag joins the two) or take it off every note. Group by Tag lists a note under each of its tags, with Untagged at the bottom. The AI button has Suggest tags, which proposes a few and reuses the tags you already have.',
     notes: 'Tagging is filing: it does not change the edited date of a note. Taking a tag off every note never deletes a note. Tags are private to the person who made them. Search also finds notes by their tags.' },
+  { id: 'templates', label: 'Templates', group: 'Notes list',
+    does: 'The + button, then From a template, opens the template list. The built-in templates are Meeting notes, Client call, Weekly review, Project kick-off, Idea and To-do list. Choosing one makes a new note with its headings, tick-boxes and tags, with dates such as the day filled in. Your own templates are listed above the built-in ones. To make one, open a note you like, press + then From a template, type a name at the bottom and press Save: it keeps the title, the text and the tags. A template of your own has a bin button; deleting it sends it to Recently deleted for 30 days.',
+    notes: 'You can keep up to 50 of your own. A template is only a starting point: changing or deleting it never changes notes already made from it.' },
+  { id: 'daily-note', label: 'Daily note', group: 'Notes list',
+    does: 'The calendar-tick button at the top of the notes list opens the note for the day, and makes it if there is not one yet, titled with the date. A new daily note starts with a heading and three empty to-dos, and any to-dos left unticked in your most recent earlier daily note are copied in under Carried over. Daily notes are tagged daily, so the Tags filter finds them all. Pressing the button again the same day opens the same note.',
+    notes: 'There is only one daily note for each day, and the earlier note is not changed when its to-dos are carried over. If you delete the note for the day and press the button again, you get a fresh one.' },
+  { id: 'recently-deleted', label: 'Recently deleted', group: 'Notes list',
+    does: 'The bin button at the top of the notes list opens Recently deleted: the notes and templates you deleted in the last 30 days. Restore puts one back as it was, with its text, tags, pin and dates. Delete for good removes it straight away, and Empty recycle bin clears the lot. Right after you delete a note, the message that appears has an Undo. The same recycle bin, including items from other tools, is in Settings under Recycle bin.',
+    notes: 'After 30 days an item is removed for good. A restored note whose project or client was deleted in the meantime comes back without it.' },
   { id: 'pin-note', label: 'Pin a note', group: 'Notes list',
     does: 'The pin button keeps a note at the top of the list in its own Pinned section, above every other group. In the list it shows when you hover a note (on a phone, tap the ⋯ button beside the note and choose Pin); in an open note it is the pin button in the toolbar. Press it again to unpin. Pinned notes show a small pin.',
     notes: 'Pinning does not change the note or its edited date. Search and filters still apply, so a pinned note that does not match them is not shown.' },
@@ -47,7 +56,7 @@ const CATALOG = [
   { id: 'open-as-chat', label: 'Open as chat', group: 'Editor',
     does: 'The chat button in the editor toolbar sends the note\'s text to a chat as the first message to edit and send. Choose an existing project, make a new project, or use a general chat.', notes: 'It copies the note into the chat; the note stays as it is.' },
   { id: 'delete', label: 'Delete', group: 'Notes list',
-    does: 'The bin button deletes the note: in the list when you hover a note (on a phone, tap the ⋯ button beside it), and in the toolbar of an open note. It asks "Delete?" first, and nothing is deleted until you press Yes.', notes: 'Deleting is permanent: there is no bin to restore from.' },
+    does: 'The bin button deletes the note: in the list when you hover a note (on a phone, tap the ⋯ button beside it), and in the toolbar of an open note. It asks "Delete?" first, and nothing is deleted until you press Yes. The note then waits 30 days in Recently deleted.', notes: 'You can restore a deleted note for 30 days from Recently deleted, or press Undo in the message straight after.' },
 ];
 
 const RULES = [
@@ -59,6 +68,7 @@ const RULES = [
   'The two ways to use the microphone: Record a voice note (from the + choice) records and writes up a whole recording into a new note; Dictate (in an open note) types live into that note.',
   'The Open buttons in this chat only open things for you: New note opens the Write-or-Record choice, New voice note opens the recorder window (it does not start recording), and Search notes puts the cursor in the search box. They never create, change or delete a note by themselves.',
   'Typing @ in a note opens a menu of things to pull in: projects, open tasks, saved prompts, and searching the web, Gmail and Calendar.',
+  'Deleted notes and templates stay in Recently deleted for 30 days and can be restored, then they are removed for good.',
   'Pinned notes sit in a Pinned section at the top of the list. The AI actions (Summarise, Pull out to-dos, Tidy up, Suggest tags, Suggest a title) only propose: the person chooses what to use, and nothing is changed or created before that.',
 ];
 
@@ -69,7 +79,7 @@ const NOT_POSSIBLE = [
   'Formatting buttons (a toolbar for bold or headings), images, files or attachments on a note. Formatting is typed as markdown symbols and shown in Preview.',
   'Folders, or sharing a note with another person. A note can only be filed under one project and one client (it can have many tags), and is private to the person who wrote it.',
   'Reminders or due dates on a note. A note can be converted to a task, and tasks have the dates.',
-  'Restoring a deleted note, or an edit history to go back to.',
+  'An edit history to go back to. A deleted note can be restored for 30 days, but changes made inside a note cannot be undone step by step afterwards.',
   'Being a legal or evidential record of a conversation: there is no consent step, speaker identification or audit trail. It is a private tool for dictating plans and ideas.',
 ];
 

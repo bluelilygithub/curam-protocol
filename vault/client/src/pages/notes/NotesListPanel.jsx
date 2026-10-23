@@ -18,7 +18,7 @@ const fmtShort = (value) => {
  */
 export default function NotesListPanel({
   list, projects, clients, onNeedClients, selectedId, mobile, moodMap, convertedIds,
-  onSelect, onNew, onConvert, onDelete, onPin, allTags, onManageTags, searchRef, bottomPad,
+  onSelect, onNew, onToday, onBin, onConvert, onDelete, onPin, allTags, onManageTags, searchRef, bottomPad,
 }) {
   const getIcon = useIcon();
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -109,7 +109,7 @@ export default function NotesListPanel({
           <div className="flex flex-wrap items-center gap-2 px-3 pb-2" style={{ paddingTop: 2 }}>
             {confirming ? (
               <>
-                <span className="text-xs" style={{ color: 'var(--color-text)' }}>Delete this note for good?</span>
+                <span className="text-xs" style={{ color: 'var(--color-text)' }}>Delete this note? You can restore it for 30 days.</span>
                 <button type="button" onClick={() => { setConfirmId(null); setMenuId(null); onDelete(note); }} className="text-xs font-medium px-3 rounded-lg hover:opacity-80 transition-opacity duration-200" style={{ background: '#ef4444', color: '#fff', minHeight: mobile ? 36 : 26 }}>Yes</button>
                 <button type="button" onClick={() => setConfirmId(null)} className="text-xs px-3 rounded-lg hover:opacity-70 transition-opacity duration-200" style={{ ...chip(false) }}>No</button>
               </>
@@ -133,12 +133,26 @@ export default function NotesListPanel({
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b flex-shrink-0" style={border}>
         <span className={`${mobile ? 'text-lg' : 'text-sm'} font-semibold`} style={{ color: 'var(--color-text)' }}>Notes</span>
+        <div className="flex items-center gap-1">
+        <button
+          type="button" onClick={onToday}
+          className="flex items-center justify-center gap-1 rounded-lg hover:opacity-70 transition-opacity duration-200"
+          style={{ color: 'var(--color-primary)', minWidth: mobile ? 44 : 26, minHeight: mobile ? 44 : 26, fontSize: 12 }}
+          title="Open today's note (made for you if there isn't one yet)" aria-label="Today's note"
+        >{getIcon('calendar-check', { size: mobile ? 20 : 15 })}</button>
+        <button
+          type="button" onClick={onBin}
+          className="flex items-center justify-center rounded-lg hover:opacity-70 transition-opacity duration-200"
+          style={{ color: 'var(--color-muted)', minWidth: mobile ? 44 : 26, minHeight: mobile ? 44 : 26 }}
+          title="Recently deleted: notes and templates you can still restore" aria-label="Recently deleted"
+        >{getIcon('trash', { size: mobile ? 19 : 14 })}</button>
         <button
           type="button" onClick={onNew}
           className={mobile ? 'flex items-center justify-center gap-1.5 text-sm font-medium px-4 rounded-lg hover:opacity-80 transition-opacity duration-200' : 'w-6 h-6 flex items-center justify-center rounded hover:opacity-60 transition-opacity duration-200'}
           style={mobile ? { minHeight: 44, background: 'var(--color-primary)', color: '#fff' } : { color: 'var(--color-primary)' }}
           title="New note: write one or record your voice" aria-label="New note"
         >{getIcon('plus', { size: mobile ? 18 : 16 })}{mobile && ' New'}</button>
+        </div>
       </div>
 
       {/* Search + view controls */}

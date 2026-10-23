@@ -37,6 +37,7 @@ import SettingsNav from '../components/SettingsNav';
 import { visibleGroups, allowedTabIds } from '../utils/settingsGroups.mjs';
 import UsersAdminPanel from '../components/UsersAdminPanel';
 import AccountantAccessPanel from '../components/AccountantAccessPanel';
+import RecycleBinPanel from '../components/RecycleBinPanel';
 import NavLayoutEditor from '../components/settings/NavLayoutEditor';
 import { DEFAULT_TILES, DEFAULT_NAV_ITEMS, mergeWithDefaults } from '../utils/mobileConfig';
 import { DEFAULT_FEATURE_ACCESS, FEATURE_ACCESS_GROUPS } from '../utils/featureAccess';
@@ -2195,6 +2196,14 @@ function SettingsPage() {
         >
           {inquirySaved ? 'Saved ✓' : 'Save'}
         </button>
+      </section>
+      )}
+
+      {/* Recycle bin tab: the shared 30-day bin for every tool that uses it (docs/recycle-bin.md) */}
+      {tab === 'Recycle bin' && (
+      <section>
+        <h2 className="text-base font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Recycle bin</h2>
+        <RecycleBinPanel />
       </section>
       )}
 

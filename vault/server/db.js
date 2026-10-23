@@ -795,6 +795,40 @@ async function initSchema() {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_note_tags_user_tag ON note_tags(user_id, tag)`);
 
+    // Note templates (the person's own; the built-in ones live in the browser) and the daily note: one note per calendar day.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS note_templates (
+        id         SERIAL PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name       TEXT NOT NULL,
+        title      TEXT NOT NULL DEFAULT '',
+        body       TEXT NOT NULL DEFAULT '',
+        tags       TEXT[] NOT NULL DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_note_templates_user ON note_templates(user_id)`);
+    await client.query(`ALTER TABLE notes ADD COLUMN IF NOT EXISTS daily_date DATE DEFAULT NULL`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_user_daily ON notes(user_id, daily_date) WHERE daily_date IS NOT NULL`);
+
+    // The shared recycle bin (server/services/recycleBin, docs/recycle-bin.md). A snapshot of whatever a tool deleted, kept 30 days.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS recycle_bin (
+        id           SERIAL PRIMARY KEY,
+        "userId"     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "entityType" TEXT NOT NULL,
+        "entityId"   TEXT NOT NULL,
+        title        TEXT NOT NULL DEFAULT '',
+        detail       TEXT,
+        payload      JSONB NOT NULL,
+        "deletedAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "expiresAt"  TIMESTAMPTZ NOT NULL
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_recycle_bin_user ON recycle_bin("userId", "deletedAt" DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_recycle_bin_expires ON recycle_bin("expiresAt")`);
+
     // ── Full-text search placeholder ──────────────────────────────────────────
     // The SQLite FTS5 virtual table is replaced with a plain table for now.
     // Phase 5 adds GIN indexes and converts queries to tsvector / plainto_tsquery.

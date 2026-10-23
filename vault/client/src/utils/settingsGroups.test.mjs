@@ -6,15 +6,15 @@ let passed = 0;
 const t = (name, fn) => { try { fn(); passed++; } catch (e) { console.error(`FAIL  ${name}\n   ${e.message}`); process.exitCode = 1; } };
 
 // the sections the page had before the menu was grouped: none may go missing, none may be added by accident
-const ORIGINAL_ADMIN = ['Appearance', 'Profile', 'AI & Chat', 'Translation', 'Tasks', 'Goals', 'Integrations', 'Shares', 'Amazon Search', 'Mobile', 'Navigation', 'Members', 'Feature Access', 'Wellbeing Invites', 'Content Restrictions', 'Tool Maintenance', 'Environment', 'Tours'];
+const ORIGINAL_ADMIN = ['Appearance', 'Profile', 'AI & Chat', 'Translation', 'Tasks', 'Goals', 'Integrations', 'Shares', 'Amazon Search', 'Mobile', 'Navigation', 'Members', 'Feature Access', 'Wellbeing Invites', 'Content Restrictions', 'Tool Maintenance', 'Environment', 'Tours', 'Recycle bin'];
 
-t('an admin sees exactly the original eighteen sections, once each', () => {
+t('an admin sees exactly the original sections plus the Recycle bin, once each', () => {
   const ids = allowedTabIds(true);
   assert.deepEqual([...ids].sort(), [...ORIGINAL_ADMIN].sort());
   assert.equal(new Set(ids).size, ids.length);
 });
-t('a member sees only Appearance, Profile and Tasks, under one group', () => {
-  assert.deepEqual(allowedTabIds(false), ['Appearance', 'Profile', 'Tasks']);
+t('a member sees only Appearance, Profile, Tasks and the Recycle bin, under one group', () => {
+  assert.deepEqual(allowedTabIds(false), ['Appearance', 'Profile', 'Tasks', 'Recycle bin']);
   assert.equal(visibleGroups(false).length, 1);
 });
 t('members never see an admin-only group', () => {

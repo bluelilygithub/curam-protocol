@@ -4,7 +4,7 @@ let _id = 0;
 
 const useToastStore = create((set) => ({
   toasts: [],
-  // `action` (optional): { label, href } — renders a clickable link inside
+  // `action` (optional): { label, href } or { label, onClick } (e.g. Undo) — renders a clickable link inside
   // the toast (e.g. "Log outcome in CRM" -> that client's Activity box).
   // Longer duration when an action is present so there's time to click it.
   addToast: (message, type = 'success', duration, action) => {
