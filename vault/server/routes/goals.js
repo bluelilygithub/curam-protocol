@@ -7,6 +7,8 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { callModel } = require('../services/callModel');
 const { getModelsForUser } = require('../services/modelResolver');
 const { logUsage } = require('../utils/logUsage');
+const bin = require('../services/recycleBin');
+const { snapshotObjective } = require('../services/recycleBin/adapters/tasks');
 
 const anthropic = new Anthropic();
 
@@ -499,16 +501,26 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/goals/:id — delete objective
 router.delete('/:id', async (req, res) => {
   try {
-    const { rows: existing } = await pool.query('SELECT * FROM objectives WHERE id = $1 AND "userId"=$2', [req.params.id, req.user.id]);
-    if (!existing[0]) return res.status(404).json({ error: 'Objective not found' });
-    const obj = existing[0];
-    // Unlink tasks from KRs belonging to this objective
-    const { rows: krs } = await pool.query('SELECT id FROM key_results WHERE "objectiveId" = $1', [obj.id]);
-    for (const kr of krs) {
-      await pool.query('UPDATE tasks SET "keyResultId" = NULL WHERE "keyResultId" = $1', [kr.id]);
+    const db = await pool.connect();
+    try {
+      await db.query('BEGIN');
+      // To the shared recycle bin (30 days): the goal, its key results and which tasks were linked to them.
+      const snap = await snapshotObjective(db, req.user.id, Number(req.params.id) || 0);
+      if (!snap) { await db.query('ROLLBACK'); return res.status(404).json({ error: 'Objective not found' }); }
+      const obj = snap.payload.objective;
+      const binId = await bin.moveToBin(db, { userId: req.user.id, type: 'goal', id: obj.id, title: snap.title, detail: snap.detail, payload: snap.payload });
+      // Unlink tasks from KRs belonging to this objective
+      const krIds = snap.payload.keyResults.map(k => k.id);
+      if (krIds.length) await db.query('UPDATE tasks SET "keyResultId" = NULL WHERE "keyResultId" = ANY($1::int[])', [krIds]);
+      await db.query('DELETE FROM objectives WHERE id = $1', [obj.id]);
+      await db.query('COMMIT');
+      res.json({ ok: true, binId, retentionDays: bin.RETENTION_DAYS });
+    } catch (err) {
+      await db.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      db.release();
     }
-    await pool.query('DELETE FROM objectives WHERE id = $1', [obj.id]);
-    res.json({ ok: true });
   } catch (err) {
     console.error('[goals DELETE /:id]', err);
     res.status(500).json({ error: err.message });

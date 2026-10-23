@@ -9,6 +9,8 @@ const { getModelsForUser } = require('../services/modelResolver');
 const { logUsage } = require('../utils/logUsage');
 const crypto = require('crypto');
 const { ownedTaskIds, ownsTask } = require('../utils/ownership');
+const bin = require('../services/recycleBin');
+const { snapshotTask } = require('../services/recycleBin/adapters/tasks');
 
 // Ownership. Every route that addresses a task, a subtask, a comment or a dependency by id works only on
 // the caller's own tasks. A task is theirs if it, or the task it is a subtask of, carries their user id
@@ -225,29 +227,28 @@ router.delete('/bulk', async (req, res) => {
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids array required' });
     // Only the caller's own tasks are touched; ids that are not theirs are skipped, as if they did not exist.
     const mine = await ownedTaskIds(req.user.id, ids);
-    // Attachments have no FK to tasks (same reasoning as touchpoints — see
-    // server/utils/attachments.js) so both this task's and its subtasks'
-    // attachments must be cleaned up explicitly before the rows go.
-    const { rows: subtaskRows } = await pool.query(
-      `SELECT id FROM tasks WHERE "parentTaskId" = ANY($1::int[])`, [mine]
-    );
-    await deleteAttachmentsForEntityIds('task', [...mine, ...subtaskRows.map(r => r.id)]);
-
+    // Each task goes to the shared recycle bin (30 days) with its subtasks, tags, comments and files, one bin item per task.
+    // A subtask picked along with its parent travels inside the parent's item, not as a second one.
     const client = await pool.connect();
+    const binIds = [];
     try {
       await client.query('BEGIN');
-      for (const id of mine) {
-        await client.query('DELETE FROM tasks WHERE "parentTaskId"=$1', [id]);
-        await client.query('DELETE FROM tasks WHERE id=$1', [id]);
+      const { rows: parents } = await client.query('SELECT id, "parentTaskId" FROM tasks WHERE id = ANY($1::int[])', [mine]);
+      const picked = new Set(parents.map(p => p.id));
+      for (const id of parents.filter(p => !picked.has(p.parentTaskId)).map(p => p.id)) {
+        const snap = await snapshotTask(client, req.user.id, id);
+        if (!snap) continue;
+        binIds.push(await bin.moveToBin(client, { userId: req.user.id, type: 'task', id, title: snap.title, detail: snap.detail, payload: snap.payload }));
+        await client.query('DELETE FROM tasks WHERE id=$1 AND "userId"=$2', [id, req.user.id]); // its subtasks go with it (ON DELETE CASCADE)
       }
       await client.query('COMMIT');
     } catch (e) {
-      await client.query('ROLLBACK');
+      await client.query('ROLLBACK').catch(() => {});
       throw e;
     } finally {
       client.release();
     }
-    res.json({ ok: true, deleted: mine.length });
+    res.json({ ok: true, deleted: mine.length, binIds, retentionDays: bin.RETENTION_DAYS });
   } catch (err) {
     console.error('[tasks bulk delete]', err);
     res.status(500).json({ error: err.message });
@@ -865,40 +866,41 @@ router.put('/:id', async (req, res) => {
 
 // DELETE /api/tasks/:id
 router.delete('/:id', async (req, res) => {
+  const client = await pool.connect();
+  const siblingIds = [];
   try {
-    const idsToClean = [Number(req.params.id)];
+    await client.query('BEGIN');
+    // The task, its subtasks, tags, comments and files go to the shared recycle bin (30 days), so Undo can bring them back.
+    const snap = await snapshotTask(client, req.user.id, Number(req.params.id) || 0);
+    if (!snap) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Task not found' }); }
+    const binId = await bin.moveToBin(client, { userId: req.user.id, type: 'task', id: snap.payload.task.id, title: snap.title, detail: snap.detail, payload: snap.payload });
 
-    if (req.query.stopSeries === 'true') {
-      // Find the recurrenceGroupId for this task, then delete all non-done tasks in the series
-      const { rows } = await pool.query('SELECT "recurrenceGroupId" FROM tasks WHERE id=$1', [req.params.id]);
-      const groupId = rows[0]?.recurrenceGroupId;
-      if (groupId) {
-        // Get all non-done sibling task IDs (excluding the task itself) to delete their subtasks first
-        const { rows: siblings } = await pool.query(
-          'SELECT id FROM tasks WHERE "recurrenceGroupId"=$1 AND status!=\'done\' AND id!=$2',
-          [groupId, req.params.id]
-        );
-        for (const s of siblings) {
-          const { rows: subs } = await pool.query('SELECT id FROM tasks WHERE "parentTaskId"=$1', [s.id]);
-          idsToClean.push(s.id, ...subs.map(r => r.id));
-          await pool.query('DELETE FROM tasks WHERE "parentTaskId"=$1', [s.id]);
-        }
-        await pool.query('DELETE FROM tasks WHERE "recurrenceGroupId"=$1 AND status!=\'done\'', [groupId]);
+    const groupId = snap.payload.task.recurrenceGroupId;
+    if (req.query.stopSeries === 'true' && groupId) {
+      // Stopping a series also removes the later, not-yet-done occurrences. Those are repeats of this task, so they are
+      // removed for good (files included) rather than binned; only the task you deleted can be restored.
+      const { rows: siblings } = await client.query(
+        'SELECT id FROM tasks WHERE "recurrenceGroupId"=$1 AND status!=\'done\' AND id!=$2 AND "userId"=$3',
+        [groupId, snap.payload.task.id, req.user.id]
+      );
+      for (const s of siblings) {
+        const { rows: subs } = await client.query('SELECT id FROM tasks WHERE "parentTaskId"=$1', [s.id]);
+        siblingIds.push(s.id, ...subs.map(r => r.id));
       }
+      await client.query('DELETE FROM tasks WHERE id = ANY($1::int[])', [siblings.map(s => s.id)]);
     }
-    const { rows: ownSubtasks } = await pool.query('SELECT id FROM tasks WHERE "parentTaskId"=$1', [req.params.id]);
-    idsToClean.push(...ownSubtasks.map(r => r.id));
-
-    // Attachments have no FK to tasks — clean up before the rows go (same
-    // reasoning as touchpoints, see server/utils/attachments.js).
-    await deleteAttachmentsForEntityIds('task', idsToClean);
-
-    await pool.query('DELETE FROM tasks WHERE "parentTaskId"=$1', [req.params.id]);
-    await pool.query('DELETE FROM tasks WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
-    res.json({ ok: true });
+    await client.query('DELETE FROM tasks WHERE id=$1 AND "userId"=$2', [snap.payload.task.id, req.user.id]); // subtasks go with it (ON DELETE CASCADE)
+    await client.query('COMMIT');
+    // Attachments have no FK to tasks (see server/utils/attachments.js): the removed repeats' files are cleaned up now;
+    // this task's own files stay while it waits in the bin.
+    await deleteAttachmentsForEntityIds('task', siblingIds).catch(() => {});
+    res.json({ ok: true, binId, retentionDays: bin.RETENTION_DAYS });
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('[tasks DELETE]', err);
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 

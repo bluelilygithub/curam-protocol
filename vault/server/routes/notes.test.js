@@ -897,6 +897,13 @@ test('ask your notes reads inside attached files: found by what the file says, t
     const kept = (await pool.query('SELECT status, chars FROM attachment_text WHERE attachment_id=$1', [contractFile])).rows[0];
     assert.strictEqual(kept.status, 'ok', 'the file was read once and the text kept');
 
+    // the list's search box looks inside the read text too, only for the owner, and a miss finds nothing
+    const found = async (q, as) => (await call('GET', `/api/notes?q=${encodeURIComponent(q)}`, undefined, as)).json.map((n) => n.id);
+    assert.ok((await found('24 months from delivery')).includes(contract), 'search finds a note by what its file says');
+    assert.ok(!(await found('24 months from delivery', 'B')).includes(contract), "and not for someone else");
+    assert.ok(!(await found('marsupial secret')).includes(theirs), "another person's file text is never searched");
+    assert.deepStrictEqual(await found('no such phrase anywhere in files'), []);
+
     // the history keeps the file names
     const hist = (await call('GET', '/api/notes/ask')).json.find((m) => m.id === r.json.id);
     assert.deepStrictEqual(hist.sources[0].files, ['terms.txt']);

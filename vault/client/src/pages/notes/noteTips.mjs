@@ -13,7 +13,7 @@ export const NOTE_TIPS = {
   newNote: 'Start a new note: write one, record your voice, or begin from a template.',
 
   // search and views
-  search: 'Find notes by words in the title or text, or by the name of a project, client or tag. Results appear as you type.',
+  search: 'Find notes by words in the title or text, in the text inside attached files, or by the name of a project, client, tag or file. Results appear as you type.',
   clearSearch: 'Clear the search.',
   views: 'Saved views: bring back a whole set of search, filters and grouping in one tap, or save the current set under a name.',
   viewsActive: (name) => `You are in the saved view "${name}". Open Views to switch, update or clear it.`,

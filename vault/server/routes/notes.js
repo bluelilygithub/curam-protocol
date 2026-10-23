@@ -60,6 +60,7 @@ router.get('/', async (req, res) => {
   const { where, params, dateCol } = filters;
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || LIST_DEFAULT, 1), LIST_MAX);
   const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+  if (req.query.q) noteFileText.backfill(userId); // searching also looks inside files, so read any attached before file text existed (a background job, one at a time)
 
   const sql = `
     SELECT n.id, n.title, left(n.body, 240) AS preview, n.project_id, n.client_id, n.source,

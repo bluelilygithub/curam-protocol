@@ -52,7 +52,9 @@ function buildFilters(userId, query = {}) {
     const term = add(`%${String(q).replace(/[\\%_]/g, '\\$&')}%`);
     where.push(`(n.title ILIKE ${term} OR n.body ILIKE ${term} OR p.name ILIKE ${term} OR c.name ILIKE ${term}
       OR EXISTS (SELECT 1 FROM note_tags nt WHERE nt.note_id = n.id AND nt.tag ILIKE ${term})
-      OR EXISTS (SELECT 1 FROM attachments a WHERE a."entityType"='note' AND a."entityId" = n.id AND a.filename ILIKE ${term}))`);
+      OR EXISTS (SELECT 1 FROM attachments a WHERE a."entityType"='note' AND a."entityId" = n.id AND a.filename ILIKE ${term})
+      OR EXISTS (SELECT 1 FROM attachments a JOIN attachment_text t ON t.attachment_id = a.id
+                  WHERE a."entityType"='note' AND a."entityId" = n.id AND t.status = 'ok' AND t.text ILIKE ${term}))`);
   }
   return { where, params, dateCol, add };
 }

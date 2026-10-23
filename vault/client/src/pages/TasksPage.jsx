@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
+import { offerUndo } from '../utils/binUndo';
 import { useIcon } from '../providers/IconProvider';
 import MoodDot from '../components/mood/MoodDot';
 import TasksCalendar from '../components/TasksCalendar';
@@ -860,7 +861,8 @@ export default function TasksPage() {
 
   const handleDelete = async (id, { stopSeries = false } = {}) => {
     const url = stopSeries ? `/api/tasks/${id}?stopSeries=true` : `/api/tasks/${id}`;
-    await api.delete(url);
+    const res = await api.delete(url);
+    const { binId } = await res.json().catch(() => ({}));
     if (stopSeries) {
       // Remove all tasks that share the same recurrenceGroupId (non-done ones were deleted server-side)
       const targetTask = tasks.find(t => t.id === id);
@@ -876,6 +878,10 @@ export default function TasksPage() {
     setConfirmDeleteId(null);
     setRecurringDeleteModal(null);
     if (expandedId === id) setExpandedId(null);
+    offerUndo({
+      message: stopSeries ? 'Task deleted and the series stopped. Only this task can be undone.' : 'Task deleted. Kept 30 days in the recycle bin.',
+      binIds: [binId], restoredMessage: 'Task restored ✓', after: fetchTasks,
+    });
   };
 
   const handleReschedule = async (taskId, newDateKey) => {
@@ -1325,10 +1331,15 @@ export default function TasksPage() {
   };
   const handleBulkDelete = async () => {
     const ids = [...selectedIds];
-    await api.delete('/api/tasks/bulk', { ids });
+    const res = await api.delete('/api/tasks/bulk', { ids });
+    const { binIds } = await res.json().catch(() => ({}));
     setTasks(prev => prev.filter(t => !ids.includes(t.id)));
     setSelectedIds(new Set());
     setBulkDeleteConfirm(false);
+    offerUndo({
+      message: `${ids.length} task${ids.length === 1 ? '' : 's'} deleted. Kept 30 days in the recycle bin.`,
+      binIds, restoredMessage: 'Tasks restored ✓', after: fetchTasks,
+    });
   };
 
   // Keyboard shortcuts

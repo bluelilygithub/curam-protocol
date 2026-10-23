@@ -162,7 +162,8 @@ test('bulk delete: another user deletes nothing, not the tasks, their subtasks o
   const own = await call('DELETE', '/api/tasks/bulk', undefined, { ids: [t.deleteA] });
   assert.strictEqual(own.json.deleted, 1);
   assert.strictEqual(await count('SELECT COUNT(*)::int n FROM tasks WHERE id = ANY($1::int[])', [[t.deleteA, t.deleteSubA]]), 0, 'the owner removed the task and its subtask');
-  assert.strictEqual(await count(`SELECT COUNT(*)::int n FROM attachments WHERE "entityType"='task' AND "entityId"=$1`, [t.deleteA]), 0, 'and its attachment record');
+  assert.strictEqual(await count(`SELECT COUNT(*)::int n FROM attachments WHERE "entityType"='task' AND "entityId"=$1`, [t.deleteA]), 1, 'its attachment record stays while the task waits in the recycle bin (removed when it is deleted forever: tasksRecycleBin.test.js)');
+  assert.strictEqual(await count(`SELECT COUNT(*)::int n FROM recycle_bin WHERE "userId"=$1 AND "entityType"='task' AND "entityId"=$2`, [A, String(t.deleteA)]), 1, 'and the task is in the bin');
 });
 
 (async () => {

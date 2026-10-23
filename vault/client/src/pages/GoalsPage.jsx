@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/apiClient';
+import { offerUndo } from '../utils/binUndo';
 import { useIcon } from '../providers/IconProvider';
 import { startGoalsTour, TOUR_KEY } from '../utils/tours/goalsTour';
 import GettingStartedWizard from '../components/GettingStartedWizard';
@@ -1043,10 +1044,12 @@ export default function GoalsPage() {
 
   const handleDeleteObjective = async () => {
     if (!selectedObj) return;
-    await api.delete(`/api/goals/${selectedObj.id}`);
+    const res = await api.delete(`/api/goals/${selectedObj.id}`);
+    const { binId } = await res.json().catch(() => ({}));
     setObjectives(prev => prev.filter(o => o.id !== selectedObj.id));
     setSelected(null);
     setConfirmDeleteObj(false);
+    offerUndo({ message: 'Goal deleted. Kept 30 days in the recycle bin.', binIds: [binId], restoredMessage: 'Goal restored ✓', after: loadObjectives });
   };
 
   const dimData = RENEWAL_DIMS_GOALS.map(d => {

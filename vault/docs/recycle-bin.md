@@ -53,6 +53,10 @@ register('goal', {
 
 4. **Test it** like `server/routes/recycleBin.test.js` does with a made-up tool: delete, list, restore, failed restore leaves the item in the bin, another person cannot see it.
 
+## Putting a row back without listing its columns (`rowRestore.js`)
+
+`insertRow(db, 'tasks', row, { userId, override })` in `server/services/recycleBin/rowRestore.js` re-inserts a `SELECT *` snapshot: only columns that still exist are written, the old id is reused when free, `"userId"` is set, and a link to another table whose target has gone since is left empty (so the row comes back without it instead of failing). `override` sets columns you changed by hand (for example the new parent id of a subtask). Tasks and Goals use it; adapters are then only about children, links and files.
+
 ## Cleaning up what the bin does not hold (optional `discard`)
 
 If the thing has files (or anything else outside the snapshot), register `discard(db, userId, payload)` next to `restore`. It is called once the item is gone for good (30 days passed, Delete forever, Empty bin) and should remove those files; it must not throw (errors are logged and swallowed). Notes uses it for attached files.
@@ -69,7 +73,9 @@ If the thing has files (or anything else outside the snapshot), register `discar
 ## Used by
 
 - **Notes**: `note` (with its tags), `note-template` and `note-view` (a saved view). Delete a note or a template and it lands here. See `docs/notes.md`.
+- **Tasks**: `task` (`adapters/tasks.js`): the task with its subtasks, tags, comments, blocked-by links, share link and files; single delete and bulk delete (one bin item per task; a subtask picked with its parent travels inside the parent's item). The files stay on disk and in `attachments` while it waits (the payload lists them) and are removed by `discard`. **Stopping a series** bins the task you deleted only; the later not-yet-done repeats are removed for good as before. Links from CRM follow-ups / fitness sessions / touchpoints that pointed at the task are not restored (they were cleared by the database when it went). Undo toast: `client/src/utils/binUndo.js` (`offerUndo`).
+- **Goals**: `goal`: the objective with its key results and which tasks were linked to them (a restore links them again, unless the task was linked elsewhere meanwhile). Deleting a single key result is still permanent.
 
-Candidates to adopt next (not done): tasks, goals, saved CSS pages, recipes, Room/Garden/Cellar planner projects, Finance documents, saved fonts. Each needs the three steps above; for planner projects the whole project JSON is the payload.
+Candidates to adopt next (not done): saved CSS pages, recipes, Room/Garden/Cellar planner projects, Finance documents, saved fonts. Each needs the three steps above; for planner projects the whole project JSON is the payload.
 
 Chats keep their older soft-delete (`sessions."deletedAt"` with a Deleted view); they are not in this bin.
