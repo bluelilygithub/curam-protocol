@@ -87,6 +87,8 @@ export const NOTE_TIPS = {
   suggestedTag: 'Add this tag, which you already use on other notes.',
   write: 'Write: the plain text box where you type.',
   preview: 'Preview: see the note formatted, with headings, bold, lists, links and tick-boxes you can tick.',
+  makeTasks: (n) => `Make ${n === 1 ? 'a task' : `${n} tasks`} from the to-dos in this note that are not ticked. Each stays linked to its line: tick one in either place and the other follows. Nothing is made unless you press this.`,
+  todoLinked: (title) => (title ? `This to-do is the task "${title}". Ticking it here finishes the task, and finishing the task ticks it here. Click to open Tasks.` : 'This to-do is a task. Click to open Tasks.'),
   voiceStyle: 'How the recording is written up: notes, an update, a to-do list, meeting notes, or just your words. Your choice is remembered next time.',
   voiceKeep: 'Whether to keep the recording itself. Nothing is kept unless you choose to: for 7 days, or until you delete it. Your choice is remembered next time.',
   voiceRecoverMake: 'Make a note from the recording that was saved on this device when the page closed.',

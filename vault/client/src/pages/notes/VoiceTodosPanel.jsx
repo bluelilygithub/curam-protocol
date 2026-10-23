@@ -3,14 +3,14 @@ import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
 import { NOTE_TIPS } from './noteTips.mjs';
-import { taskPayload } from './noteAiActions.mjs';
+import { localDay } from './noteTemplates.mjs';
 
 /**
  * After a voice note is made: the to-dos found in what was said, each with a tick, so the ones that matter can go to Tasks in one tap.
  * Nothing is created until the person presses the button, and the note itself is never changed. `note` is the new note (for its project and
  * client); `onMade(n)` says how many tasks were made; `onClose` dismisses the panel.
  */
-export default function VoiceTodosPanel({ todos, note, mobile, onMade, onClose }) {
+export default function VoiceTodosPanel({ todos, note, mobile, onMade, onLinked, onClose }) {
   const getIcon = useIcon();
   const [items, setItems] = useState(() => todos.map((title) => ({ title, on: true })));
   const [making, setMaking] = useState(false);
@@ -20,24 +20,20 @@ export default function VoiceTodosPanel({ todos, note, mobile, onMade, onClose }
   async function make() {
     setMaking(true);
     setError('');
-    let made = 0;
-    const left = [];
-    for (const it of items) {
-      if (!it.on || !it.title.trim()) { left.push(it); continue; }
-      try {
-        const res = await api.post('/api/tasks', taskPayload(it, note));
-        if (!res.ok) throw new Error('create failed');
-        made++;
-      } catch { left.push(it); }
+    // One request: the server makes the tasks (with the note's project and client, and a date if the line says one) and links each to-do
+    // line in the note, so the to-dos in the note ARE these tasks.
+    try {
+      const res = await api.post(`/api/notes/${note.id}/todos`, { items: chosen.map((i) => ({ title: i.title.trim() })), today: localDay() });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'create failed');
+      setMaking(false);
+      onLinked?.(note.id, data);
+      if (data.created?.length) onMade?.(data.created.length);
+      onClose?.();
+    } catch {
+      setMaking(false);
+      setError('The tasks could not be created. Press the button to try again.');
     }
-    setMaking(false);
-    if (made) onMade?.(made);
-    if (left.some((i) => i.on && i.title.trim())) {
-      setItems(left);
-      setError(`${left.filter((i) => i.on).length} could not be created. Press the button to try those again.`);
-      return;
-    }
-    onClose?.();
   }
 
   const btn = (primary) => ({ minHeight: mobile ? 48 : 36, background: primary ? 'var(--color-primary)' : 'var(--color-bg)', color: primary ? '#fff' : 'var(--color-text)', border: primary ? 'none' : '1px solid var(--color-border)' });
@@ -52,7 +48,7 @@ export default function VoiceTodosPanel({ todos, note, mobile, onMade, onClose }
           <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{items.length === 1 ? 'A to-do' : `${items.length} to-dos`} in what you said</h3>
           <button type="button" aria-label="Close" onClick={onClose} className="hover:opacity-60 transition-opacity duration-200" style={{ color: 'var(--color-muted)', background: 'none', border: 'none', cursor: 'pointer', minWidth: mobile ? 40 : 24, minHeight: mobile ? 40 : 24 }}>{getIcon('x', { size: 18 })}</button>
         </div>
-        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Tick the ones to add to Tasks. They stay in the note either way.</p>
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Tick the ones to make into tasks. They stay in the note, and stay in step with the tasks.</p>
         <ul className="space-y-2">
           {items.map((it, i) => (
             <li key={i} className="flex items-start gap-2">

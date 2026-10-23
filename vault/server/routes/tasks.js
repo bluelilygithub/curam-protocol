@@ -91,16 +91,65 @@ async function getSourceSessionTitle(sessionId) {
   return rows[0]?.title || null;
 }
 
+async function getSourceNoteTitle(noteId, userId) {
+  if (!noteId) return null;
+  const { rows } = await pool.query('SELECT title FROM notes WHERE id=$1 AND user_id=$2', [noteId, userId]);
+  return rows[0]?.title || null;
+}
+
 async function buildTask(row) {
-  const [tags, subtaskStats, krInfo, blockerCount, sourceSessionTitle, attachments] = await Promise.all([
+  const [tags, subtaskStats, krInfo, blockerCount, sourceSessionTitle, attachments, sourceNoteTitle] = await Promise.all([
     getTags(row.id),
     getSubtaskStats(row.id),
     getKrInfo(row.keyResultId),
     getBlockerCount(row.id),
     getSourceSessionTitle(row.sourceSessionId),
     attachmentsForEntity('task', row.id),
+    getSourceNoteTitle(row.sourceNoteId, row.userId),
   ]);
-  return { ...row, tags, ...subtaskStats, ...krInfo, blockerCount, sourceSessionTitle, attachments };
+  return { ...row, tags, ...subtaskStats, ...krInfo, blockerCount, sourceSessionTitle, attachments, sourceNoteTitle };
+}
+
+// A repeating task that has just been finished makes its next occurrence (same title, notes, tags, next date).
+async function spawnNextRecurrence(updatedTask, userId) {
+  if (!updatedTask.recurrence || updatedTask.recurrence === 'none') return;
+  // Use dueDate if set, otherwise use today as the base for the next occurrence
+  const baseDate = updatedTask.dueDate
+    ? updatedTask.dueDate.slice(0, 10)
+    : new Date().toISOString().slice(0, 10);
+  const nextDate = calculateNextDate(baseDate, updatedTask.recurrence);
+  if (!nextDate) return;
+  const newCount = (updatedTask.recurrenceCount || 0) + 1;
+  const { rows: recurrInserted } = await pool.query(
+    "INSERT INTO tasks (title,notes,status,priority,category,\"projectId\",recurrence,\"recurrenceConfig\",\"dueDate\",\"order\",\"recurrenceCount\",\"recurrenceGroupId\",\"userId\",\"updatedAt\") VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW()) RETURNING id",
+    [updatedTask.title, updatedTask.notes, updatedTask.priority, updatedTask.category, updatedTask.projectId, updatedTask.recurrence, updatedTask.recurrenceConfig, nextDate, updatedTask.order, newCount, updatedTask.recurrenceGroupId || null, userId]
+  );
+  const newTaskId = recurrInserted[0].id;
+  const tags = await getTags(updatedTask.id);
+  for (const tag of tags) {
+    await pool.query('INSERT INTO task_tags ("taskId",tag) VALUES ($1,$2)', [newTaskId, tag]);
+  }
+}
+
+// Change a task's status on behalf of something that is not the task screen (a to-do ticked in a note, docs/notes.md "Live to-dos"): the
+// same follow-ups as ticking it in Tasks (activity log, the next repeat, contract obligations, fitness sessions). Returns the task, or null
+// if it is not this person's or is already in that status.
+async function changeTaskStatus(userId, taskId, newStatus) {
+  if (!['todo', 'in-progress', 'done'].includes(newStatus)) return null;
+  const { rows: [task] } = await pool.query('SELECT * FROM tasks WHERE id=$1 AND "userId"=$2', [taskId, userId]);
+  if (!task || task.status === newStatus) return null;
+  await pool.query('UPDATE tasks SET status=$1,"updatedAt"=NOW() WHERE id=$2', [newStatus, taskId]);
+  const labels = { todo: 'To Do', 'in-progress': 'In Progress', done: 'Done' };
+  await pool.query("INSERT INTO task_comments (\"taskId\",type,content) VALUES ($1,'system',$2)", [taskId, `Status changed from ${labels[task.status] || task.status} to ${labels[newStatus]} (from a note)`]);
+  const { rows: [updated] } = await pool.query('SELECT * FROM tasks WHERE id=$1', [taskId]);
+  const isNowDone = newStatus === 'done';
+  const wasAlreadyDone = task.status === 'done';
+  if (isNowDone && !wasAlreadyDone) await spawnNextRecurrence(updated, userId);
+  if (isNowDone !== wasAlreadyDone) {
+    try { await require('../services/contractReview/contractService').syncObligationStateFromTask(Number(taskId), isNowDone); } catch (err) { console.error('[tasks] obligation state sync failed:', err.message); }
+    try { await require('../services/fitness/fitnessTasks').syncSessionFromTask(Number(taskId), isNowDone); } catch (err) { console.error('[tasks] fitness sync failed:', err.message); }
+  }
+  return updated;
 }
 
 function calculateNextDate(dateStr, recurrence) {
@@ -804,25 +853,7 @@ router.put('/:id', async (req, res) => {
     const updatedTask = updatedRows[0];
     const wasAlreadyDone = task.status === 'done';
     const isNowDone = v('status') === 'done';
-    if (isNowDone && !wasAlreadyDone && updatedTask.recurrence && updatedTask.recurrence !== 'none') {
-      // Use dueDate if set, otherwise use today as the base for the next occurrence
-      const baseDate = updatedTask.dueDate
-        ? updatedTask.dueDate.slice(0, 10)
-        : new Date().toISOString().slice(0, 10);
-      const nextDate = calculateNextDate(baseDate, updatedTask.recurrence);
-      if (nextDate) {
-        const newCount = (updatedTask.recurrenceCount || 0) + 1;
-        const { rows: recurrInserted } = await pool.query(
-          "INSERT INTO tasks (title,notes,status,priority,category,\"projectId\",recurrence,\"recurrenceConfig\",\"dueDate\",\"order\",\"recurrenceCount\",\"recurrenceGroupId\",\"userId\",\"updatedAt\") VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW()) RETURNING id",
-          [updatedTask.title, updatedTask.notes, updatedTask.priority, updatedTask.category, updatedTask.projectId, updatedTask.recurrence, updatedTask.recurrenceConfig, nextDate, updatedTask.order, newCount, updatedTask.recurrenceGroupId || null, req.user.id]
-        );
-        const newTaskId = recurrInserted[0].id;
-        const tags = await getTags(id);
-        for (const tag of tags) {
-          await pool.query('INSERT INTO task_tags ("taskId",tag) VALUES ($1,$2)', [newTaskId, tag]);
-        }
-      }
-    }
+    if (isNowDone && !wasAlreadyDone) await spawnNextRecurrence(updatedTask, req.user.id);
     const { rows: finalRows } = await pool.query('SELECT * FROM tasks WHERE id=$1', [id]);
     const built = await buildTask(finalRows[0]);
 
@@ -997,3 +1028,4 @@ router.post('/:id/subtasks', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.changeTaskStatus = changeTaskStatus; // used by the notes route (live to-dos)

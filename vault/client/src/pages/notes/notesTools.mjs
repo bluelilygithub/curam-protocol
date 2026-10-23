@@ -21,6 +21,7 @@ export const NOTES_TOOLS = [
   { id: 'ai-actions', label: 'AI actions', open: 'editor' },
   { id: 'at-menu', label: 'Pull things in with @', open: 'editor' },
   { id: 'project', label: 'Project', open: 'editor' },
+  { id: 'live-todos', label: 'Live to-dos (make tasks)', open: 'editor' },
   { id: 'convert-task', label: 'Convert to task', open: 'editor' },
   { id: 'open-as-chat', label: 'Open as chat', open: 'editor' },
   { id: 'chat-uses-notes', label: 'Use my notes in Chat', open: 'list' },

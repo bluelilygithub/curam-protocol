@@ -692,6 +692,9 @@ async function initSchema() {
     await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "recurrenceGroupId" TEXT DEFAULT NULL`);
     await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "activityStatus" TEXT NOT NULL DEFAULT 'none' CHECK("activityStatus" IN ('none','started','paused','waiting'))`);
     await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "isMilestone" INTEGER DEFAULT 0`);
+    // The note a task was made from (live to-dos, services/noteTodos.js). No foreign key, like attachments: a note waiting in the recycle bin keeps its link.
+    await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "sourceNoteId" INTEGER DEFAULT NULL`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_tasks_source_note ON tasks("sourceNoteId") WHERE "sourceNoteId" IS NOT NULL`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS task_tags (

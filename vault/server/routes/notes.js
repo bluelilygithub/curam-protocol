@@ -13,6 +13,8 @@ const { toSpeechMp3, withTempDir } = require('../services/videoFfmpeg');
 const { transcribeAudioWithGemini, isGeminiTranscribeAvailable } = require('../services/videoGenerateService');
 const { buildVoiceNote, parseStyle } = require('../services/voiceNote');
 const voiceAudio = require('../services/voiceAudio');
+const noteTodos = require('../services/noteTodos');
+const { validDay } = require('../services/noteDay');
 const noteAi = require('../services/noteAi'); // called as noteAi.runNoteAction so tests can swap it
 const { normalizeTag, normalizeTags } = require('../services/noteTags');
 const noteViews = require('../services/noteViews');
@@ -445,6 +447,36 @@ router.post('/voice', aiLimiter, upload.single('audio'), ffmpegRoute('voice-note
   }
 }, { source: 'notes', routePrefix: 'notes' }));
 
+// POST /api/notes/:id/todos  { lines?: [line numbers], items?: [{ title, due? }], today?: 'YYYY-MM-DD' }
+// Make tasks from the note's to-dos, only because the person asked: the to-do lines that are not ticked and not tasks yet (or just the lines given), or
+// a list of titles (a voice note's to-dos). Each task gets the note's project and client, "From note: ...", and a due date if the line says one ("by Friday",
+// worked out from `today`, the person's own date). The lines are marked "{task:N}" in the note's text, which is not counted as an edit (updated_at stays).
+// Answers { body, created, linkedTasks }: the text to show now. See services/noteTodos.js.
+router.post('/:id/todos', async (req, res) => {
+  const { lines, items } = req.body || {};
+  if (lines !== undefined && !(Array.isArray(lines) && lines.every(Number.isInteger))) return res.status(400).json({ error: 'lines must be line numbers' });
+  if (items !== undefined && !(Array.isArray(items) && items.length <= noteTodos.MAX_MAKE && items.every((i) => i && typeof i.title === 'string'))) return res.status(400).json({ error: 'items must be a list of titles' });
+  const today = validDay(req.body?.today) || new Date().toISOString().slice(0, 10);
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const { rows: [note] } = await db.query('SELECT * FROM notes WHERE id=$1 AND user_id=$2 FOR UPDATE', [Number(req.params.id) || 0, req.user.id]);
+    if (!note) { await db.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
+    const made = await noteTodos.makeTasks(db, req.user.id, note, { lines, items, today });
+    if (made.created.length) await db.query('UPDATE notes SET body=$1 WHERE id=$2 AND user_id=$3', [made.body, note.id, req.user.id]);
+    await db.query('COMMIT');
+    if (made.created.length) noteEmbeddings.queueEmbed(req.user.id, note.id);
+    const shown = await noteTodos.overlayForUser(pool, req.user.id, made.body);
+    res.status(made.created.length ? 201 : 200).json({ body: shown.body, created: made.created, linkedTasks: shown.linked });
+  } catch (err) {
+    await db.query('ROLLBACK').catch(() => {});
+    getLogger().error({ err }, '[notes make tasks]');
+    res.status(500).json({ error: 'Could not make the tasks. Try again.' });
+  } finally {
+    db.release();
+  }
+});
+
 // PATCH /api/notes/:id/audio/:attachmentId  { keep: 'forever' | '7d' }
 // Change how long a voice note's kept audio stays: for good, or another few days from now. (Removing it is DELETE /api/attachments/:id.)
 router.patch('/:id/audio/:attachmentId', async (req, res) => {
@@ -483,7 +515,8 @@ router.get('/:id', async (req, res) => {
     const files = await attachmentsForEntity('note', rows[0].id);
     // readable: true / false once the file's text has been looked at, null while that is still to happen
     const seen = files.length ? new Map((await pool.query('SELECT attachment_id, status FROM attachment_text WHERE attachment_id = ANY($1::int[])', [files.map((f) => f.id)])).rows.map((r) => [r.attachment_id, r.status])) : new Map();
-    res.json({ ...rows[0], attachments: files.map((f) => ({ ...f, readable: seen.has(f.id) ? seen.get(f.id) === 'ok' : null })) });
+    const shown = await noteTodos.overlayForUser(pool, req.user.id, rows[0].body); // a to-do linked to a task is shown as the task is now
+    res.json({ ...rows[0], body: shown.body, linkedTasks: shown.linked, attachments: files.map((f) => ({ ...f, readable: seen.has(f.id) ? seen.get(f.id) === 'ok' : null })) });
   } catch (err) {
     getLogger().error({ err }, '[notes read]');
     res.status(500).json({ error: 'Could not load the note. Try again.' });
@@ -556,6 +589,8 @@ router.put('/:id', async (req, res) => {
 
     const { rows: updated } = await pool.query('SELECT * FROM notes WHERE id=$1', [req.params.id]);
     noteEmbeddings.queueEmbed(req.user.id, Number(req.params.id));
+    // To-do lines linked to tasks: a line ticked, unticked or renamed since the last saved text changes the task too (docs/notes.md, Live to-dos).
+    if (body !== undefined && body !== e.body) await noteTodos.syncFromNote(pool, req.user.id, Number(req.params.id), e.body, newBody, { changeStatus: require('./tasks').changeTaskStatus, log: getLogger() });
     res.json(updated[0]);
   } catch (err) {
     getLogger().error({ err }, '[notes update]');

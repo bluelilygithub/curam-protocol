@@ -24,6 +24,7 @@ same('- one\n- two\n  - nested', 'bullet list, nested');
 same('1. first\n2. second', 'numbered list');
 same('- [ ] open thing\n- [x] done thing', 'to-do list keeps its ticks');
 same('> a quote', 'quote');
+same('- [ ] Call Sam about the budget {task:512}\n- [x] Send the quote {task:6}', 'a to-do linked to a task keeps its marker');
 same('Call [Sam](https://example.com/a) today.', 'link');
 same('line one\nline two\nline three', 'single line breaks stay plain new lines, no backslash');
 same('para one\n\npara two', 'paragraphs');

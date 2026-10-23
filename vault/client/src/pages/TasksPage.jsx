@@ -1774,6 +1774,19 @@ export default function TasksPage() {
                 </button>
               </div>
             )}
+            {task.sourceNoteId && task.sourceNoteTitle && (
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => navigate(`/notes?note=${task.sourceNoteId}`)}
+                  className="flex items-center gap-1.5 text-xs hover:opacity-70 transition-opacity"
+                  style={{ color: 'var(--color-primary)' }}
+                >
+                  {getIcon('pen-line', { size: 13 })}
+                  From note: {task.sourceNoteTitle}
+                </button>
+              </div>
+            )}
             {/* Subtasks */}
             {subs.length > 0 && (
               <div className="space-y-1">

@@ -407,6 +407,89 @@ test('kept voice audio: listed with its expiry, kept for good or extended, remov
   assert.strictEqual((await call('DELETE', `/api/attachments/${forever.id}`)).status, 200, 'and can be removed by hand any time');
 });
 
+test('live to-dos: make tasks only when asked; a linked line and its task stay in step both ways; stale notes never undo a task; private', async () => {
+  const q = async (sql, p) => (await pool.query(sql, p)).rows;
+  const today = '2026-10-23'; // a Friday
+  const note = (await call('POST', '/api/notes', { title: 'Site visit', body: '# Visit\n- [ ] Call Sam about the budget by Friday\n- [x] Send the quote\n- [ ] Book the venue\n- plain bullet', project_id: projectA, client_id: clientA })).json;
+  const before = (await call('GET', `/api/notes/${note.id}`)).json.updated_at;
+
+  // nothing becomes a task by itself
+  assert.strictEqual((await q('SELECT 1 FROM tasks WHERE "sourceNoteId"=$1', [note.id])).length, 0);
+
+  // make tasks: the to-dos that are not ticked; ticked ones and bullets are left alone
+  const made = await call('POST', `/api/notes/${note.id}/todos`, { today });
+  assert.strictEqual(made.status, 201, JSON.stringify(made.json));
+  assert.deepStrictEqual(made.json.created.map((t) => [t.title, t.dueDate]), [['Call Sam about the budget by Friday', '2026-10-30'], ['Book the venue', null]], 'a date in the line becomes the due date');
+  const [sam, venue] = made.json.created.map((t) => t.id);
+  assert.strictEqual(made.json.body, `# Visit\n- [ ] Call Sam about the budget by Friday {task:${sam}}\n- [x] Send the quote\n- [ ] Book the venue {task:${venue}}\n- plain bullet`);
+  const row = (await q('SELECT title, notes, status, "projectId", "clientId", "sourceNoteId", "userId" FROM tasks WHERE id=$1', [sam]))[0];
+  assert.deepStrictEqual({ ...row }, { title: 'Call Sam about the budget by Friday', notes: 'From note: Site visit', status: 'todo', projectId: projectA, clientId: clientA, sourceNoteId: note.id, userId: userA }, "filed under the note's project and client");
+  assert.strictEqual((await call('GET', `/api/notes/${note.id}`)).json.updated_at, before, 'linking is filing: the edited date does not move');
+  const again = await call('POST', `/api/notes/${note.id}/todos`, { today });
+  assert.strictEqual(again.status, 200);
+  assert.deepStrictEqual(again.json.created, [], 'asking again makes nothing twice');
+
+  // the task as it is now: done, renamed, gone
+  await pool.query(`UPDATE tasks SET status='done' WHERE id=$1`, [sam]);
+  await pool.query(`UPDATE tasks SET title='Book the Town Hall' WHERE id=$1`, [venue]);
+  let shown = (await call('GET', `/api/notes/${note.id}`)).json;
+  assert.match(shown.body, new RegExp(`- \\[x\\] Call Sam about the budget by Friday \\{task:${sam}\\}`));
+  assert.match(shown.body, new RegExp(`- \\[ \\] Book the Town Hall \\{task:${venue}\\}`));
+  assert.deepStrictEqual(Object.keys(shown.linkedTasks).sort(), [String(sam), String(venue)].sort());
+  assert.strictEqual(shown.linkedTasks[venue].title, 'Book the Town Hall');
+  assert.match((await q('SELECT body FROM notes WHERE id=$1', [note.id]))[0].body, new RegExp(`- \\[ \\] Call Sam about the budget by Friday \\{task:${sam}\\}`), 'showing does not rewrite the stored text');
+
+  // a stale note (open on a screen before the task was finished elsewhere) must not re-open it: the saved text and the screen's agree, so nothing is passed on
+  const stale = (await q('SELECT body FROM notes WHERE id=$1', [note.id]))[0].body.replace('- plain bullet', '- plain bullet, edited');
+  await call('PUT', `/api/notes/${note.id}`, { body: stale });
+  assert.strictEqual((await q('SELECT status FROM tasks WHERE id=$1', [sam]))[0].status, 'done', 'still done');
+
+  // ticking in the note finishes the task (with the same follow-ups: the log); unticking re-opens it; renaming renames it
+  const body = (await call('GET', `/api/notes/${note.id}`)).json.body;
+  await call('PUT', `/api/notes/${note.id}`, { body: body.replace(`- [ ] Book the Town Hall {task:${venue}}`, `- [x] Book the Town Hall {task:${venue}}`) });
+  assert.strictEqual((await q('SELECT status FROM tasks WHERE id=$1', [venue]))[0].status, 'done');
+  assert.ok((await q(`SELECT 1 FROM task_comments WHERE "taskId"=$1 AND content LIKE '%from a note%'`, [venue])).length, 'the activity log says where it came from');
+  const body2 = (await call('GET', `/api/notes/${note.id}`)).json.body;
+  await call('PUT', `/api/notes/${note.id}`, { body: body2.replace(`- [x] Call Sam about the budget by Friday {task:${sam}}`, `- [ ] Call Sam Jones about the budget {task:${sam}}`) });
+  const sam2 = (await q('SELECT status, title FROM tasks WHERE id=$1', [sam]))[0];
+  assert.deepStrictEqual({ ...sam2 }, { status: 'todo', title: 'Call Sam Jones about the budget' }, 'unticked and renamed in the note');
+
+  // a repeating task finished from a note repeats, as it does in Tasks
+  const weekly = (await pool.query(`INSERT INTO tasks (title, status, recurrence, "dueDate", "userId") VALUES ('Weekly report','todo','weekly','2026-10-23',$1) RETURNING id`, [userA])).rows[0].id;
+  const rep = (await call('POST', '/api/notes', { title: 'Reports', body: `- [ ] Weekly report {task:${weekly}}` })).json;
+  await call('PUT', `/api/notes/${rep.id}`, { body: `- [x] Weekly report {task:${weekly}}` });
+  assert.strictEqual((await q('SELECT status FROM tasks WHERE id=$1', [weekly]))[0].status, 'done');
+  assert.strictEqual((await q(`SELECT 1 FROM tasks WHERE title='Weekly report' AND status='todo' AND "dueDate"='2026-10-30' AND "userId"=$1`, [userA])).length, 1, 'the next week\'s one was made');
+
+  // a task that is deleted: the line stays as an ordinary to-do
+  await pool.query('DELETE FROM tasks WHERE id=$1', [venue]);
+  shown = (await call('GET', `/api/notes/${note.id}`)).json;
+  assert.ok(!shown.body.includes(`{task:${venue}}`), 'its marker is dropped');
+  assert.match(shown.body, /- \[x\] Book the Town Hall/);
+  assert.ok(!(venue in shown.linkedTasks));
+
+  // private: someone else's task id in a note is never shown or changed, and nobody else can make tasks from the note
+  const bTask = (await pool.query(`INSERT INTO tasks (title, status, "userId") VALUES ('B secret','todo',$1) RETURNING id`, [userB])).rows[0].id;
+  const sneaky = (await call('POST', '/api/notes', { title: 'Sneaky', body: `- [ ] mine {task:${bTask}}` })).json;
+  assert.ok(!(await call('GET', `/api/notes/${sneaky.id}`)).json.body.includes('B secret'), "B's task name is not shown");
+  await call('PUT', `/api/notes/${sneaky.id}`, { body: `- [x] mine {task:${bTask}}` });
+  const bRow = (await q('SELECT status, "sourceNoteId" FROM tasks WHERE id=$1', [bTask]))[0];
+  assert.deepStrictEqual({ ...bRow }, { status: 'todo', sourceNoteId: null }, "B's task is untouched");
+  assert.strictEqual((await call('POST', `/api/notes/${note.id}/todos`, { today }, 'B')).status, 404);
+  assert.strictEqual((await call('POST', `/api/notes/${note.id}/todos`, { lines: ['x'] })).status, 400);
+  assert.strictEqual((await call('POST', `/api/notes/${note.id}/todos`, { items: [{ nope: 1 }] })).status, 400);
+
+  // a voice note's list: the matching bullet becomes the to-do, anything new is added
+  const voice = (await call('POST', '/api/notes', { title: 'Idea on the drive', body: 'Summary:\nMove it.\n\nTo do:\n- Call Sam about the budget\n- Order the oak' })).json;
+  const items = await call('POST', `/api/notes/${voice.id}/todos`, { today, items: [{ title: 'call sam about the budget' }, { title: 'Order the oak' }, { title: 'Something said but not listed' }] });
+  assert.strictEqual(items.status, 201);
+  const ids = items.json.created.map((t) => t.id);
+  assert.strictEqual(items.json.body, `Summary:\nMove it.\n\nTo do:\n- [ ] Call sam about the budget {task:${ids[0]}}\n- [ ] Order the oak {task:${ids[1]}}\n- [ ] Something said but not listed {task:${ids[2]}}`.replace('Call sam', 'call sam'));
+  // leave no tasks behind: the tests after this one count the tasks on these projects and clients
+  await pool.query(`DELETE FROM tasks WHERE "sourceNoteId" = ANY($1::int[]) OR title='Weekly report' OR id = ANY($2::int[])`, [[note.id, voice.id, rep.id, sneaky.id], [sam, venue, weekly, bTask]]);
+  await pool.query('DELETE FROM notes WHERE id = ANY($1::int[])', [[note.id, voice.id, rep.id, sneaky.id]]);
+});
+
 test('saved views: save, list, rename, replace filters, delete to the bin and restore; names, limits and ownership', async () => {
   const filters = { search: ' quote ', preset: '30d', field: 'created', projectId: String(projectA), clientId: String(clientA), tags: ['#Budget', 'budget'], groupMode: 'tag', evil: '<script>' };
   const made = await call('POST', '/api/notes/views', { name: '  Acme   last month ', filters });

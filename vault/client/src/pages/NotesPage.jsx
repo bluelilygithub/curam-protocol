@@ -26,7 +26,8 @@ import { NOTES_INTRO, HOW_IT_WORKS, NOTES_NOT } from './notes/notesInfo.mjs';
 import { reminderState, reminderText, repeatOf, localZone } from './notes/noteReminders.mjs';
 import TemplatePicker from './notes/TemplatePicker';
 import RecentlyDeletedModal from './notes/RecentlyDeletedModal';
-import { templateToNote } from './notes/noteTemplates.mjs';
+import { templateToNote, localDay } from './notes/noteTemplates.mjs';
+import { countUnlinked, stripMarkers } from './notes/noteTodos.mjs';
 import TagManager from './notes/TagManager';
 import { DEFAULT_FILTERS, sameFilters, isPlain, describeFilters } from './notes/noteViews.mjs';
 import { addTag } from './notes/noteTags.mjs';
@@ -70,6 +71,7 @@ export default function NotesPage() {
 
   const [showChatPicker, setShowChatPicker] = useState(false);
   const [showRecorder, setShowRecorder] = useState(false);
+  const [makingTasks, setMakingTasks] = useState(false);
   const [voiceTodos, setVoiceTodos] = useState(null); // { todos, note } after a voice note that had to-dos in it
   const [showNewChooser, setShowNewChooser] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
@@ -401,7 +403,7 @@ export default function NotesPage() {
     document.dispatchEvent(new CustomEvent('vault:open-quick-capture', {
       detail: {
         title: note.title === 'Untitled' ? '' : note.title,
-        notes: (text || '').substring(0, NOTE_BODY_LIMIT),
+        notes: stripMarkers(text || '').substring(0, NOTE_BODY_LIMIT),
         projectId: note.project_id || null,
         toastMessage: 'Task created from note ✓',
       },
@@ -410,7 +412,7 @@ export default function NotesPage() {
 
   function takeToChatWith(projectId) {
     if (!selected) return;
-    const text = [title !== 'Untitled' ? title : '', body].filter(Boolean).join('\n\n');
+    const text = [title !== 'Untitled' ? title : '', stripMarkers(body)].filter(Boolean).join('\n\n');
     setShowChatPicker(false);
     setNewProjectName('');
     setCreatingProject(false);
@@ -709,6 +711,34 @@ export default function NotesPage() {
     bodyValueRef.current = aiBackup.body;
     scheduleSave(aiBackup.id, aiBackup.title, aiBackup.body);
     setAiBackup(null);
+  }
+
+  // Live to-dos (docs/notes.md): the text and the linked tasks the server sent back are what to show now. Nothing is saved from here: the server already has it.
+  function applyLinkedBody(id, data) {
+    if (selectedRef.current?.id !== id || !data?.body) return;
+    bodyValueRef.current = data.body;
+    setBody(data.body);
+    setSelected((s) => (s && s.id === id ? { ...s, body: data.body, linkedTasks: data.linkedTasks || {} } : s));
+  }
+
+  // "Make tasks": every to-do that is not ticked and not a task yet becomes one, only because the person pressed this.
+  async function makeTasksFromNote() {
+    if (!selected || makingTasks) return;
+    const id = selected.id;
+    setMakingTasks(true);
+    try {
+      await runSave(); // what is on screen must be what the server has
+      const res = await api.post(`/api/notes/${id}/todos`, { today: localDay() });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'failed');
+      applyLinkedBody(id, data);
+      const n = data.created?.length || 0;
+      if (n) addToast(`${n} task${n === 1 ? '' : 's'} made from this note ✓`, 'success', undefined, { label: 'Open Tasks', onClick: () => navigate('/tasks') });
+    } catch {
+      addToast('The tasks could not be made. Try again.', 'error');
+    } finally {
+      setMakingTasks(false);
+    }
   }
 
   function tasksMade(n) {
@@ -1144,10 +1174,25 @@ export default function NotesPage() {
             </div>
             {(() => {
               const c = taskCounts(body);
-              if (c.total) return <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{c.done} of {c.total} done</span>;
-              return !viewportMobile && mode === 'write'
-                ? <span className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>Formatting works: # heading, **bold**, - list, - [ ] to-do</span>
-                : null;
+              const unlinked = bodyLoading ? 0 : countUnlinked(body);
+              return (
+                <span className="flex items-center gap-3 min-w-0">
+                  {unlinked > 0 && (
+                    <Tooltip text={NOTE_TIPS.makeTasks(unlinked)}>
+                      <button
+                        type="button" onClick={makeTasksFromNote} disabled={makingTasks} data-tour="notes-make-tasks"
+                        className="inline-flex items-center gap-1.5 text-xs px-3 rounded-lg hover:opacity-70 transition-opacity duration-200 disabled:opacity-50 flex-shrink-0"
+                        style={{ minHeight: viewportMobile ? 36 : 26, background: 'var(--color-bg)', color: 'var(--color-primary)', border: '1px solid var(--color-border)' }}
+                      >{getIcon('list-checks', { size: 12 })}{makingTasks ? 'Making…' : unlinked === 1 ? 'Make a task' : `Make ${unlinked} tasks`}</button>
+                    </Tooltip>
+                  )}
+                  {c.total
+                    ? <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{c.done} of {c.total} done</span>
+                    : !viewportMobile && mode === 'write' && !unlinked
+                      ? <span className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>Formatting works: # heading, **bold**, - list, - [ ] to-do</span>
+                      : null}
+                </span>
+              );
             })()}
           </div>
 
@@ -1182,7 +1227,7 @@ export default function NotesPage() {
                 {bodyLoading
                   ? <p style={{ color: 'var(--color-muted)' }}>Opening…</p>
                   : body.trim()
-                    ? <NoteMarkdownView body={body} onToggleTask={toggleTask} />
+                    ? <NoteMarkdownView body={body} onToggleTask={toggleTask} linkedTasks={selected.linkedTasks || {}} today={localDay()} />
                     : <p style={{ color: 'var(--color-muted)' }}>Nothing to preview yet. Switch to Write and start typing.</p>}
               </div>
             ) : mode === 'rich' ? (
@@ -1288,7 +1333,7 @@ export default function NotesPage() {
       )}
       {insertKind && <InsertSourceModal kind={insertKind} onInsert={appendToBody} onClose={() => { setInsertKind(null); setTimeout(() => bodyRef.current?.focus(), 0); }} />}
       {showRecorder && <VoiceNoteRecorder mobile={viewportMobile} onClose={() => setShowRecorder(false)} onCreated={handleVoiceNote} />}
-      {voiceTodos && <VoiceTodosPanel todos={voiceTodos.todos} note={voiceTodos.note} mobile={viewportMobile} onMade={tasksMade} onClose={() => setVoiceTodos(null)} />}
+      {voiceTodos && <VoiceTodosPanel todos={voiceTodos.todos} note={voiceTodos.note} mobile={viewportMobile} onMade={tasksMade} onLinked={applyLinkedBody} onClose={() => setVoiceTodos(null)} />}
       {viewportMobile && (
         <input ref={keyboardRef} aria-hidden="true" tabIndex={-1} style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 1, opacity: 0, border: 0, padding: 0, fontSize: 16, pointerEvents: 'none' }} />
       )}
