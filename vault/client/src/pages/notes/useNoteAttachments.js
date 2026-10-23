@@ -50,5 +50,18 @@ export default function useNoteAttachments({ noteId, attachments, onChange }) {
     }
   }, [noteId, onChange]);
 
-  return { uploading: uploading > 0, error, clearError: () => setError(''), upload, remove };
+  // A kept voice recording: keep it for good (or another few days). The server says when it now goes.
+  const keepAudio = useCallback(async (att, keep) => {
+    setError('');
+    try {
+      const res = await api.patch(`/api/notes/${noteId}/audio/${att.id}`, { keep });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'keep failed');
+      onChange(noteId, (list) => list.map((a) => (a.id === att.id ? { ...a, expiresAt: data.expiresAt } : a)));
+    } catch {
+      setError('That could not be changed. Try again.');
+    }
+  }, [noteId, onChange]);
+
+  return { uploading: uploading > 0, error, clearError: () => setError(''), upload, remove, keepAudio };
 }

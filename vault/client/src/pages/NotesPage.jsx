@@ -9,6 +9,7 @@ import Tooltip from '../components/Tooltip';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { startNotesTour, TOUR_KEY as NOTES_TOUR_KEY } from '../utils/tours/notesTour';
 import VoiceNoteRecorder from './notes/VoiceNoteRecorder';
+import VoiceTodosPanel from './notes/VoiceTodosPanel';
 import NotesTutorChat from './notes/NotesTutorChat';
 import NewNoteChooser from './notes/NewNoteChooser';
 import NotesListPanel from './notes/NotesListPanel';
@@ -69,6 +70,7 @@ export default function NotesPage() {
 
   const [showChatPicker, setShowChatPicker] = useState(false);
   const [showRecorder, setShowRecorder] = useState(false);
+  const [voiceTodos, setVoiceTodos] = useState(null); // { todos, note } after a voice note that had to-dos in it
   const [showNewChooser, setShowNewChooser] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [creatingProject, setCreatingProject] = useState(false);
@@ -370,6 +372,11 @@ export default function NotesPage() {
   async function handleVoiceNote(note) {
     patchNote(toRow(note));
     selectNote(note);
+    if (note.audioNotKept) addToast(note.audioNotKept, 'error');
+    else if (note.audio) addToast(note.audio.expiresAt ? 'Recording kept for 7 days. Open the note to play it or keep it for good.' : 'Recording kept.', 'success');
+    if (Array.isArray(note.todos) && note.todos.length) {
+      setVoiceTodos({ todos: note.todos, note: { id: note.id, title: note.title, project_id: note.project_id, client_id: note.client_id } });
+    }
   }
 
   // ── Delete / convert / chat ───────────────────────────────────────────────
@@ -635,6 +642,15 @@ export default function NotesPage() {
     try { localStorage.removeItem(NOTES_TOUR_KEY); } catch (_) { /* ignore */ }
     startNotesTour(tourControls);
   };
+  // /notes?record=1 opens the voice recorder straight away (the mobile dashboard's Record button, a home-screen shortcut).
+  useEffect(() => {
+    if (!searchParams.get('record')) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('record');
+    setSearchParams(next, { replace: true });
+    setShowRecorder(true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Settings -> Tours -> Notes Tour opens /notes?tour=1
   useEffect(() => {
     if (!searchParams.get('tour')) return;
@@ -1095,7 +1111,7 @@ export default function NotesPage() {
             })()}
             </div>
             <NoteTagsEditor tags={selected.tags || []} allTags={allTags} mobile={viewportMobile} onChange={changeTags} />
-            <NoteFilesStrip attachments={selected.attachments} uploading={files.uploading} error={files.error} mobile={viewportMobile} onPick={files.upload} onRemove={files.remove} onClearError={files.clearError} />
+            <NoteFilesStrip attachments={selected.attachments} uploading={files.uploading} error={files.error} mobile={viewportMobile} onPick={files.upload} onRemove={files.remove} onClearError={files.clearError} onKeepAudio={files.keepAudio} />
           </div>
 
           {/* Write / Preview */}
@@ -1271,7 +1287,8 @@ export default function NotesPage() {
         />
       )}
       {insertKind && <InsertSourceModal kind={insertKind} onInsert={appendToBody} onClose={() => { setInsertKind(null); setTimeout(() => bodyRef.current?.focus(), 0); }} />}
-      {showRecorder && <VoiceNoteRecorder onClose={() => setShowRecorder(false)} onCreated={handleVoiceNote} />}
+      {showRecorder && <VoiceNoteRecorder mobile={viewportMobile} onClose={() => setShowRecorder(false)} onCreated={handleVoiceNote} />}
+      {voiceTodos && <VoiceTodosPanel todos={voiceTodos.todos} note={voiceTodos.note} mobile={viewportMobile} onMade={tasksMade} onClose={() => setVoiceTodos(null)} />}
       {viewportMobile && (
         <input ref={keyboardRef} aria-hidden="true" tabIndex={-1} style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 1, opacity: 0, border: 0, padding: 0, fontSize: 16, pointerEvents: 'none' }} />
       )}

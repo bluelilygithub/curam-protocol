@@ -42,3 +42,36 @@ assert.strictEqual(canRecord({ MediaRecorder: function MR() {}, navigator: {} })
 assert.strictEqual(canRecord(undefined), false);
 
 console.log('ok - voice note utils: format choice, timer, microphone messages, browser check');
+
+// ---- choices before recording ----
+{
+  const { STYLE_CHOICES, KEEP_CHOICES, DEFAULT_PREFS, PREFS_KEY, readPrefs, savePrefs, describeKept, describeRecovered, formatTimer } = await import('./voiceNoteUtils.mjs');
+  assert.deepStrictEqual(DEFAULT_PREFS, { style: 'notes', keep: 'no' }, 'by default: written up as notes, audio not kept');
+  assert.deepStrictEqual(STYLE_CHOICES.map((c) => c.value), ['notes', 'update', 'todo', 'meeting', 'words']);
+  assert.deepStrictEqual(KEEP_CHOICES.map((c) => c.value), ['no', '7d', 'forever']);
+  const mem = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, v) }; };
+  const store = mem();
+  assert.deepStrictEqual(readPrefs(store), DEFAULT_PREFS, 'nothing saved: the defaults');
+  savePrefs(store, { style: 'update', keep: '7d' });
+  assert.deepStrictEqual(readPrefs(store), { style: 'update', keep: '7d' }, 'remembered');
+  store.setItem(PREFS_KEY, '{"style":"bogus","keep":"always"}');
+  assert.deepStrictEqual(readPrefs(store), DEFAULT_PREFS, 'unknown values are ignored, never kept');
+  store.setItem(PREFS_KEY, 'not json');
+  assert.deepStrictEqual(readPrefs(store), DEFAULT_PREFS);
+  assert.deepStrictEqual(readPrefs(null), DEFAULT_PREFS, 'no storage at all is fine');
+  assert.doesNotThrow(() => savePrefs({ setItem() { throw new Error('private window'); } }, DEFAULT_PREFS));
+
+  const now = new Date('2026-10-24T02:00:00Z');
+  assert.strictEqual(describeKept(null, now), 'Kept until you delete it');
+  assert.strictEqual(describeKept(undefined, now), 'Kept until you delete it');
+  assert.strictEqual(describeKept('2026-10-31T02:00:00Z', now), 'Kept for 7 more days, then removed');
+  assert.strictEqual(describeKept('2026-10-24T20:00:00Z', now), 'Kept for 1 more day, then removed');
+  assert.strictEqual(describeKept('2026-10-24T01:00:00Z', now), 'Removed soon');
+
+  const startedAt = new Date(2026, 9, 24, 14, 35).toISOString();
+  assert.strictEqual(describeRecovered({ startedAt, elapsed: 192 }, new Date(2026, 9, 24, 16, 0)), '3:12 recorded today at 2:35 pm');
+  assert.strictEqual(describeRecovered({ startedAt, elapsed: 192 }, new Date(2026, 9, 26, 9, 0)), '3:12 recorded on 24 Oct at 2:35 pm');
+  assert.strictEqual(describeRecovered({ elapsed: 5 }), '0:05 recorded');
+  assert.strictEqual(formatTimer(192), '3:12');
+  console.log('ok - voice note choices: defaults keep no audio, remembered per device, wording for kept and unfinished recordings');
+}

@@ -10,6 +10,11 @@ const fsp = require('fs/promises');
 
 const V = path.join(__dirname, '..');
 const inserts = [];
+const attachmentInserts = [];
+let quotaUsed = 0;
+let knownNames = [];
+const os = require('os');
+process.env.UPLOAD_DIR = require('fs').mkdtempSync(path.join(os.tmpdir(), 'vault-voice-test-'));
 const dbPath = require.resolve(path.join(V, 'db'));
 require.cache[dbPath] = {
   id: dbPath, filename: dbPath, loaded: true,
@@ -20,6 +25,12 @@ require.cache[dbPath] = {
           inserts.push({ sql, params });
           return { rows: [{ id: 41, user_id: params[0], title: params[1], body: params[2], source: 'voice', project_id: null, client_id: null }] };
         }
+        if (/SUM\("sizeBytes"\)/.test(sql)) return { rows: [{ total: quotaUsed }] };
+        if (/INSERT INTO attachments/.test(sql)) {
+          attachmentInserts.push({ sql, params });
+          return { rows: [{ id: 99, entityId: params[1], filename: params[2], mimeType: params[4], sizeBytes: params[5], kind: 'voice', expiresAt: params[6] }] };
+        }
+        if (/FROM clients WHERE/.test(sql)) return { rows: knownNames.map((name) => ({ name })) };
         return { rows: [] };
       },
     },
@@ -81,9 +92,11 @@ ok('voice note: tidy reply is bounded and checked; title and body are put togeth
     const fd = new FormData();
     if (opts.audio !== false) fd.append('audio', new Blob([Buffer.from('fake-recording')], { type: 'audio/webm' }), 'recording.webm');
     if (opts.tidy !== undefined) fd.append('tidy', opts.tidy);
+    if (opts.style !== undefined) fd.append('style', opts.style);
+    if (opts.keep !== undefined) fd.append('keep', opts.keep);
     return fetch(`${base}/voice`, { method: 'POST', body: fd });
   };
-  const reset = () => { inserts.length = 0; transcribed.length = 0; modelCalls.length = 0; speechDirs.length = 0; modelFails = false; geminiOk = true; speechBytes = 1000; modelReply = JSON.stringify({ title: 'Move the launch to March', body: 'Summary:\nMove the launch to March.\n\nTo do:\n- Call Sam about the budget' }); };
+  const reset = () => { attachmentInserts.length = 0; quotaUsed = 0; knownNames = []; inserts.length = 0; transcribed.length = 0; modelCalls.length = 0; speechDirs.length = 0; modelFails = false; geminiOk = true; speechBytes = 1000; modelReply = JSON.stringify({ title: 'Move the launch to March', body: 'Summary:\nMove the launch to March.\n\nTo do:\n- Call Sam about the budget' }); };
 
   try {
     // nothing recorded
@@ -112,7 +125,7 @@ ok('voice note: tidy reply is bounded and checked; title and body are put togeth
     assert.strictEqual(note.tidied, true);
     assert.strictEqual(note.title, 'Move the launch to March');
     assert.ok(note.body.startsWith('Summary:\nMove the launch to March.') && note.body.includes(VN.TRANSCRIPT_DIVIDER) && note.body.endsWith(transcriptText), 'tidy version, then the words as spoken');
-    assert.deepStrictEqual([transcribed[0].userId, transcribed[0].mime, transcribed[0].opts], [7, 'audio/mp3', { format: 'text' }]);
+    assert.deepStrictEqual([transcribed[0].userId, transcribed[0].mime, transcribed[0].opts], [7, 'audio/mp3', { format: 'text', hints: '' }]);
     assert.strictEqual(modelCalls[0].model, 'light-model', 'the workspace light model does the tidying');
     assert.match(modelCalls[0].prompt, /move the launch to March/);
     ok('a recording becomes a tidied voice note with the original words kept below');
@@ -152,6 +165,59 @@ ok('voice note: tidy reply is bounded and checked; title and body are put togeth
     note = await r.json();
     assert.strictEqual(note.body, transcriptText);
     ok('an unusable tidy-up reply falls back to the words as spoken');
+
+    // the write-up style: a different instruction for the model, the same rules about not adding anything
+    reset();
+    r = await send({ style: 'update' });
+    note = await r.json();
+    assert.strictEqual(r.status, 201);
+    assert.match(modelCalls[0].opts.system, /status update/);
+    assert.match(modelCalls[0].opts.system, /Do NOT add facts/);
+    assert.deepStrictEqual(note.todos, ['Call Sam about the budget'], 'to-dos are offered, not made');
+    ok('a chosen style changes what the model is asked to write, and the to-dos are listed');
+    reset();
+    r = await send({ style: 'words' });
+    note = await r.json();
+    assert.strictEqual(modelCalls.length, 0, 'the words-only style uses no model');
+    assert.strictEqual(note.body, transcriptText);
+    assert.deepStrictEqual(note.todos, []);
+    ok('"just the words" uses no model');
+
+    // names from the person's own data go to the speech-to-text and the write-up
+    reset(); knownNames = ['Acme Pty Ltd', 'Hendersons'];
+    r = await send();
+    await r.json();
+    assert.match(transcribed[0].opts.hints, /Acme Pty Ltd, Hendersons/);
+    assert.match(modelCalls[0].opts.system, /Names that may be spoken.*Acme Pty Ltd/);
+    ok('the client and project names are given to the transcription and the write-up');
+
+    // keeping the audio: not by default, for a while, or for good; a full store never loses the note
+    reset();
+    r = await send();
+    note = await r.json();
+    assert.strictEqual(attachmentInserts.length, 0, 'by default nothing is kept');
+    assert.strictEqual(note.audio, null);
+    reset();
+    r = await send({ keep: '7d' });
+    note = await r.json();
+    assert.strictEqual(attachmentInserts.length, 1);
+    const days = (new Date(attachmentInserts[0].params[6]) - Date.now()) / 86400000;
+    assert.ok(days > 6.9 && days < 7.1, 'removed after about seven days');
+    assert.match(attachmentInserts[0].params[2], /^Voice note .*\.webm$/);
+    assert.strictEqual(note.audio.kind, 'voice');
+    assert.strictEqual(note.attachments.length, 1);
+    reset();
+    r = await send({ keep: 'forever' });
+    note = await r.json();
+    assert.strictEqual(attachmentInserts[0].params[6], null, 'no expiry');
+    reset(); quotaUsed = 10 * 1024 * 1024 * 1024;
+    r = await send({ keep: 'forever' });
+    note = await r.json();
+    assert.strictEqual(r.status, 201, 'the note is still made');
+    assert.strictEqual(note.audio, null);
+    assert.match(note.audioNotKept, /storage is full/);
+    assert.strictEqual(attachmentInserts.length, 0);
+    ok('audio is kept only when asked: for seven days or for good; a full store keeps the note and says so');
 
     // silence
     reset(); transcriptText = '   ';

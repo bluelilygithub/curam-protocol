@@ -34,7 +34,7 @@ const {
   assert.match(CATALOG.find((t) => t.id === 'new-note').does, /Type button at the bottom/, 'the phone layout is described');
   assert.match(CATALOG.find((t) => t.id === 'dictate').does, /Dictate button at the bottom/);
   const gaps = NOT_POSSIBLE.join(' ');
-  for (const needle of [/Replaying a voice recording/, /who said what by name/, /Zoom, Teams/, /about an hour/, /legal or evidential/, /Folders, or sharing/, /edit history/]) assert.match(gaps, needle);
+  for (const needle of [/Keeping every recording automatically/, /who said what by name/, /Zoom, Teams/, /about an hour/, /legal or evidential/, /Folders, or sharing/, /edit history/]) assert.match(gaps, needle);
   assert.match(RULES.join(' '), /Open buttons .* never create, change or delete a note/);
   assert.match(RULES.join(' '), /two|microphone buttons/);
 

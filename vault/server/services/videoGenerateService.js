@@ -320,7 +320,7 @@ const TEXT_TRANSCRIBE_INSTRUCTION = `Transcribe the spoken audio in full, word f
  * extracted audio track to Gemini and ask for SRT-formatted output directly.
  * Reuses the same GoogleGenerativeAI client setup as `describeImageWithGemini`.
  */
-async function transcribeAudioWithGemini(userId, audioBase64, mimeType = 'audio/mp3', { format = 'srt' } = {}) {
+async function transcribeAudioWithGemini(userId, audioBase64, mimeType = 'audio/mp3', { format = 'srt', hints = '' } = {}) {
   const { gemini: modelId } = await getModelsForUser(userId);
   if (!modelId) throw new Error('No Gemini model configured — add one in Settings to use hosted auto-transcribe');
   const { GoogleGenerativeAI } = require('@google/generative-ai');
@@ -334,7 +334,9 @@ async function transcribeAudioWithGemini(userId, audioBase64, mimeType = 'audio/
   });
 
   const result = await gModel.generateContent([
-    { text: format === 'text' ? TEXT_TRANSCRIBE_INSTRUCTION : SRT_TRANSCRIBE_INSTRUCTION },
+    { text: `${format === 'text' ? TEXT_TRANSCRIBE_INSTRUCTION : SRT_TRANSCRIBE_INSTRUCTION}${hints ? `
+
+${String(hints).slice(0, 4000)}` : ''}` },
     { inlineData: { mimeType, data: audioBase64 } },
   ]);
 

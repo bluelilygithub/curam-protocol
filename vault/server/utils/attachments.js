@@ -115,8 +115,9 @@ async function insertAttachment({ userId, entityType, entityId, file }) {
 async function attachmentsForEntities(entityType, entityIds) {
   if (!entityIds.length) return new Map();
   const { rows } = await pool.query(
-    `SELECT id, "entityId", filename, "mimeType", "sizeBytes", "createdAt"
+    `SELECT id, "entityId", filename, "mimeType", "sizeBytes", "createdAt", kind, "expiresAt"
      FROM attachments WHERE "entityType"=$1 AND "entityId" = ANY($2::int[])
+       AND ("expiresAt" IS NULL OR "expiresAt" > NOW())
      ORDER BY "createdAt" ASC`,
     [entityType, entityIds]
   );
@@ -152,7 +153,44 @@ async function deleteAttachmentsForEntityIds(entityType, entityIds) {
   );
 }
 
+/**
+ * Voice-note audio the person chose to keep (docs/voice-notes.md): written next to the note's other files, counted against the same quota,
+ * with an optional expiry (a Date) after which purgeExpiredAttachments removes it. Returns the attachment row, or throws (quota, disk);
+ * the caller treats that as "the note was made, the audio was not kept".
+ */
+async function saveVoiceAudio({ userId, noteId, buffer, mime, filename, expiresAt }) {
+  await assertWithinQuota(userId, buffer.length);
+  const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
+  const dir = path.join(uploadDir, 'attachments', `note-${noteId}`);
+  fs.mkdirSync(dir, { recursive: true });
+  const stored = path.join(dir, `${Date.now()}-${Math.random().toString(36).slice(2)}-${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`);
+  fs.writeFileSync(stored, buffer);
+  try {
+    const { rows: [attachment] } = await pool.query(`
+      INSERT INTO attachments ("userId","entityType","entityId",filename,"storedPath","mimeType","sizeBytes",kind,"expiresAt")
+      VALUES ($1,'note',$2,$3,$4,$5,$6,'voice',$7)
+      RETURNING id, "entityType", "entityId", filename, "mimeType", "sizeBytes", "createdAt", kind, "expiresAt"
+    `, [userId, noteId, filename, stored, mime, buffer.length, expiresAt || null]);
+    return attachment;
+  } catch (err) {
+    try { fs.unlinkSync(stored); } catch { /* nothing to clean */ }
+    throw err;
+  }
+}
+
+/** Remove every attachment whose expiry has passed (the file and the row). Returns how many went. Safe to run any time. */
+async function purgeExpiredAttachments(db = pool) {
+  const { rows } = await db.query(`DELETE FROM attachments WHERE "expiresAt" IS NOT NULL AND "expiresAt" < NOW() RETURNING "storedPath"`);
+  for (const a of rows) {
+    try { if (fs.existsSync(a.storedPath)) fs.unlinkSync(a.storedPath); }
+    catch (e) { console.warn('[attachments] unlink failed:', e.message); }
+  }
+  return rows.length;
+}
+
 module.exports = {
+  saveVoiceAudio,
+  purgeExpiredAttachments,
   ATTACHMENT_MIMES,
   ATTACHMENT_EXTENSIONS,
   MAX_FILE_BYTES,

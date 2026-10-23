@@ -27,6 +27,43 @@ Also give the note a short title (at most 8 words) that says what it is about.
 Reply with ONLY a JSON object, no other text:
 {"title":"...","body":"..."}`;
 
+// Other ways to write the same recording up. The rules about not adding anything are the same; only the sections differ. Chosen in the recorder
+// ("Write it up as") and remembered there. 'words' (no model at all) and 'notes' (the original, above) are the other two.
+const STYLE_COMMON = `Rules:
+- Keep the person's meaning and, where it reads well, their own wording. Do NOT add facts, decisions, names, dates or tasks that are not in the transcript. If something is unclear, leave it out or put it under Open questions.
+- Plain text only (no markdown symbols such as #, ** or backticks). Section headings on their own line ending with a colon, and "- " for bullet points.
+- Use only the sections that apply, in the order given. Keep it as short as it can be without losing anything the person wanted to remember.
+- Give the note a short title (at most 8 words) that says what it is about.
+
+Reply with ONLY a JSON object, no other text:
+{"title":"...","body":"..."}`;
+
+const STYLE_SYSTEMS = {
+  update: `You turn a spoken recording of someone giving a status update (to themselves, a colleague or a client) into a short written update. Expect false starts, repeats and filler words.
+
+Sections, in this order: Summary: (1 to 3 sentences) / What happened: / Decisions: / Next steps: (what the person said still has to be done) / Open questions: or Blockers:.
+
+${STYLE_COMMON}`,
+  todo: `You turn a spoken recording of someone listing things they need to do into a clean checklist. Expect false starts, repeats and filler words.
+
+Write one section, "To do:", with one "- " bullet per separate thing, in the order spoken, each a short action starting with a verb. Merge repeats. If the person grouped things by project or person, keep the grouping as extra headings ending with a colon. Add an "Other notes:" section only for things that are not actions.
+
+${STYLE_COMMON}`,
+  meeting: `You turn a spoken recording of a meeting or a conversation between people into meeting notes. Expect crosstalk, false starts and filler words. Do not invent speaker names; only say who said or owns something where the recording makes it clear.
+
+Sections, in this order: Summary: (1 to 3 sentences) / Discussion: / Decisions: / Actions: (what, and who if said) / Open questions:.
+
+${STYLE_COMMON}`,
+};
+
+/** The names of the styles that rewrite with the model, and the one that does not. */
+const STYLES = ['notes', 'update', 'todo', 'meeting', 'words'];
+const parseStyle = (value, tidy) => {
+  const v = String(value || '').toLowerCase();
+  if (STYLES.includes(v)) return v;
+  return tidy === 'false' || tidy === false ? 'words' : 'notes';
+};
+
 const clean = (v, max) => String(v ?? '').replace(/\r\n/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, max);
 
 function extractJson(text) {
@@ -71,12 +108,17 @@ function composeBody({ tidy, transcript }) {
  */
 async function tidyTranscript(userId, transcript, deps = {}) {
   const text = clean(transcript, MAX_TIDY_INPUT_CHARS);
+  const names = require('./voiceAudio').namesLine(deps.names);
+  const base = STYLE_SYSTEMS[deps.style] || TIDY_SYSTEM;
+  const system = names ? `${base}
+
+${names} (They are the person's own clients, projects and contacts.)` : base;
   const getModels = deps.getModels || require('./modelResolver').getModelsForUser;
   const call = deps.callModel || require('./callModel').callModel;
   const log = deps.logUsage || require('../utils/logUsage').logUsage;
   const { light: modelId } = await getModels(userId);
   const result = await call(modelId, `THE RECORDING (transcribed):\n${text}`, {
-    system: TIDY_SYSTEM, maxTokens: 4000, returnUsage: true, timeoutMs: 90000,
+    system, maxTokens: 4000, returnUsage: true, timeoutMs: 90000,
   });
   log({ userId, model: result.model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'notes' });
   const reply = normalizeTidyReply(String(result.text || ''));
@@ -88,19 +130,45 @@ async function tidyTranscript(userId, transcript, deps = {}) {
  * Build the note to save from a transcript. `tidy` false (or a failed/too-long tidy) saves the words as spoken, with the
  * default title. Returns { title, body, tidied } where `tidied` says whether the model's version was used.
  */
-async function buildVoiceNote(userId, transcript, { tidy = true, now = new Date() } = {}, deps = {}) {
+async function buildVoiceNote(userId, transcript, { tidy = true, style = 'notes', names = [], now = new Date() } = {}, deps = {}) {
   const spoken = clean(transcript, MAX_BODY_CHARS);
-  const fallback = { title: defaultVoiceTitle(now), body: spoken, tidied: false };
-  if (!tidy || spoken.length > MAX_TIDY_INPUT_CHARS) return fallback;
+  const fallback = { title: defaultVoiceTitle(now), body: spoken, tidied: false, todos: [] };
+  if (!tidy || style === 'words' || spoken.length > MAX_TIDY_INPUT_CHARS) return fallback;
   try {
-    const t = await (deps.tidy || tidyTranscript)(userId, spoken, deps);
-    return { title: t.title || fallback.title, body: composeBody({ tidy: t.body, transcript: spoken }), tidied: true };
+    const t = await (deps.tidy || tidyTranscript)(userId, spoken, { ...deps, style, names });
+    return { title: t.title || fallback.title, body: composeBody({ tidy: t.body, transcript: spoken }), tidied: true, todos: extractTodos(t.body) };
   } catch {
     return fallback;
   }
 }
 
+const TODO_HEADING = /^(to do|to-do|todo|next steps|actions?)\s*:\s*$/i;
+const ANY_HEADING = /^[A-Za-z][A-Za-z /&-]{0,40}:\s*$/;
+
+/**
+ * The to-dos in a written-up note: the bullets under "To do:", "Next steps:" or "Actions:" (several sections are joined), cleaned, repeats
+ * dropped, at most 20, each at most 200 characters. The note's own text is not changed; the person chooses which become tasks.
+ */
+function extractTodos(body) {
+  const out = [];
+  let inList = false;
+  for (const raw of String(body || '').split(/\r?\n/)) {
+    const line = raw.trim();
+    if (TODO_HEADING.test(line)) { inList = true; continue; }
+    if (!line) continue;
+    if (ANY_HEADING.test(line)) { inList = false; continue; }
+    if (!inList) continue;
+    const m = /^(?:[-*•]|\d+[.)])\s+(.+)$/.exec(line);
+    const text = (m ? m[1] : line).replace(/^\[[ xX]\]\s*/, '').trim().slice(0, 200);
+    if (text.length < 2 || out.some((t) => t.toLowerCase() === text.toLowerCase())) continue;
+    out.push(text);
+    if (out.length >= 20) break;
+  }
+  return out;
+}
+
 module.exports = {
+  STYLES, STYLE_SYSTEMS, parseStyle, extractTodos,
   TIDY_SYSTEM, TRANSCRIPT_DIVIDER, MAX_TIDY_INPUT_CHARS,
   normalizeTidyReply, defaultVoiceTitle, composeBody, tidyTranscript, buildVoiceNote,
 };

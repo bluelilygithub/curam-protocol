@@ -362,6 +362,51 @@ test('the daily note is gone: no route, and an old daily note still deletes and 
   assert.strictEqual(back.title, 'Daily note, Thu 22 Oct');
 });
 
+test('kept voice audio: listed with its expiry, kept for good or extended, removed when it runs out (even before the clean-up runs), private', async () => {
+  const fs = require('fs');
+  const { saveVoiceAudio, purgeExpiredAttachments } = require('../utils/attachments');
+  const q = async (sql, p) => (await pool.query(sql, p)).rows;
+  const id = (await call('POST', '/api/notes', { title: 'Idea on the way home', body: 'spoken' })).json.id;
+
+  // saved for a week: the note lists it with kind and expiry, and the download works
+  const week = await saveVoiceAudio({ userId: userA, noteId: id, buffer: Buffer.from('fake audio bytes'), mime: 'audio/webm', filename: 'Voice note 24 Oct 2.35 pm.webm', expiresAt: new Date(Date.now() + 7 * 86400000) });
+  const note = (await call('GET', `/api/notes/${id}`)).json;
+  assert.deepStrictEqual(note.attachments.map((a) => [a.id, a.kind, a.mimeType]), [[week.id, 'voice', 'audio/webm']]);
+  assert.ok(new Date(note.attachments[0].expiresAt) > new Date(), 'with when it goes');
+  assert.ok(!('storedPath' in note.attachments[0]));
+  const dl = await fetch(`${base}/api/attachments/${week.id}/download`);
+  assert.strictEqual(dl.status, 200);
+  assert.strictEqual(dl.headers.get('content-type'), 'audio/webm');
+  assert.strictEqual(await dl.text(), 'fake audio bytes');
+  assert.strictEqual((await fetch(`${base}/api/attachments/${week.id}/download`, { headers: { 'x-user': 'B' } })).status, 404, 'not for anyone else');
+
+  // keep it for good, then back to a week
+  assert.strictEqual((await call('PATCH', `/api/notes/${id}/audio/${week.id}`, { keep: 'forever' })).status, 200);
+  assert.strictEqual((await q('SELECT "expiresAt" FROM attachments WHERE id=$1', [week.id]))[0].expiresAt, null);
+  const again = await call('PATCH', `/api/notes/${id}/audio/${week.id}`, { keep: '7d' });
+  assert.ok(new Date(again.json.expiresAt) > new Date(Date.now() + 6 * 86400000));
+  assert.strictEqual((await call('PATCH', `/api/notes/${id}/audio/${week.id}`, { keep: 'no' })).status, 400);
+  assert.strictEqual((await call('PATCH', `/api/notes/${id}/audio/${week.id}`, { keep: 'forever' }, 'B')).status, 404, "someone else cannot change it");
+  assert.strictEqual((await call('PATCH', `/api/notes/${id}/audio/99999999`, { keep: 'forever' })).status, 404);
+  const plain = await pool.query(`INSERT INTO attachments ("userId","entityType","entityId",filename,"storedPath","mimeType","sizeBytes") VALUES ($1,'note',$2,'a.txt','/nowhere/a.txt','text/plain',1) RETURNING id`, [userA, id]);
+  assert.strictEqual((await call('PATCH', `/api/notes/${id}/audio/${plain.rows[0].id}`, { keep: 'forever' })).status, 404, 'only voice audio has a keep-for choice');
+  await pool.query('DELETE FROM attachments WHERE id=$1', [plain.rows[0].id]);
+
+  // its time runs out: gone from the list and the download straight away, and the clean-up removes the file and the row
+  const stored = (await q('SELECT "storedPath" FROM attachments WHERE id=$1', [week.id]))[0].storedPath;
+  assert.ok(fs.existsSync(stored));
+  await pool.query(`UPDATE attachments SET "expiresAt" = NOW() - INTERVAL '1 minute' WHERE id=$1`, [week.id]);
+  assert.deepStrictEqual((await call('GET', `/api/notes/${id}`)).json.attachments, [], 'not listed once expired');
+  assert.strictEqual((await fetch(`${base}/api/attachments/${week.id}/download`)).status, 404, 'not downloadable once expired');
+  const forever = await saveVoiceAudio({ userId: userA, noteId: id, buffer: Buffer.from('keep me'), mime: 'audio/mp4', filename: 'Voice note keep.m4a', expiresAt: null });
+  const removed = await purgeExpiredAttachments();
+  assert.ok(removed >= 1);
+  assert.strictEqual(fs.existsSync(stored), false, 'the file is deleted');
+  assert.strictEqual((await q('SELECT 1 FROM attachments WHERE id=$1', [week.id])).length, 0, 'and its row');
+  assert.strictEqual((await q('SELECT 1 FROM attachments WHERE id=$1', [forever.id])).length, 1, 'audio kept for good is never touched');
+  assert.strictEqual((await call('DELETE', `/api/attachments/${forever.id}`)).status, 200, 'and can be removed by hand any time');
+});
+
 test('saved views: save, list, rename, replace filters, delete to the bin and restore; names, limits and ownership', async () => {
   const filters = { search: ' quote ', preset: '30d', field: 'created', projectId: String(projectA), clientId: String(clientA), tags: ['#Budget', 'budget'], groupMode: 'tag', evil: '<script>' };
   const made = await call('POST', '/api/notes/views', { name: '  Acme   last month ', filters });

@@ -11,7 +11,8 @@ const { ffmpegRoute } = require('../middleware/ffmpegRoute');
 const { getLogger } = require('../middleware/requestContext');
 const { toSpeechMp3, withTempDir } = require('../services/videoFfmpeg');
 const { transcribeAudioWithGemini, isGeminiTranscribeAvailable } = require('../services/videoGenerateService');
-const { buildVoiceNote } = require('../services/voiceNote');
+const { buildVoiceNote, parseStyle } = require('../services/voiceNote');
+const voiceAudio = require('../services/voiceAudio');
 const noteAi = require('../services/noteAi'); // called as noteAi.runNoteAction so tests can swap it
 const { normalizeTag, normalizeTags } = require('../services/noteTags');
 const noteViews = require('../services/noteViews');
@@ -21,7 +22,7 @@ const noteAsk = require('../services/noteAsk'); // called as noteAsk.askNotes, w
 const noteFileText = require('../services/noteFileText'); // reads the text inside attached files (for Ask)
 const noteReminders = require('../services/noteReminders');
 const {
-  createAttachmentUpload, rejectIfDisguisedExecutable, assertWithinQuota, insertAttachment, attachmentsForEntity, MAX_FILE_BYTES,
+  createAttachmentUpload, rejectIfDisguisedExecutable, assertWithinQuota, insertAttachment, attachmentsForEntity, saveVoiceAudio, MAX_FILE_BYTES,
 } = require('../utils/attachments'); // the same upload policy as task and CRM attachments
 const noteRepeat = require('../services/noteRepeat');
 const bin = require('../services/recycleBin'); // deleted notes and templates wait here for 30 days
@@ -385,6 +386,16 @@ router.post('/voice', aiLimiter, upload.single('audio'), ffmpegRoute('voice-note
 
   const ext = path.extname(String(req.file.originalname || '')).toLowerCase();
   const inExt = /^\.[a-z0-9]{1,5}$/.test(ext) ? ext : '.webm';
+  // The person's own client, project and contact names help the speech-to-text and the write-up spell them right (best effort).
+  let names = [];
+  try {
+    const [c, p, k] = await Promise.all([
+      pool.query('SELECT name FROM clients WHERE "userId"=$1 ORDER BY name LIMIT 80', [userId]),
+      pool.query('SELECT name FROM projects WHERE "userId"=$1 AND "archived_at" IS NULL ORDER BY name LIMIT 80', [userId]),
+      pool.query('SELECT k.name FROM client_contacts k JOIN clients c ON c.id = k."clientId" WHERE c."userId"=$1 ORDER BY k.name LIMIT 80', [userId]),
+    ]);
+    names = voiceAudio.cleanNames([...c.rows, ...p.rows, ...k.rows].map((r) => r.name));
+  } catch { names = []; }
   let transcript;
   try {
     transcript = await withTempDir(async (dir) => {
@@ -398,7 +409,7 @@ router.post('/voice', aiLimiter, upload.single('audio'), ffmpegRoute('voice-note
         err.status = 413;
         throw err;
       }
-      return transcribeAudioWithGemini(userId, speech.toString('base64'), 'audio/mp3', { format: 'text' });
+      return transcribeAudioWithGemini(userId, speech.toString('base64'), 'audio/mp3', { format: 'text', hints: voiceAudio.namesLine(names) });
     });
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message });
@@ -407,18 +418,54 @@ router.post('/voice', aiLimiter, upload.single('audio'), ffmpegRoute('voice-note
   transcript = String(transcript || '').replace(/^```[a-z]*\s*|```\s*$/gi, '').trim();
   if (!transcript) return res.status(422).json({ error: 'No speech was heard in that recording. Check the microphone and try again.' });
 
-  const built = await buildVoiceNote(userId, transcript, { tidy: req.body?.tidy !== 'false' });
+  const style = parseStyle(req.body?.style, req.body?.tidy);
+  const built = await buildVoiceNote(userId, transcript, { tidy: style !== 'words', style, names });
   try {
     const { rows } = await pool.query(
       "INSERT INTO notes (user_id, title, body, source) VALUES ($1, $2, $3, 'voice') RETURNING *",
       [userId, built.title, built.body]
     );
-    res.status(201).json({ ...rows[0], tidied: built.tidied });
+    // Keep the audio only if the person asked (for a while, or for good). A failure here (storage full, disk) never loses the note.
+    let audio = null;
+    let audioNotKept = '';
+    const keep = voiceAudio.parseKeep(req.body?.keep);
+    if (keep !== 'no') {
+      try {
+        const mime = voiceAudio.audioMime(req.file.mimetype);
+        audio = await saveVoiceAudio({ userId, noteId: rows[0].id, buffer: req.file.buffer, mime, filename: voiceAudio.audioFilename(mime), expiresAt: voiceAudio.expiryFor(keep) });
+      } catch (err) {
+        getLogger().warn({ err }, '[notes/voice keep audio]');
+        audioNotKept = err.statusCode === 413 ? 'Your file storage is full, so the audio was not kept. The note was saved.' : 'The audio could not be kept. The note was saved.';
+      }
+    }
+    res.status(201).json({ ...rows[0], tidied: built.tidied, todos: built.todos || [], audio, audioNotKept, attachments: audio ? [audio] : [] });
   } catch (err) {
     getLogger().error({ err }, '[notes/voice save]');
     res.status(500).json({ error: 'The recording was turned into text but the note could not be saved. Try again.' });
   }
 }, { source: 'notes', routePrefix: 'notes' }));
+
+// PATCH /api/notes/:id/audio/:attachmentId  { keep: 'forever' | '7d' }
+// Change how long a voice note's kept audio stays: for good, or another few days from now. (Removing it is DELETE /api/attachments/:id.)
+router.patch('/:id/audio/:attachmentId', async (req, res) => {
+  const keep = voiceAudio.parseKeep(req.body?.keep);
+  if (keep === 'no') return res.status(400).json({ error: "keep must be 'forever' or '7d'" });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE attachments a SET "expiresAt" = $4
+         FROM notes n
+        WHERE a.id=$1 AND a."entityType"='note' AND a."entityId"=n.id AND n.id=$2 AND n.user_id=$3 AND a.kind='voice'
+          AND (a."expiresAt" IS NULL OR a."expiresAt" > NOW())
+       RETURNING a.id, a."expiresAt"`,
+      [Number(req.params.attachmentId) || 0, Number(req.params.id) || 0, req.user.id, voiceAudio.expiryFor(keep)]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'That recording is not here any more.' });
+    res.json(rows[0]);
+  } catch (err) {
+    getLogger().error({ err }, '[notes audio keep]');
+    res.status(500).json({ error: 'Could not change that. Try again.' });
+  }
+});
 
 // GET /api/notes/:id
 router.get('/:id', async (req, res) => {

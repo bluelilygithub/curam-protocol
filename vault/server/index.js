@@ -277,6 +277,7 @@ const { startExpenseReviewCron }    = require('./cron/expenseReviewCron');
 const { startWeeklyDigestCron }     = require('./cron/weeklyDigestCron');
 const { startFitnessCron, startFitnessTasksSync } = require('./cron/fitnessCron');
 const { startRecycleBinPurge } = require('./cron/recycleBinCron');
+const { startAttachmentExpiry } = require('./cron/attachmentExpiryCron');
 const { startNoteRemindersCron } = require('./cron/noteRemindersCron');
 
 // Poll until schema is ready, then seed and start listening
@@ -299,6 +300,7 @@ async function start() {
 
   startFitnessTasksSync(); // sends nothing, so it runs on staging too
   startRecycleBinPurge(); // removes bin items older than 30 days; sends nothing, so it runs everywhere
+  startAttachmentExpiry(); // removes kept voice-note audio past its time; sends nothing, so it runs everywhere
 
   if (runtimeConfig.disableExternalCron) {
     console.log('[runtime] External cron jobs disabled by DISABLE_EXTERNAL_CRON');

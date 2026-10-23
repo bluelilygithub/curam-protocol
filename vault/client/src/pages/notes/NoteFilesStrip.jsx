@@ -4,6 +4,7 @@ import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
 import { NOTE_TIPS } from './noteTips.mjs';
 import { ACCEPT, MAX_FILES, formatSize, isViewable, kindOf, ICONS, askCanRead } from './noteAttachments.mjs';
+import VoiceAudioCard from './VoiceAudioCard';
 
 /** A small picture of an image file. The picture is fetched with the sign-in header (an <img src> cannot carry it) and dropped when the chip goes. */
 function Thumb({ att, size }) {
@@ -80,10 +81,11 @@ function FileChip({ att, mobile, onRemove }) {
  *   attachments  [{ id, filename, mimeType, sizeBytes }]     uploading  true while files are being sent
  *   error        text to show (and a Dismiss)                onPick(files)  upload these      onRemove(att)  take one off
  */
-export default function NoteFilesStrip({ attachments, uploading, error, mobile, onPick, onRemove, onClearError }) {
+export default function NoteFilesStrip({ attachments, uploading, error, mobile, onPick, onRemove, onClearError, onKeepAudio }) {
   const getIcon = useIcon();
   const input = useRef(null);
   const list = Array.isArray(attachments) ? attachments : [];
+  const recordings = list.filter((a) => a.kind === 'voice'); // kept voice-note audio gets a player, not a file chip
   const height = mobile ? 36 : 26;
   return (
     <div className="space-y-1" role="group" aria-label="Files on this note" data-tour="notes-attach">
@@ -100,8 +102,9 @@ export default function NoteFilesStrip({ attachments, uploading, error, mobile, 
           onChange={(e) => { const files = Array.from(e.target.files || []); e.target.value = ''; if (files.length) onPick(files); }}
         />
         {uploading && <span className="text-xs" style={{ color: 'var(--color-muted)' }} role="status">Attaching…</span>}
-        {list.map((a) => <FileChip key={a.id} att={a} mobile={mobile} onRemove={onRemove} />)}
+        {list.filter((a) => a.kind !== 'voice').map((a) => <FileChip key={a.id} att={a} mobile={mobile} onRemove={onRemove} />)}
       </div>
+      {recordings.map((a) => <VoiceAudioCard key={a.id} att={a} mobile={mobile} onKeep={onKeepAudio} onRemove={onRemove} />)}
       {error && (
         <p className="text-xs" style={{ color: '#ef4444' }} role="alert">
           {error}{' '}

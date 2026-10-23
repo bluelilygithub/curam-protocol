@@ -49,14 +49,24 @@ export default function NotesTile() {
           {getIcon('pen-line', { size: 16, style: { color: 'var(--color-text)' } })}
           <span className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>Notes</span>
         </div>
-        <button
-          onClick={() => setShowQuick(v => !v)}
-          className="w-7 h-7 flex items-center justify-center rounded-lg hover:opacity-60 transition-opacity"
-          style={{ color: 'var(--color-primary)', background: 'var(--color-bg)' }}
-          title="New note"
-        >
-          {getIcon('plus', { size: 16 })}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('/notes?record=1')}
+            className="h-9 px-3 flex items-center justify-center gap-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition-opacity"
+            style={{ color: '#fff', background: 'var(--color-primary)' }}
+            aria-label="Record a voice note"
+          >
+            {getIcon('mic', { size: 15 })} Record
+          </button>
+          <button
+            onClick={() => setShowQuick(v => !v)}
+            className="w-9 h-9 flex items-center justify-center rounded-lg hover:opacity-60 transition-opacity"
+            style={{ color: 'var(--color-primary)', background: 'var(--color-bg)' }}
+            aria-label="New note"
+          >
+            {getIcon('plus', { size: 16 })}
+          </button>
+        </div>
       </div>
 
       {showQuick && (

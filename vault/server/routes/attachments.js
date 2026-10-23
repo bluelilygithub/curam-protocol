@@ -20,6 +20,7 @@ async function loadOwnedAttachment(attachmentId, userId) {
     `SELECT * FROM attachments WHERE id=$1`, [attachmentId]
   );
   if (!attachment) return null;
+  if (attachment.expiresAt && new Date(attachment.expiresAt) < new Date()) return null; // kept audio past its time: gone even if the clean-up has not run yet
 
   if (attachment.entityType === 'touchpoint') {
     const { rows: [ok] } = await pool.query(

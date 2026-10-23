@@ -2046,6 +2046,10 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_attachments_entity ON attachments("entityType","entityId")`);
+    // Voice-note audio kept on purpose: kind 'voice', removed after "expiresAt" (NULL = kept until deleted). See server/services/voiceAudio.js.
+    await client.query(`ALTER TABLE attachments ADD COLUMN IF NOT EXISTS kind TEXT`);
+    await client.query(`ALTER TABLE attachments ADD COLUMN IF NOT EXISTS "expiresAt" TIMESTAMPTZ`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_attachments_expires ON attachments("expiresAt") WHERE "expiresAt" IS NOT NULL`);
 
     // The text inside files attached to notes, so "Ask your notes" can find and quote it (server/services/noteFileText.js). One row per
     // attachment, removed with it. status 'none' = nothing to read (a photo, a scan, an old .doc), recorded so it is not tried again.
