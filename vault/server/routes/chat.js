@@ -9,6 +9,7 @@ const rateLimit = require('express-rate-limit');
 const { pool } = require('../db');
 const bin = require('../services/recycleBin');
 const { snapshotChat, removeChat, CHAT_MAX_BYTES } = require('../services/recycleBin/adapters/chats');
+const noteContext = require('../services/noteContext');
 const { buildTypeConfigPrompt } = require('../typePrompts');
 const { calculateCost } = require('../services/costCalculator');
 const { getModelsForUser, getVaultModelsConfigForUser } = require('../services/modelResolver');
@@ -596,7 +597,7 @@ router.post('/test-model', async (req, res) => {
 
 // POST /api/chat
 router.post('/', chatLimiter, async (req, res) => {
-  const { messages, projectId, sessionId, attachmentIds, urlAttachments, inlineImages, model: reqModel, temperature: reqTemp, reasoning, webSearch, userTimezone, studentCards: bodyStudentCards } = req.body;
+  const { messages, projectId, sessionId, attachmentIds, urlAttachments, inlineImages, model: reqModel, temperature: reqTemp, reasoning, webSearch, useNotes, userTimezone, studentCards: bodyStudentCards } = req.body;
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'messages array required' });
   }
@@ -639,6 +640,15 @@ router.post('/', chatLimiter, async (req, res) => {
   const { blocks: systemBlocks, ragFallbackActive } = studentCards
     ? await buildStudentCardsSystemBlocks(req.user?.id ?? null, userTimezone || null)
     : await buildSystemPrompt(project, sid, effectiveWebSearch, userMessage, req.user?.id ?? null, userTimezone || null);
+
+  // "Use my notes" (off unless the person switched it on for this chat): the notes that match this message go in with it, and which ones
+  // are reported back so the screen can show them. See services/noteContext.js.
+  let notesUsed = null;
+  if (useNotes === true && !studentCards && req.user?.id) {
+    const found = await noteContext.findNotesForChat(req.user.id, userMessage);
+    notesUsed = noteContext.forScreen(found);
+    systemBlocks.splice(0, systemBlocks.length, ...noteContext.withNotesBlock(systemBlocks, noteContext.buildNotesBlock(found)));
+  }
 
   // Load all project Files API documents (PDFs uploaded to Anthropic) for persistent context
   const projectFileBlocks = [];
@@ -920,7 +930,7 @@ router.post('/', chatLimiter, async (req, res) => {
       }
     }
 
-    res.write(`data: ${JSON.stringify({ usage: { inputTokens, outputTokens, model, ragFallbackActive } })}\n\n`);
+    res.write(`data: ${JSON.stringify({ usage: { inputTokens, outputTokens, model, ragFallbackActive, ...(notesUsed ? { notesUsed } : {}) } })}\n\n`);
     res.write(`data: [DONE]\n\n`);
     res.end();
 

@@ -24,7 +24,7 @@ const noteFileText = require('./noteFileText');
 const MAX_QUESTION = 500;
 const MAX_HISTORY = 6;          // earlier messages sent along so follow-ups make sense
 const MAX_HISTORY_CHARS = 1200;
-const LIMITS = { detail: { notes: 12, chars: 3000, fileChars: 3000 }, overview: { notes: 30, chars: 600, fileChars: 400 } };
+const LIMITS = { detail: { notes: 12, chars: 3000, fileChars: 3000 }, overview: { notes: 30, chars: 600, fileChars: 400 }, chat: { notes: 5, chars: 2000, fileChars: 1500 } }; // chat: noteContext.js
 const NOTE_FILE_CHARS = 12000; // asking about one open note: more of its files
 const TOTAL_CHARS = 36000;      // the most note text sent for one question
 const RECENT_FALLBACK = 8;      // when nothing matches at all: the most recent notes in scope
@@ -468,5 +468,5 @@ module.exports = {
   routeDeps,
   MAX_QUESTION, MAX_HISTORY, LIMITS, TOTAL_CHARS, PLANNER_SYSTEM, ANSWER_SYSTEM, RELATED_RULES,
   fallbackKeywords, normalizePlan, tsQuery, dayStartUtc, matchByName, fitSources, cleanHistory, buildPlannerPrompt, buildAnswerPrompt,
-  normalizeAnswer, describePlan, scopeToQuery, mergePlan, askNotes,
+  normalizeAnswer, describePlan, scopeToQuery, mergePlan, askNotes, fetchRows, fetchRowsByIds,
 };

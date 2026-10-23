@@ -5,6 +5,8 @@ export const APP_NAV_GROUPS = [
     id: 'workspace',
     label: 'Workspace',
     items: [
+      // Notes leads the workspace: where things are written down first, then filed, searched, and worked on in Chat.
+      { id: 'notes', label: 'Notes', path: '/notes', icon: 'pen-line', featureKey: null },
       { id: 'memory', label: 'Memory', path: '/memory', icon: 'brain', featureKey: 'memory' },
       { id: 'guide', label: 'User Guide', path: '/guide', icon: 'help-circle', featureKey: null },
       { id: 'showcase', label: 'Client Showcase', path: 'https://claude.ai/artifact/STxyMcZUUHCVBZniFbxhtP', icon: 'external-link', featureKey: null, external: true },
@@ -148,8 +150,8 @@ export function filterNavGroups({ groups = APP_NAV_GROUPS, canUseFeature, isAdmi
 }
 
 export const SIDEBAR_WORKSPACE_LINKS = [
-  { id: 'tasks', label: 'Tasks', path: '/tasks', icon: 'list-checks' },
   { id: 'notes', label: 'Notes', path: '/notes', icon: 'pen-line' },
+  { id: 'tasks', label: 'Tasks', path: '/tasks', icon: 'list-checks' },
   { id: 'goals', label: 'Goals', path: '/goals', icon: 'target', featureKey: 'goals' },
   { id: 'clients', label: 'CRM', path: '/clients', icon: 'briefcase', featureKey: 'clients', matchPrefix: true },
   { id: 'clientProjects', label: 'Client projects', path: '/client-projects', icon: 'list-checks', featureKey: 'clients', matchPrefix: true },

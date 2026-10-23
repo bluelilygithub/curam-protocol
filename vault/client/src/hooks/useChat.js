@@ -25,6 +25,7 @@ export function useChat({ projectId, studentCards = false }) {
     reasoning = false,
     inlineImages = [],
     webSearch = true,
+    useNotes = false,
   ) => {
     setStreamError(null);
     setIsSearching(false);
@@ -58,6 +59,7 @@ export function useChat({ projectId, studentCards = false }) {
         personaId: personaId || undefined,
         reasoning: reasoning || undefined,
         webSearch: studentCards ? false : webSearch,
+        ...(useNotes && !studentCards ? { useNotes: true } : {}),
         userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         ...(studentCards ? { studentCards: true } : {}),
       }, controller.signal);
@@ -116,6 +118,16 @@ export function useChat({ projectId, studentCards = false }) {
                 model: parsed.usage.model || u.model,
               }));
               if (parsed.usage.ragFallbackActive) setRagFallbackActive(true);
+              // "Use my notes": which notes this reply was given, shown under it
+              if (Array.isArray(parsed.usage.notesUsed)) {
+                const notesUsed = parsed.usage.notesUsed;
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  const last = updated[updated.length - 1];
+                  if (last?.role === 'assistant') updated[updated.length - 1] = { ...last, notesUsed };
+                  return updated;
+                });
+              }
             }
             if (parsed.searching) {
               if (!gotFirstChunk) {
@@ -245,7 +257,7 @@ export function useChat({ projectId, studentCards = false }) {
   }, [sessionId, messages]);
 
   // Regenerate: remove last assistant (and possibly user) pair, re-send last user message
-  const regenerate = useCallback(async (lastUserText, attachmentIds, attachmentMeta, model, urlAttachments, temperature, personaId, reasoning, webSearch = true) => {
+  const regenerate = useCallback(async (lastUserText, attachmentIds, attachmentMeta, model, urlAttachments, temperature, personaId, reasoning, webSearch = true, useNotes = false) => {
     if (isStreaming) return;
     // Remove last 2 messages (user + assistant)
     let lastUserContent = lastUserText;
@@ -271,7 +283,7 @@ export function useChat({ projectId, studentCards = false }) {
     }
     // Re-send
     if (lastUserContent) {
-      await sendMessage(lastUserContent, attachmentIds || [], attachmentMeta || [], model, urlAttachments || [], temperature || 0.7, personaId, reasoning, [], studentCards ? false : webSearch);
+      await sendMessage(lastUserContent, attachmentIds || [], attachmentMeta || [], model, urlAttachments || [], temperature || 0.7, personaId, reasoning, [], studentCards ? false : webSearch, useNotes);
     }
   }, [isStreaming, sessionId, sendMessage, studentCards]);
 

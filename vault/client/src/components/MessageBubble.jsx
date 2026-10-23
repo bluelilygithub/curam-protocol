@@ -64,7 +64,7 @@ function DeleteControl({ messageIndex, onDelete, pairAvailable, getIcon, boxed }
   );
 }
 
-function MessageBubble({ message, onDelete, pairAvailable, onOpenArtifact, onBranch, onBranchResponse, messageIndex, searching, bookmarked, onToggleBookmark, isLatest, isSpeaking, isGeneratingSpeech, isPaused, onSpeak, onPause, onResume, onStop, markdownVariant = 'default' }) {
+function MessageBubble({ message, onDelete, pairAvailable, onOpenArtifact, onBranch, onBranchResponse, messageIndex, searching, bookmarked, onToggleBookmark, onSaveToNotes, isLatest, isSpeaking, isGeneratingSpeech, isPaused, onSpeak, onPause, onResume, onStop, markdownVariant = 'default' }) {
   const isUser = message.role === 'user';
   const [showThinking, setShowThinking] = useState(false);
   const getIcon = useIcon();
@@ -304,6 +304,29 @@ function MessageBubble({ message, onDelete, pairAvailable, onOpenArtifact, onBra
           </div>
         )}
 
+        {/* Which of the person's notes this reply was given (only when "My notes" was on for the message) */}
+        {message.role === 'assistant' && Array.isArray(message.notesUsed) && message.content && (
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs" style={{ color: 'var(--color-muted)' }}>
+            {message.notesUsed.length === 0 ? (
+              <span>No note matched this message.</span>
+            ) : (
+              <>
+                <span>From your notes:</span>
+                {message.notesUsed.map((n) => (
+                  <a
+                    key={n.id}
+                    href={`/notes?note=${n.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2 py-0.5 rounded-md hover:opacity-70 transition-opacity duration-200"
+                    style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}
+                  >{n.title}</a>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+
         {/* Action buttons — appear on hover (always visible while speaking) */}
         {message.content && (
           <div className={`flex items-center gap-1 mt-1.5 transition-opacity${isSpeaking ? ' opacity-100' : ' opacity-0 group-hover:opacity-100'}`}>
@@ -340,6 +363,17 @@ function MessageBubble({ message, onDelete, pairAvailable, onOpenArtifact, onBra
                 title={bookmarked ? 'Remove bookmark' : 'Bookmark this message'}
               >
                 {getIcon('star', { size: 11, fill: bookmarked ? 'currentColor' : 'none' })}
+              </button>
+            )}
+            {onSaveToNotes && (
+              <button
+                onClick={() => onSaveToNotes(message)}
+                className="w-6 h-6 flex items-center justify-center rounded-md"
+                style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
+                title="Save this reply to Notes"
+                aria-label="Save this reply to Notes"
+              >
+                {getIcon('pen-line', { size: 11 })}
               </button>
             )}
             <button

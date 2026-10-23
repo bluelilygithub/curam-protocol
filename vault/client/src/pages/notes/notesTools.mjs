@@ -23,5 +23,7 @@ export const NOTES_TOOLS = [
   { id: 'project', label: 'Project', open: 'editor' },
   { id: 'convert-task', label: 'Convert to task', open: 'editor' },
   { id: 'open-as-chat', label: 'Open as chat', open: 'editor' },
+  { id: 'chat-uses-notes', label: 'Use my notes in Chat', open: 'list' },
+  { id: 'save-to-notes', label: 'Save a chat to Notes', open: 'list' },
   { id: 'delete', label: 'Delete', open: 'list' },
 ];

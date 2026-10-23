@@ -31,6 +31,7 @@ import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { formatSessionLabel } from '../utils/sessionDisplay';
 import { openRecentSession } from '../utils/chatNavigation';
 import { offerUndo } from '../utils/binUndo';
+import { replyToNote, chatToNote } from '../utils/chatToNote.mjs';
 
 const EMOTION_COLOURS = {
   joy: '#C9A84C', trust: '#6B9E70', fear: '#507A60', surprise: '#6B97B5',
@@ -76,7 +77,7 @@ function providerMissingHint(provider) {
 const MemoMessageList = React.memo(function MemoMessageList({
   messages, isStreaming, isAiSearching, sessionId,
   suggestions, onDelete, onBranch, onBranchResponse, onOpenArtifact, onSuggestionSelect, onBranchFollowup, canBranch, isBranching,
-  messagesEndRef, bookmarkedMap, onToggleBookmark,
+  messagesEndRef, bookmarkedMap, onToggleBookmark, onSaveToNotes,
   isTTSAvailable, isSpeaking, isGeneratingSpeech, isPaused, speakingId, speak, pauseSpeaking, resumeSpeaking, stopSpeaking,
   wideChat,
 }) {
@@ -101,6 +102,7 @@ const MemoMessageList = React.memo(function MemoMessageList({
               searching={isLastAssistant && isAiSearching}
               bookmarked={msg.id ? !!bookmarkedMap[msg.id] : false}
               onToggleBookmark={onToggleBookmark}
+              onSaveToNotes={msg.role === 'assistant' && msg.content && !(isLastAssistant && isStreaming) ? onSaveToNotes : undefined}
               isLatest={isLastAssistant}
               isSpeaking={isThisSpeaking && isSpeaking}
               isGeneratingSpeech={isThisSpeaking && isGeneratingSpeech}
@@ -248,6 +250,27 @@ function ChatPage({ general = false }) {
 
   // Web search
   const [webSearch, setWebSearch] = useState(true);
+
+  // Use my notes: off unless the person switches it on, and remembered for each chat on this device. A new chat has no id until its
+  // first reply, so a choice made before sending is saved under the id when it arrives.
+  const [useNotes, setUseNotesState] = useState(false);
+  const pendingUseNotesRef = useRef(false);
+  const notesKey = (id) => `vault:chat:useNotes:${id}`;
+  const setUseNotes = (on) => {
+    setUseNotesState(on);
+    if (sessionId) { try { localStorage.setItem(notesKey(sessionId), on ? '1' : '0'); } catch { /* not remembered in a private window */ } }
+  };
+  useEffect(() => {
+    if (!sessionId) { setUseNotesState(false); return; }
+    if (pendingUseNotesRef.current) {
+      pendingUseNotesRef.current = false;
+      try { localStorage.setItem(notesKey(sessionId), '1'); } catch { /* ignore */ }
+      return;
+    }
+    let stored = false;
+    try { stored = localStorage.getItem(notesKey(sessionId)) === '1'; } catch { /* ignore */ }
+    setUseNotesState(stored);
+  }, [sessionId]);
 
   // Model availability (null = unknown, true = configured, false = missing key)
   const [modelStatus, setModelStatus] = useState({ anthropic: null, gemini: null, deepseek: null, ollama: null });
@@ -571,7 +594,8 @@ function ChatPage({ general = false }) {
     setInlineImages([]);
     setSuggestions([]);
     setActiveArtifacts(null);
-    await sendMessage(text, ids, meta, effectiveModel || null, readyUrls, temperature, null, reasoning, imgPayload, webSearch);
+    if (!sessionId && useNotes) pendingUseNotesRef.current = true;
+    await sendMessage(text, ids, meta, effectiveModel || null, readyUrls, temperature, null, reasoning, imgPayload, webSearch, useNotes);
     setTimeout(fetchSessions, 2000);
   };
 
@@ -856,6 +880,20 @@ function ChatPage({ general = false }) {
     else offerUndo({ message: 'Chat deleted. Kept 30 days in the recycle bin.', binIds: [data?.binId], restoredMessage: 'Chat restored ✓', after: refresh });
     return true;
   };
+
+  // Save a reply, or the whole chat, as a note (filed under the chat's project when it has one) with a toast that opens it.
+  const saveToNotes = async ({ title, body }) => {
+    try {
+      const res = await api.post('/api/notes', { title, body, project_id: projectId || null });
+      const note = await res.json();
+      if (!res.ok || !note?.id) throw new Error('save failed');
+      addToast('Saved to Notes ✓', 'success', undefined, { label: 'Open', onClick: () => window.open(`/notes?note=${note.id}`, '_blank', 'noopener') });
+    } catch {
+      addToast('That could not be saved to Notes. Try again.', 'error');
+    }
+  };
+  const handleSaveReplyToNotes = useCallback((msg) => saveToNotes(replyToNote(msg.content, sessionTitle)), [projectId, sessionTitle]); // eslint-disable-line react-hooks/exhaustive-deps
+  const handleSaveChatToNotes = () => saveToNotes(chatToNote(messages, sessionTitle));
 
   const handleDeleteSession = async () => {
     if (!sessionId) return;
@@ -1281,6 +1319,20 @@ function ChatPage({ general = false }) {
                     {getIcon('globe', { size: 12 })}
                     Web search {webSearch ? 'on' : 'off'}
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setUseNotes(!useNotes)}
+                    aria-pressed={useNotes}
+                    className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-opacity hover:opacity-70"
+                    style={{
+                      borderColor: useNotes ? 'var(--color-primary)' : 'var(--color-border)',
+                      color: useNotes ? 'var(--color-primary)' : 'var(--color-muted)',
+                    }}
+                    title="Let this chat read your notes that match what you write, and show which ones it used. Off unless you switch it on; remembered for this chat."
+                  >
+                    {getIcon('pen-line', { size: 12 })}
+                    My notes {useNotes ? 'on' : 'off'}
+                  </button>
                   {(effectiveModel.includes('sonnet') || effectiveModel.includes('opus')) && (
                     <button
                       type="button"
@@ -1366,6 +1418,7 @@ function ChatPage({ general = false }) {
                 disabled: isSummarizing,
               }] : []),
               { label: 'Download', icon: 'file-down', onClick: () => downloadChatMd(messages, sessionTitle || sessionId, project?.name) },
+              ...(messages.length ? [{ label: 'Save chat to Notes', icon: 'pen-line', onClick: handleSaveChatToNotes }] : []),
               { divider: true, key: 'sep' },
               { label: 'Delete chat', icon: 'trash', danger: true, onClick: () => setConfirmDeleteSession(true) },
             ]}
@@ -1583,6 +1636,7 @@ function ChatPage({ general = false }) {
                 messagesEndRef={messagesEndRef}
                 bookmarkedMap={bookmarkedMap}
                 onToggleBookmark={handleToggleBookmark}
+                onSaveToNotes={handleSaveReplyToNotes}
                 wideChat={wideChat}
                 isTTSAvailable={isTTSAvailable}
                 isSpeaking={isSpeaking}

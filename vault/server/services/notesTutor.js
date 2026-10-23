@@ -64,6 +64,12 @@ const CATALOG = [
     notes: 'Only the first 500 characters of the note go into the task. The note itself is not changed or removed.' },
   { id: 'open-as-chat', label: 'Open as chat', group: 'Editor',
     does: 'The chat button in the editor toolbar sends the note\'s text to a chat as the first message to edit and send. Choose an existing project, make a new project, or use a general chat.', notes: 'It copies the note into the chat; the note stays as it is.' },
+  { id: 'chat-uses-notes', label: 'Use my notes in Chat', group: 'Chat and Notes',
+    does: 'In a chat, open the settings under the message box and switch on My notes. For each message you send, the notes that match what you wrote (by its words and by what it is about, including text inside attached files) are given to the chat with it, and the reply shows under it which notes it used ("From your notes:", each one opens that note in a new tab), or says that no note matched.',
+    notes: 'It is off in every new chat and remembered for each chat on that device. Only your own notes are ever read, at most five per message, and they are sent to the AI service like the rest of the message. The list of notes used is shown while you have the chat open; it is not kept when the chat is reloaded. Notes are not changed.' },
+  { id: 'save-to-notes', label: 'Save a chat to Notes', group: 'Chat and Notes',
+    does: 'Under any reply in a chat, the pen button saves that reply as a new note, titled from its first line. In the ⋯ menu of the chat, Save chat to Notes saves the whole conversation, with who said what. The note is filed under the project of the chat if it has one, and ends with a line saying which chat it came from. A message with an Open button appears afterwards.',
+    notes: 'It makes a new note each time and never changes an existing one. The chat itself is not changed.' },
   { id: 'delete', label: 'Delete', group: 'Notes list',
     does: 'The bin button deletes the note: in the list when you hover a note (on a phone, tap the ⋯ button beside it), and in the toolbar of an open note. It asks "Delete?" first, and nothing is deleted until you press Yes. The note then waits 30 days in Recently deleted.', notes: 'You can restore a deleted note for 30 days from Recently deleted, or press Undo in the message straight after.' },
 ];

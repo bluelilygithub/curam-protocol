@@ -5,6 +5,7 @@ export const NOTES_INTRO = 'Write, speak and find your notes. Every button has a
 
 export const HOW_IT_WORKS = [
   ['Write', 'The + button starts a note: type it, record your voice and have it written up, or start from a template (Meeting notes, Client call, Weekly review, your own). Notes save by themselves.'],
+  ['Chat and Notes', 'In a chat, switch on My notes (in the settings under the message box) and the chat can use the notes that match what you write; each reply shows which notes it used. It is off unless you switch it on, for each chat. The pen button under a reply, and Save chat to Notes in the chat menu, put a reply or a whole conversation into Notes.'],
   ['Write, Rich and Preview', 'Write is a plain text box: type simple symbols (# heading, **bold**, - list, - [ ] to-do). Rich is the enhanced editor, picked when you want it: the formatting shows as you type and a toolbar adds headings, lists, to-dos, links and tables. Preview shows the note formatted so you can read it and tick to-dos. Whichever you use, the note is saved as the same plain text, so search, Ask and the other tools work the same.'],
   ['Find', 'Search by words, project, client or tag. Filter by date, reminders, whether a note has files, tags, project or client, and group the list by date, project, client or tag. Save the combinations you use as views.'],
   ['Keep tidy', 'File a note under a project and a client, add tags, and pin the ones you want at the top. Manage tags renames or removes a tag everywhere.'],
@@ -15,4 +16,4 @@ export const HOW_IT_WORKS = [
   ['Recently deleted', 'Deleted notes, templates and views are kept 30 days and can be restored (Undo appears straight after a delete).'],
 ];
 
-export const NOTES_NOT = 'Notes are private to you: there is no sharing, and no images or attachments yet. A note is plain text with simple formatting symbols.';
+export const NOTES_NOT = 'Notes are private to you: there is no sharing, and no pictures placed inside a note (files can be attached). A note is plain text, with simple formatting symbols or the Rich editor.';
