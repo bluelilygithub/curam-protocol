@@ -6,6 +6,8 @@ export const NOTES_TOOLS = [
   { id: 'new-note', label: 'New note', open: 'chooser' },
   { id: 'new-voice-note', label: 'New voice note', open: 'recorder' },
   { id: 'search', label: 'Search notes', open: 'search' },
+  { id: 'group-notes', label: 'Group notes', open: 'list' },
+  { id: 'filter-notes', label: 'Filter notes', open: 'list' },
   { id: 'dictate', label: 'Dictate', open: 'editor' },
   { id: 'at-menu', label: 'Pull things in with @', open: 'editor' },
   { id: 'project', label: 'Project', open: 'editor' },

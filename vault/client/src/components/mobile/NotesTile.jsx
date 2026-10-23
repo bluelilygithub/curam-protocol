@@ -18,7 +18,7 @@ export default function NotesTile() {
   const getIcon = useIcon();
 
   const load = useCallback(() => {
-    api.get('/api/notes')
+    api.get('/api/notes?limit=12')
       .then(r => r.json())
       .then(data => { setNotes(Array.isArray(data) ? data : []); setLoading(false); })
       .catch(() => setLoading(false));
@@ -102,9 +102,9 @@ export default function NotesTile() {
               <div className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
                 {note.title || 'Untitled'}
               </div>
-              {note.body && (
+              {note.preview && (
                 <div className="text-xs mt-0.5 truncate" style={{ color: 'var(--color-muted)' }}>
-                  {note.body.replace(/[#*`[\]]/g, '').trim().slice(0, 60)}
+                  {note.preview.replace(/[#*`[\]]/g, '').trim().slice(0, 60)}
                 </div>
               )}
             </div>

@@ -3,129 +3,72 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useProjectStore from '../store/projectStore';
+import useToastStore from '../store/toastStore';
 import AtMentionDropdown from '../components/AtMentionDropdown';
-import MoodDot from '../components/mood/MoodDot';
 import VoiceNoteRecorder from './notes/VoiceNoteRecorder';
 import NotesTutorChat from './notes/NotesTutorChat';
 import NewNoteChooser from './notes/NewNoteChooser';
+import NotesListPanel from './notes/NotesListPanel';
+import InsertSourceModal from './notes/InsertSourceModal';
+import useNotesList, { toRow } from './notes/useNotesList';
+import useDictation from './notes/useDictation';
 import { NOTES_TOOLS } from './notes/notesTools.mjs';
-import { listText } from './notes/noteListText.mjs';
 
 const NOTE_BODY_LIMIT = 500;
-
-const AUTOSAVE_DELAY = 1000; // ms after last keystroke
+const AUTOSAVE_DELAY = 1000; // ms after the last keystroke
 
 export default function NotesPage() {
   const getIcon = useIcon();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { projects, fetchProjects, create: createProject } = useProjectStore();
+  const addToast = useToastStore((s) => s.addToast);
 
-  const [notes, setNotes] = useState([]);
-  const [filterProject, setFilterProject] = useState('');
+  const projectParam = searchParams.get('project') || '';
+  const noteParam = searchParams.get('note') || '';
+  const list = useNotesList({ initialProjectId: projectParam });
+  const { patchNote, removeNote } = list;
+
+  const [viewportMobile, setViewportMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 640);
+
+  // The open note. `selected` holds its details (id, project, client...); the text is in title/body so typing never re-renders the list.
   const [selected, setSelected] = useState(null);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [search, setSearch] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  const [bodyLoading, setBodyLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [saveState, setSaveState] = useState('saved'); // saved | dirty | saving | error
+
   const [showChatPicker, setShowChatPicker] = useState(false);
-  const [showRecorder, setShowRecorder] = useState(false); // the New voice note dialog
-  const [showNewChooser, setShowNewChooser] = useState(false); // what + opens: write a note, or record a voice note
+  const [showRecorder, setShowRecorder] = useState(false);
+  const [showNewChooser, setShowNewChooser] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [creatingProject, setCreatingProject] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [convertedNoteIds, setConvertedNoteIds] = useState(new Set());
-  const pendingConvertNoteIdRef = useRef(null);
-
-  const autosaveTimer = useRef(null);
-  const bodyRef = useRef(null);
-  const keyboardRef = useRef(null); // phones only: focusing this inside the tap keeps the keyboard up while the new note opens
-  const titleRef = useRef(null);
-  const searchRef = useRef(null); // the search box above the list (the guide's Open button focuses it)
-  const mentionTimerRef = useRef(null);
-  const mentionAtIndexRef = useRef(-1);
-  const recognitionRef = useRef(null);
-  const bodyValueRef = useRef(body);
-  const titleValueRef = useRef(title);
-  const selectedRef = useRef(selected);
-  const finalTranscriptRef = useRef('');
-  const isListeningRef = useRef(false); // ref version avoids stale closure in recognition callbacks
-
-  const [viewportMobile, setViewportMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 640);
-  const [mobileListOpen, setMobileListOpen] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [micSupported, setMicSupported] = useState(false);
-  const [interimText, setInterimText] = useState('');
-  const [micError, setMicError] = useState('');
-
-  // @mention state
+  const [insertKind, setInsertKind] = useState(null); // 'web' | 'gmail' | 'calendar'
   const [showMention, setShowMention] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
+  const [clients, setClients] = useState([]);
 
-  // Web search state
-  const [showSearchInput, setShowSearchInput] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchError, setSearchError] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
+  const pendingConvertNoteIdRef = useRef(null);
+  const bodyRef = useRef(null);
+  const titleRef = useRef(null);
+  const searchRef = useRef(null);
+  const keyboardRef = useRef(null); // phones: focusing this inside the tap keeps the keyboard up while a new note opens
+  const mentionTimerRef = useRef(null);
+  const mentionAtIndexRef = useRef(-1);
+  const selectedRef = useRef(null);
+  const bodyValueRef = useRef('');
+  const titleValueRef = useRef('');
+  const selectToken = useRef(0);
 
-  // Gmail state
-  const [showGmailSearch, setShowGmailSearch] = useState(false);
-  const [gmailQuery, setGmailQuery] = useState('');
-  const [isGmailSearching, setIsGmailSearching] = useState(false);
-  const [gmailError, setGmailError] = useState('');
-  const [gmailResults, setGmailResults] = useState([]);
-  const [gmailAttached, setGmailAttached] = useState([]);
-  const [gmailTranslatedQuery, setGmailTranslatedQuery] = useState('');
-
-  // Calendar state
-  const [showCalendarSearch, setShowCalendarSearch] = useState(false);
-  const [calendarQuery, setCalendarQuery] = useState('');
-  const [isCalendarSearching, setIsCalendarSearching] = useState(false);
-  const [calendarError, setCalendarError] = useState('');
-  const [calendarResults, setCalendarResults] = useState([]);
-  const [calendarAttached, setCalendarAttached] = useState([]);
-
-  useEffect(() => { fetchProjects(); }, [fetchProjects]);
-
-  useEffect(() => {
-    const handler = () => {
-      if (pendingConvertNoteIdRef.current) {
-        setConvertedNoteIds(prev => new Set([...prev, pendingConvertNoteIdRef.current]));
-        pendingConvertNoteIdRef.current = null;
-      }
-    };
-    document.addEventListener('vault:task-created', handler);
-    return () => document.removeEventListener('vault:task-created', handler);
-  }, []);
-
-  const loadNotes = useCallback(async (q = '', projectId = '') => {
-    const params = new URLSearchParams();
-    if (q) params.set('q', q);
-    if (projectId) params.set('project_id', projectId);
-    const qs = params.toString();
-    const url = qs ? `/api/notes?${qs}` : '/api/notes';
-    const res = await api.get(url);
-    setNotes(await res.json());
-  }, []);
-
-  useEffect(() => {
-    const projectParam = searchParams.get('project') || '';
-    setFilterProject(projectParam);
-    loadNotes('', projectParam);
-  }, [loadNotes, searchParams]);
-
-  useEffect(() => {
-    const noteId = searchParams.get('note');
-    if (!noteId || notes.length === 0) return;
-    const match = notes.find(n => String(n.id) === String(noteId));
-    if (match) selectNote(match);
-  }, [notes, searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Keep value refs current for mic callbacks (avoids stale closures)
+  useEffect(() => { selectedRef.current = selected; }, [selected]);
   useEffect(() => { bodyValueRef.current = body; }, [body]);
   useEffect(() => { titleValueRef.current = title; }, [title]);
-  useEffect(() => { selectedRef.current = selected; }, [selected]);
+
+  useEffect(() => { fetchProjects(); }, [fetchProjects]);
+  useEffect(() => { list.setProjectId(projectParam); }, [projectParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const check = () => setViewportMobile(window.innerWidth < 640);
@@ -133,435 +76,187 @@ export default function NotesPage() {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // Auto-open notes drawer on mobile when page first loads
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.innerWidth < 640) setMobileListOpen(true);
-  }, []); // eslint-disable-line
-
-  useEffect(() => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    setMicSupported(!!SR);
+    const handler = () => {
+      if (pendingConvertNoteIdRef.current) {
+        const id = pendingConvertNoteIdRef.current;
+        setConvertedNoteIds((prev) => new Set([...prev, id]));
+        pendingConvertNoteIdRef.current = null;
+      }
+    };
+    document.addEventListener('vault:task-created', handler);
+    return () => document.removeEventListener('vault:task-created', handler);
   }, []);
 
-  function toggleMic() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) return;
+  // ── Saving ────────────────────────────────────────────────────────────────
+  // One edit waiting at a time (pending). Saves run one after another so a slow one can never land after a newer one. Switching
+  // notes, hiding the tab or leaving the page saves straight away instead of waiting for the pause.
+  const pending = useRef(null); // { id, title, body }
+  const timer = useRef(null);
+  const chain = useRef(Promise.resolve());
 
-    setMicError('');
-
-    if (isListeningRef.current) {
-      isListeningRef.current = false;
-      recognitionRef.current?.abort();
-      return;
-    }
-
-    finalTranscriptRef.current = '';
-    isListeningRef.current = true;
-    setIsListening(true);
-    setInterimText('');
-
-    function startSession() {
-      if (!isListeningRef.current) return;
-      const recognition = new SR();
-      recognition.continuous = false;
-      // interimResults:true is required on iOS Safari — it never marks results
-      // as isFinal, so with false we receive nothing at all.
-      recognition.interimResults = true;
-      recognition.maxAlternatives = 1;
-      recognition.lang = navigator.language || 'en';
-
-      let sessionFinal = '';
-      let sessionInterim = '';
-
-      recognition.onresult = (event) => {
-        sessionFinal = '';
-        sessionInterim = '';
-        for (let i = 0; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            sessionFinal += event.results[i][0].transcript;
-          } else {
-            sessionInterim += event.results[i][0].transcript;
-          }
-        }
-        // Show live partial text in the listening banner
-        setInterimText(sessionFinal || sessionInterim);
-      };
-
-      recognition.onend = () => {
-        setInterimText('');
-        // iOS often never sets isFinal — fall back to interim text
-        const text = (sessionFinal || sessionInterim).trim();
-        if (text) finalTranscriptRef.current += text + ' ';
-
-        if (isListeningRef.current) {
-          setTimeout(startSession, 80);
-        } else {
-          setIsListening(false);
-          const transcript = finalTranscriptRef.current.trim();
-          finalTranscriptRef.current = '';
-          if (!transcript) return;
-          const current = bodyValueRef.current;
-          const newBody = current + (current ? '\n' : '') + transcript;
-          setBody(newBody);
-          setDirty(true);
-          const sel = selectedRef.current;
-          if (sel) {
-            clearTimeout(autosaveTimer.current);
-            autosaveTimer.current = setTimeout(async () => {
-              setSaving(true);
-              try {
-                await api.put(`/api/notes/${sel.id}`, { title: titleValueRef.current, body: newBody });
-                setDirty(false);
-              } catch {}
-              setSaving(false);
-            }, AUTOSAVE_DELAY);
-          }
-        }
-      };
-
-      recognition.onerror = (event) => {
-        setInterimText('');
-        if (event.error === 'no-speech' || event.error === 'aborted') {
-          if (isListeningRef.current) setTimeout(startSession, 80);
-          return;
-        }
-        isListeningRef.current = false;
-        setIsListening(false);
-        finalTranscriptRef.current = '';
-        setMicError(event.error === 'not-allowed' ? 'Microphone permission denied' : `Mic error: ${event.error}`);
-      };
-
-      recognitionRef.current = recognition;
-      try { recognition.start(); } catch {}
-    }
-
-    startSession();
-  }
-
-  const [moodMap, setMoodMap] = useState(null);
-  useEffect(() => {
-    if (notes.length === 0) { setMoodMap({}); return; }
-    const entities = notes.map(n => ({ entityType: 'note', entityId: String(n.id) }));
-    api.post('/api/mood/dominant/batch', { entities })
-      .then(r => r.json())
-      .then(batch => {
-        const map = {};
-        for (const n of notes) map[`note:${n.id}`] = batch[`note:${n.id}`] || null;
-        setMoodMap(map);
-      })
-      .catch(() => setMoodMap({}));
-  }, [notes]);
-
-  const scheduleAutosave = useCallback((noteId, newTitle, newBody) => {
-    clearTimeout(autosaveTimer.current);
-    autosaveTimer.current = setTimeout(async () => {
-      if (!noteId) return;
-      setSaving(true);
+  const runSave = useCallback(() => {
+    clearTimeout(timer.current);
+    const p = pending.current;
+    if (!p) return chain.current;
+    pending.current = null;
+    chain.current = chain.current.then(async () => {
+      const mine = selectedRef.current?.id === p.id;
+      if (mine) setSaveState('saving');
       try {
-        await api.put(`/api/notes/${noteId}`, { title: newTitle, body: newBody });
-        setDirty(false);
-        loadNotes(search, filterProject);
-      } catch (_) {}
-      setSaving(false);
-    }, AUTOSAVE_DELAY);
-  }, [search, loadNotes]);
+        const res = await api.put(`/api/notes/${p.id}`, { title: p.title, body: p.body });
+        if (!res.ok) throw new Error('save failed');
+        patchNote(toRow(await res.json()));
+        if (selectedRef.current?.id === p.id) setSaveState(pending.current?.id === p.id ? 'dirty' : 'saved');
+      } catch {
+        if (!pending.current) pending.current = p; // keep the words so Try again can send them
+        if (selectedRef.current?.id === p.id) setSaveState('error');
+      }
+    });
+    return chain.current;
+  }, [patchNote]);
 
-  function selectNote(note, { focusTitle = false } = {}) {
-    clearTimeout(autosaveTimer.current);
-    setSelected(note);
-    setTitle(note.title);
-    setBody(note.body);
-    setDirty(false);
+  const scheduleSave = useCallback((id, nextTitle, nextBody) => {
+    pending.current = { id, title: nextTitle, body: nextBody };
+    setSaveState('dirty');
+    clearTimeout(timer.current);
+    timer.current = setTimeout(runSave, AUTOSAVE_DELAY);
+  }, [runSave]);
+
+  useEffect(() => {
+    const onHide = () => { if (document.visibilityState === 'hidden') runSave(); };
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('pagehide', runSave);
+    return () => {
+      document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('pagehide', runSave);
+      runSave();
+    };
+  }, [runSave]);
+
+  // ── Dictation ─────────────────────────────────────────────────────────────
+  const dictation = useDictation({
+    onText: async (text, noteId) => {
+      if (selectedRef.current?.id === noteId) {
+        const current = bodyValueRef.current;
+        const next = current + (current ? '\n' : '') + text;
+        setBody(next);
+        scheduleSave(noteId, titleValueRef.current, next);
+        return;
+      }
+      // The person opened another note while speaking: the words still belong to the first one.
+      try {
+        const res = await api.get(`/api/notes/${noteId}`);
+        const note = await res.json();
+        await api.put(`/api/notes/${noteId}`, { body: (note.body ? `${note.body}\n` : '') + text });
+      } catch { addToast('Your dictated words could not be added to that note.', 'error'); }
+    },
+  });
+
+  // ── Opening a note ────────────────────────────────────────────────────────
+  const selectNote = useCallback(async (row, { focusTitle = false } = {}) => {
+    runSave();
+    dictation.stop();
+    setConfirmDelete(false);
+    setShowChatPicker(false);
+    const token = ++selectToken.current;
+    const needsBody = row.body === undefined;
+    setSelected(row);
+    setTitle(row.title || '');
+    setBody(row.body ?? '');
+    setSaveState('saved');
+    setLoadError('');
+    setBodyLoading(needsBody);
+    if (needsBody) {
+      try {
+        const res = await api.get(`/api/notes/${row.id}`);
+        if (!res.ok) throw new Error('load failed');
+        const full = await res.json();
+        if (token !== selectToken.current) return;
+        setSelected(full);
+        setTitle(full.title);
+        setBody(full.body);
+      } catch {
+        if (token === selectToken.current) setLoadError('This note could not be opened.');
+      } finally {
+        if (token === selectToken.current) setBodyLoading(false);
+      }
+    }
+    if (token !== selectToken.current) return;
     setTimeout(() => {
-      if (focusTitle) { titleRef.current?.focus(); titleRef.current?.select(); } else bodyRef.current?.focus();
+      if (focusTitle) { titleRef.current?.focus(); titleRef.current?.select(); } else if (!viewportMobile) bodyRef.current?.focus();
     }, 0);
+  }, [runSave, dictation, viewportMobile]);
+
+  const closeNote = useCallback(() => {
+    runSave();
+    dictation.stop();
+    selectToken.current++;
+    setSelected(null);
+    setTitle('');
+    setBody('');
+    setConfirmDelete(false);
+  }, [runSave, dictation]);
+
+  // A link to /notes?note=ID opens that note once (not again each time the list changes).
+  useEffect(() => {
+    if (!noteParam) return;
+    const id = Number(noteParam);
+    if (id && selectedRef.current?.id !== id) selectNote({ id, title: '', project_id: null, client_id: null });
+  }, [noteParam]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Creating ──────────────────────────────────────────────────────────────
+  async function createNote({ focusTitle = false } = {}) {
+    runSave();
+    try {
+      const res = await api.post('/api/notes', {
+        title: 'Untitled', body: '',
+        project_id: list.projectId ? Number(list.projectId) : null, // a note made while looking at a project belongs to it
+        client_id: list.clientId ? Number(list.clientId) : null,
+      });
+      if (!res.ok) throw new Error('create failed');
+      const note = await res.json();
+      const project = projects.find((p) => p.id === note.project_id);
+      const client = clients.find((c) => c.id === note.client_id);
+      const full = { ...note, project_name: project?.name || null, client_name: client?.name || null };
+      patchNote(toRow(full));
+      await selectNote(full, { focusTitle });
+    } catch {
+      addToast('The note could not be created. Try again.', 'error');
+    }
   }
 
-  // "Write a note" from the + chooser: make the note and open it with the cursor in the title.
   async function startWrittenNote() {
     keyboardRef.current?.focus(); // inside the tap, so a phone keeps its keyboard up while the note is made
     setShowNewChooser(false);
-    const res = await api.post('/api/notes', { title: 'Untitled', body: '' });
-    const note = await res.json();
-    await loadNotes(search, filterProject);
-    selectNote(note, { focusTitle: true });
-    if (viewportMobile) setMobileListOpen(false);
+    await createNote({ focusTitle: true });
   }
 
-  async function createNote() {
-    const res = await api.post('/api/notes', { title: 'Untitled', body: '' });
-    const note = await res.json();
-    await loadNotes(search, filterProject);
-    selectNote(note);
-    if (viewportMobile) setMobileListOpen(false);
-  }
-
-  // The guide's Open buttons only bring something into view (see notes/notesTools.mjs); none of them changes or deletes a note.
-  function openGuideTool(id) {
-    const tool = NOTES_TOOLS.find((t) => t.id === id);
-    if (!tool) return;
-    if (tool.open === 'chooser') { setShowNewChooser(true); return; }
-    if (tool.open === 'recorder') { setShowRecorder(true); return; }
-    if (tool.open === 'search' || tool.open === 'list') {
-      if (viewportMobile) setMobileListOpen(true);
-      setTimeout(() => searchRef.current?.focus(), 60);
-      return;
-    }
-    if (viewportMobile && !selected) setMobileListOpen(true);
-    setTimeout(() => bodyRef.current?.focus(), 60); // the controls inside a note: bring the open note into focus
-  }
-
-  // A voice note was just made (the server saved it): show it in the list and open it.
   async function handleVoiceNote(note) {
-    await loadNotes(search, filterProject);
+    patchNote(toRow(note));
     selectNote(note);
-    if (viewportMobile) setMobileListOpen(false);
   }
 
-  async function deleteNote(noteId, e) {
-    e.stopPropagation();
-    await api.delete(`/api/notes/${noteId}`);
-    if (selected?.id === noteId) {
-      setSelected(null);
-      setTitle('');
-      setBody('');
-    }
-    loadNotes(search, filterProject);
-  }
-
-  function handleTitleChange(e) {
-    setTitle(e.target.value);
-    setDirty(true);
-    scheduleAutosave(selected.id, e.target.value, body);
-  }
-
-  function handleBodyChange(e) {
-    const val = e.target.value;
-    setBody(val);
-    setDirty(true);
-    scheduleAutosave(selected.id, title, val);
-
-    // @mention detection
-    const cursorPos = e.target.selectionStart;
-    const textBefore = val.slice(0, cursorPos);
-    const atIndex = textBefore.lastIndexOf('@');
-    if (atIndex !== -1 && !textBefore.slice(atIndex + 1).includes(' ')) {
-      mentionAtIndexRef.current = atIndex;
-      setShowMention(true);
-      clearTimeout(mentionTimerRef.current);
-      mentionTimerRef.current = setTimeout(() => {
-        setMentionQuery(textBefore.slice(atIndex + 1));
-      }, 150);
-    } else {
-      setShowMention(false);
-      clearTimeout(mentionTimerRef.current);
-    }
-  }
-
-  // Insert text at the @ position, replacing the @query
-  function insertAtMention(text) {
-    const atIndex = mentionAtIndexRef.current;
-    const cursorPos = bodyRef.current?.selectionStart || body.length;
-    const newBody = body.slice(0, atIndex) + text + body.slice(cursorPos);
-    setBody(newBody);
-    setShowMention(false);
-    setDirty(true);
-    scheduleAutosave(selected.id, title, newBody);
-    setTimeout(() => bodyRef.current?.focus(), 0);
-  }
-
-  // Append text at the end of the body
-  function appendToBody(text) {
-    const newBody = body + (body && !body.endsWith('\n') ? '\n' : '') + text;
-    setBody(newBody);
-    setDirty(true);
-    scheduleAutosave(selected.id, title, newBody);
-  }
-
-  const handleMentionSelect = (token, extraContext = '') => {
-    insertAtMention(token + extraContext);
-  };
-
-  // Web search
-  const handleOpenSearch = () => {
-    const atIndex = mentionAtIndexRef.current;
-    const cursorPos = bodyRef.current?.selectionStart || body.length;
-    if (atIndex !== -1) {
-      const newBody = body.slice(0, atIndex) + body.slice(cursorPos);
-      setBody(newBody);
-    }
-    setShowMention(false);
-    setSearchQuery('');
-    setSearchError('');
-    setSearchResults([]);
-    setShowSearchInput(true);
-  };
-
-  const handleSearch = async () => {
-    if (!searchQuery.trim() || isSearching) return;
-    setIsSearching(true);
-    setSearchError('');
-    setSearchResults([]);
+  // ── Delete / convert / chat ───────────────────────────────────────────────
+  async function deleteNote(note) {
     try {
-      const res = await api.get(`/api/web-search?q=${encodeURIComponent(searchQuery.trim())}`);
-      const data = await res.json();
-      if (data.error) { setSearchError(data.error); return; }
-      const results = data.results || [];
-      if (results.length === 0) { setSearchError('No results found. Try a different query.'); return; }
-      setSearchResults(results);
-    } catch (err) {
-      setSearchError(err.message || 'Search failed');
-    } finally {
-      setIsSearching(false);
+      const res = await api.delete(`/api/notes/${note.id}`);
+      if (!res.ok && res.status !== 404) throw new Error('delete failed');
+      if (pending.current?.id === note.id) { pending.current = null; clearTimeout(timer.current); }
+      removeNote(note.id);
+      if (selectedRef.current?.id === note.id) closeNote();
+    } catch {
+      addToast('The note could not be deleted. Try again.', 'error');
     }
-  };
-
-  const handleSearchDone = () => {
-    if (searchResults.length > 0) {
-      const block = '\n\n**Web Search: ' + searchQuery + '**\n' +
-        searchResults.map(r => `- [${r.title}](${r.url})${r.snippet ? '\n  ' + r.snippet : ''}`).join('\n');
-      appendToBody(block);
-    }
-    setShowSearchInput(false);
-    setSearchQuery('');
-    setSearchResults([]);
-    setTimeout(() => bodyRef.current?.focus(), 0);
-  };
-
-  // Gmail
-  const handleOpenGmailSearch = () => {
-    const atIndex = mentionAtIndexRef.current;
-    const cursorPos = bodyRef.current?.selectionStart || body.length;
-    if (atIndex !== -1) {
-      const newBody = body.slice(0, atIndex) + body.slice(cursorPos);
-      setBody(newBody);
-    }
-    setShowMention(false);
-    setGmailQuery('');
-    setGmailError('');
-    setGmailResults([]);
-    setGmailAttached([]);
-    setGmailTranslatedQuery('');
-    setShowGmailSearch(true);
-  };
-
-  const handleGmailSearch = async () => {
-    if (!gmailQuery.trim() || isGmailSearching) return;
-    setIsGmailSearching(true);
-    setGmailError('');
-    setGmailResults([]);
-    setGmailTranslatedQuery('');
-    try {
-      const res = await api.get(`/api/gmail/search?q=${encodeURIComponent(gmailQuery.trim())}&max=10`);
-      const data = await res.json();
-      if (data.error) { setGmailError(data.error); return; }
-      if (data.translatedQuery && data.translatedQuery !== gmailQuery.trim()) {
-        setGmailTranslatedQuery(data.translatedQuery);
-      }
-      const results = data.results || [];
-      if (results.length === 0) { setGmailError(`No emails found${data.translatedQuery ? ` for: ${data.translatedQuery}` : ''}. Try rephrasing.`); return; }
-      setGmailResults(results);
-    } catch (err) {
-      setGmailError(err.message || 'Gmail search failed');
-    } finally {
-      setIsGmailSearching(false);
-    }
-  };
-
-  const handleGmailAttachThread = async (result) => {
-    if (gmailAttached.includes(result.threadId)) return;
-    try {
-      const res = await api.get(`/api/gmail/thread/${result.threadId}`);
-      const data = await res.json();
-      if (data.error) { setGmailError(data.error); return; }
-      const threadText = '\n\n**Email: ' + result.subject + '**\n' +
-        (data.messages || []).map(m =>
-          `From: ${m.from}\nDate: ${m.date}\n\n${m.body}`
-        ).join('\n\n---\n\n');
-      appendToBody(threadText);
-      setGmailAttached(prev => [...prev, result.threadId]);
-    } catch (err) {
-      setGmailError(err.message || 'Failed to load email thread');
-    }
-  };
-
-  const handleGmailDone = () => {
-    setShowGmailSearch(false);
-    setGmailQuery('');
-    setGmailResults([]);
-    setGmailAttached([]);
-    setGmailTranslatedQuery('');
-    setTimeout(() => bodyRef.current?.focus(), 0);
-  };
-
-  // Calendar
-  const handleOpenCalendarSearch = () => {
-    const atIndex = mentionAtIndexRef.current;
-    const cursorPos = bodyRef.current?.selectionStart || body.length;
-    if (atIndex !== -1) {
-      const newBody = body.slice(0, atIndex) + body.slice(cursorPos);
-      setBody(newBody);
-    }
-    setShowMention(false);
-    setCalendarQuery('');
-    setCalendarError('');
-    setCalendarResults([]);
-    setCalendarAttached([]);
-    setShowCalendarSearch(true);
-  };
-
-  const handleCalendarSearch = async () => {
-    if (!calendarQuery.trim() || isCalendarSearching) return;
-    setIsCalendarSearching(true);
-    setCalendarError('');
-    setCalendarResults([]);
-    try {
-      const res = await api.get(`/api/calendar/search?q=${encodeURIComponent(calendarQuery.trim())}&max=10`);
-      const data = await res.json();
-      if (data.error) { setCalendarError(data.error); return; }
-      const results = data.results || [];
-      if (results.length === 0) { setCalendarError('No events found. Try rephrasing.'); return; }
-      setCalendarResults(results);
-    } catch (err) {
-      setCalendarError(err.message || 'Calendar search failed');
-    } finally {
-      setIsCalendarSearching(false);
-    }
-  };
-
-  const handleCalendarAttachEvent = async (event) => {
-    if (calendarAttached.includes(event.id)) return;
-    try {
-      const res = await api.get(`/api/calendar/event/${event.id}`);
-      const data = await res.json();
-      if (data.error) { setCalendarError(data.error); return; }
-      appendToBody('\n\n' + (data.text || ''));
-      setCalendarAttached(prev => [...prev, event.id]);
-    } catch (err) {
-      setCalendarError(err.message || 'Failed to load event');
-    }
-  };
-
-  const handleCalendarDone = () => {
-    setShowCalendarSearch(false);
-    setCalendarQuery('');
-    setCalendarResults([]);
-    setCalendarAttached([]);
-    setTimeout(() => bodyRef.current?.focus(), 0);
-  };
-
-  function handleSearchChange(e) {
-    setSearch(e.target.value);
-    loadNotes(e.target.value, filterProject);
   }
 
-  function convertToTask(note, e) {
-    if (e) e.stopPropagation();
+  function convertToTask(note) {
     pendingConvertNoteIdRef.current = note.id;
+    const text = note.id === selected?.id ? body : (note.body ?? note.preview ?? '');
     document.dispatchEvent(new CustomEvent('vault:open-quick-capture', {
       detail: {
         title: note.title === 'Untitled' ? '' : note.title,
-        notes: (note.body || '').substring(0, NOTE_BODY_LIMIT),
+        notes: (text || '').substring(0, NOTE_BODY_LIMIT),
         projectId: note.project_id || null,
         toastMessage: 'Task created from note ✓',
       },
@@ -574,11 +269,7 @@ export default function NotesPage() {
     setShowChatPicker(false);
     setNewProjectName('');
     setCreatingProject(false);
-    if (projectId) {
-      navigate(`/projects/${projectId}/chat`, { state: { draft: text } });
-    } else {
-      navigate('/chat', { state: { draft: text } });
-    }
+    navigate(projectId ? `/projects/${projectId}/chat` : '/chat', { state: { draft: text } });
   }
 
   async function handleCreateProjectAndChat() {
@@ -587,346 +278,260 @@ export default function NotesPage() {
     try {
       const project = await createProject({ name: newProjectName.trim() });
       takeToChatWith(project.id);
-    } catch (_) {
+    } catch {
       setCreatingProject(false);
     }
   }
 
-  async function handleProjectChange(e) {
-    const pid = e.target.value ? Number(e.target.value) : null;
-    await api.put(`/api/notes/${selected.id}`, { project_id: pid });
-    setSelected(prev => ({ ...prev, project_id: pid }));
-    loadNotes(search, filterProject);
+  // ── Project / client of the open note ─────────────────────────────────────
+  const ensureClients = useCallback(async () => {
+    if (clients.length) return;
+    try {
+      const res = await api.get('/api/notes/options');
+      if (res.ok) setClients((await res.json()).clients || []);
+    } catch { /* the pickers just stay short */ }
+  }, [clients.length]);
+
+  async function changeFiling(changes, names) {
+    if (!selected) return;
+    try {
+      const res = await api.put(`/api/notes/${selected.id}`, changes);
+      if (!res.ok) throw new Error('save failed');
+      const saved = await res.json();
+      setSelected((prev) => ({ ...prev, project_id: saved.project_id, client_id: saved.client_id, ...names }));
+      patchNote(toRow(saved, names));
+    } catch {
+      addToast('That change could not be saved. Try again.', 'error');
+    }
   }
+
+  const handleProjectChange = (e) => {
+    const id = e.target.value ? Number(e.target.value) : null;
+    changeFiling({ project_id: id }, { project_name: projects.find((p) => p.id === id)?.name || null });
+  };
+  const handleClientChange = (e) => {
+    const id = e.target.value ? Number(e.target.value) : null;
+    changeFiling({ client_id: id }, { client_name: clients.find((c) => c.id === id)?.name || null });
+  };
+
+  // ── Typing ────────────────────────────────────────────────────────────────
+  function handleTitleChange(e) {
+    setTitle(e.target.value);
+    scheduleSave(selected.id, e.target.value, body);
+  }
+
+  function handleBodyChange(e) {
+    const val = e.target.value;
+    setBody(val);
+    scheduleSave(selected.id, title, val);
+
+    // "@" opens the pull-in menu, but only at the start of a word, so typing an email address does not
+    const cursorPos = e.target.selectionStart;
+    const textBefore = val.slice(0, cursorPos);
+    const atIndex = textBefore.lastIndexOf('@');
+    const startsWord = atIndex === 0 || /\s/.test(textBefore[atIndex - 1]);
+    if (atIndex !== -1 && startsWord && !/\s/.test(textBefore.slice(atIndex + 1))) {
+      mentionAtIndexRef.current = atIndex;
+      setShowMention(true);
+      clearTimeout(mentionTimerRef.current);
+      mentionTimerRef.current = setTimeout(() => setMentionQuery(textBefore.slice(atIndex + 1)), 150);
+    } else {
+      setShowMention(false);
+      clearTimeout(mentionTimerRef.current);
+    }
+  }
+
+  const cursor = () => bodyRef.current?.selectionStart ?? body.length;
+
+  function insertAtMention(text) {
+    const atIndex = mentionAtIndexRef.current;
+    const next = body.slice(0, atIndex) + text + body.slice(cursor());
+    setBody(next);
+    setShowMention(false);
+    scheduleSave(selected.id, title, next);
+    setTimeout(() => bodyRef.current?.focus(), 0);
+  }
+
+  // Append text to the end of the open note (the web / Gmail / Calendar pull-ins). Reads the latest text, so several can be added in a row.
+  function appendToBody(text) {
+    const current = bodyValueRef.current;
+    const next = current + (current && !current.endsWith('\n') ? '\n' : '') + text;
+    bodyValueRef.current = next;
+    setBody(next);
+    scheduleSave(selectedRef.current.id, titleValueRef.current, next);
+  }
+
+  // Choosing Search web / Gmail / Calendar from the @ menu: remove the "@query" that was typed, then open that search.
+  function openInsert(kind) {
+    const atIndex = mentionAtIndexRef.current;
+    if (atIndex !== -1) {
+      const next = body.slice(0, atIndex) + body.slice(cursor());
+      setBody(next);
+      scheduleSave(selected.id, title, next);
+    }
+    setShowMention(false);
+    setInsertKind(kind);
+  }
+
+  function openGuideTool(id) {
+    const tool = NOTES_TOOLS.find((t) => t.id === id);
+    if (!tool) return;
+    if (tool.open === 'chooser') { setShowNewChooser(true); return; }
+    if (tool.open === 'recorder') { setShowRecorder(true); return; }
+    if (tool.open === 'search' || tool.open === 'list') {
+      if (viewportMobile) closeNote();
+      setTimeout(() => searchRef.current?.focus(), 60);
+      return;
+    }
+    setTimeout(() => bodyRef.current?.focus(), 60);
+  }
+
+  // ── Layout ────────────────────────────────────────────────────────────────
+  const showList = !viewportMobile || !selected;
+  const showEditor = !viewportMobile || !!selected;
+  const clientOptions = clients.length ? clients : (selected?.client_id ? [{ id: selected.client_id, name: selected.client_name || `Client ${selected.client_id}` }] : []);
+  const border = { borderColor: 'var(--color-border)' };
+  const selectStyle = { background: 'var(--color-surface-2)', color: 'var(--color-muted)', border: '1px solid var(--color-border)', minHeight: viewportMobile ? 40 : 28, fontSize: viewportMobile ? 14 : 12 };
+  const toolBtn = { background: 'var(--color-surface-2)', color: 'var(--color-text)', border: '1px solid var(--color-border)', minHeight: viewportMobile ? 40 : undefined };
+
+  // Moods are only drawn on hover (desktop), so a phone does not ask for them at all.
+  const [moodMap, setMoodMap] = useState({});
+  const idsKey = viewportMobile ? '' : list.notes.map((n) => n.id).join(',');
+  useEffect(() => {
+    const missing = idsKey ? idsKey.split(',').filter((id) => !(`note:${id}` in moodMap)) : [];
+    if (!missing.length) return;
+    api.post('/api/mood/dominant/batch', { entities: missing.map((id) => ({ entityType: 'note', entityId: String(id) })) })
+      .then((r) => r.json())
+      .then((batch) => setMoodMap((prev) => { const next = { ...prev }; for (const id of missing) next[`note:${id}`] = batch[`note:${id}`] || null; return next; }))
+      .catch(() => setMoodMap((prev) => { const next = { ...prev }; for (const id of missing) next[`note:${id}`] = null; return next; }));
+  }, [idsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const statusText = { saved: 'Saved', dirty: 'Unsaved…', saving: 'Saving…', error: '' }[saveState];
 
   return (
     <div className="flex overflow-hidden" style={{ height: '100%' }}>
-      {/* ── List panel — desktop: static, mobile: slide-in drawer ── */}
-      {viewportMobile && mobileListOpen && (
-        <div
-          className="fixed inset-0 z-40"
-          style={{ background: 'rgba(0,0,0,0.35)' }}
-          onClick={() => setMobileListOpen(false)}
-        />
+      {showList && (
+        <div className="flex-shrink-0 border-r flex flex-col min-h-0" style={{ ...border, width: viewportMobile ? '100%' : 288 }}>
+          <NotesListPanel
+            list={list}
+            projects={projects}
+            clients={clients}
+            onNeedClients={ensureClients}
+            selectedId={selected?.id}
+            mobile={viewportMobile}
+            moodMap={viewportMobile ? null : moodMap}
+            convertedIds={convertedNoteIds}
+            onSelect={(row) => selectNote(row)}
+            onNew={() => setShowNewChooser(true)}
+            onConvert={convertToTask}
+            onDelete={deleteNote}
+            searchRef={searchRef}
+            bottomPad={viewportMobile ? 84 : 0 /* the guide button sits bottom-right on a phone */}
+          />
+        </div>
       )}
-      <div
-        className="flex-shrink-0 border-r flex flex-col"
-        style={viewportMobile ? {
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          bottom: 0,
-          zIndex: 50,
-          width: '285px',
-          background: 'var(--color-surface)',
-          borderColor: 'var(--color-border)',
-          transform: mobileListOpen ? 'translateX(0)' : 'translateX(-285px)',
-          transition: 'transform 0.2s ease',
-        } : {
-          width: '256px',
-          borderColor: 'var(--color-border)',
-        }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: 'var(--color-border)' }}>
-          <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Notes</span>
-          <div className="flex items-center gap-1">
-            {viewportMobile && (
-              <button
-                onClick={() => setMobileListOpen(false)}
-                className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60 transition-opacity"
-                style={{ color: 'var(--color-muted)' }}
-                title="Close"
-              >
-                {getIcon('x', { size: 14 })}
-              </button>
-            )}
-            <button
-              onClick={() => setShowNewChooser(true)}
-              className={viewportMobile
-                ? 'flex items-center justify-center gap-1.5 text-sm font-medium px-3 rounded-lg transition-opacity hover:opacity-80'
-                : 'w-6 h-6 flex items-center justify-center rounded hover:opacity-60 transition-opacity'}
-              style={viewportMobile
-                ? { minHeight: 40, background: 'var(--color-primary)', color: '#fff' }
-                : { color: 'var(--color-primary)' }}
-              title="New note: write one or record your voice"
-              aria-label="New note"
-            >
-              {getIcon('plus', { size: viewportMobile ? 18 : 16 })}{viewportMobile && ' New'}
-            </button>
-          </div>
-        </div>
 
-        {filterProject && (() => {
-          const proj = projects.find(p => String(p.id) === String(filterProject));
-          return (
-            <div className="mx-2 mt-2 mb-1 px-2 py-1.5 rounded-lg border flex items-center justify-between gap-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-              <span className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>
-                Project: <strong style={{ color: 'var(--color-text)' }}>{proj?.name || `#${filterProject}`}</strong>
-              </span>
-              <button
-                type="button"
-                onClick={() => navigate('/notes')}
-                className="text-xs flex-shrink-0 hover:opacity-70 transition-opacity"
-                style={{ color: 'var(--color-primary)' }}
-              >
-                Clear
-              </button>
-            </div>
-          );
-        })()}
-
-        {/* Search */}
-        <div className="px-2 py-1.5 border-b" style={{ borderColor: 'var(--color-border)' }}>
-          <div className="flex items-center gap-1.5 rounded px-2 py-1" style={{ background: 'var(--color-surface-2)' }}>
-            {getIcon('search', { size: 13, style: { color: 'var(--color-muted)' } })}
-            <input
-              value={search}
-              onChange={handleSearchChange}
-              ref={searchRef}
-              placeholder="Search notes…"
-              className="bg-transparent text-xs outline-none flex-1"
-              style={{ color: 'var(--color-text)' }}
-            />
-          </div>
-        </div>
-
-        {/* Note list */}
-        <div className="flex-1 overflow-y-auto">
-          {notes.length === 0 && (
-            <p className="text-xs px-3 py-4" style={{ color: 'var(--color-muted)' }}>
-              {search ? 'No results' : 'No notes yet'}
-            </p>
-          )}
-          {notes.map(note => (
-            <div
-              key={note.id}
-              className="group cursor-pointer border-b"
-              style={{
-                borderColor: 'var(--color-border)',
-                background: selected?.id === note.id ? 'var(--color-surface-2)' : 'transparent',
-              }}
-              onClick={() => { selectNote(note); if (viewportMobile) setMobileListOpen(false); }}
-            >
-              <div className="flex items-start justify-between px-3 py-2">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    {note.source === 'voice' && (
-                      <span className="flex-shrink-0" style={{ color: 'var(--color-primary)' }} title="Voice note (made from a recording)" aria-label="Voice note">
-                        {getIcon('audio-lines', { size: 13 })}
-                      </span>
-                    )}
-                    <div className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{listText(note).title}</div>
-                  </div>
-                  <div className="text-xs truncate mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                    {listText(note).preview || (note.body ? '\u00a0' : <span className="italic">empty</span>)}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 ml-1 mt-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100">
-                  {moodMap !== null && <MoodDot entityType="note" entityId={note.id} entityTitle={note.title} dominantEmotion={moodMap[`note:${note.id}`]} />}
-                  <button
-                    onClick={(e) => convertToTask(note, e)}
-                    className="hover:opacity-60 transition-opacity"
-                    style={{ color: 'var(--color-primary)' }}
-                    title="Convert to task"
-                  >
-                    {getIcon('list-checks', { size: 13 })}
-                  </button>
-                  <button
-                    onClick={(e) => deleteNote(note.id, e)}
-                    className="hover:opacity-60 transition-opacity"
-                    style={{ color: 'var(--color-muted)' }}
-                    title="Delete"
-                  >
-                    {getIcon('trash', { size: 13 })}
-                  </button>
-                </div>
-              </div>
-              {convertedNoteIds.has(note.id) && (
-                <div className="px-3 pb-1.5">
-                  <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-primary)22', color: 'var(--color-primary)' }}>
-                    ↳ task created
-                  </span>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Editor panel ── */}
-      {selected ? (
-        <div className="flex-1 flex flex-col overflow-hidden">
+      {showEditor && (selected ? (
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
           {/* Toolbar */}
-          <div className="flex items-center justify-between px-4 py-2 border-b flex-shrink-0" style={{ borderColor: 'var(--color-border)' }}>
-            <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center justify-between gap-2 px-3 sm:px-4 py-2 border-b flex-shrink-0" style={border}>
+            <div className="flex items-center gap-2 min-w-0">
               {viewportMobile && (
-                <button
-                  onClick={() => setMobileListOpen(true)}
-                  className="flex items-center gap-1 text-xs px-2 py-1 rounded-md hover:opacity-70 transition-opacity flex-shrink-0 border"
-                  style={{ color: 'var(--color-muted)', borderColor: 'var(--color-border)' }}
-                  title="Show notes list"
-                >
-                  {getIcon('menu', { size: 12 })} Notes
+                <button type="button" onClick={closeNote} aria-label="Back to all notes" className="flex items-center gap-1 text-sm px-2 rounded-lg hover:opacity-70 transition-opacity duration-200 flex-shrink-0" style={{ color: 'var(--color-primary)', minHeight: 44 }}>
+                  {getIcon('arrow-left', { size: 18 })} Notes
                 </button>
               )}
-              <select
-                value={selected.project_id || ''}
-                onChange={handleProjectChange}
-                className="text-xs rounded px-2 py-1 outline-none"
-                style={{ background: 'var(--color-surface-2)', color: 'var(--color-muted)', border: '1px solid var(--color-border)', ...(viewportMobile ? { maxWidth: 120, minHeight: 36 } : {}) }}
-                aria-label="Project"
-              >
-                <option value="">No project</option>
-                {projects.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-
               {selected.source === 'voice' && (
-                <span
-                  className="flex items-center gap-1 text-xs px-2 py-1 rounded-md"
-                  style={{ color: 'var(--color-primary)', border: '1px solid var(--color-border)' }}
-                  title="This note was made from a recording. Only the words were kept, not the audio."
-                >
-                  {getIcon('audio-lines', { size: 12 })} Voice note
+                <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-md flex-shrink-0" style={{ color: 'var(--color-primary)', border: '1px solid var(--color-border)' }} title="This note was made from a recording. Only the words were kept, not the audio.">
+                  {getIcon('audio-lines', { size: 12 })}{!viewportMobile && ' Voice note'}
                 </span>
               )}
-              {saving && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Saving…</span>}
-              {!saving && !dirty && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Saved</span>}
+              {saveState === 'error' ? (
+                <span className="text-xs flex items-center gap-1.5 min-w-0" style={{ color: '#ef4444' }} role="alert">
+                  Not saved
+                  <button type="button" onClick={runSave} className="underline hover:opacity-70 transition-opacity duration-200">Try again</button>
+                </span>
+              ) : (
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }} aria-live="polite">{statusText}</span>
+              )}
             </div>
 
-            <div className="flex items-center gap-2">
-              {micSupported && !viewportMobile && (
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {dictation.supported && !viewportMobile && (
                 <button
-                  onClick={toggleMic}
-                  className={`${viewportMobile ? 'w-9 h-9' : 'w-7 h-7'} flex items-center justify-center rounded-md hover:opacity-60 transition-opacity flex-shrink-0`}
-                  aria-label={isListening ? 'Stop dictation' : 'Dictate into this note'}
-                  style={{
-                    color: isListening ? '#ef4444' : 'var(--color-muted)',
-                    background: isListening ? '#fee2e2' : undefined,
-                    animation: isListening ? 'pulse 1.2s ease-in-out infinite' : undefined,
-                  }}
-                  title={isListening ? 'Stop dictation' : 'Dictate (voice input)'}
-                >
-                  {getIcon('mic', { size: 16 })}
-                </button>
+                  type="button"
+                  onClick={() => (dictation.listening ? dictation.stop() : dictation.start(selected.id))}
+                  className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity duration-200 flex-shrink-0"
+                  aria-label={dictation.listening ? 'Stop dictation' : 'Dictate into this note'}
+                  style={{ color: dictation.listening ? '#ef4444' : 'var(--color-muted)', background: dictation.listening ? '#fee2e2' : undefined, animation: dictation.listening ? 'pulse 1.2s ease-in-out infinite' : undefined }}
+                  title={dictation.listening ? 'Stop dictation' : 'Dictate (voice input)'}
+                >{getIcon('mic', { size: 16 })}</button>
               )}
-              <button
-                onClick={(e) => convertToTask(selected, e)}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity hover:opacity-80 whitespace-nowrap"
-                style={{ background: 'var(--color-surface-2)', color: 'var(--color-text)', border: '1px solid var(--color-border)', ...(viewportMobile ? { minHeight: 36 } : {}) }}
-                title="Convert to task"
-                aria-label="Convert to task"
-              >
-                {getIcon('list-checks', { size: viewportMobile ? 16 : 12 })}
-                {!viewportMobile && 'Convert to Task'}
+              <button type="button" onClick={() => convertToTask({ ...selected, title, body })} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity duration-200 hover:opacity-80 whitespace-nowrap" style={toolBtn} title="Convert to task" aria-label="Convert to task">
+                {getIcon('list-checks', { size: viewportMobile ? 18 : 12 })}{!viewportMobile && 'Convert to Task'}
               </button>
 
-            <div className="relative">
-              <button
-                onClick={() => { setShowChatPicker(v => !v); setNewProjectName(''); setCreatingProject(false); }}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity hover:opacity-80 whitespace-nowrap"
-                style={{ background: 'var(--color-primary)', color: '#fff', ...(viewportMobile ? { minHeight: 36 } : {}) }}
-                title="Open this note as a chat"
-                aria-label="Take to chat"
-              >
-                {getIcon('chat', { size: viewportMobile ? 16 : 12 })}
-                {!viewportMobile && 'Take to Chat'}
-                {getIcon('chevron-down', { size: 11 })}
-              </button>
-
-              {showChatPicker && (
-                <>
-                  <div className="fixed inset-0 z-30" onClick={() => setShowChatPicker(false)} />
-                  <div
-                    className="absolute right-0 top-full mt-1 z-40 rounded-xl border shadow-xl overflow-hidden"
-                    style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', minWidth: '220px' }}
-                  >
-                    {/* Associated project shortcut */}
-                    {selected.project_id && (() => {
-                      const proj = projects.find(p => p.id === selected.project_id);
-                      return proj ? (
-                        <button
-                          onClick={() => takeToChatWith(proj.id)}
-                          className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:opacity-70 transition-opacity border-b"
-                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', fontWeight: 500 }}
-                        >
-                          {getIcon('folder', { size: 12 })}
-                          {proj.name}
-                        </button>
-                      ) : null;
-                    })()}
-
-                    {/* Existing projects */}
-                    <div className="max-h-40 overflow-y-auto">
-                      {projects
-                        .filter(p => p.id !== selected.project_id)
-                        .map(p => (
-                          <button
-                            key={p.id}
-                            onClick={() => takeToChatWith(p.id)}
-                            className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:opacity-70 transition-opacity"
-                            style={{ color: 'var(--color-text)' }}
-                          >
-                            {getIcon('folder', { size: 12 })}
-                            {p.name}
+              <div className="relative">
+                <button type="button" onClick={() => { setShowChatPicker((v) => !v); setNewProjectName(''); setCreatingProject(false); }} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity duration-200 hover:opacity-80 whitespace-nowrap" style={{ background: 'var(--color-primary)', color: '#fff', minHeight: viewportMobile ? 40 : undefined }} title="Open this note as a chat" aria-label="Take to chat">
+                  {getIcon('chat', { size: viewportMobile ? 18 : 12 })}{!viewportMobile && 'Take to Chat'}{getIcon('chevron-down', { size: 11 })}
+                </button>
+                {showChatPicker && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setShowChatPicker(false)} />
+                    <div className="absolute right-0 top-full mt-1 z-40 rounded-xl border shadow-xl overflow-hidden" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', minWidth: 220 }}>
+                      {selected.project_id && (() => {
+                        const proj = projects.find((p) => p.id === selected.project_id);
+                        return proj ? (
+                          <button onClick={() => takeToChatWith(proj.id)} className="w-full text-left px-3 py-2.5 text-xs flex items-center gap-2 hover:opacity-70 transition-opacity duration-200 border-b" style={{ ...border, color: 'var(--color-primary)', fontWeight: 500 }}>
+                            {getIcon('folder', { size: 12 })}{proj.name}
+                          </button>
+                        ) : null;
+                      })()}
+                      <div className="max-h-40 overflow-y-auto">
+                        {projects.filter((p) => p.id !== selected.project_id).map((p) => (
+                          <button key={p.id} onClick={() => takeToChatWith(p.id)} className="w-full text-left px-3 py-2.5 text-xs flex items-center gap-2 hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-text)' }}>
+                            {getIcon('folder', { size: 12 })}{p.name}
                           </button>
                         ))}
-                    </div>
-
-                    {/* Create new project */}
-                    <div className="border-t" style={{ borderColor: 'var(--color-border)' }}>
-                      {!creatingProject ? (
-                        <button
-                          onClick={() => setCreatingProject(true)}
-                          className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:opacity-70 transition-opacity"
-                          style={{ color: 'var(--color-primary)' }}
-                        >
-                          {getIcon('plus', { size: 12 })}
-                          New project…
-                        </button>
-                      ) : (
-                        <div className="px-3 py-2 flex items-center gap-1.5">
-                          <input
-                            autoFocus
-                            value={newProjectName}
-                            onChange={e => setNewProjectName(e.target.value)}
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') handleCreateProjectAndChat();
-                              if (e.key === 'Escape') setCreatingProject(false);
-                            }}
-                            placeholder="Project name…"
-                            className="flex-1 text-xs px-2 py-1 rounded border outline-none"
-                            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-primary)', color: 'var(--color-text)' }}
-                          />
-                          <button
-                            onClick={handleCreateProjectAndChat}
-                            disabled={!newProjectName.trim()}
-                            className="text-xs px-2 py-1 rounded hover:opacity-80 disabled:opacity-40"
-                            style={{ background: 'var(--color-primary)', color: '#fff' }}
-                          >
-                            Go
+                      </div>
+                      <div className="border-t" style={border}>
+                        {!creatingProject ? (
+                          <button onClick={() => setCreatingProject(true)} className="w-full text-left px-3 py-2.5 text-xs flex items-center gap-2 hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-primary)' }}>
+                            {getIcon('plus', { size: 12 })}New project…
                           </button>
-                        </div>
-                      )}
+                        ) : (
+                          <div className="px-3 py-2 flex items-center gap-1.5">
+                            <input
+                              autoFocus value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') handleCreateProjectAndChat(); if (e.key === 'Escape') setCreatingProject(false); }}
+                              placeholder="Project name…" className="flex-1 min-w-0 px-2 py-1 rounded border outline-none"
+                              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-primary)', color: 'var(--color-text)', fontSize: 16 }}
+                            />
+                            <button onClick={handleCreateProjectAndChat} disabled={!newProjectName.trim()} className="text-xs px-2 py-1.5 rounded hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)', color: '#fff' }}>Go</button>
+                          </div>
+                        )}
+                      </div>
+                      <div className="border-t" style={border}>
+                        <button onClick={() => takeToChatWith(null)} className="w-full text-left px-3 py-2.5 text-xs flex items-center gap-2 hover:opacity-70 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }}>
+                          {getIcon('message-circle', { size: 12 })}General Chat
+                        </button>
+                      </div>
                     </div>
+                  </>
+                )}
+              </div>
 
-                    {/* General chat */}
-                    <div className="border-t" style={{ borderColor: 'var(--color-border)' }}>
-                      <button
-                        onClick={() => takeToChatWith(null)}
-                        className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:opacity-70 transition-opacity"
-                        style={{ color: 'var(--color-muted)' }}
-                      >
-                        {getIcon('message-circle', { size: 12 })}
-                        General Chat
-                      </button>
-                    </div>
-                  </div>
-                </>
+              {confirmDelete ? (
+                <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--color-text)' }}>
+                  Delete?
+                  <button type="button" onClick={() => deleteNote(selected)} className="px-2.5 rounded-md hover:opacity-80 transition-opacity duration-200 font-medium" style={{ background: '#ef4444', color: '#fff', minHeight: viewportMobile ? 40 : 28 }}>Yes</button>
+                  <button type="button" onClick={() => setConfirmDelete(false)} className="px-2.5 rounded-md hover:opacity-70 transition-opacity duration-200" style={{ ...toolBtn, minHeight: viewportMobile ? 40 : 28 }}>No</button>
+                </span>
+              ) : (
+                <button type="button" onClick={() => setConfirmDelete(true)} className="flex items-center justify-center rounded-md hover:opacity-60 transition-opacity duration-200" style={{ color: 'var(--color-muted)', width: viewportMobile ? 40 : 28, height: viewportMobile ? 40 : 28 }} title="Delete note" aria-label="Delete note">
+                  {getIcon('trash', { size: 16 })}
+                </button>
               )}
-            </div>
             </div>
           </div>
 
@@ -938,40 +543,51 @@ export default function NotesPage() {
             onFocus={(e) => { if (title === 'Untitled') e.target.select(); }}
             placeholder="Title"
             aria-label="Note title"
-            className={`px-4 ${viewportMobile ? 'pt-3 pb-3 border-b' : 'pt-4 pb-1'} text-xl font-semibold bg-transparent outline-none flex-shrink-0`}
-            style={{ color: 'var(--color-text)', ...(viewportMobile ? { borderColor: 'var(--color-border)' } : {}) }}
+            readOnly={bodyLoading}
+            className={`px-4 ${viewportMobile ? 'pt-3 pb-2' : 'pt-4 pb-1'} text-xl font-semibold bg-transparent outline-none flex-shrink-0`}
+            style={{ color: 'var(--color-text)' }}
           />
 
+          {/* Filing: project and client */}
+          <div className="flex items-center gap-2 px-4 pb-2 border-b flex-shrink-0" style={border}>
+            <select value={selected.project_id || ''} onChange={handleProjectChange} aria-label="Project" className="rounded px-2 outline-none min-w-0 flex-1 sm:flex-none sm:max-w-[180px]" style={selectStyle}>
+              <option value="">No project</option>
+              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            <select value={selected.client_id || ''} onChange={handleClientChange} onFocus={ensureClients} onMouseDown={ensureClients} aria-label="Client" className="rounded px-2 outline-none min-w-0 flex-1 sm:flex-none sm:max-w-[180px]" style={selectStyle}>
+              <option value="">No client</option>
+              {clientOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+
           {/* Body */}
-          <div className="flex-1 relative overflow-hidden flex flex-col">
-            {isListening && (
-              <div
-                className="flex-shrink-0 flex flex-col gap-1 px-4 py-2 text-xs font-medium border-b"
-                style={{ background: '#fee2e2', borderColor: '#fca5a5', color: '#b91c1c' }}
-              >
-                <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+          <div className="flex-1 relative overflow-hidden flex flex-col min-h-0">
+            <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+            {dictation.listening && (
+              <div className="flex-shrink-0 flex flex-col gap-1 px-4 py-2 text-xs font-medium border-b" style={{ background: '#fee2e2', borderColor: '#fca5a5', color: '#b91c1c' }}>
                 <div className="flex items-center gap-2">
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', display: 'inline-block', flexShrink: 0, animation: 'pulse 1.2s ease-in-out infinite' }} />
                   Listening… tap mic to stop
                 </div>
-                {interimText && (
-                  <div style={{ color: '#dc2626', opacity: 0.8, fontStyle: 'italic', paddingLeft: 16 }}>
-                    {interimText}
-                  </div>
-                )}
+                {dictation.interim && <div style={{ color: '#dc2626', opacity: 0.8, fontStyle: 'italic', paddingLeft: 16 }}>{dictation.interim}</div>}
               </div>
             )}
-            {micError && (
-              <div className="flex-shrink-0 px-4 py-2 text-xs border-b" style={{ background: '#fee2e2', borderColor: '#fca5a5', color: '#b91c1c' }}>
-                {micError}
+            {dictation.error && (
+              <div className="flex-shrink-0 px-4 py-2 text-xs border-b" style={{ background: '#fee2e2', borderColor: '#fca5a5', color: '#b91c1c' }}>{dictation.error}</div>
+            )}
+            {loadError && (
+              <div className="flex-shrink-0 px-4 py-2 text-xs border-b flex items-center gap-2" style={{ background: '#fee2e2', borderColor: '#fca5a5', color: '#b91c1c' }}>
+                {loadError}
+                <button type="button" onClick={() => selectNote(selected)} className="underline hover:opacity-70 transition-opacity duration-200">Try again</button>
               </div>
             )}
             <textarea
               ref={bodyRef}
               value={body}
               onChange={handleBodyChange}
-              onKeyDown={e => { if (e.key === 'Escape' && showMention) { setShowMention(false); e.preventDefault(); } }}
-              placeholder={viewportMobile ? 'Tap here to type, or press Dictate below and speak…' : 'Start writing… type @ to search emails, calendar, tasks & web'}
+              readOnly={bodyLoading || !!loadError}
+              onKeyDown={(e) => { if (e.key === 'Escape' && showMention) { setShowMention(false); e.preventDefault(); } }}
+              placeholder={bodyLoading ? 'Opening…' : viewportMobile ? 'Tap here to type, or press Dictate below and speak…' : 'Start writing… type @ to search emails, calendar, tasks & web'}
               aria-label="Note text"
               className="flex-1 px-4 py-2 bg-transparent outline-none resize-none text-sm leading-relaxed"
               style={{
@@ -981,282 +597,32 @@ export default function NotesPage() {
               }}
             />
 
-            {/* @mention dropdown */}
             {showMention && (
-              <div className="absolute bottom-2 left-4 z-50">
-                <AtMentionDropdown
-                  query={mentionQuery}
-                  onSelect={handleMentionSelect}
-                  onSearch={handleOpenSearch}
-                  onGmailSearch={handleOpenGmailSearch}
-                  onCalendarSearch={handleOpenCalendarSearch}
-                  onPromptSelect={(prompt) => insertAtMention(prompt.content || prompt.title)}
-                  onClose={() => setShowMention(false)}
-                />
-              </div>
-            )}
-            {showMention && (
-              <div className="fixed inset-0 z-40" onClick={() => setShowMention(false)} />
-            )}
-
-            {/* Web search modal */}
-            {showSearchInput && (
-              <div className="fixed inset-0 z-40" onClick={() => { setShowSearchInput(false); setSearchQuery(''); setSearchResults([]); }} />
-            )}
-            {showSearchInput && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ pointerEvents: 'none' }}>
-                <div
-                  className="rounded-xl border shadow-xl overflow-hidden"
-                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '100%', maxWidth: '520px', pointerEvents: 'auto' }}
-                >
-                  <div className="flex items-center gap-2 px-3 py-2.5">
-                    {getIcon('search', { size: 14, style: { color: 'var(--color-primary)', flexShrink: 0 } })}
-                    <input
-                      autoFocus
-                      type="text"
-                      value={searchQuery}
-                      onChange={e => { setSearchQuery(e.target.value); setSearchError(''); setSearchResults([]); }}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') { e.preventDefault(); searchResults.length > 0 ? handleSearchDone() : handleSearch(); }
-                        if (e.key === 'Escape') { setShowSearchInput(false); setSearchQuery(''); setSearchResults([]); }
-                      }}
-                      placeholder="What do you want to search for?"
-                      className="flex-1 bg-transparent outline-none text-sm"
-                      style={{ color: 'var(--color-text)' }}
-                      disabled={isSearching}
-                    />
-                    {isSearching ? (
-                      <span style={{ color: 'var(--color-primary)' }}>{getIcon('loader', { size: 14 })}</span>
-                    ) : searchResults.length > 0 ? (
-                      <button type="button" onClick={handleSearchDone}
-                        className="text-xs font-medium px-2.5 py-1 rounded-lg flex-shrink-0"
-                        style={{ background: 'var(--color-primary)', color: '#fff' }}>
-                        Insert
-                      </button>
-                    ) : searchQuery.trim() ? (
-                      <button type="button" onClick={handleSearch}
-                        className="text-xs font-medium px-2.5 py-1 rounded-lg flex-shrink-0"
-                        style={{ background: 'var(--color-primary)', color: '#fff' }}>
-                        Search
-                      </button>
-                    ) : null}
-                  </div>
-                  {searchError && <p className="px-3 pb-2.5 text-xs" style={{ color: '#ef4444' }}>{searchError}</p>}
-                  {searchResults.length > 0 ? (
-                    <div className="border-t" style={{ borderColor: 'var(--color-border)', maxHeight: '260px', overflowY: 'auto' }}>
-                      {searchResults.map((r, i) => (
-                        <div key={i} className="px-3 py-2.5 border-b last:border-b-0" style={{ borderColor: 'var(--color-border)' }}>
-                          <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{r.title}</p>
-                          {r.snippet && <p className="text-xs mt-0.5 line-clamp-2" style={{ color: 'var(--color-muted)' }}>{r.snippet}</p>}
-                          <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--color-primary)', opacity: 0.7 }}>{r.url}</p>
-                        </div>
-                      ))}
-                      <p className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
-                        {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} · press Insert or Enter to add to note
-                      </p>
-                    </div>
-                  ) : !searchError && (
-                    <p className="px-3 pb-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>
-                      Search the web and insert results into your note · Esc to cancel
-                    </p>
-                  )}
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowMention(false)} />
+                <div className="absolute bottom-2 left-4 z-50">
+                  <AtMentionDropdown
+                    query={mentionQuery}
+                    onSelect={(token, extra = '') => insertAtMention(token + extra)}
+                    onSearch={() => openInsert('web')}
+                    onGmailSearch={() => openInsert('gmail')}
+                    onCalendarSearch={() => openInsert('calendar')}
+                    onPromptSelect={(prompt) => insertAtMention(prompt.content || prompt.title)}
+                    onClose={() => setShowMention(false)}
+                  />
                 </div>
-              </div>
-            )}
-
-            {/* Gmail search modal */}
-            {showGmailSearch && (
-              <div className="fixed inset-0 z-40" onClick={() => { setShowGmailSearch(false); setGmailQuery(''); setGmailResults([]); setGmailAttached([]); setGmailTranslatedQuery(''); }} />
-            )}
-            {showGmailSearch && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ pointerEvents: 'none' }}>
-                <div
-                  className="rounded-xl border shadow-xl overflow-hidden"
-                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '100%', maxWidth: '520px', pointerEvents: 'auto' }}
-                >
-                  <div className="flex items-center gap-2 px-3 py-2.5">
-                    <span style={{ fontSize: 13, flexShrink: 0 }}>✉️</span>
-                    <input
-                      autoFocus
-                      type="text"
-                      value={gmailQuery}
-                      onChange={e => { setGmailQuery(e.target.value); setGmailError(''); setGmailResults([]); }}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') { e.preventDefault(); gmailResults.length > 0 ? handleGmailDone() : handleGmailSearch(); }
-                        if (e.key === 'Escape') { setShowGmailSearch(false); setGmailQuery(''); setGmailResults([]); setGmailAttached([]); }
-                      }}
-                      placeholder="Search Gmail (e.g. from:boss@company.com invoice)"
-                      className="flex-1 bg-transparent outline-none text-sm"
-                      style={{ color: 'var(--color-text)' }}
-                      disabled={isGmailSearching}
-                    />
-                    {isGmailSearching ? (
-                      <span style={{ color: 'var(--color-primary)' }}>{getIcon('loader', { size: 14 })}</span>
-                    ) : gmailResults.length > 0 ? (
-                      <button type="button" onClick={handleGmailDone}
-                        className="text-xs font-medium px-2.5 py-1 rounded-lg flex-shrink-0"
-                        style={{ background: 'var(--color-primary)', color: '#fff' }}>
-                        Done
-                      </button>
-                    ) : gmailQuery.trim() ? (
-                      <button type="button" onClick={handleGmailSearch}
-                        className="text-xs font-medium px-2.5 py-1 rounded-lg flex-shrink-0"
-                        style={{ background: 'var(--color-primary)', color: '#fff' }}>
-                        Search
-                      </button>
-                    ) : null}
-                  </div>
-                  {gmailError && <p className="px-3 pb-2.5 text-xs" style={{ color: '#ef4444' }}>{gmailError}</p>}
-                  {gmailTranslatedQuery && (
-                    <p className="px-3 pb-1 text-xs" style={{ color: 'var(--color-muted)' }}>
-                      Query: <code style={{ color: 'var(--color-primary)' }}>{gmailTranslatedQuery}</code>
-                    </p>
-                  )}
-                  {gmailResults.length > 0 ? (
-                    <div className="border-t" style={{ borderColor: 'var(--color-border)', maxHeight: '260px', overflowY: 'auto' }}>
-                      {gmailResults.map((r) => {
-                        const attached = gmailAttached.includes(r.threadId);
-                        return (
-                          <button
-                            key={r.id}
-                            onClick={() => handleGmailAttachThread(r)}
-                            disabled={attached}
-                            className="w-full text-left px-3 py-2.5 border-b last:border-b-0 transition-opacity"
-                            style={{ borderColor: 'var(--color-border)', opacity: attached ? 0.5 : 1 }}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{r.subject}</p>
-                              {attached
-                                ? <span className="text-xs flex-shrink-0" style={{ color: '#22c55e' }}>✓ Added</span>
-                                : <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-primary)' }}>Insert</span>
-                              }
-                            </div>
-                            <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--color-muted)' }}>{r.from} · {r.date ? new Date(r.date).toLocaleDateString() : ''}</p>
-                            {r.snippet && <p className="text-xs mt-0.5 line-clamp-1" style={{ color: 'var(--color-muted)' }}>{r.snippet}</p>}
-                          </button>
-                        );
-                      })}
-                      {gmailAttached.length > 0 && (
-                        <p className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
-                          {gmailAttached.length} thread{gmailAttached.length !== 1 ? 's' : ''} inserted into note · press Done or Enter
-                        </p>
-                      )}
-                    </div>
-                  ) : !gmailError && (
-                    <p className="px-3 pb-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>
-                      Search your inbox and insert emails into your note · Esc to cancel
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Calendar search modal */}
-            {showCalendarSearch && (
-              <div className="fixed inset-0 z-40" onClick={() => { setShowCalendarSearch(false); setCalendarQuery(''); setCalendarResults([]); setCalendarAttached([]); }} />
-            )}
-            {showCalendarSearch && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ pointerEvents: 'none' }}>
-                <div
-                  className="rounded-xl border shadow-xl overflow-hidden"
-                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '100%', maxWidth: '520px', pointerEvents: 'auto' }}
-                >
-                  <div className="flex items-center gap-2 px-3 py-2.5">
-                    <span style={{ fontSize: 13, flexShrink: 0 }}>📅</span>
-                    <input
-                      autoFocus
-                      type="text"
-                      value={calendarQuery}
-                      onChange={e => { setCalendarQuery(e.target.value); setCalendarError(''); setCalendarResults([]); }}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') { e.preventDefault(); calendarResults.length > 0 ? handleCalendarDone() : handleCalendarSearch(); }
-                        if (e.key === 'Escape') { setShowCalendarSearch(false); setCalendarQuery(''); setCalendarResults([]); setCalendarAttached([]); }
-                      }}
-                      placeholder="Search Calendar (e.g. meetings next week)"
-                      className="flex-1 bg-transparent outline-none text-sm"
-                      style={{ color: 'var(--color-text)' }}
-                      disabled={isCalendarSearching}
-                    />
-                    {isCalendarSearching ? (
-                      <span style={{ color: 'var(--color-primary)' }}>{getIcon('loader', { size: 14 })}</span>
-                    ) : calendarResults.length > 0 ? (
-                      <button type="button" onClick={handleCalendarDone}
-                        className="text-xs font-medium px-2.5 py-1 rounded-lg flex-shrink-0"
-                        style={{ background: 'var(--color-primary)', color: '#fff' }}>
-                        Done
-                      </button>
-                    ) : calendarQuery.trim() ? (
-                      <button type="button" onClick={handleCalendarSearch}
-                        className="text-xs font-medium px-2.5 py-1 rounded-lg flex-shrink-0"
-                        style={{ background: 'var(--color-primary)', color: '#fff' }}>
-                        Search
-                      </button>
-                    ) : null}
-                  </div>
-                  {calendarError && <p className="px-3 pb-2.5 text-xs" style={{ color: '#ef4444' }}>{calendarError}</p>}
-                  {calendarResults.length > 0 ? (
-                    <div className="border-t" style={{ borderColor: 'var(--color-border)', maxHeight: '260px', overflowY: 'auto' }}>
-                      {calendarResults.map((event) => {
-                        const attached = calendarAttached.includes(event.id);
-                        const start = event.start?.dateTime || event.start?.date || '';
-                        const startLabel = start ? new Date(start).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-                        return (
-                          <button
-                            key={event.id}
-                            onClick={() => handleCalendarAttachEvent(event)}
-                            disabled={attached}
-                            className="w-full text-left px-3 py-2.5 border-b last:border-b-0 transition-opacity"
-                            style={{ borderColor: 'var(--color-border)', opacity: attached ? 0.5 : 1 }}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{event.title || '(No title)'}</p>
-                              {attached
-                                ? <span className="text-xs flex-shrink-0" style={{ color: '#22c55e' }}>✓ Added</span>
-                                : <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-primary)' }}>Insert</span>
-                              }
-                            </div>
-                            {startLabel && <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{startLabel}{event.location ? ` · ${event.location}` : ''}</p>}
-                          </button>
-                        );
-                      })}
-                      {calendarAttached.length > 0 && (
-                        <p className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
-                          {calendarAttached.length} event{calendarAttached.length !== 1 ? 's' : ''} inserted into note · press Done or Enter
-                        </p>
-                      )}
-                    </div>
-                  ) : !calendarError && (
-                    <p className="px-3 pb-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>
-                      Search your calendar and insert events into your note · Esc to cancel
-                    </p>
-                  )}
-                </div>
-              </div>
+              </>
             )}
           </div>
+
           {viewportMobile && (
-            <div
-              className="flex-shrink-0 flex gap-3 px-3 pt-3 border-t"
-              style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', paddingBottom: 'max(12px, env(safe-area-inset-bottom))', paddingRight: 84 /* the guide button sits bottom-right */ }}
-            >
-              <button
-                type="button"
-                onClick={() => bodyRef.current?.focus()}
-                className="flex-1 flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-opacity hover:opacity-80"
-                style={{ minHeight: 48, background: 'var(--color-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
-                aria-label="Type into this note"
-              >
+            <div className="flex-shrink-0 flex gap-3 px-3 pt-3 border-t" style={{ ...border, background: 'var(--color-surface)', paddingBottom: 'max(12px, env(safe-area-inset-bottom))', paddingRight: 84 /* the guide button sits bottom-right */ }}>
+              <button type="button" onClick={() => bodyRef.current?.focus()} className="flex-1 flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-opacity duration-200 hover:opacity-80" style={{ minHeight: 48, background: 'var(--color-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }} aria-label="Type into this note">
                 {getIcon('pen-line', { size: 16 })} Type
               </button>
-              {micSupported && (
-                <button
-                  type="button"
-                  onClick={toggleMic}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-opacity hover:opacity-80"
-                  style={{ minHeight: 48, background: isListening ? '#fee2e2' : 'var(--color-primary)', color: isListening ? '#b91c1c' : '#fff' }}
-                  aria-label={isListening ? 'Stop dictation' : 'Dictate into this note'}
-                >
-                  {getIcon('mic', { size: 16 })} {isListening ? 'Stop' : 'Dictate'}
+              {dictation.supported && (
+                <button type="button" onClick={() => (dictation.listening ? dictation.stop() : dictation.start(selected.id))} className="flex-1 flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-opacity duration-200 hover:opacity-80" style={{ minHeight: 48, background: dictation.listening ? '#fee2e2' : 'var(--color-primary)', color: dictation.listening ? '#b91c1c' : '#fff' }} aria-label={dictation.listening ? 'Stop dictation' : 'Dictate into this note'}>
+                  {getIcon('mic', { size: 16 })} {dictation.listening ? 'Stop' : 'Dictate'}
                 </button>
               )}
             </div>
@@ -1268,47 +634,22 @@ export default function NotesPage() {
             <div className="mb-3 flex justify-center">{getIcon('pen-line', { size: 32, style: { opacity: 0.3 } })}</div>
             <p className="text-sm">Select a note or create a new one</p>
             <div className="flex gap-2 justify-center mt-3">
-              {viewportMobile && (
-                <button
-                  onClick={() => setMobileListOpen(true)}
-                  className="text-sm px-4 py-2 rounded-md hover:opacity-80 transition-opacity"
-                  style={{ background: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
-                >
-                  Show Notes
-                </button>
-              )}
-              <button
-                onClick={createNote}
-                className="text-sm px-4 py-2 rounded-md hover:opacity-80 transition-opacity"
-                style={{ background: 'var(--color-primary)', color: '#fff' }}
-              >
-                New Note
-              </button>
-              <button
-                onClick={() => setShowRecorder(true)}
-                className="text-sm px-4 py-2 rounded-md hover:opacity-80 transition-opacity flex items-center gap-1.5"
-                style={{ background: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
-              >
+              <button onClick={() => createNote({ focusTitle: true })} className="text-sm px-4 py-2 rounded-md hover:opacity-80 transition-opacity duration-200" style={{ background: 'var(--color-primary)', color: '#fff' }}>New Note</button>
+              <button onClick={() => setShowRecorder(true)} className="text-sm px-4 py-2 rounded-md hover:opacity-80 transition-opacity duration-200 flex items-center gap-1.5" style={{ background: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}>
                 {getIcon('mic', { size: 14 })} New Voice Note
               </button>
             </div>
           </div>
         </div>
-      )}
+      ))}
+
+      {insertKind && <InsertSourceModal kind={insertKind} onInsert={appendToBody} onClose={() => { setInsertKind(null); setTimeout(() => bodyRef.current?.focus(), 0); }} />}
       {showRecorder && <VoiceNoteRecorder onClose={() => setShowRecorder(false)} onCreated={handleVoiceNote} />}
       {viewportMobile && (
-        <input
-          ref={keyboardRef} aria-hidden="true" tabIndex={-1} readOnly={false}
-          style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 1, opacity: 0, border: 0, padding: 0, fontSize: 16, pointerEvents: 'none' }}
-        />
+        <input ref={keyboardRef} aria-hidden="true" tabIndex={-1} style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 1, opacity: 0, border: 0, padding: 0, fontSize: 16, pointerEvents: 'none' }} />
       )}
       {showNewChooser && (
-        <NewNoteChooser
-          mobile={viewportMobile}
-          onClose={() => setShowNewChooser(false)}
-          onWrite={startWrittenNote}
-          onVoice={() => { setShowNewChooser(false); setShowRecorder(true); }}
-        />
+        <NewNoteChooser mobile={viewportMobile} onClose={() => setShowNewChooser(false)} onWrite={startWrittenNote} onVoice={() => { setShowNewChooser(false); setShowRecorder(true); }} />
       )}
       <NotesTutorChat currentTool="" onOpenTool={openGuideTool} />
     </div>

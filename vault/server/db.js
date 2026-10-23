@@ -2014,6 +2014,8 @@ async function initSchema() {
       WHERE fingerprint IS NOT NULL
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_notes_project_id  ON notes(project_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_notes_user_updated ON notes(user_id, updated_at DESC)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_notes_user_created ON notes(user_id, created_at DESC)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_session  ON messages("sessionId")`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_study_decks_user  ON study_decks("userId", "updatedAt" DESC)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_student_quizzes_user ON student_quizzes("userId", "updatedAt" DESC)`);
