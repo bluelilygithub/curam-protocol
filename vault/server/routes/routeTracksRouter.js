@@ -115,6 +115,14 @@ function createRouter(pool, {
   const emailNow = emailLimits.now ?? Date.now;
   const perHour = emailLimits.perHour ?? 10;
   const perDay = emailLimits.perDay ?? 30;
+  /** Shared by both email routes (map PDF, route file): the person's hourly and daily allowance. Answers 429 and returns null when used up. */
+  function emailAllowance(req, res) {
+    const t = emailNow();
+    const mine = (emailHits.get(req.user.id) || []).filter((x) => t - x < 86400000);
+    if (mine.length >= perDay) { res.set('Retry-After', '3600'); res.status(429).json({ error: 'You have emailed enough maps today. Try again tomorrow.' }); return null; }
+    if (mine.filter((x) => t - x < 3600000).length >= perHour) { res.set('Retry-After', '600'); res.status(429).json({ error: 'That is a lot of emails in an hour. Wait a while and try again.' }); return null; }
+    return { mine, t };
+  }
   const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
   // ---- the ask box: "route from Morningside to Carindale" -> { kind, from, to, lengthKm, profile }. Only NAMES and numbers come back; the browser looks
@@ -262,10 +270,9 @@ function createRouter(pool, {
     if (pdf.length > MAX_PDF_BYTES) return res.status(413).json({ error: 'That PDF is too large to email (over 8 MB).' });
     if (pdf.length < 100 || pdf.subarray(0, 5).toString('latin1') !== '%PDF-') return res.status(400).json({ error: 'That is not a PDF. Make it again.' });
 
-    const t = emailNow();
-    const mine = (emailHits.get(req.user.id) || []).filter((x) => t - x < 86400000);
-    if (mine.length >= perDay) { res.set('Retry-After', '3600'); return res.status(429).json({ error: 'You have emailed enough maps today. Try again tomorrow.' }); }
-    if (mine.filter((x) => t - x < 3600000).length >= perHour) { res.set('Retry-After', '600'); return res.status(429).json({ error: 'That is a lot of emails in an hour. Wait a while and try again.' }); }
+    const allowance = emailAllowance(req, res);
+    if (!allowance) return;
+    const { mine, t } = allowance;
 
     const cc = b.copyToMe === true && req.user.email && EMAIL_RE.test(req.user.email) && req.user.email.toLowerCase() !== to.toLowerCase() ? req.user.email : undefined;
     const html = `<div style="font-family:system-ui,Arial,sans-serif;font-size:14px;color:#1a1a1a;line-height:1.5">${message ? `<p>${esc(message).replace(/\n/g, '<br>')}</p>` : '<p>A route map is attached.</p>'}<p style="color:#666;font-size:12px">Sent from Route Tracer in Vault${req.user.email ? ` by ${esc(req.user.email)}` : ''}. The map is attached as a PDF. Map data \u00a9 OpenStreetMap contributors, \u00a9 MapTiler.</p></div>`;
@@ -376,6 +383,49 @@ function createRouter(pool, {
     } catch (err) {
       getLogger().error({ err }, 'route track file export failed');
       res.status(500).json({ error: 'Could not export this track.' });
+    }
+  });
+
+  // POST /api/route-tracks/:id/email-file { to, message?, copyToMe?, format }: email a saved track as a GPX, TCX or KML file (for a watch app such as Zepp).
+  // Unlike the PDF, the file is made here from the stored track, so nothing the browser sends becomes the attachment.
+  router.post('/:id/email-file', async (req, res) => {
+    if (!UUID.test(req.params.id)) return res.status(404).json({ error: 'That track was not found.' });
+    const b = req.body && typeof req.body === 'object' ? req.body : {};
+    const format = String(b.format || 'gpx').toLowerCase();
+    if (!Object.prototype.hasOwnProperty.call(FILE_FORMATS, format)) return res.status(400).json({ error: 'The format must be gpx, tcx or kml.' });
+    const to = typeof b.to === 'string' ? b.to.trim() : '';
+    if (!to || to.length > 254 || !EMAIL_RE.test(to)) return res.status(400).json({ error: 'Enter one email address to send it to.' });
+    const message = typeof b.message === 'string' ? b.message.replace(/\r\n?/g, '\n').trim() : '';
+    if (message.length > 2000) return res.status(400).json({ error: 'The message can be at most 2,000 characters.' });
+    let row;
+    try {
+      const { rows } = await pool.query(`SELECT name, notes, geometry FROM route_tracks WHERE id = $1 AND "userId" = $2`, [req.params.id, req.user.id]);
+      row = rows[0];
+    } catch (err) {
+      getLogger().error({ err }, 'route track file email lookup failed');
+      return res.status(500).json({ error: 'Could not send this track.' });
+    }
+    if (!row) return res.status(404).json({ error: 'That track was not found.' });
+    const allowance = emailAllowance(req, res);
+    if (!allowance) return;
+    const { mine, t } = allowance;
+    const base = row.name.replace(/[^\w\-. ]+/g, '_').trim().slice(0, 80) || 'track';
+    const cc = b.copyToMe === true && req.user.email && EMAIL_RE.test(req.user.email) && req.user.email.toLowerCase() !== to.toLowerCase() ? req.user.email : undefined;
+    const html = `<div style="font-family:system-ui,Arial,sans-serif;font-size:14px;color:#1a1a1a;line-height:1.5">${message ? `<p>${esc(message).replace(/\n/g, '<br>')}</p>` : '<p>A route file is attached.</p>'}<p style="color:#666;font-size:12px">Sent from Route Tracer in Vault${req.user.email ? ` by ${esc(req.user.email)}` : ''}. The route is attached as a ${format.toUpperCase()} file; open it in your watch or maps app (for a Zepp watch, import it in the Zepp app).</p></div>`;
+    try {
+      const out = await sendEmailFn({
+        to, cc, replyTo: req.user.email || undefined, subject: `Route file: ${row.name}`.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 150), html,
+        attachments: [{ filename: `${base}.${format}`, content: Buffer.from(FILE_FORMATS[format].build(row.name, row.notes, row.geometry.coordinates), 'utf8'), contentType: FILE_FORMATS[format].type }],
+      });
+      if (out && out.skipped) return res.status(503).json({ error: 'Email is switched off on this server.' });
+      mine.push(t);
+      emailHits.set(req.user.id, mine);
+      getLogger().info({ format, copied: !!cc }, 'route file emailed'); // never the address or the words
+      res.json({ ok: true, copied: !!cc });
+    } catch (err) {
+      if (/not configured/i.test(String(err && err.message))) return res.status(503).json({ error: 'Email is not set up on this server yet.' });
+      getLogger().error({ err }, 'route file email failed');
+      res.status(502).json({ error: 'The email could not be sent. Try again in a moment.' });
     }
   });
 

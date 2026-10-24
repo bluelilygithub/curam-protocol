@@ -677,6 +677,33 @@ async function planTests() {
       const off = mkEmail({ sendEmailFn: async () => ({ ok: false, skipped: true }) });
       assert.strictEqual((await call(off, 'POST', '/api/route-tracks/email', body)).status, 503);
       off.close();
+      // /:id/email-file: the file is made on the server from the stored track
+      {
+        const fe = mkEmail();
+        const made = await call(fe, 'POST', '/api/route-tracks', input({ name: 'Bip <loop>' }));
+        const tid = made.json.track.id;
+        sent.length = 0;
+        const em = await call(fe, 'POST', `/api/route-tracks/${tid}/email-file`, { to: 'friend@example.com', format: 'tcx', message: 'Hi <b>', copyToMe: true });
+        assert.strictEqual(em.status, 200);
+        assert.deepStrictEqual(em.json, { ok: true, copied: true });
+        const fm = sent[0];
+        assert.strictEqual(fm.cc, 'me@example.com');
+        assert.ok(/^[\w\-. ]+\.tcx$/.test(fm.attachments[0].filename), fm.attachments[0].filename);
+        assert.ok(fm.attachments[0].content.toString('utf8').includes('<Course>'), 'a TCX course made from the stored track');
+        assert.ok(!/<b>/.test(fm.html), 'message escaped');
+        sent.length = 0;
+        assert.strictEqual((await call(fe, 'POST', `/api/route-tracks/${tid}/email-file`, { to: 'friend@example.com' })).status, 200, 'default gpx');
+        assert.ok(sent[0].attachments[0].filename.endsWith('.gpx'));
+        assert.strictEqual((await call(fe, 'POST', `/api/route-tracks/${tid}/email-file`, { to: 'friend@example.com', format: 'exe' })).status, 400);
+        assert.strictEqual((await call(fe, 'POST', `/api/route-tracks/${tid}/email-file`, { to: 'a@b.com, c@d.com', format: 'gpx' })).status, 400, 'one recipient');
+        assert.strictEqual((await call(fe, 'POST', `/api/route-tracks/${crypto.randomUUID()}/email-file`, { to: 'friend@example.com' })).status, 404);
+        assert.strictEqual((await call(fe, 'POST', '/api/route-tracks/nope/email-file', { to: 'friend@example.com' })).status, 404);
+        fe.close();
+        // another person cannot email a track that is not theirs
+        const stranger = mkEmail({}, 2, 'x@example.com');
+        assert.strictEqual((await call(stranger, 'POST', `/api/route-tracks/${tid}/email-file`, { to: 'friend@example.com' })).status, 404);
+        stranger.close();
+      }
       // /config says whether email is set up
       const withMail = mkEmail();
       assert.strictEqual((await call(withMail, 'GET', '/api/route-tracks/config')).json.emailEnabled, true);

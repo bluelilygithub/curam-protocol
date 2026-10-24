@@ -62,6 +62,9 @@ export const api = {
   /** Email a map PDF (made in the browser) to one address. `pdf` is base64. */
   emailMap: (input: { to: string; subject: string; message: string; copyToMe: boolean; filename: string; pdf: string }) =>
     call<{ ok: true; copied: boolean }>('POST', '/api/route-tracks/email', input),
+  /** Email a saved track as a GPX, TCX or KML file. The server makes the file from the stored track. */
+  emailFile: (id: string, input: { to: string; format: 'gpx' | 'tcx' | 'kml'; message?: string; copyToMe: boolean }) =>
+    call<{ ok: true; copied: boolean }>('POST', `/api/route-tracks/${id}/email-file`, input),
   list: (opts: { q?: string; cursor?: string | null; limit?: number } = {}) => {
     const p = new URLSearchParams();
     if (opts.q) p.set('q', opts.q);

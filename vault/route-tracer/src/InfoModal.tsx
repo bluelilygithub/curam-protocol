@@ -87,7 +87,7 @@ export function InfoModal() {
           <ul>
             <li><b>Import GPX</b> (in the gear menu) opens a file from Strava, Garmin or a friend. It appears in Edit points mode with its distance, ready to check and press Finish to save. Waypoints, times and heart rate are ignored; only the path is kept. A recording with more points than a track can hold (20,000) is simplified, and you are told by how much.</li>
             <li><b>Export GPX</b> on a saved track downloads a standard file that Strava, Garmin and gpx.studio open.</li>
-            <li><b>Send to watch</b> on a saved track gives GPX, TCX and KML downloads and the steps for the Zepp app (Amazfit Bip 6 and similar): download the file on your phone, import it in Zepp under Routes, then sync the watch. If one format is refused, try another. TCX times are placeholders. Vault cannot push to the watch itself.</li>
+            <li><b>Send to watch</b> on a saved track gives GPX, TCX and KML downloads, or emails the file to an address you type (your own, for example), and the steps for the Zepp app (Amazfit Bip 6 and similar): get the file onto your phone, import it in Zepp under Routes, then sync the watch. If one format is refused, try another. TCX times are placeholders. Vault cannot push to the watch itself.</li>
           </ul>
 
           <h3>Places near the route</h3>
