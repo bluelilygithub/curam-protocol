@@ -16,7 +16,7 @@ const CATALOG = [
     does: 'Step 2. The bottle style (Bordeaux, Burgundy, Champagne, Magnum), how many bottles the visitor wants (a slider), and the rack finish (oak, walnut or black).',
     notes: 'Changing the bottle style changes how many fit. The count is an estimate.' },
   { id: 'features', label: 'Features', group: 'Steps',
-    does: 'A step of finishing touches the business offers (for example lighting or door style). Each choice adds to the guide price.',
+    does: 'A step of finishing touches the business offers (for example lighting or door style), in groups that open and close (tap a group\'s name; it shows what is picked now). Each extra adds to the guide price, or says "Price on request". A choice that needs a bigger room is greyed out and says why.',
     notes: 'Only there when the business has set up feature options; if the visitor does not see it, there are none.' },
   { id: 'review', label: 'Review & quote', group: 'Steps',
     does: 'The last step. A summary of the design, the guide price (if the business shows one), a button to download the plan as a PDF, price help, a link that reopens the design, and the "Request a quote" button, which opens a short form right there asking for their name, email, phone (optional) and state or territory, and sends the enquiry with the design attached.',
@@ -34,9 +34,9 @@ const RULES = [
   'The door: tap a wall on the little room drawing to put the door there, then choose Left / Centre / Right (as seen standing outside) and Single / Double.',
   'Measure the room INSIDE the finished walls, floor to ceiling. Round to the nearest centimetre; the business measures properly before building anything.',
   'The design is saved in the visitor\'s own browser so it is there when they come back (Start again clears it). A design code or link reopens the same design.',
-  'The summary bar along the bottom shows bottle capacity, footprint, configuration, the guide price (if shown) and the quote button.',
+  'The bar that stays at the bottom of the screen shows bottle capacity, footprint, configuration and the guide price (if shown), with Back and Next. "Request a quote" is the main button on the Review step and a link in that bar on the earlier steps.',
   'The guide price, when shown, is a range for guidance only. Say where to find it (the Review step) but never state, calculate or promise a price yourself.',
-  'On a phone the picture comes first, then the controls. The planner works best on a computer or tablet.',
+  'On a phone the picture comes first, then the controls, and the bottom bar is slimmer (capacity, price, Back and Next). The planner works best on a computer or tablet.',
 ];
 
 const NOT_POSSIBLE = [

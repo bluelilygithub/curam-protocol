@@ -11,7 +11,7 @@ import { LiteHelp, LITE_HELP_KEY } from './LiteHelp';
 import { PriceHelp } from './PriceHelp';
 import { QuoteForm } from './QuoteForm';
 import { DoorPicker } from './DoorPicker';
-import { chosenOptions, effectsOf, featureTotals, priceLabel, resolveFeatures, togglePick, unavailableReason } from './features';
+import { cardPriceLabel, chosenOptions, effectsOf, featureTotals, priceLabel, resolveFeatures, togglePick, unavailableReason } from './features';
 import { STEP_TITLES, stepKeys, type StepKey } from './steps';
 import { LengthField, Segmented, Stepper } from './controls';
 import { TooltipHost } from '@planner-core/help/TooltipHost';
@@ -95,9 +95,14 @@ export function LiteApp() {
   const [linkCopied, setLinkCopied] = useState<'' | 'done' | 'failed'>('');
   const [pdf, setPdf] = useState<'' | 'working' | 'done' | 'failed'>('');
   const [thumb, setThumb] = useState('');
+  // Features accordion: which groups the visitor has opened or closed (the first starts open)
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   // the owner's settings (rack sizes, prices, brand colour, starting rooms): the built-in defaults until the real ones arrive, and still if they never do
   const [cfg, setCfg] = useState<LiteConfig>(DEFAULT_CONFIG);
   const panelTitle = useRef<HTMLHeadingElement>(null);
+  const footerRef = useRef<HTMLElement>(null);
+  /** The last viewport message from the page around us (frame top, window height): where the sticky footer belongs when embedded. */
+  const vpRef = useRef<{ frameTop: number; vh: number } | null>(null);
   const started = useRef(false);
   const stepSeen = useRef(false);
   const quietStep = useRef(false);
@@ -133,7 +138,7 @@ export function LiteApp() {
     // only a design the visitor has changed is worth remembering: the untouched standard room would just greet them as "welcome back" for nothing
     if (code === encodeDesign(defaultLite())) clearLastDesign(); else writeLastDesign(code);
     const to = parentOrigin();
-    if (to) window.parent.postMessage({ type: MESSAGE_TYPE, version: 1, code, summary, bottles: result.bottles, priceText: price?.text ?? '', thumb, requested: false }, to);
+    if (to) window.parent.postMessage({ type: MESSAGE_TYPE, version: 1, code, summary, bottles: result.bottles, priceText: price?.text ?? '', thumb, requested: false, footer: true }, to);
   }, [code, summary, result.bottles, price, thumb]);
 
   // a small picture for the page's phone bar, redrawn a moment after the design stops changing (only when embedded: standalone nobody shows it)
@@ -171,6 +176,25 @@ export function LiteApp() {
     return () => { ro.disconnect(); if (raf) cancelAnimationFrame(raf); };
   }, []);
 
+  // The sticky footer (Back / Next / quote). Standalone, CSS sticky keeps it at the bottom of the window. Embedded, the frame is as tall as the planner, so
+  // the footer is moved down to the bottom of what the visitor can see (the page script reports it), never above the top of the controls and never past
+  // its own place at the end of the page. Skipped when the frame scrolls by itself (CSS sticky works then).
+  const placeFooter = (): void => {
+    const f = footerRef.current, vp = vpRef.current;
+    if (!f) return;
+    const root = document.documentElement;
+    if (!vp || root.scrollHeight > window.innerHeight + 2) { f.style.transform = ''; f.dataset.shift = '0'; return; }
+    const cur = Number(f.dataset.shift || 0), r = f.getBoundingClientRect();
+    const natBottom = r.bottom - cur + window.scrollY, natTop = r.top - cur + window.scrollY;
+    const mainTop = (document.querySelector('.lite-main')?.getBoundingClientRect().top ?? 0) + window.scrollY;
+    const visibleBottom = -vp.frameTop + vp.vh;
+    const shift = visibleBottom < natBottom ? Math.max(visibleBottom - natBottom, mainTop - natTop) : 0;
+    f.style.transform = shift ? `translateY(${Math.round(shift)}px)` : '';
+    f.dataset.shift = String(Math.round(shift));
+  };
+  const placeFooterRef = useRef(placeFooter);
+  placeFooterRef.current = placeFooter;
+
   // Keeping the picture in view while the page scrolls. When the planner is embedded its frame is as tall as the planner, so CSS "sticky" has nothing
   // to stick to: the page script (cellar-lite-fill.js) sends where the visible window is, and the picture is moved down by that much, inside the planner's
   // own columns. Standalone (or a page without the script), plain CSS sticky does the job. Only on two columns (900 px and wider).
@@ -183,6 +207,8 @@ export function LiteApp() {
       if (!d || d.type !== VIEWPORT_TYPE || d.version !== 1) return;
       const frameTop = Number(d.frameTop), vh = Number(d.viewportH), gap = Math.min(400, Math.max(0, Number(d.gap) || 12));
       if (!Number.isFinite(frameTop) || !Number.isFinite(vh) || vh < 200 || vh > 5000) return;
+      vpRef.current = { frameTop, vh };
+      placeFooterRef.current();
       const el = document.querySelector<HTMLElement>('.lite-visual'), main = document.querySelector<HTMLElement>('.lite-main');
       if (!el || !main) return;
       document.documentElement.style.setProperty('--lite-vh', `${Math.round(vh)}px`);
@@ -205,6 +231,7 @@ export function LiteApp() {
     return () => window.removeEventListener('message', onMessage);
   }, []);
 
+  useEffect(() => { placeFooterRef.current(); });
   useEffect(() => { void loadConfig().then((r) => setCfg(r.config)); }, []);
   useEffect(() => { if (restored) say('welcome_back'); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
@@ -323,6 +350,14 @@ export function LiteApp() {
     <LengthField label={label} hint={`${hint} Type it ${unitExample(unit)}.`} value={draft[key]} suffix={unitSuffix(unit)} placeholder={formatLength(key === 'heightMm' ? 2400 : 2750, unit)} error={rangeNote(key)} onType={(t) => setNum(key, t)} onBlur={settle} onStep={(d) => bump(key, d)} testid={`lite-${key}`} />
   );
 
+  /** Back and Next for the step on screen: they live in the sticky footer so they are always in reach. */
+  const stepNav = ((): { back: { label: string; title: string; go: () => void } | null; next: { label: string; title: string; go: () => void; quote?: boolean } } => {
+    if (key === 'space') return { back: null, next: { label: 'Next: Racking & finishes', title: 'Next: choose your bottles and the finish of the racks.', go: () => setStepTracked('racking') } };
+    if (key === 'racking') return { back: { label: 'Space', title: 'Back to the size and door.', go: () => setStepTracked('space') }, next: { label: `Next: ${STEP_TITLES[keys[2] ?? 'review']}`, title: hasFeatures ? 'Next: choose the finishing touches.' : 'Next: review your cellar.', go: () => setStepTracked(keys[2] ?? 'review') } };
+    if (key === 'features') return { back: { label: 'Racking', title: 'Back to the bottles and finish.', go: () => setStepTracked('racking') }, next: { label: 'Next: Review', title: 'Next: review your cellar.', go: () => setStepTracked('review') } };
+    return { back: { label: hasFeatures ? 'Features' : 'Racking', title: hasFeatures ? 'Back to the finishing touches.' : 'Back to the bottles and finish.', go: () => setStepTracked(hasFeatures ? 'features' : 'racking') }, next: { label: 'Request a quote', title: 'Ask us for a quote for exactly this design. Nothing is sent until you press Send on the form.', go: ask, quote: true } };
+  })();
+
   return (
     <div className="lite" data-testid="lite" style={{ '--primary': brand.main, '--primary-dark': brand.dark, '--primary-soft': brand.soft } as CSSProperties}>
       <PhoneNotice show={cfg.mobileNotice.show} text={cfg.mobileNotice.text} phone={cfg.phone} onCall={() => say('call')} />
@@ -334,11 +369,11 @@ export function LiteApp() {
           </div>
           <span className="lite-help-btns">
             {/* icons, not words: each has a name for screen readers and a tooltip */}
-            <button type="button" className="btn icon" aria-label="Take the tour" title="Take the tour: a guided walk through the screen, one step at a time." onClick={() => void startTour()} data-testid="lite-tour"><Icon name="compass" /></button>
-            <button type="button" className="btn icon" aria-label="Help" title="Help: the plain-language guide, what each question means." onClick={() => setHelpOpen(true)} data-testid="lite-help-open"><Icon name="info" /></button>
-            <button type="button" className="btn icon" aria-label="Save design" onClick={() => void copyLink()} data-testid="lite-share" title="Save design: copies a link to this exact design. Paste it anywhere to come back to it, or send it to someone."><Icon name="bookmark" /></button>
-            <button type="button" className="btn icon" aria-label="Download my plan (PDF)" aria-busy={pdf === 'working'} disabled={result.problems.length > 0 || pdf === 'working'} onClick={() => void download()} data-testid="lite-download" title={pdf === 'working' ? 'Preparing your plan…' : 'Download my plan (PDF): saves your plan to keep or show someone. It is a preliminary design, not a quote.'}><Icon name="download" /></button>
-            {price && <button type="button" className="btn icon" aria-label="How is this price worked out?" onClick={() => { setPriceHelpOpen(true); say('price_help'); }} title="How is this price worked out? A short outline of how the guide price follows from your choices." data-testid="lite-price-help-open"><Icon name="calc" /></button>}
+            <button type="button" className="btn icon labelled" aria-label="Take the tour" title="Take the tour: a guided walk through the screen, one step at a time." onClick={() => void startTour()} data-testid="lite-tour"><Icon name="compass" /><span className="btn-label">Tour</span></button>
+            <button type="button" className="btn icon labelled" aria-label="Help" title="Help: the plain-language guide, what each question means." onClick={() => setHelpOpen(true)} data-testid="lite-help-open"><Icon name="info" /><span className="btn-label">Help</span></button>
+            <button type="button" className="btn icon labelled" aria-label="Save design" onClick={() => void copyLink()} data-testid="lite-share" title="Save design: copies a link to this exact design. Paste it anywhere to come back to it, or send it to someone."><Icon name="bookmark" /><span className="btn-label">Save</span></button>
+            <button type="button" className="btn icon labelled" aria-label="Download my plan (PDF)" aria-busy={pdf === 'working'} disabled={result.problems.length > 0 || pdf === 'working'} onClick={() => void download()} data-testid="lite-download" title={pdf === 'working' ? 'Preparing your plan…' : 'Download my plan (PDF): saves your plan to keep or show someone. It is a preliminary design, not a quote.'}><Icon name="download" /><span className="btn-label">Download</span></button>
+            {price && <button type="button" className="btn icon labelled" aria-label="How is this price worked out?" onClick={() => { setPriceHelpOpen(true); say('price_help'); }} title="How is this price worked out? A short outline of how the guide price follows from your choices." data-testid="lite-price-help-open"><Icon name="calc" /><span className="btn-label">Price</span></button>}
           </span>
         </div>
         {pdf === 'done' && <p className="lite-note" role="status" data-testid="lite-download-done">Your plan has been saved.</p>}
@@ -406,9 +441,6 @@ export function LiteApp() {
                   options={[{ value: 'SINGLE', label: 'Single door', title: 'One door. It takes less wall.', testid: 'lite-doorstyle-SINGLE' }, { value: 'DOUBLE', label: 'Double door', title: 'A pair of doors that open together. Easier to carry things through, but it takes more wall.', testid: 'lite-doorstyle-DOUBLE' }]} />
                 <p className="field-hint" data-testid="lite-doorhint">{s.doorStyle === 'DOUBLE' ? `Two doors that open together, about ${describeLength(cfg.doors.doubleMm, unit)} across.` : `One door, about ${describeLength(cfg.doors.singleMm, unit)} wide.`}</p>
               </div>
-              <div className="lite-nav">
-                <button type="button" className="btn primary lite-next" onClick={() => setStepTracked('racking')} title="Next: choose your bottles and the finish of the racks." data-testid="lite-next"><span className="lite-next-label">Next: Racking &amp; finishes <span aria-hidden="true">&rarr;</span></span><span className="lite-next-sub">Step 2 of {totalSteps}</span></button>
-              </div>
             </>
           )}
 
@@ -456,10 +488,6 @@ export function LiteApp() {
                   ))}
                 </div>
               </div>
-              <div className="lite-nav two">
-                <button type="button" className="btn lite-backbtn" onClick={() => setStepTracked('space')} title="Back to the size and door." data-testid="lite-back"><span aria-hidden="true">&larr;</span> Space</button>
-                <button type="button" className="btn primary lite-next" onClick={() => setStepTracked(keys[2] ?? 'review')} title={hasFeatures ? 'Next: choose the finishing touches.' : 'Next: review your cellar.'} data-testid="lite-next"><span className="lite-next-label">Next: {STEP_TITLES[keys[2] ?? 'review']} <span aria-hidden="true">&rarr;</span></span><span className="lite-next-sub">Step 3 of {totalSteps}</span></button>
-              </div>
             </>
           )}
 
@@ -469,37 +497,47 @@ export function LiteApp() {
               <h2 tabIndex={-1} ref={panelTitle} className="lite-step-title">Make it yours</h2>
               <p className="lite-lede">The finishing touches that turn storage into a room you show off. Add as much or as little as you like.{price ? ' The guide price updates as you go.' : ''}</p>
               <div data-tour="lt-features" data-testid="lite-features">
-                {resolved.groups.map(({ group, chosen }) => {
+                {resolved.groups.map(({ group, chosen }, gi) => {
                   const one = group.mode === 'ONE';
+                  const open = openGroups[group.id] ?? gi === 0;
+                  // what the closed header says: the pick in a pick-one group, or what has been added in a pick-any group
+                  const summaryText = one ? (chosen[0]?.name ?? '') : chosen.length === 0 ? 'None added' : chosen.length === 1 ? (chosen[0]?.name ?? '') : `${chosen.length} chosen`;
                   return (
-                    <div className="feat-group" key={group.id} role={one ? 'radiogroup' : 'group'} aria-labelledby={`feat-h-${group.id}`} data-testid={`feat-group-${group.id}`}>
-                      <div className="feat-head"><h3 id={`feat-h-${group.id}`}>{group.name}</h3><span className="feat-mode">{one ? 'Choose one' : 'Choose any'}</span></div>
-                      {group.hint && <p className="feat-hint">{group.hint}</p>}
-                      <div className="feat-cards">
-                        {group.options.filter((o) => o.enabled || chosen.some((c) => c.code === o.code)).map((o) => {
-                          const on = chosen.some((c) => c.code === o.code);
-                          const why = unavailableReason(o, { widthMm: s.widthMm, depthMm: s.depthMm });
-                          const label = priceLabel(o, cfg.pricing.currency, cfg.pricing.show);
-                          return (
-                            <button type="button" key={o.id} role={one ? 'radio' : 'checkbox'} aria-checked={on} aria-disabled={why !== null} disabled={why !== null && !on}
-                              className={`feat-card${on ? ' on' : ''}${why ? ' off' : ''}`} data-testid={`feat-${group.id}-${o.id}`}
-                              title={why ?? (on && !one ? `Take ${o.name} out of the design.` : `${one ? 'Choose' : 'Add'} ${o.name}.`)}
-                              onClick={() => { change({ features: togglePick(cfg.features, s.features, group, o) }); say('feature', { group: group.id, option: o.id }); }}>
-                              {o.badge && <span className="feat-badge">{o.badge === 'POPULAR' ? 'Popular' : 'Recommended'}</span>}
-                              <span className="feat-name">{o.name}</span>
-                              <span className="feat-desc">{why ?? o.description}</span>
-                              {label && <span className="feat-price">{label}</span>}
-                            </button>
-                          );
-                        })}
+                    <div className={`feat-group${open ? ' open' : ''}`} key={group.id} data-testid={`feat-group-${group.id}`}>
+                      <h3 className="feat-head" id={`feat-h-${group.id}`}>
+                        <button type="button" className="feat-toggle" aria-expanded={open} aria-controls={`feat-body-${group.id}`} data-testid={`feat-toggle-${group.id}`}
+                          title={open ? `Close ${group.name}.` : `Open ${group.name}.`}
+                          onClick={() => setOpenGroups((cur) => ({ ...cur, [group.id]: !(cur[group.id] ?? gi === 0) }))}>
+                          <span className="feat-title">{group.name}</span>
+                          <span className="feat-summary" data-testid={`feat-summary-${group.id}`}>{summaryText}</span>
+                          <span className="feat-chev" aria-hidden="true" />
+                        </button>
+                      </h3>
+                      <div className="feat-body" id={`feat-body-${group.id}`} hidden={!open} role={one ? 'radiogroup' : 'group'} aria-labelledby={`feat-h-${group.id}`}>
+                        <p className="feat-hint">{group.hint ? `${group.hint} ` : ''}<span className="feat-mode">{one ? 'Choose one.' : 'Choose any.'}</span></p>
+                        <div className="feat-cards">
+                          {group.options.filter((o) => o.enabled || chosen.some((c) => c.code === o.code)).map((o) => {
+                            const on = chosen.some((c) => c.code === o.code);
+                            const why = unavailableReason(o, { widthMm: s.widthMm, depthMm: s.depthMm });
+                            const label = cardPriceLabel(o, { widthMm: s.widthMm, depthMm: s.depthMm }, cfg.pricing.currency, cfg.pricing.show);
+                            return (
+                              <button type="button" key={o.id} role={one ? 'radio' : 'checkbox'} aria-checked={on} aria-disabled={why !== null} disabled={why !== null && !on}
+                                className={`feat-card${on ? ' on' : ''}${why ? ' off' : ''}`} data-testid={`feat-${group.id}-${o.id}`}
+                                title={why ?? (on && !one ? `Take ${o.name} out of the design.` : `${one ? 'Choose' : 'Add'} ${o.name}.`)}
+                                onClick={() => { change({ features: togglePick(cfg.features, s.features, group, o) }); say('feature', { group: group.id, option: o.id }); }}>
+                                {on && <span className="feat-tick" aria-hidden="true">&#10003;</span>}
+                                {o.badge && <span className="feat-badge">{o.badge === 'POPULAR' ? 'Popular' : 'Recommended'}</span>}
+                                <span className="feat-name">{o.name}</span>
+                                <span className="feat-desc">{why ?? o.description}</span>
+                                {label && <span className="feat-price">{label}</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   );
                 })}
-              </div>
-              <div className="lite-nav two">
-                <button type="button" className="btn lite-backbtn" onClick={() => setStepTracked('racking')} title="Back to the bottles and finish." data-testid="lite-back"><span aria-hidden="true">&larr;</span> Racking</button>
-                <button type="button" className="btn primary lite-next" onClick={() => setStepTracked('review')} title="Next: review your cellar." data-testid="lite-next"><span className="lite-next-label">Next: Review <span aria-hidden="true">&rarr;</span></span><span className="lite-next-sub">Step {totalSteps} of {totalSteps}</span></button>
               </div>
             </>
           )}
@@ -516,10 +554,6 @@ export function LiteApp() {
                 {hasFeatures && <div><dt>Features</dt><dd data-testid="lite-review-features">{resolved.extras.length ? resolved.extras.map((o) => o.name).join(', ') : 'Standard options only'}</dd></div>}
               </dl>
               <p className="lite-note">This is an estimate to help you plan. Rack unit sizes are typical values, and we always measure on site before anything is made.</p>
-              <div className="lite-nav two">
-                <button type="button" className="btn lite-backbtn" onClick={() => setStepTracked(hasFeatures ? 'features' : 'racking')} title={hasFeatures ? 'Back to the finishing touches.' : 'Back to the bottles and finish.'} data-testid="lite-back"><span aria-hidden="true">&larr;</span> {hasFeatures ? 'Features' : 'Racking'}</button>
-                <button type="button" className="btn primary lite-next" onClick={ask} title="Ask us for a quote for exactly this design. Nothing is sent until you press Send on the form." data-testid="lite-quote-review"><span className="lite-next-label">Request a quote <span aria-hidden="true">&rarr;</span></span><span className="lite-next-sub">Final step</span></button>
-              </div>
             </>
           )}
         </section>
@@ -577,7 +611,7 @@ export function LiteApp() {
         </section>
       </div>
 
-      <section className="lite-summary" data-tour="lt-result" aria-live="polite" data-testid="lite-result">
+      <section className="lite-summary" ref={footerRef} data-tour="lt-result" aria-live="polite" data-testid="lite-result">
         <div className="lite-cell">
           <span className="lite-cell-label">Estimated capacity</span>
           <strong className="lite-cell-value" data-testid="lite-bottles">{result.problems.length ? '—' : `${result.bottles} bottles`}</strong>
@@ -598,10 +632,16 @@ export function LiteApp() {
           </div>
         )}
         <div className="lite-cell lite-cta-cell" data-tour="lt-quote">
-          <button type="button" className="btn primary lite-cta" onClick={ask} title="Ask us for a quote for exactly this design. Nothing is sent until you press Send on the form." data-testid="lite-quote">Request a quote for this design <span aria-hidden="true">&rarr;</span></button>
-          {cfg.phone && (
-            <a className="lite-call" href={telHref(cfg.phone)} onClick={() => say('call')} title="Rather talk to someone? Tap to call. On a computer this opens your calling app, if you have one." data-testid="lite-call">Prefer to talk? Call {cfg.phone}</a>
-          )}
+          <div className="lite-nav">
+            {stepNav.back && <button type="button" className="btn lite-backbtn" onClick={stepNav.back.go} title={stepNav.back.title} data-testid="lite-back"><span aria-hidden="true">&larr;</span><span className="lite-back-label"> {stepNav.back.label}</span></button>}
+            <button type="button" className={`btn primary lite-next${stepNav.next.quote ? ' lite-cta' : ''}`} onClick={stepNav.next.go} title={stepNav.next.title} data-testid={stepNav.next.quote ? 'lite-quote' : 'lite-next'}><span className="lite-next-label">{stepNav.next.label} <span aria-hidden="true">&rarr;</span></span></button>
+          </div>
+          <div className="lite-links">
+            {!stepNav.next.quote && <button type="button" className="linklike lite-cta" onClick={ask} title="Ask us for a quote for exactly this design. Nothing is sent until you press Send on the form." data-testid="lite-quote">Request a quote for this design</button>}
+            {cfg.phone && (
+              <a className="lite-call" href={telHref(cfg.phone)} onClick={() => say('call')} title="Rather talk to someone? Tap to call. On a computer this opens your calling app, if you have one." data-testid="lite-call">Prefer to talk? Call {cfg.phone}</a>
+            )}
+          </div>
         </div>
       </section>
       <p className="foot">ESTIMATE ONLY: FINAL SITE MEASURE REQUIRED. Rack unit sizes are typical values, not a quote.</p>

@@ -9,7 +9,7 @@ import type { Fonts } from '../src/export/drawingPackage';
 import { DEFAULT_CONFIG, normaliseConfig, normaliseFeatures, type FeatureGroup, type LiteConfig, type RackType } from '../src/lite/config';
 import { buildScene } from '../src/lite/cellarScene';
 import { analyseApp, fullRuns } from '../src/app/model';
-import { chosenOptions, cleanPicks, effectsOf, featureTotals, optionMid, priceLabel, resolveFeatures, togglePick, unavailableReason } from '../src/lite/features';
+import { cardPriceLabel, chosenOptions, cleanPicks, effectsOf, featureTotals, optionMid, priceLabel, resolveFeatures, togglePick, unavailableReason } from '../src/lite/features';
 import { priceRange } from '../src/lite/price';
 import { decodeDesign, defaultLite, encodeDesign, liteToProject, summaryLine, type LiteSettings } from '../src/lite/settings';
 
@@ -155,6 +155,14 @@ describe('feature prices', () => {
     expect(priceLabel(o('glass-doors'), '$', false)).toBe('');
     expect(priceLabel(o('timber-doors'), '$', false)).toBe('Included');
     expect(priceLabel({ ...o('glass-doors'), low: 500, high: 500 }, '$', true)).toBe('+$500');
+  });
+  it('a card that cannot be chosen for this room shows no price (its reason is shown instead); a card that can keeps its label', () => {
+    const o = (id: string) => f.flatMap((g) => g.options).find((x) => x.id === id)!;
+    const island = o('island-with-drawers');
+    expect(cardPriceLabel(island, { widthMm: 2750, depthMm: 1565 }, '$', true)).toBe('');
+    expect(cardPriceLabel(island, { widthMm: 3000, depthMm: 2600 }, '$', true)).toBe(priceLabel(island, '$', true));
+    expect(cardPriceLabel(o('glass-doors'), { widthMm: 2750, depthMm: 1565 }, '$', false)).toBe('');
+    expect(cardPriceLabel(o('timber-doors'), { widthMm: 2750, depthMm: 1565 }, '$', false)).toBe('Included');
   });
 });
 

@@ -141,6 +141,8 @@ await page.getByTestId('lite-next').click();
 check('wizard: Continue goes to step 2 (bottles and finish) and the heading takes focus', (await page.getByTestId('lite-finish').count()) === 1 && (await page.getByTestId('lite-widthMm').count()) === 0 && (await page.evaluate(() => document.activeElement?.tagName)) === 'H2');
 await page.getByTestId('lite-next').click();
 check('wizard: step 3 is Features ("Make it yours"): groups of option cards, Step 3 of 4, and Added so far beside the picture', (await page.getByTestId('lite-features').count()) === 1 && /step 3 of 4/i.test(await page.getByTestId('lite-progress').innerText()) && (await page.getByTestId('lite-added').count()) === 1);
+check('features: groups are accordions, the first open and the rest closed with their pick in the header', (await page.getByTestId('feat-toggle-front').getAttribute('aria-expanded')) === 'true' && (await page.getByTestId('feat-toggle-special-storage').getAttribute('aria-expanded')) === 'false' && /None added/.test(await page.getByTestId('feat-summary-special-storage').innerText()));
+await page.getByTestId('feat-toggle-special-storage').click(); await page.getByTestId('feat-toggle-centrepiece').click();
 check('features: a pick-one group starts on its standard option, a pick-any group on nothing', (await page.getByTestId('feat-front-timber-doors').getAttribute('aria-checked')) === 'true' && (await page.getByTestId('feat-special-storage-champagne-bins').getAttribute('aria-checked')) === 'false');
 await page.getByTestId('feat-front-glass-doors').click();
 check('features: choosing glass doors swaps the standard door and lists it under Added so far', (await page.getByTestId('feat-front-glass-doors').getAttribute('aria-checked')) === 'true' && (await page.getByTestId('feat-front-timber-doors').getAttribute('aria-checked')) === 'false' && /Frameless glass doors/.test(await page.getByTestId('lite-added').innerText()));
@@ -399,26 +401,25 @@ const toControls = async () => {
   await page.waitForTimeout(500);
 };
 await toControls();
-const barInfo = await page.evaluate(() => { const b = document.getElementById('cellar-lite-bar'); return b ? { display: getComputedStyle(b).display, text: b.innerText } : null; });
-check('phone width: the quote bar is shown while the planner is on screen, with bottles and price', !!barInfo && barInfo.display === 'flex' && /About \d+ bottles/.test(barInfo.text) && /\$/.test(barInfo.text), JSON.stringify(barInfo));
-await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+// the planner has its own sticky footer now (capacity, price, Back / Next): the page script draws no second bar
+const footInfo = async () => {
+  const outer = await page.evaluate(() => ({ bar: (document.getElementById('cellar-lite-bar') ? getComputedStyle(document.getElementById('cellar-lite-bar')).display : 'none'), frameTop: document.getElementById('f').getBoundingClientRect().top, vh: window.innerHeight }));
+  const inner = await page.frameLocator('#f').getByTestId('lite-result').evaluate((el) => { const r = el.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, text: el.innerText }; });
+  return { bar: outer.bar, top: outer.frameTop + inner.top, bottom: outer.frameTop + inner.bottom, vh: outer.vh, text: inner.text };
+};
+const fi = await footInfo();
+check('phone width: the page script draws no second quote bar (the planner has its own footer)', fi.bar === 'none', JSON.stringify(fi));
+check('phone width: the sticky footer is on screen while the controls are, with bottles, price and Next', fi.top >= 0 && fi.bottom <= fi.vh + 2 && /bottles/i.test(fi.text) && /\$/.test(fi.text) && /Next/.test(fi.text), JSON.stringify(fi));
+await page.evaluate(() => window.scrollTo(0, document.getElementById('f').getBoundingClientRect().top + window.scrollY + 300));
 await page.waitForTimeout(600);
-check('and is hidden once the planner has scrolled out of view', (await page.evaluate(() => getComputedStyle(document.getElementById('cellar-lite-bar')).display)) === 'none');
+const fi2 = await footInfo();
+check('phone width: scrolling the page keeps the footer at the bottom of the screen', fi2.bottom <= fi2.vh + 2 && fi2.bottom >= fi2.vh - 60, JSON.stringify(fi2));
 await toControls();
-// the little picture: shown in the bar while the big picture is off screen, hidden while it is on screen
-const thumbInfo = await page.evaluate(() => { const i = document.querySelector('#cellar-lite-bar img'); return i ? { display: getComputedStyle(i).display, src: i.src.slice(0, 23), w: i.naturalWidth, h: i.naturalHeight, len: i.src.length } : null; });
-check('phone bar: while editing, it shows a live picture of the cellar (a real JPEG)', !!thumbInfo && thumbInfo.display === 'block' && thumbInfo.src === 'data:image/jpeg;base64,' && thumbInfo.w === 180 && thumbInfo.h === 112 && thumbInfo.len < 40000, JSON.stringify(thumbInfo));
-await frameDoorPick(page);
-const picTop = await page.evaluate(() => { const f = document.getElementById('f').getBoundingClientRect(); return f.top + window.scrollY; });
-const picY = await page.frameLocator('#f').locator('.lite-visual').evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
-await page.evaluate((y) => window.scrollTo(0, y), picTop + picY - 40);
-await page.waitForTimeout(700);
-const thumbHidden = await page.evaluate(() => { const i = document.querySelector('#cellar-lite-bar img'); const b = document.getElementById('cellar-lite-bar'); return { img: getComputedStyle(i).display, bar: getComputedStyle(b).display }; });
-check('phone bar: when the big picture is on screen the little one is hidden (never shown twice), the bar stays', thumbHidden.img === 'none' && thumbHidden.bar === 'flex', JSON.stringify(thumbHidden));
-await toControls();
-await page.locator('#cellar-lite-bar button').click();
+const frameP = page.frameLocator('iframe').first();
+for (let i = 0; i < 3; i++) { await frameP.getByTestId('lite-next').click(); await page.waitForTimeout(300); }
+await frameP.getByTestId('lite-quote').click();
 await page.waitForTimeout(800);
-check('the bar button opens the quote form in the planner, without leaving the page', /planner.html/.test(page.url()) && (await page.frameLocator('iframe').first().getByTestId('lite-quote-form').count()) === 1, page.url());
+check('Back / Next in the footer reach the review step, where the footer button opens the quote form in the planner', /planner.html/.test(page.url()) && (await frameP.getByTestId('lite-quote-form').count()) === 1, page.url());
 check('no script errors (embedded)', errors.length === 0, errors.join(' | '));
 await ctx.close();
 
@@ -430,6 +431,9 @@ await ctx.close();
   const fr = p.frameLocator('#f');
   await fr.getByTestId('lite-bottles').waitFor();
   await fr.getByTestId('lite-step-3').click(); // the long Features step
+  // the groups are accordions now: open them all so the step is long again
+  const closedGroups = fr.locator('[data-testid^="feat-toggle-"][aria-expanded="false"]');
+  while ((await closedGroups.count()) > 0) await closedGroups.first().click();
   await p.waitForTimeout(900);
   await p.evaluate(() => window.scrollTo(0, 0)); // the step change scrolled the page to the step strip: start from the top
   await p.waitForTimeout(900);
@@ -442,7 +446,10 @@ await ctx.close();
   check('embedded: after scrolling the page, the picture has followed and is still in view near the top of the window', scrolledTop >= 0 && scrolledTop < 200 && (await p.evaluate(() => window.scrollY)) > 500, String(scrolledTop));
   await p.evaluate(() => window.scrollTo(0, 0));
   await p.waitForTimeout(600);
-  check('embedded: scrolling back up puts it back beside the top of the controls', Math.abs((await place()) - startTop) < 6, String(await place()));
+  const footEmb = await p.evaluate(() => document.getElementById('f').getBoundingClientRect().top);
+const footIn = await fr.getByTestId('lite-result').evaluate((el) => { const r = el.getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; });
+check('embedded: the sticky footer rides at the bottom of the visible window while the page is scrolled', footEmb + footIn.bottom <= 800 + 2 && footEmb + footIn.bottom >= 800 - 40, JSON.stringify({ footEmb, footIn }));
+check('embedded: scrolling back up puts it back beside the top of the controls', Math.abs((await place()) - startTop) < 6, String(await place()));
   // changing step asks the page to scroll to the top of the steps
   await p.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await p.waitForTimeout(500);

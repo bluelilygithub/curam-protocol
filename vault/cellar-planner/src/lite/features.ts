@@ -102,5 +102,8 @@ export function priceLabel(o: FeatureOption, currency: string, showPrices: boole
   return r.low === r.high ? `+${currency}${fmt(r.low)}` : `+${currency}${fmt(r.low)}–${fmt(r.high)}`;
 }
 
+/** The price line on an option's card: as priceLabel, but nothing on a card that cannot be chosen for this room (it says why instead, and a price there would invite a click). */
+export const cardPriceLabel = (o: FeatureOption, room: Room, currency: string, showPrices: boolean): string => (unavailableReason(o, room) !== null ? '' : priceLabel(o, currency, showPrices));
+
 /** One line for the enquiry and the review: "Frameless glass doors, Ducted split system", or '' when nothing extra is chosen. */
 export const extrasLine = (extras: readonly FeatureOption[]): string => extras.map((o) => o.name).join(', ');

@@ -61,6 +61,8 @@ Built 2026-10-09 (see Done below and `docs/cellar-planner.md`, "Lite version for
 
 ## Done
 
+- [x] 2026-10-24 Lite layout refresh from the alternative mockup: sticky footer with Back / Next (rides the visible window inside the WordPress iframe through the page script, slim on phones), labelled header buttons, Features groups as accordions, no price on cards that cannot be chosen. Guide, tour, website help chat and docs updated. **Still to do:** upload the new `cellar-lite-fill.js` and check on a real phone (iOS Safari, Android Chrome); an optional label for extras while prices are unpublished; an option to hide the "Cellar Planner" title when embedded.
+
 - [x] 2026-10-10 Shared rack catalogue and staff price, customer quote, website enquiries to the CRM, technician calculation help, drag runs / one-click fixes / status strip / panel layout, indicative cooling estimate, 3D tab. Guide, tour and docs brought up to date.
 
 - [x] 2026-10-09 Docs: `docs/cellar-planner.md` status line and `specs/spec-v1.md` section 19 corrected (Vault wiring and saved designs exist).

@@ -4,8 +4,9 @@
  * Load this one file on BOTH pages: the page that holds the planner and the contact page (enqueue it site-wide, or on those two pages).
  *
  *  - Planner page: when the visitor presses "Request a quote for this design", it takes them to CONTACT_URL, carrying the design in the address.
- *    It also (a) sizes the planner's frame to fit, so there is one page to scroll, (b) on phones shows a bar at the bottom of the screen with the
- *    bottle count, the guide price and a quote button while the planner is on screen, and (c) passes the planner's anonymous usage events to Google
+ *    It also (a) sizes the planner's frame to fit, so there is one page to scroll, (b) keeps the planner's bottom bar (Back / Next / quote) and its picture in view as the
+ *    page scrolls (a planner older than 2026-10-24 has no such bar: then, on phones, this script shows its own bar with the bottle count, the guide
+ *    price and a quote button while the planner is on screen), and (c) passes the planner's anonymous usage events to Google
  *    Tag Manager (window.dataLayer), if the site has it.
  *  - Contact page: it finds the design in the address, writes it into the form's message box, scrolls to the form and puts the cursor in the
  *    first field. The visitor still presses the form's own Send button. When they do, and only when the message holds a planner design, this
@@ -38,7 +39,7 @@
   var PHONE_FIELD = '#cw-contact-phone';
   // 4. Planner page extras. Switch any off by setting it to false.
   var AUTO_HEIGHT = true;       // size the planner's frame to its content (no scroll bar inside the page)
-  var STICKY_BAR = true;        // phone-width screens: a quote bar at the bottom while the planner is on screen
+  var STICKY_BAR = true;        // only for a planner older than 2026-10-24 (no footer of its own): phone-width screens get a quote bar at the bottom
   var STICKY_MAX_WIDTH = 640;   // "phone width" in pixels
   var TRACK_EVENTS = true;      // push the planner's usage events to window.dataLayer
   var STICKY_PICTURE = true;    // keep the cellar picture in view while the page scrolls (desktop width)
@@ -120,7 +121,8 @@
   function refreshBar() {
     if (!bar) return;
     var phone = window.matchMedia && window.matchMedia('(max-width: ' + STICKY_MAX_WIDTH + 'px)').matches;
-    bar.style.display = phone && frameVisible && latest && !wasRequested ? 'flex' : 'none';
+    // a planner that has its own sticky footer (Back / Next / quote) says so: then there is no second bar
+    bar.style.display = phone && frameVisible && latest && !wasRequested && !latest.footer ? 'flex' : 'none';
     var showPic = bar.style.display === 'flex' && !!latest.thumb && !pictureOnScreen();
     barImg.style.display = showPic ? 'block' : 'none';
     document.body.style.paddingBottom = bar.style.display === 'flex' ? bar.offsetHeight + 'px' : '';
@@ -238,7 +240,7 @@
     if (!CODE_RE.test(d.code) || d.summary.length > 400) { log('IGNORED: code or summary has an unexpected shape'); return; }
     plannerWin = ev.source; plannerOrigin = ev.origin;
     latest = { code: d.code, summary: d.summary, bottles: Number(d.bottles) || 0, priceText: typeof d.priceText === 'string' && d.priceText.length <= 60 ? d.priceText : '',
-      thumb: typeof d.thumb === 'string' && d.thumb.length <= 40000 && THUMB_RE.test(d.thumb) ? d.thumb : '' };
+      thumb: typeof d.thumb === 'string' && d.thumb.length <= 40000 && THUMB_RE.test(d.thumb) ? d.thumb : '', footer: d.footer === true };
 
     if (STICKY_BAR) {
       ensureBar();
