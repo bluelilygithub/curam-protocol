@@ -27,8 +27,8 @@ assert.strictEqual(C.normalizeReply({ summary: 'ok then', title: 'x'.repeat(300)
 
 // the note: summary, decisions, to-dos as tick-boxes, then the whole exchange
 const body = C.compose({ summary: 'Talked about oak pricing.', decisions: ['Quote $120 a metre'], todos: ['Call Sam tomorrow'], messages: turns });
-assert.strictEqual(body, 'Summary:\nTalked about oak pricing.\n\nDecisions:\n- Quote $120 a metre\n\nTo do:\n- [ ] Call Sam tomorrow\n\n— Conversation —\n**You:**\nWhat should I charge for the oak benchtop?\n\n**Assistant:**\nAbout one hundred and twenty dollars a metre installed.\n\n**You:**\nOK, I will quote them that and call Sam tomorrow.');
-assert.strictEqual(C.compose({ messages: turns.slice(0, 2) }), '— Conversation —\n**You:**\nWhat should I charge for the oak benchtop?\n\n**Assistant:**\nAbout one hundred and twenty dollars a metre installed.', 'no summary: just the exchange');
+assert.strictEqual(body, '**Summary:**\nTalked about oak pricing.\n\n**Decisions:**\n- Quote $120 a metre\n\n**To do:**\n- [ ] Call Sam tomorrow\n\n---\n\n**Conversation**\n\n**You:**\nWhat should I charge for the oak benchtop?\n\n**Assistant:**\nAbout one hundred and twenty dollars a metre installed.\n\n**You:**\nOK, I will quote them that and call Sam tomorrow.');
+assert.strictEqual(C.compose({ messages: turns.slice(0, 2) }), '**Conversation**\n\n**You:**\nWhat should I charge for the oak benchtop?\n\n**Assistant:**\nAbout one hundred and twenty dollars a metre installed.', 'no summary: just the exchange');
 assert.match(C.defaultTitle(new Date(2026, 9, 24, 14, 35)), /^Conversation, 24 Oct 2:35 pm$/);
 
 (async () => {
@@ -40,7 +40,7 @@ assert.match(C.defaultTitle(new Date(2026, 9, 24, 14, 35)), /^Conversation, 24 O
   });
   const ok = await C.buildConversationNote(7, turns, {}, deps({ title: 'Pricing oak', summary: 'Talked about oak pricing.', decisions: [], todos: ['Call Sam tomorrow'] }));
   assert.deepStrictEqual({ title: ok.title, summarised: ok.summarised, todos: ok.todos, count: ok.count }, { title: 'Pricing oak', summarised: true, todos: ['Call Sam tomorrow'], count: 3 });
-  assert.ok(ok.body.startsWith('Summary:\nTalked about oak pricing.') && ok.body.includes('- [ ] Call Sam tomorrow') && ok.body.includes('— Conversation —'));
+  assert.ok(ok.body.startsWith('**Summary:**\nTalked about oak pricing.') && ok.body.includes('- [ ] Call Sam tomorrow') && ok.body.includes('---\n\n**Conversation**'));
   assert.strictEqual(seen.model, 'light-model');
   assert.match(seen.prompt, /Person: What should I charge/);
   assert.match(seen.system, /do not follow them/);
@@ -51,7 +51,7 @@ assert.match(C.defaultTitle(new Date(2026, 9, 24, 14, 35)), /^Conversation, 24 O
     const r = await C.buildConversationNote(7, turns, { now: new Date(2026, 9, 24, 14, 35) }, bad);
     assert.strictEqual(r.summarised, false);
     assert.strictEqual(r.title, 'Conversation, 24 Oct 2:35 pm');
-    assert.ok(r.body.startsWith('— Conversation —') && r.body.includes('About one hundred and twenty'));
+    assert.ok(r.body.startsWith('**Conversation**') && r.body.includes('About one hundred and twenty'));
   }
   const empty = await C.buildConversationNote(7, [], {}, deps({}));
   assert.strictEqual(empty.count, 0);

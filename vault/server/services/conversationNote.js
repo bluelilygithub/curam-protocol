@@ -13,7 +13,9 @@ const MAX_TITLE_CHARS = 80;
 const MAX_SUMMARY_CHARS = 4000;
 const MAX_LIST = 15;
 const MAX_ITEM_CHARS = 200;
-const CONVERSATION_DIVIDER = '— Conversation —';
+// A rule (a line across the note) then a bold heading, so the summary and the conversation read as two parts.
+const CONVERSATION_DIVIDER = '---\n\n**Conversation**';
+const CONVERSATION_HEADING = '**Conversation**';
 
 const SYSTEM = `You turn a spoken conversation between a person and an AI assistant into a note for the person, so they can read it later.
 Write: a short title (at most 8 words); a summary of 2 to 5 sentences saying what was discussed and where it ended up; the decisions that were made (only if there were any); and the to-dos: things the PERSON said they will do, or asked to be reminded to do, or agreed to do. Only include to-dos that are actually in the conversation. Do not invent decisions or to-dos to be helpful, and do not turn the assistant's suggestions into to-dos unless the person agreed to do them.
@@ -78,10 +80,11 @@ function transcript(messages) {
 /** The note's text: summary, decisions, to-dos (as tick-boxes, so Make tasks can see them), then the whole conversation. */
 function compose({ summary, decisions = [], todos = [], messages }) {
   const parts = [];
-  if (summary) parts.push(`Summary:\n${summary}`);
-  if (decisions.length) parts.push(`Decisions:\n${decisions.map((d) => `- ${d}`).join('\n')}`);
-  if (todos.length) parts.push(`To do:\n${todos.map((t) => `- [ ] ${t}`).join('\n')}`);
-  parts.push(`${CONVERSATION_DIVIDER}\n${transcript(messages)}`);
+  if (summary) parts.push(`**Summary:**\n${summary}`);
+  if (decisions.length) parts.push(`**Decisions:**\n${decisions.map((d) => `- ${d}`).join('\n')}`);
+  if (todos.length) parts.push(`**To do:**\n${todos.map((t) => `- [ ] ${t}`).join('\n')}`);
+  // the rule only when there is something above it to separate from
+  parts.push(`${parts.length ? CONVERSATION_DIVIDER : CONVERSATION_HEADING}\n\n${transcript(messages)}`);
   return parts.join('\n\n');
 }
 

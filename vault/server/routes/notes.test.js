@@ -681,16 +681,16 @@ test('a finished conversation becomes a note proposal: summary, to-dos as tick-b
     const r = await call('POST', '/api/notes/from-conversation', { sessionId: sid });
     assert.strictEqual(r.status, 200, JSON.stringify(r.json));
     assert.deepStrictEqual({ title: r.json.title, summarised: r.json.summarised, todos: r.json.todos, count: r.json.count }, { title: 'Pricing the oak', summarised: true, todos: ['Call Sam tomorrow'], count: 3 });
-    assert.ok(r.json.body.startsWith('Summary:\nTalked about oak benchtop pricing.'));
+    assert.ok(r.json.body.startsWith('**Summary:**\nTalked about oak benchtop pricing.'));
     assert.ok(r.json.body.includes('- [ ] Call Sam tomorrow'), 'to-dos are tick-boxes, so Make tasks can see them');
-    assert.ok(r.json.body.includes('— Conversation —\n**You:**\nWhat should I charge'), 'the whole exchange follows');
+    assert.ok(r.json.body.includes('---\n\n**Conversation**\n\n**You:**\nWhat should I charge'), 'the whole exchange follows');
     assert.strictEqual(Number((await q('SELECT COUNT(*) FROM notes WHERE user_id=$1', [userA]))[0].count), notesBefore, 'it only proposes: nothing was saved');
 
     fail = true;
     const down = await call('POST', '/api/notes/from-conversation', { sessionId: sid });
     assert.strictEqual(down.status, 200);
     assert.strictEqual(down.json.summarised, false, 'a failed summary still gives the exchange');
-    assert.ok(down.json.body.startsWith('— Conversation —'));
+    assert.ok(down.json.body.startsWith('**Conversation**'));
     fail = false;
 
     assert.strictEqual((await call('POST', '/api/notes/from-conversation', { sessionId: sid }, 'B')).status, 404, "someone else's conversation");

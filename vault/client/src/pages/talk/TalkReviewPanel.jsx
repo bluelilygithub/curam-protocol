@@ -38,9 +38,9 @@ export default function TalkReviewPanel({ proposal, mobile, saving, onSave, onKe
             {proposal.summarised ? 'A summary, then everything that was said. Change anything you like.' : 'The summary could not be made just now, so this is everything that was said. You can still save it.'}
           </p>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 space-y-3">
+        <div className="flex-1 min-h-0 overflow-y-auto scroll-obvious px-4 space-y-3">
           <input value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Note title" maxLength={200} className="w-full rounded-lg px-3 font-semibold" style={field} />
-          <textarea value={body} onChange={(e) => setBody(e.target.value)} aria-label="Note text" className="w-full rounded-lg px-3 py-2 text-sm" style={{ ...field, minHeight: mobile ? 220 : 280, lineHeight: 1.5, resize: 'vertical' }} />
+          <textarea value={body} onChange={(e) => setBody(e.target.value)} aria-label="Note text" className="w-full rounded-lg px-3 py-2 text-sm scroll-obvious" style={{ ...field, minHeight: mobile ? 220 : 280, lineHeight: 1.5, resize: 'vertical' }} />
           <div className="flex flex-wrap gap-2">
             <Tooltip text={TALK_TIPS.reviewProject}>
               <select value={projectId} onChange={(e) => setProjectId(e.target.value)} aria-label="Project" className="flex-1 min-w-[10rem] rounded-lg px-2 text-sm" style={field}>
