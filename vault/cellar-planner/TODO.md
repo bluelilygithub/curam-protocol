@@ -23,7 +23,7 @@ Agreed 2026-10-24 after a design discussion: the only two additions worth buildi
 
 Parked 2026-10-24. These build on supplier numbers nobody has yet, so none is started and none is in the spec. Do the trade question lists and one real job first.
 
-- Mixed rack types in one design: an optional rack type on each run, falling back to the design's type. The engine reads one rack specification for the whole design today, so capacity, placement and checks would resolve it per run; an unknown run type must be an error, never a silent fall-back to the default; a quote needs every type used to be confirmed.
+- Mixed rack types in one design: an optional rack type on each run, falling back to the design's type. The engine (`analyseRacks`) already takes a rack specification and a bottle type on every run; only the app layer (`fullRuns` in `src/app/model.ts`) stamps the design's single spec and bottle onto all runs, so the work is mainly how the app stores runs, with the price panel, quote and drawings reading each run's type; an unknown run type must be an error, never a silent fall-back to the default; a quote needs every type used to be confirmed.
 - Site measure record (measured room opening and ceiling height, measured by) with a fit check: a room smaller than the enclosure is always an error; extra room is fine up to a tolerance the installer supplies (blank until they do); a measurement never revises a quote by itself, changing the enclosure does.
 - A Sales view and a Technical view as two saved panel layouts (`layoutPrefs.ts`), not a permissions system.
 - Drawing set extras: the other three wall elevations, a section cut, a parts and carcass schedule; DXF layer names configurable in Settings, empty layers left out, a layer picker in the download.
