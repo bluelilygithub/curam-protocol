@@ -11,7 +11,7 @@ const CATALOG = [
   { id: 'search', label: 'Search or ask for a route', group: 'Top of the screen',
     does: 'The box at the top. Type a suburb, address or landmark and press Enter to fly the map there, or ask for a route in plain words, such as "route from Morningside to Carindale", "a 10 km cycling loop from Bulimba" or "Morningside to Carindale about 12 km by bike". A request sets up Plan a route for you to check; nothing is saved. There is a microphone on it.', notes: 'Planning a route from words needs route planning to be set up on the server.' },
   { id: 'tracks', label: 'Your tracks', group: 'Sidebar',
-    does: 'The list of your saved tracks, newest first, with a name filter. Open one to see it on the map with its distance, then rename it, change its colour, extend it, edit its points, download it as a GPX file, make a Map as PDF or delete it. Tick rows and press Delete to remove several at once. Tap the line of an open track to see how far that spot is from the start.', notes: 'Up to 1,000 tracks each.' },
+    does: 'The list of your saved tracks, newest first, with a name filter. Open one to see it on the map with its distance, then rename it, change its colour, extend it, edit its points, download it as a GPX, TCX or KML file, use Send to watch for a Zepp watch such as the Amazfit Bip 6, make a Map as PDF or delete it. Tick rows and press Delete to remove several at once. Tap the line of an open track to see how far that spot is from the start.', notes: 'Up to 1,000 tracks each.' },
   { id: 'draw', label: 'Draw a route', group: 'Sidebar',
     does: 'Trace a route yourself. Freehand: drag a finger or mouse along the map. Click: click each point (double-click to finish); with Follow roads switched on each click finds the road or path from the last one for the way of travelling you pick. Edit points: drag a point to move it, drag a dot between points to add one, delete a point. The distance shows live with numbered distance markers. Undo, Return to start, Out and back, an Elevation chart with climb and descent, then Finish to name and save it.', notes: 'A route keeps at most 20,000 points. A drawing in progress is autosaved in this browser, and a banner offers to restore it next time.' },
   { id: 'plan', label: 'Plan a route', group: 'Sidebar',
@@ -35,7 +35,7 @@ const CATALOG = [
 const RULES = [
   'Route Tracer saves tracks to the person\'s Vault account, one list per person. Nothing here is shared with other people.',
   'Distances come from the line itself and match the live readout, the markers and the saved track. Units (km or miles) are chosen in Settings.',
-  'A sensible order for a planned trip: Plan a route (A, B, the way of travelling), Use selected route, check or tidy it in the drawing tools (Edit points, Elevation), Finish to save, then Map as PDF or download the GPX.',
+  'A sensible order for a planned trip: Plan a route (A, B, the way of travelling), Use selected route, check or tidy it in the drawing tools (Edit points, Elevation), Finish to save, then Map as PDF, download the GPX, or Send to watch.',
   'To trace a route you already know, use Draw a route. Click mode with Follow roads switched on snaps each click to real roads and paths; Freehand does not follow roads.',
   'Planning, loops and Follow roads use the OpenRouteService routing service through Vault, so they need it to be set up, and work only where OpenStreetMap has roads or paths.',
   'The Open buttons in this chat only show a screen. They never draw, change, save or delete anything. If a drawing or a plan is in progress, an Open button asks you to finish or cancel it first rather than throwing it away.',
@@ -48,7 +48,7 @@ const NOT_POSSIBLE = [
   'Weather, traffic, opening hours, public transport times, or reviews of places.',
   'Routes where OpenStreetMap has no road or path (the routing says so), or ferry, flight and rail routing.',
   'Seeing the person\'s tracks, their drawing or the map. The guide knows what each screen does and which one is open, but cannot see what is on the map.',
-  'Exporting anything other than a GPX file or the one-page Map as PDF (no KML or Strava upload).',
+  'Exporting anything other than GPX, TCX, KML or the one-page Map as PDF (no Strava upload). It cannot push a route straight to a watch: you download the file and import it in the app that comes with the watch (Zepp for Amazfit).',
 ];
 
 const SYSTEM = `You are the guide to Route Tracer, a map tool for tracing, planning, saving and exporting walking, hiking, cycling and driving routes. People say, in everyday words, what they want to do. You point them to the right screen(s), in order, and explain how each works.

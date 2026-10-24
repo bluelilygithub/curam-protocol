@@ -352,6 +352,33 @@ function createRouter(pool, {
     }
   });
 
+  // GET /api/route-tracks/:id/file?format=gpx|tcx|kml (before /:id): the formats the Zepp app reads for a watch
+  const FILE_FORMATS = {
+    gpx: { type: 'application/gpx+xml', build: geo.toGpx },
+    tcx: { type: 'application/vnd.garmin.tcx+xml', build: geo.toTcx },
+    kml: { type: 'application/vnd.google-earth.kml+xml', build: geo.toKml },
+  };
+  router.get('/:id/file', async (req, res) => {
+    if (!UUID.test(req.params.id)) return res.status(404).json({ error: 'That track was not found.' });
+    const format = String(req.query.format || 'gpx').toLowerCase();
+    if (!Object.prototype.hasOwnProperty.call(FILE_FORMATS, format)) return res.status(400).json({ error: 'The format must be gpx, tcx or kml.' });
+    try {
+      const { rows } = await pool.query(`SELECT name, notes, geometry FROM route_tracks WHERE id = $1 AND "userId" = $2`, [req.params.id, req.user.id]);
+      if (!rows[0]) return res.status(404).json({ error: 'That track was not found.' });
+      const file = `${rows[0].name.replace(/[^\w\- .]+/g, '_').trim() || 'track'}.${format}`;
+      res.set({
+        'Content-Type': `${FILE_FORMATS[format].type}; charset=utf-8`,
+        'Content-Disposition': `attachment; filename="${file.replace(/"/g, '')}"`,
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+      });
+      res.send(FILE_FORMATS[format].build(rows[0].name, rows[0].notes, rows[0].geometry.coordinates));
+    } catch (err) {
+      getLogger().error({ err }, 'route track file export failed');
+      res.status(500).json({ error: 'Could not export this track.' });
+    }
+  });
+
   router.get('/:id', async (req, res) => {
     if (!UUID.test(req.params.id)) return res.status(404).json({ error: 'That track was not found.' });
     try {

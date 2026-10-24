@@ -69,4 +69,36 @@ function toGpx(name, notes, lines) {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Route Tracer" xmlns="http://www.topografix.com/GPX/1/1">\n  <trk>\n    <name>${esc(name)}</name>${desc}\n${segs}\n  </trk>\n</gpx>\n`;
 }
 
-module.exports = { distanceM, bboxOf, validateGeometry, cleanLines, toGpx, MAX_POINTS, MAX_LINES };
+/**
+ * TCX 2.0 Course (the format Garmin and Zepp read as a route to follow). A course point needs a time, but a drawn route has none, so
+ * the times are made up from distance at a steady walking pace; they only keep the file valid and carry no meaning.
+ * The schema limits a course name to 15 characters.
+ */
+const TCX_PACE_MS = 1.4;
+const TCX_EPOCH = Date.UTC(2000, 0, 1);
+function toTcx(name, notes, lines) {
+  let run = 0;
+  let prev = null;
+  const pts = [];
+  for (const line of lines) {
+    line.forEach((p, i) => {
+      if (prev && i > 0) run += segmentM(prev, p);
+      prev = p;
+      const t = new Date(TCX_EPOCH + Math.round((run / TCX_PACE_MS) * 1000)).toISOString();
+      pts.push(`        <Trackpoint><Time>${t}</Time><Position><LatitudeDegrees>${p[1]}</LatitudeDegrees><LongitudeDegrees>${p[0]}</LongitudeDegrees></Position><DistanceMeters>${run.toFixed(1)}</DistanceMeters></Trackpoint>`);
+    });
+    prev = null; // the gap between two strokes is not distance
+  }
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2">\n  <Courses>\n    <Course>\n      <Name>${esc(String(name).slice(0, 15))}</Name>\n      <Track>\n${pts.join('\n')}\n      </Track>\n    </Course>\n  </Courses>\n</TrainingCenterDatabase>\n`;
+}
+
+/** KML 2.2, one <LineString> per stroke inside a single placemark. */
+function toKml(name, notes, lines) {
+  const strings = lines
+    .map((l) => `      <LineString>\n        <tessellate>1</tessellate>\n        <coordinates>${l.map(([lng, lat]) => `${lng},${lat},0`).join(' ')}</coordinates>\n      </LineString>`)
+    .join('\n');
+  const desc = notes ? `\n    <description>${esc(notes)}</description>` : '';
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n  <Document>\n    <name>${esc(name)}</name>\n    <Placemark>\n    <name>${esc(name)}</name>${desc}\n      <MultiGeometry>\n${strings}\n      </MultiGeometry>\n    </Placemark>\n  </Document>\n</kml>\n`;
+}
+
+module.exports = { distanceM, bboxOf, validateGeometry, cleanLines, toGpx, toTcx, toKml, MAX_POINTS, MAX_LINES };

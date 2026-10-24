@@ -231,8 +231,9 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [pdfOpen, setPdfOpen] = useState(false);
+  const [watchOpen, setWatchOpen] = useState(false);
 
-  useEffect(() => { setPdfOpen(false); setName(track.name); setNotes(track.notes ?? ''); setColor(track.color); setEditing(false); setConfirmDelete(false); }, [track.id, track.updatedAt, track.name, track.notes, track.color]);
+  useEffect(() => { setPdfOpen(false); setWatchOpen(false); setName(track.name); setNotes(track.notes ?? ''); setColor(track.color); setEditing(false); setConfirmDelete(false); }, [track.id, track.updatedAt, track.name, track.notes, track.color]);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -246,6 +247,9 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
   }
   async function exportGpx() {
     try { await api.downloadGpx(track.id, track.name); } catch (err) { toast('error', errText(err)); }
+  }
+  async function exportFile(format: 'gpx' | 'tcx' | 'kml') {
+    try { await api.downloadFile(track.id, track.name, format); } catch (err) { toast('error', errText(err)); }
   }
   /** Open the track in the drawing tools: Extend continues it, Edit points reshapes it. Saving writes back over the same track. */
   function reopen(mode: 'extend' | 'edit') {
@@ -288,6 +292,18 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
               <button type="button" onClick={() => reopen('edit')} title="Reshape the route: move points, add points or delete them">Edit points</button>
               <button type="button" onClick={() => reopen('extend')} title="Carry on drawing from the end of this route">Extend</button>
               <button type="button" onClick={() => void exportGpx()} title="Download this track as a GPX file for Strava, Garmin or gpx.studio">Export GPX</button>
+              <button type="button" onClick={() => setWatchOpen((o) => !o)} aria-expanded={watchOpen} title="Get this route onto a Zepp watch such as the Amazfit Bip 6">Send to watch</button>
+              {watchOpen && (
+                <div className="stack" role="group" aria-label="Send to a watch">
+                  <p className="hint">Download the file, then add it in the Zepp app on your phone: <b>Profile → your watch → Routes</b> (the name varies by app version), choose <b>Import</b>, pick the file, then sync the watch.</p>
+                  <div className="row">
+                    <button type="button" onClick={() => void exportFile('gpx')} title="GPX file: try this one first">GPX</button>
+                    <button type="button" onClick={() => void exportFile('tcx')} title="TCX course file, if GPX is not accepted">TCX</button>
+                    <button type="button" onClick={() => void exportFile('kml')} title="KML file, if the others are not accepted">KML</button>
+                  </div>
+                  <p className="hint">Open this page on your phone, or send the file to it first. TCX times are placeholders so the file is valid; they are not a pace.</p>
+                </div>
+              )}
               <button type="button" onClick={() => setPdfOpen(true)} title="Make a printable A4 map of this route as a PDF, to download or email" data-tour="rt-pdf">Map as PDF</button>
               {confirmDelete ? (
                 <div className="row">

@@ -893,6 +893,7 @@ async function planTests() {
   assert.strictEqual((await call(other, 'PATCH', `/api/route-tracks/${id}`, { name: 'mine now' })).status, 404);
   assert.strictEqual((await call(other, 'DELETE', `/api/route-tracks/${id}`)).status, 404);
   assert.strictEqual((await call(other, 'GET', `/api/route-tracks/${id}/gpx`)).status, 404);
+  assert.strictEqual((await call(other, 'GET', `/api/route-tracks/${id}/file?format=tcx`)).status, 404, 'file export is owner-only too');
   assert.strictEqual((await call(other, 'GET', '/api/route-tracks')).json.tracks.length, 0, 'another user sees none');
   other.close();
 
@@ -936,6 +937,17 @@ async function planTests() {
   assert.ok(g.headers.get('content-type').startsWith('application/gpx+xml'));
   assert.ok(/attachment; filename="Renamed\.gpx"/.test(g.headers.get('content-disposition')));
   assert.strictEqual((g.text.match(/<trkseg>/g) || []).length, 2);
+
+  // ---- tcx / kml (Zepp watch import)
+  const tcx = await call(s, 'GET', `/api/route-tracks/${id}/file?format=tcx`);
+  assert.strictEqual(tcx.status, 200);
+  assert.ok(/attachment; filename="Renamed\.tcx"/.test(tcx.headers.get('content-disposition')));
+  assert.ok(tcx.text.includes('<Course>') && tcx.text.includes('<Time>2000-01-01T00:00:00.000Z</Time>'));
+  const kml = await call(s, 'GET', `/api/route-tracks/${id}/file?format=kml`);
+  assert.strictEqual(kml.status, 200);
+  assert.strictEqual((kml.text.match(/<LineString>/g) || []).length, 2, 'one LineString per stroke');
+  assert.strictEqual((await call(s, 'GET', `/api/route-tracks/${id}/file`)).status, 200, 'default is gpx');
+  assert.strictEqual((await call(s, 'GET', `/api/route-tracks/${id}/file?format=exe`)).status, 400);
 
   // ---- bulk delete: own tracks only, validated, counted
   {

@@ -76,15 +76,19 @@ export const api = {
   remove: (id: string) => call<void>('DELETE', `/api/route-tracks/${id}`),
   removeMany: (ids: string[]) => call<{ deleted: number }>('POST', '/api/route-tracks/delete', { ids }),
   /** The GPX comes through fetch (the token is a header), then saves from a Blob link: a plain link or window.open would be unauthenticated. */
-  async downloadGpx(id: string, fileName: string): Promise<void> {
+  downloadGpx(id: string, fileName: string): Promise<void> {
+    return this.downloadFile(id, fileName, 'gpx');
+  },
+  /** GPX, TCX or KML: the formats the Zepp app reads when you send a route to a watch. */
+  async downloadFile(id: string, fileName: string, format: 'gpx' | 'tcx' | 'kml'): Promise<void> {
     const t = token();
     if (!t) throw new ApiError(401, 'Sign in to Vault to use Route Tracer.');
-    const res = await fetch(`/api/route-tracks/${id}/gpx`, { headers: { Authorization: `Bearer ${t}` } });
+    const res = await fetch(`/api/route-tracks/${id}/file?format=${format}`, { headers: { Authorization: `Bearer ${t}` } });
     if (!res.ok) throw new ApiError(res.status, 'Could not export this track.');
     const url = URL.createObjectURL(await res.blob());
     const a = document.createElement('a');
     a.href = url;
-    a.download = fileName.replace(/[^\w\- .]+/g, '_') + '.gpx';
+    a.download = fileName.replace(/[^\w\- .]+/g, '_') + '.' + format;
     document.body.appendChild(a);
     a.click();
     a.remove();
