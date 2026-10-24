@@ -111,7 +111,8 @@ html[data-embedded] .lite-titlebox { padding-right: 56px; }
 .finish-swatch { width: 26px; height: 26px; border-radius: 50%; border: 1px solid rgba(0,0,0,.25); }
 .lite-target { margin-top: 12px; }
 .lite-slider { width: 100%; margin-top: 8px; accent-color: var(--primary); min-height: 28px; }
-.lite-nav { display: flex; gap: 10px; }
+.lite-nav { margin-top: 24px; display: flex; gap: 10px; }
+.lite-nav.two { justify-content: space-between; }
 .lite-nav .btn { min-height: 52px; font-size: 17px; }
 .lite-next { flex: 1; font-weight: 700; }
 .lite-nav .btn:not(.primary) { padding: 0 20px; }
@@ -126,20 +127,17 @@ html[data-embedded] .lite-titlebox { padding-right: 56px; }
 .lite-share { margin: 12px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
 
 /* ---- the summary bar along the bottom */
-.lite-summary { position: sticky; bottom: 0; z-index: 6; background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 12px 22px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 28px; box-shadow: 0 -4px 18px rgba(0,0,0,.08); }
-.lite-links { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0 14px; }
-.lite-links .lite-cta { min-height: 44px; font-size: 14px; font-weight: 600; width: auto; }
-.lite-links .lite-call { min-height: 44px; margin-top: 0; font-size: 14px; }
+.lite-summary { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px; display: flex; flex-wrap: wrap; align-items: center; gap: 16px 32px; }
 .lite-cell { flex: 1 1 150px; min-width: 0; }
 .lite-cell-label { display: block; font-size: 14px; color: var(--muted); }
-.lite-cell-value { display: block; font-size: 20px; line-height: 1.2; font-weight: 700; }
+.lite-cell-value { display: block; font-size: 24px; line-height: 1.2; font-weight: 700; }
 .lite-cell-note { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
 .lite-price-note { display: block; font-size: 12px; font-weight: 400; color: var(--muted); }
-.lite-cta-cell { flex: 1 1 360px; max-width: 460px; margin-left: auto; text-align: center; }
-.lite .btn.lite-cta { transition: opacity 200ms, background-color 200ms; }
+.lite-cta-cell { flex: 1 1 320px; max-width: 420px; margin-left: auto; text-align: center; }
+.lite .lite-cta { width: 100%; min-height: 58px; padding: 0 22px; font-size: 18px; font-weight: 700; border-radius: 8px; transition: opacity 200ms, background-color 200ms; }
 .lite-call { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; margin-top: 4px; padding: 0 10px; color: var(--primary-dark); font-weight: 600; font-size: 15px; text-decoration: underline; }
 .lite-call:hover { opacity: .7; }
-@media (max-width: 899px) { .lite-cta-cell { max-width: none; flex-basis: 100%; } .lite-cell-value { font-size: 20px; } }
+@media (max-width: 899px) { .lite-cta-cell { max-width: none; flex-basis: 100%; } .lite-cell-value { font-size: 22px; } }
 .foot { margin: 0; text-align: center; font-size: 11px; color: var(--muted); letter-spacing: .02em; }
 
 /* ---- door drawing: the room from above with its walls labelled and tappable, and the door drawn as an opening with its swing */
@@ -201,11 +199,12 @@ html[data-embedded] .lite-titlebox { padding-right: 56px; }
   .lenfield-unit { font-size: 13px; }
   .lite-cell-label { font-size: 13px; }
   .lite-cell-value { font-size: 18px; }
-  .lite-summary { padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); gap: 4px 12px; }
+  .lite-summary { position: sticky; bottom: 0; z-index: 6; box-shadow: 0 -4px 18px rgba(0,0,0,.08); padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); gap: 4px 12px; }
+  .lite-summary .lite-nav { margin-top: 0; }
   .lite-summary .lite-cell { flex: 1 1 0; }
   .lite-summary .lite-cta-cell { flex: 1 1 100%; max-width: none; margin-left: 0; }
   .lite-price-note { display: none; }
-  .lite-summary .lite-cell:nth-child(2), .lite-summary .lite-cell:nth-child(3), .lite-cell-note, .lite-links, .lite-back-label { display: none; }
+  .lite-summary .lite-cell:nth-child(2), .lite-summary .lite-cell:nth-child(3), .lite-cell-note, .lite-back-label { display: none; }
   .lite-cta-cell { flex: 1 1 100%; }
   .lite-nav .btn { min-height: 46px; }
   .lite-nav .lite-backbtn { padding: 0 16px; }
@@ -283,5 +282,3 @@ html[data-embedded] .modal, html[data-embedded] .modal.wide { max-height: calc(v
 .qf-row [aria-invalid="true"] { border-color: #b3261e; outline-color: #b3261e; }
 .qf-error { color: #b3261e; }
 
-/* the sticky footer stays slim: the owner's price note is small, and hidden on a phone */
-.lite-summary .lite-price-note { max-width: 230px; font-size: 11px; line-height: 1.25; }

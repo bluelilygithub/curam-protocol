@@ -52,7 +52,7 @@ await page.goto('http://localhost:8801/planner.html');
 const frame = page.frameLocator('#f');
 await frame.getByTestId('lite-quote').waitFor();
 const btn = await frame.getByTestId('lite-quote').evaluate((el) => { const c = getComputedStyle(el); return { w: el.getBoundingClientRect().width, h: el.getBoundingClientRect().height, bg: c.backgroundColor }; });
-check('the quote button is a quiet link in the footer on the first steps (the big brand button is Next), and is tall enough to tap', btn.w < 500 && btn.h >= 36, JSON.stringify(btn));
+check('the quote button is a large, filled button in the brand colour (not a banner)', btn.w < 500 && btn.h >= 50 && btn.bg === 'rgb(74, 90, 42)', JSON.stringify(btn));
 // The quote button no longer leaves the page (see e2e-lite-quote.mjs). This script still covers the contact page's own behaviour, for links made by
 // an older planner: a design in the address fills the form.
 await frame.getByTestId('lite-quote').click();

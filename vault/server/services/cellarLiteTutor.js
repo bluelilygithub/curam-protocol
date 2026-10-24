@@ -34,7 +34,7 @@ const RULES = [
   'The door: tap a wall on the little room drawing to put the door there, then choose Left / Centre / Right (as seen standing outside) and Single / Double.',
   'Measure the room INSIDE the finished walls, floor to ceiling. Round to the nearest centimetre; the business measures properly before building anything.',
   'The design is saved in the visitor\'s own browser so it is there when they come back (Start again clears it). A design code or link reopens the same design.',
-  'The bar that stays at the bottom of the screen shows bottle capacity, footprint, configuration and the guide price (if shown), with Back and Next. "Request a quote" is the main button on the Review step and a link in that bar on the earlier steps.',
+  'The bar along the bottom of the page shows bottle capacity, footprint, configuration and the guide price (if shown), with the "Request a quote" button. Back and Next end each step. On a phone Back and Next move into that bar, which stays at the bottom of the screen, and "Request a quote" is the last button of the Review step.',
   'The guide price, when shown, is a range for guidance only. Say where to find it (the Review step) but never state, calculate or promise a price yourself.',
   'On a phone the picture comes first, then the controls, and the bottom bar is slimmer (capacity, price, Back and Next). The planner works best on a computer or tablet.',
 ];

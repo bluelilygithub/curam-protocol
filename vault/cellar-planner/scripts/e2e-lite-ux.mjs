@@ -446,9 +446,7 @@ await ctx.close();
   check('embedded: after scrolling the page, the picture has followed and is still in view near the top of the window', scrolledTop >= 0 && scrolledTop < 200 && (await p.evaluate(() => window.scrollY)) > 500, String(scrolledTop));
   await p.evaluate(() => window.scrollTo(0, 0));
   await p.waitForTimeout(600);
-  const footEmb = await p.evaluate(() => document.getElementById('f').getBoundingClientRect().top);
-const footIn = await fr.getByTestId('lite-result').evaluate((el) => { const r = el.getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; });
-check('embedded: the sticky footer rides at the bottom of the visible window while the page is scrolled', footEmb + footIn.bottom <= 800 + 2 && footEmb + footIn.bottom >= 800 - 40, JSON.stringify({ footEmb, footIn }));
+check('desktop width: the Back / Next buttons end the panel and the footer does not follow the screen', (await fr.getByTestId('lite-next').count()) === 1 && (await fr.getByTestId('lite-result').evaluate((el) => getComputedStyle(el).position)) === 'static', '');
 check('embedded: scrolling back up puts it back beside the top of the controls', Math.abs((await place()) - startTop) < 6, String(await place()));
   // changing step asks the page to scroll to the top of the steps
   await p.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));

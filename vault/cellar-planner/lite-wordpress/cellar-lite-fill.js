@@ -4,7 +4,7 @@
  * Load this one file on BOTH pages: the page that holds the planner and the contact page (enqueue it site-wide, or on those two pages).
  *
  *  - Planner page: when the visitor presses "Request a quote for this design", it takes them to CONTACT_URL, carrying the design in the address.
- *    It also (a) sizes the planner's frame to fit, so there is one page to scroll, (b) keeps the planner's bottom bar (Back / Next / quote) and its picture in view as the
+ *    It also (a) sizes the planner's frame to fit, so there is one page to scroll, (b) keeps the planner's picture (and, on phones, its bottom bar with Back / Next / quote) in view as the
  *    page scrolls (a planner older than 2026-10-24 has no such bar: then, on phones, this script shows its own bar with the bottle count, the guide
  *    price and a quote button while the planner is on screen), and (c) passes the planner's anonymous usage events to Google
  *    Tag Manager (window.dataLayer), if the site has it.
@@ -121,7 +121,7 @@
   function refreshBar() {
     if (!bar) return;
     var phone = window.matchMedia && window.matchMedia('(max-width: ' + STICKY_MAX_WIDTH + 'px)').matches;
-    // a planner that has its own sticky footer (Back / Next / quote) says so: then there is no second bar
+    // a planner that has its own sticky footer on phones (Back / Next / quote) says so: then there is no second bar
     bar.style.display = phone && frameVisible && latest && !wasRequested && !latest.footer ? 'flex' : 'none';
     var showPic = bar.style.display === 'flex' && !!latest.thumb && !pictureOnScreen();
     barImg.style.display = showPic ? 'block' : 'none';

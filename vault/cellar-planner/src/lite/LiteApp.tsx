@@ -189,14 +189,14 @@ export function LiteApp() {
     return () => { ro.disconnect(); window.removeEventListener('message', onAsk); if (raf) cancelAnimationFrame(raf); };
   }, []);
 
-  // The sticky footer (Back / Next / quote). Standalone, CSS sticky keeps it at the bottom of the window. Embedded, the frame is as tall as the planner, so
+  // The footer is sticky on a phone only (a desktop or tablet visitor has the buttons at the end of the panel). Standalone, CSS sticky keeps it at the bottom of the window. Embedded, the frame is as tall as the planner, so
   // the footer is moved down to the bottom of what the visitor can see (the page script reports it), never above the top of the controls and never past
   // its own place at the end of the page. Skipped when the frame scrolls by itself (CSS sticky works then).
   const placeFooter = (): void => {
     const f = footerRef.current, vp = vpRef.current;
     if (!f) return;
     const root = document.documentElement;
-    if (!vp || root.scrollHeight > window.innerHeight + 2) { f.style.transform = ''; f.dataset.shift = '0'; return; }
+    if (!vp || !isPhoneRef.current || root.scrollHeight > window.innerHeight + 2) { f.style.transform = ''; f.dataset.shift = '0'; return; }
     const cur = Number(f.dataset.shift || 0), r = f.getBoundingClientRect();
     const natBottom = r.bottom - cur + window.scrollY, natTop = r.top - cur + window.scrollY;
     const mainTop = (document.querySelector('.lite-main')?.getBoundingClientRect().top ?? 0) + window.scrollY;
@@ -205,6 +205,8 @@ export function LiteApp() {
     f.style.transform = shift ? `translateY(${Math.round(shift)}px)` : '';
     f.dataset.shift = String(Math.round(shift));
   };
+  const isPhoneRef = useRef(isPhone);
+  isPhoneRef.current = isPhone;
   const placeFooterRef = useRef(placeFooter);
   placeFooterRef.current = placeFooter;
 
@@ -370,6 +372,14 @@ export function LiteApp() {
     if (key === 'features') return { back: { label: 'Racking', title: 'Back to the bottles and finish.', go: () => setStepTracked('racking') }, next: { label: 'Next: Review', title: 'Next: review your cellar.', go: () => setStepTracked('review') } };
     return { back: { label: hasFeatures ? 'Features' : 'Racking', title: hasFeatures ? 'Back to the finishing touches.' : 'Back to the bottles and finish.', go: () => setStepTracked(hasFeatures ? 'features' : 'racking') }, next: { label: 'Request a quote', title: 'Ask us for a quote for exactly this design. Nothing is sent until you press Send on the form.', go: ask, quote: true } };
   })();
+
+  /** Back and Next. On a phone they sit in the sticky footer (the quote button is Next on Review); on a desktop or tablet they end the step's panel. */
+  const navButtons = (quoteId: string) => (
+    <div className="lite-nav two">
+      {stepNav.back && <button type="button" className="btn lite-backbtn" onClick={stepNav.back.go} title={stepNav.back.title} data-testid="lite-back"><span aria-hidden="true">&larr;</span><span className="lite-back-label"> {stepNav.back.label}</span></button>}
+      <button type="button" className="btn primary lite-next" onClick={stepNav.next.go} title={stepNav.next.title} data-testid={stepNav.next.quote ? quoteId : 'lite-next'}><span className="lite-next-label">{stepNav.next.label} <span aria-hidden="true">&rarr;</span></span></button>
+    </div>
+  );
 
   return (
     <div className="lite" data-testid="lite" style={{ '--primary': brand.main, '--primary-dark': brand.dark, '--primary-soft': brand.soft } as CSSProperties}>
@@ -569,6 +579,7 @@ export function LiteApp() {
               <p className="lite-note">This is an estimate to help you plan. Rack unit sizes are typical values, and we always measure on site before anything is made.</p>
             </>
           )}
+          {!isPhone && navButtons('lite-quote-review')}
         </section>
 
         <section className="lite-visual" data-tour="lt-drawing" aria-label="Your cellar">
@@ -645,16 +656,15 @@ export function LiteApp() {
           </div>
         )}
         <div className="lite-cell lite-cta-cell" data-tour="lt-quote">
-          <div className="lite-nav">
-            {stepNav.back && <button type="button" className="btn lite-backbtn" onClick={stepNav.back.go} title={stepNav.back.title} data-testid="lite-back"><span aria-hidden="true">&larr;</span><span className="lite-back-label"> {stepNav.back.label}</span></button>}
-            <button type="button" className={`btn primary lite-next${stepNav.next.quote ? ' lite-cta' : ''}`} onClick={stepNav.next.go} title={stepNav.next.title} data-testid={stepNav.next.quote ? 'lite-quote' : 'lite-next'}><span className="lite-next-label">{stepNav.next.label} <span aria-hidden="true">&rarr;</span></span></button>
-          </div>
-          <div className="lite-links">
-            {!stepNav.next.quote && <button type="button" className="linklike lite-cta" onClick={ask} title="Ask us for a quote for exactly this design. Nothing is sent until you press Send on the form." data-testid="lite-quote">Request a quote for this design</button>}
-            {cfg.phone && (
-              <a className="lite-call" href={telHref(cfg.phone)} onClick={() => say('call')} title="Rather talk to someone? Tap to call. On a computer this opens your calling app, if you have one." data-testid="lite-call">Prefer to talk? Call {cfg.phone}</a>
-            )}
-          </div>
+          {isPhone && navButtons('lite-quote')}
+          {!isPhone && (
+            <>
+              <button type="button" className="btn primary lite-cta" onClick={ask} title="Ask us for a quote for exactly this design. Nothing is sent until you press Send on the form." data-testid="lite-quote">Request a quote for this design <span aria-hidden="true">&rarr;</span></button>
+              {cfg.phone && (
+                <a className="lite-call" href={telHref(cfg.phone)} onClick={() => say('call')} title="Rather talk to someone? Tap to call. On a computer this opens your calling app, if you have one." data-testid="lite-call">Prefer to talk? Call {cfg.phone}</a>
+              )}
+            </>
+          )}
         </div>
       </section>
       <p className="foot">ESTIMATE ONLY: FINAL SITE MEASURE REQUIRED. Rack unit sizes are typical values, not a quote.</p>
