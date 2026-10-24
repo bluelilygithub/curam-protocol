@@ -73,5 +73,11 @@ console.log('ok - voice note utils: format choice, timer, microphone messages, b
   assert.strictEqual(describeRecovered({ startedAt, elapsed: 192 }, new Date(2026, 9, 26, 9, 0)), '3:12 recorded on 24 Oct at 2:35 pm');
   assert.strictEqual(describeRecovered({ elapsed: 5 }), '0:05 recorded');
   assert.strictEqual(formatTimer(192), '3:12');
+  const { describePrefs } = await import('./voiceNoteUtils.mjs');
+  assert.strictEqual(describePrefs({ style: 'notes', keep: 'no' }), 'Written up as Notes, audio not kept');
+  assert.strictEqual(describePrefs({ style: 'update', keep: '7d' }), 'Written up as Update, audio kept 7 days');
+  assert.strictEqual(describePrefs({ style: 'words', keep: 'forever' }), 'Written up as Just my words, audio kept until you delete it');
+  assert.strictEqual(describePrefs({ style: 'todo', keep: 'no' }), 'Written up as To-do list, audio not kept');
+  assert.strictEqual(describePrefs(null), 'Written up as Notes, audio not kept');
   console.log('ok - voice note choices: defaults keep no audio, remembered per device, wording for kept and unfinished recordings');
 }

@@ -42,6 +42,8 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
   const [tags, setTags] = useState([]); // the notes must have ALL of these
   const [reminder, setReminder] = useState(''); // '' | 'due' | 'upcoming' | 'any'
   const [files, setFiles] = useState(''); // '' | 'with' | 'without' (attached files)
+  const [unfiled, setUnfiled] = useState(false); // only notes with no project and no client (not part of a saved view)
+  const [unfiledCount, setUnfiledCount] = useState(0);
   const [{ groupMode, field }, setView] = useState(readView);
 
   const seq = useRef(0);
@@ -66,13 +68,23 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
     if (tags.length) p.set('tags', tags.join(','));
     if (reminder) p.set('reminder', reminder);
     if (files) p.set('files', files);
+    if (unfiled) p.set('unfiled', '1');
     const r = rangeFor(preset, custom);
     if (r.from) p.set('from', r.from);
     if (r.to) p.set('to', r.to);
     p.set('field', field);
     return p;
     // `preset` 'today'/'7d'... are re-read at the moment of loading, so a tab left open overnight shows the new day on the next change
-  }, [debouncedSearch, projectId, clientId, tagsKey, reminder, files, preset, custom.from, custom.to, field]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, projectId, clientId, tagsKey, reminder, files, unfiled, preset, custom.from, custom.to, field]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // How many notes are not filed under any project or client yet (the Unfiled chip). Best effort: without it the chip just does not show.
+  const refreshUnfiled = useCallback(async () => {
+    try {
+      const res = await api.get('/api/notes/unfiled-count');
+      if (res.ok) setUnfiledCount(Number((await res.json()).count) || 0);
+    } catch { /* the chip stays as it was */ }
+  }, []);
+  useEffect(() => { refreshUnfiled(); }, [refreshUnfiled]);
 
   const fetchPage = useCallback(async (offset) => {
     const mine = ++seq.current;
@@ -93,12 +105,13 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
       if (stale) return;
       setNotes(rows);
       setHasMore(more);
+      refreshUnfiled();
     } catch {
       setError('Your notes could not be loaded.');
     } finally {
       setLoading(false);
     }
-  }, [fetchPage]);
+  }, [fetchPage, refreshUnfiled]);
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -125,15 +138,16 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
     const dateKey = field === 'created' ? 'created_at' : 'updated_at';
     setNotes((prev) => {
       const has = prev.some((n) => n.id === row.id);
+      if (!has) setTimeout(refreshUnfiled, 0); // a new note starts out unfiled
       const next = has ? prev.map((n) => (n.id === row.id ? { ...n, ...row } : n)) : [row, ...prev];
       // same order as the server: pinned first (latest pin on top), then by date
       return next.sort((a, b) => (Number(!!b.pinned_at) - Number(!!a.pinned_at))
         || (a.pinned_at && b.pinned_at ? new Date(b.pinned_at) - new Date(a.pinned_at) : 0)
         || (new Date(b[dateKey]) - new Date(a[dateKey])) || (b.id - a.id));
     });
-  }, [field]);
+  }, [field, refreshUnfiled]);
 
-  const removeNote = useCallback((id) => setNotes((prev) => prev.filter((n) => n.id !== id)), []);
+  const removeNote = useCallback((id) => { setNotes((prev) => prev.filter((n) => n.id !== id)); setTimeout(refreshUnfiled, 0); }, [refreshUnfiled]);
 
   // Everything a saved view holds, as it is right now (the search as typed, not as last sent).
   const filters = useMemo(() => ({ search: search.trim(), preset, custom, field, projectId, clientId, tags, reminder, files, groupMode }),
@@ -148,12 +162,13 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
     if (tags.length) q.tags = tags.join(',');
     if (reminder) q.reminder = reminder;
     if (files) q.files = files;
+    if (unfiled) q.unfiled = '1';
     const r = rangeFor(preset, custom);
     if (r.from) q.from = r.from;
     if (r.to) q.to = r.to;
     q.field = field;
     return q;
-  }, [debouncedSearch, projectId, clientId, tagsKey, reminder, files, preset, custom.from, custom.to, field]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, projectId, clientId, tagsKey, reminder, files, unfiled, preset, custom.from, custom.to, field]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const applyFilters = useCallback((f) => {
     const text = String(f.search || '');
@@ -166,18 +181,20 @@ export default function useNotesList({ initialProjectId = '' } = {}) {
     setTags(Array.isArray(f.tags) ? f.tags : []);
     setReminder(['due', 'upcoming', 'any'].includes(f.reminder) ? f.reminder : '');
     setFiles(['with', 'without'].includes(f.files) ? f.files : '');
+    setUnfiled(false); // a saved view never holds it: opening a view shows what the view says
     setView({ groupMode: ['date', 'project', 'client', 'tag'].includes(f.groupMode) ? f.groupMode : 'date', field: f.field === 'created' ? 'created' : 'updated' });
   }, []);
 
-  const filtersActive = !!(debouncedSearch || projectId || clientId || tags.length || reminder || files || preset !== 'all');
+  const filtersActive = !!(debouncedSearch || projectId || clientId || tags.length || reminder || files || unfiled || preset !== 'all');
   const clearFilters = useCallback(() => {
-    setSearch(''); setDebouncedSearch(''); setPreset('all'); setCustom({ from: '', to: '' }); setProjectId(''); setClientId(''); setTags([]); setReminder(''); setFiles('');
+    setSearch(''); setDebouncedSearch(''); setPreset('all'); setCustom({ from: '', to: '' }); setProjectId(''); setClientId(''); setTags([]); setReminder(''); setFiles(''); setUnfiled(false);
   }, []);
 
   return {
     notes, loading, loadingMore, hasMore, error, reload, loadMore, patchNote, removeNote,
     search, setSearch, searching: search.trim() !== debouncedSearch,
     preset, setPreset, custom, setCustom, projectId, setProjectId, clientId, setClientId, tags, setTags, reminder, setReminder, files, setFiles,
+    unfiled, setUnfiled, unfiledCount, refreshUnfiled,
     groupMode, setGroupMode, field, setField, filtersActive, clearFilters, filters, applyFilters, scopeQuery,
   };
 }

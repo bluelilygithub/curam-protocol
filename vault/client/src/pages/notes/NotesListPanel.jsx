@@ -35,7 +35,7 @@ export default function NotesListPanel({
   const {
     notes, loading, loadingMore, hasMore, error, reload, loadMore, search, setSearch, searching,
     preset, setPreset, custom, setCustom, projectId, setProjectId, clientId, setClientId,
-    groupMode, setGroupMode, field, setField, filtersActive, clearFilters, tags, setTags, reminder, setReminder, files, setFiles,
+    groupMode, setGroupMode, field, setField, filtersActive, clearFilters, tags, setTags, reminder, setReminder, files, setFiles, unfiled, setUnfiled, unfiledCount,
   } = list;
 
   const sections = useMemo(() => groupNotes(notes, { mode: groupMode, field }), [notes, groupMode, field]);
@@ -224,6 +224,16 @@ export default function NotesListPanel({
             </button>
           </Tooltip>
         </div>
+
+        {(unfiledCount > 0 || unfiled) && (
+          <div>
+            <Tooltip text={NOTE_TIPS.unfiled(unfiledCount)}>
+              <button type="button" onClick={() => setUnfiled(!unfiled)} aria-pressed={unfiled} data-tour="notes-unfiled" className="inline-flex items-center gap-1.5 text-xs px-2.5 rounded-full transition-opacity duration-200 hover:opacity-80" style={{ ...chip(unfiled), minHeight: mobile ? 36 : 24 }}>
+                {getIcon('folder', { size: 12 })}Unfiled {unfiledCount}
+              </button>
+            </Tooltip>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Group notes by" data-tour="notes-group">
           <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-muted)' }}>Group by</span>

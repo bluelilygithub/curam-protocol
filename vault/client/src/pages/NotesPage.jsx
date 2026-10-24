@@ -10,6 +10,8 @@ import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { startNotesTour, TOUR_KEY as NOTES_TOUR_KEY } from '../utils/tours/notesTour';
 import VoiceNoteRecorder from './notes/VoiceNoteRecorder';
 import VoiceTodosPanel from './notes/VoiceTodosPanel';
+import NoteVersionsPanel from './notes/NoteVersionsPanel';
+import VoiceRewritePanel from './notes/VoiceRewritePanel';
 import NotesTutorChat from './notes/NotesTutorChat';
 import NewNoteChooser from './notes/NewNoteChooser';
 import NotesListPanel from './notes/NotesListPanel';
@@ -71,6 +73,8 @@ export default function NotesPage() {
 
   const [showChatPicker, setShowChatPicker] = useState(false);
   const [showRecorder, setShowRecorder] = useState(false);
+  const [showVersions, setShowVersions] = useState(false);
+  const [showRewrite, setShowRewrite] = useState(false);
   const [makingTasks, setMakingTasks] = useState(false);
   const [voiceTodos, setVoiceTodos] = useState(null); // { todos, note } after a voice note that had to-dos in it
   const [showNewChooser, setShowNewChooser] = useState(false);
@@ -151,7 +155,7 @@ export default function NotesPage() {
       const mine = selectedRef.current?.id === p.id;
       if (mine) setSaveState('saving');
       try {
-        const res = await api.put(`/api/notes/${p.id}`, { title: p.title, body: p.body });
+        const res = await api.put(`/api/notes/${p.id}`, { title: p.title, body: p.body, ...(p.reason ? { versionReason: p.reason } : {}) });
         if (!res.ok) throw new Error('save failed');
         patchNote(toRow(await res.json()));
         if (selectedRef.current?.id === p.id) setSaveState(pending.current?.id === p.id ? 'dirty' : 'saved');
@@ -163,8 +167,9 @@ export default function NotesPage() {
     return chain.current;
   }, [patchNote]);
 
-  const scheduleSave = useCallback((id, nextTitle, nextBody) => {
-    pending.current = { id, title: nextTitle, body: nextBody };
+  const scheduleSave = useCallback((id, nextTitle, nextBody, reason) => {
+    // typing straight after an AI change must not lose the reason it was special
+    pending.current = { id, title: nextTitle, body: nextBody, reason: reason || (pending.current?.id === id ? pending.current.reason : undefined) };
     setSaveState('dirty');
     clearTimeout(timer.current);
     timer.current = setTimeout(runSave, AUTOSAVE_DELAY);
@@ -688,7 +693,7 @@ export default function NotesPage() {
     const next = applyText(bodyValueRef.current, mode, text);
     bodyValueRef.current = next;
     setBody(next);
-    scheduleSave(id, titleValueRef.current, next);
+    scheduleSave(id, titleValueRef.current, next, 'ai');
   }
 
   function applyAiTags(picked) {
@@ -700,7 +705,52 @@ export default function NotesPage() {
     setAiBackup({ id, title: titleValueRef.current, body: bodyValueRef.current });
     titleValueRef.current = next;
     setTitle(next);
-    scheduleSave(id, next, bodyValueRef.current);
+    scheduleSave(id, next, bodyValueRef.current, 'ai');
+  }
+
+  // A voice note written up another way: the body (and, if chosen, the title) is applied like any AI change, so Undo AI change and Earlier versions bring the old text back.
+  function applyRewrite({ title: nextTitle, body: nextBody, useTitle }) {
+    const id = selectedRef.current?.id;
+    if (!id) return;
+    setAiBackup({ id, title: titleValueRef.current, body: bodyValueRef.current });
+    const t = useTitle && nextTitle ? nextTitle : titleValueRef.current;
+    titleValueRef.current = t;
+    bodyValueRef.current = nextBody;
+    setTitle(t);
+    setBody(nextBody);
+    scheduleSave(id, t, nextBody, 'ai');
+    setShowRewrite(false);
+    addToast('Written up another way ✓', 'success');
+  }
+
+  // Earlier versions: save what is on screen first, so the list is up to date; a restore keeps the text as it is now as a version too.
+  async function openVersions() {
+    await runSave();
+    setShowVersions(true);
+  }
+
+  async function restoreVersion(versionId) {
+    const id = selectedRef.current?.id;
+    if (!id) return false;
+    try {
+      await runSave();
+      const res = await api.post(`/api/notes/${id}/versions/${versionId}/restore`);
+      if (!res.ok) return false;
+      const note = await res.json();
+      if (selectedRef.current?.id === id) {
+        titleValueRef.current = note.title;
+        bodyValueRef.current = note.body;
+        setTitle(note.title);
+        setBody(note.body);
+        setAiBackup(null);
+        setSelected((s) => (s && s.id === id ? { ...s, ...note } : s));
+      }
+      patchNote(toRow(note));
+      addToast('Earlier version restored ✓', 'success');
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   function undoAi() {
@@ -769,9 +819,22 @@ export default function NotesPage() {
       const saved = await res.json();
       setSelected((prev) => ({ ...prev, project_id: saved.project_id, client_id: saved.client_id, ...names }));
       patchNote(toRow(saved, names));
+      list.refreshUnfiled();
     } catch {
       addToast('That change could not be saved. Try again.', 'error');
     }
+  }
+
+  // A filing suggestion the person accepted: only the parts they ticked.
+  async function applyFiling(f) {
+    const changes = {};
+    const names = {};
+    if (f.projectId) { changes.project_id = f.projectId; names.project_name = f.projectName; }
+    if (f.clientId) { changes.client_id = f.clientId; names.client_name = f.clientName; }
+    if (!Object.keys(changes).length) return;
+    await ensureClients();
+    await changeFiling(changes, names);
+    addToast('Note filed ✓', 'success');
   }
 
   const handleProjectChange = (e) => {
@@ -949,6 +1012,11 @@ export default function NotesPage() {
                   </span>
                 </Tooltip>
               )}
+              {selected.source === 'voice' && (
+                <Tooltip text={NOTE_TIPS.voiceRewrite} side="bottom">
+                  <button type="button" onClick={async () => { await runSave(); setShowRewrite(true); }} className="text-xs px-2 rounded-md hover:opacity-70 transition-opacity duration-200 flex-shrink-0" style={{ ...toolBtn, minHeight: viewportMobile ? 40 : 28 }}>Write up again…</button>
+                </Tooltip>
+              )}
               {saveState === 'error' ? (
                 <span className="text-xs flex items-center gap-1.5 min-w-0" style={{ color: '#ef4444' }} role="alert">
                   Not saved
@@ -967,6 +1035,11 @@ export default function NotesPage() {
                   </button>
                 </Tooltip>
               )}
+              <Tooltip text={NOTE_TIPS.history} side="bottom">
+                <button type="button" onClick={openVersions} aria-label="Earlier versions of this note" className="flex items-center justify-center rounded-md hover:opacity-70 transition-opacity duration-200" style={{ ...toolBtn, minHeight: viewportMobile ? 40 : 28, minWidth: viewportMobile ? 40 : 28 }}>
+                  {getIcon('history', { size: 14 })}
+                </button>
+              </Tooltip>
               <Tooltip text={NOTE_TIPS.pin} side="bottom">
                 <button
                   type="button" onClick={() => togglePin(selected)}
@@ -1321,10 +1394,11 @@ export default function NotesPage() {
         <NoteAiPanel
           key={`${selected.id}:${aiAction}`}
           action={aiAction}
-          note={{ id: selected.id, title: titleValueRef.current, project_id: selected.project_id, client_id: selected.client_id, tags: selected.tags || [] }}
+          note={{ id: selected.id, title: titleValueRef.current, body: bodyValueRef.current, project_id: selected.project_id, client_id: selected.client_id, tags: selected.tags || [] }}
           mobile={viewportMobile}
           ensureSaved={ensureSaved}
           onApplyText={applyAiText}
+          onApplyFiling={applyFiling}
           onApplyTitle={applyAiTitle}
           onApplyTags={applyAiTags}
           onTasksMade={tasksMade}
@@ -1333,6 +1407,8 @@ export default function NotesPage() {
       )}
       {insertKind && <InsertSourceModal kind={insertKind} onInsert={appendToBody} onClose={() => { setInsertKind(null); setTimeout(() => bodyRef.current?.focus(), 0); }} />}
       {showRecorder && <VoiceNoteRecorder mobile={viewportMobile} onClose={() => setShowRecorder(false)} onCreated={handleVoiceNote} />}
+      {showRewrite && selected && <VoiceRewritePanel noteId={selected.id} currentTitle={title} currentBody={body} mobile={viewportMobile} onApply={applyRewrite} onClose={() => setShowRewrite(false)} />}
+      {showVersions && selected && <NoteVersionsPanel noteId={selected.id} currentTitle={title} currentBody={body} mobile={viewportMobile} onRestore={restoreVersion} onClose={() => setShowVersions(false)} />}
       {voiceTodos && <VoiceTodosPanel todos={voiceTodos.todos} note={voiceTodos.note} mobile={viewportMobile} onMade={tasksMade} onLinked={applyLinkedBody} onClose={() => setVoiceTodos(null)} />}
       {viewportMobile && (
         <input ref={keyboardRef} aria-hidden="true" tabIndex={-1} style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 1, opacity: 0, border: 0, padding: 0, fontSize: 16, pointerEvents: 'none' }} />

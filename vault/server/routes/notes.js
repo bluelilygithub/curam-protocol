@@ -11,9 +11,10 @@ const { ffmpegRoute } = require('../middleware/ffmpegRoute');
 const { getLogger } = require('../middleware/requestContext');
 const { toSpeechMp3, withTempDir } = require('../services/videoFfmpeg');
 const { transcribeAudioWithGemini, isGeminiTranscribeAvailable } = require('../services/videoGenerateService');
-const { buildVoiceNote, parseStyle } = require('../services/voiceNote');
+const { buildVoiceNote, parseStyle, splitSpoken, TRANSCRIPT_DIVIDER } = require('../services/voiceNote');
 const voiceAudio = require('../services/voiceAudio');
 const noteTodos = require('../services/noteTodos');
+const noteVersions = require('../services/noteVersions');
 const { validDay } = require('../services/noteDay');
 const noteAi = require('../services/noteAi'); // called as noteAi.runNoteAction so tests can swap it
 const { normalizeTag, normalizeTags } = require('../services/noteTags');
@@ -82,6 +83,17 @@ router.get('/', async (req, res) => {
   } catch (err) {
     getLogger().error({ err }, '[notes list]');
     res.status(500).json({ error: 'Could not load your notes. Try again.' });
+  }
+});
+
+// GET /api/notes/unfiled-count  — how many of the caller's notes have no project and no client yet (the "Unfiled" chip). Named route: before /:id.
+router.get('/unfiled-count', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT COUNT(*)::int AS count FROM notes WHERE user_id=$1 AND project_id IS NULL AND client_id IS NULL', [req.user.id]);
+    res.json({ count: rows[0].count });
+  } catch (err) {
+    getLogger().error({ err }, '[notes unfiled count]');
+    res.status(500).json({ error: 'Could not count the unfiled notes.' });
   }
 });
 
@@ -377,6 +389,39 @@ router.delete('/ask', async (req, res) => {
   }
 });
 
+// The person's own client, project and contact names: they help the speech-to-text and the write-up spell them right (best effort).
+async function personNames(userId) {
+  try {
+    const [c, p, k] = await Promise.all([
+      pool.query('SELECT name FROM clients WHERE "userId"=$1 ORDER BY name LIMIT 80', [userId]),
+      pool.query('SELECT name FROM projects WHERE "userId"=$1 AND "archived_at" IS NULL ORDER BY name LIMIT 80', [userId]),
+      pool.query('SELECT k.name FROM client_contacts k JOIN clients c ON c.id = k."clientId" WHERE c."userId"=$1 ORDER BY k.name LIMIT 80', [userId]),
+    ]);
+    return voiceAudio.cleanNames([...c.rows, ...p.rows, ...k.rows].map((r) => r.name));
+  } catch { return []; }
+}
+
+// POST /api/notes/:id/rewrite  { style: 'notes' | 'update' | 'todo' | 'meeting' | 'words' }
+// Write a voice note up another way, from the words that were said (kept at the bottom of every voice note), without listening again. It only PROPOSES:
+// nothing is saved; the screen shows what would change and the person applies it like any other change (which keeps the old text as an earlier version).
+// Answers { title, body, todos, tidied }. A note with no recorded words answers 400.
+router.post('/:id/rewrite', aiLimiter, async (req, res) => {
+  const style = parseStyle(req.body?.style);
+  try {
+    const { rows: [note] } = await pool.query('SELECT id, title, body, source FROM notes WHERE id=$1 AND user_id=$2', [Number(req.params.id) || 0, req.user.id]);
+    if (!note) return res.status(404).json({ error: 'Not found' });
+    const spoken = splitSpoken(note.body);
+    if (note.source !== 'voice' && !String(note.body || '').includes(TRANSCRIPT_DIVIDER)) return res.status(400).json({ error: 'Only a voice note can be written up again, because it keeps the words that were said.' });
+    if (spoken.length < 3) return res.status(400).json({ error: 'There are no recorded words in this note to write up.' });
+    const built = await buildVoiceNote(req.user.id, spoken, { tidy: style !== 'words', style, names: await personNames(req.user.id) });
+    if (style !== 'words' && !built.tidied) return res.status(502).json({ error: 'The write-up could not be made just now. Try again.' });
+    res.json({ title: style === 'words' ? note.title : built.title, body: built.body, todos: built.todos || [], tidied: built.tidied });
+  } catch (err) {
+    getLogger().error({ err }, '[notes rewrite]');
+    res.status(500).json({ error: 'The write-up could not be made. Try again.' });
+  }
+});
+
 // POST /api/notes/voice  (multipart: audio, optional tidy = 'false' to keep the words exactly as spoken)
 // A recording in, a note out. The audio is turned into text and then discarded; only the text is kept. Named route: before /:id.
 router.post('/voice', aiLimiter, upload.single('audio'), ffmpegRoute('voice-note', async (req, res) => {
@@ -388,16 +433,7 @@ router.post('/voice', aiLimiter, upload.single('audio'), ffmpegRoute('voice-note
 
   const ext = path.extname(String(req.file.originalname || '')).toLowerCase();
   const inExt = /^\.[a-z0-9]{1,5}$/.test(ext) ? ext : '.webm';
-  // The person's own client, project and contact names help the speech-to-text and the write-up spell them right (best effort).
-  let names = [];
-  try {
-    const [c, p, k] = await Promise.all([
-      pool.query('SELECT name FROM clients WHERE "userId"=$1 ORDER BY name LIMIT 80', [userId]),
-      pool.query('SELECT name FROM projects WHERE "userId"=$1 AND "archived_at" IS NULL ORDER BY name LIMIT 80', [userId]),
-      pool.query('SELECT k.name FROM client_contacts k JOIN clients c ON c.id = k."clientId" WHERE c."userId"=$1 ORDER BY k.name LIMIT 80', [userId]),
-    ]);
-    names = voiceAudio.cleanNames([...c.rows, ...p.rows, ...k.rows].map((r) => r.name));
-  } catch { names = []; }
+  const names = await personNames(userId);
   let transcript;
   try {
     transcript = await withTempDir(async (dir) => {
@@ -446,6 +482,58 @@ router.post('/voice', aiLimiter, upload.single('audio'), ffmpegRoute('voice-note
     res.status(500).json({ error: 'The recording was turned into text but the note could not be saved. Try again.' });
   }
 }, { source: 'notes', routePrefix: 'notes' }));
+
+// Earlier versions (services/noteVersions.js)
+// GET /api/notes/:id/versions            the list, newest first, without the text
+// GET /api/notes/:id/versions/:vid       one version in full
+// POST /api/notes/:id/versions/:vid/restore   put it back; the text the note has now is kept as a version first, so a restore can be undone too
+router.get('/:id/versions', async (req, res) => {
+  try {
+    const own = await pool.query('SELECT 1 FROM notes WHERE id=$1 AND user_id=$2', [Number(req.params.id) || 0, req.user.id]);
+    if (!own.rows[0]) return res.status(404).json({ error: 'Not found' });
+    res.json(await noteVersions.list(pool, req.user.id, Number(req.params.id)));
+  } catch (err) {
+    getLogger().error({ err }, '[notes versions list]');
+    res.status(500).json({ error: 'Could not load the earlier versions. Try again.' });
+  }
+});
+
+router.get('/:id/versions/:vid', async (req, res) => {
+  try {
+    const own = await pool.query('SELECT 1 FROM notes WHERE id=$1 AND user_id=$2', [Number(req.params.id) || 0, req.user.id]);
+    const v = own.rows[0] ? await noteVersions.get(pool, req.user.id, Number(req.params.id), Number(req.params.vid) || 0) : null;
+    if (!v) return res.status(404).json({ error: 'That version is not here any more.' });
+    res.json(v);
+  } catch (err) {
+    getLogger().error({ err }, '[notes versions get]');
+    res.status(500).json({ error: 'Could not load that version. Try again.' });
+  }
+});
+
+router.post('/:id/versions/:vid/restore', async (req, res) => {
+  const noteId = Number(req.params.id) || 0;
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const { rows: [current] } = await db.query('SELECT * FROM notes WHERE id=$1 AND user_id=$2 FOR UPDATE', [noteId, req.user.id]);
+    const v = current ? await noteVersions.get(db, req.user.id, noteId, Number(req.params.vid) || 0) : null;
+    if (!v) { await db.query('ROLLBACK'); return res.status(404).json({ error: 'That version is not here any more.' }); }
+    await noteVersions.keepIfNeeded(db, req.user.id, current, { title: v.title, body: v.body }, { reason: 'restore', log: getLogger() });
+    await db.query('UPDATE notes SET title=$1, body=$2, updated_at=NOW() WHERE id=$3 AND user_id=$4', [v.title || 'Untitled', v.body, noteId, req.user.id]);
+    await db.query('COMMIT');
+    noteEmbeddings.queueEmbed(req.user.id, noteId);
+    await noteTodos.syncFromNote(pool, req.user.id, noteId, current.body, v.body, { changeStatus: require('./tasks').changeTaskStatus, log: getLogger() });
+    const { rows: [note] } = await pool.query('SELECT * FROM notes WHERE id=$1', [noteId]);
+    const shown = await noteTodos.overlayForUser(pool, req.user.id, note.body);
+    res.json({ ...note, body: shown.body, linkedTasks: shown.linked });
+  } catch (err) {
+    await db.query('ROLLBACK').catch(() => {});
+    getLogger().error({ err }, '[notes versions restore]');
+    res.status(500).json({ error: 'Could not restore that version. Try again.' });
+  } finally {
+    db.release();
+  }
+});
 
 // POST /api/notes/:id/todos  { lines?: [line numbers], items?: [{ title, due? }], today?: 'YYYY-MM-DD' }
 // Make tasks from the note's to-dos, only because the person asked: the to-do lines that are not ticked and not tasks yet (or just the lines given), or
@@ -562,7 +650,7 @@ router.post('/', async (req, res) => {
 
 // PUT /api/notes/:id
 router.put('/:id', async (req, res) => {
-  const { title, body, project_id, client_id } = req.body;
+  const { title, body, project_id, client_id, versionReason } = req.body;
   if ((title !== undefined && typeof title !== 'string') || (body !== undefined && typeof body !== 'string')) {
     return res.status(400).json({ error: 'title and body must be text' });
   }
@@ -590,6 +678,8 @@ router.put('/:id', async (req, res) => {
     const { rows: updated } = await pool.query('SELECT * FROM notes WHERE id=$1', [req.params.id]);
     noteEmbeddings.queueEmbed(req.user.id, Number(req.params.id));
     // To-do lines linked to tasks: a line ticked, unticked or renamed since the last saved text changes the task too (docs/notes.md, Live to-dos).
+    // The text the note had before this save can be kept as an earlier version (noteVersions.shouldKeep says when).
+    if (newBody !== e.body || newTitle !== e.title) await noteVersions.keepIfNeeded(pool, req.user.id, e, { title: newTitle, body: newBody }, { reason: versionReason === 'ai' ? 'ai' : 'edit', log: getLogger() });
     if (body !== undefined && body !== e.body) await noteTodos.syncFromNote(pool, req.user.id, Number(req.params.id), e.body, newBody, { changeStatus: require('./tasks').changeTaskStatus, log: getLogger() });
     res.json(updated[0]);
   } catch (err) {
@@ -751,7 +841,12 @@ router.post('/:id/ai', aiLimiter, async (req, res) => {
     const existingTags = req.body?.action === 'tags'
       ? (await pool.query('SELECT tag FROM note_tags WHERE user_id=$1 GROUP BY tag ORDER BY COUNT(*) DESC, tag LIMIT 100', [req.user.id])).rows.map((r) => r.tag)
       : [];
-    const result = await noteAi.runNoteAction(req.user.id, req.body?.action, { title: rows[0].title, body: rows[0].body, today: req.body?.today, existingTags });
+    // Filing suggestions choose only from the person's own projects and clients.
+    const choices = req.body?.action === 'file' ? {
+      projects: (await pool.query('SELECT id, name FROM projects WHERE "userId"=$1 AND "archived_at" IS NULL ORDER BY name LIMIT 80', [req.user.id])).rows,
+      clients: (await pool.query('SELECT id, name FROM clients WHERE "userId"=$1 ORDER BY name LIMIT 80', [req.user.id])).rows,
+    } : undefined;
+    const result = await noteAi.runNoteAction(req.user.id, req.body?.action, { title: rows[0].title, body: rows[0].body, today: req.body?.today, existingTags, choices });
     res.json({ action: req.body.action, ...result });
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message });

@@ -490,6 +490,171 @@ test('live to-dos: make tasks only when asked; a linked line and its task stay i
   await pool.query('DELETE FROM notes WHERE id = ANY($1::int[])', [[note.id, voice.id, rep.id, sneaky.id]]);
 });
 
+test('earlier versions: kept when a change is worth keeping, listed, previewed, restored (and the restore can be undone), capped, private, and gone with the note for good', async () => {
+  const bin = require('../services/recycleBin');
+  const q = async (sql, p) => (await pool.query(sql, p)).rows;
+  const long = 'A sentence about the kitchen job. '.repeat(30); // ~1000 characters
+  const note = (await call('POST', '/api/notes', { title: 'Kitchen job', body: long })).json;
+  const versions = async (as) => (await call('GET', `/api/notes/${note.id}/versions`, undefined, as));
+
+  // the first change keeps what the note was; typing straight after does not keep another
+  await call('PUT', `/api/notes/${note.id}`, { body: `${long} First addition.` });
+  assert.deepStrictEqual((await versions()).json.map((v) => [v.reason, v.chars]), [['edit', long.length]], 'the original text, kept');
+  await call('PUT', `/api/notes/${note.id}`, { body: `${long} First addition. Second.` });
+  assert.strictEqual((await versions()).json.length, 1, 'a few minutes of typing is one version, not one per save');
+
+  // five minutes later the state being replaced is kept
+  await pool.query(`UPDATE notes SET updated_at = NOW() - INTERVAL '10 minutes' WHERE id=$1`, [note.id]);
+  await pool.query(`UPDATE note_versions SET saved_at = NOW() - INTERVAL '20 minutes' WHERE note_id=$1`, [note.id]);
+  await call('PUT', `/api/notes/${note.id}`, { body: `${long} First addition. Second. Third.` });
+  assert.strictEqual((await versions()).json.length, 2);
+
+  // a big deletion is kept straight away, even though the last version is new
+  await call('PUT', `/api/notes/${note.id}`, { body: 'Almost nothing left.' });
+  let list = (await versions()).json;
+  assert.strictEqual(list.length, 3, 'the text before the wipe is kept');
+  assert.match(list[0].preview, /^A sentence about the kitchen job\./);
+  assert.ok(list[0].chars > 1000);
+  assert.ok(!('body' in list[0]), 'the list carries a preview, not the whole text');
+
+  // an AI change is always kept, so it can be undone
+  await call('PUT', `/api/notes/${note.id}`, { body: 'Almost nothing left. Plus a little.', versionReason: 'ai' });
+  list = (await versions()).json;
+  assert.strictEqual(list.length, 4);
+  assert.strictEqual(list[0].reason, 'ai');
+  assert.strictEqual((await call('PUT', `/api/notes/${note.id}`, { body: 'Almost nothing left. Plus a little.', versionReason: 'ai' })).status, 200);
+  assert.strictEqual((await versions()).json.length, 4, 'saving the same text again keeps nothing');
+
+  // one version in full
+  const original = list[list.length - 1];
+  const full = (await call('GET', `/api/notes/${note.id}/versions/${original.id}`)).json;
+  assert.strictEqual(full.body, long);
+  assert.strictEqual(full.title, 'Kitchen job');
+
+  // restoring puts it back, and keeps what was there as a version first
+  const restored = await call('POST', `/api/notes/${note.id}/versions/${original.id}/restore`);
+  assert.strictEqual(restored.status, 200, JSON.stringify(restored.json));
+  assert.strictEqual(restored.json.body, long);
+  assert.strictEqual((await call('GET', `/api/notes/${note.id}`)).json.body, long);
+  list = (await versions()).json;
+  assert.strictEqual(list[0].reason, 'restore', 'what the note said before the restore is kept');
+  assert.strictEqual(list.length, 5);
+  const undo = await call('POST', `/api/notes/${note.id}/versions/${list[0].id}/restore`);
+  assert.strictEqual(undo.json.body, 'Almost nothing left. Plus a little.', 'a restore can be undone');
+
+  // private
+  assert.strictEqual((await versions('B')).status, 404);
+  assert.strictEqual((await call('GET', `/api/notes/${note.id}/versions/${original.id}`, undefined, 'B')).status, 404);
+  assert.strictEqual((await call('POST', `/api/notes/${note.id}/versions/${original.id}/restore`, undefined, 'B')).status, 404);
+  assert.strictEqual((await call('GET', `/api/notes/${note.id}/versions/99999999`)).status, 404);
+
+  // at most 100 are kept (the newest)
+  await pool.query(`INSERT INTO note_versions (note_id, user_id, title, body, saved_at, reason) SELECT $1, $2, 'old', 'old text ' || g, NOW() - (g || ' hours')::interval - INTERVAL '1 day', 'edit' FROM generate_series(1, 120) g`, [note.id, userA]);
+  await call('PUT', `/api/notes/${note.id}`, { body: 'Another change.', versionReason: 'ai' });
+  const count = Number((await q('SELECT COUNT(*) FROM note_versions WHERE note_id=$1', [note.id]))[0].count);
+  assert.strictEqual(count, 100);
+  assert.strictEqual((await versions()).json[0].reason, 'ai', 'the newest are the ones kept');
+
+  // a deleted note keeps its versions in the bin and gets them back; they go when it goes for good
+  const del = await call('DELETE', `/api/notes/${note.id}`);
+  assert.strictEqual((await versions()).status, 404, 'not reachable while the note is in the bin');
+  assert.strictEqual(Number((await q('SELECT COUNT(*) FROM note_versions WHERE note_id=$1', [note.id]))[0].count), 100, 'still stored');
+  assert.strictEqual((await call('POST', `/api/recycle-bin/${del.json.binId}/restore`)).status, 200);
+  assert.strictEqual((await versions()).json.length, 100, 'back with the note');
+  const del2 = await call('DELETE', `/api/notes/${note.id}`);
+  await bin.deleteForever(userA, del2.json.binId);
+  assert.strictEqual(Number((await q('SELECT COUNT(*) FROM note_versions WHERE note_id=$1', [note.id]))[0].count), 0, 'gone for good with the note');
+});
+
+test('rewrite a voice note another way: from the words that were said, only proposes, no model for "just my words", only voice notes, private', async () => {
+  const q = async (sql, p) => (await pool.query(sql, p)).rows;
+  const callModelMod = require('../services/callModel');
+  const resolver = require('../services/modelResolver');
+  const was = { call: callModelMod.callModel, get: resolver.getModelsForUser };
+  const prompts = [];
+  let fail = false;
+  callModelMod.callModel = async (model, prompt, opts) => {
+    prompts.push({ prompt, system: opts.system });
+    if (fail) throw new Error('model down');
+    return { text: JSON.stringify({ title: 'Move the launch', body: 'Summary:\nMove it to March.\n\nNext steps:\n- Call Sam about the budget' }), model, inputTokens: 1, outputTokens: 1 };
+  };
+  resolver.getModelsForUser = async () => ({ light: 'stub-model' });
+  try {
+    const spoken = 'so I was thinking we should move the launch to March um and call Sam about the budget';
+    const id = (await pool.query(`INSERT INTO notes (user_id, title, body, source) VALUES ($1, 'Old title', $2, 'voice') RETURNING id`, [userA, `Notes:\nold write-up\n\n— What was said —\n${spoken}`])).rows[0].id;
+
+    const r = await call('POST', `/api/notes/${id}/rewrite`, { style: 'update' });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+    assert.deepStrictEqual({ title: r.json.title, tidied: r.json.tidied, todos: r.json.todos }, { title: 'Move the launch', tidied: true, todos: ['Call Sam about the budget'] });
+    assert.ok(r.json.body.startsWith('Summary:\nMove it to March.') && r.json.body.endsWith(spoken), 'the new write-up, then the words as said');
+    assert.match(prompts[0].system, /status update/, 'the chosen style is what the model is asked for');
+    assert.ok(prompts[0].prompt.includes(spoken) && !prompts[0].prompt.includes('old write-up'), 'it works from the words said, not the old write-up');
+    assert.match((await q('SELECT body FROM notes WHERE id=$1', [id]))[0].body, /old write-up/, 'nothing is saved: it only proposes');
+
+    prompts.length = 0;
+    const words = await call('POST', `/api/notes/${id}/rewrite`, { style: 'words' });
+    assert.strictEqual(words.json.body, spoken, 'just the words: exactly as said');
+    assert.strictEqual(words.json.title, 'Old title');
+    assert.strictEqual(prompts.length, 0, 'no model needed');
+
+    fail = true;
+    assert.strictEqual((await call('POST', `/api/notes/${id}/rewrite`, { style: 'todo' })).status, 502, 'a failed write-up is an error, never a blank note');
+    fail = false;
+
+    const plain = (await call('POST', '/api/notes', { title: 'Plain', body: 'Just typed.' })).json;
+    assert.strictEqual((await call('POST', `/api/notes/${plain.id}/rewrite`, { style: 'update' })).status, 400, 'a typed note has no recorded words');
+    assert.strictEqual((await call('POST', `/api/notes/${id}/rewrite`, { style: 'update' }, 'B')).status, 404);
+    assert.strictEqual((await call('POST', '/api/notes/99999999/rewrite', { style: 'update' })).status, 404);
+    await pool.query('DELETE FROM notes WHERE id = ANY($1::int[])', [[id, plain.id]]);
+  } finally {
+    callModelMod.callModel = was.call;
+    resolver.getModelsForUser = was.get;
+  }
+});
+
+test('auto-filing: a suggested project and client chosen only from the person\'s own lists, nothing is saved; the unfiled count', async () => {
+  const q = async (sql, p) => (await pool.query(sql, p)).rows;
+  const callModelMod = require('../services/callModel');
+  const resolver = require('../services/modelResolver');
+  const was = { call: callModelMod.callModel, get: resolver.getModelsForUser };
+  const seen = [];
+  let reply = { project: 1, client: 1, why: 'The note is about Client A.' };
+  callModelMod.callModel = async (model, prompt, opts) => { seen.push({ prompt, system: opts.system }); return { text: JSON.stringify(reply), model, inputTokens: 1, outputTokens: 1 }; };
+  resolver.getModelsForUser = async () => ({ light: 'stub-model' });
+  try {
+    const note = (await call('POST', '/api/notes', { title: 'Site visit', body: 'Measured the benchtops for Client A today.' })).json;
+    const r = await call('POST', `/api/notes/${note.id}/ai`, { action: 'file' });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+    assert.deepStrictEqual({ p: r.json.projectId, c: r.json.clientId, pn: r.json.projectName, cn: r.json.clientName }, { p: projectA, c: clientA, pn: 'Project A', cn: 'Client A' });
+    assert.match(seen[0].prompt, /Project A/);
+    assert.match(seen[0].prompt, /Client A/);
+    assert.ok(!/Project B|Client B/.test(seen[0].prompt), "another person's projects and clients are never offered");
+    const stored = (await q('SELECT project_id, client_id FROM notes WHERE id=$1', [note.id]))[0];
+    assert.deepStrictEqual({ ...stored }, { project_id: null, client_id: null }, 'it only proposes: the note is not filed until the person says so');
+
+    // a number that is not on the list is no suggestion
+    reply = { project: 7, client: 9, why: 'made up' };
+    const none = await call('POST', `/api/notes/${note.id}/ai`, { action: 'file' });
+    assert.deepStrictEqual({ p: none.json.projectId, c: none.json.clientId, why: none.json.why }, { p: null, c: null, why: '' });
+    assert.strictEqual((await call('POST', `/api/notes/${note.id}/ai`, { action: 'file' }, 'B')).status, 404);
+
+    // the unfiled count: no project and no client
+    const filedNote = (await call('POST', '/api/notes', { title: 'Filed', body: 'x', project_id: projectA })).json;
+    const expected = Number((await q('SELECT COUNT(*) FROM notes WHERE user_id=$1 AND project_id IS NULL AND client_id IS NULL', [userA]))[0].count);
+    const count = await call('GET', '/api/notes/unfiled-count');
+    assert.strictEqual(count.json.count, expected);
+    assert.ok(expected >= 1);
+    await call('PUT', `/api/notes/${note.id}`, { project_id: projectA });
+    assert.strictEqual((await call('GET', '/api/notes/unfiled-count')).json.count, expected - 1, 'filing a note takes it off the count');
+    const asB = await call('GET', '/api/notes/unfiled-count', undefined, 'B');
+    assert.strictEqual(asB.json.count, Number((await q('SELECT COUNT(*) FROM notes WHERE user_id=$1 AND project_id IS NULL AND client_id IS NULL', [userB]))[0].count), "each person's own count");
+    await pool.query('DELETE FROM notes WHERE id = ANY($1::int[])', [[note.id, filedNote.id]]);
+  } finally {
+    callModelMod.callModel = was.call;
+    resolver.getModelsForUser = was.get;
+  }
+});
+
 test('saved views: save, list, rename, replace filters, delete to the bin and restore; names, limits and ownership', async () => {
   const filters = { search: ' quote ', preset: '30d', field: 'created', projectId: String(projectA), clientId: String(clientA), tags: ['#Budget', 'budget'], groupMode: 'tag', evil: '<script>' };
   const made = await call('POST', '/api/notes/views', { name: '  Acme   last month ', filters });

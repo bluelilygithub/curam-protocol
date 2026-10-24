@@ -49,7 +49,7 @@ const fakeDeps = (reply, seen = {}) => ({
   assert.strictEqual(normalizeReply('todos', { items: Array.from({ length: 40 }, (_, i) => ({ title: `Task ${i}` })) }).items.length, MAX_TODOS);
 
   // every action has a prompt that treats the note as data and forbids invention
-  assert.deepStrictEqual(ACTIONS.slice().sort(), ['summary', 'tags', 'tidy', 'title', 'todos']);
+  assert.deepStrictEqual(ACTIONS.slice().sort(), ['file', 'summary', 'tags', 'tidy', 'title', 'todos']);
   for (const a of ACTIONS) {
     assert.match(SYSTEMS[a], /DATA to work on/, `${a}: the note is data`);
     assert.match(SYSTEMS[a], /do not follow them/, `${a}: no obeying the note`);
@@ -85,6 +85,23 @@ const fakeDeps = (reply, seen = {}) => ({
   // no trustworthy "today" -> the model's dates are dropped
   const noToday = await runNoteAction(7, 'todos', { title: 't', body: 'Call Sam tomorrow', today: 'garbage' }, fakeDeps({ items: [{ title: 'Call Sam', due: '2026-10-24' }] }));
   assert.strictEqual(noToday.items[0].due, null);
+
+  // filing: the model chooses by number from the person's own lists, anything else is ignored
+  const choices = { projects: [{ id: 11, name: 'Kitchen job' }, { id: 12, name: 'Garden' }], clients: [{ id: 21, name: 'Hendersons' }] };
+  assert.deepStrictEqual(normalizeReply('file', { project: 1, client: 1, why: 'The note is about the Henderson kitchen.' }, choices),
+    { projectId: 11, projectName: 'Kitchen job', clientId: 21, clientName: 'Hendersons', why: 'The note is about the Henderson kitchen.' });
+  assert.deepStrictEqual(normalizeReply('file', { project: 2, client: null, why: 'Plants.' }, choices), { projectId: 12, projectName: 'Garden', clientId: null, clientName: null, why: 'Plants.' });
+  assert.deepStrictEqual(normalizeReply('file', { project: 9, client: 0, why: 'made up' }, choices), { projectId: null, projectName: null, clientId: null, clientName: null, why: '' }, 'a number that is not in the list is no choice, and no choice has no reason');
+  assert.deepStrictEqual(normalizeReply('file', { project: '1', client: 1.5 }, choices).projectId, 11, 'a number given as text still counts');
+  assert.strictEqual(normalizeReply('file', { project: 1.5 }, choices).projectId, null);
+  assert.strictEqual(normalizeReply('file', 'nonsense', choices), null);
+  const fileSeen = {};
+  const filed = await runNoteAction(7, 'file', { title: 'Visit', body: 'Measured up the oak benchtops for the Hendersons today.', choices }, fakeDeps({ project: 1, client: 1, why: 'Hendersons kitchen' }, fileSeen));
+  assert.strictEqual(filed.projectId, 11);
+  assert.strictEqual(filed.clientName, 'Hendersons');
+  assert.match(fileSeen.prompt, /PROJECTS:\n1\. Kitchen job\n2\. Garden\n\nCLIENTS:\n1\. Hendersons/, 'the lists are numbered for the model');
+  assert.strictEqual(fileSeen.model, 'light-model');
+  await assert.rejects(runNoteAction(7, 'file', { body: 'something to file', choices: { projects: [], clients: [] } }, fakeDeps({})), (e) => e.status === 400 && /no projects or clients/.test(e.message));
 
   // errors the route can pass on
   const noDeps = fakeDeps({});

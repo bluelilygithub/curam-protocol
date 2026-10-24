@@ -7,7 +7,7 @@ import Tooltip from '../../components/Tooltip';
 import { NOTE_TIPS } from './noteTips.mjs';
 import {
   MAX_RECORD_SEC, WARN_RECORD_SEC, pickMimeType, extensionForMime, formatTimer, describeMicError, canRecord,
-  STYLE_CHOICES, KEEP_CHOICES, readPrefs, savePrefs, describeRecovered,
+  STYLE_CHOICES, KEEP_CHOICES, readPrefs, savePrefs, describeRecovered, describePrefs,
 } from './voiceNoteUtils.mjs';
 import * as recovery from './voiceRecovery';
 
@@ -38,6 +38,7 @@ export default function VoiceNoteRecorder({ onClose, onCreated, mobile = false }
   const [error, setError] = useState('');
   const [interrupted, setInterrupted] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [showOptions, setShowOptions] = useState(false); // the two choices are tucked away: Start comes first
   const [leftover, setLeftover] = useState(null); // an unfinished recording found on this device: { meta, blob }
 
   const recorderRef = useRef(null);
@@ -320,29 +321,8 @@ export default function VoiceNoteRecorder({ onClose, onCreated, mobile = false }
         {supported && phase === 'idle' && (
           <>
             <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-              Talk through an idea, an update or a plan. When you stop, your words are written into a new note.
+              Press Start and talk. When you stop, your words are written into a new note.
             </p>
-            <div className="space-y-3">
-              <label className="block text-xs space-y-1" style={muted}>
-                Write it up as
-                <Tooltip text={NOTE_TIPS.voiceStyle}>
-                  <select value={prefs.style} onChange={(e) => setPrefs({ style: e.target.value })} className="w-full rounded-lg px-2 text-sm" style={field}>
-                    {STYLE_CHOICES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                  </select>
-                </Tooltip>
-                <span className="block">{hintFor} What was said is always kept at the bottom of the note.</span>
-              </label>
-              <label className="block text-xs space-y-1" style={muted}>
-                The recording itself
-                <Tooltip text={NOTE_TIPS.voiceKeep}>
-                  <select value={prefs.keep} onChange={(e) => setPrefs({ keep: e.target.value })} className="w-full rounded-lg px-2 text-sm" style={field}>
-                    {KEEP_CHOICES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                  </select>
-                </Tooltip>
-                <span className="block">{prefs.keep === 'no' ? 'It is turned into text and then deleted. Only the text is kept.' : 'You can play it from the note. It counts towards your file storage.'}</span>
-              </label>
-            </div>
-            <p className="text-xs" style={muted}>If other people are talking, let them know you are recording.</p>
             {error && <p className="text-sm" style={{ color: '#ef4444' }}>{error}</p>}
             <button
               type="button" onClick={start}
@@ -351,6 +331,37 @@ export default function VoiceNoteRecorder({ onClose, onCreated, mobile = false }
             >
               {getIcon('mic', { size: 18 })} Start recording
             </button>
+            <div className="text-xs space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span style={muted}>{describePrefs(prefs)}</span>
+                <Tooltip text={NOTE_TIPS.voiceOptions}>
+                  <button type="button" onClick={() => setShowOptions((v) => !v)} aria-expanded={showOptions} className="underline hover:opacity-70 transition-opacity duration-200 flex-shrink-0" style={{ color: 'var(--color-primary)', minHeight: mobile ? 36 : 24 }}>{showOptions ? 'Done' : 'Change'}</button>
+                </Tooltip>
+              </div>
+              {showOptions && (
+                <div className="space-y-3">
+                  <label className="block space-y-1" style={muted}>
+                    Write it up as
+                    <Tooltip text={NOTE_TIPS.voiceStyle}>
+                      <select value={prefs.style} onChange={(e) => setPrefs({ style: e.target.value })} className="w-full rounded-lg px-2 text-sm" style={field}>
+                        {STYLE_CHOICES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                      </select>
+                    </Tooltip>
+                    <span className="block">{hintFor} You can write it up another way afterwards from the same words.</span>
+                  </label>
+                  <label className="block space-y-1" style={muted}>
+                    The recording itself
+                    <Tooltip text={NOTE_TIPS.voiceKeep}>
+                      <select value={prefs.keep} onChange={(e) => setPrefs({ keep: e.target.value })} className="w-full rounded-lg px-2 text-sm" style={field}>
+                        {KEEP_CHOICES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                      </select>
+                    </Tooltip>
+                    <span className="block">{prefs.keep === 'no' ? 'It is turned into text and then deleted. Only the text is kept.' : 'You can play it from the note. It counts towards your file storage.'} This has to be chosen before you record.</span>
+                  </label>
+                </div>
+              )}
+              <p style={muted}>If other people are talking, let them know you are recording.</p>
+            </div>
           </>
         )}
 

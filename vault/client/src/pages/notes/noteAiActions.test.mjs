@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import { AI_ACTIONS, todayLocal, applyText, taskPayload } from './noteAiActions.mjs';
 
-assert.deepStrictEqual(AI_ACTIONS.map((a) => a.id), ['summary', 'todos', 'tidy', 'tags', 'title'], 'same actions the server knows');
+assert.deepStrictEqual(AI_ACTIONS.map((a) => a.id), ['summary', 'todos', 'tidy', 'tags', 'title', 'file'], 'same actions the server knows');
 assert.ok(AI_ACTIONS.every((a) => a.label && a.icon && a.working));
 
 // the person's own day, not UTC (11 pm on the 23rd is still the 23rd)

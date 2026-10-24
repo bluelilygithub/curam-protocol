@@ -95,6 +95,16 @@ function defaultVoiceTitle(date = new Date()) {
   return `Voice note, ${day} ${time}`;
 }
 
+/**
+ * The words that were actually said, taken back out of a voice note's text: everything after the "What was said" divider, or the whole text when
+ * there is no divider (a note made with "Just my words"). Used to write the same recording up another way without listening to it again.
+ */
+function splitSpoken(body) {
+  const text = String(body ?? '');
+  const at = text.indexOf(TRANSCRIPT_DIVIDER);
+  return (at === -1 ? text : text.slice(at + TRANSCRIPT_DIVIDER.length)).trim();
+}
+
 /** The note body: the tidy version first, then the original words so nothing said is lost (and it stays searchable). */
 function composeBody({ tidy, transcript }) {
   const raw = clean(transcript, MAX_BODY_CHARS);
@@ -168,7 +178,7 @@ function extractTodos(body) {
 }
 
 module.exports = {
-  STYLES, STYLE_SYSTEMS, parseStyle, extractTodos,
+  STYLES, STYLE_SYSTEMS, parseStyle, extractTodos, splitSpoken,
   TIDY_SYSTEM, TRANSCRIPT_DIVIDER, MAX_TIDY_INPUT_CHARS,
   normalizeTidyReply, defaultVoiceTitle, composeBody, tidyTranscript, buildVoiceNote,
 };

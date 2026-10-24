@@ -20,6 +20,7 @@ const semanticMap = {
   edit: { lucide: 'Pencil' },
   x: { lucide: 'X' },
   'rotate-ccw': { lucide: 'RotateCcw' },
+  history: { lucide: 'History' },
   'download': { lucide: 'Download' },
   check: { lucide: 'Check' },
   'chevron-right': { lucide: 'ChevronRight' },

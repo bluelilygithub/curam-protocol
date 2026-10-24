@@ -89,6 +89,13 @@ export function savePrefs(storage, prefs) {
   try { storage?.setItem(PREFS_KEY, JSON.stringify({ style: prefs.style, keep: prefs.keep })); } catch { /* not remembered in a private window */ }
 }
 
+/** The one line that stands for both choices on the recorder before it is opened up: "Written up as Notes, audio not kept". */
+export function describePrefs(prefs) {
+  const style = (STYLE_CHOICES.find((c) => c.value === prefs?.style) || STYLE_CHOICES[0]).label.split(':')[0].replace(/^Just my words, as spoken$/, 'Just my words');
+  const keep = { no: 'audio not kept', '7d': 'audio kept 7 days', forever: 'audio kept until you delete it' }[prefs?.keep] || 'audio not kept';
+  return `Written up as ${style}, ${keep}`;
+}
+
 /** The line beside a kept recording: how long it stays. `expiresAt` null/undefined means until the person deletes it. */
 export function describeKept(expiresAt, now = new Date()) {
   if (!expiresAt) return 'Kept until you delete it';

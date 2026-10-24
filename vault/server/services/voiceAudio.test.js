@@ -50,6 +50,12 @@ for (const s of ['update', 'todo', 'meeting']) {
   assert.match(VN.STYLE_SYSTEMS[s], /ONLY a JSON object/);
 }
 
+// the words said, taken back out of a voice note
+assert.strictEqual(VN.splitSpoken(`Summary:\nX\n\n${VN.TRANSCRIPT_DIVIDER}\nthe raw words\nsecond line`), 'the raw words\nsecond line');
+assert.strictEqual(VN.splitSpoken('just the words, no divider'), 'just the words, no divider', 'a note made with Just my words is all spoken');
+assert.strictEqual(VN.splitSpoken(''), '');
+assert.strictEqual(VN.splitSpoken(null), '');
+
 // to-dos found in a written-up note
 assert.deepStrictEqual(VN.extractTodos('Summary:\nWe talked.\n\nTo do:\n- Call Sam about the budget\n- [ ] Send the quote\n- call sam about the budget\n\nOpen questions:\n- Is March too late?'),
   ['Call Sam about the budget', 'Send the quote'], 'only the to-do section, repeats dropped, tick-boxes cleaned');

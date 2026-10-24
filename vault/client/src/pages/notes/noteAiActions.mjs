@@ -6,6 +6,7 @@ export const AI_ACTIONS = [
   { id: 'tidy', label: 'Tidy up', icon: 'wand', working: 'Tidying your note. This can take a few seconds…', hint: 'Fix spelling, repeats and layout' },
   { id: 'tags', label: 'Suggest tags', icon: 'tag', working: 'Choosing tags…', hint: 'Reuses the tags you already have' },
   { id: 'title', label: 'Suggest a title', icon: 'pen-line', working: 'Thinking of a title…', hint: 'A short title from the text' },
+  { id: 'file', label: 'Suggest project and client', icon: 'folder', working: 'Looking at your projects and clients…', hint: 'Chosen only from your own, and only if it clearly fits' },
 ];
 
 /** The person's own calendar day as YYYY-MM-DD (not UTC), so "tomorrow" in a note means their tomorrow. */

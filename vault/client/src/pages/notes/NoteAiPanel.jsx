@@ -1,7 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
+import Tooltip from '../../components/Tooltip';
+import { NOTE_TIPS } from './noteTips.mjs';
 import { AI_ACTIONS, todayLocal, taskPayload } from './noteAiActions.mjs';
+import { diffLines, diffStats, collapse } from './noteDiff.mjs';
 
 /**
  * The result of one AI action on the open note (summary, to-dos, tidy-up, title). The AI only proposes: nothing changes until the
@@ -11,8 +14,9 @@ import { AI_ACTIONS, todayLocal, taskPayload } from './noteAiActions.mjs';
  *   onApplyTitle(t)
  *   onApplyTags(tags)      the chosen new tags (the page adds them to the note's tags)
  *   onTasksMade(n)         after tasks were created from the to-do list
+ *   onApplyFiling(f)       { projectId, clientId, projectName, clientName }: file the note under the chosen ones
  */
-export default function NoteAiPanel({ action, note, mobile, ensureSaved, onApplyText, onApplyTitle, onApplyTags, onTasksMade, onClose }) {
+export default function NoteAiPanel({ action, note, mobile, ensureSaved, onApplyText, onApplyTitle, onApplyTags, onApplyFiling, onTasksMade, onClose }) {
   const getIcon = useIcon();
   const meta = AI_ACTIONS.find((a) => a.id === action);
   const [state, setState] = useState('working'); // working | ready | error
@@ -22,6 +26,9 @@ export default function NoteAiPanel({ action, note, mobile, ensureSaved, onApply
   const [items, setItems] = useState([]); // to-dos: { title, due, who, on, made }
   const [off, setOff] = useState([]); // suggested tags the person unticked
   const [making, setMaking] = useState(false);
+  const [showChanges, setShowChanges] = useState(true); // tidy-up: what would change, or the new text
+  const [fileProject, setFileProject] = useState(true);
+  const [fileClient, setFileClient] = useState(true);
   const [copied, setCopied] = useState(false);
   const run = useRef(0);
 
@@ -58,6 +65,12 @@ export default function NoteAiPanel({ action, note, mobile, ensureSaved, onApply
   const tagChoices = (result?.tags || []).filter((t) => !(note.tags || []).includes(t));
   const tagPicks = tagChoices.filter((t) => !off.includes(t));
   const madeCount = items.filter((i) => i.made).length;
+  // tidy-up: the new text against the note as it is now, so accepting it is a confident click
+  const tidyOps = action === 'tidy' && result ? diffLines(note.body || '', text) : [];
+  const tidyStats = diffStats(tidyOps);
+  const tidyShown = collapse(tidyOps, 1);
+  const filePicks = result && action === 'file' ? { projectId: fileProject ? result.projectId : null, clientId: fileClient ? result.clientId : null } : null;
+  const fileNothingNew = result && action === 'file' && ((!result.projectId || result.projectId === note.project_id) && (!result.clientId || result.clientId === note.client_id));
 
   async function makeTasks() {
     setMaking(true);
@@ -120,8 +133,31 @@ export default function NoteAiPanel({ action, note, mobile, ensureSaved, onApply
 
           {state === 'ready' && (action === 'summary' || action === 'tidy') && (
             <>
-              {action === 'tidy' && <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>Check it before you use it. Your note is not changed until you choose.</p>}
-              <div className="text-sm rounded-lg p-3 whitespace-pre-wrap select-text" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)', maxHeight: '45dvh', overflowY: 'auto' }}>{text}</div>
+              {action === 'tidy' && <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>Check it before you use it. Your note is not changed until you choose, and Earlier versions keeps the old text.</p>}
+              {action === 'tidy' && (
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <div className="flex rounded-lg overflow-hidden" role="group" aria-label="How to show the tidy-up" style={{ border: '1px solid var(--color-border)' }}>
+                    {[[true, 'Changes'], [false, 'New text']].map(([on, label]) => (
+                      <Tooltip key={label} text={on ? NOTE_TIPS.versionChanges : NOTE_TIPS.tidyNewText}>
+                        <button type="button" onClick={() => setShowChanges(on)} aria-pressed={showChanges === on} className="text-xs px-3 transition-opacity duration-200 hover:opacity-80" style={{ minHeight: mobile ? 36 : 26, background: showChanges === on ? 'var(--color-primary)' : 'var(--color-bg)', color: showChanges === on ? '#fff' : 'var(--color-text)' }}>{label}</button>
+                      </Tooltip>
+                    ))}
+                  </div>
+                  <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{tidyStats.added || tidyStats.removed ? `${tidyStats.added} line${tidyStats.added === 1 ? '' : 's'} in, ${tidyStats.removed} out` : 'No change'}</span>
+                </div>
+              )}
+              {action === 'tidy' && showChanges && (
+                <div className="rounded-lg p-2 overflow-y-auto" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)', maxHeight: mobile ? 260 : 320, fontFamily: 'ui-monospace, monospace', fontSize: 12, lineHeight: 1.5 }} aria-label="What the tidy-up would change">
+                  {tidyShown.map((o, i) => (o.type === 'gap'
+                    ? <p key={i} style={{ color: 'var(--color-muted)', margin: '2px 0' }}>… {o.count} unchanged line{o.count === 1 ? '' : 's'}</p>
+                    : (
+                      <p key={i} className="whitespace-pre-wrap break-words" style={{ margin: 0, padding: '0 4px', background: o.type === 'add' ? 'rgba(34,197,94,0.15)' : o.type === 'del' ? 'rgba(239,68,68,0.15)' : 'transparent', textDecoration: o.type === 'del' ? 'line-through' : 'none' }}>
+                        <span aria-hidden="true" style={{ color: 'var(--color-muted)' }}>{o.type === 'add' ? '+ ' : o.type === 'del' ? '- ' : '  '}</span>{o.text || ' '}
+                      </p>
+                    )))}
+                </div>
+              )}
+              {(action !== 'tidy' || !showChanges) && <div className="text-sm rounded-lg p-3 whitespace-pre-wrap select-text" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)', maxHeight: '45dvh', overflowY: 'auto' }}>{text}</div>}
             </>
           )}
 
@@ -160,6 +196,22 @@ export default function NoteAiPanel({ action, note, mobile, ensureSaved, onApply
                   </li>
                 ))}
               </ul>
+            )
+          )}
+          {state === 'ready' && action === 'file' && (
+            !result.projectId && !result.clientId ? (
+              <p className="text-sm py-4 text-center" style={{ color: 'var(--color-muted)' }}>Nothing in your projects or clients clearly fits this note, so no suggestion is made.</p>
+            ) : (
+              <div className="space-y-2">
+                {result.why && <p className="text-sm" style={{ color: 'var(--color-text)' }}>{result.why}</p>}
+                {[['Project', result.projectId, result.projectName, note.project_id, fileProject, setFileProject], ['Client', result.clientId, result.clientName, note.client_id, fileClient, setFileClient]].filter(([, id]) => id).map(([label, id, name, current, on, setOn]) => (
+                  <label key={label} className="flex items-center gap-2.5 rounded-lg p-2.5" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)', minHeight: mobile ? 48 : 36 }}>
+                    <input type="checkbox" checked={on && id !== current} disabled={id === current} onChange={(e) => setOn(e.target.checked)} style={{ width: 20, height: 20, accentColor: 'var(--color-primary)', flexShrink: 0 }} />
+                    <span className="text-sm">{label}: <strong>{name}</strong>{id === current ? ' (already set)' : ''}</span>
+                  </label>
+                ))}
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Chosen only from your own projects and clients. Nothing is filed until you press the button.</p>
+              </div>
             )
           )}
           {state === 'ready' && action === 'tags' && (
@@ -211,6 +263,14 @@ export default function NoteAiPanel({ action, note, mobile, ensureSaved, onApply
             <>
               <button type="button" onClick={onClose} className={btnClass} style={btn(false)}>Cancel</button>
               <button type="button" disabled={!titleDraft.trim()} onClick={() => { onApplyTitle(titleDraft.trim()); onClose(); }} className={btnClass} style={btn(true)}>Use this title</button>
+            </>
+          )}
+          {state === 'ready' && action === 'file' && (
+            <>
+              <button type="button" onClick={onClose} className={btnClass} style={btn(false)}>{fileNothingNew ? 'Close' : 'Cancel'}</button>
+              {!fileNothingNew && (result.projectId || result.clientId) && (
+                <button type="button" disabled={!filePicks.projectId && !filePicks.clientId} onClick={() => { onApplyFiling({ ...filePicks, projectName: result.projectName, clientName: result.clientName }); onClose(); }} className={btnClass} style={btn(true)}>File this note</button>
+              )}
             </>
           )}
           {state === 'ready' && action === 'tags' && (

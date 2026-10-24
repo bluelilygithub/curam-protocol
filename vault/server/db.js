@@ -812,6 +812,20 @@ async function initSchema() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_note_tags_user_tag ON note_tags(user_id, tag)`);
 
     // Note templates (the person's own; the built-in ones live in the browser) and the daily note: one note per calendar day.
+    // Earlier versions of a note (server/services/noteVersions.js). No foreign key to notes, like attachments: a note waiting in the recycle bin keeps its versions.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS note_versions (
+        id        SERIAL PRIMARY KEY,
+        note_id   INTEGER NOT NULL,
+        user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title     TEXT NOT NULL DEFAULT '',
+        body      TEXT NOT NULL DEFAULT '',
+        saved_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        reason    TEXT NOT NULL DEFAULT 'edit'
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_note_versions_note ON note_versions(note_id, saved_at DESC)`);
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS note_templates (
         id         SERIAL PRIMARY KEY,

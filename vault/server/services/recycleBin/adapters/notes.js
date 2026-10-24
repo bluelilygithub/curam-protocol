@@ -36,10 +36,13 @@ register('note', {
     if (fileIds.length) {
       await db.query(`UPDATE attachments SET "entityId"=$1 WHERE id = ANY($2::int[]) AND "userId"=$3 AND "entityType"='note'`, [rows[0].id, fileIds, userId]);
     }
+    // Earlier versions follow the note (they are kept by note number; a restore under a new number moves them).
+    if (idTaken) await db.query('UPDATE note_versions SET note_id=$1 WHERE note_id=$2 AND user_id=$3', [rows[0].id, n.id, userId]);
     return { entityId: rows[0].id };
   },
-  // Gone for good (30 days, deleted forever, bin emptied): remove the files too.
+  // Gone for good (30 days, deleted forever, bin emptied): remove the files and the earlier versions too.
   async discard(db, userId, payload) {
+    if (payload?.note?.id) await db.query('DELETE FROM note_versions WHERE note_id=$1 AND user_id=$2 AND NOT EXISTS (SELECT 1 FROM notes WHERE id=$1)', [payload.note.id, userId]);
     const fileIds = Array.isArray(payload?.attachmentIds) ? payload.attachmentIds.filter(Number.isInteger) : [];
     if (!fileIds.length) return;
     const { rows } = await db.query(`SELECT id, "storedPath" FROM attachments WHERE id = ANY($1::int[]) AND "userId"=$2 AND "entityType"='note'`, [fileIds, userId]);
