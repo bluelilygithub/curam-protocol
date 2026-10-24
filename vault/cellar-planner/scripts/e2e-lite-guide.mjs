@@ -60,8 +60,8 @@ const exe = ['C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Progra
 const browser = await chromium.launch({ executablePath: exe, headless: true });
 let failed = 0;
 const t = async (name, fn) => { try { await fn(); console.log('PASS ', name); } catch (e) { failed++; console.log('FAIL ', name, '\n     ', String(e.stack).split('\n').slice(0, 4).join('\n      ')); } };
-const newPage = async () => {
-  const ctx = await browser.newContext({ viewport: { width: 1200, height: 800 } });
+const newPage = async (width = 1200) => {
+  const ctx = await browser.newContext({ viewport: { width, height: 800 } });
   const page = await ctx.newPage();
   const errors = []; page.on('pageerror', (e) => errors.push(String(e)));
   return { page, errors };
@@ -163,31 +163,58 @@ await t('the visitor text is never turned into markup', async () => {
   await page.context().close();
 });
 
-await t('movable: the title bar drags the chat, it stays on screen, double-click puts it back; the round button drags too', async () => {
+await t('the round button sits beside the planner title (and scrolls with it, not with the screen); the chat itself drags, stays on screen, and double-click puts it back', async () => {
   state.enabled = true;
   const { page } = await newPage();
   await page.goto('http://localhost:8811/'); await planner(page).getByTestId('lite-stepper').waitFor();
   const dot = page.locator('#clg .open'); await dot.waitFor({ timeout: 8000 });
-  const b0 = await dot.boundingBox();
-  await page.mouse.move(b0.x + 20, b0.y + 20); await page.mouse.down(); await page.mouse.move(b0.x - 200, b0.y - 150, { steps: 5 }); await page.mouse.up();
-  const b1 = await dot.boundingBox();
-  assert.ok(b1.x < b0.x - 150 && b1.y < b0.y - 100, 'the round button moved');
-  assert.equal(await page.locator('#clg .panel').isVisible(), false, 'a drag does not open it');
+  await page.waitForFunction(() => document.getElementById('clg')?.classList.contains('a'), null, { timeout: 8000 });
+  const title = () => planner(page).locator('.lite-head h1').boundingBox();
+  const beside = async () => {
+    const t = await title(), b = await dot.boundingBox();
+    return { dy: Math.abs((b.y + b.height / 2) - (t.y + t.height / 2)), gap: b.x - (t.x + t.width), t, b };
+  };
+  const s0 = await beside();
+  assert.ok(s0.dy < 6, 'level with the title: ' + JSON.stringify(s0));
+  assert.ok(s0.gap > 0 && s0.gap < 400, 'just to the right of the title: ' + JSON.stringify(s0));
+  await page.mouse.move(s0.b.x + 20, s0.b.y + 20); await page.mouse.down(); await page.mouse.move(s0.b.x - 200, s0.b.y + 150, { steps: 5 }); await page.mouse.up();
+  const s1 = await beside();
+  assert.ok(Math.abs(s1.b.x - s0.b.x) < 2 && Math.abs(s1.b.y - s0.b.y) < 2, 'the button does not drag: ' + JSON.stringify([s0.b, s1.b]));
+  await page.evaluate(() => window.scrollTo(0, 260)); await page.waitForTimeout(300);
+  const s2 = await beside();
+  assert.ok(s2.dy < 6 && Math.abs(s2.t.y - s0.t.y) > 100, 'it moves with the title when the page scrolls: ' + JSON.stringify([s0.t, s2.t]));
+  await page.evaluate(() => window.scrollTo(0, 0)); await page.waitForTimeout(300);
   await dot.click();
-  assert.equal(await page.locator('#clg .panel').isVisible(), true, 'a plain click still opens it');
+  assert.equal(await page.locator('#clg .panel').isVisible(), true, 'a click opens the chat');
+  const pb = await page.locator('#clg .panel').boundingBox();
+  assert.ok(pb.x + pb.width <= 1200 && pb.y + pb.height <= 800 && pb.x >= 0 && pb.y >= 0, 'the chat opens fully on the screen, not at the title: ' + JSON.stringify(pb));
   const head = page.locator('#clg .head'); const h0 = await head.boundingBox();
   await page.mouse.move(h0.x + 150, h0.y + 10); await page.mouse.down(); await page.mouse.move(h0.x - 100, h0.y + 60, { steps: 5 }); await page.mouse.move(-500, 400, { steps: 3 }); await page.mouse.up();
   const p1 = await page.locator('#clg .panel').boundingBox();
   assert.ok(p1.x >= 0 && p1.y >= 0 && p1.x + p1.width <= 1200 && p1.y + p1.height <= 800, 'the chat stays fully on the screen: ' + JSON.stringify(p1));
   await page.reload(); await page.locator('#clg .open').waitFor({ timeout: 8000 });
-  const b2 = await page.locator('#clg .open').boundingBox();
-  assert.ok(Math.abs(b2.x - b1.x) < 3, 'the button position is remembered');
   await page.locator('#clg .open').click();
   const p2 = await page.locator('#clg .panel').boundingBox();
   assert.ok(Math.abs(p2.x - p1.x) < 3, 'the chat position is remembered');
   await page.locator('#clg .head .t').dblclick();
   const p3 = await page.locator('#clg .panel').boundingBox();
   assert.ok(p3.x > p1.x + 100, 'double-click puts the chat back');
+  await page.context().close();
+});
+
+await t('on a phone-width screen the button still sits beside the title and the header buttons stay clear of it', async () => {
+  state.enabled = true;
+  const { page } = await newPage(390);
+  await page.addInitScript(() => { try { sessionStorage.setItem('cellar-lite:phone-notice:v1', '1'); } catch (e) { /* fine */ } });
+  await page.goto('http://localhost:8811/'); await planner(page).getByTestId('lite-stepper').waitFor();
+  const dot = page.locator('#clg .open'); await dot.waitFor({ timeout: 8000 });
+  await page.waitForFunction(() => document.getElementById('clg')?.classList.contains('a'), null, { timeout: 8000 });
+  const t0 = await planner(page).locator('.lite-head h1').boundingBox(), b = await dot.boundingBox();
+  assert.ok(Math.abs((b.y + b.height / 2) - (t0.y + t0.height / 2)) < 6 && b.x >= t0.x + t0.width && b.x + b.width <= 390, 'beside the title, inside the screen: ' + JSON.stringify([t0, b]));
+  const btns = await planner(page).locator('.lite-help-btns .btn').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; }));
+  const frameBox = await page.locator('#p').boundingBox();
+  const clash = btns.some((r) => r.x + frameBox.x < b.x + b.width && r.x + frameBox.x + r.w > b.x && r.y + frameBox.y < b.y + b.height && r.y + frameBox.y + r.h > b.y);
+  assert.ok(!clash, 'the header buttons do not sit under the chat button');
   await page.context().close();
 });
 

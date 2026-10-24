@@ -1,7 +1,8 @@
 /*
  * Cellar Planner lite: the help chat for the website's planner page.
  *
- * It is the same chat as the guide inside Vault: a round button in the bottom right corner that opens a chat you can drag out of the way (by its
+ * It is the same chat as the guide inside Vault: a round button that sits beside the planner's title (it scrolls with the page, like the title; an
+ * older planner that does not say where its title is gets the button in the bottom right corner of the screen instead) that opens a chat you can drag out of the way (by its
  * title bar; double-click the bar to put it back), make wider or narrower, resize by its top-left corner, and speak into (microphone button, where the
  * browser has one). A visitor types or says what they want to do ("how do I measure my room?"); the chat answers in plain words and its "Show me"
  * links take the planner to the right step. After an answer, "Email this conversation to the team" sends the chat to your team.
@@ -57,6 +58,7 @@
   var history = [];   // what the model is sent: [{ role, content }]
   var turns = [];     // what an emailed copy shows
   var currentStep = '';
+  var anchored = false; // the button sits beside the planner's title (true) or floats in the corner of the screen (false)
   var busy = false, root, panel, list, input, sendBtn, micBtn, openBtn, emailRow, wideBtn, clearBtn, endMark, accent = ACCENT;
 
   function sameSite(a, b) {
@@ -100,6 +102,9 @@
       '#clg button:hover:not(:disabled){opacity:.7}#clg button:disabled{opacity:.4;cursor:default}' +
       '#clg :focus-visible{outline:3px solid #f5a623;outline-offset:2px}' +
       '#clg .open{width:48px;height:48px;border-radius:50%;border:0;background:var(--p);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.3);touch-action:none}' +
+      '#clg.a{position:absolute;right:auto;bottom:auto;width:48px;height:48px;z-index:20}' +
+      '#clg.a .panel{position:fixed;right:20px;bottom:20px;z-index:99995}' +
+      '@media (max-width:640px){#clg.a .panel{bottom:84px;right:12px}}' +
       '#clg .panel{display:none;flex-direction:column;position:relative;background:var(--surf);border:1px solid var(--bd);border-radius:16px;box-shadow:0 12px 36px rgba(0,0,0,.28);overflow:hidden}' +
       '#clg.on .panel{display:flex}#clg.on .open{display:none}' +
       '#clg .head{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--bd);cursor:grab;touch-action:none;user-select:none}' +
@@ -392,14 +397,14 @@
     root.classList.toggle('on', open);
     openBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
     hideTip();
-    if (open) { applySize(); window.setTimeout(function () { panelDrag.settle(); input.focus(); }, 0); } else { stopListening(); openBtn.focus(); btnDrag.settle(); }
+    if (open) { applySize(); window.setTimeout(function () { panelDrag.settle(); input.focus(); }, 0); } else { stopListening(); openBtn.focus(); if (!anchored) btnDrag.settle(); }
   }
 
   function build() {
     css();
     root = el('div'); root.id = 'clg';
     openBtn = btn('open', '', 'Open the planner help chat'); openBtn.appendChild(icon('help', 24)); openBtn.setAttribute('aria-expanded', 'false');
-    tip(openBtn, 'Ask the planner help chat. Tell it what you want to do, by typing or talking, and it tells you which steps to use. It cannot see your design. Drag it if it is in the way.');
+    tip(openBtn, function () { return 'Ask the planner help chat. Tell it what you want to do, by typing or talking, and it tells you which steps to use. It cannot see your design.' + (anchored ? '' : ' Drag it if it is in the way.'); });
     panel = el('div', 'panel'); panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', NAME);
 
     var head = el('div', 'head');
@@ -443,6 +448,8 @@
     panelDrag = draggable(panel, head, KEY_POS, { ignore: ignore, reset: true });
     btnDrag = draggable(openBtn, openBtn, KEY_POS_BTN, {});
     wideBtn.addEventListener('click', function () { size = { w: isWide() ? NARROW : WIDE, h: size.h }; store(KEY_SIZE, size); applySize(); panelDrag.settle(); });
+    // beside the title the button stays put: its drag handler is never reached
+    root.addEventListener('pointerdown', function (e) { if (anchored && e.target.closest && e.target.closest('.open')) e.stopPropagation(); }, true);
     openBtn.addEventListener('click', function () { if (btnDrag.swallowed()) return; toggle(true); });
     closeBtn.addEventListener('click', function () { toggle(false); });
     clearBtn.addEventListener('click', clearChat);
@@ -451,7 +458,45 @@
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(input.value); } });
     if (micBtn) micBtn.addEventListener('click', function () { if (wantMic) stopListening(); else startListening(); input.focus(); });
     root.addEventListener('keydown', function (e) { if (e.key === 'Escape' && root.classList.contains('on')) toggle(false); });
+    watchTitle();
     log('help chat shown');
+  }
+
+  // ------------------------------------------------------------------ beside the planner's title
+  // The planner reports where its title is (helpSpot, in its own page) with each height message. The button goes there: its place on this page is
+  // the frame's place plus that spot. Until a planner says so (an older one never does) it floats in the corner as before.
+  var spot = null;
+  function floatInCorner() {
+    if (!anchored) return;
+    anchored = false; root.classList.remove('a'); root.style.left = ''; root.style.top = '';
+    btnDrag.settle();
+  }
+  function placeButton() {
+    var f = plannerFrame();
+    if (!f || !spot) { floatInCorner(); return; }
+    var r = f.getBoundingClientRect();
+    if (!anchored) { anchored = true; root.classList.add('a'); openBtn.style.transform = ''; }
+    var wantL = r.left + spot.left, wantT = r.top + spot.top;
+    root.style.left = (wantL + window.pageXOffset) + 'px'; root.style.top = (wantT + window.pageYOffset) + 'px';
+    // when the page's body is itself positioned the numbers above are off by its own place: correct once
+    var a = root.getBoundingClientRect();
+    if (Math.abs(a.left - wantL) > 1 || Math.abs(a.top - wantT) > 1) {
+      root.style.left = (parseFloat(root.style.left) + wantL - a.left) + 'px'; root.style.top = (parseFloat(root.style.top) + wantT - a.top) + 'px';
+    }
+  }
+  function watchTitle() {
+    window.addEventListener('message', function (ev) {
+      var d = ev.data, f = plannerFrame();
+      if (!d || d.type !== 'cellar-lite:height' || !f || ev.source !== f.contentWindow) return;
+      var s = d.helpSpot;
+      spot = s && isFinite(s.left) && isFinite(s.top) && s.left >= 0 && s.left < 20000 && s.top >= 0 && s.top < 20000 ? { left: Number(s.left), top: Number(s.top) } : null;
+      placeButton();
+    });
+    window.addEventListener('resize', placeButton);
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(function () { placeButton(); }).observe(document.body);
+    // the planner has probably said where its title is already, before this script was listening: ask once more
+    var f0 = plannerFrame();
+    try { if (f0 && f0.contentWindow) f0.contentWindow.postMessage({ type: 'cellar-lite:resend', version: 1 }, new URL(f0.src).origin); } catch (e) { /* the frame is not ready: its next report will do */ }
   }
 
   // Start only when (a) this page holds the planner and (b) the owner has switched the chat on in Vault.

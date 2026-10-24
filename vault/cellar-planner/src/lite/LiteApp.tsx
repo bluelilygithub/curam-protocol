@@ -70,6 +70,9 @@ type LengthKey = 'widthMm' | 'depthMm' | 'heightMm';
 type Draft = { widthMm: string; depthMm: string; heightMm: string; target: string };
 const toDraft = (s: LiteSettings, unit: LengthUnit): Draft => ({ widthMm: formatLength(s.widthMm, unit), depthMm: formatLength(s.depthMm, unit), heightMm: formatLength(s.heightMm, unit), target: String(s.target) });
 
+/** The website help chat's round button (48 px); the title box keeps 56 px free beside the title for it, an 8 px gap plus the button (embedded only, see lite.css). */
+const HELP_BTN = 48;
+
 export function LiteApp() {
   const start = useMemo(startSettings, []);
   const [s, setS] = useState<LiteSettings>(start.s);
@@ -167,13 +170,23 @@ export function LiteApp() {
       // where the big picture sits in the page, so the page around us knows when it is on screen
       const pic = document.querySelector('.lite-visual')?.getBoundingClientRect();
       const top = pic ? Math.round(pic.top + window.scrollY) : 0, bottom = pic ? Math.round(pic.bottom + window.scrollY) : 0;
-      const key = `${h}/${top}/${bottom}`;
-      if (key !== last) { last = key; window.parent.postMessage({ type: HEIGHT_TYPE, version: 1, height: h, pictureTop: top, pictureBottom: bottom }, to); }
+      // where the website's help chat button belongs: just right of the title block, level with the title (the page script puts it there)
+      const box = document.querySelector('.lite-titlebox')?.getBoundingClientRect(), h1 = document.querySelector('.lite-head h1')?.getBoundingClientRect();
+      const helpSpot = box && h1 ? { left: Math.round(box.right - HELP_BTN), top: Math.round(h1.top + window.scrollY + h1.height / 2 - HELP_BTN / 2) } : null;
+      const key = `${h}/${top}/${bottom}/${helpSpot ? `${helpSpot.left},${helpSpot.top}` : ''}`;
+      if (key !== last) { last = key; window.parent.postMessage({ type: HEIGHT_TYPE, version: 1, height: h, pictureTop: top, pictureBottom: bottom, helpSpot }, to); }
     };
     const ro = new ResizeObserver(() => { if (!raf) raf = requestAnimationFrame(send); });
     ro.observe(document.body);
     send();
-    return () => { ro.disconnect(); if (raf) cancelAnimationFrame(raf); };
+    // a script that starts after we did (the website help chat) asks for the last report again: it would otherwise wait for the next change
+    const onAsk = (ev: MessageEvent): void => {
+      const d = ev.data as { type?: unknown; version?: unknown } | null;
+      if (ev.origin !== to || ev.source !== window.parent || !d || d.type !== 'cellar-lite:resend' || d.version !== 1) return;
+      last = ''; send();
+    };
+    window.addEventListener('message', onAsk);
+    return () => { ro.disconnect(); window.removeEventListener('message', onAsk); if (raf) cancelAnimationFrame(raf); };
   }, []);
 
   // The sticky footer (Back / Next / quote). Standalone, CSS sticky keeps it at the bottom of the window. Embedded, the frame is as tall as the planner, so
@@ -363,7 +376,7 @@ export function LiteApp() {
       <PhoneNotice show={cfg.mobileNotice.show} text={cfg.mobileNotice.text} phone={cfg.phone} onCall={() => say('call')} />
       <header className="lite-head">
         <div className="lite-head-row">
-          <div>
+          <div className="lite-titlebox">
             <h1>Cellar Planner</h1>
             <p className="lite-sub">Create a cellar that fits your space.</p>
           </div>

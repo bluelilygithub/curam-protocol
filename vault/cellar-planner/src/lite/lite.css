@@ -19,6 +19,8 @@ body { background: #f1f1ee; }
 .lite-sub { margin: 4px 0 0; font-size: 18px; color: var(--muted); }
 .lite-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .lite-help-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+/* embedded: room beside the title for the website help chat button, which the page script places there (see cellar-lite-guide.js) */
+html[data-embedded] .lite-titlebox { padding-right: 56px; }
 .lite .lite-help-btns .btn.icon { width: 44px; height: 44px; min-height: 44px; padding: 0; justify-content: center; align-items: center; }
 .lite .lite-help-btns .btn.icon svg { width: 22px; height: 22px; }
 /* labelled icons: the word sits beside the icon (under it on a phone, so five buttons still fit one row) */
