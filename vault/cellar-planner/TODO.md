@@ -10,6 +10,25 @@ Saved 2026-10-07 (updated 2026-10-09) from a review of the app. Sources: `docs/c
 - [ ] **A real past job** (dimensions, cut list, bottle count) as the acceptance test. Golden cases #01 and #02 are worked examples, not real-job validation.
 - [ ] **Lighting supplier questions** (spec 20.5). The owner's lighting text was cut off mid-sentence; ask for the rest.
 - [ ] Confirm every number read from the Carter Noir sheets (hinge side, door size, 940 | 970 | 940 split, header, vents).
+- [ ] **Send the trade question lists** (added 2026-10-24). To the **rack fabricator**: where tall runs (over 2000 mm) are fixed (floor shoe, top tie-back, ceiling bracket); the approved fixing for a rack against a 50 mm insulated panel wall; the clearance needed between a run's end upright and a perpendicular wall; whether uprights are pre-routed for LED wiring and where the wiring leaves the carcass. To the **enclosure (panel and glass) supplier**: what fixing or pull-out load the panel allows, or whether racks need their own floor-to-ceiling bracing; the dead load the header can carry; the floor perimeter channel and thermal break; how much gap scribes and cover trims can hide each side, and the clearances needed to deliver and stand the panels. To the **HVAC contractor and electrician**: a plug-in outlet or an isolator for the conditioner; the sleeve size through the header or wall; condensate pipe size, fall, and whether the unit has a lift pump.
+
+## Commercial protection: next (small, needs no outside answers)
+
+Agreed 2026-10-24 after a design discussion: the only two additions worth building now are the ones that stop a quote and a design drifting apart. Everything else from that discussion is parked below.
+
+- [ ] **Job status with an acceptance record.** A `jobStatus` on the design set by plain buttons: enquiry, quoted, accepted, site measured, issued for construction (plus on hold, declined, lost); it can move backward. Accepting records the date, how (email, PO, deposit, verbal, other), a reference and a note, and names the quote revision accepted; it cannot be set while no quote has been made. The planner keeps its own status and never takes it from the CRM deal stage. It keeps posting a timeline note to the CRM when a quote is made (already built, `src/app/leads.ts`).
+- [ ] **Frozen quote with an "out of date" warning.** Making a customer quote stores a snapshot with the design: the quote lines and totals, the catalogue prices, costs and terms used at that moment, and a fingerprint of what the customer is promised. The fingerprint is a normalised, versioned hash of the retail lines and total, outer sizes and wall types, bottle style, door and swing, finish, and each run's wall, unit count, rack type, orientation and bottle total. It leaves out run positions, run ids, internal margin that does not change the retail price, and any technical or drafting notes. If the design's fingerprint differs from the last quote's, show "Quote is out of date". Before acceptance that is only a warning; after acceptance a change needs an explicit **Issue revision** (Rev A, Rev B, earlier ones kept). Check how large a saved design gets and cap the number of revisions kept (a design is limited to 2 MB). The drawing package title block should print the quote revision.
+
+## Ideas: only if a real job or a drafter asks for them
+
+Parked 2026-10-24. These build on supplier numbers nobody has yet, so none is started and none is in the spec. Do the trade question lists and one real job first.
+
+- Mixed rack types in one design: an optional rack type on each run, falling back to the design's type. The engine reads one rack specification for the whole design today, so capacity, placement and checks would resolve it per run; an unknown run type must be an error, never a silent fall-back to the default; a quote needs every type used to be confirmed.
+- Site measure record (measured room opening and ceiling height, measured by) with a fit check: a room smaller than the enclosure is always an error; extra room is fine up to a tolerance the installer supplies (blank until they do); a measurement never revises a quote by itself, changing the enclosure does.
+- A Sales view and a Technical view as two saved panel layouts (`layoutPrefs.ts`), not a permissions system.
+- Drawing set extras: the other three wall elevations, a section cut, a parts and carcass schedule; DXF layer names configurable in Settings, empty layers left out, a layer picker in the download.
+- Technical sheets carry an "unverified" notice until the ceiling and floor build-up, anchoring and HVAC details are confirmed (one verification panel; the rack supplier tick comes from the catalogue's existing confirmed flag).
+- Rough-in markers on the plan (power supply point, condensate, line-set sleeve, sensor), each saying a licensed electrician or HVAC contractor must verify; anchoring method per run; stud grids only on stud walls, with a warning, not a ban, for fixings into insulated panel or glass. Australian terms throughout (noggings, 230 V, GPO or isolator, DN20 or DN25).
 
 ## Mobile and touch: remaining
 
