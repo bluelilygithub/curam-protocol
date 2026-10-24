@@ -18,6 +18,7 @@ const CONFIG = {
   intro: 'Hi! Tell me what you want to do in Notes, in your own words: write, record your voice, find something, or turn a note into a task. I will check what Notes can do and give you the steps. If something is missing, I will say so. I cannot see your notes.',
   starters: [
     'Record my voice and turn it into a note',
+    'Talk to the assistant out loud and keep it as a note',
     'What is the difference between the two mic buttons?',
     'Turn a note into a task',
     'Find the note about the budget',

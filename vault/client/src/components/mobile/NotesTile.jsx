@@ -59,6 +59,14 @@ export default function NotesTile() {
             {getIcon('mic', { size: 15 })} Record
           </button>
           <button
+            onClick={() => navigate('/talk')}
+            className="h-9 px-3 flex items-center justify-center gap-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition-opacity"
+            style={{ color: 'var(--color-primary)', background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+            aria-label="Talk it through"
+          >
+            {getIcon('volume-2', { size: 15 })} Talk
+          </button>
+          <button
             onClick={() => setShowQuick(v => !v)}
             className="w-9 h-9 flex items-center justify-center rounded-lg hover:opacity-60 transition-opacity"
             style={{ color: 'var(--color-primary)', background: 'var(--color-bg)' }}

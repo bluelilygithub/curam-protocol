@@ -1414,7 +1414,7 @@ export default function NotesPage() {
         <input ref={keyboardRef} aria-hidden="true" tabIndex={-1} style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 1, opacity: 0, border: 0, padding: 0, fontSize: 16, pointerEvents: 'none' }} />
       )}
       {showNewChooser && (
-        <NewNoteChooser mobile={viewportMobile} onClose={() => setShowNewChooser(false)} onWrite={startWrittenNote} onVoice={() => { setShowNewChooser(false); setShowRecorder(true); }} onTemplate={openTemplates} />
+        <NewNoteChooser mobile={viewportMobile} onClose={() => setShowNewChooser(false)} onWrite={startWrittenNote} onVoice={() => { setShowNewChooser(false); setShowRecorder(true); }} onTalk={() => { setShowNewChooser(false); navigate('/talk'); }} onTemplate={openTemplates} />
       )}
       {showTemplates && (
         <TemplatePicker

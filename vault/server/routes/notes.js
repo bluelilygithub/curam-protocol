@@ -15,6 +15,7 @@ const { buildVoiceNote, parseStyle, splitSpoken, TRANSCRIPT_DIVIDER } = require(
 const voiceAudio = require('../services/voiceAudio');
 const noteTodos = require('../services/noteTodos');
 const noteVersions = require('../services/noteVersions');
+const conversationNote = require('../services/conversationNote');
 const { validDay } = require('../services/noteDay');
 const noteAi = require('../services/noteAi'); // called as noteAi.runNoteAction so tests can swap it
 const { normalizeTag, normalizeTags } = require('../services/noteTags');
@@ -400,6 +401,29 @@ async function personNames(userId) {
     return voiceAudio.cleanNames([...c.rows, ...p.rows, ...k.rows].map((r) => r.name));
   } catch { return []; }
 }
+
+// POST /api/notes/from-conversation  { sessionId }
+// A finished spoken conversation (Talk it through, docs/talk.md) as a note PROPOSAL: a summary, the decisions and to-dos, then the whole exchange. The chat's
+// messages are read here from the saved session, which must be the caller's own (or in a project they own). Nothing is saved: the screen lets the person
+// review, file and save it. Answers { title, body, todos, summarised, count }. Named route: before /:id.
+router.post('/from-conversation', aiLimiter, async (req, res) => {
+  const sessionId = typeof req.body?.sessionId === 'string' ? req.body.sessionId.slice(0, 100) : '';
+  if (!sessionId) return res.status(400).json({ error: 'sessionId is needed' });
+  try {
+    const { rows: [session] } = await pool.query(
+      `SELECT s."sessionId" FROM sessions s LEFT JOIN projects p ON p.id = s."projectId"
+        WHERE s."sessionId"=$1 AND s."deletedAt" IS NULL AND (s."userId"=$2 OR (s."projectId" IS NOT NULL AND p."userId"=$2))`,
+      [sessionId, req.user.id]
+    );
+    if (!session) return res.status(404).json({ error: 'That conversation was not found.' });
+    const { rows: messages } = await pool.query('SELECT role, content FROM messages WHERE "sessionId"=$1 ORDER BY "createdAt", id', [sessionId]);
+    if (messages.length < 2) return res.status(400).json({ error: 'There is nothing to write up yet. Say something and wait for the reply first.' });
+    res.json(await conversationNote.buildConversationNote(req.user.id, messages));
+  } catch (err) {
+    getLogger().error({ err }, '[notes from conversation]');
+    res.status(500).json({ error: 'The note could not be made from the conversation. Try again.' });
+  }
+});
 
 // POST /api/notes/:id/rewrite  { style: 'notes' | 'update' | 'todo' | 'meeting' | 'words' }
 // Write a voice note up another way, from the words that were said (kept at the bottom of every voice note), without listening again. It only PROPOSES:

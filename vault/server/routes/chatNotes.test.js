@@ -101,6 +101,19 @@ test('the flag must be exactly true (a string or number does not switch it on)',
   }
 });
 
+test('talk mode: the reply is asked for as speech, just before the date block, only when exactly true', async () => {
+  const on = await chat({ messages: msg('how much for oak?'), voiceMode: true });
+  assert.match(on.system, /TALKING to you and will HEAR your reply/);
+  assert.ok(/Today's date/.test(on.blocks[on.blocks.length - 1].text), 'the date block is still last');
+  assert.match(on.blocks[on.blocks.length - 2].text, /TALKING to you/);
+  assert.ok(!on.blocks[on.blocks.length - 2].cache_control, 'never cached');
+  assert.ok(!/TALKING to you/.test((await chat({ messages: msg('how much for oak?') })).system), 'off by default');
+  for (const v of ['true', 1]) assert.ok(!/TALKING to you/.test((await chat({ messages: msg('how much for oak?'), voiceMode: v })).system), `voiceMode ${JSON.stringify(v)} is off`);
+  const both = await chat({ messages: msg('what did I write down about oak pricing?'), voiceMode: true, useNotes: true });
+  assert.deepStrictEqual(both.usage.notesUsed.map((n) => n.title), ['Oak pricing'], 'talk mode and My notes work together');
+  assert.match(both.blocks[both.blocks.length - 3].text, /TALKING to you/);
+});
+
 (async () => {
   await new Promise((r) => setTimeout(r, 4000)); // db.js runs its own schema init on load
   const mk = async (tag) => (await pool.query(`INSERT INTO users (email,"passwordHash") VALUES ($1,'x') RETURNING id`, [`cn-${tag}-${run}@example.test`])).rows[0].id;

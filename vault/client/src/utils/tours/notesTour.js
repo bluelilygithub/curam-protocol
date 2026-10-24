@@ -72,7 +72,7 @@ export function startNotesTour(show = {}) {
     buttons: [btnSecondary('Skip Tour', () => tour.cancel()), { text: 'Start Tour →', action: () => tour.next() }],
   });
 
-  step('notes-new', 2, 'Start a note', 'The + button starts a new note: write one, record your voice (press Start and talk; Change picks how it is written up and whether to keep the audio, and Write up again redoes it another way later), or begin from a template such as Meeting notes or Client call. On a phone, the Record button on the home screen opens the recorder straight away.', '[data-tour="notes-new"]', 'list');
+  step('notes-new', 2, 'Start a note', 'The + button starts a new note: write one, record your voice (press Start and talk; Change picks how it is written up and whether to keep the audio, and Write up again redoes it another way later), or begin from a template such as Meeting notes or Client call. Talk it through is also here: ask out loud, hear the answers, and keep the conversation as a note. On a phone, the Record button on the home screen opens the recorder straight away.', '[data-tour="notes-new"]', 'list');
   step('notes-search', 3, 'Search', 'Finds notes by words in the title or text, and by the name of a project, client or tag.', '[data-tour="notes-search"]', 'list');
   step('notes-views', 4, 'Saved views', 'Set up a search, dates, tags and grouping you use often, then save it here under a name. One tap brings it all back.', '[data-tour="notes-views"]', 'list');
   step('notes-filters', 5, 'Filters', 'Filter by date range, reminders, tags, project or client. The number on the button shows how many are on.', '[data-tour="notes-filters"]', 'list');

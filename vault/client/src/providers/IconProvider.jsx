@@ -9,6 +9,7 @@ const semanticMap = {
   search: { lucide: 'Search' },
   settings: { lucide: 'Settings' },
   mic: { lucide: 'Mic' },
+  'volume-2': { lucide: 'Volume2' },
   speaker: { lucide: 'Volume2' },
   download: { lucide: 'Download' },
   x: { lucide: 'X' },

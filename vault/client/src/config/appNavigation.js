@@ -7,6 +7,7 @@ export const APP_NAV_GROUPS = [
     items: [
       // Notes leads the workspace: where things are written down first, then filed, searched, and worked on in Chat.
       { id: 'notes', label: 'Notes', path: '/notes', icon: 'pen-line', featureKey: null },
+      { id: 'talk', label: 'Talk', path: '/talk', icon: 'mic', featureKey: null },
       { id: 'memory', label: 'Memory', path: '/memory', icon: 'brain', featureKey: 'memory' },
       { id: 'guide', label: 'User Guide', path: '/guide', icon: 'help-circle', featureKey: null },
       { id: 'showcase', label: 'Client Showcase', path: 'https://claude.ai/artifact/STxyMcZUUHCVBZniFbxhtP', icon: 'external-link', featureKey: null, external: true },

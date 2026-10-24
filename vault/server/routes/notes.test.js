@@ -655,6 +655,56 @@ test('auto-filing: a suggested project and client chosen only from the person\'s
   }
 });
 
+test('a finished conversation becomes a note proposal: summary, to-dos as tick-boxes, the whole exchange; only your own conversation; nothing is saved', async () => {
+  const crypto = require('crypto');
+  const q = async (sql, p) => (await pool.query(sql, p)).rows;
+  const callModelMod = require('../services/callModel');
+  const resolver = require('../services/modelResolver');
+  const was = { call: callModelMod.callModel, get: resolver.getModelsForUser };
+  let fail = false;
+  callModelMod.callModel = async (model) => {
+    if (fail) throw new Error('model down');
+    return { text: JSON.stringify({ title: 'Pricing the oak', summary: 'Talked about oak benchtop pricing.', decisions: ['Quote $120 a metre'], todos: ['Call Sam tomorrow'] }), model, inputTokens: 1, outputTokens: 1 };
+  };
+  resolver.getModelsForUser = async () => ({ light: 'stub-model' });
+  const sid = crypto.randomUUID();
+  const lone = crypto.randomUUID();
+  try {
+    await pool.query('INSERT INTO sessions ("sessionId","userId",title) VALUES ($1,$2,$3), ($4,$2,$5)', [sid, userA, 'Talk', lone, 'One message only']);
+    const add = (id, role, content, sec) => pool.query(`INSERT INTO messages ("sessionId", role, content, "createdAt") VALUES ($1,$2,$3, NOW() + ($4 || ' seconds')::interval)`, [id, role, content, String(sec)]);
+    await add(sid, 'user', 'What should I charge for the oak benchtop?', 0);
+    await add(sid, 'assistant', 'About one hundred and twenty dollars a metre installed.', 1);
+    await add(sid, 'user', 'OK I will quote that and call Sam tomorrow.', 2);
+    await add(lone, 'user', 'Hello?', 0);
+    const notesBefore = Number((await q('SELECT COUNT(*) FROM notes WHERE user_id=$1', [userA]))[0].count);
+
+    const r = await call('POST', '/api/notes/from-conversation', { sessionId: sid });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+    assert.deepStrictEqual({ title: r.json.title, summarised: r.json.summarised, todos: r.json.todos, count: r.json.count }, { title: 'Pricing the oak', summarised: true, todos: ['Call Sam tomorrow'], count: 3 });
+    assert.ok(r.json.body.startsWith('Summary:\nTalked about oak benchtop pricing.'));
+    assert.ok(r.json.body.includes('- [ ] Call Sam tomorrow'), 'to-dos are tick-boxes, so Make tasks can see them');
+    assert.ok(r.json.body.includes('— Conversation —\n**You:**\nWhat should I charge'), 'the whole exchange follows');
+    assert.strictEqual(Number((await q('SELECT COUNT(*) FROM notes WHERE user_id=$1', [userA]))[0].count), notesBefore, 'it only proposes: nothing was saved');
+
+    fail = true;
+    const down = await call('POST', '/api/notes/from-conversation', { sessionId: sid });
+    assert.strictEqual(down.status, 200);
+    assert.strictEqual(down.json.summarised, false, 'a failed summary still gives the exchange');
+    assert.ok(down.json.body.startsWith('— Conversation —'));
+    fail = false;
+
+    assert.strictEqual((await call('POST', '/api/notes/from-conversation', { sessionId: sid }, 'B')).status, 404, "someone else's conversation");
+    assert.strictEqual((await call('POST', '/api/notes/from-conversation', { sessionId: crypto.randomUUID() })).status, 404);
+    assert.strictEqual((await call('POST', '/api/notes/from-conversation', { sessionId: lone })).status, 400, 'nothing to write up yet');
+    assert.strictEqual((await call('POST', '/api/notes/from-conversation', {})).status, 400);
+  } finally {
+    callModelMod.callModel = was.call;
+    resolver.getModelsForUser = was.get;
+    await pool.query('DELETE FROM messages WHERE "sessionId" = ANY($1::text[])', [[sid, lone]]);
+    await pool.query('DELETE FROM sessions WHERE "sessionId" = ANY($1::text[])', [[sid, lone]]);
+  }
+});
+
 test('saved views: save, list, rename, replace filters, delete to the bin and restore; names, limits and ownership', async () => {
   const filters = { search: ' quote ', preset: '30d', field: 'created', projectId: String(projectA), clientId: String(clientA), tags: ['#Budget', 'budget'], groupMode: 'tag', evil: '<script>' };
   const made = await call('POST', '/api/notes/views', { name: '  Acme   last month ', filters });

@@ -4,6 +4,7 @@
 
 export const NOTES_TOOLS = [
   { id: 'new-note', label: 'New note', open: 'chooser' },
+  { id: 'talk', label: 'Talk it through', open: 'chooser' },
   { id: 'new-voice-note', label: 'New voice note', open: 'recorder' },
   { id: 'search', label: 'Search notes', open: 'search' },
   { id: 'group-notes', label: 'Group notes', open: 'list' },

@@ -26,6 +26,7 @@ export function useChat({ projectId, studentCards = false }) {
     inlineImages = [],
     webSearch = true,
     useNotes = false,
+    voiceMode = false,
   ) => {
     setStreamError(null);
     setIsSearching(false);
@@ -60,6 +61,7 @@ export function useChat({ projectId, studentCards = false }) {
         reasoning: reasoning || undefined,
         webSearch: studentCards ? false : webSearch,
         ...(useNotes && !studentCards ? { useNotes: true } : {}),
+        ...(voiceMode && !studentCards ? { voiceMode: true } : {}), // Talk it through: the reply is asked for as speech
         userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         ...(studentCards ? { studentCards: true } : {}),
       }, controller.signal);
