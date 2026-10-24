@@ -9,6 +9,7 @@
 //   detour: A to B but about X km (longer than the direct route). No service does this in one call, so a "via" point is placed off to one
 //           side of the A-B line and moved in or out until the route A -> via -> B is about X km. Three shapes are tried (left, right and a
 //           lopsided one), each corrected once if it misses by more than 8%, and the results come back closest-to-target first.
+//   multi:  one route through a start, up to eight stops and an end, with turn-by-turn directions
 //   leg:    one route between two points, for the "Follow roads" switch in Click mode: each click asks for the road or path from the last click
 //   - answers are cached for an hour and cache hits cost no quota
 //   - per-user limits (calls a minute, calls a day) and a global per-minute cap, because the free key is shared by everyone; a call is one
@@ -36,6 +37,10 @@ const DETOUR_TOLERANCE = 0.08;
 // the shapes tried, per round: [side (+1 left of A to B, -1 right), how far along A to B the via point sits]
 const DETOUR_SHAPES = [[[1, 0.5], [-1, 0.5], [1, 0.3]], [[1, 0.7], [-1, 0.7], [-1, 0.3]], [[1, 0.4], [-1, 0.4], [1, 0.6]]];
 const LEG_MIN_M = 5; // two clicks closer than this are the same place: no call, the segment is just the two points
+const STEPS_MAX = 400; // directions kept per route
+const STEP_TEXT_MAX = 160;
+const MULTI_MIN_POINTS = 2;
+const MULTI_MAX_POINTS = 10; // start + up to 8 stops + end
 const TIMEOUT_MS = 30000; // the public routing service is sometimes slow: waiting is better than a failed plan (the page shows a "working" card meanwhile)
 const LOOP_TIMEOUT_MS = 30000;
 const LEG_TIMEOUT_MS = 15000; // one click of Follow roads: a person is waiting for the line to appear
@@ -120,6 +125,22 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
     return new PlanError(422, 'The route planner could not plan that route.');
   }
 
+  /** The turn-by-turn steps of a route, each with the point on the map where it happens (the browser may thin the line, so a place, not an index). */
+  function toSteps(feature, coordinates) {
+    const out = [];
+    const segs = feature && feature.properties && Array.isArray(feature.properties.segments) ? feature.properties.segments : [];
+    for (const seg of segs) {
+      for (const st of Array.isArray(seg.steps) ? seg.steps : []) {
+        const text = typeof st.instruction === 'string' ? st.instruction.replace(/\s+/g, ' ').trim().slice(0, STEP_TEXT_MAX) : '';
+        const idx = Array.isArray(st.way_points) ? Number(st.way_points[0]) : NaN;
+        const pos = coordinates[idx];
+        if (!text || !pos || out.length >= STEPS_MAX) continue;
+        out.push({ text, distanceM: Math.max(0, Math.round(Number(st.distance) || 0)), durationS: Number.isFinite(Number(st.duration)) ? Math.round(Number(st.duration)) : null, type: Number.isInteger(st.type) ? st.type : null, pos: [round5(pos[0]), round5(pos[1])] });
+      }
+    }
+    return out;
+  }
+
   function toRoutes(json) {
     const features = json && Array.isArray(json.features) ? json.features : [];
     const routes = [];
@@ -133,6 +154,7 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
         distanceM: s && Number.isFinite(Number(s.distance)) ? Number(s.distance) : geo.distanceM([coordinates]),
         durationS: s && Number.isFinite(Number(s.duration)) ? Number(s.duration) : null,
         coordinates,
+        steps: toSteps(f, coordinates),
       });
     }
     return routes.slice(0, 3);
@@ -152,11 +174,12 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
   }
 
   /** A route through the given points (2 or 3), plain errors thrown. `alternatives` only for exactly two points under about 100 km. */
-  async function route(key, profile, points, alternatives, timeoutMs = TIMEOUT_MS) {
+  async function route(key, profile, points, alternatives, timeoutMs = TIMEOUT_MS, directions = true) {
     let alt = alternatives;
     for (;;) {
       try {
-        const body = { coordinates: points, instructions: false, elevation: false };
+        const body = { coordinates: points, instructions: directions, elevation: false };
+        if (directions) Object.assign(body, { instruction_format: 'text', language: 'en', units: 'm' });
         if (alt) body.alternative_routes = { target_count: 3, weight_factor: 1.6, share_factor: 0.6 };
         return toRoutes(await post(key, profile, body, timeoutMs));
       } catch (err) {
@@ -194,7 +217,7 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
     let retried = false;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
-        const body = { coordinates: [from], instructions: false, elevation: false, options: { [roundTripKey]: { length: Math.round(lengthM), points: LOOP_POINTS, seed } } };
+        const body = { coordinates: [from], instructions: true, instruction_format: 'text', language: 'en', units: 'm', elevation: false, options: { [roundTripKey]: { length: Math.round(lengthM), points: LOOP_POINTS, seed } } };
         const json = await post(key, profile, body, LOOP_TIMEOUT_MS);
         const r = toRoutes(json)[0];
         if (!r) throw Object.assign(new Error('upstream'), { upstream: { status: 404, code: 2009, message: '' } });
@@ -283,8 +306,32 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
     const hit = fromCache(ck);
     if (hit) return hit;
     limit(userId, 1);
-    const r = (await route(key, profile, [from, to], false, LEG_TIMEOUT_MS))[0];
+    const r = (await route(key, profile, [from, to], false, LEG_TIMEOUT_MS, false))[0];
     if (!r) throw new PlanError(422, 'No route could be found between those points for this way of travelling.');
+    const value = { route: r, attribution: ATTRIBUTION };
+    remember(ck, value);
+    return { ...value, cached: false };
+  }
+
+  /**
+   * { points: [[lng, lat], ...] (start, up to 8 stops, end), profile } -> { route, attribution }: one route that visits the points in order.
+   * One call to the service however many stops there are (no alternatives: the service only offers those between two points).
+   */
+  async function multi(userId, { points, profile }) {
+    const key = checkKey(profile);
+    if (!Array.isArray(points) || points.length < MULTI_MIN_POINTS || points.length > MULTI_MAX_POINTS) {
+      throw new PlanError(400, `Choose a start, an end and up to ${MULTI_MAX_POINTS - 2} stops in between.`);
+    }
+    if (!points.every(validPos)) throw new PlanError(400, 'Every stop must be a [longitude, latitude] point on the map.');
+    for (let i = 1; i < points.length; i += 1) {
+      if (geo.distanceM([[points[i - 1], points[i]]]) < MIN_M) throw new PlanError(422, 'Two stops next to each other are almost the same place. Move one of them.');
+    }
+    const ck = `multi|${profile}|${points.map((p) => `${round5(p[0])},${round5(p[1])}`).join('|')}`;
+    const hit = fromCache(ck);
+    if (hit) return hit;
+    limit(userId, 1);
+    const r = (await route(key, profile, points, false))[0];
+    if (!r) throw new PlanError(422, 'No route could be found through those stops for this way of travelling.');
     const value = { route: r, attribution: ATTRIBUTION };
     remember(ck, value);
     return { ...value, cached: false };
@@ -431,7 +478,7 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
     return { ok: route.ok, keySet: true, ms: route.ms, route, site, control, summary };
   }
 
-  return { plan, loops, detour, leg, diagnose };
+  return { plan, loops, detour, leg, multi, diagnose };
 }
 
-module.exports = { createPlanner, PlanError, PROFILES, ATTRIBUTION, ALTERNATIVES_MAX_M, LOOP_MIN_KM, LOOP_MAX_KM, DETOUR_MIN_KM, DETOUR_MAX_KM };
+module.exports = { createPlanner, PlanError, PROFILES, ATTRIBUTION, MULTI_MAX_POINTS, ALTERNATIVES_MAX_M, LOOP_MIN_KM, LOOP_MAX_KM, DETOUR_MIN_KM, DETOUR_MAX_KM };

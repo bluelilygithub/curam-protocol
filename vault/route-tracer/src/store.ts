@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { closeLoop as closeLoopFn, deleteVertex, emptyDraw, outAndBack as outAndBackFn, snapDelete, type Shaped, type DrawMode, type DrawState, type VertexRef } from './drawing';
-import type { Pos, Units } from './geo';
-import type { PlanProfile, Track, TrackSummary } from './api';
+import type { Lines, Pos, Units } from './geo';
+import type { Cue, PlanProfile, Track, TrackSummary } from './api';
 
 export const STYLES = [
   { id: 'streets-v2', label: 'Streets' },
@@ -17,7 +17,7 @@ const write = (key: string, v: string): void => { try { localStorage.setItem(key
 
 export interface Probe { pos: Pos; km: number; totalKm: number; name: string; color: string; several: boolean; /** Terrain height at the spot, metres (set from the elevation chart). */ ele?: number | null }
 
-export interface Toast { id: number; kind: 'ok' | 'error'; text: string }
+export interface Toast { id: number; kind: 'ok' | 'error'; text: string; /** A button on the toast, such as Undo. */ action?: { label: string; onClick: () => void } }
 let toastSeq = 0;
 
 interface State {
@@ -72,6 +72,9 @@ interface State {
   /** The route in the drawing tools came from Plan route: it is saved as a planned route. */
   planned: boolean;
   setPlanned(v: boolean): void;
+  /** The turn-by-turn directions of the planned route in the drawing tools, with the line they belong to; saved only while the line is unchanged. */
+  plannedCues: { cues: Cue[]; lines: Lines } | null;
+  setPlannedCues(v: { cues: Cue[]; lines: Lines } | null): void;
   /** The server has an OpenRouteService key (Plan route works). */
   routePlanning: boolean;
   setRoutePlanning(v: boolean): void;
@@ -106,7 +109,7 @@ interface State {
   setShowAll(v: boolean): void;
 
   toasts: Toast[];
-  toast(kind: Toast['kind'], text: string, ms?: number): void;
+  toast(kind: Toast['kind'], text: string, ms?: number, action?: Toast['action']): void;
   dismissToast(id: number): void;
 }
 
@@ -158,7 +161,7 @@ export const useStore = create<State>((set, get) => {
   setRubber: (rubber) => set({ rubber }),
   apply: (fn) => set((s) => ({ draw: fn(s.draw) })),
   startDrawing: (from) => set({ probe: null, drawing: true, draw: from ?? emptyDraw(), rubber: null, selectedVertex: null, panel: 'closed' }),
-  stopDrawing: () => set({ elevationOpen: false, planned: false, imported: null, mode: get().mode === 'edit' ? (read('route-tracer:mode') === 'click' ? 'click' : 'freehand') : get().mode, drawing: false, draw: emptyDraw(), rubber: null, selectedVertex: null, extendingId: null, saving: false, drawColor: COLORS[0] }),
+  stopDrawing: () => set({ elevationOpen: false, planned: false, plannedCues: null, imported: null, mode: get().mode === 'edit' ? (read('route-tracer:mode') === 'click' ? 'click' : 'freehand') : get().mode, drawing: false, draw: emptyDraw(), rubber: null, selectedVertex: null, extendingId: null, saving: false, drawColor: COLORS[0] }),
   extendingId: null,
   drawColor: COLORS[0],
   setDrawColor: (drawColor) => set({ drawColor }),
@@ -175,6 +178,8 @@ export const useStore = create<State>((set, get) => {
   setExtendingId: (extendingId) => set({ extendingId }),
   planned: false,
   setPlanned: (planned) => set({ planned }),
+  plannedCues: null,
+  setPlannedCues: (plannedCues) => set({ plannedCues }),
   routePlanning: false,
   setRoutePlanning: (routePlanning) => set({ routePlanning }),
   isAdmin: false,
@@ -185,10 +190,10 @@ export const useStore = create<State>((set, get) => {
   setImported: (imported) => set({ imported }),
 
   toasts: [],
-  toast: (kind, text, ms = 3000) => {
+  toast: (kind, text, ms, action) => {
     const id = ++toastSeq;
-    set({ toasts: [...get().toasts, { id, kind, text }] });
-    setTimeout(() => get().dismissToast(id), ms);
+    set({ toasts: [...get().toasts, { id, kind, text, action }] });
+    setTimeout(() => get().dismissToast(id), ms ?? (action ? 10000 : 3000));
   },
   dismissToast: (id) => set({ toasts: get().toasts.filter((t) => t.id !== id) }),
 };

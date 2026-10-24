@@ -1,8 +1,8 @@
-import { ArrowRight, ArrowUpDown, Bike, Car, ChevronLeft, Footprints, Mountain, Search } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, Bike, Car, ChevronLeft, Footprints, Mountain, Plus, Search, X } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
 import { useEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
-import { api, ApiError, type GeocodeResult, type PlannedRoute, type PlanProfile } from './api';
+import { api, ApiError, type Cue, type GeocodeResult, type PlannedRoute, type PlanProfile } from './api';
 import { fromLines } from './drawing';
 import { bboxOf, formatDistance, nearestOnLines, type Pos } from './geo';
 import { fitToLimit } from './gpx';
@@ -12,6 +12,7 @@ import { Field, Mic } from './Mic';
 import { MIN_LETTERS, suggestPlaces } from './placeSearch';
 import { tidySpoken } from './voice';
 import { parseSpokenNumber } from '@vault-client/utils/units/numbers.mjs';
+import { DirectionsList } from './Directions';
 import { useStore } from './store';
 
 export const PLAN_COLORS = ['#E4572E', '#1D6FA5', '#2E7D32'];
@@ -27,6 +28,7 @@ export const LOOP_MIN_KM = 1;
 export const LOOP_MAX_KM = 50;
 export const DETOUR_MIN_KM = 1;
 export const DETOUR_MAX_KM = 100;
+export const MAX_STOPS = 8; // between A and B; the server takes ten points in all
 const KM_PER_MI = 1.609344;
 const TAP_PX = 22;
 
@@ -53,6 +55,17 @@ interface PlanState {
   round: number;
   /** The length of the direct route A to B (detours), when known. */
   directM: number | null;
+  /** A to B only: stops to pass through between A and B, in order (at most MAX_STOPS), with their place names (null while being looked up). */
+  vias: Pos[];
+  viaNames: (string | null)[];
+  /** The next tap on the map adds a stop. */
+  addingStop: boolean;
+  startAddStop(): void;
+  addVia(p: Pos, name?: string | null): void;
+  setVia(i: number, p: Pos, name?: string | null): void;
+  nameVia(i: number, p: Pos, name: string): void;
+  removeVia(i: number): void;
+  moveVia(i: number, by: -1 | 1): void;
   setKind(k: PlanKind): void;
   setLengthKm(km: number): void;
   setDetourKm(km: number | null): void;
@@ -84,8 +97,8 @@ interface PlanState {
   setError(e: string | null, directM?: number | null): void;
 }
 
-const blank = { from: null, to: null, fromName: null as string | null, toName: null as string | null, busy: false, error: null, routes: [] as PlannedRoute[], selected: 0, attribution: null, round: 0, directM: null as number | null };
-const fresh = { routes: [] as PlannedRoute[], error: null, selected: 0, round: 0, directM: null as number | null };
+const blank = { vias: [] as Pos[], viaNames: [] as (string | null)[], addingStop: false, from: null, to: null, fromName: null as string | null, toName: null as string | null, busy: false, error: null, routes: [] as PlannedRoute[], selected: 0, attribution: null, round: 0, directM: null as number | null };
+const fresh = { addingStop: false, routes: [] as PlannedRoute[], error: null, selected: 0, round: 0, directM: null as number | null };
 
 /** Plan route mode: points, a way of travelling, and up to three routes along real roads and paths. */
 export const usePlan = create<PlanState>((set, get) => ({
@@ -93,7 +106,7 @@ export const usePlan = create<PlanState>((set, get) => ({
   lengthKm: savedLoopKm(),
   detourKm: null,
   // A loop has no end, so switching to one drops B; A to B and a longer A to B share both points
-  setKind: (kind) => { if (kind !== get().kind) set({ kind, ...(kind === 'loop' ? { to: null } : {}), ...fresh }); }, // choosing what is already chosen changes nothing
+  setKind: (kind) => { if (kind !== get().kind) set({ kind, ...(kind === 'loop' ? { to: null } : {}), ...(kind !== 'direct' ? { vias: [], viaNames: [] } : {}), ...fresh }); }, // choosing what is already chosen changes nothing; stops only belong to A to B
   setLengthKm: (lengthKm) => { if (lengthKm === get().lengthKm) return; try { localStorage.setItem(LOOP_KEY, String(lengthKm)); } catch { /* private window */ } set({ lengthKm, ...fresh }); },
   setDetourKm: (detourKm) => { if (detourKm === get().detourKm) return; set({ detourKm, ...fresh }); },
   moreLoops: () => set({ round: get().round + 1, routes: [], error: null, selected: 0 }),
@@ -107,7 +120,19 @@ export const usePlan = create<PlanState>((set, get) => ({
   setTo: (to, name = null) => set({ to, toName: name, ...fresh }),
   nameFor: (which, p, name) => { const st = get(); if ((which === 'from' ? st.from : st.to) === p) set(which === 'from' ? { fromName: name } : { toName: name }); },
   setProfile: (profile) => { try { localStorage.setItem(PROFILE_KEY, profile); } catch { /* private window */ } set({ profile, ...fresh }); },
-  swap: () => { const { from, to, fromName, toName } = get(); set({ from: to, to: from, fromName: toName, toName: fromName, ...fresh }); },
+  swap: () => { const { from, to, fromName, toName, vias, viaNames } = get(); set({ from: to, to: from, fromName: toName, toName: fromName, vias: [...vias].reverse(), viaNames: [...viaNames].reverse(), ...fresh }); },
+  startAddStop: () => { const st = get(); if (st.kind === 'direct' && st.from && st.to && st.vias.length < MAX_STOPS) set({ addingStop: true }); },
+  addVia: (p, name = null) => { const st = get(); if (st.vias.length >= MAX_STOPS) return; set({ vias: [...st.vias, p], viaNames: [...st.viaNames, name], ...fresh }); },
+  setVia: (i, p, name = null) => { const st = get(); if (i < 0 || i >= st.vias.length) return; set({ vias: st.vias.map((v, k) => (k === i ? p : v)), viaNames: st.viaNames.map((n, k) => (k === i ? name : n)), ...fresh }); },
+  nameVia: (i, p, name) => { const st = get(); if (st.vias[i] === p) set({ viaNames: st.viaNames.map((n, k) => (k === i ? name : n)) }); },
+  removeVia: (i) => { const st = get(); set({ vias: st.vias.filter((_, k) => k !== i), viaNames: st.viaNames.filter((_, k) => k !== i), ...fresh }); },
+  moveVia: (i, by) => {
+    const st = get(); const j = i + by;
+    if (j < 0 || j >= st.vias.length) return;
+    const vias = [...st.vias]; const names = [...st.viaNames];
+    [vias[i], vias[j]] = [vias[j], vias[i]]; [names[i], names[j]] = [names[j], names[i]];
+    set({ vias, viaNames: names, ...fresh });
+  },
   reset: () => set({ ...blank }),
   select: (selected) => set({ selected }),
   setResult: (routes, attribution, directM = null) => set({ routes, attribution, directM, selected: 0, busy: false, error: null }),
@@ -164,7 +189,11 @@ export function usePlanning(map: maplibregl.Map | null): void {
   const round = usePlan((s) => s.round);
   const routes = usePlan((s) => s.routes);
   const selected = usePlan((s) => s.selected);
+  const vias = usePlan((s) => s.vias);
+  const viaNames = usePlan((s) => s.viaNames);
+  const addingStop = usePlan((s) => s.addingStop);
   const markers = useRef<{ a?: maplibregl.Marker; b?: maplibregl.Marker }>({});
+  const viaMarkers = useRef<maplibregl.Marker[]>([]);
   const req = useRef(0);
   const fitted = useRef(false); // the map is fitted to the routes once per plan: not again when a pin is dragged (the map would jump under the pointer)
 
@@ -179,6 +208,7 @@ export function usePlanning(map: maplibregl.Map | null): void {
       const pos: Pos = [e.lngLat.lng, e.lngLat.lat];
       if (!st.from) return st.setFrom(pos);
       if (st.kind !== 'loop' && !st.to) return st.setTo(pos);
+      if (st.addingStop) return st.addVia(pos); // the Add a stop button was pressed: this tap is the stop
       let best = -1;
       let bestPx = TAP_PX;
       st.routes.forEach((r, i) => {
@@ -215,7 +245,50 @@ export function usePlanning(map: maplibregl.Map | null): void {
     sync('b', to);
     return undefined;
   }, [map, active, from, to]);
-  useEffect(() => () => { markers.current.a?.remove(); markers.current.b?.remove(); markers.current = {}; }, []);
+  useEffect(() => () => { markers.current.a?.remove(); markers.current.b?.remove(); markers.current = {}; viaMarkers.current.forEach((m) => m.remove()); viaMarkers.current = []; }, []);
+
+  // numbered pins for the stops between A and B (draggable like A and B: dropping one asks for the route again)
+  useEffect(() => {
+    if (!map) return;
+    viaMarkers.current.forEach((m) => m.remove());
+    viaMarkers.current = [];
+    if (!active) return;
+    vias.forEach((pos, i) => {
+      const el = document.createElement('div');
+      el.className = 'plan-pin plan-pin-via';
+      el.textContent = String(i + 1);
+      el.title = `Stop ${i + 1}. Drag to move it.`;
+      el.addEventListener('click', (e) => e.stopPropagation());
+      el.addEventListener('pointerdown', () => {
+        map.dragPan.disable();
+        const up = (): void => { map.dragPan.enable(); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up); };
+        window.addEventListener('pointerup', up);
+        window.addEventListener('pointercancel', up);
+      });
+      const m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat(pos).addTo(map);
+      m.on('dragend', () => { const ll = m.getLngLat(); usePlan.getState().setVia(i, [ll.lng, ll.lat]); });
+      viaMarkers.current.push(m);
+    });
+  }, [map, active, vias]);
+
+  // the cursor says a tap will add a stop
+  useEffect(() => {
+    if (!map || !active || !addingStop) return undefined;
+    const el = map.getCanvasContainer();
+    el.classList.add('adding-stop');
+    return () => el.classList.remove('adding-stop');
+  }, [map, active, addingStop]);
+
+  // the name of each stop that was tapped or dragged to: one lookup per point (nameVia ignores an answer for a point that has since moved on)
+  const asked = useRef(new WeakSet<Pos>());
+  useEffect(() => {
+    if (!active) return;
+    vias.forEach((p, i) => {
+      if (viaNames[i] !== null || asked.current.has(p)) return;
+      asked.current.add(p);
+      api.reverse(p[1], p[0]).then((r) => usePlan.getState().nameVia(i, p, r.result?.label ?? coordLabel(p))).catch(() => usePlan.getState().nameVia(i, p, coordLabel(p)));
+    });
+  }, [active, vias, viaNames]);
 
   // the name of a place that was tapped or dragged to: one deliberate lookup each (the server spaces them), the coordinates if there is no name
   useEffect(() => {
@@ -245,7 +318,8 @@ export function usePlanning(map: maplibregl.Map | null): void {
     const t = setTimeout(() => {
       const ask: Promise<{ routes: PlannedRoute[]; attribution: string; directM?: number }> = kind === 'loop' ? api.loop({ from, lengthKm, profile, round })
         : kind === 'detour' ? api.detour({ from, to: to as Pos, profile, lengthKm: detourKm ?? undefined, round })
-          : api.plan({ from, to: to as Pos, profile });
+          : vias.length ? api.multi({ points: [from, ...vias, to as Pos], profile }).then((r) => ({ routes: [r.route], attribution: r.attribution }))
+            : api.plan({ from, to: to as Pos, profile });
       ask
         .then((r) => {
           if (id !== req.current) return;
@@ -264,7 +338,7 @@ export function usePlanning(map: maplibregl.Map | null): void {
         });
     }, kind === 'direct' ? 250 : 500); // a length is typed, so wait for the typing to stop
     return () => { clearTimeout(t); };
-  }, [map, active, kind, from, to, profile, lengthKm, detourKm, round]);
+  }, [map, active, kind, from, to, vias, profile, lengthKm, detourKm, round]);
 
   // the routes on the map; the chosen one is thick and solid, the others thin and faded
   useEffect(() => {
@@ -282,9 +356,9 @@ const TYPE_PAUSE_MS = 300; // suggestions are asked for once typing pauses this 
  * away; the arrow keys and Enter pick a suggestion, Escape closes the list. An answer to an older keystroke is never shown over a newer one.
  * If MapTiler cannot answer, Enter falls back to Vault's own private place search. Tapping the map or dragging a pin fills in the name.
  */
-function PlaceRow({ which, map }: { which: 'from' | 'to'; map: maplibregl.Map | null }) {
-  const point = usePlan((s) => (which === 'from' ? s.from : s.to));
-  const name = usePlan((s) => (which === 'from' ? s.fromName : s.toName));
+function PlaceRow({ which, map }: { which: 'from' | 'to' | number; map: maplibregl.Map | null }) {
+  const point = usePlan((s) => (which === 'from' ? s.from : which === 'to' ? s.to : s.vias[which] ?? null));
+  const name = usePlan((s) => (which === 'from' ? s.fromName : which === 'to' ? s.toName : s.viaNames[which] ?? null));
   const mapKey = useStore((s) => s.mapKey);
   const [text, setText] = useState('');
   const [results, setResults] = useState<GeocodeResult[]>([]);
@@ -296,7 +370,9 @@ function PlaceRow({ which, map }: { which: 'from' | 'to'; map: maplibregl.Map | 
   const timer = useRef<number | undefined>(undefined);
   const ctl = useRef<AbortController | null>(null);
   const seq = useRef(0);
-  const label = which === 'from' ? 'A' : 'B';
+  const isStop = typeof which === 'number';
+  const label = which === 'from' ? 'A' : which === 'to' ? 'B' : String(which + 1);
+  const what = which === 'from' ? 'start' : which === 'to' ? 'end' : `stop ${label}`;
   const shown = point ? (name ?? 'Finding the place…') : '';
   useEffect(() => { if (!typing.current) setText(shown); }, [shown]);
   useEffect(() => () => { window.clearTimeout(timer.current); ctl.current?.abort(); }, []);
@@ -347,7 +423,7 @@ function PlaceRow({ which, map }: { which: 'from' | 'to'; map: maplibregl.Map | 
     setText(r.label); // even if this is the place the field already had, the typed words give way to its name
     setResults([]); setNote(''); setActive(-1);
     const p: Pos = [r.lng, r.lat];
-    if (which === 'from') usePlan.getState().setFrom(p, r.label); else usePlan.getState().setTo(p, r.label);
+    if (which === 'from') usePlan.getState().setFrom(p, r.label); else if (which === 'to') usePlan.getState().setTo(p, r.label); else usePlan.getState().setVia(which, p, r.label);
     map?.flyTo({ center: p, zoom: Math.max(map.getZoom(), 14) });
   }
   function onKey(e: React.KeyboardEvent<HTMLInputElement>): void {
@@ -358,16 +434,16 @@ function PlaceRow({ which, map }: { which: 'from' | 'to'; map: maplibregl.Map | 
   const open = results.length > 0 || !!note || (busy && text.trim().length >= MIN_LETTERS);
   return (
     <form className="field-row" onSubmit={search}>
-      <span className={`field-dot ${which}`} aria-hidden="true">{label}</span>
+      <span className={`field-dot ${isStop ? 'via' : which}`} aria-hidden="true">{label}</span>
       <span className="vwrap">
         <input
-          aria-label={which === 'from' ? 'Start (A)' : 'End (B)'} value={text} placeholder={which === 'from' ? 'Search a place, or tap the map' : 'Search a place, or tap the map again'}
+          aria-label={which === 'from' ? 'Start (A)' : which === 'to' ? 'End (B)' : `Stop ${label}`} value={text} placeholder={which === 'from' ? 'Search a place, or tap the map' : which === 'to' ? 'Search a place, or tap the map again' : 'Search a place for this stop'}
           autoComplete="off" aria-autocomplete="list" aria-expanded={open}
           onChange={(e) => typed(e.target.value)} onKeyDown={onKey}
           onBlur={() => { typing.current = false; stop(); setText(shown); setResults([]); setNote(''); }}
-          title={which === 'from' ? 'The start (A). Start typing a place and pick a suggestion (arrow keys and Enter work), or tap the map. You can also drag the A pin.' : 'The end (B). Start typing a place and pick a suggestion (arrow keys and Enter work), or tap the map. You can also drag the B pin.'}
+          title={which === 'from' ? 'The start (A). Start typing a place and pick a suggestion (arrow keys and Enter work), or tap the map. You can also drag the A pin.' : which === 'to' ? 'The end (B). Start typing a place and pick a suggestion (arrow keys and Enter work), or tap the map. You can also drag the B pin.' : `Stop ${label}, on the way from A to B. Start typing a place and pick a suggestion, or drag its pin on the map.`}
         />
-        <Mic label={`Speak the ${which === 'from' ? 'start' : 'end'} place`} onText={(t) => { typing.current = true; setText(t); }} onDone={(t) => { const w = tidySpoken(t); typing.current = true; setText(w); stop(); if (w.length < MIN_LETTERS) { setNote('Say at least 3 letters of a place name.'); return; } void ask(w, true); }} />
+        <Mic label={`Speak the ${what} place`} onText={(t) => { typing.current = true; setText(t); }} onDone={(t) => { const w = tidySpoken(t); typing.current = true; setText(w); stop(); if (w.length < MIN_LETTERS) { setNote('Say at least 3 letters of a place name.'); return; } void ask(w, true); }} />
       </span>
       <button type="submit" className="field-go" aria-label={`Search for ${label}`} title={`Search for this place now and set ${label} there`}><Search size={16} aria-hidden="true" /></button>
       {open && (
@@ -386,7 +462,7 @@ function PlaceRow({ which, map }: { which: 'from' | 'to'; map: maplibregl.Map | 
 
 /** The sidebar while planning: where from and to, how you are travelling, what kind of route, and the routes found. */
 export function PlanPanel({ map }: { map: maplibregl.Map | null }) {
-  const { active, kind, from, to, profile, busy, error, routes, selected, attribution, lengthKm, detourKm, directM, round, cancel, setKind, setLengthKm, setDetourKm, moreLoops, setProfile, swap, reset, select } = usePlan();
+  const { active, kind, from, to, vias, addingStop, profile, busy, error, routes, selected, attribution, lengthKm, detourKm, directM, round, cancel, setKind, setLengthKm, setDetourKm, moreLoops, setProfile, swap, reset, select, startAddStop, removeVia, moveVia } = usePlan();
   const units = useStore((s) => s.units);
   const unit = units === 'mi' ? 'mi' : 'km';
   const toUnit = (km: number): number => (units === 'mi' ? km / KM_PER_MI : km);
@@ -425,6 +501,7 @@ export function PlanPanel({ map }: { map: maplibregl.Map | null }) {
     s.startDrawing(fromLines(fit.lines));
     s.setMode('edit');
     s.setPlanned(true);
+    s.setPlannedCues(r.steps && r.steps.length ? { cues: r.steps, lines: fit.lines } : null); // saved with the track while the line is left as it is
     cancel();
     const box = bboxOf(fit.lines);
     if (map && box) window.dispatchEvent(new CustomEvent('route-tracer:fit', { detail: box }));
@@ -439,12 +516,12 @@ export function PlanPanel({ map }: { map: maplibregl.Map | null }) {
         : busy ? (loop ? 'Finding loops…' : detour ? 'Finding routes of that length…' : 'Finding routes…')
           : error ? ''
             : directOnly && directM ? `The direct route is ${formatDistance(directM / 1000, units)}. Type how long you want it to be (longer than that) for a detour.`
-              : routes.length ? `Tap a ${word} below, or a line on the map, to choose it.` : '';
+              : routes.length ? (vias.length ? `This ${word} passes through your ${vias.length === 1 ? 'stop' : `${vias.length} stops`} in order. Drag a pin to change it.` : `Tap a ${word} below, or a line on the map, to choose it.`) : '';
   // A to B lists the shortest first (the others in order of length); the map colours and the service's own first choice ("Suggested") stay with each route
   const order = routes.map((_, i) => i);
   if (kind === 'direct' && routes.length > 1) order.sort((a, b) => routes[a].distanceM - routes[b].distanceM);
   const offText = (pct?: number): string => (pct === undefined ? '' : Math.abs(pct) < 1 ? ' (on target)' : ` (${pct > 0 ? '+' : '−'}${Math.abs(Math.round(pct))}%)`);
-  const name = (idx: number, pos: number): string => (loop ? `Loop ${pos + 1}` : detour ? (directOnly ? 'Direct route' : `Route ${pos + 1}`) : routes.length === 1 ? 'Route' : pos === 0 ? 'Shortest' : `Option ${pos + 1}`);
+  const name = (idx: number, pos: number): string => (loop ? `Loop ${pos + 1}` : detour ? (directOnly ? 'Direct route' : `Route ${pos + 1}`) : vias.length ? 'Through your stops' : routes.length === 1 ? 'Route' : pos === 0 ? 'Shortest' : `Option ${pos + 1}`);
   const different = loop ? 'Different loops' : 'Different routes';
   return (
     <section className="side-view" aria-label="Plan a route" data-testid="planbar">
@@ -454,6 +531,16 @@ export function PlanPanel({ map }: { map: maplibregl.Map | null }) {
         <div className="plan-fields" data-tour="rt-fields">
           <div className="plan-fields-rows">
             <PlaceRow which="from" map={map} />
+            {vias.map((_, i) => (
+              <div className="via-row" key={i}>
+                <PlaceRow which={i} map={map} />
+                <span className="via-ctl">
+                  <button type="button" className="icon-btn" onClick={() => moveVia(i, -1)} disabled={i === 0} aria-label={`Move stop ${i + 1} earlier`} title="Visit this stop earlier"><ArrowUp size={14} aria-hidden="true" /></button>
+                  <button type="button" className="icon-btn" onClick={() => moveVia(i, 1)} disabled={i === vias.length - 1} aria-label={`Move stop ${i + 1} later`} title="Visit this stop later"><ArrowDown size={14} aria-hidden="true" /></button>
+                  <button type="button" className="icon-btn" onClick={() => removeVia(i)} aria-label={`Remove stop ${i + 1}`} title="Remove this stop and plan the route again"><X size={14} aria-hidden="true" /></button>
+                </span>
+              </div>
+            ))}
             {!loop && <PlaceRow which="to" map={map} />}
           </div>
           {!loop && <button type="button" className="swap-btn" onClick={swap} disabled={!from || !to} aria-label="Swap A and B" title="Swap the start and the end and plan again"><ArrowUpDown size={18} aria-hidden="true" /></button>}
@@ -468,6 +555,12 @@ export function PlanPanel({ map }: { map: maplibregl.Map | null }) {
           <button type="button" aria-pressed={loop} onClick={() => setKind('loop')} title="Loop: a circular route of about the length you choose, starting and ending at one point">Loop</button>
           <button type="button" aria-pressed={detour} onClick={() => setKind('detour')} title="Longer route: from A to B, but a route of about the length you choose (longer than the direct way), for a longer walk, ride or drive between the same two places">Longer route</button>
         </div>
+        {kind === 'direct' && (
+          <button type="button" className="add-stop" onClick={startAddStop} disabled={!from || !to || vias.length >= MAX_STOPS || busy} aria-pressed={addingStop} data-testid="add-stop"
+            title={vias.length >= MAX_STOPS ? `A route can pass through up to ${MAX_STOPS} stops` : !from || !to ? 'Set A and B first, then add stops to pass through on the way' : 'Pass through another place on the way from A to B: press this, then tap the map where the stop should be'}>
+            <Plus size={16} aria-hidden="true" /> {addingStop ? 'Tap the map for the stop…' : 'Add a stop'}
+          </button>
+        )}
         {hasLength && (
           <Field className="plan-length" label={<>{loop ? 'Length' : 'Length you want'} ({unit})</>}>{(id) => (
             <span className="vwrap">
@@ -504,6 +597,7 @@ export function PlanPanel({ map }: { map: maplibregl.Map | null }) {
                 </li>
               ); })}
             </ul>
+            {routes[selected]?.steps?.length ? <DirectionsList cues={routes[selected].steps as Cue[]} map={map} units={units} /> : null}
           </>
         )}
         {hasLength && <button type="button" onClick={moreLoops} disabled={!from || (detour && (!to || directOnly)) || !lengthOk || busy || round >= 9} title={loop ? 'Ask for different loops of the same length, heading in other directions' : 'Ask for different routes of the same length, bending the other way or at another point'} data-testid="more-loops">{different}</button>}

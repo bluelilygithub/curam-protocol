@@ -4,11 +4,13 @@ import type maplibregl from 'maplibre-gl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type Track, type TrackSummary } from './api';
 import { displayLines, finish, fromLines } from './drawing';
-import { bboxOf, formatDistance, totalKm, type BBox } from './geo';
+import { bboxOf, formatDistance, sameLines, totalKm, type BBox } from './geo';
+import { DirectionsList } from './Directions';
 import { setSaved, type SavedLine } from './mapLayers';
 import { ElevationChart } from './ElevationChart';
 import { ExportPdf } from './ExportPdf';
 import { SendToWatch } from './SendToWatch';
+import { buildCuePdf } from './cuePdf';
 import { fitToLimit } from './gpx';
 import { fitPadding } from './layout';
 import { Field, Mic } from './Mic';
@@ -17,6 +19,25 @@ import { COLORS, useStore } from './store';
 
 const fmtDate = (iso: string): string => new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
 const errText = (e: unknown): string => (e instanceof Error ? e.message : 'That did not work.');
+const TRACKS_CHANGED = 'route-tracer:tracks-changed';
+
+/** After a delete: say so, say it is kept for 30 days, and offer Undo (puts it back from Vault's recycle bin). */
+function offerUndo(text: string, binIds: string[]): void {
+  const { toast } = useStore.getState();
+  if (!binIds.length) { toast('ok', text); return; }
+  toast('ok', `${text} Kept 30 days in the recycle bin.`, 10000, {
+    label: 'Undo',
+    onClick: () => {
+      void (async () => {
+        try {
+          for (const id of binIds) await api.restore(id);
+          toast('ok', 'Restored');
+        } catch { toast('error', 'That could not be restored. Look in Vault Settings → Recycle bin.'); }
+        window.dispatchEvent(new Event(TRACKS_CHANGED));
+      })();
+    },
+  });
+}
 
 /** Fit the map to a track (the sidebar is beside the map on a computer; on a phone it is a sheet over the bottom, and room is left for it). */
 export function fitTo(map: maplibregl.Map, bbox: BBox): void {
@@ -61,6 +82,9 @@ export function SaveDialog({ onSaved }: { onSaved: (t: Track) => void }) {
   const existing = useStore((s) => (s.extendingId ? s.selected : null));
   const imported = useStore((s) => s.imported);
   const planned = useStore((s) => s.planned);
+  const plannedCues = useStore((s) => s.plannedCues);
+  // directions are kept only while the line is still the one they were made for: moved points or new strokes would make them point at the wrong places
+  const cues = plannedCues && sameLines(plannedCues.lines, lines) ? plannedCues.cues : null;
   const [name, setName] = useState(existing?.name ?? imported?.name ?? `Track – ${new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`);
   const [notes, setNotes] = useState(existing?.notes ?? imported?.notes ?? '');
   const [busy, setBusy] = useState(false);
@@ -82,8 +106,8 @@ export function SaveDialog({ onSaved }: { onSaved: (t: Track) => void }) {
     try {
       const geometry = { type: 'MultiLineString' as const, coordinates: lines };
       const track = extendingId
-        ? await api.update(extendingId, { name: name.trim(), notes: notes.trim() || null, color: drawColor, geometry })
-        : await api.create({ name: name.trim(), notes: notes.trim() || null, color: drawColor, geometry, drawMode: imported ? 'import' : planned ? 'route' : mode === 'click' || draw.snap ? 'click' : 'freehand' });
+        ? await api.update(extendingId, { name: name.trim(), notes: notes.trim() || null, color: drawColor, geometry, cues })
+        : await api.create({ name: name.trim(), notes: notes.trim() || null, color: drawColor, geometry, cues, drawMode: imported ? 'import' : planned ? 'route' : mode === 'click' || draw.snap ? 'click' : 'freehand' });
       toast('ok', 'Saved');
       onSaved(track);
     } catch (err) { toast('error', errText(err)); setBusy(false); }
@@ -96,7 +120,7 @@ export function SaveDialog({ onSaved }: { onSaved: (t: Track) => void }) {
         <Field label="Name">{(id) => <span className="vwrap"><input id={id} ref={first} title="A short name for this track, up to 120 characters" value={name} maxLength={120} required onChange={(e) => setName(e.target.value)} /><Mic onText={(t) => setName(t.slice(0, 120))} onDone={(t) => { setName(tidySpoken(t).slice(0, 120)); }} /></span>}</Field>
         <Field label="Notes (optional)">{(id) => <span className="vwrap vwrap-area"><textarea id={id} title="Anything worth remembering about this route: surface, parking, turnaround points" value={notes} maxLength={2000} rows={3} onChange={(e) => setNotes(e.target.value)} /><Mic area label="Speak a note, added to the end" onDone={(t) => { setNotes((n) => `${n.trim() ? `${n.trim()} ` : ''}${t.trim()}`.slice(0, 2000)); }} /></span>}</Field>
         <Swatches value={drawColor} onChange={setDrawColor} />
-        <p className="stats">{formatDistance(km, units)} · {points} points</p>
+        <p className="stats">{formatDistance(km, units)} · {points} points{cues ? ` · ${cues.length} directions` : ''}</p>
         <div className="row">
           <button type="button" onClick={() => setSaving(false)} title="Go back to the drawing without saving (Escape does the same)">Keep drawing</button>
           <button type="submit" className="primary" disabled={busy || !name.trim()} title="Save this track to your Vault account">{busy ? 'Saving…' : 'Save'}</button>
@@ -128,6 +152,8 @@ export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
   const [deleting, setDeleting] = useState(false);
   const sentinel = useRef<HTMLDivElement>(null);
   const reqId = useRef(0);
+  const qRef = useRef(q);
+  qRef.current = q;
 
   const load = useCallback(async (query: string, after: string | null) => {
     const id = ++reqId.current;
@@ -145,6 +171,13 @@ export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
     const t = setTimeout(() => { void load(q, null); }, q ? 300 : 0);
     return () => clearTimeout(t);
   }, [q, load]);
+
+  // a delete was undone (or something else changed the list): ask again
+  useEffect(() => {
+    const again = (): void => { void load(qRef.current, null); };
+    window.addEventListener(TRACKS_CHANGED, again);
+    return () => window.removeEventListener(TRACKS_CHANGED, again);
+  }, [load]);
 
   useEffect(() => {
     const el = sentinel.current;
@@ -174,7 +207,7 @@ export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
       setTracks(useStore.getState().tracks.filter((t) => !gone.has(t.id)));
       if (useStore.getState().selected && gone.has(useStore.getState().selected!.id)) useStore.getState().select(null);
       setPicked(new Set());
-      toast('ok', r.deleted === 1 ? 'Deleted 1 track' : `Deleted ${r.deleted} tracks`);
+      offerUndo(r.deleted === 1 ? 'Deleted 1 track.' : `Deleted ${r.deleted} tracks.`, r.binIds ?? []);
     } catch (e) { toast('error', errText(e)); } finally { setDeleting(false); setConfirming(false); }
   }
 
@@ -195,7 +228,7 @@ export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
             {confirming ? (
               <>
                 <span>Delete {picked.size} {picked.size === 1 ? 'track' : 'tracks'}?</span>
-                <button type="button" className="danger" disabled={deleting} onClick={() => void deletePicked()} title="Yes, delete the ticked tracks for good">Yes</button>
+                <button type="button" className="danger" disabled={deleting} onClick={() => void deletePicked()} title="Yes, delete the ticked tracks. They are kept for 30 days in the recycle bin, so you can undo it.">Yes</button>
                 <button type="button" onClick={() => setConfirming(false)} title="No, keep them">No</button>
               </>
             ) : (
@@ -233,6 +266,7 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
   const [busy, setBusy] = useState(false);
   const [pdfOpen, setPdfOpen] = useState(false);
   const [watchOpen, setWatchOpen] = useState(false);
+  const [cuePdfBusy, setCuePdfBusy] = useState(false);
 
   useEffect(() => { setPdfOpen(false); setWatchOpen(false); setName(track.name); setNotes(track.notes ?? ''); setColor(track.color); setEditing(false); setConfirmDelete(false); }, [track.id, track.updatedAt, track.name, track.notes, track.color]);
 
@@ -244,7 +278,23 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
   }
   async function remove() {
     setBusy(true);
-    try { await api.remove(track.id); toast('ok', 'Deleted'); onGone(); } catch (err) { toast('error', errText(err)); setBusy(false); }
+    try { const r = await api.remove(track.id); offerUndo(`Deleted ${track.name}.`, r?.binId ? [r.binId] : []); onGone(); } catch (err) { toast('error', errText(err)); setBusy(false); }
+  }
+  /** The directions as a printable PDF, made in the browser and saved from a Blob link. */
+  async function directionsPdf() {
+    if (!track.cues?.length || cuePdfBusy) return;
+    setCuePdfBusy(true);
+    try {
+      const bytes = await buildCuePdf({ title: track.name, notes: track.notes, dateLabel: fmtDate(track.createdAt), color: track.color, units, totalM: track.distanceM, cues: track.cues });
+      const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${track.name.replace(/[^\w\- .]+/g, '_').trim().slice(0, 80) || 'track'} - directions.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (err) { toast('error', errText(err)); } finally { setCuePdfBusy(false); }
   }
   async function exportGpx() {
     try { await api.downloadGpx(track.id, track.name); } catch (err) { toast('error', errText(err)); }
@@ -252,6 +302,7 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
   /** Open the track in the drawing tools: Extend continues it, Edit points reshapes it. Saving writes back over the same track. */
   function reopen(mode: 'extend' | 'edit') {
     startDrawing(fromLines(track.geometry.coordinates));
+    useStore.getState().setPlannedCues(track.cues?.length ? { cues: track.cues, lines: track.geometry.coordinates } : null); // kept on save only if the line is left alone
     setExtendingId(track.id);
     setDrawColor(track.color);
     if (mode === 'edit') setMode('edit');
@@ -285,6 +336,7 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
             <p className="hint">{fmtDate(track.createdAt)} · {track.pointCount} points</p>
             {track.notes && <p className="notes">{track.notes}</p>}
             <ElevationChart lines={track.geometry.coordinates} color={track.color} name={track.name} />
+            {track.cues?.length ? <DirectionsList cues={track.cues} map={map} units={units} /> : null}
             <div className="stack">
               <button type="button" onClick={() => setEditing(true)} title="Change this track's name, notes or colour">Rename / edit</button>
               <button type="button" onClick={() => reopen('edit')} title="Reshape the route: move points, add points or delete them">Edit points</button>
@@ -293,10 +345,11 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
               <button type="button" onClick={() => setWatchOpen((o) => !o)} aria-expanded={watchOpen} title="Get this route onto a Zepp watch such as the Amazfit Bip 6">Send to watch</button>
               {watchOpen && <SendToWatch track={track} />}
               <button type="button" onClick={() => setPdfOpen(true)} title="Make a printable A4 map of this route as a PDF, to download or email" data-tour="rt-pdf">Map as PDF</button>
+              {track.cues?.length ? <button type="button" onClick={() => void directionsPdf()} disabled={cuePdfBusy} title="Download the turn-by-turn directions as a printable PDF list">{cuePdfBusy ? 'Making the PDF…' : 'Directions as PDF'}</button> : null}
               {confirmDelete ? (
                 <div className="row">
                   <span>Delete this track?</span>
-                  <button type="button" className="danger" disabled={busy} onClick={() => void remove()} title="Yes, delete this track for good">Yes</button>
+                  <button type="button" className="danger" disabled={busy} onClick={() => void remove()} title="Yes, delete this track. It is kept for 30 days in the recycle bin, so you can undo it.">Yes</button>
                   <button type="button" onClick={() => setConfirmDelete(false)} title="No, keep it">No</button>
                 </div>
               ) : (

@@ -32,10 +32,12 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 export interface TrackSummary {
   id: string; name: string; color: string; distanceM: number; pointCount: number; bbox: BBox; drawMode: 'freehand' | 'click' | 'import' | 'route'; createdAt: string;
 }
-export interface Track extends TrackSummary { notes: string | null; geometry: { type: 'MultiLineString'; coordinates: Lines }; updatedAt: string }
-export interface TrackInput { name: string; notes?: string | null; color?: string; geometry: { type: 'MultiLineString'; coordinates: Lines }; drawMode: 'freehand' | 'click' | 'import' | 'route' }
+/** One turn-by-turn direction: what to do, how far until the next one, and the place on the map where it happens. */
+export interface Cue { text: string; distanceM: number; durationS: number | null; type: number | null; pos: [number, number] }
+export interface Track extends TrackSummary { notes: string | null; geometry: { type: 'MultiLineString'; coordinates: Lines }; /** Only a planned route that has not been reshaped has these. */ cues: Cue[] | null; updatedAt: string }
+export interface TrackInput { name: string; notes?: string | null; color?: string; geometry: { type: 'MultiLineString'; coordinates: Lines }; drawMode: 'freehand' | 'click' | 'import' | 'route'; cues?: Cue[] | null }
 export type PlanProfile = 'walking' | 'hiking' | 'cycling' | 'driving';
-export interface PlannedRoute { distanceM: number; durationS: number | null; coordinates: Line; /** Loops only: how far the length is from the target, in per cent (+8 = 8% too long). */ offPct?: number }
+export interface PlannedRoute { distanceM: number; durationS: number | null; coordinates: Line; /** Turn-by-turn directions, when the routing service gave them. */ steps?: Cue[]; /** Loops only: how far the length is from the target, in per cent (+8 = 8% too long). */ offPct?: number }
 export interface GeocodeResult { label: string; lat: number; lng: number }
 
 export const api = {
@@ -45,6 +47,9 @@ export const api = {
   /** The road or path between two clicks (Click mode with Follow roads on): one route, not alternatives. */
   leg: (input: { from: [number, number]; to: [number, number]; profile: PlanProfile }) =>
     call<{ route: PlannedRoute; cached: boolean }>('POST', '/api/route-tracks/leg', input),
+  /** One route through a start, up to eight stops and an end (no alternatives), with directions. */
+  multi: (input: { points: [number, number][]; profile: PlanProfile }) =>
+    call<{ route: PlannedRoute; attribution: string; cached: boolean }>('POST', '/api/route-tracks/multi', input),
   detour: (input: { from: [number, number]; to: [number, number]; profile: PlanProfile; lengthKm?: number; round: number }) =>
     call<{ routes: PlannedRoute[]; attribution: string; targetM: number | null; directM: number; cached: boolean }>('POST', '/api/route-tracks/detour', input),
   loop: (input: { from: [number, number]; lengthKm: number; profile: PlanProfile; round: number }) =>
@@ -74,10 +79,13 @@ export const api = {
   },
   get: (id: string) => call<{ track: Track }>('GET', `/api/route-tracks/${id}`).then((r) => r.track),
   create: (input: TrackInput) => call<{ track: Track }>('POST', '/api/route-tracks', input).then((r) => r.track),
-  update: (id: string, patch: Partial<Pick<TrackInput, 'name' | 'notes' | 'color' | 'geometry'>>) =>
+  update: (id: string, patch: Partial<Pick<TrackInput, 'name' | 'notes' | 'color' | 'geometry' | 'cues'>>) =>
     call<{ track: Track }>('PATCH', `/api/route-tracks/${id}`, patch).then((r) => r.track),
-  remove: (id: string) => call<void>('DELETE', `/api/route-tracks/${id}`),
-  removeMany: (ids: string[]) => call<{ deleted: number }>('POST', '/api/route-tracks/delete', { ids }),
+  /** Deleting moves the track to Vault's shared recycle bin (30 days); `binId` is what Undo restores. */
+  remove: (id: string) => call<{ ok: true; binId: string }>('DELETE', `/api/route-tracks/${id}`),
+  removeMany: (ids: string[]) => call<{ deleted: number; binIds: string[] }>('POST', '/api/route-tracks/delete', { ids }),
+  /** Put something back from the recycle bin. */
+  restore: (binId: string) => call<unknown>('POST', `/api/recycle-bin/${binId}/restore`),
   /** The GPX comes through fetch (the token is a header), then saves from a Blob link: a plain link or window.open would be unauthenticated. */
   downloadGpx(id: string, fileName: string): Promise<void> {
     return this.downloadFile(id, fileName, 'gpx');

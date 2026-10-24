@@ -151,7 +151,7 @@ function Toasts() {
   const toasts = useStore((s) => s.toasts);
   return (
     <div className="toasts" role="status" aria-live="polite">
-      {toasts.map((t) => <div key={t.id} className={`toast ${t.kind}`}>{t.text}</div>)}
+      {toasts.map((t) => <div key={t.id} className={`toast ${t.kind}${t.action ? ' has-action' : ''}`}>{t.text}{t.action ? <button type="button" className="toast-action" onClick={() => { t.action?.onClick(); useStore.getState().dismissToast(t.id); }} title="Put it back from the recycle bin">{t.action.label}</button> : null}</div>)}
     </div>
   );
 }

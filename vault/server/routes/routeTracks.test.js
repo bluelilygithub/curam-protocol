@@ -14,7 +14,9 @@ const http = require('http');
 const crypto = require('crypto');
 const express = require('express');
 const geo = require('../services/routeTracerGeo');
-const { createRouter } = require('./routeTracksRouter');
+const { createRouter: realCreateRouter } = require('./routeTracksRouter');
+// deletes go to the shared recycle bin: a stand-in that keeps what it was given, so no database is needed
+const createRouter = (pool, opts = {}) => realCreateRouter(pool, { getBin: () => ({ moveToBin: async (_db, o) => { pool.bin.push(o); return `bin-${pool.bin.length}`; } }), ...opts });
 
 const within = (actual, expected, pct) => assert.ok(Math.abs(actual - expected) / expected < pct / 100, `${actual} not within ${pct}% of ${expected}`);
 
@@ -55,7 +57,10 @@ function fakePool() {
   let clock = Date.UTC(2026, 9, 11, 12, 0, 0);
   const pool = {
     rows,
+    bin: [],
     failNext: false,
+    // a transaction client: statements go to the same store; BEGIN/COMMIT/ROLLBACK are no-ops (a failed delete is tested by pool.failNext)
+    async connect() { return { query: (sql, params) => (/^(BEGIN|COMMIT|ROLLBACK)$/.test(sql.trim()) ? Promise.resolve({ rows: [] }) : pool.query(sql, params)), release() {} }; },
     async query(sql, params) {
       if (pool.failNext) { pool.failNext = false; throw new Error('connection refused: secret-host:5432'); }
       const s = sql.replace(/\s+/g, ' ');
@@ -63,7 +68,7 @@ function fakePool() {
       if (/^INSERT INTO route_tracks/.test(s)) {
         const r = {
           id: crypto.randomUUID(), userId: params[0], name: params[1], notes: params[2], color: params[3], geometry: JSON.parse(params[4]),
-          distanceM: params[5], pointCount: params[6], bbox: params[7], drawMode: params[8], createdAt: new Date((clock += 1000)), updatedAt: new Date(clock),
+          distanceM: params[5], pointCount: params[6], bbox: params[7], drawMode: params[8], cues: params[9] ? JSON.parse(params[9]) : null, createdAt: new Date((clock += 1000)), updatedAt: new Date(clock),
         };
         rows.push(r);
         return { rows: [r] };
@@ -82,6 +87,7 @@ function fakePool() {
         list.sort((a, b) => b.createdAt - a.createdAt || (a.id < b.id ? 1 : -1));
         return { rows: list.slice(0, params[i]) };
       }
+      if (/^SELECT \* FROM route_tracks WHERE id = ANY/.test(s)) return { rows: rows.filter((r) => params[0].includes(r.id) && r.userId === params[1]) };
       if (/^SELECT name, notes, geometry/.test(s)) {
         const r = rows.find((x) => x.id === params[0] && x.userId === params[1]);
         return { rows: r ? [r] : [] };
@@ -91,12 +97,13 @@ function fakePool() {
         return { rows: r ? [r] : [] };
       }
       if (/^UPDATE route_tracks/.test(s)) {
-        const [name, setNotes, notes, color, geometry, dist, pts, bbox, id, userId] = params;
+        const [name, setNotes, notes, color, geometry, dist, pts, bbox, id, userId, setCues, cues] = params;
         const r = rows.find((x) => x.id === id && x.userId === userId);
         if (!r) return { rows: [] };
         if (name !== null) r.name = name;
         if (setNotes) r.notes = notes;
         if (color !== null) r.color = color;
+        if (setCues) r.cues = cues ? JSON.parse(cues) : null;
         if (geometry !== null) { r.geometry = JSON.parse(geometry); r.distanceM = dist; r.pointCount = pts; r.bbox = bbox; }
         r.updatedAt = new Date((clock += 1000));
         return { rows: [r] };
@@ -166,7 +173,7 @@ async function planTests() {
   assert.strictEqual(calls[0].body.alternative_routes.target_count, 3);
   assert.ok(!JSON.stringify(calls[0].body).includes(KEY));
   assert.strictEqual(r.routes.length, 3);
-  assert.deepStrictEqual(r.routes[0], { distanceM: 2100, durationS: 1500, coordinates: [from, mid(0.001), to] });
+  assert.deepStrictEqual(r.routes[0], { distanceM: 2100, durationS: 1500, coordinates: [from, mid(0.001), to], steps: [] });
   assert.ok(/openstreetmap/i.test(r.attribution) && /openrouteservice/i.test(r.attribution));
 
   // profiles map to the service's profile names
@@ -192,6 +199,53 @@ async function planTests() {
   await rejects(q.plan(1, { from, to: [153.02801, -27.46801], profile: 'walking' }), 422, /almost the same/);
   await rejects(q.plan(1, { from: [0, 0], to: [90, 0], profile: 'walking' }), 422, /too far apart/);
   await rejects(createPlanner({ getKey: () => null, fetchFn: fakeFetch(() => ({ json: okJson })) }).plan(1, { from, to, profile: 'walking' }), 503, /ORS_API_KEY/);
+
+  // ---- turn-by-turn directions: asked for, read, bounded, tied to a place on the map
+  {
+    calls.length = 0;
+    const withSteps = { features: [{ type: 'Feature', properties: { summary: { distance: 900, duration: 700 }, segments: [{ steps: [
+      { instruction: 'Head  north on Smith Street', distance: 400.4, duration: 300, type: 11, way_points: [0, 1] },
+      { instruction: 'Turn left onto Park Road', distance: 500, duration: 400, type: 0, way_points: [1, 2] },
+      { instruction: 'Arrive at your destination', distance: 0, duration: 0, type: 10, way_points: [2, 2] },
+      { instruction: '', distance: 1, way_points: [1, 1] },
+      { instruction: 'Off the line', distance: 1, way_points: [99, 99] },
+    ] }] }, geometry: { type: 'LineString', coordinates: [from, mid(0.001), to] } }] };
+    const d = await mk(() => ({ json: withSteps })).plan(1, { from, to, profile: 'walking' });
+    assert.strictEqual(calls[0].body.instructions, true);
+    assert.strictEqual(calls[0].body.language, 'en');
+    assert.deepStrictEqual(d.routes[0].steps.map((x) => x.text), ['Head north on Smith Street', 'Turn left onto Park Road', 'Arrive at your destination'], 'blank and off-the-line steps are dropped, spaces tidied');
+    assert.strictEqual(d.routes[0].steps[0].distanceM, 400);
+    assert.deepStrictEqual(d.routes[0].steps[1].pos, [Math.round(mid(0.001)[0] * 1e5) / 1e5, Math.round(mid(0.001)[1] * 1e5) / 1e5], 'a step is a place on the map, not an index');
+    const many = { features: [{ type: 'Feature', properties: { segments: [{ steps: Array.from({ length: 450 }, (_, i) => ({ instruction: `Step ${i}`, distance: 1, way_points: [0, 1] })) }] }, geometry: { type: 'LineString', coordinates: [from, to] } }] };
+    assert.strictEqual((await mk(() => ({ json: many })).plan(1, { from, to, profile: 'walking' })).routes[0].steps.length, 400, 'at most 400 steps');
+    // a click of Follow roads does not ask for directions (they would only slow it down)
+    calls.length = 0;
+    await mk(() => ({ json: okJson })).leg(1, { from, to, profile: 'walking' });
+    assert.strictEqual(calls[0].body.instructions, false);
+  }
+
+  // ---- multi: one call through a start, stops and an end
+  {
+    const stop1 = [153.034, -27.471]; const stop2 = [153.04, -27.473];
+    calls.length = 0;
+    const mp = mk(() => ({ json: okJson }));
+    const out = await mp.multi(1, { points: [from, stop1, stop2, to], profile: 'cycling' });
+    assert.strictEqual(calls.length, 1, 'one call however many stops');
+    assert.deepStrictEqual(calls[0].body.coordinates, [from, stop1, stop2, to]);
+    assert.strictEqual(calls[0].body.alternative_routes, undefined, 'alternatives only exist between two points');
+    assert.ok(calls[0].url.endsWith('/cycling-regular/geojson'));
+    assert.strictEqual(out.route.distanceM, 2100);
+    assert.strictEqual((await mp.multi(1, { points: [from, stop1, stop2, to], profile: 'cycling' })).cached, true, 'the same stops are answered from memory');
+    assert.strictEqual(calls.length, 1);
+    await rejects(mp.multi(1, { points: [from], profile: 'walking' }), 400);
+    await rejects(mp.multi(1, { points: Array.from({ length: 11 }, (_, i) => [153 + i * 0.01, -27.4]), profile: 'walking' }), 400, /up to 8 stops/);
+    await rejects(mp.multi(1, { points: [from, [999, 0]], profile: 'walking' }), 400);
+    await rejects(mp.multi(1, { points: [from, [153.02801, -27.46801], to], profile: 'walking' }), 422, /almost the same/);
+    await rejects(mp.multi(1, { points: [from, to], profile: 'flying' }), 400);
+    // a round trip (the last stop is the first) is fine: only neighbours must differ
+    const rt = await mk(() => ({ json: okJson })).multi(1, { points: [from, to, from], profile: 'walking' });
+    assert.ok(rt.route.coordinates.length >= 2);
+  }
 
   // over 100 km: no alternatives requested
   calls.length = 0;
@@ -995,9 +1049,57 @@ async function planTests() {
     pool.rows.splice(pool.rows.findIndex((x) => x.id === stranger), 1);
   }
 
-  // ---- delete
-  assert.strictEqual((await call(s, 'DELETE', `/api/route-tracks/${id}`)).status, 204);
-  assert.strictEqual((await call(s, 'GET', `/api/route-tracks/${id}`)).status, 404);
+  // ---- directions saved with a track: kept for the exact line, cleaned, bounded, dropped when the line changes without them
+  {
+    const cue = (n) => ({ text: `Turn left onto Park Road ${n}`, distanceM: 120.4, durationS: 90, type: 0, pos: [0.00001 * n, 0.00001 * n] });
+    const made = await call(s, 'POST', '/api/route-tracks', input({ name: 'With directions', drawMode: 'route', cues: [cue(1), cue(2)] }));
+    assert.strictEqual(made.status, 201);
+    assert.strictEqual(made.json.track.cues.length, 2);
+    assert.strictEqual(made.json.track.cues[0].distanceM, 120, 'rounded to whole metres');
+    assert.strictEqual((await call(s, 'GET', `/api/route-tracks/${made.json.track.id}`)).json.track.cues.length, 2);
+    assert.strictEqual((await call(s, 'POST', '/api/route-tracks', input({ cues: 'turn left' }))).status, 400);
+    assert.strictEqual((await call(s, 'POST', '/api/route-tracks', input({ cues: [{ text: '', distanceM: 1, pos: [0, 0] }] }))).status, 400, 'blank direction');
+    assert.strictEqual((await call(s, 'POST', '/api/route-tracks', input({ cues: [{ text: 'x', distanceM: 1, pos: [500, 0] }] }))).status, 400, 'off the map');
+    assert.strictEqual((await call(s, 'POST', '/api/route-tracks', input({ cues: Array.from({ length: 401 }, (_, i) => cue(i)) }))).status, 400, 'over 400');
+    assert.strictEqual((await call(s, 'POST', '/api/route-tracks', input({ cues: [] }))).json.track.cues, null, 'an empty list is no directions');
+    // renaming leaves them; changing the line without sending them removes them (they would point at the wrong places)
+    const tid = made.json.track.id;
+    assert.strictEqual((await call(s, 'PATCH', `/api/route-tracks/${tid}`, { name: 'Renamed' })).json.track.cues.length, 2);
+    const moved = await call(s, 'PATCH', `/api/route-tracks/${tid}`, { geometry: { type: 'MultiLineString', coordinates: [line(6)] } });
+    assert.strictEqual(moved.json.track.cues, null, 'a changed line has no stale directions');
+    const again = await call(s, 'PATCH', `/api/route-tracks/${tid}`, { geometry: { type: 'MultiLineString', coordinates: [line(6)] }, cues: [cue(3)] });
+    assert.strictEqual(again.json.track.cues.length, 1, 'sent together with the line, they are kept');
+    assert.ok(!('cues' in (await call(s, 'GET', '/api/route-tracks?limit=100')).json.tracks[0]), 'the list stays light: no directions');
+    await call(s, 'DELETE', `/api/route-tracks/${tid}`);
+  }
+
+  // ---- multi-stop planning route
+  {
+    const orsFetchMulti = async () => ({ ok: true, status: 200, json: async () => ({ features: [{ type: 'Feature', properties: { summary: { distance: 3000, duration: 2000 }, segments: [{ steps: [{ instruction: 'Head east', distance: 3000, duration: 2000, type: 11, way_points: [0, 1] }] }] }, geometry: { type: 'LineString', coordinates: [[153.0, -27.4], [153.01, -27.41]] } }] }) });
+    const ms = build(fakePool(), 1, { getMapKey: () => 'K', getOrsKey: () => 'ors-secret', fetchFn: orsFetchMulti }).listen(0);
+    const ok = await call(ms, 'POST', '/api/route-tracks/multi', { points: [[153.0, -27.4], [153.005, -27.405], [153.01, -27.41]], profile: 'walking' });
+    assert.strictEqual(ok.status, 200);
+    assert.strictEqual(ok.json.route.steps[0].text, 'Head east');
+    assert.ok(!ok.text.includes('ors-secret'));
+    assert.strictEqual((await call(ms, 'POST', '/api/route-tracks/multi', { points: [[153.0, -27.4]], profile: 'walking' })).status, 400);
+    ms.close();
+  }
+
+  // ---- delete (into the shared recycle bin)
+  {
+    const binBefore = pool.bin.length;
+    const d = await call(s, 'DELETE', `/api/route-tracks/${id}`);
+    assert.strictEqual(d.status, 200);
+    assert.ok(d.json.binId, 'the answer carries the recycle bin id (for Undo)');
+    assert.strictEqual(pool.bin.length, binBefore + 1);
+    const kept = pool.bin[pool.bin.length - 1];
+    assert.strictEqual(kept.type, 'route-track');
+    assert.strictEqual(kept.id, id);
+    assert.ok(kept.payload.track && kept.payload.track.geometry, 'the whole track row travels in the bin');
+    assert.strictEqual((await call(s, 'GET', `/api/route-tracks/${id}`)).status, 404);
+    assert.strictEqual((await call(s, 'DELETE', `/api/route-tracks/${id}`)).status, 404, 'deleting twice finds nothing');
+    assert.strictEqual(pool.bin.length, binBefore + 1, 'a track that is not there adds nothing to the bin');
+  }
 
   // ---- errors never leak internals
   pool.failNext = true;

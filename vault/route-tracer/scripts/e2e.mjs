@@ -1,7 +1,7 @@
 // Draw-and-save end-to-end test in real Chrome. The MapTiler style and the Vault API are stubbed in the browser (the server routes
 // have their own test: npm run test:route-tracks), so this proves the frontend flow: draw, undo, save, list, reload, pan, extend, delete.
 // Start `npm run dev` first (port 5177), then `node scripts/e2e.mjs [screenshotDir]`. Exits non-zero if any check fails.
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { deflateSync } from 'node:zlib';
 import { chromium } from 'playwright';
@@ -110,12 +110,30 @@ const dist = (lines) => lines.reduce((m, l) => m + l.slice(1).reduce((a, p, i) =
 const bbox = (lines) => { const xs = lines.flat().map((p) => p[0]); const ys = lines.flat().map((p) => p[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; };
 const summary = (t) => { const { geometry, notes, updatedAt, ...s } = t; return s; };
 const emailLog = [];
+const multiLog = [];
+const bin = new Map(); // the recycle bin: binId -> the track that was deleted
+let binSeq = 0;
+const trash = (t) => { const id = `bin-${++binSeq}`; bin.set(id, t); return id; };
+// three directions along a route: where it starts, a turn in the middle, where it ends
+const stepsFor = (c) => [
+  { text: 'Head north on Test Street', distanceM: Math.round(dist([c]) / 2), durationS: 200, type: 11, pos: c[0] },
+  { text: 'Turn left onto Park Road', distanceM: Math.round(dist([c]) / 2), durationS: 200, type: 0, pos: c[Math.floor(c.length / 2)] },
+  { text: 'Arrive at your destination', distanceM: 0, durationS: 0, type: 10, pos: c.at(-1) },
+];
 const askLog = [];
 const placesLog = [];
 const placesStub = { fail: 0, failText: 'x' };
 const PLACE_CATS = [['landmarks', 'Landmarks and attractions', '#d9480f'], ['museums', 'Museums and galleries', '#7048e8'], ['shows', 'Theatres and cinemas', '#c2255c'], ['sport', 'Stadiums and arenas', '#2b8a3e'], ['fun', 'Zoos and theme parks', '#e8590c'], ['nightlife', 'Nightclubs and casinos', '#9c36b5'], ['worship', 'Notable places of worship', '#5f3dc4'], ['civic', 'Civic buildings and libraries', '#1971c2'], ['campus', 'Universities and hospitals', '#0b7285']];
 const askStub = { fail: 0, failText: 'x', intent: null };
 const emailStub = { enabled: true, fail: 0, failText: 'The email could not be sent. Try again in a moment.' };
+await page.route('**/api/recycle-bin/**', async (route) => {
+  const id = new URL(route.request().url()).pathname.split('/')[3];
+  const t = bin.get(id);
+  if (!t) return route.fulfill({ status: 404, json: { error: 'That item is no longer in the recycle bin.' } });
+  bin.delete(id);
+  db.push(t);
+  return route.fulfill({ json: { ok: true, entityId: t.id } });
+});
 await page.route('**/api/route-tracks**', async (route) => {
   const req = route.request();
   const path = new URL(req.url()).pathname.replace('/api/route-tracks', '');
@@ -164,8 +182,16 @@ await page.route('**/api/route-tracks**', async (route) => {
     planLog.push(b);
     if (planDelay) await new Promise((r) => setTimeout(r, planDelay));
     if (planFail) return route.fulfill({ status: 422, json: { error: planFail } });
-    const mk = (bow) => { const mid = [(b.from[0] + b.to[0]) / 2 + bow * (b.to[1] - b.from[1]), (b.from[1] + b.to[1]) / 2 - bow * (b.to[0] - b.from[0])]; const coordinates = [b.from, [(b.from[0] + mid[0]) / 2, (b.from[1] + mid[1]) / 2], mid, [(mid[0] + b.to[0]) / 2, (mid[1] + b.to[1]) / 2], b.to]; return { distanceM: dist([coordinates]), durationS: dist([coordinates]) / 1.4, coordinates }; };
+    const mk = (bow) => { const mid = [(b.from[0] + b.to[0]) / 2 + bow * (b.to[1] - b.from[1]), (b.from[1] + b.to[1]) / 2 - bow * (b.to[0] - b.from[0])]; const coordinates = [b.from, [(b.from[0] + mid[0]) / 2, (b.from[1] + mid[1]) / 2], mid, [(mid[0] + b.to[0]) / 2, (mid[1] + b.to[1]) / 2], b.to]; return { distanceM: dist([coordinates]), durationS: dist([coordinates]) / 1.4, coordinates, steps: stepsFor(coordinates) }; };
     return route.fulfill({ json: { routes: planOrder === 'shuffled' ? [mk(-0.4), mk(0), mk(0.25)] : [mk(0), mk(0.25), mk(-0.4)], attribution: '(c) openrouteservice.org | (c) OpenStreetMap contributors', cached: false } });
+  }
+  if (m === 'POST' && path === '/multi') {
+    const b = req.postDataJSON();
+    multiLog.push(b);
+    if (planFail) return route.fulfill({ status: 422, json: { error: planFail } });
+    const coordinates = b.points.flatMap((p, i) => (i === 0 ? [p] : [[(b.points[i - 1][0] + p[0]) / 2, (b.points[i - 1][1] + p[1]) / 2 + 0.0003], p]));
+    const d = dist([coordinates]);
+    return route.fulfill({ json: { route: { distanceM: d, durationS: d / 1.4, coordinates, steps: stepsFor(coordinates) }, attribution: '(c) openrouteservice.org | (c) OpenStreetMap contributors', cached: false } });
   }
   if (m === 'POST' && path === '/leg') {
     const b = req.postDataJSON();
@@ -214,13 +240,14 @@ await page.route('**/api/route-tracks**', async (route) => {
   if (m === 'POST' && path === '/delete') {
     const ids = req.postDataJSON().ids;
     let n = 0;
-    for (const id of ids) { const i = db.findIndex((x) => x.id === id); if (i >= 0) { db.splice(i, 1); n += 1; } }
-    return route.fulfill({ json: { ok: true, deleted: n } });
+    const binIds = [];
+    for (const id of ids) { const i = db.findIndex((x) => x.id === id); if (i >= 0) { binIds.push(trash(db[i])); db.splice(i, 1); n += 1; } }
+    return route.fulfill({ json: { ok: true, deleted: n, binIds } });
   }
   if (m === 'POST' && path === '') {
     const b = req.postDataJSON();
     const lines = b.geometry.coordinates;
-    const t = { id: `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`, name: b.name, notes: b.notes ?? null, color: b.color, geometry: b.geometry, distanceM: dist(lines), pointCount: lines.flat().length, bbox: bbox(lines), drawMode: b.drawMode, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const t = { id: `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`, name: b.name, notes: b.notes ?? null, color: b.color, geometry: b.geometry, cues: b.cues ?? null, distanceM: dist(lines), pointCount: lines.flat().length, bbox: bbox(lines), drawMode: b.drawMode, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     db.push(t);
     return route.fulfill({ status: 201, json: { track: t } });
   }
@@ -228,11 +255,13 @@ await page.route('**/api/route-tracks**', async (route) => {
   if (!t) return route.fulfill({ status: 404, json: { error: 'That track was not found.' } });
   if (m === 'GET') return route.fulfill({ json: { track: t } });
   if (m === 'PATCH') {
-    Object.assign(t, req.postDataJSON());
+    const patch = req.postDataJSON();
+    if (patch.geometry && !('cues' in patch)) patch.cues = null;
+    Object.assign(t, patch);
     t.distanceM = dist(t.geometry.coordinates); t.pointCount = t.geometry.coordinates.flat().length; t.bbox = bbox(t.geometry.coordinates);
     return route.fulfill({ json: { track: t } });
   }
-  if (m === 'DELETE') { db.splice(db.indexOf(t), 1); return route.fulfill({ status: 204, body: '' }); }
+  if (m === 'DELETE') { const binId = trash(t); db.splice(db.indexOf(t), 1); return route.fulfill({ json: { ok: true, binId } }); }
   return route.fulfill({ status: 405, json: {} });
 });
 
@@ -904,6 +933,128 @@ await wait(300);
   await page.mouse.click(MX + 300, MY + 300); await wait(200);
   await page.getByRole('button', { name: 'Cancel' }).click(); await wait(300);
   check('Cancel clears the pins and routes', (await page.locator('.plan-pin').count()) === 0 && !(await bar.isVisible()));
+}
+
+// ---- Plan route: stops between A and B, turn-by-turn directions, saving them, the directions PDF, and an undoable delete
+{
+  await home();
+  await page.getByRole('button', { name: 'Plan a route' }).click();
+  const bar = page.getByTestId('planbar');
+  await bar.waitFor();
+  await page.getByRole('button', { name: 'A to B', exact: true }).click();
+  const addStop = page.getByTestId('add-stop');
+  check('Add a stop is off until A and B are set', await addStop.isDisabled());
+  planLog.length = 0; multiLog.length = 0;
+  await page.mouse.click(MX + 300, MY + 300); await wait(250);
+  await page.mouse.click(MX + 760, MY + 360); await wait(900);
+  const cards = page.getByTestId('plan-route');
+  await cards.first().waitFor({ timeout: 10000 });
+  check('without stops it asks the ordinary planner (alternatives)', planLog.length >= 1 && multiLog.length === 0 && (await cards.count()) === 3);
+  check('the routes come with directions, closed until asked for', (await page.getByTestId('directions').count()) === 1 && (await page.locator('.directions-list').count()) === 0);
+  await page.getByTestId('directions').getByRole('button').first().click();
+  check('opening them lists every step with its distance', (await page.locator('.directions-list li').count()) === 3 && /Turn left onto Park Road/.test((await page.locator('.directions-list').textContent()) ?? ''));
+  const c0 = await center();
+  await page.locator('.directions-list li').nth(1).getByRole('button').click(); await wait(900);
+  const c1 = await center();
+  check('tapping a step takes the map to where it happens', Math.abs(c1[0] - c0[0]) + Math.abs(c1[1] - c0[1]) > 1e-4);
+  await tipsOk('plan route: directions and stops');
+
+  // add a stop
+  check('Add a stop is on once A and B are set', await addStop.isEnabled());
+  await addStop.click();
+  check('it says to tap the map', /Tap the map for the stop/.test((await addStop.textContent()) ?? ''));
+  planLog.length = 0; multiLog.length = 0;
+  await page.mouse.click(MX + 520, MY + 220); await wait(1200);
+  check('the tap becomes stop 1: a numbered pin, its own field, and ONE route through it', (await page.locator('.plan-pin-via').count()) === 1 && (await page.getByLabel('Stop 1', { exact: true }).count()) === 1 && (await cards.count()) === 1 && /Through your stops/.test((await cards.first().textContent()) ?? ''), `${await cards.count()}`);
+  check('the request carries start, stop, end in order', multiLog.length >= 1 && multiLog.at(-1).points.length === 3 && Math.abs(multiLog.at(-1).points[0][0]) > 100 && typeof multiLog.at(-1).profile === 'string', JSON.stringify(multiLog.at(-1)));
+  check('and the plain planner is not asked as well', planLog.length === 0);
+  check('a tap after that is not another stop', (await addStop.textContent())?.trim() === 'Add a stop');
+  check('its directions are shown too', (await page.getByTestId('directions').count()) === 1);
+  check('the stop gets a place name', /^Test place \d+, Testville$/.test(await page.getByLabel('Stop 1', { exact: true }).inputValue()));
+
+  // a second stop, reorder, remove
+  await addStop.click();
+  await page.mouse.click(MX + 640, MY + 180); await wait(1200);
+  const firstStop = multiLog.at(-1).points[1];
+  check('a second stop goes in after the first', (await page.locator('.plan-pin-via').count()) === 2 && multiLog.at(-1).points.length === 4);
+  check('the first stop cannot move earlier and the last cannot move later', await page.getByRole('button', { name: 'Move stop 1 earlier' }).isDisabled() && await page.getByRole('button', { name: 'Move stop 2 later' }).isDisabled());
+  multiLog.length = 0;
+  await page.getByRole('button', { name: 'Move stop 2 earlier' }).click(); await wait(1200);
+  check('moving a stop earlier plans the new order', multiLog.length >= 1 && JSON.stringify(multiLog.at(-1).points[2]) === JSON.stringify(firstStop), JSON.stringify(multiLog.at(-1)));
+  multiLog.length = 0; planLog.length = 0;
+  await page.getByRole('button', { name: 'Remove stop 2' }).click(); await wait(1200);
+  check('removing a stop plans again with one fewer', (await page.locator('.plan-pin-via').count()) === 1 && multiLog.at(-1).points.length === 3);
+  await page.getByRole('button', { name: 'Remove stop 1' }).click(); await wait(1200);
+  check('removing the last one goes back to the ordinary planner with its alternatives', (await page.locator('.plan-pin-via').count()) === 0 && planLog.length >= 1 && (await cards.count()) === 3);
+
+  // the limit
+  for (let i = 0; i < 8; i += 1) { await addStop.click(); await page.mouse.click(MX + 340 + i * 50, MY + 260 + (i % 2) * 40); await wait(350); }
+  await wait(900);
+  check('at most eight stops', (await page.locator('.plan-pin-via').count()) === 8 && await addStop.isDisabled());
+  for (let i = 8; i > 1; i -= 1) { await page.getByRole('button', { name: `Remove stop ${i}` }).click(); await wait(150); }
+  await wait(1200);
+
+  // a problem with the stops is explained and nothing is drawn
+  planFail = 'Two stops next to each other are almost the same place. Move one of them.';
+  await page.getByRole('button', { name: 'Swap A and B' }).click(); await wait(1000);
+  check('a problem with the stops is explained in plain words', /almost the same place/.test((await page.getByTestId('plan-error').textContent().catch(() => '')) ?? '') && (await cards.count()) === 0);
+  planFail = null;
+  await page.getByRole('button', { name: 'Swap A and B' }).click(); await wait(1000);
+  await cards.first().waitFor({ timeout: 10000 });
+
+  // use it: the line and its directions are saved together
+  await page.getByRole('button', { name: /^Use selected route/ }).click();
+  await page.getByRole('region', { name: 'Drawing tools' }).waitFor();
+  await page.getByRole('button', { name: 'Finish' }).click();
+  await dlg.getByLabel('Name').fill('Stops and directions');
+  check('the save box says the directions come with it', /3 directions/.test((await dlg.textContent()) ?? ''));
+  await dlg.getByLabel('Name').press('Enter');
+  await page.getByLabel('Track detail').waitFor();
+  const withCues = db.at(-1);
+  check('saved with its three directions', withCues.name === 'Stops and directions' && withCues.cues?.length === 3 && withCues.cues[1].text === 'Turn left onto Park Road', JSON.stringify(withCues.cues));
+  check('the saved track shows its directions', (await page.getByLabel('Track detail').getByTestId('directions').count()) === 1);
+  await tipsOk('track detail with directions');
+
+  // the directions as a PDF
+  const pdfBtn = page.getByRole('button', { name: 'Directions as PDF' });
+  check('there is a Directions as PDF button', await pdfBtn.isVisible());
+  const [dl] = await Promise.all([page.waitForEvent('download'), pdfBtn.click()]);
+  const path = await dl.path();
+  const pdfHead = readFileSync(path).subarray(0, 5).toString('latin1');
+  check('it downloads a real PDF named for the track', pdfHead === '%PDF-' && /Stops and directions - directions\.pdf$/.test(dl.suggestedFilename()), `${pdfHead} ${dl.suggestedFilename()}`);
+
+  // reshaping the line drops the directions (they would point at the wrong places); leaving it alone keeps them
+  await page.getByRole('button', { name: 'Edit points', exact: true }).click();
+  await page.getByRole('region', { name: 'Drawing tools' }).waitFor();
+  await page.getByRole('button', { name: 'Finish' }).click();
+  await dlg.getByLabel('Name').press('Enter');
+  await page.getByLabel('Track detail').waitFor();
+  check('opened and saved again without a change, the directions stay', db.at(-1).cues?.length === 3);
+  await page.getByRole('button', { name: 'Extend', exact: true }).click();
+  await page.getByRole('region', { name: 'Drawing tools' }).waitFor();
+  await page.getByRole('button', { name: 'Click', exact: true }).click();
+  await page.mouse.click(MX + 200, MY + 500); await wait(500);
+  await page.getByRole('button', { name: 'Finish' }).click();
+  await dlg.getByLabel('Name').press('Enter');
+  await page.getByLabel('Track detail').waitFor();
+  check('extended, the old directions are gone and none are shown', db.at(-1).cues === null && (await page.getByLabel('Track detail').getByTestId('directions').count()) === 0 && (await page.getByRole('button', { name: 'Directions as PDF' }).count()) === 0);
+
+  // delete goes to the recycle bin, with Undo
+  const before = db.length;
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.getByRole('button', { name: 'Yes' }).click(); await wait(700);
+  const toast = page.locator('.toast', { hasText: /Deleted/ });
+  check('deleting says it is kept 30 days and offers Undo', db.length === before - 1 && /30 days/.test((await toast.textContent()) ?? '') && (await toast.getByRole('button', { name: 'Undo' }).count()) === 1, (await toast.allTextContents()).join('|'));
+  await toast.getByRole('button', { name: 'Undo' }).click(); await wait(900);
+  check('Undo puts the track back, and the list shows it again', db.length === before && (await page.getByRole('button', { name: /Stops and directions/ }).count()) === 1);
+  // several at once
+  await page.getByLabel('Select Stops and directions').check();
+  await page.getByRole('button', { name: /^Delete/ }).click();
+  await page.getByRole('button', { name: 'Yes', exact: true }).click(); await wait(700);
+  const toast2 = page.locator('.toast', { hasText: /Deleted/ });
+  check('deleting from the list offers Undo too', (await toast2.getByRole('button', { name: 'Undo' }).count()) === 1 && (await page.getByRole('button', { name: /Stops and directions/ }).count()) === 0);
+  await toast2.getByRole('button', { name: 'Undo' }).click(); await wait(900);
+  check('and it comes back', (await page.getByRole('button', { name: /Stops and directions/ }).count()) === 1);
 }
 
 // ---- Plan route: the A and B fields (named places, searched on Enter, never as you type) and the order of the routes

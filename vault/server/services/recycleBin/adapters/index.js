@@ -4,3 +4,4 @@
 require('./notes');
 require('./tasks'); // tasks and goals
 require('./chats');
+require('./routeTracks');

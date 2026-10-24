@@ -1129,6 +1129,8 @@ async function initSchema() {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_route_tracks_user_created ON route_tracks ("userId", "createdAt" DESC, id DESC)
     `);
+    // turn-by-turn directions that came with a planned route: [{ text, distanceM, durationS, type, pos:[lng,lat] }], null for a drawn or edited line
+    await client.query(`ALTER TABLE route_tracks ADD COLUMN IF NOT EXISTS cues JSONB`);
     // ── Fitness Planner (Stage 1 tables; later stages add weeks/sessions/logs/library/reminders: docs/fitness-planner.md) ──
     // health_* tables are the shared profile + weight series the future diet app also reads/writes.
     await client.query(`

@@ -171,3 +171,9 @@ export function nearestOnLines(lines: Lines, project: (p: Pos) => { x: number; y
   }
   return best ? { ...best, totalKm: done } : null;
 }
+
+/** The same strokes with the same points (to a millionth of a degree, about 0.1 m): is this still the line the directions were made for? */
+export function sameLines(a: Lines, b: Lines, eps = 1e-6): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((l, i) => l.length === b[i].length && l.every((p, k) => Math.abs(p[0] - b[i][k][0]) <= eps && Math.abs(p[1] - b[i][k][1]) <= eps));
+}

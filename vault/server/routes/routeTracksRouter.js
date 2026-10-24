@@ -18,9 +18,12 @@ const MAX_EMAIL_BODY_BYTES = 12 * 1024 * 1024; // the PDF as base64 plus the res
 const EMAIL_RE = /^[^\s@,;<>()\[\]"'\\]{1,64}@[^\s@,;<>()\[\]"'\\]{1,200}\.[^\s@,;<>()\[\]"'\\]{2,}$/;
 const MAX_TRACKS_PER_USER = 1000;
 const MAX_BULK_DELETE = 200;
+const MAX_CUES = 400; // turn-by-turn directions kept with a track
+const MAX_CUE_TEXT = 160;
+const BIN_TYPE = 'route-track'; // the shared recycle bin kind (server/services/recycleBin/adapters/routeTracks.js)
 const DEFAULT_COLOR = '#E4572E';
 const SUMMARY = `id, name, color, "distanceM", "pointCount", bbox, "drawMode", "createdAt"`;
-const FULL = `${SUMMARY}, notes, geometry, "updatedAt"`;
+const FULL = `${SUMMARY}, notes, geometry, cues, "updatedAt"`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const cleanName = (raw) => {
@@ -34,12 +37,34 @@ const summaryWire = (r) => ({
   id: r.id, name: r.name, color: r.color, distanceM: Number(r.distanceM), pointCount: Number(r.pointCount),
   bbox: r.bbox.map(Number), drawMode: r.drawMode, createdAt: iso(r.createdAt),
 });
-const fullWire = (r) => ({ ...summaryWire(r), notes: r.notes ?? null, geometry: r.geometry, updatedAt: iso(r.updatedAt) });
+const fullWire = (r) => ({ ...summaryWire(r), notes: r.notes ?? null, geometry: r.geometry, cues: r.cues ?? null, updatedAt: iso(r.updatedAt) });
 
 /** Reject a body over 1 MB before looking at it. */
 function limitBody(req, res, next) {
   if (Number(req.headers['content-length'] || 0) > MAX_BODY_BYTES) return res.status(413).json({ error: 'That track is too large to save (over 1 MB).' });
   return next();
+}
+
+/** Turn-by-turn directions sent with a track: null/empty = none. Returns { error } or { value } (a cleaned array, or null). */
+function cleanCues(raw) {
+  if (raw == null) return { value: null };
+  if (!Array.isArray(raw)) return { error: 'The directions must be a list.' };
+  if (raw.length > MAX_CUES) return { error: `A track can keep at most ${MAX_CUES} directions.` };
+  const out = [];
+  for (const c of raw) {
+    const ok = c && typeof c === 'object' && typeof c.text === 'string' && c.text.trim()
+      && Array.isArray(c.pos) && c.pos.length === 2 && c.pos.every((n) => typeof n === 'number' && Number.isFinite(n)) && Math.abs(c.pos[0]) <= 180 && Math.abs(c.pos[1]) <= 90
+      && Number.isFinite(Number(c.distanceM)) && Number(c.distanceM) >= 0;
+    if (!ok) return { error: 'A direction is not valid.' };
+    out.push({
+      text: c.text.replace(/\s+/g, ' ').trim().slice(0, MAX_CUE_TEXT),
+      distanceM: Math.round(Number(c.distanceM)),
+      durationS: Number.isFinite(Number(c.durationS)) && c.durationS !== null ? Math.round(Number(c.durationS)) : null,
+      type: Number.isInteger(c.type) ? c.type : null,
+      pos: [Math.round(c.pos[0] * 1e5) / 1e5, Math.round(c.pos[1] * 1e5) / 1e5],
+    });
+  }
+  return { value: out.length ? out : null };
 }
 
 /** Validate the fields a create/update may carry. Returns { error } or { value } (only the fields present). */
@@ -68,6 +93,12 @@ function parseFields(body, { create }) {
     const problem = geo.validateGeometry(b.geometry);
     if (problem) return { error: problem };
     v.lines = geo.cleanLines(b.geometry);
+  }
+  // directions belong to one exact line: sent with the geometry (or on their own), and dropped whenever the geometry changes without them
+  if (b.cues !== undefined) {
+    const c = cleanCues(b.cues);
+    if (c.error) return { error: c.error };
+    v.cues = c.value;
   }
   return { value: v };
 }
@@ -104,6 +135,8 @@ function createRouter(pool, {
   // places near a route (OpenStreetMap through Overpass): { near({ line, radiusKm }) }
   placesService = require('../services/routePlaces').createPlacesService({ log: (m, d) => getLogger().warn({ detail: d }, m) }),
   placesLimits = {},
+  // the shared recycle bin (moveToBin); injected so the tests need no database
+  getBin = () => { require('../services/recycleBin/adapters'); return require('../services/recycleBin'); },
 } = {}) {
   const router = express.Router();
   const planner = createPlanner({ getKey: getOrsKey, fetchFn, now, log: (m, d) => getLogger().warn({ detail: d }, m), ...planLimits });
@@ -137,6 +170,31 @@ function createRouter(pool, {
   const placesNow = placesLimits.now ?? Date.now;
   const placesPerHour = placesLimits.perHour ?? 20;
   const placesPerDay = placesLimits.perDay ?? 80;
+
+
+  /** Delete tracks into the shared 30-day recycle bin, all or nothing: the copy and the delete share one transaction. Returns { deleted, binIds }. */
+  async function trashTracks(userId, ids) {
+    const bin = getBin();
+    const db = await pool.connect();
+    try {
+      await db.query('BEGIN');
+      const { rows } = await db.query(`SELECT * FROM route_tracks WHERE id = ANY($1::uuid[]) AND "userId" = $2 FOR UPDATE`, [ids, userId]);
+      const binIds = [];
+      for (const r of rows) {
+        binIds.push(await bin.moveToBin(db, {
+          userId, type: BIN_TYPE, id: r.id, title: r.name,
+          detail: `${(Number(r.distanceM) / 1000).toFixed(1)} km${r.cues ? ' · with directions' : ''}`,
+          payload: { track: r },
+        }));
+      }
+      const gone = await db.query(`DELETE FROM route_tracks WHERE id = ANY($1::uuid[]) AND "userId" = $2`, [rows.map((r) => r.id), userId]);
+      await db.query('COMMIT');
+      return { deleted: gone.rowCount, binIds };
+    } catch (err) {
+      await db.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally { db.release(); }
+  }
 
   // GET /api/route-tracks/config: the browser-side MapTiler key. Prefer a separate key restricted by referrer to the Vault domain and localhost
   // (ROUTE_TRACER_MAPTILER_KEY); falls back to MAPTILER_API_KEY, which then becomes visible in the browser.
@@ -189,8 +247,8 @@ function createRouter(pool, {
     if (raw.length > MAX_BULK_DELETE) return res.status(400).json({ error: `Delete at most ${MAX_BULK_DELETE} tracks at a time.` });
     if (!raw.every((id) => typeof id === 'string' && UUID.test(id))) return res.status(400).json({ error: 'A track id is not valid.' });
     try {
-      const { rowCount } = await pool.query(`DELETE FROM route_tracks WHERE id = ANY($1::uuid[]) AND "userId" = $2`, [[...new Set(raw)], req.user.id]);
-      res.json({ ok: true, deleted: rowCount });
+      const out = await trashTracks(req.user.id, [...new Set(raw)]);
+      res.json({ ok: true, deleted: out.deleted, binIds: out.binIds });
     } catch (err) {
       getLogger().error({ err }, 'route tracks bulk delete failed');
       res.status(500).json({ error: 'Could not delete those tracks.' });
@@ -303,6 +361,22 @@ function createRouter(pool, {
       }
       getLogger().error({ err }, 'route leg failed');
       res.status(500).json({ error: 'Could not follow roads there.' });
+    }
+  });
+
+  // POST /api/route-tracks/multi { points: [[lng, lat], ...], profile }: one route through a start, up to eight stops and an end, with directions.
+  router.post('/multi', async (req, res) => {
+    try {
+      const r = await planner.multi(req.user.id, { points: req.body?.points, profile: req.body?.profile });
+      res.set('Cache-Control', 'no-store');
+      res.json(r);
+    } catch (err) {
+      if (err instanceof PlanError) {
+        if (err.retryAfter) res.set('Retry-After', String(err.retryAfter));
+        return res.status(err.status).json({ error: err.message, ...(err.extra || {}) });
+      }
+      getLogger().error({ err }, 'route multi failed');
+      res.status(500).json({ error: 'Could not plan a route through those stops.' });
     }
   });
 
@@ -452,10 +526,10 @@ function createRouter(pool, {
         return res.status(400).json({ error: `You have reached the limit of ${MAX_TRACKS_PER_USER} tracks. Delete some to add more.` });
       }
       const { rows } = await pool.query(
-        `INSERT INTO route_tracks ("userId", name, notes, color, geometry, "distanceM", "pointCount", bbox, "drawMode", "createdAt", "updatedAt")
-         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, date_trunc('milliseconds', NOW()), date_trunc('milliseconds', NOW()))
+        `INSERT INTO route_tracks ("userId", name, notes, color, geometry, "distanceM", "pointCount", bbox, "drawMode", cues, "createdAt", "updatedAt")
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10::jsonb, date_trunc('milliseconds', NOW()), date_trunc('milliseconds', NOW()))
          RETURNING ${FULL}`,
-        [req.user.id, v.name, v.notes ?? null, v.color, JSON.stringify(geometry), geo.distanceM(v.lines), v.lines.reduce((n, l) => n + l.length, 0), geo.bboxOf(v.lines), v.drawMode],
+        [req.user.id, v.name, v.notes ?? null, v.color, JSON.stringify(geometry), geo.distanceM(v.lines), v.lines.reduce((n, l) => n + l.length, 0), geo.bboxOf(v.lines), v.drawMode, v.cues ? JSON.stringify(v.cues) : null],
       );
       res.status(201).json({ track: fullWire(rows[0]) });
     } catch (err) {
@@ -480,6 +554,7 @@ function createRouter(pool, {
            "distanceM" = COALESCE($6, "distanceM"),
            "pointCount" = COALESCE($7, "pointCount"),
            bbox = COALESCE($8, bbox),
+           cues = CASE WHEN $11::boolean THEN $12::jsonb ELSE cues END,
            "updatedAt" = date_trunc('milliseconds', NOW())
          WHERE id = $9 AND "userId" = $10
          RETURNING ${FULL}`,
@@ -490,6 +565,7 @@ function createRouter(pool, {
           hasGeo ? v.lines.reduce((n, l) => n + l.length, 0) : null,
           hasGeo ? geo.bboxOf(v.lines) : null,
           req.params.id, req.user.id,
+          hasGeo || 'cues' in v, v.cues ? JSON.stringify(v.cues) : null,
         ],
       );
       if (!rows[0]) return res.status(404).json({ error: 'That track was not found.' });
@@ -503,9 +579,9 @@ function createRouter(pool, {
   router.delete('/:id', async (req, res) => {
     if (!UUID.test(req.params.id)) return res.status(404).json({ error: 'That track was not found.' });
     try {
-      const { rowCount } = await pool.query(`DELETE FROM route_tracks WHERE id = $1 AND "userId" = $2`, [req.params.id, req.user.id]);
-      if (!rowCount) return res.status(404).json({ error: 'That track was not found.' });
-      res.status(204).end();
+      const out = await trashTracks(req.user.id, [req.params.id]);
+      if (!out.deleted) return res.status(404).json({ error: 'That track was not found.' });
+      res.json({ ok: true, binId: out.binIds[0] });
     } catch (err) {
       getLogger().error({ err }, 'route track delete failed');
       res.status(500).json({ error: 'Could not delete this track.' });
