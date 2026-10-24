@@ -30,7 +30,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 }
 
 export interface TrackSummary {
-  id: string; name: string; color: string; distanceM: number; pointCount: number; bbox: BBox; drawMode: 'freehand' | 'click' | 'import' | 'route'; createdAt: string;
+  id: string; name: string; color: string; distanceM: number; pointCount: number; bbox: BBox; drawMode: 'freehand' | 'click' | 'import' | 'route'; /** Starred by the person: the list can show only these. */ favourite: boolean; createdAt: string;
 }
 /** One turn-by-turn direction: what to do, how far until the next one, and the place on the map where it happens. */
 export interface Cue { text: string; distanceM: number; durationS: number | null; type: number | null; pos: [number, number] }
@@ -70,8 +70,9 @@ export const api = {
   /** Email a saved track as a GPX, TCX or KML file. The server makes the file from the stored track. */
   emailFile: (id: string, input: { to: string; format: 'gpx' | 'tcx' | 'kml'; message?: string; copyToMe: boolean }) =>
     call<{ ok: true; copied: boolean }>('POST', `/api/route-tracks/${id}/email-file`, input),
-  list: (opts: { q?: string; cursor?: string | null; limit?: number } = {}) => {
+  list: (opts: { q?: string; cursor?: string | null; limit?: number; favourite?: boolean } = {}) => {
     const p = new URLSearchParams();
+    if (opts.favourite) p.set('favourite', '1');
     if (opts.q) p.set('q', opts.q);
     if (opts.cursor) p.set('cursor', opts.cursor);
     p.set('limit', String(opts.limit ?? 50));
@@ -79,9 +80,13 @@ export const api = {
   },
   get: (id: string) => call<{ track: Track }>('GET', `/api/route-tracks/${id}`).then((r) => r.track),
   create: (input: TrackInput) => call<{ track: Track }>('POST', '/api/route-tracks', input).then((r) => r.track),
-  update: (id: string, patch: Partial<Pick<TrackInput, 'name' | 'notes' | 'color' | 'geometry' | 'cues'>>) =>
+  update: (id: string, patch: Partial<Pick<TrackInput, 'name' | 'notes' | 'color' | 'geometry' | 'cues'>> & { favourite?: boolean }) =>
     call<{ track: Track }>('PATCH', `/api/route-tracks/${id}`, patch).then((r) => r.track),
   /** Deleting moves the track to Vault's shared recycle bin (30 days); `binId` is what Undo restores. */
+  /** A new track from this one, same line and directions, named "... (copy)". */
+  copyTrack: (id: string) => call<{ track: Track }>('POST', `/api/route-tracks/${id}/copy`).then((r) => r.track),
+  /** A new track walking this one the other way, named "... (reversed)"; its directions are not carried over. */
+  reverseTrack: (id: string) => call<{ track: Track }>('POST', `/api/route-tracks/${id}/reverse`).then((r) => r.track),
   remove: (id: string) => call<{ ok: true; binId: string }>('DELETE', `/api/route-tracks/${id}`),
   removeMany: (ids: string[]) => call<{ deleted: number; binIds: string[] }>('POST', '/api/route-tracks/delete', { ids }),
   /** Put something back from the recycle bin. */

@@ -293,8 +293,11 @@ button.back { font-size: 1rem; font-weight: 500; }
 /* a place in the list wears its pin colour as a stripe, not a round dot (a dot looks like a radio button next to the tick boxes) */
 .places-list button { border-radius: 0 8px 8px 0; padding-left: 8px; }
 
+/* favourites */
+.fav-on { color: #f59e0b; fill: #f59e0b; vertical-align: -1px; margin-right: 4px; }
 /* stops between A and B, directions, undo on a toast */
-.toast.has-action { pointer-events: auto; } /* only a toast with a button (Undo) takes clicks; the others let them through to the map */
+/* a toast with a button (Undo) takes clicks, so it sits low, out of the way of the map; the others sit at the top and let clicks through */
+.toast.has-action { pointer-events: auto; position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 30; }
 .toast-action { margin-left: 12px; padding: 2px 10px; }
 .via-row { display: flex; gap: 4px; align-items: flex-start; }
 .via-row > form { flex: 1; min-width: 0; }

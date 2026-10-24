@@ -101,4 +101,7 @@ function toKml(name, notes, lines) {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n  <Document>\n    <name>${esc(name)}</name>\n    <Placemark>\n    <name>${esc(name)}</name>${desc}\n      <MultiGeometry>\n${strings}\n      </MultiGeometry>\n    </Placemark>\n  </Document>\n</kml>\n`;
 }
 
-module.exports = { distanceM, bboxOf, validateGeometry, cleanLines, toGpx, toTcx, toKml, MAX_POINTS, MAX_LINES };
+/** The same route walked the other way: the last stroke first, and every stroke's points backwards. The distance is unchanged. */
+const reverseLines = (lines) => lines.map((l) => [...l].reverse()).reverse();
+
+module.exports = { reverseLines, distanceM, bboxOf, validateGeometry, cleanLines, toGpx, toTcx, toKml, MAX_POINTS, MAX_LINES };

@@ -145,7 +145,16 @@ await page.route('**/api/route-tracks**', async (route) => {
     if (emailStub.fail) return route.fulfill({ status: emailStub.fail, json: { error: emailStub.failText } });
     return route.fulfill({ json: { ok: true, copied: b.copyToMe === true } });
   }
-  if (m === 'GET' && path === '') return route.fulfill({ json: { tracks: [...db].reverse().map(summary), nextCursor: null } });
+  if (m === 'GET' && path === '') return route.fulfill({ json: { tracks: [...db].reverse().filter((t) => !new URL(req.url()).searchParams.get('favourite') || t.favourite).map(summary), nextCursor: null } });
+  if (m === 'POST' && /^\/[^/]+\/(copy|reverse)$/.test(path)) {
+    const [, id, kind] = path.split('/');
+    const src = db.find((x) => x.id === id);
+    if (!src) return route.fulfill({ status: 404, json: { error: 'That track was not found.' } });
+    const lines = kind === 'reverse' ? [...src.geometry.coordinates].map((l) => [...l].reverse()).reverse() : src.geometry.coordinates;
+    const t = { ...src, id: `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`, name: `${src.name} (${kind === 'copy' ? 'copy' : 'reversed'})`, geometry: { type: 'MultiLineString', coordinates: lines }, cues: kind === 'reverse' ? null : src.cues, favourite: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    db.push(t);
+    return route.fulfill({ status: 201, json: { track: t } });
+  }
   if (m === 'POST' && path === '/places') {
     const b = req.postDataJSON();
     placesLog.push(b);
@@ -247,7 +256,7 @@ await page.route('**/api/route-tracks**', async (route) => {
   if (m === 'POST' && path === '') {
     const b = req.postDataJSON();
     const lines = b.geometry.coordinates;
-    const t = { id: `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`, name: b.name, notes: b.notes ?? null, color: b.color, geometry: b.geometry, cues: b.cues ?? null, distanceM: dist(lines), pointCount: lines.flat().length, bbox: bbox(lines), drawMode: b.drawMode, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const t = { id: `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`, name: b.name, notes: b.notes ?? null, color: b.color, geometry: b.geometry, cues: b.cues ?? null, favourite: false, distanceM: dist(lines), pointCount: lines.flat().length, bbox: bbox(lines), drawMode: b.drawMode, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     db.push(t);
     return route.fulfill({ status: 201, json: { track: t } });
   }
@@ -1038,6 +1047,34 @@ await wait(300);
   await dlg.getByLabel('Name').press('Enter');
   await page.getByLabel('Track detail').waitFor();
   check('extended, the old directions are gone and none are shown', db.at(-1).cues === null && (await page.getByLabel('Track detail').getByTestId('directions').count()) === 0 && (await page.getByRole('button', { name: 'Directions as PDF' }).count()) === 0);
+
+  // favourite, copy, reverse
+  {
+    const name0 = db.at(-1).name;
+    const fav = page.getByRole('button', { name: 'Add to favourites' });
+    check('a track can be starred', await fav.isVisible());
+    await fav.click(); await wait(500);
+    check('and then says it is a favourite', db.at(-1).favourite === true && (await page.getByRole('button', { name: 'Favourite', exact: true }).getAttribute('aria-pressed')) === 'true');
+    await tipsOk('track detail: favourite, copy, reverse');
+    const n0 = db.length;
+    await page.getByRole('button', { name: 'Copy', exact: true }).click(); await wait(700);
+    check('Copy makes a new track with the same line, named (copy), not starred', db.length === n0 + 1 && db.at(-1).name === `${name0} (copy)` && db.at(-1).favourite === false && JSON.stringify(db.at(-1).geometry) === JSON.stringify(db.at(-2).geometry));
+    check('and opens it', (await page.getByRole('heading', { name: new RegExp(`${name0} \\(copy\\)`) }).count()) === 1);
+    await page.getByRole('button', { name: 'Reverse', exact: true }).click(); await wait(700);
+    const rev = db.at(-1); const was = db.at(-2);
+    check('Reverse makes another new track going the other way, without directions', db.length === n0 + 2 && /\(copy\) \(reversed\)$/.test(rev.name) && rev.cues === null && JSON.stringify(rev.geometry.coordinates[0][0]) === JSON.stringify(was.geometry.coordinates.at(-1).at(-1)));
+    check('the track it came from is unchanged', db.length === n0 + 2 && was.name === `${name0} (copy)`);
+    await page.getByRole('button', { name: /^Tracks$/ }).click(); await wait(600);
+    const onlyFav = page.getByLabel('Favourites only');
+    await onlyFav.check(); await wait(700);
+    check('Favourites only lists just the starred ones, each with a star', (await page.locator('.tracklist li').count()) === db.filter((t) => t.favourite).length && (await page.locator('.tracklist li .fav-on').count()) === db.filter((t) => t.favourite).length);
+    await onlyFav.uncheck(); await wait(700);
+    check('and unticking brings the rest back', (await page.locator('.tracklist li').count()) === db.length);
+    db.splice(n0); // the two copies were only for this check
+    await page.reload(); await ready(page);
+    await page.getByRole('button', { name: /Stops and directions/ }).first().click();
+    await page.getByLabel('Track detail').waitFor();
+  }
 
   // delete goes to the recycle bin, with Undo
   const before = db.length;

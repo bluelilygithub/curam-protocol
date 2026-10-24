@@ -1131,6 +1131,7 @@ async function initSchema() {
     `);
     // turn-by-turn directions that came with a planned route: [{ text, distanceM, durationS, type, pos:[lng,lat] }], null for a drawn or edited line
     await client.query(`ALTER TABLE route_tracks ADD COLUMN IF NOT EXISTS cues JSONB`);
+    await client.query(`ALTER TABLE route_tracks ADD COLUMN IF NOT EXISTS favourite BOOLEAN NOT NULL DEFAULT FALSE`);
     // ── Fitness Planner (Stage 1 tables; later stages add weeks/sessions/logs/library/reminders: docs/fitness-planner.md) ──
     // health_* tables are the shared profile + weight series the future diet app also reads/writes.
     await client.query(`

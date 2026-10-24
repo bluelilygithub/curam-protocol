@@ -22,7 +22,7 @@ const MAX_CUES = 400; // turn-by-turn directions kept with a track
 const MAX_CUE_TEXT = 160;
 const BIN_TYPE = 'route-track'; // the shared recycle bin kind (server/services/recycleBin/adapters/routeTracks.js)
 const DEFAULT_COLOR = '#E4572E';
-const SUMMARY = `id, name, color, "distanceM", "pointCount", bbox, "drawMode", "createdAt"`;
+const SUMMARY = `id, name, color, "distanceM", "pointCount", bbox, "drawMode", favourite, "createdAt"`;
 const FULL = `${SUMMARY}, notes, geometry, cues, "updatedAt"`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -35,7 +35,7 @@ const cleanName = (raw) => {
 const iso = (d) => new Date(d).toISOString();
 const summaryWire = (r) => ({
   id: r.id, name: r.name, color: r.color, distanceM: Number(r.distanceM), pointCount: Number(r.pointCount),
-  bbox: r.bbox.map(Number), drawMode: r.drawMode, createdAt: iso(r.createdAt),
+  bbox: r.bbox.map(Number), drawMode: r.drawMode, favourite: r.favourite === true, createdAt: iso(r.createdAt),
 });
 const fullWire = (r) => ({ ...summaryWire(r), notes: r.notes ?? null, geometry: r.geometry, cues: r.cues ?? null, updatedAt: iso(r.updatedAt) });
 
@@ -80,6 +80,10 @@ function parseFields(body, { create }) {
     const n = b.notes == null ? '' : b.notes.trim();
     if (n.length > MAX_NOTES) return { error: `Notes can be at most ${MAX_NOTES} characters.` };
     v.notes = n || null;
+  }
+  if (b.favourite !== undefined) {
+    if (typeof b.favourite !== 'boolean') return { error: 'Favourite must be true or false.' };
+    v.favourite = b.favourite;
   }
   if (b.color !== undefined) {
     if (typeof b.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(b.color)) return { error: 'The colour must look like #E4572E.' };
@@ -219,6 +223,7 @@ function createRouter(pool, {
     const params = [req.user.id];
     let where = `"userId" = $1`;
     if (q) { params.push(`%${likeEscape(q)}%`); where += ` AND name ILIKE $${params.length} ESCAPE '\\'`; }
+    if (req.query.favourite === '1' || req.query.favourite === 'true') where += ` AND favourite = true`;
     if (req.query.cursor) {
       const c = decodeCursor(req.query.cursor);
       if (!c) return res.status(400).json({ error: 'The page marker is not valid.' });
@@ -503,6 +508,34 @@ function createRouter(pool, {
     }
   });
 
+  // POST /api/route-tracks/:id/copy and /:id/reverse: a NEW track from an existing one (the original is never changed).
+  // A copy keeps the line, directions, notes and colour. A reversed one is the same route walked the other way: its directions are dropped
+  // (a left turn would become a right turn), and it is not a favourite until the person says so.
+  async function derive(req, res, { suffix, reverse }) {
+    if (!UUID.test(req.params.id)) return res.status(404).json({ error: 'That track was not found.' });
+    try {
+      const count = await pool.query(`SELECT COUNT(*) AS n FROM route_tracks WHERE "userId" = $1`, [req.user.id]);
+      if (Number(count.rows[0]?.n ?? 0) >= MAX_TRACKS_PER_USER) return res.status(400).json({ error: `You have reached the limit of ${MAX_TRACKS_PER_USER} tracks. Delete some to add more.` });
+      const src = (await pool.query(`SELECT ${FULL} FROM route_tracks WHERE id = $1 AND "userId" = $2`, [req.params.id, req.user.id])).rows[0];
+      if (!src) return res.status(404).json({ error: 'That track was not found.' });
+      const lines = reverse ? geo.reverseLines(src.geometry.coordinates) : src.geometry.coordinates;
+      const name = `${String(src.name).slice(0, MAX_NAME - suffix.length - 1)} ${suffix}`;
+      const cues = reverse ? null : src.cues;
+      const { rows } = await pool.query(
+        `INSERT INTO route_tracks ("userId", name, notes, color, geometry, "distanceM", "pointCount", bbox, "drawMode", cues, "createdAt", "updatedAt")
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10::jsonb, date_trunc('milliseconds', NOW()), date_trunc('milliseconds', NOW()))
+         RETURNING ${FULL}`,
+        [req.user.id, name, src.notes ?? null, src.color, JSON.stringify({ type: 'MultiLineString', coordinates: lines }), geo.distanceM(lines), lines.reduce((n, l) => n + l.length, 0), geo.bboxOf(lines), src.drawMode, cues ? JSON.stringify(cues) : null],
+      );
+      res.status(201).json({ track: fullWire(rows[0]) });
+    } catch (err) {
+      getLogger().error({ err }, 'route track copy failed');
+      res.status(500).json({ error: reverse ? 'Could not reverse this track.' : 'Could not copy this track.' });
+    }
+  }
+  router.post('/:id/copy', (req, res) => derive(req, res, { suffix: '(copy)', reverse: false }));
+  router.post('/:id/reverse', (req, res) => derive(req, res, { suffix: '(reversed)', reverse: true }));
+
   router.get('/:id', async (req, res) => {
     if (!UUID.test(req.params.id)) return res.status(404).json({ error: 'That track was not found.' });
     try {
@@ -555,6 +588,7 @@ function createRouter(pool, {
            "pointCount" = COALESCE($7, "pointCount"),
            bbox = COALESCE($8, bbox),
            cues = CASE WHEN $11::boolean THEN $12::jsonb ELSE cues END,
+           favourite = COALESCE($13, favourite),
            "updatedAt" = date_trunc('milliseconds', NOW())
          WHERE id = $9 AND "userId" = $10
          RETURNING ${FULL}`,
@@ -566,6 +600,7 @@ function createRouter(pool, {
           hasGeo ? geo.bboxOf(v.lines) : null,
           req.params.id, req.user.id,
           hasGeo || 'cues' in v, v.cues ? JSON.stringify(v.cues) : null,
+          v.favourite ?? null,
         ],
       );
       if (!rows[0]) return res.status(404).json({ error: 'That track was not found.' });

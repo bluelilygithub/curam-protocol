@@ -68,7 +68,7 @@ function fakePool() {
       if (/^INSERT INTO route_tracks/.test(s)) {
         const r = {
           id: crypto.randomUUID(), userId: params[0], name: params[1], notes: params[2], color: params[3], geometry: JSON.parse(params[4]),
-          distanceM: params[5], pointCount: params[6], bbox: params[7], drawMode: params[8], cues: params[9] ? JSON.parse(params[9]) : null, createdAt: new Date((clock += 1000)), updatedAt: new Date(clock),
+          distanceM: params[5], pointCount: params[6], bbox: params[7], drawMode: params[8], cues: params[9] ? JSON.parse(params[9]) : null, favourite: false, createdAt: new Date((clock += 1000)), updatedAt: new Date(clock),
         };
         rows.push(r);
         return { rows: [r] };
@@ -76,6 +76,7 @@ function fakePool() {
       if (/^SELECT .* FROM route_tracks WHERE "userId" = \$1/.test(s)) { // list
         let list = rows.filter((r) => r.userId === params[0]);
         let i = 1;
+        if (/favourite = true/.test(s)) list = list.filter((r) => r.favourite === true);
         if (/name ILIKE/.test(s)) {
           const needle = params[i++].replace(/^%|%$/g, '').replace(/\\(.)/g, '$1').toLowerCase();
           list = list.filter((r) => r.name.toLowerCase().includes(needle));
@@ -97,13 +98,14 @@ function fakePool() {
         return { rows: r ? [r] : [] };
       }
       if (/^UPDATE route_tracks/.test(s)) {
-        const [name, setNotes, notes, color, geometry, dist, pts, bbox, id, userId, setCues, cues] = params;
+        const [name, setNotes, notes, color, geometry, dist, pts, bbox, id, userId, setCues, cues, fav] = params;
         const r = rows.find((x) => x.id === id && x.userId === userId);
         if (!r) return { rows: [] };
         if (name !== null) r.name = name;
         if (setNotes) r.notes = notes;
         if (color !== null) r.color = color;
         if (setCues) r.cues = cues ? JSON.parse(cues) : null;
+        if (fav !== null) r.favourite = fav;
         if (geometry !== null) { r.geometry = JSON.parse(geometry); r.distanceM = dist; r.pointCount = pts; r.bbox = bbox; }
         r.updatedAt = new Date((clock += 1000));
         return { rows: [r] };
@@ -1071,6 +1073,48 @@ async function planTests() {
     assert.strictEqual(again.json.track.cues.length, 1, 'sent together with the line, they are kept');
     assert.ok(!('cues' in (await call(s, 'GET', '/api/route-tracks?limit=100')).json.tracks[0]), 'the list stays light: no directions');
     await call(s, 'DELETE', `/api/route-tracks/${tid}`);
+  }
+
+  // ---- favourite, copy, reverse
+  {
+    const src = (await call(s, 'POST', '/api/route-tracks', input({ name: 'Sunday loop', notes: 'Park at the gate', color: '#2E7D32', drawMode: 'route', cues: [{ text: 'Turn left', distanceM: 5, pos: [0, 0] }], geometry: { type: 'MultiLineString', coordinates: [[[1, 1], [2, 2], [3, 3]], [[10, 10], [11, 11]]] } }))).json.track;
+    assert.strictEqual(src.favourite, false, 'not a favourite to begin with');
+    const fav = await call(s, 'PATCH', `/api/route-tracks/${src.id}`, { favourite: true });
+    assert.strictEqual(fav.json.track.favourite, true);
+    assert.strictEqual((await call(s, 'PATCH', `/api/route-tracks/${src.id}`, { favourite: 'yes' })).status, 400, 'must be true or false');
+    assert.strictEqual((await call(s, 'PATCH', `/api/route-tracks/${src.id}`, { name: 'Sunday loop' })).json.track.favourite, true, 'renaming does not undo it');
+    const listed = (await call(s, 'GET', '/api/route-tracks?favourite=1&limit=100')).json.tracks;
+    assert.ok(listed.length >= 1 && listed.every((t) => t.favourite === true) && listed.some((t) => t.id === src.id), 'the favourites filter');
+    assert.ok((await call(s, 'GET', '/api/route-tracks?limit=100')).json.tracks.length > listed.length, 'without the filter everything is listed');
+
+    const copy = await call(s, 'POST', `/api/route-tracks/${src.id}/copy`);
+    assert.strictEqual(copy.status, 201);
+    const c = copy.json.track;
+    assert.notStrictEqual(c.id, src.id);
+    assert.strictEqual(c.name, 'Sunday loop (copy)');
+    assert.deepStrictEqual(c.geometry, src.geometry, 'same line');
+    assert.strictEqual(c.notes, 'Park at the gate');
+    assert.strictEqual(c.color, '#2E7D32');
+    assert.strictEqual(c.cues.length, 1, 'a copy keeps its directions');
+    assert.strictEqual(c.favourite, false, 'a copy is not a favourite');
+    assert.strictEqual(c.distanceM, src.distanceM);
+
+    const rev = await call(s, 'POST', `/api/route-tracks/${src.id}/reverse`);
+    assert.strictEqual(rev.status, 201);
+    const r2 = rev.json.track;
+    assert.strictEqual(r2.name, 'Sunday loop (reversed)');
+    assert.deepStrictEqual(r2.geometry.coordinates, [[[11, 11], [10, 10]], [[3, 3], [2, 2], [1, 1]]], 'last stroke first, every stroke backwards');
+    assert.strictEqual(r2.cues, null, 'a left turn would become a right turn: no directions');
+    assert.ok(Math.abs(r2.distanceM - src.distanceM) < 1, 'same distance');
+    assert.deepStrictEqual((await call(s, 'GET', `/api/route-tracks/${src.id}`)).json.track.geometry, src.geometry, 'the original is untouched');
+    assert.strictEqual((await call(s, 'POST', `/api/route-tracks/${crypto.randomUUID()}/copy`)).status, 404);
+    assert.strictEqual((await call(s, 'POST', `/api/route-tracks/nope/reverse`)).status, 404);
+    const stranger = build(pool, 2).listen(0);
+    assert.strictEqual((await call(stranger, 'POST', `/api/route-tracks/${src.id}/copy`)).status, 404, 'not someone else');
+    stranger.close();
+    const long = (await call(s, 'POST', '/api/route-tracks', input({ name: 'x'.repeat(120) }))).json.track;
+    assert.ok((await call(s, 'POST', `/api/route-tracks/${long.id}/copy`)).json.track.name.length <= 120, 'the new name still fits');
+    for (const t of [src, c, r2, long]) await call(s, 'DELETE', `/api/route-tracks/${t.id}`);
   }
 
   // ---- multi-stop planning route

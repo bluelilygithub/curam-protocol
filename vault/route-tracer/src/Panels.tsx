@@ -1,5 +1,5 @@
 import { ToolList } from './ToolList';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Star } from 'lucide-react';
 import type maplibregl from 'maplibre-gl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type Track, type TrackSummary } from './api';
@@ -147,6 +147,7 @@ export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [favOnly, setFavOnly] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -154,12 +155,14 @@ export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
   const reqId = useRef(0);
   const qRef = useRef(q);
   qRef.current = q;
+  const favRef = useRef(favOnly);
+  favRef.current = favOnly;
 
-  const load = useCallback(async (query: string, after: string | null) => {
+  const load = useCallback(async (query: string, after: string | null, favourite = favRef.current) => {
     const id = ++reqId.current;
     setLoading(true);
     try {
-      const r = await api.list({ q: query, cursor: after });
+      const r = await api.list({ q: query, cursor: after, favourite });
       if (id !== reqId.current) return;
       setTracks(after ? [...useStore.getState().tracks, ...r.tracks] : r.tracks);
       setCursor(r.nextCursor);
@@ -170,11 +173,11 @@ export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
   useEffect(() => {
     const t = setTimeout(() => { void load(q, null); }, q ? 300 : 0);
     return () => clearTimeout(t);
-  }, [q, load]);
+  }, [q, favOnly, load]);
 
   // a delete was undone (or something else changed the list): ask again
   useEffect(() => {
-    const again = (): void => { void load(qRef.current, null); };
+    const again = (): void => { void load(qRef.current, null, favRef.current); };
     window.addEventListener(TRACKS_CHANGED, again);
     return () => window.removeEventListener(TRACKS_CHANGED, again);
   }, [load]);
@@ -221,6 +224,7 @@ export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
         <span className="vwrap"><input type="search" aria-label="Search tracks" title="Type part of a track name to filter the list" placeholder="Search by name" value={q} onChange={(e) => setQ(e.target.value)} /><Mic label="Speak part of a track name" onText={setQ} onDone={(t) => { setQ(tidySpoken(t)); }} /></span>
       </div>
       <div className="side-body">
+        <label className="check" title="List only the tracks you have starred as favourites"><input type="checkbox" title="List only your favourite tracks" checked={favOnly} onChange={(e) => setFavOnly(e.target.checked)} /> Favourites only</label>
         <label className="check" title="Draw every saved track on the map at once, not just the open one"><input type="checkbox" title="Draw every saved track on the map at once" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} /> Show all on map</label>
         {tracks.length > 0 && (
           <div className="row">
@@ -242,13 +246,13 @@ export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
               <label className="pick"><input type="checkbox" aria-label={`Select ${t.name}`} title="Tick to select this track for deleting" checked={picked.has(t.id)} onChange={() => togglePicked(t.id)} /></label>
               <button type="button" onClick={() => void open(t)} title="Open this track: show it on the map with its details">
                 <span className="dot" style={{ background: t.color }} />
-                <span className="tname">{t.name}</span>
+                <span className="tname">{t.favourite ? <Star size={13} aria-label="Favourite" className="fav-on" /> : null}{t.name}</span>
                 <span className="tmeta">{formatDistance(t.distanceM / 1000, units)} · {fmtDate(t.createdAt)}</span>
               </button>
             </li>
           ))}
         </ul>
-        {loaded && !tracks.length && <p className="hint">{q ? 'No tracks match.' : 'No saved tracks yet. Choose Draw a route to trace one, or Plan a route to find one.'}</p>}
+        {loaded && !tracks.length && <p className="hint">{q || favOnly ? 'No tracks match.' : 'No saved tracks yet. Choose Draw a route to trace one, or Plan a route to find one.'}</p>}
         {loading && <p className="hint">Loading…</p>}
         <div ref={sentinel} style={{ height: 1 }} />
       </div>
@@ -267,8 +271,9 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
   const [pdfOpen, setPdfOpen] = useState(false);
   const [watchOpen, setWatchOpen] = useState(false);
   const [cuePdfBusy, setCuePdfBusy] = useState(false);
+  const [fav, setFav] = useState(track.favourite);
 
-  useEffect(() => { setPdfOpen(false); setWatchOpen(false); setName(track.name); setNotes(track.notes ?? ''); setColor(track.color); setEditing(false); setConfirmDelete(false); }, [track.id, track.updatedAt, track.name, track.notes, track.color]);
+  useEffect(() => { setPdfOpen(false); setWatchOpen(false); setName(track.name); setNotes(track.notes ?? ''); setColor(track.color); setEditing(false); setConfirmDelete(false); setFav(track.favourite); }, [track.id, track.updatedAt, track.name, track.notes, track.color, track.favourite]);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -295,6 +300,22 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch (err) { toast('error', errText(err)); } finally { setCuePdfBusy(false); }
+  }
+  async function toggleFavourite() {
+    const next = !fav;
+    setFav(next);
+    try { onChanged(await api.update(track.id, { favourite: next })); toast('ok', next ? 'Added to your favourites' : 'Removed from your favourites'); } catch (err) { setFav(!next); toast('error', errText(err)); }
+  }
+  /** Copy or Reverse: a NEW track (the original is not touched), opened straight away. */
+  async function derive(kind: 'copy' | 'reverse') {
+    setBusy(true);
+    try {
+      const made = await (kind === 'copy' ? api.copyTrack(track.id) : api.reverseTrack(track.id));
+      window.dispatchEvent(new Event(TRACKS_CHANGED));
+      useStore.getState().select(made);
+      if (map) fitTo(map, made.bbox);
+      toast('ok', kind === 'copy' ? `Copied as "${made.name}".` : `Reversed as "${made.name}". The original is unchanged.`);
+    } catch (err) { toast('error', errText(err)); } finally { setBusy(false); }
   }
   async function exportGpx() {
     try { await api.downloadGpx(track.id, track.name); } catch (err) { toast('error', errText(err)); }
@@ -338,7 +359,12 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
             <ElevationChart lines={track.geometry.coordinates} color={track.color} name={track.name} />
             {track.cues?.length ? <DirectionsList cues={track.cues} map={map} units={units} /> : null}
             <div className="stack">
+              <button type="button" onClick={() => void toggleFavourite()} aria-pressed={fav} title={fav ? 'This is one of your favourites. Press to remove the star.' : 'Star this track as a favourite, so you can list only your favourites'}>
+                <Star size={14} aria-hidden="true" className={fav ? 'fav-on' : ''} /> {fav ? 'Favourite' : 'Add to favourites'}
+              </button>
               <button type="button" onClick={() => setEditing(true)} title="Change this track's name, notes or colour">Rename / edit</button>
+              <button type="button" disabled={busy} onClick={() => void derive('copy')} title="Make a copy of this track to change or extend without touching the original">Copy</button>
+              <button type="button" disabled={busy} onClick={() => void derive('reverse')} title="Make a new track that goes the same way back, from the end to the start. The original stays as it is, and the directions are not copied (a left turn would become a right turn).">Reverse</button>
               <button type="button" onClick={() => reopen('edit')} title="Reshape the route: move points, add points or delete them">Edit points</button>
               <button type="button" onClick={() => reopen('extend')} title="Carry on drawing from the end of this route">Extend</button>
               <button type="button" onClick={() => void exportGpx()} title="Download this track as a GPX file for Strava, Garmin or gpx.studio">Export GPX</button>
