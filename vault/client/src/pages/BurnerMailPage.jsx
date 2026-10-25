@@ -1,9 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import useAuthStore from '../store/authStore';
 import { useIcon } from '../providers/IconProvider';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
+import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
+import BurnerMailTutorChat from './burnerMail/BurnerMailTutorChat';
+import { HOW_IT_WORKS, GUIDE_TOOLS } from './burnerMail/burnerMailTools.mjs';
+import { startBurnerMailTour, TOUR_KEY as BURNER_TOUR_KEY } from '../utils/tours/burnerMailTour';
 
 const FIELD = 'px-3 py-2.5 rounded-xl border text-sm outline-none';
 const FIELD_STYLE = { background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' };
@@ -117,6 +121,8 @@ export default function BurnerMailPage() {
   const [checkedAt, setCheckedAt] = useState(null);
   const selectedRef = useRef(null);
   selectedRef.current = selectedId;
+  const info = useToolInfoModal('vault_burner_mail_info_seen');
+  const [params, setParams] = useSearchParams();
 
   useEffect(() => {
     api.get('/api/settings/feature-access').then((r) => r.json()).then((d) => { if (d?.flags) setFeatureAccess({ ...DEFAULT_FEATURE_ACCESS, ...d.flags }); }).catch(() => {});
@@ -154,6 +160,26 @@ export default function BurnerMailPage() {
     return () => clearInterval(t);
   }, [selectedId, loadMessages, loadAddresses]);
 
+  // Settings -> Burner Mail Tour opens /burner-mail?tour=1
+  useEffect(() => {
+    if (params.get('tour')) {
+      const next = new URLSearchParams(params); next.delete('tour');
+      setParams(next, { replace: true });
+      setTimeout(startBurnerMailTour, 300);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startTour = () => {
+    try { localStorage.removeItem(BURNER_TOUR_KEY); } catch (_) { /* ignore */ }
+    startBurnerMailTour();
+  };
+
+  // The guide's "Open" buttons: scroll to the area that holds the control.
+  const openToolById = (id) => {
+    const target = GUIDE_TOOLS.find((t) => t.id === id);
+    document.querySelector(`[data-guide="${target ? target.tool : id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   const create = async () => {
     setBusy(true); setError('');
     try {
@@ -184,7 +210,11 @@ export default function BurnerMailPage() {
     <div className="flex flex-col flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
       <div className="w-full max-w-4xl mx-auto space-y-5">
         <div>
-          <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Burner Mail</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Burner Mail</h1>
+            <button type="button" title="How Burner Mail works" aria-label="How Burner Mail works" onClick={info.open} className="opacity-60 hover:opacity-100 transition-opacity" style={{ color: 'var(--color-muted)' }}>{getIcon('info', { size: 16 })}</button>
+            <button type="button" title="Take the guided tour of Burner Mail" aria-label="Take the guided tour of Burner Mail" onClick={startTour} className="opacity-60 hover:opacity-100 transition-opacity" style={{ color: 'var(--color-muted)' }}>{getIcon('compass', { size: 16 })}</button>
+          </div>
           <p className="text-sm leading-relaxed" style={{ color: 'var(--color-muted)' }}>
             Make a throw-away email address for a web sign-up. When the site sends its verification email, the code and confirm link show up here. Nothing is opened for you.
           </p>
@@ -196,7 +226,7 @@ export default function BurnerMailPage() {
           </div>
         )}
 
-        <div className="rounded-2xl border p-6 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <div className="rounded-2xl border p-6 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }} data-guide="make" data-tour="burner-make">
           <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>New address</h2>
           <div className="flex flex-col sm:flex-row gap-2">
             <input
@@ -219,7 +249,7 @@ export default function BurnerMailPage() {
         </div>
 
         <div className="grid gap-5 sm:grid-cols-[18rem_1fr]">
-          <div className="space-y-2">
+          <div className="space-y-2" data-tour="burner-list">
             {addresses.length === 0 && <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No addresses yet.</p>}
             {addresses.map((a) => (
               <div
@@ -242,9 +272,9 @@ export default function BurnerMailPage() {
             ))}
           </div>
 
-          <div className="space-y-3 min-w-0">
+          <div className="space-y-3 min-w-0" data-guide="inbox" data-tour="burner-inbox">
             {selected && (
-              <div className="rounded-2xl border p-4 space-y-2" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+              <div className="rounded-2xl border p-4 space-y-2" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }} data-tour="burner-address">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-sm break-all flex-1 min-w-0" style={{ color: 'var(--color-text)' }}>{selected.address}</span>
                   <CopyButton value={selected.address} label="Copy address" />
@@ -259,6 +289,21 @@ export default function BurnerMailPage() {
           </div>
         </div>
       </div>
+
+      {info.show && (
+        <ToolInfoModal title="How Burner Mail Works" onClose={info.close}>
+          <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+            Throw-away email addresses for web sign-ups. Not sure where to start? Press the round button at the bottom right and tell the guide what you want to do.
+          </p>
+          <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+            {HOW_IT_WORKS.map(([heading, text]) => (
+              <p key={heading} style={{ color: 'var(--color-text)' }}><strong>{heading}</strong> — {text}</p>
+            ))}
+          </div>
+        </ToolInfoModal>
+      )}
+
+      <BurnerMailTutorChat currentTool="make" onOpenTool={openToolById} />
     </div>
   );
 }

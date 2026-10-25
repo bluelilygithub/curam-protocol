@@ -29,8 +29,12 @@ Cloudflare receives the email, the Worker posts the raw message to `POST /api/in
 
 ## Files
 
-`server/routes/burnerMail.js` (signed-in API and the inbound route), `server/services/burnerMail/extract.js` (+ `extract.test.js`), `server/cron/burnerMailCron.js`, `client/src/pages/BurnerMailPage.jsx`. Tables `burner_addresses`, `burner_messages` in `server/db.js`. Test: `npm run test:burner-mail`.
+`server/routes/burnerMail.js` (signed-in API and the inbound route), `server/services/burnerMail/extract.js` (+ `extract.test.js`), `server/cron/burnerMailCron.js`, `client/src/pages/BurnerMailPage.jsx`. Tables `burner_addresses`, `burner_messages` in `server/db.js`. Tests: `npm run test:burner-mail`, `npm run test:burner-mail-tutor`.
+
+## Help
+
+The page has an (i) box (opens once), a compass tour (`client/src/utils/tours/burnerMailTour.js`, key `vault_tour_burner_mail_completed`, retake from Settings -> `/burner-mail?tour=1`) and a **Burner Mail guide** (round button, `POST /api/burner-mail-tutor`, `server/services/burnerMailTutor.js` on `guideCore.js`, wrapper `client/src/pages/burnerMail/BurnerMailTutorChat.jsx`). It sees no addresses or emails. `burnerMailTools.mjs` lists the page's two areas and the controls the Open buttons scroll to; update it and the guide `CATALOG` together (`test:burner-mail-tutor` fails on drift).
 
 ## Not built
 
-Per-service guide chat, tour, (i) box and microphone on the label field (the other tool pages have these). A Browser Agent hand-off that reads the code for you.
+Microphone on the label field. A Browser Agent hand-off that reads the code for you.

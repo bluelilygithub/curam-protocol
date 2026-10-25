@@ -23,6 +23,7 @@ const GUIDES = {
   finance: { name: 'Finance guide', endpoint: '/api/finance-tutor' },
   cellar: { name: 'Cellar Planner guide', endpoint: '/api/cellar-tutor' },
   route: { name: 'Route Tracer guide', endpoint: '/api/route-tutor' },
+  'burner-mail': { name: 'Burner Mail guide', endpoint: '/api/burner-mail-tutor' },
   'pc-health': { name: 'PC Health guide', endpoint: '/api/pc-health-tutor' },
 };
 

@@ -115,6 +115,27 @@
   "GET /api/browser-agent/runs": {
    "class": "authed"
   },
+  "POST /api/burner-mail-tutor": {
+   "class": "authed"
+  },
+  "GET /api/burner-mail/addresses": {
+   "class": "authed"
+  },
+  "POST /api/burner-mail/addresses": {
+   "class": "authed"
+  },
+  "DELETE /api/burner-mail/addresses/:id": {
+   "class": "authed"
+  },
+  "GET /api/burner-mail/addresses/:id/messages": {
+   "class": "authed"
+  },
+  "DELETE /api/burner-mail/messages/:id": {
+   "class": "authed"
+  },
+  "GET /api/burner-mail/status": {
+   "class": "authed"
+  },
   "POST /api/calendar/ask": {
    "class": "authed"
   },
@@ -1710,6 +1731,9 @@
   },
   "POST /api/html/audits": {
    "class": "authed"
+  },
+  "POST /api/inbound-mail": {
+   "class": "public"
   },
   "POST /api/local-audio/transcribe": {
    "class": "authed"
