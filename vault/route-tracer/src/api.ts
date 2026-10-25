@@ -83,8 +83,6 @@ export const api = {
   update: (id: string, patch: Partial<Pick<TrackInput, 'name' | 'notes' | 'color' | 'geometry' | 'cues'>> & { favourite?: boolean }) =>
     call<{ track: Track }>('PATCH', `/api/route-tracks/${id}`, patch).then((r) => r.track),
   /** Deleting moves the track to Vault's shared recycle bin (30 days); `binId` is what Undo restores. */
-  /** Work out directions for a saved track that has none: the line is thinned and the routing service routes through it. They are saved on the track. */
-  directions: (id: string, profile: PlanProfile) => call<{ track: Track; routeM: number }>('POST', `/api/route-tracks/${id}/directions`, { profile }),
   /** A new track from this one, same line and directions, named "... (copy)". */
   copyTrack: (id: string) => call<{ track: Track }>('POST', `/api/route-tracks/${id}/copy`).then((r) => r.track),
   /** A new track walking this one the other way, named "... (reversed)"; its directions are not carried over. */

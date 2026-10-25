@@ -10,7 +10,6 @@ import { setSaved, type SavedLine } from './mapLayers';
 import { ElevationChart } from './ElevationChart';
 import { ExportPdf } from './ExportPdf';
 import { SendToWatch } from './SendToWatch';
-import { buildCuePdf } from './cuePdf';
 import { usePlan } from './Plan';
 import { findStart, loopChoices } from './suggest';
 import { turnCues } from './turns';
@@ -308,9 +307,6 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
   const [busy, setBusy] = useState(false);
   const [pdfOpen, setPdfOpen] = useState(false);
   const [watchOpen, setWatchOpen] = useState(false);
-  const [cuePdfBusy, setCuePdfBusy] = useState(false);
-  const [dirBusy, setDirBusy] = useState(false);
-  const routePlanning = useStore((s) => s.routePlanning);
   // directions with street names if the routing service gave them when the route was saved, else worked out from the shape of the line
   const hasNames = !!track.cues?.length;
   const shownCues = useMemo(() => (track.cues?.length ? track.cues : turnCues(track.geometry.coordinates)), [track.cues, track.geometry]);
@@ -327,31 +323,6 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
   async function remove() {
     setBusy(true);
     try { const r = await api.remove(track.id); offerUndo(`Deleted ${track.name}.`, r?.binId ? [r.binId] : []); onGone(); } catch (err) { toast('error', errText(err)); setBusy(false); }
-  }
-  /** Optional upgrade: ask the routing service for street names along the track (the way of travelling is the one last used for planning). */
-  async function addStreetNames() {
-    setDirBusy(true);
-    try {
-      const r = await api.directions(track.id, usePlan.getState().profile);
-      onChanged(r.track);
-      toast('ok', 'Street names added to the directions.');
-    } catch { toast('error', 'Street names are not available for this track just now. The directions still work without them.', 5000); } finally { setDirBusy(false); }
-  }
-  /** The directions as a printable PDF, made in the browser and saved from a Blob link. */
-  async function directionsPdf() {
-    if (!shownCues.length || cuePdfBusy) return;
-    setCuePdfBusy(true);
-    try {
-      const bytes = await buildCuePdf({ title: track.name, notes: track.notes, dateLabel: fmtDate(track.createdAt), color: track.color, units, totalM: track.distanceM, cues: shownCues });
-      const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }));
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${track.name.replace(/[^\w\- .]+/g, '_').trim().slice(0, 80) || 'track'} - directions.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-    } catch (err) { toast('error', errText(err)); } finally { setCuePdfBusy(false); }
   }
   async function toggleFavourite() {
     const next = !fav;
@@ -410,10 +381,6 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
             {track.notes && <p className="notes">{track.notes}</p>}
             <ElevationChart lines={track.geometry.coordinates} color={track.color} name={track.name} />
             {shownCues.length > 1 && <DirectionsList cues={shownCues} map={map} units={units} title={track.name} shapeOnly={!hasNames} />}
-            {!hasNames && shownCues.length > 1 && routePlanning && (
-              <button type="button" className="link" disabled={dirBusy} onClick={() => void addStreetNames()} data-testid="add-street-names"
-                title="Ask the routing service for the street names along this track and add them to the directions. The directions above work without them.">{dirBusy ? 'Looking up street names…' : 'Add street names to the directions'}</button>
-            )}
             <div className="stack">
               <button type="button" onClick={() => void toggleFavourite()} aria-pressed={fav} title={fav ? 'This is one of your favourites. Press to remove the star.' : 'Star this track as a favourite, so you can list only your favourites'}>
                 <Star size={14} aria-hidden="true" className={fav ? 'fav-on' : ''} /> {fav ? 'Favourite' : 'Add to favourites'}
@@ -427,7 +394,6 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
               <button type="button" onClick={() => setWatchOpen((o) => !o)} aria-expanded={watchOpen} title="Get this route onto a Zepp watch such as the Amazfit Bip 6">Send to watch</button>
               {watchOpen && <SendToWatch track={track} />}
               <button type="button" onClick={() => setPdfOpen(true)} title="Make a printable A4 map of this route as a PDF, to download or email" data-tour="rt-pdf">Map as PDF</button>
-              {shownCues.length > 1 ? <button type="button" onClick={() => void directionsPdf()} disabled={cuePdfBusy} title="Download the turn-by-turn directions as a printable PDF list">{cuePdfBusy ? 'Making the PDF…' : 'Directions as PDF'}</button> : null}
               {confirmDelete ? (
                 <div className="row">
                   <span>Delete this track?</span>

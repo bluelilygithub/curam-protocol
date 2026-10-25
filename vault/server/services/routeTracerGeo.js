@@ -104,41 +104,4 @@ function toKml(name, notes, lines) {
 /** The same route walked the other way: the last stroke first, and every stroke's points backwards. The distance is unchanged. */
 const reverseLines = (lines) => lines.map((l) => [...l].reverse()).reverse();
 
-/**
- * A saved line thinned to at most `max` waypoints that still follow its shape (for asking the routing service for directions along it):
- * every stroke joined in order, best-first Douglas-Peucker down to `max` points, then neighbours under `minGapM` apart merged.
- * The first and last points are always kept.
- */
-function waypointsAlong(lines, max, minGapM = 30) {
-  const pts = lines.flat();
-  if (pts.length < 2) return pts;
-  const mx = (lat) => 111320 * Math.cos(rad(lat));
-  const perp = (p, a, b) => { // distance in metres from p to the segment a-b, on a flat patch of the earth
-    const k = mx(a[1]);
-    const ax = a[0] * k, ay = a[1] * 111320, bx = b[0] * k, by = b[1] * 111320, px = p[0] * k, py = p[1] * 111320;
-    const dx = bx - ax, dy = by - ay; const len2 = dx * dx + dy * dy;
-    const t = len2 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
-    return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
-  };
-  // best-first Douglas-Peucker: keep splitting the stretch that strays furthest from a straight line until `max` points are kept, so a long
-  // winding track keeps its main bends instead of collapsing to two points
-  const worstOf = (i, j) => { let worst = 0; let at = -1; for (let k = i + 1; k < j; k += 1) { const d = perp(pts[k], pts[i], pts[j]); if (d > worst) { worst = d; at = k; } } return { i, j, worst, at }; };
-  const keep = new Set([0, pts.length - 1]);
-  const open = [worstOf(0, pts.length - 1)];
-  while (keep.size < max && open.length) {
-    open.sort((x, y) => y.worst - x.worst);
-    const top = open.shift();
-    if (top.at < 0 || top.worst < 2) break; // what is left is straighter than 2 metres: not worth a waypoint
-    keep.add(top.at);
-    open.push(worstOf(top.i, top.at), worstOf(top.at, top.j));
-  }
-  const out = pts.filter((_, k) => keep.has(k));
-  const spaced = [out[0]];
-  for (let i = 1; i < out.length; i += 1) {
-    if (segmentM(spaced[spaced.length - 1], out[i]) >= minGapM) spaced.push(out[i]);
-    else if (i === out.length - 1) spaced[spaced.length - 1] = out[i]; // the end of the line always stays
-  }
-  return spaced.slice(0, max);
-}
-
-module.exports = { waypointsAlong, reverseLines, distanceM, bboxOf, validateGeometry, cleanLines, toGpx, toTcx, toKml, MAX_POINTS, MAX_LINES };
+module.exports = { reverseLines, distanceM, bboxOf, validateGeometry, cleanLines, toGpx, toTcx, toKml, MAX_POINTS, MAX_LINES };

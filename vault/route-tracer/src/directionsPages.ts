@@ -4,15 +4,13 @@ import { MARGIN, pageSize, safeText, tint, wrapText } from './mapLayout';
 import type { Cue } from './api';
 
 /**
- * The directions as a PDF: a plain A4 list to print or keep, one numbered line per turn with how far to the next one and how far you have come.
- * Never touches the DOM, so it is tested in plain Node. The text goes through safeText because the standard PDF font has Latin characters only.
+ * The directions as pages at the back of the Map as PDF: a plain A4 portrait list, one numbered line per step with how far to the next one and
+ * how far you have come. Never touches the DOM, so it is tested in plain Node. The text goes through safeText because the standard PDF font has
+ * Latin characters only.
  */
 
-export interface CuePdfInput {
+export interface DirectionsPagesInput {
   title: string;
-  notes?: string | null;
-  /** Shown under the title, already formatted (for example "12 Oct 2026"). */
-  dateLabel: string;
   color: string;
   units: Units;
   totalM: number;
@@ -25,12 +23,10 @@ const NUM_W = 26;
 const DIST_W = 96;
 const MAX_PAGES = 12; // 400 directions never need more; this only stops a runaway
 
-export async function buildCuePdf(input: CuePdfInput): Promise<Uint8Array> {
+/** Add the directions to `doc`, starting on a new page. Does nothing when there is nothing to list. */
+export async function addDirectionsPages(doc: PDFDocument, input: DirectionsPagesInput): Promise<void> {
+  if (input.cues.length < 2) return;
   const { units } = input;
-  const doc = await PDFDocument.create();
-  doc.setTitle(`Directions: ${input.title}`.slice(0, 200));
-  doc.setCreator('Route Tracer in Vault');
-  doc.setProducer('Route Tracer in Vault');
   const reg = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const has = new Set(reg.getCharacterSet());
@@ -50,16 +46,12 @@ export async function buildCuePdf(input: CuePdfInput): Promise<Uint8Array> {
   const header = (first: boolean): void => {
     if (first) {
       page.drawRectangle({ x: MARGIN, y: y - 4, width: 6, height: 26, color: accent });
-      page.drawText(safe(input.title, true).slice(0, 80), { x: MARGIN + 14, y: y + 6, size: 18, font: bold, color: ink });
+      page.drawText('Directions', { x: MARGIN + 14, y: y + 6, size: 18, font: bold, color: ink });
       y -= 26;
-      page.drawText(safe(`Directions · ${km(input.totalM)} · ${input.cues.length} steps · ${input.dateLabel}`), { x: MARGIN + 14, y, size: 10.5, font: reg, color: grey });
-      y -= 20;
-      if (input.notes) {
-        for (const l of wrapText(safe(input.notes), w - MARGIN * 2, (s) => reg.widthOfTextAtSize(s, SIZE), 5)) { page.drawText(l, { x: MARGIN, y, size: SIZE, font: reg, color: ink }); y -= LEAD; }
-        y -= 6;
-      }
+      page.drawText(safe(`${input.title} · ${km(input.totalM)} · ${input.cues.length} steps`).slice(0, 110), { x: MARGIN + 14, y, size: 10.5, font: reg, color: grey });
+      y -= 22;
     } else {
-      page.drawText(safe(`${input.title} (continued)`).slice(0, 90), { x: MARGIN, y, size: 10, font: reg, color: grey });
+      page.drawText(safe(`Directions: ${input.title} (continued)`).slice(0, 110), { x: MARGIN, y, size: 10, font: reg, color: grey });
       y -= 20;
     }
     page.drawText('Step', { x: MARGIN, y, size: 9, font: bold, color: grey });
@@ -71,7 +63,7 @@ export async function buildCuePdf(input: CuePdfInput): Promise<Uint8Array> {
   };
 
   const footer = (p: PDFPage): void => {
-    p.drawText('Directions © openrouteservice.org · © OpenStreetMap contributors. A guide only: follow signs and local rules.', { x: MARGIN, y: MARGIN - 10, size: 7.5, font: reg, color: grey });
+    p.drawText('A guide only: follow signs and local rules.', { x: MARGIN, y: MARGIN - 10, size: 7.5, font: reg, color: grey });
   };
 
   header(true);
@@ -95,5 +87,4 @@ export async function buildCuePdf(input: CuePdfInput): Promise<Uint8Array> {
     y -= need + 4;
   });
   footer(page);
-  return doc.save();
 }

@@ -7,9 +7,10 @@ import { captureMap } from './mapCapture';
 import { Field, Mic } from './Mic';
 import { captureSize, chooseOrientation } from './mapLayout';
 import { useStore } from './store';
+import { turnCues } from './turns';
 import { spokenEmail } from './voice';
 
-type State = { status: 'making'; step: string } | { status: 'error'; message: string } | { status: 'ready'; blob: Blob; kb: number; noHeights: boolean };
+type State = { status: 'making'; step: string } | { status: 'error'; message: string } | { status: 'ready'; blob: Blob; kb: number; noHeights: boolean; withDirections: boolean };
 
 const errText = (e: unknown): string => (e instanceof Error ? e.message : 'That did not work.');
 const fileBase = (name: string): string => (name.replace(/[^\w\- .]+/g, '_').trim().slice(0, 80) || 'route-map');
@@ -63,14 +64,16 @@ export function ExportPdf({ track, onClose }: { track: Track; onClose: () => voi
       if (dead) return;
       setState({ status: 'making', step: 'Putting the page together…' });
       const prof = await profileP;
+      const cues = track.cues?.length ? track.cues : turnCues(lines);
       const { buildMapPdf } = await import('./mapPdf');
       const bytes = await buildMapPdf({
         title: track.name, notes: track.notes, dateLabel: fmtDate(track.createdAt), lines, color: track.color, units, orientation,
         image: { bytes: picture.bytes, type: picture.type }, center: picture.center, zoom: picture.zoom, profile: prof.p, profileNote: prof.note,
+        cues, // the same directions the track shows: street names if it has them, else from the line's shape
       });
       if (dead) return;
       const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
-      setState({ status: 'ready', blob, kb: Math.round(blob.size / 1024), noHeights: !prof.p });
+      setState({ status: 'ready', blob, kb: Math.round(blob.size / 1024), noHeights: !prof.p, withDirections: cues.length > 1 });
     })().catch((e: unknown) => { if (!dead) setState({ status: 'error', message: errText(e) }); });
     return () => { dead = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -118,7 +121,7 @@ export function ExportPdf({ track, onClose }: { track: Track; onClose: () => voi
         )}
         {ready && (
           <>
-            <p role="status" data-testid="pdf-ready">Ready: one A4 page, {state.kb.toLocaleString('en-AU')} KB.{state.noHeights ? ' Heights could not be added.' : ''}</p>
+            <p role="status" data-testid="pdf-ready">Ready: {state.withDirections ? 'the map on one A4 page, then the directions' : 'one A4 page'}, {state.kb.toLocaleString('en-AU')} KB.{state.noHeights ? ' Heights could not be added.' : ''}</p>
             <button type="button" className="primary wide" onClick={download} title="Save the PDF to this device" data-testid="pdf-download"><Download size={16} aria-hidden="true" /> Download PDF</button>
             <hr />
             <form className="stack" onSubmit={(e) => void send(e)} data-testid="pdf-email">

@@ -111,7 +111,6 @@ const bbox = (lines) => { const xs = lines.flat().map((p) => p[0]); const ys = l
 const summary = (t) => { const { geometry, notes, updatedAt, ...s } = t; return s; };
 const emailLog = [];
 const multiLog = [];
-const directionsLog = [];
 const bin = new Map(); // the recycle bin: binId -> the track that was deleted
 let binSeq = 0;
 const trash = (t) => { const id = `bin-${++binSeq}`; bin.set(id, t); return id; };
@@ -147,13 +146,6 @@ await page.route('**/api/route-tracks**', async (route) => {
     return route.fulfill({ json: { ok: true, copied: b.copyToMe === true } });
   }
   if (m === 'GET' && path === '') return route.fulfill({ json: { tracks: [...db].reverse().filter((t) => !new URL(req.url()).searchParams.get('favourite') || t.favourite).map(summary), nextCursor: null } });
-  if (m === 'POST' && /^\/[^/]+\/directions$/.test(path)) {
-    const src = db.find((x) => x.id === path.split('/')[1]);
-    if (!src) return route.fulfill({ status: 404, json: { error: 'That track was not found.' } });
-    directionsLog.push(req.postDataJSON());
-    src.cues = stepsFor(src.geometry.coordinates.flat());
-    return route.fulfill({ json: { track: src, routeM: dist(src.geometry.coordinates) } });
-  }
   if (m === 'POST' && /^\/[^/]+\/(copy|reverse)$/.test(path)) {
     const [, id, kind] = path.split('/');
     const src = db.find((x) => x.id === id);
@@ -541,7 +533,7 @@ check('the saved track is drawn on the map', await page.evaluate(() => window.ro
     check('the PDF projects places onto its picture exactly as a map of that size does', diffs.length === 9 && diffs.every((d) => d < 0.01), JSON.stringify(diffs));
   }
   await page.getByTestId('pdf-ready').waitFor({ timeout: 60000 });
-  check('and finishes with one A4 page', /one A4 page, [\d,]+ KB/.test((await page.getByTestId('pdf-ready').textContent()) ?? ''), (await page.getByTestId('pdf-ready').textContent()) ?? '');
+  check('and finishes with the map on one A4 page, then the directions', /the map on one A4 page, then the directions, [\d,]+ KB/.test((await page.getByTestId('pdf-ready').textContent()) ?? ''), (await page.getByTestId('pdf-ready').textContent()) ?? '');
   check('the hidden map used to make it is gone again', (await page.locator('body > div[aria-hidden="true"] canvas').count()) === 0);
   await tipsOk('map as PDF window');
   const [dl] = await Promise.all([page.waitForEvent('download'), page.getByTestId('pdf-download').click()]);
@@ -549,6 +541,9 @@ check('the saved track is drawn on the map', await page.evaluate(() => window.ro
   const file = await dl.path();
   const head = (await import('node:fs')).readFileSync(file).subarray(0, 5).toString('latin1');
   check('and it is a real PDF', head === '%PDF-');
+  const { PDFDocument } = await import('pdf-lib');
+  const pdfDoc = await PDFDocument.load((await import('node:fs')).readFileSync(file));
+  check('with the directions on pages after the map', pdfDoc.getPageCount() >= 2 && pdfDoc.getPage(0).getSize().width > pdfDoc.getPage(0).getSize().height && Math.round(pdfDoc.getPage(1).getSize().width) === 595, `${pdfDoc.getPageCount()} pages`);
   if (out) (await import('node:fs')).copyFileSync(file, join(out, 'map.pdf'));
 
   // email
@@ -1019,12 +1014,6 @@ await wait(300);
   await page.locator('.directions-list li').nth(1).getByRole('button').click(); await wait(900);
   const c1 = await center();
   check('tapping a step takes the map to where it happens', Math.abs(c1[0] - c0[0]) + Math.abs(c1[1] - c0[1]) > 1e-4);
-  check('the directions can be copied or downloaded as text', (await page.getByTestId('directions').getByRole('button', { name: 'Copy as text' }).count()) === 1 && (await page.getByTestId('directions').getByRole('button', { name: 'Download .txt' }).count()) === 1);
-  await page.getByTestId('directions').getByRole('button', { name: 'Copy as text' }).click(); await wait(400);
-  check('Copy says it worked (or says to use the download)', (await page.locator('.toast', { hasText: /Directions copied|Use Download/ }).count()) >= 1);
-  const [txt] = await Promise.all([page.waitForEvent('download'), page.getByTestId('directions').getByRole('button', { name: 'Download .txt' }).click()]);
-  const txtBody = readFileSync(await txt.path(), 'utf8');
-  check('Download .txt saves numbered lines with distances, before the route is even saved', /\.txt$/.test(txt.suggestedFilename()) && /^1\. Head north on Test Street \(/m.test(txtBody) && /^3\. Arrive at your destination$/m.test(txtBody) && /Turn left onto Park Road/.test(txtBody), `${txt.suggestedFilename()} ${txtBody.slice(0, 200)}`);
   await tipsOk('plan route: directions and stops');
 
   // add a stop
@@ -1083,16 +1072,7 @@ await wait(300);
   check('the saved track shows its directions', (await page.getByLabel('Track detail').getByTestId('directions').count()) === 1);
   await tipsOk('track detail with directions');
 
-  const [txt2] = await Promise.all([page.waitForEvent('download'), page.getByLabel('Track detail').getByTestId('directions').getByRole('button', { name: 'Download .txt' }).click()]);
-  check('a saved track offers the text too, named for the track', /^Stops and directions - directions\.txt$/.test(txt2.suggestedFilename()) && /^Stops and directions$/m.test(readFileSync(await txt2.path(), 'utf8')), txt2.suggestedFilename());
 
-  // the directions as a PDF
-  const pdfBtn = page.getByRole('button', { name: 'Directions as PDF' });
-  check('there is a Directions as PDF button', await pdfBtn.isVisible());
-  const [dl] = await Promise.all([page.waitForEvent('download'), pdfBtn.click()]);
-  const path = await dl.path();
-  const pdfHead = readFileSync(path).subarray(0, 5).toString('latin1');
-  check('it downloads a real PDF named for the track', pdfHead === '%PDF-' && /Stops and directions - directions\.pdf$/.test(dl.suggestedFilename()), `${pdfHead} ${dl.suggestedFilename()}`);
 
   // reshaping the line drops the directions (they would point at the wrong places); leaving it alone keeps them
   await page.getByRole('button', { name: 'Edit points', exact: true }).click();
@@ -1108,7 +1088,7 @@ await wait(300);
   await page.getByRole('button', { name: 'Finish' }).click();
   await dlg.getByLabel('Name').press('Enter');
   await page.getByLabel('Track detail').waitFor();
-  check('extended, the street-name directions are dropped (they would no longer match) but directions from the line shape are still shown', db.at(-1).cues === null && (await page.getByLabel('Track detail').getByTestId('directions').count()) === 1 && (await page.getByTestId('add-street-names').count()) === 1 && (await page.getByRole('button', { name: 'Directions as PDF' }).count()) === 1);
+  check('extended, the street-name directions are dropped (they would no longer match) but directions from the line shape are still shown', db.at(-1).cues === null && (await page.getByLabel('Track detail').getByTestId('directions').count()) === 1);
 
   // favourite, copy, reverse
   {
@@ -1175,7 +1155,6 @@ await wait(300);
   await box.getByLabel('Name').press('Enter');
   await page.getByLabel('Track detail').waitFor();
   check('the saved track shows its directions', db.at(-1).name === 'Saved straight from the plan' && db.at(-1).cues?.length === 3 && (await page.getByLabel('Track detail').getByTestId('directions').count()) === 1);
-  check('and does not offer street names, it already has them', (await page.getByTestId('add-street-names').count()) === 0);
 
   // a track with no directions: a drawn one
   seed('Old drawn track');
@@ -1186,11 +1165,6 @@ await wait(300);
   await page.getByTestId('directions').getByRole('button').first().click();
   check('they say which way to go and how far, and that there are no street names', /^Head /.test((await page.locator('.directions-list li .dt').first().textContent()) ?? '') && /Arrive/.test((await page.locator('.directions-list li .dt').last().textContent()) ?? '') && /not the street names/.test((await page.getByTestId('directions').textContent()) ?? ''));
   await tipsOk('track detail: directions from the line');
-  const tx = await Promise.all([page.waitForEvent('download'), page.getByTestId('directions').getByRole('button', { name: 'Download .txt' }).click()]);
-  check('and can be downloaded as text without doing anything else first', /^1\. Head /m.test(readFileSync(await tx[0].path(), 'utf8')));
-  check('Directions as PDF is there too', (await page.getByRole('button', { name: 'Directions as PDF' }).count()) === 1);
-  await page.getByTestId('add-street-names').click(); await wait(800);
-  check('Add street names asks the routing service, then the street-name directions replace them', directionsLog.length === 1 && typeof directionsLog[0].profile === 'string' && (await page.getByTestId('add-street-names').count()) === 0 && db.find((t) => t.name === 'Old drawn track').cues?.length === 3);
 }
 
 // ---- Plan route: the A and B fields (named places, searched on Enter, never as you type) and the order of the routes

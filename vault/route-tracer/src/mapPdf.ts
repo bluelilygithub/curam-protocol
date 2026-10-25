@@ -1,5 +1,7 @@
 import { PDFDocument, StandardFonts, rgb, closePath, endPath, fill, lineTo, moveTo, popGraphicsState, pushGraphicsState, setFillingRgbColor, setLineCap, setLineJoin, setLineWidth, setStrokingRgbColor, stroke, LineCapStyle, LineJoinStyle, type PDFFont, type PDFPage } from 'pdf-lib';
 import { formatDistance, markersAlong, metersPerPixel, stepKmFor, totalKm, type Lines, type Pos, type Units } from './geo';
+import { addDirectionsPages } from './directionsPages';
+import type { Cue } from './api';
 import { CAPTURE_PX_PER_PT, GAP, MARGIN, captureSize, makeProjector, mapArea, niceScale, pageSize, safeText, tint, wrapText, type Orientation } from './mapLayout';
 
 export * from './mapLayout';
@@ -31,6 +33,8 @@ export interface MapPdfInput {
   profile?: PdfProfile | null;
   /** Why there is no elevation profile, if there is not one; printed in its place. */
   profileNote?: string | null;
+  /** Written directions, put on extra pages after the map. Left out (or fewer than two steps) = a one-page PDF. */
+  cues?: Cue[];
 }
 
 const FT = 3.28084;
@@ -185,5 +189,6 @@ export async function buildMapPdf(input: MapPdfInput): Promise<Uint8Array> {
   }
 
   page.drawText('Made with Route Tracer in Vault. Heights are a terrain model, good to a few metres.', { x: MARGIN, y: 12, size: 6.5, font: reg, color: rgb(0.6, 0.6, 0.6) });
+  if (input.cues && input.cues.length > 1) await addDirectionsPages(doc, { title: input.title, color: input.color, units, totalM: totalKm(lines) * 1000, cues: input.cues });
   return doc.save();
 }
