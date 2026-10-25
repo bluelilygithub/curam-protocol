@@ -24,6 +24,7 @@ const GUIDES = {
   cellar: { name: 'Cellar Planner guide', endpoint: '/api/cellar-tutor' },
   route: { name: 'Route Tracer guide', endpoint: '/api/route-tutor' },
   'burner-mail': { name: 'Burner Mail guide', endpoint: '/api/burner-mail-tutor' },
+  'dns-lookup': { name: 'DNS Lookup guide', endpoint: '/api/dns-lookup-tutor' },
   'pc-health': { name: 'PC Health guide', endpoint: '/api/pc-health-tutor' },
 };
 

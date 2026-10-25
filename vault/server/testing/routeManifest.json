@@ -532,6 +532,18 @@
   "POST /api/deals": {
    "class": "authed"
   },
+  "POST /api/dns-lookup-tutor": {
+   "class": "authed"
+  },
+  "GET /api/dns-lookup/options": {
+   "class": "authed"
+  },
+  "POST /api/dns-lookup/records": {
+   "class": "authed"
+  },
+  "POST /api/dns-lookup/email": {
+   "class": "authed"
+  },
   "POST /api/document-redaction/jobs/:id/apply": {
    "class": "authed"
   },

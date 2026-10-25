@@ -43,6 +43,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   measurements: true,
   fitness: true,
   burnerMail: true,
+  dnsLookup: true,
 };
 
 const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);

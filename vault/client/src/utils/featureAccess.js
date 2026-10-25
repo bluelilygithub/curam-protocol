@@ -40,6 +40,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   measurements: true,
   fitness: true,
   burnerMail: true,
+  dnsLookup: true,
 };
 
 export const FEATURE_ACCESS_GROUPS = [
@@ -86,6 +87,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'measurements', label: 'Measurements' },
       { key: 'fitness', label: 'Fitness' },
       { key: 'burnerMail', label: 'Burner Mail' },
+      { key: 'dnsLookup', label: 'DNS Lookup' },
       { key: 'wellbeing', label: 'Wellbeing Check' },
       { key: 'gmailIntel', label: 'Inbox Intel' },
       { key: 'productScout', label: 'Amazon Search' },

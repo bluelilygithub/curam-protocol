@@ -233,6 +233,8 @@ app.use('/api/pc-health', requireAdmin, require('./routes/pcHealth')); // PC Hea
 app.use('/api/pc-health-tutor', requireAdmin, aiLimiter, require('./routes/pcHealthTutor')); // the PC Health guide chat (sees no scan data)
 app.use('/api/burner-mail', requireFeature('burnerMail'), require('./routes/burnerMail'));
 app.use('/api/burner-mail-tutor', requireFeature('burnerMail'), aiLimiter, require('./routes/burnerMailTutor')); // the Burner Mail guide chat (sees no addresses or emails)
+app.use('/api/dns-lookup', requireFeature('dnsLookup'), require('./routes/dnsLookup'));
+app.use('/api/dns-lookup-tutor', requireFeature('dnsLookup'), aiLimiter, require('./routes/dnsLookupTutor')); // the DNS Lookup guide chat (sees no names or answers)
 app.use('/api/web-extractor', requireFeature('webExtractor'), require('./routes/webExtractor'));
 app.use('/api/web-extractor-tutor', requireFeature('webExtractor'), aiLimiter, require('./routes/webExtractorTutor')); // the Web Extractor guide chat (reads no pages)
 app.use('/api/browser-agent', requireFeature('browserAgent'), require('./routes/browserAgent'));

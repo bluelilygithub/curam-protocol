@@ -12,6 +12,8 @@
     "migrate:embeddings": "node server/scripts/migrateEmbeddings.js",
     "test:fitness": "node server/services/fitness/fitness.test.js && node server/services/fitness/week.test.js && node server/services/fitness/log.test.js && node server/services/fitness/adapt.test.js && node server/services/fitness/dashboard.test.js && node server/services/fitness/reminders.test.js",
     "test:burner-mail-tutor": "node server/services/burnerMailTutor.test.js",
+    "test:dns-lookup": "node server/services/dnsLookup/dnsLookup.test.js && node client/src/pages/dnsLookup/compare.test.mjs",
+    "test:dns-lookup-tutor": "node server/services/dnsLookupTutor.test.js",
     "test:burner-mail": "node server/services/burnerMail/extract.test.js",
     "test:measurements": "node client/src/utils/units/units.test.mjs && node client/src/utils/units/voice.test.mjs && node client/src/utils/units/scanner.test.mjs",
     "test:drag": "node client/src/utils/dragPosition.test.mjs",

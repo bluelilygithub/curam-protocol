@@ -70,6 +70,7 @@ export default function MobileNavDropdown({ onClose, isAdmin = false }) {
         measurements: 'measurements',
         fitness: 'fitness',
         burnerMail: 'burnerMail',
+        dnsLookup: 'dnsLookup',
         productScout: 'productScout',
         translate: 'translate',
         guitar: 'guitar',

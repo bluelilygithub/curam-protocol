@@ -50,6 +50,7 @@ import SeoAuditPage from './pages/SeoAuditPage';
 import HtmlAuditPage from './pages/HtmlAuditPage';
 import WebExtractorPage from './pages/WebExtractorPage';
 import BurnerMailPage from './pages/BurnerMailPage';
+import DnsLookupPage from './pages/DnsLookupPage';
 import FitnessPage from './pages/FitnessPage';
 import BrowserAgentPage from './pages/BrowserAgentPage';
 import BrowserAgentArchivePage from './pages/BrowserAgentArchivePage';
@@ -197,6 +198,7 @@ function App() {
               <Route path="/recipes" element={<RecipesPage />} />
               <Route path="/measurements" element={<MeasurementsPage />} />
               <Route path="/burner-mail" element={<BurnerMailPage />} />
+              <Route path="/dns-lookup" element={<DnsLookupPage />} />
               <Route path="/pc-health" element={<PcHealthPage />} />
               <Route path="/pdf" element={<PdfPage />} />
               <Route path="/domains" element={<DomainsPage />} />
