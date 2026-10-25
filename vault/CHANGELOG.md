@@ -4,6 +4,11 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-10-25 (graphics-text-width)
+
+### Graphics — text boxes and wrapping were sized with a flat guess
+Watermark, Text Overlay, Composite and Batch Text sized and wrapped text as 0.62 of the font size per character. Real Arial is about 17-32% narrower for ordinary text (so lines wrapped early and the background box was too wide) and about 22% wider for capitals like WWW (so text overflowed its box). They now measure with the real Arial / Liberation Sans widths (`server/services/graphicsTextMetrics.js`), falling back to the old guess, with one log warning, only if no font file is found.
+
 ## 2026-09-07 (translate-bare-translation-placeholder)
 
 ### Translate — bare word "Translation" wasn't recognized as a failure placeholder

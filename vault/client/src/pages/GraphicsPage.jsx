@@ -77,7 +77,7 @@ const TOOL_TIPS = {
   perspective: 'Straighten a picture taken at an angle, such as a sign or document that looks like a trapezoid.',
   smartcrop: 'Crop to a size or shape while keeping the most interesting or most detailed part.',
   effects: 'Flip, rotate, add a border, round the corners, add a shadow, or apply a filter such as black and white.',
-  adjust: 'Fine control of brightness, contrast, colour, sharpness, blur, noise and vignette. Save your settings as presets.',
+  adjust: 'Fine control of brightness, contrast, colour, sharpness, blur, noise and vignette. Save your settings as presets. Every change is a step you can take back on its own.',
   colorgrade: 'Give a picture a film look in one click: warm, cool, vintage, noir, golden hour and more.',
   pipeline: 'Chain several edits into one run, in the order you choose, then save the steps as a named recipe to use again.',
   annotate: 'Mark up a picture by hand: type text, draw arrows, boxes and lines, then save a PNG. Runs in your browser.',
@@ -114,7 +114,7 @@ const GROUP_TIPS = {
   Enhance: 'Change how a picture looks: filters, light and colour, film looks, or several edits chained together.',
   Compose: 'Add things to pictures or build new ones from them: text, logos, grids, icons and SVG drawings.',
   Retouch: 'Cut out, remove or recolour parts of a picture.',
-  Analyse: 'Look inside a picture: colours, text, sharpness, hidden details and differences.',
+  Analyse: 'Look inside a picture: colours, text, sharpness, hidden details and differences, or get alt text and a file name suggested.',
 };
 
 const MODE_GROUPS = [
@@ -682,16 +682,17 @@ export default function GraphicsPage() {
                 {graphicsInfo.show && (
                   <ToolInfoModal title="How Graphics Works" onClose={graphicsInfo.close}>
                     <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-                      Over 40 tools across seven groups in the list on the left — this covers the full lifecycle, not just "generate a picture". Hover over any group or tool for a plain explanation. Not sure which tool to use? Click the graduation-cap button at the bottom right and tell the guide what you want to do:
+                      43 tools across seven groups in the list on the left — this covers the full lifecycle, not just "generate a picture". Graphics opens on "What do you want to do?": pick a job (post on social media, get a picture ready for a website, prepare for print and so on) and it opens the right tools one step at a time. Hover over any group or tool for a plain explanation. Not sure which tool to use? Click the graduation-cap button at the bottom right and tell the guide what you want to do:
                     </p>
                     <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
                       <p style={{ color: 'var(--color-text)' }}><strong>Create</strong> — Generate makes a new image from a prompt via your admin-configured model, swappable workspace-wide. Animate turns one into a GIF.</p>
                       <p style={{ color: 'var(--color-text)' }}><strong>Retouch</strong> — real masked editing, not just full re-rolls: <strong>Inpaint/Remove</strong> paints an area (brush or magic-wand select) and describes what should replace it; <strong>Background</strong> removes/replaces with AI precision; <strong>Extract Element</strong> isolates a painted region as a transparent PNG; <strong>Recolor</strong> and <strong>Eraser</strong> handle targeted color/pixel changes; <strong>Redact</strong> blurs or pixelates faces, plates, or sensitive text.</p>
                       <p style={{ color: 'var(--color-text)' }}><strong>Transform</strong> — Crop/Resize, Canvas Extend (pad outward), Perspective Correct, and Smart Crop (content-aware — attention, entropy, or a fixed direction, not a naive center-crop).</p>
-                      <p style={{ color: 'var(--color-text)' }}><strong>Enhance</strong> — Effects, Adjust, Color Grading, and Pipeline (chain multiple enhance steps into one repeatable pass).</p>
+                      <p style={{ color: 'var(--color-text)' }}><strong>Enhance</strong> — Effects, Adjust (every slider change is a step you can untick on its own, with Undo and Redo), Color Grading, and Pipeline (chain up to 12 edits, including crop to a shape, text, your Brand Kit logo and the AI steps remove background and upscale, then save the steps as a named recipe and run it on up to 25 pictures from Batch).</p>
                       <p style={{ color: 'var(--color-text)' }}><strong>Compose</strong> — Annotate, Watermark, Text Overlay, Composite, Batch Text, Collage, Favicon/Icons (full manifest from one image), SVG (vectorize — 3 detail presets, 2–64 color control), and AI Icon Library (one cohesive themed set in a single pass).</p>
                       <p style={{ color: 'var(--color-text)' }}><strong>Optimise</strong> — Upscale is fidelity-first with a Replicate model and a creativity dial, not a blunt resize. Plus Convert, Compress, Batch, Export for Social (every platform's crop bundled as one ZIP), PDF→Images, Print Ready, Auto-enhance — all deterministic, no AI cost, safe to re-run.</p>
-                      <p style={{ color: 'var(--color-text)' }}><strong>Analyse</strong> — Picker, Histogram, Contrast (WCAG), Palette, Extract Text (OCR), Blur Detection, Image Diff, Remove Meta, File Info.</p>
+                      <p style={{ color: 'var(--color-text)' }}><strong>Analyse</strong> — Picker, Histogram, Contrast (WCAG), Palette, Extract Text (OCR), Alt text &amp; names (AI-suggested alt text and file names for you to check), Blur Detection, Image Diff, Remove Meta, File Info.</p>
+                      <p style={{ color: 'var(--color-text)' }}><strong>Good to know</strong> — tools that use AI show their estimated cost, and what is left of your daily limit, before they run. <strong>Recent results</strong> (button above the tool search, off until you switch it on) keeps your last 40 finished pictures in this browser only, so you can open one again; your browser can clear that storage, so download anything you need to keep.</p>
                     </div>
                   </ToolInfoModal>
                 )}
