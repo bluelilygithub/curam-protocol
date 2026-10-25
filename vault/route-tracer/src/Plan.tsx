@@ -13,6 +13,7 @@ import { MIN_LETTERS, suggestPlaces } from './placeSearch';
 import { tidySpoken } from './voice';
 import { parseSpokenNumber } from '@vault-client/utils/units/numbers.mjs';
 import { DirectionsList } from './Directions';
+import { saveLastStart } from './suggest';
 import { useStore } from './store';
 
 export const PLAN_COLORS = ['#E4572E', '#1D6FA5', '#2E7D32'];
@@ -116,7 +117,7 @@ export const usePlan = create<PlanState>((set, get) => ({
   start: () => set({ active: true, ...blank }),
   cancel: () => set({ active: false, ...blank }),
   // a new point means the old answers no longer apply
-  setFrom: (from, name = null) => set({ from, fromName: name, ...fresh }),
+  setFrom: (from, name = null) => { if (from) saveLastStart(from); set({ from, fromName: name, ...fresh }); }, // remembered, so a suggested loop can start from the last place used
   setTo: (to, name = null) => set({ to, toName: name, ...fresh }),
   nameFor: (which, p, name) => { const st = get(); if ((which === 'from' ? st.from : st.to) === p) set(which === 'from' ? { fromName: name } : { toName: name }); },
   setProfile: (profile) => { try { localStorage.setItem(PROFILE_KEY, profile); } catch { /* private window */ } set({ profile, ...fresh }); },

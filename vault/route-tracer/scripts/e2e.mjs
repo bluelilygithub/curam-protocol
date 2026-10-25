@@ -944,6 +944,32 @@ await wait(300);
   check('Cancel clears the pins and routes', (await page.locator('.plan-pin').count()) === 0 && !(await bar.isVisible()));
 }
 
+// ---- Suggested loops on the home screen: one press sets up a loop from where you are
+{
+  await home();
+  const card = page.getByTestId('suggested-loops');
+  check('the home screen offers suggested loops', await card.isVisible());
+  const chips = card.getByRole('button');
+  check('as 5, 10 and 15 km', (await chips.allTextContents()).join(',') === '5 km,10 km,15 km');
+  await tipsOk('suggested loops');
+  loopLog.length = 0;
+  await card.getByRole('button', { name: '15 km' }).click();
+  await page.getByTestId('planbar').waitFor();
+  await wait(1500);
+  check('pressing 15 km opens Plan route as a Loop of 15 km', (await page.getByRole('button', { name: 'Loop', exact: true }).getAttribute('aria-pressed')) === 'true' && loopLog.length >= 1 && loopLog.at(-1).lengthKm === 15, JSON.stringify(loopLog.at(-1)));
+  check('starting at the browser location', loopLog.length >= 1 && Math.abs(loopLog.at(-1).from[0] - 153.03) < 0.001 && Math.abs(loopLog.at(-1).from[1] + 27.47) < 0.001, JSON.stringify(loopLog.at(-1)));
+  check('and loops are offered straight away', (await page.getByTestId('plan-route').count()) >= 1);
+  check('the card is hidden while planning', (await card.count()) === 0);
+  await page.getByRole('button', { name: 'Cancel' }).click(); await wait(300);
+  check('the card is back after cancelling', await card.isVisible());
+  loopLog.length = 0;
+  await chips.nth(0).click(); // 5 km last, so the length the later checks expect as the default is what is remembered
+  await page.getByTestId('planbar').waitFor();
+  await wait(1500);
+  check('5 km asks for 5 km', loopLog.at(-1)?.lengthKm === 5, JSON.stringify(loopLog.at(-1)));
+  await page.getByRole('button', { name: 'Cancel' }).click(); await wait(300);
+}
+
 // ---- Plan route: stops between A and B, turn-by-turn directions, saving them, the directions PDF, and an undoable delete
 {
   await home();

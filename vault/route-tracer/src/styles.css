@@ -314,3 +314,9 @@ button.back { font-size: 1rem; font-weight: 500; }
 .directions-list .dn { font-weight: 600; color: var(--primary); }
 .directions-list .dd { text-align: right; font-size: 12px; white-space: nowrap; }
 .directions-list .dd small { display: block; color: var(--muted); }
+
+/* suggested loops */
+.suggest { margin: 4px 0 10px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.suggest h3 { margin: 0 0 2px; font-size: 14px; font-weight: 600; }
+.suggest-row { display: flex; gap: 6px; margin-top: 6px; }
+.suggest-row button { flex: 1; }

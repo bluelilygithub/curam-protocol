@@ -11,6 +11,8 @@ import { ElevationChart } from './ElevationChart';
 import { ExportPdf } from './ExportPdf';
 import { SendToWatch } from './SendToWatch';
 import { buildCuePdf } from './cuePdf';
+import { usePlan } from './Plan';
+import { findStart, loopChoices } from './suggest';
 import { fitToLimit } from './gpx';
 import { fitPadding } from './layout';
 import { Field, Mic } from './Mic';
@@ -141,6 +143,40 @@ function Swatches({ value, onChange }: { value: string; onChange: (c: string) =>
   );
 }
 
+/** Three ready-made loops on the home screen: one press sets up Plan route as a loop of that length from where you are (or your last start). */
+function SuggestedLoops({ map }: { map: maplibregl.Map | null }) {
+  const { routePlanning, drawing, units, toast } = useStore();
+  const planning = usePlan((s) => s.active);
+  const [busy, setBusy] = useState<number | null>(null);
+  if (!routePlanning || drawing || planning) return null;
+  async function go(km: number) {
+    setBusy(km);
+    try {
+      const start = await findStart();
+      if (!start) { toast('error', 'Allow your location, or open Plan a route and tap the map for a start, and the loops will start from there next time.', 6000); return; }
+      const p = usePlan.getState();
+      p.start();
+      p.setKind('loop');
+      p.setLengthKm(km);
+      p.setFrom(start.pos);
+      map?.flyTo({ center: start.pos, zoom: Math.max(map.getZoom(), 13.5), duration: 600 });
+      if (start.source === 'remembered') toast('ok', 'Your location was not available, so the loops start from the last place you used. Drag the A pin to move it.', 5000);
+    } finally { setBusy(null); }
+  }
+  return (
+    <section className="suggest" aria-label="Suggested loops" data-testid="suggested-loops">
+      <h3>Suggested loops</h3>
+      <p className="hint">A round trip from where you are. Pick a length.</p>
+      <div className="suggest-row">
+        {loopChoices(units).map((c) => (
+          <button key={c.label} type="button" disabled={busy !== null} aria-busy={busy === c.km} onClick={() => void go(c.km)}
+            title={`Find loops of about ${c.label} that start and end where you are now (your browser asks for your location the first time). Falls back to the last place you started from.`}>{busy === c.km ? '…' : c.label}</button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
   const { panel, setPanel, tracks, setTracks, selected, select, showAll, setShowAll, units, toast } = useStore();
   const [q, setQ] = useState('');
@@ -224,6 +260,7 @@ export function TracksPanel({ map }: { map: maplibregl.Map | null }) {
         <span className="vwrap"><input type="search" aria-label="Search tracks" title="Type part of a track name to filter the list" placeholder="Search by name" value={q} onChange={(e) => setQ(e.target.value)} /><Mic label="Speak part of a track name" onText={setQ} onDone={(t) => { setQ(tidySpoken(t)); }} /></span>
       </div>
       <div className="side-body">
+        <SuggestedLoops map={map} />
         <label className="check" title="List only the tracks you have starred as favourites"><input type="checkbox" title="List only your favourite tracks" checked={favOnly} onChange={(e) => setFavOnly(e.target.checked)} /> Favourites only</label>
         <label className="check" title="Draw every saved track on the map at once, not just the open one"><input type="checkbox" title="Draw every saved track on the map at once" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} /> Show all on map</label>
         {tracks.length > 0 && (
