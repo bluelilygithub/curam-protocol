@@ -80,6 +80,8 @@ If the thing has files (or anything else outside the snapshot), register `discar
 
 - **Route Tracer**: `route-track` (`adapters/routeTracks.js`): a saved track with its line and directions; single and multi-select delete; Undo on the page. See `docs/route-tracer.md` ("Delete and the recycle bin").
 
-Candidates to adopt next (not done): saved CSS pages, recipes, Room/Garden/Cellar planner projects, Finance documents, saved fonts. Each needs the three steps above; for planner projects the whole project JSON is the payload.
+- **Graphics recipes**: `graphics-recipe` (`adapters/graphicsRecipes.js`): a saved Graphics recipe (its steps and output format; settings only, no pictures). `DELETE /api/graphics/recipes/:id` in `server/routes/graphics/recipes.js`; Undo toast on the Pipeline screen; a restore is refused with a plain message past the 50-recipe limit. See `docs/graphics-tools.md` ("Saved recipes").
+
+Candidates to adopt next (not done): saved CSS pages, Room/Garden/Cellar planner projects, Finance documents, saved fonts. Each needs the three steps above; for planner projects the whole project JSON is the payload.
 
 Chats are in the bin since 2026-10-24 (see Used by).
