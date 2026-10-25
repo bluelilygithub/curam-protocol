@@ -39,7 +39,11 @@ const {
   outputFormatFor,
   outputOptionsFor,
   SOCIAL_PRESETS,
+  pool,
+  loadBrandLogo,
 } = require('./shared');
+const { runPipeline } = require('./enhance');
+const { getRecipe } = require('../../services/graphicsRecipes');
 const { runResize } = require('./transform');
 const { runPixelTask } = require('../../services/graphicsWorker');
 const { runWatermark } = require('./compose');
@@ -674,7 +678,7 @@ router.post('/auto-enhance', async (req, res) => {
 // Each item merges over the shared `params`, then runs through the exact same
 // function the single-image route calls, so behavior can never drift between
 // the two paths. One bad item never aborts the rest of the batch.
-const BATCH_OPS = { watermark: runWatermark, resize: runResize, convert: runConvert, compress: runCompress };
+const BATCH_OPS = { watermark: runWatermark, resize: runResize, convert: runConvert, compress: runCompress, pipeline: runPipeline };
 const BATCH_MAX_ITEMS = 25;
 
 router.post('/batch', async (req, res) => {
@@ -689,7 +693,20 @@ router.post('/batch', async (req, res) => {
     if (items.length > BATCH_MAX_ITEMS) {
       return res.status(400).json({ error: `Too many items (max ${BATCH_MAX_ITEMS})` });
     }
-    const sharedParams = (req.body?.params && typeof req.body.params === 'object') ? req.body.params : {};
+    const sharedParams = (req.body?.params && typeof req.body.params === 'object') ? { ...req.body.params } : {};
+
+    // "Run a recipe": the browser sends only the recipe's id; the steps come from the person's own saved recipe, and the
+    // Brand Kit logo (if a step uses it) is read once for the whole batch.
+    if (op === 'pipeline' && sharedParams.recipeId != null) {
+      const recipe = await getRecipe(pool, req.user.id, sharedParams.recipeId);
+      if (!recipe) return res.status(404).json({ error: 'That recipe was not found' });
+      sharedParams.steps = recipe.steps;
+      sharedParams.format = recipe.outFormat || undefined;
+      sharedParams.quality = recipe.outQuality ?? undefined;
+    }
+    if (op === 'pipeline' && Array.isArray(sharedParams.steps) && sharedParams.steps.some((s) => s?.op === 'logo')) {
+      sharedParams.brandLogoDataUrl = await loadBrandLogo(req.user.id);
+    }
 
     const results = [];
     for (const item of items) {

@@ -64,7 +64,7 @@ const TOOL_TIPS = {
   upscale: 'Make a small picture bigger and sharper. A faithful option keeps it true; an enhanced option adds detail.',
   convert: 'Change the file type: PNG, JPG, WebP, GIF, AVIF, TIFF or ICO. iPhone HEIC photos can be opened too.',
   compress: 'Make picture files smaller at a quality you choose, and see how much was saved.',
-  batch: 'Do one job (watermark, resize, convert, compress or remove metadata) on up to 25 pictures at once.',
+  batch: 'Do one job (watermark, resize, convert, compress, remove metadata, or run a saved recipe) on up to 25 pictures at once.',
   exportsocial: 'Turn one picture into every social media size you tick, with a preview of each and one zip to download.',
   pdf2img: 'Turn each page of a PDF into a PNG picture. Runs in your browser.',
   printready: 'Get a picture ready for a printer: set 150, 300 or 600 DPI, add bleed, save as TIFF, PDF or PNG.',
@@ -76,7 +76,7 @@ const TOOL_TIPS = {
   effects: 'Flip, rotate, add a border, round the corners, add a shadow, or apply a filter such as black and white.',
   adjust: 'Fine control of brightness, contrast, colour, sharpness, blur, noise and vignette. Save your settings as presets.',
   colorgrade: 'Give a picture a film look in one click: warm, cool, vintage, noir, golden hour and more.',
-  pipeline: 'Chain several edits into one run on a picture, in the order you choose.',
+  pipeline: 'Chain several edits into one run, in the order you choose, then save the steps as a named recipe to use again.',
   annotate: 'Mark up a picture by hand: type text, draw arrows, boxes and lines, then save a PNG. Runs in your browser.',
   watermark: 'Stamp text or a logo on a picture, with position, size and see-through level.',
   textoverlay: 'Put a headline or caption on a picture, with an optional box behind it and an outline for legibility.',
@@ -152,7 +152,7 @@ const TOOL_HELP = {
   batch: {
     title: 'Batch',
     what: 'Apply one operation to many images at once.',
-    features: ['Modes: Convert format, Resize, Watermark, Compress, Strip metadata', 'Convert/Resize/Watermark/Compress run in a single server round-trip (up to 25 images)', 'Per-file result with individual downloads', '"Download all" button for the full set', 'One bad file never stops the rest of the batch'],
+    features: ['Modes: Convert format, Resize, Watermark, Compress, Run a recipe, Strip metadata', 'Convert/Resize/Watermark/Compress run in a single server round-trip (up to 25 images)', 'Per-file result with individual downloads', '"Download all" button for the full set', 'One bad file never stops the rest of the batch'],
   },
   pdf2img: {
     title: 'PDF → Images',
@@ -201,8 +201,8 @@ const TOOL_HELP = {
   },
   pipeline: {
     title: 'Pipeline',
-    what: 'Chain multiple edits into one repeatable server-side pass.',
-    features: ['Up to 12 steps per pipeline', 'Ops: grayscale, sepia, invert, flip, mirror, blur, sharpen, brightness/contrast/saturation, gamma, temperature, rotate, border, resize', 'Reorder steps with ↑ / ↓ arrows', 'Per-step sliders', 'All steps applied in one server round-trip'],
+    what: 'Chain multiple edits into one repeatable server-side pass, and save the steps as a recipe.',
+    features: ['Up to 12 steps per pipeline', 'Ops: grayscale, sepia, invert, flip, mirror, blur, sharpen, brightness/contrast/saturation, gamma, temperature, rotate, border, resize, crop to a shape, add text, add your Brand Kit logo', 'Save as WebP, JPG, PNG or AVIF with a quality slider', 'My recipes: name the steps and save them; load, replace or delete them later (deleted recipes stay in the recycle bin for 30 days)', 'Run a saved recipe on up to 25 pictures from Batch', 'Reorder steps with ↑ / ↓ arrows', 'Per-step sliders', 'All steps applied in one server round-trip'],
   },
   annotate: {
     title: 'Annotate',

@@ -3,13 +3,16 @@ import React, { useState } from 'react';
 import api from '../../../utils/apiClient';
 import Tooltip from '../../../components/Tooltip';
 import { useGraphics } from '../GraphicsContext';
-import { readFileAsDataUrl, useProcessingWhile, formatBytes } from '../shared';
+import { readFileAsDataUrl, useProcessingWhile, formatBytes, useGraphicsRecipes } from '../shared';
 
 export default function BatchTool({ active }) {
   const getIcon = useIcon();
   const { setHelpTool } = useGraphics();
 
   const [batchFiles, setBatchFiles] = useState([]);
+  // "Run a recipe": a saved Pipeline recipe applied to every picture (server reads the steps from the recipe, see Pipeline -> Save recipe)
+  const { recipes } = useGraphicsRecipes();
+  const [batchRecipeId, setBatchRecipeId] = useState('');
   const [batchOp, setBatchOp] = useState('convert');
   const [batchFormat, setBatchFormat] = useState('webp');
   const [batchQuality, setBatchQuality] = useState('82');
@@ -59,6 +62,7 @@ export default function BatchTool({ active }) {
       return { type: 'text', text: batchWmText, color: batchWmColor, position: batchWmPosition, opacity: Number(batchWmOpacity) };
     }
     if (batchOp === 'compress') return { quality: Number(batchCompressQuality) };
+    if (batchOp === 'recipe') return { recipeId: Number(batchRecipeId) };
     return {};
   };
 
@@ -67,6 +71,7 @@ export default function BatchTool({ active }) {
     if (!pending.length) return;
     if (batchOp === 'resize' && !batchWidth && !batchHeight) return;
     if (batchOp === 'watermark' && !batchWmText.trim()) return;
+    if (batchOp === 'recipe' && !batchRecipeId) return;
     setBatchRunning(true);
     setBatchFiles(prev => prev.map(f => (pending.some(p => p.id === f.id) ? { ...f, status: 'working', error: '' } : f)));
 
@@ -87,7 +92,7 @@ export default function BatchTool({ active }) {
 
     try {
       const res = await api.post('/api/graphics/batch', {
-        op: batchOp,
+        op: batchOp === 'recipe' ? 'pipeline' : batchOp,
         items: pending.map(item => ({ imageDataUrl: item.imageDataUrl })),
         params: buildBatchParams(),
       });
@@ -110,7 +115,7 @@ export default function BatchTool({ active }) {
     if (!item?.result?.imageDataUrl) return;
     const base = item.name.replace(/\.[^.]+$/, '');
     const ext = item.result.ext || item.result.format || 'img';
-    const suffixes = { convert: '', resize: '-resized', watermark: '-watermarked', compress: '-compressed', strip: '-clean' };
+    const suffixes = { convert: '', resize: '-resized', watermark: '-watermarked', compress: '-compressed', recipe: '-edited', strip: '-clean' };
     const suffix = suffixes[batchOp] ?? '-clean';
     const a = document.createElement('a');
     a.href = item.result.imageDataUrl;
@@ -165,6 +170,7 @@ export default function BatchTool({ active }) {
                 <option value="resize">Resize</option>
                 <option value="watermark">Add text watermark</option>
                 <option value="compress">Compress</option>
+                <option value="recipe">Run a recipe</option>
                 <option value="strip">Strip metadata</option>
               </select></Tooltip>
             </div>
@@ -250,6 +256,24 @@ export default function BatchTool({ active }) {
             </div>
           )}
 
+          {batchOp === 'recipe' && (
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Recipe</label>
+              <Tooltip text="Your saved recipe. Every step in it, and its file type, is applied to every picture in this batch."><select
+                value={batchRecipeId}
+                onChange={e => setBatchRecipeId(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border text-sm"
+                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              >
+                <option value="">{recipes.length ? 'Choose a recipe…' : 'No saved recipes yet'}</option>
+                {recipes.map((r) => <option key={r.id} value={r.id}>{r.name} ({r.steps.length} step{r.steps.length === 1 ? '' : 's'})</option>)}
+              </select></Tooltip>
+              <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                {recipes.length ? (batchRecipeId ? (() => { const r = recipes.find((x) => String(x.id) === String(batchRecipeId)); return r ? `${r.steps.length} step${r.steps.length === 1 ? '' : 's'}${r.outFormat ? `, saved as ${r.outFormat.toUpperCase()}` : ''}.` : ''; })() : 'Pick one of your recipes.') : 'Build the steps in Pipeline, name them and press Save recipe. They will be here.'}
+              </p>
+            </div>
+          )}
+
           {batchOp === 'strip' && (
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Removes EXIF, GPS, XMP, IPTC and ICC data from every image. Format and dimensions are preserved.</p>
           )}
@@ -258,7 +282,7 @@ export default function BatchTool({ active }) {
             <Tooltip text="Apply the chosen operation to every added image that hasn't been processed yet."><button
               type="button"
               onClick={runBatchAll}
-              disabled={batchRunning || !batchFiles.some(f => f.imageDataUrl && f.status !== 'done') || (batchOp === 'resize' && !batchWidth && !batchHeight) || (batchOp === 'watermark' && !batchWmText.trim())}
+              disabled={batchRunning || !batchFiles.some(f => f.imageDataUrl && f.status !== 'done') || (batchOp === 'resize' && !batchWidth && !batchHeight) || (batchOp === 'watermark' && !batchWmText.trim()) || (batchOp === 'recipe' && !batchRecipeId)}
               className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2"
               style={{ background: 'var(--color-primary)' }}
             >

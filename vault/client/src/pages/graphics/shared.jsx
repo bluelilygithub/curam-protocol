@@ -2,7 +2,8 @@ import Tooltip from '../../components/Tooltip';
 import api from '../../utils/apiClient';
 import useProcessingStore from '../../store/processingStore';
 import { describeCost } from './costText.mjs';
-import React, { useState, useRef, useEffect } from 'react';
+import { offerUndo } from '../../utils/binUndo';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 
 export const CR_ASPECTS = [
   { id: 'free', label: 'Free', v: null },
@@ -607,6 +608,34 @@ export function useSocialPresets() {
       .catch(() => {});
   }, []);
   return socialPresets;
+}
+
+// The person's saved recipes (named lists of editing steps; see server/services/graphicsRecipes.js).
+export function useGraphicsRecipes() {
+  const [recipes, setRecipes] = useState([]);
+  const reload = useCallback(async () => {
+    try {
+      const res = await api.get('/api/graphics/recipes');
+      if (res.ok) setRecipes((await res.json()).recipes || []);
+    } catch { /* the list just stays as it was */ }
+  }, []);
+  useEffect(() => { reload(); }, [reload]);
+  // payload: { id?, name, steps, outFormat, outQuality }; the same name replaces the old recipe
+  const save = async (payload) => {
+    const res = await api.post('/api/graphics/recipes', payload);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not save the recipe');
+    await reload();
+    return data.recipe;
+  };
+  const remove = async (recipe) => {
+    const res = await api.delete(`/api/graphics/recipes/${recipe.id}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not delete the recipe');
+    await reload();
+    offerUndo({ message: `Deleted "${recipe.name}"`, binIds: data.binId, after: reload });
+  };
+  return { recipes, save, remove, reload };
 }
 
 // Pixel size of an image data URL (null until it has loaded). Used to price an upscale before it runs.

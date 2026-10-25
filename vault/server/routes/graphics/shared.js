@@ -258,6 +258,19 @@ function normalizeContentRestrictions(value) {
     .slice(0, 50);
 }
 
+// The logo saved in the person's Brand Kit (Graphics -> Brand Kit), as an image data URL, or null. Recipes use it by reference
+// so a saved recipe never carries a picture.
+async function loadBrandLogo(userId) {
+  try {
+    const { rows } = await pool.query(`SELECT value FROM settings WHERE "userId"=$1 AND key='graphics_brand_kit' LIMIT 1`, [userId]);
+    const kit = rows[0]?.value ? JSON.parse(rows[0].value) : null;
+    const logo = String(kit?.logoDataUrl || '');
+    return /^data:image\//i.test(logo) ? logo : null;
+  } catch {
+    return null;
+  }
+}
+
 async function loadContentRestrictions() {
   try {
     const { rows } = await pool.query(
@@ -1063,6 +1076,7 @@ module.exports = {
   clampDimension,
   normalizeContentRestrictions,
   loadContentRestrictions,
+  loadBrandLogo,
   buildNegativePrompt,
   restrictionSearchTerms,
   findRestrictionMatches,

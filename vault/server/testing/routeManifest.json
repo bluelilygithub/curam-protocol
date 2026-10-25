@@ -1555,6 +1555,15 @@
   "GET /api/graphics/cost-preview": {
    "class": "authed"
   },
+  "GET /api/graphics/recipes": {
+   "class": "authed"
+  },
+  "POST /api/graphics/recipes": {
+   "class": "authed"
+  },
+  "DELETE /api/graphics/recipes/:id": {
+   "class": "authed"
+  },
   "POST /api/graphics/convert": {
    "class": "authed"
   },

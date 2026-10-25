@@ -13,15 +13,54 @@ const {
   assertStill,
   clampInt,
   parseHexColor,
+  loadBrandLogo,
 } = require('./shared');
+const { runWatermark } = require('./compose');
 
 // Deterministic multi-step pipeline: apply a whitelisted sequence of sharp ops.
-const PIPELINE_OPS = ['grayscale', 'sepia', 'invert', 'blur', 'sharpen', 'brightness', 'contrast', 'saturation', 'gamma', 'rotate', 'flip', 'flop', 'resize', 'border', 'temperature'];
+const PIPELINE_OPS = ['grayscale', 'sepia', 'invert', 'blur', 'sharpen', 'brightness', 'contrast', 'saturation', 'gamma', 'rotate', 'flip', 'flop', 'resize', 'border', 'temperature', 'crop', 'watermark', 'logo'];
+const PIPELINE_MAX_STEPS = 12;
+const CROP_STRATEGIES = { attention: sharp.strategy.attention, entropy: sharp.strategy.entropy, centre: 'centre', center: 'centre' };
+const PIPE_OUT_FORMATS = { png: 'png', jpg: 'jpeg', jpeg: 'jpeg', webp: 'webp', avif: 'avif' };
 
-async function applyPipelineStep(buffer, step) {
+const stepError = (message, status = 400) => Object.assign(new Error(message), { status });
+const pngDataUrl = (buf) => `data:image/png;base64,${buf.toString('base64')}`;
+
+// "16:9", "1:1", "4:5" -> a width/height ratio, or null.
+function parseAspect(value) {
+  const m = String(value || '').trim().match(/^(\d{1,3}(?:\.\d+)?)\s*:\s*(\d{1,3}(?:\.\d+)?)$/);
+  if (!m) return null;
+  const r = Number(m[1]) / Number(m[2]);
+  return r >= 0.1 && r <= 10 ? r : null;
+}
+
+// ctx.brandLogoDataUrl is the person's Brand Kit logo (the 'logo' step uses it; a recipe never stores a picture).
+async function applyPipelineStep(buffer, step, ctx = {}) {
   const op = String(step?.op || '');
   const num = (v, d) => (Number.isFinite(Number(v)) ? Number(v) : d);
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+  if (op === 'crop') {
+    const ratio = parseAspect(step.aspect);
+    if (!ratio) throw stepError('Crop needs a shape like 1:1, 4:5 or 16:9');
+    const upright = await sharp(buffer).rotate().toBuffer();
+    const { width: W, height: H } = await sharp(upright).metadata();
+    const w = ratio > W / H ? W : Math.max(1, Math.round(H * ratio));
+    const h = ratio > W / H ? Math.max(1, Math.round(W / ratio)) : H;
+    const position = CROP_STRATEGIES[String(step.strategy || 'attention')] || CROP_STRATEGIES.attention;
+    return sharp(upright).resize({ width: w, height: h, fit: 'cover', position }).png({ compressionLevel: 1 }).toBuffer();
+  }
+  if (op === 'watermark' || op === 'logo') {
+    if (op === 'watermark' && !String(step.text || '').trim()) throw stepError('The text step needs some words');
+    if (op === 'logo' && !ctx.brandLogoDataUrl) throw stepError('This recipe adds your Brand Kit logo, but no logo is saved. Add one in Brand Kit first.');
+    const upright = await sharp(buffer).rotate().png({ compressionLevel: 1 }).toBuffer();
+    const common = { imageDataUrl: pngDataUrl(upright), opacity: clamp(num(step.opacity, op === 'logo' ? 0.9 : 0.5), 0, 1), position: step.position };
+    const out = op === 'logo'
+      ? await runWatermark({ ...common, type: 'image', watermarkDataUrl: ctx.brandLogoDataUrl, scale: clamp(num(step.scale, 20), 1, 100) })
+      : await runWatermark({ ...common, type: 'text', text: step.text, color: step.color, fontSize: step.fontSize });
+    return dataUrlToBuffer(out.imageDataUrl);
+  }
+
   let pipe = sharp(buffer).rotate();
   switch (op) {
     case 'grayscale': pipe = pipe.grayscale(); break;
@@ -57,35 +96,49 @@ async function applyPipelineStep(buffer, step) {
   return pipe.png({ compressionLevel: 1 }).toBuffer();
 }
 
+// The whole pipeline as one function, so the single-image route, Batch ("Run a recipe") and saved recipes all use exactly this.
+// `format` / `quality` are optional: the picture's own format is kept unless one is asked for (png, jpg, webp, avif).
+async function runPipeline({ imageDataUrl, steps, format, quality, brandLogoDataUrl }) {
+  let buffer = imageDataUrlToBuffer(String(imageDataUrl || ''));
+  if (!buffer) throw stepError('A valid image is required');
+  const list = Array.isArray(steps) ? steps : [];
+  if (!list.length) throw stepError('Add at least one step');
+  const valid = list.filter((s) => PIPELINE_OPS.includes(String(s?.op)));
+  if (!valid.length) throw stepError('No recognised steps');
+  if (valid.length > PIPELINE_MAX_STEPS) throw stepError(`Too many steps (max ${PIPELINE_MAX_STEPS})`);
+
+  const meta = await sharp(buffer).metadata();
+  assertStill(meta);
+  let fmt = outputFormatFor(meta);
+  const wanted = PIPE_OUT_FORMATS[String(format || '').toLowerCase()];
+  if (wanted) fmt = wanted;
+  for (const step of valid) {
+    // eslint-disable-next-line no-await-in-loop
+    buffer = await applyPipelineStep(buffer, step, { brandLogoDataUrl });
+  }
+  const opts = outputOptionsFor(fmt);
+  if (wanted && ['jpeg', 'webp', 'avif'].includes(fmt) && quality != null) opts.quality = clampInt(quality, 1, 100, opts.quality);
+  let enc = sharp(buffer);
+  if (fmt === 'jpeg') enc = enc.flatten({ background: '#ffffff' }); // a see-through picture becomes white, not black
+  const out = await enc.toFormat(fmt, opts).toBuffer();
+  const m2 = await sharp(out).metadata().catch(() => null);
+  return {
+    ok: true,
+    steps: valid.length,
+    width: m2?.width || null,
+    height: m2?.height || null,
+    format: fmt,
+    ext: fmt === 'jpeg' ? 'jpg' : fmt,
+    bytes: out.length,
+    imageDataUrl: `data:image/${fmt};base64,${out.toString('base64')}`,
+  };
+}
+
 router.post('/pipeline', async (req, res) => {
   try {
-    const imageDataUrl = String(req.body?.imageDataUrl || '');
-    let buffer = dataUrlToBuffer(imageDataUrl);
-    if (!buffer || !/^data:image\//i.test(imageDataUrl)) return res.status(400).json({ error: 'A valid image is required' });
     const steps = Array.isArray(req.body?.steps) ? req.body.steps : [];
-    if (!steps.length) return res.status(400).json({ error: 'Add at least one step' });
-    const valid = steps.filter((s) => PIPELINE_OPS.includes(String(s?.op)));
-    if (!valid.length) return res.status(400).json({ error: 'No recognised steps' });
-    if (valid.length > 12) return res.status(400).json({ error: 'Too many steps (max 12)' });
-
-    const meta = await sharp(buffer).metadata();
-    assertStill(meta);
-    const fmt = outputFormatFor(meta);
-    for (const step of valid) {
-      // eslint-disable-next-line no-await-in-loop
-      buffer = await applyPipelineStep(buffer, step);
-    }
-    const out = await sharp(buffer).toFormat(fmt, outputOptionsFor(fmt)).toBuffer();
-    const m2 = await sharp(out).metadata().catch(() => null);
-    res.json({
-      ok: true,
-      steps: valid.length,
-      width: m2?.width || null,
-      height: m2?.height || null,
-      format: fmt,
-      bytes: out.length,
-      imageDataUrl: `data:image/${fmt};base64,${out.toString('base64')}`,
-    });
+    const brandLogoDataUrl = steps.some((s) => s?.op === 'logo') ? await loadBrandLogo(req.user.id) : null;
+    res.json(await runPipeline({ imageDataUrl: req.body?.imageDataUrl, steps, format: req.body?.format, quality: req.body?.quality, brandLogoDataUrl }));
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || 'Pipeline failed' });
   }
@@ -326,5 +379,9 @@ router.post('/colorgrade', async (req, res) => {
     res.status(err.status || 500).json({ error: err.message || 'Color grading failed' });
   }
 });
+
+router.runPipeline = runPipeline;
+router.PIPELINE_OPS = PIPELINE_OPS;
+router.PIPELINE_MAX_STEPS = PIPELINE_MAX_STEPS;
 
 module.exports = router;

@@ -1132,6 +1132,20 @@ async function initSchema() {
     // turn-by-turn directions that came with a planned route: [{ text, distanceM, durationS, type, pos:[lng,lat] }], null for a drawn or edited line
     await client.query(`ALTER TABLE route_tracks ADD COLUMN IF NOT EXISTS cues JSONB`);
     await client.query(`ALTER TABLE route_tracks ADD COLUMN IF NOT EXISTS favourite BOOLEAN NOT NULL DEFAULT FALSE`);
+    // ── Graphics saved recipes: a named list of editing steps (settings only, never pictures) that can be re-run on any image or batch ──
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS graphics_recipes (
+        id          SERIAL PRIMARY KEY,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name        TEXT NOT NULL,
+        steps       JSONB NOT NULL,
+        "outFormat" TEXT,
+        "outQuality" INTEGER,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_graphics_recipes_user ON graphics_recipes ("userId", "updatedAt" DESC)`);
     // ── Fitness Planner (Stage 1 tables; later stages add weeks/sessions/logs/library/reminders: docs/fitness-planner.md) ──
     // health_* tables are the shared profile + weight series the future diet app also reads/writes.
     await client.query(`
