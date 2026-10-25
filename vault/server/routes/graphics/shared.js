@@ -841,15 +841,26 @@ function getImageSize(buffer) {
 // Clarity-style billing is per output megapixel ($0.03/MP, $0.03 min). Local
 // ComfyUI runs on the user's own hardware, so it's free. For other Replicate
 // models that bill by compute time this is a best-effort estimate.
-function estimateUpscaleCost({ provider, inputBuffer, scale }) {
-  if (provider === 'local-comfyui') return { usd: 0, megapixels: null, local: true };
+function upscaleCostForSize({ width, height, scale }) {
   const ratePerMp = Number(process.env.REPLICATE_UPSCALE_RATE_PER_MP) || 0.03;
   const minUsd = Number(process.env.REPLICATE_UPSCALE_MIN_USD) || 0.03;
-  const size = inputBuffer ? getImageSize(inputBuffer) : null;
-  if (!size) return { usd: null, megapixels: null, ratePerMp, estimate: true };
-  const megapixels = Math.min(64, (size.width * scale * size.height * scale) / 1e6);
+  if (!width || !height) return { usd: null, megapixels: null, ratePerMp, estimate: true };
+  const megapixels = Math.min(64, (width * scale * height * scale) / 1e6);
   const usd = Math.max(minUsd, megapixels * ratePerMp);
   return { usd: Number(usd.toFixed(4)), megapixels: Number(megapixels.toFixed(2)), ratePerMp, estimate: true };
+}
+
+function estimateUpscaleCost({ provider, inputBuffer, scale }) {
+  if (provider === 'local-comfyui') return { usd: 0, megapixels: null, local: true };
+  const size = inputBuffer ? getImageSize(inputBuffer) : null;
+  return upscaleCostForSize({ width: size?.width, height: size?.height, scale });
+}
+
+// Hosted background removal is a flat per-image price; the local ONNX model is free.
+function estimateBackgroundCost({ isLocal }) {
+  if (isLocal) return { usd: 0, local: true };
+  const usd = Number(process.env.REPLICATE_BG_COST_USD) || 0.02;
+  return { usd: Number(usd.toFixed(4)), estimate: true };
 }
 
 function estimateGenerateCost({ provider }) {
@@ -1080,6 +1091,8 @@ module.exports = {
   dataUrlToBuffer,
   getImageSize,
   estimateUpscaleCost,
+  upscaleCostForSize,
+  estimateBackgroundCost,
   estimateGenerateCost,
   logImageUsage,
   envReplicateUpscaleModel,

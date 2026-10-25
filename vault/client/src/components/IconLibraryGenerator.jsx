@@ -3,6 +3,7 @@ import * as LucideIcons from 'lucide-react';
 import api from '../utils/apiClient';
 import useProcessingStore from '../store/processingStore';
 import Tooltip from './Tooltip';
+import { CostNote } from '../pages/graphics/shared';
 
 const pascalCase = (name) => String(name || '')
   .split(/[-_\s]+/)
@@ -296,6 +297,7 @@ export default function IconLibraryGenerator({ getIcon }) {
             </div>
           </div>
           {genError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{genError}</div>}
+          <CostNote tool="icons" refreshKey={generating} />
           <Tooltip text="Generate the icon set using the selected references and style settings."><button
             type="button"
             onClick={generate}

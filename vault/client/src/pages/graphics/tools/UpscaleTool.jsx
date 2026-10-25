@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import api from '../../../utils/apiClient';
 import Tooltip from '../../../components/Tooltip';
 import { useGraphics } from '../GraphicsContext';
-import { readFileAsDataUrl, useProcessingWhile, renderExport, formatCost, ResultPlaceholder } from '../shared';
+import { readFileAsDataUrl, useProcessingWhile, renderExport, formatCost, ResultPlaceholder, CostNote, useImageSize } from '../shared';
 
 export default function UpscaleTool({ active }) {
   const getIcon = useIcon();
@@ -17,6 +17,7 @@ export default function UpscaleTool({ active }) {
   const [upscaling, setUpscaling] = useState(false);
   const [upscaleResult, setUpscaleResult] = useState(null);
   const [upscaleError, setUpscaleError] = useState('');
+  const upscaleSize = useImageSize(upscaleSource?.imageDataUrl);
 
   const handleUpscaleFile = async (file) => {
     if (!file) return;
@@ -197,6 +198,7 @@ export default function UpscaleTool({ active }) {
               </div>
             )}
 
+            <CostNote tool="upscale" width={upscaleSize?.width} height={upscaleSize?.height} scale={upscaleScale} refreshKey={upscaleResult} />
             <Tooltip text="Run the upscale with the settings above."><button
               type="button"
               onClick={runUpscale}

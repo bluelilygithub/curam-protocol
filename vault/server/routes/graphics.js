@@ -22,6 +22,7 @@ const compose = require('./graphics/compose');
 const retouch = require('./graphics/retouch');
 const analyse = require('./graphics/analyse');
 const plan = require('./graphics/plan');
+const cost = require('./graphics/cost');
 const { capImagePixels, makePaidGuard } = require('../middleware/graphicsLimits');
 
 // Safety nets for every route below: no oversized images, and a per-person limit on the paid AI tools.
@@ -38,5 +39,6 @@ router.use(compose);
 router.use(retouch);
 router.use(analyse);
 router.use(plan);
+router.use(cost);
 
 module.exports = router;

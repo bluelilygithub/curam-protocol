@@ -20,6 +20,7 @@ const {
   resolveGraphicsProvider,
   inpaintWithFal,
   estimateGenerateCost,
+  estimateBackgroundCost,
   imageUrlToDataUrl,
   waitForReplicate,
   getImgly,
@@ -178,8 +179,7 @@ router.post('/background', async (req, res) => {
       const result = await removeBgWithReplicate(imageDataUrl);
       cutoutBuffer = dataUrlToBuffer(result.imageDataUrl);
       provider = 'replicate';
-      const usd = Number(process.env.REPLICATE_BG_COST_USD) || 0.02;
-      cost = { usd: Number(usd.toFixed(4)), estimate: true };
+      cost = estimateBackgroundCost({ isLocal: false });
       logImageUsage({ userId: req.user.id, model: `replicate:${result.model}`, feature: 'graphics_background', costUsd: cost.usd });
     }
 

@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import api from '../../../utils/apiClient';
 import Tooltip from '../../../components/Tooltip';
 import { useGraphics } from '../GraphicsContext';
-import { useUrlImport, readFileAsDataUrl, useProcessingWhile, UrlImportRow, loadImageInto, renderExport, formatCost, ResultPlaceholder } from '../shared';
+import { useUrlImport, readFileAsDataUrl, useProcessingWhile, UrlImportRow, loadImageInto, renderExport, formatCost, ResultPlaceholder, CostNote } from '../shared';
 
 export default function BackgroundTool({ active }) {
   const getIcon = useIcon();
@@ -191,6 +191,7 @@ export default function BackgroundTool({ active }) {
               <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{bgError}</div>
             )}
 
+            <CostNote tool="background" refreshKey={bgResult} />
             <Tooltip text="Cut out the subject and apply the chosen background."><button
               type="button"
               onClick={runRemoveBg}

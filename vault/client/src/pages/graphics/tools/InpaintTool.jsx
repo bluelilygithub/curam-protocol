@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import api from '../../../utils/apiClient';
 import Tooltip from '../../../components/Tooltip';
 import { useGraphics } from '../GraphicsContext';
-import { useUrlImport, magicWandSelectionCanvas, tintSelectionCanvas, loadImageEl, useProcessingWhile, loadImageInto, UrlImportRow, renderExport, formatCost } from '../shared';
+import { useUrlImport, magicWandSelectionCanvas, tintSelectionCanvas, loadImageEl, useProcessingWhile, loadImageInto, UrlImportRow, renderExport, formatCost, CostNote } from '../shared';
 
 export default function InpaintTool({ active }) {
   const getIcon = useIcon();
@@ -203,6 +203,7 @@ export default function InpaintTool({ active }) {
               <p className="text-[11px] mt-1" style={{ color: 'var(--color-muted)' }}>To remove an object, describe the background that should replace it.</p>
             </div>
             {inpaintError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{inpaintError}</div>}
+            <CostNote tool="inpaint" refreshKey={inpaintResult} />
             <Tooltip text="Send the mask and description to the AI to repaint the masked area."><button type="button" onClick={runInpaint} disabled={inpaintBusy || !inpaintSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {inpaintBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('eraser', { size: 15 })}
               {inpaintBusy ? 'Inpainting...' : 'Inpaint'}

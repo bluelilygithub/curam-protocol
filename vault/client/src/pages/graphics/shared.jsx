@@ -1,6 +1,7 @@
 import Tooltip from '../../components/Tooltip';
 import api from '../../utils/apiClient';
 import useProcessingStore from '../../store/processingStore';
+import { describeCost } from './costText.mjs';
 import React, { useState, useRef, useEffect } from 'react';
 
 export const CR_ASPECTS = [
@@ -606,6 +607,45 @@ export function useSocialPresets() {
       .catch(() => {});
   }, []);
   return socialPresets;
+}
+
+// Pixel size of an image data URL (null until it has loaded). Used to price an upscale before it runs.
+export function useImageSize(dataUrl) {
+  const [size, setSize] = useState(null);
+  useEffect(() => {
+    if (!dataUrl) { setSize(null); return undefined; }
+    let off = false;
+    const img = new Image();
+    img.onload = () => { if (!off) setSize({ width: img.naturalWidth, height: img.naturalHeight }); };
+    img.onerror = () => { if (!off) setSize(null); };
+    img.src = dataUrl;
+    return () => { off = true; };
+  }, [dataUrl]);
+  return size;
+}
+
+// "What will this cost?" line shown above a paid tool's run button: estimated price (times `runs` for a
+// batch) and how much of today's limit is left. `refreshKey` changes after a run so the limit updates.
+export function CostNote({ tool, runs = 1, width, height, scale, refreshKey }) {
+  const [preview, setPreview] = useState(null);
+  useEffect(() => {
+    let off = false;
+    const t = setTimeout(() => {
+      const q = new URLSearchParams({ tool, runs: String(runs) });
+      if (width) q.set('width', String(width));
+      if (height) q.set('height', String(height));
+      if (scale) q.set('scale', String(scale));
+      api.get(`/api/graphics/cost-preview?${q}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (!off) setPreview(d); })
+        .catch(() => { if (!off) setPreview(null); });
+    }, 250);
+    return () => { off = true; clearTimeout(t); };
+  }, [tool, runs, width, height, scale, refreshKey]);
+  const note = describeCost(preview);
+  if (!note) return null;
+  const color = note.level === 'block' ? '#ef4444' : note.level === 'warn' ? '#f59e0b' : 'var(--color-muted)';
+  return <p className="text-xs" style={{ color }}>{note.text}</p>;
 }
 
 // Shows the page-wide "please wait" overlay while a tool has a job running (label = null when idle).

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../../../utils/apiClient';
 import Tooltip from '../../../components/Tooltip';
 import { useGraphics } from '../GraphicsContext';
-import { STYLE_PRESETS, useProcessingWhile, formatCost } from '../shared';
+import { STYLE_PRESETS, useProcessingWhile, formatCost, CostNote } from '../shared';
 
 export default function GenerateTool({ active }) {
   const getIcon = useIcon();
@@ -253,6 +253,7 @@ export default function GenerateTool({ active }) {
             </div>
           )}
 
+          <CostNote tool="generate" refreshKey={result} />
           <Tooltip text="Send the prompt to the image model and create a new image."><button
             type="submit"
             disabled={generating || !prompt.trim() || status?.ok === false}
@@ -347,6 +348,7 @@ export default function GenerateTool({ active }) {
                         style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                       /></Tooltip>
                     </div>
+                    <CostNote tool="augment" refreshKey={result} />
                     <div className="flex items-center gap-3">
                       <label className="text-xs" style={{ color: 'var(--color-muted)' }}>Change strength</label>
                       <Tooltip text="How far the new version can drift from the original image — higher makes bigger changes."><select

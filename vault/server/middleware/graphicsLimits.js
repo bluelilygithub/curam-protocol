@@ -60,6 +60,17 @@ function capImagePixels(maxMegapixels = MAX_MEGAPIXELS) {
 
 const inFlight = new Map();
 
+/** What this person has spent on paid graphics tools in the last 24 hours (USD), from the Usage dashboard's rows. */
+async function spentLast24h(pool, userId, feature = 'graphics_%') {
+  const { rows } = await pool.query(
+    `SELECT COALESCE(SUM(estimated_cost_usd), 0) AS spent
+       FROM usage_logs
+      WHERE user_id = $1 AND feature LIKE $2 AND created_at > NOW() - INTERVAL '24 hours'`,
+    [userId, feature]
+  );
+  return Number(rows[0]?.spent) || 0;
+}
+
 function makePaidGuard({ pool, feature = 'graphics_%' } = {}) {
   return async function paidGuard(req, res, next) {
     if (req.method !== 'POST') return next();
@@ -73,13 +84,7 @@ function makePaidGuard({ pool, feature = 'graphics_%' } = {}) {
     const cap = dailyCapUsd();
     if (cap > 0) {
       try {
-        const { rows } = await pool.query(
-          `SELECT COALESCE(SUM(estimated_cost_usd), 0) AS spent
-             FROM usage_logs
-            WHERE user_id = $1 AND feature LIKE $2 AND created_at > NOW() - INTERVAL '24 hours'`,
-          [userId, feature]
-        );
-        const spent = Number(rows[0]?.spent) || 0;
+        const spent = await spentLast24h(pool, userId, feature);
         if (spent >= cap) {
           return res.status(429).json({
             code: 'GRAPHICS_DAILY_CAP',
@@ -108,4 +113,4 @@ function makePaidGuard({ pool, feature = 'graphics_%' } = {}) {
   };
 }
 
-module.exports = { capImagePixels, makePaidGuard, collectImageDataUrls, dailyCapUsd, MAX_MEGAPIXELS };
+module.exports = { capImagePixels, makePaidGuard, spentLast24h, collectImageDataUrls, dailyCapUsd, MAX_MEGAPIXELS };
