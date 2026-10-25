@@ -226,6 +226,31 @@ async function planTests() {
     assert.strictEqual(calls[0].body.instructions, false);
   }
 
+  // ---- directions refused: the route still comes, without them; a really bad key still says so, and the log says why
+  {
+    const logs = [];
+    const refuse = { status: 403, json: { error: { code: 2003, message: 'Access to this API has been disallowed' } } };
+    // a key that may route but not ask for directions
+    calls.length = 0;
+    const noDirections = createPlanner({ getKey: () => KEY, log: (...a) => logs.push(a.join(' ')), fetchFn: fakeFetch(() => (calls.at(-1).body.instructions ? refuse : { json: okJson })) });
+    const got = await noDirections.plan(1, { from, to, profile: 'walking' });
+    assert.strictEqual(got.routes.length, 3, 'the routes still come');
+    assert.deepStrictEqual(got.routes[0].steps, [], 'without directions');
+    assert.strictEqual(calls.length, 2);
+    assert.strictEqual(calls[1].body.instructions, false);
+    assert.ok(logs.some((l) => /directions refused/.test(l) && /disallowed/.test(l)), 'the log says what the service answered');
+    assert.ok(!logs.join(' ').includes(KEY), 'never the key');
+    // a loop too
+    calls.length = 0;
+    const loopOk = await createPlanner({ getKey: () => KEY, fetchFn: fakeFetch(() => (calls.at(-1).body.instructions ? refuse : { json: { features: [feature([from, mid(0.002), from], 5000, 3600)] } })) }).loops(1, { from, lengthKm: 5, profile: 'walking', round: 0 });
+    assert.ok(loopOk.routes.length >= 1, 'loops still come');
+    // a key that is rejected for everything is still reported as rejected
+    logs.length = 0;
+    await rejects(createPlanner({ getKey: () => KEY, log: (...a) => logs.push(a.join(' ')), fetchFn: fakeFetch(() => refuse) }).plan(1, { from, to, profile: 'walking' }), 502, /key was rejected/);
+    assert.ok(logs.some((l) => /key rejected/.test(l) && /HTTP 403/.test(l) && /disallowed/.test(l)), 'and the log says why');
+    assert.ok(!logs.join(' ').includes(KEY));
+  }
+
   // ---- multi: one call through a start, stops and an end
   {
     const stop1 = [153.034, -27.471]; const stop2 = [153.04, -27.473];

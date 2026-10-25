@@ -114,7 +114,7 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
   /** A plain PlanError for what the service said (never its own text, never the key). `what` is the start/end wording for "not found". */
   function explain(u) {
     if (u.status === 429) return new PlanError(429, 'The routing service is busy. Try again in a minute.', 60);
-    if (u.status === 401 || u.status === 403) { log('route planner: key rejected'); return new PlanError(502, 'Route planning is not available: the routing key was rejected.'); }
+    if (u.status === 401 || u.status === 403) { log('route planner: key rejected', `HTTP ${u.status}${Number.isFinite(u.code) ? ` code ${u.code}` : ''}: ${String(u.message || '').slice(0, 200)}`); return new PlanError(502, 'Route planning is not available: the routing key was rejected.'); }
     if (u.code === 2010) {
       const end = whichEnd(u.message);
       return new PlanError(422, `No road or path was found near ${end === 'start' ? 'the start' : end === 'end' ? 'the end' : 'one of the points'}. Move it closer to a road or footpath.`);
@@ -187,6 +187,8 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
         if (!u) throw err;
         // a request the service will not do with alternatives still works as a single route
         if (alt && (u.code === 2004 || (u.status === 400 && /alternative/i.test(u.message)))) { alt = false; continue; }
+        // the directions options were refused (a key or plan that may not ask for them): the route itself matters more, so ask again without them
+        if (directions && [400, 401, 403].includes(u.status)) { log('route planner: directions refused, retrying without', `HTTP ${u.status}${Number.isFinite(u.code) ? ` code ${u.code}` : ''}: ${String(u.message || '').slice(0, 200)}`); directions = false; continue; }
         throw explain(u);
       }
     }
@@ -215,9 +217,11 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
   /** One round trip from `from` of about `lengthM` metres for a seed (the seed picks the loop's general direction). */
   async function oneLoop(key, profile, from, lengthM, seed) {
     let retried = false;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    let directions = true;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
       try {
-        const body = { coordinates: [from], instructions: true, instruction_format: 'text', language: 'en', units: 'm', elevation: false, options: { [roundTripKey]: { length: Math.round(lengthM), points: LOOP_POINTS, seed } } };
+        const body = { coordinates: [from], instructions: directions, elevation: false, options: { [roundTripKey]: { length: Math.round(lengthM), points: LOOP_POINTS, seed } } };
+        if (directions) Object.assign(body, { instruction_format: 'text', language: 'en', units: 'm' });
         const json = await post(key, profile, body, LOOP_TIMEOUT_MS);
         const r = toRoutes(json)[0];
         if (!r) throw Object.assign(new Error('upstream'), { upstream: { status: 404, code: 2009, message: '' } });
@@ -226,6 +230,8 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
         const u = err.upstream;
         // the service did not answer at all (a slow moment, a dropped connection): one more try before giving up
         if (err.transient && !retried) { retried = true; continue; }
+        // directions refused (401/403, or a 400 that is not the round-trip spelling below): ask again without them
+        if (u && directions && [401, 403].includes(u.status)) { log('route planner: directions refused, retrying without', `HTTP ${u.status}: ${String(u.message || '').slice(0, 200)}`); directions = false; continue; }
         // an unknown-option answer (not a routing answer): try the other spelling of the option once, and keep the one that works
         if (u && attempt < 2 && u.status === 400 && ![2004, 2009, 2010].includes(u.code)) { roundTripKey = roundTripKey === 'round_trip' ? 'round-trip' : 'round_trip'; continue; }
         throw err;
