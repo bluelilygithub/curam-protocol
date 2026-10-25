@@ -41,6 +41,7 @@ const STEPS_MAX = 400; // directions kept per route
 const STEP_TEXT_MAX = 160;
 const MULTI_MIN_POINTS = 2;
 const MULTI_MAX_POINTS = 10; // start + up to 8 stops + end
+const FOLLOW_MAX_POINTS = 30; // waypoints along a saved line when directions are asked for it (the service allows 50)
 const TIMEOUT_MS = 30000; // the public routing service is sometimes slow: waiting is better than a failed plan (the page shows a "working" card meanwhile)
 const LOOP_TIMEOUT_MS = 30000;
 const LEG_TIMEOUT_MS = 15000; // one click of Follow roads: a person is waiting for the line to appear
@@ -343,6 +344,25 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
     return { ...value, cached: false };
   }
 
+  /**
+   * { points (2 to 30, thinned from a saved line), profile } -> { route, attribution }: directions that follow a line that already exists.
+   * Same as multi, but takes the many waypoints of a thinned line and does not insist that every neighbour is 30 m apart (the caller thins them).
+   */
+  async function follow(userId, { points, profile }) {
+    const key = checkKey(profile);
+    if (!Array.isArray(points) || points.length < 2 || points.length > FOLLOW_MAX_POINTS) throw new PlanError(400, 'That line cannot be given directions.');
+    if (!points.every(validPos)) throw new PlanError(400, 'Every point must be a [longitude, latitude] point on the map.');
+    const ck = `follow|${profile}|${points.map((p) => `${round5(p[0])},${round5(p[1])}`).join('|')}`;
+    const hit = fromCache(ck);
+    if (hit) return hit;
+    limit(userId, 1);
+    const r = (await route(key, profile, points, false))[0];
+    if (!r) throw new PlanError(422, 'No route could be found along that line for this way of travelling.');
+    const value = { route: r, attribution: ATTRIBUTION };
+    remember(ck, value);
+    return { ...value, cached: false };
+  }
+
   // ---- detour: A to B, but about X km ------------------------------------------------------------------------------------------
 
   /** Where the via point goes: `h` metres to the `side` of the point `t` of the way from A to B. */
@@ -484,7 +504,7 @@ function createPlanner({ getKey, fetchFn = globalThis.fetch, now = Date.now, per
     return { ok: route.ok, keySet: true, ms: route.ms, route, site, control, summary };
   }
 
-  return { plan, loops, detour, leg, multi, diagnose };
+  return { plan, loops, detour, leg, multi, follow, diagnose };
 }
 
-module.exports = { createPlanner, PlanError, PROFILES, ATTRIBUTION, MULTI_MAX_POINTS, ALTERNATIVES_MAX_M, LOOP_MIN_KM, LOOP_MAX_KM, DETOUR_MIN_KM, DETOUR_MAX_KM };
+module.exports = { createPlanner, PlanError, PROFILES, ATTRIBUTION, MULTI_MAX_POINTS, FOLLOW_MAX_POINTS, ALTERNATIVES_MAX_M, LOOP_MIN_KM, LOOP_MAX_KM, DETOUR_MIN_KM, DETOUR_MAX_KM };

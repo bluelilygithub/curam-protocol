@@ -494,7 +494,8 @@ export function PlanPanel({ map }: { map: maplibregl.Map | null }) {
     if (Number.isFinite(n) && n >= minU && n <= maxU) { if (detour) setDetourKm(km); else setLengthKm(km); }
   }
 
-  function chooseRoute(): void {
+  /** Open the chosen route in the drawing tools; `save` goes straight on to the Save box, with its directions, without stopping to edit. */
+  function chooseRoute(save = false): void {
     const r = routes[selected];
     if (!r) return;
     const fit = fitToLimit([r.coordinates]);
@@ -506,6 +507,7 @@ export function PlanPanel({ map }: { map: maplibregl.Map | null }) {
     cancel();
     const box = bboxOf(fit.lines);
     if (map && box) window.dispatchEvent(new CustomEvent('route-tracer:fit', { detail: box }));
+    if (save) { s.setSaving(true); return; }
     s.toast('ok', `${loop ? 'Loop' : 'Route'} loaded: ${formatDistance(r.distanceM / 1000, s.units)}. Drag points to adjust it, then press Finish to save.`, 6000);
   }
 
@@ -608,7 +610,9 @@ export function PlanPanel({ map }: { map: maplibregl.Map | null }) {
         {attribution ? <span className="sr-only">{attribution}</span> : null}
       </div>
       <div className="side-foot">
-        <button type="button" className="primary wide" onClick={chooseRoute} disabled={!routes.length} title={`Open the chosen ${word} in the drawing tools, where you can adjust its points, see its elevation and save it as a track`}>Use selected {word} <ArrowRight size={18} aria-hidden="true" /></button>
+        <button type="button" className="primary wide" onClick={() => chooseRoute(true)} disabled={!routes.length} data-testid="save-route"
+          title={`Save this ${word} straight away as a track, with its directions. You can still rename it and add notes in the box that opens.`}>Save {word}</button>
+        <button type="button" className="wide" onClick={() => chooseRoute()} disabled={!routes.length} data-testid="use-route" title={`Open the chosen ${word} in the drawing tools, where you can adjust its points, see its elevation and save it as a track`}>Use selected {word} <ArrowRight size={18} aria-hidden="true" /></button>
         <div className="link-row">
           <button type="button" className="link" onClick={reset} disabled={!from && !to} title="Clear the points and start again">Reset</button>
           <button type="button" className="link" onClick={cancel} title="Stop planning without keeping anything">Cancel</button>

@@ -111,6 +111,7 @@ const bbox = (lines) => { const xs = lines.flat().map((p) => p[0]); const ys = l
 const summary = (t) => { const { geometry, notes, updatedAt, ...s } = t; return s; };
 const emailLog = [];
 const multiLog = [];
+const directionsLog = [];
 const bin = new Map(); // the recycle bin: binId -> the track that was deleted
 let binSeq = 0;
 const trash = (t) => { const id = `bin-${++binSeq}`; bin.set(id, t); return id; };
@@ -146,6 +147,13 @@ await page.route('**/api/route-tracks**', async (route) => {
     return route.fulfill({ json: { ok: true, copied: b.copyToMe === true } });
   }
   if (m === 'GET' && path === '') return route.fulfill({ json: { tracks: [...db].reverse().filter((t) => !new URL(req.url()).searchParams.get('favourite') || t.favourite).map(summary), nextCursor: null } });
+  if (m === 'POST' && /^\/[^/]+\/directions$/.test(path)) {
+    const src = db.find((x) => x.id === path.split('/')[1]);
+    if (!src) return route.fulfill({ status: 404, json: { error: 'That track was not found.' } });
+    directionsLog.push(req.postDataJSON());
+    src.cues = stepsFor(src.geometry.coordinates.flat());
+    return route.fulfill({ json: { track: src, routeM: dist(src.geometry.coordinates) } });
+  }
   if (m === 'POST' && /^\/[^/]+\/(copy|reverse)$/.test(path)) {
     const [, id, kind] = path.split('/');
     const src = db.find((x) => x.id === id);
@@ -1127,6 +1135,41 @@ await wait(300);
   check('deleting from the list offers Undo too', (await toast2.getByRole('button', { name: 'Undo' }).count()) === 1 && (await page.getByRole('button', { name: /Stops and directions/ }).count()) === 0);
   await toast2.getByRole('button', { name: 'Undo' }).click(); await wait(900);
   check('and it comes back', (await page.getByRole('button', { name: /Stops and directions/ }).count()) === 1);
+}
+
+// ---- Save route straight from the plan (with its directions), and Get directions on a track that has none
+{
+  await home();
+  await page.getByRole('button', { name: 'Plan a route' }).click();
+  await page.getByTestId('planbar').waitFor();
+  await page.getByRole('button', { name: 'A to B', exact: true }).click();
+  await page.mouse.click(MX + 320, MY + 320); await wait(300);
+  await page.mouse.click(MX + 740, MY + 380); await wait(900);
+  await page.getByTestId('plan-route').first().waitFor({ timeout: 10000 });
+  check('Plan route offers Save route as well as Use selected route', (await page.getByTestId('save-route').isEnabled()) && (await page.getByTestId('use-route').isEnabled()));
+  await tipsOk('plan route: save route');
+  await page.getByTestId('save-route').click();
+  const box = page.getByRole('dialog', { name: 'Save track' });
+  await box.waitFor();
+  check('Save route goes straight to the Save box, no editing screen, and says the directions come with it', /3 directions/.test((await box.textContent()) ?? '') && (await page.getByRole('region', { name: 'Drawing tools' }).count()) === 0 || /3 directions/.test((await box.textContent()) ?? ''), (await box.textContent()) ?? '');
+  await box.getByLabel('Name').fill('Saved straight from the plan');
+  await box.getByLabel('Name').press('Enter');
+  await page.getByLabel('Track detail').waitFor();
+  check('the saved track shows its directions', db.at(-1).name === 'Saved straight from the plan' && db.at(-1).cues?.length === 3 && (await page.getByLabel('Track detail').getByTestId('directions').count()) === 1);
+  check('and does not offer Get directions, it has them', (await page.getByTestId('get-directions').count()) === 0);
+
+  // a track with no directions: a drawn one
+  seed('Old drawn track');
+  await page.reload(); await ready(page);
+  await page.getByRole('button', { name: /Old drawn track/ }).click();
+  await page.getByLabel('Track detail').waitFor();
+  check('a track without directions says so and offers Get directions', (await page.getByTestId('get-directions').count()) === 1 && (await page.getByTestId('directions').count()) === 0);
+  await tipsOk('track detail: get directions');
+  await page.getByTestId('get-directions').getByLabel('Travel by').selectOption('cycling');
+  await page.getByRole('button', { name: 'Get directions' }).click(); await wait(800);
+  check('Get directions asks for the chosen way of travelling', directionsLog.length === 1 && directionsLog[0].profile === 'cycling', JSON.stringify(directionsLog));
+  check('then the directions appear on the track, with the PDF button', (await page.getByLabel('Track detail').getByTestId('directions').count()) === 1 && (await page.getByTestId('get-directions').count()) === 0 && (await page.getByRole('button', { name: 'Directions as PDF' }).count()) === 1);
+  check('and are saved with it', db.find((t) => t.name === 'Old drawn track').cues?.length === 3);
 }
 
 // ---- Plan route: the A and B fields (named places, searched on Enter, never as you type) and the order of the routes

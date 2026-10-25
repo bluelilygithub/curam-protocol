@@ -323,3 +323,7 @@ button.back { font-size: 1rem; font-weight: 500; }
 
 .directions-actions { display: flex; gap: 6px; margin-top: 6px; }
 .directions-actions button { flex: 1; }
+
+.get-directions { margin: 8px 0; }
+.get-directions .row { display: flex; gap: 6px; }
+.get-directions .row button { flex: 1; }

@@ -11,7 +11,7 @@ import { ElevationChart } from './ElevationChart';
 import { ExportPdf } from './ExportPdf';
 import { SendToWatch } from './SendToWatch';
 import { buildCuePdf } from './cuePdf';
-import { usePlan } from './Plan';
+import { PROFILES, usePlan } from './Plan';
 import { findStart, loopChoices } from './suggest';
 import { fitToLimit } from './gpx';
 import { fitPadding } from './layout';
@@ -309,6 +309,9 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
   const [pdfOpen, setPdfOpen] = useState(false);
   const [watchOpen, setWatchOpen] = useState(false);
   const [cuePdfBusy, setCuePdfBusy] = useState(false);
+  const [dirBusy, setDirBusy] = useState(false);
+  const [dirProfile, setDirProfile] = useState(() => usePlan.getState().profile);
+  const routePlanning = useStore((s) => s.routePlanning);
   const [fav, setFav] = useState(track.favourite);
 
   useEffect(() => { setPdfOpen(false); setWatchOpen(false); setName(track.name); setNotes(track.notes ?? ''); setColor(track.color); setEditing(false); setConfirmDelete(false); setFav(track.favourite); }, [track.id, track.updatedAt, track.name, track.notes, track.color, track.favourite]);
@@ -322,6 +325,15 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
   async function remove() {
     setBusy(true);
     try { const r = await api.remove(track.id); offerUndo(`Deleted ${track.name}.`, r?.binId ? [r.binId] : []); onGone(); } catch (err) { toast('error', errText(err)); setBusy(false); }
+  }
+  /** Directions for a track that has none (an older, drawn or imported one): saved on the track, shown straight away. */
+  async function getDirections() {
+    setDirBusy(true);
+    try {
+      const r = await api.directions(track.id, dirProfile);
+      onChanged(r.track);
+      toast('ok', `Directions added: ${r.track.cues?.length ?? 0} steps. They follow roads, so they can differ a little from your line.`, 6000);
+    } catch (err) { toast('error', errText(err)); } finally { setDirBusy(false); }
   }
   /** The directions as a printable PDF, made in the browser and saved from a Blob link. */
   async function directionsPdf() {
@@ -395,7 +407,17 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
             <p className="hint">{fmtDate(track.createdAt)} · {track.pointCount} points</p>
             {track.notes && <p className="notes">{track.notes}</p>}
             <ElevationChart lines={track.geometry.coordinates} color={track.color} name={track.name} />
-            {track.cues?.length ? <DirectionsList cues={track.cues} map={map} units={units} title={track.name} /> : null}
+            {track.cues?.length ? <DirectionsList cues={track.cues} map={map} units={units} title={track.name} /> : routePlanning ? (
+              <section className="get-directions" aria-label="Get directions" data-testid="get-directions">
+                <p className="hint">This track has no turn-by-turn directions yet.</p>
+                <div className="row">
+                  <select aria-label="Travel by" value={dirProfile} onChange={(e) => setDirProfile(e.target.value as typeof dirProfile)} title="How you will travel it, so the directions use the right roads and paths">
+                    {PROFILES.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                  </select>
+                  <button type="button" disabled={dirBusy} onClick={() => void getDirections()} title="Work out turn-by-turn directions along this track's route and save them with it. They follow roads and paths, so they can differ a little from the line you drew.">{dirBusy ? 'Working it out…' : 'Get directions'}</button>
+                </div>
+              </section>
+            ) : null}
             <div className="stack">
               <button type="button" onClick={() => void toggleFavourite()} aria-pressed={fav} title={fav ? 'This is one of your favourites. Press to remove the star.' : 'Star this track as a favourite, so you can list only your favourites'}>
                 <Star size={14} aria-hidden="true" className={fav ? 'fav-on' : ''} /> {fav ? 'Favourite' : 'Add to favourites'}

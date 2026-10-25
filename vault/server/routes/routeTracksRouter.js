@@ -8,7 +8,7 @@
 const express = require('express');
 const { getLogger } = require('../middleware/requestContext');
 const geo = require('../services/routeTracerGeo');
-const { createPlanner, PlanError, PROFILES, LOOP_MIN_KM, LOOP_MAX_KM, DETOUR_MIN_KM, DETOUR_MAX_KM } = require('../services/routePlanner');
+const { createPlanner, PlanError, PROFILES, FOLLOW_MAX_POINTS, LOOP_MIN_KM, LOOP_MAX_KM, DETOUR_MIN_KM, DETOUR_MAX_KM } = require('../services/routePlanner');
 
 const MAX_NAME = 120;
 const MAX_NOTES = 2000;
@@ -533,6 +533,36 @@ function createRouter(pool, {
       res.status(500).json({ error: reverse ? 'Could not reverse this track.' : 'Could not copy this track.' });
     }
   }
+  // POST /api/route-tracks/:id/directions { profile }: work out turn-by-turn directions for a track that has none (an older one, a drawn
+  // one, an imported one). The saved line is thinned to a few waypoints along it and the routing service is asked for a route through them,
+  // so the directions follow the road version of the line (they can differ a little from the drawn line). They are saved on the track.
+  router.post('/:id/directions', async (req, res) => {
+    if (!UUID.test(req.params.id)) return res.status(404).json({ error: 'That track was not found.' });
+    try {
+      const src = (await pool.query(`SELECT ${FULL} FROM route_tracks WHERE id = $1 AND "userId" = $2`, [req.params.id, req.user.id])).rows[0];
+      if (!src) return res.status(404).json({ error: 'That track was not found.' });
+      const points = geo.waypointsAlong(src.geometry.coordinates, FOLLOW_MAX_POINTS);
+      if (points.length < 2) return res.status(422).json({ error: 'That track is too short to give directions for.' });
+      const out = await planner.follow(req.user.id, { points, profile: req.body?.profile });
+      const steps = cleanCues(out.route.steps);
+      if (steps.error || !steps.value) return res.status(422).json({ error: 'The routing service gave no directions for that track. Try another way of travelling.' });
+      const { rows } = await pool.query(
+        `UPDATE route_tracks SET cues = $1::jsonb, "updatedAt" = date_trunc('milliseconds', NOW()) WHERE id = $2 AND "userId" = $3 RETURNING ${FULL}`,
+        [JSON.stringify(steps.value), req.params.id, req.user.id],
+      );
+      if (!rows[0]) return res.status(404).json({ error: 'That track was not found.' });
+      res.set('Cache-Control', 'no-store');
+      res.json({ track: fullWire(rows[0]), routeM: out.route.distanceM });
+    } catch (err) {
+      if (err instanceof PlanError) {
+        if (err.retryAfter) res.set('Retry-After', String(err.retryAfter));
+        return res.status(err.status).json({ error: err.message });
+      }
+      getLogger().error({ err }, 'route track directions failed');
+      res.status(500).json({ error: 'Could not get directions for this track.' });
+    }
+  });
+
   router.post('/:id/copy', (req, res) => derive(req, res, { suffix: '(copy)', reverse: false }));
   router.post('/:id/reverse', (req, res) => derive(req, res, { suffix: '(reversed)', reverse: true }));
 

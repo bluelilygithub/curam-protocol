@@ -97,6 +97,12 @@ function fakePool() {
         const r = rows.find((x) => x.id === params[0] && x.userId === params[1]);
         return { rows: r ? [r] : [] };
       }
+      if (/^UPDATE route_tracks SET cues = \$1::jsonb/.test(s)) {
+        const r = rows.find((x) => x.id === params[1] && x.userId === params[2]);
+        if (!r) return { rows: [] };
+        r.cues = JSON.parse(params[0]); r.updatedAt = new Date((clock += 1000));
+        return { rows: [r] };
+      }
       if (/^UPDATE route_tracks/.test(s)) {
         const [name, setNotes, notes, color, geometry, dist, pts, bbox, id, userId, setCues, cues, fav] = params;
         const r = rows.find((x) => x.id === id && x.userId === userId);
@@ -1140,6 +1146,55 @@ async function planTests() {
     const long = (await call(s, 'POST', '/api/route-tracks', input({ name: 'x'.repeat(120) }))).json.track;
     assert.ok((await call(s, 'POST', `/api/route-tracks/${long.id}/copy`)).json.track.name.length <= 120, 'the new name still fits');
     for (const t of [src, c, r2, long]) await call(s, 'DELETE', `/api/route-tracks/${t.id}`);
+  }
+
+  // ---- directions for a track that has none: thinned along its line, one routing call, saved on the track
+  {
+    const seen = [];
+    const orsFetch = async (url, init) => {
+      const b = JSON.parse(init.body); seen.push(b);
+      const c = b.coordinates;
+      return { ok: true, status: 200, json: async () => ({ features: [{ type: 'Feature', properties: { summary: { distance: 4000, duration: 2800 }, segments: [{ steps: [
+        { instruction: 'Head east', distance: 2000, duration: 1400, type: 11, way_points: [0, 1] },
+        { instruction: 'Arrive at your destination', distance: 0, duration: 0, type: 10, way_points: [c.length - 1, c.length - 1] }] }] }, geometry: { type: 'LineString', coordinates: c } }] }) };
+    };
+    const dpool = fakePool();
+    const ds = build(dpool, 1, { getMapKey: () => 'K', getOrsKey: () => 'ors-secret', fetchFn: orsFetch }).listen(0);
+    const wiggly = Array.from({ length: 800 }, (_, i) => [153 + i * 0.0002, -27.5 + Math.sin(i / 20) * 0.003]);
+    const t = (await call(ds, 'POST', '/api/route-tracks', input({ name: 'Old drawn track', geometry: { type: 'MultiLineString', coordinates: [wiggly] } }))).json.track;
+    assert.strictEqual(t.cues, null, 'a drawn track has no directions');
+    const d = await call(ds, 'POST', `/api/route-tracks/${t.id}/directions`, { profile: 'cycling' });
+    assert.strictEqual(d.status, 200, d.text);
+    assert.strictEqual(d.json.track.cues.length, 2, 'directions are saved on the track');
+    assert.strictEqual(d.json.track.cues[0].text, 'Head east');
+    assert.ok(seen.length === 1 && seen[0].coordinates.length >= 2 && seen[0].coordinates.length <= 30, `thinned to a handful of waypoints, got ${seen[0].coordinates.length}`);
+    assert.deepStrictEqual(seen[0].coordinates[0], wiggly[0], 'starts where the line starts');
+    assert.deepStrictEqual(seen[0].coordinates.at(-1), wiggly.at(-1), 'and ends where it ends');
+    assert.ok(seen[0].url === undefined && !JSON.stringify(seen[0]).includes('ors-secret'), 'no key in the request body');
+    assert.ok(!d.text.includes('ors-secret'));
+    assert.strictEqual((await call(ds, 'GET', `/api/route-tracks/${t.id}`)).json.track.cues.length, 2, 'and they are still there when it is opened again');
+    assert.strictEqual((await call(ds, 'POST', `/api/route-tracks/${t.id}/directions`, { profile: 'flying' })).status, 400, 'a bad way of travelling');
+    assert.strictEqual((await call(ds, 'POST', `/api/route-tracks/${crypto.randomUUID()}/directions`, { profile: 'walking' })).status, 404);
+    const stranger = build(dpool, 2, { getOrsKey: () => 'k', fetchFn: orsFetch }).listen(0);
+    assert.strictEqual((await call(stranger, 'POST', `/api/route-tracks/${t.id}/directions`, { profile: 'walking' })).status, 404, 'not someone else\'s track');
+    stranger.close();
+    // a short line still works, and a line of several strokes is followed in order
+    const two = (await call(ds, 'POST', '/api/route-tracks', input({ name: 'Two strokes', geometry: { type: 'MultiLineString', coordinates: [[[153, -27.5], [153.01, -27.49]], [[153.02, -27.5], [153.03, -27.49]]] } }))).json.track;
+    seen.length = 0;
+    assert.strictEqual((await call(ds, 'POST', `/api/route-tracks/${two.id}/directions`, { profile: 'walking' })).status, 200);
+    assert.deepStrictEqual(seen[0].coordinates.map((p) => p[0]), [153, 153.01, 153.02, 153.03]);
+    ds.close();
+  }
+
+  // ---- waypoints along a line
+  {
+    const wp = geo.waypointsAlong([Array.from({ length: 5000 }, (_, i) => [153 + i * 0.00005, -27.5 + Math.sin(i / 50) * 0.002])], 30);
+    assert.ok(wp.length <= 30 && wp.length >= 5, `${wp.length} waypoints`);
+    assert.strictEqual(geo.waypointsAlong([[[1, 1], [1.001, 1]]], 30).length, 2, 'a short line keeps its ends');
+    assert.strictEqual(geo.waypointsAlong([[[1, 1], [1.0001, 1]]], 30).length, 1, 'under 30 m is one place, so there is nothing to give directions for');
+    assert.deepStrictEqual(geo.waypointsAlong([[[1, 1]]], 30), [[1, 1]]);
+    const near = geo.waypointsAlong([[[153, -27.5], [153.00001, -27.5], [153.00002, -27.5], [153.01, -27.5]]], 30);
+    assert.deepStrictEqual(near.at(-1), [153.01, -27.5], 'the end is always kept');
   }
 
   // ---- multi-stop planning route
