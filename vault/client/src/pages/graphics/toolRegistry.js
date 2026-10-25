@@ -26,6 +26,7 @@ export const TOOL_COMPONENTS = {
   adjust: lazy(() => import('./tools/AdjustTool')),
   redact: lazy(() => import('./tools/RedactTool')),
   ocr: lazy(() => import('./tools/ExtractTextTool')),
+  alttext: lazy(() => import('./tools/AltTextTool')),
   palette: lazy(() => import('./tools/PaletteTool')),
   diff: lazy(() => import('./tools/ImageDiffTool')),
   picker: lazy(() => import('./tools/PickerTool')),

@@ -24,12 +24,13 @@ const analyse = require('./graphics/analyse');
 const plan = require('./graphics/plan');
 const cost = require('./graphics/cost');
 const recipes = require('./graphics/recipes');
+const describe = require('./graphics/describe');
 const { capImagePixels, makePaidGuard } = require('../middleware/graphicsLimits');
 
 // Safety nets for every route below: no oversized images, and a per-person limit on the paid AI tools.
 // (See middleware/graphicsLimits.js for the settings.)
 router.use(capImagePixels());
-router.use(['/generate', '/refine', '/augment', '/upscale', '/inpaint', '/background', '/icon-generate', '/icon-references'], makePaidGuard({ pool: shared.pool }));
+router.use(['/generate', '/refine', '/augment', '/upscale', '/inpaint', '/background', '/icon-generate', '/icon-references', '/describe'], makePaidGuard({ pool: shared.pool }));
 
 router.use(shared.router);
 router.use(create);
@@ -42,5 +43,6 @@ router.use(analyse);
 router.use(plan);
 router.use(cost);
 router.use(recipes);
+router.use(describe);
 
 module.exports = router;

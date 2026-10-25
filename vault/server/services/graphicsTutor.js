@@ -92,6 +92,8 @@ const CATALOG = [
     does: 'Pulls the main 5 to 12 colours out of a picture, with HEX and RGB and roughly how much of the picture each covers.', notes: '' },
   { id: 'ocr', label: 'Extract Text', group: 'Analyse',
     does: 'Reads the text in a screenshot, scan or receipt photo and lets the person edit, copy or save it as a .txt file. Languages: English, French, Spanish, German, Italian, Portuguese (the person picks one). Runs in the browser.', notes: 'Not for handwriting. The first use downloads the language data. Check numbers against the picture.' },
+  { id: 'alttext', label: 'Alt text & names', group: 'Analyse',
+    does: 'Suggests alt text (what a screen reader says and search engines read) and a descriptive, hyphenated file name for up to 10 pictures, which the person checks and edits. Can copy the alt text, the file name or a ready-made <img> tag, and download pictures under their new names.', notes: 'Uses AI, so it counts towards the daily AI limit. A reduced copy of each picture is sent only when Suggest is pressed. Suggestions can be wrong: always read them before using them.' },
   { id: 'blurdetect', label: 'Blur Detection', group: 'Analyse',
     does: 'Scores how sharp a picture is and says Sharp, Soft or Blurry.', notes: 'Tells you about the picture; it cannot fix a blurry one.' },
   { id: 'diff', label: 'Image Diff', group: 'Analyse',
@@ -122,10 +124,10 @@ const NOT_POSSIBLE = [
   'Putting a specific person into a photo, swapping faces, or perfectly matching the lighting of a new object. Inpaint can fill and remove, but this usually needs several tries and may never look right.',
   'Free-hand painting and drawing like a paint program, apart from Annotate\'s pen, the Eraser and the masks painted in Inpaint and Extract Element.',
   'Editing an SVG after Vectorize (moving points, recolouring shapes). It only traces.',
-  'Doing any edit to many pictures at once. Batch covers only watermark, resize, convert, compress and remove metadata (up to 25), and Batch Text covers labels (up to 20).',
+  'Doing any edit to many pictures at once. Batch covers only watermark, resize, convert, compress, remove metadata and running a saved recipe (up to 25), and Batch Text covers labels (up to 20).',
   'Reading handwriting, or text in languages other than English, French, Spanish, German, Italian and Portuguese (for example Asian languages or Arabic).',
   'Colour-accurate print preparation with printer profiles. Print Ready converts to CMYK by calculation only.',
-  'Looking at the person\'s pictures to say what is in them or to suggest an edit. The guide knows what the tools do, but cannot see any picture.',
+  'The guide itself looking at the person\'s pictures to say what is in them or to suggest an edit. It knows what the tools do, but cannot see any picture. (The Alt text & names tool does describe pictures, but only when the person presses Suggest there.)',
 ];
 
 const VERDICTS = ['doable', 'partly', 'missing', 'beyond', 'question'];

@@ -26,6 +26,7 @@ export const GOALS = [
       { tool: 'cropresize', note: 'Set the width and height the page needs.' },
       { tool: 'compress', note: 'Shrink the file so the page loads fast.' },
       { tool: 'convert', note: 'Switch to WebP or AVIF if you want the smallest file.' },
+      { tool: 'alttext', note: 'Get alt text and a descriptive file name for each picture.' },
     ],
   },
   {

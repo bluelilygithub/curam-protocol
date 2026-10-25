@@ -45,6 +45,7 @@
     "test:graphics-goals": "node client/src/pages/graphics/goals.test.mjs",
     "test:graphics-recipes": "node server/routes/graphics/graphicsRecipes.test.js",
     "test:graphics-history": "node client/src/pages/graphics/historyStore.test.mjs",
+    "test:graphics-describe": "node server/services/graphicsDescribe.test.js",
     "test:graphics-tutor": "node server/services/graphicsTutor.test.js",
     "test:cross-user": "node server/routes/crossUser.test.js && node server/routes/crossUserOwnership.test.js",
     "test:ownership-misc": "node server/routes/ownershipMisc.test.js",

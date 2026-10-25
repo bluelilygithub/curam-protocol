@@ -10,6 +10,8 @@
  * @param {number} [opts.maxTokens=500]
  * @param {string} [opts.system]
  * @param {boolean} [opts.returnUsage=false] - if true, returns { text, inputTokens, outputTokens, diagnostics }
+ * @param {Array<{mimeType:string,data:string}>} [opts.images] - pictures (base64, no data: prefix) shown to the model alongside the prompt.
+ *   Only Anthropic and Gemini models can look at pictures; any other model throws.
  * @returns {Promise<string|{text:string,inputTokens:number,outputTokens:number,diagnostics?:object}>}
  */
 
@@ -33,10 +35,10 @@ function summarizeAnthropicContent(content) {
   }));
 }
 
-async function callModel(modelId, userPrompt, { maxTokens = 500, system = null, returnUsage = false, timeoutMs = 0 } = {}) {
+async function callModel(modelId, userPrompt, { maxTokens = 500, system = null, returnUsage = false, timeoutMs = 0, images = null } = {}) {
   if (!modelId) throw new Error('callModel: modelId required');
 
-  const run = () => callModelInner(modelId, userPrompt, { maxTokens, system, returnUsage });
+  const run = () => callModelInner(modelId, userPrompt, { maxTokens, system, returnUsage, images });
 
   if (!timeoutMs || timeoutMs <= 0) return run();
 
@@ -56,8 +58,12 @@ async function callModel(modelId, userPrompt, { maxTokens = 500, system = null, 
   }
 }
 
-async function callModelInner(modelId, userPrompt, { maxTokens = 500, system = null, returnUsage = false } = {}) {
+async function callModelInner(modelId, userPrompt, { maxTokens = 500, system = null, returnUsage = false, images = null } = {}) {
   const promptLen = String(userPrompt || '').length;
+  const hasImages = Array.isArray(images) && images.length > 0;
+  if (hasImages && !(modelId.startsWith('gemini-') || !/^(ollama:|deepseek-)/.test(modelId))) {
+    throw new Error(`The model ${modelId} cannot look at pictures`);
+  }
 
   if (modelId.startsWith('ollama:')) {
     const { callOllamaModel } = require('./ollamaClient');
@@ -96,7 +102,9 @@ async function callModelInner(modelId, userPrompt, { maxTokens = 500, system = n
       ...(system ? { systemInstruction: system } : {}),
       generationConfig: { maxOutputTokens: maxTokens },
     });
-    const result = await gModel.generateContent(userPrompt);
+    const result = await gModel.generateContent(hasImages
+      ? [{ text: userPrompt }, ...images.map((im) => ({ inlineData: { mimeType: im.mimeType, data: im.data } }))]
+      : userPrompt);
     let text = '';
     let finishReason = null;
     let blockTypes = [];
@@ -211,7 +219,10 @@ async function callModelInner(modelId, userPrompt, { maxTokens = 500, system = n
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new Error('ANTHROPIC_API_KEY is not configured');
   const client = new Anthropic({ apiKey: key });
-  const params = { model: modelId, max_tokens: maxTokens, messages: [{ role: 'user', content: userPrompt }] };
+  const content = hasImages
+    ? [...images.map((im) => ({ type: 'image', source: { type: 'base64', media_type: im.mimeType, data: im.data } })), { type: 'text', text: String(userPrompt) }]
+    : userPrompt;
+  const params = { model: modelId, max_tokens: maxTokens, messages: [{ role: 'user', content }] };
   if (system) params.system = system;
   const response = await client.messages.create(params);
   // Prefer all text blocks — content[0] may be thinking/tool_use on newer models.

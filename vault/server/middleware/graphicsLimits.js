@@ -6,7 +6,7 @@
 //                   4 bytes each (a 100-megapixel photo is 400MB), so a handful of big uploads could otherwise exhaust memory.
 //                   Only the image header is read.
 //
-//  paidGuard        the tools that call a paid AI service (Generate, Augment, Upscale, Inpaint, Background, the icon tools) are
+//  paidGuard        the tools that call a paid AI service (Generate, Augment, Upscale, Inpaint, Background, the icon tools, Alt text & names) are
 //                   limited per person: at most MAX_IN_FLIGHT paid jobs at once, and a rolling 24-hour spend cap read from the same
 //                   usage_logs rows the Usage dashboard shows. The route-wide aiLimiter (30 requests a minute) is for abuse, not cost.
 //

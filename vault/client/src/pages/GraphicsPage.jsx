@@ -52,6 +52,7 @@ const MODES = [
   { id: 'contrast', label: 'Contrast (WCAG)', icon: 'contrast' },
   { id: 'palette', label: 'Palette', icon: 'swatch' },
   { id: 'ocr', label: 'Extract Text', icon: 'type' },
+  { id: 'alttext', label: 'Alt text & names', icon: 'tag' },
   { id: 'blurdetect', label: 'Blur Detection', icon: 'focus' },
   { id: 'diff', label: 'Image Diff', icon: 'layers' },
   { id: 'metadata', label: 'Remove Meta', icon: 'shield' },
@@ -99,6 +100,7 @@ const TOOL_TIPS = {
   contrast: 'Check whether a text colour on a background colour is easy enough to read (WCAG).',
   palette: 'Pull the main 5 to 12 colours out of a picture.',
   ocr: 'Read the text in a screenshot, scan or receipt photo, then edit, copy or save it. Runs in your browser.',
+  alttext: 'Get suggested alt text (what a screen reader says) and a search-friendly file name for each picture, to check and edit. Uses AI.',
   blurdetect: 'Score how sharp a picture is: Sharp, Soft or Blurry.',
   diff: 'Compare two pictures and mark in red what is different.',
   metadata: 'See the hidden details in a picture (camera, date, GPS location) and strip them out.',
@@ -122,7 +124,7 @@ const MODE_GROUPS = [
   { label: 'Enhance', ids: ['effects', 'adjust', 'colorgrade', 'pipeline'] },
   { label: 'Compose', ids: ['annotate', 'watermark', 'textoverlay', 'composite', 'batchtext', 'collage', 'favicon', 'svg', 'iconlib'] },
   { label: 'Retouch', ids: ['background', 'extract', 'recolor', 'eraser', 'redact', 'inpaint'] },
-  { label: 'Analyse', ids: ['picker', 'histogram', 'contrast', 'palette', 'ocr', 'blurdetect', 'diff', 'metadata', 'fileinfo'] },
+  { label: 'Analyse', ids: ['picker', 'histogram', 'contrast', 'palette', 'ocr', 'alttext', 'blurdetect', 'diff', 'metadata', 'fileinfo'] },
 ];
 
 const TOOL_HELP = {
@@ -285,6 +287,11 @@ const TOOL_HELP = {
     title: 'Palette',
     what: 'Extract the dominant colours from an image.',
     features: ['Extracts 5–12 dominant colours', 'Client-side quantisation — nothing uploaded', 'HEX, RGB and approximate share % for each swatch', 'One-click copy per swatch'],
+  },
+  alttext: {
+    title: 'Alt text & names',
+    what: 'Suggests alt text (the description a screen reader speaks and search engines read) and a descriptive file name for each picture.',
+    features: ['Up to 10 pictures at a time', 'Optional note about where they will be used, to help the wording', 'Nothing is sent until you press Suggest; only a reduced copy of each picture goes to the AI', 'Edit the alt text (about 125 characters or fewer reads best) and the file name', 'Mark a picture as decoration-only to get empty alt text', 'Copy the alt text, the file name or a ready-made <img> tag; download pictures under their new names', 'Uses AI: shown on the Usage dashboard and counted in your daily limit'],
   },
   ocr: {
     title: 'Extract Text (OCR)',
@@ -796,6 +803,7 @@ export default function GraphicsPage() {
                   {mode === 'adjust' && 'Tune brightness, contrast, colour, levels, gamma, sharpness, blur, noise reduction and vignette.'}
                   {mode === 'redact' && 'Draw boxes to blur or pixelate faces, plates or sensitive text.'}
                   {mode === 'ocr' && 'Extract text from screenshots, scans and receipts.'}
+                  {mode === 'alttext' && 'Suggest alt text and a descriptive file name for pictures going on a website.'}
                   {mode === 'palette' && 'Pull the dominant colours out of an image.'}
                   {mode === 'diff' && 'Highlight the pixel differences between two images.'}
                   {mode === 'picker' && 'Click anywhere on an image to read its colour.'}

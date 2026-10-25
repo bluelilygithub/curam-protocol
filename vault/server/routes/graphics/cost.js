@@ -4,7 +4,7 @@
 // BEFORE the person presses the button. Nothing is spent or logged here. Not behind the paid-job guard
 // (it only covers POST), so it still answers when the limit has been reached.
 //
-//   ?tool=generate|augment|inpaint|upscale|background|icons
+//   ?tool=generate|augment|inpaint|upscale|background|icons|describe
 //   &runs=N            how many runs the job will make (default 1; a batch passes its size)
 //   &width=&height=&scale=   upscale only: the source picture's pixels and the scale
 
@@ -22,7 +22,7 @@ const {
 const { spentLast24h, dailyCapUsd } = require('../../middleware/graphicsLimits');
 const { buildCostPreview } = require('../../services/graphicsCostPreview');
 
-const TOOLS = ['generate', 'augment', 'inpaint', 'upscale', 'background', 'icons'];
+const TOOLS = ['generate', 'augment', 'inpaint', 'upscale', 'background', 'icons', 'describe'];
 
 async function priceOfOneRun(tool, userId, q) {
   if (tool === 'generate' || tool === 'augment') {
@@ -37,7 +37,7 @@ async function priceOfOneRun(tool, userId, q) {
     return upscaleCostForSize({ width: Number(q.width) || 0, height: Number(q.height) || 0, scale });
   }
   if (tool === 'background') return estimateBackgroundCost({ isLocal: runtimeConfig.isLocal });
-  return { usd: null }; // icons are billed by the words the AI uses, so there is no price until it has run
+  return { usd: null }; // icons and alt text are billed by the words the AI uses, so there is no price until it has run
 }
 
 router.get('/cost-preview', async (req, res) => {
