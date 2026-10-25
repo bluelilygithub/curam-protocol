@@ -40,6 +40,7 @@
     "test:graphics": "node server/routes/graphics/graphics.test.js",
     "test:html-fetch": "node server/services/htmlFetch.test.js",
     "test:safe-fetch": "node server/utils/safeFetch.test.js",
+    "test:graphics-text": "node server/services/graphicsTextMetrics.test.js",
     "test:graphics-tutor": "node server/services/graphicsTutor.test.js",
     "test:cross-user": "node server/routes/crossUser.test.js && node server/routes/crossUserOwnership.test.js",
     "test:ownership-misc": "node server/routes/ownershipMisc.test.js",

@@ -14,6 +14,7 @@ const { callModel } = require('../../services/callModel');
 const { getModelsForUser } = require('../../services/modelResolver');
 const { logUsage } = require('../../utils/logUsage');
 const { runPixelTask } = require('../../services/graphicsWorker');
+const { measureTextWidth } = require('../../services/graphicsTextMetrics');
 const {
   dataUrlToBuffer,
   outputFormatFor,
@@ -57,7 +58,7 @@ async function runWatermark(params) {
     if (!text) throw Object.assign(new Error('Watermark text is required'), { status: 400 });
     const color = parseHexColor(params?.color)?.hex || '#ffffff';
     const fontSize = clampInt(params?.fontSize, 8, 600, Math.max(16, Math.round(base.width * 0.06)));
-    const w = Math.ceil(text.length * fontSize * 0.62) + 24;
+    const w = Math.ceil(measureTextWidth(text, fontSize, 'bold')) + 24;
     const h = Math.ceil(fontSize * 1.5);
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><text x="50%" y="50%" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="bold" fill="${color}" fill-opacity="${op}" text-anchor="middle" dominant-baseline="middle">${escapeXml(text)}</text></svg>`;
     overlay = Buffer.from(svg);
@@ -101,19 +102,14 @@ router.post('/watermark', async (req, res) => {
 // low-opacity. This is for real headline/caption text: full-size, wrappable,
 // with an optional background pill and outline stroke for legibility.
 
-// No real font metrics are available server-side, so wrapping uses the same
-// crude character-width heuristic as /watermark's text sizing.
-function estimateTextWidth(text, fontSize) {
-  return String(text || '').length * fontSize * 0.62;
-}
-
-function wrapTextLines(text, fontSize, maxWidthPx) {
+// Widths come from the real Arial/Liberation Sans metrics (graphicsTextMetrics), the font the SVG is drawn in.
+function wrapTextLines(text, fontSize, maxWidthPx, fontWeight) {
   const words = String(text || '').split(/\s+/).filter(Boolean);
   const lines = [];
   let current = '';
   words.forEach((word) => {
     const candidate = current ? `${current} ${word}` : word;
-    if (current && estimateTextWidth(candidate, fontSize) > maxWidthPx) {
+    if (current && measureTextWidth(candidate, fontSize, fontWeight) > maxWidthPx) {
       lines.push(current);
       current = word;
     } else {
@@ -128,10 +124,10 @@ function wrapTextLines(text, fontSize, maxWidthPx) {
 // optional background pill/box, and an optional stroke outline. Shared by
 // /text and /composite so there is exactly one implementation.
 function buildTextOverlaySvg({ text, fontSize, color, backgroundColor, align, maxWidthPx, fontWeight, strokeColor, strokeWidth }) {
-  const lines = wrapTextLines(text, fontSize, maxWidthPx);
+  const lines = wrapTextLines(text, fontSize, maxWidthPx, fontWeight);
   const lineHeight = Math.ceil(fontSize * 1.25);
   const padding = Math.ceil(fontSize * 0.4);
-  const widest = Math.max(...lines.map((line) => estimateTextWidth(line, fontSize)), 1);
+  const widest = Math.max(...lines.map((line) => measureTextWidth(line, fontSize, fontWeight)), 1);
   const boxW = Math.ceil(Math.min(maxWidthPx, widest)) + padding * 2;
   const boxH = lines.length * lineHeight + padding * 2;
   const anchor = align === 'left' ? 'start' : align === 'right' ? 'end' : 'middle';
@@ -601,7 +597,7 @@ router.post('/batch-text', async (req, res) => {
           .replace(/\{n\}/gi, String(items.length))
           .replace(/\{date\}/gi, today);
 
-        const w = Math.ceil(label.length * fontSize * 0.62) + 28;
+        const w = Math.ceil(measureTextWidth(label, fontSize, 'bold')) + 28;
         const h = Math.ceil(fontSize * 1.6);
 
         let svgInner = `<text x="50%" y="50%" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="bold" fill="${color}" fill-opacity="${opacity}" text-anchor="middle" dominant-baseline="middle">${escapeXml(label)}</text>`;
