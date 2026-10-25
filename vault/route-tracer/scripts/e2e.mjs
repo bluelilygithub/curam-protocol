@@ -992,6 +992,12 @@ await wait(300);
   await page.locator('.directions-list li').nth(1).getByRole('button').click(); await wait(900);
   const c1 = await center();
   check('tapping a step takes the map to where it happens', Math.abs(c1[0] - c0[0]) + Math.abs(c1[1] - c0[1]) > 1e-4);
+  check('the directions can be copied or downloaded as text', (await page.getByTestId('directions').getByRole('button', { name: 'Copy' }).count()) === 1 && (await page.getByTestId('directions').getByRole('button', { name: 'Download .txt' }).count()) === 1);
+  await page.getByTestId('directions').getByRole('button', { name: 'Copy' }).click(); await wait(400);
+  check('Copy says it worked (or says to use the download)', (await page.locator('.toast', { hasText: /Directions copied|Use Download/ }).count()) >= 1);
+  const [txt] = await Promise.all([page.waitForEvent('download'), page.getByTestId('directions').getByRole('button', { name: 'Download .txt' }).click()]);
+  const txtBody = readFileSync(await txt.path(), 'utf8');
+  check('Download .txt saves numbered lines with distances, before the route is even saved', /\.txt$/.test(txt.suggestedFilename()) && /^1\. Head north on Test Street \(/m.test(txtBody) && /^3\. Arrive at your destination$/m.test(txtBody) && /Turn left onto Park Road/.test(txtBody), `${txt.suggestedFilename()} ${txtBody.slice(0, 200)}`);
   await tipsOk('plan route: directions and stops');
 
   // add a stop
@@ -1049,6 +1055,9 @@ await wait(300);
   check('saved with its three directions', withCues.name === 'Stops and directions' && withCues.cues?.length === 3 && withCues.cues[1].text === 'Turn left onto Park Road', JSON.stringify(withCues.cues));
   check('the saved track shows its directions', (await page.getByLabel('Track detail').getByTestId('directions').count()) === 1);
   await tipsOk('track detail with directions');
+
+  const [txt2] = await Promise.all([page.waitForEvent('download'), page.getByLabel('Track detail').getByTestId('directions').getByRole('button', { name: 'Download .txt' }).click()]);
+  check('a saved track offers the text too, named for the track', /^Stops and directions - directions\.txt$/.test(txt2.suggestedFilename()) && /^Stops and directions$/m.test(readFileSync(await txt2.path(), 'utf8')), txt2.suggestedFilename());
 
   // the directions as a PDF
   const pdfBtn = page.getByRole('button', { name: 'Directions as PDF' });

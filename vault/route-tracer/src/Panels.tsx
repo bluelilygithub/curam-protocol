@@ -394,7 +394,7 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
             <p className="hint">{fmtDate(track.createdAt)} · {track.pointCount} points</p>
             {track.notes && <p className="notes">{track.notes}</p>}
             <ElevationChart lines={track.geometry.coordinates} color={track.color} name={track.name} />
-            {track.cues?.length ? <DirectionsList cues={track.cues} map={map} units={units} /> : null}
+            {track.cues?.length ? <DirectionsList cues={track.cues} map={map} units={units} title={track.name} /> : null}
             <div className="stack">
               <button type="button" onClick={() => void toggleFavourite()} aria-pressed={fav} title={fav ? 'This is one of your favourites. Press to remove the star.' : 'Star this track as a favourite, so you can list only your favourites'}>
                 <Star size={14} aria-hidden="true" className={fav ? 'fav-on' : ''} /> {fav ? 'Favourite' : 'Add to favourites'}

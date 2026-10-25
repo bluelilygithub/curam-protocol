@@ -320,3 +320,6 @@ button.back { font-size: 1rem; font-weight: 500; }
 .suggest h3 { margin: 0 0 2px; font-size: 14px; font-weight: 600; }
 .suggest-row { display: flex; gap: 6px; margin-top: 6px; }
 .suggest-row button { flex: 1; }
+
+.directions-actions { display: flex; gap: 6px; margin-top: 6px; }
+.directions-actions button { flex: 1; }

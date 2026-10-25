@@ -510,6 +510,8 @@ export function PlanPanel({ map }: { map: maplibregl.Map | null }) {
   }
 
   const word = KIND_WORD[kind];
+  const { fromName, toName } = usePlan.getState();
+  const planTitle = loop ? `Loop from ${fromName ?? 'start'}` : `${fromName ?? 'Start'} to ${toName ?? 'end'}`;
   const directOnly = detour && detourKm === null;
   const step = !from ? (loop ? 'Tap the map to set the start. The loop begins and ends there.' : 'Tap the map to set the start (A).')
     : !loop && !to ? 'Tap the map to set the end (B).'
@@ -598,7 +600,7 @@ export function PlanPanel({ map }: { map: maplibregl.Map | null }) {
                 </li>
               ); })}
             </ul>
-            {routes[selected]?.steps?.length ? <DirectionsList cues={routes[selected].steps as Cue[]} map={map} units={units} /> : null}
+            {routes[selected]?.steps?.length ? <DirectionsList cues={routes[selected].steps as Cue[]} map={map} units={units} title={planTitle} /> : null}
           </>
         )}
         {hasLength && <button type="button" onClick={moreLoops} disabled={!from || (detour && (!to || directOnly)) || !lengthOk || busy || round >= 9} title={loop ? 'Ask for different loops of the same length, heading in other directions' : 'Ask for different routes of the same length, bending the other way or at another point'} data-testid="more-loops">{different}</button>}
