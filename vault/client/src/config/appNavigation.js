@@ -205,7 +205,7 @@ const UNSORTED_GROUP_ID = '__unsorted';
 
 /**
  * Splits the (already feature/admin-filtered) flat groups from getAppsNavGroups
- * into the admin's nav_layout (two or three sets), when one is configured. Any visible item
+ * into the admin's nav_layout (two to five sets), when one is configured. Any visible item
  * the layout doesn't mention (new feature shipped since the layout was last
  * saved, or never placed) lands in an auto "Unsorted" group in set 1 — it's
  * never silently dropped from the nav.
@@ -214,7 +214,7 @@ const UNSORTED_GROUP_ID = '__unsorted';
  * `groups` as a single dropdown exactly as before.
  */
 export function applyNavLayout(navLayout, groups) {
-  if (!navLayout || !Array.isArray(navLayout.sets) || navLayout.sets.length < 2 || navLayout.sets.length > 3) return null;
+  if (!navLayout || !Array.isArray(navLayout.sets) || navLayout.sets.length < 2 || navLayout.sets.length > 5) return null;
 
   const itemsById = {};
   for (const group of groups) for (const item of group.items) itemsById[item.id] = item;

@@ -8,15 +8,19 @@ const EMPTY_LAYOUT = {
     { id: 'set1', label: 'Apps', groups: [] },
     { id: 'set2', label: 'More', groups: [] },
     { id: 'set3', label: 'Tools', groups: [] },
+    { id: 'set4', label: 'Extras', groups: [] },
+    { id: 'set5', label: 'Other', groups: [] },
   ],
 };
 
-/** A layout saved when there were only two sets gets an empty third one to fill (an empty set shows no button). */
-function withThreeSets(layout) {
+const DEFAULT_SET_LABELS = { 2: 'More', 3: 'Tools', 4: 'Extras', 5: 'Other' };
+
+/** A layout saved with fewer than five sets gets empty ones to fill (an empty set shows no button). */
+function withFiveSets(layout) {
   const next = cloneLayout(layout);
-  while (next.sets.length < 3) {
+  while (next.sets.length < 5) {
     const n = next.sets.length + 1;
-    next.sets.push({ id: `set${n}`, label: n === 3 ? 'Tools' : 'More', groups: [] });
+    next.sets.push({ id: `set${n}`, label: DEFAULT_SET_LABELS[n] || 'More', groups: [] });
   }
   return next;
 }
@@ -56,7 +60,7 @@ export default function NavLayoutEditor() {
       .then((res) => (res.ok ? res.json() : { navLayout: null }))
       .then((data) => {
         if (data.navLayout) {
-          setLayout(withThreeSets(data.navLayout));
+          setLayout(withFiveSets(data.navLayout));
           setConfigured(true);
         } else {
           setLayout(cloneLayout(EMPTY_LAYOUT));
@@ -217,10 +221,10 @@ export default function NavLayoutEditor() {
   return (
     <div>
       <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
-        Splits the header "Apps" menu into up to three separate dropdown buttons for everyone. Drag apps from the pool below into groups in any set; a set with no groups shows no button. {!configured && 'Nothing is split until you save — everyone currently sees the single Apps menu.'}
+        Splits the header "Apps" menu into up to five separate dropdown buttons for everyone. Drag apps from the pool below into groups in any set; a set with no groups shows no button. {!configured && 'Nothing is split until you save — everyone currently sees the single Apps menu.'}
       </p>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 2xl:grid-cols-5 gap-4 mb-5">
         {layout.sets.map((set) => (
           <div key={set.id} className="rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
             <input

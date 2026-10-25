@@ -4,7 +4,7 @@ import { useIcon } from '../providers/IconProvider';
 import { getAppsNavGroups, isNavItemActive, applyNavLayout } from '../config/appNavigation';
 import api from '../utils/apiClient';
 
-const SET_ICONS = ['layout-grid', 'grid-3x3', 'layers'];
+const SET_ICONS = ['layout-grid', 'grid-3x3', 'layers', 'briefcase', 'compass'];
 
 export default function AppsLauncher({
   canUseFeature,

@@ -305,7 +305,7 @@ router.post('/mobile', async (req, res) => {
   }
 });
 
-// GET /api/settings/nav-layout — workspace-wide header nav split (up to three dropdown
+// GET /api/settings/nav-layout — workspace-wide header nav split (up to five dropdown
 // "sets", each with its own groups) — see client/src/config/appNavigation.js.
 // null means unconfigured: the client falls back to the single "Apps" dropdown.
 router.get('/nav-layout', async (req, res) => {
@@ -331,9 +331,9 @@ router.post('/nav-layout', async (req, res) => {
       await pool.query("DELETE FROM workspace_settings WHERE key='nav_layout'");
       return res.json({ ok: true });
     }
-    // 2 sets = layouts saved before the third dropdown existed; 3 = current
-    if (!Array.isArray(navLayout.sets) || navLayout.sets.length < 2 || navLayout.sets.length > 3) {
-      return res.status(400).json({ error: 'navLayout.sets must be an array of 2 or 3 sets' });
+    // 2-3 sets = layouts saved before the fourth and fifth dropdowns existed; 5 = current
+    if (!Array.isArray(navLayout.sets) || navLayout.sets.length < 2 || navLayout.sets.length > 5) {
+      return res.status(400).json({ error: 'navLayout.sets must be an array of 2 to 5 sets' });
     }
     await pool.query(
       `INSERT INTO workspace_settings (key, value, "updatedAt")
