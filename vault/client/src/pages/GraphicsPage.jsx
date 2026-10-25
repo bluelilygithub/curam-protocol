@@ -9,6 +9,7 @@ import GraphicsTutorChat from './graphics/GraphicsTutorChat';
 import { GraphicsContext } from './graphics/GraphicsContext';
 import { TOOL_COMPONENTS } from './graphics/toolRegistry';
 import { BeforeAfter, readFileAsDataUrl } from './graphics/shared';
+import { GoalStart, GoalBar } from './graphics/GoalStart';
 
 const MODES = [
   { id: 'generate', label: 'Generate', icon: 'sparkles' },
@@ -343,12 +344,14 @@ export default function GraphicsPage() {
 
   const askCapabilityInfo = useToolInfoModal('vault_ask_graphics_capability_seen');
 
-  const [mode, setMode] = useState('generate');
-
+  // 'start' is the "What do you want to do?" view (not a tool); every other value is a tool id from MODES.
+  const [mode, setMode] = useState('start');
+  // The job picked on the start view, while the person works through its steps (see graphics/goals.mjs).
+  const [goal, setGoal] = useState(null);
 
   // Tools are loaded the first time they are opened and then kept (hidden when not showing), so each keeps its settings and result
   // while you move between tools.
-  const [visited, setVisited] = useState(() => new Set(['generate']));
+  const [visited, setVisited] = useState(() => new Set());
   useEffect(() => { setVisited((v) => (v.has(mode) ? v : new Set(v).add(mode))); }, [mode]);
   // An image handed from one tool to another (Use in…, or an Ask Graphics step): { mode, src, prompt, nonce }. The target tool takes it.
   const [handoff, setHandoff] = useState(null);
@@ -566,6 +569,10 @@ export default function GraphicsPage() {
     setMode(id);
   };
 
+  const labelFor = (id) => MODES.find((m) => m.id === id)?.label || id;
+  const startGoal = (g) => { setGoal(g); openToolById(g.steps[0].tool); };
+  const backToStart = () => { setGoal(null); setMode('start'); };
+
   const ctx = {
     compareOn, setCompareOn, brandKit, status, result, setResult, previewImage, setPreviewImage, setHelpTool, setMode,
     renderSendTo, renderCompareToggle, renderResultMedia, handoff, registerResult,
@@ -647,6 +654,22 @@ export default function GraphicsPage() {
                     </div>
                   </ToolInfoModal>
                 )}
+
+                <Tooltip text="Go back to the list of jobs (post on social, prepare for print, clean up before sharing and so on).">
+                  <button
+                    type="button"
+                    onClick={backToStart}
+                    className="w-full flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+                    style={{
+                      borderColor: mode === 'start' ? 'var(--color-primary)' : 'var(--color-border)',
+                      color: mode === 'start' ? 'var(--color-primary)' : 'var(--color-text)',
+                      background: 'var(--color-bg)',
+                    }}
+                  >
+                    {getIcon('layout-grid', { size: 13 })}
+                    What do you want to do?
+                  </button>
+                </Tooltip>
 
                 <Tooltip text="Save a logo, up to 3 brand colours and a font name once, then reuse them in Text Overlay, Composite and Watermark.">
                   <button
@@ -784,6 +807,9 @@ export default function GraphicsPage() {
 
             <GraphicsAskPanel onOpenInModeWithPrompt={openPlanStepInMode} getModeResultImage={getModeResultImage} currentMode={mode} />
 
+
+            {mode === 'start' && <GoalStart onPick={startGoal} labelFor={labelFor} />}
+            <GoalBar goal={goal} mode={mode} onStep={openToolById} onLeave={backToStart} labelFor={labelFor} />
 
             {renderTools()}
 

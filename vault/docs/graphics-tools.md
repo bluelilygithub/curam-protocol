@@ -32,6 +32,12 @@ Most tools run **locally and free** via [`sharp`](https://sharp.pixelplumbing.co
 
 ---
 
+## Start screen: "What do you want to do?"
+
+Graphics opens on a list of jobs, not on a tool (`mode` is `'start'`; it is a view, not a tool, so it is not in `MODES`, the registry or the guide `CATALOG`). Each tile (post on social, website-ready pictures, product photos, print, clean up before sharing, fix a photo, create a picture, logo and icons) opens the first tool of that job and switches on a step bar above the tool: the steps in order, the current one marked, one line on what to do there, and a link to the next step (the picture itself travels with the existing **Use in…** on the result). The bar hides when the person opens a tool that is not a step; **All jobs** (bar or the button at the top of the list) goes back to the start. A job is data in `client/src/pages/graphics/goals.mjs`: an ordered list of `{ tool, note }`. When saved recipes exist, a goal can point at a recipe in place of a list of tools and the tiles keep working. `GoalStart.jsx` draws the tiles and the bar; `npm run test:graphics-goals` fails if a step names a tool that is not in `MODES` or `toolRegistry.js`. To add a job: add an entry to `GOALS`.
+
+---
+
 ## Sidebar
 
 The page uses the same layout as Video Tools and PDF Tools: a narrow left list (title, info buttons, Brand Kit, search, groups) and the active tool in the main panel, with the Ask Graphics box above it. **Hovering any group or tool shows a plain-English tip** (`GROUP_TIPS`, `TOOL_TIPS` in `GraphicsPage.jsx`); the search box also matches the tips. Tools are grouped into seven collapsible, single-open ("accordion") categories. **Create** is open on load; opening another category closes the previous one. A search box filters tools by name across all groups (temporarily revealing matches), headings use the primary accent colour, tools highlight on hover, and the active tool is filled.
