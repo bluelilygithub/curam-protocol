@@ -10,6 +10,8 @@ import { GraphicsContext } from './graphics/GraphicsContext';
 import { TOOL_COMPONENTS } from './graphics/toolRegistry';
 import { BeforeAfter, readFileAsDataUrl } from './graphics/shared';
 import { GoalStart, GoalBar } from './graphics/GoalStart';
+import { HistoryPanel, HistoryRecorder } from './graphics/HistoryPanel';
+import { historyEnabled } from './graphics/historyStore.mjs';
 
 const MODES = [
   { id: 'generate', label: 'Generate', icon: 'sparkles' },
@@ -348,6 +350,11 @@ export default function GraphicsPage() {
   const [mode, setMode] = useState('start');
   // The job picked on the start view, while the person works through its steps (see graphics/goals.mjs).
   const [goal, setGoal] = useState(null);
+  // Recent results kept on this device (off until switched on; see graphics/historyStore.mjs). The tick refreshes the open list.
+  const [historyOn, setHistoryOn] = useState(historyEnabled);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyTick, setHistoryTick] = useState(0);
+  const onHistoryRecorded = useCallback(() => setHistoryTick((t) => t + 1), []);
 
   // Tools are loaded the first time they are opened and then kept (hidden when not showing), so each keeps its settings and result
   // while you move between tools.
@@ -514,6 +521,8 @@ export default function GraphicsPage() {
 
   // Compact "Use result in…" dropdown shown in a result header.
   const renderSendTo = (dataUrl, name, excludeMode) => (
+    <>
+    <HistoryRecorder enabled={historyOn} tool={excludeMode} name={name} dataUrl={dataUrl} onRecorded={onHistoryRecorded} />
     <Tooltip text="Continue editing this result in another tool"><select
       value=""
       onChange={(e) => { if (e.target.value) sendImageTo(e.target.value, dataUrl, name); e.target.value = ''; }}
@@ -525,6 +534,7 @@ export default function GraphicsPage() {
         <option key={t.mode} value={t.mode}>{t.label}</option>
       ))}
     </select></Tooltip>
+    </>
   );
 
   // Compare toggle for a result header (only meaningful with both images).
@@ -680,6 +690,18 @@ export default function GraphicsPage() {
                   >
                     {getIcon('briefcase', { size: 13 })}
                     Brand Kit{brandKit ? ' (saved)' : ''}
+                  </button>
+                </Tooltip>
+
+                <Tooltip text="Pictures you finished earlier, kept on this device only. Open one again, send it to another tool, or download it.">
+                  <button
+                    type="button"
+                    onClick={() => setHistoryOpen(true)}
+                    className="w-full flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-bg)' }}
+                  >
+                    {getIcon('clock', { size: 13 })}
+                    Recent results{historyOn ? '' : ' (off)'}
                   </button>
                 </Tooltip>
 
@@ -945,6 +967,18 @@ export default function GraphicsPage() {
                 </div>
               </div>
             )}
+
+            <HistoryPanel
+              open={historyOpen}
+              onClose={() => setHistoryOpen(false)}
+              enabled={historyOn}
+              onToggle={setHistoryOn}
+              tick={historyTick}
+              labelFor={labelFor}
+              canOpenIn={(tool) => HANDOFF_MODES.includes(tool)}
+              sendTargets={SEND_TARGETS}
+              onSend={(target, dataUrl, name) => { sendImageTo(target, dataUrl, name); }}
+            />
 
             {brandKitOpen && (
               <div
