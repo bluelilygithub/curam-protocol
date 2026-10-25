@@ -2890,6 +2890,54 @@
   "POST /api/tasks": {
    "class": "authed"
   },
+  "GET /api/topic-research/runs/:id": {
+   "class": "authed"
+  },
+  "POST /api/topic-research/topics/:id/run": {
+   "class": "authed"
+  },
+  "DELETE /api/topic-research/topics/:id": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/topics/:id": {
+   "class": "authed"
+  },
+  "POST /api/topic-research/runs/:id/brief": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/runs/:id/briefs": {
+   "class": "authed"
+  },
+  "DELETE /api/topic-research/briefs/:id": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/briefs/:id": {
+   "class": "authed"
+  },
+  "POST /api/topic-research/runs/:id/rescore": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/source-weights": {
+   "class": "authed"
+  },
+  "PUT /api/topic-research/source-weights": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/sources": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/settings": {
+   "class": "authed"
+  },
+  "PUT /api/topic-research/settings": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/topics": {
+   "class": "authed"
+  },
+  "POST /api/topic-research/topics": {
+   "class": "authed"
+  },
   "GET /api/translate/config": {
    "class": "authed"
   },
@@ -3401,6 +3449,24 @@
    "class": "authed"
   },
   "POST /api/youtube/watch-history": {
+   "class": "authed"
+  },
+  "POST /api/topic-research-tutor": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/model-config": {
+   "class": "authed"
+  },
+  "POST /api/topic-research/model-config": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/usage": {
+   "class": "authed"
+  },
+  "PATCH /api/topic-research/topics/:id": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/history": {
    "class": "authed"
   }
  }

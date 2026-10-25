@@ -1,0 +1,151 @@
+// Run: node client/src/pages/topicResearch/format.test.mjs
+import assert from 'assert';
+import { formatDate, timeAgo, statusLabel, parseFeedLines, feedLines, sourceChip, signalBadges, rankingNote, heatBadge, readNote, breakdownRows, defaultSelection, toggleSelection, selectionNote, factLabel, overlapWarning, costText, SIGNAL_FIELDS, DEFAULT_PERCENTS, DEFAULT_HALF_LIFE, toPercents, fromPercents, percentTotal, REFRESH_CHOICES, refreshLabel, orderTopics, mergeHistory, budgetBanner, spendLine } from './format.mjs';
+
+assert.strictEqual(formatDate(null), 'No date');
+assert.strictEqual(formatDate('garbage'), 'No date');
+assert.ok(/2026/.test(formatDate('2026-10-25T00:00:00Z')));
+
+const now = Date.UTC(2026, 9, 25, 12, 0, 0);
+assert.strictEqual(timeAgo(null, now), 'never');
+assert.strictEqual(timeAgo('nope', now), 'never');
+assert.strictEqual(timeAgo(new Date(now - 10 * 1000).toISOString(), now), 'just now');
+assert.strictEqual(timeAgo(new Date(now - 5 * 60000).toISOString(), now), '5 min ago');
+assert.strictEqual(timeAgo(new Date(now - 3 * 3600000).toISOString(), now), '3 h ago');
+assert.strictEqual(timeAgo(new Date(now - 3 * 86400000).toISOString(), now), '3 days ago');
+assert.ok(/2026|2025/.test(timeAgo(new Date(now - 40 * 86400000).toISOString(), now)));
+assert.strictEqual(timeAgo(new Date(now + 5 * 60000).toISOString(), now), 'just now', 'a clock a little ahead never reads as negative');
+
+assert.strictEqual(statusLabel('ok').level, 'good');
+assert.strictEqual(statusLabel('partial').level, 'warn');
+assert.strictEqual(statusLabel('failed').level, 'bad');
+assert.strictEqual(statusLabel(undefined).level, 'info');
+
+assert.deepStrictEqual(parseFeedLines('https://a.com/f\n\n  # a note\r\n https://b.com/f  '), [{ url: 'https://a.com/f' }, { url: 'https://b.com/f' }]);
+assert.deepStrictEqual(parseFeedLines(''), []);
+assert.strictEqual(feedLines([{ url: 'https://a.com/f' }, { url: 'https://b.com/f', name: 'B' }]), 'https://a.com/f\nhttps://b.com/f');
+assert.strictEqual(feedLines(undefined), '');
+
+assert.strictEqual(sourceChip({ label: 'Hacker News', count: 5, answered: 1, cached: false }), 'Hacker News 5');
+assert.strictEqual(sourceChip({ label: 'GDELT news', count: 30, answered: 1, cached: true }), 'GDELT news 30 (saved from earlier)');
+assert.strictEqual(sourceChip({ label: 'Reddit', count: 0, answered: 0 }), 'Reddit: did not answer');
+assert.strictEqual(sourceChip({ label: 'Brave Search', count: 0, answered: 1 }), 'Brave Search 0', 'answered with nothing is not the same as not answering');
+assert.strictEqual(sourceChip(null), '');
+
+assert.deepStrictEqual(signalBadges(undefined), []);
+assert.deepStrictEqual(signalBadges({}), []);
+assert.deepStrictEqual(signalBadges({ hn_points: 1, hn_comments: 1 }).map((b) => b.text), ['Hacker News: 1 point, 1 comment']);
+assert.deepStrictEqual(signalBadges({ hn_points: 0, hn_comments: 0 }), [], 'a story nobody has voted on or discussed shows nothing');
+assert.deepStrictEqual(signalBadges({ reddit_score: 420, reddit_comments: 88 }).map((b) => b.text), ['Reddit: score 420, 88 comments']);
+assert.deepStrictEqual(signalBadges({ serp_rank: 3, serp_provider: 'brave' }).map((b) => b.text), ['Brave #3']);
+assert.deepStrictEqual(signalBadges({ serp_rank: 2, serp_provider: 'serper', serp_top_story: true }).map((b) => b.text), ['Google #2', 'In Google Top stories']);
+const labels = { rss: 'RSS feeds', hackernews: 'Hacker News', gdelt: 'GDELT news' };
+assert.deepStrictEqual(signalBadges({ seenIn: ['rss'] }, labels), [], 'one source is not worth a badge');
+assert.deepStrictEqual(signalBadges({ seenIn: ['rss', 'gdelt', 'unknown'] }, labels).map((b) => b.text), ['Found by RSS feeds, GDELT news']);
+
+// ---- ticking articles for a brief
+const many = Array.from({ length: 15 }, (_, i) => ({ id: 100 + i }));
+assert.deepStrictEqual([...defaultSelection(many)], [100, 101, 102, 103, 104, 105, 106, 107, 108, 109], 'the best ten');
+assert.deepStrictEqual([...defaultSelection(many.slice(0, 4))], [100, 101, 102, 103]);
+assert.deepStrictEqual([...defaultSelection([])], []);
+assert.deepStrictEqual([...defaultSelection(undefined)], []);
+let sel = new Set([1, 2]);
+assert.deepStrictEqual([...toggleSelection(sel, 3)], [1, 2, 3]);
+assert.deepStrictEqual([...toggleSelection(sel, 2)], [1]);
+assert.deepStrictEqual([...sel], [1, 2], 'the old set is not changed');
+const full = new Set(Array.from({ length: 12 }, (_, i) => i + 1));
+assert.strictEqual(toggleSelection(full, 99), full, 'a thirteenth cannot be ticked');
+assert.strictEqual(toggleSelection(full, 5).size, 11, 'but one can always be unticked');
+assert.deepStrictEqual(selectionNote(0), { text: 'Tick at least one article to write a brief from.', ok: false });
+assert.strictEqual(selectionNote(1).ok, true);
+assert.ok(/mostly restate them/.test(selectionNote(2).text));
+assert.deepStrictEqual(selectionNote(5), { text: '5 articles ticked.', ok: true });
+assert.deepStrictEqual(selectionNote(13).ok, false);
+assert.strictEqual(factLabel({ singleSource: true, outletCount: 1 }), 'Single source');
+assert.strictEqual(factLabel({ singleSource: false, outletCount: 3 }), '3 outlets');
+assert.strictEqual(factLabel(undefined), '0 outlets');
+assert.strictEqual(overlapWarning([]), '');
+assert.strictEqual(overlapWarning(undefined), '');
+assert.strictEqual(overlapWarning([{}]), 'One place in this brief repeats wording from a source. Rewrite it in your own words before you use it.');
+assert.strictEqual(overlapWarning([{}, {}, {}]), '3 places in this brief repeat wording from a source. Rewrite them in your own words before you use them.');
+assert.strictEqual(costText(0), '');
+assert.strictEqual(costText(0.004), 'under 1 cent');
+assert.strictEqual(costText(0.1234), 'about $0.12');
+assert.strictEqual(costText('0.5'), 'about $0.50');
+assert.strictEqual(costText(null), '');
+
+assert.deepStrictEqual(SIGNAL_FIELDS.map((f) => f.id), ['rank', 'size', 'engagement', 'recency', 'source']);
+assert.deepStrictEqual(toPercents({ rank: 0.3, size: 0.25, engagement: 0.2, recency: 0.15, source: 0.1 }), { rank: '30', size: '25', engagement: '20', recency: '15', source: '10' });
+assert.deepStrictEqual(toPercents(undefined), { rank: '0', size: '0', engagement: '0', recency: '0', source: '0' });
+assert.deepStrictEqual(fromPercents({ rank: '30', size: '25', engagement: '', recency: 'abc', source: '-5' }), { rank: 0.3, size: 0.25, engagement: 0, recency: 0, source: 0 }, 'blank, nonsense and negative boxes are 0');
+assert.deepStrictEqual(fromPercents(DEFAULT_PERCENTS), { rank: 0.3, size: 0.25, engagement: 0.2, recency: 0.15, source: 0.1 });
+assert.strictEqual(percentTotal(DEFAULT_PERCENTS), 100);
+assert.strictEqual(percentTotal({ rank: '50', size: 'x', engagement: '25' }), 75);
+assert.strictEqual(DEFAULT_HALF_LIFE, 48);
+
+assert.strictEqual(rankingNote(null), '');
+assert.strictEqual(rankingNote({ dropped: [] }), '');
+assert.strictEqual(rankingNote({ dropped: [{ id: 'rank', label: 'Search rank', why: 'no Google or Brave results are in this search' }] }),
+  'Left out of the ranking this time: search rank (no Google or Brave results are in this search). The other signals count for more instead.');
+assert.ok(/search rank \(.*\); story size \(/.test(rankingNote({ dropped: [{ label: 'Search rank', why: 'a' }, { label: 'Story size', why: 'b' }] })));
+
+assert.strictEqual(heatBadge(null), null);
+assert.strictEqual(heatBadge({}), null);
+assert.strictEqual(heatBadge({ label: 'Rising', clusters48h: 3 }).text, '▲ Rising');
+assert.ok(/3 stories have an article from the last two days/.test(heatBadge({ label: 'Rising', clusters48h: 3 }).tip));
+assert.ok(/1 story has/.test(heatBadge({ label: 'Steady', clusters48h: 1 }).tip));
+assert.ok(/First search/.test(heatBadge({ label: 'New', clusters48h: 0 }).tip));
+assert.strictEqual(heatBadge({ label: 'Falling' }).text, '▼ Falling');
+
+assert.strictEqual(readNote('ok'), 'Page read');
+assert.strictEqual(readNote(null), 'Headline and snippet only');
+assert.strictEqual(readNote('robots'), 'The site asks not to be read');
+assert.strictEqual(readNote('something-new'), 'Headline and snippet only');
+
+assert.deepStrictEqual(breakdownRows(null), []);
+const rows = breakdownRows([
+  { id: 'rank', label: 'Search rank', available: false, why: 'no Google or Brave results are in this search', points: 0 },
+  { id: 'size', label: 'Story size', available: true, raw: 3, points: 21.4 },
+  { id: 'engagement', label: 'Engagement', available: true, raw: 0, points: 0 },
+  { id: 'recency', label: 'Recency', available: true, raw: '2026-10-24T03:00:00.000Z', points: 12.6 },
+  { id: 'source', label: 'Outlet weight', available: true, raw: 0.9, points: 9 },
+]);
+assert.deepStrictEqual(rows.map((r) => [r.id, r.off, r.points]), [['rank', true, null], ['size', false, 21.4], ['engagement', false, 0], ['recency', false, 12.6], ['source', false, 9]]);
+assert.strictEqual(rows[0].text, 'Left out: no Google or Brave results are in this search');
+assert.strictEqual(rows[1].text, '3 outlets');
+assert.strictEqual(rows[2].text, 'None');
+assert.ok(/2026/.test(rows[3].text));
+assert.strictEqual(rows[4].text, 'Your weight 0.9');
+assert.strictEqual(breakdownRows([{ id: 'size', label: 'x', available: true, raw: 1, points: 1 }])[0].text, '1 outlet');
+assert.strictEqual(breakdownRows([{ id: 'rank', label: 'x', available: true, raw: 3, points: 1 }])[0].text, 'Position 3');
+assert.strictEqual(breakdownRows([{ id: 'rank', label: 'x', available: true, raw: null, points: 0 }])[0].text, 'Not in the results');
+assert.strictEqual(breakdownRows([{ id: 'recency', label: 'x', available: true, raw: null, points: 3 }])[0].text, 'No date (counted as middling)');
+
+// ---- watchlist, history, spending
+assert.deepStrictEqual(REFRESH_CHOICES.map((c) => c.hours), [6, 12, 24, 48, 168], 'the same choices the server accepts');
+assert.strictEqual(refreshLabel(6), 'Every 6 hours');
+assert.strictEqual(refreshLabel(168), 'Every week');
+assert.strictEqual(refreshLabel(7), 'Every day', 'an unknown value shows the usual one');
+{
+  const list = [{ id: 1, onWatchlist: false }, { id: 2, onWatchlist: true, lastRun: { finishedAt: '2026-10-24T00:00:00Z' } }, { id: 3, onWatchlist: true, lastRun: { finishedAt: '2026-10-25T00:00:00Z' } }, { id: 4, onWatchlist: true }, { id: 5, onWatchlist: false }];
+  const copy = JSON.stringify(list);
+  assert.deepStrictEqual(orderTopics(list).map((t) => t.id), [3, 2, 4, 1, 5], 'watched first, newest refresh first, never-searched last among them; the rest keep their order');
+  assert.strictEqual(JSON.stringify(list), copy, 'the list is not changed');
+  assert.deepStrictEqual(orderTopics(null), []);
+}
+{
+  const rows = mergeHistory(
+    [{ id: 1, startedAt: '2026-10-20T00:00:00Z' }, { id: 2, startedAt: '2026-10-25T00:00:00Z' }],
+    [{ id: 9, createdAt: '2026-10-22T00:00:00Z' }, { id: 8, createdAt: '2026-10-25T00:00:00Z' }],
+  );
+  assert.deepStrictEqual(rows.map((r) => r.kind + r.id), ['brief8', 'run2', 'brief9', 'run1'], 'newest first, a brief before the search it came from at the same moment');
+  assert.deepStrictEqual(mergeHistory(null, undefined), []);
+}
+assert.strictEqual(budgetBanner(null), '');
+assert.strictEqual(budgetBanner({ over: false, spentUsd: 1, limitUsd: 20 }), '');
+assert.ok(budgetBanner({ over: true, spentUsd: 21.5, limitUsd: 20 }).includes('($21.50) has reached your limit of $20.00'));
+assert.strictEqual(spendLine({ spentUsd: 1.2, limitUsd: 20 }), '$1.20 of $20.00 used this month');
+assert.strictEqual(spendLine({ spentUsd: 1.2, limitUsd: 0 }), '$1.20 used this month (no limit)');
+assert.strictEqual(spendLine(null), '');
+
+console.log('topicResearch format: all passed');

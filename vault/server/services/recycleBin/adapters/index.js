@@ -6,3 +6,4 @@ require('./tasks'); // tasks and goals
 require('./chats');
 require('./routeTracks');
 require('./graphicsRecipes');
+require('./topicResearch');

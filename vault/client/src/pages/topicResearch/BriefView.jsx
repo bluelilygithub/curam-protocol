@@ -1,0 +1,198 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import api from '../../utils/apiClient';
+import useProcessingStore from '../../store/processingStore';
+import useToastStore from '../../store/toastStore';
+import { offerUndo } from '../../utils/binUndo';
+import { useIcon } from '../../providers/IconProvider';
+import { costText, factLabel, formatDate, overlapWarning } from './format.mjs';
+
+const H = ({ children }) => <h3 className="text-base font-semibold mt-5 mb-2" style={{ color: 'var(--color-text)' }}>{children}</h3>;
+
+// One research brief: notes to write your own article from. Every fact says how many outlets back it and links to them; if the brief repeats
+// wording from a source, a warning comes first. Copy and download give the same Markdown the server writes.
+export default function BriefView({ briefId, onBack, onOpenBrief }) {
+  const getIcon = useIcon();
+  const { startProcessing, stopProcessing } = useProcessingStore();
+  const addToast = useToastStore((s) => s.addToast);
+  const [brief, setBrief] = useState(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [showAngle, setShowAngle] = useState(false);
+  const [angle, setAngle] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const load = useCallback(async () => {
+    setError('');
+    try {
+      const r = await api.get(`/api/topic-research/briefs/${briefId}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Could not load that brief.');
+      setBrief(d.brief);
+    } catch (e) { setError(e.message || 'Could not reach the server.'); } finally { setLoading(false); }
+  }, [briefId]);
+  useEffect(() => { setLoading(true); setBrief(null); setShowAngle(false); setAngle(''); setConfirmDelete(false); load(); }, [load]);
+
+  const muted = { color: 'var(--color-muted)' };
+  const text = { color: 'var(--color-text)' };
+
+  if (loading) return <p className="text-sm" style={muted}>Loading…</p>;
+  if (!brief) {
+    return (
+      <div className="space-y-3">
+        <button type="button" onClick={() => onBack(null)} className="text-sm hover:opacity-70 transition-opacity" style={muted}>← All topics</button>
+        <p className="text-sm" style={{ color: '#ef4444' }}>{error || 'That brief could not be found.'}</p>
+      </div>
+    );
+  }
+
+  const c = brief.content;
+  const sourceOf = new Map(brief.sources.map((s) => [s.url, s]));
+  const numberOf = new Map(brief.sources.map((s, i) => [s.url, i + 1])); // the same numbers as the Sources list and the Markdown file
+  const warning = overlapWarning(brief.overlap);
+
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(brief.markdown); addToast('Copied as Markdown', 'success'); } catch { addToast('Could not copy. Use Download instead.', 'error'); }
+  };
+  const download = () => {
+    const url = URL.createObjectURL(new Blob([brief.markdown], { type: 'text/markdown;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = brief.fileName || 'research-brief.md';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const regenerate = async (chosen) => {
+    const want = (chosen ?? angle).trim();
+    if (!want) return;
+    startProcessing('Writing the brief…', 'This can take up to a minute and a half.');
+    try {
+      const r = await api.post(`/api/topic-research/runs/${brief.runId}/brief`, { articleIds: brief.sources.map((s) => s.id), angle: want });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Could not write the brief.');
+      onOpenBrief(d.brief.id);
+    } catch (e) { setError(e.message || 'Could not reach the server.'); } finally { stopProcessing(); }
+  };
+  const remove = async () => {
+    try {
+      const r = await api.delete(`/api/topic-research/briefs/${brief.id}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Could not delete.');
+      // the Results page lists a search's briefs: tell it now (it is about to show) and again after an Undo
+      const announce = () => window.dispatchEvent(new Event('topic-research:briefs-changed'));
+      offerUndo({ message: 'Brief deleted', binIds: d.binId, after: announce });
+      onBack(brief.topicId);
+      setTimeout(announce, 300);
+    } catch (e) { setError(e.message || 'Could not reach the server.'); }
+  };
+
+  const btn = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border hover:opacity-70 transition-opacity';
+  const btnStyle = { borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'transparent' };
+
+  return (
+    <div className="space-y-2">
+      <button type="button" onClick={() => onBack(brief.topicId)} className="text-sm hover:opacity-70 transition-opacity" style={muted}>← Back to the results</button>
+      <h2 className="text-lg font-semibold break-words" style={text}>Research brief: {brief.keyword}</h2>
+      <p className="text-xs" style={muted}>
+        Made {formatDate(brief.createdAt)} from {brief.sources.length} article{brief.sources.length === 1 ? '' : 's'} · {brief.model}{costText(brief.costUsd) ? ` · ${costText(brief.costUsd)}` : ''}.
+        {' '}Notes for writing your own piece, not text to publish. Check each fact against its sources before you use it.
+      </p>
+
+      <div className="flex flex-wrap gap-2 pt-1">
+        <button type="button" onClick={copy} className={btn} style={btnStyle}>{getIcon('copy', { size: 14 })}Copy as Markdown</button>
+        <button type="button" onClick={download} className={btn} style={btnStyle}>{getIcon('download', { size: 14 })}Download .md</button>
+        <button type="button" onClick={() => setShowAngle((v) => !v)} className={btn} style={btnStyle}>{getIcon('refresh-cw', { size: 14 })}Regenerate with a different angle</button>
+        {confirmDelete ? (
+          <span className="inline-flex items-center gap-2 text-sm" style={muted}>
+            Delete this brief?
+            <button type="button" onClick={remove} className="font-medium hover:opacity-70 transition-opacity" style={{ color: '#ef4444' }}>Yes</button>
+            <button type="button" onClick={() => setConfirmDelete(false)} className="font-medium hover:opacity-70 transition-opacity" style={text}>No</button>
+          </span>
+        ) : (
+          <button type="button" onClick={() => setConfirmDelete(true)} className={btn} style={btnStyle} title="Kept in the recycle bin for 30 days">{getIcon('trash', { size: 14 })}Delete</button>
+        )}
+      </div>
+      {error && <p className="text-sm" style={{ color: '#ef4444' }}>{error}</p>}
+
+      {showAngle && (
+        <div className="rounded-xl border p-4 space-y-3 mt-2" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <p className="text-sm" style={text}>Write the outline for another angle, from the same articles. This makes a new brief and keeps this one.</p>
+          <div className="flex flex-wrap gap-2">
+            {c.suggestedAngles.filter((a) => a.title !== c.chosenAngle).map((a) => (
+              <button key={a.title} type="button" onClick={() => regenerate(a.title)} className={btn} style={btnStyle} title={a.why}>{a.title}</button>
+            ))}
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              value={angle} onChange={(e) => setAngle(e.target.value)} maxLength={200} placeholder="Or type your own angle" aria-label="Your own angle"
+              onKeyDown={(e) => { if (e.key === 'Enter') regenerate(); }}
+              className="flex-1 px-3 py-2.5 rounded-xl border text-sm outline-none"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            />
+            <button type="button" onClick={() => regenerate()} disabled={!angle.trim()} className="px-3.5 py-2 rounded-lg text-sm font-medium hover:opacity-70 transition-opacity disabled:opacity-40" style={{ background: 'var(--color-primary)', color: '#fff' }}>Write it</button>
+          </div>
+        </div>
+      )}
+
+      {warning && (
+        <div className="rounded-xl border p-3 mt-3 space-y-1" style={{ borderColor: '#f59e0b', background: 'var(--color-surface)' }} role="alert">
+          <p className="text-sm font-medium" style={text}>{warning}</p>
+          {brief.overlap.map((o, i) => (
+            <p key={`${o.field}-${i}`} className="text-xs break-words" style={muted}>
+              <strong style={text}>{o.field}</strong>: &ldquo;{o.excerpt}…&rdquo; ({o.words} words match <a href={o.sourceUrl} target="_blank" rel="noopener noreferrer" className="underline">{o.sourceTitle || o.sourceUrl}</a>)
+            </p>
+          ))}
+        </div>
+      )}
+
+      <H>Summary</H>
+      <p className="text-sm leading-relaxed" style={text}>{c.summary}</p>
+
+      <H>Key facts</H>
+      <ul className="space-y-3">
+        {c.keyFacts.map((f, i) => (
+          <li key={i} className="rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <p className="text-sm leading-relaxed" style={text}>{f.fact}</p>
+            <p className="text-xs mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1" style={muted}>
+              <span className="font-semibold px-1.5 py-0.5 rounded" style={{ border: '1px solid var(--color-border)', color: f.singleSource ? '#b45309' : 'var(--color-text)' }}>{factLabel(f)}</span>
+              {f.sources.map((u) => {
+                const s = sourceOf.get(u);
+                return <a key={u} href={u} target="_blank" rel="noopener noreferrer" title={s?.title || u} className="underline hover:opacity-70 transition-opacity">[{numberOf.get(u) ?? '?'}] {s?.domain || u}</a>;
+              })}
+            </p>
+          </li>
+        ))}
+      </ul>
+
+      {c.anglesTaken.length > 0 && (<><H>Angles taken</H><ul className="space-y-1">{c.anglesTaken.map((a, i) => <li key={i} className="text-sm" style={text}><strong>{a.outlet}:</strong> {a.framing}</li>)}</ul></>)}
+      {c.gaps.length > 0 && (<><H>Gaps</H><ul className="list-disc pl-5 space-y-1">{c.gaps.map((g, i) => <li key={i} className="text-sm" style={text}>{g}</li>)}</ul></>)}
+
+      <H>Suggested angles for your site</H>
+      <ol className="list-decimal pl-5 space-y-1">
+        {c.suggestedAngles.map((a) => <li key={a.title} className="text-sm" style={text}><strong>{a.title}</strong>{a.why ? <span style={muted}>: {a.why}</span> : null}</li>)}
+      </ol>
+
+      <H>Outline: {c.chosenAngle}</H>
+      <div className="space-y-3">
+        {c.outline.map((o, i) => (
+          <div key={i} style={{ marginLeft: o.level === 3 ? '1.25rem' : 0 }}>
+            <p className="text-sm font-semibold" style={text}><span className="text-xs font-medium mr-2" style={muted}>H{o.level}</span>{o.heading}</p>
+            {o.notes.length > 0 && <ul className="list-disc pl-5 mt-1 space-y-0.5">{o.notes.map((n, j) => <li key={j} className="text-sm" style={muted}>{n}</li>)}</ul>}
+          </div>
+        ))}
+      </div>
+
+      <H>Keywords</H>
+      <p className="text-sm" style={text}><strong>Main:</strong> {c.keywords.primary}</p>
+      {c.keywords.related.length > 0 && <p className="text-sm" style={muted}>Related: {c.keywords.related.join(', ')}</p>}
+
+      <H>Sources</H>
+      <ol className="list-decimal pl-5 space-y-1">
+        {brief.sources.map((s) => (
+          <li key={s.id} className="text-sm break-words" style={text}>
+            <a href={s.url} target="_blank" rel="noopener noreferrer" className="underline hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)' }}>{s.title || s.url}</a>
+            <span style={muted}> · {s.domain}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}

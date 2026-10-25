@@ -25,6 +25,7 @@ const GUIDES = {
   route: { name: 'Route Tracer guide', endpoint: '/api/route-tutor' },
   'burner-mail': { name: 'Burner Mail guide', endpoint: '/api/burner-mail-tutor' },
   'dns-lookup': { name: 'DNS Lookup guide', endpoint: '/api/dns-lookup-tutor' },
+  'topic-research': { name: 'Topic Research guide', endpoint: '/api/topic-research-tutor' },
   'pc-health': { name: 'PC Health guide', endpoint: '/api/pc-health-tutor' },
 };
 

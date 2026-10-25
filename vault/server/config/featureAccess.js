@@ -40,6 +40,8 @@ const FEATURE_ACCESS_DEFAULTS = {
   routeTracer: true,
   // a work in progress with unverified values: off until an admin switches it on (Settings -> Feature Access)
   cellarPlanner: false,
+  // being built milestone by milestone (docs/topic-research.md): off until an admin switches it on
+  topicResearch: false,
   measurements: true,
   fitness: true,
   burnerMail: true,

@@ -1146,6 +1146,110 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_graphics_recipes_user ON graphics_recipes ("userId", "updatedAt" DESC)`);
+    // ── Topic Research (docs/topic-research.md): saved topics, one row per search run, the articles found (one per normalised URL per person) and
+    // which run saw which article. Briefs and source weights arrive in later milestones. Site profile + feed list live in `settings`.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS topic_research_topics (
+        id             SERIAL PRIMARY KEY,
+        "userId"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        keyword        TEXT NOT NULL,
+        region         TEXT NOT NULL DEFAULT 'AU',
+        language       TEXT NOT NULL DEFAULT 'en',
+        "onWatchlist"  BOOLEAN NOT NULL DEFAULT FALSE,
+        "refreshHours" INTEGER NOT NULL DEFAULT 24,
+        "createdAt"    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_topic_research_topics_user_kw ON topic_research_topics ("userId", lower(keyword))`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS topic_research_runs (
+        id                SERIAL PRIMARY KEY,
+        "userId"          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "topicId"         INTEGER NOT NULL REFERENCES topic_research_topics(id) ON DELETE CASCADE,
+        "startedAt"       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "finishedAt"      TIMESTAMPTZ,
+        "weightsJson"     JSONB,
+        status            TEXT NOT NULL DEFAULT 'running',
+        "errorsJson"      JSONB NOT NULL DEFAULT '[]'::jsonb,
+        "apiCostEstimate" NUMERIC(10,4) NOT NULL DEFAULT 0
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_topic_research_runs_topic ON topic_research_runs ("topicId", "startedAt" DESC)`);
+    // M2: how each source went in a run ([{ id, label, count, cached, answered, costUsd, ms }]) and the search lists a results provider gives back
+    // ({ peopleAlsoAsk, relatedSearches }); and the 24 hour saved answers of the news/search sources, per person
+    await client.query(`ALTER TABLE topic_research_runs ADD COLUMN IF NOT EXISTS "sourcesJson" JSONB`);
+    await client.query(`ALTER TABLE topic_research_runs ADD COLUMN IF NOT EXISTS "extrasJson" JSONB`);
+    // M3: how a run was ranked (the weights really used, what was left out) and how lively the topic was; whether each article's page was read;
+    // the score breakdown per article; and the owner's own weight for each outlet
+    await client.query(`ALTER TABLE topic_research_runs ADD COLUMN IF NOT EXISTS "heatJson" JSONB`);
+    await client.query(`ALTER TABLE topic_research_articles ADD COLUMN IF NOT EXISTS "extractStatus" TEXT`);
+    await client.query(`ALTER TABLE topic_research_articles ADD COLUMN IF NOT EXISTS "extractedAt" TIMESTAMPTZ`);
+    await client.query(`ALTER TABLE topic_research_run_articles ADD COLUMN IF NOT EXISTS "breakdownJson" JSONB`);
+    // M4: research briefs. "contentJson" is the validated brief, "overlapJson" the copied-wording warnings, "selectedArticleIds" the articles it was
+    // written from (kept as ids: the article rows can outlive a run and carry the stored text the overlap check read)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS topic_research_briefs (
+        id                   SERIAL PRIMARY KEY,
+        "userId"             INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "runId"              INTEGER NOT NULL REFERENCES topic_research_runs(id) ON DELETE CASCADE,
+        "selectedArticleIds" JSONB NOT NULL DEFAULT '[]'::jsonb,
+        angle                TEXT NOT NULL DEFAULT '',
+        "contentJson"        JSONB NOT NULL,
+        "overlapJson"        JSONB NOT NULL DEFAULT '[]'::jsonb,
+        model                TEXT NOT NULL DEFAULT '',
+        "costUsd"            NUMERIC(10,4) NOT NULL DEFAULT 0,
+        "inputTokens"        INTEGER NOT NULL DEFAULT 0,
+        "outputTokens"       INTEGER NOT NULL DEFAULT 0,
+        "createdAt"          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_topic_research_briefs_run ON topic_research_briefs ("runId", "createdAt" DESC)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS topic_research_source_weights (
+        "userId" INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        domain   TEXT NOT NULL,
+        weight   REAL NOT NULL,
+        note     TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY ("userId", domain)
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS topic_research_cache (
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        key         TEXT NOT NULL,
+        payload     JSONB NOT NULL,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY ("userId", key)
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS topic_research_articles (
+        id              SERIAL PRIMARY KEY,
+        "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        url             TEXT NOT NULL,
+        title           TEXT NOT NULL,
+        domain          TEXT NOT NULL,
+        "publishedAt"   TIMESTAMPTZ,
+        snippet         TEXT,
+        "extractedText" TEXT,
+        "wordCount"     INTEGER,
+        "fetchedAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE ("userId", url)
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS topic_research_run_articles (
+        id            SERIAL PRIMARY KEY,
+        "runId"       INTEGER NOT NULL REFERENCES topic_research_runs(id) ON DELETE CASCADE,
+        "articleId"   INTEGER NOT NULL REFERENCES topic_research_articles(id) ON DELETE CASCADE,
+        "clusterId"   INTEGER,
+        "signalsJson" JSONB NOT NULL DEFAULT '{}'::jsonb,
+        score         REAL,
+        "isOriginal"  BOOLEAN NOT NULL DEFAULT FALSE,
+        "serpRank"    INTEGER,
+        UNIQUE ("runId", "articleId")
+      )
+    `);
     // ── Fitness Planner (Stage 1 tables; later stages add weeks/sessions/logs/library/reminders: docs/fitness-planner.md) ──
     // health_* tables are the shared profile + weight series the future diet app also reads/writes.
     await client.query(`

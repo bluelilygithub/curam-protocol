@@ -235,6 +235,8 @@ app.use('/api/burner-mail', requireFeature('burnerMail'), require('./routes/burn
 app.use('/api/burner-mail-tutor', requireFeature('burnerMail'), aiLimiter, require('./routes/burnerMailTutor')); // the Burner Mail guide chat (sees no addresses or emails)
 app.use('/api/dns-lookup', requireFeature('dnsLookup'), require('./routes/dnsLookup'));
 app.use('/api/dns-lookup-tutor', requireFeature('dnsLookup'), aiLimiter, require('./routes/dnsLookupTutor')); // the DNS Lookup guide chat (sees no names or answers)
+app.use('/api/topic-research-tutor', requireFeature('topicResearch'), aiLimiter, require('./routes/topicResearchTutor')); // the Topic Research guide chat (sees no topics or articles)
+app.use('/api/topic-research', requireFeature('topicResearch'), require('./routes/topicResearch'));
 app.use('/api/web-extractor', requireFeature('webExtractor'), require('./routes/webExtractor'));
 app.use('/api/web-extractor-tutor', requireFeature('webExtractor'), aiLimiter, require('./routes/webExtractorTutor')); // the Web Extractor guide chat (reads no pages)
 app.use('/api/browser-agent', requireFeature('browserAgent'), require('./routes/browserAgent'));
@@ -287,6 +289,7 @@ const { startRecycleBinPurge } = require('./cron/recycleBinCron');
 const { startAttachmentExpiry } = require('./cron/attachmentExpiryCron');
 const { startBurnerMailPurge } = require('./cron/burnerMailCron');
 const { startNoteRemindersCron } = require('./cron/noteRemindersCron');
+const { startTopicResearchCron, startTopicResearchPurge } = require('./cron/topicResearchCron');
 
 // Poll until schema is ready, then seed and start listening
 async function start() {
@@ -310,6 +313,7 @@ async function start() {
   startRecycleBinPurge(); // removes bin items older than 30 days; sends nothing, so it runs everywhere
   startAttachmentExpiry(); // removes kept voice-note audio past its time; sends nothing, so it runs everywhere
   startBurnerMailPurge(); // removes burner addresses a day after they expire; sends nothing, so it runs everywhere
+  startTopicResearchPurge(); // clears Topic Research page text kept over 30 days; sends nothing, so it runs everywhere
 
   if (runtimeConfig.disableExternalCron) {
     console.log('[runtime] External cron jobs disabled by DISABLE_EXTERNAL_CRON');
@@ -322,6 +326,7 @@ async function start() {
     startWeeklyDigestCron();
     startFitnessCron();
     startNoteRemindersCron(); // emails note reminders that have fallen due
+    startTopicResearchCron(); // searches watched Topic Research topics that are due (calls feeds and search services)
   }
 
   // API key presence checks — visible in Railway logs
