@@ -1182,9 +1182,6 @@ async function initSchema() {
     // M3: how a run was ranked (the weights really used, what was left out) and how lively the topic was; whether each article's page was read;
     // the score breakdown per article; and the owner's own weight for each outlet
     await client.query(`ALTER TABLE topic_research_runs ADD COLUMN IF NOT EXISTS "heatJson" JSONB`);
-    await client.query(`ALTER TABLE topic_research_articles ADD COLUMN IF NOT EXISTS "extractStatus" TEXT`);
-    await client.query(`ALTER TABLE topic_research_articles ADD COLUMN IF NOT EXISTS "extractedAt" TIMESTAMPTZ`);
-    await client.query(`ALTER TABLE topic_research_run_articles ADD COLUMN IF NOT EXISTS "breakdownJson" JSONB`);
     // M4: research briefs. "contentJson" is the validated brief, "overlapJson" the copied-wording warnings, "selectedArticleIds" the articles it was
     // written from (kept as ids: the article rows can outlive a run and carry the stored text the overlap check read)
     await client.query(`
@@ -1250,6 +1247,10 @@ async function initSchema() {
         UNIQUE ("runId", "articleId")
       )
     `);
+    // M3 columns on the two tables above (must come after their CREATE: a fresh database has neither table until here)
+    await client.query(`ALTER TABLE topic_research_articles ADD COLUMN IF NOT EXISTS "extractStatus" TEXT`);
+    await client.query(`ALTER TABLE topic_research_articles ADD COLUMN IF NOT EXISTS "extractedAt" TIMESTAMPTZ`);
+    await client.query(`ALTER TABLE topic_research_run_articles ADD COLUMN IF NOT EXISTS "breakdownJson" JSONB`);
     // ── Fitness Planner (Stage 1 tables; later stages add weeks/sessions/logs/library/reminders: docs/fitness-planner.md) ──
     // health_* tables are the shared profile + weight series the future diet app also reads/writes.
     await client.query(`
