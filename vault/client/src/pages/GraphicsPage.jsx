@@ -207,7 +207,7 @@ const TOOL_HELP = {
   adjust: {
     title: 'Adjust',
     what: 'Fine-tune tones and colours with a full darkroom panel.',
-    features: ['Brightness, contrast, saturation, hue shift', 'Levels: black point and white point (tonal stretch)', 'Gamma (midtone brightness)', 'Sharpness, blur, noise reduction (median filter)', 'Colour temperature (warm/cool)', 'Vignette', 'Presets: save current sliders as a named preset and recall later'],
+    features: ['Every slider change is a step in a list: untick any one step to take just that change out (the others stay), Undo / Redo (Ctrl+Z, Ctrl+Shift+Z), or Back to here to return to how it looked after a step', 'Brightness, contrast, saturation, hue shift', 'Levels: black point and white point (tonal stretch)', 'Gamma (midtone brightness)', 'Sharpness, blur, noise reduction (median filter)', 'Colour temperature (warm/cool)', 'Vignette', 'Presets: save current sliders as a named preset and recall later'],
   },
   colorgrade: {
     title: 'Color Grading',

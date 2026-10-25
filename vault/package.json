@@ -47,6 +47,7 @@
     "test:graphics-history": "node client/src/pages/graphics/historyStore.test.mjs",
     "test:graphics-describe": "node server/services/graphicsDescribe.test.js",
     "test:graphics-paid-recipes": "node server/routes/graphics/graphicsPaidRecipes.test.js",
+    "test:graphics-adjust-history": "node client/src/pages/graphics/adjustHistory.test.mjs",
     "test:graphics-tutor": "node server/services/graphicsTutor.test.js",
     "test:cross-user": "node server/routes/crossUser.test.js && node server/routes/crossUserOwnership.test.js",
     "test:ownership-misc": "node server/routes/ownershipMisc.test.js",

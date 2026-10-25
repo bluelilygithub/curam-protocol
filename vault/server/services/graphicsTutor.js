@@ -47,7 +47,7 @@ const CATALOG = [
   { id: 'effects', label: 'Effects', group: 'Enhance',
     does: 'Flip, rotate (a quarter turn or any angle), add a border, round the corners, add a shadow, or apply a filter (black and white, sepia, invert, two-colour).', notes: '' },
   { id: 'adjust', label: 'Adjust', group: 'Enhance',
-    does: 'Fine control of brightness, contrast, colour strength, hue, levels, sharpness, blur, noise reduction, colour warmth and vignette. Settings can be saved as presets in this browser.', notes: '' },
+    does: 'Fine control of brightness, contrast, colour strength, hue, levels, sharpness, blur, noise reduction, colour warmth and vignette. Settings can be saved as presets in this browser. Every slider change is kept as a step in a list: any one step can be ticked off to remove just that change, Undo and Redo go one step at a time, and Back to here returns to how the picture looked after a step.', notes: 'Applies to the original picture each time, never to an earlier result, and the step list starts over when a new picture is chosen.' },
   { id: 'colorgrade', label: 'Color Grading', group: 'Enhance',
     does: 'Gives a picture a film look in one click: Warm, Cool, Cinematic, Vintage, Fade, Matte, Vivid, Noir, Golden hour, Teal and orange.', notes: 'Ten ready-made looks; they cannot be edited.' },
   { id: 'pipeline', label: 'Pipeline', group: 'Enhance',
