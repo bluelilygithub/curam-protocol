@@ -3468,6 +3468,18 @@
   },
   "GET /api/topic-research/history": {
    "class": "authed"
+  },
+  "POST /api/topic-research/briefs/:id/draft": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/briefs/:id/drafts": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/drafts/:id": {
+   "class": "authed"
+  },
+  "DELETE /api/topic-research/drafts/:id": {
+   "class": "authed"
   }
  }
 }

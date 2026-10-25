@@ -44,11 +44,18 @@ register('topic-research-topic', {
         userId, override: { runId, signalsJson: JSON.stringify(ra.signalsJson ?? {}), breakdownJson: ra.breakdownJson == null ? null : JSON.stringify(ra.breakdownJson) },
       });
     }
+    const briefIds = new Map();
     for (const b of payload.briefs || []) {
       const runId = runIds.get(b.runId);
       if (!runId) continue;
       // eslint-disable-next-line no-await-in-loop
-      await insertRow(db, 'topic_research_briefs', b, { userId, override: { runId, ...briefJson(b) } });
+      briefIds.set(b.id, await insertRow(db, 'topic_research_briefs', b, { userId, override: { runId, ...briefJson(b) } }));
+    }
+    for (const d of payload.drafts || []) {
+      const briefId = briefIds.get(d.briefId);
+      if (!briefId) continue;
+      // eslint-disable-next-line no-await-in-loop
+      await insertRow(db, 'topic_research_drafts', d, { userId, override: { briefId, ...draftJson(d) } });
     }
     return { entityId: topicId };
   },
@@ -61,6 +68,12 @@ const briefJson = (b) => ({
   overlapJson: JSON.stringify(b.overlapJson ?? []),
 });
 
+// JSONB values go in as text, as for briefs
+const draftJson = (d) => ({
+  contentJson: JSON.stringify(d.contentJson ?? {}),
+  overlapJson: JSON.stringify(d.overlapJson ?? []),
+});
+
 // A research brief on its own (deleted from the Brief page). It belongs to a search; if that search has gone, it cannot come back alone.
 register('topic-research-brief', {
   label: 'Research brief',
@@ -70,6 +83,23 @@ register('topic-research-brief', {
     const run = await db.query('SELECT 1 FROM topic_research_runs WHERE id = $1 AND "userId" = $2', [b.runId, userId]);
     if (!run.rows.length) throw new RestoreError('The search this brief was written from has been deleted. Restore that topic first.', 409);
     const entityId = await insertRow(db, 'topic_research_briefs', b, { userId, override: briefJson(b) });
+    for (const d of payload.drafts || []) {
+      // eslint-disable-next-line no-await-in-loop
+      await insertRow(db, 'topic_research_drafts', d, { userId, override: { briefId: entityId, ...draftJson(d) } });
+    }
+    return { entityId };
+  },
+});
+
+// A draft on its own (deleted from the Draft page). It belongs to a brief; if that brief has gone, it cannot come back alone.
+register('topic-research-draft', {
+  label: 'Article draft',
+  async restore(db, userId, payload) {
+    const d = payload?.draft;
+    if (!d || !d.contentJson) throw new Error('This deleted draft has nothing to restore.');
+    const brief = await db.query('SELECT 1 FROM topic_research_briefs WHERE id = $1 AND "userId" = $2', [d.briefId, userId]);
+    if (!brief.rows.length) throw new RestoreError('The research brief this draft was written from has been deleted. Restore that brief first.', 409);
+    const entityId = await insertRow(db, 'topic_research_drafts', d, { userId, override: draftJson(d) });
     return { entityId };
   },
 });

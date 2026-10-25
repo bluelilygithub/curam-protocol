@@ -24,8 +24,11 @@ const CATALOG = [
   { id: 'brief', label: 'Research brief', group: 'Find',
     does: "On a search's results, tick up to 12 articles, optionally type your own angle, and press Write a research brief. You get the angle, the key facts with where each came from, gaps, questions to answer and an outline, as notes for your own article. You can copy it or download it as Markdown.",
     notes: "It is not an article. It is checked so it does not copy the sources, and it is refused if this month's spending limit has been reached. Needs an AI model; see Choose the AI model." },
+  { id: 'draft', label: 'Draft article', group: 'Find',
+    does: 'On a saved brief, press Draft article, choose a short, medium or long draft and optionally add a note about what to stress. You get a sectioned first draft built from that brief only (not from the articles), with a source number on every factual paragraph and visible "needs your input" markers where the brief had gaps. You can copy it or download it as Markdown, and make another with a different length.',
+    notes: 'It is a starting point to edit and fact-check, not a publish-ready article. A claim without a source from the brief is left out and shown as a gap. It warns if it repeats wording from a source or from the brief. Refused when the monthly spending limit has been reached.' },
   { id: 'history', label: 'History', group: 'Look back',
-    does: "The History tab lists every past search and every brief, newest first. A search box finds them by topic words or by a brief's angle, and All, Searches and Briefs filter the list. Open an old search to read its results, or an old brief to read it again.",
+    does: "The History tab lists every past search, brief and draft, newest first. A search box finds them by topic words or by a brief's angle, and All, Searches, Briefs and Drafts filter the list. Open an old search to read its results, or an old brief or draft to read it again.",
     notes: 'It shows the latest 100 of each.' },
   { id: 'settings', label: 'Settings', group: 'Set up',
     does: 'The Settings tab holds your feeds, your site profile, how results are ranked, outlets you trust more or less, and spending this month.',
@@ -43,22 +46,23 @@ const CATALOG = [
     does: "Shows this month's estimated spend on searches and briefs against your monthly limit, and lets you change the limit. 0 means no limit. When the limit is reached, paid search sources and new briefs pause, and a banner says so.",
     notes: 'Amounts are estimates. Search prices count as zero until real per-query prices are set on the server, so for now only briefs add to it. The month is the calendar month in UTC.' },
   { id: 'model', label: 'Choose the AI model', group: 'Set up',
-    does: "In Vault's main Settings page, the Topic Research tab lets you pick which of your connected AI models writes research briefs, or leave it on the workspace default. It is the only part of Topic Research that uses an AI model.",
+    does: "In Vault's main Settings page, the Topic Research tab lets you pick which of your connected AI models writes research briefs and article drafts, or leave it on the workspace default. Briefs and drafts are the only parts of Topic Research that use an AI model.",
     notes: 'Models are the ones connected under Settings, AI & Chat. If a chosen model is later removed, the default is used instead.' },
 ];
 
 const RULES = [
   'Type a topic on the Topics tab and press Search. Open it from the list to see the ranked stories.',
-  'Topic Research only helps you research. It never writes, rewrites or publishes an article for you; you write your own from the brief.',
+  "A draft is a starting point built from one research brief only. Check every fact against its sources and edit it before you use it. Topic Research never publishes anything and never rewrites another outlet's article.",
   'A brief is notes with where each fact came from. It is checked against the sources so it does not copy them.',
   'Scores rank what to look at first. They do not say what is true.',
-  'Paid searches and briefs pause when the monthly limit is reached; free sources and reading old results carry on.',
+  'Paid searches, briefs and drafts pause when the monthly limit is reached; free sources and reading old results carry on.',
   'Page text is kept for 30 days then cleared. Deleted topics can be restored from the recycle bin.',
   'The Open buttons in this chat only switch to a tool; they never search or write anything by themselves.',
 ];
 
 const NOT_POSSIBLE = [
-  'Writing or rewriting a finished article, or publishing anything to a website.',
+  "Publishing anything to a website, or rewriting another outlet's article.",
+  'A finished, publish-ready article: a draft is a first draft that needs your edits and a fact-check.',
   "Copying or republishing another site's article.",
   'Checking whether a story is true, or fact-checking a claim.',
   'Google Trends charts or exact search volumes.',
@@ -74,7 +78,7 @@ Rules:
 - You cannot see any topic, article, brief or result they have. Never state or guess what is trending or what a search found.
 - Be plain and short, as to a friend who is not technical. Explain any special word (heat, GDELT, RSS) in a few everyday words the first time you use it.
 - Give steps in order. Each step names exactly one tool by its id and says in a sentence what to do there.
-- Never offer to write their article. A brief is notes for their own writing.
+- A draft is a first draft built from a brief for the writer to edit. Never promise it is publish-ready or fact-checked, never offer to rewrite another outlet's article, and never offer to publish anything.
 - If you need one more fact to answer, ask ONE short question and give no steps.
 ${VERDICT_HELP}
 

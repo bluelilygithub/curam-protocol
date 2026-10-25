@@ -15,11 +15,12 @@ const CONFIG = {
   name: 'Topic Research guide',
   shortName: 'guide',
   subtitle: 'Tell me what you want to research',
-  intro: 'Hi! Tell me what you want to do, in your own words: find what is trending on a topic, keep an eye on one, or write a research brief for your own article. I will check what Topic Research can do and give you the steps. If something is missing, I will say so. I cannot see your topics, articles or briefs.',
+  intro: 'Hi! Tell me what you want to do, in your own words: find what is trending on a topic, keep an eye on one, write a research brief, or turn a brief into a first draft. I will check what Topic Research can do and give you the steps. If something is missing, I will say so. I cannot see your topics, articles or briefs.',
   starters: [
     'How do I find what is trending on a topic?',
     'Can it keep an eye on a topic for me?',
     'How do I get a research brief?',
+    'Can it write a draft for me?',
     'How do I stop it spending too much?',
   ],
   // Status colours are deliberately outside the theme (see client/DESIGN.md).

@@ -9,6 +9,7 @@ import { offerUndo } from '../utils/binUndo';
 import { VoiceInputProvider, VoiceInput } from '../components/voiceInput/VoiceInput';
 import ResultsView from './topicResearch/ResultsView';
 import BriefView from './topicResearch/BriefView';
+import DraftView from './topicResearch/DraftView';
 import SettingsPanel from './topicResearch/SettingsPanel';
 import HistoryPanel from './topicResearch/HistoryPanel';
 import TopicResearchTutorChat from './topicResearch/TopicResearchTutorChat';
@@ -32,6 +33,7 @@ export default function TopicResearchPage() {
   const [params, setParams] = useSearchParams();
   const topicId = Number(params.get('topic')) || null;
   const briefId = Number(params.get('brief')) || null;
+  const draftId = Number(params.get('draft')) || null;
   const runId = Number(params.get('run')) || null; // an earlier search opened from History
   const tab = ['settings', 'history'].includes(params.get('tab')) ? params.get('tab') : 'topics';
   const info = useToolInfoModal('vault_topic_research_info_seen');
@@ -63,7 +65,7 @@ export default function TopicResearchPage() {
       if (r.ok) setUsage(d.usage);
     } catch { /* no banner if it cannot be read */ }
   }, []);
-  useEffect(() => { loadUsage(); }, [loadUsage, topicId, briefId, tab]); // re-read after a search or a brief, and when changing tab
+  useEffect(() => { loadUsage(); }, [loadUsage, topicId, briefId, draftId, tab]); // re-read after a search or a brief, and when changing tab
 
   // Settings -> Topic Research Tour opens /topic-research?tour=1
   useEffect(() => {
@@ -131,11 +133,11 @@ export default function TopicResearchPage() {
   const muted = { color: 'var(--color-muted)' };
   const tabBtn = (id, label) => (
     <button
-      key={id} type="button" aria-pressed={tab === id && !topicId && !briefId}
+      key={id} type="button" aria-pressed={tab === id && !topicId && !briefId && !draftId}
       onClick={() => setParams(id === 'topics' ? {} : { tab: id })}
       title={id === 'topics' ? 'Search a topic and see your saved ones' : id === 'history' ? 'Past searches and briefs' : 'Feeds, site profile, ranking, spending'}
       className="px-3 py-1.5 rounded-lg text-sm font-medium hover:opacity-70 transition-opacity"
-      style={tab === id && !topicId && !briefId ? { background: 'var(--color-primary)', color: '#fff' } : { border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
+      style={tab === id && !topicId && !briefId && !draftId ? { background: 'var(--color-primary)', color: '#fff' } : { border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
     >{label}</button>
   );
 
@@ -167,9 +169,14 @@ export default function TopicResearchPage() {
             </div>
           )}
 
-          {briefId ? (
+          {draftId ? (
+            <DraftView
+              draftId={draftId} onOpenDraft={(id) => setParams({ draft: String(id) })}
+              onBack={(backBriefId) => { if (backBriefId) setParams({ brief: String(backBriefId) }); else backToList(); }}
+            />
+          ) : briefId ? (
             <BriefView
-              briefId={briefId} onOpenBrief={(id) => setParams({ brief: String(id) })}
+              briefId={briefId} onOpenBrief={(id) => setParams({ brief: String(id) })} onOpenDraft={(id) => setParams({ draft: String(id) })}
               onBack={(backTopicId) => { if (backTopicId) setParams({ topic: String(backTopicId) }); else backToList(); }}
             />
           ) : topicId ? (
@@ -178,7 +185,7 @@ export default function TopicResearchPage() {
               onBack={backToList} onTopicChanged={loadTopics} onOpenBrief={(id) => setParams({ brief: String(id) })}
             />
           ) : tab === 'history' ? (
-            <HistoryPanel onOpenRun={(tid, rid) => setParams({ topic: String(tid), run: String(rid) })} onOpenBrief={(id) => setParams({ brief: String(id) })} />
+            <HistoryPanel onOpenRun={(tid, rid) => setParams({ topic: String(tid), run: String(rid) })} onOpenBrief={(id) => setParams({ brief: String(id) })} onOpenDraft={(id) => setParams({ draft: String(id) })} />
           ) : tab === 'settings' ? (
             <SettingsPanel onSaved={loadUsage} />
           ) : (

@@ -102,7 +102,7 @@ export default function SettingsPanel({ onSaved }) {
           <>
             <p className="text-sm font-medium" style={usage.over ? { color: '#ef4444' } : text} role="status">{spendLine(usage)}</p>
             <p className="text-sm" style={muted}>
-              Searches about <strong>${usage.searchUsd.toFixed(2)}</strong> · briefs about <strong>${usage.briefUsd.toFixed(2)}</strong>. These are estimates, counted for this calendar month (UTC).
+              Searches about <strong>${usage.searchUsd.toFixed(2)}</strong> · briefs about <strong>${usage.briefUsd.toFixed(2)}</strong> · drafts about <strong>${(usage.draftUsd || 0).toFixed(2)}</strong>. These are estimates, counted for this calendar month (UTC).
             </p>
           </>
         )}
@@ -110,11 +110,11 @@ export default function SettingsPanel({ onSaved }) {
           <label className={LABEL} style={text} htmlFor="tr-budget">Monthly limit (US dollars)</label>
           <input
             id="tr-budget" inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} aria-label="Monthly spending limit in US dollars"
-            title="When this month's estimated spend reaches this, paid searches and new briefs pause. 0 means no limit."
+            title="When this month's estimated spend reaches this, paid searches, new briefs and drafts pause. 0 means no limit."
             className="px-3 py-2.5 rounded-xl border text-sm outline-none w-32" maxLength={8}
             style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
           />
-          <p className="text-xs mt-1" style={muted}>0 means no limit. When it is reached, paid search sources and new briefs pause; free sources and old results carry on.</p>
+          <p className="text-xs mt-1" style={muted}>0 means no limit. When it is reached, paid search sources, new briefs and drafts pause; free sources and old results carry on.</p>
         </div>
         {usage && !usage.pricesSet && (
           <p className="text-xs leading-relaxed" style={muted}>

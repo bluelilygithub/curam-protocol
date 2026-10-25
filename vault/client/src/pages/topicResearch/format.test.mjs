@@ -1,6 +1,6 @@
 // Run: node client/src/pages/topicResearch/format.test.mjs
 import assert from 'assert';
-import { formatDate, timeAgo, statusLabel, parseFeedLines, feedLines, sourceChip, signalBadges, rankingNote, heatBadge, readNote, breakdownRows, defaultSelection, toggleSelection, selectionNote, factLabel, overlapWarning, costText, SIGNAL_FIELDS, DEFAULT_PERCENTS, DEFAULT_HALF_LIFE, toPercents, fromPercents, percentTotal, REFRESH_CHOICES, refreshLabel, orderTopics, mergeHistory, budgetBanner, spendLine } from './format.mjs';
+import { formatDate, timeAgo, statusLabel, parseFeedLines, feedLines, sourceChip, signalBadges, rankingNote, heatBadge, readNote, breakdownRows, defaultSelection, toggleSelection, selectionNote, factLabel, overlapWarning, costText, SIGNAL_FIELDS, DEFAULT_PERCENTS, DEFAULT_HALF_LIFE, toPercents, fromPercents, percentTotal, REFRESH_CHOICES, refreshLabel, orderTopics, mergeHistory, budgetBanner, spendLine, DRAFT_LENGTHS, draftLine } from './format.mjs';
 
 assert.strictEqual(formatDate(null), 'No date');
 assert.strictEqual(formatDate('garbage'), 'No date');
@@ -140,6 +140,15 @@ assert.strictEqual(refreshLabel(7), 'Every day', 'an unknown value shows the usu
   );
   assert.deepStrictEqual(rows.map((r) => r.kind + r.id), ['brief8', 'run2', 'brief9', 'run1'], 'newest first, a brief before the search it came from at the same moment');
   assert.deepStrictEqual(mergeHistory(null, undefined), []);
+{
+  const rows = mergeHistory([{ id: 1, startedAt: '2026-10-25T00:00:00Z' }], [{ id: 2, createdAt: '2026-10-25T00:00:00Z' }], [{ id: 3, createdAt: '2026-10-25T00:00:00Z' }, { id: 4, createdAt: '2026-10-26T00:00:00Z' }]);
+  assert.deepStrictEqual(rows.map((r) => r.kind + r.id), ['draft4', 'draft3', 'brief2', 'run1'], 'drafts join the list; at one moment draft, then brief, then search');
+}
+assert.deepStrictEqual(DRAFT_LENGTHS.map((l) => l.id), ['short', 'medium', 'long'], 'the same choices the server accepts');
+assert.strictEqual(draftLine({ words: 812, gapCount: 0, overlapCount: 0 }), '812 words');
+assert.strictEqual(draftLine({ words: 812, gapCount: 1, overlapCount: 2 }), '812 words · 1 place to fill · 2 copy warnings');
+assert.strictEqual(draftLine({ words: 5, gapCount: 3, overlapCount: 1 }), '5 words · 3 places to fill · 1 copy warning');
+assert.strictEqual(draftLine({}), '0 words');
 }
 assert.strictEqual(budgetBanner(null), '');
 assert.strictEqual(budgetBanner({ over: false, spentUsd: 1, limitUsd: 20 }), '');

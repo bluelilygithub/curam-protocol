@@ -1,17 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../utils/apiClient';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
-import { costText, formatDate, mergeHistory, statusLabel } from './format.mjs';
+import { costText, draftLine, formatDate, mergeHistory, statusLabel } from './format.mjs';
 
 // Status colours are deliberately outside the theme (see client/DESIGN.md).
 const LEVEL = { good: '#16a34a', warn: '#f59e0b', bad: '#ef4444', info: 'var(--color-muted)' };
-const FILTERS = [['all', 'All'], ['runs', 'Searches'], ['briefs', 'Briefs']];
+const FILTERS = [['all', 'All'], ['runs', 'Searches'], ['briefs', 'Briefs'], ['drafts', 'Drafts']];
 
 // Every past search and brief, newest first. A search opens in the Results view (marked as an earlier search); a brief opens on the Brief page.
-export default function HistoryPanel({ onOpenRun, onOpenBrief }) {
+export default function HistoryPanel({ onOpenRun, onOpenBrief, onOpenDraft }) {
   const [q, setQ] = useState('');
   const [type, setType] = useState('all');
-  const [data, setData] = useState(null); // { runs, briefs }
+  const [data, setData] = useState(null); // { runs, briefs, drafts }
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -22,20 +22,20 @@ export default function HistoryPanel({ onOpenRun, onOpenBrief }) {
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || 'Could not load the history.');
         if (live) { setData(d); setError(''); }
-      } catch (e) { if (live) { setError(e.message || 'Could not reach the server.'); setData((cur) => cur || { runs: [], briefs: [] }); } }
+      } catch (e) { if (live) { setError(e.message || 'Could not reach the server.'); setData((cur) => cur || { runs: [], briefs: [], drafts: [] }); } }
     }, q ? 250 : 0); // wait for a pause in typing
     return () => { live = false; clearTimeout(t); };
   }, [q, type]);
 
   const text = { color: 'var(--color-text)' };
   const muted = { color: 'var(--color-muted)' };
-  const rows = data ? mergeHistory(data.runs, data.briefs) : [];
+  const rows = data ? mergeHistory(data.runs, data.briefs, data.drafts) : [];
 
   return (
     <div className="space-y-4" data-guide="history">
       <div className="rounded-2xl border p-6 space-y-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <h2 className="text-base font-semibold" style={text}>History</h2>
-        <VoiceInput value={q} onChange={setQ} label="Search your history" placeholder="Search by topic or by a brief's angle" maxLength={120} />
+        <VoiceInput value={q} onChange={setQ} label="Search your history" placeholder="Search by topic, a brief's angle or a draft's title" maxLength={120} />
         <div className="flex flex-wrap gap-2" role="group" aria-label="Show">
           {FILTERS.map(([id, label]) => (
             <button
@@ -59,21 +59,21 @@ export default function HistoryPanel({ onOpenRun, onOpenBrief }) {
           return (
             <li key={`${r.kind}-${r.id}`}>
               <button
-                type="button" onClick={() => (r.kind === 'run' ? onOpenRun(r.topicId, r.id) : onOpenBrief(r.id))}
+                type="button" onClick={() => (r.kind === 'run' ? onOpenRun(r.topicId, r.id) : r.kind === 'brief' ? onOpenBrief(r.id) : onOpenDraft(r.id))}
                 className="w-full text-left rounded-xl border p-4 hover:opacity-70 transition-opacity"
                 style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
               >
                 <span className="flex flex-wrap items-baseline gap-2">
                   <span className="text-xs font-semibold px-1.5 py-0.5 rounded" style={{ background: r.kind === 'run' ? 'var(--color-surface)' : 'var(--color-primary)', color: r.kind === 'run' ? 'var(--color-muted)' : '#fff', border: '1px solid var(--color-border)' }}>
-                    {r.kind === 'run' ? 'Search' : 'Brief'}
+                    {r.kind === 'run' ? 'Search' : r.kind === 'brief' ? 'Brief' : 'Draft'}
                   </span>
-                  <span className="text-sm font-medium break-words min-w-0" style={text}>{r.keyword}</span>
+                  <span className="text-sm font-medium break-words min-w-0" style={text}>{r.kind === 'draft' && r.title ? `${r.title} (${r.keyword})` : r.keyword}</span>
                   <span className="text-xs" style={muted}>{formatDate(r.when)}</span>
                 </span>
                 <span className="block text-xs mt-1" style={muted}>
                   {r.kind === 'run'
                     ? <>{r.articleCount} article{r.articleCount === 1 ? '' : 's'} · <span style={{ color: LEVEL[st.level] }}>{st.text}</span>{r.costUsd > 0 && <> · {costText(r.costUsd)}</>}</>
-                    : <>{r.chosenAngle ? `Angle: ${r.chosenAngle} · ` : ''}{r.factCount} fact{r.factCount === 1 ? '' : 's'}{r.overlapCount > 0 && <> · {r.overlapCount} overlap warning{r.overlapCount === 1 ? '' : 's'}</>}{r.costUsd > 0 && <> · {costText(r.costUsd)}</>}</>}
+                    : r.kind === 'draft' ? <>{draftLine(r)}{r.costUsd > 0 && <> · {costText(r.costUsd)}</>}</> : <>{r.chosenAngle ? `Angle: ${r.chosenAngle} · ` : ''}{r.factCount} fact{r.factCount === 1 ? '' : 's'}{r.overlapCount > 0 && <> · {r.overlapCount} overlap warning{r.overlapCount === 1 ? '' : 's'}</>}{r.costUsd > 0 && <> · {costText(r.costUsd)}</>}</>}
                 </span>
               </button>
             </li>

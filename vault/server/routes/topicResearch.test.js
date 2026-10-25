@@ -244,6 +244,37 @@ async function main() {
         if (/^SELECT domain, weight, note FROM topic_research_source_weights/.test(s)) return { rows: (db.sourceWeights || []).filter((w) => w.userId === params[0]).sort((a, b) => (a.domain < b.domain ? -1 : 1)).map(({ domain, weight, note }) => ({ domain, weight, note })) };
         if (/^DELETE FROM topic_research_source_weights/.test(s)) { db.sourceWeights = (db.sourceWeights || []).filter((w) => w.userId !== params[0]); return { rows: [] }; }
         if (/^INSERT INTO topic_research_source_weights/.test(s)) { (db.sourceWeights = db.sourceWeights || []).push({ userId: params[0], domain: params[1], weight: params[2], note: params[3] }); return { rows: [] }; }
+        // ---- drafts (M6)
+        db.drafts = db.drafts || [];
+        if (/^SELECT COALESCE\(SUM\("costUsd"\), 0\) AS total FROM topic_research_drafts WHERE "userId" = \$1 AND "createdAt" >= \$2/.test(s)) {
+          return { rows: [{ total: db.drafts.filter((d) => d.userId === params[0] && new Date(d.createdAt) >= params[1]).reduce((t, d) => t + (Number(d.costUsd) || 0), 0) }] };
+        }
+        if (/^SELECT a\.url, a\.title, a\.snippet, a\."extractedText" AS text FROM topic_research_articles a WHERE a\.id = ANY/.test(s)) {
+          return { rows: db.articles.filter((a) => params[0].includes(a.id) && a.userId === params[1]).map((a) => ({ url: a.url, title: a.title, snippet: a.snippet, text: a.extractedText || null })) };
+        }
+        if (/^INSERT INTO topic_research_drafts/.test(s)) {
+          const d = { id: db.drafts.length + 1 + (db.draftBase || 0), userId: params[0], briefId: params[1], lengthChoice: params[2], steer: params[3], contentJson: JSON.parse(params[4]), overlapJson: JSON.parse(params[5]), model: params[6], costUsd: params[7], inputTokens: params[8], outputTokens: params[9], createdAt: new Date(NOW) };
+          db.drafts.push(d); return { rows: [d] };
+        }
+        if (/^SELECT id FROM topic_research_briefs WHERE id = \$1 AND "userId" = \$2/.test(s)) return { rows: (db.briefs || []).filter((b) => b.id === params[0] && b.userId === params[1]).map((b) => ({ id: b.id })) };
+        if (/^SELECT id, "lengthChoice", "contentJson", "overlapJson", "createdAt", "costUsd" FROM topic_research_drafts WHERE "briefId"/.test(s)) return { rows: db.drafts.filter((d) => d.briefId === params[0] && d.userId === params[1]).sort((a, b) => b.id - a.id) };
+        if (/^SELECT d\.\*, b\."selectedArticleIds" AS "selectedArticleIds"/.test(s)) {
+          const d = db.drafts.find((x) => x.id === params[0] && x.userId === params[1]);
+          const b = d && (db.briefs || []).find((x) => x.id === d.briefId);
+          return { rows: d && b ? [{ ...d, selectedArticleIds: b.selectedArticleIds, runId: b.runId, topicId: db.runs.find((r) => r.id === b.runId).topicId }] : [] };
+        }
+        if (/^SELECT \* FROM topic_research_drafts WHERE id = \$1 AND "userId" = \$2 FOR UPDATE/.test(s)) return { rows: db.drafts.filter((x) => x.id === params[0] && x.userId === params[1]) };
+        if (/^SELECT \* FROM topic_research_drafts WHERE "briefId" = ANY/.test(s)) return { rows: db.drafts.filter((d) => params[0].includes(d.briefId) && d.userId === params[1]) };
+        if (/^SELECT \* FROM topic_research_drafts WHERE "briefId" = \$1 AND "userId" = \$2/.test(s)) return { rows: db.drafts.filter((d) => d.briefId === params[0] && d.userId === params[1]) };
+        if (/^DELETE FROM topic_research_drafts WHERE id/.test(s)) { const n = db.drafts.length; db.drafts = db.drafts.filter((d) => !(d.id === params[0] && d.userId === params[1])); return { rowCount: n - db.drafts.length, rows: [] }; }
+        if (/^SELECT d\.id, d\."briefId", b\."runId", r\."topicId", t\.keyword, d\."createdAt", d\."costUsd" AS cost/.test(s)) {
+          const needle = params[1] ? params[1].replace(/^%|%$/g, '').replace(/\\(.)/g, '$1').toLowerCase() : null;
+          const rows = db.drafts.filter((d) => d.userId === params[0]).map((d) => {
+            const b = (db.briefs || []).find((x) => x.id === d.briefId); const run = b && db.runs.find((r) => r.id === b.runId); const t = run && db.topics.find((x) => x.id === run.topicId);
+            return t ? { id: d.id, briefId: d.briefId, runId: b.runId, topicId: t.id, keyword: t.keyword, createdAt: d.createdAt, cost: d.costUsd, contentJson: d.contentJson, overlapJson: d.overlapJson, lengthChoice: d.lengthChoice } : null;
+          }).filter(Boolean).filter((d) => !needle || [d.keyword, d.contentJson && d.contentJson.title].some((x) => String(x || '').toLowerCase().includes(needle))).sort((a, b) => b.id - a.id).slice(0, 100);
+          return { rows };
+        }
         // ---- spending, watchlist, history (M5)
         if (/^SELECT COALESCE\(SUM\("apiCostEstimate"\), 0\) AS total FROM topic_research_runs WHERE "userId" = \$1 AND "startedAt" >= \$2/.test(s)) {
           return { rows: [{ total: db.runs.filter((r) => r.userId === params[0] && new Date(r.startedAt) >= params[1]).reduce((t, r) => t + (Number(r.apiCostEstimate) || 0), 0) }] };
@@ -339,6 +370,8 @@ async function main() {
     app.use(express.json());
     app.use((req, res, next) => { req.user = { id: Number(req.headers['x-test-user'] || 1) }; next(); });
     const briefCalls = []; let briefMode = 'ok'; let briefGate = null;
+    const draftCalls = []; let draftMode = 'ok'; let draftGate = null;
+    const DRAFT = { title: 'A working title', sections: [{ heading: 'Costs', paragraphs: [{ kind: 'fact', text: 'A levy was announced by one outlet.', sources: ['https://a.example.com/one'] }, { kind: 'gap', text: 'Add the dollar figure.', sources: [] }] }] };
     const budgetSeen = []; // whether each source build was told the monthly limit is reached
     const modelStore = new Map(); const MODEL_CHOICES = ['model-a', 'model-b'];
     const BRIEF = {
@@ -357,7 +390,8 @@ async function main() {
       },
       rescore: async (args) => { rescored.push(args.runId); return { stories: 1, heat: { label: 'Steady', value: 3 } }; },
       isStale: async () => stale,
-      limits: { briefsPerHour: 6, perMinute: 100000 }, // the per-minute limit is tested by its own behaviour in production; this run makes hundreds of calls
+      aiGate: (req, res, next) => next(), // the app-wide 30 a minute would trip this test, which makes hundreds of calls
+      limits: { briefsPerHour: 6, draftsPerHour: 4, perMinute: 100000 }, // the per-minute limit is tested by its own behaviour in production; this run makes hundreds of calls
       makeBrief: async (input) => {
         briefCalls.push(input);
         if (briefGate) await briefGate;
@@ -365,6 +399,13 @@ async function main() {
         if (briefMode === 'secret') throw new Error('connect ECONNREFUSED secret-host:5432');
         if (briefMode === 'bad-gateway') throw Object.assign(new Error('The AI model took too long to answer. Try again, or tick fewer articles.'), { status: 502 });
         return { brief: BRIEF, overlap: [], dropped: { facts: 0, sources: 0 }, model: 'claude-test', inputTokens: 1000, outputTokens: 500, costUsd: 0.012 };
+      },
+      makeDraft: async (input) => {
+        draftCalls.push(input);
+        if (draftGate) await draftGate;
+        if (draftMode === 'no-facts') throw Object.assign(new Error('This brief has no sourced facts to write a draft from.'), { status: 400 });
+        if (draftMode === 'secret') throw new Error('connect ECONNREFUSED secret-host:5432');
+        return { draft: DRAFT, overlap: [{ field: 'section 1 paragraph 1', words: 14, excerpt: 'a copied run', sourceUrl: 'brief', sourceTitle: 'your research brief' }], dropped: { unsourced: 1, sources: 0 }, model: 'claude-test', inputTokens: 900, outputTokens: 700, costUsd: 0.02 };
       },
       getBin: () => ({ moveToBin: async (_db, o) => { pool.bin.push(o); return `bin-${pool.bin.length}`; } }),
       modelApi: {
@@ -732,10 +773,10 @@ async function main() {
         assert.deepStrictEqual((await call('GET', '/history?type=runs')).body.briefs, [], 'only searches when asked');
         assert.deepStrictEqual((await call('GET', '/history?type=briefs')).body.runs, [], 'only briefs when asked');
         assert.ok((await call('GET', '/history?q=heat')).body.runs.length >= 3, 'found by the topic');
-        assert.deepStrictEqual((await call('GET', '/history?q=zzzz')).body, { runs: [], briefs: [] });
+        assert.deepStrictEqual((await call('GET', '/history?q=zzzz')).body, { runs: [], briefs: [], drafts: [] });
         assert.strictEqual((await call('GET', '/history?q=renter')).body.briefs.length, 1, 'a brief is found by its angle');
         assert.strictEqual((await call('GET', '/history?q=my%20own')).body.briefs.length, 1, 'or the angle the owner typed');
-        assert.deepStrictEqual((await call('GET', '/history?q=%25')).body, { runs: [], briefs: [] }, 'a % in the search is a % and not "anything"');
+        assert.deepStrictEqual((await call('GET', '/history?q=%25')).body, { runs: [], briefs: [], drafts: [] }, 'a % in the search is a % and not "anything"');
         assert.ok((await call('GET', '/history?type=nonsense')).body.runs.length >= 3, 'an unknown type means all');
         pool.db.briefs = pool.db.briefs.filter((b) => b.id !== 801);
       }
@@ -784,6 +825,110 @@ async function main() {
         pool.db.briefs = pool.db.briefs.filter((b) => b.id !== 802);
       }
       pool.db.briefs.push(...brief900);
+
+      // ---------------------------------------------------------------- drafts (M6): a first draft from one brief
+      {
+        const runArts = (await call('GET', `/runs/${runForBriefHist}`)).body.articles.map((a) => a.id);
+        const stash = pool.db.briefs.splice(0, pool.db.briefs.length); // set the real briefs aside: this block needs a known brief
+        pool.db.briefs.push({ id: 950, userId: 1, runId: runForBriefHist, selectedArticleIds: runArts.slice(0, 2), angle: 'a', contentJson: BRIEF, overlapJson: [], model: 'm', costUsd: 0, inputTokens: 1, outputTokens: 1, createdAt: new Date(NOW) });
+        const callsBefore = draftCalls.length;
+        assert.strictEqual((await call('POST', '/briefs/abc/draft', {})).status, 404);
+        assert.strictEqual((await call('POST', '/briefs/99999/draft', {})).status, 404);
+        assert.strictEqual((await call('POST', '/briefs/950/draft', {}, 2)).status, 404, "someone else's brief");
+        for (const bad of [{ lengthChoice: 'huge' }, { lengthChoice: 5 }, { steer: 42 }, { steer: 'x'.repeat(201) }]) assert.strictEqual((await call('POST', '/briefs/950/draft', bad)).status, 400, JSON.stringify(bad).slice(0, 40));
+        assert.strictEqual(draftCalls.length, callsBefore, 'the model was never asked for a refused request');
+
+        let r = await call('POST', '/briefs/950/draft', { lengthChoice: 'short', steer: '  stress   cost  ' });
+        assert.strictEqual(r.status, 201);
+        const d = r.body.draft;
+        assert.deepStrictEqual([d.briefId, d.lengthChoice, d.steer, d.model, d.costUsd, d.gapCount, d.words > 0, d.keyword, d.fileName], [950, 'short', 'stress cost', 'claude-test', 0.02, 1, true, 'heat pumps', 'draft-heat-pumps-2026-10-25.md']);
+        assert.deepStrictEqual(r.body.dropped, { unsourced: 1, sources: 0 });
+        assert.strictEqual(d.overlap.length, 1);
+        assert.match(d.markdown, /^# A working title/);
+        assert.match(d.markdown, /needs your input: Add the dollar figure\./);
+        const input = draftCalls[draftCalls.length - 1];
+        assert.deepStrictEqual([input.userId, input.lengthChoice, input.steer, input.topic.keyword], [1, 'short', 'stress cost', 'heat pumps']);
+        assert.deepStrictEqual(Object.keys(input.sources[0]).sort(), ['domain', 'title', 'url'], 'the model gets titles and addresses of the sources');
+        assert.ok(input.articles.length >= 1 && input.brief === BRIEF, 'the brief goes in; the article text is only for the copy check');
+        r = await call('POST', '/briefs/950/draft', {});
+        assert.strictEqual(r.body.draft.lengthChoice, 'medium', 'medium is the usual length');
+
+        // list, get, ownership
+        r = await call('GET', '/briefs/950/drafts');
+        assert.deepStrictEqual(r.body.drafts.map((x) => [x.title, x.lengthChoice]), [['A working title', 'medium'], ['A working title', 'short']], 'newest first');
+        assert.strictEqual((await call('GET', '/briefs/950/drafts', undefined, 2)).status, 404);
+        r = await call('GET', `/drafts/${d.id}`);
+        assert.deepStrictEqual([r.status, r.body.draft.id, r.body.draft.content.title, r.body.draft.sources.length > 0], [200, d.id, 'A working title', true]);
+        assert.strictEqual((await call('GET', `/drafts/${d.id}`, undefined, 2)).status, 404);
+        assert.strictEqual((await call('GET', '/drafts/xyz')).status, 404);
+
+        // history and spending include drafts
+        const h = (await call('GET', '/history')).body;
+        assert.deepStrictEqual(h.drafts.map((x) => [x.keyword, x.title, x.briefId]), [['heat pumps', 'A working title', 950], ['heat pumps', 'A working title', 950]]);
+        assert.deepStrictEqual((await call('GET', '/history?type=drafts')).body.runs, []);
+        assert.strictEqual((await call('GET', '/history?type=runs')).body.drafts.length, 0);
+        assert.strictEqual((await call('GET', '/history?q=working')).body.drafts.length, 2, 'found by the draft title');
+        assert.strictEqual((await call('GET', '/history?q=zzzz')).body.drafts.length, 0);
+        assert.ok(((await call('GET', '/usage')).body.usage.draftUsd) >= 0.04 - 1e-9, 'drafts count towards this month');
+
+        // one at a time, and the hourly cap (4 here; two used)
+        let release; draftGate = new Promise((x) => { release = x; });
+        const first = call('POST', '/briefs/950/draft', {});
+        await new Promise((x) => setTimeout(x, 20));
+        assert.strictEqual((await call('POST', '/briefs/950/draft', {})).status, 409, 'a second press while one is being written');
+        release(); draftGate = null;
+        assert.strictEqual((await first).status, 201);
+        assert.strictEqual((await call('POST', '/briefs/950/draft', {})).status, 201);
+        r = await call('POST', '/briefs/950/draft', {});
+        assert.strictEqual(r.status, 429, 'fifth attempt in an hour');
+        assert.ok(/lot of drafts/.test(r.body.error));
+
+        // errors keep their words but never provider text
+        const old = draftCalls.length;
+        draftMode = 'no-facts';
+        pool.db.briefs[0].selectedArticleIds = runArts.slice(0, 2);
+        // (the hourly cap is full, so use a second person to reach the model)
+        pool.db.briefs.push({ ...pool.db.briefs[0], id: 951, userId: 2 });
+        const own2 = pool.db.topics.find((t) => t.userId === 2); const run2 = pool.db.runs.find((x) => x.userId === 2);
+        assert.ok(own2 && run2, 'a second person has a search to use');
+        {
+          pool.db.briefs[1].runId = run2.id;
+          r = await call('POST', '/briefs/951/draft', {}, 2);
+          assert.strictEqual(r.status, 400);
+          draftMode = 'secret';
+          r = await call('POST', '/briefs/951/draft', {}, 2);
+          assert.deepStrictEqual([r.status, /secret-host|ECONNREFUSED/.test(JSON.stringify(r.body))], [500, false]);
+        }
+        draftMode = 'ok';
+        assert.ok(draftCalls.length >= old);
+
+        // over the monthly limit: refused before the model
+        await call('PUT', '/settings', { monthlyBudgetUsd: 0.01 });
+        const before = draftCalls.length;
+        r = await call('POST', '/briefs/950/draft', {});
+        assert.strictEqual(r.status, 402);
+        assert.strictEqual(draftCalls.length, before, 'no model call when over the limit');
+        await call('PUT', '/settings', { monthlyBudgetUsd: 20 });
+
+        // delete -> the bin, with an id; gone after; undo path is the adapter's
+        const binBefore = pool.bin.length;
+        const victim = (await call('GET', '/briefs/950/drafts')).body.drafts[0];
+        assert.strictEqual((await call('DELETE', `/drafts/${victim.id}`, undefined, 2)).status, 404, "not someone else's");
+        r = await call('DELETE', `/drafts/${victim.id}`);
+        assert.deepStrictEqual([r.status, r.body.ok, typeof r.body.binId], [200, true, 'string']);
+        assert.deepStrictEqual([pool.bin[binBefore].type, /^Draft: A working title/.test(pool.bin[binBefore].title), pool.bin[binBefore].payload.draft.id], ['topic-research-draft', true, victim.id]);
+        assert.strictEqual((await call('GET', `/drafts/${victim.id}`)).status, 404);
+        assert.strictEqual((await call('DELETE', `/drafts/${victim.id}`)).status, 404, 'a second delete');
+
+        // deleting the brief carries its drafts into the bin payload
+        const briefBin = pool.bin.length;
+        r = await call('DELETE', '/briefs/950');
+        assert.strictEqual(r.status, 200);
+        assert.ok(pool.bin[briefBin].payload.drafts.length >= 1 && /draft/.test(pool.bin[briefBin].detail), 'the brief and its drafts travel together');
+
+        pool.db.briefs.splice(0, pool.db.briefs.length, ...stash);
+        pool.db.drafts = [];
+      }
 
       // delete -> the recycle bin gets the topic, its runs, links and briefs, then the topic is gone
       const binAtStart = pool.bin.length;

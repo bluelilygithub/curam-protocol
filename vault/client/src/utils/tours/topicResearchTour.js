@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_topic_research_completed';
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 9;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -85,30 +85,38 @@ export function startTopicResearchTour() {
   });
 
   tour.addStep({
+    id: 'tr-draft',
+    title: 'Turn a brief into a first draft',
+    text: 'On a saved brief, press Draft article and choose a length. You get a first draft built from that brief only, with a source number on every factual paragraph and clear "needs your input" markers where the research has gaps. It is a starting point to edit and fact-check, and it warns if it repeats wording from a source.',
+    when: { show() { injectStepCounter(5); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  tour.addStep({
     id: 'tr-tabs',
     title: 'History and Settings',
-    text: 'History lists every past search and brief, newest first, with a search box. Settings holds your feeds, what your site is about, how results are ranked and your spending.',
+    text: 'History lists every past search, brief and draft, newest first, with a search box. Settings holds your feeds, what your site is about, how results are ranked and your spending.',
     attachTo: { element: '[data-tour="tr-tabs"]', on: 'bottom' },
     beforeShowPromise: check('tr-tabs', '[data-tour="tr-tabs"]'),
-    when: { show() { injectStepCounter(5); } },
+    when: { show() { injectStepCounter(6); } },
     buttons: [btnBack(), btnNext],
   });
 
   tour.addStep({
     id: 'tr-spending',
     title: 'Spending limit',
-    text: 'Paid searches and briefs cost a little. In Settings, set a monthly limit. When the estimate reaches it, paid searches and new briefs pause and a banner tells you, until you raise the limit or the month ends. Amounts are estimates.',
+    text: 'Paid searches, briefs and drafts cost a little. In Settings, set a monthly limit. When the estimate reaches it, paid searches, new briefs and new drafts pause and a banner tells you, until you raise the limit or the month ends. Amounts are estimates.',
     attachTo: { element: '[data-tour="tr-banner"]', on: 'bottom' },
     beforeShowPromise: check('tr-spending', '[data-tour="tr-banner"]'),
-    when: { show() { injectStepCounter(6); } },
+    when: { show() { injectStepCounter(7); } },
     buttons: [btnBack(), btnNext],
   });
 
   tour.addStep({
     id: 'tr-model',
-    title: 'Which AI model writes briefs',
-    text: 'Briefs are written by the AI model you choose in Vault Settings, under Topic Research, the same way as other tools. Leave it on the default to use the workspace model. Nothing else here uses a model.',
-    when: { show() { injectStepCounter(7); } },
+    title: 'Which AI model writes briefs and drafts',
+    text: 'Briefs and drafts are written by the AI model you choose in Vault Settings, under Topic Research, the same way as other tools. Leave it on the default to use the workspace model. Searching, reading and ranking use no model.',
+    when: { show() { injectStepCounter(8); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -116,7 +124,7 @@ export function startTopicResearchTour() {
     id: 'tr-limits',
     title: 'Good to know',
     text: 'Scores say what to look at first, not what is true. Page text is kept for 30 days, then cleared. A deleted topic can be brought back from the recycle bin. Stuck? Press the round button at the bottom right and ask the guide.',
-    when: { show() { injectStepCounter(8); } },
+    when: { show() { injectStepCounter(9); } },
     buttons: [
       btnBack(),
       { text: 'Finish Tour ✓', action() { try { localStorage.setItem(TOUR_KEY, '1'); } catch (_) { /* ignore */ } tour.complete(); } },

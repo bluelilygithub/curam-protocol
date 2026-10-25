@@ -4,13 +4,14 @@ import useProcessingStore from '../../store/processingStore';
 import useToastStore from '../../store/toastStore';
 import { offerUndo } from '../../utils/binUndo';
 import { useIcon } from '../../providers/IconProvider';
-import { costText, factLabel, formatDate, overlapWarning } from './format.mjs';
+import { VoiceInput } from '../../components/voiceInput/VoiceInput';
+import { DRAFT_LENGTHS, costText, draftLine, factLabel, formatDate, overlapWarning } from './format.mjs';
 
 const H = ({ children }) => <h3 className="text-base font-semibold mt-5 mb-2" style={{ color: 'var(--color-text)' }}>{children}</h3>;
 
 // One research brief: notes to write your own article from. Every fact says how many outlets back it and links to them; if the brief repeats
 // wording from a source, a warning comes first. Copy and download give the same Markdown the server writes.
-export default function BriefView({ briefId, onBack, onOpenBrief }) {
+export default function BriefView({ briefId, onBack, onOpenBrief, onOpenDraft }) {
   const getIcon = useIcon();
   const { startProcessing, stopProcessing } = useProcessingStore();
   const addToast = useToastStore((s) => s.addToast);
@@ -20,6 +21,9 @@ export default function BriefView({ briefId, onBack, onOpenBrief }) {
   const [showAngle, setShowAngle] = useState(false);
   const [angle, setAngle] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [lengthChoice, setLengthChoice] = useState('medium');
+  const [steer, setSteer] = useState('');
+  const [drafts, setDrafts] = useState([]); // drafts already written from this brief
 
   const load = useCallback(async () => {
     setError('');
@@ -30,7 +34,20 @@ export default function BriefView({ briefId, onBack, onOpenBrief }) {
       setBrief(d.brief);
     } catch (e) { setError(e.message || 'Could not reach the server.'); } finally { setLoading(false); }
   }, [briefId]);
-  useEffect(() => { setLoading(true); setBrief(null); setShowAngle(false); setAngle(''); setConfirmDelete(false); load(); }, [load]);
+  useEffect(() => { setLoading(true); setBrief(null); setShowAngle(false); setAngle(''); setConfirmDelete(false); setSteer(''); load(); }, [load]);
+  // the drafts already written from this brief (a deleted or restored draft announces itself with this event)
+  const loadDrafts = useCallback(async () => {
+    try {
+      const r = await api.get(`/api/topic-research/briefs/${briefId}/drafts`);
+      const d = await r.json();
+      if (r.ok && Array.isArray(d.drafts)) setDrafts(d.drafts);
+    } catch { /* the list simply stays as it was */ }
+  }, [briefId]);
+  useEffect(() => {
+    loadDrafts();
+    window.addEventListener('topic-research:drafts-changed', loadDrafts);
+    return () => window.removeEventListener('topic-research:drafts-changed', loadDrafts);
+  }, [loadDrafts]);
 
   const muted = { color: 'var(--color-muted)' };
   const text = { color: 'var(--color-text)' };
@@ -69,6 +86,15 @@ export default function BriefView({ briefId, onBack, onOpenBrief }) {
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Could not write the brief.');
       onOpenBrief(d.brief.id);
+    } catch (e) { setError(e.message || 'Could not reach the server.'); } finally { stopProcessing(); }
+  };
+  const writeDraft = async () => {
+    startProcessing('Writing the draft…', 'This can take up to a minute and a half.');
+    try {
+      const r = await api.post(`/api/topic-research/briefs/${brief.id}/draft`, { lengthChoice, steer });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Could not write the draft.');
+      onOpenDraft(d.draft.id);
     } catch (e) { setError(e.message || 'Could not reach the server.'); } finally { stopProcessing(); }
   };
   const remove = async () => {
@@ -131,6 +157,43 @@ export default function BriefView({ briefId, onBack, onOpenBrief }) {
           </div>
         </div>
       )}
+
+      <div className="rounded-xl border p-4 space-y-3 mt-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }} data-tour="tr-draft">
+        <p className="text-sm font-semibold" style={text}>Draft article</p>
+        <p className="text-xs leading-relaxed" style={muted}>
+          Turn this brief into a first draft to edit. It is built from this brief only (not from the articles), with a source number on every factual paragraph and a clear marker where the research has gaps. It is a starting point, not a finished article: check every fact before you use it.
+        </p>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Length of the draft">
+          {DRAFT_LENGTHS.map((l) => (
+            <button
+              key={l.id} type="button" aria-pressed={lengthChoice === l.id} onClick={() => setLengthChoice(l.id)} title={l.tip}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium hover:opacity-70 transition-opacity"
+              style={lengthChoice === l.id ? { background: 'var(--color-primary)', color: '#fff' } : { border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
+            >{l.label}</button>
+          ))}
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex-1">
+            <VoiceInput value={steer} onChange={setSteer} label="A note about what to stress" placeholder="Anything to stress? (optional)" maxLength={200} />
+          </div>
+          <button type="button" onClick={writeDraft} className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium hover:opacity-70 transition-opacity" style={{ background: 'var(--color-primary)', color: '#fff' }}>
+            {getIcon('sparkles', { size: 14 })}Draft article
+          </button>
+        </div>
+        {drafts.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold" style={text}>Drafts already written from this brief</p>
+            <ul className="mt-1 space-y-1">
+              {drafts.map((d) => (
+                <li key={d.id}>
+                  <button type="button" onClick={() => onOpenDraft(d.id)} className="text-xs underline hover:opacity-70 transition-opacity text-left" style={{ color: 'var(--color-primary)' }}>{d.title || 'Draft'}</button>
+                  <span className="text-xs" style={muted}> · {draftLine(d)} · {formatDate(d.createdAt)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
 
       {warning && (
         <div className="rounded-xl border p-3 mt-3 space-y-1" style={{ borderColor: '#f59e0b', background: 'var(--color-surface)' }} role="alert">

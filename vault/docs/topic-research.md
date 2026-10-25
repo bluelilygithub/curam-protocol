@@ -1,6 +1,6 @@
 # Topic Research
 
-Find what is being written about a topic, so the owner can write their own piece. It lists existing coverage (and, in later milestones, ranks it and turns it into a research brief). It never publishes, and never rewrites anyone else's article. Page: `/topic-research` (flag `topicResearch`, Research & Utilities, **off by default** until the last milestone; admins always get in).
+Find what is being written about a topic, so the owner can write their own piece. It lists existing coverage (and, in later milestones, ranks it and turns it into a research brief). It can turn a brief into a first draft for the owner to edit. It never publishes anything, and never rewrites anyone else's article. Page: `/topic-research` (flag `topicResearch`, Research & Utilities, **off by default** until the last milestone; admins always get in).
 
 Built from the owner's spec ("Topic Research App — Build Spec", 25 Oct 2026) as a **native Vault tool**, not the Python/FastAPI app the spec describes. Built one milestone at a time, with a plan agreed before each.
 
@@ -12,7 +12,8 @@ Built from the owner's spec ("Topic Research App — Build Spec", 25 Oct 2026) a
 4. **Search** a topic on the Topics tab. Open it to see stories ranked best first.
 5. **Watch** a topic (tick Watch, choose how often) and it refreshes itself in the background.
 6. **Write a brief**: tick up to 12 articles, press Generate brief, then write your own piece from the notes.
-7. **History** lists every past search and brief; open one to read it again.
+7. **Draft article** (optional): on a brief, choose a length and press Draft article for a first draft built from that brief. Edit and fact-check it elsewhere.
+8. **History** lists every past search, brief and draft; open one to read it again.
 8. Help: the (i) box, the compass tour (also Settings -> Tours) and the round guide button.
 
 ## Status
@@ -22,8 +23,9 @@ Built from the owner's spec ("Topic Research App — Build Spec", 25 Oct 2026) a
 | 1. Skeleton and RSS | tables, settings, RSS source, Results page | built, awaiting review |
 | 2. More sources | Hacker News, GDELT, Brave, Serper (SERP), Reddit, 24 h cache; Google Trends not built | built, awaiting review |
 | 3. Extraction, clustering, scoring | article text, stories, score + breakdown, Original badge, topic heat, Settings weights | built, awaiting review |
-| 4. Briefs | research brief from ticked articles, strict checks, Brief page, Markdown, 12-word overlap check | built, awaiting review (**not yet run against a real model**) |
+| 4. Briefs | research brief from ticked articles, strict checks, Brief page, Markdown, 12-word overlap check | built, awaiting review (ran on Railway with a real model, 26 Oct 2026) |
 | 5. Watchlist and polish | model setting, scheduled refresh, history, monthly budget stop, 30-day purge, guide chat, tour, (i) box | built, awaiting review |
+| 6. Draft from a brief | first draft from one brief only, source numbers, gap markers, copy check, bin, budget | built, awaiting review (**not yet run against a real model**) |
 
 ## Spec to Vault translations
 
@@ -118,7 +120,7 @@ On Results, every article has a tick box (the best ten start ticked, at most twe
 
 **What was checked:** unit tests for the validator, prompt, overlap (including a planted 15-word copy), Markdown, the generator against a fake model (invented source, injected instruction, retry, provider fault, no model), and the routes; every important rule was mutation-tested. In a real browser: the tick boxes, the Brief page (warning box, source numbers matching the Sources list), the no-model error, delete then Undo with the list refreshing, Copy and Download. Restoring a brief and a whole topic with its briefs was run against the real database.
 
-**Not verified:** a brief written by a **real model**. The Anthropic key in the development `.env` is rejected (401), so the live run could not happen: how well a real model sticks to the JSON shape, keeps to the source list and paraphrases is unmeasured. The brief page in the browser was shown a hand-made brief. When a working key exists, run one brief and read it against its sources before relying on it.
+**Verified on Railway (26 Oct 2026):** a real brief ran on `deepseek-v4-flash` for under 1 cent. It followed the JSON shape, flagged single-source facts correctly and said plainly that none of its ten sources covered the topic instead of inventing specs. It did not run locally (the development key is rejected). Whether each fact is *supported* by its source is still the owner's check: spot-check three facts before relying on a brief.
 
 **Limits.** "No fact without a ticked source" is enforced, but whether a fact is *supported* by that source is not checked by code, only by you ("check each fact against its sources" is on the page and in the file). The overlap check catches copied runs of words, not close paraphrase of one article's structure. `costCalculator` prices are keyed on older model ids, so the cost shown is an estimate. A brief from one or two articles will mostly restate them (the page says so).
 
@@ -138,12 +140,32 @@ On Results, every article has a tick box (the best ten start ticked, at most twe
 
 **What was checked:** unit tests for the model resolver (own, admin, stale, none, save), spend (month edges, brief not double counted, limit 0, equal to limit), the due logic (exact interval, cap, order, sequential, skips, failures, alert once), purge, the shared search lock and paid-source pausing; mutation checks on the risky rules. Against the real database with real free sources: a watched topic searched by a cron tick, the next tick skipped it, backdating its last search made a third tick run it; the purge cleared a 31-day-old text and kept a 29-day-old one; a seeded brief above a lowered limit made `/usage` report over, Brave show "Paused", and a brief come back 402. In a real browser: Watch tick and interval, History and an earlier search, the banner appearing after the limit was lowered, the model dropdown saving and the Results page naming the chosen model, the tour and the guide opening, and no sideways scrolling at 380 px wide.
 
-**Not verified:** a brief from a real model (the local key is rejected), the guide's actual replies (same reason), and GDELT, Brave, Serper and Reddit against live responses. The tour's later steps were not stepped through by hand. The flag `topicResearch` is still off by default.
+**Not verified:** the guide's actual replies (the local key is rejected), and GDELT, Brave, Serper and Reddit against live responses. The tour's later steps were not stepped through by hand. The flag `topicResearch` is still off by default.
+
+## Milestone 6: draft from a brief
+
+**What it is.** On a brief, **Draft article** (length Short ~400 / Medium ~800 / Long ~1,400 words, plus an optional 200-character note about what to stress) writes a first draft to edit. This reverses the original spec's "never writes an article" rule on purpose, so the guardrails moved rather than went away.
+
+**The rules the code enforces** (`server/services/topicResearch/draft/`):
+- `prompt.js`: the model gets the **brief only** (angle, key facts with their source numbers, gaps, outline, keyword, the Sources list by title and outlet) and the owner's site profile. **It never sees any article's page text or snippet**, so it cannot lift sentences. The brief and the owner's note sit in marked blocks, marker characters are defanged, and the rules say nothing inside a block is an instruction.
+- `schema.js`: every paragraph is a `fact`, a `framing` line or a `gap`. A `fact` must cite source numbers that the brief's **own facts** cite; numbers are turned into addresses in code. A fact with no valid source is **not shown as a fact**: it becomes a visible gap marker ("Add a sourced point here...") and is counted. A `framing` line containing a digit is treated the same way (a figure is a claim with no source). HTML is stripped, every length capped, unknown fields ignored. The length must be within 0.3x to 1.8x of what was asked. One retry naming the problems, then a plain failure.
+- `generate.js`: model from Settings -> Topic Research (`modelResolver.js`, no id in the code); 400 if the brief has no sourced facts, 503 with no model; tokens of both attempts logged once as `topic_research_draft`; errors never carry the prompt, brief or provider text.
+- **Copy check**: the existing 12-word check (`brief/overlap.js`) runs on the draft against the ticked articles' stored text, snippets and headlines **and against the brief's own wording** (so a draft that just pastes the brief is flagged). It warns and saves; the owner decides.
+- `markdown.js`: **Copy as Markdown** and **Download .md**, with the warnings and gap markers kept at the top.
+
+**Routes:** `POST /briefs/:id/draft { lengthChoice, steer }` (10 attempts per person per hour, one at a time per brief, 402 over the monthly limit), `GET /briefs/:id/drafts`, `GET /drafts/:id`, `DELETE /drafts/:id` (recycle bin, Undo). `GET /history` lists drafts too. Table `topic_research_drafts` (cascades from the brief). Draft cost counts towards the monthly limit (`spend.js`, new `draftUsd`). Deleting a brief or topic carries its drafts into the bin and restoring brings them back.
+
+**Page.** The Draft panel sits on the Brief page with earlier drafts listed; the Draft page (`?draft=`) shows sections, source numbers matching the Sources list, dashed "[needs your input]" boxes, and the warning box. It is read-only: copy it and edit where you write. Guide, tour (9 steps) and (i) box say the new truth.
+
+**What was checked:** unit tests for the validator (unsourced fact demoted, number not cited by the brief, framing with a figure, cleaning, caps, length), the prompt (no article text, defanged note), the generator against a fake model (retry, invented source, provider fault, no model, logging) and the copy check; route tests (validation, ownership, 402, 409, hourly cap, history, delete); mutation checks on every rule. Against the real database with the model stubbed: create, list, get, history, spend, other-person 404s on create/get/list/delete, delete and restore of a draft, of a brief with its draft and of a whole topic with both, 402 with no model call; a fresh-database boot. In a real browser: the Draft panel, the Draft page (warnings, gap boxes, source numbers), the no-model error, delete, and no sideways scroll at 380 px.
+
+**Not verified:** a draft written by a **real model**. The local key is rejected, so how well a real model keeps to the JSON shape, cites only brief sources, leaves honest gaps and paraphrases is unmeasured until one runs on Railway. The Undo toast click for a draft was not exercised by hand (the bin round trip was checked in code). The narrow-window check covered the Brief page, not the Draft page.
+
+**Limits.** "Every fact has a source from the brief" is enforced, but whether the paragraph's wording is *supported* by the brief's fact is not checked by code. The copy check catches shared runs of 12 words, not close paraphrase, and once page text is purged (30 days) it compares only headlines and snippets for those articles. A draft from a thin brief will be mostly gap markers (by design).
 
 ## Known limits and open items
 
 - Article pages are fetched by `extract.js` through `safeFetch` with robots.txt checks. `htmlFetch.fetchHtml` must not be used for this: it impersonates browsers and relays through third parties.
-- Run one real brief with a working model key and read it against its sources (see Milestone 4: Not verified).
 - Before trusting the results of GDELT, Brave and Serper: run each once with a working key/network and check the real response against the adapter (field names, Top stories key). The tests only prove the adapters against the shapes they were written from.
 - A search waits for its slowest source (up to 15 s each, in parallel). A background run with progress would be better if a search ever feels slow; not done.
 - `costCalculator.js` pricing is keyed on older model ids and falls back by name; check it before trusting the monthly spend estimate.

@@ -182,20 +182,37 @@ export function orderTopics(topics) {
   return [...watched, ...(topics || []).filter((t) => !t.onWatchlist)];
 }
 
-/** Searches and briefs from /history as one list, newest first, each tagged with its kind and when. */
-export function mergeHistory(runs, briefs) {
+/** Searches, briefs and drafts from /history as one list, newest first, each tagged with its kind and when. */
+export function mergeHistory(runs, briefs, drafts) {
   const rows = [
     ...(runs || []).map((r) => ({ ...r, kind: 'run', when: r.startedAt })),
     ...(briefs || []).map((b) => ({ ...b, kind: 'brief', when: b.createdAt })),
+    ...(drafts || []).map((d) => ({ ...d, kind: 'draft', when: d.createdAt })),
   ];
   const t = (r) => (r.when ? new Date(r.when).getTime() : 0);
-  return rows.sort((a, b) => t(b) - t(a) || (a.kind === b.kind ? b.id - a.id : a.kind === 'brief' ? -1 : 1));
+  const rank = { draft: 0, brief: 1, run: 2 }; // at the same moment the newer kind of thing comes first
+  return rows.sort((a, b) => t(b) - t(a) || (a.kind === b.kind ? b.id - a.id : rank[a.kind] - rank[b.kind]));
+}
+
+/** The draft length choices, in the order shown (the server accepts exactly these ids). */
+export const DRAFT_LENGTHS = [
+  { id: 'short', label: 'Short', tip: 'About 400 words' },
+  { id: 'medium', label: 'Medium', tip: 'About 800 words' },
+  { id: 'long', label: 'Long', tip: 'About 1,400 words' },
+];
+
+/** "820 words · 2 places to fill · 1 copy warning" for a draft's list line and header. */
+export function draftLine(d) {
+  const parts = [`${d.words || 0} words`];
+  if (d.gapCount) parts.push(`${d.gapCount} place${d.gapCount === 1 ? '' : 's'} to fill`);
+  if (d.overlapCount) parts.push(`${d.overlapCount} copy warning${d.overlapCount === 1 ? '' : 's'}`);
+  return parts.join(' · ');
 }
 
 /** The banner sentence when this month's limit has been reached; '' when it has not (or there is no limit). */
 export function budgetBanner(usage) {
   if (!usage || !usage.over) return '';
-  return `This month's estimated spend ($${usage.spentUsd.toFixed(2)}) has reached your limit of $${usage.limitUsd.toFixed(2)}. Paid searches and new briefs are paused until you raise the limit or the month ends.`;
+  return `This month's estimated spend ($${usage.spentUsd.toFixed(2)}) has reached your limit of $${usage.limitUsd.toFixed(2)}. Paid searches, new briefs and new drafts are paused until you raise the limit or the month ends.`;
 }
 
 /** "$1.20 of $20.00 used this month", or "$1.20 used this month (no limit)". */

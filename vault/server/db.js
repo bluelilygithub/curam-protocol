@@ -1201,6 +1201,25 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_topic_research_briefs_run ON topic_research_briefs ("runId", "createdAt" DESC)`);
+    // M6: a first draft written from one brief (never from the article text). "contentJson" is the validated draft (title, sections of paragraphs,
+    // each a sourced fact, a framing line or a gap marker), "overlapJson" the copied-wording warnings, "lengthChoice" short|medium|long.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS topic_research_drafts (
+        id             SERIAL PRIMARY KEY,
+        "userId"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "briefId"      INTEGER NOT NULL REFERENCES topic_research_briefs(id) ON DELETE CASCADE,
+        "lengthChoice" TEXT NOT NULL DEFAULT 'medium',
+        steer          TEXT NOT NULL DEFAULT '',
+        "contentJson"  JSONB NOT NULL,
+        "overlapJson"  JSONB NOT NULL DEFAULT '[]'::jsonb,
+        model          TEXT NOT NULL DEFAULT '',
+        "costUsd"      NUMERIC(10,4) NOT NULL DEFAULT 0,
+        "inputTokens"  INTEGER NOT NULL DEFAULT 0,
+        "outputTokens" INTEGER NOT NULL DEFAULT 0,
+        "createdAt"    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_topic_research_drafts_brief ON topic_research_drafts ("briefId", "createdAt" DESC)`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS topic_research_source_weights (
         "userId" INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
