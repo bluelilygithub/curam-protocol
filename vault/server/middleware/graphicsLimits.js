@@ -71,46 +71,90 @@ async function spentLast24h(pool, userId, feature = 'graphics_%') {
   return Number(rows[0]?.spent) || 0;
 }
 
+/**
+ * Decides whether a paid job may start, and if so takes one of the person's "jobs at once" slots.
+ * `totalUsd` is what the whole job is expected to cost (0 when unknown or for a single tool call): when it is more than 0 the job is also
+ * refused up front if it would carry the day's spending past the limit, so a batch is never stopped half way by the limit.
+ * Returns { refuse: { status, body } } or { release }.
+ */
+async function startPaidJob(pool, userId, { totalUsd = 0, feature = 'graphics_%' } = {}) {
+  if ((inFlight.get(userId) || 0) >= MAX_IN_FLIGHT) {
+    return { refuse: { status: 429, body: { error: 'You already have image jobs running. Wait for one to finish, then try again.' } } };
+  }
+
+  const cap = dailyCapUsd();
+  if (cap > 0) {
+    try {
+      const spent = await spentLast24h(pool, userId, feature);
+      if (spent >= cap) {
+        return {
+          refuse: {
+            status: 429,
+            body: {
+              code: 'GRAPHICS_DAILY_CAP',
+              error: `You have reached the daily limit for AI image tools ($${cap.toFixed(2)} in the last 24 hours). It frees up as older jobs age out, or ask your admin to raise it.`,
+              spentUsd: Number(spent.toFixed(4)),
+              capUsd: cap,
+            },
+          },
+        };
+      }
+      if (totalUsd > 0 && spent + totalUsd > cap) {
+        return {
+          refuse: {
+            status: 429,
+            body: {
+              code: 'GRAPHICS_DAILY_CAP_JOB',
+              error: `This job would cost about $${totalUsd.toFixed(2)}, but only $${(cap - spent).toFixed(2)} of today's $${cap.toFixed(2)} limit for AI image tools is left. Run fewer pictures, or try again when older jobs age out (24 hours).`,
+              spentUsd: Number(spent.toFixed(4)),
+              capUsd: cap,
+              totalUsd: Number(totalUsd.toFixed(4)),
+            },
+          },
+        };
+      }
+    } catch (err) {
+      // The usage table being unreachable should not take image tools down; the rate limiter still applies.
+      console.error('[graphics] spend check failed:', err.message);
+    }
+  }
+
+  inFlight.set(userId, (inFlight.get(userId) || 0) + 1);
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    const left = (inFlight.get(userId) || 1) - 1;
+    if (left > 0) inFlight.set(userId, left); else inFlight.delete(userId);
+  };
+  return { release };
+}
+
 function makePaidGuard({ pool, feature = 'graphics_%' } = {}) {
   return async function paidGuard(req, res, next) {
     if (req.method !== 'POST') return next();
     const userId = req.user?.id;
     if (!userId) return next();
-
-    if ((inFlight.get(userId) || 0) >= MAX_IN_FLIGHT) {
-      return res.status(429).json({ error: 'You already have image jobs running. Wait for one to finish, then try again.' });
-    }
-
-    const cap = dailyCapUsd();
-    if (cap > 0) {
-      try {
-        const spent = await spentLast24h(pool, userId, feature);
-        if (spent >= cap) {
-          return res.status(429).json({
-            code: 'GRAPHICS_DAILY_CAP',
-            error: `You have reached the daily limit for AI image tools ($${cap.toFixed(2)} in the last 24 hours). It frees up as older jobs age out, or ask your admin to raise it.`,
-            spentUsd: Number(spent.toFixed(4)),
-            capUsd: cap,
-          });
-        }
-      } catch (err) {
-        // The usage table being unreachable should not take image tools down; the rate limiter still applies.
-        console.error('[graphics] spend check failed:', err.message);
-      }
-    }
-
-    inFlight.set(userId, (inFlight.get(userId) || 0) + 1);
-    let released = false;
-    const release = () => {
-      if (released) return;
-      released = true;
-      const left = (inFlight.get(userId) || 1) - 1;
-      if (left > 0) inFlight.set(userId, left); else inFlight.delete(userId);
-    };
-    res.on('finish', release);
-    res.on('close', release);
+    const job = await startPaidJob(pool, userId, { feature });
+    if (job.refuse) return res.status(job.refuse.status).json(job.refuse.body);
+    res.on('finish', job.release);
+    res.on('close', job.release);
     return next();
   };
 }
 
-module.exports = { capImagePixels, makePaidGuard, spentLast24h, collectImageDataUrls, dailyCapUsd, MAX_MEGAPIXELS };
+/**
+ * For a route that is only sometimes paid (Pipeline or Batch running a recipe with an AI step). Returns true when the job may go ahead
+ * (its slot is given back when the reply ends), false when the refusal has already been sent.
+ */
+async function guardPaidJob(pool, req, res, { totalUsd = 0, feature = 'graphics_%' } = {}) {
+  const userId = req.user?.id;
+  if (!userId) return true;
+  const job = await startPaidJob(pool, userId, { totalUsd, feature });
+  if (job.refuse) { res.status(job.refuse.status).json(job.refuse.body); return false; }
+  res.on('finish', job.release);
+  res.on('close', job.release);
+  return true;
+}
+
+module.exports = { capImagePixels, makePaidGuard, guardPaidJob, startPaidJob, spentLast24h, collectImageDataUrls, dailyCapUsd, MAX_MEGAPIXELS };

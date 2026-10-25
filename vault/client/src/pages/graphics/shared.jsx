@@ -655,8 +655,9 @@ export function useImageSize(dataUrl) {
 
 // "What will this cost?" line shown above a paid tool's run button: estimated price (times `runs` for a
 // batch) and how much of today's limit is left. `refreshKey` changes after a run so the limit updates.
-export function CostNote({ tool, runs = 1, width, height, scale, refreshKey }) {
+export function CostNote({ tool, runs = 1, width, height, scale, extra, refreshKey }) {
   const [preview, setPreview] = useState(null);
+  const extraKey = JSON.stringify(extra || {});
   useEffect(() => {
     let off = false;
     const t = setTimeout(() => {
@@ -664,13 +665,14 @@ export function CostNote({ tool, runs = 1, width, height, scale, refreshKey }) {
       if (width) q.set('width', String(width));
       if (height) q.set('height', String(height));
       if (scale) q.set('scale', String(scale));
+      Object.entries(JSON.parse(extraKey)).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '') q.set(k, String(v)); });
       api.get(`/api/graphics/cost-preview?${q}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => { if (!off) setPreview(d); })
         .catch(() => { if (!off) setPreview(null); });
     }, 250);
     return () => { off = true; clearTimeout(t); };
-  }, [tool, runs, width, height, scale, refreshKey]);
+  }, [tool, runs, width, height, scale, extraKey, refreshKey]);
   const note = describeCost(preview);
   if (!note) return null;
   const color = note.level === 'block' ? '#ef4444' : note.level === 'warn' ? '#f59e0b' : 'var(--color-muted)';

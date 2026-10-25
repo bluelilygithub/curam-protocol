@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import api from '../../../utils/apiClient';
 import Tooltip from '../../../components/Tooltip';
 import { useGraphics } from '../GraphicsContext';
-import { useUrlImport, useProcessingWhile, loadImageInto, UrlImportRow, renderExport, formatBytes, ResultPlaceholder, useGraphicsRecipes } from '../shared';
+import { useUrlImport, useProcessingWhile, loadImageInto, UrlImportRow, renderExport, formatBytes, ResultPlaceholder, useGraphicsRecipes, CostNote, useImageSize } from '../shared';
 
 export default function PipelineTool({ active }) {
   const getIcon = useIcon();
@@ -45,6 +45,8 @@ export default function PipelineTool({ active }) {
     crop: { label: 'Crop to a shape', crop: true },
     watermark: { label: 'Add text (e.g. a name or ©)', text: true, color: true },
     logo: { label: 'Add my Brand Kit logo', logo: true },
+    removebg: { label: 'Remove background (AI, costs a little)', ai: true },
+    upscale: { label: 'Upscale (AI, costs a little)', ai: true, upscale: true },
   };
   const CROP_SHAPES = [['1:1', 'Square (1:1)'], ['4:5', 'Portrait (4:5)'], ['16:9', 'Wide (16:9)'], ['3:2', 'Photo (3:2)'], ['9:16', 'Story (9:16)'], ['4:3', 'Classic (4:3)']];
   const POSITIONS = [['top-left', 'Top left'], ['top', 'Top'], ['top-right', 'Top right'], ['left', 'Left'], ['center', 'Centre'], ['right', 'Right'], ['bottom-left', 'Bottom left'], ['bottom', 'Bottom'], ['bottom-right', 'Bottom right']];
@@ -58,6 +60,7 @@ export default function PipelineTool({ active }) {
     if (def?.crop) { step.aspect = '1:1'; step.strategy = 'attention'; }
     if (def?.text) { step.text = '© My Brand'; step.color = '#ffffff'; step.position = 'bottom-right'; step.opacity = 0.5; }
     if (def?.logo) { step.position = 'bottom-right'; step.scale = 20; step.opacity = 0.9; }
+    if (def?.upscale) step.scale = 2;
     setPipeSteps(prev => [...prev, step]);
   };
 
@@ -84,10 +87,14 @@ export default function PipelineTool({ active }) {
     if (s.op === 'crop') { out.aspect = s.aspect; out.strategy = s.strategy; }
     if (s.op === 'watermark') { out.text = s.text; out.position = s.position; out.opacity = Number(s.opacity); }
     if (s.op === 'logo') { out.position = s.position; out.scale = Number(s.scale); out.opacity = Number(s.opacity); }
+    if (s.op === 'upscale') out.scale = Number(s.scale);
     return out;
   };
 
   const lossy = ['jpg', 'webp', 'avif'].includes(pipeFormat);
+  // The AI steps in the list, in the short form the cost note asks about ("removebg,upscale:4").
+  const paidList = pipeSteps.filter((s) => s.op === 'removebg' || s.op === 'upscale').map((s) => (s.op === 'upscale' ? `upscale:${s.scale}` : s.op)).join(',');
+  const pipeSize = useImageSize(pipeSource?.imageDataUrl);
 
   const loadRecipe = (id) => {
     setConfirmDeleteRecipe(false);
@@ -239,6 +246,13 @@ export default function PipelineTool({ active }) {
                       {def.color && (
                         <Tooltip text="Colour used by this step."><input type="color" value={s.color} onChange={e => updatePipeStep(s.id, { color: e.target.value })} className="h-7 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} /></Tooltip>
                       )}
+                      {def.ai && <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Uses an AI service, so it costs a little and counts towards your daily limit. The cost is shown before you run.</p>}
+                      {def.upscale && (
+                        <Tooltip text="How many times bigger to make the picture. 2x doubles its width and height; 4x is four times."><select value={s.scale} onChange={e => updatePipeStep(s.id, { scale: e.target.value })} className="w-full px-2 py-1.5 rounded-lg border text-xs" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                          <option value="2">2x bigger</option>
+                          <option value="4">4x bigger</option>
+                        </select></Tooltip>
+                      )}
                       {def.crop && (
                         <div className="flex items-center gap-2">
                           <Tooltip text="The shape to crop to. The biggest area of that shape is kept, at full quality."><select value={s.aspect} onChange={e => updatePipeStep(s.id, { aspect: e.target.value })} className="flex-1 px-2 py-1.5 rounded-lg border text-xs" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
@@ -285,6 +299,7 @@ export default function PipelineTool({ active }) {
               )}
               {lossy && <span className="text-[11px] w-8 text-right" style={{ color: 'var(--color-muted)' }}>{pipeQuality}</span>}
             </div>
+            {paidList && <CostNote tool="recipe" extra={{ paid: paidList }} width={pipeSize?.width} height={pipeSize?.height} refreshKey={pipeResult} />}
             {pipeError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{pipeError}</div>}
             <Tooltip text="Run every step in the pipeline on the image, in order."><button type="button" onClick={runPipeline} disabled={pipeBusy || !pipeSource?.imageDataUrl || !pipeSteps.length} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {pipeBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('workflow', { size: 15 })}

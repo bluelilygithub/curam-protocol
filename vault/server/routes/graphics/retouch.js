@@ -283,4 +283,7 @@ router.post('/recolor', async (req, res) => {
   }
 });
 
+router.removeBgLocal = removeBgLocal;
+router.removeBgWithReplicate = removeBgWithReplicate;
+
 module.exports = router;

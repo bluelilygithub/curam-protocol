@@ -206,7 +206,7 @@ const TOOL_HELP = {
   pipeline: {
     title: 'Pipeline',
     what: 'Chain multiple edits into one repeatable server-side pass, and save the steps as a recipe.',
-    features: ['Up to 12 steps per pipeline', 'Ops: grayscale, sepia, invert, flip, mirror, blur, sharpen, brightness/contrast/saturation, gamma, temperature, rotate, border, resize, crop to a shape, add text, add your Brand Kit logo', 'Save as WebP, JPG, PNG or AVIF with a quality slider', 'My recipes: name the steps and save them; load, replace or delete them later (deleted recipes stay in the recycle bin for 30 days)', 'Run a saved recipe on up to 25 pictures from Batch', 'Reorder steps with ↑ / ↓ arrows', 'Per-step sliders', 'All steps applied in one server round-trip'],
+    features: ['Up to 12 steps per pipeline', 'Ops: grayscale, sepia, invert, flip, mirror, blur, sharpen, brightness/contrast/saturation, gamma, temperature, rotate, border, resize, crop to a shape, add text, add your Brand Kit logo, plus the AI steps remove background and upscale (these cost a little; the cost is shown first)', 'Save as WebP, JPG, PNG or AVIF with a quality slider', 'My recipes: name the steps and save them; load, replace or delete them later (deleted recipes stay in the recycle bin for 30 days)', 'Run a saved recipe on up to 25 pictures from Batch', 'Reorder steps with ↑ / ↓ arrows', 'Per-step sliders', 'All steps applied in one server round-trip'],
   },
   annotate: {
     title: 'Annotate',

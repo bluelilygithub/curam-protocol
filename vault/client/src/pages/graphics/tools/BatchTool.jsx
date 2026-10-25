@@ -1,9 +1,9 @@
 import { useIcon } from '../../../providers/IconProvider';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../../../utils/apiClient';
 import Tooltip from '../../../components/Tooltip';
 import { useGraphics } from '../GraphicsContext';
-import { readFileAsDataUrl, useProcessingWhile, formatBytes, useGraphicsRecipes } from '../shared';
+import { readFileAsDataUrl, useProcessingWhile, formatBytes, useGraphicsRecipes, CostNote } from '../shared';
 
 export default function BatchTool({ active }) {
   const getIcon = useIcon();
@@ -13,6 +13,27 @@ export default function BatchTool({ active }) {
   // "Run a recipe": a saved Pipeline recipe applied to every picture (server reads the steps from the recipe, see Pipeline -> Save recipe)
   const { recipes } = useGraphicsRecipes();
   const [batchRecipeId, setBatchRecipeId] = useState('');
+  // A recipe with an AI step (remove background / upscale) costs money per picture: it is priced before it starts, and sent a few pictures at a time.
+  const chosenRecipe = batchOp === 'recipe' ? recipes.find((r) => String(r.id) === String(batchRecipeId)) : null;
+  const aiOps = (chosenRecipe?.steps || []).filter((s) => s.op === 'removebg' || s.op === 'upscale').map((s) => s.op);
+  const perCall = aiOps.includes('upscale') ? 4 : aiOps.includes('removebg') ? 8 : Infinity;
+  const [pendingSize, setPendingSize] = useState({ width: 0, height: 0 }); // the largest waiting picture, to quote an upscale
+  const pendingKey = batchFiles.filter(f => f.imageDataUrl && f.status !== 'done').map(f => f.id).join('|');
+  useEffect(() => {
+    if (!aiOps.length) return undefined;
+    let off = false;
+    (async () => {
+      let width = 0; let height = 0;
+      for (const f of batchFiles.filter(x => x.imageDataUrl && x.status !== 'done')) {
+        // eslint-disable-next-line no-await-in-loop
+        const dims = await new Promise((resolve) => { const i = new Image(); i.onload = () => resolve({ w: i.naturalWidth, h: i.naturalHeight }); i.onerror = () => resolve({ w: 0, h: 0 }); i.src = f.imageDataUrl; });
+        if (dims.w * dims.h > width * height) { width = dims.w; height = dims.h; }
+      }
+      if (!off) setPendingSize({ width, height });
+    })();
+    return () => { off = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingKey, aiOps.length]);
   const [batchOp, setBatchOp] = useState('convert');
   const [batchFormat, setBatchFormat] = useState('webp');
   const [batchQuality, setBatchQuality] = useState('82');
@@ -90,23 +111,49 @@ export default function BatchTool({ active }) {
       return;
     }
 
-    try {
+    const failAll = (items, message) => setBatchFiles(prev => prev.map(f => (items.some(p => p.id === f.id) ? { ...f, status: 'error', error: message } : f)));
+    const sendChunk = async (chunk) => {
       const res = await api.post('/api/graphics/batch', {
         op: batchOp === 'recipe' ? 'pipeline' : batchOp,
-        items: pending.map(item => ({ imageDataUrl: item.imageDataUrl })),
+        items: chunk.map(item => ({ imageDataUrl: item.imageDataUrl })),
         params: buildBatchParams(),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Batch operation failed');
       setBatchFiles(prev => prev.map(f => {
-        const idx = pending.findIndex(p => p.id === f.id);
+        const idx = chunk.findIndex(p => p.id === f.id);
         if (idx === -1) return f;
         const itemResult = data.results?.[idx];
         if (!itemResult || itemResult.error) return { ...f, status: 'error', error: itemResult?.error || 'Operation failed' };
         return { ...f, status: 'done', result: itemResult };
       }));
-    } catch (err) {
-      setBatchFiles(prev => prev.map(f => (pending.some(p => p.id === f.id) ? { ...f, status: 'error', error: err.message || 'Batch operation failed' } : f)));
+    };
+
+    // With an AI step: ask first what the whole batch will cost, and do not start if it would pass today's limit.
+    if (aiOps.length) {
+      try {
+        const q = new URLSearchParams({ tool: 'recipe', recipeId: String(batchRecipeId), runs: String(pending.length), width: String(pendingSize.width || ''), height: String(pendingSize.height || '') });
+        const res = await api.get(`/api/graphics/cost-preview?${q}`);
+        const quote = res.ok ? await res.json() : null;
+        if (quote?.blocked || quote?.overLimit) {
+          failAll(pending, quote.blocked
+            ? "Today's limit for AI image tools is used up. It frees up as older jobs pass 24 hours."
+            : `This batch would cost about $${Number(quote.totalUsd).toFixed(2)}, but only $${Number(quote.remainingUsd).toFixed(2)} of today's limit is left. Run fewer pictures, or try again later.`);
+          setBatchRunning(false);
+          return;
+        }
+      } catch { /* if the quote cannot be read, the server still checks before it starts */ }
+    }
+
+    const size = Number.isFinite(perCall) ? perCall : pending.length;
+    for (let i = 0; i < pending.length; i += size) {
+      const chunk = pending.slice(i, i + size);
+      try {
+        await sendChunk(chunk); // eslint-disable-line no-await-in-loop
+      } catch (err) {
+        failAll(pending.slice(i), err.message || 'Batch operation failed'); // this call and the ones after it; earlier ones are done
+        break;
+      }
     }
     setBatchRunning(false);
   };
@@ -271,6 +318,13 @@ export default function BatchTool({ active }) {
               <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
                 {recipes.length ? (batchRecipeId ? (() => { const r = recipes.find((x) => String(x.id) === String(batchRecipeId)); return r ? `${r.steps.length} step${r.steps.length === 1 ? '' : 's'}${r.outFormat ? `, saved as ${r.outFormat.toUpperCase()}` : ''}.` : ''; })() : 'Pick one of your recipes.') : 'Build the steps in Pipeline, name them and press Save recipe. They will be here.'}
               </p>
+            </div>
+          )}
+
+          {batchOp === 'recipe' && aiOps.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>This recipe uses an AI service ({aiOps.map(o => (o === 'removebg' ? 'remove background' : 'upscale')).join(' and ')}), so each picture costs a little. It runs {perCall} pictures at a time and may take a while.</p>
+              <CostNote tool="recipe" extra={{ recipeId: batchRecipeId }} runs={Math.max(1, batchFiles.filter(f => f.imageDataUrl && f.status !== 'done').length)} width={pendingSize.width} height={pendingSize.height} refreshKey={batchRunning} />
             </div>
           )}
 

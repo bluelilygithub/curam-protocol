@@ -42,7 +42,9 @@ const {
   pool,
   loadBrandLogo,
 } = require('./shared');
-const { runPipeline } = require('./enhance');
+const { runPipeline, recipePrices } = require('./enhance');
+const { guardPaidJob } = require('../../middleware/graphicsLimits');
+const paidSteps = require('../../services/graphicsPaidSteps');
 const { getRecipe } = require('../../services/graphicsRecipes');
 const { runResize } = require('./transform');
 const { runPixelTask } = require('../../services/graphicsWorker');
@@ -708,9 +710,32 @@ router.post('/batch', async (req, res) => {
       sharedParams.brandLogoDataUrl = await loadBrandLogo(req.user.id);
     }
 
+    // A recipe with an AI step (remove background, upscale): fewer pictures per call, and the whole call is priced and checked against
+    // the daily limit BEFORE the first picture, so the limit never stops it half way.
+    const aiSteps = op === 'pipeline' ? paidSteps.paidSteps(sharedParams.steps) : [];
+    if (aiSteps.length) {
+      const perCall = paidSteps.maxPicturesPerCall(sharedParams.steps);
+      if (items.length > perCall) {
+        return res.status(400).json({ error: `A recipe with an AI step runs on up to ${perCall} pictures at a time. Send the rest in another go.`, maxPerCall: perCall });
+      }
+      const sizes = [];
+      for (const item of items) {
+        const buf = imageDataUrlToBuffer(String(item?.imageDataUrl || ''));
+        // eslint-disable-next-line no-await-in-loop
+        const meta = buf ? await sharp(buf).metadata().catch(() => null) : null;
+        sizes.push(orientedSize(meta));
+      }
+      const price = paidSteps.priceJob(sharedParams.steps, sizes, recipePrices());
+      if (!(await guardPaidJob(pool, req, res, { totalUsd: price.usd }))) return;
+    }
+
     const results = [];
     for (const item of items) {
-      const merged = { ...sharedParams, ...(item && typeof item === 'object' ? item : {}) };
+      // For a recipe only the picture comes from the item: the steps, the owner and the AI settings are the server's, so an item can
+      // never swap in different (paid) steps or charge another person.
+      const merged = op === 'pipeline'
+        ? { ...sharedParams, imageDataUrl: item?.imageDataUrl, userId: req.user.id }
+        : { ...sharedParams, ...(item && typeof item === 'object' ? item : {}) };
       try {
         // eslint-disable-next-line no-await-in-loop
         const result = await runner(merged);

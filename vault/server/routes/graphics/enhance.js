@@ -13,12 +13,21 @@ const {
   assertStill,
   clampInt,
   parseHexColor,
+  orientedSize,
   loadBrandLogo,
+  runtimeConfig,
+  pool,
+  upscaleWithReplicate,
+  logImageUsage,
+  estimateBackgroundCost,
+  upscaleCostForSize,
 } = require('./shared');
 const { runWatermark } = require('./compose');
+const { guardPaidJob } = require('../../middleware/graphicsLimits');
+const paid = require('../../services/graphicsPaidSteps');
 
 // Deterministic multi-step pipeline: apply a whitelisted sequence of sharp ops.
-const PIPELINE_OPS = ['grayscale', 'sepia', 'invert', 'blur', 'sharpen', 'brightness', 'contrast', 'saturation', 'gamma', 'rotate', 'flip', 'flop', 'resize', 'border', 'temperature', 'crop', 'watermark', 'logo'];
+const PIPELINE_OPS = ['grayscale', 'sepia', 'invert', 'blur', 'sharpen', 'brightness', 'contrast', 'saturation', 'gamma', 'rotate', 'flip', 'flop', 'resize', 'border', 'temperature', 'crop', 'watermark', 'logo', ...paid.PAID_OPS];
 const PIPELINE_MAX_STEPS = 12;
 const CROP_STRATEGIES = { attention: sharp.strategy.attention, entropy: sharp.strategy.entropy, centre: 'centre', center: 'centre' };
 const PIPE_OUT_FORMATS = { png: 'png', jpg: 'jpeg', jpeg: 'jpeg', webp: 'webp', avif: 'avif' };
@@ -32,6 +41,26 @@ function parseAspect(value) {
   if (!m) return null;
   const r = Number(m[1]) / Number(m[2]);
   return r >= 0.1 && r <= 10 ? r : null;
+}
+
+// The AI services a recipe's paid steps call. Looked up when needed (and replaceable in tests through ctx.deps).
+function paidDeps(ctx) {
+  const given = ctx.deps || {};
+  const needsRetouch = !given.removeBgLocal || !given.removeBgWithReplicate;
+  const retouch = needsRetouch ? require('./retouch') : {};
+  return {
+    isLocal: runtimeConfig.isLocal,
+    removeBgLocal: retouch.removeBgLocal,
+    removeBgWithReplicate: retouch.removeBgWithReplicate,
+    upscaleWithReplicate,
+    logImageUsage,
+    ...given,
+  };
+}
+
+// The prices a recipe is quoted with: the same estimators the single Background and Upscale tools use.
+function recipePrices() {
+  return paid.makePrices({ isLocal: runtimeConfig.isLocal, backgroundCost: estimateBackgroundCost, upscaleCost: upscaleCostForSize });
 }
 
 // ctx.brandLogoDataUrl is the person's Brand Kit logo (the 'logo' step uses it; a recipe never stores a picture).
@@ -59,6 +88,32 @@ async function applyPipelineStep(buffer, step, ctx = {}) {
       ? await runWatermark({ ...common, type: 'image', watermarkDataUrl: ctx.brandLogoDataUrl, scale: clamp(num(step.scale, 20), 1, 100) })
       : await runWatermark({ ...common, type: 'text', text: step.text, color: step.color, fontSize: step.fontSize });
     return dataUrlToBuffer(out.imageDataUrl);
+  }
+
+  if (op === 'removebg') {
+    const d = paidDeps(ctx);
+    const upright = await sharp(buffer).rotate().png({ compressionLevel: 1 }).toBuffer();
+    let cut;
+    if (d.isLocal) {
+      cut = await d.removeBgLocal(upright, 'image/png'); // on this machine: free
+    } else {
+      const result = await d.removeBgWithReplicate(pngDataUrl(upright));
+      cut = dataUrlToBuffer(result.imageDataUrl);
+      d.logImageUsage({ userId: ctx.userId, model: `replicate:${result.model}`, feature: 'graphics_background', costUsd: estimateBackgroundCost({ isLocal: false }).usd });
+    }
+    return sharp(cut).png({ compressionLevel: 1 }).toBuffer();
+  }
+  if (op === 'upscale') {
+    const d = paidDeps(ctx);
+    if (d.isLocal) throw stepError('Upscaling inside a recipe uses the hosted AI service, which this local copy of Vault does not use. It works on the live site.');
+    const upright = await sharp(buffer).rotate().png({ compressionLevel: 1 }).toBuffer();
+    const meta = await sharp(upright).metadata();
+    const scale = paid.upscaleScaleOf(step);
+    const tooBig = paid.upscaleTooBig([{ op: 'upscale', scale }], meta);
+    if (tooBig) throw stepError(tooBig);
+    const result = await d.upscaleWithReplicate({ imageDataUrl: pngDataUrl(upright), scale, creativity: Number.isFinite(Number(step.creativity)) ? Number(step.creativity) : -8 });
+    d.logImageUsage({ userId: ctx.userId, model: `replicate:${result.model}`, feature: 'graphics_upscale', costUsd: upscaleCostForSize({ width: meta.width, height: meta.height, scale }).usd });
+    return sharp(dataUrlToBuffer(result.imageDataUrl)).png({ compressionLevel: 1 }).toBuffer();
   }
 
   let pipe = sharp(buffer).rotate();
@@ -98,7 +153,7 @@ async function applyPipelineStep(buffer, step, ctx = {}) {
 
 // The whole pipeline as one function, so the single-image route, Batch ("Run a recipe") and saved recipes all use exactly this.
 // `format` / `quality` are optional: the picture's own format is kept unless one is asked for (png, jpg, webp, avif).
-async function runPipeline({ imageDataUrl, steps, format, quality, brandLogoDataUrl }) {
+async function runPipeline({ imageDataUrl, steps, format, quality, brandLogoDataUrl, userId, deps }) {
   let buffer = imageDataUrlToBuffer(String(imageDataUrl || ''));
   if (!buffer) throw stepError('A valid image is required');
   const list = Array.isArray(steps) ? steps : [];
@@ -109,12 +164,14 @@ async function runPipeline({ imageDataUrl, steps, format, quality, brandLogoData
 
   const meta = await sharp(buffer).metadata();
   assertStill(meta);
+  const tooBig = paid.upscaleTooBig(valid, orientedSize(meta)); // refuse before spending anything
+  if (tooBig) throw stepError(tooBig);
   let fmt = outputFormatFor(meta);
   const wanted = PIPE_OUT_FORMATS[String(format || '').toLowerCase()];
   if (wanted) fmt = wanted;
   for (const step of valid) {
     // eslint-disable-next-line no-await-in-loop
-    buffer = await applyPipelineStep(buffer, step, { brandLogoDataUrl });
+    buffer = await applyPipelineStep(buffer, step, { brandLogoDataUrl, userId, deps });
   }
   const opts = outputOptionsFor(fmt);
   if (wanted && ['jpeg', 'webp', 'avif'].includes(fmt) && quality != null) opts.quality = clampInt(quality, 1, 100, opts.quality);
@@ -138,7 +195,14 @@ router.post('/pipeline', async (req, res) => {
   try {
     const steps = Array.isArray(req.body?.steps) ? req.body.steps : [];
     const brandLogoDataUrl = steps.some((s) => s?.op === 'logo') ? await loadBrandLogo(req.user.id) : null;
-    res.json(await runPipeline({ imageDataUrl: req.body?.imageDataUrl, steps, format: req.body?.format, quality: req.body?.quality, brandLogoDataUrl }));
+    // Steps that call a paid AI service: take a "jobs at once" slot and check the daily limit for what this run will cost, before it starts.
+    if (paid.paidSteps(steps).length) {
+      const buf = imageDataUrlToBuffer(String(req.body?.imageDataUrl || ''));
+      const meta = buf ? await sharp(buf).metadata().catch(() => null) : null;
+      const price = paid.priceJob(steps, [orientedSize(meta)], recipePrices());
+      if (!(await guardPaidJob(pool, req, res, { totalUsd: price.usd }))) return;
+    }
+    res.json(await runPipeline({ imageDataUrl: req.body?.imageDataUrl, steps, format: req.body?.format, quality: req.body?.quality, brandLogoDataUrl, userId: req.user.id }));
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || 'Pipeline failed' });
   }
@@ -381,6 +445,7 @@ router.post('/colorgrade', async (req, res) => {
 });
 
 router.runPipeline = runPipeline;
+router.recipePrices = recipePrices;
 router.PIPELINE_OPS = PIPELINE_OPS;
 router.PIPELINE_MAX_STEPS = PIPELINE_MAX_STEPS;
 
