@@ -1534,6 +1534,27 @@
   "POST /api/graphics/batch": {
    "class": "authed"
   },
+  "POST /api/graphics/batch-job": {
+   "class": "authed"
+  },
+  "GET /api/graphics/batch-jobs/:id": {
+   "class": "authed"
+  },
+  "GET /api/graphics/batch-jobs/:id/results": {
+   "class": "authed"
+  },
+  "DELETE /api/graphics/batch-jobs/:id": {
+   "class": "authed"
+  },
+  "GET /api/graphics/print-profile": {
+   "class": "authed"
+  },
+  "POST /api/graphics/print-profile": {
+   "class": "authed"
+  },
+  "DELETE /api/graphics/print-profile": {
+   "class": "authed"
+  },
   "POST /api/graphics/blur-detect": {
    "class": "authed"
   },

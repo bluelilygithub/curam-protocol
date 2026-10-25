@@ -43,7 +43,9 @@ const {
   loadBrandLogo,
 } = require('./shared');
 const { runPipeline, recipePrices } = require('./enhance');
-const { guardPaidJob } = require('../../middleware/graphicsLimits');
+const { guardPaidJob, startPaidJob } = require('../../middleware/graphicsLimits');
+const batchJobs = require('../../services/graphicsBatchJobs');
+const colour = require('../../services/graphicsColour');
 const paidSteps = require('../../services/graphicsPaidSteps');
 const { getRecipe } = require('../../services/graphicsRecipes');
 const { runResize } = require('./transform');
@@ -490,6 +492,9 @@ router.post('/print-ready', async (req, res) => {
       });
     }
 
+    // CMYK has no transparency in this output: anything see-through becomes white first (before the colour conversion).
+    if (format === 'tiff-cmyk') pipeline = pipeline.flatten({ background: { r: 255, g: 255, b: 255 } });
+    const rgbStage = pipeline; // the picture as RGB, with bleed, before any colour profile is applied
     pipeline = pipeline.withMetadata({ density: dpi });
 
     let outputBuffer;
@@ -497,18 +502,50 @@ router.post('/print-ready', async (req, res) => {
     let ext;
     let colorSpace = 'sRGB';
     let pxW, pxH;
+    let colourInfo = null; // CMYK only: how it was converted, and what the printed colours will look like
 
     if (format === 'tiff-cmyk') {
-      // Get raw RGB pixels from the processed pipeline, then convert to CMYK
-      // and write a standards-compliant CMYK TIFF manually (sharp can't do CMYK)
-      const { data: rgbData, info } = await pipeline
-        .removeAlpha()
-        .raw()
-        .toBuffer({ resolveWithObject: true });
-      pxW = info.width;
-      pxH = info.height;
-      const { out: cmykData } = await runPixelTask('cmyk', { rgb: rgbData, pixelCount: pxW * pxH });
-      outputBuffer = buildCmykTiff(cmykData, pxW, pxH, dpi);
+      // Colour-managed: convert through an ICC profile (the workspace's own printer profile, else the built-in generic one) and embed it in the
+      // file. If that cannot be done, fall back to the older plain-maths conversion and say so.
+      const custom = await colour.loadCustomProfile(pool);
+      const profileArg = custom ? colour.profileFile(custom.buf) : 'cmyk';
+      try {
+        const rgbPng = await rgbStage.png({ compressionLevel: 1 }).toBuffer();
+        const cmykTiff = await sharp(rgbPng)
+          .withMetadata({ density: dpi, icc: profileArg })
+          .tiff({ compression: 'lzw', xres: dpi / 25.4, yres: dpi / 25.4 })
+          .toBuffer();
+        const cm = await sharp(cmykTiff).metadata();
+        if (cm.space !== 'cmyk' || cm.channels !== 4) throw new Error('the conversion did not produce CMYK');
+        // The soft proof: the CMYK file converted back to screen colours through the same profile, so the person can see what print will do to
+        // their colours. Shown at most 1200px wide; the same size version of the original tells how much changed.
+        const proofSmall = sharp(cmykTiff).resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true }).toColourspace('srgb');
+        const proofPng = await proofSmall.clone().png().toBuffer();
+        const probe = { width: 300, height: 300, fit: 'inside', withoutEnlargement: true };
+        const [proofRaw, origRaw] = await Promise.all([
+          sharp(proofPng).resize(probe).removeAlpha().raw().toBuffer({ resolveWithObject: true }),
+          sharp(rgbPng).resize(probe).removeAlpha().raw().toBuffer({ resolveWithObject: true }),
+        ]);
+        const same = proofRaw.info.width === origRaw.info.width && proofRaw.info.height === origRaw.info.height;
+        outputBuffer = cmykTiff;
+        pxW = cm.width;
+        pxH = cm.height;
+        colourInfo = {
+          colorManaged: true,
+          profileName: custom ? custom.name : colour.BUILTIN_NAME,
+          profileCustom: Boolean(custom),
+          proofDataUrl: `data:image/png;base64,${proofPng.toString('base64')}`,
+          outOfGamutPct: same ? colour.gamutReport(origRaw.data, proofRaw.data, 3).changedPct : null,
+        };
+      } catch (err) {
+        console.error('[graphics] ICC CMYK conversion failed, using the plain-maths conversion:', err.message);
+        const { data: rgbData, info } = await rgbStage.removeAlpha().raw().toBuffer({ resolveWithObject: true });
+        pxW = info.width;
+        pxH = info.height;
+        const { out: cmykData } = await runPixelTask('cmyk', { rgb: rgbData, pixelCount: pxW * pxH });
+        outputBuffer = buildCmykTiff(cmykData, pxW, pxH, dpi);
+        colourInfo = { colorManaged: false, profileName: null, profileCustom: false, proofDataUrl: null, outOfGamutPct: null };
+      }
       mimeType = 'image/tiff';
       ext = 'tiff';
       colorSpace = 'CMYK';
@@ -576,6 +613,7 @@ router.post('/print-ready', async (req, res) => {
       hasAlpha: hasAlpha && background === 'transparent',
       bleedMm,
       qualityNote,
+      ...(colourInfo || {}),
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Print-ready conversion failed' });
@@ -683,73 +721,128 @@ router.post('/auto-enhance', async (req, res) => {
 const BATCH_OPS = { watermark: runWatermark, resize: runResize, convert: runConvert, compress: runCompress, pipeline: runPipeline };
 const BATCH_MAX_ITEMS = 25;
 
+/**
+ * Checks a batch request and works out what it is. Returns { op, runner, items, sharedParams, aiSteps, totalUsd }, or null after sending the reply.
+ * A recipe with an AI step (remove background, upscale) takes fewer pictures per call, and is priced up front so the daily limit can be checked
+ * BEFORE the first picture (the caller does the check: the sync route and the background job take the job slot differently).
+ */
+async function prepareBatch(req, res) {
+  const op = String(req.body?.op || '').trim();
+  const runner = BATCH_OPS[op];
+  if (!runner) {
+    res.status(400).json({ error: `Unsupported batch op. Choose one of: ${Object.keys(BATCH_OPS).join(', ')}` });
+    return null;
+  }
+  const items = Array.isArray(req.body?.items) ? req.body.items : [];
+  if (!items.length) { res.status(400).json({ error: 'Add at least one item' }); return null; }
+  if (items.length > BATCH_MAX_ITEMS) { res.status(400).json({ error: `Too many items (max ${BATCH_MAX_ITEMS})` }); return null; }
+  const sharedParams = (req.body?.params && typeof req.body.params === 'object') ? { ...req.body.params } : {};
+
+  // "Run a recipe": the browser sends only the recipe's id; the steps come from the person's own saved recipe, and the
+  // Brand Kit logo (if a step uses it) is read once for the whole batch.
+  if (op === 'pipeline' && sharedParams.recipeId != null) {
+    const recipe = await getRecipe(pool, req.user.id, sharedParams.recipeId);
+    if (!recipe) { res.status(404).json({ error: 'That recipe was not found' }); return null; }
+    sharedParams.steps = recipe.steps;
+    sharedParams.format = recipe.outFormat || undefined;
+    sharedParams.quality = recipe.outQuality ?? undefined;
+  }
+  if (op === 'pipeline' && Array.isArray(sharedParams.steps) && sharedParams.steps.some((s) => s?.op === 'logo')) {
+    sharedParams.brandLogoDataUrl = await loadBrandLogo(req.user.id);
+  }
+
+  const aiSteps = op === 'pipeline' ? paidSteps.paidSteps(sharedParams.steps) : [];
+  let totalUsd = 0;
+  if (aiSteps.length) {
+    if (runtimeConfig.isLocal && aiSteps.some((s) => s.op === 'upscale')) { res.status(400).json({ error: paidSteps.UPSCALE_LIVE_ONLY }); return null; }
+    const perCall = paidSteps.maxPicturesPerCall(sharedParams.steps);
+    if (items.length > perCall) {
+      res.status(400).json({ error: `A recipe with an AI step runs on up to ${perCall} pictures at a time. Send the rest in another go.`, maxPerCall: perCall });
+      return null;
+    }
+    const sizes = [];
+    for (const item of items) {
+      const buf = imageDataUrlToBuffer(String(item?.imageDataUrl || ''));
+      // eslint-disable-next-line no-await-in-loop
+      const meta = buf ? await sharp(buf).metadata().catch(() => null) : null;
+      sizes.push(orientedSize(meta));
+    }
+    totalUsd = paidSteps.priceJob(sharedParams.steps, sizes, recipePrices()).usd;
+  }
+  return { op, runner, items, sharedParams, aiSteps, totalUsd };
+}
+
+/** Runs the pictures one after another. `report(index, result)` is called as each finishes; `shouldStop()` is checked between pictures. */
+async function runBatchItems({ op, runner, items, sharedParams, userId, report, shouldStop = () => false }) {
+  for (let index = 0; index < items.length; index += 1) {
+    if (shouldStop()) return;
+    const item = items[index];
+    // For a recipe only the picture comes from the item: the steps, the owner and the AI settings are the server's, so an item can
+    // never swap in different (paid) steps or charge another person.
+    const merged = op === 'pipeline'
+      ? { ...sharedParams, imageDataUrl: item?.imageDataUrl, userId }
+      : { ...sharedParams, ...(item && typeof item === 'object' ? item : {}) };
+    let result;
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      result = await runner(merged);
+    } catch (err) {
+      result = { error: err.message || `${op} failed` };
+    }
+    report(index, result);
+  }
+}
+
 router.post('/batch', async (req, res) => {
   try {
-    const op = String(req.body?.op || '').trim();
-    const runner = BATCH_OPS[op];
-    if (!runner) {
-      return res.status(400).json({ error: `Unsupported batch op. Choose one of: ${Object.keys(BATCH_OPS).join(', ')}` });
-    }
-    const items = Array.isArray(req.body?.items) ? req.body.items : [];
-    if (!items.length) return res.status(400).json({ error: 'Add at least one item' });
-    if (items.length > BATCH_MAX_ITEMS) {
-      return res.status(400).json({ error: `Too many items (max ${BATCH_MAX_ITEMS})` });
-    }
-    const sharedParams = (req.body?.params && typeof req.body.params === 'object') ? { ...req.body.params } : {};
-
-    // "Run a recipe": the browser sends only the recipe's id; the steps come from the person's own saved recipe, and the
-    // Brand Kit logo (if a step uses it) is read once for the whole batch.
-    if (op === 'pipeline' && sharedParams.recipeId != null) {
-      const recipe = await getRecipe(pool, req.user.id, sharedParams.recipeId);
-      if (!recipe) return res.status(404).json({ error: 'That recipe was not found' });
-      sharedParams.steps = recipe.steps;
-      sharedParams.format = recipe.outFormat || undefined;
-      sharedParams.quality = recipe.outQuality ?? undefined;
-    }
-    if (op === 'pipeline' && Array.isArray(sharedParams.steps) && sharedParams.steps.some((s) => s?.op === 'logo')) {
-      sharedParams.brandLogoDataUrl = await loadBrandLogo(req.user.id);
-    }
-
-    // A recipe with an AI step (remove background, upscale): fewer pictures per call, and the whole call is priced and checked against
-    // the daily limit BEFORE the first picture, so the limit never stops it half way.
-    const aiSteps = op === 'pipeline' ? paidSteps.paidSteps(sharedParams.steps) : [];
-    if (aiSteps.length) {
-      if (runtimeConfig.isLocal && aiSteps.some((s) => s.op === 'upscale')) return res.status(400).json({ error: paidSteps.UPSCALE_LIVE_ONLY });
-      const perCall = paidSteps.maxPicturesPerCall(sharedParams.steps);
-      if (items.length > perCall) {
-        return res.status(400).json({ error: `A recipe with an AI step runs on up to ${perCall} pictures at a time. Send the rest in another go.`, maxPerCall: perCall });
-      }
-      const sizes = [];
-      for (const item of items) {
-        const buf = imageDataUrlToBuffer(String(item?.imageDataUrl || ''));
-        // eslint-disable-next-line no-await-in-loop
-        const meta = buf ? await sharp(buf).metadata().catch(() => null) : null;
-        sizes.push(orientedSize(meta));
-      }
-      const price = paidSteps.priceJob(sharedParams.steps, sizes, recipePrices());
-      if (!(await guardPaidJob(pool, req, res, { totalUsd: price.usd }))) return;
-    }
-
-    const results = [];
-    for (const item of items) {
-      // For a recipe only the picture comes from the item: the steps, the owner and the AI settings are the server's, so an item can
-      // never swap in different (paid) steps or charge another person.
-      const merged = op === 'pipeline'
-        ? { ...sharedParams, imageDataUrl: item?.imageDataUrl, userId: req.user.id }
-        : { ...sharedParams, ...(item && typeof item === 'object' ? item : {}) };
-      try {
-        // eslint-disable-next-line no-await-in-loop
-        const result = await runner(merged);
-        results.push(result);
-      } catch (err) {
-        results.push({ error: err.message || `${op} failed` });
-      }
-    }
-
-    res.json({ ok: true, op, count: results.length, results });
+    const batch = await prepareBatch(req, res);
+    if (!batch) return;
+    if (batch.aiSteps.length && !(await guardPaidJob(pool, req, res, { totalUsd: batch.totalUsd }))) return;
+    const results = new Array(batch.items.length).fill(null);
+    await runBatchItems({ ...batch, userId: req.user.id, report: (i, r) => { results[i] = r; } });
+    res.json({ ok: true, op: batch.op, count: results.length, results });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Batch operation failed' });
   }
+});
+
+// The same batch as a background job: answered at once with an id, then checked with GET /batch-jobs/:id and collected with
+// GET /batch-jobs/:id/results. No request stays open while the AI works, so the gateway's five-minute cut-off cannot lose the results.
+router.post('/batch-job', async (req, res) => {
+  try {
+    const batch = await prepareBatch(req, res);
+    if (!batch) return;
+    let release = () => {};
+    if (batch.aiSteps.length) {
+      const slot = await startPaidJob(pool, req.user.id, { totalUsd: batch.totalUsd });
+      if (slot.refuse) return res.status(slot.refuse.status).json(slot.refuse.body);
+      release = slot.release; // given back when the job ends, not when this reply is sent
+    }
+    const userId = req.user.id;
+    const jobId = batchJobs.startJob(userId, batch.items.length, ({ report, shouldStop }) => runBatchItems({ ...batch, userId, report, shouldStop }), { release });
+    res.status(202).json({ ok: true, jobId, total: batch.items.length, estimatedUsd: batch.totalUsd });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || 'Could not start the batch', code: err.code });
+  }
+});
+
+router.get('/batch-jobs/:id', (req, res) => {
+  const job = batchJobs.getJob(req.user.id, req.params.id);
+  if (!job) return res.status(404).json({ error: 'That batch was not found. It may have finished long ago, or the server restarted.' });
+  res.set('Cache-Control', 'no-store');
+  res.json(job);
+});
+
+router.get('/batch-jobs/:id/results', (req, res) => {
+  const results = batchJobs.getResults(req.user.id, req.params.id);
+  if (!results) return res.status(404).json({ error: 'That batch was not found.' });
+  res.set('Cache-Control', 'no-store');
+  res.json({ ok: true, results });
+});
+
+router.delete('/batch-jobs/:id', (req, res) => {
+  if (!batchJobs.cancelJob(req.user.id, req.params.id)) return res.status(404).json({ error: 'That batch was not found.' });
+  res.json({ ok: true });
 });
 
 router.runConvert = runConvert;

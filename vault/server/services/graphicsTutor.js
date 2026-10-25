@@ -33,7 +33,7 @@ const CATALOG = [
   { id: 'pdf2img', label: 'PDF → Images', group: 'Optimise',
     does: 'Turns each page of a PDF into a PNG picture, at the resolution you pick. Runs in the browser; nothing is uploaded.', notes: 'PDF Tools has a similar tool with JPG and page ranges.' },
   { id: 'printready', label: 'Print Ready', group: 'Optimise',
-    does: 'Gets a picture ready for a printer: sets 150, 300 or 600 DPI, can add a bleed margin, and saves as TIFF (screen or CMYK colour), PDF or PNG.', notes: 'The CMYK conversion is a simple calculation, not a printer profile, so for colour-critical print work check with the printer.' },
+    does: 'Gets a picture ready for a printer: sets 150, 300 or 600 DPI, can add a bleed margin, and saves as TIFF (screen or CMYK colour), PDF or PNG. The CMYK TIFF is converted through a colour (ICC) profile that is embedded in the file, and a soft proof shows how the colours will look in print, with a warning if many bright colours cannot be printed.', notes: 'Out of the box it uses a built-in generic CMYK profile, which is a rough guide and not a press standard. An administrator can upload the printer\'s own CMYK profile (an .icc file, often FOGRA39 or GRACoL) once, and every CMYK file then uses it. Colour-critical work still needs a proof from the printer.' },
   { id: 'autoenhance', label: 'Auto-enhance', group: 'Optimise',
     does: 'One click that corrects brightness, contrast and colour from what is in the picture, and shows what it changed with a before-and-after slider.', notes: '' },
   { id: 'cropresize', label: 'Crop / Resize', group: 'Transform',
@@ -113,7 +113,7 @@ const RULES = [
   'A sensible order for a multi-step job: fix the picture first (Perspective Correct, Crop / Resize, Auto-enhance or Adjust), then retouch (Background, Inpaint, Recolor), then add text or a watermark, then resize or convert for where it is going, and compress last.',
   'The Brand Kit button above the tool list saves a logo, up to three colours and a font name. Text Overlay, Watermark and Composite offer them, and a Pipeline or recipe can add the saved logo as a step.',
   'Graphics opens on "What do you want to do?": ready-made jobs (post on social media, get a picture ready for a website, product photos, prepare for print, clean up before sharing, fix up a photo, create a picture, make a logo or icon set) that each open the right tools in order, with a step bar above the tool. The button at the top of the tool list brings that screen back, and a box on it can make Graphics open on the last tool used instead.',
-  'To repeat the same edits on many pictures: build the steps in Pipeline (including crop to a shape, add text, add the Brand Kit logo, and the AI steps remove background and upscale), name them and press Save recipe, then in Batch choose Run a recipe (up to 25 pictures; with an AI step they run a few at a time). Recipes hold settings only, never pictures.',
+  'To repeat the same edits on many pictures: build the steps in Pipeline (including crop to a shape, add text, add the Brand Kit logo, and the AI steps remove background and upscale), name them and press Save recipe, then in Batch choose Run a recipe (up to 25 pictures; with an AI step they run as a background job on the server a few pictures at a time, with progress and a Cancel button, so a long run cannot be lost to a timeout; finished pictures are kept and only they are charged if it is cancelled). Recipes hold settings only, never pictures.',
   'Adjust lists every slider change as a step: any one can be unticked to take just that change out, with Undo, Redo and Back to here.',
   'The Ask Graphics box at the top of the page can run a few edits from one plain sentence (Adjust, Color Grading, Background, Recolor, Canvas Extend, Augment) and can open Inpaint or Extract Element for the person to paint on. It cannot run the other tools.',
   'Many tools have an "Export…" button to re-save the result as PNG, JPG, WebP or AVIF at a size or quality, and a Compare slider to see before and after.',
@@ -129,7 +129,7 @@ const NOT_POSSIBLE = [
   'Editing an SVG after Vectorize (moving points, recolouring shapes). It only traces.',
   'Doing any edit to many pictures at once. Batch covers only watermark, resize, convert, compress, remove metadata and running a saved recipe (up to 25), and Batch Text covers labels (up to 20).',
   'Reading handwriting, or text in languages other than English, French, Spanish, German, Italian and Portuguese (for example Asian languages or Arabic).',
-  'Colour-accurate print preparation with printer profiles. Print Ready converts to CMYK by calculation only.',
+  'Guaranteed press-accurate colour. Print Ready converts to CMYK through a colour profile and shows a soft proof, but Vault includes no press-standard printer profiles (such as FOGRA39 or GRACoL, which their owners license), so without the printer\'s own profile uploaded by an administrator the result is a rough guide, and nothing replaces a proof from the printer.',
   'The guide itself looking at the person\'s pictures to say what is in them or to suggest an edit. It knows what the tools do, but cannot see any picture. (The Alt text & names tool does describe pictures, but only when the person presses Suggest there.)',
 ];
 

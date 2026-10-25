@@ -18,6 +18,10 @@ export default function BatchTool({ active }) {
   const chosenRecipe = batchOp === 'recipe' ? recipes.find((r) => String(r.id) === String(batchRecipeId)) : null;
   const aiOps = (chosenRecipe?.steps || []).filter((s) => s.op === 'removebg' || s.op === 'upscale').map((s) => s.op);
   const perCall = aiOps.includes('upscale') ? 4 : aiOps.includes('removebg') ? 8 : Infinity;
+  // An AI batch runs as a background job on the server: this page starts it, checks on it every couple of seconds, and collects the results.
+  const cancelBatch = useRef(false);
+  const currentJob = useRef(null);
+  const [jobProgress, setJobProgress] = useState(null); // { done, total } across the whole batch
   const [pendingSize, setPendingSize] = useState({ width: 0, height: 0 }); // the largest waiting picture, to quote an upscale
   const pendingKey = batchFiles.filter(f => f.imageDataUrl && f.status !== 'done').map(f => f.id).join('|');
   useEffect(() => {
@@ -94,6 +98,7 @@ export default function BatchTool({ active }) {
     if (batchOp === 'resize' && !batchWidth && !batchHeight) return;
     if (batchOp === 'watermark' && !batchWmText.trim()) return;
     if (batchOp === 'recipe' && !batchRecipeId) return;
+    cancelBatch.current = false;
     setBatchRunning(true);
     setBatchFiles(prev => prev.map(f => (pending.some(p => p.id === f.id) ? { ...f, status: 'working', error: '' } : f)));
 
@@ -112,8 +117,57 @@ export default function BatchTool({ active }) {
       return;
     }
 
-    const failAll = (items, message) => setBatchFiles(prev => prev.map(f => (items.some(p => p.id === f.id) ? { ...f, status: 'error', error: message } : f)));
-    const sendChunk = async (chunk) => {
+    // (a picture that already finished stays finished)
+    const failAll = (items, message) => setBatchFiles(prev => prev.map(f => (f.status !== 'done' && items.some(p => p.id === f.id) ? { ...f, status: 'error', error: message } : f)));
+    const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+
+    const applyResults = (chunk, results, notDone) => setBatchFiles(prev => prev.map(f => {
+      const idx = chunk.findIndex(p => p.id === f.id);
+      if (idx === -1) return f;
+      const itemResult = results?.[idx];
+      if (!itemResult) return notDone(f);
+      if (itemResult.error) return { ...f, status: 'error', error: itemResult.error };
+      return { ...f, status: 'done', result: itemResult };
+    }));
+
+    // One chunk of an AI batch as a background job: start it, check on it every 2 seconds, then collect the results.
+    const sendChunkAsJob = async (chunk, doneBefore, allCount) => {
+      const startRes = await api.post('/api/graphics/batch-job', {
+        op: 'pipeline',
+        items: chunk.map(item => ({ imageDataUrl: item.imageDataUrl })),
+        params: buildBatchParams(),
+      });
+      const started = await startRes.json();
+      if (!startRes.ok) throw new Error(started.error || 'Could not start the batch');
+      const jobId = started.jobId;
+      currentJob.current = jobId;
+      setJobProgress({ done: doneBefore, total: allCount });
+      let status = { status: 'running', done: 0 };
+      let misses = 0;
+      while (status.status === 'running') {
+        await sleep(2000); // eslint-disable-line no-await-in-loop
+        try {
+          const r = await api.get(`/api/graphics/batch-jobs/${jobId}`); // eslint-disable-line no-await-in-loop
+          if (r.status === 404) throw Object.assign(new Error('Lost track of this batch (the server may have restarted). Run it again; pictures already finished are kept.'), { fatal: true });
+          status = await r.json(); // eslint-disable-line no-await-in-loop
+          misses = 0;
+          setJobProgress({ done: doneBefore + (status.done || 0), total: allCount });
+        } catch (err) {
+          misses += 1;
+          if (err.fatal || misses >= 4) throw err; // a missed check or two (a network blip) is fine
+        }
+      }
+      currentJob.current = null;
+      const rr = await api.get(`/api/graphics/batch-jobs/${jobId}/results`);
+      const data = await rr.json();
+      if (!rr.ok) throw new Error(data.error || 'Could not collect the results');
+      const stopped = status.status === 'cancelled';
+      applyResults(chunk, data.results, (f) => (stopped ? { ...f, status: 'ready', error: '' } : { ...f, status: 'error', error: status.error || 'Not processed' }));
+      if (status.status === 'error') throw new Error(status.error || 'The batch failed');
+    };
+
+    const sendChunk = async (chunk, doneBefore = 0, allCount = chunk.length) => {
+      if (aiOps.length) return sendChunkAsJob(chunk, doneBefore, allCount);
       const res = await api.post('/api/graphics/batch', {
         op: batchOp === 'recipe' ? 'pipeline' : batchOp,
         items: chunk.map(item => ({ imageDataUrl: item.imageDataUrl })),
@@ -121,13 +175,7 @@ export default function BatchTool({ active }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Batch operation failed');
-      setBatchFiles(prev => prev.map(f => {
-        const idx = chunk.findIndex(p => p.id === f.id);
-        if (idx === -1) return f;
-        const itemResult = data.results?.[idx];
-        if (!itemResult || itemResult.error) return { ...f, status: 'error', error: itemResult?.error || 'Operation failed' };
-        return { ...f, status: 'done', result: itemResult };
-      }));
+      applyResults(chunk, data.results, (f) => ({ ...f, status: 'error', error: 'Operation failed' }));
     };
 
     // With an AI step: ask first what the whole batch will cost, and do not start if it would pass today's limit.
@@ -148,15 +196,25 @@ export default function BatchTool({ active }) {
 
     const size = Number.isFinite(perCall) ? perCall : pending.length;
     for (let i = 0; i < pending.length; i += size) {
+      if (cancelBatch.current) break;
       const chunk = pending.slice(i, i + size);
       try {
-        await sendChunk(chunk); // eslint-disable-line no-await-in-loop
+        await sendChunk(chunk, i, pending.length); // eslint-disable-line no-await-in-loop
       } catch (err) {
         failAll(pending.slice(i), err.message || 'Batch operation failed'); // this call and the ones after it; earlier ones are done
         break;
       }
     }
+    if (cancelBatch.current) setBatchFiles(prev => prev.map(f => (f.status === 'working' ? { ...f, status: 'ready', error: '' } : f))); // cancelled: left for another go
+    currentJob.current = null;
+    setJobProgress(null);
     setBatchRunning(false);
+  };
+
+  const cancelRun = async () => {
+    cancelBatch.current = true;
+    const id = currentJob.current;
+    if (id) { try { await api.delete(`/api/graphics/batch-jobs/${id}`); } catch { /* the check on the job will see it has stopped */ } }
   };
 
   const batchResultName = (item) => {
@@ -195,7 +253,8 @@ export default function BatchTool({ active }) {
     });
   };
 
-  useProcessingWhile(batchRunning ? 'Processing batch…' : null);
+  // An AI batch shows its own progress and a Cancel button instead of blocking the page.
+  useProcessingWhile(batchRunning && !aiOps.length ? 'Processing batch…' : null);
 
   return (
     <>
@@ -362,6 +421,12 @@ export default function BatchTool({ active }) {
               {batchRunning ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('file-stack', { size: 15 })}
               {batchRunning ? 'Processing...' : 'Process all'}
             </button></Tooltip>
+            {batchRunning && jobProgress && (
+              <>
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{jobProgress.done} of {jobProgress.total} done. You can leave this open; it keeps going on the server.</span>
+                <Tooltip text="Stop after the picture being worked on. Pictures already finished are kept, and you only pay for those."><button type="button" onClick={cancelRun} className="px-3 py-2 rounded-xl text-sm border hover:opacity-80" style={{ borderColor: 'var(--color-border)', color: '#ef4444' }}>Cancel</button></Tooltip>
+              </>
+            )}
             {batchFiles.some(f => f.result?.imageDataUrl) && (
               <Tooltip text="Download every processed result at once."><button
                 type="button"

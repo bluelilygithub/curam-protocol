@@ -67,10 +67,10 @@ const TOOL_TIPS = {
   upscale: 'Make a small picture bigger and sharper. A faithful option keeps it true; an enhanced option adds detail.',
   convert: 'Change the file type: PNG, JPG, WebP, GIF, AVIF, TIFF or ICO. iPhone HEIC photos can be opened too.',
   compress: 'Make picture files smaller at a quality you choose, and see how much was saved.',
-  batch: 'Do one job (watermark, resize, convert, compress, remove metadata, or run a saved recipe) on up to 25 pictures at once.',
+  batch: 'Do one job (watermark, resize, convert, compress, remove metadata, or run a saved recipe) on up to 25 pictures at once. Recipes with an AI step run in the background with progress and a Cancel button.',
   exportsocial: 'Turn one picture into every social media size you tick, with a preview of each and one zip to download.',
   pdf2img: 'Turn each page of a PDF into a PNG picture. Runs in your browser.',
-  printready: 'Get a picture ready for a printer: set 150, 300 or 600 DPI, add bleed, save as TIFF, PDF or PNG.',
+  printready: 'Get a picture ready for a printer: set 150, 300 or 600 DPI, add bleed, save as TIFF, PDF or PNG. CMYK files use a colour profile and show a soft proof of how colours will print.',
   autoenhance: 'One click that fixes brightness, contrast and colour, with a before-and-after slider.',
   cropresize: 'Set an exact size, or drag a crop box. Has presets for common social sizes.',
   extend: 'Add empty space around a picture on any side, in white, a colour or transparent.',
@@ -217,7 +217,7 @@ const TOOL_HELP = {
   pipeline: {
     title: 'Pipeline',
     what: 'Chain multiple edits into one repeatable server-side pass, and save the steps as a recipe.',
-    features: ['Up to 12 steps per pipeline', 'Ops: grayscale, sepia, invert, flip, mirror, blur, sharpen, brightness/contrast/saturation, gamma, temperature, rotate, border, resize, crop to a shape, add text, add your Brand Kit logo, plus the AI steps remove background and upscale (these cost a little; the cost is shown first)', 'Save as WebP, JPG, PNG or AVIF with a quality slider', 'My recipes: name the steps and save them; load, replace or delete them later (deleted recipes stay in the recycle bin for 30 days)', 'Run a saved recipe on up to 25 pictures from Batch', 'Reorder steps with ↑ / ↓ arrows', 'Per-step sliders', 'All steps applied in one server round-trip'],
+    features: ['Up to 12 steps per pipeline', 'Ops: grayscale, sepia, invert, flip, mirror, blur, sharpen, brightness/contrast/saturation, gamma, temperature, rotate, border, resize, crop to a shape, add text, add your Brand Kit logo, plus the AI steps remove background and upscale (these cost a little; the cost is shown first)', 'Save as WebP, JPG, PNG or AVIF with a quality slider', 'My recipes: name the steps and save them; load, replace or delete them later (deleted recipes stay in the recycle bin for 30 days)', 'Run a saved recipe on up to 25 pictures from Batch (a recipe with an AI step runs as a background job with progress and Cancel)', 'Reorder steps with ↑ / ↓ arrows', 'Per-step sliders', 'All steps applied in one server round-trip'],
   },
   annotate: {
     title: 'Annotate',
@@ -332,7 +332,7 @@ const TOOL_HELP = {
   printready: {
     title: 'Print Ready',
     what: 'Prepare any image for professional printing — set target DPI, flatten transparency, add bleed, and export as TIFF, PDF or PNG.',
-    features: ['Output as TIFF/sRGB, TIFF/CMYK (offset print), PDF or PNG', 'DPI presets: 150 (large format), 300 (standard), 600 (high detail)', 'Flatten transparency to white, or keep it', 'Bleed margin slider (0–25mm) pads the canvas for edge-to-edge artwork', 'CMYK conversion is mathematical RGB→CMYK — for colour-critical offset work, an ICC profile-based conversion is more accurate', 'Runs locally on the server — nothing sent to a third party'],
+    features: ['Output as TIFF/sRGB, TIFF/CMYK (offset print), PDF or PNG', 'DPI presets: 150 (large format), 300 (standard), 600 (high detail)', 'Flatten transparency to white, or keep it', 'Bleed margin slider (0–25mm) pads the canvas for edge-to-edge artwork', 'TIFF/CMYK is converted through an ICC colour profile and the profile is embedded in the file', 'Soft proof: see the colours as they will print, with a warning when many bright colours cannot be printed', 'Built-in generic CMYK profile out of the box; an administrator can upload the printer\'s own profile (.icc) once for everyone', 'Runs locally on the server — nothing sent to a third party'],
   },
   eraser: {
     title: 'Eraser',
@@ -682,7 +682,7 @@ export default function GraphicsPage() {
                 {graphicsInfo.show && (
                   <ToolInfoModal title="How Graphics Works" onClose={graphicsInfo.close}>
                     <p className="text-sm" style={{ color: 'var(--color-text)' }}>
-                      43 tools across seven groups in the list on the left — this covers the full lifecycle, not just "generate a picture". Graphics opens on "What do you want to do?": pick a job (post on social media, get a picture ready for a website, prepare for print and so on) and it opens the right tools one step at a time. Hover over any group or tool for a plain explanation. Not sure which tool to use? Click the graduation-cap button at the bottom right and tell the guide what you want to do:
+                      {MODES.length} tools across seven groups in the list on the left — this covers the full lifecycle, not just "generate a picture". Graphics opens on "What do you want to do?": pick a job (post on social media, get a picture ready for a website, prepare for print and so on) and it opens the right tools one step at a time. Hover over any group or tool for a plain explanation. Not sure which tool to use? Click the graduation-cap button at the bottom right and tell the guide what you want to do:
                     </p>
                     <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
                       <p style={{ color: 'var(--color-text)' }}><strong>Create</strong> — Generate makes a new image from a prompt via your admin-configured model, swappable workspace-wide. Animate turns one into a GIF.</p>

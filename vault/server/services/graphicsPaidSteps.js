@@ -7,8 +7,8 @@
 const PAID_OPS = ['removebg', 'upscale'];
 const MAX_UPSCALE_OUTPUT_MP = Number(process.env.GRAPHICS_MAX_UPSCALE_MP) || 64;
 
-// A call stays open while every picture is processed one after another, and the gateway closes a request left open for about five
-// minutes. So a call carrying AI steps takes fewer pictures; the browser sends the rest in further calls.
+// A group of pictures is sent in one request and run as one background job (graphicsBatchJobs.js). Keeping the groups small keeps the request
+// body under the server's size limit and one job short; the browser sends the rest as further groups.
 const MAX_PICTURES_PER_CALL = { removebg: 8, upscale: 4 };
 
 const UPSCALE_LIVE_ONLY = 'Upscale inside a recipe uses the hosted AI service, which this local copy of Vault does not use. It works on the live site. Remove the Upscale step to run it here.';

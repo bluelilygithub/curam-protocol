@@ -37,7 +37,7 @@ const toBuf = (url) => Buffer.from(String(url).split(',')[1], 'base64');
 async function startServer() {
   const app = express();
   app.use(express.json({ limit: '30mb' }));
-  app.use((req, _res, next) => { req.user = { id: 1 }; next(); });
+  app.use((req, _res, next) => { req.user = { id: 1, isAdmin: Boolean(global.__isAdmin) }; next(); });
   app.use('/api/graphics', router);
   const server = await new Promise((resolve) => { const s = http.createServer(app).listen(0, () => resolve(s)); });
   const base = `http://127.0.0.1:${server.address().port}/api/graphics`;
@@ -174,6 +174,70 @@ async function startServer() {
     assert.strictEqual(r.body.colorSpace, 'CMYK');
     const cmyk = await runPixelTask('cmyk', { rgb: Buffer.from([255, 0, 0, 0, 0, 0]), pixelCount: 2 });
     assert.deepStrictEqual([...cmyk.out], [0, 255, 255, 0, 0, 0, 0, 255], 'pure red and black convert to CMYK');
+
+    // ---- Print Ready CMYK is colour managed: converted through an ICC profile, the profile travels in the file, and a soft proof comes back ----
+    {
+      const info = await post('/print-ready', { imageDataUrl: dataUrl(red, 'image/png'), format: 'tiff-cmyk', dpi: 300 });
+      assert.strictEqual(info.status, 200);
+      assert.strictEqual(info.body.colorManaged, true);
+      assert.strictEqual(info.body.profileCustom, false);
+      assert.match(info.body.profileName, /built in/);
+      const tiff = await sharp(toBuf(info.body.imageDataUrl)).metadata();
+      assert.deepStrictEqual([tiff.space, tiff.channels], ['cmyk', 4]);
+      assert.ok(tiff.icc && tiff.icc.length > 1000, 'the profile is embedded in the TIFF');
+      assert.strictEqual(tiff.density, 300);
+      const proof = await sharp(toBuf(info.body.proofDataUrl)).metadata();
+      assert.strictEqual(proof.format, 'png');
+      assert.ok(info.body.outOfGamutPct > 90, `pure red cannot be printed as is (${info.body.outOfGamutPct}% changed)`);
+      const proofPx = await sharp(toBuf(info.body.proofDataUrl)).removeAlpha().raw().toBuffer();
+      assert.ok(proofPx[1] > 30, 'the proof shows the red a little duller than 255,0,0 (the green channel rose)');
+      // a neutral grey survives printing almost unchanged
+      const grey = await sharp({ create: { width: 40, height: 40, channels: 3, background: '#777777' } }).png().toBuffer();
+      const g = await post('/print-ready', { imageDataUrl: dataUrl(grey, 'image/png'), format: 'tiff-cmyk' });
+      assert.ok(g.body.outOfGamutPct < 5, `grey is fine in print (${g.body.outOfGamutPct}%)`);
+      // see-through becomes white in CMYK, not black
+      const clearish = await sharp({ create: { width: 20, height: 20, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toBuffer();
+      const t = await post('/print-ready', { imageDataUrl: dataUrl(clearish, 'image/png'), format: 'tiff-cmyk', background: 'transparent' });
+      const tpx = await sharp(toBuf(t.body.proofDataUrl)).removeAlpha().raw().toBuffer();
+      assert.ok(tpx[0] > 235 && tpx[1] > 235 && tpx[2] > 235, 'transparent areas print as paper white');
+      // the other formats stay RGB and carry no colour-management fields
+      const rgb = await post('/print-ready', { imageDataUrl: dataUrl(red, 'image/png'), format: 'tiff' });
+      assert.strictEqual(rgb.body.colorSpace, 'sRGB');
+      assert.strictEqual(rgb.body.proofDataUrl, undefined);
+
+      // the printer's own profile: only an admin sets it; it must be a CMYK printer profile; once set it is the one used
+      const tinyRgb = await sharp({ create: { width: 8, height: 8, channels: 3, background: '#888' } }).png().toBuffer();
+      const cmykIcc = (await sharp(await sharp(tinyRgb).withMetadata({ icc: 'cmyk' }).tiff().toBuffer()).metadata()).icc;
+      const rgbIcc = (await sharp(await sharp(tinyRgb).withMetadata({ icc: 'srgb' }).tiff().toBuffer()).metadata()).icc;
+      const kept = new Map();
+      global.__poolHandler = async (sql, params) => {
+        if (/DELETE FROM workspace_settings/.test(sql) && params?.[0] === 'graphics_cmyk_profile') { kept.delete('v'); return { rows: [] }; }
+        if (/FROM workspace_settings/.test(sql) && params?.[0] === 'graphics_cmyk_profile') return { rows: kept.has('v') ? [{ value: kept.get('v'), updatedAt: new Date() }] : [] };
+        if (/INSERT INTO workspace_settings/.test(sql) && params?.[0] === 'graphics_cmyk_profile') { kept.set('v', params[1]); return { rows: [] }; }
+        return { rows: [{ value: global.__restrictions || '[]' }] };
+      };
+      const getP = async () => (await fetch(`${baseUrl}/print-profile`)).json();
+      const send = async (method, body) => { const res = await fetch(`${baseUrl}/print-profile`, { method, headers: { 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined }); return { status: res.status, body: await res.json() }; };
+      let pr = await getP();
+      assert.deepStrictEqual([pr.custom, pr.canEdit], [null, false]);
+      assert.strictEqual((await send('POST', { dataBase64: cmykIcc.toString('base64') })).status, 403, 'not an admin');
+      assert.strictEqual((await send('DELETE')).status, 403);
+      global.__isAdmin = true;
+      assert.strictEqual((await getP()).canEdit, true);
+      assert.strictEqual((await send('POST', { dataBase64: rgbIcc.toString('base64') })).status, 400, 'an RGB profile is refused');
+      assert.strictEqual((await send('POST', { dataBase64: Buffer.from('not a profile at all'.repeat(20)).toString('base64') })).status, 400);
+      assert.strictEqual(kept.size, 0, 'refused profiles are not stored');
+      const up = await send('POST', { dataBase64: `data:application/octet-stream;base64,${cmykIcc.toString('base64')}` });
+      assert.strictEqual(up.status, 200, up.body.error);
+      pr = await getP();
+      assert.strictEqual(pr.custom.name, 'Chemical proof');
+      const withOwn = await post('/print-ready', { imageDataUrl: dataUrl(red, 'image/png'), format: 'tiff-cmyk' });
+      assert.deepStrictEqual([withOwn.body.profileCustom, withOwn.body.profileName], [true, 'Chemical proof']);
+      assert.strictEqual((await send('DELETE')).status, 200);
+      assert.strictEqual((await getP()).custom, null);
+      global.__isAdmin = false;
+      global.__poolHandler = undefined;
+    }
     r = await post('/vectorize', { imageDataUrl: dataUrl(red, 'image/png'), colors: 4 });
     assert.strictEqual(r.status, 200, `vectorize: ${r.body.error}`);
     assert.ok(r.body.svg.includes('<svg'));
@@ -358,6 +422,29 @@ async function startServer() {
     r = await post('/batch', { op: 'resize', items: [{ imageDataUrl: gif, width: 20 }, { imageDataUrl: frameA, width: 20 }] });
     assert.match(r.body.results[0].error, /animated/, 'in a batch, the animated item is reported');
     assert.ok(r.body.results[1].imageDataUrl, 'and the others still run');
+    // ---- Background batch job: answered at once, polled, results collected; unknown ids are plain errors ----
+    {
+      const get = async (route) => { const res = await fetch(`${baseUrl}${route}`); return { status: res.status, body: await res.json() }; };
+      const del = async (route) => { const res = await fetch(`${baseUrl}${route}`, { method: 'DELETE' }); return { status: res.status, body: await res.json() }; };
+      const pics = await Promise.all([30, 40, 50].map(async (w) => dataUrl(await sharp({ create: { width: w, height: w, channels: 3, background: '#369' } }).png().toBuffer(), 'image/png')));
+      const j = await post('/batch-job', { op: 'resize', items: pics.map((u) => ({ imageDataUrl: u, width: 10 })) });
+      assert.strictEqual(j.status, 202, `batch-job: ${j.body.error}`);
+      assert.ok(j.body.jobId && j.body.total === 3);
+      let st;
+      for (let i = 0; i < 100; i += 1) { st = await get(`/batch-jobs/${j.body.jobId}`); if (st.body.status !== 'running') break; await new Promise((x) => setTimeout(x, 20)); }
+      assert.strictEqual(st.body.status, 'done');
+      assert.deepStrictEqual([st.body.done, st.body.total], [3, 3]);
+      assert.strictEqual(st.body.results, undefined, 'the status check is small: no pictures in it');
+      const got = await get(`/batch-jobs/${j.body.jobId}/results`);
+      assert.strictEqual(got.body.results.length, 3);
+      assert.ok(got.body.results.every((x) => x.imageDataUrl), 'every picture came back');
+      assert.strictEqual((await sharp(toBuf(got.body.results[2].imageDataUrl)).metadata()).width, 10);
+      assert.strictEqual((await get('/batch-jobs/doesnotexist')).status, 404);
+      assert.strictEqual((await get('/batch-jobs/doesnotexist/results')).status, 404);
+      assert.strictEqual((await del('/batch-jobs/doesnotexist')).status, 404);
+      assert.strictEqual((await post('/batch-job', { op: 'nope', items: [{ imageDataUrl: pics[0] }] })).status, 400);
+      assert.strictEqual((await post('/batch-job', { op: 'resize', items: [] })).status, 400);
+    }
     r = await post('/convert', { imageDataUrl: gif, format: 'webp' });
     assert.strictEqual(r.status, 200);
     assert.strictEqual((await sharp(toBuf(r.body.imageDataUrl), { animated: true }).metadata()).pages, 2, 'Convert keeps the animation');
