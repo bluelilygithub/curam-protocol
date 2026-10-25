@@ -123,6 +123,7 @@ export function SaveDialog({ onSaved }: { onSaved: (t: Track) => void }) {
         <Field label="Notes (optional)">{(id) => <span className="vwrap vwrap-area"><textarea id={id} title="Anything worth remembering about this route: surface, parking, turnaround points" value={notes} maxLength={2000} rows={3} onChange={(e) => setNotes(e.target.value)} /><Mic area label="Speak a note, added to the end" onDone={(t) => { setNotes((n) => `${n.trim() ? `${n.trim()} ` : ''}${t.trim()}`.slice(0, 2000)); }} /></span>}</Field>
         <Swatches value={drawColor} onChange={setDrawColor} />
         <p className="stats">{formatDistance(km, units)} · {points} points{cues ? ` · ${cues.length} directions` : ''}</p>
+        {planned && !cues && <p className="hint" data-testid="no-directions">{plannedCues ? 'Directions are not saved: the line no longer matches the planned route.' : 'This route came without directions, so none are saved.'}</p>}
         <div className="row">
           <button type="button" onClick={() => setSaving(false)} title="Go back to the drawing without saving (Escape does the same)">Keep drawing</button>
           <button type="submit" className="primary" disabled={busy || !name.trim()} title="Save this track to your Vault account">{busy ? 'Saving…' : 'Save'}</button>
