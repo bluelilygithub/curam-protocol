@@ -1,13 +1,14 @@
 import { useIcon } from '../../../providers/IconProvider';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../../../utils/apiClient';
 import Tooltip from '../../../components/Tooltip';
 import { useGraphics } from '../GraphicsContext';
 import { readFileAsDataUrl, useProcessingWhile, formatBytes, useGraphicsRecipes, CostNote } from '../shared';
+import { BATCH_KEEP } from '../historyStore.mjs';
 
 export default function BatchTool({ active }) {
   const getIcon = useIcon();
-  const { setHelpTool } = useGraphics();
+  const { setHelpTool, recordHistory } = useGraphics();
 
   const [batchFiles, setBatchFiles] = useState([]);
   // "Run a recipe": a saved Pipeline recipe applied to every picture (server reads the steps from the recipe, see Pipeline -> Save recipe)
@@ -158,17 +159,35 @@ export default function BatchTool({ active }) {
     setBatchRunning(false);
   };
 
-  const downloadBatchItem = (item) => {
-    if (!item?.result?.imageDataUrl) return;
+  const batchResultName = (item) => {
     const base = item.name.replace(/\.[^.]+$/, '');
     const ext = item.result.ext || item.result.format || 'img';
     const suffixes = { convert: '', resize: '-resized', watermark: '-watermarked', compress: '-compressed', recipe: '-edited', strip: '-clean' };
-    const suffix = suffixes[batchOp] ?? '-clean';
+    return `${base}${suffixes[batchOp] ?? '-clean'}.${ext}`;
+  };
+
+  const downloadBatchItem = (item) => {
+    if (!item?.result?.imageDataUrl) return;
     const a = document.createElement('a');
     a.href = item.result.imageDataUrl;
-    a.download = `${base}${suffix}.${ext}`;
+    a.download = batchResultName(item);
     a.click();
   };
+
+  // Recent results: keep the first few results of each run (a batch can make 25, which would push everything else out of the history).
+  const keptThisRun = useRef(0);
+  const keptIds = useRef(new Set());
+  useEffect(() => { if (batchRunning) keptThisRun.current = 0; }, [batchRunning]); // the ids already kept stay, so an earlier run's results are not saved again
+  useEffect(() => {
+    for (const f of batchFiles) {
+      if (keptThisRun.current >= BATCH_KEEP) return;
+      if (f.status !== 'done' || !f.result?.imageDataUrl || keptIds.current.has(f.id)) continue;
+      keptIds.current.add(f.id);
+      keptThisRun.current += 1;
+      recordHistory?.({ tool: 'batch', name: batchResultName(f), dataUrl: f.result.imageDataUrl });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batchFiles]);
 
   const downloadBatchAll = () => {
     batchFiles.filter(f => f.result?.imageDataUrl).forEach((item, i) => {

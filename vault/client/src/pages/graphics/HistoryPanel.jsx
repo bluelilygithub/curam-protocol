@@ -2,13 +2,13 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
 import {
-  HISTORY_MAX_ITEMS, listHistory, getHistoryImage, removeHistory, clearHistory, addHistory, makeThumb,
+  HISTORY_MAX_ITEMS, BATCH_KEEP, listHistory, getHistoryImage, removeHistory, clearHistory, addHistory, makeThumb,
   blobToDataUrl, setHistoryEnabled, timeAgo, signatureOf,
 } from './historyStore.mjs';
 
 // Renders nothing. Put one beside a tool's result: when the result changes and history is switched on, the result is
 // kept on this device (see historyStore.mjs). A tool that shows "Use in…" gets this automatically.
-export function HistoryRecorder({ enabled, tool, name, dataUrl, onRecorded }) {
+export function HistoryRecorder({ enabled, tool, name, dataUrl, onRecorded, onFailed }) {
   const last = useRef('');
   useEffect(() => {
     if (!enabled || !dataUrl || !/^data:image\//i.test(dataUrl)) return undefined;
@@ -21,15 +21,15 @@ export function HistoryRecorder({ enabled, tool, name, dataUrl, onRecorded }) {
         const thumb = await makeThumb(dataUrl);
         const kept = await addHistory({ tool, name, dataUrl, thumb });
         if (kept && !off) onRecorded?.();
-      } catch { /* storage full or blocked (private window): history just skips this one */ }
+      } catch { onFailed?.(); /* storage full or blocked (private window): this one is skipped, and the window says so */ }
     })();
     return () => { off = true; };
-  }, [enabled, tool, name, dataUrl, onRecorded]);
+  }, [enabled, tool, name, dataUrl, onRecorded, onFailed]);
   return null;
 }
 
 // The "Recent results" window: on/off switch, the kept pictures, and what to do with each.
-export function HistoryPanel({ open, onClose, enabled, onToggle, tick, labelFor, canOpenIn, sendTargets, onSend }) {
+export function HistoryPanel({ open, onClose, enabled, onToggle, tick, failed, labelFor, canOpenIn, sendTargets, onSend }) {
   const getIcon = useIcon();
   const [items, setItems] = useState(null); // null = loading
   const [error, setError] = useState('');
@@ -94,11 +94,12 @@ export function HistoryPanel({ open, onClose, enabled, onToggle, tick, labelFor,
           <span>
             Keep my recent results on this device
             <span className="block text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-              The last {HISTORY_MAX_ITEMS} finished pictures are kept in this browser only: nothing is uploaded. Clearing your browser data, or using another device, removes or hides them. Tools that only show a number or a colour are not kept.
+              The last {HISTORY_MAX_ITEMS} finished pictures are kept in this browser only: nothing is uploaded, and another device or browser will not see them. Treat this as a convenience, not a backup: your browser can clear this storage on its own (Safari does it for sites you have not visited in a while, and private windows keep nothing), so download anything you need to keep. A batch keeps its first {BATCH_KEEP} results. Tools that only show a number or a colour are not kept.
             </span>
           </span>
         </label>
 
+        {failed && enabled && !error && <p className="text-sm px-3 py-2 rounded-xl" style={{ color: '#92400e', background: '#fef3c7' }}>The last result could not be kept: this browser's storage is full or blocked (a private window does this). Download anything you need.</p>}
         {error && <p className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{error}</p>}
 
         {items === null ? (

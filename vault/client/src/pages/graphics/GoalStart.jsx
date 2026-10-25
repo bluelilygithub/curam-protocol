@@ -5,7 +5,7 @@ import { GOALS, stepIndex } from './goals.mjs';
 
 // The Graphics landing view: "What do you want to do?" Each tile opens the first tool of that goal and
 // switches on the step bar (GoalBar) so the person can see where they are in the job. See goals.mjs.
-export function GoalStart({ onPick, labelFor }) {
+export function GoalStart({ onPick, labelFor, openOnLast, onToggleOpenOnLast }) {
   const getIcon = useIcon();
   return (
     <section className="space-y-4" data-tour="graphics-goals">
@@ -36,6 +36,12 @@ export function GoalStart({ onPick, labelFor }) {
           </Tooltip>
         ))}
       </div>
+      <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
+        <Tooltip text="Skip this screen from now on: Graphics opens straight on the tool you used last. The button 'What do you want to do?' at the top of the tool list brings this screen back.">
+          <input type="checkbox" checked={Boolean(openOnLast)} onChange={(e) => onToggleOpenOnLast(e.target.checked)} />
+        </Tooltip>
+        Next time, open on the tool I used last instead of this screen
+      </label>
     </section>
   );
 }

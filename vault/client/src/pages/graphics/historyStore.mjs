@@ -5,6 +5,7 @@
 export const HISTORY_MAX_ITEMS = 40;
 export const HISTORY_MAX_BYTES = 150 * 1024 * 1024; // all kept pictures together
 export const HISTORY_MAX_ITEM_BYTES = 12 * 1024 * 1024; // a single picture bigger than this is not kept
+export const BATCH_KEEP = 6; // a batch can make 25 results; keeping all would push everything else out of the 40
 export const HISTORY_ON_KEY = 'vault_graphics_history_on';
 
 /** Which entries to delete so what is kept fits the limits: the oldest go first. `entries` need { id, createdAt, bytes }. */

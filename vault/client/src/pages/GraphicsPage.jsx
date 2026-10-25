@@ -11,7 +11,7 @@ import { TOOL_COMPONENTS } from './graphics/toolRegistry';
 import { BeforeAfter, readFileAsDataUrl } from './graphics/shared';
 import { GoalStart, GoalBar } from './graphics/GoalStart';
 import { HistoryPanel, HistoryRecorder } from './graphics/HistoryPanel';
-import { historyEnabled } from './graphics/historyStore.mjs';
+import { historyEnabled, addHistory, makeThumb } from './graphics/historyStore.mjs';
 
 const MODES = [
   { id: 'generate', label: 'Generate', icon: 'sparkles' },
@@ -126,6 +126,17 @@ const MODE_GROUPS = [
   { label: 'Retouch', ids: ['background', 'extract', 'recolor', 'eraser', 'redact', 'inpaint'] },
   { label: 'Analyse', ids: ['picker', 'histogram', 'contrast', 'palette', 'ocr', 'alttext', 'blurdetect', 'diff', 'metadata', 'fileinfo'] },
 ];
+
+// "Open on the tool I used last" instead of the start screen: off unless the person ticks the box on the start screen.
+const OPEN_ON_LAST_KEY = 'vault_graphics_open_on_last';
+const LAST_TOOL_KEY = 'vault_graphics_last_tool';
+const readLocal = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const writeLocal = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private window: it just will not be remembered */ } };
+function initialMode() {
+  if (readLocal(OPEN_ON_LAST_KEY) !== '1') return 'start';
+  const last = readLocal(LAST_TOOL_KEY);
+  return MODES.some((m) => m.id === last) ? last : 'start';
+}
 
 const TOOL_HELP = {
   generate: {
@@ -354,14 +365,27 @@ export default function GraphicsPage() {
   const askCapabilityInfo = useToolInfoModal('vault_ask_graphics_capability_seen');
 
   // 'start' is the "What do you want to do?" view (not a tool); every other value is a tool id from MODES.
-  const [mode, setMode] = useState('start');
+  const [mode, setMode] = useState(initialMode);
+  const [openOnLast, setOpenOnLast] = useState(() => readLocal(OPEN_ON_LAST_KEY) === '1');
+  useEffect(() => { if (openOnLast && mode !== 'start') writeLocal(LAST_TOOL_KEY, mode); }, [mode, openOnLast]);
+  const toggleOpenOnLast = (on) => { setOpenOnLast(on); writeLocal(OPEN_ON_LAST_KEY, on ? '1' : '0'); };
   // The job picked on the start view, while the person works through its steps (see graphics/goals.mjs).
   const [goal, setGoal] = useState(null);
   // Recent results kept on this device (off until switched on; see graphics/historyStore.mjs). The tick refreshes the open list.
   const [historyOn, setHistoryOn] = useState(historyEnabled);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyTick, setHistoryTick] = useState(0);
-  const onHistoryRecorded = useCallback(() => setHistoryTick((t) => t + 1), []);
+  const [historyFailed, setHistoryFailed] = useState(false);
+  const onHistoryRecorded = useCallback(() => { setHistoryFailed(false); setHistoryTick((t) => t + 1); }, []);
+  const onHistoryFailed = useCallback(() => setHistoryFailed(true), []);
+  // For tools that make many results at once (Batch): they decide which to keep and call this for each.
+  const recordHistory = useCallback(async ({ tool, name, dataUrl }) => {
+    if (!historyOn || !dataUrl) return;
+    try {
+      const thumb = await makeThumb(dataUrl);
+      if (await addHistory({ tool, name, dataUrl, thumb })) onHistoryRecorded();
+    } catch { onHistoryFailed(); }
+  }, [historyOn, onHistoryRecorded, onHistoryFailed]);
 
   // Tools are loaded the first time they are opened and then kept (hidden when not showing), so each keeps its settings and result
   // while you move between tools.
@@ -376,7 +400,7 @@ export default function GraphicsPage() {
 
   const [compareOn, setCompareOn] = useState(false);
 
-  const [openGroup, setOpenGroup] = useState('Create');
+  const [openGroup, setOpenGroup] = useState(() => MODE_GROUPS.find((g) => g.ids.includes(initialMode()))?.label || 'Create');
 
   const [toolSearch, setToolSearch] = useState('');
 
@@ -529,7 +553,7 @@ export default function GraphicsPage() {
   // Compact "Use result in…" dropdown shown in a result header.
   const renderSendTo = (dataUrl, name, excludeMode) => (
     <>
-    <HistoryRecorder enabled={historyOn} tool={excludeMode} name={name} dataUrl={dataUrl} onRecorded={onHistoryRecorded} />
+    <HistoryRecorder enabled={historyOn} tool={excludeMode} name={name} dataUrl={dataUrl} onRecorded={onHistoryRecorded} onFailed={onHistoryFailed} />
     <Tooltip text="Continue editing this result in another tool"><select
       value=""
       onChange={(e) => { if (e.target.value) sendImageTo(e.target.value, dataUrl, name); e.target.value = ''; }}
@@ -592,7 +616,7 @@ export default function GraphicsPage() {
 
   const ctx = {
     compareOn, setCompareOn, brandKit, status, result, setResult, previewImage, setPreviewImage, setHelpTool, setMode,
-    renderSendTo, renderCompareToggle, renderResultMedia, handoff, registerResult,
+    renderSendTo, renderCompareToggle, renderResultMedia, handoff, registerResult, recordHistory,
   };
 
   const renderTools = () => MODES.map(({ id }) => {
@@ -838,7 +862,7 @@ export default function GraphicsPage() {
             <GraphicsAskPanel onOpenInModeWithPrompt={openPlanStepInMode} getModeResultImage={getModeResultImage} currentMode={mode} />
 
 
-            {mode === 'start' && <GoalStart onPick={startGoal} labelFor={labelFor} />}
+            {mode === 'start' && <GoalStart onPick={startGoal} labelFor={labelFor} openOnLast={openOnLast} onToggleOpenOnLast={toggleOpenOnLast} />}
             <GoalBar goal={goal} mode={mode} onStep={openToolById} onLeave={backToStart} labelFor={labelFor} />
 
             {renderTools()}
@@ -982,6 +1006,7 @@ export default function GraphicsPage() {
               enabled={historyOn}
               onToggle={setHistoryOn}
               tick={historyTick}
+              failed={historyFailed}
               labelFor={labelFor}
               canOpenIn={(tool) => HANDOFF_MODES.includes(tool)}
               sendTargets={SEND_TARGETS}
