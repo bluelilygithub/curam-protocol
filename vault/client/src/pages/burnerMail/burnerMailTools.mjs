@@ -31,6 +31,7 @@ export const HOW_IT_WORKS = [
   ['Wait for the email', 'The page checks for new mail every few seconds. A verification email can take a few seconds to a couple of minutes. The code appears in large type with a Copy button, and any confirm link is listed first.'],
   ['Links are never opened for you', 'Each link shows its site name. Check it matches the service you signed up for, then Open or Copy link.'],
   ['What is kept', 'Only the plain text of each email, its codes and its link addresses. Pictures and layout are never kept. An address stops working when it expires, and it is removed a day later with its emails. Deleting an address or an email is permanent.'],
+  ['Be patient', 'Some sites take ten minutes or more to send the email. Wait before pressing Resend on the other site; repeated resends can slow it down.'],
   ['Limits', 'Some websites refuse unfamiliar email domains. Addresses only receive mail; they cannot send or reply.'],
 ];
 

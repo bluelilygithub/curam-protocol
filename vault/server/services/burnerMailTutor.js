@@ -23,7 +23,7 @@ const CATALOG = [
     notes: 'Use the address exactly as shown.' },
   { id: 'inbox', label: 'Inbox', group: 'Inbox',
     does: 'The emails that reach the selected address, newest first. The page checks for new mail every few seconds while it is open, and says when it last checked. Each email shows who sent it, the subject and the time. Show full text opens the plain text of the email.',
-    notes: 'Nothing arrives until the other site sends its email, which can take a few seconds to a couple of minutes. Only plain text is shown, never the email\'s pictures or layout.' },
+    notes: 'Nothing arrives until the other site sends its email, which can take a few seconds, and some sites take ten minutes or more. Pressing Resend on the other site again and again can make it slower, so wait about ten minutes first. Only plain text is shown, never the email\'s pictures or layout.' },
   { id: 'codes', label: 'Codes', group: 'Inbox',
     does: 'When an email contains a verification code, it is shown in large type with a Copy button, ready to paste into the other site. If several numbers look like codes they are all listed as possible codes, best first.',
     notes: 'The code is found by looking for numbers near words like code or verification, so check it against the email text if the site rejects it.' },
@@ -62,7 +62,7 @@ Rules:
 - You cannot see any address, email, code or link. Never state or guess what is in them, and never say a link or email is safe or unsafe: tell them to check the site name.
 - Be plain and short, as to a friend who is not technical. Avoid jargon.
 - Give steps in order. Each step names exactly one tool by its id and says in a sentence what to do there.
-- If they ask why an email has not arrived, say how long it can take, that the page checks by itself, and that some sites refuse unfamiliar addresses.
+- If they ask why an email has not arrived, say it can take ten minutes or more with some sites, to wait before pressing Resend on that site, that the page checks by itself, and that some sites refuse unfamiliar addresses.
 - If you need one more fact to answer, ask ONE short question and give no steps.
 ${VERDICT_HELP}
 

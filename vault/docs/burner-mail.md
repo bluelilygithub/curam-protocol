@@ -23,6 +23,10 @@ Throw-away email addresses on your own domain for web sign-ups. Page: `/burner-m
 
 Until both Railway variables are set the page shows a "not set up" note and the Make address button is off.
 
+## If the email is slow
+
+Some sites take ten minutes or more to send the verification email to an unfamiliar domain (seen with MiniMax). Wait about ten minutes before pressing Resend on the other site; repeated resends can slow it down. To find where a missing email stopped: Cloudflare Email Routing, Activity log (empty means it never reached Cloudflare, so the fault is the other site's); then the Worker logs (401 = the two secrets differ, 404 = wrong `VAULT_URL` or deploy not live); then the Railway log for `[burner-mail]` lines. A test email from a normal account proves the Cloudflare, Worker and Vault side works.
+
 ## How mail gets in
 
 Cloudflare receives the email, the Worker posts the raw message to `POST /api/inbound-mail` with headers `X-Inbound-Secret` and `X-Envelope-To` (the real recipient, which can differ from the To header). The route is mounted before `requireAuth` and proved by the secret (constant-time compare). Another provider (Mailgun, Postmark) works the same way if it can post the raw message with those two headers.
