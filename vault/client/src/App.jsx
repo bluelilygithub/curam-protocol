@@ -49,6 +49,7 @@ import SeoPage from './pages/SeoPage';
 import SeoAuditPage from './pages/SeoAuditPage';
 import HtmlAuditPage from './pages/HtmlAuditPage';
 import WebExtractorPage from './pages/WebExtractorPage';
+import BurnerMailPage from './pages/BurnerMailPage';
 import FitnessPage from './pages/FitnessPage';
 import BrowserAgentPage from './pages/BrowserAgentPage';
 import BrowserAgentArchivePage from './pages/BrowserAgentArchivePage';
@@ -195,6 +196,7 @@ function App() {
               <Route path="/music" element={<MusicPage />} />
               <Route path="/recipes" element={<RecipesPage />} />
               <Route path="/measurements" element={<MeasurementsPage />} />
+              <Route path="/burner-mail" element={<BurnerMailPage />} />
               <Route path="/pc-health" element={<PcHealthPage />} />
               <Route path="/pdf" element={<PdfPage />} />
               <Route path="/domains" element={<DomainsPage />} />

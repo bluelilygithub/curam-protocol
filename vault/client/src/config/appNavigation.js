@@ -94,6 +94,7 @@ export const APP_NAV_GROUPS = [
       { id: 'recipes', label: 'Recipes', path: '/recipes', icon: 'utensils', featureKey: 'recipes' },
       { id: 'measurements', label: 'Measurements', path: '/measurements', icon: 'ruler', featureKey: 'measurements' },
       { id: 'fitness', label: 'Fitness', path: '/fitness', icon: 'dumbbell', featureKey: 'fitness' },
+      { id: 'burnerMail', label: 'Burner Mail', path: '/burner-mail', icon: 'mail', featureKey: 'burnerMail' },
       { id: 'youtube', label: 'YouTube', path: '/youtube', icon: 'youtube', featureKey: 'youtube' },
       { id: 'productScout', label: 'Amazon Search', path: '/product-scout', icon: 'productScout', featureKey: 'productScout' },
     ],

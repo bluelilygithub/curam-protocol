@@ -42,6 +42,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   cellarPlanner: false,
   measurements: true,
   fitness: true,
+  burnerMail: true,
 };
 
 const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);

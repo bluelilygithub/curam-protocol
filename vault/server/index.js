@@ -122,6 +122,9 @@ app.use('/api/fitness/unsubscribe', require('./routes/fitnessUnsubscribe'));
 // The PC Health helper on the admin's own PC has no login: it proves itself with its own token (see routes/pcHealth.js), so before requireAuth.
 app.use('/api/pc-helper', require('./routes/pcHealth').helperRouter);
 
+// Burner Mail: the mail provider (a Cloudflare Email Worker) posts each raw email here; it proves itself with INBOUND_MAIL_SECRET, so before requireAuth.
+app.use('/api/inbound-mail', require('./routes/burnerMail').inboundRouter);
+
 const { requireAuth, requireAdmin, requireFeature, requireAnyFeature } = require('./middleware/auth');
 app.use('/api', requireAuth);
 
@@ -228,6 +231,7 @@ app.use('/api/fitness', requireFeature('fitness'), require('./routes/fitness'));
 app.use('/api/measurements-tutor', requireFeature('measurements'), aiLimiter, require('./routes/measurementsTutor')); // the Measurements guide chat (sees no values or documents)
 app.use('/api/pc-health', requireAdmin, require('./routes/pcHealth')); // PC Health agent (admin only, read-only report on the admin's own PC)
 app.use('/api/pc-health-tutor', requireAdmin, aiLimiter, require('./routes/pcHealthTutor')); // the PC Health guide chat (sees no scan data)
+app.use('/api/burner-mail', requireFeature('burnerMail'), require('./routes/burnerMail'));
 app.use('/api/web-extractor', requireFeature('webExtractor'), require('./routes/webExtractor'));
 app.use('/api/web-extractor-tutor', requireFeature('webExtractor'), aiLimiter, require('./routes/webExtractorTutor')); // the Web Extractor guide chat (reads no pages)
 app.use('/api/browser-agent', requireFeature('browserAgent'), require('./routes/browserAgent'));
@@ -278,6 +282,7 @@ const { startWeeklyDigestCron }     = require('./cron/weeklyDigestCron');
 const { startFitnessCron, startFitnessTasksSync } = require('./cron/fitnessCron');
 const { startRecycleBinPurge } = require('./cron/recycleBinCron');
 const { startAttachmentExpiry } = require('./cron/attachmentExpiryCron');
+const { startBurnerMailPurge } = require('./cron/burnerMailCron');
 const { startNoteRemindersCron } = require('./cron/noteRemindersCron');
 
 // Poll until schema is ready, then seed and start listening
@@ -301,6 +306,7 @@ async function start() {
   startFitnessTasksSync(); // sends nothing, so it runs on staging too
   startRecycleBinPurge(); // removes bin items older than 30 days; sends nothing, so it runs everywhere
   startAttachmentExpiry(); // removes kept voice-note audio past its time; sends nothing, so it runs everywhere
+  startBurnerMailPurge(); // removes burner addresses a day after they expire; sends nothing, so it runs everywhere
 
   if (runtimeConfig.disableExternalCron) {
     console.log('[runtime] External cron jobs disabled by DISABLE_EXTERNAL_CRON');

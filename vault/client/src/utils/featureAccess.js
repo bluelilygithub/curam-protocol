@@ -39,6 +39,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   cellarPlanner: false,
   measurements: true,
   fitness: true,
+  burnerMail: true,
 };
 
 export const FEATURE_ACCESS_GROUPS = [
@@ -84,6 +85,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'cellarPlanner', label: 'Cellar Planner' },
       { key: 'measurements', label: 'Measurements' },
       { key: 'fitness', label: 'Fitness' },
+      { key: 'burnerMail', label: 'Burner Mail' },
       { key: 'wellbeing', label: 'Wellbeing Check' },
       { key: 'gmailIntel', label: 'Inbox Intel' },
       { key: 'productScout', label: 'Amazon Search' },

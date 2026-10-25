@@ -1385,6 +1385,35 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_pc_health_scans_user ON pc_health_scans ("userId", id DESC)`);
+    // Burner Mail: throw-away sign-up addresses on the owner's domain + the emails that reach them (plain text, codes, link addresses; never HTML).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS burner_addresses (
+        id              SERIAL PRIMARY KEY,
+        "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        address         TEXT NOT NULL UNIQUE,
+        label           TEXT,
+        "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "expiresAt"     TIMESTAMPTZ NOT NULL,
+        "lastMessageAt" TIMESTAMPTZ
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_burner_addresses_user ON burner_addresses ("userId", "createdAt" DESC)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS burner_messages (
+        id           SERIAL PRIMARY KEY,
+        "addressId"  INTEGER NOT NULL REFERENCES burner_addresses(id) ON DELETE CASCADE,
+        "userId"     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "fromAddr"   TEXT,
+        subject      TEXT,
+        "bodyText"   TEXT,
+        codes        JSONB NOT NULL DEFAULT '[]',
+        links        JSONB NOT NULL DEFAULT '[]',
+        "messageId"  TEXT,
+        "receivedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_burner_messages_address ON burner_messages ("addressId", id DESC)`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_burner_messages_dedupe ON burner_messages ("addressId", "messageId") WHERE "messageId" IS NOT NULL`);
     // Safe clean-up (the only thing PC Health can change): whether the helper was started with -AllowCleanup, and each request + result.
     await client.query(`ALTER TABLE pc_health_helpers ADD COLUMN IF NOT EXISTS "canClean" BOOLEAN NOT NULL DEFAULT FALSE`);
     await client.query(`
