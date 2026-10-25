@@ -714,6 +714,7 @@ router.post('/batch', async (req, res) => {
     // the daily limit BEFORE the first picture, so the limit never stops it half way.
     const aiSteps = op === 'pipeline' ? paidSteps.paidSteps(sharedParams.steps) : [];
     if (aiSteps.length) {
+      if (runtimeConfig.isLocal && aiSteps.some((s) => s.op === 'upscale')) return res.status(400).json({ error: paidSteps.UPSCALE_LIVE_ONLY });
       const perCall = paidSteps.maxPicturesPerCall(sharedParams.steps);
       if (items.length > perCall) {
         return res.status(400).json({ error: `A recipe with an AI step runs on up to ${perCall} pictures at a time. Send the rest in another go.`, maxPerCall: perCall });

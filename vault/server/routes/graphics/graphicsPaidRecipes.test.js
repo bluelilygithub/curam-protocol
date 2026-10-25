@@ -69,6 +69,27 @@ const prices = {
   assert.strictEqual(r.refuse.body.code, 'GRAPHICS_DAILY_CAP');
   r = await startPaidJob(poolWith('4.99'), 904, { totalUsd: 0 }); // a single tool call: only blocked when the limit is already used up
   assert.ok(r.release); r.release();
+  // two jobs started together: the second sees the money the first has reserved, even though nothing is spent yet
+  const idle = poolWith('4.00');
+  const first = await startPaidJob(idle, 910, { totalUsd: 0.6 });
+  assert.ok(first.release, 'the first job fits');
+  const second = await startPaidJob(idle, 910, { totalUsd: 0.6 }); // 4.00 spent + 0.60 reserved + 0.60 > 5.00
+  assert.strictEqual(second.refuse.body.code, 'GRAPHICS_DAILY_CAP_JOB');
+  assert.match(second.refuse.body.error, /only \$0\.40/); // what is really left once the first job's share is set aside
+  first.release();
+  const third = await startPaidJob(idle, 910, { totalUsd: 0.6 }); // the share comes back when the first job ends
+  assert.ok(third.release); third.release();
+  // a different person is not affected by someone else's reservation
+  const other = await startPaidJob(idle, 911, { totalUsd: 0.9 });
+  assert.ok(other.release); other.release();
+  // a refused job reserves nothing
+  const held = await startPaidJob(idle, 912, { totalUsd: 0.9 });
+  const refused = await startPaidJob(idle, 912, { totalUsd: 2 });
+  assert.ok(refused.refuse);
+  held.release();
+  const after = await startPaidJob(idle, 912, { totalUsd: 0.95 });
+  assert.ok(after.release, 'only the job that ran held anything'); after.release();
+
   // two jobs at once is the most
   const a = await startPaidJob(poolWith('0'), 905, {});
   const b = await startPaidJob(poolWith('0'), 905, {});
@@ -111,6 +132,10 @@ const prices = {
   await runPipeline({ imageDataUrl: src, steps: [{ op: 'removebg' }], userId: 42, deps: local });
   assert.deepStrictEqual([localCalls.length, logs.length], [1, 0]);
   await assert.rejects(runPipeline({ imageDataUrl: src, steps: [{ op: 'upscale' }], userId: 42, deps: local }), /hosted AI service/);
+  // ...and it says so BEFORE any step runs, not when the Upscale step is reached
+  localCalls.length = 0;
+  await assert.rejects(runPipeline({ imageDataUrl: src, steps: [{ op: 'removebg' }, { op: 'sharpen' }, { op: 'upscale' }], userId: 42, deps: local }), /live site/);
+  assert.deepStrictEqual(localCalls, [], 'the earlier steps did not run');
 
   // a result that would be too large is refused BEFORE any AI call
   calls.length = 0;

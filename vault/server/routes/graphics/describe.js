@@ -7,7 +7,17 @@
 const express = require('express');
 const router = express.Router();
 const { imageDataUrlToBuffer } = require('./shared');
-const { describeImage } = require('../../services/graphicsDescribe');
+const { describeImage, pickVisionModel, providerLabel } = require('../../services/graphicsDescribe');
+
+// GET /api/graphics/describe/info -> { available, provider }: who would receive the picture, so the screen can say so before anything is sent.
+router.get('/describe/info', async (req, res) => {
+  try {
+    const modelId = await pickVisionModel(req.user.id);
+    res.json({ available: Boolean(modelId), provider: providerLabel(modelId) });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Could not check' });
+  }
+});
 
 router.post('/describe', async (req, res) => {
   try {

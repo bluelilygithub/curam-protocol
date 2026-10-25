@@ -40,6 +40,7 @@ async function priceOfRecipe(userId, q) {
   }
   const ai = paid.paidSteps(steps);
   if (!ai.length) return { usd: 0, local: true, maxPerCall: null };
+  if (runtimeConfig.isLocal && ai.some((s) => s.op === 'upscale')) return { usd: null, unavailable: paid.UPSCALE_LIVE_ONLY, maxPerCall: null };
   const prices = paid.makePrices({ isLocal: runtimeConfig.isLocal, backgroundCost: estimateBackgroundCost, upscaleCost: upscaleCostForSize });
   const one = paid.priceOneRun(steps, { width: Number(q.width) || 0, height: Number(q.height) || 0 }, prices);
   const max = paid.maxPicturesPerCall(steps);
@@ -79,7 +80,7 @@ router.get('/cost-preview', async (req, res) => {
       tool,
       ...buildCostPreview({ perRunUsd: cost.usd, runs, spentUsd, capUsd: dailyCapUsd(), estimate: cost.estimate }),
       megapixels: cost.megapixels ?? null,
-      ...(tool === 'recipe' ? { maxPerCall: cost.maxPerCall ?? null } : {}),
+      ...(tool === 'recipe' ? { maxPerCall: cost.maxPerCall ?? null, unavailable: cost.unavailable || null } : {}),
     });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });

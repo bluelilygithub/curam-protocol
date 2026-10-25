@@ -27,4 +27,7 @@ assert.strictEqual(describeCost({ ...base, blocked: true, remainingUsd: 0 }).lev
 assert.match(describeCost({ ...base, unknown: true, perRunUsd: null, totalUsd: null }).text, /\$4\.50 of today's/);
 assert.ok(!/limit left/.test(describeCost({ ...base, capUsd: null, remainingUsd: null }).text));
 
+// A step that cannot run here is shown as blocked, in its own words.
+assert.deepStrictEqual(describeCost({ ...base, unavailable: 'Upscale works on the live site only.' }), { text: 'Upscale works on the live site only.', level: 'block' });
+
 console.log('costText: ok');

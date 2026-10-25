@@ -27,6 +27,7 @@ const FONT_FILES = {
 };
 
 const FALLBACK_EM_PER_CHAR = 0.62;
+let warned = false;
 const cache = {}; // 'regular' | 'bold' -> opentype Font, or null once we know there is none
 
 function loadFont(kind) {
@@ -38,6 +39,10 @@ function loadFont(kind) {
       cache[kind] = opentype.parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
       break;
     } catch { /* try the next location */ }
+  }
+  if (!cache[kind] && !warned) {
+    warned = true;
+    console.warn('[graphics] no Arial / Liberation Sans font file found: text widths use a rough estimate (wrapping and box sizes may be a little off)');
   }
   return cache[kind];
 }

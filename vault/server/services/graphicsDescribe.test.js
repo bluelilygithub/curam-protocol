@@ -4,7 +4,7 @@
 // Alt text and file name suggestions, with a fake model: no network, no database.
 const assert = require('assert');
 const sharp = require('sharp');
-const { describeImage, cleanAlt, slugFilename, parseDescription, buildPrompt, canSeePictures, ALT_MAX } = require('./graphicsDescribe');
+const { pickVisionModel, providerLabel, describeImage, cleanAlt, slugFilename, parseDescription, buildPrompt, canSeePictures, ALT_MAX } = require('./graphicsDescribe');
 
 // ── tidying what the model says ──────────────────────────────────────────────────────────
 assert.strictEqual(cleanAlt('  An image of "a red kettle"\n on a bench '), 'A red kettle on a bench');
@@ -43,6 +43,11 @@ assert.ok(buildPrompt('x'.repeat(2000)).length < 2000, 'context is capped');
 assert.ok(canSeePictures('gemini-x') && canSeePictures('claude-x'));
 assert.ok(!canSeePictures('deepseek-x') && !canSeePictures('ollama:llama') && !canSeePictures(''));
 
+// ── who would receive the picture ────────────────────────────────────────────────────────
+assert.strictEqual(providerLabel('gemini-2-flash'), 'Google Gemini');
+assert.strictEqual(providerLabel('claude-x'), 'Anthropic Claude');
+assert.strictEqual(providerLabel(null), null);
+
 // ── the whole thing, with a fake model ───────────────────────────────────────────────────
 (async () => {
   const png = `data:image/png;base64,${(await sharp({ create: { width: 2400, height: 1200, channels: 4, background: { r: 200, g: 40, b: 40, alpha: 0.5 } } }).png().toBuffer()).toString('base64')}`;
@@ -67,6 +72,9 @@ assert.ok(!canSeePictures('deepseek-x') && !canSeePictures('ollama:llama') && !c
   assert.ok(Math.max(sent.width, sent.height) <= 1024, 'a reduced copy is sent, not the original');
   assert.ok(calls[0].prompt.includes('a page about paint'));
   assert.deepStrictEqual([logs[0].userId, logs[0].feature, logs[0].inputTokens], [7, 'graphics_describe', 1000]);
+
+  assert.strictEqual(await pickVisionModel(7, deps), 'claude-test'); // the same choice the real call makes
+  assert.strictEqual(await pickVisionModel(7, { getModelsForUser: async () => ({ light: 'deepseek-flash' }) }), null);
 
   // No model that can look: a clear 503, and nothing is sent.
   await assert.rejects(describeImage(7, png, {}, { ...deps, getModelsForUser: async () => ({ light: 'deepseek-flash', standard: 'ollama:x' }) }), (e) => e.status === 503 && /look at pictures/.test(e.message));

@@ -64,6 +64,16 @@ Where the picture will be used (a description from the person, to be treated as 
 
 const canSeePictures = (id) => Boolean(id) && (String(id).startsWith('gemini-') || !/^(ollama:|deepseek-)/.test(String(id)));
 
+/** The model that would be used for this person (light, then standard, then Gemini: the first that can look at pictures), or null. */
+async function pickVisionModel(userId, deps = {}) {
+  const getModelsForUser = deps.getModelsForUser || require('./modelResolver').getModelsForUser;
+  const models = await getModelsForUser(userId);
+  return [models.light, models.standard, models.gemini].find(canSeePictures) || null;
+}
+
+/** Who receives the picture, in words for the person: "Google Gemini" or "Anthropic Claude". */
+const providerLabel = (modelId) => (!modelId ? null : String(modelId).startsWith('gemini-') ? 'Google Gemini' : 'Anthropic Claude');
+
 /** A smaller JPEG copy of the picture: fewer tokens, and less of the original leaves the server. */
 async function prepareForModel(imageDataUrl) {
   const m = String(imageDataUrl || '').match(/^data:image\/[a-z0-9.+-]+;base64,(.+)$/i);
@@ -85,11 +95,9 @@ async function prepareForModel(imageDataUrl) {
  */
 async function describeImage(userId, imageDataUrl, { context = '' } = {}, deps = {}) {
   const callModel = deps.callModel || require('./callModel').callModel;
-  const getModelsForUser = deps.getModelsForUser || require('./modelResolver').getModelsForUser;
   const logUsage = deps.logUsage || require('../utils/logUsage').logUsage;
 
-  const models = await getModelsForUser(userId);
-  const modelId = [models.light, models.standard, models.gemini].find(canSeePictures);
+  const modelId = await pickVisionModel(userId, deps);
   if (!modelId) {
     throw Object.assign(new Error('No AI model that can look at pictures is set up for this workspace. Add a Claude or Gemini model in Settings.'), { status: 503 });
   }
@@ -106,4 +114,4 @@ async function describeImage(userId, imageDataUrl, { context = '' } = {}, deps =
   return { ...parsed, model: out.model || modelId };
 }
 
-module.exports = { describeImage, cleanAlt, slugFilename, parseDescription, buildPrompt, canSeePictures, ALT_MAX };
+module.exports = { pickVisionModel, providerLabel, describeImage, cleanAlt, slugFilename, parseDescription, buildPrompt, canSeePictures, ALT_MAX };

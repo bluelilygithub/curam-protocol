@@ -1,5 +1,5 @@
 import { useIcon } from '../../../providers/IconProvider';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import api from '../../../utils/apiClient';
 import Tooltip from '../../../components/Tooltip';
 import { useGraphics } from '../GraphicsContext';
@@ -19,6 +19,16 @@ export default function AltTextTool({ active }) {
   const [context, setContext] = useState('');
   const [running, setRunning] = useState(false);
   const [copied, setCopied] = useState('');
+  // Who would receive the pictures (from the workspace's Settings), so the notice can name them before anything is sent.
+  const [provider, setProvider] = useState(undefined); // undefined = checking, null = no model that can look at pictures
+  useEffect(() => {
+    let off = false;
+    api.get('/api/graphics/describe/info')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!off) setProvider(d ? (d.available ? d.provider : null) : undefined); })
+      .catch(() => { if (!off) setProvider(undefined); });
+    return () => { off = true; };
+  }, []);
 
   const patch = (id, p) => setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...p } : it)));
 
@@ -90,7 +100,9 @@ export default function AltTextTool({ active }) {
             Alt text is the short description a screen reader speaks and search engines read. This suggests it, and a file name that says what the picture shows. Always read and edit the suggestions before you use them.
           </p>
           <p className="text-xs rounded-lg px-3 py-2" style={{ color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
-            Nothing is sent until you press <strong>Suggest</strong>. Then a reduced copy of each picture goes to the AI service (not the original file).
+            {provider === null
+              ? <>No AI model that can look at pictures is set up for this workspace yet, so Suggest will not work. Ask your admin to add a Claude or Gemini model in Settings.</>
+              : <>Nothing is sent until you press <strong>Suggest</strong>. Then a reduced copy of each picture (not the original file) is sent on through Vault to <strong>{provider || 'the AI service'}</strong>. That is outside this browser, unlike most Graphics tools.</>}
           </p>
 
           <div className="space-y-2">
@@ -123,7 +135,7 @@ export default function AltTextTool({ active }) {
             <Tooltip text="Ask the AI to suggest alt text and a file name for each picture that does not have one yet."><button
               type="button"
               onClick={suggestAll}
-              disabled={running || !pending.length}
+              disabled={running || !pending.length || provider === null}
               className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2"
               style={{ background: 'var(--color-primary)' }}
             >

@@ -11,6 +11,8 @@ const MAX_UPSCALE_OUTPUT_MP = Number(process.env.GRAPHICS_MAX_UPSCALE_MP) || 64;
 // minutes. So a call carrying AI steps takes fewer pictures; the browser sends the rest in further calls.
 const MAX_PICTURES_PER_CALL = { removebg: 8, upscale: 4 };
 
+const UPSCALE_LIVE_ONLY = 'Upscale inside a recipe uses the hosted AI service, which this local copy of Vault does not use. It works on the live site. Remove the Upscale step to run it here.';
+
 const isPaidOp = (op) => PAID_OPS.includes(op);
 const paidSteps = (steps) => (Array.isArray(steps) ? steps.filter((s) => isPaidOp(s?.op)) : []);
 
@@ -89,4 +91,4 @@ function makePrices({ isLocal, backgroundCost, upscaleCost }) {
   };
 }
 
-module.exports = { makePrices, PAID_OPS, MAX_PICTURES_PER_CALL, isPaidOp, paidSteps, upscaleScaleOf, maxPicturesPerCall, priceOneRun, priceJob, upscaleTooBig, parsePaidList };
+module.exports = { UPSCALE_LIVE_ONLY, makePrices, PAID_OPS, MAX_PICTURES_PER_CALL, isPaidOp, paidSteps, upscaleScaleOf, maxPicturesPerCall, priceOneRun, priceJob, upscaleTooBig, parsePaidList };

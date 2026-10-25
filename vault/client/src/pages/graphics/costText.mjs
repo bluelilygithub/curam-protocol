@@ -7,6 +7,7 @@ const money = (n) => `$${Number(n) < 1 ? Number(n).toFixed(3) : Number(n).toFixe
 /** Returns { text, level } where level is 'info' | 'warn' | 'block', or null when there is nothing to say. */
 export function describeCost(p) {
   if (!p) return null;
+  if (p.unavailable) return { text: p.unavailable, level: 'block' }; // for example Upscale in a recipe on a local copy
   const left = p.capUsd != null
     ? ` ${money(p.remainingUsd)} of today's ${money(p.capUsd)} limit left.`
     : '';

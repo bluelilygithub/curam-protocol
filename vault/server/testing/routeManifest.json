@@ -1552,6 +1552,9 @@
   "GET /api/graphics/convert/info": {
    "class": "authed"
   },
+  "GET /api/graphics/describe/info": {
+   "class": "authed"
+  },
   "POST /api/graphics/describe": {
    "class": "authed"
   },

@@ -59,6 +59,10 @@ function capImagePixels(maxMegapixels = MAX_MEGAPIXELS) {
 }
 
 const inFlight = new Map();
+// Money promised to jobs that are still running, per person. Spending is only written to usage_logs as each AI call finishes, so
+// without this two jobs started together would both see the same balance and could carry the day past the limit between them.
+const reservedUsd = new Map();
+const reservedFor = (userId) => reservedUsd.get(userId) || 0;
 
 /** What this person has spent on paid graphics tools in the last 24 hours (USD), from the Usage dashboard's rows. */
 async function spentLast24h(pool, userId, feature = 'graphics_%') {
@@ -75,7 +79,7 @@ async function spentLast24h(pool, userId, feature = 'graphics_%') {
  * Decides whether a paid job may start, and if so takes one of the person's "jobs at once" slots.
  * `totalUsd` is what the whole job is expected to cost (0 when unknown or for a single tool call): when it is more than 0 the job is also
  * refused up front if it would carry the day's spending past the limit, so a batch is never stopped half way by the limit.
- * Returns { refuse: { status, body } } or { release }.
+ * The job's cost is reserved while it runs, so a second job started at the same time sees it. Returns { refuse: { status, body } } or { release }.
  */
 async function startPaidJob(pool, userId, { totalUsd = 0, feature = 'graphics_%' } = {}) {
   if ((inFlight.get(userId) || 0) >= MAX_IN_FLIGHT) {
@@ -85,7 +89,7 @@ async function startPaidJob(pool, userId, { totalUsd = 0, feature = 'graphics_%'
   const cap = dailyCapUsd();
   if (cap > 0) {
     try {
-      const spent = await spentLast24h(pool, userId, feature);
+      const spent = (await spentLast24h(pool, userId, feature)) + reservedFor(userId);
       if (spent >= cap) {
         return {
           refuse: {
@@ -120,12 +124,18 @@ async function startPaidJob(pool, userId, { totalUsd = 0, feature = 'graphics_%'
   }
 
   inFlight.set(userId, (inFlight.get(userId) || 0) + 1);
+  const reserve = Math.max(0, Number(totalUsd) || 0);
+  if (reserve > 0) reservedUsd.set(userId, reservedFor(userId) + reserve);
   let released = false;
   const release = () => {
     if (released) return;
     released = true;
     const left = (inFlight.get(userId) || 1) - 1;
     if (left > 0) inFlight.set(userId, left); else inFlight.delete(userId);
+    if (reserve > 0) {
+      const rest = reservedFor(userId) - reserve;
+      if (rest > 0.00001) reservedUsd.set(userId, rest); else reservedUsd.delete(userId);
+    }
   };
   return { release };
 }

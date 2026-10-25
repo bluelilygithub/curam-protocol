@@ -105,7 +105,7 @@ async function applyPipelineStep(buffer, step, ctx = {}) {
   }
   if (op === 'upscale') {
     const d = paidDeps(ctx);
-    if (d.isLocal) throw stepError('Upscaling inside a recipe uses the hosted AI service, which this local copy of Vault does not use. It works on the live site.');
+    if (d.isLocal) throw stepError(paid.UPSCALE_LIVE_ONLY);
     const upright = await sharp(buffer).rotate().png({ compressionLevel: 1 }).toBuffer();
     const meta = await sharp(upright).metadata();
     const scale = paid.upscaleScaleOf(step);
@@ -166,6 +166,9 @@ async function runPipeline({ imageDataUrl, steps, format, quality, brandLogoData
   assertStill(meta);
   const tooBig = paid.upscaleTooBig(valid, orientedSize(meta)); // refuse before spending anything
   if (tooBig) throw stepError(tooBig);
+  // Upscale uses the hosted AI service: say so before the first step runs, not when it is reached.
+  const isLocal = deps && 'isLocal' in deps ? deps.isLocal : runtimeConfig.isLocal;
+  if (isLocal && valid.some((s) => s.op === 'upscale')) throw stepError(paid.UPSCALE_LIVE_ONLY);
   let fmt = outputFormatFor(meta);
   const wanted = PIPE_OUT_FORMATS[String(format || '').toLowerCase()];
   if (wanted) fmt = wanted;
