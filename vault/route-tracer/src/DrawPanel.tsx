@@ -1,5 +1,8 @@
 import { ChevronLeft } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import type maplibregl from 'maplibre-gl';
+import { useEffect, useMemo, useState } from 'react';
+import { DirectionsList } from './Directions';
+import { turnCues } from './turns';
 import { canSnap, cleared, displayLines, hasWork, snapCounts, snapRetry, undo } from './drawing';
 import { ElevationChart } from './ElevationChart';
 import { formatDistance, totalKm } from './geo';
@@ -8,10 +11,14 @@ import { PROFILES } from './Plan';
 import { useStore } from './store';
 
 /** The drawing tools, as a sidebar view: the distance so far, how to draw, route shapes, elevation, and Undo / Clear / Finish / Cancel at the foot. */
-export function DrawPanel({ onFinish }: { onFinish: () => void }) {
+export function DrawPanel({ onFinish, map }: { onFinish: () => void; map: maplibregl.Map | null }) {
   const { draw, mode, setMode, apply, units, stopDrawing, selectedVertex, setSelectedVertex, deleteSelectedVertex, extendingId, setPanel, closeLoop, outAndBack, elevationOpen, setElevationOpen, drawColor, imported, followRoads, setFollowRoads, followProfile, setFollowProfile, routePlanning } = useStore();
   const lines = useMemo(() => displayLines(draw), [draw]);
   const km = useMemo(() => totalKm(lines), [lines]);
+  // directions for the line as drawn, worked out a moment after the last change so drawing stays smooth
+  const [dirLines, setDirLines] = useState(lines);
+  useEffect(() => { const t = setTimeout(() => setDirLines(lines), 350); return () => clearTimeout(t); }, [lines]);
+  const cues = useMemo(() => turnCues(dirLines), [dirLines]);
   const [confirmClear, setConfirmClear] = useState(false);
   const work = hasWork(draw);
   const c = snapCounts(draw);
@@ -75,6 +82,7 @@ export function DrawPanel({ onFinish }: { onFinish: () => void }) {
           <button type="button" onClick={() => setElevationOpen(!elevationOpen)} aria-pressed={elevationOpen} disabled={!work} title="Show the elevation profile and total climb for this route, from terrain data" data-tour="rt-elev">Elevation</button>
         </div>
         {elevationOpen && work && <ElevationChart lines={lines} color={drawColor} name={imported?.name ?? 'Drawing'} />}
+        {work && cues.length > 1 && <DirectionsList cues={cues} map={map} units={units} title={imported?.name ?? 'Drawn route'} shapeOnly />}
       </div>
       <div className="side-foot" data-tour="rt-actions">
         <button type="button" className="primary wide" onClick={onFinish} disabled={!work || c.waiting > 0} title={c.waiting > 0 ? 'Waiting for the roads to be found, a moment' : 'Finish drawing and save it as a named track'}>Finish</button>

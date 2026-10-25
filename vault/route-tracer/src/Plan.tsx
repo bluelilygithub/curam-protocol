@@ -13,6 +13,7 @@ import { MIN_LETTERS, suggestPlaces } from './placeSearch';
 import { tidySpoken } from './voice';
 import { parseSpokenNumber } from '@vault-client/utils/units/numbers.mjs';
 import { DirectionsList } from './Directions';
+import { turnCues } from './turns';
 import { saveLastStart } from './suggest';
 import { useStore } from './store';
 
@@ -602,7 +603,7 @@ export function PlanPanel({ map }: { map: maplibregl.Map | null }) {
                 </li>
               ); })}
             </ul>
-            {routes[selected]?.steps?.length ? <DirectionsList cues={routes[selected].steps as Cue[]} map={map} units={units} title={planTitle} /> : null}
+            {routes[selected] ? <DirectionsList cues={routes[selected].steps?.length ? routes[selected].steps as Cue[] : turnCues([routes[selected].coordinates])} map={map} units={units} title={planTitle} shapeOnly={!routes[selected].steps?.length} /> : null}
           </>
         )}
         {hasLength && <button type="button" onClick={moreLoops} disabled={!from || (detour && (!to || directOnly)) || !lengthOk || busy || round >= 9} title={loop ? 'Ask for different loops of the same length, heading in other directions' : 'Ask for different routes of the same length, bending the other way or at another point'} data-testid="more-loops">{different}</button>}

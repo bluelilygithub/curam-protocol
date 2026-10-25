@@ -23,7 +23,7 @@ async function copyText(text: string): Promise<boolean> {
  * Copy puts them on the clipboard as numbered lines, Download .txt saves the same text as a file. Used by Plan route (the route being chosen)
  * and by a saved track that came from a planned route.
  */
-export function DirectionsList({ cues, map, units, title = 'Route', startOpen = false }: { cues: Cue[]; map: maplibregl.Map | null; units: Units; title?: string; startOpen?: boolean }) {
+export function DirectionsList({ cues, map, units, title = 'Route', startOpen = false, shapeOnly = false }: { cues: Cue[]; map: maplibregl.Map | null; units: Units; title?: string; startOpen?: boolean; /** The directions were worked out from the shape of the line, so they have no street names. */ shapeOnly?: boolean }) {
   const [open, setOpen] = useState(startOpen);
   const toast = useStore((s) => s.toast);
   if (!cues.length) return null;
@@ -51,9 +51,10 @@ export function DirectionsList({ cues, map, units, title = 'Route', startOpen = 
         Directions · {cues.length} {cues.length === 1 ? 'step' : 'steps'}
       </button>
       <div className="directions-actions">
-        <button type="button" onClick={() => void copy()} title="Copy the directions to the clipboard as numbered lines, to paste into an email or notes">Copy</button>
+        <button type="button" onClick={() => void copy()} title="Copy the directions to the clipboard as numbered lines, to paste into an email or notes">Copy as text</button>
         <button type="button" onClick={download} title="Save the directions as a plain text (.txt) file">Download .txt</button>
       </div>
+      {open && shapeOnly && <p className="hint">Worked out from the shape of the line, so they say which way to turn but not the street names.</p>}
       {open && (
         <ol className="directions-list">
           {rows.map(({ c, at }, i) => (

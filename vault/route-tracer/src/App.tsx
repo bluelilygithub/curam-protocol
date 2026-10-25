@@ -128,7 +128,7 @@ function Shell({ mapKey, map, onMap }: { mapKey: string; map: maplibregl.Map | n
       <Header map={map} />
       <div className="body">
         <div className="sidebar" data-testid="sidebar">
-          {planning ? <PlanPanel map={map} /> : drawing ? <DrawPanel onFinish={onFinish} /> : <TracksPanel map={map} />}
+          {planning ? <PlanPanel map={map} /> : drawing ? <DrawPanel onFinish={onFinish} map={map} /> : <TracksPanel map={map} />}
         </div>
         <div className="mapwrap">
           <MapView mapKey={mapKey} onMap={onMap} />

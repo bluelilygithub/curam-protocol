@@ -978,6 +978,25 @@ await wait(300);
   await page.getByRole('button', { name: 'Cancel' }).click(); await wait(300);
 }
 
+// ---- Directions straight from drawing, no routing service needed
+{
+  await home();
+  await page.getByRole('button', { name: 'Draw a route' }).click();
+  await page.getByRole('button', { name: 'Click', exact: true }).click();
+  for (const [x, y] of [[300, 500], [300, 300], [600, 300]]) { await page.mouse.click(MX + x, MY + y); await wait(350); }
+  await wait(900);
+  const dd = page.getByRole('region', { name: 'Drawing tools' }).getByTestId('directions');
+  check('while drawing, directions appear for the line so far', (await dd.count()) === 1 && /Directions · 3 steps/.test((await dd.textContent()) ?? ''), (await dd.textContent().catch(() => '')) ?? '');
+  await dd.getByRole('button').first().click();
+  const t = (await page.locator('.directions-list li .dt').allTextContents()).join(' | ');
+  check('go north, turn right, arrive', /^Head north \| Turn right \| Arrive/.test(t), t);
+  await tipsOk('drawing tools: directions');
+  await page.getByRole('button', { name: 'Clear' }).click();
+  await page.getByRole('button', { name: 'Yes' }).click(); await wait(500);
+  check('and go away when the drawing is cleared', (await dd.count()) === 0);
+  await page.getByTestId('draw-back').click(); await wait(300);
+}
+
 // ---- Plan route: stops between A and B, turn-by-turn directions, saving them, the directions PDF, and an undoable delete
 {
   await home();
@@ -1000,8 +1019,8 @@ await wait(300);
   await page.locator('.directions-list li').nth(1).getByRole('button').click(); await wait(900);
   const c1 = await center();
   check('tapping a step takes the map to where it happens', Math.abs(c1[0] - c0[0]) + Math.abs(c1[1] - c0[1]) > 1e-4);
-  check('the directions can be copied or downloaded as text', (await page.getByTestId('directions').getByRole('button', { name: 'Copy' }).count()) === 1 && (await page.getByTestId('directions').getByRole('button', { name: 'Download .txt' }).count()) === 1);
-  await page.getByTestId('directions').getByRole('button', { name: 'Copy' }).click(); await wait(400);
+  check('the directions can be copied or downloaded as text', (await page.getByTestId('directions').getByRole('button', { name: 'Copy as text' }).count()) === 1 && (await page.getByTestId('directions').getByRole('button', { name: 'Download .txt' }).count()) === 1);
+  await page.getByTestId('directions').getByRole('button', { name: 'Copy as text' }).click(); await wait(400);
   check('Copy says it worked (or says to use the download)', (await page.locator('.toast', { hasText: /Directions copied|Use Download/ }).count()) >= 1);
   const [txt] = await Promise.all([page.waitForEvent('download'), page.getByTestId('directions').getByRole('button', { name: 'Download .txt' }).click()]);
   const txtBody = readFileSync(await txt.path(), 'utf8');
@@ -1089,7 +1108,7 @@ await wait(300);
   await page.getByRole('button', { name: 'Finish' }).click();
   await dlg.getByLabel('Name').press('Enter');
   await page.getByLabel('Track detail').waitFor();
-  check('extended, the old directions are gone and none are shown', db.at(-1).cues === null && (await page.getByLabel('Track detail').getByTestId('directions').count()) === 0 && (await page.getByRole('button', { name: 'Directions as PDF' }).count()) === 0);
+  check('extended, the street-name directions are dropped (they would no longer match) but directions from the line shape are still shown', db.at(-1).cues === null && (await page.getByLabel('Track detail').getByTestId('directions').count()) === 1 && (await page.getByTestId('add-street-names').count()) === 1 && (await page.getByRole('button', { name: 'Directions as PDF' }).count()) === 1);
 
   // favourite, copy, reverse
   {
@@ -1156,20 +1175,22 @@ await wait(300);
   await box.getByLabel('Name').press('Enter');
   await page.getByLabel('Track detail').waitFor();
   check('the saved track shows its directions', db.at(-1).name === 'Saved straight from the plan' && db.at(-1).cues?.length === 3 && (await page.getByLabel('Track detail').getByTestId('directions').count()) === 1);
-  check('and does not offer Get directions, it has them', (await page.getByTestId('get-directions').count()) === 0);
+  check('and does not offer street names, it already has them', (await page.getByTestId('add-street-names').count()) === 0);
 
   // a track with no directions: a drawn one
   seed('Old drawn track');
   await page.reload(); await ready(page);
   await page.getByRole('button', { name: /Old drawn track/ }).click();
   await page.getByLabel('Track detail').waitFor();
-  check('a track without directions says so and offers Get directions', (await page.getByTestId('get-directions').count()) === 1 && (await page.getByTestId('directions').count()) === 0);
-  await tipsOk('track detail: get directions');
-  await page.getByTestId('get-directions').getByLabel('Travel by').selectOption('cycling');
-  await page.getByRole('button', { name: 'Get directions' }).click(); await wait(800);
-  check('Get directions asks for the chosen way of travelling', directionsLog.length === 1 && directionsLog[0].profile === 'cycling', JSON.stringify(directionsLog));
-  check('then the directions appear on the track, with the PDF button', (await page.getByLabel('Track detail').getByTestId('directions').count()) === 1 && (await page.getByTestId('get-directions').count()) === 0 && (await page.getByRole('button', { name: 'Directions as PDF' }).count()) === 1);
-  check('and are saved with it', db.find((t) => t.name === 'Old drawn track').cues?.length === 3);
+  check('a track with no street-name directions still shows directions, from the shape of its line', (await page.getByTestId('directions').count()) === 1 && /Directions · \d+ steps/.test((await page.getByTestId('directions').textContent()) ?? ''));
+  await page.getByTestId('directions').getByRole('button').first().click();
+  check('they say which way to go and how far, and that there are no street names', /^Head /.test((await page.locator('.directions-list li .dt').first().textContent()) ?? '') && /Arrive/.test((await page.locator('.directions-list li .dt').last().textContent()) ?? '') && /not the street names/.test((await page.getByTestId('directions').textContent()) ?? ''));
+  await tipsOk('track detail: directions from the line');
+  const tx = await Promise.all([page.waitForEvent('download'), page.getByTestId('directions').getByRole('button', { name: 'Download .txt' }).click()]);
+  check('and can be downloaded as text without doing anything else first', /^1\. Head /m.test(readFileSync(await tx[0].path(), 'utf8')));
+  check('Directions as PDF is there too', (await page.getByRole('button', { name: 'Directions as PDF' }).count()) === 1);
+  await page.getByTestId('add-street-names').click(); await wait(800);
+  check('Add street names asks the routing service, then the street-name directions replace them', directionsLog.length === 1 && typeof directionsLog[0].profile === 'string' && (await page.getByTestId('add-street-names').count()) === 0 && db.find((t) => t.name === 'Old drawn track').cues?.length === 3);
 }
 
 // ---- Plan route: the A and B fields (named places, searched on Enter, never as you type) and the order of the routes

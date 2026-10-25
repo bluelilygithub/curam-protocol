@@ -11,8 +11,9 @@ import { ElevationChart } from './ElevationChart';
 import { ExportPdf } from './ExportPdf';
 import { SendToWatch } from './SendToWatch';
 import { buildCuePdf } from './cuePdf';
-import { PROFILES, usePlan } from './Plan';
+import { usePlan } from './Plan';
 import { findStart, loopChoices } from './suggest';
+import { turnCues } from './turns';
 import { fitToLimit } from './gpx';
 import { fitPadding } from './layout';
 import { Field, Mic } from './Mic';
@@ -123,7 +124,6 @@ export function SaveDialog({ onSaved }: { onSaved: (t: Track) => void }) {
         <Field label="Notes (optional)">{(id) => <span className="vwrap vwrap-area"><textarea id={id} title="Anything worth remembering about this route: surface, parking, turnaround points" value={notes} maxLength={2000} rows={3} onChange={(e) => setNotes(e.target.value)} /><Mic area label="Speak a note, added to the end" onDone={(t) => { setNotes((n) => `${n.trim() ? `${n.trim()} ` : ''}${t.trim()}`.slice(0, 2000)); }} /></span>}</Field>
         <Swatches value={drawColor} onChange={setDrawColor} />
         <p className="stats">{formatDistance(km, units)} · {points} points{cues ? ` · ${cues.length} directions` : ''}</p>
-        {planned && !cues && <p className="hint" data-testid="no-directions">{plannedCues ? 'Directions are not saved: the line no longer matches the planned route.' : 'This route came without directions, so none are saved.'}</p>}
         <div className="row">
           <button type="button" onClick={() => setSaving(false)} title="Go back to the drawing without saving (Escape does the same)">Keep drawing</button>
           <button type="submit" className="primary" disabled={busy || !name.trim()} title="Save this track to your Vault account">{busy ? 'Saving…' : 'Save'}</button>
@@ -310,8 +310,10 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
   const [watchOpen, setWatchOpen] = useState(false);
   const [cuePdfBusy, setCuePdfBusy] = useState(false);
   const [dirBusy, setDirBusy] = useState(false);
-  const [dirProfile, setDirProfile] = useState(() => usePlan.getState().profile);
   const routePlanning = useStore((s) => s.routePlanning);
+  // directions with street names if the routing service gave them when the route was saved, else worked out from the shape of the line
+  const hasNames = !!track.cues?.length;
+  const shownCues = useMemo(() => (track.cues?.length ? track.cues : turnCues(track.geometry.coordinates)), [track.cues, track.geometry]);
   const [fav, setFav] = useState(track.favourite);
 
   useEffect(() => { setPdfOpen(false); setWatchOpen(false); setName(track.name); setNotes(track.notes ?? ''); setColor(track.color); setEditing(false); setConfirmDelete(false); setFav(track.favourite); }, [track.id, track.updatedAt, track.name, track.notes, track.color, track.favourite]);
@@ -326,21 +328,21 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
     setBusy(true);
     try { const r = await api.remove(track.id); offerUndo(`Deleted ${track.name}.`, r?.binId ? [r.binId] : []); onGone(); } catch (err) { toast('error', errText(err)); setBusy(false); }
   }
-  /** Directions for a track that has none (an older, drawn or imported one): saved on the track, shown straight away. */
-  async function getDirections() {
+  /** Optional upgrade: ask the routing service for street names along the track (the way of travelling is the one last used for planning). */
+  async function addStreetNames() {
     setDirBusy(true);
     try {
-      const r = await api.directions(track.id, dirProfile);
+      const r = await api.directions(track.id, usePlan.getState().profile);
       onChanged(r.track);
-      toast('ok', `Directions added: ${r.track.cues?.length ?? 0} steps. They follow roads, so they can differ a little from your line.`, 6000);
-    } catch (err) { toast('error', errText(err)); } finally { setDirBusy(false); }
+      toast('ok', 'Street names added to the directions.');
+    } catch { toast('error', 'Street names are not available for this track just now. The directions still work without them.', 5000); } finally { setDirBusy(false); }
   }
   /** The directions as a printable PDF, made in the browser and saved from a Blob link. */
   async function directionsPdf() {
-    if (!track.cues?.length || cuePdfBusy) return;
+    if (!shownCues.length || cuePdfBusy) return;
     setCuePdfBusy(true);
     try {
-      const bytes = await buildCuePdf({ title: track.name, notes: track.notes, dateLabel: fmtDate(track.createdAt), color: track.color, units, totalM: track.distanceM, cues: track.cues });
+      const bytes = await buildCuePdf({ title: track.name, notes: track.notes, dateLabel: fmtDate(track.createdAt), color: track.color, units, totalM: track.distanceM, cues: shownCues });
       const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }));
       const a = document.createElement('a');
       a.href = url;
@@ -407,17 +409,11 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
             <p className="hint">{fmtDate(track.createdAt)} · {track.pointCount} points</p>
             {track.notes && <p className="notes">{track.notes}</p>}
             <ElevationChart lines={track.geometry.coordinates} color={track.color} name={track.name} />
-            {track.cues?.length ? <DirectionsList cues={track.cues} map={map} units={units} title={track.name} /> : routePlanning ? (
-              <section className="get-directions" aria-label="Get directions" data-testid="get-directions">
-                <p className="hint">This track has no turn-by-turn directions yet.</p>
-                <div className="row">
-                  <select aria-label="Travel by" value={dirProfile} onChange={(e) => setDirProfile(e.target.value as typeof dirProfile)} title="How you will travel it, so the directions use the right roads and paths">
-                    {PROFILES.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-                  </select>
-                  <button type="button" disabled={dirBusy} onClick={() => void getDirections()} title="Work out turn-by-turn directions along this track's route and save them with it. They follow roads and paths, so they can differ a little from the line you drew.">{dirBusy ? 'Working it out…' : 'Get directions'}</button>
-                </div>
-              </section>
-            ) : null}
+            {shownCues.length > 1 && <DirectionsList cues={shownCues} map={map} units={units} title={track.name} shapeOnly={!hasNames} />}
+            {!hasNames && shownCues.length > 1 && routePlanning && (
+              <button type="button" className="link" disabled={dirBusy} onClick={() => void addStreetNames()} data-testid="add-street-names"
+                title="Ask the routing service for the street names along this track and add them to the directions. The directions above work without them.">{dirBusy ? 'Looking up street names…' : 'Add street names to the directions'}</button>
+            )}
             <div className="stack">
               <button type="button" onClick={() => void toggleFavourite()} aria-pressed={fav} title={fav ? 'This is one of your favourites. Press to remove the star.' : 'Star this track as a favourite, so you can list only your favourites'}>
                 <Star size={14} aria-hidden="true" className={fav ? 'fav-on' : ''} /> {fav ? 'Favourite' : 'Add to favourites'}
@@ -431,7 +427,7 @@ function TrackDetail({ map, track, onChanged, onGone }: { map: maplibregl.Map | 
               <button type="button" onClick={() => setWatchOpen((o) => !o)} aria-expanded={watchOpen} title="Get this route onto a Zepp watch such as the Amazfit Bip 6">Send to watch</button>
               {watchOpen && <SendToWatch track={track} />}
               <button type="button" onClick={() => setPdfOpen(true)} title="Make a printable A4 map of this route as a PDF, to download or email" data-tour="rt-pdf">Map as PDF</button>
-              {track.cues?.length ? <button type="button" onClick={() => void directionsPdf()} disabled={cuePdfBusy} title="Download the turn-by-turn directions as a printable PDF list">{cuePdfBusy ? 'Making the PDF…' : 'Directions as PDF'}</button> : null}
+              {shownCues.length > 1 ? <button type="button" onClick={() => void directionsPdf()} disabled={cuePdfBusy} title="Download the turn-by-turn directions as a printable PDF list">{cuePdfBusy ? 'Making the PDF…' : 'Directions as PDF'}</button> : null}
               {confirmDelete ? (
                 <div className="row">
                   <span>Delete this track?</span>
