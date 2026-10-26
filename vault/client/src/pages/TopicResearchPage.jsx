@@ -10,6 +10,7 @@ import ResultsView from './topicResearch/ResultsView';
 import BriefView from './topicResearch/BriefView';
 import DraftView from './topicResearch/DraftView';
 import WorkflowBar from './topicResearch/WorkflowBar';
+import PromptPanel from './topicResearch/PromptPanel';
 import SettingsPanel from './topicResearch/SettingsPanel';
 import HistoryPanel from './topicResearch/HistoryPanel';
 import TopicResearchTutorChat from './topicResearch/TopicResearchTutorChat';
@@ -17,7 +18,7 @@ import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { HOW_IT_WORKS, GUIDE_TOOLS } from './topicResearch/topicResearchTools.mjs';
 import { startTopicResearchTour, TOUR_KEY } from '../utils/tours/topicResearchTour';
 import { withProgress } from './topicResearch/withProgress';
-import { REFRESH_CHOICES, SEARCH_STEP_LABELS, budgetBanner, heatBadge, orderTopics, refreshLabel, statusLabel, timeAgo } from './topicResearch/format.mjs';
+import { explainFailure, REFRESH_CHOICES, SEARCH_STEP_LABELS, budgetBanner, heatBadge, orderTopics, refreshLabel, statusLabel, timeAgo } from './topicResearch/format.mjs';
 
 // Status colours are deliberately outside the theme (see client/DESIGN.md).
 const LEVEL = { good: '#16a34a', warn: '#f59e0b', bad: '#ef4444', info: 'var(--color-muted)' };
@@ -44,6 +45,8 @@ export default function TopicResearchPage() {
   const [suggested, setSuggested] = useState(null); // other ways to word the topic: null = not asked, [] = nothing to add
   const [ticked, setTicked] = useState(new Set()); // the ones to search as well
   const [suggesting, setSuggesting] = useState(false);
+  const [suggestNote, setSuggestNote] = useState(''); // the AI's one-sentence note on what the trade calls the topic (never searched, never saved)
+  const [suggestPrompt, setSuggestPrompt] = useState(null); // the prompt that produced the suggestions
   const [error, setError] = useState('');
   const [confirmId, setConfirmId] = useState(null);
 
@@ -103,7 +106,7 @@ export default function TopicResearchPage() {
   const openTopic = (id) => go({ topic: String(id) });
   const backToList = () => { setParams({}); loadTopics(); };
 
-  const changeKeyword = (v) => { setKeyword(v); setSuggested(null); setTicked(new Set()); }; // other words belong to the topic they were suggested for
+  const changeKeyword = (v) => { setKeyword(v); setSuggested(null); setTicked(new Set()); setSuggestNote(''); setSuggestPrompt(null); }; // other words belong to the topic they were suggested for
 
   const suggest = async () => {
     const k = keyword.trim();
@@ -113,7 +116,7 @@ export default function TopicResearchPage() {
       const r = await api.post('/api/topic-research/suggest-queries', { keyword: k });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Could not suggest other words.');
-      setSuggested(d.queries); setTicked(new Set(d.queries));
+      setSuggested(d.queries); setTicked(new Set(d.queries)); setSuggestNote(d.note || ''); setSuggestPrompt(d.prompt || null);
     } catch (e) { setError(e.message || 'Could not reach the server.'); } finally { setSuggesting(false); }
   };
   const toggleTick = (q) => setTicked((cur) => { const next = new Set(cur); if (next.has(q)) next.delete(q); else next.add(q); return next; });
@@ -124,9 +127,9 @@ export default function TopicResearchPage() {
     setError('');
     try {
       const r = await withProgress({ title: 'Searching…', detail: 'This can take up to half a minute.', steps: SEARCH_STEP_LABELS }, (opId) => api.post('/api/topic-research/topics', { keyword: k, opId, ...(suggested !== null ? { extraQueries: [...ticked] } : {}) }));
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Could not search.');
-      setKeyword(''); setSuggested(null); setTicked(new Set());
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(explainFailure(r, d, 'Could not search.'));
+      setKeyword(''); setSuggested(null); setTicked(new Set()); setSuggestNote(''); setSuggestPrompt(null);
       openTopic(d.topic.id);
     } catch (e) { setError(e.message || 'Could not reach the server.'); }
   };
@@ -235,6 +238,11 @@ export default function TopicResearchPage() {
                   >
                     {getIcon('sparkles', { size: 12 })}{suggesting ? 'Thinking…' : 'Suggest industry terms'}
                   </button>
+                  {suggested !== null && suggestNote && (
+                    <p className="text-sm leading-relaxed rounded-lg border p-2.5" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}>
+                      <strong>AI note (check it):</strong> {suggestNote}
+                    </p>
+                  )}
                   {suggested !== null && suggested.length === 0 && <p className="text-xs" style={muted}>Those words already look like the way the trade says it. Search as they are.</p>}
                   {suggested !== null && suggested.length > 0 && (
                     <div className="rounded-xl border p-3 space-y-1.5" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
@@ -248,6 +256,7 @@ export default function TopicResearchPage() {
                       <p className="text-xs" style={muted}>Each ticked phrase is searched too, so Brave and Google (if switched on) are asked once for each. That counts towards your monthly limit.</p>
                     </div>
                   )}
+                  {suggested !== null && <PromptPanel prompt={suggestPrompt} label="What the AI was asked for these words" />}
                 </div>
                 {error && <p className="text-sm" style={{ color: '#ef4444' }}>{error}</p>}
               </div>

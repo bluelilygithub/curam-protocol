@@ -288,3 +288,40 @@ export function workflowSteps(view) {
   const at = { topics: 0, results: 1, brief: 2, draft: 3 }[view] ?? 0;
   return stages.map(([id, label], i) => ({ id, label, state: i < at ? 'done' : i === at ? 'current' : 'todo' }));
 }
+
+/**
+ * The sentence for a failed request. Our own server always sends { error }, and that wins. A reply with no error (a gateway answering for the
+ * app when it restarts or a request runs too long, or a page that is not JSON) gets a plain explanation instead of a generic "could not": it may
+ * still have finished on the server, so the person is told to look before trying again.
+ */
+export function explainFailure(response, data, fallback) {
+  if (data && typeof data.error === 'string' && data.error.trim()) return data.error;
+  const status = Number(response?.status) || 0;
+  const ours = data && typeof data === 'object' && Object.keys(data).length > 0 && status > 0 && status < 500;
+  if (ours) return fallback;
+  return `The server did not answer properly${status ? ` (HTTP ${status})` : ''}. It may have been restarting after an update, or the AI model took too long. It may still have finished: check the list below or History before you try again.`;
+}
+
+// ---- what was asked: the search words, what was not used, and the prompt of an AI call (milestone 8) ----
+
+/** The whole prompt as one piece of text, for Copy: the model, the rules, the request with its material, and a second try's extra text if there was one. */
+export function promptText(p) {
+  if (!p || typeof p !== 'object') return '';
+  const parts = [`MODEL: ${p.model || 'not recorded'}`, '', '=== SYSTEM (the rules the AI was given) ===', String(p.system || ''), '', '=== USER (the request and the material) ===', String(p.user || '')];
+  if (p.retry) parts.push('', '=== SECOND TRY: this was added to the request ===', String(p.retry));
+  return parts.join('\n');
+}
+
+/** "Searched for: “storm” · “hurricane”": the words every source was asked, the topic's own first. */
+export function searchedForLine(queries, keyword) {
+  const list = (Array.isArray(queries) && queries.length ? queries : [keyword]).filter(Boolean);
+  return list.length ? `Searched for: ${list.map((q) => `\u201c${q}\u201d`).join(' \u00b7 ')}` : '';
+}
+
+/** "Not used this time: Reddit (needs ...) · Google results (...)": the sources that were switched off, each with its reason. Empty when all were asked. */
+export function notUsedLine(notAsked) {
+  const list = (Array.isArray(notAsked) ? notAsked : []).filter((s) => s && s.label);
+  if (!list.length) return '';
+  const cut = (t) => (String(t || '').length > 110 ? `${String(t).slice(0, 107)}...` : String(t || ''));
+  return `Not used this time: ${list.map((s) => (s.reason ? `${s.label} (${cut(s.reason)})` : s.label)).join(' \u00b7 ')}`;
+}

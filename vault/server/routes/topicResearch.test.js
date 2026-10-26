@@ -219,7 +219,7 @@ async function main() {
         if (/^SELECT id FROM topic_research_runs WHERE id = \$1 AND "userId" = \$2/.test(s)) return { rows: db.runs.filter((r) => r.id === params[0] && r.userId === params[1]).map((r) => ({ id: r.id })) };
         if (/^INSERT INTO topic_research_briefs/.test(s)) {
           db.briefs = db.briefs || [];
-          const b = { id: db.briefs.length + 1 + (db.briefBase || 0), userId: params[0], runId: params[1], selectedArticleIds: JSON.parse(params[2]), angle: params[3], contentJson: JSON.parse(params[4]), overlapJson: JSON.parse(params[5]), model: params[6], costUsd: params[7], inputTokens: params[8], outputTokens: params[9], createdAt: new Date(NOW + 5000 * (db.briefs.length + 1)) };
+          const b = { id: db.briefs.length + 1 + (db.briefBase || 0), userId: params[0], runId: params[1], selectedArticleIds: JSON.parse(params[2]), angle: params[3], contentJson: JSON.parse(params[4]), overlapJson: JSON.parse(params[5]), model: params[6], costUsd: params[7], inputTokens: params[8], outputTokens: params[9], promptJson: params[10] ? JSON.parse(params[10]) : null, createdAt: new Date(NOW + 5000 * (db.briefs.length + 1)) };
           db.briefs.push(b); return { rows: [b] };
         }
         if (/^UPDATE topic_research_runs SET "apiCostEstimate" = "apiCostEstimate" \+ \$1/.test(s)) { const r = db.runs.find((x) => x.id === params[1] && x.userId === params[2]); if (r) r.apiCostEstimate = (Number(r.apiCostEstimate) || 0) + params[0]; return { rows: [] }; }
@@ -256,7 +256,7 @@ async function main() {
           return { rows: db.articles.filter((a) => params[0].includes(a.id) && a.userId === params[1]).map((a) => ({ url: a.url, title: a.title, snippet: a.snippet, text: a.extractedText || null })) };
         }
         if (/^INSERT INTO topic_research_drafts/.test(s)) {
-          const d = { id: db.drafts.length + 1 + (db.draftBase || 0), userId: params[0], briefId: params[1], lengthChoice: params[2], steer: params[3], contentJson: JSON.parse(params[4]), overlapJson: JSON.parse(params[5]), model: params[6], costUsd: params[7], inputTokens: params[8], outputTokens: params[9], createdAt: new Date(NOW) };
+          const d = { id: db.drafts.length + 1 + (db.draftBase || 0), userId: params[0], briefId: params[1], lengthChoice: params[2], steer: params[3], contentJson: JSON.parse(params[4]), overlapJson: JSON.parse(params[5]), model: params[6], costUsd: params[7], inputTokens: params[8], outputTokens: params[9], promptJson: params[10] ? JSON.parse(params[10]) : null, createdAt: new Date(NOW) };
           db.drafts.push(d); return { rows: [d] };
         }
         if (/^SELECT id FROM topic_research_briefs WHERE id = \$1 AND "userId" = \$2/.test(s)) return { rows: (db.briefs || []).filter((b) => b.id === params[0] && b.userId === params[1]).map((b) => ({ id: b.id })) };
@@ -377,6 +377,7 @@ async function main() {
     const suggestCalls = []; let suggestMode = 'ok';
     let clockShift = 0; // moved forward to clear the hourly caps
     const draftCalls = []; let draftMode = 'ok'; let draftGate = null;
+    let briefPromptUser = 'BRIEF USER prompt';
     const DRAFT = { title: 'A working title', sections: [{ heading: 'Costs', paragraphs: [{ kind: 'fact', text: 'A levy was announced by one outlet.', sources: ['https://a.example.com/one'] }, { kind: 'gap', text: 'Add the dollar figure.', sources: [] }] }] };
     const budgetSeen = []; // whether each source build was told the monthly limit is reached
     const modelStore = new Map(); const MODEL_CHOICES = ['model-a', 'model-b'];
@@ -404,12 +405,12 @@ async function main() {
         if (briefMode === 'no-model') throw Object.assign(new Error('No AI model is set up for this workspace yet.'), { status: 503 });
         if (briefMode === 'secret') throw new Error('connect ECONNREFUSED secret-host:5432');
         if (briefMode === 'bad-gateway') throw Object.assign(new Error('The AI model took too long to answer. Try again, or tick fewer articles.'), { status: 502 });
-        return { brief: BRIEF, overlap: [], dropped: { facts: 0, sources: 0 }, model: 'claude-test', inputTokens: 1000, outputTokens: 500, costUsd: 0.012 };
+        return { brief: BRIEF, overlap: [], dropped: { facts: 0, sources: 0 }, model: 'claude-test', inputTokens: 1000, outputTokens: 500, costUsd: 0.012, prompt: { model: 'claude-test', system: 'BRIEF SYSTEM', user: briefPromptUser, retry: null } };
       },
       suggestQueriesFn: async (input) => {
         suggestCalls.push(input);
         if (suggestMode === 'no-model') throw Object.assign(new Error('No AI model is set up for this workspace yet.'), { status: 503 });
-        return { phrases: ['wine cellar cooling unit', 'wine room refrigeration'], model: 'cheap-test', costUsd: 0.0002 };
+        return { phrases: ['wine cellar cooling unit', 'wine room refrigeration'], note: 'Cooling is sized by heat load, not motor size.', model: 'cheap-test', costUsd: 0.0002, prompt: { model: 'cheap-test', system: 'SUGGEST SYSTEM', user: `topic: ${input.keyword}`, retry: null } };
       },
       checkRelevanceFn: async (input) => {
         relevanceCalls.push(input);
@@ -418,11 +419,12 @@ async function main() {
         return { scores: input.articles.map((a) => ({ id: a.id, score: relevanceMode === 'poor' ? 0 : 3, why: 'w', missing: false })), verdict: relevanceMode === 'poor' ? 'poor' : 'good', ratio: relevanceMode === 'poor' ? 0 : 1, summary: 'wine racks', message: relevanceMode === 'poor' ? 'Most of the ticked sources are not about it.' : '', model: 'cheap-test', inputTokens: 1, outputTokens: 1, costUsd: 0.0004 };
       },
       makeDraft: async (input) => {
+        // (the prompt a real generator returns is what the model received; here a recognisable one)
         draftCalls.push(input);
         if (draftGate) await draftGate;
         if (draftMode === 'no-facts') throw Object.assign(new Error('This brief has no sourced facts to write a draft from.'), { status: 400 });
         if (draftMode === 'secret') throw new Error('connect ECONNREFUSED secret-host:5432');
-        return { draft: DRAFT, overlap: [{ field: 'section 1 paragraph 1', words: 14, excerpt: 'a copied run', sourceUrl: 'brief', sourceTitle: 'your research brief' }], dropped: { unsourced: 1, sources: 0 }, model: 'claude-test', inputTokens: 900, outputTokens: 700, costUsd: 0.02 };
+        return { draft: DRAFT, overlap: [{ field: 'section 1 paragraph 1', words: 14, excerpt: 'a copied run', sourceUrl: 'brief', sourceTitle: 'your research brief' }], dropped: { unsourced: 1, sources: 0 }, model: 'claude-test', inputTokens: 900, outputTokens: 700, costUsd: 0.02, prompt: { model: 'claude-test', system: 'DRAFT SYSTEM', user: 'DRAFT USER', retry: 'RETRY TEXT' } };
       },
       getBin: () => ({ moveToBin: async (_db, o) => { pool.bin.push(o); return `bin-${pool.bin.length}`; } }),
       modelApi: {
@@ -1028,6 +1030,72 @@ async function main() {
         for (const bad of ['wine', { a: 1 }, [5], ['a b', null], ['one phrase', 'two phrase', 'three phrase', 'four phrase']]) assert.strictEqual((await call('POST', '/topics', { keyword: 'wine cellar basics', extraQueries: bad })).status, 400, JSON.stringify(bad));
         assert.strictEqual((await call('GET', '/topics', undefined, 2)).body.topics.some((t) => t.id === newId), false, "someone else's topic phrasings are not visible");
         await call('DELETE', `/topics/${newId}`);
+      }
+
+      // ---------------------------------------------------------------- prompts and what was not asked (M8)
+      {
+        // a suggestion carries its note and the prompt it was sent
+        clockShift += 2 * 3600000;
+        let r = await call('POST', '/suggest-queries', { keyword: 'motors for walk in wine cabinets' });
+        assert.deepStrictEqual([r.status, r.body.note, r.body.prompt.system, r.body.prompt.user], [200, 'Cooling is sized by heat load, not motor size.', 'SUGGEST SYSTEM', 'topic: motors for walk in wine cabinets']);
+        // a source check carries the prompt too
+        const arts = (await call('GET', `/runs/${runForBriefHist}`)).body.articles.map((a) => a.id);
+        r = await call('POST', `/runs/${runForBriefHist}/relevance`, { articleIds: arts });
+        assert.strictEqual(typeof r.body.relevance.prompt, 'undefined', 'the stubbed check returns none: only what the real one returns is passed through (no invention)');
+        // the brief: stored with its prompt, on the single read only
+        const stash3 = pool.db.briefs.splice(0, pool.db.briefs.length);
+        briefPromptUser = 'BRIEF USER ' + 'x'.repeat(250000);
+        r = await call('POST', `/runs/${runForBriefHist}/brief`, { articleIds: arts.slice(0, 1) });
+        assert.strictEqual(r.status, 201);
+        const created = r.body.brief;
+        assert.strictEqual(created.prompt.system, 'BRIEF SYSTEM', 'the system part is never cut');
+        assert.strictEqual(created.prompt.model, 'claude-test');
+        assert.ok(created.prompt.user.length < 241000 && /cut: the rest of this prompt is not kept/.test(created.prompt.user) && created.prompt.user.startsWith('BRIEF USER xxx'), 'an enormous user part is cut with a marker');
+        briefPromptUser = 'BRIEF USER prompt';
+        r = await call('POST', `/runs/${runForBriefHist}/brief`, { articleIds: arts.slice(0, 1), angle: 'second' });
+        const second = r.body.brief;
+        assert.deepStrictEqual(second.prompt, { model: 'claude-test', system: 'BRIEF SYSTEM', user: 'BRIEF USER prompt', retry: null }, 'stored exactly as the generator reported it');
+        const single = (await call('GET', `/briefs/${second.id}`)).body.brief;
+        assert.deepStrictEqual(single.prompt, second.prompt, 'the single read has it');
+        assert.strictEqual((await call('GET', `/briefs/${second.id}`, undefined, 2)).status, 404, "somebody else's prompt is not readable");
+        const list = (await call('GET', `/runs/${runForBriefHist}/briefs`)).body.briefs;
+        assert.ok(list.length >= 2 && list.every((b) => !('prompt' in b) && !JSON.stringify(b).includes('BRIEF SYSTEM')), 'lists never carry the prompt (it holds page text)');
+        assert.ok(!JSON.stringify((await call('GET', '/history')).body).includes('BRIEF SYSTEM'), 'nor does the history');
+        // one made before prompts were kept reads as "no prompt"
+        pool.db.briefs.find((b) => b.id === second.id).promptJson = null;
+        assert.strictEqual((await call('GET', `/briefs/${second.id}`)).body.brief.prompt, null);
+        // the draft: the same
+        clockShift += 2 * 3600000;
+        r = await call('POST', `/briefs/${second.id}/draft`, {});
+        assert.strictEqual(r.status, 201);
+        assert.deepStrictEqual(r.body.draft.prompt, { model: 'claude-test', system: 'DRAFT SYSTEM', user: 'DRAFT USER', retry: 'RETRY TEXT' });
+        const dsingle = (await call('GET', `/drafts/${r.body.draft.id}`)).body.draft;
+        assert.strictEqual(dsingle.prompt.retry, 'RETRY TEXT');
+        assert.strictEqual((await call('GET', `/drafts/${r.body.draft.id}`, undefined, 2)).status, 404);
+        const dlist = (await call('GET', `/briefs/${second.id}/drafts`)).body.drafts;
+        assert.ok(dlist.length >= 1 && dlist.every((d) => !('prompt' in d)), 'the draft list never carries the prompt');
+        pool.db.briefs.splice(0, pool.db.briefs.length, ...stash3);
+        pool.db.drafts = [];
+
+        // what was NOT asked this time, and why (the stub's rss and reddit are off)
+        r = await call('GET', `/runs/${runForBriefHist}`);
+        assert.ok(Array.isArray(r.body.run.notAsked), 'the run carries a list of sources not asked');
+        const off = r.body.run.notAsked.map((s) => s.id);
+        assert.ok(off.includes('reddit') && r.body.run.notAsked.find((s) => s.id === 'reddit').reason.length > 5, 'an off source is listed with its reason');
+        const askedIds = new Set(r.body.run.sources.map((s) => s.id));
+        assert.ok(off.every((id) => !askedIds.has(id)), 'a source that was asked is never listed as not asked');
+        // a source that WAS asked in this run but is switched off now is still not "not asked this time"
+        const feedsNow = (await call('GET', '/settings')).body.settings.feeds;
+        assert.ok(askedIds.size > 0, 'the run asked at least one source');
+        const askedId = [...askedIds][0];
+        const stubOff = pool.db.settings; // (the stub marks a source off when its prerequisite is gone: here the feed list)
+        if (askedId === 'rss') {
+          await call('PUT', '/settings', { feeds: [] });
+          const r2 = await call('GET', `/runs/${runForBriefHist}`);
+          assert.ok(r2.body.run.sources.some((x) => x.id === 'rss'), 'the run did ask the feeds');
+          assert.ok(!r2.body.run.notAsked.some((x) => x.id === 'rss'), 'feeds were asked in this run: not listed even though there are none now');
+          await call('PUT', '/settings', { feeds: feedsNow.map((x) => x.url) });
+        }
       }
 
       // ---------------------------------------------------------------- progress steps (M7): where a long action has got to

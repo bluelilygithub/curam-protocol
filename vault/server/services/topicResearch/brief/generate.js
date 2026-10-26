@@ -58,6 +58,7 @@ async function generateBrief(input, depsIn = {}) {
   }
   const { system, user } = buildPrompt({ topic, settings, heat, extras, articles, angle });
 
+  let sentRetry = null; // the extra text added to the prompt on a second try, if there was one
   let inputTokens = 0;
   let outputTokens = 0;
   let attempts = 0;
@@ -85,6 +86,7 @@ async function generateBrief(input, depsIn = {}) {
       }
       if (!problems.length) break;
       message = buildRetryPrompt(user, problems);
+      sentRetry = message.slice(user.length);
     }
   } finally {
     // the tokens were spent whether or not the answer was usable
@@ -97,7 +99,7 @@ async function generateBrief(input, depsIn = {}) {
   const overlap = findOverlaps(textFields(validated.value), articles.map((a) => ({ url: normaliseUrl(a.url) || a.url, title: a.title, texts: [a.title, a.snippet, a.text] })));
   const costUsd = deps.calculateCost(model, inputTokens, outputTokens);
   report.done('check', `${validated.value.keyFacts.length} sourced fact${validated.value.keyFacts.length === 1 ? '' : 's'}${overlap.length ? `, ${overlap.length} copy warning${overlap.length === 1 ? '' : 's'}` : ''}`);
-  return { brief: validated.value, overlap, dropped: validated.dropped, model, inputTokens, outputTokens, costUsd, attempts };
+  return { brief: validated.value, overlap, dropped: validated.dropped, model, inputTokens, outputTokens, costUsd, attempts, prompt: { model, system, user, retry: sentRetry } };
 }
 
 module.exports = { generateBrief, MAX_OUTPUT_TOKENS, TIMEOUT_MS };

@@ -28,6 +28,7 @@ Built from the owner's spec ("Topic Research App — Build Spec", 25 Oct 2026) a
 | 4. Briefs | research brief from ticked articles, strict checks, Brief page, Markdown, 12-word overlap check | built, awaiting review (ran on Railway with a real model, 26 Oct 2026) |
 | 5. Watchlist and polish | model setting, scheduled refresh, history, monthly budget stop, 30-day purge, guide chat, tour, (i) box | built, awaiting review |
 | 6. Draft from a brief | first draft from one brief only, source numbers, gap markers, copy check, bin, budget | built, awaiting review (**not yet run against a real model**) |
+| 8. See what was asked, and ask better | the search words and unused sources shown, the exact prompt of every AI call shown, a premise note on question-type topics, Serper via the key Vault already has | built, awaiting review (**the note and the prompts not yet seen with a real model**) |
 | 7. Right sources first, and visible progress | real progress steps + where-you-are bar, shop-page detection, topic-match score, source check before a brief, industry-term suggestions with multi-phrase search, thin-brief warning | built, awaiting review (**suggestions and the source check not yet run against a real model**) |
 
 ## Spec to Vault translations
@@ -189,6 +190,26 @@ On Results, every article has a tick box (the best ten start ticked, at most twe
 **Not verified:** the source check and the suggestions against a **real model** (the local key is rejected; both were exercised with the model call stubbed, in tests and in the browser), shop-page detection on real shop pages (it is unit-tested on hand-made addresses and markup; the one live search returned no shop pages), and how well a cheap model scores relevance or words a topic. After deploy, re-run the wine-cabinet topic on Railway and compare.
 
 **Limits.** Topic match counts words, not meaning: a page that mentions the words in passing scores some. The readiness check is a word-overlap heuristic. Progress is in memory, so a restart during an action loses its steps (the action itself is unaffected). Searching several phrasings multiplies calls to paid sources.
+
+## Milestone 8: see what was asked, and ask better
+
+**Why.** On "motors for walk in wine cabinets" the search found mostly retail pages and nothing on screen said why. A web check showed nobody writes about "motors" for this: the trade writes about **cooling capacity (BTU an hour) and heat load**, and bottle count is a minor factor. Technical questions like this need the trade's words, and the tool should show what it asked so a thin result explains itself.
+
+**The search words, and what was not used.** Results always says "Searched for: ..." (the topic's own words, then any ticked phrasings) and, when something was switched off, "Not used this time: Reddit (needs ...) . Google results (...)" with each reason, from the same status list as Settings (`GET /runs/:id` returns `notAsked`; a source that was asked is never listed).
+
+**The exact prompt of every AI call.** A collapsed "What the AI was asked" panel shows the model, the rules (system), the request with its material (user; other outlets' text is shown as it was sent) and, for a second try, the extra text added. Copy puts the whole thing on the clipboard. Brief and draft prompts are **stored on the row** (`"promptJson"`, the user part cut at 240,000 characters with a marker, the system part never cut), returned **only by the single-item reads** (`GET /briefs/:id`, `GET /drafts/:id` and the create responses), never in lists or History. Source-check and suggestion prompts come back with their response and are shown with that result. A test compares what is returned with what the model actually received. **Because a stored prompt carries other outlets' page text it follows the 30-day rule**: the daily purge clears `"promptJson"` older than 30 days (the brief or draft stays; the panel then says the prompt is not kept, as it does for anything made before M8).
+
+**Questions and the trade's words.** When the topic is a question about sizes, amounts or specifications, the suggestion step may add a one-sentence note on what the trade actually measures or calls it and whether the question's premise fits (the wine case: cooling is sized by heat load, not by motor size or bottle count). It is shown as "AI note (check it)", is never searched and never saved, and does not change the suggested phrasings. It can be wrong, which is why it is labelled and why the person still ticks what to search.
+
+**Google results with the key Vault already has.** The Serper source accepts `SERPER_SEARCH_API_KEY` (the key the chat web search and Recipes use) **only when Serper is chosen as the Google results provider in Topic Research Settings**: a key that merely exists never starts spending on every search. `SERP_API_KEY` (this tool's own) still wins. Search prices count as zero until `SERP_PRICE_PER_QUERY_USD` is set, so Google searches are not yet in the monthly limit.
+
+**Tip for technical topics.** Write the question, press Suggest industry terms, read the note, tick the trade phrasings (for the wine case: "wine cellar cooling capacity BTU", "wine cellar heat load"), and expect manufacturer sizing guides rather than news. Reference tables and PDF spec sheets are not read yet.
+
+**What was checked:** the prompt returned equals what the (fake) model received for brief, draft, source check and suggestions, including a second try; storage on the row, absence from lists and History, the cut marker, ownership, bin round trips are covered by the existing restore code (columns are copied); the purge clears old prompts only; the premise note is cleaned, capped, dropped when it only repeats the topic and never changes the phrases; the Serper fallback rules (only on the choice, own key wins, blank is none, another provider ignores it); the helpers for the lines and Copy text. Real database and browser results are in the summary of this milestone.
+
+**Not verified:** the premise note and suggestions with a **real model**; how often the note is right; and whether trade phrasings really change what Brave returns for the wine case (to try on Railway).
+
+**Limits.** Prompts for briefs and drafts made before this are not available. The stored prompt can be large (up to about 240 KB for twelve articles). The "not used" list shows the current source status, so it reflects settings now, not at the moment of an old search.
 
 ## Known limits and open items
 

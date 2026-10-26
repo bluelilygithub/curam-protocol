@@ -2,9 +2,10 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../../utils/apiClient';
 import { withProgress } from './withProgress';
 import WorkflowBar from './WorkflowBar';
+import PromptPanel from './PromptPanel';
 import { useIcon } from '../../providers/IconProvider';
 import {
-  BRIEF_STEP_LABELS, RELEVANCE_STEP_LABELS, SEARCH_STEP_LABELS, breakdownRows, isShopPage, costText, defaultSelection, formatDate, heatBadge, rankingNote, readNote, selectionNote, signalBadges, sourceChip, statusLabel, timeAgo, toggleSelection,
+  BRIEF_STEP_LABELS, RELEVANCE_STEP_LABELS, SEARCH_STEP_LABELS, breakdownRows, isShopPage, notUsedLine, searchedForLine, costText, defaultSelection, formatDate, heatBadge, rankingNote, readNote, selectionNote, signalBadges, sourceChip, statusLabel, timeAgo, toggleSelection,
 } from './format.mjs';
 
 const BRIEFS_CHANGED = 'topic-research:briefs-changed';
@@ -174,8 +175,8 @@ export default function ResultsView({ topicId, pinnedRunId = null, onShowLatest,
     setRelevance(null);
     try {
       const r = await withProgress({ title: 'Writing the brief…', detail: 'This can take up to a minute and a half.', steps: BRIEF_STEP_LABELS }, (opId) => api.post(`/api/topic-research/runs/${runId}/brief`, { articleIds: [...picked], angle, opId }));
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Could not write the brief.');
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(explainFailure(r, d, 'Could not write the brief.'));
       onOpenBrief(d.brief.id);
     } catch (e) { setError(e.message || 'Could not reach the server.'); }
   };
@@ -184,8 +185,8 @@ export default function ResultsView({ topicId, pinnedRunId = null, onShowLatest,
   const searchAgain = async () => {
     try {
       const r = await withProgress({ title: 'Searching…', detail: 'This can take up to half a minute.', steps: SEARCH_STEP_LABELS }, (opId) => api.post(`/api/topic-research/topics/${topicId}/run`, { opId }));
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Could not search.');
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(explainFailure(r, d, 'Could not search.'));
       setOpen({}); setReranked(false);
       await load();
       onTopicChanged?.();
@@ -248,8 +249,11 @@ export default function ResultsView({ topicId, pinnedRunId = null, onShowLatest,
         </div>
       )}
 
-      {run && run.queries && run.queries.length > 1 && (
-        <p className="text-xs" style={muted}>Searched for: {run.queries.map((q) => `“${q}”`).join(' · ')}</p>
+      {run && (
+        <div className="space-y-0.5" data-guide="searched">
+          <p className="text-xs" style={muted}>{searchedForLine(run.queries, topic.keyword)}</p>
+          {notUsedLine(run.notAsked) && <p className="text-xs" style={muted}>{notUsedLine(run.notAsked)}</p>}
+        </div>
       )}
 
       {run && (
@@ -351,6 +355,7 @@ export default function ResultsView({ topicId, pinnedRunId = null, onShowLatest,
                     );
                   })}
                 </ul>
+                <PromptPanel prompt={relevance.prompt} label="What the AI was asked to check" />
                 <div className="flex flex-wrap gap-2">
                   <button type="button" onClick={() => setRelevance(null)} className="px-3 py-1.5 rounded-lg text-sm font-medium border hover:opacity-70 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Choose different articles</button>
                   <button type="button" onClick={onBack} className="px-3 py-1.5 rounded-lg text-sm font-medium border hover:opacity-70 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Back to the topic list, where you can search again with different words">Search again with different words</button>

@@ -2,11 +2,12 @@ import React, { useCallback, useEffect, useState } from 'react';
 import api from '../../utils/apiClient';
 import { withProgress } from './withProgress';
 import WorkflowBar from './WorkflowBar';
+import PromptPanel from './PromptPanel';
 import useToastStore from '../../store/toastStore';
 import { offerUndo } from '../../utils/binUndo';
 import { useIcon } from '../../providers/IconProvider';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
-import { BRIEF_STEP_LABELS, DRAFT_LENGTHS, DRAFT_STEP_LABELS, costText, draftReadiness, draftLine, factLabel, formatDate, overlapWarning } from './format.mjs';
+import { explainFailure, BRIEF_STEP_LABELS, DRAFT_LENGTHS, DRAFT_STEP_LABELS, costText, draftReadiness, draftLine, factLabel, formatDate, overlapWarning } from './format.mjs';
 
 const H = ({ children }) => <h3 className="text-base font-semibold mt-5 mb-2" style={{ color: 'var(--color-text)' }}>{children}</h3>;
 
@@ -83,8 +84,8 @@ export default function BriefView({ briefId, onBack, onOpenBrief, onOpenDraft })
     if (!want) return;
     try {
       const r = await withProgress({ title: 'Writing the brief…', detail: 'This can take up to a minute and a half.', steps: BRIEF_STEP_LABELS }, (opId) => api.post(`/api/topic-research/runs/${brief.runId}/brief`, { articleIds: brief.sources.map((s) => s.id), angle: want, opId }));
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Could not write the brief.');
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(explainFailure(r, d, 'Could not write the brief.'));
       onOpenBrief(d.brief.id);
     } catch (e) { setError(e.message || 'Could not reach the server.'); }
   };
@@ -98,8 +99,8 @@ export default function BriefView({ briefId, onBack, onOpenBrief, onOpenDraft })
     setThin(null);
     try {
       const r = await withProgress({ title: 'Writing the draft…', detail: 'This can take up to a minute and a half.', steps: DRAFT_STEP_LABELS }, (opId) => api.post(`/api/topic-research/briefs/${brief.id}/draft`, { lengthChoice, steer, opId }));
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Could not write the draft.');
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(explainFailure(r, d, 'Could not write the draft.'));
       onOpenDraft(d.draft.id);
     } catch (e) { setError(e.message || 'Could not reach the server.'); }
   };
@@ -274,6 +275,8 @@ export default function BriefView({ briefId, onBack, onOpenBrief, onOpenDraft })
           </li>
         ))}
       </ol>
+
+      <PromptPanel prompt={brief.prompt} kept={!!brief.prompt} label="What the AI was asked to write this brief" />
     </div>
   );
 }

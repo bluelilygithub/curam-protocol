@@ -23,6 +23,18 @@ const { aiLimiter } = require('../middleware/aiRateLimit');
 const MAX_TOPICS_PER_USER = 200;
 const DRAFT_BIN_TYPE = 'topic-research-draft';
 const MAX_STEER = 200;
+const MAX_PROMPT_CHARS = 240000; // the user part of a stored prompt: it carries the page text of up to twelve articles
+const PROMPT_CUT_NOTE = '\n\n[... cut: the rest of this prompt is not kept ...]';
+/** The prompt as stored: exactly as sent, except that an enormous user part is cut with a marker (the system part and the model name are never cut). */
+function promptForStorage(p) {
+  if (!p || typeof p !== 'object') return null;
+  const user = String(p.user || '');
+  return {
+    model: String(p.model || ''), system: String(p.system || ''),
+    user: user.length > MAX_PROMPT_CHARS ? user.slice(0, MAX_PROMPT_CHARS) + PROMPT_CUT_NOTE : user,
+    retry: p.retry ? String(p.retry).slice(0, 4000) : null,
+  };
+}
 // the steps a person sees while a brief or a draft is written (progress.js)
 const WRITE_STEPS = (noun) => [{ id: 'prepare', label: `Getting the ${noun === 'brief' ? 'articles' : 'brief'} ready` }, { id: 'write', label: `Writing the ${noun}` }, { id: 'check', label: 'Checking sources and wording' }];
 const opIdOf = (req) => (typeof req.body?.opId === 'string' && OP_ID.test(req.body.opId) ? req.body.opId : undefined);
@@ -322,8 +334,18 @@ function createRouter(pool, {
         id: storyId, outlets: new Set(list.map((a) => a.domain)).size, bestScore: Math.max(...list.map((a) => a.score ?? 0)),
         originalId: list.find((a) => a.isOriginal)?.id ?? null, articleIds: list.map((a) => a.id),
       }));
+      // the sources that were NOT asked this time, and why (so a thin result explains itself); never allowed to break the page
+      let notAsked = [];
+      try {
+        const settings = await loadSettings(pool, req.user.id);
+        const spend = await monthSpend(pool, req.user.id, settings.monthlyBudgetUsd, { now });
+        const status = (await sourcesForSettings(settings, { buildSources, budgetOver: spend.over })).status;
+        const asked = new Set((Array.isArray(sources) ? sources : []).map((s) => s.id));
+        notAsked = status.filter((s) => !s.enabled && !asked.has(s.id)).map((s) => ({ id: s.id, label: s.label, reason: s.reason || '' }));
+      } catch { /* the list is a courtesy */ }
       res.json({
         run: {
+          notAsked,
           id: run.id, topicId: run.topicId, status: run.status, startedAt: iso(run.startedAt), finishedAt: iso(run.finishedAt),
           errors: Array.isArray(errors) ? errors : [], sources: Array.isArray(sources) ? sources : [],
           extras: extras && typeof extras === 'object' ? extras : { peopleAlsoAsk: [], relatedSearches: [] },
@@ -360,10 +382,12 @@ function createRouter(pool, {
     return ids.map((id) => byId.get(id)).filter(Boolean).map((r) => ({ id: r.id, url: r.url, title: r.title, domain: r.domain }));
   }
 
-  async function briefWire(row, keyword, sources) {
+  // `includePrompt`: only the single-brief reads carry the prompt (it holds page text, so lists never do); null = not kept (made before it was stored, or older than 30 days)
+  async function briefWire(row, keyword, sources, { includePrompt = false } = {}) {
     const content = asJson(row.contentJson, null);
     const overlap = asJson(row.overlapJson, []);
     return {
+      ...(includePrompt ? { prompt: asJson(row.promptJson, null) } : {}),
       id: row.id, runId: row.runId, topicId: row.topicId ?? null, keyword, fileName: briefFileName(keyword, row.createdAt), angle: row.angle, chosenAngle: content?.chosenAngle || '',
       content, overlap, sources, model: row.model, costUsd: Number(row.costUsd) || 0,
       inputTokens: row.inputTokens, outputTokens: row.outputTokens, createdAt: iso(row.createdAt),
@@ -419,12 +443,12 @@ function createRouter(pool, {
         articles: rows.map((r) => ({ url: r.url, title: r.title, domain: r.domain, publishedAt: r.publishedAt, score: r.score == null ? null : Number(r.score), snippet: r.snippet || '', text: r.text || '' })),
       });
       const { rows: [saved] } = await pool.query(
-        `INSERT INTO topic_research_briefs ("userId", "runId", "selectedArticleIds", angle, "contentJson", "overlapJson", model, "costUsd", "inputTokens", "outputTokens")
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-        [req.user.id, id, JSON.stringify(rows.map((r) => r.id)), angle, JSON.stringify(out.brief), JSON.stringify(out.overlap), out.model, out.costUsd, out.inputTokens, out.outputTokens],
+        `INSERT INTO topic_research_briefs ("userId", "runId", "selectedArticleIds", angle, "contentJson", "overlapJson", model, "costUsd", "inputTokens", "outputTokens", "promptJson")
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+        [req.user.id, id, JSON.stringify(rows.map((r) => r.id)), angle, JSON.stringify(out.brief), JSON.stringify(out.overlap), out.model, out.costUsd, out.inputTokens, out.outputTokens, JSON.stringify(promptForStorage(out.prompt))],
       );
       const sources = await sourcesOf(req.user.id, rows.map((r) => r.id));
-      res.status(201).json({ brief: await briefWire({ ...saved, topicId: run.topicId }, topic.keyword, sources), dropped: out.dropped });
+      res.status(201).json({ brief: await briefWire({ ...saved, topicId: run.topicId }, topic.keyword, sources, { includePrompt: true }), dropped: out.dropped });
     } catch (err) { fail(res, err, 'write that brief'); } finally { report.finish(); if (held) briefsRunning.delete(key); }
   });
 
@@ -478,7 +502,7 @@ function createRouter(pool, {
       mine.push(t); checkHits.set(req.user.id, mine);
       const settings = await loadSettings(pool, req.user.id);
       const out = await suggestQueriesFn({ userId: req.user.id, keyword, niche: settings.niche });
-      res.json({ queries: out.phrases });
+      res.json({ queries: out.phrases, note: out.note || '', prompt: out.prompt || null });
     } catch (err) { fail(res, err, 'suggest other words'); }
   });
 
@@ -512,7 +536,7 @@ function createRouter(pool, {
       if (!row) return res.status(404).json({ error: 'Brief not found.' });
       const topic = await ownTopic(req.user.id, row.topicId);
       const sources = await sourcesOf(req.user.id, asJson(row.selectedArticleIds, []));
-      res.json({ brief: await briefWire(row, topic?.keyword || '', sources) });
+      res.json({ brief: await briefWire(row, topic?.keyword || '', sources, { includePrompt: true }) });
     } catch (err) { fail(res, err, 'load that brief'); }
   });
 
@@ -550,6 +574,7 @@ function createRouter(pool, {
     const content = asJson(row.contentJson, null);
     const overlap = asJson(row.overlapJson, []);
     return {
+      ...(context.includePrompt ? { prompt: asJson(row.promptJson, null) } : {}),
       id: row.id, briefId: row.briefId, runId: context.runId ?? null, topicId: context.topicId ?? null, keyword, fileName: draftFileName(keyword, row.createdAt),
       lengthChoice: row.lengthChoice, steer: row.steer, content, overlap, sources, words: draftWords(content), gapCount: draftGaps(content),
       model: row.model, costUsd: Number(row.costUsd) || 0, createdAt: iso(row.createdAt),
@@ -605,11 +630,11 @@ function createRouter(pool, {
         articles: articles.map((a) => ({ url: a.url, title: a.title, snippet: a.snippet || '', text: a.text || '' })),
       });
       const { rows: [saved] } = await pool.query(
-        `INSERT INTO topic_research_drafts ("userId", "briefId", "lengthChoice", steer, "contentJson", "overlapJson", model, "costUsd", "inputTokens", "outputTokens")
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-        [req.user.id, id, lengthChoice, steer, JSON.stringify(out.draft), JSON.stringify(out.overlap), out.model, out.costUsd, out.inputTokens, out.outputTokens],
+        `INSERT INTO topic_research_drafts ("userId", "briefId", "lengthChoice", steer, "contentJson", "overlapJson", model, "costUsd", "inputTokens", "outputTokens", "promptJson")
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+        [req.user.id, id, lengthChoice, steer, JSON.stringify(out.draft), JSON.stringify(out.overlap), out.model, out.costUsd, out.inputTokens, out.outputTokens, JSON.stringify(promptForStorage(out.prompt))],
       );
-      res.status(201).json({ draft: draftWire(saved, topic.keyword, sources, { topicId: brief.topicId, runId: brief.runId }), dropped: out.dropped });
+      res.status(201).json({ draft: draftWire(saved, topic.keyword, sources, { topicId: brief.topicId, runId: brief.runId, includePrompt: true }), dropped: out.dropped });
     } catch (err) { fail(res, err, 'write that draft'); } finally { report.finish(); if (held) briefsRunning.delete(key); }
   });
 
@@ -645,7 +670,7 @@ function createRouter(pool, {
       if (!row) return res.status(404).json({ error: 'Draft not found.' });
       const topic = await ownTopic(req.user.id, row.topicId);
       const sources = await sourcesOf(req.user.id, asJson(row.selectedArticleIds, []));
-      res.json({ draft: draftWire(row, topic?.keyword || '', sources, { topicId: row.topicId, runId: row.runId }) });
+      res.json({ draft: draftWire(row, topic?.keyword || '', sources, { topicId: row.topicId, runId: row.runId, includePrompt: true }) });
     } catch (err) { fail(res, err, 'load that draft'); }
   });
 

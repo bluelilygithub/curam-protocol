@@ -33,7 +33,7 @@ const KW = 'motors for walk in wine cabinets';
     assert.deepStrictEqual(v(['wine cellar ' + 'z'.repeat(200)]).length, 1, 'a long phrase is cut, not refused');
     assert.ok(v(['wine cellar ' + 'z'.repeat(200)])[0].length <= 80);
     assert.deepStrictEqual(v(['z'.repeat(200)]), [], 'a single enormous word is not a phrase');
-    assert.deepStrictEqual(validate({ phrases: [] }, KW), { phrases: [], problems: [] }, 'an empty list is a valid answer');
+    assert.deepStrictEqual(validate({ phrases: [] }, KW), { phrases: [], note: '', problems: [] }, 'an empty list is a valid answer');
     for (const bad of [null, [], 'no', {}, { phrases: 'wine' }]) assert.ok(validate(bad, KW).problems.length === 1, JSON.stringify(bad));
   }
 
@@ -54,16 +54,34 @@ const KW = 'motors for walk in wine cabinets';
     };
   };
   {
-    const w = mk([{ phrases: ['wine cellar cooling unit', 'wine room refrigeration system'] }]);
+    const w = mk([{ note: 'Cooling is sized by heat load, not motor size.', phrases: ['wine cellar cooling unit', 'wine room refrigeration system'] }]);
     const out = await suggestQueries(w.input, w.deps);
+    assert.strictEqual(out.note, 'Cooling is sized by heat load, not motor size.');
     assert.deepStrictEqual([out.phrases, out.model, out.costUsd], [['wine cellar cooling unit', 'wine room refrigeration system'], 'cheap-model', 0.0002]);
     assert.strictEqual(w.calls[0].model, 'cheap-model');
+    assert.deepStrictEqual(out.prompt, { model: 'cheap-model', system: w.calls[0].opts.system, user: w.calls[0].prompt, retry: null }, 'the prompt shown is exactly what the model received');
     assert.deepStrictEqual(w.logged.map((l) => [l.userId, l.feature]), [[7, 'topic_research_suggest']], 'logged once');
+    // the premise note: one cleaned line, never searched, and never altering the phrases
+    {
+      const q = (note) => validate({ note, phrases: ['wine cellar cooling unit'] }, KW);
+      assert.strictEqual(q('Cooling is sized by heat load (BTU an hour), not by motor size or bottle count.').note, 'Cooling is sized by heat load (BTU an hour), not by motor size or bottle count.');
+      assert.strictEqual(q('<b>Heat</b> load  decides\nit.').note, 'Heat load decides it.', 'tags and line breaks cleaned');
+      assert.strictEqual(q('x '.repeat(300)).note.length <= 200, true, 'cut to 200 characters');
+      assert.strictEqual(q('').note, '', 'no note is fine');
+      assert.strictEqual(q(undefined).note, '');
+      assert.strictEqual(q(42).note, '', 'junk is no note');
+      assert.strictEqual(q('Motors for walk in wine cabinets.').note, '', 'a note that only says the topic back is dropped');
+      assert.deepStrictEqual(q('A note').phrases, ['wine cellar cooling unit'], 'the note never changes the phrases');
+      assert.ok(!q('Search for crazy words').phrases.some((p) => /crazy/.test(p)), 'the note is not turned into a phrase');
+    }
+    assert.match(buildPrompt({ keyword: KW }).system, /question about sizes, amounts or specifications/);
+    assert.match(buildPrompt({ keyword: KW }).user, /"note"/);
     const none = mk([{ phrases: [] }]);
     assert.deepStrictEqual((await suggestQueries(none.input, none.deps)).phrases, [], 'nothing to add is fine');
     const retry = mk(['not json', { phrases: ['wine cellar cooling unit'] }]);
     const r = await suggestQueries(retry.input, retry.deps);
     assert.deepStrictEqual([r.phrases, retry.calls.length, r.inputTokens, retry.logged.length], [['wine cellar cooling unit'], 2, 200, 1], 'one retry, both attempts counted, logged once');
+    assert.strictEqual(r.prompt.user + r.prompt.retry, retry.calls[1].prompt, 'the second try\'s extra text is kept');
     const shape = mk([{ nope: 1 }, { phrases: ['wine cellar cooling unit'] }]);
     assert.strictEqual((await suggestQueries(shape.input, shape.deps)).phrases.length, 1, 'a wrong shape is retried');
   }

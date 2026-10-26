@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_topic_research_completed';
 
-const TOTAL_STEPS = 11;
+const TOTAL_STEPS = 12;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -105,10 +105,18 @@ export function startTopicResearchTour() {
   });
 
   tour.addStep({
+    id: 'tr-prompts',
+    title: 'See what the AI was asked',
+    text: 'Nothing is hidden. The results page lists the words every source was searched for and any source that was not used, and why. On a brief, a draft, a source check or the suggestions, the What the AI was asked panel shows the exact prompt that was sent, so you can see why an answer came out as it did.',
+    when: { show() { injectStepCounter(7); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  tour.addStep({
     id: 'tr-draft',
     title: 'Turn a brief into a first draft',
     text: 'On a saved brief, press Draft article and choose a length. You get a first draft built from that brief only, with a source number on every factual paragraph and clear "needs your input" markers where the research has gaps. It is a starting point to edit and fact-check, and it warns if it repeats wording from a source.',
-    when: { show() { injectStepCounter(7); } },
+    when: { show() { injectStepCounter(8); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -118,7 +126,7 @@ export function startTopicResearchTour() {
     text: 'History lists every past search, brief and draft, newest first, with a search box. Settings holds your feeds, what your site is about, how results are ranked and your spending.',
     attachTo: { element: '[data-tour="tr-tabs"]', on: 'bottom' },
     beforeShowPromise: check('tr-tabs', '[data-tour="tr-tabs"]'),
-    when: { show() { injectStepCounter(8); } },
+    when: { show() { injectStepCounter(9); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -128,7 +136,7 @@ export function startTopicResearchTour() {
     text: 'Paid searches, briefs and drafts cost a little. In Settings, set a monthly limit. When the estimate reaches it, paid searches, new briefs and new drafts pause and a banner tells you, until you raise the limit or the month ends. Amounts are estimates.',
     attachTo: { element: '[data-tour="tr-banner"]', on: 'bottom' },
     beforeShowPromise: check('tr-spending', '[data-tour="tr-banner"]'),
-    when: { show() { injectStepCounter(9); } },
+    when: { show() { injectStepCounter(10); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -136,7 +144,7 @@ export function startTopicResearchTour() {
     id: 'tr-model',
     title: 'Which AI model writes briefs and drafts',
     text: "Briefs and drafts are written by the AI model you choose in Vault Settings, under Topic Research, the same way as other tools. Leave it on the default to use the workspace model. Quick source checks and suggestions use the workspace's cheaper model. Searching, reading and ranking use none.",
-    when: { show() { injectStepCounter(10); } },
+    when: { show() { injectStepCounter(11); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -144,7 +152,7 @@ export function startTopicResearchTour() {
     id: 'tr-limits',
     title: 'Good to know',
     text: 'Scores say what to look at first, not what is true. Page text is kept for 30 days, then cleared. A deleted topic can be brought back from the recycle bin. Stuck? Press the round button at the bottom right and ask the guide.',
-    when: { show() { injectStepCounter(11); } },
+    when: { show() { injectStepCounter(12); } },
     buttons: [
       btnBack(),
       { text: 'Finish Tour ✓', action() { try { localStorage.setItem(TOUR_KEY, '1'); } catch (_) { /* ignore */ } tour.complete(); } },

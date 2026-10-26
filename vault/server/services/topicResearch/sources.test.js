@@ -16,7 +16,7 @@ const { createHackerNewsSource } = require('./sources/hackernews');
 const { createGdeltSource, parseSeenDate, buildQuery } = require('./sources/gdelt');
 const { createRedditSource, redditStatus } = require('./sources/reddit');
 const { createBraveSource, braveStatus, freshnessFor } = require('./sources/brave');
-const { createSerperSource, serperStatus } = require('./sources/serper');
+const { createSerperSource, serperStatus, serperConfig } = require('./sources/serper');
 const { cached, withCache, cacheKey } = require('./cache');
 const { buildSources } = require('./sources');
 const { runCollect, searchAllQueries, mergeItems, mergeExtras } = require('./collect');
@@ -306,6 +306,19 @@ async function main() {
     assert.ok(/not Serper/.test((await serperStatus({ env: { SERP_API_KEY: 'k' }, getConfig: noWorkspaceKey })).reason));
     assert.strictEqual((await serperStatus({ env, getConfig: noWorkspaceKey })).enabled, true);
     assert.strictEqual((await serperStatus({ env: { SERP_API_KEY: 'k' }, settings: { serpProvider: 'serper' }, getConfig: noWorkspaceKey })).enabled, true, 'the provider chosen in Settings counts');
+    // the key Vault already uses for Serper elsewhere: only on an explicit choice in Settings, never because it exists
+    {
+      const shared = { SERPER_SEARCH_API_KEY: 'shared-key' };
+      const off = await serperStatus({ env: shared, getConfig: noWorkspaceKey });
+      assert.deepStrictEqual([off.enabled, /workspace has a Serper key/.test(off.reason), /Choose Serper/.test(off.reason)], [false, true, true], 'the key existing is not enough: it says how to switch it on');
+      assert.strictEqual((await serperStatus({ env: shared, settings: { serpProvider: 'none' }, getConfig: noWorkspaceKey })).enabled, false);
+      assert.strictEqual((await serperStatus({ env: { ...shared, SERP_PROVIDER: 'serper' }, getConfig: noWorkspaceKey })).enabled, false, 'SERP_PROVIDER in the environment is not the person\'s choice in Settings');
+      const on = await serperConfig({ env: shared, settings: { serpProvider: 'serper' }, getConfig: noWorkspaceKey });
+      assert.deepStrictEqual([on.apiKey, on.viaWorkspaceKey], ['shared-key', true], 'chosen in Settings: the shared key is used');
+      assert.strictEqual((await serperConfig({ env: { ...shared, SERP_API_KEY: 'own-key' }, settings: { serpProvider: 'serper' }, getConfig: noWorkspaceKey })).apiKey, 'own-key', 'a key set for this tool wins');
+      assert.strictEqual((await serperStatus({ env: { SERPER_SEARCH_API_KEY: '   ' }, settings: { serpProvider: 'serper' }, getConfig: noWorkspaceKey })).enabled, false, 'a blank key is no key');
+      assert.ok(/not built yet/.test((await serperStatus({ env: shared, settings: { serpProvider: 'dataforseo' }, getConfig: noWorkspaceKey })).reason), 'another provider chosen: the shared Serper key is not used');
+    }
     assert.strictEqual((await serperStatus({ env: {}, getConfig: async () => ({ provider: 'serper', apiKey: 'k' }) })).enabled, true, 'the workspace search key counts when it is a Serper key');
     assert.strictEqual((await serperStatus({ env: {}, getConfig: async () => ({ provider: 'brave', apiKey: 'k' }) })).enabled, false);
 

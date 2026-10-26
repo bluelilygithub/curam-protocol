@@ -124,6 +124,7 @@ async function checkRelevance(input, depsIn = {}) {
 
   const ids = articles.map((a) => a.id);
   const { system, user } = buildPrompt({ topic, settings, articles });
+  let sentRetry = null; // the extra text added to the prompt on a second try, if there was one
   let inputTokens = 0;
   let outputTokens = 0;
   let result = null;
@@ -146,6 +147,7 @@ async function checkRelevance(input, depsIn = {}) {
       problems = v.problems;
       if (!problems.length) { result = v; break; }
       message = `${user}\n\nYour previous answer could not be used:\n${problems.slice(0, 4).map((p) => `- ${String(p).slice(0, 200)}`).join('\n')}\nReply again with only the corrected JSON object.`;
+      sentRetry = message.slice(user.length);
     }
   } finally {
     if (inputTokens || outputTokens) deps.logUsage({ userId, model, inputTokens, outputTokens, feature: 'topic_research_relevance' });
@@ -156,6 +158,7 @@ async function checkRelevance(input, depsIn = {}) {
     scores: result.scores, verdict, ratio, summary: result.summary,
     message: messageFor({ verdict, scores: result.scores, summary: result.summary, keyword: topic.keyword }),
     model, inputTokens, outputTokens, costUsd: deps.calculateCost(model, inputTokens, outputTokens),
+    prompt: { model, system, user, retry: sentRetry },
   };
 }
 

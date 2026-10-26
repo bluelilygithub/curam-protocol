@@ -1,6 +1,6 @@
 // Run: node client/src/pages/topicResearch/format.test.mjs
 import assert from 'assert';
-import { draftReadiness, RELEVANCE_STEP_LABELS, isShopPage, formatDate, timeAgo, statusLabel, parseFeedLines, feedLines, sourceChip, signalBadges, rankingNote, heatBadge, readNote, breakdownRows, defaultSelection, toggleSelection, selectionNote, factLabel, overlapWarning, costText, SIGNAL_FIELDS, DEFAULT_PERCENTS, DEFAULT_HALF_LIFE, toPercents, fromPercents, percentTotal, REFRESH_CHOICES, refreshLabel, orderTopics, mergeHistory, budgetBanner, spendLine, DRAFT_LENGTHS, draftLine, SEARCH_STEP_LABELS, BRIEF_STEP_LABELS, DRAFT_STEP_LABELS, stepsForModal, workflowSteps } from './format.mjs';
+import { promptText, searchedForLine, notUsedLine, explainFailure, draftReadiness, RELEVANCE_STEP_LABELS, isShopPage, formatDate, timeAgo, statusLabel, parseFeedLines, feedLines, sourceChip, signalBadges, rankingNote, heatBadge, readNote, breakdownRows, defaultSelection, toggleSelection, selectionNote, factLabel, overlapWarning, costText, SIGNAL_FIELDS, DEFAULT_PERCENTS, DEFAULT_HALF_LIFE, toPercents, fromPercents, percentTotal, REFRESH_CHOICES, refreshLabel, orderTopics, mergeHistory, budgetBanner, spendLine, DRAFT_LENGTHS, draftLine, SEARCH_STEP_LABELS, BRIEF_STEP_LABELS, DRAFT_STEP_LABELS, stepsForModal, workflowSteps } from './format.mjs';
 
 assert.strictEqual(formatDate(null), 'No date');
 assert.strictEqual(formatDate('garbage'), 'No date');
@@ -234,6 +234,44 @@ assert.deepStrictEqual(workflowSteps('draft').map((s) => s.label), ['Search', 'C
   assert.strictEqual(draftReadiness({ keyFacts: good.keyFacts, outline: [] }).level, 'ok', 'four facts and no outline: nothing to contradict them');
   assert.ok(Math.abs(draftReadiness({ keyFacts: [fact('a b c d', true), fact('e f g h', true), fact('i j k l'), fact('m n o p')], outline: [] }).singleShare - 0.5) < 1e-9);
   assert.strictEqual(RELEVANCE_STEP_LABELS.length, 1);
+}
+
+// ---- failed requests: our own message wins; a gateway's silence is explained
+{
+  assert.strictEqual(explainFailure({ status: 400 }, { error: 'Tick at least one article.' }, 'Could not write the draft.'), 'Tick at least one article.', 'our own message always wins, even on a 5xx');
+  assert.strictEqual(explainFailure({ status: 500 }, { error: 'Could not write that draft.' }, 'x'), 'Could not write that draft.');
+  assert.strictEqual(explainFailure({ status: 502 }, { error: '  ' }, 'Could not write the draft.').startsWith('The server did not answer properly'), true, 'a blank error from a 5xx is not an error');
+  const gateway = explainFailure({ status: 502 }, { status: 'error', code: 502, message: 'Application failed to respond' }, 'Could not write the draft.');
+  assert.match(gateway, /did not answer properly \(HTTP 502\)/);
+  assert.match(gateway, /restarting after an update/);
+  assert.match(gateway, /It may still have finished: check the list below or History/);
+  assert.match(explainFailure({ status: 504 }, {}, 'x'), /HTTP 504/, 'an empty reply from a gateway');
+  assert.match(explainFailure({ status: 200 }, {}, 'x'), /did not answer properly/, 'no usable reply at all');
+  assert.match(explainFailure(undefined, undefined, 'x'), /did not answer properly\./, 'nothing to go on: no status shown');
+  assert.strictEqual(explainFailure({ status: 404 }, { message: 'nope' }, 'Could not write the draft.'), 'Could not write the draft.', 'a 4xx with its own shape keeps the plain fallback');
+}
+
+// ---- what was asked
+{
+  const p = { model: 'model-x', system: 'RULES', user: 'REQUEST\nwith material', retry: null };
+  const txt = promptText(p);
+  assert.ok(txt.startsWith('MODEL: model-x'));
+  assert.ok(txt.indexOf('RULES') < txt.indexOf('REQUEST'), 'the rules come before the request');
+  assert.ok(txt.includes('=== SYSTEM') && txt.includes('=== USER') && !txt.includes('SECOND TRY'));
+  assert.ok(promptText({ ...p, retry: '\n\nYour previous answer could not be used' }).includes('=== SECOND TRY: this was added to the request ===\n\n\nYour previous answer could not be used'), 'a second try\'s extra text is shown after');
+  assert.strictEqual(promptText(null), '');
+  assert.strictEqual(promptText('nope'), '');
+  assert.ok(promptText({ system: 's', user: 'u' }).startsWith('MODEL: not recorded'));
+
+  assert.strictEqual(searchedForLine(['storm', 'hurricane'], 'storm'), 'Searched for: \u201cstorm\u201d \u00b7 \u201churricane\u201d');
+  assert.strictEqual(searchedForLine(['storm'], 'storm'), 'Searched for: \u201cstorm\u201d', 'a single phrasing is shown too');
+  assert.strictEqual(searchedForLine([], 'motors for walk in wine cabinets'), 'Searched for: \u201cmotors for walk in wine cabinets\u201d', 'an older run with no record falls back to the topic');
+  assert.strictEqual(searchedForLine(undefined, ''), '');
+
+  assert.strictEqual(notUsedLine([]), '');
+  assert.strictEqual(notUsedLine(undefined), '');
+  assert.strictEqual(notUsedLine([{ label: 'Reddit', reason: 'Needs REDDIT_CLIENT_ID.' }, { label: 'Google results (Serper)', reason: '' }, null, {}]), 'Not used this time: Reddit (Needs REDDIT_CLIENT_ID.) \u00b7 Google results (Serper)');
+  assert.ok(notUsedLine([{ label: 'X', reason: 'y'.repeat(300) }]).endsWith('...)'), 'a long reason is cut');
 }
 
 console.log('topicResearch format: all passed');

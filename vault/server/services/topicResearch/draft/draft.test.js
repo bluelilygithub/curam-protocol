@@ -174,6 +174,7 @@ const goodAnswer = (extra = {}) => ({
     const out = await generateDraft(w.input, w.deps);
     assert.deepStrictEqual([out.model, out.attempts, out.costUsd, out.inputTokens, out.outputTokens], ['model-x', 1, 0.002, 100, 50]);
     assert.strictEqual(w.calls[0].model, 'model-x', 'uses the resolved model, never a literal');
+    assert.deepStrictEqual(out.prompt, { model: 'model-x', system: w.calls[0].opts.system, user: w.calls[0].prompt, retry: null }, 'the prompt shown is exactly what the model received');
     assert.deepStrictEqual(w.logged.map((l) => [l.userId, l.feature]), [[7, 'topic_research_draft']], 'tokens logged once');
     assert.strictEqual(out.draft.sections.length, 2);
     assert.deepStrictEqual(out.overlap, []);
@@ -183,6 +184,7 @@ const goodAnswer = (extra = {}) => ({
     const out = await generateDraft(w.input, w.deps);
     assert.strictEqual(out.attempts, 2);
     assert.match(w.calls[1].prompt, /could not be used/);
+    assert.strictEqual(out.prompt.user + out.prompt.retry, w.calls[1].prompt, 'the first prompt and the second try\'s extra text are both kept');
     assert.deepStrictEqual([out.inputTokens, out.outputTokens], [200, 100], 'both attempts counted');
     assert.strictEqual(w.logged.length, 1, 'but logged once');
   }

@@ -65,6 +65,7 @@ async function main() {
     assert.deepStrictEqual(w.usage, [{ userId: 7, model: 'claude-test-standard', inputTokens: 12000, outputTokens: 900, feature: 'topic_research_brief' }], 'cost logged once, to the right person and feature');
     assert.strictEqual(w.userIdAsked, 7);
     assert.strictEqual(w.calls.length, 1);
+    assert.deepStrictEqual(r.prompt, { model: 'claude-test-standard', system: w.calls[0].opts.system, user: w.calls[0].message, retry: null }, 'the prompt shown to the person is exactly what the model received');
     assert.strictEqual(w.calls[0].modelId, 'claude-test-standard');
     assert.deepStrictEqual([w.calls[0].opts.returnUsage, w.calls[0].opts.maxTokens, w.calls[0].opts.timeoutMs > 60000], [true, MAX_OUTPUT_TOKENS, true]);
     assert.ok(/Paraphrase/.test(w.calls[0].opts.system) && w.calls[0].message.includes('<<<SOURCE 2>>>'));
@@ -102,6 +103,9 @@ async function main() {
     assert.deepStrictEqual(w.usage[0].inputTokens, 2100);
     assert.ok(w.calls[1].message.startsWith(w.calls[0].message), 'the second ask is the first plus the problem');
     assert.ok(/not valid JSON/.test(w.calls[1].message) && /Reply again with only the corrected JSON/.test(w.calls[1].message));
+    assert.strictEqual(r.prompt.user, w.calls[0].message, 'the first prompt is kept as it was sent');
+    assert.strictEqual(r.prompt.user + r.prompt.retry, w.calls[1].message, 'and the extra text of the second try is kept beside it');
+    assert.ok(/could not be used/.test(r.prompt.retry));
 
     // valid JSON that fails the checks: the retry names the checks
     const invented = goodBrief({ keyFacts: [{ fact: 'Made up.', sources: ['https://invented.example/x'] }] });

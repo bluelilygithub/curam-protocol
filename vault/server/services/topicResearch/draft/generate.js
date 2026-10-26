@@ -57,6 +57,7 @@ async function generateDraft(input, depsIn = {}) {
 
   const { system, user } = buildPrompt({ topic, settings, brief, sources, lengthChoice, steer });
 
+  let sentRetry = null; // the extra text added to the prompt on a second try, if there was one
   let inputTokens = 0;
   let outputTokens = 0;
   let attempts = 0;
@@ -84,6 +85,7 @@ async function generateDraft(input, depsIn = {}) {
       }
       if (!problems.length) break;
       message = buildRetryPrompt(user, problems);
+      sentRetry = message.slice(user.length);
     }
   } finally {
     // the tokens were spent whether or not the answer was usable
@@ -99,7 +101,7 @@ async function generateDraft(input, depsIn = {}) {
   const overlap = findOverlaps(textFields(validated.value), sourcesText);
   const costUsd = deps.calculateCost(model, inputTokens, outputTokens);
   report.done('check', `${validated.words} words${overlap.length ? `, ${overlap.length} copy warning${overlap.length === 1 ? '' : 's'}` : ''}`);
-  return { draft: validated.value, overlap, dropped: validated.dropped, words: validated.words, model, inputTokens, outputTokens, costUsd, attempts };
+  return { draft: validated.value, overlap, dropped: validated.dropped, words: validated.words, model, inputTokens, outputTokens, costUsd, attempts, prompt: { model, system, user, retry: sentRetry } };
 }
 
 module.exports = { generateDraft, MAX_OUTPUT_TOKENS, TIMEOUT_MS };

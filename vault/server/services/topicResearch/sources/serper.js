@@ -6,7 +6,8 @@
 // against mocks only: it has not been run against the live service, and the Top stories key name is unconfirmed. See docs/topic-research.md.
 //
 // A key comes from SERP_API_KEY (with SERP_PROVIDER=serper, or the provider chosen in Topic Research Settings), or from the workspace
-// search key when that one is a Serper key.
+// search key when that one is a Serper key, or from SERPER_SEARCH_API_KEY (the key the rest of Vault already uses for Serper) BUT ONLY when the
+// person has chosen Serper in Topic Research Settings: a key that merely exists must not start spending on every search.
 
 const { makeItem } = require('./base');
 const { postJson, failed, SourceError } = require('./http');
@@ -22,12 +23,16 @@ async function serperConfig({ env = process.env, settings = {}, getConfig = defa
   const provider = (settings.serpProvider && settings.serpProvider !== 'none' ? settings.serpProvider : (env.SERP_PROVIDER || '')).toLowerCase();
   const own = (env.SERP_API_KEY || '').trim();
   if (own && provider === 'serper') return { apiKey: own };
+  // the key Vault already has for Serper, used only on an explicit choice in Settings (not because it exists)
+  const shared = (env.SERPER_SEARCH_API_KEY || '').trim();
+  if (shared && !own && String(settings.serpProvider || '').toLowerCase() === 'serper') return { apiKey: shared, viaWorkspaceKey: true };
   try {
     const cfg = await getConfig();
     if (cfg?.provider === 'serper' && cfg.apiKey) return { apiKey: cfg.apiKey };
   } catch { /* no workspace key */ }
   if (provider && provider !== 'serper' && provider !== 'none') return { reason: `The ${provider} provider is not built yet. Only Serper is.` };
   if (own) return { reason: 'SERP_API_KEY is set but the search provider is not Serper. Set SERP_PROVIDER=serper or choose it in Settings.' };
+  if (shared) return { reason: 'The workspace has a Serper key. Choose Serper as the Google results provider in Settings to use it (each search then costs a little).' };
   return { reason: 'Needs SERP_API_KEY and SERP_PROVIDER=serper (no Google results provider chosen yet).' };
 }
 

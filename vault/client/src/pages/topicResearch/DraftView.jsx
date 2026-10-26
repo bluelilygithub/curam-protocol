@@ -2,10 +2,11 @@ import React, { useCallback, useEffect, useState } from 'react';
 import api from '../../utils/apiClient';
 import { withProgress } from './withProgress';
 import WorkflowBar from './WorkflowBar';
+import PromptPanel from './PromptPanel';
 import useToastStore from '../../store/toastStore';
 import { offerUndo } from '../../utils/binUndo';
 import { useIcon } from '../../providers/IconProvider';
-import { DRAFT_STEP_LABELS, costText, draftLine, formatDate } from './format.mjs';
+import { explainFailure, DRAFT_STEP_LABELS, costText, draftLine, formatDate } from './format.mjs';
 
 // One article draft: a first draft built from a research brief, to edit. Each factual paragraph carries source numbers that match the Sources
 // list; places the research could not fill are marked; a warning comes first if the draft repeats wording from a source or from the brief.
@@ -59,8 +60,8 @@ export default function DraftView({ draftId, onBack, onOpenDraft, onGoSearch, on
   const another = async () => {
     try {
       const r = await withProgress({ title: 'Writing the draft…', detail: 'This can take up to a minute and a half.', steps: DRAFT_STEP_LABELS }, (opId) => api.post(`/api/topic-research/briefs/${draft.briefId}/draft`, { lengthChoice: draft.lengthChoice, steer: draft.steer, opId }));
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Could not write the draft.');
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(explainFailure(r, d, 'Could not write the draft.'));
       onOpenDraft(d.draft.id);
     } catch (e) { setError(e.message || 'Could not reach the server.'); }
   };
@@ -151,6 +152,8 @@ export default function DraftView({ draftId, onBack, onOpenDraft, onGoSearch, on
           </li>
         ))}
       </ol>
+
+      <PromptPanel prompt={draft.prompt} kept={!!draft.prompt} label="What the AI was asked to write this draft" />
     </div>
   );
 }

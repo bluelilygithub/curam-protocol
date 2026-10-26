@@ -95,6 +95,7 @@ const ans = (scores, summary = 'wine cabinets and racks') => ({ scores: scores.m
     assert.deepStrictEqual([out.verdict, out.ratio, out.model, out.costUsd, out.scores.map((s) => s.score)], ['poor', 0, 'cheap-model', 0.0004, [0, 1, 1, 0]]);
     assert.match(out.message, /not about "wine cellar cooling unit"/);
     assert.strictEqual(w.calls[0].model, 'cheap-model', 'the cheap model, never a literal');
+    assert.deepStrictEqual(out.prompt, { model: 'cheap-model', system: w.calls[0].opts.system, user: w.calls[0].prompt, retry: null }, 'the prompt shown is exactly what the model received');
     assert.deepStrictEqual(w.logged.map((l) => [l.userId, l.feature]), [[7, 'topic_research_relevance']], 'logged once');
     const good = await checkRelevance(...(() => { const g = mk([ans([3, 3, 2, 1])]); return [g.input, g.deps]; })());
     assert.deepStrictEqual([good.verdict, good.message], ['good', '']);
@@ -104,6 +105,7 @@ const ans = (scores, summary = 'wine cabinets and racks') => ({ scores: scores.m
     const out = await checkRelevance(w.input, w.deps);
     assert.strictEqual(out.verdict, 'good');
     assert.match(w.calls[1].prompt, /could not be used/);
+    assert.strictEqual(out.prompt.user + out.prompt.retry, w.calls[1].prompt, 'the second try\'s extra text is kept');
     assert.deepStrictEqual([out.inputTokens, out.outputTokens, w.logged.length], [400, 160, 1], 'both attempts counted, logged once');
     const fewer = mk([{ scores: [{ n: 1, score: 3 }] }, ans([2, 2, 2, 2])]);
     assert.strictEqual((await checkRelevance(fewer.input, fewer.deps)).verdict, 'good', 'an answer that scores too few pages is retried');

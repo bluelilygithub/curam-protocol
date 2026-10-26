@@ -95,8 +95,12 @@ async function purgeOld(pool, now = Date.now) {
       WHERE "extractedText" IS NOT NULL AND COALESCE("extractedAt", "fetchedAt") < $1`,
     [new Date(nowMs - TEXT_KEEP_DAYS * DAY)],
   );
+  // a stored prompt carries other outlets' page text, so it is kept no longer than that text is (the brief or draft itself stays)
+  const cutoff = new Date(nowMs - TEXT_KEEP_DAYS * DAY);
+  const briefPrompts = await pool.query('UPDATE topic_research_briefs SET "promptJson" = NULL WHERE "promptJson" IS NOT NULL AND "createdAt" < $1', [cutoff]);
+  const draftPrompts = await pool.query('UPDATE topic_research_drafts SET "promptJson" = NULL WHERE "promptJson" IS NOT NULL AND "createdAt" < $1', [cutoff]);
   const cache = await pool.query('DELETE FROM topic_research_cache WHERE "createdAt" < $1', [new Date(nowMs - CACHE_KEEP_DAYS * DAY)]);
-  return { textCleared: text.rowCount || 0, cacheCleared: cache.rowCount || 0 };
+  return { textCleared: text.rowCount || 0, cacheCleared: cache.rowCount || 0, promptsCleared: (briefPrompts.rowCount || 0) + (draftPrompts.rowCount || 0) };
 }
 
 let refreshTask = null;
@@ -135,7 +139,7 @@ function startTopicResearchPurge() {
   if (purgeTask) return;
   purgeTask = cron.schedule('30 3 * * *', () => {
     purgeOld(require('../db').pool).then((r) => {
-      if (r.textCleared || r.cacheCleared) console.log(`[topic-research] purge: page text cleared on ${r.textCleared} articles, ${r.cacheCleared} saved answers removed`);
+      if (r.textCleared || r.cacheCleared || r.promptsCleared) console.log(`[topic-research] purge: page text cleared on ${r.textCleared} articles, ${r.promptsCleared} stored prompts cleared, ${r.cacheCleared} saved answers removed`);
     }).catch((err) => console.warn('[topic-research] purge failed:', err.message));
   });
   console.log('[topic-research] 30-day page-text clean-up scheduled daily at 03:30');

@@ -168,7 +168,7 @@ export default function SettingsPanel({ onSaved }) {
             <option value="serpapi" disabled>SerpAPI (not built yet)</option>
             <option value="dataforseo" disabled>DataForSEO (not built yet)</option>
           </select>
-          <p className="text-xs mt-1" style={muted}>Gives each result&apos;s Google position plus the &quot;People also ask&quot; questions. Needs the provider&apos;s key on the server (SERP_API_KEY).</p>
+          <p className="text-xs mt-1" style={muted}>Gives each result&apos;s Google position plus the &quot;People also ask&quot; questions. Needs the provider&apos;s key on the server (SERP_API_KEY); if the workspace already has a Serper key (SERPER_SEARCH_API_KEY, used by the other search tools), choosing Serper here uses it. Each search then costs a little, and it is only used once you choose it.</p>
         </div>
       </div>
 

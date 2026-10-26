@@ -1223,6 +1223,9 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_topic_research_drafts_brief ON topic_research_drafts ("briefId", "createdAt" DESC)`);
+    // M8: the exact prompt sent to the model for a brief or a draft ({ model, system, user, retry }); cleared with the page text after 30 days
+    await client.query(`ALTER TABLE topic_research_briefs ADD COLUMN IF NOT EXISTS "promptJson" JSONB`);
+    await client.query(`ALTER TABLE topic_research_drafts ADD COLUMN IF NOT EXISTS "promptJson" JSONB`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS topic_research_source_weights (
         "userId" INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
