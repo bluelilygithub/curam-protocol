@@ -7,6 +7,8 @@
 //   resolution: the person's own setting -> the first admin's setting -> the workspace `standard` model (then whatever text model exists)
 //   a saved id that is no longer in the connected list is ignored (falls back), so removing a model never breaks the tool.
 //
+// Small jobs (relevance checks, trade-term suggestions) use the workspace's `light` model when there is one (resolveCheapModel).
+//
 // Everything outside is injectable so tests need no database. See docs/topic-research.md.
 
 const SETTINGS_KEY = 'topic_research_model';
@@ -52,6 +54,17 @@ function createModelResolver(deps = {}) {
     return d.pickTextModel(await d.getModelsForUser(userId), 'standard');
   }
 
+  /**
+   * The model for the SMALL jobs (is this article about the topic, suggest trade words): the workspace's cheaper `light` model when it has one,
+   * else the person's own choice, else the `standard` model. A short answer from many articles does not need the model that writes a brief.
+   * Null when no model is set up at all.
+   */
+  async function resolveCheapModel(userId) {
+    const tiers = await d.getModelsForUser(userId);
+    if (tiers?.light) return tiers.light;
+    return resolveTopicResearchModel(userId);
+  }
+
   /** What the Settings tab needs: the saved choice (even a stale one), whether it is still valid, the list to choose from and the default. */
   async function getTopicResearchModelConfig(userId) {
     const [{ models }, { modelId, fromAdmin }] = await Promise.all([d.getVaultModelsConfigForUser(userId), chosen(userId)]);
@@ -84,7 +97,7 @@ function createModelResolver(deps = {}) {
     return getTopicResearchModelConfig(userId);
   }
 
-  return { resolveTopicResearchModel, getTopicResearchModelConfig, saveTopicResearchModel };
+  return { resolveTopicResearchModel, resolveCheapModel, getTopicResearchModelConfig, saveTopicResearchModel };
 }
 
 module.exports = { createModelResolver, SETTINGS_KEY, ...createModelResolver() };

@@ -10,6 +10,15 @@ const { getLogger } = require('../../middleware/requestContext');
 const { loadSettings } = require('./settings');
 const { runCollect } = require('./collect');
 const { monthSpend } = require('./spend');
+const { progress } = require('./progress');
+
+// the steps a person sees while a search runs (the notes are recorded as each really happens: progress.js)
+const SEARCH_STEPS = [
+  { id: 'sources', label: 'Asking your sources' },
+  { id: 'save', label: 'Saving what they found' },
+  { id: 'read', label: 'Reading the best pages' },
+  { id: 'rank', label: 'Grouping stories and ranking' },
+];
 
 // one page reader for the whole server, so its robots.txt answers and its per-site spacing last from one search to the next
 let sharedExtractor = null;
@@ -34,23 +43,25 @@ async function sourcesFor(settings, { buildSources = (s, d) => require('./source
  * @returns {{ id, status, errors, count, sources, extras, analysis, spend }}
  * @throws an error with status 409 when this topic is already being searched
  */
-async function searchTopic({ pool, userId, topic, days, refresh = false, now = Date.now, buildSources, analyse, log }) {
+async function searchTopic({ pool, userId, topic, days, refresh = false, now = Date.now, buildSources, analyse, log, opId }) {
   const key = `${userId}:${topic.id}`;
   if (running.has(key)) { const e = new Error('A search for this topic is already running.'); e.status = 409; throw e; }
   running.add(key);
+  const report = progress.begin(userId, opId, SEARCH_STEPS);
   try {
     const settings = await loadSettings(pool, userId);
     const spend = await monthSpend(pool, userId, settings.monthlyBudgetUsd, { now });
     const { sources } = await sourcesFor(settings, { buildSources, budgetOver: spend.over });
-    const out = await runCollect({ pool, userId, topic, sources, days, refresh, now });
+    const extra = Array.isArray(topic.extraQueries) ? topic.extraQueries : [];
+    const out = await runCollect({ pool, userId, topic, sources, days, refresh, now, report, queries: [topic.keyword, ...extra] });
     let analysis = null;
     try {
       const run = analyse || ((args) => require('./analyse').analyseRun({ ...args, extractor: defaultExtractor() }));
-      const a = await run({ pool, userId, runId: out.runId, topic, now });
+      const a = await run({ pool, userId, runId: out.runId, topic, now, report });
       analysis = a ? { stories: a.stories, read: a.read, heat: a.heat } : null;
     } catch (err) { (log || ((e) => getLogger().error({ err: e }, 'topic research analysis failed')))(err); }
     return { id: out.runId, status: out.status, errors: out.errors, count: out.count, sources: out.sources, extras: out.extras, analysis, spend };
-  } finally { running.delete(key); }
+  } finally { report.finish(); running.delete(key); }
 }
 
-module.exports = { searchTopic, sourcesFor, isRunning, running, defaultExtractor };
+module.exports = { searchTopic, sourcesFor, isRunning, running, defaultExtractor, SEARCH_STEPS };

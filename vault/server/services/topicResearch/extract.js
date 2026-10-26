@@ -9,6 +9,7 @@
 // kept for analysis only and is never sent to the browser. Work stops starting new pages once the time budget is spent.
 // See docs/topic-research.md.
 
+const { classify } = require('./pageKind');
 const { fetchPublicFile } = require('../../utils/safeFetch');
 const { createRobotsChecker } = require('./robots');
 const { createThrottle } = require('./sources/http');
@@ -69,10 +70,11 @@ function createExtractor({
     return t.run;
   };
   return {
-    async readPages(candidates, { budgetMs = DEFAULT_BUDGET_MS } = {}) {
+    async readPages(candidates, { budgetMs = DEFAULT_BUDGET_MS, onEach } = {}) {
       const started = now();
       const results = new Array(candidates.length);
       let next = 0;
+      let readSoFar = 0;
 
       async function readOne(c) {
         const rule = await robots.check(c.url);
@@ -96,17 +98,20 @@ function createExtractor({
         if (!c.publishedAt) {
           try { published = believableDate(extractMetadata(html, file.finalUrl || c.url)?.published, now()); } catch { /* a page with no usable metadata is common */ }
         }
-        if (text.length < THIN_CHARS) return { id: c.id, status: 'thin', published };
+        const pageKind = classify({ url: file.finalUrl || c.url, html, text });
+        if (text.length < THIN_CHARS) return { id: c.id, status: 'thin', published, pageKind };
         const kept = text.slice(0, MAX_TEXT_CHARS);
-        return { id: c.id, status: 'ok', text: kept, wordCount: wordCountOf(kept), published };
+        return { id: c.id, status: 'ok', text: kept, wordCount: wordCountOf(kept), published, pageKind };
       }
 
       async function worker() {
         while (next < candidates.length) {
           const i = next; next += 1;
           const c = candidates[i];
-          if (now() - started >= budgetMs) { results[i] = { id: c.id, status: 'skipped' }; continue; }
+          if (now() - started >= budgetMs) { results[i] = { id: c.id, status: 'skipped' }; readSoFar += 1; try { onEach?.(readSoFar, candidates.length); } catch { /* a progress note never stops a read */ } continue; }
           try { results[i] = await readOne(c); } catch { results[i] = { id: c.id, status: 'error' }; }
+          readSoFar += 1;
+          try { onEach?.(readSoFar, candidates.length); } catch { /* a progress note never stops a read */ }
         }
       }
       await Promise.all(Array.from({ length: Math.min(concurrency, candidates.length) }, worker));

@@ -1,6 +1,6 @@
 // Run: node client/src/pages/topicResearch/format.test.mjs
 import assert from 'assert';
-import { formatDate, timeAgo, statusLabel, parseFeedLines, feedLines, sourceChip, signalBadges, rankingNote, heatBadge, readNote, breakdownRows, defaultSelection, toggleSelection, selectionNote, factLabel, overlapWarning, costText, SIGNAL_FIELDS, DEFAULT_PERCENTS, DEFAULT_HALF_LIFE, toPercents, fromPercents, percentTotal, REFRESH_CHOICES, refreshLabel, orderTopics, mergeHistory, budgetBanner, spendLine, DRAFT_LENGTHS, draftLine } from './format.mjs';
+import { draftReadiness, RELEVANCE_STEP_LABELS, isShopPage, formatDate, timeAgo, statusLabel, parseFeedLines, feedLines, sourceChip, signalBadges, rankingNote, heatBadge, readNote, breakdownRows, defaultSelection, toggleSelection, selectionNote, factLabel, overlapWarning, costText, SIGNAL_FIELDS, DEFAULT_PERCENTS, DEFAULT_HALF_LIFE, toPercents, fromPercents, percentTotal, REFRESH_CHOICES, refreshLabel, orderTopics, mergeHistory, budgetBanner, spendLine, DRAFT_LENGTHS, draftLine, SEARCH_STEP_LABELS, BRIEF_STEP_LABELS, DRAFT_STEP_LABELS, stepsForModal, workflowSteps } from './format.mjs';
 
 assert.strictEqual(formatDate(null), 'No date');
 assert.strictEqual(formatDate('garbage'), 'No date');
@@ -48,6 +48,20 @@ const many = Array.from({ length: 15 }, (_, i) => ({ id: 100 + i }));
 assert.deepStrictEqual([...defaultSelection(many)], [100, 101, 102, 103, 104, 105, 106, 107, 108, 109], 'the best ten');
 assert.deepStrictEqual([...defaultSelection(many.slice(0, 4))], [100, 101, 102, 103]);
 assert.deepStrictEqual([...defaultSelection([])], []);
+{
+  const mix = [{ id: 1 }, { id: 2, pageKind: 'product' }, { id: 3, pageKind: 'article' }, { id: 4, pageKind: 'listing' }, { id: 5, pageKind: null }];
+  assert.deepStrictEqual([...defaultSelection(mix)], [1, 3, 5], 'shop pages are not ticked to begin with');
+  assert.deepStrictEqual([...defaultSelection(mix, 2)], [1, 3], 'and do not use up the best-ten places');
+  assert.deepStrictEqual([isShopPage({ pageKind: 'product' }), isShopPage({ pageKind: 'listing' }), isShopPage({ pageKind: 'article' }), isShopPage({}), isShopPage(null)], [true, true, false, false, false]);
+  const rows2 = breakdownRows([
+    { id: 'match', label: 'Topic match', available: true, raw: 0.27, points: 5.3 },
+    { id: 'shop', label: 'Shop page', available: true, raw: 'product', value: 0.4, points: -12 },
+    { id: 'shop', label: 'Shop page', available: true, raw: 'listing', value: 0.4, points: -3 },
+  ]);
+  assert.strictEqual(rows2[0].text, '27% about the topic');
+  assert.ok(/shop page \(a product\).*multiplied by 0\.4/.test(rows2[1].text) && /a list of products/.test(rows2[2].text));
+  assert.strictEqual(rows2[1].points, -12, 'the shop-page row takes points off');
+}
 assert.deepStrictEqual([...defaultSelection(undefined)], []);
 let sel = new Set([1, 2]);
 assert.deepStrictEqual([...toggleSelection(sel, 3)], [1, 2, 3]);
@@ -74,11 +88,11 @@ assert.strictEqual(costText(0.1234), 'about $0.12');
 assert.strictEqual(costText('0.5'), 'about $0.50');
 assert.strictEqual(costText(null), '');
 
-assert.deepStrictEqual(SIGNAL_FIELDS.map((f) => f.id), ['rank', 'size', 'engagement', 'recency', 'source']);
-assert.deepStrictEqual(toPercents({ rank: 0.3, size: 0.25, engagement: 0.2, recency: 0.15, source: 0.1 }), { rank: '30', size: '25', engagement: '20', recency: '15', source: '10' });
-assert.deepStrictEqual(toPercents(undefined), { rank: '0', size: '0', engagement: '0', recency: '0', source: '0' });
-assert.deepStrictEqual(fromPercents({ rank: '30', size: '25', engagement: '', recency: 'abc', source: '-5' }), { rank: 0.3, size: 0.25, engagement: 0, recency: 0, source: 0 }, 'blank, nonsense and negative boxes are 0');
-assert.deepStrictEqual(fromPercents(DEFAULT_PERCENTS), { rank: 0.3, size: 0.25, engagement: 0.2, recency: 0.15, source: 0.1 });
+assert.deepStrictEqual(SIGNAL_FIELDS.map((f) => f.id), ['rank', 'size', 'engagement', 'recency', 'source', 'match']);
+assert.deepStrictEqual(toPercents({ rank: 0.3, size: 0.25, engagement: 0.2, recency: 0.15, source: 0.1 }), { rank: '30', size: '25', engagement: '20', recency: '15', source: '10', match: '0' });
+assert.deepStrictEqual(toPercents(undefined), { rank: '0', size: '0', engagement: '0', recency: '0', source: '0', match: '0' });
+assert.deepStrictEqual(fromPercents({ rank: '30', size: '25', engagement: '', recency: 'abc', source: '-5' }), { rank: 0.3, size: 0.25, engagement: 0, recency: 0, source: 0, match: 0 }, 'blank, nonsense and negative boxes are 0');
+assert.deepStrictEqual(fromPercents(DEFAULT_PERCENTS), { rank: 0.25, size: 0.2, engagement: 0.15, recency: 0.15, source: 0.05, match: 0.2 });
 assert.strictEqual(percentTotal(DEFAULT_PERCENTS), 100);
 assert.strictEqual(percentTotal({ rank: '50', size: 'x', engagement: '25' }), 75);
 assert.strictEqual(DEFAULT_HALF_LIFE, 48);
@@ -156,5 +170,70 @@ assert.ok(budgetBanner({ over: true, spentUsd: 21.5, limitUsd: 20 }).includes('(
 assert.strictEqual(spendLine({ spentUsd: 1.2, limitUsd: 20 }), '$1.20 of $20.00 used this month');
 assert.strictEqual(spendLine({ spentUsd: 1.2, limitUsd: 0 }), '$1.20 used this month (no limit)');
 assert.strictEqual(spendLine(null), '');
+
+// ---- progress steps and the workflow bar
+assert.deepStrictEqual([SEARCH_STEP_LABELS.length, BRIEF_STEP_LABELS.length, DRAFT_STEP_LABELS.length], [4, 3, 3]);
+{
+  const m = stepsForModal([
+    { id: 'sources', label: 'Asking your sources', status: 'done', detail: '5 sources asked' },
+    { id: 'save', label: 'Saving what they found', status: 'active', detail: '40 articles' },
+    { id: 'read', label: 'Reading the best pages', status: 'pending', detail: '' },
+    { id: 'rank', label: 'Grouping stories and ranking', status: 'error', detail: 'broke' },
+    { id: 'x', label: 'Skipped one', status: 'skipped', detail: '' },
+  ]);
+  assert.deepStrictEqual(m.map((s) => s.status), ['done', 'active', 'pending', 'error', 'done']);
+  assert.strictEqual(m[0].label, 'Asking your sources · 5 sources asked');
+  assert.strictEqual(m[1].label, 'Saving what they found · 40 articles');
+  assert.strictEqual(m[2].label, 'Reading the best pages', 'a pending step shows no note');
+  assert.strictEqual(m[4].label, 'Skipped one');
+  assert.deepStrictEqual(stepsForModal(null), []);
+  assert.deepStrictEqual(stepsForModal([{}]).map((s) => [s.id, s.label, s.status]), [['step-0', '', 'done']], 'a junk step does not throw');
+}
+assert.deepStrictEqual(workflowSteps('topics').map((s) => s.state), ['current', 'todo', 'todo', 'todo']);
+assert.deepStrictEqual(workflowSteps('results').map((s) => s.state), ['done', 'current', 'todo', 'todo']);
+assert.deepStrictEqual(workflowSteps('brief').map((s) => s.state), ['done', 'done', 'current', 'todo']);
+assert.deepStrictEqual(workflowSteps('draft').map((s) => s.state), ['done', 'done', 'done', 'current']);
+assert.deepStrictEqual(workflowSteps('nonsense').map((s) => s.state), ['current', 'todo', 'todo', 'todo'], 'an unknown view is the start');
+assert.deepStrictEqual(workflowSteps('draft').map((s) => s.label), ['Search', 'Choose sources', 'Brief', 'Draft']);
+
+// ---- draft readiness: is there enough in the brief to write from?
+{
+  const fact = (text, single = false) => ({ fact: text, sources: ['u'], singleSource: single });
+  const sec = (heading, notes = [], level = 2) => ({ level, heading, notes });
+  const good = {
+    keyFacts: [fact('Refrigeration must reject heat to the room'), fact('Front venting hides the grille in joinery'), fact('Insulation and door seals decide cooling load'), fact('Service access should be planned before building')],
+    outline: [sec('Introduction'), sec('Heat rejection and ventilation'), sec('Joinery and venting'), sec('Insulation and seals'), sec('Service access'), sec('Conclusion')],
+  };
+  const g = draftReadiness(good);
+  assert.deepStrictEqual([g.level, g.facts, g.sections, g.unsupported, g.message], ['ok', 4, 4, 0, ''], 'an opening and a close need no fact; each subject section has one');
+  // 9 subject sections, 6 with nothing behind them: thin
+  const thin = {
+    keyFacts: [fact('Refrigeration must reject heat'), fact('Front venting hides the grille'), fact('Seals matter'), fact('Service access matters')],
+    outline: [sec('Heat rejection'), sec('Venting'), sec('Compressor ratings'), sec('Duty cycles'), sec('Ambient limits'), sec('Australian climate'), sec('Pricing in dollars'), sec('Sizing to volume'), sec('Warranty on joinery')],
+  };
+  const t = draftReadiness(thin);
+  assert.deepStrictEqual([t.level, t.sections, t.unsupported], ['thin', 9, 7], 'only heat and venting are covered: 7 of 9 have nothing (seals and service matter are not outline sections here)');
+  assert.ok(t.message.startsWith('7 of 9 sections of the outline have no supporting fact in this brief.'));
+  assert.ok(/needs your input/.test(t.message) && /rough check from word overlap/.test(t.message));
+  // exactly half unsupported is thin; one under is fine
+  const half = { keyFacts: good.keyFacts, outline: [sec('Heat rejection'), sec('Venting'), sec('Compressor ratings'), sec('Pricing in dollars')] };
+  assert.strictEqual(draftReadiness(half).level, 'thin', '2 of 4 is half');
+  const under = { keyFacts: good.keyFacts, outline: [sec('Heat rejection'), sec('Venting'), sec('Insulation'), sec('Pricing in dollars')] };
+  assert.deepStrictEqual([draftReadiness(under).level, draftReadiness(under).unsupported], ['ok', 1], '1 of 4 is fine');
+  // too few facts is thin whatever the outline says, and the sentence says so (singular too)
+  const few = draftReadiness({ keyFacts: [fact('Refrigeration must reject heat')], outline: [sec('Heat rejection')] });
+  assert.deepStrictEqual([few.level, /only 1 sourced fact\./.test(few.message)], ['thin', true]);
+  assert.ok(/only 3 sourced facts\./.test(draftReadiness({ keyFacts: good.keyFacts.slice(0, 3), outline: good.outline }).message));
+  // a sub-heading is not counted as a section of its own; plural and singular words match; a section's notes count
+  const sub = draftReadiness({ keyFacts: good.keyFacts, outline: [sec('Heat rejection'), sec('Pricing', [], 3), sec('Fittings', ['grilles hidden by venting'])] });
+  assert.deepStrictEqual([sub.sections, sub.unsupported], [2, 0], 'level-3 headings are skipped; "venting" in the notes finds the venting fact');
+  assert.deepStrictEqual([draftReadiness({ keyFacts: good.keyFacts, outline: [sec('Seal')] }).unsupported, draftReadiness({ keyFacts: good.keyFacts, outline: [sec('Seals')] }).unsupported], [0, 0], 'seal and seals both find "seals"');
+  // junk in, no throw
+  for (const junk of [null, undefined, {}, { keyFacts: 'x', outline: 4 }, { keyFacts: [null], outline: [null] }]) assert.doesNotThrow(() => draftReadiness(junk));
+  assert.strictEqual(draftReadiness(null).level, 'thin', 'nothing in a brief is thin');
+  assert.strictEqual(draftReadiness({ keyFacts: good.keyFacts, outline: [] }).level, 'ok', 'four facts and no outline: nothing to contradict them');
+  assert.ok(Math.abs(draftReadiness({ keyFacts: [fact('a b c d', true), fact('e f g h', true), fact('i j k l'), fact('m n o p')], outline: [] }).singleShare - 0.5) < 1e-9);
+  assert.strictEqual(RELEVANCE_STEP_LABELS.length, 1);
+}
 
 console.log('topicResearch format: all passed');

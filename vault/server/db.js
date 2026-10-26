@@ -1179,6 +1179,9 @@ async function initSchema() {
     // ({ peopleAlsoAsk, relatedSearches }); and the 24 hour saved answers of the news/search sources, per person
     await client.query(`ALTER TABLE topic_research_runs ADD COLUMN IF NOT EXISTS "sourcesJson" JSONB`);
     await client.query(`ALTER TABLE topic_research_runs ADD COLUMN IF NOT EXISTS "extrasJson" JSONB`);
+    // M7: the phrasings a search really asked (the topic's own words, then any extra ones the person ticked), and the extra ones saved on a topic
+    await client.query(`ALTER TABLE topic_research_runs ADD COLUMN IF NOT EXISTS "queriesJson" JSONB`);
+    await client.query(`ALTER TABLE topic_research_topics ADD COLUMN IF NOT EXISTS "extraQueries" JSONB`);
     // M3: how a run was ranked (the weights really used, what was left out) and how lively the topic was; whether each article's page was read;
     // the score breakdown per article; and the owner's own weight for each outlet
     await client.query(`ALTER TABLE topic_research_runs ADD COLUMN IF NOT EXISTS "heatJson" JSONB`);
@@ -1269,6 +1272,8 @@ async function initSchema() {
     // M3 columns on the two tables above (must come after their CREATE: a fresh database has neither table until here)
     await client.query(`ALTER TABLE topic_research_articles ADD COLUMN IF NOT EXISTS "extractStatus" TEXT`);
     await client.query(`ALTER TABLE topic_research_articles ADD COLUMN IF NOT EXISTS "extractedAt" TIMESTAMPTZ`);
+    // M7: 'product' | 'listing' | 'article' (pageKind.js); null until known (a shop address is known at once, the rest when the page is read)
+    await client.query(`ALTER TABLE topic_research_articles ADD COLUMN IF NOT EXISTS "pageKind" TEXT`);
     await client.query(`ALTER TABLE topic_research_run_articles ADD COLUMN IF NOT EXISTS "breakdownJson" JSONB`);
     // ── Fitness Planner (Stage 1 tables; later stages add weeks/sessions/logs/library/reminders: docs/fitness-planner.md) ──
     // health_* tables are the shared profile + weight series the future diet app also reads/writes.

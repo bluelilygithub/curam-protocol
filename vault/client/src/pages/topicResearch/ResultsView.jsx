@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../../utils/apiClient';
-import useProcessingStore from '../../store/processingStore';
+import { withProgress } from './withProgress';
+import WorkflowBar from './WorkflowBar';
 import { useIcon } from '../../providers/IconProvider';
 import {
-  breakdownRows, costText, defaultSelection, formatDate, heatBadge, rankingNote, readNote, selectionNote, signalBadges, sourceChip, statusLabel, timeAgo, toggleSelection,
+  BRIEF_STEP_LABELS, RELEVANCE_STEP_LABELS, SEARCH_STEP_LABELS, breakdownRows, isShopPage, costText, defaultSelection, formatDate, heatBadge, rankingNote, readNote, selectionNote, signalBadges, sourceChip, statusLabel, timeAgo, toggleSelection,
 } from './format.mjs';
 
 const BRIEFS_CHANGED = 'topic-research:briefs-changed';
@@ -35,7 +36,7 @@ function ScorePill({ article }) {
           {rows.map((r) => (
             <span key={r.id} className="flex justify-between gap-3 text-xs" style={{ color: r.off ? 'var(--color-muted)' : 'var(--color-text)' }}>
               <span className="min-w-0"><strong>{r.label}</strong><span className="block" style={{ color: 'var(--color-muted)' }}>{r.text}</span></span>
-              <span className="shrink-0 font-semibold">{r.off ? '–' : `+${r.points.toFixed(1)}`}</span>
+              <span className="shrink-0 font-semibold">{r.off ? '–' : `${r.points < 0 ? '' : '+'}${r.points.toFixed(1)}`}</span>
             </span>
           ))}
         </span>
@@ -64,6 +65,9 @@ function ArticleRow({ article, labels, checked, onToggle, showOriginal = true })
       </div>
       {article.snippet && <p className="text-xs mt-1.5 leading-relaxed break-words" style={muted}>{article.snippet}</p>}
       <div className="flex flex-wrap items-center gap-1.5 mt-2">
+        {isShopPage(article) && (
+          <span className="text-xs font-semibold px-1.5 py-0.5 rounded" style={{ border: '1px solid #f59e0b', color: '#b45309' }} title="This looks like a shop page (a product or a list of products), not coverage of the topic. Its score is cut to 40% and it is not ticked for a brief unless you tick it.">Shop page</span>
+        )}
         {showOriginal && article.isOriginal && (
           <span className="text-xs font-semibold px-1.5 py-0.5 rounded" style={{ background: 'var(--color-primary)', color: '#fff' }} title="The earliest article found on this story, when two or more outlets covered it">Original</span>
         )}
@@ -81,7 +85,6 @@ function ArticleRow({ article, labels, checked, onToggle, showOriginal = true })
 // `pinnedRunId` opens one earlier search (from History) instead of the latest, with a note and a way back to the latest.
 export default function ResultsView({ topicId, pinnedRunId = null, onShowLatest, onBack, onTopicChanged, onOpenBrief }) {
   const getIcon = useIcon();
-  const { startProcessing, stopProcessing } = useProcessingStore();
   const [data, setData] = useState(null); // { run, topic, stories, articles }
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -91,6 +94,7 @@ export default function ResultsView({ topicId, pinnedRunId = null, onShowLatest,
   const [picked, setPicked] = useState(new Set()); // article ids ticked for a brief
   const [angle, setAngle] = useState('');
   const [briefs, setBriefs] = useState([]); // earlier briefs for this search
+  const [relevance, setRelevance] = useState(null); // the check before a brief, shown when the sources look off topic
   const [model, setModel] = useState(null); // which model will write a brief: { effectiveModel, name }
   const rerankTried = useRef(new Set()); // runs already re-ranked in this visit, so a run that stays "stale" cannot loop
 
@@ -153,28 +157,39 @@ export default function ResultsView({ topicId, pinnedRunId = null, onShowLatest,
     return () => window.removeEventListener(BRIEFS_CHANGED, loadBriefs);
   }, [loadBriefs]);
 
+  // First a small check that the ticked articles are about the topic. Good: write the brief at once. Mixed or poor: say so and let the person decide.
+  // A check that could not run (no model, a fault) never blocks the brief; running out of this month's limit does.
   const generate = async () => {
     if (!selectionNote(picked.size).ok) return;
-    startProcessing('Writing the brief…', 'This can take up to a minute and a half.');
+    setError(''); setRelevance(null);
     try {
-      const r = await api.post(`/api/topic-research/runs/${runId}/brief`, { articleIds: [...picked], angle });
+      const r = await withProgress({ title: 'Checking the sources…', detail: 'A quick check before the brief is written.', steps: RELEVANCE_STEP_LABELS, poll: false }, () => api.post(`/api/topic-research/runs/${runId}/relevance`, { articleIds: [...picked] }));
+      const d = await r.json().catch(() => ({}));
+      if (r.status === 402) throw new Error(d.error || 'The monthly limit has been reached.');
+      if (r.ok && d.relevance && d.relevance.verdict !== 'good') { setRelevance(d.relevance); return; }
+    } catch (e) { setError(e.message || 'Could not reach the server.'); return; }
+    await writeBrief();
+  };
+  const writeBrief = async () => {
+    setRelevance(null);
+    try {
+      const r = await withProgress({ title: 'Writing the brief…', detail: 'This can take up to a minute and a half.', steps: BRIEF_STEP_LABELS }, (opId) => api.post(`/api/topic-research/runs/${runId}/brief`, { articleIds: [...picked], angle, opId }));
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Could not write the brief.');
       onOpenBrief(d.brief.id);
-    } catch (e) { setError(e.message || 'Could not reach the server.'); } finally { stopProcessing(); }
+    } catch (e) { setError(e.message || 'Could not reach the server.'); }
   };
   const togglePick = (id) => setPicked((cur) => toggleSelection(cur, id));
 
   const searchAgain = async () => {
-    startProcessing('Searching, reading the best pages and ranking…', 'This can take up to half a minute.');
     try {
-      const r = await api.post(`/api/topic-research/topics/${topicId}/run`, {});
+      const r = await withProgress({ title: 'Searching…', detail: 'This can take up to half a minute.', steps: SEARCH_STEP_LABELS }, (opId) => api.post(`/api/topic-research/topics/${topicId}/run`, { opId }));
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Could not search.');
       setOpen({}); setReranked(false);
       await load();
       onTopicChanged?.();
-    } catch (e) { setError(e.message || 'Could not reach the server.'); } finally { stopProcessing(); }
+    } catch (e) { setError(e.message || 'Could not reach the server.'); }
   };
 
   const surface = { background: 'var(--color-surface)', borderColor: 'var(--color-border)' };
@@ -210,6 +225,7 @@ export default function ResultsView({ topicId, pinnedRunId = null, onShowLatest,
 
   return (
     <div className="space-y-4">
+      <WorkflowBar view="results" go={{ search: onBack }} />
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" onClick={onBack} className="text-sm hover:opacity-70 transition-opacity" style={muted}>← All topics</button>
         <h2 className="text-lg font-semibold flex-1 min-w-0 break-words" style={text}>
@@ -230,6 +246,10 @@ export default function ResultsView({ topicId, pinnedRunId = null, onShowLatest,
           <span className="flex-1 min-w-0" style={text}>This is an earlier search, from {formatDate(run.startedAt)}.</span>
           {onShowLatest && <button type="button" onClick={onShowLatest} className="font-medium hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)' }}>See the latest search</button>}
         </div>
+      )}
+
+      {run && run.queries && run.queries.length > 1 && (
+        <p className="text-xs" style={muted}>Searched for: {run.queries.map((q) => `“${q}”`).join(' · ')}</p>
       )}
 
       {run && (
@@ -316,6 +336,27 @@ export default function ResultsView({ topicId, pinnedRunId = null, onShowLatest,
               <p className="text-xs" style={muted}>
                 {model.id ? <>Written by <strong>{model.name}</strong>{model.own ? '' : ' (the workspace default)'}. Change it in Vault Settings, under Topic Research.</> : 'No AI model is set up yet, so a brief cannot be written. Ask your admin to add one in Settings.'}
               </p>
+            )}
+            {relevance && (
+              <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: '#f59e0b', background: 'var(--color-bg)' }} role="alert">
+                <p className="text-sm font-semibold" style={text}>Check before you write this brief</p>
+                <p className="text-sm leading-relaxed" style={text}>{relevance.message}</p>
+                <ul className="space-y-1">
+                  {relevance.scores.map((s) => {
+                    const a = byId.get(s.id);
+                    return (
+                      <li key={s.id} className="text-xs break-words" style={muted}>
+                        <strong style={{ color: s.score >= 2 ? '#16a34a' : '#b45309' }}>{s.score} of 3</strong> · <span style={text}>{a?.title || 'Article'}</span>{s.why ? ` — ${s.why}` : ''}
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setRelevance(null)} className="px-3 py-1.5 rounded-lg text-sm font-medium border hover:opacity-70 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Choose different articles</button>
+                  <button type="button" onClick={onBack} className="px-3 py-1.5 rounded-lg text-sm font-medium border hover:opacity-70 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }} title="Back to the topic list, where you can search again with different words">Search again with different words</button>
+                  <button type="button" onClick={writeBrief} className="px-3 py-1.5 rounded-lg text-sm font-medium hover:opacity-70 transition-opacity" style={{ background: 'var(--color-primary)', color: '#fff' }}>Write the brief anyway</button>
+                </div>
+              </div>
             )}
             {briefs.length > 0 && (
               <div>

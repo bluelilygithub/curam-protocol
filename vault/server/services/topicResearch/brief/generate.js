@@ -12,6 +12,7 @@ const { buildPrompt, buildRetryPrompt } = require('./prompt');
 const { validateBrief, textFields } = require('./schema');
 const { findOverlaps } = require('./overlap');
 const { normaliseUrl } = require('../urlNormalise');
+const { NOOP } = require('../progress');
 
 const MAX_OUTPUT_TOKENS = 6000;
 const TIMEOUT_MS = 150000;
@@ -43,6 +44,7 @@ const withDefaults = (given) => Object.fromEntries(Object.entries(DEFAULTS).map(
  */
 async function generateBrief(input, depsIn = {}) {
   const deps = withDefaults(depsIn);
+  const report = input.report || NOOP;
   const { userId, topic, settings, heat, extras, articles, angle = '' } = input;
   if (!articles?.length) throw fail(400, 'Tick at least one article to write a brief from.');
 
@@ -65,6 +67,7 @@ async function generateBrief(input, depsIn = {}) {
     let message = user;
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       attempts = attempt;
+      report.start('write', attempt === 1 ? 'Waiting for the AI model' : 'The first answer could not be used: trying once more');
       let reply;
       try {
         reply = readReply(await deps.callModel(model, message, { system, maxTokens: MAX_OUTPUT_TOKENS, returnUsage: true, timeoutMs: TIMEOUT_MS }));
@@ -87,10 +90,13 @@ async function generateBrief(input, depsIn = {}) {
     // the tokens were spent whether or not the answer was usable
     if (inputTokens || outputTokens) deps.logUsage({ userId, model, inputTokens, outputTokens, feature: 'topic_research_brief' });
   }
+  report.done('write');
+  report.start('check', 'Checking sources and wording');
   if (problems.length) throw fail(502, 'The AI model\'s answer could not be used, even after a second try. Try again, or tick fewer articles.');
 
   const overlap = findOverlaps(textFields(validated.value), articles.map((a) => ({ url: normaliseUrl(a.url) || a.url, title: a.title, texts: [a.title, a.snippet, a.text] })));
   const costUsd = deps.calculateCost(model, inputTokens, outputTokens);
+  report.done('check', `${validated.value.keyFacts.length} sourced fact${validated.value.keyFacts.length === 1 ? '' : 's'}${overlap.length ? `, ${overlap.length} copy warning${overlap.length === 1 ? '' : 's'}` : ''}`);
   return { brief: validated.value, overlap, dropped: validated.dropped, model, inputTokens, outputTokens, costUsd, attempts };
 }
 

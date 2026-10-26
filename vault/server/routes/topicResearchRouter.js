@@ -17,12 +17,17 @@ const { validateSourceWeights, loadSourceWeights, saveSourceWeights } = require(
 const { briefToMarkdown, briefFileName } = require('../services/topicResearch/brief/markdown');
 const { draftToMarkdown, draftFileName } = require('../services/topicResearch/draft/markdown');
 const { LENGTHS: DRAFT_LENGTHS, DEFAULT_LENGTH: DEFAULT_DRAFT_LENGTH } = require('../services/topicResearch/draft/schema');
+const { progress, OP_ID } = require('../services/topicResearch/progress');
 const { aiLimiter } = require('../middleware/aiRateLimit');
 
 const MAX_TOPICS_PER_USER = 200;
 const DRAFT_BIN_TYPE = 'topic-research-draft';
 const MAX_STEER = 200;
+// the steps a person sees while a brief or a draft is written (progress.js)
+const WRITE_STEPS = (noun) => [{ id: 'prepare', label: `Getting the ${noun === 'brief' ? 'articles' : 'brief'} ready` }, { id: 'write', label: `Writing the ${noun}` }, { id: 'check', label: 'Checking sources and wording' }];
+const opIdOf = (req) => (typeof req.body?.opId === 'string' && OP_ID.test(req.body.opId) ? req.body.opId : undefined);
 const DRAFTS_PER_HOUR = 10;
+const CHECKS_PER_HOUR = 40;
 const MAX_KEYWORD = 120;
 const BIN_TYPE = 'topic-research-topic'; // the shared recycle bin kind (server/services/recycleBin/adapters/topicResearch.js)
 const BRIEF_BIN_TYPE = 'topic-research-brief';
@@ -42,7 +47,26 @@ const cleanKeyword = (raw) => (typeof raw === 'string' ? raw.replace(/\s+/g, ' '
 
 const topicWire = (r) => ({
   id: r.id, keyword: r.keyword, region: r.region, language: r.language, onWatchlist: r.onWatchlist === true, refreshHours: r.refreshHours, createdAt: iso(r.createdAt),
+  extraQueries: Array.isArray(r.extraQueries) ? r.extraQueries : [], // other ways to word the topic that every search of it also asks
 });
+
+const MAX_EXTRA_QUERIES = 3;
+/** The extra phrasings from a request: undefined (not sent), or a cleaned list (each searchable, none the topic itself, none twice, at most three). */
+function cleanQueries(raw, keyword) {
+  if (raw === undefined) return { list: undefined };
+  if (!Array.isArray(raw)) return { error: 'The extra search phrases must be a list.' };
+  const seen = new Set([cleanKeyword(keyword).toLowerCase()]);
+  const list = [];
+  for (const q of raw) {
+    if (typeof q !== 'string') return { error: 'Each extra search phrase must be text.' };
+    const c = cleanKeyword(q);
+    if (!c || seen.has(c.toLowerCase()) || !topicTerms(c).length) continue;
+    seen.add(c.toLowerCase());
+    list.push(c);
+  }
+  if (list.length > MAX_EXTRA_QUERIES) return { error: `Use at most ${MAX_EXTRA_QUERIES} extra search phrases.` };
+  return { list };
+}
 
 function createRouter(pool, {
   // the sources for one run, built from the person's settings and the server's keys (services/topicResearch/sources/index.js). May return
@@ -59,6 +83,10 @@ function createRouter(pool, {
   makeBrief = (input) => require('../services/topicResearch/brief/generate').generateBrief(input),
   // write a first draft from a brief (draft/generate.js). Injected so the route tests need no model.
   makeDraft = (input) => require('../services/topicResearch/draft/generate').generateDraft(input),
+  // other ways to word a topic (relevance/suggest.js). Injected so the route tests need no model.
+  suggestQueriesFn = (input) => require('../services/topicResearch/relevance/suggest').suggestQueries(input),
+  // check that the ticked articles are about the topic (relevance/check.js). Injected so the route tests need no model.
+  checkRelevanceFn = (input) => require('../services/topicResearch/relevance/check').checkRelevance(input),
   // the per-person limit on model-cost routes (30 a minute for the whole app); tests that make hundreds of calls pass their own
   aiGate = aiLimiter,
   // which model writes briefs: the owner's choice in Settings -> Topic Research (modelResolver.js). Injected so tests need no database.
@@ -75,8 +103,8 @@ function createRouter(pool, {
   }));
 
   // the same search the watchlist job runs (services/topicResearch/runSearch.js), with this router's injected pieces for tests
-  const search = async (userId, topic, days, refresh) => {
-    const out = await searchTopic({ pool, userId, topic, days, refresh, now, buildSources, analyse });
+  const search = async (userId, topic, days, refresh, opId) => {
+    const out = await searchTopic({ pool, userId, topic, days, refresh, now, buildSources, analyse, opId });
     const { spend, ...wire } = out;
     return { ...wire, budgetOver: spend.over };
   };
@@ -153,6 +181,8 @@ function createRouter(pool, {
     const keyword = cleanKeyword(req.body?.keyword);
     if (!keyword) return res.status(400).json({ error: 'Type a topic to search for, for example: heat pumps Queensland.' });
     if (!topicTerms(keyword).length) return res.status(400).json({ error: 'That topic has no searchable words. Try something more specific.' });
+    const eq = cleanQueries(req.body?.extraQueries, keyword);
+    if (eq.error) return res.status(400).json({ error: eq.error });
     try {
       let topic = (await pool.query(`SELECT * FROM topic_research_topics WHERE "userId" = $1 AND lower(keyword) = lower($2)`, [req.user.id, keyword])).rows[0];
       let created = false;
@@ -161,13 +191,16 @@ function createRouter(pool, {
         if (Number(n) >= MAX_TOPICS_PER_USER) return res.status(409).json({ error: `You have ${MAX_TOPICS_PER_USER} saved topics. Delete some to add more.` });
         const settings = await loadSettings(pool, req.user.id);
         topic = (await pool.query(
-          `INSERT INTO topic_research_topics ("userId", keyword, region) VALUES ($1, $2, $3) RETURNING *`,
-          [req.user.id, keyword, settings.region],
+          `INSERT INTO topic_research_topics ("userId", keyword, region, "extraQueries") VALUES ($1, $2, $3, $4) RETURNING *`,
+          [req.user.id, keyword, settings.region, JSON.stringify(eq.list || [])],
         )).rows[0];
         created = true;
+      } else if (eq.list !== undefined) {
+        // searching the same topic again with a different set of phrasings replaces the saved set
+        topic = (await pool.query(`UPDATE topic_research_topics SET "extraQueries" = $1 WHERE id = $2 AND "userId" = $3 RETURNING *`, [JSON.stringify(eq.list), topic.id, req.user.id])).rows[0];
       }
       // typing the same words again may use saved answers; only "Search again" asks everything afresh
-      const run = await search(req.user.id, topic, req.body?.days ?? DEFAULT_DAYS, false);
+      const run = await search(req.user.id, topic, req.body?.days ?? DEFAULT_DAYS, false, opIdOf(req));
       res.status(created ? 201 : 200).json({ topic: topicWire(topic), run, created });
     } catch (err) { fail(res, err, 'search that topic'); }
   });
@@ -197,7 +230,7 @@ function createRouter(pool, {
       const topic = await ownTopic(req.user.id, id);
       if (!topic) return res.status(404).json({ error: 'Topic not found.' });
       // "Search again" is a manual refresh: saved answers are skipped (send refresh:false to allow them)
-      res.json({ run: await search(req.user.id, topic, req.body?.days ?? DEFAULT_DAYS, req.body?.refresh !== false) });
+      res.json({ run: await search(req.user.id, topic, req.body?.days ?? DEFAULT_DAYS, req.body?.refresh !== false, opIdOf(req)) });
     } catch (err) { fail(res, err, 'search that topic'); }
   });
 
@@ -260,7 +293,7 @@ function createRouter(pool, {
       if (!run) return res.status(404).json({ error: 'Search not found.' });
       const topic = await ownTopic(req.user.id, run.topicId);
       const { rows } = await pool.query(
-        `SELECT a.id, a.url, a.title, a.domain, a."publishedAt", a.snippet, a."extractStatus", ra.score, ra."isOriginal", ra."serpRank", ra."clusterId", ra."signalsJson", ra."breakdownJson"
+        `SELECT a.id, a.url, a.title, a.domain, a."publishedAt", a.snippet, a."extractStatus", a."pageKind", ra.score, ra."isOriginal", ra."serpRank", ra."clusterId", ra."signalsJson", ra."breakdownJson"
            FROM topic_research_run_articles ra JOIN topic_research_articles a ON a.id = ra."articleId"
           WHERE ra."runId" = $1 AND a."userId" = $2
           ORDER BY ra.score DESC NULLS LAST, a."publishedAt" DESC NULLS LAST, a.id DESC LIMIT 300`,
@@ -276,7 +309,7 @@ function createRouter(pool, {
       const articles = rows.map((a) => ({
         id: a.id, url: a.url, title: a.title, domain: a.domain, publishedAt: iso(a.publishedAt), snippet: a.snippet,
         score: a.score == null ? null : Number(a.score), isOriginal: a.isOriginal === true, serpRank: a.serpRank, clusterId: a.clusterId,
-        signals: json(a.signalsJson, {}), breakdown: json(a.breakdownJson, null), pageRead: a.extractStatus || null,
+        signals: json(a.signalsJson, {}), breakdown: json(a.breakdownJson, null), pageRead: a.extractStatus || null, pageKind: a.pageKind || null,
       }));
       // stories: the groups the articles were put into, best first (the articles are already best first)
       const byStory = new Map();
@@ -295,6 +328,7 @@ function createRouter(pool, {
           errors: Array.isArray(errors) ? errors : [], sources: Array.isArray(sources) ? sources : [],
           extras: extras && typeof extras === 'object' ? extras : { peopleAlsoAsk: [], relatedSearches: [] },
           costUsd: Number(run.apiCostEstimate) || 0,
+          queries: Array.isArray(json(run.queriesJson, [])) ? json(run.queriesJson, []) : [], // the phrasings this search really asked
           ranking: json(run.weightsJson, null), heat: json(run.heatJson, null),
           // true when the stored scores came from different settings (or were never made): the page asks for a re-rank
           weightsStale: await isStale(pool, req.user.id, run),
@@ -313,6 +347,7 @@ function createRouter(pool, {
   };
   const briefHits = new Map(); // userId -> timestamps of this hour's brief requests (a model call costs money, so the cap counts attempts)
   const draftHits = new Map(); // the same for drafts
+  const checkHits = new Map(); // and for relevance checks and trade-term suggestions
 
   /** The articles a brief cites, in citation order (the order they were given to the model); articles since deleted are simply missing. */
   async function sourcesOf(userId, ids) {
@@ -352,6 +387,7 @@ function createRouter(pool, {
 
     const key = `brief:${req.user.id}:${id}`;
     let held = false;
+    let report = { finish() {} };
     try {
       const { rows: [run] } = await pool.query(`SELECT * FROM topic_research_runs WHERE id = $1 AND "userId" = $2`, [id, req.user.id]);
       if (!run) return res.status(404).json({ error: 'Search not found.' });
@@ -372,9 +408,13 @@ function createRouter(pool, {
       const topic = await ownTopic(req.user.id, run.topicId);
       if (!topic) return res.status(404).json({ error: 'Search not found.' });
       briefsRunning.add(key); held = true;
+      report = progress.begin(req.user.id, opIdOf(req), WRITE_STEPS('brief'));
+      report.start('prepare', 'Loading the ticked articles');
       mine.push(t); briefHits.set(req.user.id, mine);
       const settings = await loadSettings(pool, req.user.id);
+      report.done('prepare', `${rows.length} article${rows.length === 1 ? '' : 's'}`);
       const out = await makeBrief({
+        report,
         userId: req.user.id, topic: { keyword: topic.keyword, region: topic.region }, settings, heat: asJson(run.heatJson, null), extras: asJson(run.extrasJson, null), angle,
         articles: rows.map((r) => ({ url: r.url, title: r.title, domain: r.domain, publishedAt: r.publishedAt, score: r.score == null ? null : Number(r.score), snippet: r.snippet || '', text: r.text || '' })),
       });
@@ -385,7 +425,61 @@ function createRouter(pool, {
       );
       const sources = await sourcesOf(req.user.id, rows.map((r) => r.id));
       res.status(201).json({ brief: await briefWire({ ...saved, topicId: run.topicId }, topic.keyword, sources), dropped: out.dropped });
-    } catch (err) { fail(res, err, 'write that brief'); } finally { if (held) briefsRunning.delete(key); }
+    } catch (err) { fail(res, err, 'write that brief'); } finally { report.finish(); if (held) briefsRunning.delete(key); }
+  });
+
+  // POST /runs/:id/relevance { articleIds }: are the ticked articles about the topic? (a small model call, made before a brief is written)
+  router.post('/runs/:id/relevance', aiGate, async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(404).json({ error: 'Search not found.' });
+    const rawIds = Array.isArray(req.body?.articleIds) ? req.body.articleIds : null;
+    const ids = rawIds ? [...new Set(rawIds.map(Number))] : [];
+    if (!rawIds || !ids.length || ids.length > MAX_BRIEF_ARTICLES || !ids.every((n) => Number.isInteger(n) && n > 0 && n <= MAX_INT)) {
+      return res.status(400).json({ error: `Tick between 1 and ${MAX_BRIEF_ARTICLES} articles to check.` });
+    }
+    try {
+      const { rows: [run] } = await pool.query(`SELECT * FROM topic_research_runs WHERE id = $1 AND "userId" = $2`, [id, req.user.id]);
+      if (!run) return res.status(404).json({ error: 'Search not found.' });
+      const spend = await spendFor(req.user.id);
+      if (spend.over) return res.status(402).json({ error: overBudgetMessage(spend), spend });
+      const t = now();
+      const mine = (checkHits.get(req.user.id) || []).filter((x) => t - x < 3600000);
+      if (mine.length >= (limits.checksPerHour ?? CHECKS_PER_HOUR)) { res.set('Retry-After', '600'); return res.status(429).json({ error: 'That is a lot of checks in an hour. Wait a while and try again.' }); }
+      const { rows } = await pool.query(
+        `SELECT a.id, a.url, a.title, a.domain, a."publishedAt", a.snippet, a."extractedText" AS text, ra.score
+           FROM topic_research_run_articles ra JOIN topic_research_articles a ON a.id = ra."articleId"
+          WHERE ra."runId" = $1 AND a."userId" = $2 AND a.id = ANY($3::int[])
+          ORDER BY ra.score DESC NULLS LAST, a.id`,
+        [id, req.user.id, ids],
+      );
+      if (rows.length !== ids.length) return res.status(400).json({ error: 'One of those articles is not part of this search.' });
+      const topic = await ownTopic(req.user.id, run.topicId);
+      if (!topic) return res.status(404).json({ error: 'Search not found.' });
+      mine.push(t); checkHits.set(req.user.id, mine);
+      const settings = await loadSettings(pool, req.user.id);
+      const out = await checkRelevanceFn({
+        userId: req.user.id, topic: { keyword: topic.keyword }, settings,
+        articles: rows.map((r) => ({ id: r.id, title: r.title, domain: r.domain, snippet: r.snippet || '', text: r.text || '' })),
+      });
+      res.json({ relevance: out });
+    } catch (err) { fail(res, err, 'check those articles'); }
+  });
+
+  // POST /suggest-queries { keyword }: up to three other ways to word the topic, in the words the trade uses (a small model call; nothing is searched)
+  router.post('/suggest-queries', aiGate, async (req, res) => {
+    const keyword = cleanKeyword(req.body?.keyword);
+    if (!keyword || !topicTerms(keyword).length) return res.status(400).json({ error: 'Type a topic first.' });
+    try {
+      const spend = await spendFor(req.user.id);
+      if (spend.over) return res.status(402).json({ error: overBudgetMessage(spend), spend });
+      const t = now();
+      const mine = (checkHits.get(req.user.id) || []).filter((x) => t - x < 3600000);
+      if (mine.length >= (limits.checksPerHour ?? CHECKS_PER_HOUR)) { res.set('Retry-After', '600'); return res.status(429).json({ error: 'That is a lot of suggestions in an hour. Wait a while and try again.' }); }
+      mine.push(t); checkHits.set(req.user.id, mine);
+      const settings = await loadSettings(pool, req.user.id);
+      const out = await suggestQueriesFn({ userId: req.user.id, keyword, niche: settings.niche });
+      res.json({ queries: out.phrases });
+    } catch (err) { fail(res, err, 'suggest other words'); }
   });
 
   // GET /runs/:id/briefs: the briefs already written for one search, newest first
@@ -477,6 +571,7 @@ function createRouter(pool, {
 
     const key = `draft:${req.user.id}:${id}`;
     let held = false;
+    let report = { finish() {} };
     try {
       const { rows: [brief] } = await pool.query(
         `SELECT b.*, r."topicId" AS "topicId" FROM topic_research_briefs b JOIN topic_research_runs r ON r.id = b."runId" WHERE b.id = $1 AND b."userId" = $2`,
@@ -498,9 +593,13 @@ function createRouter(pool, {
         ? await pool.query(`SELECT a.url, a.title, a.snippet, a."extractedText" AS text FROM topic_research_articles a WHERE a.id = ANY($1::int[]) AND a."userId" = $2`, [ids, req.user.id])
         : { rows: [] };
       briefsRunning.add(key); held = true;
+      report = progress.begin(req.user.id, opIdOf(req), WRITE_STEPS('draft'));
+      report.start('prepare', 'Loading the brief and its sources');
       mine.push(t); draftHits.set(req.user.id, mine);
       const settings = await loadSettings(pool, req.user.id);
+      report.done('prepare');
       const out = await makeDraft({
+        report,
         userId: req.user.id, topic: { keyword: topic.keyword, region: topic.region }, settings, brief: content, lengthChoice, steer,
         sources: sources.map((s) => ({ url: s.url, title: s.title, domain: s.domain })),
         articles: articles.map((a) => ({ url: a.url, title: a.title, snippet: a.snippet || '', text: a.text || '' })),
@@ -511,7 +610,7 @@ function createRouter(pool, {
         [req.user.id, id, lengthChoice, steer, JSON.stringify(out.draft), JSON.stringify(out.overlap), out.model, out.costUsd, out.inputTokens, out.outputTokens],
       );
       res.status(201).json({ draft: draftWire(saved, topic.keyword, sources, { topicId: brief.topicId, runId: brief.runId }), dropped: out.dropped });
-    } catch (err) { fail(res, err, 'write that draft'); } finally { if (held) briefsRunning.delete(key); }
+    } catch (err) { fail(res, err, 'write that draft'); } finally { report.finish(); if (held) briefsRunning.delete(key); }
   });
 
   // GET /briefs/:id/drafts: the drafts already written from this brief, newest first
@@ -586,6 +685,13 @@ function createRouter(pool, {
       if (id !== undefined && id !== null && typeof id !== 'string') return res.status(400).json({ error: 'The model must be text.' });
       res.json(await modelApi.saveTopicResearchModel(req.user.id, id));
     } catch (err) { fail(res, err, 'save the model setting'); }
+  });
+
+  // GET /progress/:opId: the steps of a long action started with that opId (a search, a brief, a draft); 404 until it has started
+  router.get('/progress/:opId', (req, res) => {
+    const p = progress.get(req.user.id, req.params.opId);
+    if (!p) return res.status(404).json({ error: 'No such action.' });
+    res.json(p);
   });
 
   // GET /usage: this month's estimated spend against the limit (the banner, the Settings box)

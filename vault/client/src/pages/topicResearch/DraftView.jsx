@@ -1,17 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import api from '../../utils/apiClient';
-import useProcessingStore from '../../store/processingStore';
+import { withProgress } from './withProgress';
+import WorkflowBar from './WorkflowBar';
 import useToastStore from '../../store/toastStore';
 import { offerUndo } from '../../utils/binUndo';
 import { useIcon } from '../../providers/IconProvider';
-import { costText, draftLine, formatDate } from './format.mjs';
+import { DRAFT_STEP_LABELS, costText, draftLine, formatDate } from './format.mjs';
 
 // One article draft: a first draft built from a research brief, to edit. Each factual paragraph carries source numbers that match the Sources
 // list; places the research could not fill are marked; a warning comes first if the draft repeats wording from a source or from the brief.
 // Copy and download give the same Markdown the server writes. It is read-only: edit the copy where you write.
-export default function DraftView({ draftId, onBack, onOpenDraft }) {
+export default function DraftView({ draftId, onBack, onOpenDraft, onGoSearch, onGoResults }) {
   const getIcon = useIcon();
-  const { startProcessing, stopProcessing } = useProcessingStore();
   const addToast = useToastStore((s) => s.addToast);
   const [draft, setDraft] = useState(null);
   const [error, setError] = useState('');
@@ -57,13 +57,12 @@ export default function DraftView({ draftId, onBack, onOpenDraft }) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   const another = async () => {
-    startProcessing('Writing the draft…', 'This can take up to a minute and a half.');
     try {
-      const r = await api.post(`/api/topic-research/briefs/${draft.briefId}/draft`, { lengthChoice: draft.lengthChoice, steer: draft.steer });
+      const r = await withProgress({ title: 'Writing the draft…', detail: 'This can take up to a minute and a half.', steps: DRAFT_STEP_LABELS }, (opId) => api.post(`/api/topic-research/briefs/${draft.briefId}/draft`, { lengthChoice: draft.lengthChoice, steer: draft.steer, opId }));
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Could not write the draft.');
       onOpenDraft(d.draft.id);
-    } catch (e) { setError(e.message || 'Could not reach the server.'); } finally { stopProcessing(); }
+    } catch (e) { setError(e.message || 'Could not reach the server.'); }
   };
   const remove = async () => {
     try {
@@ -83,6 +82,7 @@ export default function DraftView({ draftId, onBack, onOpenDraft }) {
 
   return (
     <div className="space-y-2">
+      <WorkflowBar view="draft" go={{ search: onGoSearch, sources: () => onGoResults(draft.topicId), brief: () => onBack(draft.briefId) }} />
       <button type="button" onClick={() => onBack(draft.briefId)} className="text-sm hover:opacity-70 transition-opacity" style={muted}>← Back to the brief</button>
       <h2 className="text-lg font-semibold break-words" style={text}>{c.title}</h2>
       <p className="text-xs" style={muted}>

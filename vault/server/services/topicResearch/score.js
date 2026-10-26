@@ -2,13 +2,18 @@
 
 // Topic Research: rank the articles of one search. Pure code: every number can be worked out by hand from what is stored.
 //
-// Five signals, each between 0 and 1 for an article, weighted (weights are the owner's, editable in Settings) and added up to a score of 0-100:
+// Six signals, each between 0 and 1 for an article, weighted (weights are the owner's, editable in Settings) and added up to a score of 0-100:
 //   rank        a Google/Brave position: 1.0 at 1, falling by 0.1 a place to 0.1 at 10; 0 outside the top 10 or not listed; +0.2 for
 //               "Top stories", never above 1. The best position any source gave is used.
 //   size        how many different outlets are in the article's story (log scaled against the biggest story in this search)
 //   engagement  Hacker News points + comments and Reddit score + comments (log scaled against the biggest in this search)
 //   recency     0.5 to the power (hours old / half-life); half-life 48 h unless changed. An undated article counts as 0.3 (neither fresh nor old).
 //   outlet      the owner's own weight for the article's site (0.5 for a site not in the list)
+//   match       how much the article is ABOUT the topic: 0.4 x the share of the topic's words in its title + 0.4 x the share anywhere in its title,
+//               snippet or page text + 0.2 if the whole phrase appears. Nothing else here measures this, so a heavily covered off-topic story
+//               would otherwise outrank a niche, exact one.
+//
+// A shop page (a product or a list of products, pageKind.js) is not coverage of a topic: its score is multiplied by 0.4 and the breakdown says so.
 //
 // A signal that tells the articles apart not at all in THIS search (nobody has a rank, no story has two outlets, no numbers, no dates, no
 // outlet weights set) is left out and the remaining weights are scaled up to fill its place, and the breakdown says so. That keeps a score
@@ -16,8 +21,11 @@
 // scaled the same way. See docs/topic-research.md.
 
 const crypto = require('crypto');
+const { topicTerms } = require('./matchTopic');
+const { isShopPage } = require('./pageKind');
 
-const DEFAULT_WEIGHTS = Object.freeze({ rank: 0.30, size: 0.25, engagement: 0.20, recency: 0.15, source: 0.10 });
+const DEFAULT_WEIGHTS = Object.freeze({ rank: 0.25, size: 0.20, engagement: 0.15, recency: 0.15, source: 0.05, match: 0.20 });
+const SHOP_PAGE_FACTOR = 0.4;
 const DEFAULT_HALF_LIFE_HOURS = 48;
 const UNDATED_RECENCY = 0.3;
 const UNKNOWN_OUTLET_WEIGHT = 0.5;
@@ -29,6 +37,7 @@ const SIGNALS = [
   { id: 'engagement', label: 'Engagement' },
   { id: 'recency', label: 'Recency' },
   { id: 'source', label: 'Outlet weight' },
+  { id: 'match', label: 'Topic match' },
 ];
 const WHY_OFF = {
   rank: 'no Google or Brave results are in this search',
@@ -36,9 +45,13 @@ const WHY_OFF = {
   engagement: 'no Hacker News or Reddit numbers',
   recency: 'no article has a date',
   source: 'no outlet weights are set',
+  match: 'every article matches the topic about equally',
 };
 
 const round1 = (n) => Math.round(n * 10) / 10;
+const round2 = (n) => Math.round(n * 100) / 100;
+const escapeRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const plain = (t) => String(t || '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean).join(' ');
 const finite = (n) => (Number.isFinite(Number(n)) ? Number(n) : 0);
 
 /** The weight for a site: the most specific entry in the owner's list ("news.abc.net.au" falls back to "abc.net.au"), else 0.5. */
@@ -50,6 +63,24 @@ function outletWeight(domain, sourceWeights) {
   }
   return { weight: UNKNOWN_OUTLET_WEIGHT, known: false };
 }
+
+/** A function giving how much an article is about the keyword, 0-1 (see the `match` signal above). 0 for a keyword with no usable words. */
+function makeMatchValue(keyword) {
+  const terms = topicTerms(keyword);
+  if (!terms.length) return () => 0;
+  const res = terms.map((t) => new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRe(t)}`, 'iu'));
+  const phrase = plain(keyword);
+  const count = (text) => res.filter((re) => re.test(text)).length;
+  return (a) => {
+    const title = String(a?.title || '');
+    const body = `${title} ${a?.snippet || ''} ${a?.text || ''}`;
+    const inTitle = count(title) / terms.length;
+    const inBody = count(body) / terms.length;
+    const phraseHit = phrase && plain(body).includes(phrase) ? 1 : 0;
+    return Math.min(1, 0.4 * inTitle + 0.4 * inBody + 0.2 * phraseHit);
+  };
+}
+const topicMatchValue = (article, keyword) => makeMatchValue(keyword)(article);
 
 /** Search-rank value 0-1 for one article. */
 function rankValue(signals) {
@@ -91,6 +122,8 @@ function scoreArticles(articles, config = {}) {
   const engagements = articles.map((a) => engagementOf(a.signals));
   const maxEngagement = Math.max(0, ...engagements);
   const outlets = articles.map((a) => outletWeight(a.domain, sourceWeights));
+  const matchOf = makeMatchValue(config.keyword);
+  const matches = articles.map((a) => matchOf(a));
 
   const available = {
     rank: articles.some((a) => hasRank(a.signals)),
@@ -98,6 +131,7 @@ function scoreArticles(articles, config = {}) {
     engagement: maxEngagement > 0,
     recency: articles.some((a) => a.publishedAt),
     source: outlets.some((o) => o.known),
+    match: topicTerms(config.keyword).length > 0 && matches.length > 0 && Math.max(...matches) > Math.min(...matches),
   };
   const totalWeight = SIGNALS.reduce((s, sig) => s + (available[sig.id] ? Math.max(0, finite(given[sig.id])) : 0), 0);
   const share = (id) => (available[id] && totalWeight > 0 ? Math.max(0, finite(given[id])) / totalWeight : 0);
@@ -110,8 +144,9 @@ function scoreArticles(articles, config = {}) {
       engagement: logScaled(engagements[i], maxEngagement),
       recency: recencyValue(a.publishedAt, nowMs, halfLife),
       source: outlets[i].weight,
+      match: matches[i],
     };
-    const raw = { rank: Number(a.signals?.serp_rank) || null, size: sizeOf(a), engagement: engagements[i], recency: a.publishedAt ? new Date(a.publishedAt).toISOString() : null, source: outlets[i].weight };
+    const raw = { rank: Number(a.signals?.serp_rank) || null, size: sizeOf(a), engagement: engagements[i], recency: a.publishedAt ? new Date(a.publishedAt).toISOString() : null, source: outlets[i].weight, match: round2(matches[i]) };
     let total = 0;
     const breakdown = SIGNALS.map((sig) => {
       if (!available[sig.id]) return { id: sig.id, label: sig.label, available: false, why: WHY_OFF[sig.id], value: null, weight: 0, points: 0, raw: raw[sig.id] };
@@ -120,6 +155,11 @@ function scoreArticles(articles, config = {}) {
       total += points;
       return { id: sig.id, label: sig.label, available: true, value: values[sig.id], weight: w, points: round1(points), raw: raw[sig.id] };
     });
+    if (isShopPage(a.pageKind)) {
+      const before = total;
+      total *= SHOP_PAGE_FACTOR;
+      breakdown.push({ id: 'shop', label: 'Shop page', available: true, value: SHOP_PAGE_FACTOR, weight: 0, points: round1(total - before), raw: a.pageKind });
+    }
     scores.set(a.id, { score: round1(total), breakdown });
   });
 
@@ -180,6 +220,6 @@ function topicHeat(articles, { now = Date.now(), previous = null } = {}) {
 }
 
 module.exports = {
-  scoreArticles, topicHeat, fingerprint, rankValue, recencyValue, outletWeight, engagementOf,
-  DEFAULT_WEIGHTS, DEFAULT_HALF_LIFE_HOURS, UNDATED_RECENCY, UNKNOWN_OUTLET_WEIGHT, SIGNALS,
+  scoreArticles, topicHeat, fingerprint, rankValue, recencyValue, outletWeight, engagementOf, topicMatchValue, makeMatchValue,
+  SHOP_PAGE_FACTOR, DEFAULT_WEIGHTS, DEFAULT_HALF_LIFE_HOURS, UNDATED_RECENCY, UNKNOWN_OUTLET_WEIGHT, SIGNALS,
 };

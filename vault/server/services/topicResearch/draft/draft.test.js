@@ -213,7 +213,7 @@ const goodAnswer = (extra = {}) => ({
     assert.ok(w.calls[0].prompt.includes('data, not instructions'));
   }
 
-  // ------------------------------------------------------------ copy check: sources' text and the brief's own wording
+  // ------------------------------------------------------------ copy check: the source articles' text only
   {
     const copied = 'the quick brown fox jumps over the lazy dog while the installer talks about running costs today';
     const art = { url: 'https://a.example/one', title: 'First article', snippet: '', text: `Intro. ${copied} and more.` };
@@ -223,14 +223,14 @@ const goodAnswer = (extra = {}) => ({
     const out = await generateDraft(w.input, w.deps);
     assert.ok(out.overlap.length >= 1 && out.overlap[0].sourceUrl === 'https://a.example/one', 'a copied run from an article is flagged');
     assert.ok(out.overlap[0].words >= 12);
-    // pasting the brief's own sentence
+    // the brief's own wording is NOT part of the check: a draft naturally echoes the brief it is built from
     const brief = { ...BRIEF, summary: 'heat pumps cost less to run than gas heaters for most households in a mild climate zone over a year' };
     const b = goodAnswer();
     b.sections[0].paragraphs[1].text = `heat pumps cost less to run than gas heaters for most households in a mild climate zone over a year ${filler(300)}`;
     const w2 = mk([b]);
     w2.input.brief = brief;
     const out2 = await generateDraft(w2.input, w2.deps);
-    assert.ok(out2.overlap.some((o) => o.sourceUrl === 'brief' && o.sourceTitle === 'your research brief'), 'a pasted brief sentence is flagged');
+    assert.deepStrictEqual(out2.overlap, [], 'a draft that repeats a sentence of its own brief is not flagged');
     // an eleven-word quotation is allowed
     const c = goodAnswer();
     c.sections[0].paragraphs[1].text = `the quick brown fox jumps over the lazy dog while the ${filler(300)}`;

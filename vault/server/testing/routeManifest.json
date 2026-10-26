@@ -3480,6 +3480,15 @@
   },
   "DELETE /api/topic-research/drafts/:id": {
    "class": "authed"
+  },
+  "GET /api/topic-research/progress/:opId": {
+   "class": "authed"
+  },
+  "POST /api/topic-research/suggest-queries": {
+   "class": "authed"
+  },
+  "POST /api/topic-research/runs/:id/relevance": {
+   "class": "authed"
   }
  }
 }

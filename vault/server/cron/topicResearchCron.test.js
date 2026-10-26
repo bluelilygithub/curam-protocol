@@ -14,8 +14,8 @@ const { searchTopic, running } = require('../services/topicResearch/runSearch');
 const H = 3600000;
 const NOW = Date.UTC(2026, 9, 25, 12, 0, 0);
 
-function world({ topics = [], runs = [], briefs = [], drafts = [], articles = [], cache = [] } = {}) {
-  const w = { topics, runs, briefs, drafts, articles, cache };
+function world({ topics = [], runs = [], briefs = [], drafts = [], checks = [], articles = [], cache = [] } = {}) {
+  const w = { topics, runs, briefs, drafts, checks, articles, cache };
   w.pool = {
     async query(sql, p = []) {
       const s = sql.replace(/\s+/g, ' ').trim();
@@ -28,6 +28,7 @@ function world({ topics = [], runs = [], briefs = [], drafts = [], articles = []
       if (/^SELECT COALESCE\(SUM\("apiCostEstimate"\)/.test(s)) return { rows: [{ total: w.runs.filter((r) => r.userId === p[0] && new Date(r.startedAt) >= p[1]).reduce((t, r) => t + (r.apiCostEstimate || 0), 0) }] };
       if (/^SELECT COALESCE\(SUM\("costUsd"\), 0\) AS total FROM topic_research_briefs/.test(s)) return { rows: [{ total: w.briefs.filter((b) => b.userId === p[0] && new Date(b.createdAt) >= p[1]).reduce((t, b) => t + (b.costUsd || 0), 0) }] };
       if (/^SELECT COALESCE\(SUM\("costUsd"\), 0\) AS total FROM topic_research_drafts/.test(s)) return { rows: [{ total: (w.drafts || []).filter((d) => d.userId === p[0] && new Date(d.createdAt) >= p[1]).reduce((t, d) => t + (d.costUsd || 0), 0) }] };
+      if (/^SELECT COALESCE\(SUM\(estimated_cost_usd\), 0\) AS total FROM usage_logs/.test(s)) return { rows: [{ total: w.checks.filter((c) => c.userId === p[0] && new Date(c.createdAt) >= p[1]).reduce((t, c) => t + (c.costUsd || 0), 0) }] };
       if (/^UPDATE topic_research_articles SET "extractedText" = NULL/.test(s)) {
         let n = 0;
         for (const a of w.articles) if (a.extractedText != null && new Date(a.extractedAt || a.fetchedAt) < p[0]) { a.extractedText = null; a.wordCount = null; n += 1; }
@@ -162,12 +163,13 @@ async function main() {
       runs: [run(1, 1, 0, { apiCostEstimate: 0.5, startedAt: new Date(m) }), run(2, 1, 0, { apiCostEstimate: 9, startedAt: new Date(m - 1) }), run(3, 1, 0, { userId: 2, apiCostEstimate: 7, startedAt: new Date(m + 5) })],
       briefs: [{ userId: 1, costUsd: 0.25, createdAt: new Date(m + 10) }, { userId: 1, costUsd: 4, createdAt: new Date(m - 10) }, { userId: 2, costUsd: 6, createdAt: new Date(m + 10) }],
       drafts: [{ userId: 1, costUsd: 0.1, createdAt: new Date(m + 20) }, { userId: 1, costUsd: 3, createdAt: new Date(m - 20) }, { userId: 2, costUsd: 5, createdAt: new Date(m + 20) }],
+      checks: [{ userId: 1, costUsd: 0.05, createdAt: new Date(m + 30) }, { userId: 1, costUsd: 2, createdAt: new Date(m - 30) }, { userId: 2, costUsd: 9, createdAt: new Date(m + 30) }],
     });
     const env = {};
     let s = await monthSpend(w.pool, 1, 20, { now: () => NOW, env });
-    assert.deepStrictEqual([s.searchUsd, s.briefUsd, s.draftUsd, s.spentUsd, s.over, s.pricesSet], [0.5, 0.25, 0.1, 0.85, false, false], 'this month only, this person only, search + brief + draft');
-    assert.strictEqual((await monthSpend(w.pool, 1, 0.85, { now: () => NOW, env })).over, true, 'exactly at the limit is over');
-    assert.strictEqual((await monthSpend(w.pool, 1, 0.86, { now: () => NOW, env })).over, false);
+    assert.deepStrictEqual([s.searchUsd, s.briefUsd, s.draftUsd, s.checkUsd, s.spentUsd, s.over, s.pricesSet], [0.5, 0.25, 0.1, 0.05, 0.9, false, false], 'this month only, this person only, search + brief + draft + checks');
+    assert.strictEqual((await monthSpend(w.pool, 1, 0.9, { now: () => NOW, env })).over, true, 'exactly at the limit is over');
+    assert.strictEqual((await monthSpend(w.pool, 1, 0.91, { now: () => NOW, env })).over, false);
     assert.strictEqual((await monthSpend(w.pool, 1, 0, { now: () => NOW, env })).over, false, '0 = no limit');
     assert.strictEqual((await monthSpend(w.pool, 1, -3, { now: () => NOW, env })).over, false);
     assert.strictEqual((await monthSpend(w.pool, 1, 20, { now: () => NOW, env: { BRAVE_PRICE_PER_QUERY_USD: '0.005' } })).pricesSet, true);

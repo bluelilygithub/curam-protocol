@@ -38,7 +38,7 @@ export default function TopicResearchModelCard({ choices, defaultModel }) {
     <section className="mb-8" data-guide="model">
       <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={muted}>Research brief model</h2>
       <p className="text-xs mb-4" style={muted}>
-        Topic Research uses an AI model for one thing: writing a research brief (the angle, key facts with their sources, gaps and an outline). Searching, reading and ranking use no model.
+        Topic Research uses an AI model to write a research brief (the angle, key facts with their sources, gaps and an outline) and an article draft. The quick source check and the industry-term suggestions use the workspace's cheaper model when there is one. Searching, reading and ranking use no model.
         By default it uses your default chat model; pick another connected model here to use that instead.
       </p>
       <label className="block text-xs font-medium mb-1.5" style={muted} htmlFor="tr-model">Model</label>

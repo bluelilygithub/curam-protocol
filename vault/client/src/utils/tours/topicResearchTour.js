@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_topic_research_completed';
 
-const TOTAL_STEPS = 9;
+const TOTAL_STEPS = 11;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -57,12 +57,32 @@ export function startTopicResearchTour() {
   });
 
   tour.addStep({
+    id: 'tr-workflow',
+    title: 'Where you are',
+    text: 'This bar shows the four stages of the work: Search, Choose sources, Brief and Draft. The one you are on is filled, and you can click an earlier one to go back. While a search, brief or draft runs, a box lists each step as it really happens, so you can see where it is up to.',
+    attachTo: { element: '[data-tour="tr-workflow"]', on: 'bottom' },
+    beforeShowPromise: check('tr-workflow', '[data-tour="tr-workflow"]'),
+    when: { show() { injectStepCounter(2); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  tour.addStep({
     id: 'tr-search',
     title: 'Search a topic',
     text: 'Type a topic and press Search. It asks your sources, reads the best pages, groups articles about the same story and ranks the stories. It can take up to half a minute.',
     attachTo: { element: '[data-tour="tr-search"]', on: 'bottom' },
     beforeShowPromise: check('tr-search', '[data-tour="tr-search"]'),
-    when: { show() { injectStepCounter(2); } },
+    when: { show() { injectStepCounter(3); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  tour.addStep({
+    id: 'tr-suggest',
+    title: 'Find the trade\'s words',
+    text: 'People search in everyday words, but manufacturers and trade writers use their own, so the best articles may never use yours. Type a topic and press Suggest industry terms: the AI model offers up to three other phrasings. Tick the ones to search as well. Nothing is searched until you press Search.',
+    attachTo: { element: '[data-tour="tr-suggest"]', on: 'bottom' },
+    beforeShowPromise: check('tr-suggest', '[data-tour="tr-suggest"]'),
+    when: { show() { injectStepCounter(4); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -72,15 +92,15 @@ export function startTopicResearchTour() {
     text: 'Every topic you search is saved here. Tick Watch on one and choose how often it refreshes, and it searches by itself in the background. Watched topics are listed first.',
     attachTo: { element: '[data-tour="tr-topics"]', on: 'top' },
     beforeShowPromise: check('tr-topics', '[data-tour="tr-topics"]'),
-    when: { show() { injectStepCounter(3); } },
+    when: { show() { injectStepCounter(5); } },
     buttons: [btnBack(), btnNext],
   });
 
   tour.addStep({
     id: 'tr-results',
     title: 'Ranked stories and briefs',
-    text: 'Open a topic to see its stories, best first. Tick the articles you want and write a research brief: the angle, the key facts with where each came from, gaps and an outline. It is notes for your own writing, and it is checked so it does not copy the sources.',
-    when: { show() { injectStepCounter(4); } },
+    text: 'Open a topic to see its stories, best first. Shop pages are badged and scored lower. Tick the articles you want and write a research brief. A quick source check first warns you if they are not really about your topic. The brief gives you: the angle, the key facts with where each came from, gaps and an outline. It is notes for your own writing, and it is checked so it does not copy the sources.',
+    when: { show() { injectStepCounter(6); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -88,7 +108,7 @@ export function startTopicResearchTour() {
     id: 'tr-draft',
     title: 'Turn a brief into a first draft',
     text: 'On a saved brief, press Draft article and choose a length. You get a first draft built from that brief only, with a source number on every factual paragraph and clear "needs your input" markers where the research has gaps. It is a starting point to edit and fact-check, and it warns if it repeats wording from a source.',
-    when: { show() { injectStepCounter(5); } },
+    when: { show() { injectStepCounter(7); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -98,7 +118,7 @@ export function startTopicResearchTour() {
     text: 'History lists every past search, brief and draft, newest first, with a search box. Settings holds your feeds, what your site is about, how results are ranked and your spending.',
     attachTo: { element: '[data-tour="tr-tabs"]', on: 'bottom' },
     beforeShowPromise: check('tr-tabs', '[data-tour="tr-tabs"]'),
-    when: { show() { injectStepCounter(6); } },
+    when: { show() { injectStepCounter(8); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -108,15 +128,15 @@ export function startTopicResearchTour() {
     text: 'Paid searches, briefs and drafts cost a little. In Settings, set a monthly limit. When the estimate reaches it, paid searches, new briefs and new drafts pause and a banner tells you, until you raise the limit or the month ends. Amounts are estimates.',
     attachTo: { element: '[data-tour="tr-banner"]', on: 'bottom' },
     beforeShowPromise: check('tr-spending', '[data-tour="tr-banner"]'),
-    when: { show() { injectStepCounter(7); } },
+    when: { show() { injectStepCounter(9); } },
     buttons: [btnBack(), btnNext],
   });
 
   tour.addStep({
     id: 'tr-model',
     title: 'Which AI model writes briefs and drafts',
-    text: 'Briefs and drafts are written by the AI model you choose in Vault Settings, under Topic Research, the same way as other tools. Leave it on the default to use the workspace model. Searching, reading and ranking use no model.',
-    when: { show() { injectStepCounter(8); } },
+    text: "Briefs and drafts are written by the AI model you choose in Vault Settings, under Topic Research, the same way as other tools. Leave it on the default to use the workspace model. Quick source checks and suggestions use the workspace's cheaper model. Searching, reading and ranking use none.",
+    when: { show() { injectStepCounter(10); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -124,7 +144,7 @@ export function startTopicResearchTour() {
     id: 'tr-limits',
     title: 'Good to know',
     text: 'Scores say what to look at first, not what is true. Page text is kept for 30 days, then cleared. A deleted topic can be brought back from the recycle bin. Stuck? Press the round button at the bottom right and ask the guide.',
-    when: { show() { injectStepCounter(9); } },
+    when: { show() { injectStepCounter(11); } },
     buttons: [
       btnBack(),
       { text: 'Finish Tour ✓', action() { try { localStorage.setItem(TOUR_KEY, '1'); } catch (_) { /* ignore */ } tour.complete(); } },

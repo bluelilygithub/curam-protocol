@@ -57,8 +57,11 @@ export function signalBadges(signals, sourceLabels = {}) {
 export const MAX_BRIEF_ARTICLES = 12;
 export const DEFAULT_TICKED = 10;
 
-/** The articles ticked to begin with: the best ten (the list arrives best first). */
-export const defaultSelection = (articles, max = DEFAULT_TICKED) => new Set((articles || []).slice(0, max).map((a) => a.id));
+/** True for a product or a list of products: not coverage of a topic, so it is not ticked to begin with and is badged "Shop page". */
+export const isShopPage = (a) => a?.pageKind === 'product' || a?.pageKind === 'listing';
+
+/** The articles ticked to begin with: the best ten that are not shop pages (the list arrives best first). */
+export const defaultSelection = (articles, max = DEFAULT_TICKED) => new Set((articles || []).filter((a) => !isShopPage(a)).slice(0, max).map((a) => a.id));
 
 /** Tick or untick one article; ticking a thirteenth is refused (the same Set comes back). */
 export function toggleSelection(selected, id, max = MAX_BRIEF_ARTICLES) {
@@ -95,15 +98,16 @@ export function costText(usd) {
   return `about $${n.toFixed(2)}`;
 }
 
-/** The five things a result is ranked on, in the order they are shown in Settings. */
+/** The six things a result is ranked on, in the order they are shown in Settings. */
 export const SIGNAL_FIELDS = [
   { id: 'rank', label: 'Search rank', tip: 'Where Google or Brave put it. Needs a results source switched on.' },
   { id: 'size', label: 'Story size', tip: 'How many different outlets covered the same story.' },
   { id: 'engagement', label: 'Engagement', tip: 'Points, votes and comments on Hacker News and Reddit.' },
   { id: 'recency', label: 'Recency', tip: 'How new it is. See "How fast news goes stale".' },
   { id: 'source', label: 'Outlet weight', tip: 'Your own opinion of the outlet, set in the list below.' },
+  { id: 'match', label: 'Topic match', tip: 'How much the article is about your topic: your words in its title, and anywhere in its text.' },
 ];
-export const DEFAULT_PERCENTS = { rank: 30, size: 25, engagement: 20, recency: 15, source: 10 };
+export const DEFAULT_PERCENTS = { rank: 25, size: 20, engagement: 15, recency: 15, source: 5, match: 20 };
 export const DEFAULT_HALF_LIFE = 48;
 
 /** The server's weights (0-1 each) -> whole percentages as text, for the boxes. */
@@ -152,6 +156,8 @@ export function breakdownRows(breakdown) {
     else if (b.id === 'engagement') text = b.raw > 0 ? `${b.raw} points, votes and comments` : 'None';
     else if (b.id === 'recency') text = b.raw ? formatDate(b.raw) : 'No date (counted as middling)';
     else if (b.id === 'source') text = `Your weight ${b.raw}`;
+    else if (b.id === 'match') text = `${Math.round((Number(b.raw) || 0) * 100)}% about the topic`;
+    else if (b.id === 'shop') text = `Looks like a shop page (${b.raw === 'listing' ? 'a list of products' : 'a product'}): the score is multiplied by ${b.value}`;
     return { id: b.id, label: b.label, text, points: Number(b.points) || 0, off: false };
   });
 }
@@ -220,4 +226,65 @@ export function spendLine(usage) {
   if (!usage) return '';
   const spent = `$${usage.spentUsd.toFixed(2)}`;
   return usage.limitUsd > 0 ? `${spent} of $${usage.limitUsd.toFixed(2)} used this month` : `${spent} used this month (no limit)`;
+}
+
+// ---- progress steps and the "you are here" bar (milestone 7) ----
+
+/** The steps shown while each long action runs, before the server has said anything (the server then fills in what really happened). */
+export const SEARCH_STEP_LABELS = ['Asking your sources', 'Saving what they found', 'Reading the best pages', 'Grouping stories and ranking'];
+export const BRIEF_STEP_LABELS = ['Getting the articles ready', 'Writing the brief', 'Checking sources and wording'];
+export const DRAFT_STEP_LABELS = ['Getting the brief ready', 'Writing the draft', 'Checking sources and wording'];
+/** Words that name a kind of section (an opening, a close) rather than a subject: a section made only of these needs no fact behind it. */
+const GENERIC_WORDS = new Set(['introduction', 'intro', 'overview', 'summary', 'conclusion', 'final', 'thoughts', 'wrap', 'next', 'steps', 'takeaways', 'about', 'what', 'with', 'your', 'this', 'that', 'from', 'when', 'where', 'which', 'guide', 'checklist', 'why', 'how', 'start', 'before', 'after', 'read', 'more']);
+const stems = (text) => [...new Set(String(text || '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 4 && !GENERIC_WORDS.has(w)).map((w) => (w.length > 4 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w)))];
+
+/**
+ * Before a draft is written: does the brief have enough to write from? A rough, honest check from word overlap, not from understanding:
+ * a section of the outline is "supported" when one of its subject words (from its heading and notes) appears in at least one key fact.
+ * A section made only of opening/closing words is framing and needs no fact. Thin = fewer than 4 sourced facts, or half the sections or more
+ * unsupported. Returns { level: 'ok' | 'thin', facts, sections, unsupported, singleShare, message }.
+ */
+export function draftReadiness(brief) {
+  const objects = (list) => (Array.isArray(list) ? list.filter((x) => x && typeof x === 'object') : []);
+  const facts = objects(brief?.keyFacts);
+  const outline = objects(brief?.outline);
+  const main = outline.filter((o) => o.level !== 3);
+  const sections = main.length ? main : outline;
+  const factWords = facts.map((f) => stems(f.fact));
+  let counted = 0;
+  let unsupported = 0;
+  for (const o of sections) {
+    const subject = stems(`${o.heading || ''} ${(o.notes || []).join(' ')}`);
+    if (!subject.length) continue; // an opening or a close
+    counted += 1;
+    const hit = subject.some((w) => factWords.some((fw) => fw.some((x) => x.startsWith(w) || w.startsWith(x))));
+    if (!hit) unsupported += 1;
+  }
+  const singleShare = facts.length ? facts.filter((f) => f.singleSource).length / facts.length : 0;
+  const thin = facts.length < 4 || (counted > 0 && unsupported / counted >= 0.5);
+  const parts = [];
+  if (counted > 0 && unsupported > 0) parts.push(`${unsupported} of ${counted} section${counted === 1 ? '' : 's'} of the outline ${unsupported === 1 ? 'has' : 'have'} no supporting fact in this brief.`);
+  if (facts.length < 4) parts.push(`The brief has only ${facts.length} sourced fact${facts.length === 1 ? '' : 's'}.`);
+  return {
+    level: thin ? 'thin' : 'ok', facts: facts.length, sections: counted, unsupported, singleShare,
+    message: thin ? `${parts.join(' ')} Those parts of the draft will be mostly "needs your input" markers. This is a rough check from word overlap.` : '',
+  };
+}
+
+export const RELEVANCE_STEP_LABELS = ['Checking the articles are about your topic'];
+
+/** The server's steps -> the list ProcessingModal shows: a note after the label once a step has something to say. */
+export function stepsForModal(serverSteps) {
+  return (Array.isArray(serverSteps) ? serverSteps : []).map((s, i) => ({
+    id: String(s?.id ?? `step-${i}`),
+    label: s?.detail && s.status !== 'pending' ? `${s.label} · ${s.detail}` : String(s?.label ?? ''),
+    status: s?.status === 'error' ? 'error' : s?.status === 'active' ? 'active' : s?.status === 'pending' ? 'pending' : 'done', // done and skipped both read as finished
+  }));
+}
+
+/** The four stages of the work, with where you are: { id, label, state: 'done' | 'current' | 'todo' }. `view` is topics | results | brief | draft. */
+export function workflowSteps(view) {
+  const stages = [['search', 'Search'], ['sources', 'Choose sources'], ['brief', 'Brief'], ['draft', 'Draft']];
+  const at = { topics: 0, results: 1, brief: 2, draft: 3 }[view] ?? 0;
+  return stages.map(([id, label], i) => ({ id, label, state: i < at ? 'done' : i === at ? 'current' : 'todo' }));
 }

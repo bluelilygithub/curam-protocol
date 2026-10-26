@@ -5,7 +5,11 @@
 // say so. One source failing never stops the run. Sources are { id, name, label, search(keyword, since, ctx) -> { items, errors, answered?,
 // extras?, costUsd?, cached? } } (see sources/base.js); the list comes from sources/index.js. See docs/topic-research.md.
 
+const { NOOP } = require('./progress');
+const { urlKind } = require('./pageKind');
+
 const MAX_ITEMS_PER_RUN = 300;
+const MAX_QUERIES = 4; // the topic's own words plus up to three extra phrasings
 const DEFAULT_DAYS = 30;
 const MAX_DAYS = 90;
 const MAX_EXTRAS = 12;
@@ -52,6 +56,33 @@ function mergeItems(items) {
   return list.slice(0, MAX_ITEMS_PER_RUN);
 }
 
+/**
+ * Ask one source about every phrasing and put the answers together as one answer from that source: the items of every phrasing (the run merges
+ * duplicates later), the errors, the upstreams that replied, the cost, cached only if every answer was, and the People-also-ask lists merged.
+ * One phrasing failing keeps the others (and is reported); all failing is a failure of the source.
+ */
+async function searchAllQueries(source, queries, since, ctx) {
+  if (queries.length === 1) return source.search(queries[0], since, ctx);
+  const settled = await Promise.allSettled(queries.map((q) => source.search(q, since, ctx)));
+  const ok = settled.filter((r) => r.status === 'fulfilled').map((r) => r.value || {});
+  if (!ok.length) throw settled[0].reason;
+  const label = source.label || source.name;
+  // the same fault from the same source, once per phrasing, is one fault to the person reading the page
+  const errors = [];
+  const note = (e) => { if (!errors.some((x) => x.source === e.source && x.message === e.message)) errors.push(e); };
+  ok.forEach((v) => (v.errors || []).forEach(note));
+  settled.forEach((r) => { if (r.status === 'rejected') note({ source: label, message: String(r.reason?.message || 'This source failed').slice(0, 200) }); });
+  const extras = ok.map((v) => v.extras).filter(Boolean);
+  return {
+    items: ok.flatMap((v) => v.items || []),
+    errors,
+    answered: ok.reduce((n, v) => n + (Number.isInteger(v.answered) ? v.answered : 1), 0),
+    costUsd: ok.reduce((n, v) => n + (v.cached ? 0 : Number(v.costUsd) || 0), 0),
+    cached: ok.every((v) => v.cached),
+    extras: extras.length ? mergeExtras(extras) : undefined,
+  };
+}
+
 /** Combine the People-also-ask and related-search lists several sources may have returned. */
 function mergeExtras(list) {
   const paa = new Map();
@@ -69,8 +100,14 @@ function mergeExtras(list) {
  *   status: ok = everything answered; partial = something answered and something did not; failed = nothing answered (or no sources set up).
  *   A source may report `answered` (how many of its upstreams replied); without it, a source that did not throw counts as one.
  */
-async function runCollect({ pool, userId, topic, sources, days, refresh = false, now = () => Date.now() }) {
+async function runCollect({ pool, userId, topic, sources, days, refresh = false, now = () => Date.now(), report = NOOP, queries }) {
   const span = clampDays(days);
+  // the topic's own words first, then any extra phrasings the person ticked (never more than MAX_QUERIES, never the same twice)
+  const asked = [];
+  for (const q of [topic.keyword, ...(Array.isArray(queries) ? queries : [])]) {
+    if (typeof q === 'string' && q.trim() && !asked.some((x) => x.toLowerCase() === q.trim().toLowerCase())) asked.push(q.trim());
+  }
+  asked.length = Math.min(asked.length, MAX_QUERIES);
   const since = new Date(now() - span * 86400000);
   const { rows: [run] } = await pool.query(
     `INSERT INTO topic_research_runs ("userId", "topicId", status) VALUES ($1, $2, 'running') RETURNING id`,
@@ -81,10 +118,18 @@ async function runCollect({ pool, userId, topic, sources, days, refresh = false,
     if (!sources.length) errors.push({ source: 'search', message: 'No sources are set up yet. Add some RSS feeds in Settings.' });
     const ctx = { refresh, region: topic.region, language: topic.language, userId, pool, days: span };
     // each source is timed on its own: all of them start together, so timing after they have all finished would show the slowest for everyone
+    const total = sources.length;
+    let finished = 0;
+    report.start('sources', `Asking ${total} source${total === 1 ? '' : 's'}${asked.length > 1 ? ` about ${asked.length} phrasings` : ''}`);
     const settled = await Promise.all(sources.map(async (s) => {
       const t0 = now();
-      try { return { ok: true, value: await s.search(topic.keyword, since, ctx), ms: Math.max(0, now() - t0) }; } catch (reason) { return { ok: false, reason, ms: Math.max(0, now() - t0) }; }
+      let out;
+      try { out = { ok: true, value: await searchAllQueries(s, asked, since, ctx), ms: Math.max(0, now() - t0) }; } catch (reason) { out = { ok: false, reason, ms: Math.max(0, now() - t0) }; }
+      finished += 1;
+      report.detail('sources', `${finished} of ${total} answered (latest: ${s.label || s.name})`);
+      return out;
     }));
+    report.done('sources', `${total} source${total === 1 ? '' : 's'} asked`);
     const items = [];
     const extrasList = [];
     const summary = [];
@@ -113,17 +158,19 @@ async function runCollect({ pool, userId, topic, sources, days, refresh = false,
     });
     const merged = mergeItems(items);
     const extras = mergeExtras(extrasList);
+    report.start('save', `${merged.length} article${merged.length === 1 ? '' : 's'}`);
     for (const it of merged) {
       // eslint-disable-next-line no-await-in-loop
       const { rows: [art] } = await pool.query(
-        `INSERT INTO topic_research_articles ("userId", url, title, domain, "publishedAt", snippet)
-              VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO topic_research_articles ("userId", url, title, domain, "publishedAt", snippet, "pageKind")
+              VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT ("userId", url) DO UPDATE SET
+              "pageKind" = COALESCE(topic_research_articles."pageKind", EXCLUDED."pageKind"),
               title = EXCLUDED.title,
               "publishedAt" = COALESCE(EXCLUDED."publishedAt", topic_research_articles."publishedAt"),
               snippet = COALESCE(EXCLUDED.snippet, topic_research_articles.snippet)
          RETURNING id`,
-        [userId, it.url, it.title, it.domain, it.publishedAt, it.snippet],
+        [userId, it.url, it.title, it.domain, it.publishedAt, it.snippet, urlKind(it.url)], // a product or list address is known before the page is read
       );
       // eslint-disable-next-line no-await-in-loop
       await pool.query(
@@ -132,13 +179,14 @@ async function runCollect({ pool, userId, topic, sources, days, refresh = false,
         [run.id, art.id, JSON.stringify(it.signals || {})],
       );
     }
+    report.done('save', `${merged.length} article${merged.length === 1 ? '' : 's'} saved`);
     const status = answered === 0 ? 'failed' : (errors.length === 0 ? 'ok' : 'partial');
     await pool.query(
-      `UPDATE topic_research_runs SET status = $1, "finishedAt" = NOW(), "errorsJson" = $2, "sourcesJson" = $3, "extrasJson" = $4, "apiCostEstimate" = $5
+      `UPDATE topic_research_runs SET status = $1, "finishedAt" = NOW(), "errorsJson" = $2, "sourcesJson" = $3, "extrasJson" = $4, "apiCostEstimate" = $5, "queriesJson" = $8
         WHERE id = $6 AND "userId" = $7`,
-      [status, JSON.stringify(errors), JSON.stringify(summary), JSON.stringify(extras), costUsd, run.id, userId],
+      [status, JSON.stringify(errors), JSON.stringify(summary), JSON.stringify(extras), costUsd, run.id, userId, JSON.stringify(asked)],
     );
-    return { runId: run.id, status, errors, count: merged.length, sources: summary, extras, costUsd };
+    return { runId: run.id, status, errors, count: merged.length, sources: summary, extras, costUsd, queries: asked };
   } catch (err) {
     await pool.query(
       `UPDATE topic_research_runs SET status = 'failed', "finishedAt" = NOW(), "errorsJson" = $1 WHERE id = $2 AND "userId" = $3`,
@@ -148,4 +196,4 @@ async function runCollect({ pool, userId, topic, sources, days, refresh = false,
   }
 }
 
-module.exports = { runCollect, mergeItems, mergeSignals, mergeExtras, clampDays, MAX_ITEMS_PER_RUN, DEFAULT_DAYS, MAX_DAYS };
+module.exports = { runCollect, searchAllQueries, MAX_QUERIES, mergeItems, mergeSignals, mergeExtras, clampDays, MAX_ITEMS_PER_RUN, DEFAULT_DAYS, MAX_DAYS };

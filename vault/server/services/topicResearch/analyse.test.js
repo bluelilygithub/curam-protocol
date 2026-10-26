@@ -108,6 +108,19 @@ async function main() {
     const out = await analyseRun({ pool, userId: 1, runId, topic, extractor: okReader(log, ownWords), limit: 4, budgetMs: 9999, now: () => NOW });
 
     assert.strictEqual(log.length, 1, 'pages are read once');
+    assert.strictEqual(typeof log[0].opts.onEach, 'function', 'the reader is given a way to report each page');
+    {
+      const notes = []; const report = { start: (id, d) => notes.push(['start', id, d]), detail: (id, d) => notes.push(['detail', id, d]), done: (id, d) => notes.push(['done', id, d]), fail() {}, finish() {} };
+      const pool2 = fakePool();
+      const loaded = load(pool2, 'heatPumps', { signals: sameSignals });
+      await analyseRun({ pool: pool2, userId: 1, runId: loaded.runId, topic: loaded.topic, extractor: okReader([], ownWords), limit: 4, budgetMs: 9999, now: () => NOW, report });
+      assert.deepStrictEqual([...new Set(notes.map((n) => n[1]))], ['read', 'rank'], 'reading then ranking are reported');
+      assert.ok(notes.some((n) => n[0] === 'start' && n[1] === 'read' && /^0 of 4 pages read/.test(n[2])));
+      assert.ok(notes.filter((n) => n[0] === 'done').length === 2);
+      const none = []; const rep2 = { start: (id) => none.push(id), detail() {}, done: (id, d) => none.push(id + ':' + d), fail() {}, finish() {} };
+      await analyseRun({ pool: pool2, userId: 1, runId: loaded.runId, topic: loaded.topic, extractor: null, now: () => NOW, report: rep2 });
+      assert.ok(none.includes('read:Nothing new to read') && none.includes('rank'), 'with nothing to read the read step says so');
+    }
     assert.strictEqual(log[0].candidates.length, 4, 'only the best few');
     assert.strictEqual(log[0].opts.budgetMs, 9999);
     assert.ok(log[0].candidates.every((c) => /^https:\/\//.test(c.url)));
@@ -120,7 +133,7 @@ async function main() {
 
     // every article has a story, a score and a breakdown; the grouping is right
     const ras = pool.db.runArticles;
-    assert.ok(ras.every((r) => Number.isInteger(r.clusterId) && r.clusterId >= 1 && typeof r.score === 'number' && r.breakdownJson.length === 5));
+    assert.ok(ras.every((r) => Number.isInteger(r.clusterId) && r.clusterId >= 1 && typeof r.score === 'number' && r.breakdownJson.length >= 5));
     assert.deepStrictEqual(gradeGrouping('heatPumps', groupingOf(pool, ids)), [], 'stories grouped as a person would');
     assert.strictEqual(out.stories, new Set(ras.map((r) => r.clusterId)).size);
     const numbers = [...new Set(ras.map((r) => r.clusterId))].sort((a, b) => a - b);
@@ -139,7 +152,7 @@ async function main() {
     const run = pool.db.runs[0];
     assert.strictEqual(run.weightsJson.halfLifeHours, 48);
     assert.ok(/^[0-9a-f]{12}$/.test(run.weightsJson.fingerprint));
-    assert.deepStrictEqual(run.weightsJson.dropped.map((d) => d.id), ['source'], 'a search rank, story sizes, engagement and dates all existed: only the outlet weights (none set) were left out');
+    assert.deepStrictEqual(run.weightsJson.dropped.map((d) => d.id), ['source', 'match'], 'a search rank, story sizes, engagement and dates all existed; the outlet weights (none set) and topic match (the fixture topic is one made-up word that no article contains, so nothing is told apart) were left out');
     assert.strictEqual(run.heatJson.label, 'New');
     assert.strictEqual(await isStale(pool, 1, run), false, 'scores just made are up to date');
 
@@ -247,7 +260,7 @@ async function main() {
     assert.strictEqual(pool.db.runArticles.find((r) => r.id === 999).score, null, "and it is not scored or changed");
   }
 
-  assert.deepStrictEqual(Object.keys(DEFAULT_WEIGHTS), ['rank', 'size', 'engagement', 'recency', 'source']);
+  assert.deepStrictEqual(Object.keys(DEFAULT_WEIGHTS), ['rank', 'size', 'engagement', 'recency', 'source', 'match']);
   console.log('topicResearch analyse: all passed');
 }
 

@@ -165,9 +165,10 @@ async function main() {
         if (/^SELECT \* FROM topic_research_topics WHERE "userId" = \$1 AND lower\(keyword\)/.test(s)) return { rows: db.topics.filter((t) => t.userId === params[0] && t.keyword.toLowerCase() === params[1].toLowerCase()) };
         if (/^SELECT COUNT\(\*\) AS n FROM topic_research_topics/.test(s)) return { rows: [{ n: String(db.topics.filter((t) => t.userId === params[0]).length) }] };
         if (/^INSERT INTO topic_research_topics/.test(s)) {
-          const t = { id: (seq.topic += 1), userId: params[0], keyword: params[1], region: params[2], language: 'en', onWatchlist: false, refreshHours: 24, createdAt: new Date(NOW + seq.topic * 1000) };
+          const t = { id: (seq.topic += 1), userId: params[0], keyword: params[1], region: params[2], language: 'en', onWatchlist: false, refreshHours: 24, createdAt: new Date(NOW + seq.topic * 1000), extraQueries: params[3] ? JSON.parse(params[3]) : [] };
           db.topics.push(t); return { rows: [t] };
         }
+        if (/^UPDATE topic_research_topics SET "extraQueries" = \$1/.test(s)) { const t = db.topics.find((x) => x.id === params[1] && x.userId === params[2]); if (t) t.extraQueries = JSON.parse(params[0]); return { rows: t ? [t] : [] }; }
         if (/^SELECT \* FROM topic_research_topics WHERE id = \$1 AND "userId" = \$2/.test(s)) return { rows: db.topics.filter((t) => t.id === params[0] && t.userId === params[1]) };
         if (/^INSERT INTO topic_research_runs/.test(s)) {
           const r = { id: (seq.run += 1), userId: params[0], topicId: params[1], startedAt: new Date(NOW + seq.run * 1000), finishedAt: null, status: 'running', errorsJson: [] };
@@ -176,7 +177,7 @@ async function main() {
         if (/^UPDATE topic_research_runs SET status = 'failed'/.test(s)) { const r = db.runs.find((x) => x.id === params[1] && x.userId === params[2]); if (r) { r.status = 'failed'; r.errorsJson = JSON.parse(params[0]); } return { rows: [] }; }
         if (/^UPDATE topic_research_runs SET status = \$1/.test(s)) {
           const r = db.runs.find((x) => x.id === params[5] && x.userId === params[6]);
-          if (r) { r.status = params[0]; r.errorsJson = JSON.parse(params[1]); r.sourcesJson = JSON.parse(params[2]); r.extrasJson = JSON.parse(params[3]); r.apiCostEstimate = params[4]; r.finishedAt = new Date(NOW); }
+          if (r) { r.status = params[0]; r.errorsJson = JSON.parse(params[1]); r.sourcesJson = JSON.parse(params[2]); r.extrasJson = JSON.parse(params[3]); r.apiCostEstimate = params[4]; r.queriesJson = params[7] ? JSON.parse(params[7]) : null; r.finishedAt = new Date(NOW); }
           return { rows: [] };
         }
         if (/^INSERT INTO topic_research_articles/.test(s)) {
@@ -244,6 +245,8 @@ async function main() {
         if (/^SELECT domain, weight, note FROM topic_research_source_weights/.test(s)) return { rows: (db.sourceWeights || []).filter((w) => w.userId === params[0]).sort((a, b) => (a.domain < b.domain ? -1 : 1)).map(({ domain, weight, note }) => ({ domain, weight, note })) };
         if (/^DELETE FROM topic_research_source_weights/.test(s)) { db.sourceWeights = (db.sourceWeights || []).filter((w) => w.userId !== params[0]); return { rows: [] }; }
         if (/^INSERT INTO topic_research_source_weights/.test(s)) { (db.sourceWeights = db.sourceWeights || []).push({ userId: params[0], domain: params[1], weight: params[2], note: params[3] }); return { rows: [] }; }
+        // ---- relevance and suggestion checks cost, from the usage log (M7)
+        if (/^SELECT COALESCE\(SUM\(estimated_cost_usd\), 0\) AS total FROM usage_logs/.test(s)) return { rows: [{ total: (db.checks || []).filter((c) => c.userId === params[0] && new Date(c.createdAt) >= params[1]).reduce((t, c) => t + (Number(c.costUsd) || 0), 0) }] };
         // ---- drafts (M6)
         db.drafts = db.drafts || [];
         if (/^SELECT COALESCE\(SUM\("costUsd"\), 0\) AS total FROM topic_research_drafts WHERE "userId" = \$1 AND "createdAt" >= \$2/.test(s)) {
@@ -370,6 +373,9 @@ async function main() {
     app.use(express.json());
     app.use((req, res, next) => { req.user = { id: Number(req.headers['x-test-user'] || 1) }; next(); });
     const briefCalls = []; let briefMode = 'ok'; let briefGate = null;
+    const relevanceCalls = []; let relevanceMode = 'ok';
+    const suggestCalls = []; let suggestMode = 'ok';
+    let clockShift = 0; // moved forward to clear the hourly caps
     const draftCalls = []; let draftMode = 'ok'; let draftGate = null;
     const DRAFT = { title: 'A working title', sections: [{ heading: 'Costs', paragraphs: [{ kind: 'fact', text: 'A levy was announced by one outlet.', sources: ['https://a.example.com/one'] }, { kind: 'gap', text: 'Add the dollar figure.', sources: [] }] }] };
     const budgetSeen = []; // whether each source build was told the monthly limit is reached
@@ -381,7 +387,7 @@ async function main() {
     const analysed = []; const rescored = [];
     let stale = false; let analysisBreaks = false;
     app.use('/api/topic-research', createRouter(pool, {
-      now: () => NOW,
+      now: () => NOW + clockShift,
       analyse: async (args) => {
         analysed.push(args);
         if (analysisBreaks) throw new Error('reading pages exploded: secret-host:5432');
@@ -391,7 +397,7 @@ async function main() {
       rescore: async (args) => { rescored.push(args.runId); return { stories: 1, heat: { label: 'Steady', value: 3 } }; },
       isStale: async () => stale,
       aiGate: (req, res, next) => next(), // the app-wide 30 a minute would trip this test, which makes hundreds of calls
-      limits: { briefsPerHour: 6, draftsPerHour: 4, perMinute: 100000 }, // the per-minute limit is tested by its own behaviour in production; this run makes hundreds of calls
+      limits: { briefsPerHour: 6, draftsPerHour: 4, checksPerHour: 5, perMinute: 100000 }, // the per-minute limit is tested by its own behaviour in production; this run makes hundreds of calls
       makeBrief: async (input) => {
         briefCalls.push(input);
         if (briefGate) await briefGate;
@@ -399,6 +405,17 @@ async function main() {
         if (briefMode === 'secret') throw new Error('connect ECONNREFUSED secret-host:5432');
         if (briefMode === 'bad-gateway') throw Object.assign(new Error('The AI model took too long to answer. Try again, or tick fewer articles.'), { status: 502 });
         return { brief: BRIEF, overlap: [], dropped: { facts: 0, sources: 0 }, model: 'claude-test', inputTokens: 1000, outputTokens: 500, costUsd: 0.012 };
+      },
+      suggestQueriesFn: async (input) => {
+        suggestCalls.push(input);
+        if (suggestMode === 'no-model') throw Object.assign(new Error('No AI model is set up for this workspace yet.'), { status: 503 });
+        return { phrases: ['wine cellar cooling unit', 'wine room refrigeration'], model: 'cheap-test', costUsd: 0.0002 };
+      },
+      checkRelevanceFn: async (input) => {
+        relevanceCalls.push(input);
+        if (relevanceMode === 'no-model') throw Object.assign(new Error('No AI model is set up for this workspace yet.'), { status: 503 });
+        if (relevanceMode === 'secret') throw new Error('connect ECONNREFUSED secret-host:5432');
+        return { scores: input.articles.map((a) => ({ id: a.id, score: relevanceMode === 'poor' ? 0 : 3, why: 'w', missing: false })), verdict: relevanceMode === 'poor' ? 'poor' : 'good', ratio: relevanceMode === 'poor' ? 0 : 1, summary: 'wine racks', message: relevanceMode === 'poor' ? 'Most of the ticked sources are not about it.' : '', model: 'cheap-test', inputTokens: 1, outputTokens: 1, costUsd: 0.0004 };
       },
       makeDraft: async (input) => {
         draftCalls.push(input);
@@ -457,16 +474,16 @@ async function main() {
 
       // how results are ranked: weights and how fast news goes stale
       r = await call('GET', '/settings');
-      assert.deepStrictEqual([r.body.settings.scoringWeights, r.body.settings.halfLifeHours], [{ rank: 0.3, size: 0.25, engagement: 0.2, recency: 0.15, source: 0.1 }, 48]);
+      assert.deepStrictEqual([r.body.settings.scoringWeights, r.body.settings.halfLifeHours], [{ rank: 0.25, size: 0.2, engagement: 0.15, recency: 0.15, source: 0.05, match: 0.2 }, 48]);
       assert.strictEqual((await call('PUT', '/settings', { scoringWeights: { rank: -1 } })).status, 400);
       assert.strictEqual((await call('PUT', '/settings', { scoringWeights: { rank: 'lots' } })).status, 400);
-      assert.strictEqual((await call('PUT', '/settings', { scoringWeights: { rank: 0, size: 0, engagement: 0, recency: 0, source: 0 } })).status, 400, 'at least one weight must count');
+      assert.strictEqual((await call('PUT', '/settings', { scoringWeights: { rank: 0, size: 0, engagement: 0, recency: 0, source: 0, match: 0 } })).status, 400, 'at least one weight must count');
       assert.strictEqual((await call('PUT', '/settings', { halfLifeHours: 0 })).status, 400);
       assert.strictEqual((await call('PUT', '/settings', { halfLifeHours: 5000 })).status, 400);
       r = await call('PUT', '/settings', { scoringWeights: { rank: 0.05, recency: 0.9 }, halfLifeHours: 24 });
-      assert.deepStrictEqual([r.status, r.body.settings.scoringWeights.rank, r.body.settings.scoringWeights.size, r.body.settings.halfLifeHours, r.body.settings.niche], [200, 0.05, 0.25, 24, 'Home energy'], 'a partial change keeps the rest');
-      assert.deepStrictEqual((await call('GET', '/settings', undefined, 2)).body.settings.scoringWeights.rank, 0.3, "someone else's ranking is theirs");
-      await call('PUT', '/settings', { scoringWeights: { rank: 0.3, size: 0.25, engagement: 0.2, recency: 0.15, source: 0.1 }, halfLifeHours: 48 });
+      assert.deepStrictEqual([r.status, r.body.settings.scoringWeights.rank, r.body.settings.scoringWeights.size, r.body.settings.halfLifeHours, r.body.settings.niche], [200, 0.05, 0.2, 24, 'Home energy'], 'a partial change keeps the rest');
+      assert.deepStrictEqual((await call('GET', '/settings', undefined, 2)).body.settings.scoringWeights.rank, 0.25, "someone else's ranking is theirs");
+      await call('PUT', '/settings', { scoringWeights: { rank: 0.25, size: 0.2, engagement: 0.15, recency: 0.15, source: 0.05, match: 0.2 }, halfLifeHours: 48 });
 
       // the owner's own weight for each outlet
       assert.deepStrictEqual((await call('GET', '/source-weights')).body.weights, []);
@@ -927,6 +944,123 @@ async function main() {
         assert.ok(pool.bin[briefBin].payload.drafts.length >= 1 && /draft/.test(pool.bin[briefBin].detail), 'the brief and its drafts travel together');
 
         pool.db.briefs.splice(0, pool.db.briefs.length, ...stash);
+        pool.db.drafts = [];
+      }
+
+      // ---------------------------------------------------------------- relevance check before a brief (M7)
+      {
+        const arts = (await call('GET', `/runs/${runForBriefHist}`)).body.articles.map((a) => a.id);
+        assert.strictEqual((await call('POST', '/runs/abc/relevance', { articleIds: arts })).status, 404);
+        assert.strictEqual((await call('POST', '/runs/99999/relevance', { articleIds: arts })).status, 404);
+        assert.strictEqual((await call('POST', `/runs/${runForBriefHist}/relevance`, { articleIds: arts }, 2)).status, 404, "someone else's search");
+        for (const bad of [{}, { articleIds: [] }, { articleIds: 'x' }, { articleIds: [0] }, { articleIds: [1.5] }, { articleIds: Array.from({ length: 13 }, (_, i) => i + 1) }]) assert.strictEqual((await call('POST', `/runs/${runForBriefHist}/relevance`, bad)).status, 400, JSON.stringify(bad).slice(0, 40));
+        assert.strictEqual((await call('POST', `/runs/${runForBriefHist}/relevance`, { articleIds: [987654] })).status, 400, 'an article that is not part of the search');
+        assert.strictEqual(relevanceCalls.length, 0, 'the model was never asked for a refused request');
+        let r = await call('POST', `/runs/${runForBriefHist}/relevance`, { articleIds: arts });
+        assert.deepStrictEqual([r.status, r.body.relevance.verdict, r.body.relevance.message, r.body.relevance.scores.length], [200, 'good', '', arts.length]);
+        const sent = relevanceCalls[relevanceCalls.length - 1];
+        assert.deepStrictEqual([sent.userId, sent.topic.keyword, sent.articles.length > 0, Object.keys(sent.articles[0]).sort()], [1, 'heat pumps', true, ['domain', 'id', 'snippet', 'text', 'title']]);
+        relevanceMode = 'poor';
+        r = await call('POST', `/runs/${runForBriefHist}/relevance`, { articleIds: arts });
+        assert.deepStrictEqual([r.body.relevance.verdict, /not about/.test(r.body.relevance.message)], ['poor', true]);
+        relevanceMode = 'secret';
+        r = await call('POST', `/runs/${runForBriefHist}/relevance`, { articleIds: arts });
+        assert.deepStrictEqual([r.status, /secret-host|ECONNREFUSED/.test(JSON.stringify(r.body))], [500, false], 'provider text never reaches the page');
+        relevanceMode = 'no-model';
+        assert.strictEqual((await call('POST', `/runs/${runForBriefHist}/relevance`, { articleIds: arts })).status, 503);
+        relevanceMode = 'ok';
+        // the hourly cap (5 here; four attempts so far counted)
+        assert.strictEqual((await call('POST', `/runs/${runForBriefHist}/relevance`, { articleIds: arts })).status, 200);
+        r = await call('POST', `/runs/${runForBriefHist}/relevance`, { articleIds: arts });
+        assert.strictEqual(r.status, 429);
+        assert.ok(/lot of checks/.test(r.body.error));
+        // over the monthly limit: refused before the model; the cost of earlier checks counts towards it
+        clockShift += 2 * 3600000;
+        pool.db.checks = [{ userId: 1, costUsd: 0.6, createdAt: new Date(NOW + clockShift) }];
+        assert.ok(((await call('GET', '/usage')).body.usage.checkUsd) >= 0.6 - 1e-9, 'small checks count towards this month');
+        await call('PUT', '/settings', { monthlyBudgetUsd: 0.5 });
+        const before = relevanceCalls.length;
+        assert.strictEqual((await call('POST', `/runs/${runForBriefHist}/relevance`, { articleIds: arts })).status, 402);
+        assert.strictEqual(relevanceCalls.length, before, 'no model call when over the limit');
+        await call('PUT', '/settings', { monthlyBudgetUsd: 20 });
+        pool.db.checks = [];
+      }
+
+      // ---------------------------------------------------------------- other ways to word the topic (M7)
+      {
+        clockShift += 2 * 3600000; // the hourly check cap starts again
+        for (const bad of [{}, { keyword: '' }, { keyword: '   ' }, { keyword: 'the of' }, { keyword: 42 }]) assert.strictEqual((await call('POST', '/suggest-queries', bad)).status, 400, JSON.stringify(bad));
+        assert.strictEqual(suggestCalls.length, 0, 'the model was never asked for a refused request');
+        let r = await call('POST', '/suggest-queries', { keyword: '  motors   for walk in wine cabinets ' });
+        assert.deepStrictEqual([r.status, r.body.queries], [200, ['wine cellar cooling unit', 'wine room refrigeration']]);
+        assert.deepStrictEqual([suggestCalls[0].userId, suggestCalls[0].keyword, typeof suggestCalls[0].niche], [1, 'motors for walk in wine cabinets', 'string'], 'the cleaned topic and the site description go to the model');
+        suggestMode = 'no-model';
+        assert.strictEqual((await call('POST', '/suggest-queries', { keyword: 'wine cellars' })).status, 503);
+        suggestMode = 'ok';
+        for (let i = 0; i < 3; i += 1) assert.strictEqual((await call('POST', '/suggest-queries', { keyword: 'wine cellars' })).status, 200);
+        r = await call('POST', '/suggest-queries', { keyword: 'wine cellars' });
+        assert.strictEqual(r.status, 429, 'the hourly cap (5, counted with the relevance checks)');
+        clockShift += 2 * 3600000;
+        await call('PUT', '/settings', { monthlyBudgetUsd: 0.01 });
+        pool.db.checks = [{ userId: 1, costUsd: 0.5, createdAt: new Date(NOW + clockShift) }];
+        const before = suggestCalls.length;
+        assert.strictEqual((await call('POST', '/suggest-queries', { keyword: 'wine cellars' })).status, 402);
+        assert.strictEqual(suggestCalls.length, before, 'no model call over the limit');
+        await call('PUT', '/settings', { monthlyBudgetUsd: 20 });
+        pool.db.checks = [];
+
+        // extra phrasings saved on a topic and used by its searches
+        r = await call('POST', '/topics', { keyword: 'wine cellar basics', extraQueries: ['wine cellar cooling unit', 'Wine Cellar Cooling Unit', 'wine cellar basics', '  ', 'wine room refrigeration'] });
+        assert.strictEqual(r.status, 201);
+        assert.deepStrictEqual(r.body.topic.extraQueries, ['wine cellar cooling unit', 'wine room refrigeration'], 'cleaned: no duplicates, not the topic itself, no blanks');
+        assert.deepStrictEqual(r.body.run.id > 0 && (await call('GET', `/runs/${r.body.run.id}`)).body.run.queries, ['wine cellar basics', 'wine cellar cooling unit', 'wine room refrigeration'], 'the run says which phrasings it asked');
+        const newId = r.body.topic.id;
+        assert.deepStrictEqual((await call('GET', '/topics')).body.topics.find((t) => t.id === newId).extraQueries, ['wine cellar cooling unit', 'wine room refrigeration'], 'the topic list carries them');
+        r = await call('POST', `/topics/${newId}/run`, {});
+        assert.deepStrictEqual((await call('GET', `/runs/${r.body.run.id}`)).body.run.queries.length, 3, 'Search again asks them too');
+        // the same words again without extraQueries keeps the saved set; with a new set replaces it; with an empty list clears it
+        r = await call('POST', '/topics', { keyword: 'wine cellar basics' });
+        assert.deepStrictEqual([r.status, r.body.topic.extraQueries.length], [200, 2], 'not sent = unchanged');
+        r = await call('POST', '/topics', { keyword: 'wine cellar basics', extraQueries: ['wine cooling'] });
+        assert.deepStrictEqual(r.body.topic.extraQueries, ['wine cooling'], 'a new set replaces the old');
+        r = await call('POST', '/topics', { keyword: 'wine cellar basics', extraQueries: [] });
+        assert.deepStrictEqual(r.body.topic.extraQueries, [], 'an empty list clears it');
+        for (const bad of ['wine', { a: 1 }, [5], ['a b', null], ['one phrase', 'two phrase', 'three phrase', 'four phrase']]) assert.strictEqual((await call('POST', '/topics', { keyword: 'wine cellar basics', extraQueries: bad })).status, 400, JSON.stringify(bad));
+        assert.strictEqual((await call('GET', '/topics', undefined, 2)).body.topics.some((t) => t.id === newId), false, "someone else's topic phrasings are not visible");
+        await call('DELETE', `/topics/${newId}`);
+      }
+
+      // ---------------------------------------------------------------- progress steps (M7): where a long action has got to
+      {
+        assert.strictEqual((await call('GET', '/progress/op-nothing1')).status, 404, 'unknown action');
+        assert.strictEqual((await call('GET', '/progress/bad')).status, 404, 'bad id');
+        let r = await call('POST', `/topics/${topicId}/run`, { opId: 'op-search01' });
+        assert.strictEqual(r.status, 200);
+        let p = await call('GET', '/progress/op-search01');
+        assert.strictEqual(p.status, 200);
+        assert.deepStrictEqual(p.body.steps.map((x) => x.id), ['sources', 'save', 'read', 'rank']);
+        assert.strictEqual(p.body.finished, true);
+        assert.deepStrictEqual(p.body.steps.map((x) => x.status).filter((x) => x === 'pending'), [], 'nothing is left pending once it has finished');
+        assert.match(p.body.steps[0].detail, /source/, 'the sources step says how many were asked');
+        assert.strictEqual((await call('GET', '/progress/op-search01', undefined, 2)).status, 404, "somebody else's action is invisible");
+        // a request with no opId, or a bad one, works exactly as before
+        assert.strictEqual((await call('POST', `/topics/${topicId}/run`, {})).status, 200);
+        assert.strictEqual((await call('POST', `/topics/${topicId}/run`, { opId: 'x y' })).status, 200);
+        assert.strictEqual((await call('GET', '/progress/x y')).status, 404);
+        // brief and draft (two hours later: the hourly caps start again)
+        clockShift += 2 * 3600000;
+        const stash2 = pool.db.briefs.splice(0, pool.db.briefs.length);
+        const arts = (await call('GET', `/runs/${runForBriefHist}`)).body.articles.map((a) => a.id);
+        r = await call('POST', `/runs/${runForBriefHist}/brief`, { articleIds: arts.slice(0, 2), opId: 'op-brief001' });
+        assert.strictEqual(r.status, 201);
+        p = await call('GET', '/progress/op-brief001');
+        assert.deepStrictEqual([p.body.steps.map((x) => x.id), p.body.steps[0].status, p.body.finished], [['prepare', 'write', 'check'], 'done', true]);
+        assert.match(p.body.steps[0].detail, /^\d+ articles?$/);
+        r = await call('POST', `/briefs/${r.body.brief.id}/draft`, { opId: 'op-draft001' });
+        assert.strictEqual(r.status, 201);
+        p = await call('GET', '/progress/op-draft001');
+        assert.deepStrictEqual([p.body.steps.map((x) => x.id), p.body.finished], [['prepare', 'write', 'check'], true]);
+        pool.db.briefs.splice(0, pool.db.briefs.length, ...stash2);
         pool.db.drafts = [];
       }
 

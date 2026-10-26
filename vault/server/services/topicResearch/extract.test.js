@@ -78,6 +78,19 @@ async function main() {
     assert.deepStrictEqual(status, {
       thin: 'thin', pdf: 'not-html', paywall: 'blocked', throttled: 'blocked', login: 'blocked', gone: 'error', boom: 'error', bad: 'error', closed: 'robots', unreadable: 'blocked',
     });
+    // a note after every page, counting up to the total (pages that are skipped for time count too)
+    {
+      const seen = [];
+      const w2 = world({ pages: { 'https://a.com/1': page(LONG), 'https://b.com/1': page(LONG), 'https://c.com/1': page(LONG) } });
+      await w2.extractor().readPages(['a', 'b', 'c'].map((u, i) => cand(i, `https://${u}.com/1`)), { budgetMs: 1e9, onEach: (done, of) => seen.push([done, of]) });
+      assert.deepStrictEqual(seen, [[1, 3], [2, 3], [3, 3]]);
+      const w3 = world({ pages: { 'https://a.com/1': page(LONG), 'https://b.com/1': page(LONG) }, fetchMs: 50 });
+      const skipped = [];
+      await w3.extractor({ concurrency: 1 }).readPages(['a', 'b'].map((u, i) => cand(i, `https://${u}.com/1`)), { budgetMs: 10, onEach: (done, of) => skipped.push([done, of]) });
+      assert.deepStrictEqual(skipped, [[1, 2], [2, 2]], 'a page skipped for time is still counted');
+      const out = await w2.extractor().readPages([cand(0, 'https://a.com/1')], { budgetMs: 1e9, onEach: () => { throw new Error('the page broke'); } });
+      assert.strictEqual(out[0].status, 'ok', 'a progress note that throws never stops a read');
+    }
     assert.ok(!w.fetched.includes('https://closed.com/1') && !w.fetched.includes('https://unreadable.com/1'), 'a site that says no is never asked for the page');
     assert.ok(out.every((r) => r.text === undefined), 'no page that failed gives any text');
     assert.strictEqual(out[0].text, undefined, 'a nearly empty page is not kept as an article');

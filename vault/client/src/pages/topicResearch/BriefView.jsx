@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import api from '../../utils/apiClient';
-import useProcessingStore from '../../store/processingStore';
+import { withProgress } from './withProgress';
+import WorkflowBar from './WorkflowBar';
 import useToastStore from '../../store/toastStore';
 import { offerUndo } from '../../utils/binUndo';
 import { useIcon } from '../../providers/IconProvider';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
-import { DRAFT_LENGTHS, costText, draftLine, factLabel, formatDate, overlapWarning } from './format.mjs';
+import { BRIEF_STEP_LABELS, DRAFT_LENGTHS, DRAFT_STEP_LABELS, costText, draftReadiness, draftLine, factLabel, formatDate, overlapWarning } from './format.mjs';
 
 const H = ({ children }) => <h3 className="text-base font-semibold mt-5 mb-2" style={{ color: 'var(--color-text)' }}>{children}</h3>;
 
@@ -13,7 +14,6 @@ const H = ({ children }) => <h3 className="text-base font-semibold mt-5 mb-2" st
 // wording from a source, a warning comes first. Copy and download give the same Markdown the server writes.
 export default function BriefView({ briefId, onBack, onOpenBrief, onOpenDraft }) {
   const getIcon = useIcon();
-  const { startProcessing, stopProcessing } = useProcessingStore();
   const addToast = useToastStore((s) => s.addToast);
   const [brief, setBrief] = useState(null);
   const [error, setError] = useState('');
@@ -24,6 +24,7 @@ export default function BriefView({ briefId, onBack, onOpenBrief, onOpenDraft })
   const [lengthChoice, setLengthChoice] = useState('medium');
   const [steer, setSteer] = useState('');
   const [drafts, setDrafts] = useState([]); // drafts already written from this brief
+  const [thin, setThin] = useState(null); // the readiness warning shown before a draft of a thin brief
 
   const load = useCallback(async () => {
     setError('');
@@ -80,22 +81,27 @@ export default function BriefView({ briefId, onBack, onOpenBrief, onOpenDraft })
   const regenerate = async (chosen) => {
     const want = (chosen ?? angle).trim();
     if (!want) return;
-    startProcessing('Writing the brief…', 'This can take up to a minute and a half.');
     try {
-      const r = await api.post(`/api/topic-research/runs/${brief.runId}/brief`, { articleIds: brief.sources.map((s) => s.id), angle: want });
+      const r = await withProgress({ title: 'Writing the brief…', detail: 'This can take up to a minute and a half.', steps: BRIEF_STEP_LABELS }, (opId) => api.post(`/api/topic-research/runs/${brief.runId}/brief`, { articleIds: brief.sources.map((s) => s.id), angle: want, opId }));
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Could not write the brief.');
       onOpenBrief(d.brief.id);
-    } catch (e) { setError(e.message || 'Could not reach the server.'); } finally { stopProcessing(); }
+    } catch (e) { setError(e.message || 'Could not reach the server.'); }
+  };
+  // A brief with little to write from makes a draft that is mostly gaps: say so first, and let the person go ahead or not.
+  const askDraft = () => {
+    const r = draftReadiness(brief.content);
+    if (r.level === 'thin') { setThin(r); return; }
+    writeDraft();
   };
   const writeDraft = async () => {
-    startProcessing('Writing the draft…', 'This can take up to a minute and a half.');
+    setThin(null);
     try {
-      const r = await api.post(`/api/topic-research/briefs/${brief.id}/draft`, { lengthChoice, steer });
+      const r = await withProgress({ title: 'Writing the draft…', detail: 'This can take up to a minute and a half.', steps: DRAFT_STEP_LABELS }, (opId) => api.post(`/api/topic-research/briefs/${brief.id}/draft`, { lengthChoice, steer, opId }));
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Could not write the draft.');
       onOpenDraft(d.draft.id);
-    } catch (e) { setError(e.message || 'Could not reach the server.'); } finally { stopProcessing(); }
+    } catch (e) { setError(e.message || 'Could not reach the server.'); }
   };
   const remove = async () => {
     try {
@@ -115,6 +121,7 @@ export default function BriefView({ briefId, onBack, onOpenBrief, onOpenDraft })
 
   return (
     <div className="space-y-2">
+      <WorkflowBar view="brief" go={{ search: () => onBack(null), sources: () => onBack(brief.topicId) }} />
       <button type="button" onClick={() => onBack(brief.topicId)} className="text-sm hover:opacity-70 transition-opacity" style={muted}>← Back to the results</button>
       <h2 className="text-lg font-semibold break-words" style={text}>Research brief: {brief.keyword}</h2>
       <p className="text-xs" style={muted}>
@@ -125,7 +132,7 @@ export default function BriefView({ briefId, onBack, onOpenBrief, onOpenDraft })
       <div className="flex flex-wrap gap-2 pt-1">
         <button type="button" onClick={copy} className={btn} style={btnStyle}>{getIcon('copy', { size: 14 })}Copy as Markdown</button>
         <button type="button" onClick={download} className={btn} style={btnStyle}>{getIcon('download', { size: 14 })}Download .md</button>
-        <button type="button" onClick={() => setShowAngle((v) => !v)} className={btn} style={btnStyle}>{getIcon('refresh-cw', { size: 14 })}Regenerate with a different angle</button>
+        <button type="button" onClick={() => setShowAngle((v) => !v)} className={btn} style={btnStyle}>{getIcon('refresh-cw', { size: 14 })}Another angle, same articles</button>
         {confirmDelete ? (
           <span className="inline-flex items-center gap-2 text-sm" style={muted}>
             Delete this brief?
@@ -140,7 +147,7 @@ export default function BriefView({ briefId, onBack, onOpenBrief, onOpenDraft })
 
       {showAngle && (
         <div className="rounded-xl border p-4 space-y-3 mt-2" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <p className="text-sm" style={text}>Write the outline for another angle, from the same articles. This makes a new brief and keeps this one.</p>
+          <p className="text-sm" style={text}>Write the outline for another angle, from the same articles. This makes a new brief and keeps this one. It reads the same sources, so it cannot make up for a poor set of them: to find better sources, search again with different words.</p>
           <div className="flex flex-wrap gap-2">
             {c.suggestedAngles.filter((a) => a.title !== c.chosenAngle).map((a) => (
               <button key={a.title} type="button" onClick={() => regenerate(a.title)} className={btn} style={btnStyle} title={a.why}>{a.title}</button>
@@ -176,10 +183,21 @@ export default function BriefView({ briefId, onBack, onOpenBrief, onOpenDraft })
           <div className="flex-1">
             <VoiceInput value={steer} onChange={setSteer} label="A note about what to stress" placeholder="Anything to stress? (optional)" maxLength={200} />
           </div>
-          <button type="button" onClick={writeDraft} className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium hover:opacity-70 transition-opacity" style={{ background: 'var(--color-primary)', color: '#fff' }}>
+          <button type="button" onClick={askDraft} className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium hover:opacity-70 transition-opacity" style={{ background: 'var(--color-primary)', color: '#fff' }}>
             {getIcon('sparkles', { size: 14 })}Draft article
           </button>
         </div>
+        <p className="text-xs leading-relaxed" style={muted}>The note shapes what the draft emphasises. It cannot add facts the brief does not have.</p>
+        {thin && (
+          <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: '#f59e0b', background: 'var(--color-bg)' }} role="alert">
+            <p className="text-sm" style={text}>{thin.message}</p>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setThin(null)} className={btn} style={btnStyle}>Not yet</button>
+              <button type="button" onClick={() => onBack(null)} className={btn} style={btnStyle} title="Back to the topic list, where you can search again with different words">Search again with different words</button>
+              <button type="button" onClick={writeDraft} className="px-3 py-1.5 rounded-lg text-sm font-medium hover:opacity-70 transition-opacity" style={{ background: 'var(--color-primary)', color: '#fff' }}>Draft anyway</button>
+            </div>
+          </div>
+        )}
         {drafts.length > 0 && (
           <div>
             <p className="text-xs font-semibold" style={text}>Drafts already written from this brief</p>

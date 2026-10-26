@@ -2605,7 +2605,7 @@ function SettingsPage() {
             <div>
               <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Topic Research Tour</p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                8-step tour — searching a topic, watching it, ranked stories and briefs, history, spending limit, the model
+                11-step tour — where you are, searching a topic, trade words, watching it, ranked stories, briefs and drafts, history, spending limit, the model
               </p>
             </div>
             <button

@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import useAuthStore from '../store/authStore';
-import useProcessingStore from '../store/processingStore';
 import { useIcon } from '../providers/IconProvider';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { offerUndo } from '../utils/binUndo';
@@ -10,13 +9,15 @@ import { VoiceInputProvider, VoiceInput } from '../components/voiceInput/VoiceIn
 import ResultsView from './topicResearch/ResultsView';
 import BriefView from './topicResearch/BriefView';
 import DraftView from './topicResearch/DraftView';
+import WorkflowBar from './topicResearch/WorkflowBar';
 import SettingsPanel from './topicResearch/SettingsPanel';
 import HistoryPanel from './topicResearch/HistoryPanel';
 import TopicResearchTutorChat from './topicResearch/TopicResearchTutorChat';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { HOW_IT_WORKS, GUIDE_TOOLS } from './topicResearch/topicResearchTools.mjs';
 import { startTopicResearchTour, TOUR_KEY } from '../utils/tours/topicResearchTour';
-import { REFRESH_CHOICES, budgetBanner, heatBadge, orderTopics, refreshLabel, statusLabel, timeAgo } from './topicResearch/format.mjs';
+import { withProgress } from './topicResearch/withProgress';
+import { REFRESH_CHOICES, SEARCH_STEP_LABELS, budgetBanner, heatBadge, orderTopics, refreshLabel, statusLabel, timeAgo } from './topicResearch/format.mjs';
 
 // Status colours are deliberately outside the theme (see client/DESIGN.md).
 const LEVEL = { good: '#16a34a', warn: '#f59e0b', bad: '#ef4444', info: 'var(--color-muted)' };
@@ -26,7 +27,6 @@ const LEVEL = { good: '#16a34a', warn: '#f59e0b', bad: '#ef4444', info: 'var(--c
 export default function TopicResearchPage() {
   const getIcon = useIcon();
   const isAdmin = useAuthStore((s) => s.user?.isAdmin);
-  const { startProcessing, stopProcessing } = useProcessingStore();
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
   const [flagsLoaded, setFlagsLoaded] = useState(false);
   const canUse = isAdmin || featureAccess.topicResearch === true;
@@ -41,6 +41,9 @@ export default function TopicResearchPage() {
 
   const [topics, setTopics] = useState(null);
   const [keyword, setKeyword] = useState('');
+  const [suggested, setSuggested] = useState(null); // other ways to word the topic: null = not asked, [] = nothing to add
+  const [ticked, setTicked] = useState(new Set()); // the ones to search as well
+  const [suggesting, setSuggesting] = useState(false);
   const [error, setError] = useState('');
   const [confirmId, setConfirmId] = useState(null);
 
@@ -100,18 +103,32 @@ export default function TopicResearchPage() {
   const openTopic = (id) => go({ topic: String(id) });
   const backToList = () => { setParams({}); loadTopics(); };
 
+  const changeKeyword = (v) => { setKeyword(v); setSuggested(null); setTicked(new Set()); }; // other words belong to the topic they were suggested for
+
+  const suggest = async () => {
+    const k = keyword.trim();
+    if (!k || suggesting) return;
+    setError(''); setSuggesting(true);
+    try {
+      const r = await api.post('/api/topic-research/suggest-queries', { keyword: k });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Could not suggest other words.');
+      setSuggested(d.queries); setTicked(new Set(d.queries));
+    } catch (e) { setError(e.message || 'Could not reach the server.'); } finally { setSuggesting(false); }
+  };
+  const toggleTick = (q) => setTicked((cur) => { const next = new Set(cur); if (next.has(q)) next.delete(q); else next.add(q); return next; });
+
   const search = async () => {
     const k = keyword.trim();
     if (!k) return;
     setError('');
-    startProcessing('Searching, reading the best pages and ranking…', 'This can take up to half a minute.');
     try {
-      const r = await api.post('/api/topic-research/topics', { keyword: k });
+      const r = await withProgress({ title: 'Searching…', detail: 'This can take up to half a minute.', steps: SEARCH_STEP_LABELS }, (opId) => api.post('/api/topic-research/topics', { keyword: k, opId, ...(suggested !== null ? { extraQueries: [...ticked] } : {}) }));
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Could not search.');
-      setKeyword('');
+      setKeyword(''); setSuggested(null); setTicked(new Set());
       openTopic(d.topic.id);
-    } catch (e) { setError(e.message || 'Could not reach the server.'); } finally { stopProcessing(); }
+    } catch (e) { setError(e.message || 'Could not reach the server.'); }
   };
 
   const remove = async (t) => {
@@ -172,6 +189,7 @@ export default function TopicResearchPage() {
           {draftId ? (
             <DraftView
               draftId={draftId} onOpenDraft={(id) => setParams({ draft: String(id) })}
+              onGoSearch={backToList} onGoResults={(tid) => setParams({ topic: String(tid) })}
               onBack={(backBriefId) => { if (backBriefId) setParams({ brief: String(backBriefId) }); else backToList(); }}
             />
           ) : briefId ? (
@@ -190,12 +208,13 @@ export default function TopicResearchPage() {
             <SettingsPanel onSaved={loadUsage} />
           ) : (
             <>
+              <WorkflowBar view="topics" />
               <div className="rounded-2xl border p-6 space-y-3" style={surface} data-tour="tr-search">
                 <h2 className="text-base font-semibold" style={text}>Search a topic</h2>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <div className="flex-1">
                     <VoiceInput
-                      value={keyword} onChange={setKeyword} label="Topic to search for" placeholder="e.g. heat pumps Queensland" maxLength={120}
+                      value={keyword} onChange={changeKeyword} label="Topic to search for" placeholder="e.g. heat pumps Queensland" maxLength={120}
                       onKeyDown={(e) => { if (e.key === 'Enter') search(); }}
                     />
                   </div>
@@ -208,6 +227,28 @@ export default function TopicResearchPage() {
                   </button>
                 </div>
                 <p className="text-xs" style={muted}>Every word must appear in an article&apos;s title or summary. Searching the same words again updates that topic.</p>
+                <div className="space-y-2" data-tour="tr-suggest">
+                  <button
+                    type="button" onClick={suggest} disabled={!keyword.trim() || suggesting}
+                    title="Asks the AI model how a manufacturer or trade publication would word this topic. Nothing is searched until you press Search."
+                    className="inline-flex items-center gap-1.5 text-xs font-medium hover:opacity-70 transition-opacity disabled:opacity-40" style={{ color: 'var(--color-primary)' }}
+                  >
+                    {getIcon('sparkles', { size: 12 })}{suggesting ? 'Thinking…' : 'Suggest industry terms'}
+                  </button>
+                  {suggested !== null && suggested.length === 0 && <p className="text-xs" style={muted}>Those words already look like the way the trade says it. Search as they are.</p>}
+                  {suggested !== null && suggested.length > 0 && (
+                    <div className="rounded-xl border p-3 space-y-1.5" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                      <p className="text-xs" style={muted}>Also search for these? The trade may write the topic differently, so the best articles may not use your words.</p>
+                      {suggested.map((q) => (
+                        <label key={q} className="flex items-center gap-2 text-sm cursor-pointer" style={text}>
+                          <input type="checkbox" checked={ticked.has(q)} onChange={() => toggleTick(q)} />
+                          <span className="break-words min-w-0">{q}</span>
+                        </label>
+                      ))}
+                      <p className="text-xs" style={muted}>Each ticked phrase is searched too, so Brave and Google (if switched on) are asked once for each. That counts towards your monthly limit.</p>
+                    </div>
+                  )}
+                </div>
                 {error && <p className="text-sm" style={{ color: '#ef4444' }}>{error}</p>}
               </div>
 

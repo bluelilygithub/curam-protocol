@@ -14,6 +14,7 @@ const { clusterArticles } = require('./cluster');
 const { scoreArticles, topicHeat, fingerprint } = require('./score');
 const { loadSettings } = require('./settings');
 const { loadSourceWeights, toMap } = require('./sourceWeights');
+const { NOOP } = require('./progress');
 
 const READ_LIMIT = Math.max(0, Number(process.env.TOPIC_RESEARCH_EXTRACT_LIMIT) || 12);
 const READ_BUDGET_MS = Math.max(1000, Number(process.env.TOPIC_RESEARCH_EXTRACT_BUDGET_MS) || 25000);
@@ -35,7 +36,7 @@ async function loadScoringConfig(pool, userId, now = Date.now()) {
 async function loadRunArticles(pool, userId, runId) {
   const { rows } = await pool.query(
     `SELECT ra.id AS "raId", ra."clusterId", ra."signalsJson",
-            a.id AS "articleId", a.url, a.title, a.domain, a."publishedAt", a.snippet, a."extractedText", a."extractStatus", a."extractedAt"
+            a.id AS "articleId", a.url, a.title, a.domain, a."publishedAt", a.snippet, a."extractedText", a."extractStatus", a."extractedAt", a."pageKind"
        FROM topic_research_run_articles ra JOIN topic_research_articles a ON a.id = ra."articleId"
       WHERE ra."runId" = $1 AND a."userId" = $2 ORDER BY a.id`,
     [runId, userId],
@@ -43,7 +44,7 @@ async function loadRunArticles(pool, userId, runId) {
   return rows.map((r) => ({
     id: r.raId, articleId: r.articleId, url: r.url, title: r.title, domain: r.domain, snippet: r.snippet || '',
     publishedAt: r.publishedAt ? new Date(r.publishedAt) : null, text: r.extractedText || '',
-    extractStatus: r.extractStatus || null, extractedAt: r.extractedAt ? new Date(r.extractedAt) : null,
+    extractStatus: r.extractStatus || null, extractedAt: r.extractedAt ? new Date(r.extractedAt) : null, pageKind: r.pageKind || null,
     signals: json(r.signalsJson, {}), clusterId: r.clusterId,
   }));
 }
@@ -104,9 +105,10 @@ async function saveReads(pool, userId, reads) {
     // eslint-disable-next-line no-await-in-loop
     await pool.query(
       `UPDATE topic_research_articles
-          SET "extractedText" = $1, "wordCount" = $2, "extractStatus" = $3, "extractedAt" = NOW(), "publishedAt" = COALESCE("publishedAt", $4)
+          SET "extractedText" = $1, "wordCount" = $2, "extractStatus" = $3, "extractedAt" = NOW(), "publishedAt" = COALESCE("publishedAt", $4),
+              "pageKind" = COALESCE($7, "pageKind")
         WHERE id = $5 AND "userId" = $6`,
-      [r.status === 'ok' ? r.text : null, r.status === 'ok' ? r.wordCount : null, r.status, r.published || null, r.articleId, userId],
+      [r.status === 'ok' ? r.text : null, r.status === 'ok' ? r.wordCount : null, r.status, r.published || null, r.articleId, userId, r.pageKind || null],
     );
   }
 }
@@ -115,8 +117,8 @@ async function saveReads(pool, userId, reads) {
  * @param extractor { readPages(candidates, { budgetMs }) } (extract.js); null skips reading (used when none is configured)
  * @returns {{ stories, read: { counts, tried }, heat, used }}
  */
-async function analyseRun({ pool, userId, runId, topic, extractor, limit = READ_LIMIT, budgetMs = READ_BUDGET_MS, now = Date.now }) {
-  const config = { ...(await loadScoringConfig(pool, userId, now())), now: now() };
+async function analyseRun({ pool, userId, runId, topic, extractor, limit = READ_LIMIT, budgetMs = READ_BUDGET_MS, now = Date.now, report = NOOP }) {
+  const config = { ...(await loadScoringConfig(pool, userId, now())), now: now(), keyword: topic?.keyword };
   const previous = await previousHeatOf(pool, userId, topic.id, runId);
 
   let articles = await loadRunArticles(pool, userId, runId);
@@ -127,9 +129,11 @@ async function analyseRun({ pool, userId, runId, topic, extractor, limit = READ_
     const order = [...articles].sort((a, b) => first.scores.get(b.id).score - first.scores.get(a.id).score || a.id - b.id);
     const picks = order.filter((a) => needsReading(a, now())).slice(0, limit);
     let reads = [];
+    if (picks.length) report.start('read', `0 of ${picks.length} pages read`);
     try {
-      if (picks.length) reads = await extractor.readPages(picks.map((a) => ({ id: a.id, url: a.url, publishedAt: a.publishedAt })), { budgetMs });
+      if (picks.length) reads = await extractor.readPages(picks.map((a) => ({ id: a.id, url: a.url, publishedAt: a.publishedAt })), { budgetMs, onEach: (done, of) => report.detail('read', `${done} of ${of} pages read`) });
     } catch { counts.error = picks.length; /* the reader fell over: rank on headlines and snippets alone */ }
+    if (picks.length) report.done('read', `${picks.length} page${picks.length === 1 ? '' : 's'} tried`);
     const byId = new Map(picks.map((a) => [a.id, a]));
     const withIds = reads.map((r) => ({ ...r, articleId: byId.get(r.id).articleId }));
     await saveReads(pool, userId, withIds);
@@ -137,14 +141,17 @@ async function analyseRun({ pool, userId, runId, topic, extractor, limit = READ_
     tried = reads.length;
     if (reads.length) articles = await loadRunArticles(pool, userId, runId);
   }
+  if (!tried) report.done('read', 'Nothing new to read');
+  report.start('rank', 'Grouping articles into stories');
   const result = analyse(articles, config, previous);
   await saveAnalysis(pool, userId, runId, result);
+  report.done('rank', `${result.stories} stor${result.stories === 1 ? 'y' : 'ies'}`);
   return { stories: result.stories, read: { counts, tried }, heat: result.heat, used: result.used };
 }
 
 /** Rank a stored run again with the settings as they are now. Groups the articles first if the run was never grouped. */
 async function rescoreRun({ pool, userId, runId, topic, now = Date.now }) {
-  const config = { ...(await loadScoringConfig(pool, userId, now())), now: now() };
+  const config = { ...(await loadScoringConfig(pool, userId, now())), now: now(), keyword: topic?.keyword };
   const articles = await loadRunArticles(pool, userId, runId);
   const previous = topic ? await previousHeatOf(pool, userId, topic.id, runId) : null;
   const grouped = articles.length > 0 && articles.every((a) => a.clusterId != null);

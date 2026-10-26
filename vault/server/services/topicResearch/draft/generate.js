@@ -10,8 +10,8 @@
 const { buildPrompt, buildRetryPrompt } = require('./prompt');
 const { validateDraft, textFields, LENGTHS, DEFAULT_LENGTH } = require('./schema');
 const { findOverlaps } = require('../brief/overlap');
-const { textFields: briefTextFields } = require('../brief/schema');
 const { normaliseUrl } = require('../urlNormalise');
+const { NOOP } = require('../progress');
 
 const MAX_OUTPUT_TOKENS = 6000;
 const TIMEOUT_MS = 150000;
@@ -42,6 +42,7 @@ const withDefaults = (given) => Object.fromEntries(Object.entries(DEFAULTS).map(
  */
 async function generateDraft(input, depsIn = {}) {
   const deps = withDefaults(depsIn);
+  const report = input.report || NOOP;
   const { userId, topic, settings, brief, sources = [], articles = [], steer = '' } = input;
   const lengthChoice = LENGTHS[input.lengthChoice] ? input.lengthChoice : DEFAULT_LENGTH;
 
@@ -65,6 +66,7 @@ async function generateDraft(input, depsIn = {}) {
     let message = user;
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       attempts = attempt;
+      report.start('write', attempt === 1 ? 'Waiting for the AI model' : 'The first answer could not be used: trying once more');
       let reply;
       try {
         reply = readReply(await deps.callModel(model, message, { system, maxTokens: MAX_OUTPUT_TOKENS, returnUsage: true, timeoutMs: TIMEOUT_MS }));
@@ -87,13 +89,16 @@ async function generateDraft(input, depsIn = {}) {
     // the tokens were spent whether or not the answer was usable
     if (inputTokens || outputTokens) deps.logUsage({ userId, model, inputTokens, outputTokens, feature: 'topic_research_draft' });
   }
+  report.done('write');
+  report.start('check', 'Checking sources and wording');
   if (problems.length) throw fail(502, 'The AI model\'s answer could not be used, even after a second try. Try again, or choose a different length.');
 
-  // copy check: the articles' own words, and the brief's (a draft that just pastes the brief's sentences is not a draft)
+  // copy check: the source articles' own words only. The draft is built from the brief, so it naturally echoes the brief; flagging that buried the
+  // warnings that matter (a run of words taken from an outlet). The brief itself already passed this check against the same articles.
   const sourcesText = articles.map((a) => ({ url: normaliseUrl(a.url) || a.url, title: a.title, texts: [a.title, a.snippet, a.text] }));
-  sourcesText.push({ url: 'brief', title: 'your research brief', texts: briefTextFields(brief).map((f) => f.text) });
   const overlap = findOverlaps(textFields(validated.value), sourcesText);
   const costUsd = deps.calculateCost(model, inputTokens, outputTokens);
+  report.done('check', `${validated.words} words${overlap.length ? `, ${overlap.length} copy warning${overlap.length === 1 ? '' : 's'}` : ''}`);
   return { draft: validated.value, overlap, dropped: validated.dropped, words: validated.words, model, inputTokens, outputTokens, costUsd, attempts };
 }
 

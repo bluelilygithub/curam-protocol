@@ -19,7 +19,7 @@ const { createBraveSource, braveStatus, freshnessFor } = require('./sources/brav
 const { createSerperSource, serperStatus } = require('./sources/serper');
 const { cached, withCache, cacheKey } = require('./cache');
 const { buildSources } = require('./sources');
-const { runCollect, mergeItems, mergeExtras } = require('./collect');
+const { runCollect, searchAllQueries, mergeItems, mergeExtras } = require('./collect');
 const { makeItem } = require('./sources/base');
 
 const NOW = Date.UTC(2026, 9, 25, 0, 0, 0);
@@ -438,6 +438,54 @@ async function main() {
     const dead = await runCollect({ pool, userId: 1, topic: { id: 5, keyword: 'x', region: 'AU', language: 'en' }, sources: [sources[3], sources[4]], days: 30, now: () => NOW });
     assert.strictEqual(dead.status, 'failed');
     assert.strictEqual(dead.count, 0);
+
+    // several phrasings of one topic: every source is asked each one, the answers become one answer, and one failing phrasing keeps the rest
+    {
+      const asked = [];
+      const item = (url, title) => ({ url, title, domain: new URL(url).hostname, publishedAt: new Date(NOW - 3600000), snippet: '', signals: {} });
+      const multi = {
+        id: 'm', name: 'm', label: 'Multi',
+        search: async (q) => {
+          asked.push(q);
+          if (q === 'broken phrase') throw new Error('upstream down');
+          return { items: [item('https://same.example.com/a', 'Shared story'), item(`https://${q.replace(/\W+/g, '-')}.example.com/x`, `Only for ${q}`)], errors: [], answered: 1, costUsd: 0.01, cached: false, extras: { peopleAlsoAsk: [{ question: `Q for ${q}?` }], relatedSearches: [] } };
+        },
+      };
+      const topic = { id: 5, keyword: 'motors for walk in wine cabinets', region: 'AU', language: 'en' };
+      const out = await runCollect({ pool, userId: 1, topic, sources: [multi], days: 30, now: () => NOW, queries: ['wine cellar cooling unit', 'broken phrase', 'Wine Cellar Cooling Unit', '  ', 7, 'wine room refrigeration', 'a fifth phrase that is cut'] });
+      assert.deepStrictEqual(asked.sort(), ['broken phrase', 'motors for walk in wine cabinets', 'wine cellar cooling unit', 'wine room refrigeration'].sort(), 'the topic first, the extras once each (case ignored), at most four in all, junk ignored');
+      assert.deepStrictEqual(out.queries, ['motors for walk in wine cabinets', 'wine cellar cooling unit', 'broken phrase', 'wine room refrigeration'], 'the queries really asked are reported in order');
+      assert.strictEqual(out.count, 4, 'the same article from two phrasings is one article; each phrasing\'s own article is kept');
+      assert.strictEqual(out.sources[0].count, 6, 'the source reports every item it returned');
+      assert.ok(Math.abs(out.costUsd - 0.03) < 1e-9, 'three phrasings answered, three charges');
+      assert.ok(out.errors.some((e) => e.source === 'Multi' && /upstream down/.test(e.message)), 'the failing phrasing is reported');
+      assert.strictEqual(out.status, 'partial');
+      assert.strictEqual(out.extras.peopleAlsoAsk.length, 3, 'People-also-ask lists are merged');
+      // the same fault from one source on every phrasing is reported once
+      const noisy = await searchAllQueries({ label: 'Noisy', search: async () => ({ items: [], errors: [{ source: 'Noisy', message: 'Rate limited' }], answered: 0 }) }, ['a b', 'c d', 'e f'], new Date(NOW), {});
+      assert.deepStrictEqual(noisy.errors, [{ source: 'Noisy', message: 'Rate limited' }]);
+      const mixed = await searchAllQueries({ label: 'Mixed', search: async (q) => { if (q !== 'a b') throw new Error('upstream down'); return { items: [], errors: [{ source: 'Mixed', message: 'one problem' }], answered: 1 }; } }, ['a b', 'c d', 'e f'], new Date(NOW), {});
+      assert.deepStrictEqual(mixed.errors.map((e) => e.message), ['one problem', 'upstream down'], 'two phrasings failing the same way give one line');
+      // every phrasing failing is a failure of the source
+      const dead = await runCollect({ pool, userId: 1, topic, sources: [{ id: 'd', name: 'd', label: 'Dead', search: async () => { throw new Error('down'); } }], days: 30, now: () => NOW, queries: ['one phrase', 'two phrase'] });
+      assert.deepStrictEqual([dead.status, dead.count, dead.errors.length], ['failed', 0, 1]);
+      // no extra phrasings: exactly the old behaviour, one call
+      const one = []; await runCollect({ pool, userId: 1, topic, sources: [{ id: 'o', name: 'o', search: async (q) => { one.push(q); return { items: [], errors: [], answered: 1 }; } }], days: 30, now: () => NOW });
+      assert.deepStrictEqual(one, ['motors for walk in wine cabinets']);
+      // cached only when every answer was
+      const c = await searchAllQueries({ label: 'C', search: async (q) => ({ items: [], errors: [], answered: 1, cached: q === 'a b', costUsd: q === 'a b' ? 0 : 0.5 }) }, ['a b', 'c d'], new Date(NOW), {});
+      assert.deepStrictEqual([c.cached, c.costUsd, c.answered], [false, 0.5, 2]);
+    }
+
+    // progress notes: each source reported as it answers, then the save
+    {
+      const notes = []; const report = { start: (id, d) => notes.push(['start', id, d]), detail: (id, d) => notes.push(['detail', id, d]), done: (id, d) => notes.push(['done', id, d]), fail() {}, finish() {} };
+      const quick = (n) => ({ id: n, name: n, label: n.toUpperCase(), search: async () => ({ items: [], errors: [], answered: 1 }) });
+      await runCollect({ pool, userId: 1, topic: { id: 5, keyword: 'x', region: 'AU', language: 'en' }, sources: [quick('a'), quick('b')], days: 30, now: () => NOW, report });
+      assert.deepStrictEqual(notes.map((n) => n.slice(0, 2).join(':')), ['start:sources', 'detail:sources', 'detail:sources', 'done:sources', 'start:save', 'done:save']);
+      assert.ok(/^1 of 2 answered/.test(notes[1][2]) && /^2 of 2 answered/.test(notes[2][2]), 'counts go up as sources answer');
+      assert.strictEqual(notes[0][2], 'Asking 2 sources');
+    }
 
     // the source gets what it needs to cache and to localise
     let seen = null;
