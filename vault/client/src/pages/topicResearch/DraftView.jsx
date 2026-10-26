@@ -3,6 +3,7 @@ import api from '../../utils/apiClient';
 import { withProgress } from './withProgress';
 import WorkflowBar from './WorkflowBar';
 import PromptPanel from './PromptPanel';
+import ActionBar, { ActionRow, MoreMenu } from './ActionBar';
 import useToastStore from '../../store/toastStore';
 import { offerUndo } from '../../utils/binUndo';
 import { useIcon } from '../../providers/IconProvider';
@@ -83,28 +84,31 @@ export default function DraftView({ draftId, onBack, onOpenDraft, onGoSearch, on
 
   return (
     <div className="space-y-2">
-      <WorkflowBar view="draft" go={{ search: onGoSearch, sources: () => onGoResults(draft.topicId), brief: () => onBack(draft.briefId) }} />
-      <button type="button" onClick={() => onBack(draft.briefId)} className="text-sm hover:opacity-70 transition-opacity" style={muted}>← Back to the brief</button>
+      <ActionBar>
+        <WorkflowBar view="draft" go={{ search: onGoSearch, sources: () => onGoResults(draft.topicId), brief: () => onBack(draft.briefId) }} />
+        <ActionRow>
+          <button type="button" onClick={() => onBack(draft.briefId)} className={btn} style={{ ...btnStyle, borderColor: 'var(--color-primary)' }} title="Back to the brief this draft was written from">← Brief</button>
+          <button type="button" onClick={another} className={btn} style={btnStyle} title="Writes a new draft from the same brief and keeps this one">{getIcon('refresh-cw', { size: 14 })}Write another</button>
+          <button type="button" onClick={copy} className={btn} style={btnStyle}>{getIcon('copy', { size: 14 })}Copy</button>
+          {confirmDelete ? (
+            <span className="inline-flex items-center gap-2 text-sm" style={muted}>
+              Delete this draft?
+              <button type="button" onClick={remove} className="font-medium hover:opacity-70 transition-opacity" style={{ color: '#ef4444' }}>Yes</button>
+              <button type="button" onClick={() => setConfirmDelete(false)} className="font-medium hover:opacity-70 transition-opacity" style={text}>No</button>
+            </span>
+          ) : (
+            <MoreMenu btn={btn} btnStyle={btnStyle} items={[
+              { label: 'Download .md', onClick: download },
+              { label: 'Delete', onClick: () => setConfirmDelete(true), danger: true, title: 'Kept in the recycle bin for 30 days' },
+            ]} />
+          )}
+        </ActionRow>
+      </ActionBar>
       <h2 className="text-lg font-semibold break-words" style={text}>{c.title}</h2>
       <p className="text-xs" style={muted}>
         Draft made {formatDate(draft.createdAt)} for &ldquo;{draft.keyword}&rdquo; · {draftLine(draft)} · {draft.lengthChoice} · {draft.model}{costText(draft.costUsd) ? ` · ${costText(draft.costUsd)}` : ''}.
         {' '}A starting point built from your research brief, for you to edit. Check every fact against its sources before you publish.
       </p>
-
-      <div className="flex flex-wrap gap-2 pt-1">
-        <button type="button" onClick={copy} className={btn} style={btnStyle}>{getIcon('copy', { size: 14 })}Copy as Markdown</button>
-        <button type="button" onClick={download} className={btn} style={btnStyle}>{getIcon('download', { size: 14 })}Download .md</button>
-        <button type="button" onClick={another} className={btn} style={btnStyle} title="Writes a new draft from the same brief and keeps this one">{getIcon('refresh-cw', { size: 14 })}Write another</button>
-        {confirmDelete ? (
-          <span className="inline-flex items-center gap-2 text-sm" style={muted}>
-            Delete this draft?
-            <button type="button" onClick={remove} className="font-medium hover:opacity-70 transition-opacity" style={{ color: '#ef4444' }}>Yes</button>
-            <button type="button" onClick={() => setConfirmDelete(false)} className="font-medium hover:opacity-70 transition-opacity" style={text}>No</button>
-          </span>
-        ) : (
-          <button type="button" onClick={() => setConfirmDelete(true)} className={btn} style={btnStyle} title="Kept in the recycle bin for 30 days">{getIcon('trash', { size: 14 })}Delete</button>
-        )}
-      </div>
       {error && <p className="text-sm" style={{ color: '#ef4444' }}>{error}</p>}
 
       {(gaps > 0 || draft.overlap.length > 0) && (

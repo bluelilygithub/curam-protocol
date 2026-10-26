@@ -163,7 +163,7 @@ export default function TopicResearchPage() {
 
   return (
     <VoiceInputProvider lang="en-AU">
-      <div className="flex flex-col flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
+      <div className="flex flex-col flex-1 min-h-0 p-4 sm:p-6">
         <div className="w-full max-w-4xl mx-auto space-y-5">
           <div>
             <div className="flex items-center gap-2">

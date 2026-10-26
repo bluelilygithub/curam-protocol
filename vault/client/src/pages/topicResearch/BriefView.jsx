@@ -3,13 +3,17 @@ import api from '../../utils/apiClient';
 import { withProgress } from './withProgress';
 import WorkflowBar from './WorkflowBar';
 import PromptPanel from './PromptPanel';
+import ActionBar, { ActionRow, MoreMenu } from './ActionBar';
+import BriefTabs from './BriefTabs';
 import useToastStore from '../../store/toastStore';
 import { offerUndo } from '../../utils/binUndo';
 import { useIcon } from '../../providers/IconProvider';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
-import { explainFailure, BRIEF_STEP_LABELS, DRAFT_LENGTHS, DRAFT_STEP_LABELS, costText, draftReadiness, draftLine, factLabel, formatDate, overlapWarning } from './format.mjs';
+import { briefJumpLinks, explainFailure, BRIEF_STEP_LABELS, DRAFT_LENGTHS, DRAFT_STEP_LABELS, costText, draftReadiness, draftLine, factLabel, formatDate, overlapWarning } from './format.mjs';
 
-const H = ({ children }) => <h3 className="text-base font-semibold mt-5 mb-2" style={{ color: 'var(--color-text)' }}>{children}</h3>;
+// `id` makes a heading a jump target; the margin keeps it clear of the bar that stays at the top while scrolling
+const H = ({ children, id }) => <h3 id={id} className="text-base font-semibold mt-5 mb-2" style={{ color: 'var(--color-text)', scrollMarginTop: '9rem' }}>{children}</h3>;
+const jump = (id) => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
 
 // One research brief: notes to write your own article from. Every fact says how many outlets back it and links to them; if the brief repeats
 // wording from a source, a warning comes first. Copy and download give the same Markdown the server writes.
@@ -19,7 +23,6 @@ export default function BriefView({ briefId, onBack, onOpenBrief, onOpenDraft })
   const [brief, setBrief] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [showAngle, setShowAngle] = useState(false);
   const [angle, setAngle] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [lengthChoice, setLengthChoice] = useState('medium');
@@ -36,7 +39,7 @@ export default function BriefView({ briefId, onBack, onOpenBrief, onOpenDraft })
       setBrief(d.brief);
     } catch (e) { setError(e.message || 'Could not reach the server.'); } finally { setLoading(false); }
   }, [briefId]);
-  useEffect(() => { setLoading(true); setBrief(null); setShowAngle(false); setAngle(''); setConfirmDelete(false); setSteer(''); load(); }, [load]);
+  useEffect(() => { setLoading(true); setBrief(null); setAngle(''); setConfirmDelete(false); setSteer(''); load(); }, [load]);
   // the drafts already written from this brief (a deleted or restored draft announces itself with this event)
   const loadDrafts = useCallback(async () => {
     try {
@@ -122,51 +125,45 @@ export default function BriefView({ briefId, onBack, onOpenBrief, onOpenDraft })
 
   return (
     <div className="space-y-2">
-      <WorkflowBar view="brief" go={{ search: () => onBack(null), sources: () => onBack(brief.topicId) }} />
-      <button type="button" onClick={() => onBack(brief.topicId)} className="text-sm hover:opacity-70 transition-opacity" style={muted}>← Back to the results</button>
+      <ActionBar>
+        <WorkflowBar
+          view="brief" reached={drafts.length ? ['draft'] : []}
+          go={{ search: () => onBack(null), sources: () => onBack(brief.topicId), draft: () => { if (drafts[0]) onOpenDraft(drafts[0].id); } }}
+        />
+        <ActionRow>
+          <button type="button" onClick={() => onBack(brief.topicId)} className={btn} style={{ ...btnStyle, borderColor: 'var(--color-primary)' }} title="Back to this search's results and the articles you ticked">← Results</button>
+          <button type="button" onClick={() => jump('tr-angles')} className={btn} style={btnStyle} title="Jump to the suggested angles: each can have its own outline">{getIcon('refresh-cw', { size: 14 })}Another angle</button>
+          <button type="button" onClick={() => jump('tr-draftbox')} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium hover:opacity-70 transition-opacity" style={{ background: 'var(--color-primary)', color: '#fff' }} title="Jump to Draft article: choose a length, then write it">{getIcon('sparkles', { size: 14 })}Draft article</button>
+          <button type="button" onClick={copy} className={btn} style={btnStyle}>{getIcon('copy', { size: 14 })}Copy</button>
+          {confirmDelete ? (
+            <span className="inline-flex items-center gap-2 text-sm" style={muted}>
+              Delete this brief?
+              <button type="button" onClick={remove} className="font-medium hover:opacity-70 transition-opacity" style={{ color: '#ef4444' }}>Yes</button>
+              <button type="button" onClick={() => setConfirmDelete(false)} className="font-medium hover:opacity-70 transition-opacity" style={text}>No</button>
+            </span>
+          ) : (
+            <MoreMenu btn={btn} btnStyle={btnStyle} items={[
+              { label: 'Download .md', onClick: download },
+              { label: 'Delete', onClick: () => setConfirmDelete(true), danger: true, title: 'Kept in the recycle bin for 30 days' },
+            ]} />
+          )}
+        </ActionRow>
+      </ActionBar>
       <h2 className="text-lg font-semibold break-words" style={text}>Research brief: {brief.keyword}</h2>
       <p className="text-xs" style={muted}>
         Made {formatDate(brief.createdAt)} from {brief.sources.length} article{brief.sources.length === 1 ? '' : 's'} · {brief.model}{costText(brief.costUsd) ? ` · ${costText(brief.costUsd)}` : ''}.
         {' '}Notes for writing your own piece, not text to publish. Check each fact against its sources before you use it.
       </p>
-
-      <div className="flex flex-wrap gap-2 pt-1">
-        <button type="button" onClick={copy} className={btn} style={btnStyle}>{getIcon('copy', { size: 14 })}Copy as Markdown</button>
-        <button type="button" onClick={download} className={btn} style={btnStyle}>{getIcon('download', { size: 14 })}Download .md</button>
-        <button type="button" onClick={() => setShowAngle((v) => !v)} className={btn} style={btnStyle}>{getIcon('refresh-cw', { size: 14 })}Another angle, same articles</button>
-        {confirmDelete ? (
-          <span className="inline-flex items-center gap-2 text-sm" style={muted}>
-            Delete this brief?
-            <button type="button" onClick={remove} className="font-medium hover:opacity-70 transition-opacity" style={{ color: '#ef4444' }}>Yes</button>
-            <button type="button" onClick={() => setConfirmDelete(false)} className="font-medium hover:opacity-70 transition-opacity" style={text}>No</button>
-          </span>
-        ) : (
-          <button type="button" onClick={() => setConfirmDelete(true)} className={btn} style={btnStyle} title="Kept in the recycle bin for 30 days">{getIcon('trash', { size: 14 })}Delete</button>
-        )}
-      </div>
+      <BriefTabs runId={brief.runId} currentId={brief.id} onOpen={onOpenBrief} />
+      <p className="text-xs flex flex-wrap items-center gap-x-3 gap-y-1" style={muted} data-guide="jumplinks">
+        <span>Jump to:</span>
+        {briefJumpLinks(c).map(([id, label]) => (
+          <button key={id} type="button" onClick={() => jump(id)} className="underline hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)' }}>{label}</button>
+        ))}
+      </p>
       {error && <p className="text-sm" style={{ color: '#ef4444' }}>{error}</p>}
 
-      {showAngle && (
-        <div className="rounded-xl border p-4 space-y-3 mt-2" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <p className="text-sm" style={text}>Write the outline for another angle, from the same articles. This makes a new brief and keeps this one. It reads the same sources, so it cannot make up for a poor set of them: to find better sources, search again with different words.</p>
-          <div className="flex flex-wrap gap-2">
-            {c.suggestedAngles.filter((a) => a.title !== c.chosenAngle).map((a) => (
-              <button key={a.title} type="button" onClick={() => regenerate(a.title)} className={btn} style={btnStyle} title={a.why}>{a.title}</button>
-            ))}
-          </div>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <input
-              value={angle} onChange={(e) => setAngle(e.target.value)} maxLength={200} placeholder="Or type your own angle" aria-label="Your own angle"
-              onKeyDown={(e) => { if (e.key === 'Enter') regenerate(); }}
-              className="flex-1 px-3 py-2.5 rounded-xl border text-sm outline-none"
-              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-            />
-            <button type="button" onClick={() => regenerate()} disabled={!angle.trim()} className="px-3.5 py-2 rounded-lg text-sm font-medium hover:opacity-70 transition-opacity disabled:opacity-40" style={{ background: 'var(--color-primary)', color: '#fff' }}>Write it</button>
-          </div>
-        </div>
-      )}
-
-      <div className="rounded-xl border p-4 space-y-3 mt-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }} data-tour="tr-draft">
+      <div className="rounded-xl border p-4 space-y-3 mt-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }} data-tour="tr-draft" id="tr-draftbox">
         <p className="text-sm font-semibold" style={text}>Draft article</p>
         <p className="text-xs leading-relaxed" style={muted}>
           Turn this brief into a first draft to edit. It is built from this brief only (not from the articles), with a source number on every factual paragraph and a clear marker where the research has gaps. It is a starting point, not a finished article: check every fact before you use it.
@@ -228,7 +225,7 @@ export default function BriefView({ briefId, onBack, onOpenBrief, onOpenDraft })
       <H>Summary</H>
       <p className="text-sm leading-relaxed" style={text}>{c.summary}</p>
 
-      <H>Key facts</H>
+      <H id="tr-facts">Key facts</H>
       <ul className="space-y-3">
         {c.keyFacts.map((f, i) => (
           <li key={i} className="rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
@@ -245,14 +242,36 @@ export default function BriefView({ briefId, onBack, onOpenBrief, onOpenDraft })
       </ul>
 
       {c.anglesTaken.length > 0 && (<><H>Angles taken</H><ul className="space-y-1">{c.anglesTaken.map((a, i) => <li key={i} className="text-sm" style={text}><strong>{a.outlet}:</strong> {a.framing}</li>)}</ul></>)}
-      {c.gaps.length > 0 && (<><H>Gaps</H><ul className="list-disc pl-5 space-y-1">{c.gaps.map((g, i) => <li key={i} className="text-sm" style={text}>{g}</li>)}</ul></>)}
+      {c.gaps.length > 0 && (<><H id="tr-gaps">Gaps</H><ul className="list-disc pl-5 space-y-1">{c.gaps.map((g, i) => <li key={i} className="text-sm" style={text}>{g}</li>)}</ul></>)}
 
-      <H>Suggested angles for your site</H>
-      <ol className="list-decimal pl-5 space-y-1">
-        {c.suggestedAngles.map((a) => <li key={a.title} className="text-sm" style={text}><strong>{a.title}</strong>{a.why ? <span style={muted}>: {a.why}</span> : null}</li>)}
+      <H id="tr-angles">Suggested angles for your site</H>
+      <p className="text-xs mb-2" style={muted}>Each angle can have its own outline. Write the outline for another one and you get a new brief from the same articles; this brief stays, and you can flip between them. It reads the same sources, so it cannot make up for a poor source list.</p>
+      <ol className="space-y-2">
+        {c.suggestedAngles.map((a) => {
+          const here = a.title === c.chosenAngle;
+          return (
+            <li key={a.title} className="rounded-xl border p-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between" style={{ borderColor: 'var(--color-border)', background: here ? 'var(--color-surface)' : 'var(--color-bg)' }}>
+              <span className="text-sm min-w-0" style={text}><strong>{a.title}</strong>{a.why ? <span style={muted}>: {a.why}</span> : null}</span>
+              {here ? (
+                <button type="button" onClick={() => jump('tr-outline')} className={btn + ' shrink-0'} style={btnStyle}>Outline below ✓</button>
+              ) : (
+                <button type="button" onClick={() => regenerate(a.title)} className="shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium hover:opacity-70 transition-opacity" style={{ background: 'var(--color-primary)', color: '#fff' }} title="Makes a new brief with an outline for this angle, from the same articles">Write the outline</button>
+              )}
+            </li>
+          );
+        })}
       </ol>
+      <div className="flex flex-col sm:flex-row gap-2 mt-2">
+        <input
+          value={angle} onChange={(e) => setAngle(e.target.value)} maxLength={200} placeholder="Or type your own angle" aria-label="Your own angle"
+          onKeyDown={(e) => { if (e.key === 'Enter') regenerate(); }}
+          className="flex-1 px-3 py-2.5 rounded-xl border text-sm outline-none"
+          style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+        />
+        <button type="button" onClick={() => regenerate()} disabled={!angle.trim()} className="px-3.5 py-2 rounded-lg text-sm font-medium hover:opacity-70 transition-opacity disabled:opacity-40" style={{ background: 'var(--color-primary)', color: '#fff' }}>Write the outline</button>
+      </div>
 
-      <H>Outline: {c.chosenAngle}</H>
+      <H id="tr-outline">Outline: {c.chosenAngle}</H>
       <div className="space-y-3">
         {c.outline.map((o, i) => (
           <div key={i} style={{ marginLeft: o.level === 3 ? '1.25rem' : 0 }}>
@@ -266,7 +285,7 @@ export default function BriefView({ briefId, onBack, onOpenBrief, onOpenDraft })
       <p className="text-sm" style={text}><strong>Main:</strong> {c.keywords.primary}</p>
       {c.keywords.related.length > 0 && <p className="text-sm" style={muted}>Related: {c.keywords.related.join(', ')}</p>}
 
-      <H>Sources</H>
+      <H id="tr-sources">Sources</H>
       <ol className="list-decimal pl-5 space-y-1">
         {brief.sources.map((s) => (
           <li key={s.id} className="text-sm break-words" style={text}>

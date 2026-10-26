@@ -13,7 +13,7 @@ Built from the owner's spec ("Topic Research App — Build Spec", 25 Oct 2026) a
 5. **Watch** a topic (tick Watch, choose how often) and it refreshes itself in the background.
 6. **Write a brief**: tick up to 12 articles, press Generate brief, then write your own piece from the notes.
 4a. **Suggest industry terms** (optional, under the topic box): the AI model offers up to three other ways to word the topic as the trade would; tick the ones to search as well.
-4b. While anything runs, a box shows the real steps; a bar above each page shows where you are (Search, Choose sources, Brief, Draft).
+4b. While anything runs, a box shows the real steps; a bar above each page shows where you are (Search, Results, Brief, Draft; milestone 9 made every stage that exists a clickable tab).
 7. **Draft article** (optional): on a brief, choose a length and press Draft article for a first draft built from that brief. Edit and fact-check it elsewhere.
 8. **History** lists every past search, brief and draft; open one to read it again.
 8. Help: the (i) box, the compass tour (also Settings -> Tours) and the round guide button.
@@ -210,6 +210,14 @@ On Results, every article has a tick box (the best ten start ticked, at most twe
 **Not verified:** the premise note and suggestions with a **real model**; how often the note is right; and whether trade phrasings really change what Brave returns for the wine case (to try on Railway).
 
 **Limits.** Prompts for briefs and drafts made before this are not available. The stored prompt can be large (up to about 240 KB for twelve articles). The "not used" list shows the current source status, so it reflects settings now, not at the moment of an old search.
+
+## Milestone 9: easier to move around
+
+**Why.** After M8 the brief page worked but was not easy to use: the way back to the results was small grey text, "Choose sources" did not look clickable, the actions sat at the top while the outline being read was far below, and only the chosen angle had an outline, the others hidden behind a toggle. **Client-only: no server, table, AI or cost change** (it uses the existing `GET /runs/:id/briefs`).
+
+**What changed.** The step bar is real tabs (Search, **Results**, Brief, Draft; a later stage that already exists is clickable too, e.g. the Brief from the Results page). On a brief or draft a **bar stays at the top while the page scrolls** (`ActionBar.jsx`): the step tabs and **← Results** (or **← Brief**), **Another angle** (jumps to the angles), **Draft article** (jumps to the draft box), **Copy**, and **More** (Download, Delete with its inline confirm). Each suggested angle has its own **Write the outline** button (the chosen one says "Outline below ✓"), plus a box to type your own angle: it makes a new brief and keeps the old one. The search's briefs are **tabs under the title** (`BriefTabs.jsx`, oldest first, hidden when there is one). **Jump to:** Facts, Gaps, Angles, Outline, Sources. The row of buttons scrolls sideways on a phone instead of wrapping.
+
+**Checked:** the pure helpers (`workflowSteps` with `reached`, `briefJumpLinks`, `briefTabLabel`) by test; the rest in a real browser (desktop and phone width). **Not checked:** a real-model outline for a second angle (Railway).
 
 ## Known limits and open items
 

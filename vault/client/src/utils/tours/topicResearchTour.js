@@ -59,7 +59,7 @@ export function startTopicResearchTour() {
   tour.addStep({
     id: 'tr-workflow',
     title: 'Where you are',
-    text: 'This bar shows the four stages of the work: Search, Choose sources, Brief and Draft. The one you are on is filled, and you can click an earlier one to go back. While a search, brief or draft runs, a box lists each step as it really happens, so you can see where it is up to.',
+    text: 'This bar shows the four stages of the work: Search, Results, Brief and Draft. The one you are on is filled, and every stage that exists is a tab you can click. On a brief or draft the bar stays at the top while you scroll, with the buttons you need next. While a search, brief or draft runs, a box lists each step as it really happens, so you can see where it is up to.',
     attachTo: { element: '[data-tour="tr-workflow"]', on: 'bottom' },
     beforeShowPromise: check('tr-workflow', '[data-tour="tr-workflow"]'),
     when: { show() { injectStepCounter(2); } },

@@ -282,11 +282,34 @@ export function stepsForModal(serverSteps) {
   }));
 }
 
-/** The four stages of the work, with where you are: { id, label, state: 'done' | 'current' | 'todo' }. `view` is topics | results | brief | draft. */
-export function workflowSteps(view) {
-  const stages = [['search', 'Search'], ['sources', 'Choose sources'], ['brief', 'Brief'], ['draft', 'Draft']];
+/**
+ * The four stages of the work, with where you are: { id, label, state: 'done' | 'current' | 'later' | 'todo' }. `view` is topics | results | brief | draft.
+ * `reached` lists the later stages that already exist (a brief while looking at the results): they read 'later' and can be clicked, the rest stay 'todo'.
+ */
+export function workflowSteps(view, reached = []) {
+  const stages = [['search', 'Search'], ['sources', 'Results'], ['brief', 'Brief'], ['draft', 'Draft']];
   const at = { topics: 0, results: 1, brief: 2, draft: 3 }[view] ?? 0;
-  return stages.map(([id, label], i) => ({ id, label, state: i < at ? 'done' : i === at ? 'current' : 'todo' }));
+  const have = new Set(Array.isArray(reached) ? reached : []);
+  return stages.map(([id, label], i) => ({ id, label, state: i < at ? 'done' : i === at ? 'current' : have.has(id) ? 'later' : 'todo' }));
+}
+
+/** The jump links at the top of a brief: [anchor id, label]; only the sections that exist. */
+export function briefJumpLinks(content) {
+  const c = content || {};
+  return [
+    ['tr-facts', 'Facts', Array.isArray(c.keyFacts) && c.keyFacts.length > 0],
+    ['tr-gaps', 'Gaps', Array.isArray(c.gaps) && c.gaps.length > 0],
+    ['tr-angles', 'Angles', Array.isArray(c.suggestedAngles) && c.suggestedAngles.length > 0],
+    ['tr-outline', 'Outline', Array.isArray(c.outline) && c.outline.length > 0],
+    ['tr-sources', 'Sources', true],
+  ].filter((x) => x[2]).map(([id, label]) => [id, label]);
+}
+
+/** The label of a brief's tab: its angle and the day it was made, kept short. */
+export function briefTabLabel(b) {
+  const angle = String(b?.chosenAngle || b?.angle || 'Brief').replace(/\s+/g, ' ').trim();
+  const short = angle.length > 34 ? `${angle.slice(0, 33)}…` : angle;
+  return `${short} · ${formatDate(b?.createdAt)}`;
 }
 
 /**

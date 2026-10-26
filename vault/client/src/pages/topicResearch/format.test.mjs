@@ -1,6 +1,6 @@
 // Run: node client/src/pages/topicResearch/format.test.mjs
 import assert from 'assert';
-import { promptText, searchedForLine, notUsedLine, explainFailure, draftReadiness, RELEVANCE_STEP_LABELS, isShopPage, formatDate, timeAgo, statusLabel, parseFeedLines, feedLines, sourceChip, signalBadges, rankingNote, heatBadge, readNote, breakdownRows, defaultSelection, toggleSelection, selectionNote, factLabel, overlapWarning, costText, SIGNAL_FIELDS, DEFAULT_PERCENTS, DEFAULT_HALF_LIFE, toPercents, fromPercents, percentTotal, REFRESH_CHOICES, refreshLabel, orderTopics, mergeHistory, budgetBanner, spendLine, DRAFT_LENGTHS, draftLine, SEARCH_STEP_LABELS, BRIEF_STEP_LABELS, DRAFT_STEP_LABELS, stepsForModal, workflowSteps } from './format.mjs';
+import { workflowSteps as wfs, briefJumpLinks, briefTabLabel, promptText, searchedForLine, notUsedLine, explainFailure, draftReadiness, RELEVANCE_STEP_LABELS, isShopPage, formatDate, timeAgo, statusLabel, parseFeedLines, feedLines, sourceChip, signalBadges, rankingNote, heatBadge, readNote, breakdownRows, defaultSelection, toggleSelection, selectionNote, factLabel, overlapWarning, costText, SIGNAL_FIELDS, DEFAULT_PERCENTS, DEFAULT_HALF_LIFE, toPercents, fromPercents, percentTotal, REFRESH_CHOICES, refreshLabel, orderTopics, mergeHistory, budgetBanner, spendLine, DRAFT_LENGTHS, draftLine, SEARCH_STEP_LABELS, BRIEF_STEP_LABELS, DRAFT_STEP_LABELS, stepsForModal, workflowSteps } from './format.mjs';
 
 assert.strictEqual(formatDate(null), 'No date');
 assert.strictEqual(formatDate('garbage'), 'No date');
@@ -194,7 +194,7 @@ assert.deepStrictEqual(workflowSteps('results').map((s) => s.state), ['done', 'c
 assert.deepStrictEqual(workflowSteps('brief').map((s) => s.state), ['done', 'done', 'current', 'todo']);
 assert.deepStrictEqual(workflowSteps('draft').map((s) => s.state), ['done', 'done', 'done', 'current']);
 assert.deepStrictEqual(workflowSteps('nonsense').map((s) => s.state), ['current', 'todo', 'todo', 'todo'], 'an unknown view is the start');
-assert.deepStrictEqual(workflowSteps('draft').map((s) => s.label), ['Search', 'Choose sources', 'Brief', 'Draft']);
+assert.deepStrictEqual(workflowSteps('draft').map((s) => s.label), ['Search', 'Results', 'Brief', 'Draft']);
 
 // ---- draft readiness: is there enough in the brief to write from?
 {
@@ -272,6 +272,20 @@ assert.deepStrictEqual(workflowSteps('draft').map((s) => s.label), ['Search', 'C
   assert.strictEqual(notUsedLine(undefined), '');
   assert.strictEqual(notUsedLine([{ label: 'Reddit', reason: 'Needs REDDIT_CLIENT_ID.' }, { label: 'Google results (Serper)', reason: '' }, null, {}]), 'Not used this time: Reddit (Needs REDDIT_CLIENT_ID.) \u00b7 Google results (Serper)');
   assert.ok(notUsedLine([{ label: 'X', reason: 'y'.repeat(300) }]).endsWith('...)'), 'a long reason is cut');
+}
+
+// ---- navigation (milestone 9)
+{
+  assert.deepStrictEqual(wfs('results', ['brief']).map((s) => s.state), ['done', 'current', 'later', 'todo'], 'a brief that exists is reachable from the results');
+  assert.deepStrictEqual(wfs('brief', ['brief', 'draft']).map((s) => s.state), ['done', 'done', 'current', 'later']);
+  assert.deepStrictEqual(wfs('results', ['search', 'sources']).map((s) => s.state), ['done', 'current', 'todo', 'todo'], 'a stage behind or at you is never "later"');
+  assert.deepStrictEqual(wfs('topics', 'nonsense').map((s) => s.state), ['current', 'todo', 'todo', 'todo'], 'junk for reached is ignored');
+  assert.deepStrictEqual(briefJumpLinks({ keyFacts: [1], gaps: [], suggestedAngles: [1], outline: [1] }).map((x) => x[0]), ['tr-facts', 'tr-angles', 'tr-outline', 'tr-sources'], 'an empty section has no link');
+  assert.deepStrictEqual(briefJumpLinks(null), [['tr-sources', 'Sources']]);
+  assert.ok(briefTabLabel({ chosenAngle: 'Sizing the cooling unit', createdAt: '2026-10-26T01:00:00Z' }).startsWith('Sizing the cooling unit · '));
+  assert.ok(briefTabLabel({ chosenAngle: 'x'.repeat(80), createdAt: '2026-10-26T01:00:00Z' }).length < 60, 'a long angle is cut');
+  assert.ok(briefTabLabel({ angle: 'typed angle', createdAt: '2026-10-26T01:00:00Z' }).startsWith('typed angle'), 'falls back to the angle asked for');
+  assert.ok(briefTabLabel({}).startsWith('Brief'));
 }
 
 console.log('topicResearch format: all passed');

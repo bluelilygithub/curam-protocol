@@ -226,7 +226,7 @@ export default function ResultsView({ topicId, pinnedRunId = null, onShowLatest,
 
   return (
     <div className="space-y-4">
-      <WorkflowBar view="results" go={{ search: onBack }} />
+      <WorkflowBar view="results" reached={briefs.length ? ['brief'] : []} go={{ search: onBack, brief: () => { if (briefs[0]) onOpenBrief(briefs[0].id); } }} />
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" onClick={onBack} className="text-sm hover:opacity-70 transition-opacity" style={muted}>← All topics</button>
         <h2 className="text-lg font-semibold flex-1 min-w-0 break-words" style={text}>
