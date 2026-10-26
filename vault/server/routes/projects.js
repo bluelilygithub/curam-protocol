@@ -5,6 +5,7 @@ const router = express.Router();
 const { pool } = require('../db');
 const { getModelsForUser } = require('../services/modelResolver');
 const { FEATURE_ACCESS_DEFAULTS } = require('../config/featureAccess');
+const { ownsRow } = require('../utils/ownedLinks');
 
 async function canMembersSelectModel() {
   const { rows } = await pool.query(
@@ -152,13 +153,20 @@ router.patch('/:id/unarchive', async (req, res) => {
 
 // PUT /api/projects/:id
 router.put('/:id', async (req, res) => {
-  const { name, goal, problem, audience, techStack, constraints, successCriteria, tone, notes, model, projectType, typeConfig, folderId, startDate, targetEndDate } = req.body;
+  const { name, goal, problem, audience, techStack, constraints, successCriteria, tone, notes, model, projectType, typeConfig, folderId, startDate, targetEndDate, clientId } = req.body;
   const { standard: standardModel } = await getModelsForUser(req.user?.id);
   const canSelectProjectModel = req.user?.isAdmin || await canMembersSelectModel();
   try {
     const { rows: existing } = await pool.query('SELECT * FROM projects WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
     if (!existing[0]) return res.status(404).json({ error: 'Not found' });
     const p = existing[0];
+
+    // the project's client: only changed when sent (null removes it), and only to one of the caller's own clients
+    const clientSent = clientId !== undefined;
+    const newClientId = clientSent && clientId !== null && clientId !== '' ? Number(clientId) : null;
+    if (clientSent && newClientId !== null && !(await ownsRow(pool, 'client', newClientId, req.user.id))) {
+      return res.status(400).json({ error: 'clientId does not match one of your clients' });
+    }
 
     const resolvedModel = canSelectProjectModel
       ? (model ?? p.model ?? standardModel)
@@ -192,6 +200,8 @@ router.put('/:id', async (req, res) => {
         req.params.id,
       ]
     );
+
+    if (clientSent) await pool.query('UPDATE projects SET "clientId"=$1 WHERE id=$2 AND "userId"=$3', [newClientId, req.params.id, req.user.id]);
 
     const { rows: updated } = await pool.query(
       `SELECT p.*, c.name AS "clientName" FROM projects p LEFT JOIN clients c ON c.id = p."clientId" WHERE p.id=$1`,

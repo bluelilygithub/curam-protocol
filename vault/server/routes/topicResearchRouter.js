@@ -19,6 +19,7 @@ const { draftToMarkdown, draftFileName } = require('../services/topicResearch/dr
 const { LENGTHS: DRAFT_LENGTHS, DEFAULT_LENGTH: DEFAULT_DRAFT_LENGTH } = require('../services/topicResearch/draft/schema');
 const { progress, OP_ID } = require('../services/topicResearch/progress');
 const { aiLimiter } = require('../middleware/aiRateLimit');
+const { ownsRow } = require('../utils/ownedLinks');
 
 const MAX_TOPICS_PER_USER = 200;
 const DRAFT_BIN_TYPE = 'topic-research-draft';
@@ -60,6 +61,7 @@ const cleanKeyword = (raw) => (typeof raw === 'string' ? raw.replace(/\s+/g, ' '
 const topicWire = (r) => ({
   id: r.id, keyword: r.keyword, region: r.region, language: r.language, onWatchlist: r.onWatchlist === true, refreshHours: r.refreshHours, createdAt: iso(r.createdAt),
   extraQueries: Array.isArray(r.extraQueries) ? r.extraQueries : [], // other ways to word the topic that every search of it also asks
+  clientId: r.clientId ?? null, projectId: r.projectId ?? null, // who the topic is for (names come from linksFor)
 });
 
 const MAX_EXTRA_QUERIES = 3;
@@ -128,6 +130,48 @@ function createRouter(pool, {
     return rows[0] || null;
   }
 
+  /**
+   * Who each topic is for: Map topicId -> { client: {id,name,viaProject}|null, project: {id,name}|null }. One query for any number of topics.
+   * A topic linked to a project whose project has a client, and no client of its own, shows that client (viaProject: true): derived on read, never stored twice.
+   */
+  async function linksFor(userId, topicIds) {
+    const ids = [...new Set((topicIds || []).map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+    const out = new Map();
+    if (!ids.length) return out;
+    const { rows } = await pool.query(
+      `SELECT t.id, t."clientId", c.name AS "clientName", t."projectId", p.name AS "projectName", p."clientId" AS "projClientId", pc.name AS "projClientName"
+         FROM topic_research_topics t
+         LEFT JOIN clients c ON c.id = t."clientId" AND c."userId" = t."userId"
+         LEFT JOIN projects p ON p.id = t."projectId" AND p."userId" = t."userId"
+         LEFT JOIN clients pc ON pc.id = p."clientId" AND pc."userId" = t."userId"
+        WHERE t.id = ANY($1) AND t."userId" = $2`,
+      [ids, userId],
+    );
+    for (const r of rows) {
+      const client = r.clientName != null ? { id: r.clientId, name: r.clientName, viaProject: false }
+        : r.projClientName != null ? { id: r.projClientId, name: r.projClientName, viaProject: true } : null;
+      const project = r.projectName != null ? { id: r.projectId, name: r.projectName } : null;
+      out.set(r.id, { client, project });
+    }
+    return out;
+  }
+  const NO_LINK = { client: null, project: null };
+  async function linkFor(userId, topicId) { return (await linksFor(userId, [topicId])).get(Number(topicId)) || NO_LINK; }
+
+  /** The client/project a request asks for: { clientId?, projectId? } (undefined = not sent, null = remove) or { error }. Each must be the caller's own. */
+  async function readLinks(userId, body) {
+    const b = body && typeof body === 'object' ? body : {};
+    const out = {};
+    for (const [key, kind, label] of [['clientId', 'client', 'client'], ['projectId', 'project', 'project']]) {
+      if (b[key] === undefined) continue;
+      if (b[key] === null || b[key] === '') { out[key] = null; continue; }
+      const id = parseId(b[key]);
+      if (!id || !(await ownsRow(pool, kind, id, userId))) return { error: `That ${label} is not one of yours.` };
+      out[key] = id;
+    }
+    return out;
+  }
+
   function fail(res, err, what) {
     // errors we raised ourselves carry a status and a message written for the person (never provider text, a prompt or article text)
     if (err && [400, 402, 409, 502, 503].includes(err.status)) return res.status(err.status).json({ error: err.message });
@@ -175,7 +219,7 @@ function createRouter(pool, {
   router.get('/topics', async (req, res) => {
     try {
       const { rows } = await pool.query(
-        `SELECT t.id, t.keyword, t.region, t.language, t."onWatchlist", t."refreshHours", t."createdAt",
+        `SELECT t.id, t.keyword, t.region, t.language, t."onWatchlist", t."refreshHours", t."createdAt", t."clientId", t."projectId",
                 r.id AS "lastRunId", r.status AS "lastStatus", r."finishedAt" AS "lastRunAt", r."heatJson" AS "lastHeat",
                 (SELECT COUNT(*) FROM topic_research_run_articles ra WHERE ra."runId" = r.id) AS "articleCount"
            FROM topic_research_topics t
@@ -184,7 +228,8 @@ function createRouter(pool, {
         [req.user.id],
       );
       const heatWire = (v) => { const h = typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch { return null; } })() : v; return h && h.label ? { label: h.label, value: Number(h.value) || 0 } : null; };
-      res.json({ topics: rows.map((r) => ({ ...topicWire(r), lastRun: r.lastRunId ? { id: r.lastRunId, status: r.lastStatus, finishedAt: iso(r.lastRunAt), articleCount: Number(r.articleCount), heat: heatWire(r.lastHeat) } : null })) });
+      const links = await linksFor(req.user.id, rows.map((r) => r.id));
+      res.json({ topics: rows.map((r) => ({ ...topicWire(r), link: links.get(r.id) || NO_LINK, lastRun: r.lastRunId ? { id: r.lastRunId, status: r.lastStatus, finishedAt: iso(r.lastRunAt), articleCount: Number(r.articleCount), heat: heatWire(r.lastHeat) } : null })) });
     } catch (err) { fail(res, err, 'load your topics'); }
   });
 
@@ -195,6 +240,8 @@ function createRouter(pool, {
     if (!topicTerms(keyword).length) return res.status(400).json({ error: 'That topic has no searchable words. Try something more specific.' });
     const eq = cleanQueries(req.body?.extraQueries, keyword);
     if (eq.error) return res.status(400).json({ error: eq.error });
+    const wanted = await readLinks(req.user.id, req.body);
+    if (wanted.error) return res.status(400).json({ error: wanted.error });
     try {
       let topic = (await pool.query(`SELECT * FROM topic_research_topics WHERE "userId" = $1 AND lower(keyword) = lower($2)`, [req.user.id, keyword])).rows[0];
       let created = false;
@@ -203,17 +250,24 @@ function createRouter(pool, {
         if (Number(n) >= MAX_TOPICS_PER_USER) return res.status(409).json({ error: `You have ${MAX_TOPICS_PER_USER} saved topics. Delete some to add more.` });
         const settings = await loadSettings(pool, req.user.id);
         topic = (await pool.query(
-          `INSERT INTO topic_research_topics ("userId", keyword, region, "extraQueries") VALUES ($1, $2, $3, $4) RETURNING *`,
-          [req.user.id, keyword, settings.region, JSON.stringify(eq.list || [])],
+          `INSERT INTO topic_research_topics ("userId", keyword, region, "extraQueries", "clientId", "projectId") VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+          [req.user.id, keyword, settings.region, JSON.stringify(eq.list || []), wanted.clientId ?? null, wanted.projectId ?? null],
         )).rows[0];
         created = true;
       } else if (eq.list !== undefined) {
         // searching the same topic again with a different set of phrasings replaces the saved set
         topic = (await pool.query(`UPDATE topic_research_topics SET "extraQueries" = $1 WHERE id = $2 AND "userId" = $3 RETURNING *`, [JSON.stringify(eq.list), topic.id, req.user.id])).rows[0];
       }
+      // searching a saved topic again with a client or project chosen links it (sent as null = unlink; not sent = unchanged)
+      if (!created && (wanted.clientId !== undefined || wanted.projectId !== undefined)) {
+        topic = (await pool.query(
+          `UPDATE topic_research_topics SET "clientId" = CASE WHEN $1::boolean THEN $2 ELSE "clientId" END, "projectId" = CASE WHEN $3::boolean THEN $4 ELSE "projectId" END WHERE id = $5 AND "userId" = $6 RETURNING *`,
+          [wanted.clientId !== undefined, wanted.clientId ?? null, wanted.projectId !== undefined, wanted.projectId ?? null, topic.id, req.user.id],
+        )).rows[0];
+      }
       // typing the same words again may use saved answers; only "Search again" asks everything afresh
       const run = await search(req.user.id, topic, req.body?.days ?? DEFAULT_DAYS, false, opIdOf(req));
-      res.status(created ? 201 : 200).json({ topic: topicWire(topic), run, created });
+      res.status(created ? 201 : 200).json({ topic: { ...topicWire(topic), link: await linkFor(req.user.id, topic.id) }, run, created });
     } catch (err) { fail(res, err, 'search that topic'); }
   });
 
@@ -230,7 +284,7 @@ function createRouter(pool, {
            FROM topic_research_runs r WHERE r."topicId" = $1 AND r."userId" = $2 ORDER BY r."startedAt" DESC, r.id DESC LIMIT 20`,
         [id, req.user.id],
       );
-      res.json({ topic: topicWire(topic), runs: rows.map((r) => ({ id: r.id, status: r.status, startedAt: iso(r.startedAt), finishedAt: iso(r.finishedAt), articleCount: Number(r.articleCount) })) });
+      res.json({ topic: { ...topicWire(topic), link: await linkFor(req.user.id, topic.id) }, runs: rows.map((r) => ({ id: r.id, status: r.status, startedAt: iso(r.startedAt), finishedAt: iso(r.finishedAt), articleCount: Number(r.articleCount) })) });
     } catch (err) { fail(res, err, 'load that topic'); }
   });
 
@@ -355,7 +409,7 @@ function createRouter(pool, {
           // true when the stored scores came from different settings (or were never made): the page asks for a re-rank
           weightsStale: await isStale(pool, req.user.id, run),
         },
-        topic: topic ? topicWire(topic) : null,
+        topic: topic ? { ...topicWire(topic), link: await linkFor(req.user.id, topic.id) } : null,
         stories,
         articles,
       });
@@ -383,11 +437,12 @@ function createRouter(pool, {
   }
 
   // `includePrompt`: only the single-brief reads carry the prompt (it holds page text, so lists never do); null = not kept (made before it was stored, or older than 30 days)
-  async function briefWire(row, keyword, sources, { includePrompt = false } = {}) {
+  async function briefWire(row, keyword, sources, { includePrompt = false, link = null } = {}) {
     const content = asJson(row.contentJson, null);
     const overlap = asJson(row.overlapJson, []);
     return {
       ...(includePrompt ? { prompt: asJson(row.promptJson, null) } : {}),
+      ...(link ? { link } : {}),
       id: row.id, runId: row.runId, topicId: row.topicId ?? null, keyword, fileName: briefFileName(keyword, row.createdAt), angle: row.angle, chosenAngle: content?.chosenAngle || '',
       content, overlap, sources, model: row.model, costUsd: Number(row.costUsd) || 0,
       inputTokens: row.inputTokens, outputTokens: row.outputTokens, createdAt: iso(row.createdAt),
@@ -448,7 +503,7 @@ function createRouter(pool, {
         [req.user.id, id, JSON.stringify(rows.map((r) => r.id)), angle, JSON.stringify(out.brief), JSON.stringify(out.overlap), out.model, out.costUsd, out.inputTokens, out.outputTokens, JSON.stringify(promptForStorage(out.prompt))],
       );
       const sources = await sourcesOf(req.user.id, rows.map((r) => r.id));
-      res.status(201).json({ brief: await briefWire({ ...saved, topicId: run.topicId }, topic.keyword, sources, { includePrompt: true }), dropped: out.dropped });
+      res.status(201).json({ brief: await briefWire({ ...saved, topicId: run.topicId }, topic.keyword, sources, { includePrompt: true, link: await linkFor(req.user.id, run.topicId) }), dropped: out.dropped });
     } catch (err) { fail(res, err, 'write that brief'); } finally { report.finish(); if (held) briefsRunning.delete(key); }
   });
 
@@ -536,7 +591,7 @@ function createRouter(pool, {
       if (!row) return res.status(404).json({ error: 'Brief not found.' });
       const topic = await ownTopic(req.user.id, row.topicId);
       const sources = await sourcesOf(req.user.id, asJson(row.selectedArticleIds, []));
-      res.json({ brief: await briefWire(row, topic?.keyword || '', sources, { includePrompt: true }) });
+      res.json({ brief: await briefWire(row, topic?.keyword || '', sources, { includePrompt: true, link: await linkFor(req.user.id, row.topicId) }) });
     } catch (err) { fail(res, err, 'load that brief'); }
   });
 
@@ -575,6 +630,7 @@ function createRouter(pool, {
     const overlap = asJson(row.overlapJson, []);
     return {
       ...(context.includePrompt ? { prompt: asJson(row.promptJson, null) } : {}),
+      ...(context.link ? { link: context.link } : {}),
       id: row.id, briefId: row.briefId, runId: context.runId ?? null, topicId: context.topicId ?? null, keyword, fileName: draftFileName(keyword, row.createdAt),
       lengthChoice: row.lengthChoice, steer: row.steer, content, overlap, sources, words: draftWords(content), gapCount: draftGaps(content),
       model: row.model, costUsd: Number(row.costUsd) || 0, createdAt: iso(row.createdAt),
@@ -634,7 +690,7 @@ function createRouter(pool, {
               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
         [req.user.id, id, lengthChoice, steer, JSON.stringify(out.draft), JSON.stringify(out.overlap), out.model, out.costUsd, out.inputTokens, out.outputTokens, JSON.stringify(promptForStorage(out.prompt))],
       );
-      res.status(201).json({ draft: draftWire(saved, topic.keyword, sources, { topicId: brief.topicId, runId: brief.runId, includePrompt: true }), dropped: out.dropped });
+      res.status(201).json({ draft: draftWire(saved, topic.keyword, sources, { topicId: brief.topicId, runId: brief.runId, includePrompt: true, link: await linkFor(req.user.id, brief.topicId) }), dropped: out.dropped });
     } catch (err) { fail(res, err, 'write that draft'); } finally { report.finish(); if (held) briefsRunning.delete(key); }
   });
 
@@ -670,7 +726,7 @@ function createRouter(pool, {
       if (!row) return res.status(404).json({ error: 'Draft not found.' });
       const topic = await ownTopic(req.user.id, row.topicId);
       const sources = await sourcesOf(req.user.id, asJson(row.selectedArticleIds, []));
-      res.json({ draft: draftWire(row, topic?.keyword || '', sources, { topicId: row.topicId, runId: row.runId, includePrompt: true }) });
+      res.json({ draft: draftWire(row, topic?.keyword || '', sources, { topicId: row.topicId, runId: row.runId, includePrompt: true, link: await linkFor(req.user.id, row.topicId) }) });
     } catch (err) { fail(res, err, 'load that draft'); }
   });
 
@@ -731,16 +787,62 @@ function createRouter(pool, {
     const b = req.body && typeof req.body === 'object' ? req.body : {};
     if (b.onWatchlist !== undefined && typeof b.onWatchlist !== 'boolean') return res.status(400).json({ error: 'The watchlist choice must be on or off.' });
     if (b.refreshHours !== undefined && !REFRESH_CHOICES.includes(b.refreshHours)) return res.status(400).json({ error: `Refresh every ${REFRESH_CHOICES.join(', ')} hours.` });
-    if (b.onWatchlist === undefined && b.refreshHours === undefined) return res.status(400).json({ error: 'Nothing to change.' });
+    const linkSent = b.clientId !== undefined || b.projectId !== undefined;
+    if (b.onWatchlist === undefined && b.refreshHours === undefined && !linkSent) return res.status(400).json({ error: 'Nothing to change.' });
     try {
       const topic = await ownTopic(req.user.id, id);
       if (!topic) return res.status(404).json({ error: 'Topic not found.' });
+      const wanted = await readLinks(req.user.id, b); // after the topic is known to be theirs, so a stranger learns nothing about clients or projects
+      if (wanted.error) return res.status(400).json({ error: wanted.error });
+      if (linkSent) {
+        await pool.query(
+          `UPDATE topic_research_topics SET "clientId" = CASE WHEN $1::boolean THEN $2 ELSE "clientId" END, "projectId" = CASE WHEN $3::boolean THEN $4 ELSE "projectId" END WHERE id = $5 AND "userId" = $6`,
+          [wanted.clientId !== undefined, wanted.clientId ?? null, wanted.projectId !== undefined, wanted.projectId ?? null, id, req.user.id],
+        );
+      }
       const { rows: [saved] } = await pool.query(
         `UPDATE topic_research_topics SET "onWatchlist" = COALESCE($1, "onWatchlist"), "refreshHours" = COALESCE($2, "refreshHours") WHERE id = $3 AND "userId" = $4 RETURNING *`,
         [b.onWatchlist ?? null, b.refreshHours ?? null, id, req.user.id],
       );
-      res.json({ topic: topicWire(saved) });
+      res.json({ topic: { ...topicWire(saved), link: await linkFor(req.user.id, id) } });
     } catch (err) { fail(res, err, 'change that topic'); }
+  });
+
+  // GET /linked?clientId=N | ?projectId=N: the research done for a client (directly, or for any of the client's projects) or for a project, so the
+  // Client and Project pages can show it. Only the caller's topics; a client or project that is not theirs gets an empty list, never someone else's.
+  router.get('/linked', async (req, res) => {
+    const clientId = req.query.clientId !== undefined ? parseId(req.query.clientId) : null;
+    const projectId = req.query.projectId !== undefined ? parseId(req.query.projectId) : null;
+    if (!clientId && !projectId) return res.status(400).json({ error: 'Say which client or project.' });
+    try {
+      let topics = [];
+      if (clientId && await ownsRow(pool, 'client', clientId, req.user.id)) {
+        topics = (await pool.query(
+          `SELECT t.id, t.keyword, t."createdAt" FROM topic_research_topics t
+            WHERE t."userId" = $1 AND (t."clientId" = $2 OR t."projectId" IN (SELECT id FROM projects WHERE "clientId" = $2 AND "userId" = $1))
+            ORDER BY t."createdAt" DESC, t.id DESC LIMIT 50`, [req.user.id, clientId])).rows;
+      } else if (projectId && await ownsRow(pool, 'project', projectId, req.user.id)) {
+        topics = (await pool.query(
+          `SELECT t.id, t.keyword, t."createdAt" FROM topic_research_topics t WHERE t."userId" = $1 AND t."projectId" = $2
+            ORDER BY t."createdAt" DESC, t.id DESC LIMIT 50`, [req.user.id, projectId])).rows;
+      }
+      const out = [];
+      for (const t of topics) {
+        const { rows: runs } = await pool.query(`SELECT id FROM topic_research_runs WHERE "topicId" = $1 AND "userId" = $2 ORDER BY "startedAt" DESC, id DESC LIMIT 1`, [t.id, req.user.id]);
+        const { rows: briefs } = await pool.query(
+          `SELECT b.id, b."contentJson", b."createdAt" FROM topic_research_briefs b JOIN topic_research_runs r ON r.id = b."runId"
+            WHERE r."topicId" = $1 AND b."userId" = $2 ORDER BY b."createdAt" DESC, b.id DESC LIMIT 10`, [t.id, req.user.id]);
+        const { rows: drafts } = await pool.query(
+          `SELECT d.id, d."contentJson", d."createdAt" FROM topic_research_drafts d JOIN topic_research_briefs b ON b.id = d."briefId" JOIN topic_research_runs r ON r.id = b."runId"
+            WHERE r."topicId" = $1 AND d."userId" = $2 ORDER BY d."createdAt" DESC, d.id DESC LIMIT 10`, [t.id, req.user.id]);
+        out.push({
+          id: t.id, keyword: t.keyword, createdAt: iso(t.createdAt), lastRunId: runs[0]?.id ?? null,
+          briefs: briefs.map((b) => ({ id: b.id, label: asJson(b.contentJson, null)?.chosenAngle || 'Brief', createdAt: iso(b.createdAt) })),
+          drafts: drafts.map((d) => ({ id: d.id, label: asJson(d.contentJson, null)?.title || 'Draft', createdAt: iso(d.createdAt) })),
+        });
+      }
+      res.json({ topics: out });
+    } catch (err) { fail(res, err, 'load the linked research'); }
   });
 
   // GET /history?q=&type=all|runs|briefs: past searches and briefs, newest first (each list capped at 100)

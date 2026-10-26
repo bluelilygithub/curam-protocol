@@ -5,6 +5,7 @@ import WorkflowBar from './WorkflowBar';
 import PromptPanel from './PromptPanel';
 import ActionBar, { ActionRow, MoreMenu } from './ActionBar';
 import BriefTabs from './BriefTabs';
+import LinkChips from './LinkChips';
 import useToastStore from '../../store/toastStore';
 import { offerUndo } from '../../utils/binUndo';
 import { useIcon } from '../../providers/IconProvider';
@@ -154,6 +155,7 @@ export default function BriefView({ briefId, onBack, onOpenBrief, onOpenDraft })
         Made {formatDate(brief.createdAt)} from {brief.sources.length} article{brief.sources.length === 1 ? '' : 's'} · {brief.model}{costText(brief.costUsd) ? ` · ${costText(brief.costUsd)}` : ''}.
         {' '}Notes for writing your own piece, not text to publish. Check each fact against its sources before you use it.
       </p>
+      {brief.link && (brief.link.client || brief.link.project) && <p className="text-xs flex flex-wrap items-center gap-2" style={muted}>For: <LinkChips link={brief.link} /></p>}
       <BriefTabs runId={brief.runId} currentId={brief.id} onOpen={onOpenBrief} />
       <p className="text-xs flex flex-wrap items-center gap-x-3 gap-y-1" style={muted} data-guide="jumplinks">
         <span>Jump to:</span>

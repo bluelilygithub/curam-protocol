@@ -4,6 +4,7 @@ import { withProgress } from './withProgress';
 import WorkflowBar from './WorkflowBar';
 import PromptPanel from './PromptPanel';
 import ActionBar, { ActionRow, MoreMenu } from './ActionBar';
+import LinkChips from './LinkChips';
 import useToastStore from '../../store/toastStore';
 import { offerUndo } from '../../utils/binUndo';
 import { useIcon } from '../../providers/IconProvider';
@@ -105,6 +106,7 @@ export default function DraftView({ draftId, onBack, onOpenDraft, onGoSearch, on
         </ActionRow>
       </ActionBar>
       <h2 className="text-lg font-semibold break-words" style={text}>{c.title}</h2>
+      {draft.link && (draft.link.client || draft.link.project) && <p className="text-xs flex flex-wrap items-center gap-2" style={muted}>For: <LinkChips link={draft.link} /></p>}
       <p className="text-xs" style={muted}>
         Draft made {formatDate(draft.createdAt)} for &ldquo;{draft.keyword}&rdquo; · {draftLine(draft)} · {draft.lengthChoice} · {draft.model}{costText(draft.costUsd) ? ` · ${costText(draft.costUsd)}` : ''}.
         {' '}A starting point built from your research brief, for you to edit. Check every fact against its sources before you publish.

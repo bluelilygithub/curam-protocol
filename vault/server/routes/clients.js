@@ -363,6 +363,31 @@ router.patch('/:id', async (req, res) => {
 });
 
 // DELETE /api/clients/:id
+// PATCH /api/clients/:id/assign-project { projectId, unassign? }: attach one of the person's projects to this client, or (unassign) detach it.
+// The Client page's Link / Unlink project buttons call this. Both rows must be the caller's; an unassign only clears a project that is
+// really linked to THIS client. (Registered before nothing else matches this longer path.)
+router.patch('/:id/assign-project', async (req, res) => {
+  const clientId = parseInt(req.params.id, 10);
+  const projectId = parseInt(req.body?.projectId, 10);
+  if (!Number.isInteger(clientId) || !Number.isInteger(projectId)) return res.status(400).json({ error: 'A client and a project are needed.' });
+  try {
+    const { rows: [c] } = await pool.query('SELECT id FROM clients WHERE id=$1 AND "userId"=$2', [clientId, req.user.id]);
+    if (!c) return res.status(404).json({ error: 'Client not found.' });
+    const { rows: [p] } = await pool.query('SELECT id, "clientId" FROM projects WHERE id=$1 AND "userId"=$2', [projectId, req.user.id]);
+    if (!p) return res.status(404).json({ error: 'Project not found.' });
+    if (req.body?.unassign === true) {
+      if (p.clientId !== clientId) return res.status(409).json({ error: 'That project is not linked to this client.' });
+      await pool.query('UPDATE projects SET "clientId" = NULL, "updatedAt" = NOW() WHERE id=$1 AND "userId"=$2', [projectId, req.user.id]);
+    } else {
+      await pool.query('UPDATE projects SET "clientId" = $1, "updatedAt" = NOW() WHERE id=$2 AND "userId"=$3', [clientId, projectId, req.user.id]);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    getLogger().error({ err }, 'clients: assign-project failed');
+    res.status(500).json({ error: 'Could not change that link.' });
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   const clientId = parseInt(req.params.id, 10);
   const userId   = req.user.id;

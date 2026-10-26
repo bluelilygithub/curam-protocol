@@ -13,6 +13,8 @@ import { formatSessionLabel } from '../utils/sessionDisplay';
 import { openNewChatModal } from '../utils/openNewChatModal';
 import EmotionWheel from '../components/mood/EmotionWheel';
 import MoodDot from '../components/mood/MoodDot';
+import ProjectClientControl from '../components/ProjectClientControl';
+import LinkedResearch from '../components/LinkedResearch';
 
 const EMOTION_COLOURS = {
   joy: '#C9A84C', trust: '#6B9E70', fear: '#507A60', surprise: '#6B97B5',
@@ -310,6 +312,8 @@ function ProjectDetail() {
 
         {activeTab === 'overview' && (
           <div className="mb-8 space-y-6">
+            <ProjectClientControl project={project} onChanged={fetchProjects} />
+            <LinkedResearch projectId={Number(id)} />
             {hubLoading ? (
               <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading overview…</p>
             ) : (

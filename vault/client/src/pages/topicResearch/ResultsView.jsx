@@ -3,6 +3,8 @@ import api from '../../utils/apiClient';
 import { withProgress } from './withProgress';
 import WorkflowBar from './WorkflowBar';
 import PromptPanel from './PromptPanel';
+import LinkPicker from './LinkPicker';
+import LinkChips from './LinkChips';
 import { useIcon } from '../../providers/IconProvider';
 import {
   BRIEF_STEP_LABELS, RELEVANCE_STEP_LABELS, SEARCH_STEP_LABELS, breakdownRows, isShopPage, notUsedLine, searchedForLine, costText, defaultSelection, formatDate, heatBadge, rankingNote, readNote, selectionNote, signalBadges, sourceChip, statusLabel, timeAgo, toggleSelection,
@@ -97,6 +99,8 @@ export default function ResultsView({ topicId, pinnedRunId = null, onShowLatest,
   const [briefs, setBriefs] = useState([]); // earlier briefs for this search
   const [relevance, setRelevance] = useState(null); // the check before a brief, shown when the sources look off topic
   const [model, setModel] = useState(null); // which model will write a brief: { effectiveModel, name }
+  const [editLink, setEditLink] = useState(false); // changing who the topic is for
+  const [linkDraft, setLinkDraft] = useState({ clientId: null, projectId: null });
   const rerankTried = useRef(new Set()); // runs already re-ranked in this visit, so a run that stays "stale" cannot loop
 
   const load = useCallback(async () => {
@@ -193,6 +197,17 @@ export default function ResultsView({ topicId, pinnedRunId = null, onShowLatest,
     } catch (e) { setError(e.message || 'Could not reach the server.'); }
   };
 
+  const saveLink = async () => {
+    try {
+      const r = await api.patch(`/api/topic-research/topics/${topicId}`, { clientId: linkDraft.clientId, projectId: linkDraft.projectId });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(explainFailure(r, d, 'Could not save that.'));
+      setEditLink(false);
+      await load();
+      if (onTopicChanged) onTopicChanged();
+    } catch (e) { setError(e.message || 'Could not reach the server.'); }
+  };
+
   const surface = { background: 'var(--color-surface)', borderColor: 'var(--color-border)' };
   const text = { color: 'var(--color-text)' };
   const muted = { color: 'var(--color-muted)' };
@@ -240,6 +255,25 @@ export default function ResultsView({ topicId, pinnedRunId = null, onShowLatest,
         >
           {getIcon('refresh-cw', { size: 14 })}Search again
         </button>
+      </div>
+
+      <div className="space-y-2" data-guide="topiclink">
+        {!editLink ? (
+          <p className="text-xs flex flex-wrap items-center gap-2" style={muted}>
+            <span>{topic.link && (topic.link.client || topic.link.project) ? 'For:' : 'Not linked to a client or project.'}</span>
+            <LinkChips link={topic.link} />
+            <button type="button" onClick={() => { setLinkDraft({ clientId: topic.clientId ?? null, projectId: topic.projectId ?? null }); setEditLink(true); }} className="underline hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)' }}>{topic.link && (topic.link.client || topic.link.project) ? 'Change' : 'Link one'}</button>
+          </p>
+        ) : (
+          <div className="rounded-xl border p-3 space-y-2" style={{ ...surface, background: 'var(--color-bg)' }}>
+            <LinkPicker clientId={linkDraft.clientId} projectId={linkDraft.projectId} onChange={setLinkDraft} idPrefix="tr-edit" />
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={saveLink} className="px-3 py-1.5 rounded-lg text-sm font-medium hover:opacity-70 transition-opacity" style={{ background: 'var(--color-primary)', color: '#fff' }}>Save</button>
+              <button type="button" onClick={() => setEditLink(false)} className="px-3 py-1.5 rounded-lg text-sm font-medium border hover:opacity-70 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
+            </div>
+            <p className="text-xs" style={muted}>The briefs and drafts of this topic follow it, and it shows on that client's and project's own pages.</p>
+          </div>
+        )}
       </div>
 
       {pinnedRunId && run && (

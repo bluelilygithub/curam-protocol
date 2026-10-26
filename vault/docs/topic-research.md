@@ -219,6 +219,16 @@ On Results, every article has a tick box (the best ten start ticked, at most twe
 
 **Checked:** the pure helpers (`workflowSteps` with `reached`, `briefJumpLinks`, `briefTabLabel`) by test; the rest in a real browser (desktop and phone width). **Not checked:** a real-model outline for a second angle (Railway).
 
+## Milestone 10: for a client or project, and the two-way view
+
+**Why.** Research should sit with the client or project it is for, and Clients and Projects should show each other. **Found while building:** the Client page's Link project / Unlink buttons called `PATCH /api/clients/:id/assign-project`, which did not exist on the server (it 404'd), and a project's client could only be set when the project was created. Both fixed here.
+
+**What changed.** A topic can be for **one client and/or one project** (`topic_research_topics."clientId"`, `"projectId"`, both `ON DELETE SET NULL`: deleting either only unlinks; the ALTERs sit after the clients table in `db.js`). Chosen under the search box, changed from the topic's results page (**Change**), shown as chips on the topic, brief and draft. A project's own client shows as the topic's client "(via project)" when the topic has none of its own: derived on read, never stored twice. Ownership is checked (`server/utils/ownedLinks.js`): somebody else's client or project is refused, and a stranger asking about someone's topic gets 404 before anything is checked about the link.
+
+**The other side.** `GET /api/topic-research/linked?clientId=|projectId=` lists the person's topics for that client (directly, or for any of its projects) or project, with briefs and drafts; the Client page and the Project page show it as a **Research** section (`components/LinkedResearch.jsx`, quiet when the tool is off for the person). The Project page also has a **Client** control (choose, change, remove: `PUT /projects/:id` now accepts `clientId`). The Client page's project list keeps Link/Unlink (`PATCH /clients/:id/assign-project`, now real).
+
+**Not done:** the separate Client-projects page (`ClientProjectPage`) does not show Research; History does not filter by client.
+
 ## Known limits and open items
 
 - Article pages are fetched by `extract.js` through `safeFetch` with robots.txt checks. `htmlFetch.fetchHtml` must not be used for this: it impersonates browsers and relays through third parties.

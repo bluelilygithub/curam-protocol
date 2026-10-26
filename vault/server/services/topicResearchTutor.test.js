@@ -29,6 +29,8 @@ checkGuide({
     ['suggest', 'notes', /Nothing is searched until you press Search/, 'suggestions do not search by themselves'],
     ['suggest', 'notes', /AI note \(check it\)/, 'the premise note is labelled'],
     ['prompts', 'does', /exact prompt that was sent/, 'the prompt shown is the one sent'],
+    ['links', 'does', /Research section on that client/, 'the guide says where linked research shows'],
+    ['links', 'notes', /only removes the link/, 'deleting a client keeps the research'],
     ['prompts', 'does', /not used this time and why/, 'the results say which sources were not used'],
     ['prompts', 'notes', /30 days/, 'stored prompts follow the 30-day rule'],
     ['progress', 'notes', /not on a timer/, 'progress steps are real'],

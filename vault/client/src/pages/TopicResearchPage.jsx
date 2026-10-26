@@ -18,6 +18,8 @@ import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { HOW_IT_WORKS, GUIDE_TOOLS } from './topicResearch/topicResearchTools.mjs';
 import { startTopicResearchTour, TOUR_KEY } from '../utils/tours/topicResearchTour';
 import { withProgress } from './topicResearch/withProgress';
+import LinkPicker from './topicResearch/LinkPicker';
+import LinkChips from './topicResearch/LinkChips';
 import { explainFailure, REFRESH_CHOICES, SEARCH_STEP_LABELS, budgetBanner, heatBadge, orderTopics, refreshLabel, statusLabel, timeAgo } from './topicResearch/format.mjs';
 
 // Status colours are deliberately outside the theme (see client/DESIGN.md).
@@ -42,6 +44,7 @@ export default function TopicResearchPage() {
 
   const [topics, setTopics] = useState(null);
   const [keyword, setKeyword] = useState('');
+  const [forLink, setForLink] = useState({ clientId: null, projectId: null }); // who a new search is for (both optional)
   const [suggested, setSuggested] = useState(null); // other ways to word the topic: null = not asked, [] = nothing to add
   const [ticked, setTicked] = useState(new Set()); // the ones to search as well
   const [suggesting, setSuggesting] = useState(false);
@@ -126,7 +129,7 @@ export default function TopicResearchPage() {
     if (!k) return;
     setError('');
     try {
-      const r = await withProgress({ title: 'Searching…', detail: 'This can take up to half a minute.', steps: SEARCH_STEP_LABELS }, (opId) => api.post('/api/topic-research/topics', { keyword: k, opId, ...(suggested !== null ? { extraQueries: [...ticked] } : {}) }));
+      const r = await withProgress({ title: 'Searching…', detail: 'This can take up to half a minute.', steps: SEARCH_STEP_LABELS }, (opId) => api.post('/api/topic-research/topics', { keyword: k, opId, ...(suggested !== null ? { extraQueries: [...ticked] } : {}), ...(forLink.clientId ? { clientId: forLink.clientId } : {}), ...(forLink.projectId ? { projectId: forLink.projectId } : {}) }));
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(explainFailure(r, d, 'Could not search.'));
       setKeyword(''); setSuggested(null); setTicked(new Set()); setSuggestNote(''); setSuggestPrompt(null);
@@ -229,6 +232,7 @@ export default function TopicResearchPage() {
                     {getIcon('search', { size: 14 })}Search
                   </button>
                 </div>
+                <LinkPicker clientId={forLink.clientId} projectId={forLink.projectId} onChange={setForLink} idPrefix="tr-new" />
                 <p className="text-xs" style={muted}>Every word must appear in an article&apos;s title or summary. Searching the same words again updates that topic.</p>
                 <div className="space-y-2" data-tour="tr-suggest">
                   <button
@@ -275,6 +279,7 @@ export default function TopicResearchPage() {
                     <div key={t.id} className="rounded-xl border p-4 flex flex-wrap items-center gap-3" style={{ ...surface, background: 'var(--color-bg)' }}>
                       <button type="button" onClick={() => openTopic(t.id)} className="flex-1 min-w-0 text-left hover:opacity-70 transition-opacity">
                         <span className="block text-sm font-medium break-words" style={text}>{t.keyword}</span>
+                        {t.link && (t.link.client || t.link.project) && <span className="block mt-1"><LinkChips link={t.link} /></span>}
                         <span className="block text-xs mt-0.5" style={muted}>
                           {t.lastRun
                             ? <>{t.lastRun.articleCount} article{t.lastRun.articleCount === 1 ? '' : 's'} · searched {timeAgo(t.lastRun.finishedAt)} · <span style={{ color: LEVEL[st.level] }}>{st.text}</span>{heatBadge(t.lastRun.heat) && <> · <span title={heatBadge(t.lastRun.heat).tip}>{heatBadge(t.lastRun.heat).text}</span></>}</>

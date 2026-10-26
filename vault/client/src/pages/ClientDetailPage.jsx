@@ -11,6 +11,7 @@ import { FOLLOW_UP_CATEGORY } from '../utils/taskCategories';
 import AttachmentChip from '../components/AttachmentChip';
 import { startCrmTour, TOUR_KEY as CRM_TOUR_KEY } from '../utils/tours/crmTour';
 import CrmInfoModal, { INFO_SEEN_KEY as CRM_INFO_SEEN_KEY } from '../components/CrmInfoModal';
+import LinkedResearch from '../components/LinkedResearch';
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
 
@@ -590,6 +591,9 @@ export default function ClientDetailPage() {
               onRefresh={load}
             />
           </Section>
+
+          {/* Research: the Topic Research topics, briefs and drafts made for this client or any of its projects (quiet when the tool is off) */}
+          <LinkedResearch clientId={Number(id)} />
 
           {/* 2b. Tasks — every open task linked to this client, whether via a
                project or directly (tasks.clientId, e.g. a touchpoint

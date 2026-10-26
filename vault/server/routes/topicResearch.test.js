@@ -153,7 +153,7 @@ async function main() {
 
   // ---------------------------------------------------------------- fake pool
   function fakePool() {
-    const db = { settings: new Map(), topics: [], runs: [], articles: [], runArticles: [] };
+    const db = { settings: new Map(), topics: [], runs: [], articles: [], runArticles: [], clients: [], projects: [] };
     const seq = { topic: 0, run: 0, article: 0, ra: 0 };
     const pool = {
       db, bin: [], binFail: false,
@@ -165,10 +165,45 @@ async function main() {
         if (/^SELECT \* FROM topic_research_topics WHERE "userId" = \$1 AND lower\(keyword\)/.test(s)) return { rows: db.topics.filter((t) => t.userId === params[0] && t.keyword.toLowerCase() === params[1].toLowerCase()) };
         if (/^SELECT COUNT\(\*\) AS n FROM topic_research_topics/.test(s)) return { rows: [{ n: String(db.topics.filter((t) => t.userId === params[0]).length) }] };
         if (/^INSERT INTO topic_research_topics/.test(s)) {
-          const t = { id: (seq.topic += 1), userId: params[0], keyword: params[1], region: params[2], language: 'en', onWatchlist: false, refreshHours: 24, createdAt: new Date(NOW + seq.topic * 1000), extraQueries: params[3] ? JSON.parse(params[3]) : [] };
+          const t = { id: (seq.topic += 1), userId: params[0], keyword: params[1], region: params[2], language: 'en', onWatchlist: false, refreshHours: 24, createdAt: new Date(NOW + seq.topic * 1000), extraQueries: params[3] ? JSON.parse(params[3]) : [], clientId: params[4] ?? null, projectId: params[5] ?? null };
           db.topics.push(t); return { rows: [t] };
         }
         if (/^UPDATE topic_research_topics SET "extraQueries" = \$1/.test(s)) { const t = db.topics.find((x) => x.id === params[1] && x.userId === params[2]); if (t) t.extraQueries = JSON.parse(params[0]); return { rows: t ? [t] : [] }; }
+        // ---- who a topic is for (M10)
+        if (/^SELECT 1 FROM (clients|projects) WHERE id = \$1 AND "userId" = \$2/.test(s)) {
+          const list = /clients/.test(s) ? db.clients : db.projects;
+          return { rows: list.filter((x) => x.id === params[0] && x.userId === params[1]).map(() => ({ '?column?': 1 })) };
+        }
+        if (/^UPDATE topic_research_topics SET "clientId" = CASE WHEN/.test(s)) {
+          const t = db.topics.find((x) => x.id === params[4] && x.userId === params[5]);
+          if (t) { if (params[0]) t.clientId = params[1]; if (params[2]) t.projectId = params[3]; }
+          return { rows: t ? [t] : [] };
+        }
+        if (/^SELECT t.id, t."clientId", c.name AS "clientName"/.test(s)) {
+          return { rows: db.topics.filter((t) => params[0].includes(t.id) && t.userId === params[1]).map((t) => {
+            const c = db.clients.find((x) => x.id === t.clientId && x.userId === t.userId);
+            const p = db.projects.find((x) => x.id === t.projectId && x.userId === t.userId);
+            const pc = p ? db.clients.find((x) => x.id === p.clientId && x.userId === t.userId) : null;
+            return { id: t.id, clientId: t.clientId, clientName: c ? c.name : null, projectId: t.projectId, projectName: p ? p.name : null, projClientId: p ? p.clientId : null, projClientName: pc ? pc.name : null };
+          }) };
+        }
+        if (/^SELECT t.id, t.keyword, t."createdAt" FROM topic_research_topics t WHERE t."userId" = \$1 AND \(t."clientId" = \$2 OR/.test(s)) {
+          const viaProject = new Set(db.projects.filter((p) => p.clientId === params[1] && p.userId === params[0]).map((p) => p.id));
+          return { rows: db.topics.filter((t) => t.userId === params[0] && (t.clientId === params[1] || viaProject.has(t.projectId))) };
+        }
+        if (/^SELECT t.id, t.keyword, t."createdAt" FROM topic_research_topics t WHERE t."userId" = \$1 AND t."projectId" = \$2/.test(s)) {
+          return { rows: db.topics.filter((t) => t.userId === params[0] && t.projectId === params[1]) };
+        }
+        if (/^SELECT id FROM topic_research_runs WHERE "topicId" = \$1 AND "userId" = \$2/.test(s)) return { rows: db.runs.filter((r) => r.topicId === params[0] && r.userId === params[1]).slice(-1) };
+        if (/^SELECT b.id, b."contentJson", b."createdAt" FROM topic_research_briefs b JOIN topic_research_runs r/.test(s)) {
+          const runIds = new Set(db.runs.filter((r) => r.topicId === params[0]).map((r) => r.id));
+          return { rows: (db.briefs || []).filter((b) => runIds.has(b.runId) && b.userId === params[1]) };
+        }
+        if (/^SELECT d.id, d."contentJson", d."createdAt" FROM topic_research_drafts d JOIN topic_research_briefs b/.test(s)) {
+          const runIds = new Set(db.runs.filter((r) => r.topicId === params[0]).map((r) => r.id));
+          const briefIds = new Set((db.briefs || []).filter((b) => runIds.has(b.runId)).map((b) => b.id));
+          return { rows: (db.drafts || []).filter((d) => briefIds.has(d.briefId) && d.userId === params[1]) };
+        }
         if (/^SELECT \* FROM topic_research_topics WHERE id = \$1 AND "userId" = \$2/.test(s)) return { rows: db.topics.filter((t) => t.id === params[0] && t.userId === params[1]) };
         if (/^INSERT INTO topic_research_runs/.test(s)) {
           const r = { id: (seq.run += 1), userId: params[0], topicId: params[1], startedAt: new Date(NOW + seq.run * 1000), finishedAt: null, status: 'running', errorsJson: [] };
@@ -1096,6 +1131,76 @@ async function main() {
           assert.ok(!r2.body.run.notAsked.some((x) => x.id === 'rss'), 'feeds were asked in this run: not listed even though there are none now');
           await call('PUT', '/settings', { feeds: feedsNow.map((x) => x.url) });
         }
+      }
+
+      // ---------------------------------------------------------------- who a topic is for (M10)
+      {
+        pool.db.clients.push({ id: 1, userId: 1, name: 'Acme Wines' }, { id: 2, userId: 2, name: 'Someone Else Ltd' });
+        pool.db.projects.push({ id: 5, userId: 1, name: 'Cellar site', clientId: 1 }, { id: 6, userId: 1, name: 'Solo project', clientId: null }, { id: 7, userId: 2, name: 'Not mine', clientId: 2 });
+        clockShift += 2 * 3600000;
+        let r = await call('POST', '/topics', { keyword: 'linked topic alpha', clientId: 1 });
+        assert.deepStrictEqual([r.status, r.body.topic.link.client?.name, r.body.topic.link.project], [201, 'Acme Wines', null], 'a topic can be made for one of your clients');
+        const tid = r.body.topic.id;
+        r = await call('POST', '/topics', { keyword: 'linked topic beta', clientId: 2 });
+        assert.deepStrictEqual([r.status, /not one of yours/.test(r.body.error)], [400, true], "someone else's client is refused");
+        r = await call('POST', '/topics', { keyword: 'linked topic gamma', projectId: 'x' });
+        assert.strictEqual(r.status, 400, 'a junk id is refused');
+        assert.strictEqual((await call('POST', '/topics', { keyword: 'linked topic delta', projectId: 7 })).status, 400, "someone else's project is refused");
+        assert.ok(!pool.db.topics.some((t) => /beta|gamma|delta/.test(t.keyword)), 'a refused request saves nothing');
+
+        r = await call('PATCH', `/topics/${tid}`, { projectId: 5 });
+        assert.deepStrictEqual([r.status, r.body.topic.link.project?.name, r.body.topic.link.client?.name, r.body.topic.link.client?.viaProject], [200, 'Cellar site', 'Acme Wines', false], 'a project is added, the own client stays');
+        r = await call('PATCH', `/topics/${tid}`, { clientId: null });
+        assert.deepStrictEqual([r.body.topic.link.client?.name, r.body.topic.link.client?.viaProject], ['Acme Wines', true], 'with no client of its own it shows the project\'s client, marked as derived');
+        r = await call('PATCH', `/topics/${tid}`, { projectId: 6 });
+        assert.deepStrictEqual([r.body.topic.link.project?.name, r.body.topic.link.client], ['Solo project', null], 'a project with no client shows none');
+        assert.strictEqual((await call('PATCH', `/topics/${tid}`, { projectId: 7 })).status, 400, "a foreign project cannot be linked");
+        assert.strictEqual((await call('PATCH', `/topics/${tid}`, { clientId: 2 })).status, 400, "a foreign client cannot be linked");
+        assert.strictEqual((await call('PATCH', `/topics/${tid}`, {})).status, 400, 'nothing to change is still refused');
+        assert.strictEqual((await call('PATCH', `/topics/${tid}`, { clientId: 1 }, 2)).status, 404, "somebody else's topic cannot be linked");
+        assert.strictEqual(pool.db.topics.find((t) => t.id === tid).clientId, null, 'a refused change changed nothing');
+        r = await call('PATCH', `/topics/${tid}`, { onWatchlist: true });
+        assert.deepStrictEqual([r.status, r.body.topic.link.project?.name], [200, 'Solo project'], 'changing other settings leaves the link alone');
+        await call('PATCH', `/topics/${tid}`, { onWatchlist: false, projectId: 5, clientId: 1 });
+
+        // the list, the topic page and the search page all say who it is for
+        assert.strictEqual((await call('GET', '/topics')).body.topics.find((t) => t.id === tid).link.client.name, 'Acme Wines');
+        assert.strictEqual((await call('GET', `/topics/${tid}`)).body.topic.link.project.name, 'Cellar site');
+        const run1 = pool.db.runs.filter((x) => x.topicId === tid).slice(-1)[0];
+        assert.strictEqual((await call('GET', `/runs/${run1.id}`)).body.topic.link.client.name, 'Acme Wines');
+
+        // a brief and a draft of that topic carry it
+        const stashB = pool.db.briefs.splice(0, pool.db.briefs.length);
+        const arts = (await call('GET', `/runs/${run1.id}`)).body.articles.map((a) => a.id);
+        r = await call('POST', `/runs/${run1.id}/brief`, { articleIds: arts.slice(0, 1) });
+        assert.deepStrictEqual([r.status, r.body.brief.link.project?.name], [201, 'Cellar site'], 'the brief you just made');
+        const bid = r.body.brief.id;
+        assert.strictEqual((await call('GET', `/briefs/${bid}`)).body.brief.link.client.name, 'Acme Wines', 'a brief opened later');
+        clockShift += 2 * 3600000;
+        r = await call('POST', `/briefs/${bid}/draft`, {});
+        assert.strictEqual(r.body.draft.link.client.name, 'Acme Wines', 'the draft you just made');
+        assert.strictEqual((await call('GET', `/drafts/${r.body.draft.id}`)).body.draft.link.project.name, 'Cellar site', 'a draft opened later');
+
+        // the other side: what the Client and Project pages ask for
+        r = await call('GET', '/linked?clientId=1');
+        assert.deepStrictEqual([r.status, r.body.topics.map((t) => t.keyword)], [200, ['linked topic alpha']], 'a client lists its topics');
+        assert.ok(r.body.topics[0].briefs.length === 1 && r.body.topics[0].drafts.length === 1 && r.body.topics[0].lastRunId === run1.id, 'with their briefs, drafts and latest search');
+        await call('PATCH', `/topics/${tid}`, { clientId: null });
+        assert.deepStrictEqual((await call('GET', '/linked?clientId=1')).body.topics.map((t) => t.keyword), ['linked topic alpha'], 'a topic for one of the client\'s projects counts, even with no client of its own');
+        assert.deepStrictEqual((await call('GET', '/linked?projectId=5')).body.topics.map((t) => t.keyword), ['linked topic alpha'], 'a project lists its topics');
+        assert.deepStrictEqual((await call('GET', '/linked?projectId=6')).body.topics, [], 'another project of yours: none');
+        assert.deepStrictEqual((await call('GET', '/linked?clientId=2')).body.topics, [], "somebody else's client: an empty list, nothing of theirs");
+        assert.deepStrictEqual((await call('GET', '/linked?clientId=1', undefined, 2)).body.topics, [], "somebody else asking about your client sees none of your topics");
+        assert.strictEqual((await call('GET', '/linked')).status, 400, 'say which client or project');
+
+        // deleting the project or client only unlinks: the topic stays (the database does this; here the link simply goes)
+        pool.db.briefs.splice(0, pool.db.briefs.length, ...stashB); pool.db.drafts = [];
+        pool.db.topics.find((t) => t.id === tid).projectId = null;
+        assert.strictEqual((await call('GET', `/topics/${tid}`)).body.topic.link.project, null, 'a topic whose project is gone shows no project');
+        // leave the shared fake as it was for the checks after this one
+        pool.db.topics = pool.db.topics.filter((t) => t.id !== tid);
+        pool.db.runs = pool.db.runs.filter((x) => x.topicId !== tid);
+        pool.db.clients.length = 0; pool.db.projects.length = 0;
       }
 
       // ---------------------------------------------------------------- progress steps (M7): where a long action has got to

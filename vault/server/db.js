@@ -2643,6 +2643,11 @@ async function initSchema() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_client_contacts_client ON client_contacts("clientId")`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_client_touchpoints_client ON client_touchpoints("clientId")`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_projects_client ON projects("clientId")`);
+  // Topic Research: the client and/or project a topic is for (its briefs and drafts inherit it). Here, after clients exists; deleting either only unlinks.
+  await pool.query(`ALTER TABLE topic_research_topics ADD COLUMN IF NOT EXISTS "clientId" INTEGER REFERENCES clients(id) ON DELETE SET NULL`);
+  await pool.query(`ALTER TABLE topic_research_topics ADD COLUMN IF NOT EXISTS "projectId" INTEGER REFERENCES projects(id) ON DELETE SET NULL`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_topic_research_topics_client ON topic_research_topics("clientId")`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_topic_research_topics_project ON topic_research_topics("projectId")`);
 
   // ── CRM: audit log — records who created/edited/deleted a contact, deal,
   // touchpoint, or client, and what it looked like before/after. Added after
