@@ -51,6 +51,21 @@ Three more page guides on `guideCore.js`/`guideRouter.js`, each with a tools lis
 
 They see no fonts, values, documents or pages. The CSS guide follows that tool's rule of no code words in anything a person reads (its test checks the catalogue, rules and page wording). The three tests use `server/services/guideTestKit.js` (`checkGuide`), which also checks the page's menu against the catalogue (every menu tool has a tip, a blurb and the same group in the guide); use it for the next page guide. The pages' menu is the shared `client/src/components/ToolSidebar.jsx` (see client/DESIGN.md).
 
+## The CRM, Shares and Settings guides
+
+Three guides on `guideCore.js`/`guideRouter.js`, tested with `server/services/guideBasicsKit.js` (`checkBasics`: prompt, untrusted answers, model call, safety wording) plus a drift check against the page. They see no clients, holdings, settings, keys or users.
+
+| Guide | `guideId` | Endpoint | Where the button shows | Test |
+|---|---|---|---|---|
+| CRM guide | `crm` | `/api/crm-tutor` (flag `clients`) | `ClientsPage`, `ClientDetailPage`, `PipelinePage` | `npm run test:crm-tutor` |
+| Shares guide | `shares` | `/api/shares-tutor` (flag `shares`) | `SharesPage` | `npm run test:shares-tutor` |
+| Settings guide | `settings` | `/api/settings-tutor` (any login) | `SettingsPage`, `AdminPage` | `npm run test:settings-tutor` |
+
+- **CRM:** controls are listed in `client/src/pages/crm/crmGuideTools.mjs` (list, New client, the client-page sections, Pipeline); an Open button for a client-page section only works on a client's page (elsewhere a toast says to open a client first). Update that file and `CATALOG` in `server/services/crmTutor.js` together.
+- **Shares:** ids are the page's own `TABS`; never recommends buy/sell, no tax advice. The test fails if `TABS` and `CATALOG` drift.
+- **Settings:** ids are the Settings section ids (`utils/settingsGroups.mjs`) plus six `admin-…` parts of the Admin page. Admin-only sections must say "Admin only" (tested). From another page an Open button stores `settingsTab` and goes to `/settings`; `admin-…` goes to `/admin`. A new Settings tab needs a `CATALOG` entry or the test fails.
+- The Finance guide already existed (`finance`); it is hidden for accountant logins.
+
 ## Behaviour changes belong in the shared files
 
 Change how all guides look or behave in `TutorChat.jsx` (client) or `tutorEmail.js` (server), never in a wrapper. Tooltip behaviour belongs in `Tooltip.jsx` and applies to the whole app.

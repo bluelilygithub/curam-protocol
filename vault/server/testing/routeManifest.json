@@ -562,6 +562,15 @@
   "POST /api/password-vault/reset": {
    "class": "authed"
   },
+  "POST /api/crm-tutor": {
+   "class": "authed"
+  },
+  "POST /api/shares-tutor": {
+   "class": "authed"
+  },
+  "POST /api/settings-tutor": {
+   "class": "authed"
+  },
   "POST /api/dns-lookup-tutor": {
    "class": "authed"
   },

@@ -236,7 +236,10 @@ app.use('/api/burner-mail-tutor', requireFeature('burnerMail'), aiLimiter, requi
 app.use('/api/password-vault', requireFeature('passwordVault'), require('./routes/passwordVault')); // zero-knowledge password manager: stores ciphertext only
 app.use('/api/password-vault-tutor', requireFeature('passwordVault'), aiLimiter, require('./routes/passwordVaultTutor')); // the Password Vault guide chat (sees no passwords or names)
 app.use('/api/dns-lookup', requireFeature('dnsLookup'), require('./routes/dnsLookup'));
-app.use('/api/dns-lookup-tutor', requireFeature('dnsLookup'), aiLimiter, require('./routes/dnsLookupTutor')); // the DNS Lookup guide chat (sees no names or answers)
+app.use('/api/crm-tutor', requireFeature('clients'), aiLimiter, require('./routes/crmTutor')); // the CRM guide chat (sees no clients, deals or notes)
+app.use('/api/shares-tutor', requireFeature('shares'), aiLimiter, require('./routes/sharesTutor')); // the Shares guide chat (sees no holdings or figures)
+app.use('/api/settings-tutor', aiLimiter, require('./routes/settingsTutor')); // the Settings and Admin guide chat (sees no settings, keys or users)
+app.use('/api/dns-lookup-tutor',requireFeature('dnsLookup'), aiLimiter, require('./routes/dnsLookupTutor')); // the DNS Lookup guide chat (sees no names or answers)
 app.use('/api/topic-research-tutor', requireFeature('topicResearch'), aiLimiter, require('./routes/topicResearchTutor')); // the Topic Research guide chat (sees no topics or articles)
 app.use('/api/topic-research', requireFeature('topicResearch'), require('./routes/topicResearch'));
 app.use('/api/web-extractor', requireFeature('webExtractor'), require('./routes/webExtractor'));

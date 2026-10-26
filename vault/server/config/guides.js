@@ -28,6 +28,9 @@ const GUIDES = {
   'topic-research': { name: 'Topic Research guide', endpoint: '/api/topic-research-tutor' },
   'password-vault': { name: 'Password Vault guide', endpoint: '/api/password-vault-tutor' },
   'pc-health': { name: 'PC Health guide', endpoint: '/api/pc-health-tutor' },
+  crm: { name: 'CRM guide', endpoint: '/api/crm-tutor' },
+  shares: { name: 'Shares guide', endpoint: '/api/shares-tutor' },
+  settings: { name: 'Settings guide', endpoint: '/api/settings-tutor' },
 };
 
 module.exports = { GUIDES };

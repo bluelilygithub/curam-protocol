@@ -12,6 +12,7 @@ import AttachmentChip from '../components/AttachmentChip';
 import { startCrmTour, TOUR_KEY as CRM_TOUR_KEY } from '../utils/tours/crmTour';
 import CrmInfoModal, { INFO_SEEN_KEY as CRM_INFO_SEEN_KEY } from '../components/CrmInfoModal';
 import { useLinkedResearch, ResearchList } from '../components/LinkedResearch';
+import CrmTutorChat from './crm/CrmTutorChat';
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
 
@@ -620,6 +621,8 @@ export default function ClientDetailPage() {
 
         </div>
       </div>
+
+      <CrmTutorChat where="detail" onSection={(key) => (sectionRefs[key] ? goToSection(key) : setSections((s) => ({ ...s, [key]: true })))} />
 
       {/* Edit modal */}
       {editModal && (

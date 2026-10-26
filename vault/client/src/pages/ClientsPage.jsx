@@ -5,6 +5,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import MoodDot from '../components/mood/MoodDot';
 import useToastStore from '../store/toastStore';
 import { useIcon } from '../providers/IconProvider';
+import CrmTutorChat from './crm/CrmTutorChat';
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
 
@@ -440,6 +441,8 @@ export default function ClientsPage() {
           ))}
         </div>
       )}
+
+      <CrmTutorChat where="list" currentTool="client-list" onNewClient={() => setModal('new')} />
 
       {/* New/Edit modal */}
       {modal && (

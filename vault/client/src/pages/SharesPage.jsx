@@ -9,6 +9,7 @@ import SharesChartsTab from '../components/shares/SharesChartsTab';
 import SharesCgtTab from '../components/shares/SharesCgtTab';
 import SharesStatementsTab from '../components/shares/SharesStatementsTab';
 import SharesPackTab from '../components/shares/SharesPackTab';
+import SharesTutorChat from './shares/SharesTutorChat';
 import { useIcon } from '../providers/IconProvider';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 
@@ -1372,6 +1373,7 @@ export default function SharesPage() {
             {tab === 'questions' && <QuestionsTab />}
 
             {tab === 'metals' && <MetalsTab />}
+            {canUseShares && <SharesTutorChat currentTab={tab} onOpenTab={setTab} />}
           </>
         )}
       </>

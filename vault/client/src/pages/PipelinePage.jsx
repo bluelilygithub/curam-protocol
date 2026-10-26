@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/apiClient';
+import CrmTutorChat from './crm/CrmTutorChat';
 
 // Workspace-wide, cross-client view of client_deals — independent of the
 // per-client Deals section on ClientDetailPage, which stays as-is. Table
@@ -185,6 +186,7 @@ export default function PipelinePage() {
           </table>
         </div>
       )}
+      <CrmTutorChat where="pipeline" currentTool="pipeline" />
     </div>
   );
 }

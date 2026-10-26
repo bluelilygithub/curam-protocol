@@ -5,6 +5,7 @@ import api from '../utils/apiClient';
 import useAuthStore from '../store/authStore';
 import { relativeTime } from '../utils/relativeTime';
 import UsersAdminPanel from '../components/UsersAdminPanel';
+import SettingsTutorChat from './settings/SettingsTutorChat';
 
 // ── Stats helpers ─────────────────────────────────────────────────────────────
 
@@ -1196,6 +1197,7 @@ function AdminPage() {
         </div>
       )}
 
+      <SettingsTutorChat currentTab="admin-dashboard" />
     </div>
   );
 }

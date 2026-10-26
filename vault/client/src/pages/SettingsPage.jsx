@@ -49,6 +49,7 @@ import NavLayoutEditor from '../components/settings/NavLayoutEditor';
 import { DEFAULT_TILES, DEFAULT_NAV_ITEMS, mergeWithDefaults } from '../utils/mobileConfig';
 import { DEFAULT_FEATURE_ACCESS, FEATURE_ACCESS_GROUPS } from '../utils/featureAccess';
 import { LOCAL_CLONE_VOICE_URI } from '../hooks/useVoice';
+import SettingsTutorChat from './settings/SettingsTutorChat';
 
 const AUDIO_VOICE_SETTING_KEY = 'audio_voice_uri';
 const AUDIO_VOICE_STORAGE_KEY = 'vault:chat:selected-voice-uri';
@@ -3559,6 +3560,8 @@ function SettingsPage() {
           onCancel={() => setShowReopenWizardConfirm(false)}
         />
       )}
+
+      <SettingsTutorChat currentTab={tab} onOpenSection={selectTab} />
 
       {showResetGoalsConfirm && (
         <ConfirmModal
