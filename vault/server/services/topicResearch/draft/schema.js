@@ -14,11 +14,11 @@
 //     back as problems (the caller asks once more, then gives up).
 // Pure code. See docs/topic-research.md.
 
-const { clean } = require('../brief/schema');
+const { clean, tidy } = require('../brief/schema');
 
 const LENGTHS = Object.freeze({ short: 400, medium: 800, long: 1400 });
 const DEFAULT_LENGTH = 'medium';
-const LIMITS = Object.freeze({ title: 160, heading: 150, paragraph: 1200, gapNote: 300, sections: 14, paragraphs: 12, sourcesPerParagraph: 6 });
+const LIMITS = Object.freeze({ title: 160, heading: 150, paragraph: 1200, gapNote: 600, sections: 14, paragraphs: 12, sourcesPerParagraph: 6 });
 const TOO_LONG = 1.8; // times the asked length
 const TOO_SHORT = 0.3;
 
@@ -28,7 +28,7 @@ const list = (v) => (Array.isArray(v) ? v : []);
 const words = (text) => String(text || '').split(/\s+/).filter(Boolean).length;
 
 /** A paragraph's text, kept to one block of plain text (line breaks inside a paragraph become spaces). */
-const paragraphText = (v) => clean(v, LIMITS.paragraph);
+const paragraphText = (v) => tidy(v, LIMITS.paragraph);
 
 /**
  * @param raw          the model's parsed JSON
@@ -57,7 +57,7 @@ function validateDraft(raw, { allowed, lengthChoice = DEFAULT_LENGTH } = {}) {
       const kind = p?.kind === 'fact' || p?.kind === 'framing' || p?.kind === 'gap' ? p.kind : null;
       if (!kind) continue;
       if (kind === 'gap') {
-        const note = clean(p.text, LIMITS.gapNote);
+        const note = tidy(p.text, LIMITS.gapNote);
         if (note) paragraphs.push({ kind: 'gap', text: note, sources: [] });
         continue;
       }

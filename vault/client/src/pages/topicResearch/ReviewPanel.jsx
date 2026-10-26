@@ -122,6 +122,13 @@ export default function ReviewPanel({ draftId, draftModel }) {
           {c.moves.length > 0 && (<><H>Changes to the current draft</H><ul className="space-y-1">{c.moves.map((m, i) => <li key={i} className="text-sm" style={text}><span className="text-xs font-semibold px-1.5 py-0.5 rounded mr-2" style={{ border: '1px solid var(--color-border)' }}>{REVIEW_ACTION_LABELS[m.action] || m.action}</span>{m.detail}</li>)}</ul></>)}
           {c.missingEvidence.length > 0 && (<><H>Evidence still missing</H><ul className="list-disc pl-5 space-y-0.5">{c.missingEvidence.map((x, i) => <li key={i} className="text-sm" style={text}>{x}</li>)}</ul></>)}
           {c.risks.length > 0 && (<><H>Risks</H><ul className="list-disc pl-5 space-y-0.5">{c.risks.map((x, i) => <li key={i} className="text-sm" style={text}>{x}</li>)}</ul></>)}
+          {(c.fromOutside || []).length > 0 && (
+            <div className="mt-4 rounded-xl border p-3" style={{ borderColor: '#f59e0b', background: 'var(--color-bg)' }} data-guide="review-outside">
+              <h4 className="text-sm font-semibold mb-1" style={text}>From the AI&apos;s own knowledge, not your sources</h4>
+              <p className="text-xs mb-1.5" style={muted}>Nothing in your brief supports these. Check them yourself before you use them.</p>
+              <ul className="list-disc pl-5 space-y-0.5">{c.fromOutside.map((x, i) => <li key={i} className="text-sm" style={text}>{x}</li>)}</ul>
+            </div>
+          )}
           <div className="flex flex-wrap gap-2 mt-4">
             <button type="button" onClick={copyVerdict} className={btn} style={btnStyle}>{getIcon('copy', { size: 14 })}Copy verdict as Markdown</button>
           </div>

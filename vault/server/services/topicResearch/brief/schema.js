@@ -29,6 +29,21 @@ function clean(value, max) {
   return value.replace(/<[^>]*>/g, ' ').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 }
 
+/**
+ * Like clean(), but a text that is too long is cut at the end of a sentence (or, failing that, at a word with an ellipsis), never in the middle of a
+ * word. For text a person reads as sentences (gap notes, advice): "Add what the installer… " is better than "Add what the insta".
+ */
+function tidy(value, max) {
+  const full = clean(value, Number.MAX_SAFE_INTEGER);
+  if (full.length <= max) return full;
+  const head = full.slice(0, max);
+  const sentence = [...head.matchAll(/[.!?]["')\]]?(?=\s|$)/g)].pop();
+  if (sentence && sentence.index + sentence[0].length >= max * 0.5) return head.slice(0, sentence.index + sentence[0].length).trim();
+  const room = head.slice(0, Math.max(1, max - 1));
+  const space = room.lastIndexOf(' ');
+  return `${(space > max * 0.5 ? room.slice(0, space) : room).replace(/[\s,;:.\-]+$/, '')}\u2026`;
+}
+
 const list = (v) => (Array.isArray(v) ? v : []);
 
 /**
@@ -111,4 +126,4 @@ function textFields(brief) {
   return out.filter((x) => x.text);
 }
 
-module.exports = { validateBrief, textFields, clean, LIMITS };
+module.exports = { validateBrief, textFields, clean, tidy, LIMITS };

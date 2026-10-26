@@ -96,6 +96,34 @@ const good = (extra = {}) => ({
     assert.ok(!('evil' in validateReview({ ...good(), evil: 'x' }, { sourceCount: 2 }).value), 'unknown fields are ignored');
   }
 
+  // ------------------------------------------------------------ long text is cut at a sentence, never mid-word; the model's own knowledge is kept apart
+  {
+    const long = good();
+    long.structure[0].contents = `${'First sentence is a complete thought about the sizing question. '.repeat(10)}Tail that runs on and on without end and would be chopped midwo${'r'.repeat(400)}`;
+    long.structure[1].writerInput = `Photos and measurements from a real install, then the figures you trust${' and more words'.repeat(60)}`;
+    long.verdict = `${'A whole sentence here. '.repeat(120)}`;
+    const r = validateReview(long, { sourceCount: 2 });
+    assert.ok(r.value.structure[0].contents.length <= LIMITS.contents && r.value.structure[0].contents.endsWith('.'), 'cut at the end of a sentence');
+    assert.ok(!/midwo/.test(r.value.structure[0].contents), 'the unfinished tail is dropped');
+    const wi = r.value.structure[1].writerInput;
+    const orig = long.structure[1].writerInput;
+    const body = wi.slice(0, -1);
+    assert.ok(wi.length <= LIMITS.writerInput && wi.endsWith('…'), 'no sentence end: cut with an ellipsis');
+    assert.ok(orig.startsWith(body) && /[\s,;:.-]/.test(orig[body.length]), 'the cut falls between words, never inside one');
+    assert.ok(r.value.verdict.length <= LIMITS.verdict && r.value.verdict.endsWith('sentence here.'));
+    const short = validateReview(good(), { sourceCount: 2 });
+    assert.strictEqual(short.value.structure[0].contents, 'Running costs fell, per one outlet', 'short text is untouched');
+    // advice from outside the brief
+    const o = validateReview(good({ fromOutside: ['Puck lights pool light: a general point, not from the brief.', '<b>Dimming</b> suits the display zone.', '', 7, ...Array.from({ length: 20 }, (_, i) => `extra ${i}`)] }), { sourceCount: 2 });
+    assert.strictEqual(o.value.fromOutside.length, LIMITS.outside, 'capped');
+    assert.strictEqual(o.value.fromOutside[1], 'Dimming suits the display zone.', 'tags stripped');
+    assert.deepStrictEqual(validateReview(good(), { sourceCount: 2 }).value.fromOutside, [], 'an answer with none is fine');
+    const md = reviewToMarkdown(o.value, { sources: SOURCES });
+    assert.ok(md.includes("## From the AI's own knowledge (not from your sources)"));
+    assert.match(md, /nothing in your brief supports them/);
+    assert.ok(!/From the AI's own knowledge/.test(reviewToMarkdown(validateReview(good(), { sourceCount: 2 }).value, { sources: SOURCES })), 'no section when there is nothing');
+  }
+
   // ------------------------------------------------------------ prompt: the brief and the draft backbone, never article text
   {
     const planted = 'PLANTED ARTICLE SENTENCE that must never reach the model';
@@ -111,7 +139,11 @@ const good = (extra = {}) => ({
     assert.match(user, /\[framing\] Many homeowners/);
     assert.match(user, /1\. First article \(a\.example\)/);
     assert.match(user, /between 4 and 10 recommended sections/);
-    assert.match(system, /ONLY what is in the brief and the draft/);
+    assert.match(system, /Base every judgement on what is in the brief and the draft/);
+    assert.match(system, /never say what a source contains beyond what the brief itself says/, 'it cannot see the sources, so it must not describe them');
+    assert.match(system, /ONLY in "fromOutside"/, 'its own knowledge goes in one labelled place');
+    assert.match(user, /"fromOutside"/, 'and the format asks for that list');
+    assert.match(system, /at most eight sentences/);
     assert.match(system, /Do not write the essay/);
     assert.match(system, /data to read|not addressed to you/);
     // an injected instruction inside the draft is neutralised as data and does not break out of its block

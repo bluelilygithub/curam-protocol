@@ -33,6 +33,7 @@ function reviewToMarkdown(review, { createdAt = null, model = '', keyword = '', 
   if (review.moves.length) out.push(`## Changes to the current draft\n\n${review.moves.map((m) => `- **${m.action}:** ${m.detail}`).join('\n')}`);
   if (review.missingEvidence.length) out.push(`## Evidence still missing\n\n${review.missingEvidence.map((x) => `- ${x}`).join('\n')}`);
   if (review.risks.length) out.push(`## Risks\n\n${review.risks.map((x) => `- ${x}`).join('\n')}`);
+  if ((review.fromOutside || []).length) out.push(`## From the AI's own knowledge (not from your sources)\n\nCheck these yourself: nothing in your brief supports them.\n\n${review.fromOutside.map((x) => `- ${x}`).join('\n')}`);
   if (sources.length) out.push('## Sources', sources.map((s, i) => `${i + 1}. ${s.title || s.url} (${s.domain || ''}) ${s.url}`.replace(/\s+\(\)\s*/, ' ')).join('\n'));
   return `${out.join('\n\n')}\n`;
 }

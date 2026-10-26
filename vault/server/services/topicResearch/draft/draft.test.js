@@ -62,6 +62,14 @@ const goodAnswer = (extra = {}) => ({
     assert.deepStrictEqual(LENGTHS, { short: 400, medium: 800, long: 1400 });
   }
 
+  // ------------------------------------------------------------ schema: a long gap note is cut at a sentence, not in the middle of a word
+  {
+    const a = goodAnswer();
+    a.sections[0].paragraphs.push({ kind: 'gap', text: `${'Add the lumen or lux figures from a source you trust. '.repeat(15)}and then the final thought is cut midwo${'r'.repeat(300)}`, sources: [] });
+    const note = validateDraft(a, { allowed: ALLOWED, lengthChoice: 'short' }).value.sections[0].paragraphs.find((p) => p.kind === 'gap' && /lumen/.test(p.text)).text;
+    assert.ok(note.length <= 600 && note.endsWith('.') && !/midwo/.test(note), 'cut after a whole sentence');
+  }
+
   // ------------------------------------------------------------ schema: a claim with no valid source is not shown as a fact
   {
     const a = goodAnswer();

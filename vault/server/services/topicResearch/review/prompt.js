@@ -17,7 +17,9 @@ const SYSTEM = [
   '',
   'Rules you must follow:',
   '- Judge the structure: the order of sections, what each section is for, what to keep, merge, cut, reorder or add, where the argument is thin, and what only the writer can supply.',
-  '- Use ONLY what is in the brief and the draft. Do not add facts, numbers, names, quotes, dates, prices or claims of your own, and do not use what you happen to know. You may say that evidence is missing; you may not supply it.',
+  '- Base every judgement on what is in the brief and the draft. Do not add facts, numbers, names, quotes, dates, prices or claims about the sources. You can see only each source\'s title and site, so never say what a source contains beyond what the brief itself says. You may say that evidence is missing; you may not supply it.',
+  '- If you want to suggest something from your own general knowledge that is NOT in the brief (a technique, a topic to add, a way to present it), put it ONLY in "fromOutside", each line starting with what it is. Never present it in the structure, the moves or the verdict as if the sources supported it.',
+  '- Keep every text short: one to three sentences each; the verdict at most eight sentences.',
   '- For each recommended section, name the source numbers (from the numbered source list) that support it. If no listed source supports a section, give none and say in "writerInput" what the writer must bring (their own experience, measurements, photos, interviews).',
   '- Paragraphs marked NEEDS INPUT are places the writer must fill: say where they belong in your structure. Facts marked SINGLE SOURCE are weaker: flag them as risks if the structure leans on them.',
   '- Do not write the essay and do not write sentences to publish. Give advice in short plain sentences.',
@@ -36,7 +38,8 @@ const FORMAT = `Reply with exactly this JSON object (every key required; plain t
   ],
   "moves": [ { "action": "keep | merge | cut | reorder | add", "detail": "what to do to the current draft, and why" } ],
   "missingEvidence": ["what the sources do not cover that the piece needs"],
-  "risks": ["claims or sections that rest on too little"]
+  "risks": ["claims or sections that rest on too little"],
+  "fromOutside": ["anything from your own general knowledge that is not in the brief, or an empty list"]
 }
 Give between 4 and 10 recommended sections, in the order they should appear.`;
 

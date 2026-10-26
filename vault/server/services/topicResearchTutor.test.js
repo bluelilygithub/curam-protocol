@@ -33,6 +33,7 @@ checkGuide({
     ['review', 'does', /never given any article's text/, 'the verdict never gets article text'],
     ['review', 'does', /Structure opinion model/, 'the guide says where the model is chosen'],
     ['review', 'notes', /Up to five verdicts/, 'how many are kept'],
+    ['review', 'does', /own general knowledge/, 'its own knowledge is labelled apart'],
     ['links', 'notes', /only removes the link/, 'deleting a client keeps the research'],
     ['prompts', 'does', /not used this time and why/, 'the results say which sources were not used'],
     ['prompts', 'notes', /30 days/, 'stored prompts follow the 30-day rule'],
