@@ -233,6 +233,8 @@ app.use('/api/pc-health', requireAdmin, require('./routes/pcHealth')); // PC Hea
 app.use('/api/pc-health-tutor', requireAdmin, aiLimiter, require('./routes/pcHealthTutor')); // the PC Health guide chat (sees no scan data)
 app.use('/api/burner-mail', requireFeature('burnerMail'), require('./routes/burnerMail'));
 app.use('/api/burner-mail-tutor', requireFeature('burnerMail'), aiLimiter, require('./routes/burnerMailTutor')); // the Burner Mail guide chat (sees no addresses or emails)
+app.use('/api/password-vault', requireFeature('passwordVault'), require('./routes/passwordVault')); // zero-knowledge password manager: stores ciphertext only
+app.use('/api/password-vault-tutor', requireFeature('passwordVault'), aiLimiter, require('./routes/passwordVaultTutor')); // the Password Vault guide chat (sees no passwords or names)
 app.use('/api/dns-lookup', requireFeature('dnsLookup'), require('./routes/dnsLookup'));
 app.use('/api/dns-lookup-tutor', requireFeature('dnsLookup'), aiLimiter, require('./routes/dnsLookupTutor')); // the DNS Lookup guide chat (sees no names or answers)
 app.use('/api/topic-research-tutor', requireFeature('topicResearch'), aiLimiter, require('./routes/topicResearchTutor')); // the Topic Research guide chat (sees no topics or articles)

@@ -41,6 +41,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   fitness: true,
   burnerMail: true,
   dnsLookup: true,
+  passwordVault: false, // holds logins: keep in step with server/config/featureAccess.js
   topicResearch: false, // keep in step with server/config/featureAccess.js
 };
 
@@ -89,6 +90,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'fitness', label: 'Fitness' },
       { key: 'burnerMail', label: 'Burner Mail' },
       { key: 'dnsLookup', label: 'DNS Lookup' },
+      { key: 'passwordVault', label: 'Password Vault' },
       { key: 'topicResearch', label: 'Topic Research' },
       { key: 'wellbeing', label: 'Wellbeing Check' },
       { key: 'gmailIntel', label: 'Inbox Intel' },

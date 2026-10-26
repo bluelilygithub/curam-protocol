@@ -2010,6 +2010,36 @@ async function initSchema() {
       )
     `);
 
+    // Password Vault: zero-knowledge. The browser derives the key from a master password and encrypts every entry (AES-256-GCM); the server
+    // keeps only the key settings (salt, iteration count, a check blob) and ciphertext. "clientId" is the one plain field: it is how an entry
+    // is linked to a CRM client. See docs/password-vault.md.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS password_vault_keys (
+        "userId"         INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        kdf              TEXT NOT NULL,
+        "kdfIterations"  INTEGER NOT NULL,
+        salt             TEXT NOT NULL,
+        verifier         JSONB NOT NULL,
+        "keyVersion"     INTEGER NOT NULL DEFAULT 1,
+        "createdAt"      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt"      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS password_vault_entries (
+        id             SERIAL PRIMARY KEY,
+        "userId"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "clientId"     INTEGER REFERENCES clients(id) ON DELETE SET NULL,
+        iv             TEXT NOT NULL,
+        ciphertext     TEXT NOT NULL,
+        "keyVersion"   INTEGER NOT NULL DEFAULT 1,
+        "createdAt"    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt"    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_password_vault_entries_user ON password_vault_entries ("userId", "updatedAt" DESC)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_password_vault_entries_client ON password_vault_entries ("clientId") WHERE "clientId" IS NOT NULL`);
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS client_contacts (
         id          SERIAL PRIMARY KEY,

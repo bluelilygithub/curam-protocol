@@ -7,3 +7,4 @@ require('./chats');
 require('./routeTracks');
 require('./graphicsRecipes');
 require('./topicResearch');
+require('./passwordVault');

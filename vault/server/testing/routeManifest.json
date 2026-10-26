@@ -532,6 +532,36 @@
   "POST /api/deals": {
    "class": "authed"
   },
+  "POST /api/password-vault-tutor": {
+   "class": "authed"
+  },
+  "GET /api/password-vault/status": {
+   "class": "authed"
+  },
+  "POST /api/password-vault/setup": {
+   "class": "authed"
+  },
+  "GET /api/password-vault/entries": {
+   "class": "authed"
+  },
+  "POST /api/password-vault/entries": {
+   "class": "authed"
+  },
+  "PUT /api/password-vault/entries/:id": {
+   "class": "authed"
+  },
+  "PATCH /api/password-vault/entries/:id/client": {
+   "class": "authed"
+  },
+  "DELETE /api/password-vault/entries/:id": {
+   "class": "authed"
+  },
+  "POST /api/password-vault/rekey": {
+   "class": "authed"
+  },
+  "POST /api/password-vault/reset": {
+   "class": "authed"
+  },
   "POST /api/dns-lookup-tutor": {
    "class": "authed"
   },

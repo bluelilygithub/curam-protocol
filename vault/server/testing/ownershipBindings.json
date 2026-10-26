@@ -10,6 +10,7 @@
     "api/client-projects/:id/links/:linkId": "project_links",
     "api/deals/:id": "client_deals",
     "api/graphics/recipes/:id": "graphics_recipes",
+    "api/password-vault/entries/:id": "password_vault_entries",
     "api/graphics/batch-jobs/:id": null,
     "api/document-redaction/jobs/:id": null,
     "api/document-redaction/jobs/:id/candidates/:candidateId": null,

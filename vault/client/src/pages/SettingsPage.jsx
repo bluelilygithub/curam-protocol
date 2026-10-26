@@ -26,6 +26,7 @@ import { startRecipesTour, TOUR_KEY as RECIPES_TOUR_KEY } from '../utils/tours/r
 import { TOUR_KEY as MEASUREMENTS_TOUR_KEY } from '../utils/tours/measurementsTour';
 import { TOUR_KEY as BURNER_MAIL_TOUR_KEY } from '../utils/tours/burnerMailTour';
 import { TOUR_KEY as DNS_LOOKUP_TOUR_KEY } from '../utils/tours/dnsLookupTour';
+import { TOUR_KEY as PASSWORD_VAULT_TOUR_KEY } from '../utils/tours/passwordVaultTour';
 import { TOUR_KEY as TOPIC_RESEARCH_TOUR_KEY } from '../utils/tours/topicResearchTour';
 import TopicResearchModelCard from './topicResearch/TopicResearchModelCard';
 import { TOUR_KEY as NOTES_TOUR_KEY } from '../utils/tours/notesTour';
@@ -2599,6 +2600,24 @@ function SettingsPage() {
               style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
             >
               {localStorage.getItem(DNS_LOOKUP_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Password Vault Tour</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                6-step tour — master password, adding a login, linking it to a client, the generator, password health, locking
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(PASSWORD_VAULT_TOUR_KEY);
+                navigate('/password-vault?tour=1');
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              {localStorage.getItem(PASSWORD_VAULT_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
             </button>
           </div>
           <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>

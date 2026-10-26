@@ -194,6 +194,7 @@ const semanticMap = {
   'file-pen': { lucide: 'FilePen' },
   'pen-square': { lucide: 'PenSquare' },
   lock: { lucide: 'Lock' },
+  'key-round': { lucide: 'KeyRound' },
   'lock-open': { lucide: 'LockOpen' },
   chains: { lucide: 'Link2' },
   finance: { lucide: 'Coins' },

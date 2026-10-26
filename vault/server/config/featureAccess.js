@@ -42,6 +42,8 @@ const FEATURE_ACCESS_DEFAULTS = {
   cellarPlanner: false,
   // being built milestone by milestone (docs/topic-research.md): off until an admin switches it on
   topicResearch: false,
+  // holds logins: off until an admin switches it on (Settings -> Feature Access)
+  passwordVault: false,
   measurements: true,
   fitness: true,
   burnerMail: true,

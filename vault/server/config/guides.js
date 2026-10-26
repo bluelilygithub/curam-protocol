@@ -26,6 +26,7 @@ const GUIDES = {
   'burner-mail': { name: 'Burner Mail guide', endpoint: '/api/burner-mail-tutor' },
   'dns-lookup': { name: 'DNS Lookup guide', endpoint: '/api/dns-lookup-tutor' },
   'topic-research': { name: 'Topic Research guide', endpoint: '/api/topic-research-tutor' },
+  'password-vault': { name: 'Password Vault guide', endpoint: '/api/password-vault-tutor' },
   'pc-health': { name: 'PC Health guide', endpoint: '/api/pc-health-tutor' },
 };
 
