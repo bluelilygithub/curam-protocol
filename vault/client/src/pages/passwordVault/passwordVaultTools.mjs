@@ -13,14 +13,14 @@ export const GROUPS = ['Keep', 'Make', 'Check', 'Safety'];
 
 export const GROUP_TIPS = {
   Keep: 'Your saved logins: add, find, copy, link to a client, delete.',
-  Make: 'Make a strong random password to copy or save.',
+  Make: 'Make a strong random password to copy or save. A login\'s own Make one button opens the same options.',
   Check: 'Spot passwords that are weak, reused or old.',
   Safety: 'Set up or change the master password, lock the vault, and choose how soon it locks itself.',
 };
 
 export const TOOL_TIPS = {
   passwords: 'Your saved logins. Search them, filter by client, copy a password without showing it, and add or change one. Needs the master password.',
-  generator: 'Make a random password: choose the length and which characters to use. Made on this device and not saved until you put it in a login.',
+  generator: 'Make a random password: choose the length, which characters to use and which to never use. Made on this device and not saved until you put it in a login.',
   health: 'Looks over your saved passwords on this device and lists any that are weak, used twice or not changed for over a year.',
   master: 'Create or change the master password, lock the vault now, choose the auto-lock time, or start again if the master password is forgotten.',
 };
@@ -39,7 +39,7 @@ export const HOW_IT_WORKS = [
   ['No way back in', 'Because Vault never sees the master password, it cannot reset it. If it is forgotten, the only option is to erase the vault and start again. Pick something you will remember and keep a copy somewhere safe, away from the computer.'],
   ['Adding and finding logins', 'Add a login with its title, username, web address, password and notes. Search by any of them. Copy puts the password on the clipboard without showing it, and clears it again after 30 seconds.'],
   ['Clients', 'A login can be linked to one of your clients, then found by filtering on that client. The link is the only thing not locked, so the client\'s name can be shown. It does not share the login with anyone.'],
-  ['Generator and health', 'The generator makes random passwords on this device. Password health lists weak, reused and old passwords. Both work on this device only; health cannot tell if a password was in a data breach.'],
+  ['Generator and health', 'The generator makes random passwords on this device. Make one on a login opens it with its own rules (length, characters, characters to avoid), which can be kept with that login. Password health lists weak, reused and old passwords. Both work on this device only; health cannot tell if a password was in a data breach.'],
   ['Locking', 'The vault locks itself after a quiet spell (5 minutes unless you change it), when the page is reloaded and when you sign out. You can lock it yourself at any time.'],
   ['Deleting', 'A deleted login goes to the Recycle bin for 30 days and can be put back. It stays locked there too.'],
   ['Not included', 'Filling logins into websites for you, sharing a login with another person, one-time codes, importing from another password manager, and breach checks.'],
@@ -49,6 +49,7 @@ export const HOW_IT_WORKS = [
 export const GUIDE_TOOLS = [
   { id: 'passwords', label: 'My passwords', tool: 'passwords' },
   { id: 'add-password', label: 'Add a password', tool: 'passwords' },
+  { id: 'login-rules', label: 'Rules for one login', tool: 'passwords' },
   { id: 'client-link', label: 'Link to a client', tool: 'passwords' },
   { id: 'client-filter', label: 'Filter by client', tool: 'passwords' },
   { id: 'copy-password', label: 'Copy password', tool: 'passwords' },

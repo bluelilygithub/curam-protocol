@@ -2606,7 +2606,7 @@ function SettingsPage() {
             <div>
               <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Password Vault Tour</p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                6-step tour — master password, adding a login, linking it to a client, the generator, password health, locking
+                6-step tour — master password, adding a login, linking it to a client, per-login password rules and the generator, password health, locking
               </p>
             </div>
             <button

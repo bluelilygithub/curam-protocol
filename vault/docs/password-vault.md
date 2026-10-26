@@ -32,6 +32,14 @@ The key settings are stored (`kdf`, `kdfIterations`, `salt`) so the method can b
 - **Writes carry `keyVersion`**; a stale window gets 409 `KEY_CHANGED` and is locked, so an entry can never be saved under a key that is no longer current.
 - **Recycle bin**: a deleted entry is kept as ciphertext for 30 days with `keyVersion`. After a master-password change the old key is gone, so a restore of an older item is refused with a plain sentence. A reset removes the person's bin items too.
 
+## Rules for one login
+
+**Make one** on a login opens `GeneratorModal`, which holds the same `GeneratorPanel` as the Password generator tool (length, lower/upper/numbers/symbols, look-alikes, and "never use these characters" for sites that reject some). "Keep these rules with this login" stores them as `genRules` **inside the encrypted entry**, so Make one starts from them next time. The remembered global choice (`vault:passwordGenOptions`) only seeds logins that have no rules.
+
+## Moving it in the navigation
+
+The tool is in the nav catalog (`client/src/config/appNavigation.js`, id `passwordVault`, Research & Utilities), so **Settings -> Navigation** can place it in any set or group. Until placed it sits under "Unsorted" in the first set.
+
 ## What it does not do (and the guide says so)
 
 Autofill or filling sites, sharing a login with another person, one-time codes / passkeys, importing from or exporting to another manager, a breach check (it would mean sending the password somewhere), and any kind of recovery. Each person sees only their own vault; linking to a client is filing, not sharing.

@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
-import { generatePassword } from '../../utils/passwordGen.mjs';
+import GeneratorModal from './GeneratorModal';
+import { describeRules } from './GeneratorPanel';
 import { BTN, BTN_OUTLINE, BTN_PRIMARY, CARD, CARD_STYLE, FIELD, FIELD_STYLE, Message, SecretInput, StrengthMeter, loadGenOptions } from './shared';
 
 const LABEL = 'text-xs font-medium';
@@ -19,6 +20,8 @@ export default function EntryForm({ item, clients, startPassword = '', startClie
   const [password, setPassword] = useState(item ? item.password || '' : startPassword);
   const [notes, setNotes] = useState(item?.notes || '');
   const [clientId, setClientId] = useState(item?.clientId ? String(item.clientId) : startClientId);
+  const [rules, setRules] = useState(item?.genRules || null); // this login's own password rules, kept inside its encrypted data
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -31,7 +34,7 @@ export default function EntryForm({ item, clients, startPassword = '', startClie
         id: item?.id,
         clientId: clientId ? Number(clientId) : null,
         data: {
-          title: title.trim(), username: username.trim(), url: url.trim(), password, notes,
+          title: title.trim(), username: username.trim(), url: url.trim(), password, notes, ...(rules ? { genRules: rules } : {}),
           passwordChangedAt: changed ? new Date().toISOString() : (item.passwordChangedAt || item.createdAt),
         },
       });
@@ -58,13 +61,14 @@ export default function EntryForm({ item, clients, startPassword = '', startClie
           <span className={LABEL} style={{ color: 'var(--color-muted)' }}>Password</span>
           <div className="flex gap-2 items-start">
             <SecretInput value={password} onChange={setPassword} label="Password" placeholder="Password" className="flex-1" autoComplete="new-password" />
-            <Tooltip text="Fill in a strong random password. It uses the length and characters you last chose in the Password generator.">
-              <button type="button" onClick={() => setPassword(generatePassword(loadGenOptions()))} className={BTN} style={BTN_OUTLINE}>
+            <Tooltip text="Open the password generator for this login: choose its length, which characters to use and which to avoid.">
+              <button type="button" onClick={() => setRulesOpen(true)} className={BTN} style={BTN_OUTLINE} data-guide="login-rules">
                 {getIcon('refresh-cw', { size: 14 })}Make one
               </button>
             </Tooltip>
           </div>
           <StrengthMeter password={password} />
+          {rules && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Rules kept for this login: {describeRules(rules)}.</p>}
         </div>
         <label className="space-y-1 block sm:col-span-2" data-guide="client-link">
           <span className={LABEL} style={{ color: 'var(--color-muted)' }}>Client (optional)</span>
@@ -84,6 +88,13 @@ export default function EntryForm({ item, clients, startPassword = '', startClie
         <button type="button" onClick={save} disabled={busy || !title.trim()} className={BTN} style={BTN_PRIMARY}>{getIcon('check', { size: 14 })}{busy ? 'Locking and saving…' : 'Save'}</button>
         <button type="button" onClick={onCancel} disabled={busy} className={BTN} style={BTN_OUTLINE}>Cancel</button>
       </div>
+      {rulesOpen && (
+        <GeneratorModal
+          title={title.trim()} startOptions={rules || loadGenOptions()} hasSavedRules={!!rules}
+          onClose={() => setRulesOpen(false)}
+          onUse={(pw, options, remember) => { setPassword(pw); if (remember) setRules(options); setRulesOpen(false); }}
+        />
+      )}
     </div>
   );
 }

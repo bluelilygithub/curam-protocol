@@ -73,7 +73,7 @@ export function startPasswordVaultTour(setTab) {
   tour.addStep({
     id: 'vault-add',
     title: 'Add a login',
-    text: 'Save a title, username, web address, password and notes. Pick a client to file it under them. The Make one button fills in a strong random password.',
+    text: 'Save a title, username, web address, password and notes. Pick a client to file it under them. Make one opens the password generator for this login, so you can set its own rules (length, which characters, which to avoid) and keep them with the login.',
     attachTo: { element: '[data-tour="vault-add"]', on: 'bottom' },
     beforeShowPromise: go('passwords', 'vault-add', '[data-tour="vault-add"]'),
     when: { show() { injectStepCounter(3); } },

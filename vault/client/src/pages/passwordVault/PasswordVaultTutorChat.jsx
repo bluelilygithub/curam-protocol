@@ -20,6 +20,7 @@ const CONFIG = {
   starters: [
     'How do I save a login for a client?',
     'Make me a strong password',
+    'A site will not accept symbols. What do I do?',
     'I forgot my master password',
     'Which of my passwords are weak?',
   ],

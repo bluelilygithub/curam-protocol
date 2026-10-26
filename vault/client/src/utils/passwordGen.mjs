@@ -9,7 +9,8 @@ export const AMBIGUOUS = 'Il1O0o'; // look alike in many fonts
 
 export const MIN_LENGTH = 8;
 export const MAX_LENGTH = 64;
-export const DEFAULT_OPTIONS = { length: 20, lower: true, upper: true, digits: true, symbols: true, avoidAmbiguous: true };
+export const MAX_EXCLUDE = 40;
+export const DEFAULT_OPTIONS = { length: 20, lower: true, upper: true, digits: true, symbols: true, avoidAmbiguous: true, exclude: '' };
 
 const defaultRandomValues = (arr) => globalThis.crypto.getRandomValues(arr);
 
@@ -25,12 +26,14 @@ export function randomInt(max, getRandomValues = defaultRandomValues) {
 }
 
 function setsFor(o) {
-  const strip = (s) => (o.avoidAmbiguous ? [...s].filter((c) => !AMBIGUOUS.includes(c)).join('') : s);
+  const strip = (s) => [...s].filter((c) => !(o.avoidAmbiguous && AMBIGUOUS.includes(c)) && !o.exclude.includes(c)).join('');
   const sets = [];
   if (o.lower) sets.push(strip(LOWER));
   if (o.upper) sets.push(strip(UPPER));
   if (o.digits) sets.push(strip(DIGITS));
   if (o.symbols) sets.push(strip(SYMBOLS));
+  // a kind the person ticked but then excluded entirely would silently vanish: say so instead
+  if (sets.some((x) => !x.length)) throw new Error('Every character of one ticked kind is excluded. Untick that kind or shorten the excluded list.');
   return sets;
 }
 
@@ -38,6 +41,7 @@ function setsFor(o) {
 export function normaliseOptions(options = {}) {
   const o = { ...DEFAULT_OPTIONS, ...options };
   o.length = Math.min(MAX_LENGTH, Math.max(MIN_LENGTH, Math.round(Number(o.length) || DEFAULT_OPTIONS.length)));
+  o.exclude = [...new Set([...String(o.exclude || '').replace(/\s/g, '')])].slice(0, MAX_EXCLUDE).join(''); // whitespace and repeats dropped
   return o;
 }
 
@@ -59,7 +63,8 @@ export function generatePassword(options = {}, getRandomValues = defaultRandomVa
 /** Bits of randomness in a password made with these options (length x log2 of the characters it draws from). */
 export function generatedBits(options = {}) {
   const o = normaliseOptions(options);
-  const pool = setsFor(o).join('').length;
+  let pool = 0;
+  try { pool = new Set(setsFor(o).join('')).size; } catch { /* nothing usable: 0 bits */ }
   return pool ? Math.round(o.length * Math.log2(pool)) : 0;
 }
 

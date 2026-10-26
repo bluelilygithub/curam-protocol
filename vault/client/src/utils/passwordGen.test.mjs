@@ -57,6 +57,18 @@ assert.ok(generatedBits({ length: 20 }) > 110);
 assert.ok(generatedBits({ length: 10, upper: false, symbols: false, digits: false }) < generatedBits({ length: 10 }));
 assert.strictEqual(generatedBits({ lower: false, upper: false, digits: false, symbols: false }), 0);
 
+// ---- excluded characters: never appear, and a kind that is excluded away entirely is an error, not a silent gap
+for (let n = 0; n < 200; n++) {
+  const pw = generatePassword({ length: 16, exclude: '&?#@!' });
+  assert.ok(!/[&?#@!]/.test(pw), `excluded characters stay out: ${pw}`);
+  assert.ok(/[^A-Za-z0-9]/.test(pw), 'still has a symbol');
+}
+assert.strictEqual(normaliseOptions({ exclude: ' a b a ' }).exclude, 'ab', 'spaces and repeats dropped');
+assert.strictEqual(normaliseOptions({ exclude: 'x'.repeat(100) }).exclude.length, 1);
+assert.throws(() => generatePassword({ digits: true, exclude: '0123456789' }), /excluded/);
+assert.strictEqual(generatedBits({ digits: true, exclude: '0123456789' }), 0);
+assert.ok(generatedBits({ length: 20, exclude: 'abcdefghijklmnopqrstuvwxyz' }) < generatedBits({ length: 20 }));
+
 // ---- strength guess
 const s = (p) => estimateStrength(p);
 assert.strictEqual(s('').label, 'Empty');

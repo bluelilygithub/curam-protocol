@@ -21,6 +21,8 @@ checkGuide({
     ['copy-password', 'does', /30 seconds/, 'the clipboard is cleared'],
     ['delete-password', 'does', /Recycle bin for 30 days/, 'a delete goes to the bin'],
     ['generator', 'notes', /works even when the vault is locked/, 'the generator needs no unlock'],
+    ['login-rules', 'does', /every generator option/, 'a login has its own generator rules'],
+    ['login-rules', 'notes', /encrypted data/, 'the rules are encrypted with the login'],
     ['health', 'notes', /data breach/, 'no breach check'],
     ['master', 'notes', /never sent to Vault/, 'the master password stays on the device'],
     ['reset-vault', 'notes', /no other way back in/, 'a forgotten master password cannot be recovered'],
