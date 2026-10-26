@@ -10,7 +10,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
-const { createModelResolver, SETTINGS_KEY } = require('./modelResolver');
+const { createModelResolver, SETTINGS_KEY, REVIEW_KEY } = require('./modelResolver');
 
 // a fake settings table and the workspace's connected models
 function world({ models = [{ id: 'model-a' }, { id: 'model-b' }, { id: 'model-c' }], standard = 'model-a', admins = [1], settings = [] } = {}) {
@@ -133,6 +133,33 @@ async function main() {
     assert.strictEqual(await w.resolver.resolveTopicResearchModel(7), 'model-b');
     w.standard = 'model-c';
     assert.strictEqual(await w.resolver.resolveTopicResearchModel(7), 'model-c');
+  }
+
+  // ------------------------------------------------------------ the structure opinion has its own model (M11)
+  {
+    assert.notStrictEqual(REVIEW_KEY, SETTINGS_KEY);
+    // nothing chosen: the model that writes briefs
+    let w = world({ settings: [{ userId: 7, key: SETTINGS_KEY, value: 'model-b' }] });
+    assert.strictEqual(await w.resolver.resolveReviewModel(7), 'model-b', 'no choice for the verdict: the brief model');
+    // chosen: that one, and the brief model is not touched
+    w = world({ settings: [{ userId: 7, key: SETTINGS_KEY, value: 'model-b' }, { userId: 7, key: REVIEW_KEY, value: 'model-c' }] });
+    assert.strictEqual(await w.resolver.resolveReviewModel(7), 'model-c');
+    assert.strictEqual(await w.resolver.resolveTopicResearchModel(7), 'model-b', 'the brief model is unchanged by the verdict setting');
+    // a choice that is no longer connected is ignored
+    w = world({ settings: [{ userId: 7, key: REVIEW_KEY, value: 'model-gone' }] });
+    assert.strictEqual(await w.resolver.resolveReviewModel(7), 'model-a', 'a stale choice falls back to the brief model (here the workspace standard)');
+    // the first admin's choice is inherited
+    w = world({ admins: [1], settings: [{ userId: 1, key: REVIEW_KEY, value: 'model-c' }] });
+    assert.strictEqual(await w.resolver.resolveReviewModel(7), 'model-c');
+    // saving: only a connected model, empty clears, the other setting is left alone
+    w = world({ settings: [{ userId: 7, key: SETTINGS_KEY, value: 'model-b' }] });
+    await assert.rejects(() => w.resolver.saveReviewModel(7, 'not-connected'), (e) => e.status === 400);
+    const saved = await w.resolver.saveReviewModel(7, 'model-c');
+    assert.deepStrictEqual([saved.settingsKey, saved.modelId, saved.effectiveModel, saved.globalStandard], [REVIEW_KEY, 'model-c', 'model-c', 'model-b']);
+    assert.ok(w.rows.some((r) => r.key === SETTINGS_KEY && r.value === 'model-b'), 'the brief setting survives');
+    const cleared = await w.resolver.saveReviewModel(7, '');
+    assert.deepStrictEqual([cleared.modelId, cleared.effectiveModel], ['', 'model-b'], 'cleared: the card shows the brief model as the default');
+    assert.ok(!w.rows.some((r) => r.key === REVIEW_KEY));
   }
 
   // ------------------------------------------------------------ NO model id is written in Topic Research code

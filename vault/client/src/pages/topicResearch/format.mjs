@@ -247,6 +247,9 @@ export function spendLine(usage) {
 export const SEARCH_STEP_LABELS = ['Asking your sources', 'Saving what they found', 'Reading the best pages', 'Grouping stories and ranking'];
 export const BRIEF_STEP_LABELS = ['Getting the articles ready', 'Writing the brief', 'Checking sources and wording'];
 export const DRAFT_STEP_LABELS = ['Getting the brief ready', 'Writing the draft', 'Checking sources and wording'];
+export const REVIEW_STEP_LABELS = ['Getting the brief ready', 'Writing the verdict', 'Checking the answer'];
+/** What a verdict's suggested change to the draft is called, in plain words. */
+export const REVIEW_ACTION_LABELS = Object.freeze({ keep: 'Keep', merge: 'Merge', cut: 'Cut', reorder: 'Reorder', add: 'Add' });
 /** Words that name a kind of section (an opening, a close) rather than a subject: a section made only of these needs no fact behind it. */
 const GENERIC_WORDS = new Set(['introduction', 'intro', 'overview', 'summary', 'conclusion', 'final', 'thoughts', 'wrap', 'next', 'steps', 'takeaways', 'about', 'what', 'with', 'your', 'this', 'that', 'from', 'when', 'where', 'which', 'guide', 'checklist', 'why', 'how', 'start', 'before', 'after', 'read', 'more']);
 const stems = (text) => [...new Set(String(text || '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 4 && !GENERIC_WORDS.has(w)).map((w) => (w.length > 4 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w)))];

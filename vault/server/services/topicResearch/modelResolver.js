@@ -12,6 +12,7 @@
 // Everything outside is injectable so tests need no database. See docs/topic-research.md.
 
 const SETTINGS_KEY = 'topic_research_model';
+const REVIEW_KEY = 'topic_research_review_model'; // the model asked for a structure verdict; empty = the one that writes briefs
 
 const clean = (v) => (v != null && String(v).trim() ? String(v).trim() : null);
 
@@ -24,24 +25,24 @@ function createModelResolver(deps = {}) {
   };
   const getPool = () => (typeof d.pool === 'function' ? d.pool() : d.pool);
 
-  async function ownSetting(userId) {
+  async function ownSetting(userId, key = SETTINGS_KEY) {
     if (!userId) return null;
-    const { rows } = await getPool().query('SELECT value FROM settings WHERE "userId" = $1 AND key = $2', [String(userId), SETTINGS_KEY]);
+    const { rows } = await getPool().query('SELECT value FROM settings WHERE "userId" = $1 AND key = $2', [String(userId), key]);
     return clean(rows[0]?.value);
   }
 
-  async function firstAdminSetting() {
+  async function firstAdminSetting(key = SETTINGS_KEY) {
     const { rows } = await getPool().query(
       `SELECT s.value FROM settings s JOIN users u ON u.id::text = s."userId"::text WHERE u."isAdmin" = TRUE AND s.key = $1 ORDER BY s."userId" ASC LIMIT 1`,
-      [SETTINGS_KEY],
+      [key],
     );
     return clean(rows[0]?.value);
   }
 
-  async function chosen(userId) {
-    const own = await ownSetting(userId);
+  async function chosen(userId, key = SETTINGS_KEY) {
+    const own = await ownSetting(userId, key);
     if (own) return { modelId: own, fromAdmin: false };
-    const admin = await firstAdminSetting();
+    const admin = await firstAdminSetting(key);
     return admin ? { modelId: admin, fromAdmin: true } : { modelId: null, fromAdmin: false };
   }
 
@@ -52,6 +53,13 @@ function createModelResolver(deps = {}) {
     const [{ models }, { modelId }] = await Promise.all([d.getVaultModelsConfigForUser(userId), chosen(userId)]);
     if (modelId && inList(models, modelId)) return modelId;
     return d.pickTextModel(await d.getModelsForUser(userId), 'standard');
+  }
+
+  /** The model that gives a structure verdict: the person's choice for that job when it is a connected model, else the model that writes briefs. */
+  async function resolveReviewModel(userId) {
+    const [{ models }, { modelId }] = await Promise.all([d.getVaultModelsConfigForUser(userId), chosen(userId, REVIEW_KEY)]);
+    if (modelId && inList(models, modelId)) return modelId;
+    return resolveTopicResearchModel(userId);
   }
 
   /**
@@ -97,7 +105,29 @@ function createModelResolver(deps = {}) {
     return getTopicResearchModelConfig(userId);
   }
 
-  return { resolveTopicResearchModel, resolveCheapModel, getTopicResearchModelConfig, saveTopicResearchModel };
+  /** What the Settings card for the structure opinion needs (same shape as getTopicResearchModelConfig; the default shown is the brief model). */
+  async function getReviewModelConfig(userId) {
+    const [{ models }, { modelId, fromAdmin }, briefModel] = await Promise.all([d.getVaultModelsConfigForUser(userId), chosen(userId, REVIEW_KEY), resolveTopicResearchModel(userId)]);
+    const valid = !modelId || inList(models, modelId);
+    return { settingsKey: REVIEW_KEY, modelId: modelId || '', assignmentValid: valid, fromAdmin, globalStandard: briefModel, effectiveModel: modelId && valid ? modelId : briefModel, choices: models };
+  }
+
+  async function saveReviewModel(userId, modelId) {
+    const id = clean(modelId);
+    if (id) {
+      const { models } = await d.getVaultModelsConfigForUser(userId);
+      if (!inList(models, id)) throw Object.assign(new Error('Choose one of the models connected in Settings -> AI & Chat.'), { status: 400 });
+      await getPool().query(
+        `INSERT INTO settings ("userId", key, value) VALUES ($1, $2, $3) ON CONFLICT ("userId", key) DO UPDATE SET value = EXCLUDED.value`,
+        [String(userId), REVIEW_KEY, id],
+      );
+    } else {
+      await getPool().query('DELETE FROM settings WHERE "userId" = $1 AND key = $2', [String(userId), REVIEW_KEY]);
+    }
+    return getReviewModelConfig(userId);
+  }
+
+  return { resolveTopicResearchModel, resolveReviewModel, resolveCheapModel, getTopicResearchModelConfig, saveTopicResearchModel, getReviewModelConfig, saveReviewModel };
 }
 
-module.exports = { createModelResolver, SETTINGS_KEY, ...createModelResolver() };
+module.exports = { createModelResolver, SETTINGS_KEY, REVIEW_KEY, ...createModelResolver() };

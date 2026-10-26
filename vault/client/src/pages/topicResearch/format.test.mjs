@@ -1,6 +1,6 @@
 // Run: node client/src/pages/topicResearch/format.test.mjs
 import assert from 'assert';
-import { filterTopicsByLink, workflowSteps as wfs, briefJumpLinks, briefTabLabel, promptText, searchedForLine, notUsedLine, explainFailure, draftReadiness, RELEVANCE_STEP_LABELS, isShopPage, formatDate, timeAgo, statusLabel, parseFeedLines, feedLines, sourceChip, signalBadges, rankingNote, heatBadge, readNote, breakdownRows, defaultSelection, toggleSelection, selectionNote, factLabel, overlapWarning, costText, SIGNAL_FIELDS, DEFAULT_PERCENTS, DEFAULT_HALF_LIFE, toPercents, fromPercents, percentTotal, REFRESH_CHOICES, refreshLabel, orderTopics, mergeHistory, budgetBanner, spendLine, DRAFT_LENGTHS, draftLine, SEARCH_STEP_LABELS, BRIEF_STEP_LABELS, DRAFT_STEP_LABELS, stepsForModal, workflowSteps } from './format.mjs';
+import { REVIEW_STEP_LABELS, REVIEW_ACTION_LABELS, filterTopicsByLink, workflowSteps as wfs, briefJumpLinks, briefTabLabel, promptText, searchedForLine, notUsedLine, explainFailure, draftReadiness, RELEVANCE_STEP_LABELS, isShopPage, formatDate, timeAgo, statusLabel, parseFeedLines, feedLines, sourceChip, signalBadges, rankingNote, heatBadge, readNote, breakdownRows, defaultSelection, toggleSelection, selectionNote, factLabel, overlapWarning, costText, SIGNAL_FIELDS, DEFAULT_PERCENTS, DEFAULT_HALF_LIFE, toPercents, fromPercents, percentTotal, REFRESH_CHOICES, refreshLabel, orderTopics, mergeHistory, budgetBanner, spendLine, DRAFT_LENGTHS, draftLine, SEARCH_STEP_LABELS, BRIEF_STEP_LABELS, DRAFT_STEP_LABELS, stepsForModal, workflowSteps } from './format.mjs';
 
 assert.strictEqual(formatDate(null), 'No date');
 assert.strictEqual(formatDate('garbage'), 'No date');
@@ -305,6 +305,13 @@ assert.deepStrictEqual(workflowSteps('draft').map((s) => s.label), ['Search', 'R
   assert.deepStrictEqual(ids({ clientId: 10, projectId: 6 }), [], 'a mismatch gives nothing');
   assert.deepStrictEqual(ids({ clientId: '10' }), [1, 2], 'an id from a select (text) still matches');
   assert.deepStrictEqual(filterTopicsByLink(null, { clientId: 1 }), []);
+}
+
+// ---- structure verdict labels
+{
+  assert.strictEqual(REVIEW_STEP_LABELS.length, DRAFT_STEP_LABELS.length, 'the same number of steps the server reports');
+  assert.deepStrictEqual(Object.keys(REVIEW_ACTION_LABELS), ['keep', 'merge', 'cut', 'reorder', 'add'], 'one label per action the server allows');
+  assert.ok(Object.values(REVIEW_ACTION_LABELS).every((l) => /^[A-Z][a-z]+$/.test(l)));
 }
 
 console.log('topicResearch format: all passed');

@@ -16,6 +16,8 @@ const { topicTerms } = require('../services/topicResearch/matchTopic');
 const { validateSourceWeights, loadSourceWeights, saveSourceWeights } = require('../services/topicResearch/sourceWeights');
 const { briefToMarkdown, briefFileName } = require('../services/topicResearch/brief/markdown');
 const { draftToMarkdown, draftFileName } = require('../services/topicResearch/draft/markdown');
+const { reviewToMarkdown } = require('../services/topicResearch/review/markdown');
+const { buildPrompt: buildReviewPrompt, pasteText: reviewPasteText } = require('../services/topicResearch/review/prompt');
 const { LENGTHS: DRAFT_LENGTHS, DEFAULT_LENGTH: DEFAULT_DRAFT_LENGTH } = require('../services/topicResearch/draft/schema');
 const { progress, OP_ID } = require('../services/topicResearch/progress');
 const { aiLimiter } = require('../middleware/aiRateLimit');
@@ -40,6 +42,8 @@ function promptForStorage(p) {
 const WRITE_STEPS = (noun) => [{ id: 'prepare', label: `Getting the ${noun === 'brief' ? 'articles' : 'brief'} ready` }, { id: 'write', label: `Writing the ${noun}` }, { id: 'check', label: 'Checking sources and wording' }];
 const opIdOf = (req) => (typeof req.body?.opId === 'string' && OP_ID.test(req.body.opId) ? req.body.opId : undefined);
 const DRAFTS_PER_HOUR = 10;
+const REVIEWS_PER_HOUR = 10;
+const MAX_REVIEWS_PER_DRAFT = 5;
 const CHECKS_PER_HOUR = 40;
 const MAX_KEYWORD = 120;
 const BIN_TYPE = 'topic-research-topic'; // the shared recycle bin kind (server/services/recycleBin/adapters/topicResearch.js)
@@ -97,6 +101,7 @@ function createRouter(pool, {
   makeBrief = (input) => require('../services/topicResearch/brief/generate').generateBrief(input),
   // write a first draft from a brief (draft/generate.js). Injected so the route tests need no model.
   makeDraft = (input) => require('../services/topicResearch/draft/generate').generateDraft(input),
+  makeReview = (input) => require('../services/topicResearch/review/generate').generateReview(input),
   // other ways to word a topic (relevance/suggest.js). Injected so the route tests need no model.
   suggestQueriesFn = (input) => require('../services/topicResearch/relevance/suggest').suggestQueries(input),
   // check that the ticked articles are about the topic (relevance/check.js). Injected so the route tests need no model.
@@ -423,6 +428,7 @@ function createRouter(pool, {
   };
   const briefHits = new Map(); // userId -> timestamps of this hour's brief requests (a model call costs money, so the cap counts attempts)
   const draftHits = new Map(); // the same for drafts
+  const reviewHits = new Map(); // and for structure verdicts
   const checkHits = new Map(); // and for relevance checks and trade-term suggestions
 
   /** The articles a brief cites, in citation order (the order they were given to the model); articles since deleted are simply missing. */
@@ -694,6 +700,118 @@ function createRouter(pool, {
     } catch (err) { fail(res, err, 'write that draft'); } finally { report.finish(); if (held) briefsRunning.delete(key); }
   });
 
+  // ---- structure verdicts (M11): a second model's opinion on how to structure the essay -------------------------------------------------
+  // One draft with everything a verdict needs: the draft, its brief, the topic and the sources in the brief's citation order. null when not the caller's.
+  async function reviewContext(userId, draftId) {
+    const { rows: [row] } = await pool.query(
+      `SELECT d.*, b."selectedArticleIds" AS "selectedArticleIds", b."contentJson" AS "briefJson", b."runId" AS "runId", r."topicId" AS "topicId"
+         FROM topic_research_drafts d JOIN topic_research_briefs b ON b.id = d."briefId" JOIN topic_research_runs r ON r.id = b."runId"
+        WHERE d.id = $1 AND d."userId" = $2`,
+      [draftId, userId],
+    );
+    if (!row) return null;
+    const topic = await ownTopic(userId, row.topicId);
+    if (!topic) return null;
+    const sources = await sourcesOf(userId, asJson(row.selectedArticleIds, []));
+    return { row, topic, sources, brief: asJson(row.briefJson, null), draft: asJson(row.contentJson, null) };
+  }
+
+  function reviewWire(row, { keyword = '', sources = [], includePrompt = false } = {}) {
+    const content = asJson(row.contentJson, null);
+    return {
+      id: row.id, draftId: row.draftId, keyword, content,
+      sources: sources.map((s, i) => ({ number: i + 1, url: s.url, title: s.title, domain: s.domain })),
+      model: row.model, costUsd: Number(row.costUsd) || 0, createdAt: iso(row.createdAt),
+      markdown: content ? reviewToMarkdown(content, { createdAt: row.createdAt, model: row.model, keyword, sources }) : '',
+      ...(includePrompt ? { prompt: asJson(row.promptJson, null) } : {}),
+    };
+  }
+
+  // POST /drafts/:id/review: ask the structure-opinion model for a verdict on this draft and its brief (never the articles' text)
+  router.post('/drafts/:id/review', aiGate, async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(404).json({ error: 'Draft not found.' });
+    const key = `review:${req.user.id}:${id}`;
+    let held = false;
+    let report = { finish() {} };
+    try {
+      const ctx = await reviewContext(req.user.id, id);
+      if (!ctx) return res.status(404).json({ error: 'Draft not found.' });
+      if (!ctx.draft || !ctx.brief) return res.status(409).json({ error: 'This draft cannot be reviewed.' });
+      if (briefsRunning.has(key)) return res.status(409).json({ error: 'A verdict for this draft is already being written.' });
+      const spend = await spendFor(req.user.id);
+      if (spend.over) return res.status(402).json({ error: overBudgetMessage(spend), spend });
+      const t = now();
+      const mine = (reviewHits.get(req.user.id) || []).filter((x) => t - x < 3600000);
+      if (mine.length >= (limits.reviewsPerHour ?? REVIEWS_PER_HOUR)) { res.set('Retry-After', '600'); return res.status(429).json({ error: 'That is a lot of verdicts in an hour. Wait a while and try again.' }); }
+      briefsRunning.add(key); held = true;
+      report = progress.begin(req.user.id, opIdOf(req), WRITE_STEPS('verdict'));
+      report.start('prepare', 'Loading the brief and the draft');
+      mine.push(t); reviewHits.set(req.user.id, mine);
+      const settings = await loadSettings(pool, req.user.id);
+      report.done('prepare');
+      const out = await makeReview({
+        report, userId: req.user.id, topic: { keyword: ctx.topic.keyword, region: ctx.topic.region }, settings, brief: ctx.brief, draft: ctx.draft,
+        sources: ctx.sources.map((s) => ({ url: s.url, title: s.title, domain: s.domain })),
+      });
+      const { rows: [saved] } = await pool.query(
+        `INSERT INTO topic_research_reviews ("userId", "draftId", "contentJson", model, "costUsd", "inputTokens", "outputTokens", "promptJson")
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [req.user.id, id, JSON.stringify(out.review), out.model, out.costUsd, out.inputTokens, out.outputTokens, JSON.stringify(promptForStorage(out.prompt))],
+      );
+      // only the newest few verdicts of a draft are kept
+      await pool.query(
+        `DELETE FROM topic_research_reviews WHERE "draftId" = $1 AND "userId" = $2 AND id NOT IN (SELECT id FROM topic_research_reviews WHERE "draftId" = $1 AND "userId" = $2 ORDER BY "createdAt" DESC, id DESC LIMIT ${MAX_REVIEWS_PER_DRAFT})`,
+        [id, req.user.id],
+      );
+      res.status(201).json({ review: reviewWire(saved, { keyword: ctx.topic.keyword, sources: ctx.sources, includePrompt: true }), dropped: out.dropped });
+    } catch (err) { fail(res, err, 'write that verdict'); } finally { report.finish(); if (held) briefsRunning.delete(key); }
+  });
+
+  // GET /drafts/:id/reviews: the verdicts already made for this draft, newest first (no prompt: that is on the single read)
+  router.get('/drafts/:id/reviews', async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(404).json({ error: 'Draft not found.' });
+    try {
+      const { rows: [d] } = await pool.query(`SELECT id FROM topic_research_drafts WHERE id = $1 AND "userId" = $2`, [id, req.user.id]);
+      if (!d) return res.status(404).json({ error: 'Draft not found.' });
+      const { rows } = await pool.query(
+        `SELECT id, "draftId", "contentJson", model, "costUsd", "createdAt" FROM topic_research_reviews WHERE "draftId" = $1 AND "userId" = $2 ORDER BY "createdAt" DESC, id DESC LIMIT ${MAX_REVIEWS_PER_DRAFT}`,
+        [id, req.user.id],
+      );
+      res.json({ reviews: rows.map((r) => ({ id: r.id, model: r.model, costUsd: Number(r.costUsd) || 0, createdAt: iso(r.createdAt), verdict: (asJson(r.contentJson, null)?.verdict || '').slice(0, 160) })) });
+    } catch (err) { fail(res, err, 'load the verdicts'); }
+  });
+
+  // GET /reviews/:id: one verdict with its sources and the prompt it was made from
+  router.get('/reviews/:id', async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(404).json({ error: 'Verdict not found.' });
+    try {
+      const { rows: [row] } = await pool.query(`SELECT * FROM topic_research_reviews WHERE id = $1 AND "userId" = $2`, [id, req.user.id]);
+      if (!row) return res.status(404).json({ error: 'Verdict not found.' });
+      const ctx = await reviewContext(req.user.id, row.draftId);
+      res.json({ review: reviewWire(row, { keyword: ctx?.topic.keyword || '', sources: ctx?.sources || [], includePrompt: true }) });
+    } catch (err) { fail(res, err, 'load that verdict'); }
+  });
+
+  // GET /drafts/:id/review-prompt: the exact request a verdict would send, WITHOUT calling any model, to paste into any other AI
+  router.get('/drafts/:id/review-prompt', async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(404).json({ error: 'Draft not found.' });
+    try {
+      const ctx = await reviewContext(req.user.id, id);
+      if (!ctx) return res.status(404).json({ error: 'Draft not found.' });
+      if (!ctx.draft || !ctx.brief) return res.status(409).json({ error: 'This draft cannot be reviewed.' });
+      const settings = await loadSettings(pool, req.user.id);
+      const { system, user } = buildReviewPrompt({
+        topic: { keyword: ctx.topic.keyword, region: ctx.topic.region }, settings, brief: ctx.brief, draft: ctx.draft,
+        sources: ctx.sources.map((s) => ({ url: s.url, title: s.title, domain: s.domain })),
+      });
+      res.json({ prompt: { system, user }, text: reviewPasteText({ system, user }) });
+    } catch (err) { fail(res, err, 'build the request'); }
+  });
+
   // GET /briefs/:id/drafts: the drafts already written from this brief, newest first
   router.get('/briefs/:id/drafts', async (req, res) => {
     const id = parseId(req.params.id);
@@ -765,6 +883,18 @@ function createRouter(pool, {
       const id = req.body?.modelId;
       if (id !== undefined && id !== null && typeof id !== 'string') return res.status(400).json({ error: 'The model must be text.' });
       res.json(await modelApi.saveTopicResearchModel(req.user.id, id));
+    } catch (err) { fail(res, err, 'save the model setting'); }
+  });
+
+  // GET/POST /review-model-config { modelId }: which connected model gives structure verdicts ('' = the one that writes briefs)
+  router.get('/review-model-config', async (req, res) => {
+    try { res.json(await modelApi.getReviewModelConfig(req.user.id)); } catch (err) { fail(res, err, 'load the model setting'); }
+  });
+  router.post('/review-model-config', async (req, res) => {
+    try {
+      const id = req.body?.modelId;
+      if (id !== undefined && id !== null && typeof id !== 'string') return res.status(400).json({ error: 'The model must be text.' });
+      res.json(await modelApi.saveReviewModel(req.user.id, id));
     } catch (err) { fail(res, err, 'save the model setting'); }
   });
 

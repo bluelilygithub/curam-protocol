@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_topic_research_completed';
 
-const TOTAL_STEPS = 13;
+const TOTAL_STEPS = 14;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -129,12 +129,20 @@ export function startTopicResearchTour() {
   });
 
   tour.addStep({
+    id: 'tr-review',
+    title: 'Get a second opinion',
+    text: 'On a draft, the Structure verdict asks another AI model how it would structure the essay. It reads your brief and the draft\'s backbone (what is sourced, what still needs your input), never the articles\' text. Choose the model in Settings; a different one from the writer gives a truer second opinion. You can also copy the request and paste it into any AI yourself.',
+    when: { show() { injectStepCounter(10); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  tour.addStep({
     id: 'tr-tabs',
     title: 'History and Settings',
     text: 'History lists every past search, brief and draft, newest first, with a search box. Settings holds your feeds, what your site is about, how results are ranked and your spending.',
     attachTo: { element: '[data-tour="tr-tabs"]', on: 'bottom' },
     beforeShowPromise: check('tr-tabs', '[data-tour="tr-tabs"]'),
-    when: { show() { injectStepCounter(10); } },
+    when: { show() { injectStepCounter(11); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -144,7 +152,7 @@ export function startTopicResearchTour() {
     text: 'Paid searches, briefs and drafts cost a little. In Settings, set a monthly limit. When the estimate reaches it, paid searches, new briefs and new drafts pause and a banner tells you, until you raise the limit or the month ends. Amounts are estimates.',
     attachTo: { element: '[data-tour="tr-banner"]', on: 'bottom' },
     beforeShowPromise: check('tr-spending', '[data-tour="tr-banner"]'),
-    when: { show() { injectStepCounter(11); } },
+    when: { show() { injectStepCounter(12); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -152,7 +160,7 @@ export function startTopicResearchTour() {
     id: 'tr-model',
     title: 'Which AI model writes briefs and drafts',
     text: "Briefs and drafts are written by the AI model you choose in Vault Settings, under Topic Research, the same way as other tools. Leave it on the default to use the workspace model. Quick source checks and suggestions use the workspace's cheaper model. Searching, reading and ranking use none.",
-    when: { show() { injectStepCounter(12); } },
+    when: { show() { injectStepCounter(13); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -160,7 +168,7 @@ export function startTopicResearchTour() {
     id: 'tr-limits',
     title: 'Good to know',
     text: 'Scores say what to look at first, not what is true. Page text is kept for 30 days, then cleared. A deleted topic can be brought back from the recycle bin. Stuck? Press the round button at the bottom right and ask the guide.',
-    when: { show() { injectStepCounter(13); } },
+    when: { show() { injectStepCounter(14); } },
     buttons: [
       btnBack(),
       { text: 'Finish Tour ✓', action() { try { localStorage.setItem(TOUR_KEY, '1'); } catch (_) { /* ignore */ } tour.complete(); } },

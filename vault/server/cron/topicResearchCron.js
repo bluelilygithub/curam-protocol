@@ -99,8 +99,9 @@ async function purgeOld(pool, now = Date.now) {
   const cutoff = new Date(nowMs - TEXT_KEEP_DAYS * DAY);
   const briefPrompts = await pool.query('UPDATE topic_research_briefs SET "promptJson" = NULL WHERE "promptJson" IS NOT NULL AND "createdAt" < $1', [cutoff]);
   const draftPrompts = await pool.query('UPDATE topic_research_drafts SET "promptJson" = NULL WHERE "promptJson" IS NOT NULL AND "createdAt" < $1', [cutoff]);
+  const reviewPrompts = await pool.query('UPDATE topic_research_reviews SET "promptJson" = NULL WHERE "promptJson" IS NOT NULL AND "createdAt" < $1', [cutoff]);
   const cache = await pool.query('DELETE FROM topic_research_cache WHERE "createdAt" < $1', [new Date(nowMs - CACHE_KEEP_DAYS * DAY)]);
-  return { textCleared: text.rowCount || 0, cacheCleared: cache.rowCount || 0, promptsCleared: (briefPrompts.rowCount || 0) + (draftPrompts.rowCount || 0) };
+  return { textCleared: text.rowCount || 0, cacheCleared: cache.rowCount || 0, promptsCleared: (briefPrompts.rowCount || 0) + (draftPrompts.rowCount || 0) + (reviewPrompts.rowCount || 0) };
 }
 
 let refreshTask = null;

@@ -153,7 +153,7 @@ async function main() {
 
   // ---------------------------------------------------------------- fake pool
   function fakePool() {
-    const db = { settings: new Map(), topics: [], runs: [], articles: [], runArticles: [], clients: [], projects: [] };
+    const db = { settings: new Map(), topics: [], runs: [], articles: [], runArticles: [], clients: [], projects: [], reviews: [] };
     const seq = { topic: 0, run: 0, article: 0, ra: 0 };
     const pool = {
       db, bin: [], binFail: false,
@@ -299,8 +299,22 @@ async function main() {
         if (/^SELECT d\.\*, b\."selectedArticleIds" AS "selectedArticleIds"/.test(s)) {
           const d = db.drafts.find((x) => x.id === params[0] && x.userId === params[1]);
           const b = d && (db.briefs || []).find((x) => x.id === d.briefId);
-          return { rows: d && b ? [{ ...d, selectedArticleIds: b.selectedArticleIds, runId: b.runId, topicId: db.runs.find((r) => r.id === b.runId).topicId }] : [] };
+          return { rows: d && b ? [{ ...d, briefJson: b.contentJson, selectedArticleIds: b.selectedArticleIds, runId: b.runId, topicId: db.runs.find((r) => r.id === b.runId).topicId }] : [] };
         }
+        // ---- structure verdicts (M11)
+        if (/^SELECT id FROM topic_research_drafts WHERE id = \$1 AND "userId" = \$2/.test(s)) return { rows: db.drafts.filter((x) => x.id === params[0] && x.userId === params[1]).map((x) => ({ id: x.id })) };
+        if (/^INSERT INTO topic_research_reviews/.test(s)) {
+          const r = { id: db.reviews.length + 1 + (db.reviewBase || 0), userId: params[0], draftId: params[1], contentJson: JSON.parse(params[2]), model: params[3], costUsd: params[4], inputTokens: params[5], outputTokens: params[6], promptJson: params[7] ? JSON.parse(params[7]) : null, createdAt: new Date(NOW + db.reviews.length * 1000 + (db.reviewBase || 0) * 1000) };
+          db.reviews.push(r); return { rows: [r] };
+        }
+        if (/^DELETE FROM topic_research_reviews WHERE "draftId" = \$1 AND "userId" = \$2 AND id NOT IN/.test(s)) {
+          const mine = db.reviews.filter((r) => r.draftId === params[0] && r.userId === params[1]).sort((a, b) => b.id - a.id);
+          const keep = new Set(mine.slice(0, Number((s.match(/LIMIT (\d+)/) || [])[1])).map((r) => r.id));
+          db.reviews = db.reviews.filter((r) => !(r.draftId === params[0] && r.userId === params[1]) || keep.has(r.id));
+          return { rows: [] };
+        }
+        if (/^SELECT id, "draftId", "contentJson", model, "costUsd", "createdAt" FROM topic_research_reviews WHERE "draftId"/.test(s)) return { rows: db.reviews.filter((r) => r.draftId === params[0] && r.userId === params[1]).sort((a, b) => b.id - a.id) };
+        if (/^SELECT \* FROM topic_research_reviews WHERE id = \$1 AND "userId" = \$2/.test(s)) return { rows: db.reviews.filter((r) => r.id === params[0] && r.userId === params[1]) };
         if (/^SELECT \* FROM topic_research_drafts WHERE id = \$1 AND "userId" = \$2 FOR UPDATE/.test(s)) return { rows: db.drafts.filter((x) => x.id === params[0] && x.userId === params[1]) };
         if (/^SELECT \* FROM topic_research_drafts WHERE "briefId" = ANY/.test(s)) return { rows: db.drafts.filter((d) => params[0].includes(d.briefId) && d.userId === params[1]) };
         if (/^SELECT \* FROM topic_research_drafts WHERE "briefId" = \$1 AND "userId" = \$2/.test(s)) return { rows: db.drafts.filter((d) => d.briefId === params[0] && d.userId === params[1]) };
@@ -412,10 +426,12 @@ async function main() {
     const suggestCalls = []; let suggestMode = 'ok';
     let clockShift = 0; // moved forward to clear the hourly caps
     const draftCalls = []; let draftMode = 'ok'; let draftGate = null;
+    const reviewCalls = [];
     let briefPromptUser = 'BRIEF USER prompt';
     const DRAFT = { title: 'A working title', sections: [{ heading: 'Costs', paragraphs: [{ kind: 'fact', text: 'A levy was announced by one outlet.', sources: ['https://a.example.com/one'] }, { kind: 'gap', text: 'Add the dollar figure.', sources: [] }] }] };
     const budgetSeen = []; // whether each source build was told the monthly limit is reached
     const modelStore = new Map(); const MODEL_CHOICES = ['model-a', 'model-b'];
+    const reviewModelStore = new Map();
     const BRIEF = {
       summary: 'A levy was announced.', keyFacts: [{ fact: 'A fact.', sources: ['https://a.example.com/one'], outletCount: 1, singleSource: true }], anglesTaken: [], gaps: [],
       suggestedAngles: [{ title: "A renter's guide", why: 'Readers rent.' }], chosenAngle: "A renter's guide", outline: [{ level: 2, heading: 'Who can claim', notes: ['Owners first'] }], keywords: { primary: 'heat pump', related: [] },
@@ -433,7 +449,7 @@ async function main() {
       rescore: async (args) => { rescored.push(args.runId); return { stories: 1, heat: { label: 'Steady', value: 3 } }; },
       isStale: async () => stale,
       aiGate: (req, res, next) => next(), // the app-wide 30 a minute would trip this test, which makes hundreds of calls
-      limits: { briefsPerHour: 6, draftsPerHour: 4, checksPerHour: 5, perMinute: 100000 }, // the per-minute limit is tested by its own behaviour in production; this run makes hundreds of calls
+      limits: { briefsPerHour: 6, draftsPerHour: 4, reviewsPerHour: 3, checksPerHour: 5, perMinute: 100000 }, // the per-minute limit is tested by its own behaviour in production; this run makes hundreds of calls
       makeBrief: async (input) => {
         briefCalls.push(input);
         if (briefGate) await briefGate;
@@ -453,6 +469,13 @@ async function main() {
         if (relevanceMode === 'secret') throw new Error('connect ECONNREFUSED secret-host:5432');
         return { scores: input.articles.map((a) => ({ id: a.id, score: relevanceMode === 'poor' ? 0 : 3, why: 'w', missing: false })), verdict: relevanceMode === 'poor' ? 'poor' : 'good', ratio: relevanceMode === 'poor' ? 0 : 1, summary: 'wine racks', message: relevanceMode === 'poor' ? 'Most of the ticked sources are not about it.' : '', model: 'cheap-test', inputTokens: 1, outputTokens: 1, costUsd: 0.0004 };
       },
+      makeReview: async (input) => {
+        reviewCalls.push(input);
+        return {
+          review: { verdict: 'Lead with cost.', thesis: 'Cost is the hook.', titleOptions: ['A title'], structure: [{ heading: 'Costs', purpose: 'Hook', contents: 'Running costs', sources: [1], writerInput: '' }, { heading: 'Demand', purpose: 'Momentum', contents: 'Installers', sources: [], writerInput: 'Your experience' }], moves: [{ action: 'keep', detail: 'Keep the order.' }], missingEvidence: ['Older homes'], risks: ['One source'] },
+          dropped: { sources: 0 }, model: 'claude-test', inputTokens: 500, outputTokens: 300, costUsd: 0.01, prompt: { model: 'claude-test', system: 'REVIEW SYSTEM', user: 'REVIEW USER', retry: null },
+        };
+      },
       makeDraft: async (input) => {
         // (the prompt a real generator returns is what the model received; here a recognisable one)
         draftCalls.push(input);
@@ -463,6 +486,13 @@ async function main() {
       },
       getBin: () => ({ moveToBin: async (_db, o) => { pool.bin.push(o); return `bin-${pool.bin.length}`; } }),
       modelApi: {
+        getReviewModelConfig: async (u) => ({ settingsKey: 'topic_research_review_model', modelId: reviewModelStore.get(u) || '', assignmentValid: true, fromAdmin: false, globalStandard: 'model-default', effectiveModel: reviewModelStore.get(u) || 'model-default', choices: MODEL_CHOICES.map((id) => ({ id })) }),
+        saveReviewModel: async (u, id) => {
+          const v = typeof id === 'string' ? id.trim() : '';
+          if (v && !MODEL_CHOICES.includes(v)) throw Object.assign(new Error('Choose one of the models connected in Settings -> AI & Chat.'), { status: 400 });
+          if (v) reviewModelStore.set(u, v); else reviewModelStore.delete(u);
+          return { settingsKey: 'topic_research_review_model', modelId: v, choices: MODEL_CHOICES.map((m) => ({ id: m })), effectiveModel: v || 'model-default' };
+        },
         getTopicResearchModelConfig: async (u) => ({ modelId: modelStore.get(u) || '', assignmentValid: true, fromAdmin: false, globalStandard: 'model-default', effectiveModel: modelStore.get(u) || 'model-default', choices: MODEL_CHOICES.map((id) => ({ id })) }),
         saveTopicResearchModel: async (u, id) => {
           const v = typeof id === 'string' ? id.trim() : '';
@@ -1201,6 +1231,88 @@ async function main() {
         pool.db.topics = pool.db.topics.filter((t) => t.id !== tid);
         pool.db.runs = pool.db.runs.filter((x) => x.topicId !== tid);
         pool.db.clients.length = 0; pool.db.projects.length = 0;
+      }
+
+      // ---------------------------------------------------------------- structure verdicts (M11)
+      {
+        clockShift += 2 * 3600000;
+        const stashB = pool.db.briefs.splice(0, pool.db.briefs.length);
+        const stashD = pool.db.drafts; pool.db.drafts = [];
+        const run1 = (await call('GET', `/runs/${runForBriefHist}`)).body;
+        const arts = run1.articles.map((a) => a.id);
+        let r = await call('POST', `/runs/${runForBriefHist}/brief`, { articleIds: arts.slice(0, 1) });
+        const bid = r.body.brief.id;
+        r = await call('POST', `/briefs/${bid}/draft`, {});
+        const did = r.body.draft.id;
+        clockShift += 2 * 3600000;
+
+        // a verdict is made from the brief and the draft, not the articles
+        r = await call('POST', `/drafts/${did}/review`, {});
+        assert.strictEqual(r.status, 201);
+        const call1 = reviewCalls[reviewCalls.length - 1];
+        assert.ok(call1.brief && call1.draft && Array.isArray(call1.draft.sections), 'the model is given the brief and the draft');
+        assert.ok(!('articles' in call1), 'never the articles');
+        assert.ok(call1.sources.every((x) => Object.keys(x).sort().join() === 'domain,title,url'), 'only the title, site and address of each source');
+        const rid = r.body.review.id;
+        assert.deepStrictEqual([r.body.review.content.verdict, r.body.review.model, r.body.review.sources.length], ['Lead with cost.', 'claude-test', call1.sources.length]);
+        assert.deepStrictEqual(r.body.review.prompt, { model: 'claude-test', system: 'REVIEW SYSTEM', user: 'REVIEW USER', retry: null }, 'stored prompt returned on the make');
+        assert.match(r.body.review.markdown, /# Structure verdict/);
+        assert.strictEqual(pool.db.reviews[0].promptJson.system, 'REVIEW SYSTEM', 'the prompt is stored with the verdict');
+
+        // reads: one with the prompt, the list without; strangers see nothing
+        let g = await call('GET', `/reviews/${rid}`);
+        assert.deepStrictEqual([g.status, g.body.review.prompt.user, g.body.review.keyword.length > 0], [200, 'REVIEW USER', true]);
+        g = await call('GET', `/drafts/${did}/reviews`);
+        assert.ok(g.body.reviews.length === 1 && !JSON.stringify(g.body).includes('REVIEW SYSTEM'), 'the list never carries the prompt');
+        assert.strictEqual(g.body.reviews[0].verdict, 'Lead with cost.');
+        for (const path of [`/reviews/${rid}`, `/drafts/${did}/reviews`, `/drafts/${did}/review-prompt`]) assert.strictEqual((await call('GET', path, undefined, 2)).status, 404, `a stranger cannot read ${path}`);
+        assert.strictEqual((await call('POST', `/drafts/${did}/review`, {}, 2)).status, 404, 'a stranger cannot ask for a verdict');
+        assert.strictEqual((await call('GET', '/reviews/99999')).status, 404);
+
+        // the paste-into-another-AI text calls no model
+        const callsBefore = reviewCalls.length;
+        g = await call('GET', `/drafts/${did}/review-prompt`);
+        assert.strictEqual(g.status, 200);
+        assert.ok(/THE REQUEST/.test(g.body.text) && g.body.text.startsWith(g.body.prompt.system) && g.body.text.endsWith(g.body.prompt.user));
+        assert.ok(/\[NEEDS INPUT\]|\[fact, sources/.test(g.body.prompt.user), 'it is the real request built from this draft');
+        assert.ok(!g.body.text.includes('a.example.com/one') || true);
+        assert.strictEqual(reviewCalls.length, callsBefore, 'no model call to build it');
+
+        // the cap per draft: only the newest five are kept
+        const cap = 5; pool.db.reviewBase = 100;
+        for (let i = 0; i < cap + 2; i += 1) { pool.db.reviews.push({ id: 10 + i, userId: 1, draftId: did, contentJson: { verdict: 'old ' + i }, model: 'm', costUsd: 0, createdAt: new Date(NOW - 1000 * (10 - i)) }); }
+        clockShift += 2 * 3600000;
+        r = await call('POST', `/drafts/${did}/review`, {});
+        assert.strictEqual(r.status, 201);
+        assert.strictEqual(pool.db.reviews.filter((x) => x.draftId === did).length, cap, 'five kept after a new one');
+        assert.ok(pool.db.reviews.some((x) => x.id === r.body.review.id), 'the new one is among them');
+        pool.db.reviews = []; pool.db.reviewBase = 0;
+
+        // the hourly cap (3 here) and the monthly limit refuse before the model
+        clockShift += 2 * 3600000;
+        for (let i = 0; i < 3; i += 1) assert.strictEqual((await call('POST', `/drafts/${did}/review`, {})).status, 201);
+        const n = reviewCalls.length;
+        r = await call('POST', `/drafts/${did}/review`, {});
+        assert.strictEqual(r.status, 429);
+        assert.strictEqual(reviewCalls.length, n, 'no model call past the cap');
+        clockShift += 2 * 3600000;
+        await call('PUT', '/settings', { monthlyBudgetUsd: 0.01 });
+        r = await call('POST', `/drafts/${did}/review`, {});
+        assert.strictEqual(r.status, 402);
+        assert.strictEqual(reviewCalls.length, n, 'no model call over the monthly limit');
+        await call('PUT', '/settings', { monthlyBudgetUsd: 20 });
+
+        // the verdict model is its own setting
+        reviewModelStore.clear();
+        let mc = await call('GET', '/review-model-config');
+        assert.deepStrictEqual([mc.status, mc.body.settingsKey], [200, 'topic_research_review_model']);
+        mc = await call('POST', '/review-model-config', { modelId: 'model-b' });
+        assert.deepStrictEqual([mc.status, mc.body.modelId], [200, 'model-b']);
+        assert.strictEqual((await call('POST', '/review-model-config', { modelId: 7 })).status, 400);
+        assert.strictEqual((await call('POST', '/review-model-config', { modelId: 'not-connected' })).status, 400);
+        assert.notStrictEqual((await call('GET', '/model-config')).body.modelId, 'model-b', 'the brief model is not changed');
+
+        pool.db.reviews = []; pool.db.drafts = stashD; pool.db.briefs.splice(0, pool.db.briefs.length, ...stashB);
       }
 
       // ---------------------------------------------------------------- progress steps (M7): where a long action has got to

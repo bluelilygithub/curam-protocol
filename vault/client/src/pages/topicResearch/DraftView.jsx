@@ -5,6 +5,7 @@ import WorkflowBar from './WorkflowBar';
 import PromptPanel from './PromptPanel';
 import ActionBar, { ActionRow, MoreMenu } from './ActionBar';
 import LinkChips from './LinkChips';
+import ReviewPanel from './ReviewPanel';
 import useToastStore from '../../store/toastStore';
 import { offerUndo } from '../../utils/binUndo';
 import { useIcon } from '../../providers/IconProvider';
@@ -90,6 +91,7 @@ export default function DraftView({ draftId, onBack, onOpenDraft, onGoSearch, on
         <ActionRow>
           <button type="button" onClick={() => onBack(draft.briefId)} className={btn} style={{ ...btnStyle, borderColor: 'var(--color-primary)' }} title="Back to the brief this draft was written from">← Brief</button>
           <button type="button" onClick={another} className={btn} style={btnStyle} title="Writes a new draft from the same brief and keeps this one">{getIcon('refresh-cw', { size: 14 })}Write another</button>
+          <button type="button" onClick={() => { const el = document.getElementById('tr-review'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium hover:opacity-70 transition-opacity" style={{ background: 'var(--color-primary)', color: '#fff' }} title="Jump to the structure verdict: another AI's opinion on how to structure the essay">{getIcon('sparkles', { size: 14 })}Second opinion</button>
           <button type="button" onClick={copy} className={btn} style={btnStyle}>{getIcon('copy', { size: 14 })}Copy</button>
           {confirmDelete ? (
             <span className="inline-flex items-center gap-2 text-sm" style={muted}>
@@ -158,6 +160,8 @@ export default function DraftView({ draftId, onBack, onOpenDraft, onGoSearch, on
           </li>
         ))}
       </ol>
+
+      <ReviewPanel draftId={draft.id} draftModel={draft.model} />
 
       <PromptPanel prompt={draft.prompt} kept={!!draft.prompt} label="What the AI was asked to write this draft" />
     </div>

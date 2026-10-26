@@ -29,7 +29,7 @@ async function monthSpend(pool, userId, limitUsd, { now = Date.now, env = proces
     pool.query(`SELECT COALESCE(SUM("costUsd"), 0) AS total FROM topic_research_briefs WHERE "userId" = $1 AND "createdAt" >= $2`, [userId, start]),
     pool.query(`SELECT COALESCE(SUM("costUsd"), 0) AS total FROM topic_research_drafts WHERE "userId" = $1 AND "createdAt" >= $2`, [userId, start]),
     // the small model calls (is this article on topic, suggest trade words) have no table of their own: their cost is in the usage log
-    pool.query(`SELECT COALESCE(SUM(estimated_cost_usd), 0) AS total FROM usage_logs WHERE user_id = $1 AND created_at >= $2 AND feature IN ('topic_research_relevance', 'topic_research_suggest')`, [userId, start]),
+    pool.query(`SELECT COALESCE(SUM(estimated_cost_usd), 0) AS total FROM usage_logs WHERE user_id = $1 AND created_at >= $2 AND feature IN ('topic_research_relevance', 'topic_research_suggest', 'topic_research_review')`, [userId, start]),
   ]);
   const searchUsd = round4(s?.total);
   const briefUsd = round4(b?.total);

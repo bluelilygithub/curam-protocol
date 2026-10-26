@@ -1226,6 +1226,22 @@ async function initSchema() {
     // M8: the exact prompt sent to the model for a brief or a draft ({ model, system, user, retry }); cleared with the page text after 30 days
     await client.query(`ALTER TABLE topic_research_briefs ADD COLUMN IF NOT EXISTS "promptJson" JSONB`);
     await client.query(`ALTER TABLE topic_research_drafts ADD COLUMN IF NOT EXISTS "promptJson" JSONB`);
+    // M11: a second model's verdict on how to structure the essay, one row per request (5 kept per draft); gone with its draft
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS topic_research_reviews (
+        id             SERIAL PRIMARY KEY,
+        "userId"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "draftId"      INTEGER NOT NULL REFERENCES topic_research_drafts(id) ON DELETE CASCADE,
+        "contentJson"  JSONB NOT NULL,
+        model          TEXT,
+        "costUsd"      NUMERIC(10,6) NOT NULL DEFAULT 0,
+        "inputTokens"  INTEGER,
+        "outputTokens" INTEGER,
+        "promptJson"   JSONB,
+        "createdAt"    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_topic_research_reviews_draft ON topic_research_reviews ("draftId", "createdAt" DESC)`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS topic_research_source_weights (
         "userId" INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

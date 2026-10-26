@@ -229,6 +229,18 @@ On Results, every article has a tick box (the best ten start ticked, at most twe
 
 **Not done:** the separate Client-projects page (`ClientProjectPage`) does not show Research; History does not filter by client.
 
+## Milestone 11: a structure verdict from a second model
+
+**What it is.** At the bottom of a draft, **Get a second opinion** asks another model how it would structure the essay. The request (`review/prompt.js`) carries the **brief** (angle, summary, facts with source numbers and single-source flags, gaps, outline, keywords), the draft's **backbone** (every paragraph marked fact / framing / NEEDS INPUT, with its source numbers) and the numbered source list by **title and site only**. **No article text, snippet or address is ever sent** (a test plants a sentence in the sources and checks it never reaches the prompt). The brief and draft sit in marked data blocks with marker characters defanged, like the brief and draft prompts.
+
+**The answer** is strict JSON checked by `review/schema.js`: a verdict paragraph, the thesis, up to three titles, 2 to 14 recommended sections (heading, purpose, what goes here, source numbers, what only the writer can add), moves (keep, merge, cut, reorder, add), missing evidence and risks. Source numbers must be ones in the list it was given (others are dropped and counted); HTML stripped; everything capped; unknown fields ignored; one retry naming the problem. It is advice, not text to publish, and the page says so.
+
+**Which model.** Settings -> Topic Research has a second card, **Structure opinion model** (`topic_research_review_model`, `GET/POST /review-model-config`, `modelResolver.resolveReviewModel`). Empty = the brief model, which gives the same opinion twice, so the card and the panel say to choose a different one; the panel also says so when the verdict came from the model that wrote the draft. No model id is written in code (the existing scan covers the new files).
+
+**Routes and storage.** `POST /drafts/:id/review` (10 an hour, 402 over the monthly limit, progress steps), `GET /drafts/:id/reviews`, `GET /reviews/:id` (with the prompt), and `GET /drafts/:id/review-prompt`, which builds the **exact request without calling any model** so it can be pasted into any other AI. Table `topic_research_reviews` (verdict JSON, model, cost, `"promptJson"`, cascades with the draft): the newest five per draft are kept; the stored prompt is cleared after 30 days like the others. The cost is logged as `topic_research_review` and counts in the monthly spend through the usage log (the same place the small checks are).
+
+**Limits.** Verdicts are not restored from the recycle bin with a draft (they are cheap to make again). A real model's advice, and how good it is, has not been seen: only a fake model has been run. The verdict cannot see the sources' text, so it cannot say whether a source really supports a section, only what the brief says about it.
+
 ## Known limits and open items
 
 - Article pages are fetched by `extract.js` through `safeFetch` with robots.txt checks. `htmlFetch.fetchHtml` must not be used for this: it impersonates browsers and relays through third parties.

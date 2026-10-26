@@ -14,8 +14,8 @@ const { searchTopic, running } = require('../services/topicResearch/runSearch');
 const H = 3600000;
 const NOW = Date.UTC(2026, 9, 25, 12, 0, 0);
 
-function world({ topics = [], runs = [], briefs = [], drafts = [], checks = [], articles = [], cache = [] } = {}) {
-  const w = { topics, runs, briefs, drafts, checks, articles, cache };
+function world({ topics = [], runs = [], briefs = [], drafts = [], checks = [], articles = [], cache = [], reviews = [] } = {}) {
+  const w = { topics, runs, briefs, drafts, checks, articles, cache, reviews };
   w.pool = {
     async query(sql, p = []) {
       const s = sql.replace(/\s+/g, ' ').trim();
@@ -29,8 +29,8 @@ function world({ topics = [], runs = [], briefs = [], drafts = [], checks = [], 
       if (/^SELECT COALESCE\(SUM\("costUsd"\), 0\) AS total FROM topic_research_briefs/.test(s)) return { rows: [{ total: w.briefs.filter((b) => b.userId === p[0] && new Date(b.createdAt) >= p[1]).reduce((t, b) => t + (b.costUsd || 0), 0) }] };
       if (/^SELECT COALESCE\(SUM\("costUsd"\), 0\) AS total FROM topic_research_drafts/.test(s)) return { rows: [{ total: (w.drafts || []).filter((d) => d.userId === p[0] && new Date(d.createdAt) >= p[1]).reduce((t, d) => t + (d.costUsd || 0), 0) }] };
       if (/^SELECT COALESCE\(SUM\(estimated_cost_usd\), 0\) AS total FROM usage_logs/.test(s)) return { rows: [{ total: w.checks.filter((c) => c.userId === p[0] && new Date(c.createdAt) >= p[1]).reduce((t, c) => t + (c.costUsd || 0), 0) }] };
-      if (/^UPDATE topic_research_(briefs|drafts) SET "promptJson" = NULL/.test(s)) {
-        const list = /briefs/.test(s) ? w.briefs : w.drafts;
+      if (/^UPDATE topic_research_(briefs|drafts|reviews) SET "promptJson" = NULL/.test(s)) {
+        const list = /briefs/.test(s) ? w.briefs : /reviews/.test(s) ? w.reviews : w.drafts; if (!list) return { rowCount: 0, rows: [] };
         let n = 0;
         for (const x of list) if (x.promptJson != null && new Date(x.createdAt) < p[0]) { x.promptJson = null; n += 1; }
         return { rowCount: n, rows: [] };
@@ -153,9 +153,12 @@ async function main() {
       cache: [{ key: 'a', createdAt: new Date(NOW - 8 * 86400000) }, { key: 'b', createdAt: new Date(NOW - 6 * 86400000) }],
       briefs: [{ id: 1, promptJson: { user: 'old brief prompt' }, createdAt: new Date(NOW - 31 * 86400000), contentJson: { keep: true } }, { id: 2, promptJson: { user: 'new brief prompt' }, createdAt: new Date(NOW - 29 * 86400000) }, { id: 3, promptJson: null, createdAt: new Date(NOW - 40 * 86400000) }],
       drafts: [{ id: 1, promptJson: { user: 'old draft prompt' }, createdAt: new Date(NOW - 31 * 86400000) }, { id: 2, promptJson: { user: 'new draft prompt' }, createdAt: new Date(NOW - 1 * 86400000) }],
+      reviews: [{ id: 1, promptJson: { user: 'old verdict prompt' }, contentJson: { verdict: 'kept' }, createdAt: new Date(NOW - 31 * 86400000) }, { id: 2, promptJson: { user: 'new verdict prompt' }, createdAt: new Date(NOW - 2 * 86400000) }],
     });
     const r = await purgeOld(w.pool, () => NOW);
-    assert.deepStrictEqual(r, { textCleared: 2, cacheCleared: 1, promptsCleared: 2 });
+    assert.deepStrictEqual(r, { textCleared: 2, cacheCleared: 1, promptsCleared: 3 });
+    assert.deepStrictEqual(w.reviews.map((x) => x.promptJson), [null, { user: 'new verdict prompt' }], 'the verdict prompt goes after 30 days too; the verdict stays');
+    assert.deepStrictEqual(w.reviews[0].contentJson, { verdict: 'kept' });
     assert.deepStrictEqual([w.briefs.map((b) => b.promptJson), w.drafts.map((d) => d.promptJson)], [[null, { user: 'new brief prompt' }, null], [null, { user: 'new draft prompt' }]], 'a stored prompt goes with the page text it carries; newer ones stay');
     assert.deepStrictEqual(w.briefs[0].contentJson, { keep: true }, 'the brief itself is untouched');
     assert.strictEqual(w.briefs.length + w.drafts.length, 5, 'no brief or draft row is removed');
