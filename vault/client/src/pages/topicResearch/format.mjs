@@ -188,6 +188,19 @@ export function orderTopics(topics) {
   return [...watched, ...(topics || []).filter((t) => !t.onWatchlist)];
 }
 
+/**
+ * The saved topics for one client and/or one project (both optional; none = all). A client matches a topic made for that client, or for one of
+ * that client's projects (the server marks that as the topic's client too). A project matches only topics made for that project.
+ */
+export function filterTopicsByLink(topics, { clientId = null, projectId = null } = {}) {
+  const list = Array.isArray(topics) ? topics : [];
+  return list.filter((t) => {
+    if (clientId != null && Number(t?.link?.client?.id) !== Number(clientId)) return false;
+    if (projectId != null && Number(t?.link?.project?.id) !== Number(projectId)) return false;
+    return true;
+  });
+}
+
 /** Searches, briefs and drafts from /history as one list, newest first, each tagged with its kind and when. */
 export function mergeHistory(runs, briefs, drafts) {
   const rows = [

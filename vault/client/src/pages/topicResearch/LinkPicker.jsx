@@ -3,7 +3,7 @@ import api from '../../utils/apiClient';
 
 // "Who is this for?": a client and/or a project of the person's own, picked from the lists the rest of Vault already keeps. Both are optional.
 // Reports { clientId, projectId } (numbers or null). A project that belongs to a client says so in its label, and when no client is picked the topic shows that one.
-export default function LinkPicker({ clientId, projectId, onChange, idPrefix = 'tr-link' }) {
+export default function LinkPicker({ clientId, projectId, onChange, idPrefix = 'tr-link', filter = false }) {
   const [clients, setClients] = useState([]);
   const [projects, setProjects] = useState([]);
   const [failed, setFailed] = useState(false);
@@ -33,16 +33,16 @@ export default function LinkPicker({ clientId, projectId, onChange, idPrefix = '
   return (
     <div className="grid sm:grid-cols-2 gap-2" data-guide="linkpicker">
       <div>
-        <label htmlFor={`${idPrefix}-client`} className={lbl} style={{ color: 'var(--color-muted)' }}>For client (optional)</label>
+        <label htmlFor={`${idPrefix}-client`} className={lbl} style={{ color: 'var(--color-muted)' }}>{filter ? 'Client' : 'For client (optional)'}</label>
         <select id={`${idPrefix}-client`} value={clientId ?? ''} onChange={(e) => onChange({ clientId: num(e.target.value), projectId: projectId ?? null })} className={cls} style={field}>
-          <option value="">No client</option>
+          <option value="">{filter ? 'All clients' : 'No client'}</option>
           {clients.map((c) => <option key={c.id} value={c.id}>{c.name}{c.company ? ` — ${c.company}` : ''}</option>)}
         </select>
       </div>
       <div>
-        <label htmlFor={`${idPrefix}-project`} className={lbl} style={{ color: 'var(--color-muted)' }}>For project (optional)</label>
+        <label htmlFor={`${idPrefix}-project`} className={lbl} style={{ color: 'var(--color-muted)' }}>{filter ? 'Project' : 'For project (optional)'}</label>
         <select id={`${idPrefix}-project`} value={projectId ?? ''} onChange={(e) => onChange({ clientId: clientId ?? null, projectId: num(e.target.value) })} className={cls} style={field}>
-          <option value="">No project</option>
+          <option value="">{filter ? 'All projects' : 'No project'}</option>
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}{p.clientName ? ` — ${p.clientName}` : ''}</option>)}
         </select>
       </div>

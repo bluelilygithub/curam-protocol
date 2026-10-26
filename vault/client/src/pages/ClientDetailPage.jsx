@@ -11,7 +11,7 @@ import { FOLLOW_UP_CATEGORY } from '../utils/taskCategories';
 import AttachmentChip from '../components/AttachmentChip';
 import { startCrmTour, TOUR_KEY as CRM_TOUR_KEY } from '../utils/tours/crmTour';
 import CrmInfoModal, { INFO_SEEN_KEY as CRM_INFO_SEEN_KEY } from '../components/CrmInfoModal';
-import LinkedResearch from '../components/LinkedResearch';
+import { useLinkedResearch, ResearchList } from '../components/LinkedResearch';
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
 
@@ -332,10 +332,12 @@ export default function ClientDetailPage() {
     deals:       true,
     contacts:    true,
     projects:    false,
+    research:    true,
     tasks:       true,
   });
 
   const toggleSection = (key) => setSections(s => ({ ...s, [key]: !s[key] }));
+  const clientResearch = useLinkedResearch({ clientId: Number(id) }); // null when Topic Research is off for this person: no section
 
   const dealsRef    = useRef(null);
   const projectsRef = useRef(null);
@@ -593,7 +595,11 @@ export default function ClientDetailPage() {
           </Section>
 
           {/* Research: the Topic Research topics, briefs and drafts made for this client or any of its projects (quiet when the tool is off) */}
-          <LinkedResearch clientId={Number(id)} />
+          {clientResearch !== null && (
+            <Section title={`Research${clientResearch.length ? ` (${clientResearch.length})` : ''}`} open={sections.research} onToggle={() => toggleSection('research')}>
+              <ResearchList topics={clientResearch} noun="client" />
+            </Section>
+          )}
 
           {/* 2b. Tasks — every open task linked to this client, whether via a
                project or directly (tasks.clientId, e.g. a touchpoint

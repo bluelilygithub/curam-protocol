@@ -1,6 +1,6 @@
 // Run: node client/src/pages/topicResearch/format.test.mjs
 import assert from 'assert';
-import { workflowSteps as wfs, briefJumpLinks, briefTabLabel, promptText, searchedForLine, notUsedLine, explainFailure, draftReadiness, RELEVANCE_STEP_LABELS, isShopPage, formatDate, timeAgo, statusLabel, parseFeedLines, feedLines, sourceChip, signalBadges, rankingNote, heatBadge, readNote, breakdownRows, defaultSelection, toggleSelection, selectionNote, factLabel, overlapWarning, costText, SIGNAL_FIELDS, DEFAULT_PERCENTS, DEFAULT_HALF_LIFE, toPercents, fromPercents, percentTotal, REFRESH_CHOICES, refreshLabel, orderTopics, mergeHistory, budgetBanner, spendLine, DRAFT_LENGTHS, draftLine, SEARCH_STEP_LABELS, BRIEF_STEP_LABELS, DRAFT_STEP_LABELS, stepsForModal, workflowSteps } from './format.mjs';
+import { filterTopicsByLink, workflowSteps as wfs, briefJumpLinks, briefTabLabel, promptText, searchedForLine, notUsedLine, explainFailure, draftReadiness, RELEVANCE_STEP_LABELS, isShopPage, formatDate, timeAgo, statusLabel, parseFeedLines, feedLines, sourceChip, signalBadges, rankingNote, heatBadge, readNote, breakdownRows, defaultSelection, toggleSelection, selectionNote, factLabel, overlapWarning, costText, SIGNAL_FIELDS, DEFAULT_PERCENTS, DEFAULT_HALF_LIFE, toPercents, fromPercents, percentTotal, REFRESH_CHOICES, refreshLabel, orderTopics, mergeHistory, budgetBanner, spendLine, DRAFT_LENGTHS, draftLine, SEARCH_STEP_LABELS, BRIEF_STEP_LABELS, DRAFT_STEP_LABELS, stepsForModal, workflowSteps } from './format.mjs';
 
 assert.strictEqual(formatDate(null), 'No date');
 assert.strictEqual(formatDate('garbage'), 'No date');
@@ -286,6 +286,25 @@ assert.deepStrictEqual(workflowSteps('draft').map((s) => s.label), ['Search', 'R
   assert.ok(briefTabLabel({ chosenAngle: 'x'.repeat(80), createdAt: '2026-10-26T01:00:00Z' }).length < 60, 'a long angle is cut');
   assert.ok(briefTabLabel({ angle: 'typed angle', createdAt: '2026-10-26T01:00:00Z' }).startsWith('typed angle'), 'falls back to the angle asked for');
   assert.ok(briefTabLabel({}).startsWith('Brief'));
+}
+
+// ---- filtering saved topics by client or project
+{
+  const topics = [
+    { id: 1, link: { client: { id: 10, name: 'Acme' }, project: null } },
+    { id: 2, link: { client: { id: 10, name: 'Acme', viaProject: true }, project: { id: 5, name: 'Site' } } },
+    { id: 3, link: { client: null, project: { id: 6, name: 'Solo' } } },
+    { id: 4, link: { client: null, project: null } },
+    { id: 5 },
+  ];
+  const ids = (f) => filterTopicsByLink(topics, f).map((t) => t.id);
+  assert.deepStrictEqual(ids({}), [1, 2, 3, 4, 5], 'no filter shows everything');
+  assert.deepStrictEqual(ids({ clientId: 10 }), [1, 2], 'a client shows its own topics and those of its projects');
+  assert.deepStrictEqual(ids({ projectId: 6 }), [3]);
+  assert.deepStrictEqual(ids({ clientId: 10, projectId: 5 }), [2], 'both narrow it');
+  assert.deepStrictEqual(ids({ clientId: 10, projectId: 6 }), [], 'a mismatch gives nothing');
+  assert.deepStrictEqual(ids({ clientId: '10' }), [1, 2], 'an id from a select (text) still matches');
+  assert.deepStrictEqual(filterTopicsByLink(null, { clientId: 1 }), []);
 }
 
 console.log('topicResearch format: all passed');

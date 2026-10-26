@@ -3,12 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import api from '../utils/apiClient';
 
 // The research (Topic Research) done for a client or a project, shown on that client's or project's own page, each item opening Topic Research.
-// Quiet by design: nothing is drawn when the tool is off for the person, the request fails, or there is no research yet and `showEmpty` is false.
-// Pass exactly one of clientId / projectId.
-export default function LinkedResearch({ clientId = null, projectId = null, showEmpty = true }) {
-  const navigate = useNavigate();
-  const [topics, setTopics] = useState(null); // null = not loaded or not available
+// Quiet by design: nothing is drawn when the tool is off for the person or the request fails. Pass exactly one of clientId / projectId.
 
+/** The linked topics (with their briefs and drafts), or null while loading or when the tool is not available to this person. */
+export function useLinkedResearch({ clientId = null, projectId = null }) {
+  const [topics, setTopics] = useState(null);
   useEffect(() => {
     let live = true;
     setTopics(null);
@@ -24,22 +23,20 @@ export default function LinkedResearch({ clientId = null, projectId = null, show
     })();
     return () => { live = false; };
   }, [clientId, projectId]);
+  return topics;
+}
 
-  if (topics === null) return null;
-  if (!topics.length && !showEmpty) return null;
+/** The topics, briefs and drafts as a plain list (no frame), for a page that wraps it in its own section. */
+export function ResearchList({ topics, noun = 'client' }) {
+  const navigate = useNavigate();
   const muted = { color: 'var(--color-muted)' };
   const link = { color: 'var(--color-primary)' };
   const go = (qs) => navigate(`/topic-research?${qs}`);
   const day = (d) => (d ? new Date(d).toLocaleDateString() : '');
-
   return (
-    <section className="rounded-xl border p-4 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }} data-guide="linked-research">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Research</h3>
-        <button type="button" onClick={() => navigate('/topic-research')} className="text-xs hover:opacity-70 transition-opacity" style={link}>Open Topic Research</button>
-      </div>
+    <div className="space-y-3 pt-3" data-guide="linked-research">
       {!topics.length && (
-        <p className="text-sm" style={muted}>No research is linked here yet. In Topic Research, choose this {clientId ? 'client' : 'project'} when you search a topic.</p>
+        <p className="text-sm" style={muted}>No research is linked here yet. In Topic Research, choose this {noun} when you search a topic, or open a topic and press Change.</p>
       )}
       {topics.map((t) => (
         <div key={t.id} className="space-y-1">
@@ -62,6 +59,23 @@ export default function LinkedResearch({ clientId = null, projectId = null, show
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+/** The framed card (used on the Project page). */
+export default function LinkedResearch({ clientId = null, projectId = null, showEmpty = true }) {
+  const navigate = useNavigate();
+  const topics = useLinkedResearch({ clientId, projectId });
+  if (topics === null) return null;
+  if (!topics.length && !showEmpty) return null;
+  return (
+    <section className="rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Research</h3>
+        <button type="button" onClick={() => navigate('/topic-research')} className="text-xs hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)' }}>Open Topic Research</button>
+      </div>
+      <ResearchList topics={topics} noun={clientId ? 'client' : 'project'} />
     </section>
   );
 }

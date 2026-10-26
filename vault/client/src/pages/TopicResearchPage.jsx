@@ -20,7 +20,7 @@ import { startTopicResearchTour, TOUR_KEY } from '../utils/tours/topicResearchTo
 import { withProgress } from './topicResearch/withProgress';
 import LinkPicker from './topicResearch/LinkPicker';
 import LinkChips from './topicResearch/LinkChips';
-import { explainFailure, REFRESH_CHOICES, SEARCH_STEP_LABELS, budgetBanner, heatBadge, orderTopics, refreshLabel, statusLabel, timeAgo } from './topicResearch/format.mjs';
+import { filterTopicsByLink, explainFailure, REFRESH_CHOICES, SEARCH_STEP_LABELS, budgetBanner, heatBadge, orderTopics, refreshLabel, statusLabel, timeAgo } from './topicResearch/format.mjs';
 
 // Status colours are deliberately outside the theme (see client/DESIGN.md).
 const LEVEL = { good: '#16a34a', warn: '#f59e0b', bad: '#ef4444', info: 'var(--color-muted)' };
@@ -45,6 +45,7 @@ export default function TopicResearchPage() {
   const [topics, setTopics] = useState(null);
   const [keyword, setKeyword] = useState('');
   const [forLink, setForLink] = useState({ clientId: null, projectId: null }); // who a new search is for (both optional)
+  const [showLink, setShowLink] = useState({ clientId: null, projectId: null }); // which saved topics to list (both optional; none = all)
   const [suggested, setSuggested] = useState(null); // other ways to word the topic: null = not asked, [] = nothing to add
   const [ticked, setTicked] = useState(new Set()); // the ones to search as well
   const [suggesting, setSuggesting] = useState(false);
@@ -267,13 +268,24 @@ export default function TopicResearchPage() {
 
               <div className="space-y-2" data-tour="tr-topics">
                 <h2 className="text-base font-semibold" style={text}>Saved topics</h2>
+                {topics && topics.length > 0 && (
+                  <div className="space-y-1" data-guide="topicfilter">
+                    <LinkPicker clientId={showLink.clientId} projectId={showLink.projectId} onChange={setShowLink} idPrefix="tr-filter" filter />
+                    {(showLink.clientId || showLink.projectId) && (
+                      <p className="text-xs" style={muted}>
+                        Showing {filterTopicsByLink(topics, showLink).length} of {topics.length} topics.{' '}
+                        <button type="button" onClick={() => setShowLink({ clientId: null, projectId: null })} className="underline hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)' }}>Show all</button>
+                      </p>
+                    )}
+                  </div>
+                )}
                 {topics === null && <p className="text-sm" style={muted}>Loading…</p>}
                 {topics && topics.length === 0 && (
                   <p className="text-sm leading-relaxed" style={muted}>
                     No topics yet. Add a few feeds in Settings first, then search for a topic above.
                   </p>
                 )}
-                {orderTopics(topics).map((t) => {
+                {orderTopics(filterTopicsByLink(topics, showLink)).map((t) => {
                   const st = statusLabel(t.lastRun?.status);
                   return (
                     <div key={t.id} className="rounded-xl border p-4 flex flex-wrap items-center gap-3" style={{ ...surface, background: 'var(--color-bg)' }}>
