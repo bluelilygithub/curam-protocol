@@ -28,6 +28,12 @@ function hasSharesAccess(user) {
   return user.featureOverrides?.shares === true;
 }
 
+// The Finance guide chat (POST, answers from a fixed catalogue, sees no books and writes nothing). It runs as the accountant's OWN user,
+// never the owner's, so it can't reach any data; its AI cost is logged against the accountant.
+function isGuidePost(p, method) {
+  return method === 'POST' && p === '/finance-tutor';
+}
+
 function isOwnGetPath(p) {
   return OWN_GET_PATHS.some((x) => p === x || p.startsWith(`${x}/`));
 }
@@ -84,6 +90,11 @@ async function applyAccountantScope(req, res, user, token) {
   const readOnly = req.method === 'GET' || req.method === 'HEAD';
 
   const sharesOk = isSharesPath(p) && hasSharesAccess(user);
+  if (isGuidePost(p, req.method)) {
+    req.user = { id: user.id, email: user.email, isAdmin: false, isAccountant: true, actorId: user.id };
+    return true;
+  }
+
   if (!readOnly || !(isFinancePath(p) || sharesOk || isOwnGetPath(p))) {
     // /auth/* never reaches here (skipped earlier); logout is a POST handled there too.
     await logAccess(req, actor, 'denied', 403);

@@ -57,6 +57,16 @@ function run(user, method, path) {
     assert.strictEqual(ok, false);
   });
 
+  await test('the Finance guide (POST /finance-tutor) is allowed, as the accountant itself, and nothing else is', async () => {
+    const { ok, req } = await run(accountant({}), 'POST', '/finance-tutor');
+    assert.strictEqual(ok, true);
+    assert.strictEqual(req.user.id, 34, 'never remapped to the owner');
+    for (const [m, p] of [['GET', '/finance-tutor'], ['POST', '/finance-tutor/x'], ['POST', '/finance/invoices'], ['POST', '/notes-tutor']]) {
+      const r = await run(accountant({}), m, p);
+      assert.strictEqual(r.ok, false, m + ' ' + p);
+    }
+  });
+
   await test('Finance is unchanged, other apps stay closed', async () => {
     assert.strictEqual((await run(accountant({ shares: false }), 'GET', '/finance/invoices')).ok, true);
     assert.strictEqual((await run(accountant({ shares: true }), 'GET', '/notes')).ok, false);

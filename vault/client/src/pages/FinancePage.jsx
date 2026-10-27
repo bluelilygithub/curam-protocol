@@ -7099,7 +7099,7 @@ function FinancePageInner() {
 
       {showWelcome && <AccountantWelcome onClose={closeWelcome} onOpenTab={setTab} ownerEmail={ownerEmail} />}
       {showHelp && <FinanceHelpModal tab={tab} onClose={() => setShowHelp(false)} />}
-      {!isAccountant && <FinanceTutorChat currentTab={tab} onOpenTab={setTab} />}
+      <FinanceTutorChat currentTab={tab} onOpenTab={setTab} />
     </div>
   );
 }
