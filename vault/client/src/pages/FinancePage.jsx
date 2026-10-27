@@ -6919,7 +6919,7 @@ const groupOfTab = (t) => TAB_GROUPS.find(g => g.tabs.includes(t)) || TAB_GROUPS
 
 const NO_DATE_FILTER_TABS = new Set(['Documents', 'Suppliers', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings', 'Recurring', 'Vehicle/Home Office', 'Reports']);
 
-export default function FinancePage() {
+function FinancePageInner() {
   const isAccountant = useAuthStore((s) => s.user?.isAccountant); // read-only login: no AI guide (it is refused server side)
   const [searchParams, setSearchParams] = useSearchParams();
   const clientFilter = searchParams.get('clientId') || null;
@@ -7081,4 +7081,40 @@ export default function FinancePage() {
       {!isAccountant && <FinanceTutorChat currentTab={tab} onOpenTab={setTab} />}
     </div>
   );
+}
+
+/**
+ * Front door to Finance. A member whose Finance is switched off (Settings -> Feature Access, or their own Features panel) can still
+ * type /finance, but every Finance request is refused, so instead of a broken, empty page they get a plain explanation.
+ * Admins and accountant logins always pass (an accountant's Finance is always on, see accountantFlags on the server).
+ * If the check itself fails the page opens as before: the server still refuses anything not allowed.
+ */
+export default function FinancePage() {
+  const user = useAuthStore((s) => s.user);
+  const [state, setState] = useState(user?.isAdmin ? 'ok' : 'checking');
+  useEffect(() => {
+    if (user?.isAdmin) { setState('ok'); return undefined; }
+    let live = true;
+    api.get('/api/settings/feature-access').then((r) => r.json())
+      .then((d) => { if (live) setState(d?.flags?.finance === false ? 'off' : 'ok'); })
+      .catch(() => { if (live) setState('ok'); });
+    return () => { live = false; };
+  }, [user?.isAdmin]);
+
+  if (state === 'checking') return null;
+  if (state === 'off') {
+    return (
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-lg mx-auto mt-10 rounded-2xl border p-6 space-y-3" role="alert" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Finance isn't turned on for your account</h1>
+          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+            You can open this address, but Finance has been switched off for you, so nothing here will load or save. This isn't an empty set of books.
+            If you need Finance, ask the workspace admin to turn it on for you.
+          </p>
+          <Link to="/" className="inline-block text-sm underline hover:opacity-60 transition-opacity" style={{ color: 'var(--color-primary)' }}>Back to the home page</Link>
+        </div>
+      </div>
+    );
+  }
+  return <FinancePageInner />;
 }
