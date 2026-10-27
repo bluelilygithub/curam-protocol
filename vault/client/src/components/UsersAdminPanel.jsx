@@ -262,8 +262,8 @@ export default function UsersAdminPanel({ title = 'Members' }) {
             </thead>
             <tbody>
               {users.map((user, i) => (
+                <React.Fragment key={user.id}>
                 <tr
-                  key={user.id}
                   style={{
                     background: 'var(--color-surface)',
                     borderBottom: i < users.length - 1 ? '1px solid var(--color-border)' : undefined,
@@ -400,8 +400,12 @@ export default function UsersAdminPanel({ title = 'Members' }) {
                       </div>
                     )}
 
-                    {featuresFor === user.id && (
-                      <div className="mt-2 rounded-lg border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                  </td>
+                </tr>
+                {featuresFor === user.id && (
+                  <tr style={{ background: 'var(--color-surface)', borderBottom: i < users.length - 1 ? '1px solid var(--color-border)' : undefined }}>
+                    <td colSpan={7} className="px-3 pb-3">
+                      <div className="rounded-lg border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
                         {featuresLoading || !featuresState ? (
                           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</p>
                         ) : (
@@ -409,7 +413,7 @@ export default function UsersAdminPanel({ title = 'Members' }) {
                             <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
                               Narrows this user's access below the workspace defaults. Unchecking here turns a feature off just for them — it can't turn on a feature the workspace has disabled.
                             </p>
-                            <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1.5 max-h-64 overflow-y-auto">
+                            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2 max-h-96 overflow-y-auto">
                               {FEATURE_ACCESS_OPTIONS.map((opt) => {
                                 const workspaceEnabled = featuresState.workspaceFlags[opt.key] !== false;
                                 const checked = workspaceEnabled && featuresState.overrides[opt.key] !== false;
@@ -451,9 +455,10 @@ export default function UsersAdminPanel({ title = 'Members' }) {
                           </>
                         )}
                       </div>
-                    )}
-                  </td>
-                </tr>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
               ))}
             </tbody>
           </table>
