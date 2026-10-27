@@ -732,9 +732,9 @@ function DashboardTab({ from, to }) {
 
   const cards = [
     { label: 'Revenue',          value: fmt(data.yearRevenue),       sub: `${data.paidInvoices} paid invoices`,                          tip: 'Total from invoices marked paid this financial year.' },
-    { label: 'Outstanding',      value: fmt(data.outstandingAmount), sub: `${data.outstandingCount} sent, not yet due`, warn: data.outstandingCount > 0, tip: 'Sent invoices that are not yet overdue — money you are still waiting on.' },
-    { label: 'Overdue',          value: fmt(data.overdueAmount),     sub: `${data.overdueCount} past due date`,         neg: data.overdueCount > 0,     tip: 'Sent invoices past their due date — chase these up first.' },
-    { label: 'Quotes',           value: fmt(data.quotesAmount),      sub: `${data.quotesCount} pending, not accepted`,                   tip: 'Quotes sent to clients that have not yet been accepted — not yet real revenue.' },
+    { label: 'Outstanding',      value: fmt(data.outstandingAmount), sub: `${data.outstandingCount} sent, not yet due${data.historical ? ` · as at ${fmtDate(data.asAt)}` : ''}`, warn: data.outstandingCount > 0, tip: 'Sent invoices that are not yet overdue — money you are still waiting on.' },
+    { label: 'Overdue',          value: fmt(data.overdueAmount),     sub: `${data.overdueCount} past due date${data.historical ? ` · as at ${fmtDate(data.asAt)}` : ''}`,         neg: data.overdueCount > 0,     tip: 'Sent invoices past their due date — chase these up first.' },
+    { label: 'Quotes',           value: fmt(data.quotesAmount),      sub: `${data.quotesCount} pending, not accepted${data.historical ? ` · issued by ${fmtDate(data.asAt)}` : ''}`,                   tip: 'Quotes sent to clients that have not yet been accepted — not yet real revenue.' },
     { label: 'Expenses',         value: fmt(data.yearExpenses),      sub: 'ex GST',                                                       tip: 'Total business expenses this financial year, excluding GST.' },
     { label: 'Wages',            value: fmt(data.yearWages),         sub: 'gross wages',                                                  tip: 'Total gross wages paid to employees this financial year.' },
     { label: 'Net Profit (est)', value: fmt(net),                    sub: 'revenue − expenses − wages',                 neg: net < 0,                tip: 'Rough estimate only — the Reports tab Profit & Loss is the accurate figure for tax purposes.' },

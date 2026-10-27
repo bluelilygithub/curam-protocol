@@ -3999,6 +3999,10 @@ router.get('/dashboard', async (req, res) => {
     const yearStart = `${today.slice(0, 4)}-01-01`;
     const from      = req.query.from || yearStart;
     const to        = req.query.to   || today;
+    // Outstanding / Overdue / Quotes are balances "as at" a day, not totals over a period: for a past period they are as at the
+    // period's last day (invoices issued by then and not yet paid by then); for the current period they are as at today.
+    const historical = to < today;
+    const asAt       = historical ? to : today;
 
     const [paid, outstanding, overdue, quotes, expenses, wages] = await Promise.all([
       pool.query(
@@ -4009,18 +4013,23 @@ router.get('/dashboard', async (req, res) => {
       pool.query(
         `SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS total
          FROM fin_invoices WHERE "userId"=$1 AND "docType" != 'quote'
-           AND (status='draft' OR (status='sent' AND ("dueDate" IS NULL OR "dueDate"::date >= $2)))`,
-        [userId, today]
+           AND ($3::boolean = FALSE OR "issueDate"::date <= $2)
+           AND (status='draft' OR (status='sent' AND ("dueDate" IS NULL OR "dueDate"::date >= $2))
+                OR ($3::boolean AND status='paid' AND "paidAt"::date > $2 AND ("dueDate" IS NULL OR "dueDate"::date >= $2)))`,
+        [userId, asAt, historical]
       ),
       pool.query(
         `SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS total
-         FROM fin_invoices WHERE "userId"=$1 AND "docType" != 'quote' AND status='sent' AND "dueDate"::date < $2`,
-        [userId, today]
+         FROM fin_invoices WHERE "userId"=$1 AND "docType" != 'quote' AND "dueDate"::date < $2
+           AND ($3::boolean = FALSE OR "issueDate"::date <= $2)
+           AND (status='sent' OR ($3::boolean AND status='paid' AND "paidAt"::date > $2))`,
+        [userId, asAt, historical]
       ),
       pool.query(
         `SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS total
-         FROM fin_invoices WHERE "userId"=$1 AND "docType"='quote' AND status IN ('draft','sent')`,
-        [userId]
+         FROM fin_invoices WHERE "userId"=$1 AND "docType"='quote' AND status IN ('draft','sent')
+           AND ($3::boolean = FALSE OR "issueDate"::date <= $2)`,
+        [userId, asAt, historical]
       ),
       pool.query(
         `SELECT COALESCE(SUM(amount),0) AS total FROM fin_expenses WHERE "userId"=$1 AND date BETWEEN $2 AND $3`,
@@ -4043,6 +4052,8 @@ router.get('/dashboard', async (req, res) => {
       quotesCount:       parseInt(quotes.rows[0].count),
       yearExpenses:      parseFloat(expenses.rows[0].total),
       yearWages:         parseFloat(wages.rows[0].total),
+      asAt,
+      historical,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
