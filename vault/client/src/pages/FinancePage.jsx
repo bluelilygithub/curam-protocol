@@ -630,13 +630,22 @@ const DATE_PRESETS = [
   { key: 'month',   label: 'Month'   },
   { key: 'quarter', label: 'Quarter' },
   { key: 'year',    label: 'Year'    },
-  { key: 'fy',      label: 'FY'      },
+  { key: 'fy',      label: 'This FY' },
   { key: 'custom',  label: 'Custom'  },
   { key: 'all',     label: 'All'     },
 ];
 
 function DateRangePicker({ value, onChange }) {
   const { preset, from, to } = value;
+  // financial years run 1 July to 30 June; list this one and the six before it, newest first
+  const curFyStart = Number(getPresetRange('fy').from.slice(0, 4));
+  const fyList = Array.from({ length: 7 }, (_, i) => curFyStart - i);
+  const fyLabel = (y) => `FY${y}–${String(y + 1).slice(2)}`;
+  const fyValue = preset === 'fy' ? `fy:${curFyStart}` : (String(preset).startsWith('fy:') ? preset : '');
+  const pickFy = (v) => {
+    const y = Number(v.slice(3));
+    onChange({ preset: y === curFyStart ? 'fy' : v, from: `${y}-07-01`, to: `${y + 1}-06-30` });
+  };
   const select = (key) => {
     if (key === 'custom') { onChange({ preset: 'custom', from, to }); return; }
     onChange({ preset: key, ...getPresetRange(key) });
@@ -658,6 +667,18 @@ function DateRangePicker({ value, onChange }) {
           </Tooltip>
         ))}
       </div>
+      <Tooltip text="Pick a whole financial year (1 July to 30 June), including previous years, to see its records.">
+        <select
+          value={fyValue}
+          onChange={(e) => e.target.value && pickFy(e.target.value)}
+          aria-label="Financial year"
+          className="text-xs px-2.5 py-1 rounded-full font-medium outline-none"
+          style={{ background: fyValue ? 'var(--color-primary)' : 'transparent', color: fyValue ? '#fff' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+        >
+          <option value="" style={{ color: '#000' }}>Financial year…</option>
+          {fyList.map((y) => <option key={y} value={`fy:${y}`} style={{ color: '#000' }}>{fyLabel(y)}{y === curFyStart ? ' (current)' : ''}</option>)}
+        </select>
+      </Tooltip>
       {preset === 'custom' && (
         <div className="flex items-center gap-1.5">
           <Tooltip text="Start of the custom date range.">
@@ -6924,7 +6945,7 @@ function FinancePageInner() {
   const [searchParams, setSearchParams] = useSearchParams();
   const clientFilter = searchParams.get('clientId') || null;
   const [tab, setTab] = useState(() => searchParams.get('tab') || 'Dashboard');
-  const [dateRange, setDateRange] = useState(() => ({ preset: 'month', ...getPresetRange('month') }));
+  const [dateRange, setDateRange] = useState(() => (isAccountant ? { preset: 'fy', ...getPresetRange('fy') } : { preset: 'month', ...getPresetRange('month') }));
   const [showHelp, setShowHelp] = useState(false);
   const ownerEmail = useAuthStore((s) => s.user?.ownerEmail);
   // Accountants get a welcome guide: opens on first visit, reopened from the header button.

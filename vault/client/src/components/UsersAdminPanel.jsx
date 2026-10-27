@@ -3,6 +3,7 @@ import api from '../utils/apiClient';
 import { relativeTime } from '../utils/relativeTime';
 import { FEATURE_ACCESS_OPTIONS } from '../utils/featureAccess';
 import LandingPicker from './LandingPicker';
+import Tooltip from './Tooltip';
 
 export default function UsersAdminPanel({ title = 'Members' }) {
   const [users, setUsers] = useState([]);
@@ -299,9 +300,9 @@ export default function UsersAdminPanel({ title = 'Members' }) {
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-2 flex-wrap">
                       {user.isAccountant && (
-                        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                          Read-only login. Finance is always on; turn Shares on or off, set an end date or disable it in Accountant access below.
-                        </span>
+                        <Tooltip text="Read-only login. Finance is always on; turn Shares on or off, set an end date or disable it in Accountant access below.">
+                          <span tabIndex={0} className="text-xs px-2 py-1 rounded-md border cursor-help" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>ⓘ Read-only login</span>
+                        </Tooltip>
                       )}
                       {!user.isAdmin && !user.isAccountant && (
                         <button
