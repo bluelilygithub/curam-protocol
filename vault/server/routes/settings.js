@@ -3,7 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
-const { FEATURE_ACCESS_KEYS, flagsFromSettingRows, applyUserOverrides } = require('../config/featureAccess');
+const { FEATURE_ACCESS_KEYS, flagsFromSettingRows, applyUserOverrides, accountantFlags } = require('../config/featureAccess');
 const { getVaultModelsConfigForUser, validateVaultModelsCatalog } = require('../services/modelResolver');
 const {
   SLOT_KEYS: DOC_REDACTION_SLOT_KEYS,
@@ -217,9 +217,12 @@ router.get('/feature-access', async (req, res) => {
 
     if (!req.user?.isAdmin) {
       const { rows: userRows } = await pool.query(
-        'SELECT "featureOverrides" FROM users WHERE id=$1', [req.user.id]
+        'SELECT "featureOverrides", "accountantOfUserId" FROM users WHERE id=$1', [req.user.id]
       );
-      flags = applyUserOverrides(flags, userRows[0]?.featureOverrides);
+      // an accountant login is not a workspace member: Finance always, Shares only if the owner ticked it (see accountantFlags)
+      flags = userRows[0]?.accountantOfUserId
+        ? accountantFlags(userRows[0].featureOverrides)
+        : applyUserOverrides(flags, userRows[0]?.featureOverrides);
     }
 
     res.json({ flags });

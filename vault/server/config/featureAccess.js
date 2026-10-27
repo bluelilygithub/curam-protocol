@@ -86,7 +86,22 @@ function applyUserOverrides(workspaceFlags, overrides) {
   return flags;
 }
 
+/**
+ * Flags for an accountant login. An accountant is the owner's read-only reader, not a workspace member, so the workspace's
+ * member switches do not apply: Finance is always on, Shares is on only when the owner ticked it for that accountant
+ * (featureOverrides.shares === true), and everything else is off. (Before this, switching Finance off for members also
+ * emptied the accountant's Finance.)
+ */
+function accountantFlags(overrides) {
+  const flags = {};
+  for (const key of FEATURE_ACCESS_KEYS) flags[key] = false;
+  flags.finance = true;
+  flags.shares = !!overrides && typeof overrides === 'object' && overrides.shares === true;
+  return flags;
+}
+
 module.exports = {
+  accountantFlags,
   FEATURE_ACCESS_DEFAULTS,
   FEATURE_ACCESS_KEYS,
   flagsFromSettingRows,

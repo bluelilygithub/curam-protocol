@@ -114,7 +114,7 @@ export default function AccountantAccessPanel() {
                   <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{a.email}</div>
                   <div className="text-xs" style={{ color: ended ? '#ef4444' : 'var(--color-muted)' }}>
                     {a.disabledAt ? 'Disabled' : ended ? 'Expired' : a.accessExpiresAt ? `Ends ${new Date(a.accessExpiresAt).toLocaleDateString()}` : 'No end date'}
-                    {' · '}last sign-in {a.lastLoginAt ? relativeTime(a.lastLoginAt) : 'never'}
+                    {' · '}can see: Finance{a.sharesAccess ? ' and Shares' : ' only'}, read-only{' · '}last sign-in {a.lastLoginAt ? relativeTime(a.lastLoginAt) : 'never'}
                     {a.activeSessions > 0 && ` · ${a.activeSessions} active session${a.activeSessions === 1 ? '' : 's'}`}
                   </div>
                 </div>

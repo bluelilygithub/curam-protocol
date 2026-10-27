@@ -278,7 +278,7 @@ export default function UsersAdminPanel({ title = 'Members' }) {
                     )}
                   </td>
                   <td className="px-3 py-2.5" style={{ color: user.isAdmin ? 'var(--color-primary)' : 'var(--color-muted)' }}>
-                    {user.isAdmin ? 'Admin' : 'User'}
+                    {user.isAdmin ? 'Admin' : user.isAccountant ? 'Accountant' : 'User'}
                   </td>
                   <td className="px-3 py-2.5">
                     <LandingPicker
@@ -298,7 +298,12 @@ export default function UsersAdminPanel({ title = 'Members' }) {
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-2 flex-wrap">
-                      {!user.isAdmin && (
+                      {user.isAccountant && (
+                        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                          Read-only login. Finance is always on; turn Shares on or off, set an end date or disable it in Accountant access below.
+                        </span>
+                      )}
+                      {!user.isAdmin && !user.isAccountant && (
                         <button
                           onClick={() => (featuresFor === user.id ? setFeaturesFor(null) : openFeatures(user))}
                           disabled={busyUserId === user.id}
@@ -308,6 +313,7 @@ export default function UsersAdminPanel({ title = 'Members' }) {
                           {featuresFor === user.id ? 'Close Features' : 'Features'}
                         </button>
                       )}
+                      {!user.isAccountant && (
                       <button
                         onClick={() => handleToggleAdmin(user)}
                         disabled={busyUserId === user.id}
@@ -316,6 +322,7 @@ export default function UsersAdminPanel({ title = 'Members' }) {
                       >
                         {user.isAdmin ? 'Remove Admin' : 'Make Admin'}
                       </button>
+                      )}
                       <button
                         onClick={() => {
                           setResetPasswordFor(user.id);

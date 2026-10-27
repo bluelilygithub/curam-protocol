@@ -1,7 +1,7 @@
 'use strict';
 
 const { pool } = require('../db');
-const { FEATURE_ACCESS_KEYS, flagsFromSettingRows, applyUserOverrides } = require('../config/featureAccess');
+const { FEATURE_ACCESS_KEYS, flagsFromSettingRows, applyUserOverrides, accountantFlags } = require('../config/featureAccess');
 const { attachUserToLogContext } = require('./requestContext');
 const { applyAccountantScope } = require('../services/accountantAccess');
 
@@ -61,8 +61,9 @@ async function loadFeatureAccess(userId) {
   if (!userId) return workspaceFlags;
 
   const { rows: userRows } = await pool.query(
-    'SELECT "featureOverrides" FROM users WHERE id=$1', [userId]
+    'SELECT "featureOverrides", "accountantOfUserId" FROM users WHERE id=$1', [userId]
   );
+  if (userRows[0]?.accountantOfUserId) return accountantFlags(userRows[0].featureOverrides);
   return applyUserOverrides(workspaceFlags, userRows[0]?.featureOverrides);
 }
 
