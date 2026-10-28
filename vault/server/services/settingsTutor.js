@@ -20,6 +20,9 @@ const CATALOG = [
   { id: 'Recycle bin', label: 'Recycle bin', group: 'You',
     does: 'Settings, Recycle bin: everything you deleted in the last 30 days from tools that use the shared bin (notes, tasks, goals, chats and more), each with a restore button.',
     notes: 'After 30 days an item is gone for good.' },
+  { id: 'Vault Shelf', label: 'Vault Shelf', group: 'You',
+    does: 'Settings, Vault Shelf: make, name and revoke the keys that connect the Vault Shelf Windows clipboard app to your Vault. A key is shown once when it is made, and each key can be limited to Notes, Invoice Review, the CRM inbox or the sensitive-data check.',
+    notes: 'Only shows for a member when an admin has switched the Vault Shelf feature on for them (Settings, Feature Access, or the member\'s own Features). A key can never do more than the person\'s own account may do. If a key is lost, revoke it and make a new one: the old key cannot be shown again.' },
   { id: 'Goals', label: 'Goals', group: 'You',
     does: 'Settings, Goals: how goals and their reviews work. Admin only.', notes: 'Admin only.' },
   { id: 'Tours', label: 'Tours', group: 'You',
@@ -79,7 +82,7 @@ const CATALOG = [
 ];
 
 const RULES = [
-  'Settings is a menu of sections down the left (a dropdown on a phone), with a search box. Members see only You: Appearance, Profile, Tasks and Recycle bin. Everything else is for admins.',
+  'Settings is a menu of sections down the left (a dropdown on a phone), with a search box. Members see only You: Appearance, Profile, Tasks and Recycle bin (and Vault Shelf, when an admin has switched that feature on for them). Everything else is for admins.',
   'The first user was made the admin. Only an admin sees the Admin page and the admin sections of Settings.',
   'Feature Access works in two layers: the workspace switches (Settings, Feature Access) apply to every member, then an admin can narrow one person further in Members. A person\'s own switch can only turn a feature off, never on.',
   'Admins always keep access to every feature, whatever the switches say.',

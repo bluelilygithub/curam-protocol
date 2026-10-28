@@ -35,6 +35,49 @@ function CreatedPaidBadges({ row }) {
   );
 }
 
+// A row pushed from the Vault Shelf (Windows clipboard app) has no Gmail message and no PDF: it is a copied text, table or picture.
+// Show where it came from, open the picture if there is one, and let the reviewer read the copied text. Text is shown as plain text.
+function ShelfClip({ row, onOpenFile }) {
+  const getIcon = useIcon();
+  const [open, setOpen] = useState(false);
+  const raw = row.rawExtraction || {};
+  const unsure = raw.extractionStatus === 'low_confidence' && raw.suggested;
+  const quiet = { color: 'var(--color-primary)' };
+  return (
+    <div className="flex flex-col gap-1">
+      <span
+        className="text-xs px-2 py-0.5 rounded-full font-medium self-start"
+        style={{ background: 'var(--color-surface)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+        title={`Copied with Vault Shelf${raw.sourceApp ? ` from ${raw.sourceApp}` : ''}. Check every value before you approve.`}
+      >
+        Shelf Capture
+      </span>
+      {row.s3Url && (
+        <button onClick={onOpenFile} className="hover:opacity-70 transition-opacity inline-flex items-center gap-1 text-xs self-start" style={quiet}>
+          {getIcon('file', { size: 12 })} Picture
+        </button>
+      )}
+      {raw.text && (
+        <button onClick={() => setOpen((v) => !v)} className="hover:opacity-70 transition-opacity text-xs self-start" style={quiet}>
+          {open ? 'Hide text' : 'View text'}
+        </button>
+      )}
+      {open && raw.text && (
+        <pre className="text-xs whitespace-pre-wrap break-words max-h-40 overflow-auto rounded p-1.5" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>{raw.text}</pre>
+      )}
+      {unsure && (
+        <div
+          className="text-xs px-1.5 py-0.5 rounded"
+          style={{ color: '#92400e', background: '#fef3c7' }}
+          title={`The reader was not sure, so nothing was filled in. It thought: ${[raw.suggested.vendor, raw.suggested.amount != null ? `${raw.suggested.currency || ''} ${raw.suggested.amount}`.trim() : null, raw.suggested.date].filter(Boolean).join(', ') || 'nothing clear'}.`}
+        >
+          Not sure: left blank
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EditableCell({ value, onChange, type = 'text' }) {
   return (
     <input
@@ -286,9 +329,13 @@ export default function ExpenseReviewPage() {
                   </select>
                 </td>
                 <td className="py-2 px-2">
-                  <button onClick={() => openAttachment(row.id)} className="hover:opacity-70 transition-colors inline-flex items-center gap-1 text-xs" style={{ color: 'var(--color-primary)' }}>
-                    {getIcon('file', { size: 12 })} PDF
-                  </button>
+                  {row.source === 'shelf' ? (
+                    <ShelfClip row={row} onOpenFile={() => openAttachment(row.id)} />
+                  ) : (
+                    <button onClick={() => openAttachment(row.id)} className="hover:opacity-70 transition-colors inline-flex items-center gap-1 text-xs" style={{ color: 'var(--color-primary)' }}>
+                      {getIcon('file', { size: 12 })} PDF
+                    </button>
+                  )}
                 </td>
                 <td className="py-2 px-2">
                   <div className="flex flex-col gap-1">

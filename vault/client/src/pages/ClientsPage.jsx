@@ -6,6 +6,7 @@ import MoodDot from '../components/mood/MoodDot';
 import useToastStore from '../store/toastStore';
 import { useIcon } from '../providers/IconProvider';
 import CrmTutorChat from './crm/CrmTutorChat';
+import ShelfInboxModal from './crm/ShelfInboxModal';
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
 
@@ -321,6 +322,13 @@ export default function ClientsPage() {
   const [search,       setSearch]       = useState('');
   const [modal,        setModal]        = useState(null); // null | 'new' | {client}
   const [confirmDel,   setConfirmDel]   = useState(null);
+  const [shelfCount,   setShelfCount]   = useState(0);     // captures sent from the Vault Shelf app with no client chosen
+  const [showShelf,    setShowShelf]    = useState(false);
+
+  const loadShelfCount = useCallback(() => {
+    api.get('/api/shelf-inbox/count').then(r => (r.ok ? r.json() : null)).then(d => setShelfCount(Number(d?.count) || 0)).catch(() => {});
+  }, []);
+  useEffect(() => { loadShelfCount(); }, [loadShelfCount]);
 
   const searchRef = useRef('');
 
@@ -378,7 +386,12 @@ export default function ClientsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>CRM</h1>
-        <Btn onClick={() => setModal('new')}>+ New Client</Btn>
+        <div className="flex items-center gap-2">
+          {shelfCount > 0 && (
+            <Btn variant="secondary" onClick={() => setShowShelf(true)}>Unfiled from Shelf ({shelfCount})</Btn>
+          )}
+          <Btn onClick={() => setModal('new')}>+ New Client</Btn>
+        </div>
       </div>
 
       {/* Filter bar */}
@@ -443,6 +456,8 @@ export default function ClientsPage() {
       )}
 
       <CrmTutorChat where="list" currentTool="client-list" onNewClient={() => setModal('new')} />
+
+      {showShelf && <ShelfInboxModal onClose={() => setShowShelf(false)} onChanged={loadShelfCount} />}
 
       {/* New/Edit modal */}
       {modal && (

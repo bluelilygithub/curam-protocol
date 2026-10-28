@@ -43,6 +43,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   dnsLookup: true,
   passwordVault: false, // holds logins: keep in step with server/config/featureAccess.js
   topicResearch: false, // keep in step with server/config/featureAccess.js
+  shelf: false, // Vault Shelf Windows app keys: keep in step with server/config/featureAccess.js
 };
 
 export const FEATURE_ACCESS_GROUPS = [
@@ -92,6 +93,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'dnsLookup', label: 'DNS Lookup' },
       { key: 'passwordVault', label: 'Password Vault' },
       { key: 'topicResearch', label: 'Topic Research' },
+      { key: 'shelf', label: 'Vault Shelf (Windows app)' },
       { key: 'wellbeing', label: 'Wellbeing Check' },
       { key: 'gmailIntel', label: 'Inbox Intel' },
       { key: 'productScout', label: 'Amazon Search' },

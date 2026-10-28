@@ -3528,6 +3528,48 @@
   },
   "POST /api/topic-research/runs/:id/relevance": {
    "class": "authed"
+  },
+  "GET /api/quick-ingest/verify": {
+   "class": "public"
+  },
+  "POST /api/quick-ingest/notes": {
+   "class": "public"
+  },
+  "POST /api/quick-ingest/finance": {
+   "class": "public"
+  },
+  "POST /api/quick-ingest/crm": {
+   "class": "public"
+  },
+  "POST /api/quick-ingest/redact": {
+   "class": "public"
+  },
+  "GET /api/shelf-tokens": {
+   "class": "authed"
+  },
+  "POST /api/shelf-tokens": {
+   "class": "authed"
+  },
+  "POST /api/shelf-tokens/:id/revoke": {
+   "class": "authed"
+  },
+  "DELETE /api/shelf-tokens/:id": {
+   "class": "authed"
+  },
+  "GET /api/shelf-inbox": {
+   "class": "authed"
+  },
+  "GET /api/shelf-inbox/count": {
+   "class": "authed"
+  },
+  "GET /api/shelf-inbox/:id/file": {
+   "class": "authed"
+  },
+  "POST /api/shelf-inbox/:id/assign": {
+   "class": "authed"
+  },
+  "DELETE /api/shelf-inbox/:id": {
+   "class": "authed"
   }
  }
 }

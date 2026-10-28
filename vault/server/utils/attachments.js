@@ -178,6 +178,31 @@ async function saveVoiceAudio({ userId, noteId, buffer, mime, filename, expiresA
   }
 }
 
+/**
+ * Saves bytes the server already holds (a picture pushed from the Vault Shelf) as an ordinary attachment on a note or CRM touchpoint:
+ * same folder layout, same per-user quota, shown and deleted through the usual attachment routes. The caller has already checked the
+ * bytes are what they claim (magic bytes) and picked a safe filename and mime type. Throws on quota or disk problems.
+ */
+async function saveBufferAttachment({ userId, entityType, entityId, folder, buffer, mime, filename }) {
+  await assertWithinQuota(userId, buffer.length);
+  const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
+  const dir = path.join(uploadDir, 'attachments', folder);
+  fs.mkdirSync(dir, { recursive: true });
+  const stored = path.join(dir, `${Date.now()}-${Math.random().toString(36).slice(2)}-${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`);
+  fs.writeFileSync(stored, buffer);
+  try {
+    const { rows: [attachment] } = await pool.query(`
+      INSERT INTO attachments ("userId","entityType","entityId",filename,"storedPath","mimeType","sizeBytes")
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      RETURNING id, "entityType", "entityId", filename, "mimeType", "sizeBytes", "createdAt"
+    `, [userId, entityType, entityId, filename, stored, mime, buffer.length]);
+    return attachment;
+  } catch (err) {
+    try { fs.unlinkSync(stored); } catch { /* nothing to clean */ }
+    throw err;
+  }
+}
+
 /** Remove every attachment whose expiry has passed (the file and the row). Returns how many went. Safe to run any time. */
 async function purgeExpiredAttachments(db = pool) {
   const { rows } = await db.query(`DELETE FROM attachments WHERE "expiresAt" IS NOT NULL AND "expiresAt" < NOW() RETURNING "storedPath"`);
@@ -190,6 +215,7 @@ async function purgeExpiredAttachments(db = pool) {
 
 module.exports = {
   saveVoiceAudio,
+  saveBufferAttachment,
   purgeExpiredAttachments,
   ATTACHMENT_MIMES,
   ATTACHMENT_EXTENSIONS,

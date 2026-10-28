@@ -65,6 +65,7 @@
     "test:settings-lookup": "node server/routes/settingsLookup.test.js",
     "test:local-audio": "node server/routes/localAudio.test.js",
     "test:cellar-leads": "node server/routes/cellarLeads.test.js",
+    "test:shelf": "node server/routes/quickIngest.test.js && node client/src/utils/shelfKeys.test.mjs",
     "test:backup": "node server/routes/backup.test.js",
     "test:email": "node server/routes/email.test.js",
     "test:route-tracks": "node server/routes/routeTracks.test.js && node server/services/routeIntent.test.js && node server/services/routePlaces.test.js",

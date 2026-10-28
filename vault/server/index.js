@@ -83,6 +83,11 @@ app.use(helmet({
   } : false,
 }));
 
+// Vault Shelf (the Windows clipboard app): it has no login, it proves itself with an ingest-only key (see routes/quickIngestRouter.js), so this is
+// mounted before requireAuth. It is also before the 30 MB body parser below on purpose: the router checks the key first and then reads its own,
+// much smaller, body (2 MB of JSON or one 10 MB picture).
+app.use('/api/quick-ingest', require('./routes/quickIngest').ingestRouter);
+
 app.use(express.json({ limit: '30mb' }));
 app.use(express.urlencoded({ extended: true, limit: '30mb' }));
 
@@ -173,6 +178,9 @@ app.use('/api/backup', require('./routes/backup'));
 app.use('/api/finance', requireFeature('finance'), require('./routes/finance'));
 app.use('/api/finance-tutor', requireFeature('finance'), aiLimiter, require('./routes/financeTutor'));
 app.use('/api/expense-review', requireFeature('gmailIntel'), require('./routes/expenseReview'));
+// Vault Shelf, signed-in side: make/revoke the app's keys (Settings) and file what it sent to the CRM with no client chosen (CRM page). docs/vault-shelf.md
+app.use('/api/shelf-tokens', requireFeature('shelf'), require('./routes/quickIngest').tokensRouter);
+app.use('/api/shelf-inbox', requireFeature('clients'), require('./routes/quickIngest').inboxRouter);
 app.use('/api/usage', requireFeature('usage'), require('./routes/usage'));
 app.use('/api/mood', requireFeature('mood'), require('./routes/mood'));
 // aiLimiter applies to the whole router — clients.js now has an AI-cost

@@ -48,15 +48,22 @@ async function getPriorityDomains(userId) {
 // holds a local disk path under UPLOAD_DIR, not an actual S3 url. See db.js comment on
 // the column itself.
 function saveInvoicePdf(pdfBase64, { vendor, gmailMessageId, date }) {
+  const standardBase64 = pdfBase64.replace(/-/g, '+').replace(/_/g, '/');
+  return saveInvoiceFile(Buffer.from(standardBase64, 'base64'), { vendor, key: gmailMessageId, date, ext: '.pdf' });
+}
+
+// The same placement for any invoice file: bytes in, path (relative to UPLOAD_DIR) out. `key` makes the name unique (a Gmail message id for
+// Gmail invoices, a random id for a clip pushed from the Vault Shelf, which saves pictures this way); `ext` is a fixed extension the caller has
+// already checked (never taken from a user's file name).
+function saveInvoiceFile(buffer, { vendor, key, date, ext }) {
   const d = date ? new Date(date) : new Date();
   const year = String(d.getFullYear());
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const dir = path.join(INVOICE_DIR, year, month);
   fs.mkdirSync(dir, { recursive: true });
-  const filename = `${safeFilenamePart(vendor || gmailMessageId)}-${gmailMessageId.slice(0, 8)}.pdf`;
+  const filename = `${safeFilenamePart(vendor || key)}-${String(key).slice(0, 8)}${ext}`;
   const fullPath = path.join(dir, filename);
-  const standardBase64 = pdfBase64.replace(/-/g, '+').replace(/_/g, '/');
-  fs.writeFileSync(fullPath, Buffer.from(standardBase64, 'base64'));
+  fs.writeFileSync(fullPath, buffer);
   // Store path relative to UPLOAD_DIR, same convention as fin_expenses.receipt_path.
   return path.relative(UPLOAD_DIR, fullPath).split(path.sep).join('/');
 }
@@ -202,4 +209,4 @@ async function runPoll(userId, { afterDate, dryRun = false }) {
   return { matched: candidates.length, inserted, skippedDuplicate, skippedOther, insertedRows };
 }
 
-module.exports = { runPoll, findInvoiceCandidates, extractAndQueue, saveInvoicePdf, INVOICE_DIR };
+module.exports = { runPoll, findInvoiceCandidates, extractAndQueue, saveInvoicePdf, saveInvoiceFile, INVOICE_DIR };

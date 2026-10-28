@@ -1911,6 +1911,14 @@ async function initSchema() {
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_expense_review_gmail_msg ON expense_review_queue ("userId","gmailMessageId")`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_expense_review_status ON expense_review_queue ("userId","reviewStatus")`);
 
+    // Vault Shelf (docs/vault-shelf.md): a clipboard capture pushed from the Windows app lands here too, with no Gmail message behind it.
+    // gmailMessageId therefore becomes optional (the unique index above still stops a repeated Gmail message: NULLs never collide),
+    // `source` says where the row came from ('gmail' for everything that existed before, 'shelf'), and sizeBytes counts a saved image
+    // against the Shelf storage quota. Additive and safe to run on every boot.
+    await client.query(`ALTER TABLE expense_review_queue ALTER COLUMN "gmailMessageId" DROP NOT NULL`);
+    await client.query(`ALTER TABLE expense_review_queue ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'gmail'`);
+    await client.query(`ALTER TABLE expense_review_queue ADD COLUMN IF NOT EXISTS "sizeBytes" INTEGER`);
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS fin_wages (
         id             SERIAL PRIMARY KEY,
@@ -2102,6 +2110,57 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_client_interactions_client ON client_interactions("clientId", date DESC)`);
+
+    // ── Vault Shelf (docs/vault-shelf.md) ────────────────────────────────────
+    // The Windows clipboard app proves itself with an "ingest-only" key: shelf_tokens holds only the SHA-256 of each key (shown once when made),
+    // what it may do (scopes), and when it was last used / revoked. A revoked key stays as a row so the list can say so.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS shelf_tokens (
+        id          SERIAL PRIMARY KEY,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        label       TEXT NOT NULL,
+        "tokenHash" TEXT NOT NULL UNIQUE,
+        prefix      TEXT NOT NULL,
+        last4       TEXT NOT NULL,
+        scopes      TEXT[] NOT NULL DEFAULT '{}',
+        "expiresAt"  TIMESTAMPTZ,
+        "lastUsedAt" TIMESTAMPTZ,
+        "revokedAt"  TIMESTAMPTZ,
+        "createdAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_shelf_tokens_user ON shelf_tokens("userId")`);
+    // One row per clip the app has pushed to one route, so a retry after a dropped connection answers "already have it" instead of making a
+    // second note / queue row. "resultId" stays NULL while the first request is still working.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS shelf_ingests (
+        id          SERIAL PRIMARY KEY,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "clipId"    TEXT NOT NULL,
+        route       TEXT NOT NULL,
+        "resultId"  INTEGER,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE ("userId", "clipId", route)
+      )
+    `);
+    // Captures sent to the CRM with no client chosen wait here (the CRM page shows "Unfiled from Shelf"); assigning one turns it into a real
+    // client_interactions row. A separate table on purpose: client_interactions."clientId" stays NOT NULL, so no CRM query changes.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS shelf_inbox (
+        id          SERIAL PRIMARY KEY,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind        TEXT NOT NULL DEFAULT 'text' CHECK (kind IN ('text','image')),
+        title       TEXT,
+        body        TEXT,
+        "filePath"  TEXT,
+        "mimeType"  TEXT,
+        "sizeBytes" INTEGER NOT NULL DEFAULT 0,
+        "sourceApp" TEXT,
+        "tokenId"   INTEGER REFERENCES shelf_tokens(id) ON DELETE SET NULL,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_shelf_inbox_user ON shelf_inbox("userId", "createdAt" DESC)`);
 
     // ── Migration for a pre-existing client_interactions (this table
     // shipped once already this session with a narrower shape) — additive/

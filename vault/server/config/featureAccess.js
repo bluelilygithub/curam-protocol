@@ -48,6 +48,8 @@ const FEATURE_ACCESS_DEFAULTS = {
   fitness: true,
   burnerMail: true,
   dnsLookup: true,
+  // the Vault Shelf Windows app pushes clipboard items into Notes, Invoice Review, the CRM inbox and a redaction check: off until an admin switches it on
+  shelf: false,
 };
 
 const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);

@@ -41,7 +41,8 @@ import { startRouteTracerTour, TOUR_KEY as ROUTE_TRACER_TOUR_KEY } from '../util
 import { startCellarPlannerTour, TOUR_KEY as CELLAR_PLANNER_TOUR_KEY } from '../utils/tours/cellarPlannerTour';
 import ConfirmModal from '../components/ConfirmModal';
 import SettingsNav from '../components/SettingsNav';
-import { visibleGroups, allowedTabIds } from '../utils/settingsGroups.mjs';
+import { visibleGroups, allowedTabIds, isFeatureGatedTab } from '../utils/settingsGroups.mjs';
+import ShelfTokensPanel from '../components/settings/ShelfTokensPanel';
 import UsersAdminPanel from '../components/UsersAdminPanel';
 import AccountantAccessPanel from '../components/AccountantAccessPanel';
 import RecycleBinPanel from '../components/RecycleBinPanel';
@@ -196,6 +197,7 @@ function SettingsPage() {
   const [mobileSaved, setMobileSaved] = useState(false);
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
   const [featureAccessSaved, setFeatureAccessSaved] = useState(false);
+  const [featureAccessLoaded, setFeatureAccessLoaded] = useState(false);
   const [runtimeInfo, setRuntimeInfo] = useState(null);
   const [contentRestrictions, setContentRestrictions] = useState([]);
   const [contentRestrictionsSaved, setContentRestrictionsSaved] = useState(false);
@@ -209,8 +211,9 @@ function SettingsPage() {
   const [toolMaintenanceError, setToolMaintenanceError] = useState('');
 
   // the sections (and their groups) come from one list shared with the menu: see utils/settingsGroups.mjs
-  const groups = visibleGroups(!!user?.isAdmin);
-  const TABS = allowedTabIds(!!user?.isAdmin);
+  // (a few sections, like Vault Shelf, show to a member only while their feature switch is on: `featureAccess` holds the caller's own switches)
+  const groups = visibleGroups(!!user?.isAdmin, undefined, featureAccess);
+  const TABS = allowedTabIds(!!user?.isAdmin, undefined, featureAccess);
 
   function selectTab(t) {
     setTab(t);
@@ -218,12 +221,13 @@ function SettingsPage() {
   }
 
   useEffect(() => {
-    const allowedTabs = allowedTabIds(!!user?.isAdmin);
-    if (!allowedTabs.includes(tab)) {
+    const allowedTabs = allowedTabIds(!!user?.isAdmin, undefined, featureAccess);
+    // a switch-gated section a person had open last time is kept until the switches have loaded, then judged
+    if (!allowedTabs.includes(tab) && !(isFeatureGatedTab(tab) && !featureAccessLoaded)) {
       setTab('Appearance');
       localStorage.setItem('settingsTab', 'Appearance');
     }
-  }, [tab, user?.isAdmin]);
+  }, [tab, user?.isAdmin, featureAccess, featureAccessLoaded]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return undefined;
@@ -372,7 +376,7 @@ function SettingsPage() {
       if (data?.flags && typeof data.flags === 'object') {
         setFeatureAccess({ ...DEFAULT_FEATURE_ACCESS, ...data.flags });
       }
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setFeatureAccessLoaded(true));
 
     api.get('/api/settings/content-restrictions').then(r => r.json()).then(data => {
       if (Array.isArray(data?.restrictions)) {
@@ -2212,6 +2216,14 @@ function SettingsPage() {
       <section>
         <h2 className="text-base font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Recycle bin</h2>
         <RecycleBinPanel />
+      </section>
+      )}
+
+      {/* Vault Shelf tab: keys for the Windows clipboard app (docs/vault-shelf.md) */}
+      {tab === 'Vault Shelf' && (
+      <section>
+        <h2 className="text-base font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Vault Shelf</h2>
+        <ShelfTokensPanel />
       </section>
       )}
 

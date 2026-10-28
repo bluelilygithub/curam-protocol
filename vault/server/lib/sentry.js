@@ -10,7 +10,8 @@ const enabled = Boolean(process.env.SENTRY_DSN);
 // anything after "?" is dropped from events, transactions, spans and breadcrumbs that mention these endpoints, and request bodies with it.
 function sensitiveUrls(env = process.env) {
   // api.maptiler.com: the outbound tile URL carries the MapTiler key as ?key=, which must never reach an error report
-  const list = ['/api/geocode', 'nominatim.openstreetmap.org', 'api.maptiler.com'];
+  // /api/quick-ingest and /api/shelf-tokens: the Vault Shelf app posts what was on someone's clipboard, and the key is a bearer token
+  const list = ['/api/geocode', 'nominatim.openstreetmap.org', 'api.maptiler.com', '/api/quick-ingest', '/api/shelf-tokens'];
   try { if (env.NOMINATIM_URL) list.push(new URL(env.NOMINATIM_URL).host); } catch { /* not a URL: ignore */ }
   return list;
 }
@@ -27,6 +28,7 @@ function scrubEvent(event, env = process.env) {
     delete req.query_string;
     delete req.data;
     delete req.cookies;
+    if (req.headers) { delete req.headers.authorization; delete req.headers.Authorization; }
   }
   if (isSensitive(event.transaction, env)) event.transaction = stripQuery(event.transaction);
   const scrubData = (data) => {
