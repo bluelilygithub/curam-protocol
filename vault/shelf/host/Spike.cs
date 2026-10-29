@@ -138,6 +138,25 @@ private async Task<CaptureOutcome?> WaitOutcome(Action trigger, int timeoutMs = 
         finally { _app.Monitor.Processed -= Handler; }
     }
 
+    private const string LookProbe = "JSON.stringify({ bg: getComputedStyle(document.documentElement).getPropertyValue('--color-bg').trim(), primary: getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim(), scheme: document.documentElement.dataset.scheme, bodyFont: getComputedStyle(document.body).fontFamily, dmSansLoaded: [...document.fonts].some(f => f.family === 'DM Sans' && f.status === 'loaded'), interLoaded: [...document.fonts].some(f => f.family === 'Inter' && f.status === 'loaded'), fontsBlocked: [...document.fonts].some(f => f.status === 'error') })";
+
+    private async Task<Dictionary<string, object?>> LookInRealWindowAsync(string theme, string font)
+    {
+        var r = new Dictionary<string, object?> { ["theme"] = theme, ["font"] = font };
+        _app.Bridge.Handle($"{{\"id\":1,\"command\":\"save_settings\",\"args\":{{\"patch\":{{\"theme\":\"{theme}\",\"font\":\"{font}\"}}}}}}");
+        await _app.OpenAsync();
+        var win = _app.Window;
+        if (win is null) { r["error"] = "the shelf did not open"; return r; }
+        await Task.WhenAny(win.Ready.Task, Task.Delay(10000));
+        await Task.Delay(1200);                                    // the web fonts load from the bundle once text is drawn in them
+        string raw = await win.EvalAsync(LookProbe);              // a JSON string holding JSON
+        r["probe"] = JsonSerializer.Deserialize<string>(raw);
+        r["dialogs"] = win.DialogCount;
+        _app.Close();
+        await Task.Delay(500);
+        return r;
+    }
+
     public async Task RunAsync()
     {
         var result = new Dictionary<string, object?>
@@ -191,8 +210,10 @@ private async Task<CaptureOutcome?> WaitOutcome(Action trigger, int timeoutMs = 
                 bool cards = await Task.WhenAny(win.Ready.Task, Task.Delay(10000)) == win.Ready.Task && win.Ready.Task.IsCompletedSuccessfully && win.Ready.Task.Result;
                 c["msHotkeyToCardsDrawn"] = sw.ElapsedMilliseconds;
                 c["cardsDrawn"] = cards;
+                if (!cards) c["startupMarksWhenStalled"] = new Dictionary<string, long>(win.Marks);
                 c["activate"] = $"{_app.LastActivate.ok} ({_app.LastActivate.how})";
                 await Task.Delay(250);
+                if (win.IsDisposed) { c["error"] = "the shelf closed by itself: another window took the focus while the test ran"; c["foregroundNow"] = NativeMethods.TitleOf(GetForegroundWindow()); c["marksBeforeClose"] = new Dictionary<string, long>(win.Marks); await Task.Delay(500); continue; }
                 c["shelfHasKeyboardFocus"] = GetForegroundWindow() == win.Handle;
                 c["startupMarksMs"] = new Dictionary<string, long>(win.Marks);
 
@@ -217,7 +238,7 @@ private async Task<CaptureOutcome?> WaitOutcome(Action trigger, int timeoutMs = 
 
                 // dismiss the way a person does: Esc in the page, which asks the shell to hide
                 sw.Restart();
-                if (GetForegroundWindow() == win.Handle) Chord(VK_ESCAPE);
+                if (!win.IsDisposed && GetForegroundWindow() == win.Handle) Chord(VK_ESCAPE);
                 else { c["escapeNotSentToShelf"] = true; c["foregroundWas"] = NativeMethods.TitleOf(GetForegroundWindow()) + " / " + GetForegroundWindow(); }
                 while (_app.Window is not null && sw.ElapsedMilliseconds < 4000) await Task.Delay(5);
                 c["msEscToClosed"] = sw.ElapsedMilliseconds;
@@ -278,6 +299,11 @@ private async Task<CaptureOutcome?> WaitOutcome(Action trigger, int timeoutMs = 
             Say("live clipboard: " + System.Text.Json.JsonSerializer.Serialize(result["clipboardLive"]));
             await Task.Delay(2000);
             snapshots.Add(MemoryProbe.Take("idle after clipboard activity"));
+
+            // ---- 5. Vault's look inside the real window: the default theme, then a saved different theme and font, read by the page on its very first paint
+            result["lookDefault"] = await LookInRealWindowAsync("warm-sand", "DM Sans");
+            result["lookDarkInter"] = await LookInRealWindowAsync("dark-slate", "Inter");
+            await LookInRealWindowAsync("warm-sand", "DM Sans");
         }
         catch (Exception e)
         {

@@ -48,6 +48,26 @@ const run = async (scheme) => {
   check(tag('the newest copy is chosen and previewed on the right'), (await preview.innerText()).includes('Call Dana back'));
   await shot('01-shelf');
 
+  // ---- Vault's look: tokens, fonts, hover, transitions
+  const token = (name) => page.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);
+  check(tag("default look is Vault's Warm Sand (bg, surface, border, primary, text, muted)"),
+    (await Promise.all(['--color-bg', '--color-surface', '--color-border', '--color-primary', '--color-text', '--color-muted'].map(token))).join(',').toLowerCase() === '#f5f5f0,#eeeee8,#d8d8d0,#cc785c,#1a1a1a,#888888');
+  check(tag('the page follows the chosen theme, not the operating system (same colours with the OS in dark or light mode)'), (await token('--color-bg')).toLowerCase() === '#f5f5f0');
+  check(tag("the UI font is Vault's default, DM Sans, and it is really loaded from the bundle"),
+    (await page.evaluate(async () => { await document.fonts.ready; return { family: getComputedStyle(document.body).fontFamily, loaded: [...document.fonts].some((f) => f.family === 'DM Sans' && f.status === 'loaded') }; })).family.includes('DM Sans')
+    && (await page.evaluate(() => [...document.fonts].some((f) => f.family === 'DM Sans' && f.status === 'loaded'))));
+  check(tag("code uses Vault's code font, DM Mono"), (await page.evaluate(async () => { await document.fonts.load('400 12px "DM Mono"'); return [...document.fonts].some((f) => f.family === 'DM Mono' && f.status === 'loaded'); })));
+  const accent = page.getByRole('tab', { name: /^All/ });
+  const accentBg = await accent.evaluate((e) => getComputedStyle(e).backgroundColor);
+  check(tag('the chosen filter chip is painted in the theme primary colour'), accentBg === 'rgb(204, 120, 92)', accentBg);
+  const save = preview.getByRole('button', { name: /Save as Note/ });
+  const before = await save.evaluate((e) => ({ bg: getComputedStyle(e).backgroundColor, color: getComputedStyle(e).color, border: getComputedStyle(e).borderColor, opacity: getComputedStyle(e).opacity }));
+  await save.hover(); await page.waitForTimeout(320);
+  const after = await save.evaluate((e) => ({ bg: getComputedStyle(e).backgroundColor, color: getComputedStyle(e).color, border: getComputedStyle(e).borderColor, opacity: getComputedStyle(e).opacity }));
+  check(tag('hover changes only the opacity, never a colour (Vault rule)'), after.bg === before.bg && after.color === before.color && after.border === before.border && Number(after.opacity) < Number(before.opacity), JSON.stringify({ before, after }));
+  await page.mouse.move(5, 5);
+  check(tag('transitions are 200 ms'), (await save.evaluate((e) => getComputedStyle(e).transitionDuration)).split(',').every((d) => d.trim() === '0.2s'));
+
   // ---- previews by kind
   await choose(3);
   check(tag('colour: swatch with HEX / RGB / HSL'), (await preview.innerText()).includes('rgb(204, 120, 92)') && (await preview.innerText()).includes('hsl('));
@@ -194,6 +214,27 @@ const run = async (scheme) => {
   await page.getByRole('button', { name: 'Add' }).click();
   check(tag('settings: an excluded program is added in tidy form'), (await page.getByText('keepass.exe').count()) >= 1);
   await page.getByRole('switch', { name: /Ingest to Finance/ }).uncheck().catch(async () => { await page.getByLabel(/Ingest to Finance/).uncheck(); });
+
+  // ---- appearance: every Vault theme and font can be chosen, and each one really changes the page
+  await page.getByRole('heading', { name: 'Appearance' }).waitFor();
+  const themeNames = ['Warm Sand', 'Dark Slate', 'Forest', 'Midnight Blue', 'Paper White'];
+  const expectBg = { 'Warm Sand': '#f5f5f0', 'Dark Slate': '#0f1117', Forest: '#f0f4f0', 'Midnight Blue': '#0d1b2a', 'Paper White': '#ffffff' };
+  check(tag('Appearance offers all five Vault themes'), (await page.getByRole('radio').count()) === 5);
+  for (const name of themeNames) {
+    await page.getByRole('radio', { name }).click();
+    await page.waitForTimeout(250);
+    const bg = (await token('--color-bg')).toLowerCase();
+    const scheme = await page.evaluate(() => document.documentElement.dataset.scheme);
+    check(tag('theme ' + name + ": the page takes Vault's exact background and the right light/dark setting"), bg === expectBg[name] && scheme === (['Dark Slate', 'Midnight Blue'].includes(name) ? 'dark' : 'light'), bg + ' ' + scheme);
+    await shot('theme-' + name.toLowerCase().replace(' ', '-'));
+  }
+  await page.getByRole('radio', { name: 'Warm Sand' }).click();
+  for (const font of ['Inter', 'Lato', 'Merriweather', 'JetBrains Mono', 'DM Sans']) {
+    await page.getByLabel('Font').selectOption({ label: font });
+    await page.waitForTimeout(250);
+    const ok = await page.evaluate(async (f) => { await document.fonts.load('400 14px "' + f + '"'); return { used: getComputedStyle(document.body).fontFamily.includes(f), loaded: [...document.fonts].some((x) => x.family === f && x.status === 'loaded') }; }, font);
+    check(tag('font ' + font + ': used by the page and loaded from the bundle'), ok.used && ok.loaded, JSON.stringify(ok));
+  }
   await shot('12-settings-privacy');
   await page.getByRole('button', { name: 'Back' }).click();
   await page.waitForTimeout(200);

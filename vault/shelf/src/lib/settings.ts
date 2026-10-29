@@ -9,6 +9,8 @@ export const AUTO_CLEAR_CHOICES = [0, 1, 4, 8, 24, 72, 168] as const;
 
 export const DEFAULT_SETTINGS: Settings = {
   hotkey: DEFAULT_HOTKEY,
+  theme: 'warm-sand',
+  font: 'DM Sans',
   startOnBoot: false,
   autoDismiss: true,
   baseUrl: '',

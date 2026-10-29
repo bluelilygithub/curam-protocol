@@ -206,6 +206,7 @@ public class SettingsStoreTests
     {
         using var root = new TempRoot();
         var s = new SettingsStore(root.Path).Current;
+        Assert.Equal("warm-sand", s.Theme); Assert.Equal("DM Sans", s.Font);   // the same defaults as a new Vault
         Assert.Equal("Ctrl+Shift+Space", s.Hotkey); Assert.True(s.AutoDismiss); Assert.True(s.IgnorePasswords); Assert.False(s.StartOnBoot);
         Assert.Equal(100, s.RetentionItems); Assert.Equal(0, s.AutoClearHours); Assert.Empty(s.ExcludedApps); Assert.All(s.Actions.Values, v => Assert.True(v));
     }
@@ -221,6 +222,21 @@ public class SettingsStoreTests
         Assert.Equal("Ctrl+Alt+K", back.Hotkey); Assert.Equal(50, back.RetentionItems); Assert.Equal(24, back.AutoClearHours);
         Assert.Equal(new[] { "keepass.exe", "1password.exe" }, back.ExcludedApps); Assert.False(back.Actions["finance"]); Assert.True(back.Actions["notes"]);
         Assert.Equal("https://v.example.com", back.BaseUrl);
+    }
+
+    [Fact]
+    public void The_theme_and_font_are_saved_and_odd_names_are_refused()
+    {
+        using var root = new TempRoot();
+        var store = new SettingsStore(root.Path);
+        var (ok, problems) = store.Apply(JsonNode.Parse("""{"theme":"dark-slate","font":"JetBrains Mono"}""")!.AsObject());
+        Assert.Empty(problems); Assert.Equal("dark-slate", ok.Theme); Assert.Equal("JetBrains Mono", ok.Font);
+        var back = new SettingsStore(root.Path).Current;
+        Assert.Equal("dark-slate", back.Theme); Assert.Equal("JetBrains Mono", back.Font);
+        var (bad, issues) = store.Apply(JsonNode.Parse("""{"theme":"<script>alert(1)</script>","font":"x'; DROP TABLE"}""")!.AsObject());
+        Assert.Equal(2, issues.Count);
+        Assert.Equal("dark-slate", bad.Theme); Assert.Equal("JetBrains Mono", bad.Font);   // the old values stay
+        Assert.Equal(2, store.Apply(JsonNode.Parse("""{"theme":"","font":"1Font"}""")!.AsObject()).problems.Count);
     }
 
     [Fact]

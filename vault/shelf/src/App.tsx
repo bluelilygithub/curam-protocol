@@ -9,6 +9,7 @@ import Toast from './components/Toast';
 import { useClipContent, useThumbs, useToast } from './hooks';
 import { countByFilter, describeClip, matchesFilter, type Described, type FilterId } from './lib/describe';
 import { ACTION_DONE, DEFAULT_SETTINGS, visibleActions } from './lib/settings';
+import { applyLook, resolveLook } from './lib/theme';
 
 const AUTO_DISMISS_DELAY_MS = 800; // long enough to read "Pushed to Vault" before the tray slides away
 
@@ -53,6 +54,9 @@ export default function App() {
       if (event === 'show') { setView('shelf'); setFilter('all'); setSelectedId(null); setRedact(null); void refreshVerify(bridge); root.current?.focus(); }
     });
   }, [bridge, refreshClips, refreshVerify]);
+
+  // the chosen theme and font (Vault's own table), applied whenever the settings change
+  useEffect(() => { applyLook(resolveLook(settings.theme, settings.font)); }, [settings.theme, settings.font]);
 
   // ---- what is on the shelf
   const described = useMemo(() => new Map<string, Described>(clips.map((c) => [c.id, describeClip(c)])), [clips]);
@@ -144,7 +148,7 @@ export default function App() {
 
   return (
     <div ref={root} tabIndex={-1} className="h-screen w-screen box-border p-2.5 outline-none">
-      <div className="relative h-full flex flex-col rounded-tray border border-shelf-line/10 bg-shelf-bg/70 backdrop-blur-xl shadow-2xl overflow-hidden">
+      <div className="relative h-full flex flex-col rounded-tray border border-shelf-line bg-shelf-bg/70 shadow-2xl overflow-hidden">
         {view === 'settings' ? (
           <div className="flex-1 min-h-0 p-4">
             <SettingsView bridge={bridge} settings={settings} verify={verify} onSettings={setSettings} onVerify={setVerify} onBack={() => setView('shelf')} onCleared={() => { void refreshClips(bridge); show('History cleared', 'info'); }} />
@@ -158,7 +162,7 @@ export default function App() {
                   ? <div className="h-full flex items-center justify-center text-sm text-shelf-muted text-center px-6">{clips.length === 0 ? 'Nothing copied yet. Copy something and it will appear here.' : 'Nothing of this kind on the shelf.'}</div>
                   : <CardStrip clips={shown} described={described} selectedId={selectedId} thumbs={thumbs} onSelect={setSelectedId} onVisiblePictures={onVisiblePictures} />}
               </section>
-              <section className="min-w-0 min-h-0 border-l border-shelf-line/10 pl-4" aria-label="Preview">
+              <section className="min-w-0 min-h-0 border-l border-shelf-line pl-4" aria-label="Preview">
                 <Inspector
                   meta={selected} desc={selected ? described.get(selected.id) ?? null : null} content={content}
                   actions={actions} busy={busy} redact={redact}

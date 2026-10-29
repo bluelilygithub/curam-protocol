@@ -27,6 +27,7 @@ internal sealed class ShelfWindow : Form
     private readonly string _dist;
     private readonly string _userData;
     private readonly string? _browserArgs;
+    private readonly string _query;
     private WebView2? _view;
 
     /// <summary>Completes when the page has loaded and drawn its first cards.</summary>
@@ -42,9 +43,9 @@ internal sealed class ShelfWindow : Form
     /// <summary>Run a script in the page and return its JSON result (used by the self-test; nothing else calls this).</summary>
     public async Task<string> EvalAsync(string js) => _view?.CoreWebView2 is { } core ? await core.ExecuteScriptAsync(js) : "null";
 
-    public ShelfWindow(Bridge bridge, string distFolder, string userDataFolder, string? browserArgs = null)
+    public ShelfWindow(Bridge bridge, string distFolder, string userDataFolder, string? browserArgs = null, string query = "")
     {
-        _bridge = bridge; _dist = distFolder; _userData = userDataFolder; _browserArgs = browserArgs ?? DefaultBrowserArgs;
+        _bridge = bridge; _dist = distFolder; _userData = userDataFolder; _browserArgs = browserArgs ?? DefaultBrowserArgs; _query = query;
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         TopMost = true;
@@ -101,7 +102,7 @@ internal sealed class ShelfWindow : Form
 
             var done = new TaskCompletionSource();
             core.NavigationCompleted += (_, _) => done.TrySetResult();
-            core.Navigate($"https://{HostName}/index.html");
+            core.Navigate($"https://{HostName}/index.html{_query}");
             await done.Task;
             Mark("pageLoaded");
             _view.Focus();

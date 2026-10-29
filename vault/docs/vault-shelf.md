@@ -32,6 +32,10 @@ Run with the host's self-test (`shelf/host/README.md`): real hotkey, real Notepa
 
 With the SQLite store, listener and WinForms clipboard code added: idle about 18 MB (14 MB after clipboard activity); **first open about 85 MB, later opens about 73 MB** (under 90; a cycle that also renders an SVG and an HTML clip is about 81); cards in about 0.75 to 0.9 s. The live listener passed every scenario through the real message loop: it captures text, masks a secret (the real one is nowhere in the store), drops password-manager clips, honours pause and the exclusion list, names the copying program, keeps a double copy once, captures pictures, and does not re-capture a copy-back from the shelf.
 
+### After the Vault look (themes, fonts, Lucide icons) was applied
+
+The shelf now follows Vault's design system (`shelf/README.md`, "The look"): Vault's six colour tokens from `client/src/themes.js` (all five themes, Warm Sand by default), Vault's fonts bundled with the page, opacity-only hover, 200 ms transitions, Lucide icons, no OS dark mode. Verified in the real window: the exact Vault colours and fonts are in place at first paint for the default and for a saved Dark Slate with Inter, the bundled fonts load under the page's security policy, no script pop-ups. **Memory finding:** the first version of this work raised the first open to about 84 to 96 MB (over the 90 MB cap); the cause was one CSS `backdrop-blur` on the panel, which the GPU-less browser renders in software. Removing it gives **first open about 79 MB, later opens 67 to 74 MB, worst case 84 MB** (three runs), about 10 MB under the cap. Chromium's low-end-device mode made no difference.
+
 Findings that changed the design: the "200 to 400 ms to create the webview" estimate was wrong for default settings (2.8 s) and about right only with the tuned switches (about 0.7 s
 to a finished page); and Windows 10 has no Mica, so the translucent window could not be tested here.
 

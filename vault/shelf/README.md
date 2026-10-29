@@ -70,3 +70,21 @@ refuses to send a masked clip even if asked.
 - `show` is sent each time the tray opens; the page expects a fresh webview each time (creating it on open and destroying it on dismiss is how the 35 MB idle goal is met).
 - `get_clip` for a picture returns the small copy; the original stays encrypted in the shell and is what `dispatch` uploads.
 - Nothing the page receives is trusted: text is rendered as text, SVG/HTML go through the sanitiser, a picture must be a `data:image/(png|jpeg|gif|webp);base64` URL.
+
+## The look: it follows Vault's own design system
+
+The shelf uses Vault's tokens, themes and fonts, not a palette of its own (see `../client/DESIGN.md`):
+
+- **Colours:** the same six tokens Vault writes (`--color-bg`, `--color-surface`, `--color-border`, `--color-primary`, `--color-text`, `--color-muted`, each with an `-rgb` twin so
+  opacity works) from the same table, `../client/src/themes.js`, imported through the `@vault-client` alias (as Route Tracer does). A theme added there appears here with no change.
+  Status colours are fixed as in Vault (error `#ef4444`, success `#16a34a`). The default is **Warm Sand**.
+- **Light and dark come from the chosen theme, never from the operating system.** (Vault does not follow the OS either.)
+- **Fonts:** Vault's five (DM Sans, Inter, Lato, Merriweather, JetBrains Mono) plus DM Mono for code, **bundled** with the page (`src/fonts.ts`, `@fontsource`) because the page's
+  security policy allows no network, so Google Fonts cannot be used. Default DM Sans. Only the weights the UI uses are included.
+- **Rules from DESIGN.md:** hover changes opacity only (never a colour), every transition is 200 ms, inner cards `rounded-xl`, sections `rounded-2xl`, inputs
+  `rounded-xl px-3 py-2.5`, Lucide icons (Vault's icon library), Tailwind text sizes. Tests enforce the colours, the fonts, opacity-only hover and the 200 ms rule.
+- **Choosing the look:** Settings, Appearance (the same five themes and fonts). Vault keeps its own choice only in each browser's `localStorage`, which a separate Windows window
+  cannot read, so the shelf stores its own (`theme`, `font`) and the shell passes it in the page address (`?theme=...&font=...`) so even the first paint is right. Picking the
+  same theme and font as in Vault makes them match. Following Vault's choice automatically would need Vault to save it on the server (a small change in Vault's Settings);
+  the `verify` answer could then carry it.
+- **No CSS blur.** A `backdrop-filter` on the whole panel cost about 5 to 10 MB in the GPU-less browser the shell runs and does nothing useful (the window supplies any translucency).

@@ -7,6 +7,9 @@ namespace VaultShelf.Host.Settings;
 internal sealed class AppSettings
 {
     public string Hotkey { get; set; } = "Ctrl+Shift+Space";
+    /// <summary>Vault's own theme id and font name (client/src/themes.js). The page knows the full tables; the shell only keeps what it was told, after a plain-characters check.</summary>
+    public string Theme { get; set; } = "warm-sand";
+    public string Font { get; set; } = "DM Sans";
     public bool StartOnBoot { get; set; }
     public bool AutoDismiss { get; set; } = true;
     public string BaseUrl { get; set; } = "";
@@ -27,6 +30,10 @@ internal static class SettingsRules
         "Ctrl+C", "Ctrl+V", "Ctrl+X", "Ctrl+Z", "Ctrl+Y", "Ctrl+A", "Ctrl+S", "Ctrl+W", "Ctrl+Q", "Alt+F4", "Alt+Tab", "Ctrl+Alt+Delete", "Ctrl+Shift+Esc",
         "Win+L", "Win+D", "Win+E", "Win+R", "Win+V", "Win+Space",
     };
+
+    /// <summary>A theme id is lower-case words joined by hyphens (warm-sand, dark-slate). Which ids exist is Vault's table, which the page holds; an unknown one just shows the default.</summary>
+    public static bool IsThemeId(string s) => System.Text.RegularExpressions.Regex.IsMatch(s, @"^[a-z][a-z0-9-]{0,31}$");
+    public static bool IsFontName(string s) => System.Text.RegularExpressions.Regex.IsMatch(s, @"^[A-Za-z][A-Za-z0-9 ]{0,39}$");
 
     public static int ClampRetention(int n) => Math.Min(RetentionMax, Math.Max(RetentionMin, n));
 
@@ -106,7 +113,7 @@ internal sealed class SettingsStore
     {
         var o = new JsonObject
         {
-        ["hotkey"] = s.Hotkey, ["startOnBoot"] = s.StartOnBoot, ["autoDismiss"] = s.AutoDismiss, ["baseUrl"] = s.BaseUrl,
+        ["hotkey"] = s.Hotkey, ["theme"] = s.Theme, ["font"] = s.Font, ["startOnBoot"] = s.StartOnBoot, ["autoDismiss"] = s.AutoDismiss, ["baseUrl"] = s.BaseUrl,
         ["ignorePasswords"] = s.IgnorePasswords, ["retentionItems"] = s.RetentionItems, ["autoClearHours"] = s.AutoClearHours,
         ["excludedApps"] = new JsonArray(s.ExcludedApps.Select(a => (JsonNode)JsonValue.Create(a)!).ToArray()),
         ["actions"] = new JsonObject(s.Actions.Select(kv => new KeyValuePair<string, JsonNode?>(kv.Key, JsonValue.Create(kv.Value)))),
@@ -124,7 +131,7 @@ internal sealed class SettingsStore
         problems = new List<string>();
         var s = new AppSettings
         {
-            Hotkey = start.Hotkey, StartOnBoot = start.StartOnBoot, AutoDismiss = start.AutoDismiss, BaseUrl = start.BaseUrl, IgnorePasswords = start.IgnorePasswords,
+            Hotkey = start.Hotkey, Theme = start.Theme, Font = start.Font, StartOnBoot = start.StartOnBoot, AutoDismiss = start.AutoDismiss, BaseUrl = start.BaseUrl, IgnorePasswords = start.IgnorePasswords,
             RetentionItems = start.RetentionItems, AutoClearHours = start.AutoClearHours, ExcludedApps = new List<string>(start.ExcludedApps), Actions = new Dictionary<string, bool>(start.Actions),
         };
         bool? Bool(string k) => patch[k] is JsonValue v && v.TryGetValue<bool>(out var b) ? b : null;
@@ -132,6 +139,8 @@ internal sealed class SettingsStore
         string? Str(string k) => patch[k] is JsonValue v && v.TryGetValue<string>(out var t) ? t : null;
 
         if (Str("hotkey") is { } hk) { var p = SettingsRules.HotkeyProblem(hk); if (p is null) s.Hotkey = hk; else problems.Add(p); }
+        if (Str("theme") is { } th) { if (SettingsRules.IsThemeId(th)) s.Theme = th; else problems.Add("That theme name is not valid."); }
+        if (Str("font") is { } fo) { if (SettingsRules.IsFontName(fo)) s.Font = fo; else problems.Add("That font name is not valid."); }
         if (Bool("startOnBoot") is { } sb) s.StartOnBoot = sb;
         if (Bool("autoDismiss") is { } ad) s.AutoDismiss = ad;
         if (Bool("ignorePasswords") is { } ip) s.IgnorePasswords = ip;

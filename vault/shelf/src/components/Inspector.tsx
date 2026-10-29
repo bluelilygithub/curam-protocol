@@ -45,17 +45,17 @@ export default function Inspector(p: Props) {
   const dims = meta.width && meta.height ? ` · ${meta.width} × ${meta.height}` : '';
   return (
     <div className="h-full flex flex-col min-h-0 gap-2.5">
-      <div className="flex items-center gap-2 text-[12px] text-shelf-muted min-h-[24px]">
+      <div className="flex items-center gap-2 text-xs text-shelf-muted min-h-[24px]">
         <Icon name={desc.type === 'color' ? 'color' : desc.type} size={14} />
         <span className="font-semibold text-shelf-text">{desc.label}</span>
         <span className="truncate">{timeAgo(meta.createdAt)}{meta.sourceApp ? ` · ${meta.sourceApp}` : ''} · {formatBytes(meta.sizeBytes)}{dims}</span>
         <div className="ml-auto flex items-center gap-1 shrink-0">
-          <button type="button" onClick={p.onCopy} className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-shelf-text hover:bg-shelf-text/10 transition-colors" title="Copy again (Enter copies and closes)"><Icon name="copy" size={14} /> Copy</button>
-          <button type="button" onClick={p.onDelete} className="inline-flex items-center px-1.5 py-1 rounded-md text-shelf-muted hover:text-shelf-danger hover:bg-shelf-text/10 transition-colors" title="Remove from the shelf (Delete)" aria-label="Remove from the shelf"><Icon name="trash" size={14} /></button>
+          <button type="button" onClick={p.onCopy} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-shelf-text hover:opacity-70 transition-colors" title="Copy again (Enter copies and closes)"><Icon name="copy" size={14} /> Copy</button>
+          <button type="button" onClick={p.onDelete} className="inline-flex items-center px-1.5 py-1 rounded-lg text-shelf-muted hover:opacity-70 transition-colors" title="Remove from the shelf (Delete)" aria-label="Remove from the shelf"><Icon name="trash" size={14} /></button>
         </div>
       </div>
       {meta.masked && (
-        <div className="flex items-center gap-2 rounded-card bg-shelf-danger/10 text-shelf-danger text-[12px] px-3 py-2" role="note">
+        <div className="flex items-center gap-2 rounded-card bg-shelf-danger/10 text-shelf-danger text-xs px-3 py-2" role="note">
           <Icon name="lock" size={14} /> A secret was found in this copy and hidden. It can be read here but is never sent to Vault.
         </div>
       )}

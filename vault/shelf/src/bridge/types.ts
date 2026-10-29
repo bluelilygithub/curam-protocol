@@ -59,6 +59,9 @@ export interface DispatchResult {
 
 export interface Settings {
   hotkey: string;
+  /** Vault's own theme id (client/src/themes.js) and font name, chosen here because Vault keeps its choice only in the browser. */
+  theme: string;
+  font: string;
   startOnBoot: boolean;
   autoDismiss: boolean;
   /** The Vault address (origin only). Not secret. */

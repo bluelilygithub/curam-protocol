@@ -21,7 +21,7 @@ dismiss**); focus remembered and restored; click-away dismiss; the page-to-shell
   (current Windows user, plus an application entropy value) before it touches the disk. Only metadata that is not content is in the clear: kind, time, size, the program it
   came from, and the masked/truncated flags. It keeps the last N clips (10 to 200), clears by age (1 hour to 7 days), prunes when something is captured and every ten
   minutes, and removes picture files with no row at start.
-- **Settings** (`Settings/`). `settings.json` (never the key), checked with the same rules as the page; a damaged file means defaults. **Start with Windows** is a value in the
+- **Settings** (`Settings/`). `settings.json` (never the key; it includes the chosen Vault `theme` and `font`, which the shell passes to the page in its address so the first paint is right), checked with the same rules as the page; a damaged file means defaults. **Start with Windows** is a value in the
   current user's Run key. **Credential Manager** (`Security/CredentialStore.cs`) will hold the Vault key; it is written by the connection step in M4.
 
 ## Not built yet
@@ -43,7 +43,7 @@ bin/Release/net10.0-windows/VaultShelf.exe # tray icon appears; press Ctrl+Shift
 ## Tests
 
 ```
-cd vault/shelf/host.tests && dotnet test     # 171 tests
+cd vault/shelf/host.tests && dotnet test     # 172 tests
 ```
 
 They use the real Windows pieces: DPAPI, Credential Manager (a throw-away target), the registry (a throw-away value), the SQLite file, and **the real clipboard, so running

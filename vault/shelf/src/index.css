@@ -2,70 +2,60 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Windows 11 colours. Light and dark follow the Windows setting. RGB triplets so Tailwind can add opacity (bg-shelf-bg/70). */
+/*
+ * Vault's tokens (client/src/index.css and ThemeProvider): the defaults below are Warm Sand and DM Sans, the same as a new Vault. src/lib/theme.ts replaces the
+ * colours with the chosen theme as soon as the page starts. The -rgb twins let Tailwind add opacity (bg-shelf-accent/70).
+ */
 :root {
-  --shelf-bg: 243 243 243;
-  --shelf-card: 255 255 255;
-  --shelf-line: 0 0 0;
-  --shelf-text: 26 26 26;
-  --shelf-muted: 96 96 96;
-  --shelf-accent: 0 95 184;
-  --shelf-danger: 196 43 28;
-  --shelf-ok: 15 123 15;
+  --font-sans: 'DM Sans', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+  --color-bg: #F5F5F0;        --color-bg-rgb: 245 245 240;
+  --color-surface: #EEEEE8;   --color-surface-rgb: 238 238 232;
+  --color-border: #D8D8D0;    --color-border-rgb: 216 216 208;
+  --color-primary: #CC785C;   --color-primary-rgb: 204 120 92;
+  --color-text: #1A1A1A;      --color-text-rgb: 26 26 26;
+  --color-muted: #888888;     --color-muted-rgb: 136 136 136;
+  --color-on-primary: #ffffff; --color-on-primary-rgb: 255 255 255;
   color-scheme: light;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --shelf-bg: 32 32 32;
-    --shelf-card: 50 50 50;
-    --shelf-line: 255 255 255;
-    --shelf-text: 255 255 255;
-    --shelf-muted: 190 190 190;
-    --shelf-accent: 96 205 255;
-    --shelf-danger: 255 153 164;
-    --shelf-ok: 108 203 95;
-    color-scheme: dark;
-  }
-}
 
+* { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 body {
-  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-  color: rgb(var(--shelf-text));
+  font-family: var(--font-sans);
+  color: var(--color-text);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
   user-select: none; /* it is a tray, not a document: parts that are meant to be copied turn selection back on */
 }
-/* In a plain browser (development) there is no Mica behind the page, so give it a solid backdrop. Hosted, the window shows through. */
-html:not([data-hosted]) body { background: rgb(var(--shelf-bg)); }
+/* In a plain browser (development) there is no Mica behind the page, so give it Vault's background. Hosted, the window shows through. */
+html:not([data-hosted]) body { background-color: var(--color-bg); }
 html[data-hosted] body { background: transparent; }
 
 pre, code, .select-all { user-select: text; }
+:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
 /* code must read exactly as it is: no ligatures (a font would draw !== as one "≠" shape, and => as an arrow) */
 pre, code, kbd, .font-mono { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
-:focus-visible { outline: 2px solid rgb(var(--shelf-accent)); outline-offset: 2px; }
 
-* { scrollbar-width: thin; scrollbar-color: rgb(var(--shelf-line) / 0.3) transparent; }
+* { scrollbar-width: thin; scrollbar-color: var(--color-border) transparent; }
 ::-webkit-scrollbar { width: 9px; height: 9px; }
-::-webkit-scrollbar-thumb { background: rgb(var(--shelf-line) / 0.25); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
-::-webkit-scrollbar-thumb:hover { background: rgb(var(--shelf-line) / 0.4); background-clip: padding-box; border: 2px solid transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
 
 @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
-/* code colours (highlight.js class names), kept to the tray's own palette */
-.hljs { color: rgb(var(--shelf-text)); background: transparent; }
-.hljs-comment, .hljs-quote { color: rgb(var(--shelf-muted)); font-style: italic; }
+/* code colours (highlight.js class names). Which set is used depends on the chosen theme being light or dark, not on the operating system. */
+.hljs { color: var(--color-text); background: transparent; }
+.hljs-comment, .hljs-quote { color: var(--color-muted); font-style: italic; }
 .hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-built_in, .hljs-doctag { color: #b4005a; }
 .hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute, .hljs-meta .hljs-string { color: #0b7a3b; }
 .hljs-number, .hljs-symbol, .hljs-bullet, .hljs-variable, .hljs-template-variable, .hljs-link { color: #b25b00; }
 .hljs-title, .hljs-section, .hljs-name, .hljs-selector-id, .hljs-selector-class, .hljs-type, .hljs-class .hljs-title { color: #1c5fb5; }
 .hljs-attr, .hljs-property, .hljs-params { color: #6b3fa0; }
-.hljs-deletion { color: rgb(var(--shelf-danger)); }
-@media (prefers-color-scheme: dark) {
-  .hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-built_in, .hljs-doctag { color: #ff79b8; }
-  .hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute, .hljs-meta .hljs-string { color: #7ee2a0; }
-  .hljs-number, .hljs-symbol, .hljs-bullet, .hljs-variable, .hljs-template-variable, .hljs-link { color: #ffb86b; }
-  .hljs-title, .hljs-section, .hljs-name, .hljs-selector-id, .hljs-selector-class, .hljs-type, .hljs-class .hljs-title { color: #7cb8ff; }
-  .hljs-attr, .hljs-property, .hljs-params { color: #c9a0ff; }
-}
+.hljs-deletion { color: #ef4444; }
+[data-scheme='dark'] .hljs-keyword, [data-scheme='dark'] .hljs-selector-tag, [data-scheme='dark'] .hljs-literal, [data-scheme='dark'] .hljs-built_in, [data-scheme='dark'] .hljs-doctag { color: #ff79b8; }
+[data-scheme='dark'] .hljs-string, [data-scheme='dark'] .hljs-regexp, [data-scheme='dark'] .hljs-addition, [data-scheme='dark'] .hljs-attribute, [data-scheme='dark'] .hljs-meta .hljs-string { color: #7ee2a0; }
+[data-scheme='dark'] .hljs-number, [data-scheme='dark'] .hljs-symbol, [data-scheme='dark'] .hljs-bullet, [data-scheme='dark'] .hljs-variable, [data-scheme='dark'] .hljs-template-variable, [data-scheme='dark'] .hljs-link { color: #ffb86b; }
+[data-scheme='dark'] .hljs-title, [data-scheme='dark'] .hljs-section, [data-scheme='dark'] .hljs-name, [data-scheme='dark'] .hljs-selector-id, [data-scheme='dark'] .hljs-selector-class, [data-scheme='dark'] .hljs-type, [data-scheme='dark'] .hljs-class .hljs-title { color: #7cb8ff; }
+[data-scheme='dark'] .hljs-attr, [data-scheme='dark'] .hljs-property, [data-scheme='dark'] .hljs-params { color: #c9a0ff; }

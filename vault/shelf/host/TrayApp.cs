@@ -106,7 +106,9 @@ internal sealed class TrayApp : ApplicationContext
         try
         {
             _focus.Remember();                                  // before any window of ours exists
-            var w = new ShelfWindow(Bridge, _dist, _userData, _browserArgs);
+            // the chosen theme and font go in the page address, so the first paint already wears them (no flash of the default)
+            var look = Settings.Current;
+            var w = new ShelfWindow(Bridge, _dist, _userData, _browserArgs, $"?theme={Uri.EscapeDataString(look.Theme)}&font={Uri.EscapeDataString(look.Font)}");
             Window = w;
             w.Show();
             LastActivate = _focus.Activate(w.Handle);

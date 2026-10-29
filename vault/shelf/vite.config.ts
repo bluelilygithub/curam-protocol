@@ -1,3 +1,5 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
 
@@ -26,9 +28,13 @@ function strictCsp(): Plugin {
   };
 }
 
+const here = path.dirname(fileURLToPath(import.meta.url));
+
 export default defineConfig({
   base: './', // the shell loads the built page from disk
   plugins: [react(), strictCsp()],
-  server: { port: 5177, strictPort: true },
+  // Vault's own theme and font tables (client/src/themes.js), so the shelf offers exactly the looks Vault does and a new one added there appears here
+  resolve: { alias: { '@vault-client': path.resolve(here, '../client/src') } },
+  server: { port: 5177, strictPort: true, fs: { allow: ['..'] } },
   build: { outDir: 'dist', emptyOutDir: true, sourcemap: false, target: 'es2022' },
 });

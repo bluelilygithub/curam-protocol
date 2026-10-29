@@ -16,7 +16,7 @@ export default function ActionBar({ actions, busy, onAction }: { actions: Action
             onClick={() => onAction(a.id)}
             title={a.enabled ? undefined : a.reason}
             aria-disabled={!a.enabled}
-            className={`px-3 py-1.5 rounded-md text-[12.5px] font-medium border transition-[opacity,background-color] duration-150 ${a.enabled ? 'border-shelf-line/20 bg-shelf-card/80 text-shelf-text hover:bg-shelf-accent hover:text-white hover:border-shelf-accent' : 'border-shelf-line/10 text-shelf-muted opacity-60 cursor-not-allowed'} ${working ? 'opacity-70' : ''}`}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-[opacity,background-color] ${a.enabled ? 'border-shelf-line bg-shelf-card/80 text-shelf-text hover:opacity-70' : 'border-shelf-line text-shelf-muted opacity-60 cursor-not-allowed'} ${working ? 'opacity-70' : ''}`}
           >
             {working ? 'Sending…' : a.label}
           </button>
