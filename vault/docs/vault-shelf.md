@@ -8,8 +8,8 @@ Vault. This file covers the **Vault side (Milestone 1, built)** and the plan for
 | | What | Status |
 |---|---|---|
 | M1 | Vault server: keys, `/api/quick-ingest/*`, Settings card, CRM inbox, Invoice Review tag, tests | **Built** (local only; not on `staging` until the owner says) |
-| M2 | Rust core: tray, global hotkey, clipboard listener with exclusion flags, secret masking, DPAPI-encrypted SQLite. **Starts with a measuring spike** (idle memory, WebView teardown, focus return) | Not started |
-| M3 | On-demand UI and previews (webview created on open, torn down on dismiss) | Not started |
+| M2 | Native shell: tray, global hotkey, clipboard listener with exclusion flags, secret masking, DPAPI-encrypted SQLite. **Starts with a measuring spike** (idle memory, WebView teardown, focus return) | **Paused.** Needs a toolchain this PC does not have: Rust + MSVC C++ build tools (Tauri), or the .NET SDK (C# + WebView2, no C++ needed). Not installed yet; the choice is open |
+| M3 | The tray page (`vault/shelf/`): shelf of cards, filters, previews, actions, Settings, hotkey recorder, behind a bridge contract (`shelf/README.md`) | **Built and verified in Chrome** against sample data (32 unit tests, 47 browser checks, light and dark). The window lifecycle (create on open, destroy on dismiss) belongs to the shell and waits for M2 |
 | M4 | Dispatch from Rust (`reqwest`) with the key from Windows Credential Manager, Settings view | Not started |
 | M5 | `vault-shelf://open` handler (no parameters), "Open Shelf" button in Vault's top bar, packaging | Not started |
 
