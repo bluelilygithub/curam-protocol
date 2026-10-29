@@ -8,10 +8,28 @@ Vault. This file covers the **Vault side (Milestone 1, built)** and the plan for
 | | What | Status |
 |---|---|---|
 | M1 | Vault server: keys, `/api/quick-ingest/*`, Settings card, CRM inbox, Invoice Review tag, tests | **Built** (local only; not on `staging` until the owner says) |
-| M2 | Native shell: tray, global hotkey, clipboard listener with exclusion flags, secret masking, DPAPI-encrypted SQLite. **Starts with a measuring spike** (idle memory, WebView teardown, focus return) | **Paused.** Needs a toolchain this PC does not have: Rust + MSVC C++ build tools (Tauri), or the .NET SDK (C# + WebView2, no C++ needed). Not installed yet; the choice is open |
+| M2 | Native shell: tray, global hotkey, clipboard listener with exclusion flags, secret masking, DPAPI-encrypted SQLite. **Starts with a measuring spike** (idle memory, WebView teardown, focus return) | **Stack chosen: C# / .NET 10 + WebView2** (`shelf/host/`, instead of Rust: no C++ build tools needed). **Spike done and passing** (see below). Still to build: clipboard listener + exclusion flags, secret masking, encrypted store, Credential Manager, start-on-boot |
 | M3 | The tray page (`vault/shelf/`): shelf of cards, filters, previews, actions, Settings, hotkey recorder, behind a bridge contract (`shelf/README.md`) | **Built and verified in Chrome** against sample data (32 unit tests, 47 browser checks, light and dark). The window lifecycle (create on open, destroy on dismiss) belongs to the shell and waits for M2 |
 | M4 | Dispatch from Rust (`reqwest`) with the key from Windows Credential Manager, Settings view | Not started |
 | M5 | `vault-shelf://open` handler (no parameters), "Open Shelf" button in Vault's top bar, packaging | Not started |
+
+## M2 spike results (2026-10-29, Windows 10 22H2, .NET 10.0.14, WebView2 runtime 156)
+
+Run with the host's self-test (`shelf/host/README.md`): real hotkey, real Notepad, injected key presses; memory = private working set of the host plus its own WebView2 processes.
+
+| Goal | Result |
+|---|---|
+| Idle under 35 MB | **Met.** The tray alone is about 17 MB (about 2 MB after a memory trim), with **no browser process running** |
+| Active under 90 MB | **Met, but only with tuned browser switches.** With WebView2's defaults the open shelf used about 115 MB (157 MB the first time). With the switches in `ShelfWindow.DefaultBrowserArgs` it uses **65 to 80 MB** (6 processes) |
+| Webview created on open, destroyed on dismiss | **Works.** Every browser process is gone within about a second of closing; 5 open/close cycles showed no growth |
+| Speed | Window visible in about **60 ms**; cards drawn in about **0.72 s** (cold browser start is about 440 ms of that). With default switches it was about **2.8 s**: the stall was removed by turning off background networking, update checks and SmartScreen lookups, not by the GPU switch |
+| Shelf gets the keyboard focus | **Yes** (directly, no workaround needed) in all cycles |
+| Previous window gets focus back on Esc | **Yes**, in all cycles, about 60 ms |
+| Click-away | **Works.** Choosing another window closes the shelf in about 40 ms and the chosen window keeps the focus |
+| Hostile clips in the real window with the built page's policy | SVG shown as a blob image, HTML in a sandboxed frame, **0 script pop-ups** |
+
+Findings that changed the design: the "200 to 400 ms to create the webview" estimate was wrong for default settings (2.8 s) and about right only with the tuned switches (about 0.7 s
+to a finished page); and Windows 10 has no Mica, so the translucent window could not be tested here.
 
 ## The key (ingest-only token)
 
