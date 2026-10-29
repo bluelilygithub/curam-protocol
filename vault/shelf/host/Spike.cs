@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using VaultShelf.Host.Clipboard;
 using static VaultShelf.Host.NativeMethods;
 
 namespace VaultShelf.Host;
@@ -43,6 +44,98 @@ internal sealed class Spike
             if (p.MainWindowHandle != IntPtr.Zero) return p.MainWindowHandle;
         }
         return IntPtr.Zero;
+    }
+
+private async Task<CaptureOutcome?> WaitOutcome(Action trigger, int timeoutMs = 2500)
+    {
+        var tcs = new TaskCompletionSource<CaptureOutcome>();
+        void Handler(CaptureOutcome o) => tcs.TrySetResult(o);
+        _app.Monitor.Processed += Handler;
+        try
+        {
+            trigger();
+            var done = await Task.WhenAny(tcs.Task, Task.Delay(timeoutMs));
+            return done == tcs.Task ? tcs.Task.Result : null;
+        }
+        finally { _app.Monitor.Processed -= Handler; }
+    }
+
+    private static void SetClipboard(Action<System.Windows.Forms.DataObject> fill)
+    {
+        var d = new System.Windows.Forms.DataObject();
+        fill(d);
+        System.Windows.Forms.Clipboard.SetDataObject(d, true, 10, 50);
+    }
+
+    /// <summary>The real listener through the real message loop: copy things the way programs do and see what the app does with each.</summary>
+    private async Task<Dictionary<string, object?>> LiveClipboardAsync()
+    {
+        var r = new Dictionary<string, object?>();
+        int before = _app.Store.Count();
+        string token = "ghp" + "_" + string.Concat(Enumerable.Range(0, 36).Select(i => "aB3dE5gH7jK9mN1pQ"[i % 17]));
+
+        var plain = await WaitOutcome(() => SetClipboard(d => d.SetText("live capture test " + Guid.NewGuid().ToString("N"))));
+        r["plainTextCaptured"] = plain is { Captured: true };
+        r["plainTextSource"] = plain?.Owner;
+
+        var secret = await WaitOutcome(() => SetClipboard(d => d.SetText("remote set-url https://x:" + token + "@github.com/a/b")));
+        r["secretCaptured"] = secret is { Captured: true };
+        r["secretMasked"] = secret is { Masked: true };
+        var stored = secret?.ClipId is { } sid ? _app.Store.GetText(sid) : null;
+        r["secretNotStored"] = stored is not null && !stored.Contains(token);
+
+        var marked = await WaitOutcome(() => SetClipboard(d => { d.SetText("a password from a manager"); d.SetData("ExcludeClipboardContentFromMonitorProcessing", false, new MemoryStream(new byte[] { 1, 0, 0, 0 })); }));
+        r["passwordManagerClipDropped"] = marked is { Captured: false, Reason: "PasswordManagerFlag" };
+
+        _app.Monitor.Paused = true;
+        var paused = await WaitOutcome(() => SetClipboard(d => d.SetText("copied while paused")));
+        r["pausedDropped"] = paused is { Captured: false, Reason: "Paused" };
+        _app.Monitor.Paused = false;
+
+        var dup = await WaitOutcome(() => SetClipboard(d => d.SetText("same twice")));
+        var dup2 = await WaitOutcome(() => SetClipboard(d => d.SetText("same twice")));
+        r["duplicateCapturedOnceOnly"] = dup is { Captured: true } && dup2 is not { Captured: true };
+
+        using (var bmp = new System.Drawing.Bitmap(800, 500))
+        {
+            using (var g = System.Drawing.Graphics.FromImage(bmp)) g.Clear(System.Drawing.Color.SteelBlue);
+            var img = await WaitOutcome(() => SetClipboard(d => d.SetImage(bmp)));
+            r["pictureCaptured"] = img is { Captured: true, Kind: Storage.ClipKind.Image };
+        }
+
+        // another program: it must be seen as that program, and an excluded program must be dropped
+        var ps = Process.Start(new ProcessStartInfo("powershell.exe", "-NoProfile -WindowStyle Hidden -Command \"Set-Clipboard -Value 'copied by powershell'; Start-Sleep -Seconds 4\"") { CreateNoWindow = true, UseShellExecute = false })!;
+        var fromPs = await Task.Run(async () => await WaitOutcomeFrom(ps, 6000));
+        r["otherProgramCaptured"] = fromPs is { Captured: true };
+        r["otherProgramNamed"] = fromPs?.Owner;
+        try { ps.Kill(true); } catch (InvalidOperationException) { /* finished */ }
+
+        _app.Settings.Current.ExcludedApps.Add("powershell.exe");
+        var ps2 = Process.Start(new ProcessStartInfo("powershell.exe", "-NoProfile -WindowStyle Hidden -Command \"Set-Clipboard -Value 'from an excluded program'; Start-Sleep -Seconds 4\"") { CreateNoWindow = true, UseShellExecute = false })!;
+        var excluded = await WaitOutcomeFrom(ps2, 6000);
+        r["excludedProgramDropped"] = excluded is { Captured: false, Reason: "ExcludedApp" };
+        _app.Settings.Current.ExcludedApps.Remove("powershell.exe");
+        try { ps2.Kill(true); } catch (InvalidOperationException) { /* finished */ }
+
+        // the shelf puts a clip back on the clipboard: that must not be captured again
+        var first = _app.Store.List().First(c => c.Kind == Storage.ClipKind.Text && !c.Masked);
+        int countBefore = _app.Store.Count();
+        var again = await WaitOutcome(() => _app.Bridge.Handle($"{{\"id\":1,\"command\":\"copy_clip\",\"args\":{{\"id\":\"{first.Id}\"}}}}"), 1500);
+        r["copyBackNotCapturedAgain"] = again is null && _app.Store.Count() == countBefore;
+
+        r["clipsAddedByTest"] = _app.Store.Count() - before;
+        r["listenerRegistered"] = _app.Monitor.Listening;
+        return r;
+    }
+
+    /// <summary>Wait for the monitor's next result (used where the copy is made by another process).</summary>
+    private async Task<CaptureOutcome?> WaitOutcomeFrom(Process _, int timeoutMs)
+    {
+        var tcs = new TaskCompletionSource<CaptureOutcome>();
+        void Handler(CaptureOutcome o) => tcs.TrySetResult(o);
+        _app.Monitor.Processed += Handler;
+        try { var done = await Task.WhenAny(tcs.Task, Task.Delay(timeoutMs)); return done == tcs.Task ? tcs.Task.Result : null; }
+        finally { _app.Monitor.Processed -= Handler; }
     }
 
     public async Task RunAsync()
@@ -103,13 +196,13 @@ internal sealed class Spike
                 c["shelfHasKeyboardFocus"] = GetForegroundWindow() == win.Handle;
                 c["startupMarksMs"] = new Dictionary<string, long>(win.Marks);
 
-                if (n == 1 && cards)
+                if (n == 3 && cards)
                 {
                     // hostile clips inside the real window with the built page's policy: pick the SVG, then the HTML clip, and look at what the page made of them
-                    await win.EvalAsync("document.querySelector('[data-clip-id=clip-005]')?.click()");
+                    await win.EvalAsync("document.querySelectorAll('[role=option]')[4]?.click()");
                     await Task.Delay(500);
                     c["svgDrawnAsBlobImage"] = (await win.EvalAsync("document.querySelector('section[aria-label=Preview] img')?.src.startsWith('blob:') === true")) == "true";
-                    await win.EvalAsync("document.querySelector('[data-clip-id=clip-006]')?.click()");
+                    await win.EvalAsync("document.querySelectorAll('[role=option]')[5]?.click()");
                     await Task.Delay(500);
                     c["htmlInSandboxedFrame"] = (await win.EvalAsync("(() => { const f = document.querySelector('section[aria-label=Preview] iframe'); return !!f && f.getAttribute('sandbox') === ''; })()")) == "true";
                     c["scriptDialogsFromHostileClips"] = win.DialogCount;
@@ -179,6 +272,12 @@ internal sealed class Spike
                 snapshots.Add(s);
                 Say($"{label}: host {s.HostMb:F1} MB, web view processes {s.WebViewProcesses} ({s.WebViewMb:F1} MB)");
             }
+
+            // ---- 4. the real clipboard listener, through the real message loop
+            result["clipboardLive"] = await LiveClipboardAsync();
+            Say("live clipboard: " + System.Text.Json.JsonSerializer.Serialize(result["clipboardLive"]));
+            await Task.Delay(2000);
+            snapshots.Add(MemoryProbe.Take("idle after clipboard activity"));
         }
         catch (Exception e)
         {

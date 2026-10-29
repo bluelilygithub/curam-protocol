@@ -8,8 +8,8 @@ Vault. This file covers the **Vault side (Milestone 1, built)** and the plan for
 | | What | Status |
 |---|---|---|
 | M1 | Vault server: keys, `/api/quick-ingest/*`, Settings card, CRM inbox, Invoice Review tag, tests | **Built** (local only; not on `staging` until the owner says) |
-| M2 | Native shell: tray, global hotkey, clipboard listener with exclusion flags, secret masking, DPAPI-encrypted SQLite. **Starts with a measuring spike** (idle memory, WebView teardown, focus return) | **Stack chosen: C# / .NET 10 + WebView2** (`shelf/host/`, instead of Rust: no C++ build tools needed). **Spike done and passing** (see below). Still to build: clipboard listener + exclusion flags, secret masking, encrypted store, Credential Manager, start-on-boot |
-| M3 | The tray page (`vault/shelf/`): shelf of cards, filters, previews, actions, Settings, hotkey recorder, behind a bridge contract (`shelf/README.md`) | **Built and verified in Chrome** against sample data (32 unit tests, 47 browser checks, light and dark). The window lifecycle (create on open, destroy on dismiss) belongs to the shell and waits for M2 |
+| M2 | Native shell: tray, global hotkey, clipboard listener with exclusion flags, secret masking, DPAPI-encrypted SQLite. **Starts with a measuring spike** (idle memory, WebView teardown, focus return) | **Stack: C# / .NET 10 + WebView2** (`shelf/host/`). **Built and tested:** tray, hotkey, on-demand window, clipboard listener with the password-manager markers, secret masking, DPAPI-encrypted SQLite history with retention and auto-clear, settings, Start with Windows, Credential Manager store (171 tests + a live self-test). Still to build: sending to Vault is M4 |
+| M3 | The tray page (`vault/shelf/`): shelf of cards, filters, previews, actions, Settings, hotkey recorder, behind a bridge contract (`shelf/README.md`) | **Built and verified in Chrome** against sample data (32 unit tests, 47 browser checks, light and dark). The window lifecycle (create on open, destroy on dismiss) is done by the shell (M2) |
 | M4 | Dispatch from Rust (`reqwest`) with the key from Windows Credential Manager, Settings view | Not started |
 | M5 | `vault-shelf://open` handler (no parameters), "Open Shelf" button in Vault's top bar, packaging | Not started |
 
@@ -27,6 +27,10 @@ Run with the host's self-test (`shelf/host/README.md`): real hotkey, real Notepa
 | Previous window gets focus back on Esc | **Yes**, in all cycles, about 60 ms |
 | Click-away | **Works.** Choosing another window closes the shelf in about 40 ms and the chosen window keeps the focus |
 | Hostile clips in the real window with the built page's policy | SVG shown as a blob image, HTML in a sandboxed frame, **0 script pop-ups** |
+
+### After the clipboard, masking and storage work (same machine)
+
+With the SQLite store, listener and WinForms clipboard code added: idle about 18 MB (14 MB after clipboard activity); **first open about 85 MB, later opens about 73 MB** (under 90; a cycle that also renders an SVG and an HTML clip is about 81); cards in about 0.75 to 0.9 s. The live listener passed every scenario through the real message loop: it captures text, masks a secret (the real one is nowhere in the store), drops password-manager clips, honours pause and the exclusion list, names the copying program, keeps a double copy once, captures pictures, and does not re-capture a copy-back from the shelf.
 
 Findings that changed the design: the "200 to 400 ms to create the webview" estimate was wrong for default settings (2.8 s) and about right only with the tuned switches (about 0.7 s
 to a finished page); and Windows 10 has no Mica, so the translucent window could not be tested here.

@@ -1,10 +1,14 @@
 using System.Drawing.Drawing2D;
+using VaultShelf.Host.Clipboard;
+using VaultShelf.Host.Security;
+using VaultShelf.Host.Settings;
+using VaultShelf.Host.Storage;
 
 namespace VaultShelf.Host;
 
 /// <summary>
-/// The always-running part: a tray icon, the global hotkey and the right-click menu. It owns no web browser: the shelf window (and its WebView2)
-/// exists only between the hotkey press and the moment the shelf is dismissed.
+/// The always-running part: a tray icon, the global hotkey, the clipboard listener and the right-click menu. It owns no web browser: the shelf window (and
+/// its WebView2) exists only between the hotkey press and the moment the shelf is dismissed.
 /// </summary>
 internal sealed class TrayApp : ApplicationContext
 {
@@ -14,32 +18,80 @@ internal sealed class TrayApp : ApplicationContext
     private readonly HotkeyWindow _hotkey = new();
     private readonly FocusKeeper _focus = new();
     private readonly Icon _icon;
+    private readonly System.Windows.Forms.Timer _pruneTimer = new() { Interval = 10 * 60 * 1000 };
+    private readonly ToolStripMenuItem _pauseItem;
+    private string _activeHotkey;
     private bool _opening;
 
-    public Bridge Bridge { get; } = new();
+    public ClipStore Store { get; }
+    public SettingsStore Settings { get; }
+    public CredentialStore Credentials { get; }
+    public StartupRegistration Startup { get; }
+    public ClipboardMonitor Monitor { get; }
+    public Bridge Bridge { get; }
     public ShelfWindow? Window { get; private set; }
     public bool TrimAfterClose { get; set; } = true;
-    public bool HotkeyRegistered { get; }
+    public bool HotkeyRegistered { get; private set; }
     public (bool ok, string how) LastActivate { get; private set; }
     public (bool ok, string how) LastRestore { get; private set; }
-    public Action<string>? Log { get; set; }
 
-    public TrayApp(string distFolder, string userDataFolder, string? browserArgs, string hotkey = "Ctrl+Shift+Space")
+    public TrayApp(string distFolder, string userDataFolder, string? browserArgs, string root, StartupRegistration? startup = null, CredentialStore? credentials = null)
     {
         _dist = distFolder; _userData = userDataFolder; _browserArgs = browserArgs;
+        Store = new ClipStore(root);
+        Settings = new SettingsStore(root);
+        Credentials = credentials ?? new CredentialStore();
+        Startup = startup ?? new StartupRegistration();
+        Monitor = new ClipboardMonitor(Store, () => Settings.Current);
+        Bridge = new Bridge(Store, Settings, Credentials, Startup, Monitor, ApplyHotkey);
+
         _icon = MakeIcon();
+        _activeHotkey = Settings.Current.Hotkey;
         var menu = new ContextMenuStrip();
         menu.Items.Add("Open", null, async (_, _) => await OpenAsync());
-        menu.Items.Add("Settings", null, async (_, _) => await OpenAsync());      // opens the shelf; it will go straight to Settings once that is wired (M4)
-        menu.Items.Add(new ToolStripMenuItem("Pause monitoring") { CheckOnClick = true });  // wired to the clipboard listener in the next step
-        menu.Items.Add("Clear history", null, (_, _) => { /* wired to the store in the next step */ });
+        menu.Items.Add("Settings", null, async (_, _) => await OpenAsync());      // opens the shelf; it will go straight to Settings once that is wired
+        _pauseItem = new ToolStripMenuItem("Pause monitoring") { CheckOnClick = true };
+        _pauseItem.CheckedChanged += (_, _) => { Monitor.Paused = _pauseItem.Checked; UpdateTooltip(); };
+        menu.Items.Add(_pauseItem);
+        menu.Items.Add("Clear history", null, (_, _) => ConfirmClear());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitThread());
-        _tray = new NotifyIcon { Icon = _icon, Text = $"Vault Shelf ({hotkey})", ContextMenuStrip = menu, Visible = true };
+        _tray = new NotifyIcon { Icon = _icon, ContextMenuStrip = menu, Visible = true };
         _tray.MouseClick += async (_, e) => { if (e.Button == MouseButtons.Left) await ToggleAsync(); };
 
         _hotkey.Pressed += async () => await ToggleAsync();
-        HotkeyRegistered = _hotkey.Register(hotkey);
+        HotkeyRegistered = _hotkey.Register(_activeHotkey);
+        UpdateTooltip();
+
+        Monitor.Processed += outcome => { if (outcome.Captured) NotifyPage("clips_changed"); };
+        Bridge.ClipsChanged += () => NotifyPage("clips_changed");
+
+        // keep the history inside its limits: now, then every ten minutes
+        Store.Prune(Settings.Current.RetentionItems, Settings.Current.AutoClearHours, DateTimeOffset.UtcNow);
+        _pruneTimer.Tick += (_, _) => { if (Store.Prune(Settings.Current.RetentionItems, Settings.Current.AutoClearHours, DateTimeOffset.UtcNow) > 0) NotifyPage("clips_changed"); };
+        _pruneTimer.Start();
+
+        // "Start with Windows" is a setting; make the registry agree with it (and carry the current program path if the program moved)
+        try { if (Settings.Current.StartOnBoot) Startup.Set(true); } catch (Exception e) when (e is UnauthorizedAccessException or System.Security.SecurityException) { /* shown as unchanged the next time it is asked for */ }
+    }
+
+    private void UpdateTooltip() => _tray.Text = Monitor.Paused ? "Vault Shelf (paused)" : $"Vault Shelf ({_activeHotkey})";
+
+    /// <summary>Change the global shortcut. False (and the old one kept) when another program already uses it.</summary>
+    public bool ApplyHotkey(string hotkey)
+    {
+        if (!_hotkey.Register(hotkey)) { HotkeyRegistered = _hotkey.Register(_activeHotkey); return false; }
+        _activeHotkey = hotkey; HotkeyRegistered = true; UpdateTooltip();
+        return true;
+    }
+
+    private void NotifyPage(string name) => Window?.PostEvent(name);
+
+    private void ConfirmClear()
+    {
+        if (MessageBox.Show("Clear everything on the shelf? This cannot be undone.", "Vault Shelf", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
+        Store.Clear();
+        NotifyPage("clips_changed");
     }
 
     public async Task ToggleAsync()
@@ -88,11 +140,14 @@ internal sealed class TrayApp : ApplicationContext
 
     protected override void ExitThreadCore()
     {
+        _pruneTimer.Dispose();
         Window?.Destroy();
         Window = null;
         _tray.Visible = false;
         _tray.Dispose();
+        Monitor.Dispose();
         _hotkey.Dispose();
+        Store.Dispose();
         _icon.Dispose();
         base.ExitThreadCore();
     }

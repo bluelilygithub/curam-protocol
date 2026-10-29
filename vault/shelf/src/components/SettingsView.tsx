@@ -80,7 +80,13 @@ export default function SettingsView({ bridge, settings, verify, onSettings, onV
   const [retention, setRetention] = useState(settings.retentionItems);
   const slider = useRef<number>(0);
 
-  const save = async (patch: Partial<Settings>) => onSettings(await bridge.saveSettings(patch));
+  // the shell checks every change itself and can refuse one (a shortcut another program already owns, a value that is not allowed): say so
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const save = async (patch: Partial<Settings>) => {
+    setSaveError(null);
+    try { onSettings(await bridge.saveSettings(patch)); }
+    catch (e) { setSaveError(e instanceof Error && e.message ? e.message : 'That setting could not be saved.'); }
+  };
   const changeRetention = (n: number) => {
     setRetention(n);
     window.clearTimeout(slider.current);
@@ -122,6 +128,7 @@ export default function SettingsView({ bridge, settings, verify, onSettings, onV
         <button type="button" onClick={onBack} className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[13px] hover:bg-shelf-text/10 transition-colors"><Icon name="back" size={16} /> Back</button>
         <h1 className="m-0 text-[15px] font-semibold">Settings</h1>
       </div>
+      {saveError && <p className="m-0 mb-2 rounded-card bg-shelf-danger/10 text-shelf-danger text-[12.5px] px-3 py-2" role="alert">{saveError}</p>}
       <div className="flex-1 min-h-0 overflow-y-auto pr-1">
         <div className="grid gap-3 lg:grid-cols-2 pb-3">
           <Section title="General and shortcuts">

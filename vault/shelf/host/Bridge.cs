@@ -1,12 +1,17 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using VaultShelf.Host.Clipboard;
+using VaultShelf.Host.Security;
+using VaultShelf.Host.Settings;
+using VaultShelf.Host.Storage;
 
 namespace VaultShelf.Host;
 
 /// <summary>
-/// The shell's side of the contract in ../README.md. The page calls window.shelfNative.invoke(command, args); the transport (below) carries it over
-/// WebView2 messages, and this class answers. At this stage the answers are placeholders (a hundred sample clips), so the window lifecycle, the
-/// transport and the memory can be measured honestly; the clipboard store (M2) and Vault dispatch (M4) replace them.
+/// The shell's side of the contract in ../README.md. The page calls window.shelfNative.invoke(command, args); the transport (PageScript) carries it over
+/// WebView2 messages and this class answers from the real history and settings. The Vault key is never returned (only whether one is saved), and sending to
+/// Vault (verify, save_connection, dispatch) is the next milestone: those answer that it is not built yet.
 /// </summary>
 internal sealed class Bridge
 {
@@ -26,43 +31,67 @@ internal sealed class Bridge
         })();
         """;
 
+    private readonly ClipStore _store;
+    private readonly SettingsStore _settings;
+    private readonly CredentialStore _credentials;
+    private readonly StartupRegistration _startup;
+    private readonly ClipboardMonitor _monitor;
+    private readonly Func<string, bool> _applyHotkey;
+
     /// <summary>The page asked the shell to hide the tray (Esc, or after sending to Vault).</summary>
     public event Action? HideRequested;
+    /// <summary>The list changed because of something the page did (delete, clear); the page is told to reload.</summary>
+    public event Action? ClipsChanged;
 
-    private readonly List<JsonObject> _clips = BuildSampleClips(100);
-
-    private static List<JsonObject> BuildSampleClips(int count)
+    public Bridge(ClipStore store, SettingsStore settings, CredentialStore credentials, StartupRegistration startup, ClipboardMonitor monitor, Func<string, bool> applyHotkey)
     {
-        var list = new List<JsonObject>();
-        long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        for (int i = 0; i < count; i++)
-        {
-            string text = (i % 4) switch
-            {
-                0 => $"Reminder {i + 1}: send the revised drawing package for job {1000 + i}.",
-                1 => $"https://example.com/jobs/{1000 + i}/files",
-                2 => $"Ref,Qty\nR-{i},{i % 9 + 1}\nR-{i + 1},{(i + 3) % 9 + 1}",
-                _ => $"#{(i * 2654435) & 0xffffff:x6}",
-            };
-            string kind = "text";
-            // one SVG and one HTML clip, with script in them, so the built page's policy and sanitiser are exercised inside the real window too
-            if (i == 4) { kind = "svg"; text = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 40 40\" width=\"80\" height=\"80\" onload=\"alert(1)\"><script>alert(2)</script><rect width=\"40\" height=\"40\" fill=\"#3b82f6\"/></svg>"; }
-            if (i == 5) { kind = "html"; text = "<h2 onclick=\"alert(1)\">Summary</h2><p>Up <b>12%</b>. <a href=\"https://evil.example\">link</a></p><script>alert(2)</script><img src=\"https://evil.example/p.gif\">"; }
-            list.Add(new JsonObject
-            {
-                ["id"] = $"clip-{i + 1:000}", ["kind"] = kind, ["createdAt"] = now - i * 420000L, ["sourceApp"] = "sample.exe",
-                ["sizeBytes"] = text.Length, ["preview"] = text, ["truncated"] = false, ["masked"] = false,
-            });
-        }
-        return list;
+        _store = store; _settings = settings; _credentials = credentials; _startup = startup; _monitor = monitor; _applyHotkey = applyHotkey;
     }
 
-    private static JsonObject DefaultSettings() => new()
+    private static JsonObject Meta(ClipRecord c)
     {
-        ["hotkey"] = "Ctrl+Shift+Space", ["startOnBoot"] = false, ["autoDismiss"] = true, ["baseUrl"] = "", ["hasKey"] = false,
-        ["ignorePasswords"] = true, ["retentionItems"] = 100, ["autoClearHours"] = 0, ["excludedApps"] = new JsonArray(),
-        ["actions"] = new JsonObject { ["finance"] = true, ["notes"] = true, ["redact"] = true, ["crm"] = true },
-    };
+        var o = new JsonObject
+        {
+            ["id"] = c.Id, ["kind"] = c.Kind.ToString().ToLowerInvariant(), ["createdAt"] = c.CreatedAt, ["sourceApp"] = c.SourceApp, ["sizeBytes"] = c.SizeBytes,
+            ["preview"] = c.Preview, ["truncated"] = c.Kind != ClipKind.Image && c.SizeBytes > Encoding.UTF8.GetByteCount(c.Preview), ["masked"] = c.Masked,
+        };
+        if (c.Kind == ClipKind.Image) { o["width"] = c.Width; o["height"] = c.Height; }
+        return o;
+    }
+
+    private JsonNode? GetClip(string? id)
+    {
+        if (id is null || _store.Get(id) is not { } c) return null;
+        if (c.Kind == ClipKind.Image)
+        {
+            var thumb = _store.GetThumbPng(id);
+            return thumb is null ? null : new JsonObject { ["id"] = id, ["kind"] = "image", ["mime"] = "image/png", ["dataUrl"] = "data:image/png;base64," + Convert.ToBase64String(thumb), ["width"] = c.Width, ["height"] = c.Height };
+        }
+        string? text = _store.GetText(id);
+        return text is null ? null : new JsonObject { ["id"] = id, ["kind"] = c.Kind.ToString().ToLowerInvariant(), ["text"] = text };
+    }
+
+    private JsonObject CurrentSettings() => SettingsStore.ToJson(_settings.Current, hasKey: _credentials.Exists());
+
+    private JsonObject SaveSettings(JsonObject patch)
+    {
+        var before = _settings.Current;
+        var (next, problems) = _settings.Apply(patch);
+
+        if (!string.Equals(next.Hotkey, before.Hotkey, StringComparison.Ordinal) && !_applyHotkey(next.Hotkey))
+        {
+            // another program already owns that shortcut: keep the one that works
+            next.Hotkey = before.Hotkey; _applyHotkey(before.Hotkey); _settings.Save();
+            problems.Add("Another program is already using that shortcut. Try a different one.");
+        }
+        if (next.StartOnBoot != before.StartOnBoot) { try { _startup.Set(next.StartOnBoot); } catch (Exception e) when (e is UnauthorizedAccessException or System.Security.SecurityException) { next.StartOnBoot = before.StartOnBoot; _settings.Save(); problems.Add("Windows would not let this be changed."); } }
+        if (next.RetentionItems != before.RetentionItems || next.AutoClearHours != before.AutoClearHours)
+        {
+            if (_store.Prune(next.RetentionItems, next.AutoClearHours, DateTimeOffset.UtcNow) > 0) ClipsChanged?.Invoke();
+        }
+        if (problems.Count > 0) throw new InvalidOperationException(problems[0]);
+        return CurrentSettings();
+    }
 
     /// <summary>Handle one message from the page and return the JSON reply to post back, or null when it is not a request.</summary>
     public string? Handle(string json)
@@ -77,14 +106,17 @@ internal sealed class Bridge
         {
             JsonNode? result = command switch
             {
-                "list_clips" => new JsonArray(_clips.Select(c => (JsonNode)c.DeepClone()).ToArray()),
+                "list_clips" => new JsonArray(_store.List(Math.Max(10, _settings.Current.RetentionItems)).Select(c => (JsonNode)Meta(c)).ToArray()),
                 "get_clip" => GetClip(args["id"]?.GetValue<string>()),
-                "get_settings" or "save_settings" => DefaultSettings(),
-                "verify" => new JsonObject { ["ok"] = false, ["scopes"] = new JsonArray(), ["unavailable"] = new JsonArray(), ["error"] = "No key saved yet." },
+                "get_settings" => CurrentSettings(),
+                "save_settings" => SaveSettings(args["patch"] as JsonObject ?? new JsonObject()),
+                "delete_clip" => Run(() => { if (args["id"]?.GetValue<string>() is { } cid) _store.Delete(cid); ClipsChanged?.Invoke(); }),
+                "clear_history" => Run(() => { _store.Clear(); ClipsChanged?.Invoke(); }),
+                "copy_clip" => Run(() => { if (args["id"]?.GetValue<string>() is { } cid && _store.Get(cid) is { } c) ClipboardWriter.CopyBack(_store, c, _monitor); }),
+                "hide_shelf" => Run(() => HideRequested?.Invoke()),
+                "verify" => new JsonObject { ["ok"] = false, ["scopes"] = new JsonArray(), ["unavailable"] = new JsonArray(), ["error"] = _credentials.Exists() ? "Checking the key with Vault is not built yet." : "No key saved yet." },
                 "save_connection" => new JsonObject { ["ok"] = false, ["scopes"] = new JsonArray(), ["unavailable"] = new JsonArray(), ["error"] = "Connecting to Vault is not built yet." },
                 "dispatch" => new JsonObject { ["ok"] = false, ["error"] = "Sending to Vault is not built yet." },
-                "copy_clip" or "delete_clip" or "clear_history" => null,
-                "hide_shelf" => HideAndReturnNull(),
                 _ => throw new InvalidOperationException($"Unknown command: {command}"),
             };
             return new JsonObject { ["type"] = "reply", ["id"] = id, ["result"] = result }.ToJsonString();
@@ -95,13 +127,7 @@ internal sealed class Bridge
         }
     }
 
-    private JsonNode? HideAndReturnNull() { HideRequested?.Invoke(); return null; }
-
-    private JsonNode? GetClip(string? id)
-    {
-        var c = _clips.FirstOrDefault(x => x["id"]?.GetValue<string>() == id);
-        return c is null ? null : new JsonObject { ["id"] = id, ["kind"] = c["kind"]!.GetValue<string>(), ["text"] = c["preview"]!.GetValue<string>() };
-    }
+    private static JsonNode? Run(Action a) { a(); return null; }
 
     public static string EventMessage(string name) => new JsonObject { ["type"] = "event", ["name"] = name }.ToJsonString();
 }
