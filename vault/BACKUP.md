@@ -11,12 +11,53 @@ Curam Vault includes a built-in Google Drive backup system accessible from the A
 - All uploaded files stored in the `UPLOAD_DIR` volume (PDFs, Word docs, images, etc.)
 - A `manifest.json` recording the backup date, file count, and record counts per table
 
-**Not included:**
+**Not included** (and see the next section: most of the database is not in this backup):
 - Environment variables (API keys, database connection string, encryption key)
 - Google OAuth tokens (you'll need to reconnect Google after restoring to a new server)
 - Server configuration (Railway settings, custom domains, etc.)
 
 Store your environment variables in a password manager or a secure `.env` file kept outside the repository.
+
+---
+
+## Read this first: the Drive backup is partial
+
+Checked 2026-10-31 against `server/routes/backup.js`. The Admin → Backups button saves **23 of the ~208 tables**: folders, personas, projects, memory, task templates and tasks (with tags, comments, dependencies), goals and key results, chats (sessions, messages, files, bookmarks, pinned URLs, search index), prompts, prompt chains, notes, debates and comparisons. Files saved: each of your project upload folders and your own `finance-docs` folder.
+
+**Not in it:** Finance (invoices, journals, BAS, assets, wages), Shares, CRM (clients, contacts, deals, touchpoints), Note versions/templates/reminders, Password Vault, Topic Research, Email Follow-Up, Fitness, Cellar/Room/Garden/Route planner projects, saved CSS pages, Gmail/Calendar tokens, settings and feature flags, users and sessions. Files not saved: attachments (touchpoints, tasks, notes), Shares documents, Video library, Shelf installer, voice recordings.
+
+So **the only complete backup is a full Postgres copy**, taken from Railway (below). Treat the Drive backup as a convenience copy of chats, projects and tasks, not as disaster recovery.
+
+---
+
+## Full backup: what to do and how to prove it works
+
+1. **Database.** In the Railway dashboard open the Postgres service and look for scheduled backups (the wording and plan needed change; check what yours offers). Whatever it offers, also take your own copy before risky work:
+   ```
+   pg_dump -Fc "<DATABASE_PUBLIC_URL from the Postgres service Variables tab>" -f vault-YYYY-MM-DD.dump
+   ```
+   Keep the file outside the repo (`*.sql` is gitignored; `.dump` is not, so do not save it inside the project folder).
+2. **Uploads volume.** Railway has no download button for a volume. Copy it with the Railway CLI (`railway ssh`, then `tar czf` the `UPLOAD_DIR` folder and copy it out) or accept that only the Drive-backed folders above are recoverable. Decide which; write the answer here.
+3. **`ENCRYPTION_KEY` and the other variables** (table below) in a password manager, not Railway alone.
+
+### Restore rehearsal (do once, then note the date here)
+
+Never against production. Use the staging environment or a scratch database.
+
+1. Take a dump of production as in step 1.
+2. Create an empty database (staging's Postgres service, or a local one) and restore: `pg_restore --no-owner --clean --if-exists -d "<target url>" vault-YYYY-MM-DD.dump`. Errors about the `vector` extension mean the target lacks pgvector (Railway's Postgres image has it; a plain local Postgres does not).
+3. Point a staging deploy (or a local `npm run dev`) at it with the **same** `ENCRYPTION_KEY`. Boot; the idempotent schema runs over the top and should change nothing.
+4. Check: sign in, open Finance (an invoice and a report), a project with files, Notes with an attachment, CRM. Gmail will say reconnect if the key differs.
+5. Restore the uploads copy into the staging volume and re-open a file and a Finance document.
+6. Record below: date, dump size, time taken, what was missing.
+
+Last rehearsal: **not yet done.**
+
+### Rolling back a bad deploy
+
+- **Fastest (about a minute):** Railway dashboard → the Vault service → Deployments → the last good deployment → Redeploy (or Rollback, depending on the label). No git change; the next push to `version-7` deploys again, so also do the git step.
+- **Git:** `git revert <bad commit>` then push `version-7`. Do not force-push.
+- **Database:** schema changes here are additive idempotent statements (`IF NOT EXISTS`), so older code runs against a newer schema. A change that drops or renames a column would break that, which is why destructive schema changes need the migration process in `docs/hardening.md`.
 
 ---
 
