@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-10-30 (hardening-flags-cron-locks)
+
+### Feature flags — Translate and Guitar could not be switched off by an admin
+They were in the client's flag list but not the server's, so the Feature Access switch had nothing to save to. Both are now in `server/config/featureAccess.js` (default on, so nothing changes for members; accountant logins no longer see them). A test now fails if the two lists differ.
+
+### Scheduled jobs — two instances during a deploy could both send the same reminder or digest
+While a new version rolls out, the old and new server both run their schedules. Jobs that send email, create recurring invoices or call paid services now take a database lock first (`server/utils/cronLock.js`); the second instance skips that run. Plan and next steps: `docs/hardening.md`.
+
 ## 2026-10-25 (graphics-text-width)
 
 ### Graphics — text boxes and wrapping were sized with a flat guess

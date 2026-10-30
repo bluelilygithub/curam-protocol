@@ -9,6 +9,7 @@
 
 const cron = require('node-cron');
 const { pool } = require('../db');
+const { withCronLock } = require('../utils/cronLock');
 
 function fmtAud(n) {
   const v = parseFloat(n || 0).toFixed(2);
@@ -162,7 +163,7 @@ function startWeeklyDigestCron() {
   // Monday 07:30 server time — after the finance-reminders hourly Monday sweep
   // has had a chance to run at :00, before the workday starts.
   task = cron.schedule('30 7 * * 1', () => {
-    runWeeklyDigest().catch(err => console.error('[weekly-digest] Cron error:', err.message));
+    withCronLock('weekly-digest', runWeeklyDigest).catch(err => console.error('[weekly-digest] Cron error:', err.message));
   });
   console.log('[weekly-digest] Cron scheduled — Mondays 07:30');
 }

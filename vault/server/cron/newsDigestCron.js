@@ -7,6 +7,7 @@ const { analyseTopicArticles } = require('../services/newsAnalysisService');
 const { getModelsForUser } = require('../services/modelResolver');
 const { logUsage } = require('../utils/logUsage');
 const { reportNewsDigestRun, getPrimaryAdminUserId, capture, makeFingerprint } = require('../services/SuggestionService');
+const { withCronLock } = require('../utils/cronLock');
 
 let cronTask = null;
 
@@ -140,7 +141,7 @@ async function scheduleDigestCron() {
   const [hour, minute] = time.split(':').map(Number);
   const daysPattern = days.length === 7 ? '*' : days.join(',');
   const schedule = `${minute} ${hour} * * ${daysPattern}`;
-  cronTask = cron.schedule(schedule, runDailyDigest, { timezone: tz });
+  cronTask = cron.schedule(schedule, () => withCronLock('news-digest', runDailyDigest), { timezone: tz });
   console.log(`[news-cron] Scheduled daily digest at ${time} on days [${days}] (tz: ${tz})`);
 }
 

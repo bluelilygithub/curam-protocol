@@ -3,6 +3,7 @@
 const cron = require('node-cron');
 const { pool } = require('../db');
 const { captureIf, makeFingerprint } = require('../services/SuggestionService');
+const { withCronLock } = require('../utils/cronLock');
 
 const { finYearForDate } = require('../utils/finYear');
 
@@ -350,7 +351,7 @@ function startFinanceRemindersCron() {
         .filter(r => parseInt(r.reminder_hour) === currentHour)
         .map(r => r.userId);
       for (const userId of matchingUserIds) {
-        runFinanceReminders(userId).catch(err =>
+        withCronLock(`finance-reminders:${userId}`, () => runFinanceReminders(userId)).catch(err =>
           console.error(`[finance-reminders] Error for user ${userId}:`, err.message)
         );
       }
@@ -363,7 +364,7 @@ function startFinanceRemindersCron() {
   if (annualVhoTask) return;
   // Daily at 08:00 server time; checkAnnualVehicleHoReminder() no-ops outside the ~25 Jun – 14 Jul window.
   annualVhoTask = cron.schedule('0 8 * * *', () => {
-    checkAnnualVehicleHoReminder().catch(err =>
+    withCronLock('finance-annual-vho', checkAnnualVehicleHoReminder).catch(err =>
       console.error('[finance-reminders] Annual vehicle/home office cron error:', err.message)
     );
   });

@@ -4,6 +4,7 @@ const cron = require('node-cron');
 const { pool } = require('../db');
 const portfolio = require('../services/sharesPortfolio');
 const marketData = require('../services/marketData');
+const { withCronLock } = require('../utils/cronLock');
 const {
   holdingKey,
   formatPctOffDisplay,
@@ -316,7 +317,7 @@ async function startSharesCron() {
   // ASX: 5 AM and 1 PM (Alpha Vantage — 25 req/day, so 2 polls/day)
   asxCronTask = cron.schedule(
     '0 5,13 * * *',
-    () => runSharesPoll(['ASX']),
+    () => withCronLock('shares-asx', () => runSharesPoll(['ASX'])),
     { timezone: tz }
   );
 
@@ -326,17 +327,17 @@ async function startSharesCron() {
   // Note: US market holidays are not excluded (Finnhub has no daily cap).
   usCronTask = cron.schedule(
     '0 10-16 * * 1-5',
-    async () => {
+    () => withCronLock('shares-us', async () => {
       await runSharesPoll(['NYSE', 'NASDAQ']);
       await checkDailyDropAlerts();
-    },
+    }),
     { timezone: 'America/New_York' }
   );
 
   // News briefings: 4 AM daily (after overnight US session closes)
   newsCronTask = cron.schedule(
     '0 4 * * *',
-    async () => {
+    () => withCronLock('shares-news', async () => {
       const userIds = await getActiveShareUserIds();
       for (const userId of userIds) {
         try {
@@ -346,7 +347,7 @@ async function startSharesCron() {
           await reportSharesCron('briefing-failed', { userId, error: err.message });
         }
       }
-    },
+    }),
     { timezone: tz }
   );
 
@@ -355,7 +356,7 @@ async function startSharesCron() {
   // Runs after the 4 AM per-stock briefing and after the overnight US close.
   observationCronTask = cron.schedule(
     '0 7 * * *',
-    async () => {
+    () => withCronLock('shares-observation', async () => {
       const userIds = await getActiveShareUserIds();
       for (const userId of userIds) {
         try {
@@ -365,14 +366,14 @@ async function startSharesCron() {
           await reportSharesCron('briefing-failed', { userId, error: err.message, context: 'sharesCron observation' });
         }
       }
-    },
+    }),
     { timezone: tz }
   );
 
   // 30-day summary: 1st of each month at 4:30 AM (after daily briefing finishes)
   summaryMonthCronTask = cron.schedule(
     '30 4 1 * *',
-    async () => {
+    () => withCronLock('shares-summary', async () => {
       const userIds = await getActiveShareUserIds();
       for (const userId of userIds) {
         try {
@@ -386,7 +387,7 @@ async function startSharesCron() {
           });
         }
       }
-    },
+    }),
     { timezone: tz }
   );
 

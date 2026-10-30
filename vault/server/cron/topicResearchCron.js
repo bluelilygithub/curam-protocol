@@ -14,6 +14,7 @@
 // `runDueTopics` and `purgeOld` take everything they need as arguments so tests need no database or network. See docs/topic-research.md.
 
 const cron = require('node-cron');
+const { withCronLock } = require('../utils/cronLock');
 
 const MAX_PER_TICK = 5;
 const FAILURES_BEFORE_ALERT = 3;
@@ -129,8 +130,8 @@ function startTopicResearchCron() {
     if (busy) return; // the last tick is still going (a search can take half a minute)
     busy = true;
     try {
-      const r = await runDueTopics(realDeps());
-      if (r.ran || r.failed) console.log(`[topic-research] refreshed ${r.ran}, failed ${r.failed}, skipped ${r.skipped} of ${r.due} due (${r.checked} watched)`);
+      const r = await withCronLock('topic-research-refresh', () => runDueTopics(realDeps()));
+      if (r && (r.ran || r.failed)) console.log(`[topic-research] refreshed ${r.ran}, failed ${r.failed}, skipped ${r.skipped} of ${r.due} due (${r.checked} watched)`);
     } catch (err) { console.warn('[topic-research] refresh run failed:', err.message); } finally { busy = false; }
   });
   console.log('[topic-research] watchlist refresh scheduled every 15 minutes');

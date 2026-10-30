@@ -10,6 +10,7 @@ const cron = require('node-cron');
 const { pool } = require('../db');
 const { runPoll } = require('../services/expenseReviewService');
 const { captureIf, makeFingerprint } = require('../services/SuggestionService');
+const { withCronLock } = require('../utils/cronLock');
 
 const LAST_POLLED_KEY = 'expense_review_last_polled_at';
 const SIX_MONTHS_MS = 1000 * 60 * 60 * 24 * 30 * 6;
@@ -92,7 +93,7 @@ async function runExpenseReviewPoll() {
 async function startExpenseReviewCron() {
   if (cronTask) cronTask.stop();
   const tz = await getWorkspaceTimezone();
-  cronTask = cron.schedule('0 * * * *', runExpenseReviewPoll, { timezone: tz });
+  cronTask = cron.schedule('0 * * * *', () => withCronLock('expense-review', runExpenseReviewPoll), { timezone: tz });
   console.log(`[expense-review-cron] scheduled hourly (tz=${tz})`);
 }
 

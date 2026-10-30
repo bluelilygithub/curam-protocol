@@ -2,6 +2,7 @@
 
 const cron  = require('node-cron');
 const { pool } = require('../db');
+const { withCronLock } = require('../utils/cronLock');
 
 function addDays(dateStr, n) {
   const d = new Date(dateStr + 'T00:00:00Z');
@@ -177,7 +178,7 @@ function startRecurringCron() {
   if (task) return;
   // Run once per day at 00:05 to create any due recurring entries
   task = cron.schedule('5 0 * * *', () => {
-    runRecurring().catch(err => console.error('[recurring] Cron error:', err.message));
+    withCronLock('recurring', runRecurring).catch(err => console.error('[recurring] Cron error:', err.message));
   });
   console.log('[recurring] Cron scheduled — daily at 00:05');
 }

@@ -5,14 +5,15 @@
 
 const cron = require('node-cron');
 const { runNoteReminders } = require('../services/noteReminders');
+const { withCronLock } = require('../utils/cronLock');
 
 let task = null;
 
 function startNoteRemindersCron() {
   if (task) return;
   task = cron.schedule('*/5 * * * *', () => {
-    runNoteReminders().then((r) => {
-      if (r.due) console.log(`[note-reminders] ${r.sent} sent, ${r.failed} failed of ${r.due} due`);
+    withCronLock('note-reminders', runNoteReminders).then((r) => {
+      if (r && r.due) console.log(`[note-reminders] ${r.sent} sent, ${r.failed} failed of ${r.due} due`);
     }).catch((err) => console.warn('[note-reminders] run failed:', err.message));
   });
   console.log('[note-reminders] scheduled every 5 minutes');

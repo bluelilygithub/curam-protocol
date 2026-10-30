@@ -2,6 +2,7 @@
 
 const cron = require('node-cron');
 const { pool } = require('../db');
+const { withCronLock } = require('../utils/cronLock');
 
 let task = null;
 
@@ -44,8 +45,8 @@ function startFitnessTasksSync() {
 function startFitnessCron() {
   if (task) return;
   task = cron.schedule('5 * * * *', () => {
-    runFitnessCron().then((r) => {
-      if (r.reminders.sent || r.reminders.failed) console.log(`[fitness-cron] reminders ${JSON.stringify(r.reminders)}`);
+    withCronLock('fitness-cron', runFitnessCron).then((r) => {
+      if (r && (r.reminders.sent || r.reminders.failed)) console.log(`[fitness-cron] reminders ${JSON.stringify(r.reminders)}`);
     }).catch((err) => console.error('[fitness-cron] error:', err.message));
   });
   console.log('[fitness-cron] Cron scheduled: hourly at :05 (reminder emails, plan tasks)');
