@@ -217,6 +217,7 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
   const [suggest, setSuggest] = useState(null);
   const [aliases, setAliases] = useState('');
   const [lastRead, setLastRead] = useState(null);
+  const [previews, setPreviews] = useState({}); // threadId -> 'loading' | messages[]
 
   const reload = useCallback(async () => {
     try {
@@ -226,6 +227,13 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
     } catch { /* leave the last view in place */ }
   }, [caseId]);
   useEffect(() => { reload(); }, [reload]);
+
+  const togglePreview = async (threadId) => {
+    if (previews[threadId]) { setPreviews((p) => { const n = { ...p }; delete n[threadId]; return n; }); return; }
+    setPreviews((p) => ({ ...p, [threadId]: 'loading' }));
+    const r = await call(() => api.get(`/api/email-follow-up/${caseId}/threads/${threadId}/preview`));
+    setPreviews((p) => { const n = { ...p }; if (r.ok) n[threadId] = r.data.messages; else delete n[threadId]; return n; });
+  };
 
   if (!data) return <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
   const { case: c, rows, sources, drafts, sentSweep, coverage, draftCap } = data;
@@ -303,12 +311,28 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
               <h3 className="text-sm font-semibold">Threads with these people</h3>
               {!suggest.length && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Nothing new found. Check the addresses above.</p>}
               {suggest.map((t) => (
-                <div key={t.threadId} className="flex items-center gap-3 rounded-xl border p-3" style={CARD}>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{t.subject}</p>
-                    <p className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>{t.from} · {t.messages} message{t.messages === 1 ? '' : 's'}{t.date ? ` · ${new Date(t.date).toLocaleDateString()}` : ''}</p>
+                <div key={t.threadId} className="rounded-xl border p-3 space-y-2" style={CARD}>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{t.subject}</p>
+                      <p className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>{t.from} · {t.messages} message{t.messages === 1 ? '' : 's'}{t.date ? ` · ${new Date(t.date).toLocaleDateString()}` : ''}</p>
+                    </div>
+                    <Btn small tip={previews[t.threadId] ? EF_TIPS.hidePreview : EF_TIPS.preview} onClick={() => togglePreview(t.threadId)}>{previews[t.threadId] ? 'Hide' : 'Preview'}</Btn>
+                    <Btn small primary tip={EF_TIPS.attach} onClick={async () => { const r = await call(() => api.post(`/api/email-follow-up/${caseId}/threads`, { threadId: t.threadId }), 'Attached.'); if (r.ok) { setSuggest(suggest.filter((x) => x.threadId !== t.threadId)); reload(); } }}>Attach to case</Btn>
                   </div>
-                  <Btn small primary tip={EF_TIPS.attach} onClick={async () => { const r = await call(() => api.post(`/api/email-follow-up/${caseId}/threads`, { threadId: t.threadId }), 'Attached.'); if (r.ok) { setSuggest(suggest.filter((x) => x.threadId !== t.threadId)); reload(); } }}>Attach to case</Btn>
+                  {t.snippet && !previews[t.threadId] && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{t.snippet}</p>}
+                  {previews[t.threadId] === 'loading' && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</p>}
+                  {Array.isArray(previews[t.threadId]) && (
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {previews[t.threadId].map((m, i) => (
+                        <div key={i} className="rounded-lg p-3 text-xs space-y-1" style={{ background: 'var(--color-surface)' }}>
+                          <p className="font-medium">{m.sent ? 'You sent' : 'From'} {m.from}{m.date ? ` · ${new Date(m.date).toLocaleString()}` : ''}</p>
+                          <p className="whitespace-pre-wrap" style={{ color: 'var(--color-text)' }}>{m.body || '(no text)'}</p>
+                          {m.attachments.length > 0 && <p style={{ color: WARN }}>Attachments (not read): {m.attachments.join(', ')}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

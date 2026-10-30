@@ -24,7 +24,9 @@ export const EF_TIPS = {
   tabMail: 'The email threads attached to this case.',
   tabDrafts: 'Follow-up text waiting for you to read, approve and copy.',
   tabCoverage: 'What the tool read, what it could not see, and what you must check yourself.',
-  attach: 'Attach every message in this thread to the case. You can then read them into the ledger.',
+  preview: 'Read the emails in this thread here before deciding. Nothing is attached or saved by looking.',
+  hidePreview: 'Close the preview.',
+  attach:'Attach every message in this thread to the case. You can then read them into the ledger.',
   // ledger rows
   draftFollowup: 'Writes follow-up text from this row\'s own quoted words. Nothing is sent.',
   resolvedElsewhere: 'It was dealt with by phone, in person or in a portal. Closes the row, with an optional note.',

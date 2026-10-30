@@ -610,6 +610,9 @@
   "GET /api/email-follow-up/:id/suggestions": {
    "class": "authed"
   },
+  "GET /api/email-follow-up/:id/threads/:threadId/preview": {
+   "class": "authed"
+  },
   "POST /api/email-follow-up/:id/threads": {
    "class": "authed"
   },

@@ -177,6 +177,25 @@ async function suggestThreads(userId, caseRow, attachedThreadIds) {
   return out;
 }
 
+/** Read-only look at a thread before it is attached: nothing is stored. Bodies are cut short; attachments are listed by name only. */
+async function previewThread(userId, threadId) {
+  const g = gmailHelpers();
+  const gmail = await g.getGmailClient(userId);
+  const t = await gmail.users.threads.get({ userId: 'me', id: threadId, format: 'full' });
+  return (t.data.messages || []).slice(0, 30).map((m) => {
+    const h = m.payload?.headers || [];
+    return {
+      from: g.getHeader(h, 'From') || '',
+      to: g.getHeader(h, 'To') || '',
+      subject: g.getHeader(h, 'Subject') || '',
+      date: m.internalDate ? new Date(Number(m.internalDate)).toISOString() : null,
+      sent: (m.labelIds || []).includes('SENT'),
+      body: String(g.extractBody(m.payload) || '').replace(/\r/g, '').trim().slice(0, 2500),
+      attachments: attachmentsOf(m.payload).map((a) => a.filename),
+    };
+  });
+}
+
 /**
  * Rule 10.1: sweep Sent for this case, across every alias (Rule 10.3: scope is the case, never one party).
  * A failed sweep is recorded as not completed, which blocks drafting; it is never treated as "nothing found".
@@ -284,7 +303,7 @@ async function latestApproval(draftId) {
 module.exports = {
   EMAIL_RE, cleanAliases, listCases, getCase, insertCase, saveLedger, patchCase,
   listSources, getSource, addSource, markExtracted,
-  attachThread, suggestThreads, runSentSweep, latestSweep, freshInbound, ownerEmail,
+  attachThread, suggestThreads, previewThread, runSentSweep, latestSweep, freshInbound, ownerEmail,
   listDrafts, getDraft, pendingDraftCount, insertDraft, setDraftStatus, addApproval, latestApproval,
   localDate,
 };

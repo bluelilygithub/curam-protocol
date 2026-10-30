@@ -217,6 +217,17 @@ router.get('/:id/suggestions', async (req, res) => {
   } catch (err) { fail(res, err); }
 });
 
+// Read-only preview of a thread before attaching it. Stores nothing.
+router.get('/:id/threads/:threadId/preview', async (req, res) => {
+  try {
+    const c = await loadCase(req, res);
+    if (!c) return;
+    const threadId = String(req.params.threadId || '');
+    if (!/^[A-Za-z0-9_-]{6,64}$/.test(threadId)) return res.status(400).json({ error: 'Bad thread.' });
+    res.json({ messages: await store.previewThread(req.user.id, threadId) });
+  } catch (err) { fail(res, err); }
+});
+
 router.post('/:id/threads', async (req, res) => {
   try {
     const c = await loadCase(req, res);
