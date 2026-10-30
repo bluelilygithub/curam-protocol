@@ -35,6 +35,7 @@ export default function EmailFollowUpPage() {
   const [cases, setCases] = useState(null);
   const [creating, setCreating] = useState(false);
   const [clients, setClients] = useState([]);
+  const [clientsLoaded, setClientsLoaded] = useState(false);
   const [form, setForm] = useState({ title: '', obligation: '', kind: 'accounting', profile: 'soft', aliases: '', clientId: '' });
   const canUse = isAdmin || featureAccess.emailFollowUp === true;
   const openId = Number(params.get('case')) || null;
@@ -71,8 +72,19 @@ export default function EmailFollowUpPage() {
     api.get('/api/clients').then((r) => r.json()).then((d) => {
       const list = Array.isArray(d) ? d : (d.clients || []);
       setClients(list.filter((c) => c && c.id && c.name).slice(0, 300));
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setClientsLoaded(true));
   }, [canUse]);
+
+  // The CRM client page's "New case for this client" arrives as /email-follow-up?new=1&clientId=N: open the form with that client chosen.
+  useEffect(() => {
+    if (!canUse || !params.get('new') || !clientsLoaded) return;
+    const id = Number(params.get('clientId'));
+    const client = clients.find((c) => c.id === id);
+    const next = new URLSearchParams(params); next.delete('new'); next.delete('clientId');
+    setParams(next, { replace: true });
+    setCreating(true);
+    if (client) setForm((f) => ({ ...f, clientId: String(client.id), title: f.title || `${client.name}: follow-up` }));
+  }, [canUse, clientsLoaded, clients, params]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!canUse) return flagsLoaded ? <Navigate to="/" replace /> : null;
 
@@ -186,7 +198,7 @@ export default function EmailFollowUpPage() {
                         <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{c.status}</span>
                         {c.pendingDrafts > 0 && <span className="text-xs" style={{ color: '#f59e0b' }}>{c.pendingDrafts} draft{c.pendingDrafts === 1 ? '' : 's'} waiting</span>}
                       </div>
-                      <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>{c.obligation} · {c.rowCount} in the ledger · {c.sourceCount} message{c.sourceCount === 1 ? '' : 's'}</p>
+                      <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>{c.clientName ? `${c.clientName} · ` : ''}{c.obligation} · {c.rowCount} in the ledger · {c.sourceCount} message{c.sourceCount === 1 ? '' : 's'}</p>
                     </button>
                   </Tooltip>
                 ))}

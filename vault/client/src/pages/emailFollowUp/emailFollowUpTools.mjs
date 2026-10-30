@@ -38,6 +38,7 @@ export const TOOL_BLURBS = {
 export const HOW_IT_WORKS = [
   ['A case is a matter you open', 'You say what is owed ("Acme owes the Q3 bank statements") and who is involved. Nothing opens itself and no email attaches itself: you choose each thread.'],
   ['The ledger', 'Press Read and the AI proposes a row for each thing owed. Every row must quote the email word for word, or it is thrown away. Dates are worked out by plain code from the sender\'s own words, so "early next week" stays a deadline for you to fill in, never a guess.'],
+  ['Linked to your CRM', 'A case can be linked to a client in your CRM. The case shows the client with an Open in CRM button, and the client\'s page has an Email follow-up section that lists its cases, opens them, and starts a new one for that client. Linking changes nothing in the CRM.'],
   ['Check Sent first', 'Before you chase anyone, the tool checks your Sent folder for the people in the case, so you do not nag about something you already answered. Draft follow-up runs the check itself when the last one is more than 15 minutes old, and drafts nothing if it cannot.'],
   ['Drafts', 'A draft is fixed sentences around the row\'s own quoted words, checked against the email it came from. Anything the check cannot back up is blocked or flagged. You approve it, then copy it into your own mail program. The tool never sends.'],
   ['Copying is double-checked', 'Just before you copy, the tool looks in Gmail for new mail in the same threads. If the other person has written since, the draft goes back to waiting so you do not send something out of date.'],
@@ -50,6 +51,7 @@ export const GUIDE_TOOLS = [
   { id: 'cases', label: 'Your cases', tool: 'cases' },
   { id: 'new-case', label: 'New case', tool: 'cases' },
   { id: 'people', label: 'People in the case', tool: 'mail' },
+  { id: 'client-link', label: 'CRM client link', tool: 'mail' },
   { id: 'find-mail', label: 'Find mail', tool: 'mail' },
   { id: 'get-attachments', label: 'Get attachments', tool: 'mail' },
   { id: 'read', label: 'Read new messages', tool: 'mail' },

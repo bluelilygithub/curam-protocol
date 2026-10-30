@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../../utils/apiClient';
 import useToastStore from '../../store/toastStore';
 import { useIcon } from '../../providers/IconProvider';
@@ -221,6 +222,10 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
   const [lastRead, setLastRead] = useState(null);
   const [previews, setPreviews] = useState({}); // threadId -> 'loading' | messages[]
   const [lastAtt, setLastAtt] = useState(null);
+  const navigate = useNavigate();
+  const [editClient, setEditClient] = useState(false);
+  const [clientList, setClientList] = useState([]);
+  const [pickClient, setPickClient] = useState('');
 
   const reload = useCallback(async () => {
     try {
@@ -230,6 +235,21 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
     } catch { /* leave the last view in place */ }
   }, [caseId]);
   useEffect(() => { reload(); }, [reload]);
+
+  const startEditClient = async () => {
+    setPickClient(data && data.case.clientId ? String(data.case.clientId) : '');
+    setEditClient(true);
+    try {
+      const r = await api.get('/api/clients');
+      const d = await r.json();
+      const list = Array.isArray(d) ? d : (d.clients || []);
+      setClientList(list.filter((x) => x && x.id && x.name).slice(0, 300));
+    } catch { /* the list stays empty: the person can still choose "No CRM client" */ }
+  };
+  const saveClient = async () => {
+    const r = await call(() => api.patch(`/api/email-follow-up/${caseId}`, { clientId: pickClient ? Number(pickClient) : null }), 'Saved.');
+    if (r.ok) { setEditClient(false); reload(); }
+  };
 
   const togglePreview = async (threadId) => {
     if (previews[threadId]) { setPreviews((p) => { const n = { ...p }; delete n[threadId]; return n; }); return; }
@@ -270,6 +290,24 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
         </div>
         <Badge>{c.profile === 'professional' ? 'strict' : 'relaxed'}</Badge>
         <Badge color={c.status === 'active' ? GOOD : undefined}>{c.status}</Badge>
+      </div>
+
+      {/* The other half of the link to the CRM: this case's client, a way back to the client's page, and a way to change it. */}
+      <div className="flex flex-wrap items-center gap-2 text-xs" data-tour="ef-client" data-guide="client-link">
+        <span style={{ color: 'var(--color-muted)' }}>{c.clientId ? `Client: ${c.clientName || 'in your CRM'}` : 'Not linked to a CRM client'}</span>
+        {c.clientId && <Btn small tip={EF_TIPS.openClient} onClick={() => navigate(`/clients/${c.clientId}`)}>Open in CRM</Btn>}
+        <Btn small tip={EF_TIPS.changeClient} onClick={startEditClient}>{c.clientId ? 'Change client' : 'Link to a client'}</Btn>
+        {editClient && (
+          <>
+            <Tooltip text={EF_TIPS.clientPick}>
+              <select className={`${FIELD} text-xs`} style={FIELD_STYLE} aria-label="CRM client" value={pickClient} onChange={(e) => setPickClient(e.target.value)}>
+                <option value="">No CRM client</option>
+                {clientList.map((cl) => <option key={cl.id} value={cl.id}>{cl.name}</option>)}
+              </select>
+            </Tooltip>
+            <Btn small primary tip={EF_TIPS.saveClient} onClick={saveClient}>Save</Btn>
+          </>
+        )}
       </div>
 
       <div className="rounded-2xl border p-4 space-y-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }} data-tour="ef-people">

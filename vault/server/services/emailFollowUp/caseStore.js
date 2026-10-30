@@ -26,14 +26,22 @@ function cleanAliases(list) {
 
 const CASE_COLS = `id, "userId", title, obligation, kind, profile, status, aliases, governing, ledger, "clientId", "projectId", "createdAt", "updatedAt"`;
 
-async function listCases(userId) {
+/** A person's cases, newest first. `clientId` narrows to the cases linked to one CRM client (the client page lists them). */
+async function listCases(userId, { clientId = null } = {}) {
   const { rows } = await pool.query(
     `SELECT c.id, c.title, c.obligation, c.kind, c.profile, c.status, c.aliases, c."clientId", c."projectId", c."createdAt", c."updatedAt",
+            (SELECT cl.name FROM clients cl WHERE cl.id=c."clientId" AND cl."userId"=c."userId") AS "clientName",
             jsonb_array_length(c.ledger) AS "rowCount",
             (SELECT COUNT(*) FROM ef_drafts d WHERE d."caseId"=c.id AND d.status='pending') AS "pendingDrafts",
             (SELECT COUNT(*) FROM ef_sources s WHERE s."caseId"=c.id) AS "sourceCount"
-       FROM ef_cases c WHERE c."userId"=$1 ORDER BY c."updatedAt" DESC LIMIT 200`, [userId]);
+       FROM ef_cases c WHERE c."userId"=$1 AND ($2::int IS NULL OR c."clientId"=$2) ORDER BY c."updatedAt" DESC LIMIT 200`, [userId, clientId]);
   return rows.map((r) => ({ ...r, rowCount: Number(r.rowCount), pendingDrafts: Number(r.pendingDrafts), sourceCount: Number(r.sourceCount) }));
+}
+
+async function clientName(userId, clientId) {
+  if (!clientId) return null;
+  const { rows } = await pool.query('SELECT name FROM clients WHERE id=$1 AND "userId"=$2', [clientId, userId]);
+  return rows[0] ? rows[0].name : null;
 }
 
 async function getCase(userId, id) {
@@ -411,7 +419,7 @@ async function latestApproval(draftId) {
 }
 
 module.exports = {
-  EMAIL_RE, cleanAliases, listCases, getCase, insertCase, withLedger, patchCase,
+  EMAIL_RE, cleanAliases, listCases, clientName, getCase, insertCase, withLedger, patchCase,
   listSources, getSource, addSource, markExtracted,
   attachThread, suggestThreads, previewThread, fetchAttachments, runSentSweep, latestSweep, freshInbound, ownerEmail,
   listDrafts, getDraft, pendingDraftCount, insertDraft, setDraftStatus, addApproval, latestApproval,

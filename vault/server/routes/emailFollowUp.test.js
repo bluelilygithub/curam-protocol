@@ -83,6 +83,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     ok("another person's project is refused", r.status === 400, r);
     r = await call('GET', `/${caseB.id}`, null, userA);
     ok("another person cannot read the case", r.status === 404, r.status);
+    r = await call('GET', `/?clientId=${clientB}`, null, userB);
+    ok("a client's page lists that client's cases, with the client's name", r.status === 200 && r.body.cases.length === 1 && r.body.cases[0].id === caseB.id && r.body.cases[0].clientName === 'B client', r.body);
+    r = await call('GET', `/?clientId=${clientA}`, null, userB);
+    ok("someone else's client id lists nothing", r.status === 200 && r.body.cases.length === 0, r.body);
+    r = await call('GET', `/${caseB.id}`, null, userB);
+    ok('the case itself carries its client name (for the Open in CRM link)', r.body.case.clientId === clientB && r.body.case.clientName === 'B client', r.body.case);
+    r = await call('PATCH', `/${caseB.id}`, { clientId: null }, userB);
+    ok('a case can be unlinked from its client', r.status === 200 && r.body.case.clientId === null, r.body);
 
     // ---- H1: a failed Read keeps what was read before it ----
     console.log('extract keeps its work');

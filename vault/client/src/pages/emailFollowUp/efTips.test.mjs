@@ -12,7 +12,7 @@ import { HOW_IT_WORKS } from './emailFollowUpTools.mjs';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const src = path.join(here, '../..'); // client/src
 const read = (p) => fs.readFileSync(path.join(src, p), 'utf8');
-const files = ['pages/EmailFollowUpPage.jsx', 'pages/emailFollowUp/CaseView.jsx'];
+const files = ['pages/EmailFollowUpPage.jsx', 'pages/emailFollowUp/CaseView.jsx', 'components/LinkedEmailFollowUp.jsx'];
 const sources = Object.fromEntries(files.map((f) => [f, read(f)]));
 
 // ---- the tips themselves: real sentences

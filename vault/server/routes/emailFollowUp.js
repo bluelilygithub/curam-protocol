@@ -189,7 +189,10 @@ router.patch('/drafts/:draftId', async (req, res) => {
 // ---------- cases ----------
 
 router.get('/', async (req, res) => {
-  try { res.json({ cases: await store.listCases(req.user.id) }); } catch (err) { fail(res, err); }
+  try {
+    const clientId = Number(req.query.clientId);
+    res.json({ cases: await store.listCases(req.user.id, { clientId: Number.isInteger(clientId) && clientId > 0 ? clientId : null }) });
+  } catch (err) { fail(res, err); }
 });
 
 router.post('/', async (req, res) => {
@@ -206,7 +209,7 @@ router.get('/:id', async (req, res) => {
     if (!c) return;
     const [sources, drafts, sweep] = await Promise.all([store.listSources(c.id), store.listDrafts(c.id), store.latestSweep(c.id)]);
     res.json({
-      case: { ...c, ledger: undefined },
+      case: { ...c, ledger: undefined, clientName: await store.clientName(req.user.id, c.clientId) },
       rows: c.ledger,
       sources: sources.map((s) => ({ ...s, label: sourceLabel(s) })),
       drafts,

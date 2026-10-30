@@ -15,6 +15,12 @@ export const EF_TIPS = {
   caseCard: 'Open this case.',
   // inside a case
   back: 'Go back to your list of cases.',
+  openClient: 'Open this client in your CRM. You can come back here with the Email follow-up section on the client page.',
+  changeClient: 'Link this case to a different CRM client, or to none. Nothing is changed in the CRM.',
+  clientPick: 'Choose the CRM client this case belongs to.',
+  saveClient: 'Save the link to this client.',
+  clientNewCase: 'Open a new Email Follow-Up case for this client, ready filled in.',
+  clientCase: 'Open this case in Email Follow-Up.',
   people: 'The email addresses of the people in this case, separated by commas. Used to find mail and to check Sent.',
   savePeople: 'Save these addresses for the case.',
   findMail: 'Looks in Gmail for threads with these people. You pick which to attach; nothing attaches itself.',

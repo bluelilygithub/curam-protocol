@@ -12,6 +12,7 @@ import AttachmentChip from '../components/AttachmentChip';
 import { startCrmTour, TOUR_KEY as CRM_TOUR_KEY } from '../utils/tours/crmTour';
 import CrmInfoModal, { INFO_SEEN_KEY as CRM_INFO_SEEN_KEY } from '../components/CrmInfoModal';
 import { useLinkedResearch, ResearchList } from '../components/LinkedResearch';
+import { useLinkedEmailFollowUp, EmailFollowUpList } from '../components/LinkedEmailFollowUp';
 import CrmTutorChat from './crm/CrmTutorChat';
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
@@ -334,11 +335,13 @@ export default function ClientDetailPage() {
     contacts:    true,
     projects:    false,
     research:    true,
+    emailFollowUp: true,
     tasks:       true,
   });
 
   const toggleSection = (key) => setSections(s => ({ ...s, [key]: !s[key] }));
   const clientResearch = useLinkedResearch({ clientId: Number(id) }); // null when Topic Research is off for this person: no section
+  const clientEmailCases = useLinkedEmailFollowUp(Number(id)); // null when Email Follow-Up is off for this person: no section
 
   const dealsRef    = useRef(null);
   const projectsRef = useRef(null);
@@ -599,6 +602,13 @@ export default function ClientDetailPage() {
           {clientResearch !== null && (
             <Section title={`Research${clientResearch.length ? ` (${clientResearch.length})` : ''}`} open={sections.research} onToggle={() => toggleSection('research')}>
               <ResearchList topics={clientResearch} noun="client" />
+            </Section>
+          )}
+
+          {/* Email follow-up: the Email Follow-Up cases linked to this client, and a way to start one (quiet when the tool is off) */}
+          {clientEmailCases !== null && (
+            <Section title={`Email follow-up${clientEmailCases.length ? ` (${clientEmailCases.length})` : ''}`} open={sections.emailFollowUp} onToggle={() => toggleSection('emailFollowUp')}>
+              <EmailFollowUpList cases={clientEmailCases} clientId={Number(id)} />
             </Section>
           )}
 
