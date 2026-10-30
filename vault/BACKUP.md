@@ -32,7 +32,7 @@ So **the only complete backup is a full Postgres copy**, taken from Railway (bel
 
 ## Full backup: what to do and how to prove it works
 
-1. **Database.** In the Railway dashboard open the Postgres service and look for scheduled backups (the wording and plan needed change; check what yours offers). Whatever it offers, also take your own copy before risky work:
+1. **Database.** Owner confirmed 2026-10-31: Railway backs up the Postgres service daily (6 kept) and monthly (4 kept), so about a week back at day level and four months at month level. Still unproven: a restore from one of these (see the rehearsal below). In the Railway dashboard open the Postgres service and look for scheduled backups (the wording and plan needed change; check what yours offers). Whatever it offers, also take your own copy before risky work:
    ```
    pg_dump -Fc "<DATABASE_PUBLIC_URL from the Postgres service Variables tab>" -f vault-YYYY-MM-DD.dump
    ```
