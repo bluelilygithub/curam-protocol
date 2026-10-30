@@ -119,6 +119,16 @@ function applyMention(rows, mention, ctx = {}) {
   }
 
   const old = live.find((r) => sameAsk(r, candidate));
+  // Two figures for the same ask inside ONE email (its body and its attachment, say) are a disagreement, not a change of mind:
+  // keep both open, flag both, name the question. Neither figure is preferred (fixture 2).
+  if (old && old.amount != null && candidate.amount != null && old.amount !== candidate.amount
+    && old.requestDate && candidate.requestDate && new Date(old.requestDate).getTime() === new Date(candidate.requestDate).getTime()) {
+    const q = `The same email gives two figures for this: ${old.amount} and ${candidate.amount}. Which is right?`;
+    candidate.conflictWith = old.id; candidate.conflictQuestion = q;
+    old.conflictWith = candidate.id; old.conflictQuestion = q;
+    next.push(candidate);
+    return { rows: next, row: candidate, action: 'conflict', delta: null };
+  }
   if (old) {
     candidate.supersedes = old.id;
     candidate.requestDate = old.requestDate || candidate.requestDate;
@@ -216,6 +226,18 @@ function suspendForSubstitute(rows, rowId, substitute, ctx = {}) {
   return { rows: next, row: sub };
 }
 
+/** When one side of a disagreement is closed, the other no longer has anything to disagree with. */
+function clearConflict(rows, rowId) {
+  const closed = rows.find((r) => r.id === rowId);
+  const partner = closed && closed.conflictWith;
+  if (!partner) return rows;
+  return rows.map((r) => {
+    if (r.id !== partner && r.id !== rowId) return r;
+    const { conflictWith, conflictQuestion, ...rest } = r; // eslint-disable-line no-unused-vars
+    return rest;
+  });
+}
+
 /** Rule 11.2: age downgrades, it does not nag. An open row with no inbound evidence for maxDays becomes unverified. */
 function ageRows(rows, now, { maxDays = 21, lastInboundAt = {} } = {}) {
   const nowMs = new Date(now).getTime();
@@ -230,5 +252,5 @@ function ageRows(rows, now, { maxDays = 21, lastInboundAt = {} } = {}) {
 
 module.exports = {
   KINDS, DIRECTIONS, CLAIM_TYPES, STATUSES,
-  rowFromMention, applyMention, transition, suspendForSubstitute, ageRows, describeDelta, sameIdentity, itemSet,
+  rowFromMention, applyMention, transition, suspendForSubstitute, clearConflict, ageRows, describeDelta, sameIdentity, itemSet,
 };

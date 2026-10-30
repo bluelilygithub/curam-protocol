@@ -310,7 +310,10 @@ No open questions remain. The next edit to this document comes from a fixture th
 - **§7.1** In this build, draft prose is template-assembled from the ledger row's own quoted words; no model writes draft text. Narrower than the rule allows, and repeatable.
 - **§10** Deciding that a Sent message answers a row is left to the person after a sweep (a named warning), since it is a semantic judgement and §7.3 forbids a machine `pass` for those.
 - **§1.3** Not applicable in this build: nothing ingests mail automatically, so there is no unmatched queue to expire. The rule stays for any future automatic ingest.
-- **Not exercised yet:** fixtures 2 and 8 (need attachment text), and every real-model and real-mailbox measurement (§7.5, §7.6).
+- **Not exercised yet:** every real-model and real-mailbox measurement (§7.5, §7.6).
+- **§2 / §12.2 (attachments, built):** each attachment is its own source hanging off its message. Read: PDF text layer, Word, plain text. Kept as `reference_only` with a reason: pictures, scans (no OCR), spreadsheets, other types. Refused as `failed`: a file whose first bytes show a program or script, however it is named. Only the page text is taken; metadata and form-field values are never read into the case (a deliberate narrowing of fixture 8's "store as data": there is nothing to act on if it is never stored). Hidden (white) text is part of the text layer and is kept as data.
+- **§4.3 (changed):** two different amounts for the same ask inside ONE email (its body and its attachment) are a **disagreement**, not a change of mind. Both rows stay open, flagged against each other with a named question, and neither can be drafted until one is waived (fixture 2). A correction in a LATER email is still a superseding row.
+- **§5.3:** a "within N days" deadline may use a start date only when the model returns it as wording that is itself in the source text and code reads it as an exact date (fixture 8: invoice dated 15 October 2026, due within 30 days, gives 14 November). Otherwise it stays `needs_review`.
 
 ### v1.0.1 — patch set, applied at lock
 

@@ -83,6 +83,7 @@ function RowCard({ row, caseId, sources, reload, onDraft }) {
       </p>
       {row.condition && <p className="text-xs" style={{ color: WARN }}>Only if: "{row.condition}" {row.conditionSatisfied ? '(shown met)' : '(not shown met)'}</p>}
       {row.delta && <p className="text-xs" style={{ color: WARN }}>Changed from the earlier ask: {row.delta}</p>}
+      {row.conflictWith && <p className="text-xs" style={{ color: BAD }}>{row.conflictQuestion} Waive the wrong one to continue; no draft can be made until you do.</p>}
       {row.quote && (
         <p className="text-xs leading-relaxed border-l-2 pl-2" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
           "{row.quote}"{src ? ` — ${src.label}` : ''}{row.anchors.length > 1 ? ` (+${row.anchors.length - 1} more mention${row.anchors.length > 2 ? 's' : ''})` : ''}
@@ -218,6 +219,7 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
   const [aliases, setAliases] = useState('');
   const [lastRead, setLastRead] = useState(null);
   const [previews, setPreviews] = useState({}); // threadId -> 'loading' | messages[]
+  const [lastAtt, setLastAtt] = useState(null);
 
   const reload = useCallback(async () => {
     try {
@@ -238,9 +240,13 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
   if (!data) return <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
   const { case: c, rows, sources, drafts, sentSweep, coverage, draftCap } = data;
   const unread = sources.filter((s) => !s.extractedAt && s.parseStatus === 'parsed').length;
+  const messages = sources.filter((s) => s.kind !== 'document');
+  const docsOf = (id) => sources.filter((s) => s.parentId === id);
+  const attPending = messages.filter((s) => !s.attachmentsFetchedAt && Array.isArray(s.attachments) && s.attachments.length > 0);
+  const attPendingCount = attPending.reduce((n, s) => n + s.attachments.length, 0);
   const pending = drafts.filter((d) => d.status === 'pending').length;
   const ordered = [...rows].sort((a, b) => (a.status === 'open' ? 0 : 1) - (b.status === 'open' ? 0 : 1));
-  const counts = { rows: rows.length, sources: sources.length, pending, cap: draftCap };
+  const counts = { rows: rows.length, sources: messages.length, pending, cap: draftCap };
 
   const run = async (key, fn, okMsg) => {
     setBusy(key);
@@ -274,15 +280,22 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
         </div>
         <div className="flex flex-wrap gap-2" data-tour="ef-steps" data-guide="mail">
           <Btn small disabled={busy === 'find'} tip={EF_TIPS.findMail} onClick={async () => { const r = await run('find', () => api.get(`/api/email-follow-up/${caseId}/suggestions`)); if (r.ok) { setSuggest(r.data.threads); onTab('mail'); } }}>1. Find mail</Btn>
-          <Btn small primary disabled={busy === 'read' || !unread} tip={EF_TIPS.read(unread)} onClick={async () => { const r = await run('read', () => api.post(`/api/email-follow-up/${caseId}/extract`, {})); if (r.ok) { setLastRead(r.data); reload(); } }}>{busy === 'read' ? 'Reading…' : `2. Read ${unread || 'no'} new message${unread === 1 ? '' : 's'}`}</Btn>
-          <Btn small disabled={busy === 'sweep'} tip={EF_TIPS.checkSent} onClick={async () => { const r = await run('sweep', () => api.post(`/api/email-follow-up/${caseId}/sent-sweep`, {}), 'Sent mail checked.'); if (r.ok) reload(); }}>{busy === 'sweep' ? 'Checking…' : '3. Check Sent'}</Btn>
+          <Btn small disabled={busy === 'att' || !attPendingCount} tip={EF_TIPS.getAttachments(attPendingCount)} onClick={async () => { const r = await run('att', () => api.post(`/api/email-follow-up/${caseId}/attachments`, {})); if (r.ok) { setLastAtt(r.data); reload(); } }}>{busy === 'att' ? 'Fetching…' : `2. Get ${attPendingCount || 'no'} attachment${attPendingCount === 1 ? '' : 's'}`}</Btn>
+          <Btn small primary disabled={busy === 'read' || !unread} tip={EF_TIPS.read(unread)} onClick={async () => { const r = await run('read', () => api.post(`/api/email-follow-up/${caseId}/extract`, {})); if (r.ok) { setLastRead(r.data); reload(); } }}>{busy === 'read' ? 'Reading…' : `3. Read ${unread || 'no'} new item${unread === 1 ? '' : 's'}`}</Btn>
+          <Btn small disabled={busy === 'sweep'} tip={EF_TIPS.checkSent} onClick={async () => { const r = await run('sweep', () => api.post(`/api/email-follow-up/${caseId}/sent-sweep`, {}), 'Sent mail checked.'); if (r.ok) reload(); }}>{busy === 'sweep' ? 'Checking…' : '4. Check Sent'}</Btn>
         </div>
         <p className="text-xs" style={{ color: sentSweep && sentSweep.completed ? GOOD : WARN }}>
           {sentSweep ? (sentSweep.completed ? `Sent checked ${new Date(sentSweep.at).toLocaleString()} (${sentSweep.found} new).` : `Last Sent check failed: ${sentSweep.error || 'unknown'}. Drafting to chase others stays blocked.`) : 'Sent has not been checked yet: you cannot draft a chase until it is.'}
         </p>
+        {lastAtt && (
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+            Attachments: {lastAtt.parsed} read, {lastAtt.referenceOnly} kept without text (pictures, scans, spreadsheets), {lastAtt.failed} could not be read.
+            {lastAtt.remainingMessages > 0 && ` ${lastAtt.remainingMessages} more message${lastAtt.remainingMessages === 1 ? '' : 's'} to go: press again.`}
+          </p>
+        )}
         {lastRead && (
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-            Read {lastRead.read}: {lastRead.added} new, {lastRead.evidence} restated, {lastRead.superseded} changed.
+            Read {lastRead.read}: {lastRead.added} new, {lastRead.evidence} restated, {lastRead.superseded} changed{lastRead.conflicts ? `, ${lastRead.conflicts} disagreeing` : ''}.
             {lastRead.dropped.length > 0 && ` ${lastRead.dropped.length} dropped (${[...new Set(lastRead.dropped.map((d) => d.reason))].slice(0, 3).join('; ')}).`}
             {lastRead.remaining > 0 && ` ${lastRead.remaining} more to read.`}
           </p>
@@ -339,11 +352,16 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
           )}
           <div className="space-y-2">
             <h3 className="text-sm font-semibold">Attached to this case</h3>
-            {!sources.length && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No mail attached. Press "1. Find mail" above.</p>}
-            {sources.map((s) => (
-              <div key={s.id} className="rounded-xl border p-3 text-xs" style={CARD}>
+            {!messages.length && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No mail attached. Press "1. Find mail" above.</p>}
+            {messages.map((s) => (
+              <div key={s.id} className="rounded-xl border p-3 text-xs space-y-1" style={CARD}>
                 <p className="font-medium text-sm">{s.label}</p>
                 <p style={{ color: 'var(--color-muted)' }}>{s.receivedAt ? new Date(s.receivedAt).toLocaleString() : 'no date'} · {s.extractedAt ? 'read' : 'not read yet'}{s.parseReason ? ` · ${s.parseReason}` : ''}</p>
+                {docsOf(s.id).map((d) => (
+                  <p key={d.id} className="pl-3 border-l-2" style={{ borderColor: 'var(--color-border)', color: d.parseStatus === 'failed' ? BAD : d.parseStatus === 'parsed' ? GOOD : 'var(--color-muted)' }}>
+                    {d.filename || 'file'} — {d.parseStatus === 'parsed' ? `read${d.extractedAt ? ' into the ledger' : ', not yet read into the ledger'}` : d.parseStatus === 'failed' ? `could not be read: ${d.parseReason}` : `not read: ${d.parseReason}`}
+                  </p>
+                ))}
               </div>
             ))}
           </div>
@@ -360,7 +378,7 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
 
       {tab === 'coverage' && (
         <div className="space-y-3 text-sm" data-guide="coverage">
-          <p>{coverage.read.messages} message{coverage.read.messages === 1 ? '' : 's'} read{coverage.read.from ? ` (${coverage.read.from.slice(0, 10)} to ${coverage.read.to.slice(0, 10)})` : ''}.</p>
+          <p>{coverage.read.messages} message{coverage.read.messages === 1 ? '' : 's'}{coverage.read.attachments ? ` and ${coverage.read.attachments} attachment${coverage.read.attachments === 1 ? '' : 's'}` : ''} read{coverage.read.from ? ` (${coverage.read.from.slice(0, 10)} to ${coverage.read.to.slice(0, 10)})` : ''}.</p>
           <div><h3 className="font-semibold text-sm">This tool could not see</h3><ul className="list-disc pl-5 text-xs space-y-1" style={{ color: 'var(--color-muted)' }}>{coverage.notVisible.map((n) => <li key={n}>{n}</li>)}</ul></div>
           <div><h3 className="font-semibold text-sm">You need to check yourself</h3><ul className="list-disc pl-5 text-xs space-y-1" style={{ color: 'var(--color-muted)' }}>{coverage.verify.map((n) => <li key={n}>{n}</li>)}</ul></div>
           <Btn small tip={EF_TIPS.copyCoverage} onClick={async () => { try { await navigator.clipboard.writeText(coverage.text); useToastStore.getState().addToast('Copied.'); } catch { /* blocked */ } }}>{getIcon('copy', { size: 12 })} Copy this</Btn>

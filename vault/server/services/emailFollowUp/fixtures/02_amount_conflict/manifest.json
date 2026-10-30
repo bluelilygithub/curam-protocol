@@ -1,0 +1,46 @@
+{
+  "id": "02",
+  "eval_now": "2026-10-15T09:00:00+10:00",
+  "eval_tz": "Australia/Brisbane",
+  "profile": "both",
+  "check": "conflict",
+  "sources": {
+    "msg-02-body": {
+      "text": "Hi, please pay the outstanding invoice of $4,200 for the website work."
+    },
+    "doc-02-invoice": {
+      "text": "INVOICE INV-2026005. Website work. Total due $4,000.00."
+    }
+  },
+  "mentions": [
+    {
+      "kind": "waiting_on",
+      "direction": "they_owe",
+      "party": "client@acme.com",
+      "items": [
+        "website invoice"
+      ],
+      "itemNoun": "invoice",
+      "claimType": "agreed",
+      "sourceId": "msg-02-body",
+      "amount": 4200,
+      "quote": "please pay the outstanding invoice of $4,200",
+      "sentAt": "2026-10-14T10:00:00+10:00"
+    },
+    {
+      "kind": "waiting_on",
+      "direction": "they_owe",
+      "party": "client@acme.com",
+      "items": [
+        "website invoice"
+      ],
+      "itemNoun": "invoice",
+      "claimType": "agreed",
+      "sourceId": "doc-02-invoice",
+      "amount": 4000,
+      "quote": "Total due $4,000.00",
+      "sentAt": "2026-10-14T10:00:00+10:00"
+    }
+  ],
+  "failure_condition": "Either figure is silently preferred, the rows are merged, or a draft can be made while the figures disagree (§4.3)."
+}

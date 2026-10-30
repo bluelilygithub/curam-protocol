@@ -30,8 +30,11 @@ Each mention has:
 - "claimType": "agreed" (clearly promised or demanded), "proposed" (offered but not accepted), "conditional" (depends on something: "if", "might", "subject to") or "refused"
 - "condition": for conditional only, the condition in the writer's own words, else null
 - "dueRaw": the deadline wording copied exactly as written ("by Friday the 23rd", "early next week"), or null if none. Do not turn it into a date.
+- "startRaw": only when the deadline counts from a date written in the text ("within 30 days" of an invoice dated 15 October 2026), that date copied exactly as written, else null. Never use the date of the email.
 - "quote": the shortest sentence or phrase from the email that shows this, copied word for word.
-Never upgrade "might" or "if" to "agreed". When unsure, use "proposed" or "conditional".`;
+Never upgrade "might" or "if" to "agreed". When unsure, use "proposed" or "conditional".
+
+Some text is an ATTACHMENT (a PDF or document that came with an email) rather than the email itself. Treat it the same way. For an invoice or statement: if the mailbox owner SENT it, the other party owes the total ("they_owe", kind "waiting_on", items like "Invoice INV-123", amount = the total due, claimType "agreed"); if it was RECEIVED, the mailbox owner owes it ("i_owe"). Use the amount only if one total is clearly stated, else null. Several different invoices are several mentions.`;
 
 function clean(text, max) {
   return String(text == null ? '' : text).replace(/\r/g, '').slice(0, max);
@@ -86,6 +89,12 @@ function normalizeMentions(modelText, source, ctx) {
     const quote = source.text.slice(where.start, where.end);
 
     const amount = m.amount == null || m.amount === '' ? null : Number(m.amount);
+    // A start date for "within N days" is accepted only if code can read it as an exact date from wording the text itself contains.
+    let startDate;
+    if (m.startRaw && locateQuote(source.text, String(m.startRaw))) {
+      const s = parseDeadline(String(m.startRaw).slice(0, 100), { sentAt: source.receivedAt, tz: ctx.tz });
+      if (s.status === 'exact') startDate = s.date;
+    }
     out.push({
       kind: m.kind,
       direction: m.direction,
@@ -95,7 +104,7 @@ function normalizeMentions(modelText, source, ctx) {
       amount: Number.isFinite(amount) ? amount : null,
       claimType: m.claimType,
       condition: m.claimType === 'conditional' ? String(m.condition).trim().slice(0, 300) : null,
-      due: m.dueRaw ? parseDeadline(String(m.dueRaw).slice(0, 200), { sentAt: source.receivedAt, tz: ctx.tz }) : undefined,
+      due: m.dueRaw ? parseDeadline(String(m.dueRaw).slice(0, 200), { sentAt: source.receivedAt, tz: ctx.tz, startDate }) : undefined,
       quote,
       sourceId: source.id,
       requestDate: source.receivedAt,
@@ -123,7 +132,8 @@ async function extractFromSource(userId, source, ctx, deps = {}) {
 
   const text = clean(source.text, MAX_TEXT);
   if (text.trim().length < 3) return { mentions: [], dropped: [] };
-  const header = `Mailbox owner: ${ctx.ownerEmail || 'unknown'}\nCase: ${clean(ctx.obligation, 300)}\nMessage is ${source.channel === 'sent' ? 'SENT BY the mailbox owner' : 'RECEIVED by the mailbox owner'}\nFrom: ${clean(source.fromAddr, 200)}\nTo: ${clean(source.toAddr, 300)}\nDate: ${source.receivedAt}`;
+  const what = source.kind === 'document' ? `ATTACHMENT "${clean(source.filename, 120)}" of an email that was ${source.channel === 'sent' ? 'SENT BY' : 'RECEIVED by'} the mailbox owner` : `Message is ${source.channel === 'sent' ? 'SENT BY the mailbox owner' : 'RECEIVED by the mailbox owner'}`;
+  const header = `Mailbox owner: ${ctx.ownerEmail || 'unknown'}\nCase: ${clean(ctx.obligation, 300)}\n${what}\nFrom: ${clean(source.fromAddr, 200)}\nTo: ${clean(source.toAddr, 300)}\nDate: ${source.receivedAt}`;
   const prompt = `${header}\n\n<email>\n${text}\n</email>`;
 
   const result = await call(modelId, prompt, { system: SYSTEM, maxTokens: 2500, returnUsage: true, timeoutMs: 90000 });

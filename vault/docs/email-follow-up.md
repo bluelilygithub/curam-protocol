@@ -23,7 +23,7 @@ The design set recommended a **separate local product** with Vault as an optiona
 | API | `server/routes/emailFollowUp.js` at `/api/email-follow-up` |
 | Page | `client/src/pages/EmailFollowUpPage.jsx`, `client/src/pages/emailFollowUp/CaseView.jsx`, `labels.mjs` |
 | Help, tips, tour, guide | `emailFollowUp/emailFollowUpTools.mjs` (the five places, group and tool tips, the (i) box text, what the guide can point at), `emailFollowUp/efTips.mjs` (one tip per control), `emailFollowUp/EmailFollowUpTutorChat.jsx`, `client/src/utils/tours/emailFollowUpTour.js`, `server/services/emailFollowUpTutor.js` + `server/routes/emailFollowUpTutor.js` (`POST /api/email-follow-up-tutor`), registered in `server/config/guides.js` |
-| Tests | `npm run test:email-follow-up` (21 fixtures + unit checks, extractor with a fake model, labels, tips/helpers, guide); `npm run test:email-follow-up-tutor` for the guide alone; `npm run test:guides` |
+| Tests | `npm run test:email-follow-up` (23 fixtures + unit checks incl. attachment reading, extractor with a fake model, labels, tips/helpers, guide); `npm run test:email-follow-up-tutor` for the guide alone; `npm run test:guides` |
 
 ## Helpers (the Vault tool conventions)
 
@@ -44,11 +44,13 @@ The design set recommended a **separate local product** with Vault as an optiona
 - **Sent reconciliation (10.x).** "Check Sent" lists the case's Sent mail across every address in the case (per case, never per party) and records a watermark. Chasing someone is blocked until a sweep covering the request date to now has completed; a failed sweep is recorded as not completed and blocks. After a sweep, mail sent to that person since the request is shown as a warning the person must accept ("check none already answers this"). The tool does not decide that a Sent message answers a row; a person does.
 - **Approval and copy (9.x).** Approval hashes the whole outbound object (subject, body, To, Cc, Bcc, reply chain, citations). **Copy** re-reads Gmail for new mail in the cited threads and refuses (and resets to pending) if the counterparty wrote or a cited thread grew; if Gmail cannot be read, copy is refused. Absence of an approval record means no.
 - **Review capacity (8.x).** At most 5 drafts waiting per case; above that, no new drafts.
-- **Coverage statement (11.3).** Shown on the "What was covered" tab: what was read, what this tool cannot see (phone, portals, other mailboxes, attachments, Sent if unchecked), what the person must verify.
+- **Coverage statement (11.3).** Shown on the "What was covered" tab: what was read, what this tool cannot see (phone, portals, other mailboxes, how many attachments were read and which were not, grouped by reason, Sent if unchecked), what the person must verify.
 
 ## Not built (honest list)
 
-- **Attachments are not read.** No PDF text, no OCR. Attached mail records its attachment filenames and says so in the coverage statement. So fixtures 2 (body vs attachment amount), 8 (injection in a PDF), 13 beyond the rule, and the document half of 22 are **not exercised end to end**, and there are no governing documents yet (`governing` is stored but has no upload; the gate is vacuous, which is legal per Rule 1.4).
+- **No OCR, no spreadsheets.** Scanned PDFs and pictures are kept as "not read" with the reason; so are spreadsheets (the installed `xlsx` reader is too old to trust with strangers' files). If a client's invoices are scans, they will not reach the ledger. Adding OCR (Vault already has Tesseract for Translate and Contract Review) is the next step for that.
+- **No governing documents yet.** `governing` is stored but there is no upload for a contract or a request list; the gate is vacuous, which is legal per Rule 1.4. The attachment reader could be pointed at this next.
+- **Attachment reading has not been run on a real mailbox.** It is tested with real PDFs generated in the tests and a fake Gmail in a local database, not against Gmail itself.
 - **Ageing job.** `ageRows()` is tested but nothing runs it on a schedule, so rows never become `unverified` by themselves yet.
 - **Deleting a case.** Not offered. Cases are closed or abandoned (`PATCH /:id { status }`). Deleting needs a recycle-bin adapter first (CLAUDE.md rule for any tool that deletes).
 - **Suggestions inbox hook.** Nothing here calls `SuggestionService.capture()` yet (for example when a Sent check keeps failing or rows go unverified). The guide route also does not file a "something is missing" suggestion beyond what `guideRouter` already does.
@@ -58,7 +60,7 @@ The design set recommended a **separate local product** with Vault as an optiona
 
 ## Fixtures
 
-21 fixtures in `server/services/emailFollowUp/fixtures/` (rule suite, Rule S1): 01, 03, 04, 05, 06, 07, 09, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22 from the plan, plus **23** added here. Not built: **02** (needs attachment text) and **08** (needs a PDF). Differences from the plan: `manifest.json` instead of `manifest.md` (so the harness can read it), and the hand-written extracted rows/drafts sit inside the manifest rather than in separate `expected_input/` files. Each fixture has a fixed `eval_now`/`eval_tz` and a named failure condition; a fixture without them is rejected by the runner (Rule 14.1).
+23 fixtures in `server/services/emailFollowUp/fixtures/` (rule suite, Rule S1): every one of the plan's 22 (01 to 22) plus **23** added here. 02 (the body and the attachment give different amounts) and 08 (a real PDF carrying instructions in its metadata, hidden text and a form field; stored as `attachments/Subcontractor_Invoice_1042.pdf`) arrived with attachment reading. Differences from the plan: `manifest.json` instead of `manifest.md` (so the harness can read it), and the hand-written extracted rows/drafts sit inside the manifest rather than in separate `expected_input/` files. Each fixture has a fixed `eval_now`/`eval_tz` and a named failure condition; a fixture without them is rejected by the runner (Rule 14.1).
 
 **Mutation check.** To see whether the fixtures would actually catch a broken rule, ten rules were deliberately broken one at a time (merging a scope change, closing a conditional on affirmation, dropping the authority lock, hashing only the body, ignoring new mail at copy time, skipping the Sent sweep, guessing a date, locking a soft case on any unreadable file, accepting an unknown citation, ignoring a dropped hedge). Nine were caught at once. **One was not**: dropping a hedge ("might" stated as a flat fact) passed all 20 fixtures, because the only fixtures touching hedges were caught by a different check. That is why fixture 23 exists. The plan predicted the first run would change something; this is what changed.
 

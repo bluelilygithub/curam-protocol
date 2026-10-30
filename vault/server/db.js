@@ -1622,6 +1622,14 @@ async function initSchema() {
     `);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_ef_sources_external ON ef_sources ("caseId","externalId") WHERE "externalId" IS NOT NULL`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ef_sources_case ON ef_sources ("caseId", "receivedAt")`);
+    // Attachments become their own sources (a document hangs off the message it came in): file name, type, size, how it was read.
+    await client.query(`ALTER TABLE ef_sources ADD COLUMN IF NOT EXISTS "parentId" INTEGER REFERENCES ef_sources(id) ON DELETE CASCADE`);
+    await client.query(`ALTER TABLE ef_sources ADD COLUMN IF NOT EXISTS filename TEXT`);
+    await client.query(`ALTER TABLE ef_sources ADD COLUMN IF NOT EXISTS "mimeType" TEXT`);
+    await client.query(`ALTER TABLE ef_sources ADD COLUMN IF NOT EXISTS "sizeBytes" INTEGER`);
+    await client.query(`ALTER TABLE ef_sources ADD COLUMN IF NOT EXISTS parser TEXT`);
+    await client.query(`ALTER TABLE ef_sources ADD COLUMN IF NOT EXISTS "attachmentsFetchedAt" TIMESTAMPTZ`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ef_sources_parent ON ef_sources ("parentId")`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS ef_drafts (
         id           SERIAL PRIMARY KEY,

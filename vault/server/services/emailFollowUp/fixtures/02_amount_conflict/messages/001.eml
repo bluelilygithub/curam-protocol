@@ -1,0 +1,9 @@
+From: client@acme.com
+To: me@x.com
+Date: Wed, 14 Oct 2026 10:00:00 +1000
+Message-ID: <msg-02-body>
+Subject: Invoice
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Hi, please pay the outstanding invoice of $4,200 for the website work.

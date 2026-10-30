@@ -52,6 +52,7 @@ function guardSourcesOf(sources) {
 
 function sourceLabel(s) {
   const who = String(s.fromAddr || '').replace(/<.*>/, '').trim() || 'unknown sender';
+  if (s.kind === 'document') return `Attachment "${s.filename || 'file'}" (${s.channel === 'sent' ? 'sent' : 'from'} ${who}${s.subject ? `: ${s.subject}` : ''})`;
   return `${s.channel === 'sent' ? 'Sent' : 'From'} ${who}${s.subject ? `: ${s.subject}` : ''}`;
 }
 
@@ -62,9 +63,9 @@ function nextRowId(ledger) {
 }
 
 function coverageOf(c, sources, sweep) {
-  const attach = sources.reduce((n, s) => n + (Array.isArray(s.attachments) ? s.attachments.length : 0), 0);
+  const attach = sources.reduce((n, s) => n + (s.kind !== 'document' && Array.isArray(s.attachments) ? s.attachments.length : 0), 0);
   return coverageStatement({
-    sources: sources.map((s) => ({ id: s.id, label: sourceLabel(s), parseStatus: s.parseStatus, parseReason: s.parseReason, receivedAt: s.receivedAt ? new Date(s.receivedAt).toISOString() : null })),
+    sources: sources.map((s) => ({ id: s.id, kind: s.kind, label: sourceLabel(s), parseStatus: s.parseStatus, parseReason: s.parseReason, receivedAt: s.receivedAt ? new Date(s.receivedAt).toISOString() : null })),
     rows: c.ledger,
     sentWatermark: sweep,
     governing: c.governing || [],
@@ -238,6 +239,15 @@ router.post('/:id/threads', async (req, res) => {
   } catch (err) { fail(res, err); }
 });
 
+// Downloads the attachments of the attached messages (read-only) and reads their text. Press again if it says some remain.
+router.post('/:id/attachments', async (req, res) => {
+  try {
+    const c = await loadCase(req, res);
+    if (!c) return;
+    res.json(await store.fetchAttachments(req.user.id, c));
+  } catch (err) { fail(res, err); }
+});
+
 // Reads the not-yet-read messages into the ledger. The model only proposes; code validates, anchors and files.
 router.post('/:id/extract', aiLimiter, async (req, res) => {
   try {
@@ -248,7 +258,7 @@ router.post('/:id/extract', aiLimiter, async (req, res) => {
     const sources = (await store.listSources(c.id, { withText: true })).filter((s) => !s.extractedAt && s.parseStatus === 'parsed' && s.channel !== 'note');
     let ledger = c.ledger;
     const newId = nextRowId(ledger);
-    const summary = { read: 0, added: 0, evidence: 0, superseded: 0, dropped: [], remaining: Math.max(0, sources.length - EXTRACT_BATCH) };
+    const summary = { read: 0, added: 0, evidence: 0, superseded: 0, conflicts: 0, dropped: [], remaining: Math.max(0, sources.length - EXTRACT_BATCH) };
 
     for (const s of sources.slice(0, EXTRACT_BATCH)) {
       const out = await extractFromSource(req.user.id, { ...s, receivedAt: s.receivedAt ? new Date(s.receivedAt).toISOString() : new Date().toISOString() }, { tz: timezone, ownerEmail: owner, obligation: c.obligation });
@@ -256,6 +266,7 @@ router.post('/:id/extract', aiLimiter, async (req, res) => {
         const r = ledgerLib.applyMention(ledger, m, { newId });
         ledger = r.rows;
         if (r.action === 'new') summary.added += 1;
+        else if (r.action === 'conflict') summary.conflicts += 1;
         else if (r.action === 'evidence') summary.evidence += 1;
         else summary.superseded += 1;
       }
@@ -296,8 +307,9 @@ router.post('/:id/rows/:rowId/event', async (req, res) => {
     const event = { type, note: String(req.body?.note || '').slice(0, 500), by: req.body?.by || 'human_note', humanNote: String(req.body?.note || '').slice(0, 500) };
     const t = ledgerLib.transition(row, event);
     if (!t.ok) return res.status(409).json({ error: t.reason, rule: t.rule });
-    await saveRow(c, row.id, t.row);
-    res.json({ row: t.row });
+    const ledger = ledgerLib.clearConflict(c.ledger.map((r) => (r.id === row.id ? t.row : r)), row.id);
+    await store.saveLedger(c.id, ledger);
+    res.json({ row: ledger.find((r) => r.id === row.id) });
   } catch (err) { fail(res, err); }
 });
 

@@ -16,6 +16,8 @@ const approval = require('./approval');
 const gates = require('./gates');
 const { buildNudgeDraft } = require('./draft');
 const { coverageStatement } = require('./coverage');
+const { extractAttachmentText, planAttachment } = require('./attachmentText');
+const { normalizeMentions } = require('./extract');
 
 const FIXTURES = path.join(__dirname, 'fixtures');
 let passed = 0;
@@ -168,6 +170,46 @@ const CHECKS = {
     }
   },
 
+  conflict(fx) {
+    let rows = [];
+    for (const m of fx.mentions) rows = ledger.applyMention(rows, toMention(fx, m)).rows;
+    const [a, b] = rows;
+    if (rows.length !== 2 || a.status !== 'open' || b.status !== 'open') fail(fx.id, `expected two open rows, got ${JSON.stringify(rows.map((r) => [r.id, r.status]))}. ${fx.failure_condition}`);
+    else {
+      if (a.conflictWith !== b.id || b.conflictWith !== a.id) fail(fx.id, '§4.3: the two rows are not flagged against each other');
+      if (!/Which is right\?/.test(a.conflictQuestion || '')) fail(fx.id, 'no named question');
+      const now = fx.eval_now;
+      const wm = { completed: true, from: '2026-01-01T00:00:00+10:00', to: '2026-10-15T08:55:00+10:00' };
+      const blocked = gates.canDraft({ row: a, watermark: wm, now });
+      if (blocked.ok || !blocked.blocks.some((x) => x.rule === '4.3')) fail(fx.id, 'a row with a disputed figure can be drafted');
+      const closed = ledger.transition(a, { type: 'waive' }).row;
+      const after = ledger.clearConflict(rows.map((r) => (r.id === a.id ? closed : r)), a.id);
+      if (after.find((r) => r.id === b.id).conflictWith) fail(fx.id, 'closing one side did not clear the other');
+      if (!gates.canDraft({ row: after.find((r) => r.id === b.id), watermark: wm, now }).ok) fail(fx.id, 'the remaining row should be draftable once the dispute is settled');
+    }
+    // a later correction (different email date) is still a plain supersede, not a dispute
+    const later = ledger.applyMention(ledger.applyMention([], toMention(fx, fx.mentions[0])).rows, toMention(fx, { ...fx.mentions[1], sentAt: '2026-10-16T10:00:00+10:00' }));
+    if (later.action !== 'supersede') fail(fx.id, `a correction in a later email should supersede, got ${later.action}`);
+  },
+
+  async hostile_document(fx) {
+    const bytes = fs.readFileSync(path.join(FIXTURES, fx.dir, 'attachments', fx.file));
+    const r = await extractAttachmentText({ filename: fx.file, mimeType: 'application/pdf', buffer: bytes });
+    if (r.parseStatus !== 'parsed') { fail(fx.id, `PDF not read: ${r.parseStatus} ${r.parseReason}`); return; }
+    for (const needle of fx.expected.textHas) if (!r.text.includes(needle)) fail(fx.id, `extracted text lacks "${needle}" (it must be kept as data)`);
+    for (const needle of fx.expected.textLacks) if (r.text.includes(needle)) fail(fx.id, `"${needle}" was read into the case: metadata and form fields must not be`);
+    const source = { id: 31, kind: 'document', text: r.text, receivedAt: '2026-10-15T00:00:00+10:00' };
+    // a model that was steered by the document, adding fields it has no right to set
+    const modelReply = JSON.stringify({ mentions: [{ ...fx.fakeModelMention, status: 'met', approve: true, authority: 'confirmed', suppressWarnings: true }] });
+    const out = normalizeMentions(modelReply, source, { tz: fx.eval_tz });
+    if (out.mentions.length !== 1) { fail(fx.id, `expected one mention, got ${out.mentions.length}: ${JSON.stringify(out.dropped)}`); return; }
+    const folded = ledger.applyMention([], out.mentions[0], { newId: () => 'r1' });
+    const row = folded.rows[0];
+    const e = fx.expected;
+    if (row.status !== 'open' || row.amount !== e.amount || row.due.date !== e.due) fail(fx.id, `row is ${row.status}/${row.amount}/${row.due.date}. ${fx.failure_condition}`);
+    if (row.suppressWarnings || row.approve) fail(fx.id, 'the document steered a field into the ledger');
+  },
+
   substitute(fx) {
     const { rows } = ledger.applyMention([], toMention(fx, fx.mention));
     const anchor = resolveAnchor(fx.sources, fx.substitute);
@@ -248,6 +290,8 @@ const CHECKS = {
 
 // ---------- run ----------
 
+(async () => {
+
 const dirs = fs.readdirSync(FIXTURES).filter((d) => fs.statSync(path.join(FIXTURES, d)).isDirectory()).sort();
 for (const dir of dirs) {
   const fx = JSON.parse(fs.readFileSync(path.join(FIXTURES, dir, 'manifest.json'), 'utf8'));
@@ -268,14 +312,14 @@ for (const dir of dirs) {
   }
   if (!CHECKS[fx.check]) fail(fx.id, `unknown check ${fx.check}`);
   else if (failures.length === before) {
-    try { CHECKS[fx.check](fx); } catch (e) { fail(fx.id, `threw: ${e.stack || e.message}`); }
+    try { await CHECKS[fx.check](fx); } catch (e) { fail(fx.id, `threw: ${e.stack || e.message}`); }
   }
   if (failures.length === before) passed += 1;
 }
 
 // ---------- direct unit checks ----------
 
-(function unit() {
+await (async function unit() {
   const sent = '2026-10-14T10:00:00+10:00';
   const tz = 'Australia/Brisbane';
   const check = (name, fn) => { try { fn(); } catch (e) { failures.push(`unit ${name}: ${e.message}`); } };
@@ -314,6 +358,34 @@ for (const dir of dirs) {
     assert.strictEqual(FEATURE_ACCESS_DEFAULTS.emailFollowUp, false);
     if (typeof accountantFlags === 'function') assert.notStrictEqual(accountantFlags({}).emailFollowUp, true);
   });
+  // ----- attachment text: reads what it should, refuses what it should, and says why (async checks, awaited below) -----
+  const pdfLib = require('pdf-lib');
+  const mkPdf = async (text) => { const d = await pdfLib.PDFDocument.create(); const p = d.addPage(); if (text) p.drawText(text, { x: 40, y: 700, size: 12 }); return Buffer.from(await d.save()); };
+  const att = async (name, filename, buffer, mimeType) => { try { return await extractAttachmentText({ filename, mimeType, buffer }); } catch (e) { failures.push(`unit ${name}: threw ${e.message}`); return {}; } };
+  const must = (name, cond, got) => { if (!cond) failures.push(`unit ${name}: ${JSON.stringify(got)}`); };
+
+  let r = await att('pdf text', 'a.pdf', await mkPdf('Invoice INV-1 Total due $3,450.00 payable in 30 days'), 'application/pdf');
+  must('a PDF with text is parsed', r.parseStatus === 'parsed' && /3,450\.00/.test(r.text) && /pdfjs/.test(r.parser), r);
+  r = await att('scan', 'scan.pdf', await mkPdf(''), 'application/pdf');
+  must('a PDF with no text layer is kept with a reason, not read', r.parseStatus === 'reference_only' && /OCR/.test(r.parseReason) && r.text === '', r);
+  r = await att('program renamed', 'invoice.pdf', Buffer.concat([Buffer.from('MZ'), Buffer.alloc(200, 1)]), 'application/pdf');
+  must('a program renamed .pdf is refused by its first bytes', r.parseStatus === 'failed' && /program/.test(r.parseReason), r);
+  r = await att('script renamed', 'notes.txt', Buffer.from('#!/bin/sh\nrm -rf /\n'), 'text/plain');
+  must('a script renamed .txt is refused', r.parseStatus === 'failed', r);
+  r = await att('png', 'logo.pdf', Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(50)]), 'application/pdf');
+  must('a picture is kept with a reason', r.parseStatus === 'reference_only' && /picture/.test(r.parseReason), r);
+  r = await att('broken pdf', 'bad.pdf', Buffer.from('%PDF-1.7\nthis is not really a pdf'), 'application/pdf');
+  must('a broken PDF fails with a reason', r.parseStatus === 'failed' && r.parseReason, r);
+  r = await att('text', 'list.csv', Buffer.from('item,amount\nQ3 ledger,4000\n'), 'text/csv');
+  must('plain text is read', r.parseStatus === 'parsed' && /Q3 ledger/.test(r.text), r);
+  r = await att('binary as text', 'x.txt', Buffer.alloc(300, 0), 'text/plain');
+  must('binary posing as text fails', r.parseStatus === 'failed', r);
+  r = await att('empty', 'e.pdf', Buffer.alloc(0), 'application/pdf');
+  must('an empty file fails', r.parseStatus === 'failed', r);
+  must('pictures and spreadsheets are not even downloaded', !planAttachment({ filename: 'a.png', mimeType: 'image/png', size: 100 }).fetch && !planAttachment({ filename: 'a.xlsx', size: 100 }).fetch, null);
+  must('a PDF is downloaded', planAttachment({ filename: 'a.pdf', mimeType: 'application/pdf', size: 100 }).fetch, null);
+  must('a huge file is not downloaded', !planAttachment({ filename: 'a.pdf', size: 50 * 1024 * 1024 }).fetch, null);
+
   check('coverage prints the misses', () => {
     const c = coverageStatement({ sources: [{ id: 's1', parseStatus: 'parsed', receivedAt: '2026-10-01T00:00:00Z' }], rows: [], sentWatermark: null });
     assert.ok(c.notVisible.some((x) => /phone|portal/i.test(x)) && c.notVisible.some((x) => /Sent mail has not been checked/.test(x)));
@@ -326,3 +398,4 @@ if (failures.length) {
   process.exit(1);
 }
 console.log(`email-follow-up: ${passed}/${dirs.length} fixtures passed, unit checks passed`);
+})().catch((e) => { console.error(e); process.exit(1); });

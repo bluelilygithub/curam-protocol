@@ -7,6 +7,7 @@
 const { pool } = require('../../db');
 const { sha256 } = require('./common');
 const { localDate } = require('./deadlines');
+const { extractAttachmentText, planAttachment } = require('./attachmentText');
 
 const EMAIL_RE = /^[^\s@()"<>,;]+@[^\s@()"<>,;]+\.[^\s@()"<>,;]+$/;
 const MAX_SOURCE_CHARS = 60000;
@@ -73,7 +74,8 @@ async function patchCase(userId, id, patch) {
 async function listSources(caseId, { withText = false } = {}) {
   const { rows } = await pool.query(
     `SELECT id, kind, channel, "externalId", "threadId", subject, "fromAddr", "toAddr", "messageIdHeader", "receivedAt", "contentHash",
-            ${withText ? 'text,' : ''} attachments, "parseStatus", "parseReason", "extractedAt"
+            ${withText ? 'text,' : ''} attachments, "parseStatus", "parseReason", "extractedAt",
+            "parentId", filename, "mimeType", "sizeBytes", parser, "attachmentsFetchedAt"
        FROM ef_sources WHERE "caseId"=$1 ORDER BY "receivedAt" ASC NULLS LAST, id ASC`, [caseId]);
   return rows;
 }
@@ -87,13 +89,13 @@ async function getSource(caseId, id) {
 async function addSource(userId, caseId, s) {
   const text = String(s.text || '').slice(0, MAX_SOURCE_CHARS);
   const { rows } = await pool.query(
-    `INSERT INTO ef_sources ("caseId","userId",kind,channel,"externalId","threadId",subject,"fromAddr","toAddr","messageIdHeader","receivedAt","contentHash",text,attachments,"parseStatus","parseReason")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+    `INSERT INTO ef_sources ("caseId","userId",kind,channel,"externalId","threadId",subject,"fromAddr","toAddr","messageIdHeader","receivedAt","contentHash",text,attachments,"parseStatus","parseReason","parentId",filename,"mimeType","sizeBytes",parser)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
      ON CONFLICT ("caseId","externalId") WHERE "externalId" IS NOT NULL DO NOTHING
      RETURNING id`,
     [caseId, userId, s.kind || 'message', s.channel || 'inbound', s.externalId || null, s.threadId || null, s.subject || null, s.fromAddr || null, s.toAddr || null,
       s.messageIdHeader || null, s.receivedAt || null, sha256(text), text, JSON.stringify(s.attachments || []),
-      s.parseStatus || 'parsed', s.parseReason || null]);
+      s.parseStatus || 'parsed', s.parseReason || null, s.parentId || null, s.filename || null, s.mimeType || null, s.sizeBytes || null, s.parser || null]);
   return rows[0] ? { id: rows[0].id, created: true } : { id: null, created: false };
 }
 
@@ -105,7 +107,7 @@ async function markExtracted(sourceId) {
 
 function attachmentsOf(payload, out = []) {
   if (!payload) return out;
-  if (payload.filename) out.push({ filename: payload.filename, mimeType: payload.mimeType, size: payload.body?.size || 0 });
+  if (payload.filename) out.push({ filename: payload.filename, mimeType: payload.mimeType, size: payload.body?.size || 0, attachmentId: payload.body?.attachmentId || null, partId: payload.partId || null });
   for (const p of payload.parts || []) attachmentsOf(p, out);
   return out;
 }
@@ -125,9 +127,9 @@ function messageToSource(msg, { getHeader, extractBody }) {
     messageIdHeader: getHeader(headers, 'Message-ID') || getHeader(headers, 'Message-Id') || null,
     receivedAt: msg.internalDate ? new Date(Number(msg.internalDate)).toISOString() : null,
     text: extractBody(msg.payload) || '',
-    attachments,
+    attachments: attachments.map(({ filename, mimeType, size }) => ({ filename, mimeType, size })),
     parseStatus: 'parsed',
-    parseReason: attachments.length ? `${attachments.length} attachment${attachments.length === 1 ? '' : 's'} not read in this version` : null,
+    parseReason: attachments.length ? `${attachments.length} attachment${attachments.length === 1 ? '' : 's'}: press "Get attachments" to read them` : null,
   };
 }
 
@@ -173,6 +175,59 @@ async function suggestThreads(userId, caseRow, attachedThreadIds) {
       date: first?.internalDate ? new Date(Number(first.internalDate)).toISOString() : null,
       messages: (full.data.messages || []).length,
     });
+  }
+  return out;
+}
+
+const ATT_MAX_DOWNLOADS = 12;      // files downloaded per press, to keep one request short
+const ATT_BUDGET_MS = 50000;
+
+/**
+ * Turn the attachments of attached messages into their own sources (case model §2). Each file is downloaded from Gmail read-only,
+ * its text taken by attachmentText.js (PDF text layer, Word, plain text), and stored as a document hanging off its message. Files that
+ * cannot be read are still recorded, with the reason, so the coverage statement can list them. Stops at a budget; press again for more.
+ */
+async function fetchAttachments(userId, caseRow) {
+  const g = gmailHelpers();
+  const gmail = await g.getGmailClient(userId);
+  const { rows: msgs } = await pool.query(
+    `SELECT id, channel, "externalId", "threadId", subject, "fromAddr", "toAddr", "messageIdHeader", "receivedAt"
+       FROM ef_sources WHERE "caseId"=$1 AND "parentId" IS NULL AND kind='message' AND "attachmentsFetchedAt" IS NULL
+        AND "externalId" IS NOT NULL AND jsonb_array_length(attachments) > 0
+      ORDER BY "receivedAt" ASC NULLS LAST, id ASC`, [caseRow.id]);
+  const out = { messages: 0, parsed: 0, referenceOnly: 0, failed: 0, downloaded: 0, remainingMessages: 0 };
+  const started = Date.now();
+
+  for (let i = 0; i < msgs.length; i += 1) {
+    const m = msgs[i];
+    if (out.downloaded >= ATT_MAX_DOWNLOADS || Date.now() - started > ATT_BUDGET_MS) { out.remainingMessages = msgs.length - i; break; }
+    const full = await gmail.users.messages.get({ userId: 'me', id: m.externalId, format: 'full' });
+    const parts = attachmentsOf(full.data.payload);
+    const { rows: have } = await pool.query(`SELECT "externalId" FROM ef_sources WHERE "caseId"=$1 AND "parentId"=$2`, [caseRow.id, m.id]);
+    const done = new Set(have.map((r) => r.externalId));
+
+    for (const a of parts) {
+      const externalId = `${m.externalId}#${a.filename}#${a.size}`;
+      if (done.has(externalId)) continue;
+      const plan = planAttachment(a);
+      let r;
+      if (!plan.fetch || !a.attachmentId) {
+        r = { parseStatus: plan.parseStatus || 'reference_only', parseReason: plan.parseReason || 'no downloadable content', text: '', parser: null };
+      } else {
+        out.downloaded += 1;
+        // A download that throws is left for the next press (the message is not marked done), never recorded as a failed file.
+        const att = await gmail.users.messages.attachments.get({ userId: 'me', messageId: m.externalId, id: a.attachmentId });
+        r = await extractAttachmentText({ filename: a.filename, mimeType: a.mimeType, buffer: Buffer.from(att.data.data || '', 'base64url') });
+      }
+      await addSource(userId, caseRow.id, {
+        kind: 'document', channel: m.channel, externalId, threadId: m.threadId, subject: m.subject, fromAddr: m.fromAddr, toAddr: m.toAddr,
+        messageIdHeader: m.messageIdHeader, receivedAt: m.receivedAt, parentId: m.id, filename: a.filename, mimeType: a.mimeType, sizeBytes: a.size,
+        text: r.text, parseStatus: r.parseStatus, parseReason: r.parseReason, parser: r.parser,
+      });
+      if (r.parseStatus === 'parsed') out.parsed += 1; else if (r.parseStatus === 'failed') out.failed += 1; else out.referenceOnly += 1;
+    }
+    await pool.query(`UPDATE ef_sources SET "attachmentsFetchedAt"=NOW(), "parseReason"=NULL WHERE id=$1`, [m.id]);
+    out.messages += 1;
   }
   return out;
 }
@@ -303,7 +358,7 @@ async function latestApproval(draftId) {
 module.exports = {
   EMAIL_RE, cleanAliases, listCases, getCase, insertCase, saveLedger, patchCase,
   listSources, getSource, addSource, markExtracted,
-  attachThread, suggestThreads, previewThread, runSentSweep, latestSweep, freshInbound, ownerEmail,
+  attachThread, suggestThreads, previewThread, fetchAttachments, runSentSweep, latestSweep, freshInbound, ownerEmail,
   listDrafts, getDraft, pendingDraftCount, insertDraft, setDraftStatus, addApproval, latestApproval,
   localDate,
 };

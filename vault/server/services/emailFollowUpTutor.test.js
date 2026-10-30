@@ -19,6 +19,9 @@ checkGuide({
     ['new-case', 'does', /what is owed/, 'a case is opened from what is owed'],
     ['find-mail', 'notes', /Nothing attaches itself/, 'mail never attaches itself'],
     ['read', 'notes', /word for word/, 'a row needs a word-for-word quote'],
+    ['read', 'notes', /two different amounts/, 'a disagreement blocks drafting'],
+    ['get-attachments', 'notes', /scanned PDFs.*not read/s, 'scans are listed as not read'],
+    ['get-attachments', 'notes', /program/, 'a disguised program is refused'],
     ['check-sent', 'notes', /Required before chasing/, 'Sent must be checked first'],
     ['draft-followup', 'notes', /No AI writes the draft/, 'drafts are not model-written'],
     ['condition-met', 'notes', /"thanks" never counts/, 'a polite reply does not meet a condition'],
@@ -27,7 +30,7 @@ checkGuide({
     ['approve', 'notes', /newer version|new version/, 'editing resets approval'],
     ['coverage', 'does', /could not see/, 'coverage says what it could not see'],
   ],
-  gaps: [/Sending an email/, /attachments/, /phone calls, portals/, /Opening a case by itself/, /legal, tax or accounting advice/, /Editing the wording/, /Medical, mortgage/],
+  gaps: [/Sending an email/, /scanned documents or pictures/, /phone calls, portals/, /Opening a case by itself/, /legal, tax or accounting advice/, /Editing the wording/, /Medical, mortgage/],
   rules: [/only reads Gmail/, /never guesses a date/, /check Sent before chasing/, /five drafts/, /word for word/],
   system: [/cannot see any case, email/, /cannot send|it cannot/],
 }).catch((e) => { console.error(e); process.exit(1); });

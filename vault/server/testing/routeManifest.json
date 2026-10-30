@@ -616,6 +616,9 @@
   "POST /api/email-follow-up/:id/threads": {
    "class": "authed"
   },
+  "POST /api/email-follow-up/:id/attachments": {
+   "class": "authed"
+  },
   "POST /api/email-follow-up/:id/extract": {
    "class": "authed"
   },

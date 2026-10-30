@@ -50,6 +50,7 @@ function canDraft({ row, watermark, now, pendingDrafts = 0, cap = 5, sentLinks =
   if (row.status === 'unverified') blocks.push({ rule: '11.2', reason: 'row is unverified (no recent evidence): unverified rows cannot draft' });
   else if (row.status !== 'open') blocks.push({ rule: '4.5', reason: `row is ${row.status}` });
   if (row.claimType === 'refused') blocks.push({ rule: '4.1', reason: 'the ask was refused: nothing to chase' });
+  if (row.conflictWith) blocks.push({ rule: '4.3', reason: `${row.conflictQuestion || 'two sources disagree on the figure'} Waive the wrong one first.` });
 
   // Rule 10.1: reconcile against Sent before anything is chased.
   const answered = sentLinks.find((l) => l.kind === 'answered');

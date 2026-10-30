@@ -23,7 +23,7 @@ export const TOOL_TIPS = {
   ledger: 'Everything owed in the case, each with the exact words it came from, its deadline and what you can do about it.',
   mail: 'The email threads attached to this case, and a search for more threads with the people involved.',
   drafts: 'Follow-up text written from the ledger, waiting for you to read, approve and copy. Nothing is ever sent.',
-  coverage: 'What the tool read, what it could not see (phone calls, portals, attachments) and what you must check yourself.',
+  coverage: 'What the tool read, what it could not see (phone calls, portals, scans and pictures) and what you must check yourself.',
 };
 
 export const TOOL_BLURBS = {
@@ -41,7 +41,8 @@ export const HOW_IT_WORKS = [
   ['Check Sent first', 'Before you chase anyone, the tool checks your Sent folder for the people in the case, so you do not nag about something you already answered. Chasing stays blocked until that check has worked.'],
   ['Drafts', 'A draft is fixed sentences around the row\'s own quoted words, checked against the email it came from. Anything the check cannot back up is blocked or flagged. You approve it, then copy it into your own mail program. The tool never sends.'],
   ['Copying is double-checked', 'Just before you copy, the tool looks in Gmail for new mail in the same threads. If the other person has written since, the draft goes back to waiting so you do not send something out of date.'],
-  ['What it cannot see', 'Phone calls, portals, other mailboxes and the contents of attachments. The What was covered tab says so, and lists what you must check yourself. Use it for accounting, freelance and job-search matters, not medical or mortgage ones: the text of attached emails is read by the AI.'],
+  ['Attachments', 'Get attachments downloads the files on the attached mail (read-only) and reads the text of PDFs, Word and plain-text files, so an invoice\'s total and dates can become ledger rows too. Pictures, scans and spreadsheets are kept in the list as "not read", with the reason. If an email and its attachment give two different figures, both rows stay open and you must say which is right before anything can be drafted.'],
+  ['What it cannot see', 'Phone calls, portals, other mailboxes, and anything that is only a picture, such as a scanned invoice. The What was covered tab says so, and lists what you must check yourself. Use it for accounting, freelance and job-search matters, not medical or mortgage ones: the text of attached emails and documents is read by the AI.'],
 ];
 
 // Everything the guide can point at: the five places plus the controls inside them. `tool` is the place the Open button shows.
@@ -50,6 +51,7 @@ export const GUIDE_TOOLS = [
   { id: 'new-case', label: 'New case', tool: 'cases' },
   { id: 'people', label: 'People in the case', tool: 'mail' },
   { id: 'find-mail', label: 'Find mail', tool: 'mail' },
+  { id: 'get-attachments', label: 'Get attachments', tool: 'mail' },
   { id: 'read', label: 'Read new messages', tool: 'mail' },
   { id: 'check-sent', label: 'Check Sent', tool: 'mail' },
   { id: 'mail', label: 'Mail', tool: 'mail' },
