@@ -16,13 +16,26 @@ export function isWindowsDesktop(nav, width = 1024) {
   return /Windows NT/i.test(ua);
 }
 
-/** What to say after the button is pressed. The browser cannot tell us whether the app opened, so this never claims it did not. */
-export function launcherHelp(installerUrl) {
+/**
+ * What to say after the button is pressed, and where the installer comes from. The browser cannot tell us whether the app opened, so this never
+ * claims it did not. The installer is the one an admin uploaded to Vault if there is one, else the outside address an admin entered, else nothing.
+ */
+export function launcherHelp({ installerAvailable = false, installerUrl = '' } = {}) {
   const url = typeof installerUrl === 'string' && /^https:\/\//i.test(installerUrl) ? installerUrl : '';
+  const source = installerAvailable === true ? 'vault' : url ? 'link' : null;
   return {
     title: 'Opening Vault Shelf',
     text: 'Your browser may ask to open Vault Shelf: choose Open. If nothing happens, the app may not be installed on this PC yet.',
-    installerUrl: url,
-    fallback: url ? '' : 'Ask your Vault admin for the installer.',
+    source,
+    installerUrl: source === 'link' ? url : '',
+    fallback: source ? '' : 'Ask your Vault admin for the installer.',
   };
+}
+
+/** "58.4 MB" for the size of the uploaded installer. */
+export function formatSize(bytes) {
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n < 0) return '';
+  if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }

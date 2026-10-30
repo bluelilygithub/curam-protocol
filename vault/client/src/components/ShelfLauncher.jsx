@@ -1,18 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
 import api from '../utils/apiClient';
+import useToastStore from '../store/toastStore';
 import { useIcon } from '../providers/IconProvider';
 import { SHELF_URL, isWindowsDesktop, launcherHelp } from '../utils/shelfLauncher.mjs';
 
 /**
  * "Open Shelf" in the top bar: opens the Vault Shelf Windows app (a vault-shelf://open link the installer registers). Shown only on a Windows
  * desktop browser, only to people who may use the Shelf, and only while an admin has the button switched on (Settings -> Vault Shelf).
- * The browser cannot say whether the app opened, so after the press a small note explains what to do if it did not (and offers the installer
- * the admin chose). Nothing is sent to the app: the link carries no information.
+ * The browser cannot say whether the app opened, so after the press a small note explains what to do if it did not, and offers the installer
+ * (the copy an admin uploaded to Vault, else the outside address they entered). Nothing is sent to the app: the link carries no information.
  */
 export default function ShelfLauncher({ allowed }) {
   const getIcon = useIcon();
-  const [setting, setSetting] = useState(null); // { enabled, installerUrl } once loaded
+  const addToast = useToastStore((s) => s.addToast);
+  const [setting, setSetting] = useState(null); // { enabled, installerUrl, installerAvailable } once loaded
   const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
   const box = useRef(null);
   const windows = typeof navigator !== 'undefined' && isWindowsDesktop(navigator, window.innerWidth);
 
@@ -21,7 +24,7 @@ export default function ShelfLauncher({ allowed }) {
     let live = true;
     api.get('/api/shelf-tokens/launcher')
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (live && d) setSetting({ enabled: !!d.enabled, installerUrl: d.installerUrl || '' }); })
+      .then((d) => { if (live && d) setSetting({ enabled: !!d.enabled, installerUrl: d.installerUrl || '', installerAvailable: d.installer?.available === true }); })
       .catch(() => {});
     return () => { live = false; };
   }, [allowed, windows]);
@@ -36,8 +39,17 @@ export default function ShelfLauncher({ allowed }) {
   }, [open]);
 
   if (!allowed || !windows || !setting?.enabled) return null;
-  const help = launcherHelp(setting.installerUrl);
+  const help = launcherHelp(setting);
 
+  async function download() {
+    if (busy) return;
+    setBusy(true);
+    try { await api.download('/api/shelf-tokens/installer', 'VaultShelfSetup.exe'); }
+    catch (e) { addToast(e?.message || 'Could not download the installer.', 'error'); }
+    finally { setBusy(false); }
+  }
+
+  const linkStyle = { color: 'var(--color-primary)' };
   return (
     <div className="relative hidden sm:block" ref={box}>
       <button
@@ -58,9 +70,16 @@ export default function ShelfLauncher({ allowed }) {
         >
           <div className="text-sm font-semibold">{help.title}</div>
           <p style={{ color: 'var(--color-muted)' }}>{help.text}</p>
-          {help.installerUrl
-            ? <a href={help.installerUrl} className="inline-flex items-center gap-1.5 font-medium hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)' }} rel="noopener noreferrer">{getIcon('download', { size: 14 })} Download the installer</a>
-            : <p style={{ color: 'var(--color-muted)' }}>{help.fallback}</p>}
+          {help.source === 'vault' && (
+            <button type="button" onClick={download} disabled={busy} className="inline-flex items-center gap-1.5 font-medium hover:opacity-70 transition-opacity disabled:opacity-50" style={linkStyle}>
+              {getIcon('download', { size: 14 })} {busy ? 'Downloading…' : 'Download the installer'}
+            </button>
+          )}
+          {help.source === 'link' && (
+            <a href={help.installerUrl} className="inline-flex items-center gap-1.5 font-medium hover:opacity-70 transition-opacity" style={linkStyle} rel="noopener noreferrer">{getIcon('download', { size: 14 })} Download the installer</a>
+          )}
+          {!help.source && <p style={{ color: 'var(--color-muted)' }}>{help.fallback}</p>}
+          {help.source && <p style={{ color: 'var(--color-muted)' }}>Windows may warn that it is from an unknown publisher: choose More info, then Run anyway.</p>}
         </div>
       )}
     </div>

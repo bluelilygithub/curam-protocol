@@ -3553,6 +3553,15 @@
   "PUT /api/shelf-tokens/launcher": {
    "class": "authed"
   },
+  "GET /api/shelf-tokens/installer": {
+   "class": "authed"
+  },
+  "POST /api/shelf-tokens/installer": {
+   "class": "authed"
+  },
+  "DELETE /api/shelf-tokens/installer": {
+   "class": "authed"
+  },
   "POST /api/shelf-tokens": {
    "class": "authed"
   },

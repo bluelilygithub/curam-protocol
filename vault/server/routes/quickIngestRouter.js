@@ -361,7 +361,7 @@ function createRouters(deps) {
   }
   tokens.get('/launcher', async (req, res) => {
     try {
-      res.set('Cache-Control', 'no-store').json({ ...(await readLauncher()), canEdit: !!req.user.isAdmin });
+      res.set('Cache-Control', 'no-store').json({ ...(await readLauncher()), installer: readInstallerInfo(), canEdit: !!req.user.isAdmin });
     } catch (err) {
       log().error(errInfo(err), '[shelf launcher read]');
       sendError(res, 500, 'Could not load the Shelf button setting.');
@@ -395,6 +395,94 @@ function createRouters(deps) {
     } catch (err) {
       log().error(errInfo(err), '[shelf launcher save]');
       sendError(res, 500, 'Could not save that.');
+    }
+  });
+
+  // ---- the Windows installer, kept on this server's upload volume (Settings -> Vault Shelf: admins upload it, people with the Shelf download it)
+  //   GET    /api/shelf-tokens/installer   the file (signed in, Shelf on)    POST /installer  multipart "file" (admin)    DELETE /installer (admin)
+  // One file only (VaultShelfSetup.exe) plus a small record of its size and SHA-256. It is never run here.
+  const installerDir = deps.installerDir || path.join(process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads'), 'shelf-installer');
+  const INSTALLER_FILE = 'VaultShelfSetup.exe';
+  const INSTALLER_MAX = (Number(process.env.SHELF_INSTALLER_MAX_MB) || 200) * 1024 * 1024;
+  const installerPath = () => path.join(installerDir, INSTALLER_FILE);
+  const installerMetaPath = () => path.join(installerDir, 'installer.json');
+  function readInstallerInfo() {
+    try {
+      const st = fs.statSync(installerPath());
+      let meta = {};
+      try { meta = JSON.parse(fs.readFileSync(installerMetaPath(), 'utf8')) || {}; } catch { meta = {}; }
+      return { available: true, sizeBytes: st.size, sha256: typeof meta.sha256 === 'string' ? meta.sha256 : null, uploadedAt: meta.uploadedAt || st.mtime.toISOString() };
+    } catch { return { available: false, sizeBytes: 0, sha256: null, uploadedAt: null }; }
+  }
+  const installerUpload = multer({
+    storage: multer.diskStorage({
+      destination: (req, file, cb) => { try { const d = path.join(installerDir, '.incoming'); fs.mkdirSync(d, { recursive: true }); cb(null, d); } catch (e) { cb(e); } },
+      filename: (req, file, cb) => cb(null, crypto.randomBytes(12).toString('hex') + '.part'),
+    }),
+    limits: { fileSize: INSTALLER_MAX, files: 1, fields: 3 },
+  });
+  const sha256File = (file) => new Promise((resolve, reject) => {
+    const h = crypto.createHash('sha256');
+    fs.createReadStream(file).on('data', (c) => h.update(c)).on('error', reject).on('end', () => resolve(h.digest('hex')));
+  });
+  const dropTemp = (file) => { if (file && file.path) fs.promises.unlink(file.path).catch(() => {}); };
+
+  tokens.get('/installer', (req, res) => {
+    const info = readInstallerInfo();
+    if (!info.available) return sendError(res, 404, 'The installer has not been uploaded yet. Ask your Vault admin.');
+    res.set({
+      'Content-Type': 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${INSTALLER_FILE}"`,
+      'Content-Length': String(info.sizeBytes),
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'no-store',
+    });
+    const stream = fs.createReadStream(installerPath());
+    stream.on('error', () => { if (!res.headersSent) sendError(res, 500, 'Could not read the installer.'); else res.destroy(); });
+    stream.pipe(res);
+  });
+
+  tokens.post('/installer', (req, res) => {
+    if (!req.user.isAdmin) return sendError(res, 403, 'Only an admin can upload the installer.');
+    installerUpload.single('file')(req, res, async (err) => {
+      const file = req.file;
+      try {
+        if (err) {
+          if (err.code === 'LIMIT_FILE_SIZE') return sendError(res, 413, `That file is too large (the limit is ${Math.round(INSTALLER_MAX / 1048576)} MB).`);
+          log().warn({ err: err.message }, '[shelf installer upload]');
+          return sendError(res, 400, 'The upload did not arrive properly. Try again.');
+        }
+        if (!file) return sendError(res, 400, 'Choose VaultShelfSetup.exe to upload.');
+        if (!/\.exe$/i.test(String(file.originalname || ''))) { dropTemp(file); return sendError(res, 400, 'That is not a Windows program (.exe).'); }
+        const head = Buffer.alloc(2);
+        const fd = await fs.promises.open(file.path, 'r');
+        try { await fd.read(head, 0, 2, 0); } finally { await fd.close(); }
+        if (head.toString('latin1') !== 'MZ') { dropTemp(file); return sendError(res, 400, 'That file is not a Windows program.'); }
+        if (file.size < 100 * 1024) { dropTemp(file); return sendError(res, 400, 'That file is too small to be the installer.'); }
+        const sha256 = await sha256File(file.path);
+        await fs.promises.mkdir(installerDir, { recursive: true });
+        await fs.promises.rename(file.path, installerPath());       // replaces the old one in one step: a download in progress never sees half a file
+        const record = { sha256, uploadedAt: new Date().toISOString(), uploadedBy: req.user.id, originalName: path.basename(String(file.originalname)).slice(0, 120) };
+        await fs.promises.writeFile(installerMetaPath(), JSON.stringify(record));
+        log().info({ userId: req.user.id, sizeBytes: file.size }, '[shelf installer] uploaded');
+        res.set('Cache-Control', 'no-store').json({ installer: readInstallerInfo() });
+      } catch (e) {
+        dropTemp(file);
+        log().error(errInfo(e), '[shelf installer upload]');
+        sendError(res, 500, 'Could not save the installer.');
+      }
+    });
+  });
+
+  tokens.delete('/installer', async (req, res) => {
+    try {
+      if (!req.user.isAdmin) return sendError(res, 403, 'Only an admin can remove the installer.');
+      await fs.promises.rm(installerPath(), { force: true });
+      await fs.promises.rm(installerMetaPath(), { force: true });
+      res.set('Cache-Control', 'no-store').json({ installer: readInstallerInfo() });
+    } catch (e) {
+      log().error(errInfo(e), '[shelf installer remove]');
+      sendError(res, 500, 'Could not remove the installer.');
     }
   });
 

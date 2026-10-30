@@ -296,6 +296,64 @@ async function part2() {
       assert.strictEqual((await api('GET', '/api/shelf-tokens/launcher', { token: member.token })).status, 403);
       await setFlag('shelf', 'true');
     });
+    // ---------------- the installer file kept on the server (admin uploads, Shelf users download)
+    await t('the installer: only an admin can upload or remove it; only real Windows programs are accepted; nothing half-written is left', async () => {
+      const send = async (method, p, token, file) => {
+        const fd = new FormData();
+        if (file) fd.append('file', new Blob([file.buffer], { type: 'application/octet-stream' }), file.name);
+        const res = await fetch(base + p, { method, headers: token ? { Authorization: `Bearer ${token}` } : {}, body: method === 'POST' ? fd : undefined });
+        return { status: res.status, text: await res.text() };
+      };
+      const exe = (n, fill = 7) => ({ name: 'VaultShelfSetup.exe', buffer: Buffer.concat([Buffer.from('MZ'), Buffer.alloc(n, fill)]) });
+      assert.strictEqual((await api('GET', '/api/shelf-tokens/installer', { token: member.token })).status, 404, 'nothing uploaded yet');
+      assert.strictEqual(j(await api('GET', '/api/shelf-tokens/launcher', { token: member.token })).installer.available, false);
+      assert.strictEqual((await send('POST', '/api/shelf-tokens/installer', member.token, exe(200000))).status, 403, 'a member cannot upload');
+      assert.strictEqual((await send('POST', '/api/shelf-tokens/installer', null, exe(200000))).status, 401, 'signed out');
+      assert.strictEqual((await send('POST', '/api/shelf-tokens/installer', admin.token)).status, 400, 'no file');
+      assert.strictEqual((await send('POST', '/api/shelf-tokens/installer', admin.token, { name: 'notes.txt', buffer: Buffer.from('MZ' + 'x'.repeat(200000)) })).status, 400, 'not an .exe');
+      assert.strictEqual((await send('POST', '/api/shelf-tokens/installer', admin.token, { name: 'Setup.exe', buffer: Buffer.from('PK' + 'x'.repeat(200000)) })).status, 400, 'an .exe name on something that is not a program');
+      assert.strictEqual((await send('POST', '/api/shelf-tokens/installer', admin.token, exe(500))).status, 400, 'too small to be the installer');
+      assert.strictEqual((await api('GET', '/api/shelf-tokens/installer', { token: member.token })).status, 404, 'rejected uploads stored nothing');
+      const incoming = path.join(process.env.UPLOAD_DIR, 'shelf-installer', '.incoming');
+      assert(!fs.existsSync(incoming) || fs.readdirSync(incoming).length === 0, 'no temporary files left behind');
+
+      const first = exe(300000, 1);
+      const up = await send('POST', '/api/shelf-tokens/installer', admin.token, first);
+      assert.strictEqual(up.status, 200, up.text);
+      const info = j(up).installer;
+      assert.deepStrictEqual([info.available, info.sizeBytes], [true, first.buffer.length]);
+      assert.strictEqual(info.sha256, crypto.createHash('sha256').update(first.buffer).digest('hex'));
+      assert.deepStrictEqual(j(await api('GET', '/api/shelf-tokens/launcher', { token: member.token })).installer.sha256, info.sha256, 'members see that it exists, with its fingerprint');
+      assert(!fs.existsSync(incoming) || fs.readdirSync(incoming).length === 0);
+    });
+    await t('the installer download: signed in with the Shelf on, exact bytes, saved as a file and never run by the browser', async () => {
+      const get = (token) => fetch(base + '/api/shelf-tokens/installer', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      assert.strictEqual((await get(null)).status, 401);
+      const ok = await get(member.token);
+      assert.strictEqual(ok.status, 200);
+      assert.match(ok.headers.get('content-disposition'), /attachment; filename="VaultShelfSetup\.exe"/);
+      assert.strictEqual(ok.headers.get('x-content-type-options'), 'nosniff');
+      const body = Buffer.from(await ok.arrayBuffer());
+      assert.strictEqual(body.length, 300002);
+      assert.strictEqual(Number(ok.headers.get('content-length')), body.length);
+      assert.strictEqual(body.subarray(0, 2).toString('latin1'), 'MZ');
+      // replacing it: the next download is the new file
+      const fd = new FormData();
+      fd.append('file', new Blob([Buffer.concat([Buffer.from('MZ'), Buffer.alloc(150000, 9)])]), 'VaultShelfSetup.exe');
+      assert.strictEqual((await fetch(base + '/api/shelf-tokens/installer', { method: 'POST', headers: { Authorization: `Bearer ${admin.token}` }, body: fd })).status, 200);
+      assert.strictEqual(Buffer.from(await (await get(member.token)).arrayBuffer()).length, 150002, 'the new file replaced the old one');
+      await setFlag('shelf', 'false');
+      assert.strictEqual((await get(member.token)).status, 403, 'with the Shelf off for the account there is no download');
+      await setFlag('shelf', 'true');
+    });
+    await t('the installer can be removed by an admin only', async () => {
+      assert.strictEqual((await api('DELETE', '/api/shelf-tokens/installer', { token: member.token })).status, 403);
+      assert.strictEqual((await api('GET', '/api/shelf-tokens/installer', { token: member.token })).status, 200, 'a refused removal removes nothing');
+      assert.strictEqual((await api('DELETE', '/api/shelf-tokens/installer', { token: admin.token })).status, 200);
+      assert.strictEqual((await api('GET', '/api/shelf-tokens/installer', { token: member.token })).status, 404);
+      assert.strictEqual(j(await api('GET', '/api/shelf-tokens/launcher', { token: member.token })).installer.available, false);
+      assert.strictEqual((await api('DELETE', '/api/shelf-tokens/installer', { token: admin.token })).status, 200, 'removing nothing is fine');
+    });
 
     let memberKey;
     await t('a key is shown once, stored only as a hash, and listed without the secret', async () => {
