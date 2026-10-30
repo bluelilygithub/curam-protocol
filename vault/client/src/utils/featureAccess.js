@@ -47,6 +47,20 @@ export const DEFAULT_FEATURE_ACCESS = {
   shelf: false, // Vault Shelf Windows app keys: keep in step with server/config/featureAccess.js
 };
 
+// How finished each surface is (keep in step with server/config/featureAccess.js; a test fails if they differ). Missing = ga.
+export const FEATURE_LIFECYCLE = {
+  cellarPlanner: 'preview',
+  topicResearch: 'preview',
+  emailFollowUp: 'preview',
+  shelf: 'preview',
+  passwordVault: 'preview',
+  memory: 'parked',
+};
+export const LIFECYCLE_LABELS = {
+  preview: { label: 'Preview', tip: 'Built but not proven yet: unverified data, or not yet run against the real service.' },
+  parked: { label: 'Parked', tip: 'Kept, but not being developed.' },
+};
+
 export const FEATURE_ACCESS_GROUPS = [
   {
     id: 'website',

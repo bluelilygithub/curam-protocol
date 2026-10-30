@@ -59,6 +59,22 @@ const FEATURE_ACCESS_DEFAULTS = {
 
 const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);
 
+// How finished each surface is, so "is this safe to rely on?" has one answer (docs/hardening.md):
+//   ga      finished and in everyday use
+//   preview built but not proven (unverified data, never run against the real service, or still being built milestone by milestone)
+//   parked  kept, not being developed
+// A flag missing from this list counts as ga. The Feature Access panel shows the status; it changes no behaviour.
+const LIFECYCLE_VALUES = ['ga', 'preview', 'parked'];
+const FEATURE_LIFECYCLE = {
+  cellarPlanner: 'preview',   // real-job validation and the rod fabricator's rack values are pending
+  topicResearch: 'preview',   // built milestone by milestone; drafts, source check and suggestions not yet run against a real model
+  emailFollowUp: 'preview',   // not run against a real model or mailbox
+  shelf: 'preview',           // Windows app: installer unsigned, no guide chat yet
+  passwordVault: 'preview',   // new, holds logins: off until an admin switches it on
+  memory: 'parked',           // rarely used; hidden from menus by default
+};
+const lifecycleOf = (key) => FEATURE_LIFECYCLE[key] || 'ga';
+
 function parseFlagValue(raw) {
   const v = String(raw || '').trim().toLowerCase();
   return v !== 'false' && v !== '0' && v !== 'off';
@@ -111,6 +127,9 @@ module.exports = {
   accountantFlags,
   FEATURE_ACCESS_DEFAULTS,
   FEATURE_ACCESS_KEYS,
+  FEATURE_LIFECYCLE,
+  LIFECYCLE_VALUES,
+  lifecycleOf,
   flagsFromSettingRows,
   applyUserOverrides,
 };

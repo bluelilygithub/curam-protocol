@@ -31,7 +31,7 @@ Log lines to look for after a deploy: `[cron-lock] <name>: another instance is r
    - Derived lists. Done: subtasks, chats with no project, deleted chats, projects not yet client projects, mood tied to a task, search, current mission statement, bookmarks, pinned URLs (extra link rows are added by `seedDerived()` in `server/testing/ownershipFixtures.js`; `--probe=<text>` prints what user A is told by matching GET routes). Finance done (2026-10-31): the test makes A's chart of accounts the way the app does, then adds an interest entry on the bank account, an unread receipt, an asset needing depreciation, an overdue and a paid invoice and a fixed-rate home-office year, and gives the customer statement a client id; the Finance charts, interest, unread documents, depreciation preview, home-office gaps, aged receivables, income received, invoice status, sales by client and customer statements are now covered. **Still empty:** aged payables and the documents index (need supplier bills and a stored document), a few Finance settings/pending counters (vehicle, home-office pending, today-summary), contract-review obligations and clause search, guitar loops (keyed on the song id, not the row id), shares news, translate drift, glossary and language order.
    - Needs a query value to answer (`clientId`, `weekStart`, `dob`, `tool`): 400 to a bare call.
    **Rule: a new route fails `crossUser.test.js` until it is added to `server/testing/routeManifest.json` (`--update`, then review the class).** **Fixed 2026-10-31:** `GET /api/search` used to show every `search_index` row with no project to every member (nothing wrote such a row, so nothing leaked); it now returns only rows in the caller's own projects, and the ownership test seeds an orphan row to keep it that way (it fails without the fix). Still to decide: a static check for a query on a user table with no `"userId"` filter.
-5. **Lifecycle status per flag.** Add `lifecycle: 'ga' | 'preview' | 'parked'` for each key in the one registry, and show it in the Feature Access panel.
+5. **Lifecycle status per flag.** Done 2026-10-31. `FEATURE_LIFECYCLE` in `server/config/featureAccess.js` (mirrored in `client/src/utils/featureAccess.js`, parity test): `ga` (default, left out of the list), `preview` (cellarPlanner, topicResearch, emailFollowUp, shelf, passwordVault) or `parked` (memory). The Feature Access panel shows a Preview/Parked tag; it changes no behaviour. A test fails if a tool that ships switched off is marked ga. **A new feature that ships off or unproven starts as `preview`; move it to ga (delete its line) when it has run against the real service.**
 6. **Deploy rollback note.** Done 2026-10-31, in `BACKUP.md` ("Rolling back a bad deploy").
 7. **New-feature gate** as a short PR template: done 2026-10-31, `.github/pull_request_template.md` (checklist below).
 
@@ -50,7 +50,7 @@ A repo-wide reformat while branches are open; an ORM; Redis/queues before a seco
 
 Before it ships, answer yes to each:
 
-- One flag in the one registry (`server/config/featureAccess.js` + client list, test enforces parity), with a lifecycle status once item 5 lands.
+- One flag in the one registry (`server/config/featureAccess.js` + client list, test enforces parity), with a lifecycle status (`preview` until proven).
 - An ownership rule, and a test proving another user cannot reach it (extend `crossUserOwnership.test.js`).
 - A schema change delivered as a migration once the baseline exists; until then, idempotent DDL in `db.js`.
 - `getLogger()` logging; a cost/rate-limit decision if it calls a paid API; a retention/recycle-bin decision if it stores user data.
@@ -71,5 +71,5 @@ Baseline taken 2026-10-30:
 | Largest client file | `FinancePage.jsx`, about 7,100 lines |
 | `console.*` calls in `server/` | about 1,300 (rough, includes test files) |
 | Skipped-but-green test files | not yet measured (item 3) |
-| Surfaces marked preview/parked | 0 (item 5) |
+| Surfaces marked preview/parked | 6 (5 preview, 1 parked), 2026-10-31 |
 | Boot time | not yet measured |

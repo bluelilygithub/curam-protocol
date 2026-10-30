@@ -4,6 +4,19 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-10-31 (hardening-lifecycle-search)
+
+### Feature Access — each tool now shows how finished it is
+Settings -> Feature Access tags Cellar Planner, Topic Research, Email Follow-Up, Vault Shelf and Password Vault as **Preview** and Memory as **Parked**; everything else is unmarked (finished). Display only, nothing switches on or off differently. The list lives in `server/config/featureAccess.js` and the client copy, and a test fails if they differ.
+
+### Search — entries with no project were visible to every member
+`GET /api/search` also returned any search entry with no project to all members. The app never wrote one, so nothing leaked, but it now returns only entries in the caller's own projects.
+
+### Tests — ownership coverage
+The cross-user ownership test now proves 231 of 475 GET routes (was 197) after its test data stopped looking deleted or expired and gained the extra rows lists are built from (subtasks, mood, Finance journal and invoices). Test-only.
+
+---
+
 ## 2026-10-30 (hardening-flags-cron-locks)
 
 ### Feature flags — Translate and Guitar could not be switched off by an admin

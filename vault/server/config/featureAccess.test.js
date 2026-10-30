@@ -6,7 +6,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
-const { accountantFlags, FEATURE_ACCESS_KEYS, FEATURE_ACCESS_DEFAULTS } = require('./featureAccess');
+const { accountantFlags, FEATURE_ACCESS_KEYS, FEATURE_ACCESS_DEFAULTS, FEATURE_LIFECYCLE, LIFECYCLE_VALUES, lifecycleOf } = require('./featureAccess');
 
 const off = accountantFlags(null);
 assert.strictEqual(off.finance, true, 'Finance is always on for an accountant');
@@ -31,5 +31,19 @@ for (const k of FEATURE_ACCESS_KEYS) {
 }
 const clientMenuKeys = [...clientSrc.matchAll(/\{\s*key:\s*'(\w+)'/g)].map((x) => x[1]);
 for (const k of clientMenuKeys) assert.ok(FEATURE_ACCESS_KEYS.includes(k), `Feature Access menu lists "${k}" which the server does not know`);
+
+// Lifecycle status: only real flags, only known values, same on the client, and a tool that ships switched off is never "ga"
+for (const [k, v] of Object.entries(FEATURE_LIFECYCLE)) {
+  assert.ok(FEATURE_ACCESS_KEYS.includes(k), `lifecycle lists "${k}" which is not a flag`);
+  assert.ok(LIFECYCLE_VALUES.includes(v) && v !== 'ga', `lifecycle for "${k}" must be preview or parked (ga is the default and is left out)`);
+}
+assert.strictEqual(lifecycleOf('finance'), 'ga');
+assert.strictEqual(lifecycleOf('cellarPlanner'), 'preview');
+const lc = clientSrc.match(/FEATURE_LIFECYCLE\s*=\s*(\{[\s\S]*?\n\});/);
+assert.ok(lc, 'could not find FEATURE_LIFECYCLE in the client file');
+assert.deepStrictEqual(new Function(`return (${lc[1]});`)(), FEATURE_LIFECYCLE, 'client FEATURE_LIFECYCLE differs from the server list');
+for (const k of FEATURE_ACCESS_KEYS) {
+  if (FEATURE_ACCESS_DEFAULTS[k] === false && k !== 'memberModelSelection') assert.notStrictEqual(lifecycleOf(k), 'ga', `"${k}" ships switched off, so it cannot be ga: mark it preview or parked`);
+}
 
 console.log('featureAccess tests passed');

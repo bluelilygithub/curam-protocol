@@ -49,7 +49,7 @@ import AccountantAccessPanel from '../components/AccountantAccessPanel';
 import RecycleBinPanel from '../components/RecycleBinPanel';
 import NavLayoutEditor from '../components/settings/NavLayoutEditor';
 import { DEFAULT_TILES, DEFAULT_NAV_ITEMS, mergeWithDefaults } from '../utils/mobileConfig';
-import { DEFAULT_FEATURE_ACCESS, FEATURE_ACCESS_GROUPS } from '../utils/featureAccess';
+import { DEFAULT_FEATURE_ACCESS, FEATURE_ACCESS_GROUPS, FEATURE_LIFECYCLE, LIFECYCLE_LABELS } from '../utils/featureAccess';
 import { LOCAL_CLONE_VOICE_URI } from '../hooks/useVoice';
 import SettingsTutorChat from './settings/SettingsTutorChat';
 
@@ -3240,6 +3240,15 @@ function SettingsPage() {
                     <span className="flex-1 text-sm" style={{ color: 'var(--color-text)' }}>
                       {opt.label}
                     </span>
+                    {LIFECYCLE_LABELS[FEATURE_LIFECYCLE[opt.key]] && (
+                      <span
+                        className="text-xs px-2 py-0.5 rounded-full border"
+                        title={LIFECYCLE_LABELS[FEATURE_LIFECYCLE[opt.key]].tip}
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                      >
+                        {LIFECYCLE_LABELS[FEATURE_LIFECYCLE[opt.key]].label}
+                      </span>
+                    )}
                     <button
                       onClick={() => setFeatureAccess((prev) => ({ ...prev, [opt.key]: !enabled }))}
                       className="text-xs px-3 py-1 rounded-lg border font-medium transition-all hover:opacity-80"
