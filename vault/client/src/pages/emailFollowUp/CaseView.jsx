@@ -77,6 +77,7 @@ function RowCard({ row, caseId, sources, reload, onDraft }) {
         {row.claimType !== 'agreed' && <Badge color={WARN}>{row.claimType}</Badge>}
         {row.authority === 'unconfirmed' && <Badge color={WARN}>authority unconfirmed</Badge>}
         {row.taskId && <Badge>task made</Badge>}
+        {src && /tesseract/.test(src.parser || '') && <Badge color={WARN}>from a scan (OCR)</Badge>}
       </div>
       <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
         {row.partyLabel || row.party}{row.amount != null ? ` · $${row.amount}` : ''} · {dueLabel(row.due)}
@@ -289,8 +290,8 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
         </p>
         {lastAtt && (
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-            Attachments: {lastAtt.parsed} read, {lastAtt.referenceOnly} kept without text (pictures, scans, spreadsheets), {lastAtt.failed} could not be read.
-            {lastAtt.remainingMessages > 0 && ` ${lastAtt.remainingMessages} more message${lastAtt.remainingMessages === 1 ? '' : 's'} to go: press again.`}
+            Attachments: {lastAtt.parsed} read{lastAtt.ocr ? ` (${lastAtt.ocr} of them scans read by OCR)` : ''}, {lastAtt.referenceOnly} kept without text (pictures, spreadsheets, unreadable scans), {lastAtt.failed} could not be read.
+            {lastAtt.remainingMessages > 0 && ` ${lastAtt.remainingMessages} more message${lastAtt.remainingMessages === 1 ? '' : 's'} to go: press again (scans are read a few at a time).`}
           </p>
         )}
         {lastRead && (
@@ -341,7 +342,7 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
                         <div key={i} className="rounded-lg p-3 text-xs space-y-1" style={{ background: 'var(--color-surface)' }}>
                           <p className="font-medium">{m.sent ? 'You sent' : 'From'} {m.from}{m.date ? ` · ${new Date(m.date).toLocaleString()}` : ''}</p>
                           <p className="whitespace-pre-wrap" style={{ color: 'var(--color-text)' }}>{m.body || '(no text)'}</p>
-                          {m.attachments.length > 0 && <p style={{ color: WARN }}>Attachments (not read): {m.attachments.join(', ')}</p>}
+                          {m.attachments.length > 0 && <p style={{ color: WARN }}>Attachments (names only here; attach the thread, then press Get attachments to read them): {m.attachments.join(', ')}</p>}
                         </div>
                       ))}
                     </div>
@@ -359,7 +360,7 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
                 <p style={{ color: 'var(--color-muted)' }}>{s.receivedAt ? new Date(s.receivedAt).toLocaleString() : 'no date'} · {s.extractedAt ? 'read' : 'not read yet'}{s.parseReason ? ` · ${s.parseReason}` : ''}</p>
                 {docsOf(s.id).map((d) => (
                   <p key={d.id} className="pl-3 border-l-2" style={{ borderColor: 'var(--color-border)', color: d.parseStatus === 'failed' ? BAD : d.parseStatus === 'parsed' ? GOOD : 'var(--color-muted)' }}>
-                    {d.filename || 'file'} — {d.parseStatus === 'parsed' ? `read${d.extractedAt ? ' into the ledger' : ', not yet read into the ledger'}` : d.parseStatus === 'failed' ? `could not be read: ${d.parseReason}` : `not read: ${d.parseReason}`}
+                    {d.filename || 'file'} — {d.parseStatus === 'parsed' ? `read${/tesseract/.test(d.parser || '') ? ' by OCR (check the figures)' : ''}${d.extractedAt ? ' into the ledger' : ', not yet read into the ledger'}` : d.parseStatus === 'failed' ? `could not be read: ${d.parseReason}` : `not read: ${d.parseReason}`}
                   </p>
                 ))}
               </div>

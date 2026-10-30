@@ -5,8 +5,8 @@
 // The text is DATA from an untrusted file (Rule 12.1): only the visible text content of the file is taken. Metadata, form-field names
 // and scripts are never read into the case, so there is nothing in them to act on. Hidden text (white-on-white) IS part of the text
 // layer and is kept as data, like any other text; it can never do anything because nothing in the pipeline obeys text.
-// Types read: PDF with a text layer, Word (.docx), plain text / CSV / Markdown. Not read in this version: scans and pictures (no OCR),
-// spreadsheets (the installed reader is too old to trust with strangers' files), anything else.
+// Types read: PDF (text layer, and OCR for scanned pages when the caller supplies it: ocrPdf.js), Word (.docx), plain text / CSV / Markdown.
+// Not read: pictures (a logo is not a document), spreadsheets (the installed reader is too old to trust with strangers' files), anything else.
 
 const { extractPdfTextFromBuffer } = require('../../utils/pdfText');
 
@@ -53,19 +53,78 @@ function planAttachment({ filename, mimeType, size }) {
   const mime = String(mimeType || '').toLowerCase();
   if (size && size > MAX_BYTES) return { fetch: false, parseStatus: 'reference_only', parseReason: `larger than ${MAX_BYTES / 1024 / 1024} MB: not read` };
   if (mime.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'tif', 'tiff', 'heic'].includes(ext)) {
-    return { fetch: false, parseStatus: 'reference_only', parseReason: 'picture: its text is not read in this version (no OCR)' };
+    return { fetch: false, parseStatus: 'reference_only', parseReason: 'picture: pictures are not read (only scanned PDF pages are read by OCR)' };
   }
-  if (['xls', 'xlsx', 'xlsm', 'ods'].includes(ext)) return { fetch: false, parseStatus: 'reference_only', parseReason: 'spreadsheet: not read in this version' };
+  if (['xls', 'xlsx', 'xlsm', 'ods'].includes(ext)) return { fetch: false, parseStatus: 'reference_only', parseReason: 'spreadsheet: spreadsheets are not read' };
   if (['pdf', 'docx', 'txt', 'csv', 'md', 'text'].includes(ext) || mime === 'application/pdf' || mime.startsWith('text/')
     || mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return { fetch: true };
   return { fetch: false, parseStatus: 'reference_only', parseReason: `${ext ? `.${ext}` : 'this'} file type is not read in this version` };
 }
 
+const PAGE_TEXT_MIN = 15;       // a page with fewer characters than this has no usable text layer
+const MIN_OCR_CONFIDENCE = 55;  // below this average, OCR output is too unreliable to put figures in a ledger
+const MAX_OCR_PAGES = 10;
+
+const tidy = (t) => String(t || '').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+
 /**
- * @param {{filename: string, mimeType?: string, buffer: Buffer}} f
- * @returns {Promise<{parseStatus: 'parsed'|'reference_only'|'failed', text: string, parser: string|null, parseReason: string|null}>}
+ * Text of a PDF, page by page. A page with a text layer is used as it is. A page without one is a scan: if `ocr` is supplied it
+ * is read by OCR (at most MAX_OCR_PAGES pages), otherwise the file is reported with `needsOcr` so the caller can decide.
+ * OCR text is marked in `parser` ("tesseract") so everything downstream knows it is a guess at the page, not the page.
  */
-async function extractAttachmentText({ filename, mimeType, buffer }) {
+async function readPdfPages(pages, buffer, ocr) {
+  if (!pages.length) return result('failed', '', 'pdfjs', 'the PDF has no pages');
+  const clean = pages.map(tidy);
+  const scanned = clean.map((t, i) => (t.length < PAGE_TEXT_MIN ? i + 1 : 0)).filter(Boolean);
+  const textPages = clean.length - scanned.length;
+  const finish = (parts, parser, reason) => {
+    const text = parts.join('\n\n').trim();
+    const cut = text.length > MAX_CHARS;
+    return result('parsed', text.slice(0, MAX_CHARS), parser, [reason, cut ? `cut at ${MAX_CHARS} characters` : null].filter(Boolean).join('; ') || null);
+  };
+
+  if (!scanned.length) return finish(clean, 'pdfjs', null);
+
+  if (!ocr) {
+    const r = textPages
+      ? finish(clean.filter((t, i) => !scanned.includes(i + 1)), 'pdfjs', `${scanned.length} scanned page${scanned.length === 1 ? '' : 's'} not read (OCR was not run)`)
+      : result('reference_only', '', 'pdfjs', 'no text layer (a scan or a picture of a page) and OCR was not run');
+    return { ...r, needsOcr: true };
+  }
+
+  const wanted = scanned.slice(0, MAX_OCR_PAGES);
+  let read;
+  try { read = await ocr(buffer, wanted); }
+  catch (e) {
+    const why = e && e.code === 'ENOENT' ? 'OCR is not available on this server' : `OCR failed (${String(e && e.message).slice(0, 80)})`;
+    return textPages
+      ? finish(clean.filter((t, i) => !scanned.includes(i + 1)), 'pdfjs', `${scanned.length} scanned page${scanned.length === 1 ? '' : 's'} not read: ${why}`)
+      : result('failed', '', 'pdfjs', `a scan, and ${why}`);
+  }
+
+  const byPage = new Map(read.map((p) => [p.page, p]));
+  const usable = read.filter((p) => tidy(p.text).length >= PAGE_TEXT_MIN);
+  const confidence = usable.length ? Math.round(usable.reduce((n, p) => n + p.confidence, 0) / usable.length) : 0;
+  if (!usable.length || confidence < MIN_OCR_CONFIDENCE) {
+    const why = !usable.length ? 'OCR found no readable text' : `OCR could not read it reliably (confidence ${confidence}%)`;
+    return textPages
+      ? { ...finish(clean.filter((t, i) => !scanned.includes(i + 1)), 'pdfjs', `${scanned.length} scanned page${scanned.length === 1 ? '' : 's'} not read: ${why}`), ocrUsed: true }
+      : { ...result('reference_only', '', 'tesseract', `a scan: ${why}`), ocrUsed: true };
+  }
+
+  const parts = clean.map((t, i) => (t.length >= PAGE_TEXT_MIN ? t : tidy((byPage.get(i + 1) || {}).text)));
+  const skipped = scanned.length - wanted.length;
+  const note = `read by OCR from ${usable.length} scanned page${usable.length === 1 ? '' : 's'} (confidence ${confidence}%): figures can be misread, so check them against the original`
+    + (skipped > 0 ? `; ${skipped} further scanned page${skipped === 1 ? '' : 's'} not read (limit ${MAX_OCR_PAGES})` : '');
+  return { ...finish(parts.filter(Boolean), textPages ? 'pdfjs+tesseract' : 'tesseract', note), ocrUsed: true };
+}
+
+/**
+ * @param {{filename: string, mimeType?: string, buffer: Buffer, ocr?: (pdf: Buffer, pages: number[]) => Promise<{page:number,text:string,confidence:number}[]>}} f
+ *   `ocr` is optional: without it a scanned PDF comes back as reference_only with `needsOcr: true`.
+ * @returns {Promise<{parseStatus: 'parsed'|'reference_only'|'failed', text: string, parser: string|null, parseReason: string|null, needsOcr?: boolean, ocrUsed?: boolean}>}
+ */
+async function extractAttachmentText({ filename, mimeType, buffer, ocr }) {
   if (!Buffer.isBuffer(buffer) || !buffer.length) return result('failed', '', null, 'the file is empty');
   if (buffer.length > MAX_BYTES) return result('reference_only', '', null, `larger than ${MAX_BYTES / 1024 / 1024} MB: not read`);
   const ext = EXT(filename);
@@ -73,7 +132,7 @@ async function extractAttachmentText({ filename, mimeType, buffer }) {
 
   // The file's real type is what its first bytes say, never its name (a program renamed .pdf is still a program).
   if (kind === 'program') return result('failed', '', null, 'looks like a program or script, not a document: not opened');
-  if (kind === 'image') return result('reference_only', '', null, 'picture: its text is not read in this version (no OCR)');
+  if (kind === 'image') return result('reference_only', '', null, 'picture: pictures are not read (only scanned PDF pages are read by OCR)');
 
   try {
     if (kind === 'pdf') {
@@ -83,9 +142,7 @@ async function extractAttachmentText({ filename, mimeType, buffer }) {
         if (/password/i.test(String(e.message))) return result('failed', '', 'pdfjs', 'password protected');
         return result('failed', '', 'pdfjs', `could not read the PDF (${String(e.message).slice(0, 80)})`);
       }
-      const text = pages.join('\n\n').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
-      if (text.length < 20) return result('reference_only', '', 'pdfjs', 'no text layer (a scan or a picture of a page): its text is not read in this version (no OCR)');
-      return result('parsed', text.slice(0, MAX_CHARS), 'pdfjs', text.length > MAX_CHARS ? `cut at ${MAX_CHARS} characters` : null);
+      return await readPdfPages(pages, buffer, ocr);
     }
     if (kind === 'zip') {
       if (ext !== 'docx') return result('reference_only', '', null, 'a zip-based file other than Word: not read in this version');

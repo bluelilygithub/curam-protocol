@@ -79,8 +79,8 @@ export function startEmailFollowUpTour() {
 
   tour.addStep({
     id: 'ef-steps',
-    title: 'Find, read, check Sent',
-    text: '1. Find mail lists threads with these people for you to attach. 2. Get attachments reads the text of PDFs and Word files that came with them. 3. Read asks the AI to propose ledger rows; each must quote the text word for word or it is dropped. 4. Check Sent looks for replies you already sent, and chasing stays blocked until it has worked.',
+    title: 'Find, attachments, read, check Sent',
+    text: '1. Find mail lists threads with these people for you to attach. 2. Get attachments reads the text of PDFs and Word files that came with them, and scanned pages by OCR. 3. Read asks the AI to propose ledger rows; each must quote the text word for word or it is dropped. 4. Check Sent looks for replies you already sent, and chasing stays blocked until it has worked.',
     attachTo: { element: '[data-tour="ef-steps"]', on: 'bottom' },
     beforeShowPromise: check('ef-steps', '[data-tour="ef-steps"]'),
     when: { show() { injectStepCounter(4); } },
@@ -108,7 +108,7 @@ export function startEmailFollowUpTour() {
   tour.addStep({
     id: 'ef-limits',
     title: 'Good to know',
-    text: 'The tool cannot see phone calls, portals, other mailboxes, or anything that is only a picture, such as a scanned invoice; the What was covered tab says so. Use it for accounting, freelance and job-search matters, not medical or mortgage ones. Stuck? Press the round button at the bottom right and ask the guide.',
+    text: 'The tool cannot see phone calls, portals, other mailboxes, or anything that is only a photo. Scans are read by OCR, which can misread a figure, so check those against the original. The What was covered tab says so. Use it for accounting, freelance and job-search matters, not medical or mortgage ones. Stuck? Press the round button at the bottom right and ask the guide.',
     when: { show() { injectStepCounter(7); } },
     buttons: [
       btnBack(),

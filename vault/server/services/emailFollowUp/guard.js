@@ -25,7 +25,7 @@ function result(index, verdict, code, rule, message, extra) {
  * Check one claim. A claim is { text, kind: 'fact'|'courtesy', anchor, derived? }.
  * sources: { [sourceId]: { id, versionHash, supersededBy, parseStatus, text, clauses? } }
  */
-function checkClaim(claim, index, { sources, profile, row }) {
+function checkClaimCore(claim, index, { sources, profile, row }) {
   const text = String(claim.text || '');
   const hasNumbers = numbersIn(text).length > 0;
 
@@ -94,6 +94,19 @@ function checkClaim(claim, index, { sources, profile, row }) {
     return result(index, 'needs_review', 'SEMANTIC', '7.3', 'paraphrase of the source: only a reader can confirm it', { span });
   }
   return result(index, 'pass', 'VERBATIM', '7.2', 'quotes the cited text exactly');
+}
+
+/**
+ * A claim that passes every exact check but is quoted from a scan read by OCR is NOT a pass: OCR can misread a digit and quote the
+ * misreading faithfully. A person confirms it against the original document (acknowledged like any other warning).
+ */
+function checkClaim(claim, index, ctx) {
+  const r = checkClaimCore(claim, index, ctx);
+  const src = claim.anchor && ctx.sources[claim.anchor.sourceId];
+  if (r.verdict === 'pass' && src && src.ocr) {
+    return result(index, 'needs_review', 'OCR_SOURCE', '2.6', 'this comes from a scan read by OCR, which can misread figures: check it against the original document');
+  }
+  return r;
 }
 
 /**

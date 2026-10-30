@@ -11,6 +11,7 @@ function coverageStatement({ sources = [], rows = [], sentWatermark = null, gove
   const docs = sources.filter((s) => s.kind === 'document');
   const readMessages = messages.filter((s) => s.parseStatus === 'parsed');
   const readDocs = docs.filter((s) => s.parseStatus === 'parsed');
+  const ocrDocs = readDocs.filter((s) => /tesseract/.test(s.parser || ''));
   const notRead = docs.filter((s) => s.parseStatus !== 'parsed');
 
   const notVisible = [
@@ -31,6 +32,7 @@ function coverageStatement({ sources = [], rows = [], sentWatermark = null, gove
     }
     for (const [reason, n] of groups) notVisible.push(`${plural(n, 'attachment')} ${reason}.`);
   }
+  if (ocrDocs.length) notVisible.push(`${plural(ocrDocs.length, 'attachment')} ${ocrDocs.length === 1 ? 'was' : 'were'} scans read by OCR: the words and figures are a machine's reading of a picture, not the original text.`);
   for (const s of messages.filter((m) => m.parseStatus !== 'parsed')) notVisible.push(`${s.label || s.id}: ${s.parseStatus === 'failed' ? 'could not be read' : 'kept for reference only'} (${s.parseReason || 'no reason recorded'}).`);
   if (!sentWatermark || !sentWatermark.completed) notVisible.push('Your Sent mail has not been checked for this case yet, so replies you already sent may be missing.');
 
@@ -42,6 +44,7 @@ function coverageStatement({ sources = [], rows = [], sentWatermark = null, gove
     if (r.status === 'open' && r.authority === 'unconfirmed') verify.push(`"${r.items.join(', ')}": ${r.partyLabel || r.party} took this over but their authority is unconfirmed.`);
     if (r.status === 'open' && r.claimType === 'conditional') verify.push(`"${r.items.join(', ')}": depends on "${r.condition}", which has not been shown to be met.`);
   }
+  if (ocrDocs.length) verify.push('Any figure or date that came from a scan (OCR) should be checked against the original document before you rely on it.');
   verify.push('Every deadline shown is taken from the messages. The tool never decides a deadline was met or a legal window is open.');
 
   const dates = messages.map((s) => s.receivedAt).filter(Boolean).sort();
@@ -49,6 +52,7 @@ function coverageStatement({ sources = [], rows = [], sentWatermark = null, gove
     read: {
       messages: readMessages.length,
       attachments: readDocs.length,
+      ocr: ocrDocs.length,
       from: dates[0] || null,
       to: dates[dates.length - 1] || null,
       governingDocuments: governing.length,

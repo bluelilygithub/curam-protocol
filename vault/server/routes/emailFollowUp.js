@@ -45,7 +45,7 @@ async function loadCase(req, res) {
 function guardSourcesOf(sources) {
   const map = {};
   for (const s of sources) {
-    map[s.id] = { id: s.id, versionHash: s.contentHash, supersededBy: null, parseStatus: s.parseStatus, text: s.text || '' };
+    map[s.id] = { id: s.id, versionHash: s.contentHash, supersededBy: null, parseStatus: s.parseStatus, text: s.text || '', ocr: /tesseract/.test(s.parser || '') };
   }
   return map;
 }
@@ -65,7 +65,7 @@ function nextRowId(ledger) {
 function coverageOf(c, sources, sweep) {
   const attach = sources.reduce((n, s) => n + (s.kind !== 'document' && Array.isArray(s.attachments) ? s.attachments.length : 0), 0);
   return coverageStatement({
-    sources: sources.map((s) => ({ id: s.id, kind: s.kind, label: sourceLabel(s), parseStatus: s.parseStatus, parseReason: s.parseReason, receivedAt: s.receivedAt ? new Date(s.receivedAt).toISOString() : null })),
+    sources: sources.map((s) => ({ id: s.id, kind: s.kind, label: sourceLabel(s), parseStatus: s.parseStatus, parseReason: s.parseReason, parser: s.parser, receivedAt: s.receivedAt ? new Date(s.receivedAt).toISOString() : null })),
     rows: c.ledger,
     sentWatermark: sweep,
     governing: c.governing || [],

@@ -17,22 +17,24 @@ The design set recommended a **separate local product** with Vault as an optiona
 
 | Piece | File |
 |---|---|
-| Rules (all pure, no database or clock) | `server/services/emailFollowUp/` : `ledger.js` (supersession, claim types, conditional closing, authority lock, ageing), `deadlines.js`, `guard.js`, `approval.js`, `gates.js`, `draft.js`, `coverage.js`, `common.js` |
+| Rules (all pure, no database or clock) | `server/services/emailFollowUp/` : `ledger.js` (supersession, disagreeing figures, claim types, conditional closing, authority lock, ageing), `deadlines.js`, `guard.js` (incl. the OCR rule), `approval.js`, `gates.js`, `draft.js`, `coverage.js`, `common.js` |
+| Attachments | `attachmentText.js` (file to text: PDF, Word, plain text; refuses disguised programs; says why a file was not read), `ocrPdf.js` (scanned PDF pages, reusing Contract Review's `pdftoppm` and Tesseract pool); fetched by `caseStore.fetchAttachments` |
 | The only model use | `extract.js` (reads one message into proposed rows; no tools; email fenced as data; every quote must be word-for-word in the message or the row is dropped; deadlines parsed by code) |
 | Database + Gmail | `caseStore.js`; tables `ef_cases` (ledger kept as one JSON array per case), `ef_sources`, `ef_drafts`, `ef_approvals` (append-only), `ef_sent_sweeps` in `server/db.js` |
-| API | `server/routes/emailFollowUp.js` at `/api/email-follow-up` |
+| API | `server/routes/emailFollowUp.js` at `/api/email-follow-up`: cases, `GET /:id/suggestions`, `GET /:id/threads/:threadId/preview` (read-only look before attaching), `POST /:id/threads`, `POST /:id/attachments`, `POST /:id/extract`, `POST /:id/sent-sweep`, row actions, drafts (approve, copy, edit, decline) |
 | Page | `client/src/pages/EmailFollowUpPage.jsx`, `client/src/pages/emailFollowUp/CaseView.jsx`, `labels.mjs` |
 | Help, tips, tour, guide | `emailFollowUp/emailFollowUpTools.mjs` (the five places, group and tool tips, the (i) box text, what the guide can point at), `emailFollowUp/efTips.mjs` (one tip per control), `emailFollowUp/EmailFollowUpTutorChat.jsx`, `client/src/utils/tours/emailFollowUpTour.js`, `server/services/emailFollowUpTutor.js` + `server/routes/emailFollowUpTutor.js` (`POST /api/email-follow-up-tutor`), registered in `server/config/guides.js` |
-| Tests | `npm run test:email-follow-up` (23 fixtures + unit checks incl. attachment reading, extractor with a fake model, labels, tips/helpers, guide); `npm run test:email-follow-up-tutor` for the guide alone; `npm run test:guides` |
+| Tests | `npm run test:email-follow-up` (24 fixtures + unit checks incl. attachment reading and OCR decisions, extractor with a fake model, labels, tips/helpers, guide, and a real-Tesseract test); `npm run test:email-follow-up-tutor` for the guide alone; `npm run test:guides` |
 
 ## Helpers (the Vault tool conventions)
 
 - **Tooltips:** every button, field, dropdown, tick box and tab uses the shared `Tooltip` with a sentence from `efTips.mjs`, never a native `title=""`. `efTips.test.mjs` fails if a control has no tip, uses a native title, or a tip is not a proper sentence (checked by breaking one on purpose: it names the control).
 - **(i) box:** "How Email Follow-Up Works", opens once per browser (`vault_email_follow_up_info_seen`), reopen with the (i) beside the title.
+- **Preview before attaching:** each suggested thread shows a snippet and a **Preview** button that opens the emails in it (read-only, nothing stored).
 - **Compass tour:** 7 steps (`vault_tour_email_follow_up_completed`); a step whose target is not on screen (for example the tabs while you are on the case list) shows in the middle of the screen instead of failing. Retake it from the compass, or **Settings -> Email Follow-Up Tour** (opens `/email-follow-up?tour=1`).
 - **Guide chat:** the round button, shared `TutorChat`, `guideId` `email-follow-up`. It points at the real controls (its Open buttons switch the tab, or go back to the case list, and need a case open for the tabs), says what the tool does not do, and sees no cases, emails or drafts. Update `CATALOG` in `emailFollowUpTutor.js` and `GUIDE_TOOLS` in `emailFollowUpTools.mjs` together; the test fails if they drift.
 - **Microphone:** on the free-text fields (case name, what is owed, notes, their words, subject) through the shared `VoiceInput`.
-- **Cross-user route list:** the 17 routes are in `server/testing/routeManifest.json` as `authed`. (Running `crossUser.test.js --update` rewrote about 400 unrelated lines because the manifest was already out of date, so only these entries were added by hand; the inventory step of that test still fails on 62 other routes that were missing before this work.)
+- **Cross-user route list:** the 19 routes are in `server/testing/routeManifest.json` as `authed`. (Running `crossUser.test.js --update` rewrote about 400 unrelated lines because the manifest was already out of date, so only these entries were added by hand; the inventory step of that test still fails on 62 other routes that were missing before this work.)
 
 ## What was built from the spec, and how
 
@@ -48,7 +50,8 @@ The design set recommended a **separate local product** with Vault as an optiona
 
 ## Not built (honest list)
 
-- **No OCR, no spreadsheets.** Scanned PDFs and pictures are kept as "not read" with the reason; so are spreadsheets (the installed `xlsx` reader is too old to trust with strangers' files). If a client's invoices are scans, they will not reach the ledger. Adding OCR (Vault already has Tesseract for Translate and Contract Review) is the next step for that.
+- **Plain pictures and spreadsheets are not read.** Photos and logos (`.png`, `.jpg`) are kept as "not read" with the reason, because most are signature logos and OCR on them would be slow noise; a photographed invoice is therefore not read. Spreadsheets are kept as not read too (the installed `xlsx` reader is too old to trust with strangers' files). Handwriting and poor scans may come back as "OCR could not read it reliably".
+- **OCR has not been run end to end on the server.** The real Tesseract engine is tested on a picture of an invoice (`ocrPdf.test.js`, 95% confidence, total read correctly), but the page-to-picture step uses poppler's `pdftoppm` (already in the Dockerfile for Contract Review) and that tool is not installed on this PC, so the first real scanned PDF on Railway is the first full run. If `pdftoppm` is ever missing there, each scan is recorded as failed with "OCR is not available on this server" and is **not retried** (the message is marked fetched).
 - **No governing documents yet.** `governing` is stored but there is no upload for a contract or a request list; the gate is vacuous, which is legal per Rule 1.4. The attachment reader could be pointed at this next.
 - **Attachment reading has not been run on a real mailbox.** It is tested with real PDFs generated in the tests and a fake Gmail in a local database, not against Gmail itself.
 - **Ageing job.** `ageRows()` is tested but nothing runs it on a schedule, so rows never become `unverified` by themselves yet.
@@ -58,9 +61,20 @@ The design set recommended a **separate local product** with Vault as an optiona
 - **Not run against a real model or mailbox.** Rate of correct extraction (fixture plan Rule S2), the misrepresented-claim rate (7.5) and retrieval recall (7.6) are all still unmeasured.
 - **The UI has not been looked at in a browser.** It compiles and the API behind it passes a smoke test against the local Postgres (22 route checks), nothing more.
 
+## OCR (scanned PDFs)
+
+`ocrPdf.js` reuses what Vault already has rather than adding a third copy: poppler's `pdftoppm` to turn a page into a picture (`contractReview/pdfRasterize.js`) and the tesseract.js worker pool (`contractReview/ocrScheduler.js`, English, shuts itself down when idle). Both load on first use.
+
+- **Per page, not per file.** A page with a text layer is used as it is; only pages with less than 15 characters of text are sent to OCR, then everything is joined in page order (parser `pdfjs+tesseract`, or `tesseract` if every page was a scan). At most 10 scanned pages per file; the rest are named in the reason.
+- **Limits per press:** 12 downloads and 3 scanned files by OCR. A scanned file beyond the third is left for the next press, not recorded as unread, and pressing again picks it up (tested against the database).
+- **Confidence.** Tesseract's average confidence over the pages it read must be 55% or more, otherwise the file is kept as "not read: OCR could not read it reliably (confidence N%)". Nothing is put in a ledger from a page the engine itself doubts.
+- **A guess is labelled as one.** OCR can misread a digit and the ledger would quote the misreading faithfully, so: the source is marked as OCR; the row card shows "from a scan (OCR)"; the guard turns any claim quoted from an OCR source from `pass` into `needs_review` (`OCR_SOURCE`, §2.6) so a person must tick it, and so a draft built from a scan always asks you to check the figure against the original; the coverage statement counts scans read by OCR and says to check their figures. A claim whose figure is not in the OCR text at all still fails outright.
+- **Failure is visible.** No poppler or no engine gives "OCR is not available on this server"; an engine error gives "OCR failed (...)"; both are recorded against the file.
+- Tests: unit checks with a fake engine for every decision above, fixture 24, mutation checks (seven rules broken one at a time, all caught), and a real-engine test.
+
 ## Fixtures
 
-23 fixtures in `server/services/emailFollowUp/fixtures/` (rule suite, Rule S1): every one of the plan's 22 (01 to 22) plus **23** added here. 02 (the body and the attachment give different amounts) and 08 (a real PDF carrying instructions in its metadata, hidden text and a form field; stored as `attachments/Subcontractor_Invoice_1042.pdf`) arrived with attachment reading. Differences from the plan: `manifest.json` instead of `manifest.md` (so the harness can read it), and the hand-written extracted rows/drafts sit inside the manifest rather than in separate `expected_input/` files. Each fixture has a fixed `eval_now`/`eval_tz` and a named failure condition; a fixture without them is rejected by the runner (Rule 14.1).
+24 fixtures in `server/services/emailFollowUp/fixtures/` (rule suite, Rule S1): every one of the plan's 22 (01 to 22) plus **23** and **24** added here (24: a quote from a scan read by OCR is never a plain pass). 02 (the body and the attachment give different amounts) and 08 (a real PDF carrying instructions in its metadata, hidden text and a form field; stored as `attachments/Subcontractor_Invoice_1042.pdf`) arrived with attachment reading. Differences from the plan: `manifest.json` instead of `manifest.md` (so the harness can read it), and the hand-written extracted rows/drafts sit inside the manifest rather than in separate `expected_input/` files. Each fixture has a fixed `eval_now`/`eval_tz` and a named failure condition; a fixture without them is rejected by the runner (Rule 14.1).
 
 **Mutation check.** To see whether the fixtures would actually catch a broken rule, ten rules were deliberately broken one at a time (merging a scope change, closing a conditional on affirmation, dropping the authority lock, hashing only the body, ignoring new mail at copy time, skipping the Sent sweep, guessing a date, locking a soft case on any unreadable file, accepting an unknown citation, ignoring a dropped hedge). Nine were caught at once. **One was not**: dropping a hedge ("might" stated as a flat fact) passed all 20 fixtures, because the only fixtures touching hedges were caught by a different check. That is why fixture 23 exists. The plan predicted the first run would change something; this is what changed.
 

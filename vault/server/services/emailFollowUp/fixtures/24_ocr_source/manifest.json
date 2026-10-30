@@ -1,0 +1,21 @@
+{
+  "id": "24",
+  "eval_now": "2026-10-15T09:00:00+10:00",
+  "eval_tz": "Australia/Brisbane",
+  "profile": "both",
+  "check": "ocr_source",
+  "sources": {
+    "doc-24": {
+      "text": "INVOICE 1042. Website work. Total due $3,450.00. Thank you."
+    }
+  },
+  "row": {
+    "id": "r1",
+    "claimType": "agreed",
+    "due": {
+      "status": "needs_review"
+    },
+    "direction": "they_owe"
+  },
+  "failure_condition": "A figure quoted from a scan read by OCR is passed without a person being asked to check it against the original (§2.6)."
+}

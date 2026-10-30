@@ -8,6 +8,7 @@ const { pool } = require('../../db');
 const { sha256 } = require('./common');
 const { localDate } = require('./deadlines');
 const { extractAttachmentText, planAttachment } = require('./attachmentText');
+const { ocrPages } = require('./ocrPdf');
 
 const EMAIL_RE = /^[^\s@()"<>,;]+@[^\s@()"<>,;]+\.[^\s@()"<>,;]+$/;
 const MAX_SOURCE_CHARS = 60000;
@@ -181,26 +182,36 @@ async function suggestThreads(userId, caseRow, attachedThreadIds) {
 
 const ATT_MAX_DOWNLOADS = 12;      // files downloaded per press, to keep one request short
 const ATT_BUDGET_MS = 50000;
+const ATT_MAX_OCR_FILES = 3;       // scanned files read by OCR per press (each can take many seconds)
 
 /**
  * Turn the attachments of attached messages into their own sources (case model §2). Each file is downloaded from Gmail read-only,
- * its text taken by attachmentText.js (PDF text layer, Word, plain text), and stored as a document hanging off its message. Files that
+ * its text taken by attachmentText.js (PDF text layer, OCR for scanned pages, Word, plain text), and stored as a document hanging off its message. Files that
  * cannot be read are still recorded, with the reason, so the coverage statement can list them. Stops at a budget; press again for more.
  */
-async function fetchAttachments(userId, caseRow) {
+async function fetchAttachments(userId, caseRow, deps = {}) {
   const g = gmailHelpers();
   const gmail = await g.getGmailClient(userId);
+  // Before OCR existed, a scanned PDF was recorded as "no text layer ... (no OCR)" and its message marked done. Those records hold no
+  // text and nothing refers to them, so drop them and let their message be read again, now with OCR. (Pictures are not matched.)
+  await pool.query(
+    `WITH old AS (
+       DELETE FROM ef_sources WHERE "caseId"=$1 AND kind='document' AND "parseStatus"='reference_only' AND filename ILIKE '%.pdf'
+          AND "parseReason" LIKE 'no text layer%(no OCR)' RETURNING "parentId")
+     UPDATE ef_sources SET "attachmentsFetchedAt"=NULL WHERE id IN (SELECT "parentId" FROM old)`, [caseRow.id]);
   const { rows: msgs } = await pool.query(
     `SELECT id, channel, "externalId", "threadId", subject, "fromAddr", "toAddr", "messageIdHeader", "receivedAt"
        FROM ef_sources WHERE "caseId"=$1 AND "parentId" IS NULL AND kind='message' AND "attachmentsFetchedAt" IS NULL
         AND "externalId" IS NOT NULL AND jsonb_array_length(attachments) > 0
       ORDER BY "receivedAt" ASC NULLS LAST, id ASC`, [caseRow.id]);
-  const out = { messages: 0, parsed: 0, referenceOnly: 0, failed: 0, downloaded: 0, remainingMessages: 0 };
+  const out = { messages: 0, parsed: 0, referenceOnly: 0, failed: 0, downloaded: 0, ocr: 0, remainingMessages: 0 };
   const started = Date.now();
+  const ocrOf = deps.ocr || ocrPages;
 
   for (let i = 0; i < msgs.length; i += 1) {
     const m = msgs[i];
     if (out.downloaded >= ATT_MAX_DOWNLOADS || Date.now() - started > ATT_BUDGET_MS) { out.remainingMessages = msgs.length - i; break; }
+    let deferred = false;
     const full = await gmail.users.messages.get({ userId: 'me', id: m.externalId, format: 'full' });
     const parts = attachmentsOf(full.data.payload);
     const { rows: have } = await pool.query(`SELECT "externalId" FROM ef_sources WHERE "caseId"=$1 AND "parentId"=$2`, [caseRow.id, m.id]);
@@ -217,7 +228,12 @@ async function fetchAttachments(userId, caseRow) {
         out.downloaded += 1;
         // A download that throws is left for the next press (the message is not marked done), never recorded as a failed file.
         const att = await gmail.users.messages.attachments.get({ userId: 'me', messageId: m.externalId, id: a.attachmentId });
-        r = await extractAttachmentText({ filename: a.filename, mimeType: a.mimeType, buffer: Buffer.from(att.data.data || '', 'base64url') });
+        // OCR is slow, so only a few scanned files are read per press. A scanned file past that limit is left for the next press
+        // (not recorded as unread), so nothing is lost by pressing again.
+        const canOcr = out.ocr < ATT_MAX_OCR_FILES;
+        r = await extractAttachmentText({ filename: a.filename, mimeType: a.mimeType, buffer: Buffer.from(att.data.data || '', 'base64url'), ocr: canOcr ? ocrOf : undefined });
+        if (r.needsOcr && !canOcr) { deferred = true; break; }
+        if (r.ocrUsed) out.ocr += 1;
       }
       await addSource(userId, caseRow.id, {
         kind: 'document', channel: m.channel, externalId, threadId: m.threadId, subject: m.subject, fromAddr: m.fromAddr, toAddr: m.toAddr,
@@ -226,6 +242,7 @@ async function fetchAttachments(userId, caseRow) {
       });
       if (r.parseStatus === 'parsed') out.parsed += 1; else if (r.parseStatus === 'failed') out.failed += 1; else out.referenceOnly += 1;
     }
+    if (deferred) { out.remainingMessages = msgs.length - i; break; }
     await pool.query(`UPDATE ef_sources SET "attachmentsFetchedAt"=NOW(), "parseReason"=NULL WHERE id=$1`, [m.id]);
     out.messages += 1;
   }

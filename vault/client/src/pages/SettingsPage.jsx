@@ -2620,7 +2620,7 @@ function SettingsPage() {
             <div>
               <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Email Follow-Up Tour</p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                7-step tour — opening a case, finding and reading mail, checking Sent, the ledger, drafts you approve and copy
+                7-step tour — opening a case, finding mail, reading attachments (scans too), checking Sent, the ledger, drafts you approve and copy
               </p>
             </div>
             <button

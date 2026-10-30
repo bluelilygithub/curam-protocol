@@ -161,6 +161,22 @@ const CHECKS = {
     }
   },
 
+  ocr_source(fx) {
+    const claim = { kind: 'fact', text: 'You wrote: "Total due $3,450.00"', anchor: { sourceId: 'doc-24', quote: 'Total due $3,450.00' } };
+    const run = (ocr) => {
+      const sources = guardSources({ sources: { 'doc-24': { text: fx.sources['doc-24'].text, ocr } } });
+      sources['doc-24'].ocr = ocr;
+      return checkDraft({ claims: [{ ...claim, anchor: resolveAnchor(fx.sources, claim.anchor) }] }, { sources, profile: 'professional', row: fx.row });
+    };
+    const scan = run(true);
+    if (scan.verdict !== 'needs_review' || scan.results[0].code !== 'OCR_SOURCE') fail(fx.id, `a quote from an OCR'd scan gave ${scan.verdict}/${scan.results[0].code}. ${fx.failure_condition}`);
+    const real = run(false);
+    if (real.verdict !== 'pass') fail(fx.id, `the same quote from a real text layer should pass, got ${real.verdict}`);
+    // a figure that OCR got wrong is still caught as needs_review, never silently passed
+    const wrong = checkDraft({ claims: [{ kind: 'fact', text: 'You owe $3,950.00', anchor: resolveAnchor(fx.sources, claim.anchor) }] }, { sources: (() => { const s = guardSources({ sources: { 'doc-24': { text: fx.sources['doc-24'].text } } }); s['doc-24'].ocr = true; return s; })(), profile: 'professional', row: fx.row });
+    if (wrong.verdict !== 'fail') fail(fx.id, 'a figure not in the OCR text should fail');
+  },
+
   claim_checks(fx) {
     const sources = guardSources(fx);
     for (const c of fx.cases) {
@@ -385,6 +401,35 @@ await (async function unit() {
   must('pictures and spreadsheets are not even downloaded', !planAttachment({ filename: 'a.png', mimeType: 'image/png', size: 100 }).fetch && !planAttachment({ filename: 'a.xlsx', size: 100 }).fetch, null);
   must('a PDF is downloaded', planAttachment({ filename: 'a.pdf', mimeType: 'application/pdf', size: 100 }).fetch, null);
   must('a huge file is not downloaded', !planAttachment({ filename: 'a.pdf', size: 50 * 1024 * 1024 }).fetch, null);
+
+  // ----- OCR (a fake engine: what matters here is what is done with its answer) -----
+  const mkPdfPages = async (texts) => { const d = await pdfLib.PDFDocument.create(); for (const t of texts) { const p = d.addPage(); if (t) p.drawText(t, { x: 40, y: 700, size: 12 }); } return Buffer.from(await d.save()); };
+  const fakeOcr = (text, confidence = 90, calls) => async (buf, pages) => { if (calls) calls.push(pages); return pages.map((p) => ({ page: p, text, confidence })); };
+  const scanBuf = await mkPdf('');
+  const o = (ocr, buffer = scanBuf) => extractAttachmentText({ filename: 's.pdf', mimeType: 'application/pdf', buffer, ocr });
+
+  r = await o(fakeOcr('INVOICE 1042 Total due $3,450.00 payable within 30 days'));
+  must('a scan is read by OCR and marked as OCR', r.parseStatus === 'parsed' && /tesseract/.test(r.parser) && /confidence 90%/.test(r.parseReason) && /misread/.test(r.parseReason) && /3,450.00/.test(r.text) && r.ocrUsed, r);
+  r = await o(fakeOcr('smudge smudge smudge smudge smudge', 30));
+  must('OCR that is not confident is not trusted', r.parseStatus === 'reference_only' && /reliably/.test(r.parseReason) && r.text === '', r);
+  r = await o(fakeOcr('', 95));
+  must('OCR that finds nothing says so', r.parseStatus === 'reference_only' && /no readable text/.test(r.parseReason), r);
+  r = await o(async () => { const e = new Error('spawn pdftoppm ENOENT'); e.code = 'ENOENT'; throw e; });
+  must('no OCR tools on the server is reported, not hidden', r.parseStatus === 'failed' && /not available on this server/.test(r.parseReason), r);
+  r = await o(undefined);
+  must('without OCR a scan is reported as needing it', r.parseStatus === 'reference_only' && r.needsOcr === true && /OCR was not run/.test(r.parseReason), r);
+  const mixed = await mkPdfPages(['Page one has a real text layer with the total $100.00', '']);
+  const calls = [];
+  r = await o(fakeOcr('Page two was a scan: balance $250.00', 88, calls), mixed);
+  must('only the pages with no text layer are sent to OCR', JSON.stringify(calls) === '[[2]]', calls);
+  must('a mixed PDF keeps its real text and adds the OCR page in order', r.parseStatus === 'parsed' && r.text.indexOf('$100.00') < r.text.indexOf('$250.00') && /pdfjs\+tesseract/.test(r.parser), r);
+  const long = await mkPdfPages(Array(12).fill(''));
+  const calls2 = [];
+  r = await o(fakeOcr('A scanned page with enough words on it to count', 90, calls2), long);
+  must('OCR is limited to ten pages and says so', calls2[0].length === 10 && /2 further scanned pages not read/.test(r.parseReason), { calls: calls2[0] && calls2[0].length, r: r.parseReason });
+  const calls3 = [];
+  r = await extractAttachmentText({ filename: 'x.pdf', mimeType: 'application/pdf', buffer: await mkPdf('Total due $9.00 and plenty of ordinary text here'), ocr: async (b, p) => { calls3.push(p); return []; } });
+  must('a PDF with a text layer never calls OCR', r.parseStatus === 'parsed' && /pdfjs/.test(r.parser) && !r.ocrUsed && calls3.length === 0 && !r.parseReason, { r, calls3 });
 
   check('coverage prints the misses', () => {
     const c = coverageStatement({ sources: [{ id: 's1', parseStatus: 'parsed', receivedAt: '2026-10-01T00:00:00Z' }], rows: [], sentWatermark: null });

@@ -22,8 +22,8 @@ const CATALOG = [
     does: 'Step 1. Looks in Gmail for threads to or from the people in the case and lists them on the Mail tab. Preview shows the emails in a thread before you decide; Attach to case adds every message of a thread you choose.',
     notes: 'It only suggests. Previewing stores nothing. Nothing attaches itself. Gmail must be connected, and the tool only reads Gmail.' },
   { id: 'get-attachments', label: 'Get attachments', group: 'Inside a case',
-    does: 'Step 2. Downloads the files that came with the attached emails (read-only) and reads their text: PDFs that have a text layer, Word documents and plain-text files. Each file appears under its email on the Mail tab with whether it was read. Up to twelve files per press; press again if it says more remain.',
-    notes: 'Pictures, scanned PDFs (no text layer) and spreadsheets are kept in the list as not read, with the reason, and are never guessed at. A file whose first bytes show it is really a program is refused. The Read step then treats a readable attachment like an email.' },
+    does: 'Step 2. Downloads the files that came with the attached emails (read-only) and reads their text: PDFs (scanned pages are read by OCR), Word documents and plain-text files. Each file appears under its email on the Mail tab with whether it was read. Up to twelve files per press, and only three scanned files by OCR per press; press again if it says more remain.',
+    notes: 'OCR is a machine reading a picture of a page and can misread a figure, so a row taken from a scan is marked "from a scan (OCR)" and a draft quoting it asks you to check it against the original. A scan OCR cannot read reliably, plain pictures such as logos, and spreadsheets are kept in the list as not read, with the reason, and are never guessed at. A file whose first bytes show it is really a program is refused. The Read step then treats a readable attachment like an email.' },
   { id: 'read', label: 'Read new messages', group: 'Inside a case',
     does: 'Step 3. The AI reads each attached message and fetched attachment you have not read yet (up to ten at a time) and proposes ledger rows: what is owed, by whom, any amount, whether it was clearly agreed or only conditional, and the deadline wording. Code then checks each one. An invoice you sent becomes a row where they owe you the total.',
     notes: 'A row is kept only if its quote is word for word in the text, otherwise it is dropped and the count is shown. Dates are worked out by code, not the AI. If an email and its attachment give two different amounts, both rows stay open and flagged, and no draft can be made until you waive the wrong one.' },
@@ -81,7 +81,8 @@ const RULES = [
 
 const NOT_POSSIBLE = [
   'Sending an email, or putting a draft into your Gmail drafts folder: it only produces text to copy.',
-  'Reading scanned documents or pictures (no OCR), spreadsheets, or any file that is not a PDF with a text layer, a Word document or a text file. It lists each one as not read, with the reason.',
+  'Reading photos and pictures of documents (only scanned PDF pages are read by OCR), spreadsheets, or any file that is not a PDF, a Word document or a text file. Handwriting and poor scans may not be readable. It lists each one as not read, with the reason.',
+  'Guaranteeing that a figure read from a scan is right: OCR can misread digits, so it asks you to check against the original.',
   'Seeing phone calls, portals, other people\'s mailboxes or anything not attached to the case.',
   'Opening a case by itself, or noticing a new matter in your inbox: a person opens every case.',
   'Deciding that a deadline or legal time limit was met, or giving legal, tax or accounting advice.',
