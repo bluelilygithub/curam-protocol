@@ -60,11 +60,20 @@ The design set recommended a **separate local product** with Vault as an optiona
 - **The §6 export gates are not called**, governing items cannot be added, and a file that could not be read cannot be tied to an obligation (so §6.1 cannot fire). The coverage statement is the only warning about unreadable files.
 - **The "answered / chased in Sent" branches of `canDraft` are not fed by the app** (the SENT_SINCE warning does that job).
   All four are logged in the case model as v1.0.3.
-- **Deleting a case.** Not offered. Cases are closed or abandoned (`PATCH /:id { status }`). Deleting needs a recycle-bin adapter first (CLAUDE.md rule for any tool that deletes).
 - **Suggestions inbox hook.** Nothing here calls `SuggestionService.capture()` yet (for example when a Sent check keeps failing or rows go unverified). The guide route also does not file a "something is missing" suggestion beyond what `guideRouter` already does.
 - **No microphone on email-address boxes** (case people, recipients, "who took over"): a spoken address is too error-prone, so those stay typed.
 - **Not run against a real model or mailbox.** Rate of correct extraction (fixture plan Rule S2), the misrepresented-claim rate (7.5) and retrieval recall (7.6) are all still unmeasured.
 - **The UI has not been looked at in a browser.** It compiles and the API behind it passes a smoke test against the local Postgres (22 route checks), nothing more.
+
+## Finishing with a case: close, set aside, remove, delete
+
+"Delete a case" was three different requests, and only one of them is a delete.
+
+- **Close** ("this matter is finished"). **Close case** in the case header, with an optional reason; **Reopen** undoes it. A closed case is **read-only**: nothing new is read, attached, fetched, checked, drafted, approved, edited or copied, and no row can be changed, until it is reopened. Open rows and waiting drafts are not touched (closing does not rewrite history; the header says how many there are when you close). The case list shows open cases only, with **Show closed cases (N)**. It is the right end state for a finished matter: the case is the record of what was read, quoted and approved.
+- **Set aside / Remove** ("the wrong thread got attached"). On the Mail tab each thread has **Set aside** (kept in the case, so anything that quotes it still resolves, but it is no longer read, fetched or counted; **Bring back** undoes it) and **Remove** (deletes the thread and its attachments for good). Remove is **refused when a ledger row or a draft quotes the thread**, and says what does: nothing is ever silently re-anchored (case model 2.4), so a quoted thread is set aside instead. The coverage statement names set-aside items as "kept but not read".
+- **Delete** ("this was a mistake" or "this data must not be here"). **Delete this case…** inside the case only, never from a list card. The panel shows what goes (messages, attachments, drafts, approval records, Sent checks, ledger rows), says Gmail is not touched and that tasks made from the case stay, and asks you to **type the case name**. If any draft was ever approved there is a second, explicit tick: deleting deletes the record that it was approved and copied, and Vault keeps no other copy of that wording. Allowed, not blocked: erasure is a legitimate reason. By default a copy waits **30 days in the shared recycle bin** (Settings, Recycle bin; `adapters/emailFollowUp.js`, kind `email-follow-up-case`) and the toast has Undo; **Delete forever** skips the copy. Restoring puts back the case, every message and attachment (same ids, so the ledger's quotes still point at them), every draft with its approval records and the Sent checks; the client link is dropped only if the client has since gone. A case too big for the bin (25 MB; the default 5 MB is raised for this kind) is refused with "delete forever instead". Why the bin and not a hard delete: it is the convention for every tool that deletes (docs/recycle-bin.md), a mistaken delete is recoverable, and the bin's own **Delete forever** covers erasure.
+
+Tested in `server/routes/emailFollowUp.test.js`, with nine rules broken one at a time to confirm each is noticed (including that a closed case refuses to copy, approve or edit an existing draft).
 
 ## Limits per press
 

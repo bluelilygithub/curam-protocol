@@ -5,6 +5,7 @@ import useToastStore from '../../store/toastStore';
 import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
+import { offerUndo } from '../../utils/binUndo';
 import { dueLabel, directionLabel, statusLabel } from './labels.mjs';
 import { EF_TIPS } from './efTips.mjs';
 
@@ -24,13 +25,13 @@ const TABS = [
 ];
 
 // Every button carries a hover tip (shared Tooltip, never a native title).
-function Btn({ children, onClick, primary, disabled, tip, small, ...rest }) {
+function Btn({ children, onClick, primary, danger, disabled, tip, small, ...rest }) {
   return (
     <Tooltip text={tip}>
       <button
         type="button" onClick={onClick} disabled={disabled} {...rest}
         className={`rounded-lg ${small ? 'px-2.5 py-1 text-xs' : 'px-3.5 py-1.5 text-sm'} font-medium border hover:opacity-70 transition-opacity disabled:opacity-40`}
-        style={primary ? { background: 'var(--color-primary)', borderColor: 'var(--color-primary)', color: '#fff' } : { borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+        style={danger ? { background: BAD, borderColor: BAD, color: '#fff' } : primary ? { background: 'var(--color-primary)', borderColor: 'var(--color-primary)', color: '#fff' } : { borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
       >{children}</button>
     </Tooltip>
   );
@@ -55,7 +56,7 @@ function useCall() {
 
 // ---------- ledger ----------
 
-function RowCard({ row, caseId, sources, reload, onDraft }) {
+function RowCard({ row, caseId, sources, reload, onDraft, locked }) {
   const call = useCall();
   const [mode, setMode] = useState(null); // 'sub' | 'cond' | 'close'
   const [text, setText] = useState('');
@@ -91,7 +92,7 @@ function RowCard({ row, caseId, sources, reload, onDraft }) {
           "{row.quote}"{src ? ` — ${src.label}` : ''}{row.anchors.length > 1 ? ` (+${row.anchors.length - 1} more mention${row.anchors.length > 2 ? 's' : ''})` : ''}
         </p>
       )}
-      {live && (
+      {live && !locked && (
         <div className="flex flex-wrap gap-2 pt-1">
           <Btn small primary onClick={() => onDraft(row)} tip={EF_TIPS.draftFollowup}>Draft follow-up</Btn>
           <Btn small onClick={() => setMode(mode === 'close' ? null : 'close')} tip={EF_TIPS.resolvedElsewhere}>Resolved elsewhere</Btn>
@@ -133,7 +134,7 @@ function RowCard({ row, caseId, sources, reload, onDraft }) {
 
 // ---------- drafts ----------
 
-function DraftCard({ draft, reload }) {
+function DraftCard({ draft, reload, locked }) {
   const call = useCall();
   const toast = useToastStore((s) => s.addToast);
   const c = draft.content;
@@ -200,12 +201,12 @@ function DraftCard({ draft, reload }) {
           <Btn small primary onClick={save} tip={EF_TIPS.saveVersion}>Save as new version</Btn>
         </div>
       )}
-      <div className="flex flex-wrap gap-2">
+      {!locked && <div className="flex flex-wrap gap-2">
         {draft.status === 'pending' && <Btn small primary disabled={draft.verdict.verdict === 'fail'} onClick={approve} tip={EF_TIPS.approve}>Approve</Btn>}
         {draft.status === 'approved' && <Btn small primary onClick={copy} tip={EF_TIPS.copy}>Copy to send myself</Btn>}
         {(draft.status === 'pending' || draft.status === 'approved') && <Btn small onClick={() => setEdit(!edit)} tip={EF_TIPS.editRecipients}>Edit recipients</Btn>}
         {draft.status !== 'declined' && <Btn small tip={EF_TIPS.decline} onClick={async () => { const r = await call(() => api.post(`/api/email-follow-up/drafts/${draft.id}/decline`, {}), 'Declined.'); if (r.ok) reload(); }}>Decline</Btn>}
-      </div>
+      </div>}
     </div>
   );
 }
@@ -227,6 +228,15 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
   const [editClient, setEditClient] = useState(false);
   const [clientList, setClientList] = useState([]);
   const [pickClient, setPickClient] = useState('');
+  const [closeOpen, setCloseOpen] = useState(false);
+  const [closeReason, setCloseReason] = useState('');
+  const [delOpen, setDelOpen] = useState(false);
+  const [delPreview, setDelPreview] = useState(null);
+  const [delTitle, setDelTitle] = useState('');
+  const [delAck, setDelAck] = useState(false);
+  const [delForever, setDelForever] = useState(false);
+  const [delNote, setDelNote] = useState('');
+  const [removing, setRemoving] = useState(''); // threadId waiting for "Yes, remove"
 
   const reload = useCallback(async () => {
     try {
@@ -252,6 +262,39 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
     if (r.ok) { setEditClient(false); reload(); }
   };
 
+  const doClose = async () => {
+    const r = await call(() => api.patch(`/api/email-follow-up/${caseId}`, { status: 'closed', closeReason }), 'Case closed.');
+    if (r.ok) { setCloseOpen(false); setCloseReason(''); reload(); }
+  };
+  const doReopen = async () => {
+    const r = await call(() => api.patch(`/api/email-follow-up/${caseId}`, { status: 'active' }), 'Case reopened.');
+    if (r.ok) reload();
+  };
+  const openDelete = async () => {
+    setDelTitle(''); setDelAck(false); setDelForever(false); setDelNote('');
+    const r = await call(() => api.get(`/api/email-follow-up/${caseId}/delete-preview`));
+    if (r.ok) { setDelPreview(r.data); setDelOpen(true); }
+  };
+  const doDelete = async () => {
+    try {
+      const res = await api.delete(`/api/email-follow-up/${caseId}`, { confirmTitle: delTitle, acknowledgeApprovals: delAck, forever: delForever });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (d.tooLarge) { setDelForever(true); setDelNote(d.error); return; }
+        useToastStore.getState().addToast(d.error || 'Could not delete the case.', 'error');
+        return;
+      }
+      if (d.binId) offerUndo({ message: 'Case deleted. A copy stays in Settings, Recycle bin for 30 days.', binIds: [d.binId], restoredMessage: 'Case restored.', after: () => {} });
+      else useToastStore.getState().addToast('Case deleted for good.');
+      onBack();
+    } catch { useToastStore.getState().addToast('Could not reach the server.', 'error'); }
+  };
+  const threadAction = async (threadId, what, body) => {
+    const r = await call(() => api.post(`/api/email-follow-up/${caseId}/threads/${threadId}/${what}`, body || {}));
+    setRemoving('');
+    if (r.ok) reload();
+  };
+
   const togglePreview = async (threadId) => {
     if (previews[threadId]) { setPreviews((p) => { const n = { ...p }; delete n[threadId]; return n; }); return; }
     setPreviews((p) => ({ ...p, [threadId]: 'loading' }));
@@ -261,10 +304,19 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
 
   if (!data) return <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
   const { case: c, rows, sources, drafts, sentSweep, coverage, draftCap } = data;
-  const unread = sources.filter((s) => !s.extractedAt && s.parseStatus === 'parsed').length;
+  const locked = c.status === 'closed' || c.status === 'abandoned';
+  const unread = sources.filter((s) => !s.extractedAt && !s.setAsideAt && s.parseStatus === 'parsed').length;
   const messages = sources.filter((s) => s.kind !== 'document');
   const docsOf = (id) => sources.filter((s) => s.parentId === id);
-  const attPending = messages.filter((s) => !s.attachmentsFetchedAt && Array.isArray(s.attachments) && s.attachments.length > 0);
+  const attPending = messages.filter((s) => !s.attachmentsFetchedAt && !s.setAsideAt && Array.isArray(s.attachments) && s.attachments.length > 0);
+  const threads = [];
+  for (const m of messages) {
+    const key = m.threadId || `m${m.id}`;
+    let t = threads.find((x) => x.key === key);
+    if (!t) { t = { key, threadId: m.threadId, subject: m.subject, msgs: [] }; threads.push(t); }
+    t.msgs.push(m);
+  }
+  const openRows = rows.filter((r) => r.status === 'open').length;
   const attPendingCount = attPending.reduce((n, s) => n + s.attachments.length, 0);
   const pending = drafts.filter((d) => d.status === 'pending').length;
   const ordered = [...rows].sort((a, b) => (a.status === 'open' ? 0 : 1) - (b.status === 'open' ? 0 : 1));
@@ -311,6 +363,53 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
         )}
       </div>
 
+      {locked && (
+        <div className="rounded-xl border p-3 text-sm flex flex-wrap items-center gap-3" style={{ borderColor: WARN, background: 'var(--color-bg)' }}>
+          <span className="flex-1 min-w-0">This case is closed{c.closeReason ? ` (${c.closeReason})` : ''}. It is read-only until you reopen it.</span>
+          <Btn small primary tip={EF_TIPS.reopenCase} onClick={doReopen}>Reopen</Btn>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2 text-xs" data-guide="close-case">
+        {!locked && !closeOpen && <Btn small tip={EF_TIPS.closeCase} onClick={() => setCloseOpen(true)}>Close case</Btn>}
+        {closeOpen && (
+          <>
+            <span style={{ color: 'var(--color-muted)' }}>{openRows} row{openRows === 1 ? '' : 's'} still open and {pending} draft{pending === 1 ? '' : 's'} waiting stay as they are.</span>
+            <Tooltip text={EF_TIPS.closeReason}><div className="min-w-[14rem]"><VoiceInput value={closeReason} onChange={setCloseReason} placeholder="Why? (optional)" /></div></Tooltip>
+            <Btn small primary tip={EF_TIPS.confirmClose} onClick={doClose}>Close case</Btn>
+            <Btn small tip={EF_TIPS.cancelClose} onClick={() => setCloseOpen(false)}>Cancel</Btn>
+          </>
+        )}
+        {!delOpen && <Btn small tip={EF_TIPS.deleteCase} onClick={openDelete}>Delete this case…</Btn>}
+      </div>
+
+      {delOpen && delPreview && (
+        <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: BAD, background: 'var(--color-surface)' }}>
+          <h3 className="text-base font-semibold">Delete this case?</h3>
+          <p className="text-sm leading-relaxed">
+            This removes {delPreview.messages} message{delPreview.messages === 1 ? '' : 's'}, {delPreview.attachments} attachment{delPreview.attachments === 1 ? '' : 's'}, {delPreview.drafts} draft{delPreview.drafts === 1 ? '' : 's'}, {delPreview.approvals} approval record{delPreview.approvals === 1 ? '' : 's'}, {delPreview.sweeps} Sent check{delPreview.sweeps === 1 ? '' : 's'} and the ledger of {delPreview.rows} row{delPreview.rows === 1 ? '' : 's'}.
+            Your Gmail is not touched.{delPreview.tasks ? ` The ${delPreview.tasks} task${delPreview.tasks === 1 ? '' : 's'} made from this case stay in Tasks.` : ''} A copy waits 30 days in Settings, Recycle bin, unless you choose Delete forever below.
+          </p>
+          {delPreview.approvedEver > 0 && (
+            <label className="flex items-start gap-2 text-sm" style={{ color: BAD }}>
+              <Tooltip text={EF_TIPS.deleteAck}><input type="checkbox" className="mt-1" aria-label="I understand the approval record goes too" checked={delAck} onChange={(e) => setDelAck(e.target.checked)} /></Tooltip>
+              <span>This case has {delPreview.approvedEver} approved draft{delPreview.approvedEver === 1 ? '' : 's'}. Deleting it deletes the record that {delPreview.approvedEver === 1 ? 'it was' : 'they were'} approved and copied; Vault keeps no other copy of that wording. I understand.</span>
+            </label>
+          )}
+          <Tooltip text={EF_TIPS.deleteTitle}>
+            <input className={`${FIELD} w-full text-sm`} style={FIELD_STYLE} aria-label="Type the case name to confirm" placeholder={`Type "${c.title}" to confirm`} value={delTitle} onChange={(e) => setDelTitle(e.target.value)} />
+          </Tooltip>
+          <label className="flex items-start gap-2 text-sm">
+            <Tooltip text={EF_TIPS.deleteForever}><input type="checkbox" className="mt-1" aria-label="Delete forever now" checked={delForever} onChange={(e) => setDelForever(e.target.checked)} /></Tooltip>
+            <span>Delete forever now: skip the recycle bin. This cannot be undone.{delNote ? ` ${delNote}` : ''}</span>
+          </label>
+          <div className="flex gap-2">
+            <Btn small danger tip={EF_TIPS.deleteConfirm} disabled={delTitle.trim() !== String(c.title).trim() || (delPreview.approvedEver > 0 && !delAck)} onClick={doDelete}>{delForever ? 'Delete forever' : 'Delete case'}</Btn>
+            <Btn small tip={EF_TIPS.deleteCancel} onClick={() => setDelOpen(false)}>Cancel</Btn>
+          </div>
+        </div>
+      )}
+
       <div className="rounded-2xl border p-4 space-y-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }} data-tour="ef-people">
         <div className="flex flex-wrap items-center gap-2">
           <Tooltip text={EF_TIPS.people}>
@@ -319,10 +418,10 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
           <Btn small tip={EF_TIPS.savePeople} onClick={async () => { const r = await call(() => api.patch(`/api/email-follow-up/${caseId}`, { aliases: aliases.split(',').map((x) => x.trim()).filter(Boolean) }), 'Saved.'); if (r.ok) reload(); }}>Save people</Btn>
         </div>
         <div className="flex flex-wrap gap-2" data-tour="ef-steps" data-guide="mail">
-          <Btn small disabled={busy === 'find'} tip={EF_TIPS.findMail} onClick={async () => { const r = await run('find', () => api.get(`/api/email-follow-up/${caseId}/suggestions`)); if (r.ok) { setSuggest(r.data.threads); setSuggestMore(!!r.data.more); onTab('mail'); } }}>1. Find mail</Btn>
-          <Btn small disabled={busy === 'att' || !attPendingCount} tip={EF_TIPS.getAttachments(attPendingCount)} onClick={async () => { const r = await run('att', () => api.post(`/api/email-follow-up/${caseId}/attachments`, {})); if (r.ok) { setLastAtt(r.data); reload(); } }}>{busy === 'att' ? 'Fetching…' : `2. Get ${attPendingCount || 'no'} attachment${attPendingCount === 1 ? '' : 's'}`}</Btn>
-          <Btn small primary disabled={busy === 'read' || !unread} tip={EF_TIPS.read(unread)} onClick={async () => { const r = await run('read', () => api.post(`/api/email-follow-up/${caseId}/extract`, {})); if (r.ok) { setLastRead(r.data); reload(); } }}>{busy === 'read' ? 'Reading…' : `3. Read ${unread || 'no'} new item${unread === 1 ? '' : 's'}`}</Btn>
-          <Btn small disabled={busy === 'sweep'} tip={EF_TIPS.checkSent} onClick={async () => { const r = await run('sweep', () => api.post(`/api/email-follow-up/${caseId}/sent-sweep`, {})); if (r.ok) { useToastStore.getState().addToast(r.data.completed ? 'Sent mail checked.' : `Looked at ${r.data.scanned} sent messages so far. Press Check Sent again to carry on.`); reload(); } }}>{busy === 'sweep' ? 'Checking…' : sentSweep && sentSweep.partial ? '4. Check Sent (continue)' : '4. Check Sent'}</Btn>
+          <Btn small disabled={locked || busy === 'find'} tip={EF_TIPS.findMail} onClick={async () => { const r = await run('find', () => api.get(`/api/email-follow-up/${caseId}/suggestions`)); if (r.ok) { setSuggest(r.data.threads); setSuggestMore(!!r.data.more); onTab('mail'); } }}>1. Find mail</Btn>
+          <Btn small disabled={locked || busy === 'att' || !attPendingCount} tip={EF_TIPS.getAttachments(attPendingCount)} onClick={async () => { const r = await run('att', () => api.post(`/api/email-follow-up/${caseId}/attachments`, {})); if (r.ok) { setLastAtt(r.data); reload(); } }}>{busy === 'att' ? 'Fetching…' : `2. Get ${attPendingCount || 'no'} attachment${attPendingCount === 1 ? '' : 's'}`}</Btn>
+          <Btn small primary disabled={locked || busy === 'read' || !unread} tip={EF_TIPS.read(unread)} onClick={async () => { const r = await run('read', () => api.post(`/api/email-follow-up/${caseId}/extract`, {})); if (r.ok) { setLastRead(r.data); reload(); } }}>{busy === 'read' ? 'Reading…' : `3. Read ${unread || 'no'} new item${unread === 1 ? '' : 's'}`}</Btn>
+          <Btn small disabled={locked || busy === 'sweep'} tip={EF_TIPS.checkSent} onClick={async () => { const r = await run('sweep', () => api.post(`/api/email-follow-up/${caseId}/sent-sweep`, {})); if (r.ok) { useToastStore.getState().addToast(r.data.completed ? 'Sent mail checked.' : `Looked at ${r.data.scanned} sent messages so far. Press Check Sent again to carry on.`); reload(); } }}>{busy === 'sweep' ? 'Checking…' : sentSweep && sentSweep.partial ? '4. Check Sent (continue)' : '4. Check Sent'}</Btn>
         </div>
         <p className="text-xs" style={{ color: sentSweep && sentSweep.completed ? GOOD : WARN }}>
           {sentSweep ? (sentSweep.completed ? `Sent checked ${new Date(sentSweep.at).toLocaleString()} (${sentSweep.found} new).` : sentSweep.partial ? `Sent check in progress: ${sentSweep.scanned} messages looked at so far. Press Check Sent again to carry on until it says it is finished.` : `Last Sent check failed: ${sentSweep.error || 'unknown'}. Draft follow-up will try again, and drafts nothing until it works.`) : 'Sent has not been checked yet. Draft follow-up checks it for you when you chase someone.'}
@@ -354,7 +453,7 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
       {tab === 'ledger' && (
         <div className="space-y-3" data-guide="ledger" data-tour="ef-ledger">
           {!ordered.length && <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Nothing recorded yet. Attach a thread under Mail, then press "Read new messages".</p>}
-          {ordered.map((r) => <RowCard key={r.id} row={r} caseId={caseId} sources={sources} reload={reload} onDraft={draftRow} />)}
+          {ordered.map((r) => <RowCard key={r.id} row={r} caseId={caseId} sources={sources} reload={reload} onDraft={draftRow} locked={locked} />)}
         </div>
       )}
 
@@ -395,17 +494,38 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
           <div className="space-y-2">
             <h3 className="text-sm font-semibold">Attached to this case</h3>
             {!messages.length && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No mail attached. Press "1. Find mail" above.</p>}
-            {messages.map((s) => (
-              <div key={s.id} className="rounded-xl border p-3 text-xs space-y-1" style={CARD}>
-                <p className="font-medium text-sm">{s.label}</p>
-                <p style={{ color: 'var(--color-muted)' }}>{s.receivedAt ? new Date(s.receivedAt).toLocaleString() : 'no date'} · {s.extractedAt ? 'read' : 'not read yet'}{s.parseReason ? ` · ${s.parseReason}` : ''}</p>
-                {docsOf(s.id).map((d) => (
-                  <p key={d.id} className="pl-3 border-l-2" style={{ borderColor: 'var(--color-border)', color: d.parseStatus === 'failed' ? BAD : d.parseStatus === 'parsed' ? GOOD : 'var(--color-muted)' }}>
-                    {d.filename || 'file'} — {d.parseStatus === 'parsed' ? `read${/tesseract/.test(d.parser || '') ? ' by OCR (check the figures)' : ''}${d.extractedAt ? ' into the ledger' : ', not yet read into the ledger'}` : d.parseStatus === 'failed' ? `could not be read: ${d.parseReason}` : `not read: ${d.parseReason}`}
-                  </p>
-                ))}
-              </div>
-            ))}
+            {threads.map((t) => {
+              const aside = t.msgs.every((m) => m.setAsideAt);
+              return (
+                <div key={t.key} className="rounded-xl border p-3 space-y-2" style={{ ...CARD, opacity: aside ? 0.65 : 1 }}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold flex-1 min-w-0 truncate">{t.subject || '(no subject)'}</span>
+                    <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{t.msgs.length} message{t.msgs.length === 1 ? '' : 's'}{aside ? ' · set aside: kept, not read' : ''}</span>
+                    {t.threadId && !locked && (aside
+                      ? <Btn small tip={EF_TIPS.bringBack} onClick={() => threadAction(t.threadId, 'set-aside', { aside: false })}>Bring back</Btn>
+                      : <Btn small tip={EF_TIPS.setAside} onClick={() => threadAction(t.threadId, 'set-aside', { aside: true })}>Set aside</Btn>)}
+                    {t.threadId && !locked && removing !== t.threadId && <Btn small tip={EF_TIPS.removeThread} onClick={() => setRemoving(t.threadId)}>Remove</Btn>}
+                    {removing === t.threadId && (
+                      <>
+                        <Btn small danger tip={EF_TIPS.confirmRemove} onClick={() => threadAction(t.threadId, 'detach')}>Yes, remove</Btn>
+                        <Btn small tip={EF_TIPS.cancelRemove} onClick={() => setRemoving('')}>No</Btn>
+                      </>
+                    )}
+                  </div>
+                  {t.msgs.map((s) => (
+                    <div key={s.id} className="text-xs space-y-1 pl-3 border-l-2" style={{ borderColor: 'var(--color-border)' }}>
+                      <p className="font-medium">{s.label}</p>
+                      <p style={{ color: 'var(--color-muted)' }}>{s.receivedAt ? new Date(s.receivedAt).toLocaleString() : 'no date'} · {s.extractedAt ? 'read' : aside ? 'not read' : 'not read yet'}{s.parseReason ? ` · ${s.parseReason}` : ''}</p>
+                      {docsOf(s.id).map((d) => (
+                        <p key={d.id} className="pl-3 border-l-2" style={{ borderColor: 'var(--color-border)', color: d.parseStatus === 'failed' ? BAD : d.parseStatus === 'parsed' ? GOOD : 'var(--color-muted)' }}>
+                          {d.filename || 'file'} — {d.parseStatus === 'parsed' ? `read${/tesseract/.test(d.parser || '') ? ' by OCR (check the figures)' : ''}${d.extractedAt ? ' into the ledger' : ', not yet read into the ledger'}` : d.parseStatus === 'failed' ? `could not be read: ${d.parseReason}` : `not read: ${d.parseReason}`}
+                        </p>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -414,7 +534,7 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
         <div className="space-y-3" data-guide="drafts" data-tour="ef-drafts">
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Drafts are text for you to paste into your own mail program. This tool never sends anything. Every sentence quotes a message; a sentence the guard cannot back is blocked or flagged.</p>
           {!drafts.length && <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No drafts yet. Use "Draft follow-up" on a ledger row.</p>}
-          {drafts.map((d) => <DraftCard key={d.id} draft={d} reload={reload} />)}
+          {drafts.map((d) => <DraftCard key={d.id} draft={d} reload={reload} locked={locked} />)}
         </div>
       )}
 

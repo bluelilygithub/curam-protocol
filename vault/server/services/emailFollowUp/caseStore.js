@@ -24,12 +24,12 @@ function cleanAliases(list) {
 
 // ---------- cases ----------
 
-const CASE_COLS = `id, "userId", title, obligation, kind, profile, status, aliases, governing, ledger, "clientId", "projectId", "createdAt", "updatedAt"`;
+const CASE_COLS = `id, "userId", title, obligation, kind, profile, status, aliases, governing, ledger, "clientId", "projectId", "closedAt", "closeReason", "createdAt", "updatedAt"`;
 
 /** A person's cases, newest first. `clientId` narrows to the cases linked to one CRM client (the client page lists them). */
 async function listCases(userId, { clientId = null } = {}) {
   const { rows } = await pool.query(
-    `SELECT c.id, c.title, c.obligation, c.kind, c.profile, c.status, c.aliases, c."clientId", c."projectId", c."createdAt", c."updatedAt",
+    `SELECT c.id, c.title, c.obligation, c.kind, c.profile, c.status, c.aliases, c."clientId", c."projectId", c."closedAt", c."closeReason", c."createdAt", c."updatedAt",
             (SELECT cl.name FROM clients cl WHERE cl.id=c."clientId" AND cl."userId"=c."userId") AS "clientName",
             jsonb_array_length(c.ledger) AS "rowCount",
             (SELECT COUNT(*) FROM ef_drafts d WHERE d."caseId"=c.id AND d.status='pending') AS "pendingDrafts",
@@ -98,7 +98,16 @@ async function patchCase(userId, id, patch) {
   const add = (col, v) => { vals.push(v); sets.push(`${col}=$${vals.length}`); };
   if (patch.title !== undefined) add('title', String(patch.title).trim().slice(0, 200));
   if (patch.aliases !== undefined) add('aliases', JSON.stringify(cleanAliases(patch.aliases)));
-  if (patch.status !== undefined && ['active', 'closed', 'abandoned'].includes(patch.status)) add('status', patch.status);
+  // Closing means finished: off the list, read-only. Reopening clears the close. (The 'abandoned' status still exists in the schema but nothing sets it.)
+  if (patch.status === 'closed') {
+    add('status', 'closed');
+    add('"closedAt"', new Date());
+    add('"closeReason"', String(patch.closeReason || '').trim().slice(0, 300) || null);
+  } else if (patch.status === 'active') {
+    add('status', 'active');
+    add('"closedAt"', null);
+    add('"closeReason"', null);
+  }
   let profileChanged = false;
   if (patch.profile !== undefined && ['soft', 'professional'].includes(patch.profile)) {
     const cur = await getCase(userId, id);
@@ -122,7 +131,7 @@ async function listSources(caseId, { withText = false } = {}) {
   const { rows } = await pool.query(
     `SELECT id, kind, channel, "externalId", "threadId", subject, "fromAddr", "toAddr", "messageIdHeader", "receivedAt", "contentHash",
             ${withText ? 'text,' : ''} attachments, "parseStatus", "parseReason", "extractedAt",
-            "parentId", filename, "mimeType", "sizeBytes", parser, "attachmentsFetchedAt"
+            "parentId", filename, "mimeType", "sizeBytes", parser, "attachmentsFetchedAt", "setAsideAt"
        FROM ef_sources WHERE "caseId"=$1 ORDER BY "receivedAt" ASC NULLS LAST, id ASC`, [caseId]);
   return rows;
 }
@@ -185,6 +194,95 @@ function gmailHelpers() { return require('../../routes/gmail'); }
 async function ownerEmail(userId) {
   const { rows } = await pool.query(`SELECT email FROM gmail_tokens WHERE "userId"=$1`, [userId]);
   return rows[0]?.email || null;
+}
+
+// ---------- setting a thread aside, removing one, deleting a case ----------
+
+/** Set a whole thread (its messages and their attachments) aside, or bring it back. Aside sources stay stored, so anything that cites them still resolves, but they are no longer read. */
+async function setThreadAside(caseId, threadId, aside) {
+  const { rowCount } = await pool.query(
+    'UPDATE ef_sources SET "setAsideAt" = CASE WHEN $3 THEN NOW() ELSE NULL END WHERE "caseId"=$1 AND "threadId"=$2', [caseId, threadId, !!aside]);
+  return rowCount;
+}
+
+/** Everything in the case that cites a source of this thread: ledger rows (anchors or evidence) and drafts (claim anchors). */
+function citationsOf(ledger, drafts, sourceIds) {
+  const ids = new Set(sourceIds);
+  const rows = (ledger || []).filter((r) => (r.anchors || []).some((a) => ids.has(a.sourceId)) || (r.evidence || []).some((e) => ids.has(e)));
+  const hit = (drafts || []).filter((d) => ((d.content && d.content.claims) || []).some((c) => c.anchor && ids.has(c.anchor.sourceId)));
+  return { rows: rows.length, drafts: hit.length };
+}
+
+/**
+ * Take a thread out of a case for good (its messages and attachments are deleted), but only when nothing cites it. If a ledger row or a draft quotes it,
+ * nothing is removed: the caller says what cites it and suggests setting it aside instead. A citation is never silently moved or dropped (case model 2.4).
+ */
+async function detachThread(userId, caseId, threadId) {
+  return withLedger(userId, caseId, async (ledger, client) => {
+    const { rows: src } = await client.query('SELECT id FROM ef_sources WHERE "caseId"=$1 AND "threadId"=$2', [caseId, threadId]);
+    if (!src.length) return { value: { removed: 0 } };
+    const { rows: drafts } = await client.query('SELECT content FROM ef_drafts WHERE "caseId"=$1', [caseId]);
+    const cited = citationsOf(ledger, drafts, src.map((s) => s.id));
+    if (cited.rows || cited.drafts) return { value: { removed: 0, cited } };
+    const del = await client.query('DELETE FROM ef_sources WHERE "caseId"=$1 AND "threadId"=$2', [caseId, threadId]);
+    return { value: { removed: del.rowCount } };
+  });
+}
+
+/** What deleting a case would take with it, in counts, for the confirmation. */
+async function deletePreview(userId, caseRow) {
+  const one = async (sql) => Number((await pool.query(sql, [caseRow.id])).rows[0].n);
+  const [messages, attachments, drafts, approvals, approvedEver, sweeps] = await Promise.all([
+    one("SELECT COUNT(*) AS n FROM ef_sources WHERE \"caseId\"=$1 AND kind='message'"),
+    one("SELECT COUNT(*) AS n FROM ef_sources WHERE \"caseId\"=$1 AND kind='document'"),
+    one("SELECT COUNT(*) AS n FROM ef_drafts WHERE \"caseId\"=$1 AND status <> 'replaced'"),
+    one('SELECT COUNT(*) AS n FROM ef_approvals a JOIN ef_drafts d ON d.id=a."draftId" WHERE d."caseId"=$1'),
+    one("SELECT COUNT(*) AS n FROM ef_approvals a JOIN ef_drafts d ON d.id=a.\"draftId\" WHERE d.\"caseId\"=$1 AND a.decision='approved'"),
+    one('SELECT COUNT(*) AS n FROM ef_sent_sweeps WHERE "caseId"=$1'),
+  ]);
+  const tasks = (caseRow.ledger || []).filter((r) => r.taskId).length;
+  return { messages, attachments, drafts, approvals, approvedEver, sweeps, rows: (caseRow.ledger || []).length, tasks };
+}
+
+/**
+ * Delete a case with everything under it. By default a copy goes to the shared recycle bin first (30 days, restorable, in the same transaction);
+ * `forever` skips the copy for "this data must not be here". A case too big for the bin throws code TOO_LARGE: the caller offers "delete forever".
+ * Tasks made from the case are not touched.
+ */
+async function deleteCase(userId, caseRow, { forever = false } = {}) {
+  const { moveToBin } = require('../recycleBin');
+  require('../recycleBin').loadAdapters();
+  const { CASE_BIN_MAX_BYTES } = require('../recycleBin/adapters/emailFollowUp');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: locked } = await client.query('SELECT * FROM ef_cases WHERE id=$1 AND "userId"=$2 FOR UPDATE', [caseRow.id, userId]);
+    if (!locked[0]) throw Object.assign(new Error('Case not found.'), { status: 404 });
+    let binId = null;
+    if (!forever) {
+      const q = async (sql) => (await client.query(sql, [caseRow.id])).rows;
+      const payload = {
+        case: locked[0],
+        sources: await q('SELECT * FROM ef_sources WHERE "caseId"=$1 ORDER BY id'),
+        drafts: await q('SELECT * FROM ef_drafts WHERE "caseId"=$1 ORDER BY id'),
+        approvals: await q('SELECT a.* FROM ef_approvals a JOIN ef_drafts d ON d.id=a."draftId" WHERE d."caseId"=$1 ORDER BY a.id'),
+        sweeps: await q('SELECT * FROM ef_sent_sweeps WHERE "caseId"=$1 ORDER BY id'),
+      };
+      binId = await moveToBin(client, {
+        userId, type: 'email-follow-up-case', id: caseRow.id, title: locked[0].title,
+        detail: `${payload.sources.length} items, ${payload.drafts.length} draft${payload.drafts.length === 1 ? '' : 's'}`,
+        payload, maxBytes: Number(process.env.EF_CASE_BIN_MAX_BYTES) || CASE_BIN_MAX_BYTES,
+      });
+    }
+    await client.query('DELETE FROM ef_cases WHERE id=$1 AND "userId"=$2', [caseRow.id, userId]); // cascades to sources, drafts, approvals and sweeps
+    await client.query('COMMIT');
+    return { binId };
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /** Attach every message of one Gmail thread to a case. A person chose this thread; nothing attaches itself. */
@@ -271,7 +369,7 @@ async function fetchAttachments(userId, caseRow, deps = {}) {
      UPDATE ef_sources SET "attachmentsFetchedAt"=NULL WHERE id IN (SELECT "parentId" FROM old)`, [caseRow.id]);
   const { rows: msgs } = await pool.query(
     `SELECT id, channel, "externalId", "threadId", subject, "fromAddr", "toAddr", "messageIdHeader", "receivedAt"
-       FROM ef_sources WHERE "caseId"=$1 AND "parentId" IS NULL AND kind='message' AND "attachmentsFetchedAt" IS NULL
+       FROM ef_sources WHERE "caseId"=$1 AND "parentId" IS NULL AND kind='message' AND "attachmentsFetchedAt" IS NULL AND "setAsideAt" IS NULL
         AND "externalId" IS NOT NULL AND jsonb_array_length(attachments) > 0
       ORDER BY "receivedAt" ASC NULLS LAST, id ASC`, [caseRow.id]);
   const out = { messages: 0, parsed: 0, referenceOnly: 0, failed: 0, downloaded: 0, ocr: 0, remainingMessages: 0 };
@@ -477,7 +575,7 @@ async function latestApproval(draftId) {
 module.exports = {
   EMAIL_RE, cleanAliases, listCases, clientName, getCase, insertCase, withLedger, patchCase,
   listSources, getSource, addSource, markExtracted,
-  attachThread, suggestThreads, previewThread, fetchAttachments, runSentSweep, latestSweep, freshInbound, ownerEmail,
+  attachThread, suggestThreads, previewThread, fetchAttachments, setThreadAside, detachThread, deletePreview, deleteCase, runSentSweep, latestSweep, freshInbound, ownerEmail,
   listDrafts, getDraft, pendingDraftCount, insertDraft, setDraftStatus, addApproval, latestApproval,
   localDate,
 };

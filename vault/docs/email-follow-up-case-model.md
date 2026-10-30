@@ -303,6 +303,14 @@ No open questions remain. The next edit to this document comes from a fixture th
 
 ## Decisions log
 
+### v1.0.4 — finishing with a case: close, set aside, delete
+
+The model said nothing about deletion, so it was neither supported nor ruled out. Now decided. "Delete a case" is three requests:
+
+- **Closing** (status `closed`, reopenable) is the normal end of a case and the only one that keeps the audit trail. A closed case is read-only (nothing new is read, checked, drafted, approved, edited or copied; no row action) until reopened. The case is the record that a person read these warnings and accepted them, and Vault keeps no sent copy of copied wording, so a finished matter is closed, not deleted. `abandoned` remains in the schema and nothing sets it.
+- **Setting a thread aside** keeps its sources (so §2.4 holds: nothing is silently re-anchored or orphaned) but stops it being read, fetched or counted. **Removing** a thread deletes it and is refused when any ledger row or draft quotes it.
+- **Deleting** exists and is a second-tier action: only from inside the case, the case name typed, the counts shown, and a separate explicit acknowledgement when any draft was ever approved. **Approval records are not protected from case deletion**: deleting the case deletes the approval records with it (append-only holds inside a live case; erasure is a legitimate reason to remove the whole case). By default the delete goes through the shared 30-day recycle bin, where the person can restore it or use the bin's Delete forever; "Delete forever now" skips the copy; a case too big for the bin is refused with that way out. Tasks made from the case's rows are the person's own and are left alone. Gmail is never touched. A hard delete with no bin was considered and rejected: it breaks the convention every other tool follows, and the bin's own Delete forever already covers "this data must not be here".
+
 ### v1.0.3 — after a code review of the first build: what the product does NOT run, and what changed
 
 Rules written in this document that the application does not run (each is real in the pure modules and tested by fixtures, but nothing in the app calls it). They are recorded here so nobody assumes otherwise:

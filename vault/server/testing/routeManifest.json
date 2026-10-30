@@ -613,6 +613,18 @@
   "GET /api/email-follow-up/:id/threads/:threadId/preview": {
    "class": "authed"
   },
+  "GET /api/email-follow-up/:id/delete-preview": {
+   "class": "authed"
+  },
+  "DELETE /api/email-follow-up/:id": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/:id/threads/:threadId/set-aside": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/:id/threads/:threadId/detach": {
+   "class": "authed"
+  },
   "POST /api/email-follow-up/:id/threads": {
    "class": "authed"
   },

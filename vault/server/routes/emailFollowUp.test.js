@@ -60,10 +60,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const extractMod = require('../services/emailFollowUp/extract');
   let modelDelayMs = 0;
   let failOnSourceText = null;
+  const readCalls = [];
   extractMod.extractFromSource = async (userId, source, ctx) => {
+    readCalls.push(source.id);
     if (modelDelayMs) await sleep(modelDelayMs);
     if (failOnSourceText && source.text.includes(failOnSourceText)) throw new Error('the AI timed out');
-    const item = source.text.match(/item-\d+/)[0];
+    const item = (source.text.match(/item-\d+/) || ['item-0'])[0];
     return extractMod.normalizeMentions(JSON.stringify({ mentions: [{ kind: 'waiting_on', direction: 'they_owe', party: 'p@client.test', items: [item], itemNoun: 'document', claimType: 'agreed', dueRaw: null, quote: `owes ${item}` }] }), source, ctx);
   };
 
@@ -306,6 +308,135 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     r = await call('POST', `/${cBig.id}/rows/r1/draft`, {});
     ok('once the check has finished, the draft is made', r.status === 201, r);
     sentPages = null;
+
+    // ---- closing a case: finished, off the list, read-only ----
+    console.log('closing');
+    const cC = await newCase({ title: 'Close me' });
+    r = await call('PATCH', `/${cC.id}`, { status: 'closed', closeReason: 'all paid' });
+    ok('a case can be closed, with a reason and a time', r.status === 200 && r.body.case.status === 'closed' && r.body.case.closeReason === 'all paid' && r.body.case.closedAt, r.body);
+    const tries = [
+      ['POST', `/${cC.id}/attachments`, {}], ['POST', `/${cC.id}/extract`, {}], ['POST', `/${cC.id}/sent-sweep`, {}], ['POST', `/${cC.id}/threads`, { threadId: 'abcdef123' }],
+      ['POST', `/${cC.id}/threads/abcdef123/set-aside`, {}], ['POST', `/${cC.id}/threads/abcdef123/detach`, {}],
+      ['POST', `/${cC.id}/rows/r1/event`, { type: 'waive' }], ['POST', `/${cC.id}/rows/r1/task`, {}], ['POST', `/${cC.id}/rows/r1/draft`, {}],
+    ];
+    const refused = [];
+    for (const [m, p, b] of tries) { const x = await call(m, p, b); if (x.status !== 409 || !x.body.closed) refused.push([m, p, x.status]); }
+    ok('a closed case refuses every change (read, attach, check, draft, row actions, set aside)', refused.length === 0, refused);
+    r = await call('GET', `/${cC.id}`);
+    ok('but it can still be read', r.status === 200 && r.body.case.status === 'closed', r.status);
+    r = await call('PATCH', `/${cC.id}`, { status: 'active' });
+    ok('reopening clears the close', r.body.case.status === 'active' && r.body.case.closedAt === null && r.body.case.closeReason === null, r.body.case);
+    r = await call('POST', `/${cC.id}/extract`, {});
+    ok('and work is allowed again', r.status === 200, r);
+    r = await call('GET', '/');
+    ok('the list carries the status of each case (the page filters it)', r.body.cases.some((x) => x.id === cC.id && x.status === 'active'), null);
+
+    // a closed case also refuses to approve, edit or copy a draft it already has
+    const dClosed = await approvedDraft();
+    const dPending = await store.insertDraft(userA, c4.id, 'r1', draftContent, hash, { verdict: 'pass', results: [], reasons: [] });
+    await call('PATCH', `/${c4.id}`, { status: 'closed' });
+    const copyClosed = await call('POST', `/drafts/${dClosed.id}/copy`, {});
+    const approveClosed = await call('POST', `/drafts/${dPending.id}/approve`, {});
+    const editClosed = await call('PATCH', `/drafts/${dPending.id}`, { subject: 'new' });
+    ok('a closed case will not copy, approve or edit a draft either', [copyClosed, approveClosed, editClosed].every((x) => x.status === 409 && x.body.closed === true), [copyClosed.status, approveClosed.status, editClosed.status]);
+    await call('PATCH', `/${c4.id}`, { status: 'active' });
+
+    // ---- setting a thread aside, and removing one ----
+    console.log('set aside and remove');
+    const cA = await newCase();
+    const mA = await store.addSource(userA, cA.id, { channel: 'inbound', externalId: 'a-msg', threadId: 'thread-aaa', subject: 'A', fromAddr: 'P <p@client.test>', receivedAt: new Date(Date.now() - 3600000).toISOString(), text: 'The client owes item-1 and should send it.' });
+    await store.addSource(userA, cA.id, { kind: 'document', channel: 'inbound', externalId: 'a-doc', threadId: 'thread-aaa', parentId: mA.id, filename: 'inv.pdf', receivedAt: new Date().toISOString(), text: 'Invoice: item-1 total $10.' });
+    const mB = await store.addSource(userA, cA.id, { channel: 'inbound', externalId: 'b-msg', threadId: 'thread-bbb', subject: 'B', fromAddr: 'P <p@client.test>', receivedAt: new Date().toISOString(), text: 'The client owes item-2 and should send it.' });
+    r = await call('POST', `/${cA.id}/threads/thread-aaa/set-aside`, { aside: true });
+    ok('a thread (message and attachment) can be set aside', r.status === 200 && r.body.changed === 2, r.body);
+    readCalls.length = 0;
+    r = await call('POST', `/${cA.id}/extract`, {});
+    ok('a set-aside thread is not read', r.body.read === 1 && readCalls.length === 1 && readCalls[0] === mB.id, { read: r.body.read, calls: readCalls });
+    r = await call('GET', `/${cA.id}`);
+    ok('it is still in the case and marked aside (so citations still resolve)', r.body.sources.filter((x) => x.setAsideAt).length === 2 && r.body.sources.length === 3, r.body.sources.map((x) => [x.id, x.setAsideAt]));
+    ok('the coverage statement says it was set aside, and does not count it as read', r.body.coverage.notVisible.some((x) => /you set aside/.test(x)) && r.body.coverage.read.messages === 1, r.body.coverage);
+    r = await call('POST', `/${cA.id}/threads/thread-aaa/set-aside`, { aside: false });
+    readCalls.length = 0;
+    r = await call('POST', `/${cA.id}/extract`, {});
+    ok('brought back, it is read', r.body.read === 2 && readCalls.length === 2, { read: r.body.read, calls: readCalls });
+
+    // remove: refused when something quotes it, allowed when nothing does
+    r = await call('POST', `/${cA.id}/threads/thread-aaa/detach`, {});
+    ok('a thread a ledger row quotes cannot be removed, and the reply says what quotes it', r.status === 409 && r.body.cited && r.body.cited.rows >= 1 && /Set it aside/.test(r.body.error), r.body);
+    ok('and nothing was removed', (await store.listSources(cA.id)).length === 3);
+    const cN = await newCase();
+    const mN = await store.addSource(userA, cN.id, { channel: 'inbound', externalId: 'n-msg', threadId: 'thread-nnn', subject: 'N', text: 'noise', receivedAt: new Date().toISOString() });
+    await store.addSource(userA, cN.id, { kind: 'document', channel: 'inbound', externalId: 'n-doc', threadId: 'thread-nnn', parentId: mN.id, filename: 'x.pdf', text: 'noise doc', receivedAt: new Date().toISOString() });
+    r = await call('POST', `/${cN.id}/threads/thread-nnn/detach`, {});
+    ok('a thread nothing quotes is removed with its attachments', r.status === 200 && r.body.removed === 2 && (await store.listSources(cN.id)).length === 0, r.body);
+
+    // ---- deleting a case: confirmation, the recycle bin, restore, forever ----
+    console.log('delete');
+    const recycle = require('../services/recycleBin');
+    recycle.loadAdapters();
+    const cD = await newCase({ title: 'Delete me (test)', clientId: clientA });
+    await call('PATCH', `/${cD.id}`, { clientId: null });
+    const sD = await addMsg(userA, cD.id, 6);
+    const dDoc = await store.addSource(userA, cD.id, { kind: 'document', channel: 'inbound', externalId: 'd-doc', threadId: `thread-${cD.id}-6`, parentId: sD.id, filename: 'inv.pdf', receivedAt: new Date().toISOString(), text: 'Invoice item-6 total $60.' });
+    const srcD = (await store.listSources(cD.id, { withText: true })).find((x) => x.id === sD.id);
+    const mD = extractMod.normalizeMentions(JSON.stringify({ mentions: [{ kind: 'waiting_on', direction: 'they_owe', party: 'p@client.test', items: ['item-6'], claimType: 'agreed', quote: 'owes item-6' }] }), { ...srcD, receivedAt: new Date(srcD.receivedAt).toISOString() }, { tz: 'Australia/Brisbane' }).mentions;
+    await store.withLedger(userA, cD.id, async (l) => ({ ledger: ledgerLib.applyMention(l, mD[0], { newId: () => 'r1' }).rows, value: 1 }));
+    const taskId = (await pool.query(`INSERT INTO tasks (title, status, priority, "userId") VALUES ('From the case','todo','medium',$1) RETURNING id`, [userA])).rows[0].id;
+    await store.withLedger(userA, cD.id, async (l) => ({ ledger: l.map((x) => ({ ...x, taskId })), value: 1 }));
+    const rowD = (await ledgerOf(cD.id))[0];
+    const contentD = { ...buildNudgeDraft(rowD, { to: ['p@client.test'], threadIds: [] }), notes: [] };
+    const hashD = approvalLib.draftHash({ ...contentD, id: null, version: 1 });
+    const draftD = await store.insertDraft(userA, cD.id, 'r1', contentD, hashD, { verdict: 'pass', results: [], reasons: [] });
+    await store.addApproval(draftD.id, 1, hashD, 'approved', userA, []);
+    await store.setDraftStatus(draftD.id, 'approved');
+    await pool.query(`INSERT INTO ef_sent_sweeps ("caseId","userId","fromAt","toAt",completed,found) VALUES ($1,$2,NOW() - interval '30 days',NOW(),TRUE,0)`, [cD.id, userA]);
+
+    r = await call('GET', `/${cD.id}/delete-preview`);
+    ok('the preview counts what would go', r.status === 200 && r.body.messages === 1 && r.body.attachments === 1 && r.body.drafts === 1 && r.body.approvals === 1 && r.body.approvedEver === 1 && r.body.sweeps === 1 && r.body.rows === 1 && r.body.tasks === 1, r.body);
+    r = await call('DELETE', `/${cD.id}`, { confirmTitle: 'wrong name' });
+    ok('without the case name typed exactly, nothing is deleted', r.status === 400 && (await store.getCase(userA, cD.id)) !== null, r);
+    r = await call('DELETE', `/${cD.id}`, { confirmTitle: 'Delete me (test)' });
+    ok('a case with an approved draft needs a second, explicit confirmation', r.status === 409 && r.body.needsAcknowledgement === true && (await store.getCase(userA, cD.id)) !== null, r.body);
+    r = await call('DELETE', `/${cD.id}`, { confirmTitle: 'Delete me (test)' }, userB);
+    ok("another person cannot delete it", r.status === 404 && (await store.getCase(userA, cD.id)) !== null, r.status);
+    const ledgerBefore = JSON.stringify(await ledgerOf(cD.id));
+    r = await call('DELETE', `/${cD.id}`, { confirmTitle: 'Delete me (test)', acknowledgeApprovals: true });
+    ok('with both confirmations it is deleted and a copy is kept', r.status === 200 && r.body.binId && r.body.forever === false, r.body);
+    ok('the case and everything under it is gone', (await store.getCase(userA, cD.id)) === null
+      && (await pool.query('SELECT COUNT(*) AS n FROM ef_sources WHERE "caseId"=$1', [cD.id])).rows[0].n === '0'
+      && (await pool.query('SELECT COUNT(*) AS n FROM ef_drafts WHERE "caseId"=$1', [cD.id])).rows[0].n === '0'
+      && (await pool.query('SELECT COUNT(*) AS n FROM ef_approvals WHERE "draftId"=$1', [draftD.id])).rows[0].n === '0'
+      && (await pool.query('SELECT COUNT(*) AS n FROM ef_sent_sweeps WHERE "caseId"=$1', [cD.id])).rows[0].n === '0');
+    ok('the task made from the case is untouched', (await pool.query('SELECT COUNT(*) AS n FROM tasks WHERE id=$1', [taskId])).rows[0].n === '1');
+    const binned = await recycle.list(userA, { types: ['email-follow-up-case'] });
+    ok('it is in the recycle bin, named', binned.some((x) => x.id === r.body.binId && x.title === 'Delete me (test)'), binned.map((x) => [x.id, x.title]));
+
+    const back = await recycle.restoreItem(userA, r.body.binId);
+    const restored = await store.getCase(userA, Number(back.entityId));
+    ok('restoring brings the case back with the same id and ledger', restored && restored.id === cD.id && JSON.stringify(restored.ledger) === ledgerBefore, restored && restored.id);
+    const rs = await store.listSources(cD.id, { withText: true });
+    ok('with its messages and attachments, still linked, ids unchanged', rs.length === 2 && rs.find((x) => x.id === dDoc.id).parentId === sD.id && rs.find((x) => x.id === sD.id).text.includes('item-6'), rs.map((x) => [x.id, x.parentId]));
+    const rd = await store.listDrafts(cD.id);
+    ok('and the draft, still approved, with its approval record', rd.length === 1 && rd[0].status === 'approved' && (await store.latestApproval(rd[0].id)).decision === 'approved', rd.map((x) => x.status));
+    ok('and the Sent check record', (await store.latestSweep(cD.id)).completed === true);
+    r = await call('POST', `/drafts/${rd[0].id}/copy`, {});
+    ok('the restored approved draft copies, as before', r.status === 200 && r.body.ok, r);
+
+    // forever skips the bin
+    const binBefore = (await recycle.list(userA, { types: ['email-follow-up-case'] })).length;
+    r = await call('DELETE', `/${cD.id}`, { confirmTitle: 'Delete me (test)', acknowledgeApprovals: true, forever: true });
+    ok('delete forever keeps no copy', r.status === 200 && r.body.binId === null && r.body.forever === true && (await recycle.list(userA, { types: ['email-follow-up-case'] })).length === binBefore, r.body);
+    ok('and the case is gone for good', (await store.getCase(userA, cD.id)) === null);
+
+    // too big for the bin: refused with the way out, nothing deleted
+    const cBigBin = await newCase({ title: 'Big one' });
+    await addMsg(userA, cBigBin.id, 8);
+    process.env.EF_CASE_BIN_MAX_BYTES = '200';
+    r = await call('DELETE', `/${cBigBin.id}`, { confirmTitle: 'Big one' });
+    delete process.env.EF_CASE_BIN_MAX_BYTES;
+    ok('a case too big for the recycle bin is not deleted, and the reply offers delete forever', r.status === 409 && r.body.tooLarge === true && (await store.getCase(userA, cBigBin.id)) !== null, r.body);
+    r = await call('DELETE', `/${cBigBin.id}`, { confirmTitle: 'Big one', forever: true });
+    ok('and delete forever then works', r.status === 200 && (await store.getCase(userA, cBigBin.id)) === null, r.body);
 
     // ---- every Gmail route is limited per person ----
     console.log('rate limit');

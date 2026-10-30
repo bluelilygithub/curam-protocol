@@ -6,7 +6,10 @@
 
 function plural(n, word) { return `${n} ${word}${n === 1 ? '' : 's'}`; }
 
-function coverageStatement({ sources = [], rows = [], sentWatermark = null, governing = [], attachmentsNotFetched = 0 }) {
+function coverageStatement({ sources: allSources = [], rows = [], sentWatermark = null, governing = [], attachmentsNotFetched = 0 }) {
+  // Threads the person set aside are kept (anything that cites them still resolves) but are not read, so they are left out of the counts and named instead.
+  const sources = allSources.filter((s) => !s.setAside);
+  const aside = allSources.filter((s) => s.setAside);
   const messages = sources.filter((s) => s.kind !== 'document');
   const docs = sources.filter((s) => s.kind === 'document');
   const readMessages = messages.filter((s) => s.parseStatus === 'parsed');
@@ -36,6 +39,11 @@ function coverageStatement({ sources = [], rows = [], sentWatermark = null, gove
   }
   if (ocrDocs.length) notVisible.push(`${plural(ocrDocs.length, 'attachment')} ${ocrDocs.length === 1 ? 'was' : 'were'} scans read by OCR: the words and figures are a machine's reading of a picture, not the original text.`);
   for (const s of messages.filter((m) => m.parseStatus !== 'parsed')) notVisible.push(`${s.label || s.id}: ${s.parseStatus === 'failed' ? 'could not be read' : 'kept for reference only'} (${s.parseReason || 'no reason recorded'}).`);
+  if (aside.length) {
+    const am = aside.filter((s) => s.kind !== 'document').length;
+    const ad = aside.length - am;
+    notVisible.push(`${plural(am, 'message')}${ad ? ` and ${plural(ad, 'attachment')}` : ''} you set aside: kept in the case but not read.`);
+  }
   if (!sentWatermark || !sentWatermark.completed) notVisible.push('Your Sent mail has not been checked for this case yet, so replies you already sent may be missing.');
 
   const verify = [];

@@ -42,6 +42,12 @@ function fail(res, err) {
   return res.status(500).json({ error: 'Something went wrong. Please try again.' });
 }
 
+// A closed case is read-only: nothing new is read, attached, checked, drafted, approved or copied until it is reopened (PATCH status active).
+function writable(c, res) {
+  if (c.status === 'closed' || c.status === 'abandoned') { res.status(409).json({ error: 'This case is closed. Reopen it to make changes.', closed: true }); return false; }
+  return true;
+}
+
 async function loadCase(req, res) {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) { res.status(400).json({ error: 'Bad case id.' }); return null; }
@@ -73,11 +79,11 @@ function nextRowId(ledger) {
 function coverageOf(c, sources, sweep) {
   // attachments on messages the Get attachments step has not finished, less the ones already recorded for that message
   const notFetched = sources.reduce((n, s) => {
-    if (s.kind === 'document' || s.attachmentsFetchedAt || !Array.isArray(s.attachments) || !s.attachments.length) return n;
+    if (s.kind === 'document' || s.attachmentsFetchedAt || s.setAsideAt || !Array.isArray(s.attachments) || !s.attachments.length) return n;
     return n + Math.max(0, s.attachments.length - sources.filter((d) => d.parentId === s.id).length);
   }, 0);
   return coverageStatement({
-    sources: sources.map((s) => ({ id: s.id, kind: s.kind, label: sourceLabel(s), parseStatus: s.parseStatus, parseReason: s.parseReason, parser: s.parser, receivedAt: s.receivedAt ? new Date(s.receivedAt).toISOString() : null })),
+    sources: sources.map((s) => ({ id: s.id, kind: s.kind, label: sourceLabel(s), parseStatus: s.parseStatus, parseReason: s.parseReason, parser: s.parser, setAside: !!s.setAsideAt, receivedAt: s.receivedAt ? new Date(s.receivedAt).toISOString() : null })),
     rows: c.ledger,
     sentWatermark: sweep,
     governing: c.governing || [],
@@ -100,6 +106,7 @@ router.post('/drafts/:draftId/approve', async (req, res) => {
     if (!draft) return res.status(404).json({ error: 'Draft not found.' });
     if (draft.status !== 'pending') return res.status(409).json({ error: `This draft is ${draft.status}.` });
     const c = await store.getCase(req.user.id, draft.caseId);
+    if (!writable(c, res)) return;
     const sources = await store.listSources(c.id, { withText: true });
     const content = { ...draft.content, id: draft.id, version: draft.version };
     const g = guardFor(c, sources, content);
@@ -136,6 +143,7 @@ router.post('/drafts/:draftId/copy', gmailLimiter, async (req, res) => {
     const draft = await store.getDraft(req.user.id, Number(req.params.draftId));
     if (!draft) return res.status(404).json({ error: 'Draft not found.' });
     const content = { ...draft.content, id: draft.id, version: draft.version };
+    { const owner = await store.getCase(req.user.id, draft.caseId); if (!writable(owner, res)) return; }
     const approval = draft.status === 'approved' ? await store.latestApproval(draft.id) : null;
 
     // The guard is run again now, under the case's CURRENT checking: an approval does not outlive a source that has since become unreadable,
@@ -175,6 +183,7 @@ router.patch('/drafts/:draftId', async (req, res) => {
     if (!draft) return res.status(404).json({ error: 'Draft not found.' });
     if (draft.status === 'replaced' || draft.status === 'declined') return res.status(409).json({ error: `This draft is ${draft.status}.` });
     const c = await store.getCase(req.user.id, draft.caseId);
+    if (!writable(c, res)) return;
     const next = { ...draft.content };
     if (req.body?.subject !== undefined) next.subject = String(req.body.subject).slice(0, 300);
     for (const f of ['to', 'cc']) {
@@ -229,6 +238,38 @@ router.get('/:id', async (req, res) => {
   } catch (err) { fail(res, err); }
 });
 
+// What deleting this case would take with it (the confirmation shows these counts).
+router.get('/:id/delete-preview', async (req, res) => {
+  try {
+    const c = await loadCase(req, res);
+    if (!c) return;
+    res.json(await store.deletePreview(req.user.id, c));
+  } catch (err) { fail(res, err); }
+});
+
+// Delete a case. Only from inside the case: the person types its name; if any draft was ever approved they must also acknowledge that the approval
+// record goes too. By default a copy waits 30 days in the shared recycle bin; { forever: true } skips the copy. Tasks made from its rows stay.
+router.delete('/:id', async (req, res) => {
+  try {
+    const c = await loadCase(req, res);
+    if (!c) return;
+    if (String(req.body?.confirmTitle || '').trim() !== String(c.title).trim()) return res.status(400).json({ error: 'Type the name of the case exactly to delete it.' });
+    const preview = await store.deletePreview(req.user.id, c);
+    if (preview.approvedEver && !req.body?.acknowledgeApprovals) {
+      return res.status(409).json({ error: 'This case has approved drafts. Deleting it deletes the record that they were approved and copied. Confirm that you understand.', needsAcknowledgement: true, preview });
+    }
+    try {
+      const out = await store.deleteCase(req.user.id, c, { forever: !!req.body?.forever });
+      res.json({ ok: true, binId: out.binId, forever: !!req.body?.forever, preview });
+    } catch (err) {
+      if (err && err.code === 'TOO_LARGE') {
+        return res.status(409).json({ error: 'This case is too big to keep in the recycle bin. You can delete it forever instead, or leave it as it is.', tooLarge: true });
+      }
+      throw err;
+    }
+  } catch (err) { fail(res, err); }
+});
+
 router.patch('/:id', async (req, res) => {
   try {
     const c = await loadCase(req, res);
@@ -259,10 +300,41 @@ router.get('/:id/threads/:threadId/preview', gmailLimiter, async (req, res) => {
   } catch (err) { fail(res, err); }
 });
 
+// Set a thread aside (kept, so anything that cites it still resolves, but no longer read) or bring it back.
+router.post('/:id/threads/:threadId/set-aside', async (req, res) => {
+  try {
+    const c = await loadCase(req, res);
+    if (!c) return;
+    if (!writable(c, res)) return;
+    const threadId = String(req.params.threadId || '');
+    if (!/^[A-Za-z0-9_-]{6,64}$/.test(threadId)) return res.status(400).json({ error: 'Bad thread.' });
+    const n = await store.setThreadAside(c.id, threadId, req.body?.aside !== false);
+    res.json({ ok: true, changed: n, aside: req.body?.aside !== false });
+  } catch (err) { fail(res, err); }
+});
+
+// Remove a thread from the case for good. Refused, with what cites it, when a ledger row or a draft quotes it: set it aside instead.
+router.post('/:id/threads/:threadId/detach', async (req, res) => {
+  try {
+    const c = await loadCase(req, res);
+    if (!c) return;
+    if (!writable(c, res)) return;
+    const threadId = String(req.params.threadId || '');
+    if (!/^[A-Za-z0-9_-]{6,64}$/.test(threadId)) return res.status(400).json({ error: 'Bad thread.' });
+    const out = await store.detachThread(req.user.id, c.id, threadId);
+    if (out.cited) {
+      const bits = [out.cited.rows ? `${out.cited.rows} ledger row${out.cited.rows === 1 ? '' : 's'}` : null, out.cited.drafts ? `${out.cited.drafts} draft${out.cited.drafts === 1 ? '' : 's'}` : null].filter(Boolean).join(' and ');
+      return res.status(409).json({ error: `Not removed: ${bits} quote this thread. Set it aside instead, or waive or decline those first.`, cited: out.cited });
+    }
+    res.json({ ok: true, removed: out.removed });
+  } catch (err) { fail(res, err); }
+});
+
 router.post('/:id/threads', gmailLimiter, async (req, res) => {
   try {
     const c = await loadCase(req, res);
     if (!c) return;
+    if (!writable(c, res)) return;
     const threadId = String(req.body?.threadId || '').trim();
     if (!/^[A-Za-z0-9_-]{6,64}$/.test(threadId)) return res.status(400).json({ error: 'Choose a thread.' });
     res.json(await store.attachThread(req.user.id, c.id, threadId));
@@ -274,6 +346,7 @@ router.post('/:id/attachments', gmailLimiter, async (req, res) => {
   try {
     const c = await loadCase(req, res);
     if (!c) return;
+    if (!writable(c, res)) return;
     res.json(await store.fetchAttachments(req.user.id, c));
   } catch (err) { fail(res, err); }
 });
@@ -283,9 +356,10 @@ router.post('/:id/extract', aiLimiter, async (req, res) => {
   try {
     const c = await loadCase(req, res);
     if (!c) return;
+    if (!writable(c, res)) return;
     const { timezone } = await resolveUserTimezone(req.user.id);
     const owner = await store.ownerEmail(req.user.id);
-    const sources = (await store.listSources(c.id, { withText: true })).filter((s) => !s.extractedAt && s.parseStatus === 'parsed' && s.channel !== 'note');
+    const sources = (await store.listSources(c.id, { withText: true })).filter((s) => !s.extractedAt && !s.setAsideAt && s.parseStatus === 'parsed' && s.channel !== 'note');
     const summary = { read: 0, added: 0, evidence: 0, superseded: 0, conflicts: 0, dropped: [], remaining: Math.max(0, sources.length - EXTRACT_BATCH), stopped: null };
 
     // One source at a time, each saved and marked read TOGETHER under the ledger lock. If the model fails on the seventh, the first six are
@@ -336,6 +410,7 @@ router.post('/:id/sent-sweep', gmailLimiter, async (req, res) => {
   try {
     const c = await loadCase(req, res);
     if (!c) return;
+    if (!writable(c, res)) return;
     res.json(await store.runSentSweep(req.user.id, c));
   } catch (err) { fail(res, err); }
 });
@@ -349,6 +424,7 @@ router.post('/:id/rows/:rowId/event', async (req, res) => {
   try {
     const c = await loadCase(req, res);
     if (!c) return;
+    if (!writable(c, res)) return;
     const type = String(req.body?.type || '');
     // Only human actions are offered here: closing, waiving, confirming authority, asserting a condition was met.
     if (!['human_close', 'waive', 'confirm_authority', 'condition_met'].includes(type)) return res.status(400).json({ error: 'Unknown action.' });
@@ -371,6 +447,7 @@ router.post('/:id/rows/:rowId/substitute', async (req, res) => {
   try {
     const c = await loadCase(req, res);
     if (!c) return;
+    if (!writable(c, res)) return;
     const party = String(req.body?.party || '').trim();
     const sourceId = Number(req.body?.sourceId);
     const quote = String(req.body?.quote || '').trim();
@@ -396,6 +473,7 @@ router.post('/:id/rows/:rowId/task', async (req, res) => {
   try {
     const c = await loadCase(req, res);
     if (!c) return;
+    if (!writable(c, res)) return;
     // The task and the row's link to it are made in one transaction: no task without the link, no link without the task.
     const out = await store.withLedger(req.user.id, c.id, async (ledger, client) => {
       const row = ledger.find((r) => r.id === req.params.rowId);
@@ -421,6 +499,7 @@ router.post('/:id/rows/:rowId/draft', gmailLimiter, async (req, res) => {
   try {
     const c = await loadCase(req, res);
     if (!c) return;
+    if (!writable(c, res)) return;
     const row = c.ledger.find((r) => r.id === req.params.rowId);
     if (!row) return res.status(404).json({ error: 'Row not found.' });
 

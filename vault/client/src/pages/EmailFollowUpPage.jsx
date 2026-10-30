@@ -36,8 +36,12 @@ export default function EmailFollowUpPage() {
   const [creating, setCreating] = useState(false);
   const [clients, setClients] = useState([]);
   const [clientsLoaded, setClientsLoaded] = useState(false);
+  const [showClosed, setShowClosed] = useState(false);
   const [form, setForm] = useState({ title: '', obligation: '', kind: 'accounting', profile: 'soft', aliases: '', clientId: '' });
   const canUse = isAdmin || featureAccess.emailFollowUp === true;
+  const isClosed = (c) => c.status === 'closed' || c.status === 'abandoned';
+  const closedCount = (cases || []).filter(isClosed).length;
+  const visibleCases = (cases || []).filter((c) => showClosed || !isClosed(c));
   const openId = Number(params.get('case')) || null;
   const tab = TABS.includes(params.get('tab')) ? params.get('tab') : 'ledger';
 
@@ -184,18 +188,24 @@ export default function EmailFollowUpPage() {
               )}
 
               {cases === null && <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>}
-              {cases && !cases.length && !creating && (
+              {cases && !visibleCases.length && !creating && (
                 <div className="rounded-2xl border p-6" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-                  <p className="text-sm leading-relaxed">No cases yet. Press <strong>New case</strong>, say what is owed and by whom, then attach the email threads about it.</p>
+                  <p className="text-sm leading-relaxed">{cases.length ? 'No open cases. Show closed cases above, or press New case.' : <>No cases yet. Press <strong>New case</strong>, say what is owed and by whom, then attach the email threads about it.</>}</p>
                 </div>
               )}
               <div className="space-y-3">
-                {(cases || []).map((c) => (
+                {closedCount > 0 && (
+                <Tooltip text={EF_TIPS.showClosed}>
+                  <button type="button" onClick={() => setShowClosed(!showClosed)} className="text-xs hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)' }}>{showClosed ? 'Hide closed cases' : `Show closed cases (${closedCount})`}</button>
+                </Tooltip>
+              )}
+              {visibleCases.map((c) => (
                   <Tooltip key={c.id} text={EF_TIPS.caseCard}>
                     <button type="button" onClick={() => setParams({ case: String(c.id) })} className="w-full text-left rounded-xl border p-4 hover:opacity-70 transition-opacity" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-semibold">{c.title}</span>
                         <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{c.status}</span>
+                        {c.closeReason && isClosed(c) && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>({c.closeReason})</span>}
                         {c.pendingDrafts > 0 && <span className="text-xs" style={{ color: '#f59e0b' }}>{c.pendingDrafts} draft{c.pendingDrafts === 1 ? '' : 's'} waiting</span>}
                       </div>
                       <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>{c.clientName ? `${c.clientName} · ` : ''}{c.obligation} · {c.rowCount} in the ledger · {c.sourceCount} message{c.sourceCount === 1 ? '' : 's'}</p>
