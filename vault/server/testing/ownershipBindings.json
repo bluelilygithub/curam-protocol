@@ -29,7 +29,7 @@
     "api/goals/:id": "objectives",
     "api/guitar/library/:songId": "guitar_user_songs",
     "api/guitar/loops/:loopId": "guitar_user_song_loops",
-    "api/guitar/loops/:songId": "guitar_user_song_loops",
+    "api/guitar/loops/:songId": "guitar_user_songs",
     "api/guitar/songs/:songId/chords/:eventId": "guitar_chord_events",
     "api/mission/:id": "mission_statements",
     "api/mood/dominant/:entityType/:entityId": "mood_checkins",
@@ -57,6 +57,8 @@
     "api/restyle/projects/:id/versions/:vid": "restyle_project_versions",
     "api/burner-mail/addresses/:id": "burner_addresses",
     "api/notes/:id/versions/:vid": "note_versions",
-    "api/attachments/:id": "attachments"
+    "api/attachments/:id": "attachments",
+    "api/bookmarks/session/:sessionId": "sessions",
+    "api/pinned-urls/:projectId": "projects"
   }
 }

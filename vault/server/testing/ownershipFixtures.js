@@ -150,4 +150,34 @@ async function reread(pool, tables, entry) {
   return r.rows[0] || null;
 }
 
-module.exports = { MARK, introspect, makeBuilder, reread, OWNER_COLS };
+/**
+ * Lists that are built from a link between two rows (a subtask, a chat with no project, a mood tied to a task) stay empty
+ * when every fixture row stands alone. This adds the few extra rows that make those routes answer with A's data.
+ * Each is a copy of A's fixture row with the link columns changed; a failure to add one is reported, not fatal.
+ */
+async function seedDerived(pool, tables, fx) {
+  const notes = [];
+  async function clone(table, overrides) {
+    const e = fx[table]; if (!e) throw new Error(`no fixture row for ${table}`);
+    const t = tables[table];
+    const row = { ...e.row, ...overrides };
+    // a serial/identity key is left for the database to assign; a key the caller overrides (a text id) is kept
+    for (const k of t.pk) if (!(k in overrides)) { const c = t.cols.find((x) => x.name === k); if (c && c.hasDefault) delete row[k]; }
+    const names = Object.keys(row);
+    const res = await pool.query(`INSERT INTO "${table}" (${names.map((n) => `"${n}"`).join(',')}) VALUES (${names.map((_, i) => `$${i + 1}`).join(',')}) RETURNING *`, names.map((n) => row[n]));
+    return res.rows[0];
+  }
+  const step = async (label, fn) => { try { await fn(); } catch (e) { notes.push(`${label}: ${String(e.message).slice(0, 90)}`); } };
+  const idOf = (t) => fx[t] && Object.values(fx[t].pk)[0];
+
+  await step('subtask', () => clone('tasks', { parentTaskId: idOf('tasks'), shareToken: null }));
+  await step('chat with no project', () => clone('messages', { projectId: null, sessionId: idOf('sessions') }));
+  await step('deleted chat', () => clone('sessions', { sessionId: `${MARK}deleted-${rnd()}`, deletedAt: new Date() }));
+  await step('project not yet a client project', () => clone('projects', { projectType: 'standard' }));
+  await step('mood tied to a task', () => clone('mood_checkins', { entity_type: 'task', entity_id: String(idOf('tasks')) }));
+  await step('current mission statement', () => pool.query('UPDATE mission_statements SET is_current = true WHERE id = $1', [idOf('mission_statements')]));
+  await step('search index entry', () => pool.query(`INSERT INTO search_index (type,"projectId",title,body) VALUES ('project',$1,$2,$3)`, [String(idOf('projects')), `${MARK}search-title`, `${MARK}search-body`]));
+  return notes;
+}
+
+module.exports = { MARK, introspect, makeBuilder, reread, OWNER_COLS, seedDerived };

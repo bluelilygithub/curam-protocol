@@ -19,7 +19,7 @@ const harness = require('../testing/crossUserHarness');
 const fs = require('fs');
 const path = require('path');
 const { listRoutes } = require('../testing/listRoutes');
-const { introspect, makeBuilder, MARK, OWNER_COLS } = require('../testing/ownershipFixtures');
+const { introspect, makeBuilder, seedDerived, MARK, OWNER_COLS } = require('../testing/ownershipFixtures');
 const { bindingsFor, HINTS } = require('../testing/ownershipBindings');
 const { FEATURE_ACCESS_KEYS } = require('../config/featureAccess');
 
@@ -42,6 +42,9 @@ const REF_ALIASES = {
   messages: ['messageId'], memory: ['memoryId'], client_contacts: ['contactId'], client_touchpoints: ['touchpointId'],
 };
 
+// --probe=<text> prints what user A is told by every GET route whose "METHOD path" contains the text (to see why a route is vacuous)
+const PROBE = (process.argv.find((x) => x.startsWith('--probe=')) || '').slice(8);
+
 (async () => {
   const h = await harness.start();
   const { pool } = h;
@@ -55,6 +58,8 @@ const REF_ALIASES = {
   const unbuildable = {};
   for (const t of Object.keys(tables)) { try { await builder.build(t); } catch (e) { unbuildable[t] = e.message.slice(0, 80); } }
   const fx = builder.rows;
+  const seedNotes = await seedDerived(pool, tables, fx);
+  if (seedNotes.length) console.log(`extra link rows not added: ${seedNotes.join('; ')}`);
   console.log(`fixtures: ${Object.keys(fx).length} of ${Object.keys(tables).length} tables hold a row for user A`);
 
   const tableNames = new Set(Object.keys(tables));
@@ -118,9 +123,12 @@ const REF_ALIASES = {
 
   // 1. leak sweep ────────────────────────────────────────────────────────────────────────────────
   // Routes that need a date range or a search term answer 400 to a bare call; retry with ordinary values.
+  // routes that answer nothing without a search word
+  const QUERY_HINTS = { '/api/search': 'q=' + MARK.replace(/-$/, '') };
   const STD_QUERY = 'from=2000-01-01&to=2100-01-01&start=2000-01-01&end=2100-01-01&fy=2025-26&year=2026&month=1&q=probe&limit=50';
   const withQuery = (u) => u + (u.includes('?') ? '&' : '?') + STD_QUERY;
   const get = async (user, url) => {
+    for (const [p, q] of Object.entries(QUERY_HINTS)) if (url === p) url += '?' + q;
     let r = await harness.call(h.base, 'GET', url, { token: user.token });
     if (r.status === 400) r = await harness.call(h.base, 'GET', withQuery(url), { token: user.token });
     return r;
@@ -132,6 +140,7 @@ const REF_ALIASES = {
     const b = await get(B, r.url);
     if (hasMark(b.text) && !SHARED_BY_DESIGN[key(r)]) results.leaks.push(`${key(r)} -> ${b.status} ${r.url}`);
     const a = await get(A, r.url);
+    if (PROBE && key(r).includes(PROBE)) console.log(`  probe ${key(r)} url=${r.url} bound=${r.boundTables.join(',')} -> A ${a.status} ${a.text.slice(0, 300)}`);
     if (hasMark(a.text)) { results.verified++; continue; }
     const c = await get(C, r.url);
     if (a.status >= 200 && a.status < 300 && a.text !== c.text) {
