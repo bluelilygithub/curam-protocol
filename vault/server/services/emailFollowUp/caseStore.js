@@ -202,15 +202,39 @@ async function attachThread(userId, caseId, threadId) {
 }
 
 /** Threads that look like they belong to a case, for the person to accept one by one (Rule 1.2). */
+const FIND_SHOW = 12;        // threads shown per press
+const FIND_SCAN_MAX = 200;   // Gmail threads looked through per press while finding that many unattached ones
+const FIND_PAGE = 50;
+
 async function suggestThreads(userId, caseRow, attachedThreadIds) {
   const g = gmailHelpers();
   const gmail = await g.getGmailClient(userId);
   const aliases = caseRow.aliases || [];
-  if (!aliases.length) return [];
+  if (!aliases.length) return { threads: [], more: false };
   const q = `(${aliases.map((a) => `from:${a} OR to:${a}`).join(' OR ')})`;
-  const list = await gmail.users.threads.list({ userId: 'me', q, maxResults: 15 });
+  const attached = new Set(attachedThreadIds);
+
+  // Newest first, page by page, skipping what is already attached, until enough new ones are found. (Looking at only the newest 15 meant that
+  // once those were attached, Find mail showed nothing however many older threads there were.)
+  const picked = [];
+  let scanned = 0;
+  let pageToken;
+  let more = false;
+  do {
+    const list = await gmail.users.threads.list({ userId: 'me', q, maxResults: FIND_PAGE, pageToken });
+    const page = list.data.threads || [];
+    for (const t of page) {
+      scanned += 1;
+      if (attached.has(t.id)) continue;
+      if (picked.length < FIND_SHOW) picked.push(t);
+      else more = true; // an unattached thread beyond the ones shown
+    }
+    pageToken = list.data.nextPageToken;
+  } while (pageToken && picked.length < FIND_SHOW && scanned < FIND_SCAN_MAX);
+  if (pageToken) more = true; // Gmail has older threads still not looked at
+
   const out = [];
-  for (const t of (list.data.threads || []).filter((x) => !attachedThreadIds.includes(x.id)).slice(0, 12)) {
+  for (const t of picked) {
     const full = await gmail.users.threads.get({ userId: 'me', id: t.id, format: 'metadata', metadataHeaders: ['Subject', 'From', 'Date'] });
     const first = (full.data.messages || [])[0];
     const headers = first?.payload?.headers || [];
@@ -223,7 +247,7 @@ async function suggestThreads(userId, caseRow, attachedThreadIds) {
       messages: (full.data.messages || []).length,
     });
   }
-  return out;
+  return { threads: out, more };
 }
 
 const ATT_MAX_DOWNLOADS = 12;      // files downloaded per press, to keep one request short
@@ -314,47 +338,79 @@ async function previewThread(userId, threadId) {
   });
 }
 
+const SWEEP_PAGE = 100;           // Sent messages looked at per press
+const SWEEP_FETCH_BATCH = 8;      // downloaded at once within a page
+const SWEEP_RESUME_MS = 30 * 60 * 1000;  // Gmail page positions only stay good for a short while
+
 /**
  * Rule 10.1: sweep Sent for this case, across every alias (Rule 10.3: scope is the case, never one party).
- * A failed sweep is recorded as not completed, which blocks drafting; it is never treated as "nothing found".
+ * On a big case one press looks at one page of Sent (100 messages) and the check carries on from there the next press; it counts as
+ * COMPLETE only when the last page is done. A failure is recorded as not completed, which blocks drafting; it is never "nothing found".
+ * A later check only needs to add the new tail (from the last completed check, less an hour) as long as it covered the same addresses
+ * and reached back at least as far as this case needs now.
+ * @returns {{completed: boolean, partial: boolean, from: string, to: string, found: number, scanned: number}}
  */
 async function runSentSweep(userId, caseRow) {
   const aliases = caseRow.aliases || [];
   if (!aliases.length) throw Object.assign(new Error('Add at least one address for the people in this case first.'), { status: 400 });
-  const requestDates = (caseRow.ledger || []).map((r) => r.requestDate).filter(Boolean).map((d) => new Date(d).getTime());
-  const fromMs = Math.min(new Date(caseRow.createdAt).getTime(), ...requestDates) - 24 * 3600 * 1000;
-  const from = new Date(fromMs);
-  const to = new Date();
+  const aliasKey = [...aliases].sort().join(',');
   const g = gmailHelpers();
-  let found = 0;
+
+  const { rows: last } = await pool.query('SELECT * FROM ef_sent_sweeps WHERE "caseId"=$1 ORDER BY id DESC LIMIT 1', [caseRow.id]);
+  let run = last[0] && !last[0].completed && !last[0].error && last[0].nextPageToken && last[0].aliasKey === aliasKey
+    && Date.now() - new Date(last[0].updatedAt).getTime() < SWEEP_RESUME_MS ? last[0] : null;
+
+  if (!run) {
+    const requestDates = (caseRow.ledger || []).map((r) => r.requestDate).filter(Boolean).map((d) => new Date(d).getTime());
+    const needFromMs = Math.min(new Date(caseRow.createdAt).getTime(), ...requestDates) - 24 * 3600 * 1000;
+    const { rows: done } = await pool.query('SELECT * FROM ef_sent_sweeps WHERE "caseId"=$1 AND completed=TRUE ORDER BY id DESC LIMIT 1', [caseRow.id]);
+    const prev = done[0] && done[0].aliasKey === aliasKey && new Date(done[0].fromAt).getTime() <= needFromMs ? done[0] : null;
+    const fromMs = prev ? new Date(prev.fromAt).getTime() : needFromMs;                       // what the check now claims to cover
+    const afterMs = prev ? new Date(prev.toAt).getTime() - 3600 * 1000 : needFromMs;          // where this run needs to start looking
+    const q = `in:sent (${aliases.map((a) => `to:${a} OR cc:${a}`).join(' OR ')}) after:${Math.floor(afterMs / 1000)}`;
+    const ins = await pool.query(
+      'INSERT INTO ef_sent_sweeps ("caseId","userId","fromAt","toAt",completed,found,scanned,q,"aliasKey") VALUES ($1,$2,$3,NOW(),FALSE,0,0,$4,$5) RETURNING *',
+      [caseRow.id, userId, new Date(fromMs), q, aliasKey]);
+    run = ins.rows[0];
+  }
+
   try {
     const gmail = await g.getGmailClient(userId);
-    const q = `in:sent (${aliases.map((a) => `to:${a} OR cc:${a}`).join(' OR ')}) after:${Math.floor(fromMs / 1000)}`;
-    const ids = [];
-    let pageToken;
-    do {
-      const res = await gmail.users.messages.list({ userId: 'me', q, maxResults: 100, pageToken });
-      for (const m of res.data.messages || []) ids.push(m.id);
-      pageToken = res.data.nextPageToken;
-    } while (pageToken && ids.length < 300);
-    if (pageToken) throw new Error('More than 300 sent messages in the window: narrow the case first.');
-    for (const id of ids) {
-      const msg = await gmail.users.messages.get({ userId: 'me', id, format: 'full' });
-      const r = await addSource(userId, caseRow.id, messageToSource(msg.data, g));
-      if (r.created) found += 1;
+    const res = await gmail.users.messages.list({ userId: 'me', q: run.q, maxResults: SWEEP_PAGE, pageToken: run.nextPageToken || undefined });
+    const ids = (res.data.messages || []).map((m) => m.id);
+    const next = res.data.nextPageToken || null;
+
+    // Skip what is already stored (a repeated press or an overlapping tail costs no download).
+    const { rows: have } = ids.length ? await pool.query('SELECT "externalId" FROM ef_sources WHERE "caseId"=$1 AND "externalId" = ANY($2)', [caseRow.id, ids]) : { rows: [] };
+    const known = new Set(have.map((r) => r.externalId));
+    const todo = ids.filter((id) => !known.has(id));
+    let found = 0;
+    for (let i = 0; i < todo.length; i += SWEEP_FETCH_BATCH) {
+      const got = await Promise.all(todo.slice(i, i + SWEEP_FETCH_BATCH).map((id) => gmail.users.messages.get({ userId: 'me', id, format: 'full' })));
+      for (const msg of got) { const r = await addSource(userId, caseRow.id, messageToSource(msg.data, g)); if (r.created) found += 1; }
     }
-    await pool.query(`INSERT INTO ef_sent_sweeps ("caseId","userId","fromAt","toAt",completed,found) VALUES ($1,$2,$3,$4,TRUE,$5)`, [caseRow.id, userId, from, to, found]);
-    return { completed: true, from: from.toISOString(), to: to.toISOString(), found, scanned: ids.length };
+
+    const completed = !next;
+    const scanned = run.scanned + ids.length;
+    const total = run.found + found;
+    await pool.query(
+      'UPDATE ef_sent_sweeps SET completed=$1, "nextPageToken"=$2, scanned=$3, found=$4, "updatedAt"=NOW() WHERE id=$5',
+      [completed, next, scanned, total, run.id]);
+    return { completed, partial: !completed, from: new Date(run.fromAt).toISOString(), to: new Date(run.toAt).toISOString(), found: total, scanned };
   } catch (err) {
-    await pool.query(`INSERT INTO ef_sent_sweeps ("caseId","userId","fromAt","toAt",completed,found,error) VALUES ($1,$2,$3,$4,FALSE,$5,$6)`, [caseRow.id, userId, from, to, found, String(err.message).slice(0, 300)]);
+    await pool.query('UPDATE ef_sent_sweeps SET error=$1, "nextPageToken"=NULL, "updatedAt"=NOW() WHERE id=$2', [String(err.message).slice(0, 300), run.id]);
     throw err;
   }
 }
 
 async function latestSweep(caseId) {
-  const { rows } = await pool.query(`SELECT id, "fromAt" AS "from", "toAt" AS "to", completed, found, error, "createdAt" FROM ef_sent_sweeps WHERE "caseId"=$1 ORDER BY id DESC LIMIT 1`, [caseId]);
+  const { rows } = await pool.query('SELECT id, "fromAt" AS "from", "toAt" AS "to", completed, found, scanned, "nextPageToken", error, "updatedAt" FROM ef_sent_sweeps WHERE "caseId"=$1 ORDER BY id DESC LIMIT 1', [caseId]);
   const w = rows[0];
-  return w ? { completed: w.completed, from: w.from, to: w.to, found: w.found, error: w.error, at: w.createdAt } : null;
+  if (!w) return null;
+  return {
+    completed: w.completed, partial: !w.completed && !w.error && !!w.nextPageToken, from: w.from, to: w.to,
+    found: w.found, scanned: w.scanned, error: w.error, at: w.updatedAt,
+  };
 }
 
 /** Copy-time check (Rule 9.4): mail in the cited threads newer than the draft, read live from Gmail. Fails closed. */

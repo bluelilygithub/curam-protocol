@@ -321,6 +321,7 @@ Behaviour changed by the review (all with tests in `server/routes/emailFollowUp.
 - **§10.1 is implemented as: a chase needs a Sent check that reaches up to now (15 minutes' tolerance), and Draft follow-up makes that check itself when the last one is older.** The rule is unchanged; only the extra button press is gone. If the check cannot be made, nothing is drafted.
 - **Approval is checked again at copy time** under the case's current checking, so a draft approved under one profile, or before a source became unreadable, cannot be copied on its old approval. Changing a case's profile also sends its approved drafts back to pending.
 - **A client or project id in a request must belong to the caller.**
+- **§10.1, Check Sent in steps:** one press reads one Gmail page (100 messages) and the check counts as complete only when the last page is done; the old 300-message ceiling, which failed with no way out, is gone. A later check adds only the recent tail when it covers the same addresses and reaches back far enough (rows record the addresses they covered). Find mail pages through Gmail until it has twelve unattached threads (up to 200 looked at) instead of looking only at the newest fifteen. Every Gmail-calling route has a per-person rate limit.
 
 ### v1.0.2 — first build inside Vault (see `email-follow-up.md`); forced by running the fixtures, not by review
 

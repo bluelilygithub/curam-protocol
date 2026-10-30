@@ -27,9 +27,33 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // stand-ins: Gmail (nothing in Sent, nothing new in threads; can be made to fail) and the model
   let gmailFails = false;
+  let threadPages = null;   // Find mail: pages of thread ids, newest first (null = nothing)
+  let sentPages = null;     // Check Sent: pages of message ids (null = nothing)
+  const sentQueries = [];   // the searches the Sent check made
+  const downloaded = [];    // Sent messages actually downloaded
+  const page = (pages, token) => { const i = token ? Number(token) : 0; return { items: pages[i] || [], next: i + 1 < pages.length ? String(i + 1) : undefined }; };
   const fakeGmail = { users: {
-    messages: { list: async () => { if (gmailFails) throw new Error('Gmail is down'); return { data: { messages: [] } }; }, get: async () => ({ data: { payload: { headers: [] } } }) },
-    threads: { get: async () => ({ data: { messages: [] } }), list: async () => ({ data: { threads: [] } }) },
+    messages: {
+      list: async ({ q, pageToken }) => {
+        if (gmailFails) throw new Error('Gmail is down');
+        sentQueries.push(q);
+        if (!sentPages) return { data: { messages: [] } };
+        const p = page(sentPages, pageToken);
+        return { data: { messages: p.items.map((id) => ({ id })), nextPageToken: p.next } };
+      },
+      get: async ({ id }) => {
+        downloaded.push(id);
+        return { data: { id, threadId: `t-${id}`, internalDate: String(Date.now()), labelIds: ['SENT'], payload: { mimeType: 'text/plain', headers: [{ name: 'To', value: 'p@client.test' }, { name: 'Subject', value: `S ${id}` }, { name: 'From', value: 'me@x.test' }], body: { data: Buffer.from(`hello ${id}`).toString('base64') } } } };
+      },
+    },
+    threads: {
+      get: async ({ id }) => ({ data: { messages: [{ id: `${id}-m`, internalDate: String(Date.now() - 86400000), payload: { headers: [{ name: 'Subject', value: `Subject ${id}` }, { name: 'From', value: 'p@client.test' }] } }] } }),
+      list: async ({ pageToken }) => {
+        if (!threadPages) return { data: { threads: [] } };
+        const p = page(threadPages, pageToken);
+        return { data: { threads: p.items.map((id) => ({ id, snippet: `snippet ${id}` })), nextPageToken: p.next } };
+      },
+    },
   } };
   require('./gmail').getGmailClient = async () => fakeGmail;
 
@@ -211,6 +235,93 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     r = await call('POST', `/${c5.id}/rows/r1/draft`, {});
     const sw2 = await store.latestSweep(c5.id);
     ok('a stale check is made again before the next draft', r.status === 201 && new Date(sw2.to).getTime() > Date.now() - 60000, { s: r.status, to: sw2 && sw2.to });
+
+    // ---- Find mail: no ceiling at the newest 15 threads ----
+    console.log('Find mail goes past what is attached');
+    const cFind = await newCase();
+    const ids = Array.from({ length: 40 }, (_, i) => `th${String(i + 1).padStart(3, '0')}`);
+    threadPages = [ids.slice(0, 10), ids.slice(10, 20), ids.slice(20, 30), ids.slice(30, 40)];
+    const attachThreads = async (n) => { for (let i = 0; i < n; i += 1) await store.addSource(userA, cFind.id, { channel: 'inbound', externalId: `f-${ids[i]}`, threadId: ids[i], subject: 'x', text: 'x', receivedAt: new Date().toISOString() }); };
+    r = await call('GET', `/${cFind.id}/suggestions`);
+    ok('the first press shows twelve of the forty and says there are more', r.status === 200 && r.body.threads.length === 12 && r.body.more === true, { n: r.body.threads && r.body.threads.length, more: r.body.more });
+    await attachThreads(15);
+    r = await call('GET', `/${cFind.id}/suggestions`);
+    ok('after the newest 15 are attached it reaches past them (it used to show nothing)', r.body.threads.length === 12 && r.body.threads[0].threadId === 'th016' && r.body.more === true, { first: r.body.threads[0] && r.body.threads[0].threadId, n: r.body.threads.length });
+    await attachThreads(35);
+    r = await call('GET', `/${cFind.id}/suggestions`);
+    ok('with 35 attached, the last five are shown and nothing more is promised', r.body.threads.length === 5 && r.body.more === false, { n: r.body.threads.length, more: r.body.more });
+    await attachThreads(40);
+    r = await call('GET', `/${cFind.id}/suggestions`);
+    ok('with all forty attached there is nothing left', r.body.threads.length === 0 && r.body.more === false, r.body);
+    threadPages = null;
+
+    // ---- Check Sent: a big Sent folder is read a page at a time, and counts as done only at the end ----
+    console.log('Check Sent in steps');
+    const cSent = await newCase();
+    const sid = (n) => `s${String(n).padStart(4, '0')}`;
+    sentPages = [Array.from({ length: 100 }, (_, i) => sid(i + 1)), Array.from({ length: 100 }, (_, i) => sid(i + 101)), Array.from({ length: 50 }, (_, i) => sid(i + 201))];
+    r = await call('POST', `/${cSent.id}/sent-sweep`, {});
+    ok('the first press looks at 100 and is not finished', r.status === 200 && r.body.completed === false && r.body.partial === true && r.body.scanned === 100, r.body);
+    const firstAfter = Number(sentQueries[sentQueries.length - 1].match(/after:(\d+)/)[1]); // where THIS case's first look started
+    let sw0 = await store.latestSweep(cSent.id);
+    ok('the case shows the check as in progress', sw0.partial === true && sw0.completed === false && sw0.scanned === 100, sw0);
+    ok('an unfinished check does not count as a Sent check (the gate stays shut)', !require('../services/emailFollowUp/gates').sentSweepCovers(sw0, null, new Date().toISOString()));
+    r = await call('POST', `/${cSent.id}/sent-sweep`, {});
+    ok('the second press carries on to 200', r.body.scanned === 200 && r.body.completed === false, r.body);
+    gmailFails = true;
+    r = await call('POST', `/${cSent.id}/sent-sweep`, {});
+    ok('a Gmail failure part-way is an error and leaves the check unfinished', r.status >= 500 && (await store.latestSweep(cSent.id)).completed === false, r);
+    gmailFails = false;
+    const before = downloaded.length;
+    r = await call('POST', `/${cSent.id}/sent-sweep`, {});
+    ok('after a failure it starts again but does not download what it already has', r.body.partial === true && downloaded.length === before, { r: r.body, more: downloaded.length - before });
+    await call('POST', `/${cSent.id}/sent-sweep`, {});
+    r = await call('POST', `/${cSent.id}/sent-sweep`, {});
+    ok('the last page finishes it', r.body.completed === true && r.body.partial === false, r.body);
+    ok('every Sent message was downloaded exactly once (250)', downloaded.length === 250 && new Set(downloaded).size === 250, { n: downloaded.length, unique: new Set(downloaded).size });
+    const swDone = await store.latestSweep(cSent.id);
+    ok('now it counts as a Sent check', require('../services/emailFollowUp/gates').sentSweepCovers(swDone, null, new Date().toISOString()), swDone);
+    sentPages = [[]];
+    r = await call('POST', `/${cSent.id}/sent-sweep`, {});
+    const lastAfter = Number(sentQueries[sentQueries.length - 1].match(/after:(\d+)/)[1]);
+    ok('a later check only searches the recent tail, not everything again', r.body.completed === true && lastAfter > firstAfter, { firstAfter, lastAfter });
+    ok('and still claims the whole earlier window', new Date((await store.latestSweep(cSent.id)).from).getTime() <= firstAfter * 1000 + 1000, null);
+    await call('PATCH', `/${cSent.id}`, { aliases: ['p@client.test', 'other@client.test'] });
+    sentPages = [[]];
+    const nBefore = sentQueries.length;
+    await call('POST', `/${cSent.id}/sent-sweep`, {});
+    const widened = Number(sentQueries[nBefore].match(/after:(\d+)/)[1]);
+    ok('a new address on the case means a full look back, not just the tail', widened <= firstAfter + 2, { widened, firstAfter });
+
+    // Draft follow-up on a big Sent folder: it begins the check, says so, and drafts nothing until the check is finished
+    const cBig = await newCase();
+    const sB = await addMsg(userA, cBig.id, 7);
+    const srcBig = (await store.listSources(cBig.id, { withText: true })).find((x) => x.id === sB.id);
+    const mBig = extractMod.normalizeMentions(JSON.stringify({ mentions: [{ kind: 'waiting_on', direction: 'they_owe', party: 'p@client.test', items: ['item-7'], claimType: 'agreed', quote: 'owes item-7' }] }), { ...srcBig, receivedAt: new Date(srcBig.receivedAt).toISOString() }, { tz: 'Australia/Brisbane' }).mentions;
+    await store.withLedger(userA, cBig.id, async (l) => ({ ledger: ledgerLib.applyMention(l, mBig[0], { newId: () => 'r1' }).rows, value: 1 }));
+    sentPages = [Array.from({ length: 100 }, (_, i) => `b${i}`), Array.from({ length: 10 }, (_, i) => `c${i}`)];
+    r = await call('POST', `/${cBig.id}/rows/r1/draft`, {});
+    ok('a big Sent folder: nothing is drafted yet and the person is told why', r.status === 409 && /takes a few steps/.test(r.body.error || '') && !(await store.listDrafts(cBig.id)).length, r);
+    await call('POST', `/${cBig.id}/sent-sweep`, {});
+    r = await call('POST', `/${cBig.id}/rows/r1/draft`, {});
+    ok('once the check has finished, the draft is made', r.status === 201, r);
+    sentPages = null;
+
+    // ---- every Gmail route is limited per person ----
+    console.log('rate limit');
+    const userC = await mkUser('c');
+    const cRate = await newCase({}, userC);
+    const codes = [];
+    for (let i = 0; i < 65; i += 1) codes.push((await call('GET', `/${cRate.id}/suggestions`, null, userC)).status);
+    ok('the first 60 in a minute are allowed', codes.slice(0, 60).every((c) => c === 200), codes.slice(0, 60).filter((c) => c !== 200));
+    ok('the 61st is refused with 429', codes.slice(60).every((c) => c === 429), codes.slice(60));
+    r = await call('POST', `/${cRate.id}/sent-sweep`, {}, userC);
+    ok('the limit covers the other Gmail routes too', r.status === 429, r.status);
+    r = await call('GET', `/${cRate.id}`, null, userC);
+    ok('but reading the case itself is not limited', r.status === 200, r.status);
+    r = await call('GET', `/${caseB.id}/suggestions`, null, userB);
+    ok('and one person using up the limit does not use up anyone elses', r.status === 200, r.status);
+    await pool.query('DELETE FROM users WHERE id=$1', [userC]).catch(() => {});
   } finally {
     server.close();
     await pool.query('DELETE FROM users WHERE id = ANY($1)', [[userA, userB]]).catch(() => {}); // cascades to cases, sources, drafts, clients

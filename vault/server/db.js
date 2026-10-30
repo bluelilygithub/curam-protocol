@@ -1674,6 +1674,13 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ef_sweeps_case ON ef_sent_sweeps ("caseId", id DESC)`);
+    // A Sent check can take several presses on a busy case: where it has got to (Gmail page position), how many messages seen, the search used, and
+    // which addresses it covered (a later check can then add only the new tail, but only for the same addresses).
+    await client.query(`ALTER TABLE ef_sent_sweeps ADD COLUMN IF NOT EXISTS "nextPageToken" TEXT`);
+    await client.query(`ALTER TABLE ef_sent_sweeps ADD COLUMN IF NOT EXISTS scanned INTEGER NOT NULL DEFAULT 0`);
+    await client.query(`ALTER TABLE ef_sent_sweeps ADD COLUMN IF NOT EXISTS q TEXT`);
+    await client.query(`ALTER TABLE ef_sent_sweeps ADD COLUMN IF NOT EXISTS "aliasKey" TEXT`);
+    await client.query(`ALTER TABLE ef_sent_sweeps ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()`);
     // Safe clean-up (the only thing PC Health can change): whether the helper was started with -AllowCleanup, and each request + result.
     await client.query(`ALTER TABLE pc_health_helpers ADD COLUMN IF NOT EXISTS "canClean" BOOLEAN NOT NULL DEFAULT FALSE`);
     await client.query(`

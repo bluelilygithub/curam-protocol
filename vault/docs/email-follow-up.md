@@ -66,6 +66,21 @@ The design set recommended a **separate local product** with Vault as an optiona
 - **Not run against a real model or mailbox.** Rate of correct extraction (fixture plan Rule S2), the misrepresented-claim rate (7.5) and retrieval recall (7.6) are all still unmeasured.
 - **The UI has not been looked at in a browser.** It compiles and the API behind it passes a smoke test against the local Postgres (22 route checks), nothing more.
 
+## Limits per press
+
+A button never does unlimited work in one request. The ones that can have more to do say so, and pressing again carries on.
+
+| Button | Per press | If there is more |
+|---|---|---|
+| 1. Find mail | Looks through up to 200 Gmail threads (50 a page), newest first, skipping those already attached, and shows 12 | Says "older threads remain": attach what you need and press again to reach further back. (It used to look at only the newest 15, so once those were attached it showed nothing.) |
+| 2. Get attachments | 12 downloads, about 50 seconds, 3 scanned files by OCR | "N more messages to go: press again" |
+| 3. Read | 10 messages or attachments | "N more to read" |
+| 4. Check Sent | 100 sent messages (one Gmail page) | Carries on from where it stopped; counts as finished only when the last page is done, and drafting waits until then. The page position is kept for 30 minutes. |
+
+**Check Sent in detail.** Each press reads one page of Sent. A failure part-way is recorded as an error and the next press starts again, but messages already stored are not downloaded twice. Once a check has finished, a later check only searches the recent tail (from an hour before the last one) as long as it covers the same addresses and reaches back at least as far as the case now needs; adding an address to the case, or attaching older mail, makes the next check look back over the whole window again. (It used to stop at 300 sent messages with "narrow the case first", with no way to narrow it, which left drafting blocked for good on a long-running client.) Draft follow-up starts the check itself if it is stale; on a big Sent folder it says the check takes a few steps and drafts nothing until you have pressed Check Sent through to the end.
+
+**Rate limit.** Every route that calls Gmail (Find mail, preview, attach, Get attachments, Check Sent, drafting, copying) is limited to 60 a minute per person; Read has its own AI limit.
+
 ## Route and storage test
 
 `server/routes/emailFollowUp.test.js` runs the real routes and storage against a throwaway local Postgres with a stand-in for Gmail and for the model (the rule suite cannot see what the app does with its rules). It needs `EF_TEST_DATABASE_URL=postgresql://vault@127.0.0.1:15433/vault_local`; without it, it prints `SKIPPED` and passes, so `npm run test:email-follow-up` stays runnable anywhere. It refuses a database that is not on this machine and deletes the two users it makes. It covers: a client/project id that is not yours is refused; a model failure on the third message keeps the first two and a second press carries on; two Reads at once read each message once; a Read while a task is made keeps both changes; the ledger lock itself (two slow changes at once both survive; a change that throws leaves the ledger as it was); a profile change sends approved drafts back; copy re-checks the guard; Draft follow-up checks Sent itself, drafts nothing if it cannot, and checks again when the last check is stale. All seven fixes were broken one at a time to prove the test notices (it found a bug in the first version of the profile fix).

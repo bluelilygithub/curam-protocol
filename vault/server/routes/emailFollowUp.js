@@ -7,6 +7,7 @@
 
 const express = require('express');
 const { getLogger } = require('../middleware/requestContext');
+const rateLimit = require('express-rate-limit');
 const { aiLimiter } = require('../middleware/aiRateLimit');
 const { RuleError } = require('../services/emailFollowUp/common');
 const ledgerLib = require('../services/emailFollowUp/ledger');
@@ -21,6 +22,14 @@ const { resolveUserTimezone } = require('../services/fitness/timezone');
 
 const router = express.Router();
 const log = () => { try { return getLogger(); } catch { return console; } };
+
+// Every route that calls Gmail (looking for mail, previewing, attaching, fetching attachments, checking Sent, drafting, copying) is limited per
+// person, so a stuck button or a script cannot burn through the Gmail quota. Reading into the ledger has its own limit (aiLimiter).
+const gmailLimiter = rateLimit({
+  windowMs: 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req) => String(req.user?.id || req.ip),
+  message: { error: 'Too many requests to Gmail, please wait a minute.' },
+});
 
 const DRAFT_CAP = 5;            // Rule 8.1: unreviewed drafts per case before drafting stops
 const EXTRACT_BATCH = 10;       // messages read per press, to keep one request short
@@ -122,7 +131,7 @@ router.post('/drafts/:draftId/decline', async (req, res) => {
 });
 
 // Copy-time check (Rule 9.4): live Gmail read for new mail in the threads this draft cites. If Gmail cannot be read the answer is no.
-router.post('/drafts/:draftId/copy', async (req, res) => {
+router.post('/drafts/:draftId/copy', gmailLimiter, async (req, res) => {
   try {
     const draft = await store.getDraft(req.user.id, Number(req.params.draftId));
     if (!draft) return res.status(404).json({ error: 'Draft not found.' });
@@ -229,18 +238,18 @@ router.patch('/:id', async (req, res) => {
 });
 
 // Suggestions only (Rule 1.2): the person accepts a thread one by one.
-router.get('/:id/suggestions', async (req, res) => {
+router.get('/:id/suggestions', gmailLimiter, async (req, res) => {
   try {
     const c = await loadCase(req, res);
     if (!c) return;
     const sources = await store.listSources(c.id);
     const attached = [...new Set(sources.map((s) => s.threadId).filter(Boolean))];
-    res.json({ threads: await store.suggestThreads(req.user.id, c, attached) });
+    res.json(await store.suggestThreads(req.user.id, c, attached)); // { threads, more }
   } catch (err) { fail(res, err); }
 });
 
 // Read-only preview of a thread before attaching it. Stores nothing.
-router.get('/:id/threads/:threadId/preview', async (req, res) => {
+router.get('/:id/threads/:threadId/preview', gmailLimiter, async (req, res) => {
   try {
     const c = await loadCase(req, res);
     if (!c) return;
@@ -250,7 +259,7 @@ router.get('/:id/threads/:threadId/preview', async (req, res) => {
   } catch (err) { fail(res, err); }
 });
 
-router.post('/:id/threads', async (req, res) => {
+router.post('/:id/threads', gmailLimiter, async (req, res) => {
   try {
     const c = await loadCase(req, res);
     if (!c) return;
@@ -261,7 +270,7 @@ router.post('/:id/threads', async (req, res) => {
 });
 
 // Downloads the attachments of the attached messages (read-only) and reads their text. Press again if it says some remain.
-router.post('/:id/attachments', async (req, res) => {
+router.post('/:id/attachments', gmailLimiter, async (req, res) => {
   try {
     const c = await loadCase(req, res);
     if (!c) return;
@@ -323,7 +332,7 @@ router.post('/:id/extract', aiLimiter, async (req, res) => {
   } catch (err) { fail(res, err); }
 });
 
-router.post('/:id/sent-sweep', async (req, res) => {
+router.post('/:id/sent-sweep', gmailLimiter, async (req, res) => {
   try {
     const c = await loadCase(req, res);
     if (!c) return;
@@ -408,7 +417,7 @@ router.post('/:id/rows/:rowId/task', async (req, res) => {
 
 // ---------- drafting ----------
 
-router.post('/:id/rows/:rowId/draft', async (req, res) => {
+router.post('/:id/rows/:rowId/draft', gmailLimiter, async (req, res) => {
   try {
     const c = await loadCase(req, res);
     if (!c) return;
@@ -420,8 +429,12 @@ router.post('/:id/rows/:rowId/draft', async (req, res) => {
     let sweep = await store.latestSweep(c.id);
     const chasing = row.direction === 'they_owe' || row.direction === 'external';
     if (chasing && (row.status === 'open') && !gates.sentSweepCovers(sweep, row.requestDate, new Date().toISOString())) {
-      try { await store.runSentSweep(req.user.id, c); sweep = await store.latestSweep(c.id); }
-      catch (err) {
+      try {
+        const ran = await store.runSentSweep(req.user.id, c);
+        sweep = await store.latestSweep(c.id);
+        // A big Sent folder takes several presses of Check Sent: it is not done yet, so nothing is drafted yet.
+        if (!ran.completed) return res.status(409).json({ error: `Your Sent folder is large, so checking it takes a few steps (${ran.scanned} messages looked at so far). Press Check Sent until it says it is finished, then draft again.` });
+      } catch (err) {
         if (err && err.status) return res.status(err.status).json({ error: err.message });
         return res.status(502).json({ error: 'Your Sent folder could not be checked just now, so nothing was drafted. Try again.', detail: String(err && err.message).slice(0, 140) });
       }

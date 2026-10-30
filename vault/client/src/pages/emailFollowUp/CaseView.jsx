@@ -218,6 +218,7 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState('');
   const [suggest, setSuggest] = useState(null);
+  const [suggestMore, setSuggestMore] = useState(false);
   const [aliases, setAliases] = useState('');
   const [lastRead, setLastRead] = useState(null);
   const [previews, setPreviews] = useState({}); // threadId -> 'loading' | messages[]
@@ -318,13 +319,13 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
           <Btn small tip={EF_TIPS.savePeople} onClick={async () => { const r = await call(() => api.patch(`/api/email-follow-up/${caseId}`, { aliases: aliases.split(',').map((x) => x.trim()).filter(Boolean) }), 'Saved.'); if (r.ok) reload(); }}>Save people</Btn>
         </div>
         <div className="flex flex-wrap gap-2" data-tour="ef-steps" data-guide="mail">
-          <Btn small disabled={busy === 'find'} tip={EF_TIPS.findMail} onClick={async () => { const r = await run('find', () => api.get(`/api/email-follow-up/${caseId}/suggestions`)); if (r.ok) { setSuggest(r.data.threads); onTab('mail'); } }}>1. Find mail</Btn>
+          <Btn small disabled={busy === 'find'} tip={EF_TIPS.findMail} onClick={async () => { const r = await run('find', () => api.get(`/api/email-follow-up/${caseId}/suggestions`)); if (r.ok) { setSuggest(r.data.threads); setSuggestMore(!!r.data.more); onTab('mail'); } }}>1. Find mail</Btn>
           <Btn small disabled={busy === 'att' || !attPendingCount} tip={EF_TIPS.getAttachments(attPendingCount)} onClick={async () => { const r = await run('att', () => api.post(`/api/email-follow-up/${caseId}/attachments`, {})); if (r.ok) { setLastAtt(r.data); reload(); } }}>{busy === 'att' ? 'Fetching…' : `2. Get ${attPendingCount || 'no'} attachment${attPendingCount === 1 ? '' : 's'}`}</Btn>
           <Btn small primary disabled={busy === 'read' || !unread} tip={EF_TIPS.read(unread)} onClick={async () => { const r = await run('read', () => api.post(`/api/email-follow-up/${caseId}/extract`, {})); if (r.ok) { setLastRead(r.data); reload(); } }}>{busy === 'read' ? 'Reading…' : `3. Read ${unread || 'no'} new item${unread === 1 ? '' : 's'}`}</Btn>
-          <Btn small disabled={busy === 'sweep'} tip={EF_TIPS.checkSent} onClick={async () => { const r = await run('sweep', () => api.post(`/api/email-follow-up/${caseId}/sent-sweep`, {}), 'Sent mail checked.'); if (r.ok) reload(); }}>{busy === 'sweep' ? 'Checking…' : '4. Check Sent'}</Btn>
+          <Btn small disabled={busy === 'sweep'} tip={EF_TIPS.checkSent} onClick={async () => { const r = await run('sweep', () => api.post(`/api/email-follow-up/${caseId}/sent-sweep`, {})); if (r.ok) { useToastStore.getState().addToast(r.data.completed ? 'Sent mail checked.' : `Looked at ${r.data.scanned} sent messages so far. Press Check Sent again to carry on.`); reload(); } }}>{busy === 'sweep' ? 'Checking…' : sentSweep && sentSweep.partial ? '4. Check Sent (continue)' : '4. Check Sent'}</Btn>
         </div>
         <p className="text-xs" style={{ color: sentSweep && sentSweep.completed ? GOOD : WARN }}>
-          {sentSweep ? (sentSweep.completed ? `Sent checked ${new Date(sentSweep.at).toLocaleString()} (${sentSweep.found} new).` : `Last Sent check failed: ${sentSweep.error || 'unknown'}. Draft follow-up will try again, and drafts nothing until it works.`) : 'Sent has not been checked yet. Draft follow-up checks it for you when you chase someone.'}
+          {sentSweep ? (sentSweep.completed ? `Sent checked ${new Date(sentSweep.at).toLocaleString()} (${sentSweep.found} new).` : sentSweep.partial ? `Sent check in progress: ${sentSweep.scanned} messages looked at so far. Press Check Sent again to carry on until it says it is finished.` : `Last Sent check failed: ${sentSweep.error || 'unknown'}. Draft follow-up will try again, and drafts nothing until it works.`) : 'Sent has not been checked yet. Draft follow-up checks it for you when you chase someone.'}
         </p>
         {lastAtt && (
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
@@ -363,6 +364,7 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
             <div className="space-y-2">
               <h3 className="text-sm font-semibold">Threads with these people</h3>
               {!suggest.length && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Nothing new found. Check the addresses above.</p>}
+              {suggestMore && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>There are older threads with these people. Attach what you need from the newest, then press Find mail again to reach further back.</p>}
               {suggest.map((t) => (
                 <div key={t.threadId} className="rounded-xl border p-3 space-y-2" style={CARD}>
                   <div className="flex items-center gap-3">
