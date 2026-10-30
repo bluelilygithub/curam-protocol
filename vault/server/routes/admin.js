@@ -9,6 +9,8 @@ const sentryStats = require('../services/sentryStats');
 const { cleanLanding, getWorkspaceLanding, setWorkspaceLanding } = require('../utils/landing');
 const SALT_ROUNDS = 12;
 
+const DEFAULT_SHOP_GMAIL_QUERY = 'from:(delivery@amazon.com.au OR auto-confirm@amazon.com OR shipment-tracking@amazon.com OR *shopify.com OR *shop.app) (shipped OR delivered OR "tracking number" OR "order confirmation" OR "your order" OR "dispatch" OR "out for delivery")';
+
 async function getAdminCount(client = pool) {
   const { rows } = await client.query('SELECT COUNT(*)::INT AS n FROM users WHERE "isAdmin" = TRUE');
   return Number(rows[0]?.n || 0);
@@ -467,6 +469,64 @@ router.get('/accountants/log', async (req, res) => {
       `SELECT id, "actorId", "actorEmail", kind, method, path, query, status, ip, "userAgent", "createdAt"
        FROM accountant_access_log WHERE ${where} ORDER BY "createdAt" DESC, id DESC LIMIT $${params.length}`, params);
     res.json({ log: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/gmail-routing
+router.get('/gmail-routing', async (req, res) => {
+  try {
+    let result = await pool.query('SELECT * FROM gmail_routing_rules WHERE "ruleType" = $1', ['shop']);
+    if (result.rows.length === 0) {
+      result = await pool.query(
+        `INSERT INTO gmail_routing_rules ("ruleType", label, query, enabled)
+         VALUES ($1, $2, $3, TRUE)
+         ON CONFLICT ("ruleType") DO UPDATE SET "updatedAt" = NOW()
+         RETURNING *`,
+        ['shop', 'Deliveries/ToProcess', DEFAULT_SHOP_GMAIL_QUERY]
+      );
+    }
+    const rule = result.rows[0];
+    res.json({
+      ruleType: rule.ruleType,
+      label: rule.label,
+      query: rule.query || '',
+      enabled: !!rule.enabled,
+      updatedAt: rule.updatedAt
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/admin/gmail-routing
+router.put('/gmail-routing', async (req, res) => {
+  const { label, query, enabled } = req.body || {};
+  const nextLabel = typeof label === 'string' && label.trim() ? label.trim() : 'Deliveries/ToProcess';
+  const nextQuery = typeof query === 'string' ? query : DEFAULT_SHOP_GMAIL_QUERY;
+  const nextEnabled = typeof enabled === 'boolean' ? enabled : true;
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO gmail_routing_rules ("ruleType", label, query, enabled, "updatedAt")
+       VALUES ($1, $2, $3, $4, NOW())
+       ON CONFLICT ("ruleType") DO UPDATE SET
+         label = EXCLUDED.label,
+         query = EXCLUDED.query,
+         enabled = EXCLUDED.enabled,
+         "updatedAt" = NOW()
+       RETURNING *`,
+      ['shop', nextLabel, nextQuery, nextEnabled]
+    );
+    const rule = result.rows[0];
+    res.json({
+      ruleType: rule.ruleType,
+      label: rule.label,
+      query: rule.query || '',
+      enabled: !!rule.enabled,
+      updatedAt: rule.updatedAt
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

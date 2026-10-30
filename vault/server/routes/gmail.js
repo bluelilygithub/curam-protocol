@@ -13,6 +13,24 @@ const { callModel } = require('../services/callModel');
 const { calculateCost } = require('../services/costCalculator');
 const { encrypt, decrypt } = require('../utils/encryption');
 
+let _shopRuleCache = { rule: null, ts: 0 };
+const SHOP_RULE_TTL = 60 * 1000;
+
+async function getShopGmailRule() {
+  const now = Date.now();
+  if (_shopRuleCache.rule && now - _shopRuleCache.ts < SHOP_RULE_TTL) {
+    return _shopRuleCache.rule;
+  }
+  try {
+    const { rows } = await pool.query('SELECT * FROM gmail_routing_rules WHERE "ruleType" = $1', ['shop']);
+    _shopRuleCache = { rule: rows[0] || null, ts: now };
+    return _shopRuleCache.rule;
+  } catch (e) {
+    console.error('[gmail] getShopGmailRule failed', e.message);
+    return null;
+  }
+}
+
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const gmailAuthLimiter = rateLimit({
@@ -566,17 +584,32 @@ function formatEmailAge(ms) {
 // top of the INBOX label filter, used by fetchAllInboxEmailsSince for real pagination.
 async function fetchInboxEmails(userId, optsOrMaxResults = 100) {
   const opts = typeof optsOrMaxResults === 'number' ? { maxResults: optsOrMaxResults } : (optsOrMaxResults || {});
-  const { maxResults = 100, q, pageToken } = opts;
+  const { maxResults = 100, q, pageToken, useShopRule } = opts;
 
   const oauth2Client = await getAuthClient(userId);
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+  let labelIds = ['INBOX'];
+  let query = q || '';
+
+  if (useShopRule) {
+    const rule = await getShopGmailRule();
+    if (rule?.enabled && rule.label) {
+      labelIds = undefined;
+      const parts = [];
+      parts.push(`label:${rule.label}`);
+      if (rule.query && rule.query.trim()) parts.push(`(${rule.query.trim()})`);
+      if (query.trim()) parts.push(query.trim());
+      query = parts.join(' AND ');
+    }
+  }
 
   // threads.list deduplicates conversations (one entry per thread, not per message)
   const listRes = await gmail.users.threads.list({
     userId: 'me',
     maxResults,
-    labelIds: ['INBOX'],
-    ...(q ? { q } : {}),
+    ...(labelIds ? { labelIds } : {}),
+    ...(query ? { q: query } : {}),
     ...(pageToken ? { pageToken } : {}),
   });
   const threadList = listRes.data.threads || [];
@@ -722,6 +755,19 @@ Return format — JSON array only, no markdown, no explanation. Use the number f
 }
 
 // GET /api/gmail/inbox/classify — incremental: only classifies new/changed threads
+router.get('/shop/ingest', async (req, res) => {
+  try {
+    const { emails } = await fetchInboxEmails(req.user.id, { maxResults: 100, useShopRule: true });
+    res.json({ emails });
+  } catch (err) {
+    console.error('[gmail/shop/ingest]', err.message);
+    if (err.message?.includes('invalid_grant') || err.message?.includes('Token has been expired')) {
+      return res.status(400).json({ error: 'gmail_token_expired' });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/inbox/classify', gmailInboxClassifyLimiter, async (req, res) => {
   const userId = req.user.id;
   const forceRefresh = req.query.refresh === '1';
