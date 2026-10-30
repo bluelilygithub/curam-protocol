@@ -373,10 +373,12 @@ router.patch('/:id/assign-project', async (req, res) => {
   try {
     const { rows: [c] } = await pool.query('SELECT id FROM clients WHERE id=$1 AND "userId"=$2', [clientId, req.user.id]);
     if (!c) return res.status(404).json({ error: 'Client not found.' });
-    const { rows: [p] } = await pool.query('SELECT id, "clientId" FROM projects WHERE id=$1 AND "userId"=$2', [projectId, req.user.id]);
+    const { rows: [p] } = await pool.query('SELECT id, "clientId", "projectType" FROM projects WHERE id=$1 AND "userId"=$2', [projectId, req.user.id]);
     if (!p) return res.status(404).json({ error: 'Project not found.' });
     if (req.body?.unassign === true) {
       if (p.clientId !== clientId) return res.status(409).json({ error: 'That project is not linked to this client.' });
+      // Client work (projectType 'client') must always have a client; unlinking it would leave an orphan.
+      if (p.projectType === 'client') return res.status(409).json({ error: 'This is client work, so it needs a client. Move it to another client instead of unlinking it.' });
       await pool.query('UPDATE projects SET "clientId" = NULL, "updatedAt" = NOW() WHERE id=$1 AND "userId"=$2', [projectId, req.user.id]);
     } else {
       await pool.query('UPDATE projects SET "clientId" = $1, "updatedAt" = NOW() WHERE id=$2 AND "userId"=$3', [clientId, projectId, req.user.id]);

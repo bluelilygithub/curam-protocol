@@ -2005,7 +2005,12 @@ function ProjectsSection({ clientId, projects, tasks, projectStatus, onRefresh }
 
   const unlinkProject = async (project) => {
     try {
-      await api.patch(`/api/clients/${clientId}/assign-project`, { projectId: project.id, unassign: true });
+      const res = await api.patch(`/api/clients/${clientId}/assign-project`, { projectId: project.id, unassign: true });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        addToast(data.error || 'Failed to unlink project', 'error');
+        return;
+      }
       addToast(`${project.name} unlinked`);
       onRefresh();
     } catch {
