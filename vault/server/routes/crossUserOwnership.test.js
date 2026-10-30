@@ -125,6 +125,8 @@ const REF_ALIASES = {
     if (r.status === 400) r = await harness.call(h.base, 'GET', withQuery(url), { token: user.token });
     return r;
   };
+  // with --vacuous, say what A was actually told, so a missing fixture can be told from a route that holds no user data
+  const why = (a) => (process.argv.includes('--vacuous') ? ` :: ${a.text.replace(/\s+/g, ' ').slice(0, 110)}` : '');
   results.distinguishable = []; results.adminInside = []; results.external = []; results.notFound = [];
   for (const r of plan.filter((p) => p.method === 'GET')) {
     const b = await get(B, r.url);
@@ -138,9 +140,9 @@ const REF_ALIASES = {
       else results.distinguishable.push(key(r));
     } else if (a.status === 403) results.adminInside.push(key(r));
     else if (a.status >= 500) results.external.push(`${key(r)} (${a.status})`);
-    else if (a.status === 404 || a.status === 410) results.notFound.push(key(r));
+    else if (a.status === 404 || a.status === 410) results.notFound.push(key(r) + why(a));
     else if (r.unresolved) results.unresolved.push(key(r));
-    else results.vacuous.push(`${key(r)} (A got ${a.status})`);
+    else results.vacuous.push(`${key(r)} (A got ${a.status})${why(a)}`);
   }
 
   // 2. id probes ─────────────────────────────────────────────────────────────────────────────────

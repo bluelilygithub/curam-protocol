@@ -12,6 +12,13 @@ const crypto = require('crypto');
 const MARK = 'XMARK-';
 const OWNER_COLS = new Set(['userId', 'user_id', 'ownerId', 'owner_id', 'createdBy']);
 const SKIP_TABLES = new Set(['users', 'auth_sessions']);
+// Nullable columns that mean "this row has been removed / ended / used". A fixture row that has them filled looks deleted,
+// expired or closed, and the routes rightly hide it, so the route would show nothing and prove nothing.
+const ENDED_COL = /^(deleted|closed|expires?|expired|archived|dismissed|cancel+ed|revoked|completed|resolved|used|consumed|trashed)(_?at|On|Date)?$/i;
+// Required expiry columns get a date a year ahead (a row that expired at birth is hidden by "expiresAt > NOW()"), and a few
+// text columns that routes filter on get the value the filter wants instead of a marker.
+const FUTURE_COL = /^expires?(At|On|Date)?$/i;
+const VALUE_HINTS = { 'projects.projectType': 'client', 'projects.clientStatus': 'active' };
 const rnd = () => crypto.randomBytes(3).toString('hex');
 
 async function introspect(pool) {
@@ -52,6 +59,9 @@ async function introspect(pool) {
 }
 
 function valueFor(table, col) {
+  const hint = VALUE_HINTS[`${table.name}.${col.name}`];
+  if (hint !== undefined) return hint;
+  if (FUTURE_COL.test(col.name) && /^timestamp/.test(col.type)) return new Date(Date.now() + 365 * 86400000);
   const chk = table.checks[col.name];
   if (chk && chk.length) return chk[0];
   switch (col.type) {
@@ -99,6 +109,7 @@ function makeBuilder(pool, tables, userA) {
           continue;
         }
         const isPk = t.pk.includes(col.name);
+        if (col.nullable && !isPk && ENDED_COL.test(col.name)) continue;
         if (col.hasDefault && !(isPk && false)) {
           // let the database fill it, except text columns where a marker is wanted and no CHECK stops us
           if (!['text', 'character varying'].includes(col.type) || isPk) continue;

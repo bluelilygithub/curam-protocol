@@ -50,6 +50,13 @@
     "api/youtube/lists/:id": "youtube_saved_lists",
     "api/youtube/lists/:id/items/:videoId": null,
     "api/youtube/playlist/:playlistId": null,
-    "api/youtube/transcript-languages/:videoId": null
+    "api/youtube/transcript-languages/:videoId": null,
+    "api/email-follow-up/:id": "ef_cases",
+    "api/google-ads/projects/:id": "seo_projects",
+    "api/restyle/projects/:id": "restyle_projects",
+    "api/restyle/projects/:id/versions/:vid": "restyle_project_versions",
+    "api/burner-mail/addresses/:id": "burner_addresses",
+    "api/notes/:id/versions/:vid": "note_versions",
+    "api/attachments/:id": "attachments"
   }
 }
