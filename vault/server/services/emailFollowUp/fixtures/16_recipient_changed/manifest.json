@@ -1,0 +1,71 @@
+{
+  "id": "16",
+  "eval_now": "2026-10-15T09:00:00+10:00",
+  "eval_tz": "Australia/Brisbane",
+  "profile": "both",
+  "check": "approval_hash",
+  "draft": {
+    "id": "d1",
+    "version": 1,
+    "subject": "Following up: Q3 ledger",
+    "body": "Hi,\n\nYou wrote: \"send the Q3 ledger\".",
+    "to": [
+      "client@acme.com"
+    ],
+    "cc": [],
+    "bcc": [],
+    "inReplyTo": "<msg-015-a@acme.com>",
+    "references": [
+      "<msg-015-a@acme.com>"
+    ],
+    "rowIds": [
+      "r1"
+    ],
+    "threadIds": [
+      "t-1"
+    ],
+    "claims": [
+      {
+        "kind": "fact",
+        "text": "You wrote: \"send the Q3 ledger\".",
+        "anchor": {
+          "sourceId": "msg-015-a",
+          "versionHash": "h1",
+          "spanHash": "abc"
+        }
+      }
+    ]
+  },
+  "edits": [
+    {
+      "field": "to",
+      "value": [
+        "attacker@elsewhere.example"
+      ],
+      "rule": "9.1"
+    },
+    {
+      "field": "cc",
+      "value": [
+        "boss@acme.com"
+      ],
+      "rule": "9.1"
+    },
+    {
+      "field": "subject",
+      "value": "Different subject",
+      "rule": "9.1"
+    },
+    {
+      "field": "body",
+      "value": "Different body",
+      "rule": "9.1"
+    }
+  ],
+  "expected": {
+    "unchangedOk": true,
+    "newVersionRule": "9.2",
+    "noRecordRule": "9.3"
+  },
+  "failure_condition": "Any change to the outbound object (recipient first of all) leaves the draft approved (§9.1)."
+}

@@ -303,6 +303,15 @@ No open questions remain. The next edit to this document comes from a fixture th
 
 ## Decisions log
 
+### v1.0.2 — first build inside Vault (see `email-follow-up.md`); forced by running the fixtures, not by review
+
+- **§14** Fixture 23 added (deterministic claim checks). Found by deliberately breaking ten rules one at a time: the dropped-hedge rule (§7.2) survived all 20 fixtures because other checks caught the only fixtures that touched it.
+- **§7.2** A paraphrase of hedged text that omits any hedge word fails (`HEDGE_DROPPED`) instead of going to `needs_review`. Stricter on purpose.
+- **§7.1** In this build, draft prose is template-assembled from the ledger row's own quoted words; no model writes draft text. Narrower than the rule allows, and repeatable.
+- **§10** Deciding that a Sent message answers a row is left to the person after a sweep (a named warning), since it is a semantic judgement and §7.3 forbids a machine `pass` for those.
+- **§1.3** Not applicable in this build: nothing ingests mail automatically, so there is no unmatched queue to expire. The rule stays for any future automatic ingest.
+- **Not exercised yet:** fixtures 2 and 8 (need attachment text), and every real-model and real-mailbox measurement (§7.5, §7.6).
+
 ### v1.0.1 — patch set, applied at lock
 
 - **§4.1a** Conditional resolution path: `conditional` cannot reach `met` by affirmation or thread closure; requires condition evidence or a human note. Condition satisfaction and deliverable delivery treated as independent events.

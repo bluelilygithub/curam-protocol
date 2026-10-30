@@ -1,0 +1,80 @@
+{
+  "id": "22",
+  "eval_now": "2026-10-15T09:00:00+10:00",
+  "eval_tz": "Australia/Brisbane",
+  "profile": "soft",
+  "check": "parse_scope",
+  "cases": [
+    {
+      "name": "unreadable, no obligation",
+      "profile": "soft",
+      "sources": [
+        {
+          "id": "s1",
+          "parseStatus": "failed"
+        }
+      ],
+      "rows": [],
+      "expected": {
+        "exportBlocked": false,
+        "blockedDraftSources": [
+          "s1"
+        ]
+      }
+    },
+    {
+      "name": "unreadable, holds the only copy of a deliverable",
+      "profile": "soft",
+      "sources": [
+        {
+          "id": "s1",
+          "parseStatus": "failed",
+          "candidateObligations": 1
+        }
+      ],
+      "rows": [],
+      "expected": {
+        "exportBlocked": true,
+        "ruleInReason": "6.1"
+      }
+    },
+    {
+      "name": "unreadable, a row already references it",
+      "profile": "soft",
+      "sources": [
+        {
+          "id": "s1",
+          "parseStatus": "failed"
+        }
+      ],
+      "rows": [
+        {
+          "id": "r1",
+          "evidence": [
+            "s1"
+          ],
+          "anchors": []
+        }
+      ],
+      "expected": {
+        "exportBlocked": true,
+        "ruleInReason": "6.1"
+      }
+    },
+    {
+      "name": "unreadable, professional",
+      "profile": "professional",
+      "sources": [
+        {
+          "id": "s1",
+          "parseStatus": "failed"
+        }
+      ],
+      "rows": [],
+      "expected": {
+        "exportBlocked": true
+      }
+    }
+  ],
+  "failure_condition": "(a) an unattributed unreadable file locks the whole soft case, or (b) the only copy of a named deliverable lets export through (§6.1)."
+}

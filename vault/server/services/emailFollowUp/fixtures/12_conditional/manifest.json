@@ -1,0 +1,42 @@
+{
+  "id": "12",
+  "eval_now": "2026-10-15T09:00:00+10:00",
+  "eval_tz": "Australia/Brisbane",
+  "profile": "both",
+  "check": "fold_mentions",
+  "sources": {
+    "msg-012-a": {
+      "text": "I might be able to pay $4,000 next month if revenue allows."
+    }
+  },
+  "mentions": [
+    {
+      "kind": "commitment",
+      "direction": "i_owe",
+      "party": "client@acme.com",
+      "items": [
+        "payment of 4000"
+      ],
+      "itemNoun": "payment",
+      "claimType": "conditional",
+      "amount": 4000,
+      "condition": "if revenue allows",
+      "sourceId": "msg-012-a",
+      "quote": "I might be able to pay $4,000 next month if revenue allows",
+      "dueRaw": "next month",
+      "sentAt": "2026-10-14T10:00:00+10:00"
+    }
+  ],
+  "expected_ledger": [
+    {
+      "id": "r1",
+      "status": "open",
+      "claimType": "conditional",
+      "condition": "if revenue allows",
+      "due": {
+        "status": "needs_review"
+      }
+    }
+  ],
+  "failure_condition": "Any row with claim_type agreed and a due date (§4.1)."
+}

@@ -1,0 +1,48 @@
+{
+  "id": "14",
+  "eval_now": "2026-10-19T12:00:00+10:00",
+  "eval_tz": "Australia/Brisbane",
+  "profile": "both",
+  "check": "substitute",
+  "sources": {
+    "msg-014-a": {
+      "text": "Sarah owes you the revised depreciation schedules by tomorrow."
+    },
+    "msg-014-b": {
+      "text": "Hi, Sarah is out sick this week. I will be handling the depreciation schedule request going forward."
+    }
+  },
+  "mention": {
+    "kind": "waiting_on",
+    "direction": "they_owe",
+    "party": "sarah@accounting.com",
+    "items": [
+      "revised depreciation schedules"
+    ],
+    "itemNoun": "schedule",
+    "claimType": "agreed",
+    "sourceId": "msg-014-a",
+    "quote": "Sarah owes you the revised depreciation schedules by tomorrow",
+    "dueRaw": "by tomorrow",
+    "sentAt": "2026-10-19T09:00:00+10:00"
+  },
+  "substitute": {
+    "party": "alex@accounting.com",
+    "sourceId": "msg-014-b",
+    "quote": "I will be handling the depreciation schedule request going forward"
+  },
+  "expected": {
+    "original": {
+      "status": "suspended",
+      "due": "2026-10-20"
+    },
+    "substitute": {
+      "status": "open",
+      "authority": "unconfirmed",
+      "due": "2026-10-20"
+    },
+    "deliverableRefusedRule": "3.3a",
+    "afterConfirm": "met"
+  },
+  "failure_condition": "Sarah's row is met or waived on receipt of the reply, or Alex's row clears the obligation before authority is confirmed (§3.3a)."
+}

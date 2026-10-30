@@ -41,6 +41,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   fitness: true,
   burnerMail: true,
   dnsLookup: true,
+  emailFollowUp: false, // keep in step with server/config/featureAccess.js
   passwordVault: false, // holds logins: keep in step with server/config/featureAccess.js
   topicResearch: false, // keep in step with server/config/featureAccess.js
   shelf: false, // Vault Shelf Windows app keys: keep in step with server/config/featureAccess.js
@@ -91,6 +92,7 @@ export const FEATURE_ACCESS_GROUPS = [
       { key: 'fitness', label: 'Fitness' },
       { key: 'burnerMail', label: 'Burner Mail' },
       { key: 'dnsLookup', label: 'DNS Lookup' },
+      { key: 'emailFollowUp', label: 'Email Follow-Up' },
       { key: 'passwordVault', label: 'Password Vault' },
       { key: 'topicResearch', label: 'Topic Research' },
       { key: 'shelf', label: 'Vault Shelf (Windows app)' },

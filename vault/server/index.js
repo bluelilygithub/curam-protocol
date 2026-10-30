@@ -244,6 +244,8 @@ app.use('/api/burner-mail-tutor', requireFeature('burnerMail'), aiLimiter, requi
 app.use('/api/password-vault', requireFeature('passwordVault'), require('./routes/passwordVault')); // zero-knowledge password manager: stores ciphertext only
 app.use('/api/password-vault-tutor', requireFeature('passwordVault'), aiLimiter, require('./routes/passwordVaultTutor')); // the Password Vault guide chat (sees no passwords or names)
 app.use('/api/dns-lookup', requireFeature('dnsLookup'), require('./routes/dnsLookup'));
+app.use('/api/email-follow-up-tutor', requireFeature('emailFollowUp'), aiLimiter, require('./routes/emailFollowUpTutor')); // the Email Follow-Up guide chat (sees no cases, emails or drafts)
+app.use('/api/email-follow-up', requireFeature('emailFollowUp'), require('./routes/emailFollowUp')); // commitments ledger over attached Gmail threads; read-only Gmail, nothing is sent
 app.use('/api/crm-tutor', requireFeature('clients'), aiLimiter, require('./routes/crmTutor')); // the CRM guide chat (sees no clients, deals or notes)
 app.use('/api/shares-tutor', requireFeature('shares'), aiLimiter, require('./routes/sharesTutor')); // the Shares guide chat (sees no holdings or figures)
 app.use('/api/settings-tutor', aiLimiter, require('./routes/settingsTutor')); // the Settings and Admin guide chat (sees no settings, keys or users)

@@ -48,6 +48,8 @@ const FEATURE_ACCESS_DEFAULTS = {
   fitness: true,
   burnerMail: true,
   dnsLookup: true,
+  // reads attached Gmail threads into a commitments ledger and prepares cited follow-up text to copy (docs/email-follow-up.md): off until an admin switches it on
+  emailFollowUp: false,
   // the Vault Shelf Windows app pushes clipboard items into Notes, Invoice Review, the CRM inbox and a redaction check: off until an admin switches it on
   shelf: false,
 };

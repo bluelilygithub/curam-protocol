@@ -1,0 +1,38 @@
+{
+  "id": "19",
+  "eval_now": "2026-10-15T09:00:00+10:00",
+  "eval_tz": "Australia/Brisbane",
+  "profile": "both",
+  "check": "backlog",
+  "row": {
+    "id": "r1",
+    "kind": "commitment",
+    "direction": "i_owe",
+    "status": "open",
+    "claimType": "agreed"
+  },
+  "cap": 5,
+  "cases": [
+    {
+      "pendingDrafts": 4,
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "pendingDrafts": 5,
+      "expected": {
+        "ok": false,
+        "rule": "8.2"
+      }
+    },
+    {
+      "pendingDrafts": 9,
+      "expected": {
+        "ok": false,
+        "rule": "8.2"
+      }
+    }
+  ],
+  "failure_condition": "Drafting continues above the cap because generation is cheap (§8.2)."
+}

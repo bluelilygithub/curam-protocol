@@ -1,0 +1,56 @@
+{
+  "id": "06",
+  "eval_now": "2026-10-15T09:00:00+10:00",
+  "eval_tz": "Australia/Brisbane",
+  "profile": "both",
+  "check": "can_draft",
+  "row": {
+    "id": "r1",
+    "kind": "waiting_on",
+    "direction": "they_owe",
+    "status": "open",
+    "claimType": "agreed",
+    "requestDate": "2026-10-01T09:00:00+10:00"
+  },
+  "watermark": null,
+  "sentLinks": [],
+  "controls": [
+    {
+      "watermark": {
+        "completed": true,
+        "from": "2026-10-01T00:00:00+10:00",
+        "to": "2026-10-15T08:55:00+10:00"
+      },
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "watermark": {
+        "completed": true,
+        "from": "2026-10-05T00:00:00+10:00",
+        "to": "2026-10-15T08:55:00+10:00"
+      },
+      "expected": {
+        "ok": false,
+        "rule": "10.1"
+      }
+    },
+    {
+      "watermark": {
+        "completed": false,
+        "from": "2026-10-01T00:00:00+10:00",
+        "to": "2026-10-15T08:55:00+10:00"
+      },
+      "expected": {
+        "ok": false,
+        "rule": "10.1"
+      }
+    }
+  ],
+  "expected": {
+    "ok": false,
+    "rule": "10.1"
+  },
+  "failure_condition": "A draft is produced because the item \"looked\" unanswered while no completed Sent sweep covers the window (§10.1)."
+}

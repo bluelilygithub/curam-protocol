@@ -1,0 +1,31 @@
+{
+  "id": "05",
+  "eval_now": "2026-10-15T09:00:00+10:00",
+  "eval_tz": "Australia/Brisbane",
+  "profile": "both",
+  "check": "can_draft",
+  "row": {
+    "id": "r1",
+    "kind": "waiting_on",
+    "direction": "they_owe",
+    "status": "open",
+    "claimType": "agreed",
+    "requestDate": "2026-10-01T09:00:00+10:00"
+  },
+  "watermark": {
+    "completed": true,
+    "from": "2026-10-01T00:00:00+10:00",
+    "to": "2026-10-15T08:55:00+10:00"
+  },
+  "sentLinks": [
+    {
+      "messageId": "sent-005-a",
+      "kind": "answered"
+    }
+  ],
+  "expected": {
+    "ok": false,
+    "close": true
+  },
+  "failure_condition": "A draft is produced for an item already answered in Sent (§10)."
+}

@@ -96,6 +96,7 @@ export const APP_NAV_GROUPS = [
       { id: 'fitness', label: 'Fitness', path: '/fitness', icon: 'dumbbell', featureKey: 'fitness' },
       { id: 'burnerMail', label: 'Burner Mail', path: '/burner-mail', icon: 'mail', featureKey: 'burnerMail' },
       { id: 'dnsLookup', label: 'DNS Lookup', path: '/dns-lookup', icon: 'globe', featureKey: 'dnsLookup' },
+      { id: 'emailFollowUp', label: 'Email Follow-Up', path: '/email-follow-up', icon: 'list-checks', featureKey: 'emailFollowUp' },
       { id: 'passwordVault', label: 'Password Vault', path: '/password-vault', icon: 'key-round', featureKey: 'passwordVault' },
       { id: 'topicResearch', label: 'Topic Research', path: '/topic-research', icon: 'trending-up', featureKey: 'topicResearch' },
       { id: 'youtube', label: 'YouTube', path: '/youtube', icon: 'youtube', featureKey: 'youtube' },

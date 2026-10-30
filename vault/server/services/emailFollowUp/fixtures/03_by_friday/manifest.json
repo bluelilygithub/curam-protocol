@@ -1,0 +1,18 @@
+{
+  "id": "03",
+  "eval_now": "2026-10-15T09:00:00+10:00",
+  "eval_tz": "Australia/Brisbane",
+  "profile": "both",
+  "check": "deadline",
+  "cases": [
+    {
+      "raw": "By Friday",
+      "sentAt": "2026-10-14T10:00:00+10:00",
+      "expected": {
+        "status": "exact",
+        "date": "2026-10-16"
+      }
+    }
+  ],
+  "failure_condition": "needs_review: \"by Friday\" with a known sent date is computable."
+}

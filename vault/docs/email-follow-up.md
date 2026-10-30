@@ -1,0 +1,76 @@
+# Email Follow-Up (built into Vault)
+
+Status: **built, behind the `emailFollowUp` feature flag (off by default), not yet used on a real mailbox or a real model.**
+Design set: `email-follow-up-context.md`, `email-follow-up-case-model.md` (locked rules), `email-follow-up-use-cases.md`, `email-follow-up-risk-register.md`, `email-follow-up-fixture-plan.md`. This file says what was actually built from them and where it differs.
+
+## What it is, in Vault terms
+
+A page at `/email-follow-up` (Research & Utilities, switch on in Settings -> Feature Access). A person **opens a case by hand** ("Acme owes the Q3 ledger"), attaches Gmail threads to it, presses **Read** so the AI proposes ledger rows, presses **Check Sent**, and then asks for a **follow-up draft** on any open row. The draft is plain text to copy into their own mail program.
+
+It adds to Vault and replaces nothing: no existing route, table or page was changed. It reuses Vault's existing read-only Gmail connection (`routes/gmail.js`, one extra export `extractBody`), the model resolver (`light` tier), `logUsage`, the Tasks table (optional "Make a task"), and the CRM client list (optional link). It never calls `POST /api/email` or any send function; Gmail scopes stay read-only.
+
+## Decision made in this build (changes the design set)
+
+The design set recommended a **separate local product** with Vault as an optional one-way consumer. This build puts it **inside Vault** instead, at the owner's request. What that costs, so it is not forgotten: case mail and the ledger now live in the shared Postgres, and extracted message text goes to the configured model (Claude or Gemini), exactly like the rest of Vault. The design set called this a problem for medical, mortgage and escrow cases. **Scope is therefore the accounting document chase, freelance and job-search cases only; do not use it for the deferred verticals.**
+
+## Where the code is
+
+| Piece | File |
+|---|---|
+| Rules (all pure, no database or clock) | `server/services/emailFollowUp/` : `ledger.js` (supersession, claim types, conditional closing, authority lock, ageing), `deadlines.js`, `guard.js`, `approval.js`, `gates.js`, `draft.js`, `coverage.js`, `common.js` |
+| The only model use | `extract.js` (reads one message into proposed rows; no tools; email fenced as data; every quote must be word-for-word in the message or the row is dropped; deadlines parsed by code) |
+| Database + Gmail | `caseStore.js`; tables `ef_cases` (ledger kept as one JSON array per case), `ef_sources`, `ef_drafts`, `ef_approvals` (append-only), `ef_sent_sweeps` in `server/db.js` |
+| API | `server/routes/emailFollowUp.js` at `/api/email-follow-up` |
+| Page | `client/src/pages/EmailFollowUpPage.jsx`, `client/src/pages/emailFollowUp/CaseView.jsx`, `labels.mjs` |
+| Help, tips, tour, guide | `emailFollowUp/emailFollowUpTools.mjs` (the five places, group and tool tips, the (i) box text, what the guide can point at), `emailFollowUp/efTips.mjs` (one tip per control), `emailFollowUp/EmailFollowUpTutorChat.jsx`, `client/src/utils/tours/emailFollowUpTour.js`, `server/services/emailFollowUpTutor.js` + `server/routes/emailFollowUpTutor.js` (`POST /api/email-follow-up-tutor`), registered in `server/config/guides.js` |
+| Tests | `npm run test:email-follow-up` (21 fixtures + unit checks, extractor with a fake model, labels, tips/helpers, guide); `npm run test:email-follow-up-tutor` for the guide alone; `npm run test:guides` |
+
+## Helpers (the Vault tool conventions)
+
+- **Tooltips:** every button, field, dropdown, tick box and tab uses the shared `Tooltip` with a sentence from `efTips.mjs`, never a native `title=""`. `efTips.test.mjs` fails if a control has no tip, uses a native title, or a tip is not a proper sentence (checked by breaking one on purpose: it names the control).
+- **(i) box:** "How Email Follow-Up Works", opens once per browser (`vault_email_follow_up_info_seen`), reopen with the (i) beside the title.
+- **Compass tour:** 7 steps (`vault_tour_email_follow_up_completed`); a step whose target is not on screen (for example the tabs while you are on the case list) shows in the middle of the screen instead of failing. Retake it from the compass, or **Settings -> Email Follow-Up Tour** (opens `/email-follow-up?tour=1`).
+- **Guide chat:** the round button, shared `TutorChat`, `guideId` `email-follow-up`. It points at the real controls (its Open buttons switch the tab, or go back to the case list, and need a case open for the tabs), says what the tool does not do, and sees no cases, emails or drafts. Update `CATALOG` in `emailFollowUpTutor.js` and `GUIDE_TOOLS` in `emailFollowUpTools.mjs` together; the test fails if they drift.
+- **Microphone:** on the free-text fields (case name, what is owed, notes, their words, subject) through the shared `VoiceInput`.
+- **Cross-user route list:** the 17 routes are in `server/testing/routeManifest.json` as `authed`. (Running `crossUser.test.js --update` rewrote about 400 unrelated lines because the manifest was already out of date, so only these entries were added by hand; the inventory step of that test still fails on 62 other routes that were missing before this work.)
+
+## What was built from the spec, and how
+
+- **Manual cases only (1.1, 1.2).** `POST /` needs a title and an obligation. Mail is only ever *suggested* (`GET /:id/suggestions`) and attached when the person presses Attach. There is no inbound queue because nothing ingests automatically, so Rule 1.3 (queue expiry) has nothing to apply to; `gates.suggestCaseForMessage` stays as the tested invariant.
+- **Ledger rules (4.x, 3.x, 11.x)** as written: structured identity, superseding rows with the change in words, `conditional` can never be closed by "thanks", an unconfirmed substitute cannot clear anything, ageing turns rows `unverified` (the function exists and is tested; **no job calls it yet**, see "Not built").
+- **Deadlines (5.x).** Code reads the person's own words against the message's sent date in the person's time zone (`resolveUserTimezone`, the same rule Fitness uses). "Early next week", "next Friday", "within 14 days of receipt" with no stated receipt date, and business days with no pinned calendar all come back `needs_review` with what is missing. Nothing is guessed.
+- **Guard (7.x).** Deterministic only: citation exists, clause exists, version current, the cited text is still the same bytes, figures present in the span, hedges ("might", "if") and negations preserved, "as agreed" refused unless the row is `agreed`. Paraphrase is `needs_review`, never `pass`. **No model judges a draft.**
+- **Drafting (7.1).** Retrieve first, then assemble: a draft is fixed sentence templates around the row's own quoted words. **No model writes any draft prose.** This is narrower than the spec (which allowed a generator); it makes drafts repeatable and removes the unmeasured "generation quality" risk. Wording cannot be edited in the page for the same reason (the body *is* the cited claims); recipients and subject can, and an edit mints a new version (9.2).
+- **Sent reconciliation (10.x).** "Check Sent" lists the case's Sent mail across every address in the case (per case, never per party) and records a watermark. Chasing someone is blocked until a sweep covering the request date to now has completed; a failed sweep is recorded as not completed and blocks. After a sweep, mail sent to that person since the request is shown as a warning the person must accept ("check none already answers this"). The tool does not decide that a Sent message answers a row; a person does.
+- **Approval and copy (9.x).** Approval hashes the whole outbound object (subject, body, To, Cc, Bcc, reply chain, citations). **Copy** re-reads Gmail for new mail in the cited threads and refuses (and resets to pending) if the counterparty wrote or a cited thread grew; if Gmail cannot be read, copy is refused. Absence of an approval record means no.
+- **Review capacity (8.x).** At most 5 drafts waiting per case; above that, no new drafts.
+- **Coverage statement (11.3).** Shown on the "What was covered" tab: what was read, what this tool cannot see (phone, portals, other mailboxes, attachments, Sent if unchecked), what the person must verify.
+
+## Not built (honest list)
+
+- **Attachments are not read.** No PDF text, no OCR. Attached mail records its attachment filenames and says so in the coverage statement. So fixtures 2 (body vs attachment amount), 8 (injection in a PDF), 13 beyond the rule, and the document half of 22 are **not exercised end to end**, and there are no governing documents yet (`governing` is stored but has no upload; the gate is vacuous, which is legal per Rule 1.4).
+- **Ageing job.** `ageRows()` is tested but nothing runs it on a schedule, so rows never become `unverified` by themselves yet.
+- **Deleting a case.** Not offered. Cases are closed or abandoned (`PATCH /:id { status }`). Deleting needs a recycle-bin adapter first (CLAUDE.md rule for any tool that deletes).
+- **Suggestions inbox hook.** Nothing here calls `SuggestionService.capture()` yet (for example when a Sent check keeps failing or rows go unverified). The guide route also does not file a "something is missing" suggestion beyond what `guideRouter` already does.
+- **No microphone on email-address boxes** (case people, recipients, "who took over"): a spoken address is too error-prone, so those stay typed.
+- **Not run against a real model or mailbox.** Rate of correct extraction (fixture plan Rule S2), the misrepresented-claim rate (7.5) and retrieval recall (7.6) are all still unmeasured.
+- **The UI has not been looked at in a browser.** It compiles and the API behind it passes a smoke test against the local Postgres (22 route checks), nothing more.
+
+## Fixtures
+
+21 fixtures in `server/services/emailFollowUp/fixtures/` (rule suite, Rule S1): 01, 03, 04, 05, 06, 07, 09, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22 from the plan, plus **23** added here. Not built: **02** (needs attachment text) and **08** (needs a PDF). Differences from the plan: `manifest.json` instead of `manifest.md` (so the harness can read it), and the hand-written extracted rows/drafts sit inside the manifest rather than in separate `expected_input/` files. Each fixture has a fixed `eval_now`/`eval_tz` and a named failure condition; a fixture without them is rejected by the runner (Rule 14.1).
+
+**Mutation check.** To see whether the fixtures would actually catch a broken rule, ten rules were deliberately broken one at a time (merging a scope change, closing a conditional on affirmation, dropping the authority lock, hashing only the body, ignoring new mail at copy time, skipping the Sent sweep, guessing a date, locking a soft case on any unreadable file, accepting an unknown citation, ignoring a dropped hedge). Nine were caught at once. **One was not**: dropping a hedge ("might" stated as a flat fact) passed all 20 fixtures, because the only fixtures touching hedges were caught by a different check. That is why fixture 23 exists. The plan predicted the first run would change something; this is what changed.
+
+## Decisions Log (additions to `email-follow-up-case-model.md`)
+
+Recorded in the case model's own log as v1.0.2. In short:
+
+1. **Fixture 23 added** (deterministic claim checks: hedge dropped, figure not in source, negation flipped, exact quote with hedge kept, paraphrase never passes).
+2. **A paraphrase of hedged text that drops the hedge word fails (`HEDGE_DROPPED`) rather than going to `needs_review`.** Found when fixture 23's first draft expected `needs_review`. The stricter result stands: a reader should not be asked to approve a flat statement of something the source only floated.
+3. **Drafts are template-assembled with no model prose** (see Drafting above).
+4. **Sent reconciliation is human-decided after the sweep** (the SENT_SINCE warning) because deciding "this Sent mail answers that row" is exactly the semantic judgement the spec says must not be `pass`.
+
+## Turning it on
+
+Settings -> Feature Access -> Email Follow-Up. Admins always see it. Needs Gmail connected and a model set up in Settings (the `light` tier is used for reading messages). Members stay off until switched on per workspace or per user.

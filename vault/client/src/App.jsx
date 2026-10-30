@@ -51,6 +51,7 @@ import HtmlAuditPage from './pages/HtmlAuditPage';
 import WebExtractorPage from './pages/WebExtractorPage';
 import BurnerMailPage from './pages/BurnerMailPage';
 import DnsLookupPage from './pages/DnsLookupPage';
+import EmailFollowUpPage from './pages/EmailFollowUpPage';
 import PasswordVaultPage from './pages/PasswordVaultPage';
 import TopicResearchPage from './pages/TopicResearchPage';
 import FitnessPage from './pages/FitnessPage';
@@ -201,6 +202,7 @@ function App() {
               <Route path="/measurements" element={<MeasurementsPage />} />
               <Route path="/burner-mail" element={<BurnerMailPage />} />
               <Route path="/dns-lookup" element={<DnsLookupPage />} />
+              <Route path="/email-follow-up" element={<EmailFollowUpPage />} />
               <Route path="/password-vault" element={<PasswordVaultPage />} />
               <Route path="/topic-research" element={<TopicResearchPage />} />
               <Route path="/pc-health" element={<PcHealthPage />} />

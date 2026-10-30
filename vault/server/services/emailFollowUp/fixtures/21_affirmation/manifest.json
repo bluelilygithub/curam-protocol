@@ -1,0 +1,37 @@
+{
+  "id": "21",
+  "eval_now": "2026-10-15T09:00:00+10:00",
+  "eval_tz": "Australia/Brisbane",
+  "profile": "both",
+  "check": "affirmation",
+  "sources": {
+    "msg-021-a": {
+      "text": "I might be able to pay $4,000 next month if revenue allows."
+    }
+  },
+  "mention": {
+    "kind": "commitment",
+    "direction": "i_owe",
+    "party": "client@acme.com",
+    "items": [
+      "payment of 4000"
+    ],
+    "itemNoun": "payment",
+    "claimType": "conditional",
+    "amount": 4000,
+    "condition": "if revenue allows",
+    "sourceId": "msg-021-a",
+    "quote": "I might be able to pay $4,000 next month if revenue allows",
+    "dueRaw": "next month",
+    "sentAt": "2026-10-14T10:00:00+10:00"
+  },
+  "affirmation": "great, thanks",
+  "badDraftClaim": "As agreed, you will pay $4,000 next month.",
+  "expected": {
+    "status": "open",
+    "claimType": "conditional",
+    "deliverableRefusedRule": "4.1a",
+    "badDraftCode": "CLAIM_TYPE_MISMATCH"
+  },
+  "failure_condition": "The row becomes met on a polite reply, or a draft containing \"as agreed\" passes (§4.1a)."
+}

@@ -1,0 +1,58 @@
+{
+  "id": "10",
+  "eval_now": "2026-10-15T09:00:00+10:00",
+  "eval_tz": "Australia/Brisbane",
+  "profile": "professional",
+  "check": "guard_draft",
+  "sources": {
+    "gov-001": {
+      "text": "Clause 4.2: the contractor must lodge the report within the period.",
+      "clauses": [
+        "4.1",
+        "4.2"
+      ]
+    }
+  },
+  "row": {
+    "id": "r1",
+    "claimType": "agreed",
+    "due": {
+      "status": "exact",
+      "date": "2026-10-23"
+    },
+    "direction": "they_owe"
+  },
+  "draft": {
+    "claims": [
+      {
+        "kind": "fact",
+        "text": "Clause 9.9 requires lodging.",
+        "anchor": {
+          "sourceId": "gov-001",
+          "clause": "9.9",
+          "quote": "Clause 4.2: the contractor must lodge the report within the period."
+        }
+      }
+    ]
+  },
+  "controlDraft": {
+    "claims": [
+      {
+        "kind": "fact",
+        "text": "Clause 4.2: the contractor must lodge the report within the period.",
+        "anchor": {
+          "sourceId": "gov-001",
+          "clause": "4.2",
+          "quote": "Clause 4.2: the contractor must lodge the report within the period."
+        }
+      }
+    ]
+  },
+  "expected": {
+    "verdict": "fail",
+    "code": "UNKNOWN_CLAUSE",
+    "exportAllowed": false,
+    "controlVerdict": "pass"
+  },
+  "failure_condition": "A citation to a clause that does not exist is accepted."
+}

@@ -1,0 +1,73 @@
+{
+  "id": "01",
+  "eval_now": "2026-10-15T09:00:00+10:00",
+  "eval_tz": "Australia/Brisbane",
+  "profile": "both",
+  "check": "fold_mentions",
+  "sources": {
+    "msg-01-a": {
+      "text": "Please make sure you send over the Q3 ledger by Friday the 23rd."
+    },
+    "msg-01-b": {
+      "text": "Just checking you have the Q3 ledger on your list: Friday the 23rd."
+    },
+    "msg-01-c": {
+      "text": "Reminder, Q3 ledger due Friday the 23rd."
+    }
+  },
+  "mentions": [
+    {
+      "kind": "waiting_on",
+      "direction": "they_owe",
+      "party": "client@acme.com",
+      "items": [
+        "Q3 ledger"
+      ],
+      "itemNoun": "document",
+      "claimType": "agreed",
+      "sourceId": "msg-01-a",
+      "quote": "send over the Q3 ledger by Friday the 23rd",
+      "dueRaw": "by Friday the 23rd",
+      "sentAt": "2026-10-14T10:00:00+10:00"
+    },
+    {
+      "kind": "waiting_on",
+      "direction": "they_owe",
+      "party": "client@acme.com",
+      "items": [
+        "Q3 ledger"
+      ],
+      "itemNoun": "document",
+      "claimType": "agreed",
+      "sourceId": "msg-01-b",
+      "quote": "Q3 ledger on your list: Friday the 23rd",
+      "dueRaw": "Friday the 23rd",
+      "sentAt": "2026-10-14T11:00:00+10:00"
+    },
+    {
+      "kind": "waiting_on",
+      "direction": "they_owe",
+      "party": "client@acme.com",
+      "items": [
+        "Q3 ledger"
+      ],
+      "itemNoun": "document",
+      "claimType": "agreed",
+      "sourceId": "msg-01-c",
+      "quote": "Q3 ledger due Friday the 23rd",
+      "dueRaw": "Friday the 23rd",
+      "sentAt": "2026-10-14T12:00:00+10:00"
+    }
+  ],
+  "expected_ledger": [
+    {
+      "id": "r1",
+      "status": "open",
+      "anchorCount": 3,
+      "due": {
+        "date": "2026-10-23"
+      }
+    }
+  ],
+  "failure_condition": "Three rows, or two rows plus a merge flag, instead of one row with three anchors (§4.4)."
+}

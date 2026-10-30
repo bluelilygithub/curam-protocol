@@ -1,0 +1,66 @@
+{
+  "id": "11",
+  "eval_now": "2026-10-15T09:00:00+10:00",
+  "eval_tz": "Australia/Brisbane",
+  "profile": "both",
+  "check": "fold_mentions",
+  "sources": {
+    "msg-011-a": {
+      "text": "Please make sure you send over the Q3 ledger by Friday the 23rd."
+    },
+    "msg-011-b": {
+      "text": "Actually, since the board meeting moved up, please send the Q3 ledger and bank statements by Wednesday the 21st instead."
+    }
+  },
+  "mentions": [
+    {
+      "kind": "waiting_on",
+      "direction": "they_owe",
+      "party": "client@acme.com",
+      "items": [
+        "Q3 ledger"
+      ],
+      "itemNoun": "document",
+      "claimType": "agreed",
+      "sourceId": "msg-011-a",
+      "quote": "send over the Q3 ledger by Friday the 23rd",
+      "dueRaw": "by Friday the 23rd",
+      "sentAt": "2026-10-14T10:00:00+10:00"
+    },
+    {
+      "kind": "waiting_on",
+      "direction": "they_owe",
+      "party": "client@acme.com",
+      "items": [
+        "Q3 ledger",
+        "bank statements"
+      ],
+      "itemNoun": "document",
+      "claimType": "agreed",
+      "sourceId": "msg-011-b",
+      "quote": "send the Q3 ledger and bank statements by Wednesday the 21st",
+      "dueRaw": "by Wednesday the 21st",
+      "sentAt": "2026-10-14T14:30:00+10:00"
+    }
+  ],
+  "expected_ledger": [
+    {
+      "id": "r1",
+      "status": "superseded",
+      "supersededBy": "r2",
+      "due": {
+        "date": "2026-10-23"
+      }
+    },
+    {
+      "id": "r2",
+      "status": "open",
+      "due": {
+        "date": "2026-10-21"
+      },
+      "itemCount": 2,
+      "delta": "deadline moved two days earlier; one document added."
+    }
+  ],
+  "failure_condition": "A single row with both messages as evidence and due 2026-10-23: the accelerated deadline and the extra document were swallowed (§4.3)."
+}

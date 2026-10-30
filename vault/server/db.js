@@ -1576,6 +1576,96 @@ async function initSchema() {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_burner_messages_address ON burner_messages ("addressId", id DESC)`);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_burner_messages_dedupe ON burner_messages ("addressId", "messageId") WHERE "messageId" IS NOT NULL`);
+    // Email Follow-Up (docs/email-follow-up-context.md): a commitments ledger built on cases a person opens by hand. Additive; nothing here
+    // touches Gmail Intel, Invoice Review, the CRM or Tasks tables (a ledger row can optionally become a Task through the tasks table).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ef_cases (
+        id          SERIAL PRIMARY KEY,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title       TEXT NOT NULL,
+        obligation  TEXT NOT NULL,
+        kind        TEXT NOT NULL DEFAULT 'other',
+        profile     TEXT NOT NULL DEFAULT 'soft' CHECK (profile IN ('soft','professional')),
+        status      TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','active','closed','abandoned')),
+        aliases     JSONB NOT NULL DEFAULT '[]',
+        governing   JSONB NOT NULL DEFAULT '[]',
+        ledger      JSONB NOT NULL DEFAULT '[]',
+        "clientId"  INTEGER REFERENCES clients(id) ON DELETE SET NULL,
+        "projectId" INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ef_cases_user ON ef_cases ("userId", "updatedAt" DESC)`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ef_sources (
+        id                SERIAL PRIMARY KEY,
+        "caseId"          INTEGER NOT NULL REFERENCES ef_cases(id) ON DELETE CASCADE,
+        "userId"          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind              TEXT NOT NULL DEFAULT 'message',
+        channel           TEXT NOT NULL DEFAULT 'inbound' CHECK (channel IN ('inbound','sent','note')),
+        "externalId"      TEXT,
+        "threadId"        TEXT,
+        subject           TEXT,
+        "fromAddr"        TEXT,
+        "toAddr"          TEXT,
+        "messageIdHeader" TEXT,
+        "receivedAt"      TIMESTAMPTZ,
+        "contentHash"     TEXT NOT NULL,
+        text              TEXT NOT NULL DEFAULT '',
+        attachments       JSONB NOT NULL DEFAULT '[]',
+        "parseStatus"     TEXT NOT NULL DEFAULT 'parsed' CHECK ("parseStatus" IN ('parsed','reference_only','failed')),
+        "parseReason"     TEXT,
+        "extractedAt"     TIMESTAMPTZ,
+        "createdAt"       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_ef_sources_external ON ef_sources ("caseId","externalId") WHERE "externalId" IS NOT NULL`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ef_sources_case ON ef_sources ("caseId", "receivedAt")`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ef_drafts (
+        id           SERIAL PRIMARY KEY,
+        "caseId"     INTEGER NOT NULL REFERENCES ef_cases(id) ON DELETE CASCADE,
+        "userId"     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "rowId"      TEXT NOT NULL,
+        version      INTEGER NOT NULL DEFAULT 1,
+        "previousId" INTEGER,
+        content      JSONB NOT NULL,
+        hash         TEXT NOT NULL,
+        verdict      JSONB NOT NULL,
+        status       TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','declined','replaced')),
+        "createdAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "updatedAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ef_drafts_case ON ef_drafts ("caseId", status)`);
+    // Append-only: one record per decision, never updated (case model section 9).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ef_approvals (
+        id                 SERIAL PRIMARY KEY,
+        "draftId"          INTEGER NOT NULL REFERENCES ef_drafts(id) ON DELETE CASCADE,
+        version            INTEGER NOT NULL,
+        hash               TEXT NOT NULL,
+        decision           TEXT NOT NULL CHECK (decision IN ('approved','declined')),
+        "userId"           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "acceptedWarnings" JSONB NOT NULL DEFAULT '[]',
+        "createdAt"        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ef_sent_sweeps (
+        id          SERIAL PRIMARY KEY,
+        "caseId"    INTEGER NOT NULL REFERENCES ef_cases(id) ON DELETE CASCADE,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "fromAt"    TIMESTAMPTZ NOT NULL,
+        "toAt"      TIMESTAMPTZ NOT NULL,
+        completed   BOOLEAN NOT NULL DEFAULT FALSE,
+        found       INTEGER NOT NULL DEFAULT 0,
+        error       TEXT,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ef_sweeps_case ON ef_sent_sweeps ("caseId", id DESC)`);
     // Safe clean-up (the only thing PC Health can change): whether the helper was started with -AllowCleanup, and each request + result.
     await client.query(`ALTER TABLE pc_health_helpers ADD COLUMN IF NOT EXISTS "canClean" BOOLEAN NOT NULL DEFAULT FALSE`);
     await client.query(`

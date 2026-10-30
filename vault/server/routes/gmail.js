@@ -1061,6 +1061,7 @@ Be concise and direct. When asked to count, count. When asked to summarise, summ
 module.exports = router;
 module.exports.getGmailClient           = getGmailClient;
 module.exports.getHeader                = getHeader;
+module.exports.extractBody              = extractBody; // Email Follow-Up reads attached threads with the same body reader
 // Exposed for server/services/expenseReviewService.js (invoice review queue) so it reuses
 // Inbox Intel's own classifier, attachment lookup, and PDF extraction instead of reimplementing them.
 module.exports.getAuthClient            = getAuthClient;

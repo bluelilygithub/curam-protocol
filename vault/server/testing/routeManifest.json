@@ -583,6 +583,57 @@
   "POST /api/dns-lookup/email": {
    "class": "authed"
   },
+  "POST /api/email-follow-up/drafts/:draftId/approve": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/drafts/:draftId/decline": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/drafts/:draftId/copy": {
+   "class": "authed"
+  },
+  "PATCH /api/email-follow-up/drafts/:draftId": {
+   "class": "authed"
+  },
+  "GET /api/email-follow-up": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up": {
+   "class": "authed"
+  },
+  "GET /api/email-follow-up/:id": {
+   "class": "authed"
+  },
+  "PATCH /api/email-follow-up/:id": {
+   "class": "authed"
+  },
+  "GET /api/email-follow-up/:id/suggestions": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/:id/threads": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/:id/extract": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/:id/sent-sweep": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/:id/rows/:rowId/event": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/:id/rows/:rowId/substitute": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/:id/rows/:rowId/task": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/:id/rows/:rowId/draft": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up-tutor": {
+   "class": "authed"
+  },
   "POST /api/document-redaction/jobs/:id/apply": {
    "class": "authed"
   },

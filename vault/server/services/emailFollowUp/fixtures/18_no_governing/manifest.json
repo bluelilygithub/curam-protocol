@@ -1,0 +1,44 @@
+{
+  "id": "18",
+  "eval_now": "2026-10-15T09:00:00+10:00",
+  "eval_tz": "Australia/Brisbane",
+  "profile": "soft",
+  "check": "export_gates",
+  "cases": [
+    {
+      "name": "soft, no governing document",
+      "profile": "soft",
+      "governing": [],
+      "sources": [],
+      "rows": [],
+      "expected": {
+        "exportBlocked": false
+      }
+    },
+    {
+      "name": "professional, no governing document",
+      "profile": "professional",
+      "governing": [],
+      "sources": [],
+      "rows": [],
+      "expected": {
+        "exportBlocked": false
+      }
+    },
+    {
+      "name": "professional, unmapped governing item",
+      "profile": "professional",
+      "governing": [
+        {
+          "id": "item-1"
+        }
+      ],
+      "sources": [],
+      "rows": [],
+      "expected": {
+        "exportBlocked": true
+      }
+    }
+  ],
+  "failure_condition": "Export blocked for \"missing governing document\" when there is none (§1.4), or an unmapped item passes in the professional profile."
+}

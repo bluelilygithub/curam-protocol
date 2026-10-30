@@ -1,0 +1,19 @@
+{
+  "id": "04",
+  "eval_now": "2026-10-15T09:00:00+10:00",
+  "eval_tz": "Australia/Brisbane",
+  "profile": "both",
+  "check": "deadline",
+  "cases": [
+    {
+      "raw": "early next week",
+      "sentAt": "2026-10-14T10:00:00+10:00",
+      "expected": {
+        "status": "needs_review",
+        "date": null,
+        "rawPreserved": true
+      }
+    }
+  ],
+  "failure_condition": "Any date is invented for \"early next week\"."
+}

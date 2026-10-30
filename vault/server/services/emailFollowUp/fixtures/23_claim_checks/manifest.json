@@ -1,0 +1,59 @@
+{
+  "id": "23",
+  "eval_now": "2026-10-15T09:00:00+10:00",
+  "eval_tz": "Australia/Brisbane",
+  "profile": "both",
+  "check": "claim_checks",
+  "sources": {
+    "msg-023-a": {
+      "text": "I might be able to pay $4,000 next month, but I cannot confirm the date. The invoice was issued on the 15th."
+    }
+  },
+  "row": {
+    "id": "r1",
+    "claimType": "agreed",
+    "due": {
+      "status": "needs_review"
+    },
+    "direction": "they_owe"
+  },
+  "cases": [
+    {
+      "name": "hedge dropped",
+      "text": "You will pay $4,000 next month.",
+      "quote": "I might be able to pay $4,000 next month",
+      "expected": "HEDGE_DROPPED"
+    },
+    {
+      "name": "figure not in source",
+      "text": "You might pay $5,000 next month.",
+      "quote": "I might be able to pay $4,000 next month",
+      "expected": "FIGURE_NOT_IN_SOURCE"
+    },
+    {
+      "name": "negation flipped",
+      "text": "You can confirm the date.",
+      "quote": "I cannot confirm the date",
+      "expected": "NEGATION_MISMATCH"
+    },
+    {
+      "name": "exact quote with hedge kept",
+      "text": "You wrote: \"I might be able to pay $4,000 next month\"",
+      "quote": "I might be able to pay $4,000 next month",
+      "expected": "VERBATIM"
+    },
+    {
+      "name": "paraphrase is never a pass",
+      "text": "The invoice went out in the middle of the month.",
+      "quote": "The invoice was issued on the 15th",
+      "expected": "SEMANTIC"
+    },
+    {
+      "name": "hedged text restated without a hedge word is stopped, not left to a reader",
+      "text": "You said payment next month is possible.",
+      "quote": "I might be able to pay $4,000 next month",
+      "expected": "HEDGE_DROPPED"
+    }
+  ],
+  "failure_condition": "A hedged, negated or re-figured sentence is stated flatly and the guard passes it (§7.2), or a paraphrase passes without a reader (§7.3)."
+}

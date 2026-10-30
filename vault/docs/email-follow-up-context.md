@@ -1,6 +1,6 @@
 # Email Follow-Up — Context and Decision Record
 
-Status: **design complete, nothing built.** No code was written at any point in this work. This file is the entry point for a fresh session; the four documents below are self-contained and can be read in any order after this one.
+Status (updated 2026-10-30): **design complete; a first version is now built inside Vault** (see `email-follow-up.md` for what was built, what was not, and the one decision that overrides the "separate product" verdict below). The design text below is left as written. This file is the entry point for a fresh session; the documents below are self-contained and can be read in any order after this one.
 
 | File | What it holds |
 |---|---|

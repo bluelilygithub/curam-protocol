@@ -19,6 +19,8 @@
     "test:password-vault-api": "node server/routes/passwordVault.test.js",
     "test:password-vault-tutor": "node server/services/passwordVaultTutor.test.js",
     "test:dns-lookup-tutor": "node server/services/dnsLookupTutor.test.js",
+    "test:email-follow-up": "node server/services/emailFollowUp/emailFollowUp.test.js && node server/services/emailFollowUp/extract.test.js && node client/src/pages/emailFollowUp/labels.test.mjs && node client/src/pages/emailFollowUp/efTips.test.mjs && node server/services/emailFollowUpTutor.test.js",
+    "test:email-follow-up-tutor": "node server/services/emailFollowUpTutor.test.js",
     "test:crm-tutor": "node server/services/crmTutor.test.js",
     "test:shares-tutor": "node server/services/sharesTutor.test.js",
     "test:settings-tutor": "node server/services/settingsTutor.test.js",

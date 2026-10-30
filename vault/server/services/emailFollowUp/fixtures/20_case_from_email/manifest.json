@@ -1,0 +1,29 @@
+{
+  "id": "20",
+  "eval_now": "2026-10-15T09:00:00+10:00",
+  "eval_tz": "Australia/Brisbane",
+  "profile": "both",
+  "check": "case_creation",
+  "message": {
+    "from": "newclient@example.com",
+    "subject": "Please send your Q4 documents",
+    "body": "We need the Q4 documents by 30 November."
+  },
+  "cases": [
+    {
+      "id": "c1",
+      "status": "active",
+      "aliases": [
+        "client@acme.com"
+      ]
+    }
+  ],
+  "expected": {
+    "refusedRule": "1.2",
+    "unknownSenderAction": "queue",
+    "knownSenderAction": "suggest",
+    "neverAttached": true,
+    "humanRequiresObligation": true
+  },
+  "failure_condition": "A case appears from an inbound message, or a message attaches without acceptance (§1.2)."
+}

@@ -1,0 +1,60 @@
+{
+  "id": "15",
+  "eval_now": "2026-10-15T09:00:00+10:00",
+  "eval_tz": "Australia/Brisbane",
+  "profile": "both",
+  "check": "approval_stale",
+  "draft": {
+    "id": "d1",
+    "version": 1,
+    "subject": "Following up: Q3 ledger",
+    "body": "Hi,\n\nYou wrote: \"send the Q3 ledger\".",
+    "to": [
+      "client@acme.com"
+    ],
+    "cc": [],
+    "bcc": [],
+    "inReplyTo": "<msg-015-a@acme.com>",
+    "references": [
+      "<msg-015-a@acme.com>"
+    ],
+    "rowIds": [
+      "r1"
+    ],
+    "threadIds": [
+      "t-1"
+    ],
+    "claims": [
+      {
+        "kind": "fact",
+        "text": "You wrote: \"send the Q3 ledger\".",
+        "anchor": {
+          "sourceId": "msg-015-a",
+          "versionHash": "h1",
+          "spanHash": "abc"
+        }
+      }
+    ]
+  },
+  "inboundSince": [
+    {
+      "id": "msg-015-b",
+      "from": "Client <client@acme.com>",
+      "threadId": "t-1",
+      "receivedAt": "2026-10-15T08:00:00+10:00"
+    }
+  ],
+  "unrelated": [
+    {
+      "id": "msg-015-c",
+      "from": "newsletter@elsewhere.example",
+      "threadId": "t-9"
+    }
+  ],
+  "expected": {
+    "staleRule": "9.4",
+    "unrelatedOk": true,
+    "noInboundOk": true
+  },
+  "failure_condition": "The approved state survives new mail from the counterparty (§9.4), or unrelated mail needlessly resets it."
+}
