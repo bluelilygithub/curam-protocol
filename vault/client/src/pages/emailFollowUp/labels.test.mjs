@@ -13,3 +13,7 @@ assert.ok(statusLabel('unverified').includes('still open'));
 assert.ok(statusLabel('suspended').includes('someone else'));
 for (const id of ['ledger', 'mail', 'drafts', 'coverage']) assert.ok(tabHint(id).length > 10, `tab hint for ${id}`);
 console.log('email-follow-up labels: passed');
+// no deadline said at all is not a problem to solve
+assert.strictEqual(dueLabel({ status: 'needs_review', date: null, raw: null, missing: ['deadline wording'] }), 'no deadline stated');
+assert.ok(dueLabel({ status: 'needs_review', date: null, raw: 'soon', missing: ['a stated date'] }).includes('needs you'));
+console.log('email-follow-up labels (no-deadline wording): passed');

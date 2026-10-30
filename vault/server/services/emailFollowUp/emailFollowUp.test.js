@@ -431,6 +431,25 @@ await (async function unit() {
   r = await extractAttachmentText({ filename: 'x.pdf', mimeType: 'application/pdf', buffer: await mkPdf('Total due $9.00 and plenty of ordinary text here'), ocr: async (b, p) => { calls3.push(p); return []; } });
   must('a PDF with a text layer never calls OCR', r.parseStatus === 'parsed' && /pdfjs/.test(r.parser) && !r.ocrUsed && calls3.length === 0 && !r.parseReason, { r, calls3 });
 
+  check('coverage: a row with no deadline is not a to-do, a deadline that was said but unclear is', () => {
+    const row = (items, due) => ({ id: 'r', items, status: 'open', claimType: 'agreed', authority: 'confirmed', due });
+    const c = coverageStatement({ sources: [], rows: [
+      row(['quiet'], { status: 'needs_review', raw: null, missing: ['deadline wording'] }),
+      row(['vague'], { status: 'needs_review', raw: 'soon', missing: ['a stated date'] }),
+    ] });
+    assert.ok(!c.verify.some((v) => v.includes('"quiet"')), 'no deadline stated is not listed');
+    assert.ok(c.verify.some((v) => v.includes('"vague"') && v.includes('soon')), 'a vague deadline is listed with what was said');
+  });
+  check('coverage: attachments not fetched counts only what is really unfetched', () => {
+    const docs = [{ id: 1, kind: 'document', parseStatus: 'parsed', parser: 'pdfjs/x' }, { id: 2, kind: 'document', parseStatus: 'reference_only', parseReason: 'picture' }];
+    const done = coverageStatement({ sources: docs, rows: [], attachmentsNotFetched: 0 });
+    assert.ok(!done.notVisible.some((x) => /not been fetched/.test(x)), 'nothing unfetched, nothing said');
+    assert.ok(done.notVisible.some((x) => /1 of 2 attachments fetched was read/.test(x)));
+    const some = coverageStatement({ sources: docs, rows: [], attachmentsNotFetched: 3 });
+    assert.ok(some.notVisible.some((x) => /3 attachments on the attached mail have not been fetched yet\./.test(x)));
+    const none = coverageStatement({ sources: [], rows: [], attachmentsNotFetched: 2 });
+    assert.ok(none.notVisible.some((x) => /not been fetched yet, so none were read/.test(x)));
+  });
   check('coverage prints the misses', () => {
     const c = coverageStatement({ sources: [{ id: 's1', parseStatus: 'parsed', receivedAt: '2026-10-01T00:00:00Z' }], rows: [], sentWatermark: null });
     assert.ok(c.notVisible.some((x) => /phone|portal/i.test(x)) && c.notVisible.some((x) => /Sent mail has not been checked/.test(x)));

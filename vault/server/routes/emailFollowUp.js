@@ -62,13 +62,17 @@ function nextRowId(ledger) {
 }
 
 function coverageOf(c, sources, sweep) {
-  const attach = sources.reduce((n, s) => n + (s.kind !== 'document' && Array.isArray(s.attachments) ? s.attachments.length : 0), 0);
+  // attachments on messages the Get attachments step has not finished, less the ones already recorded for that message
+  const notFetched = sources.reduce((n, s) => {
+    if (s.kind === 'document' || s.attachmentsFetchedAt || !Array.isArray(s.attachments) || !s.attachments.length) return n;
+    return n + Math.max(0, s.attachments.length - sources.filter((d) => d.parentId === s.id).length);
+  }, 0);
   return coverageStatement({
     sources: sources.map((s) => ({ id: s.id, kind: s.kind, label: sourceLabel(s), parseStatus: s.parseStatus, parseReason: s.parseReason, parser: s.parser, receivedAt: s.receivedAt ? new Date(s.receivedAt).toISOString() : null })),
     rows: c.ledger,
     sentWatermark: sweep,
     governing: c.governing || [],
-    attachmentCount: attach,
+    attachmentsNotFetched: notFetched,
   });
 }
 

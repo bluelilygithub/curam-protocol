@@ -17,6 +17,8 @@ export function statusLabel(status) {
 export function dueLabel(due) {
   if (!due) return 'no deadline given';
   if (due.status === 'exact') return `due ${due.date}`;
+  // nothing was said about timing: that is not a problem to solve, just no deadline
+  if (!due.raw) return 'no deadline stated';
   const missing = (due.missing || []).filter(Boolean);
   return `deadline needs you${missing.length ? ` (${missing.join('; ')})` : ''}${due.raw ? `: they said "${due.raw}"` : ''}`;
 }

@@ -6,7 +6,7 @@
 
 function plural(n, word) { return `${n} ${word}${n === 1 ? '' : 's'}`; }
 
-function coverageStatement({ sources = [], rows = [], sentWatermark = null, governing = [], attachmentCount = 0 }) {
+function coverageStatement({ sources = [], rows = [], sentWatermark = null, governing = [], attachmentsNotFetched = 0 }) {
   const messages = sources.filter((s) => s.kind !== 'document');
   const docs = sources.filter((s) => s.kind === 'document');
   const readMessages = messages.filter((s) => s.parseStatus === 'parsed');
@@ -20,11 +20,13 @@ function coverageStatement({ sources = [], rows = [], sentWatermark = null, gove
   ];
 
   // Attachments: say how many were read, and group the ones that were not by their reason (Rule 2.6: each has a stated reason).
-  if (attachmentCount && !docs.length) {
-    notVisible.push(`${plural(attachmentCount, 'attachment')} on the attached mail ${attachmentCount === 1 ? 'has' : 'have'} not been fetched yet, so none were read.`);
-  } else if (docs.length) {
+  // `attachmentsNotFetched` counts only attachments on messages the Get attachments step has not finished: the same picture attached
+  // twice to one email is stored once and is not "unfetched".
+  if (attachmentsNotFetched) {
+    notVisible.push(`${plural(attachmentsNotFetched, 'attachment')} on the attached mail ${attachmentsNotFetched === 1 ? 'has' : 'have'} not been fetched yet${docs.length ? '' : ', so none were read'}.`);
+  }
+  if (docs.length) {
     notVisible.push(`${readDocs.length} of ${plural(docs.length, 'attachment')} fetched ${readDocs.length === 1 ? 'was' : 'were'} read (text only).`);
-    if (attachmentCount > docs.length) notVisible.push(`${plural(attachmentCount - docs.length, 'more attachment')} on the attached mail ${attachmentCount - docs.length === 1 ? 'has' : 'have'} not been fetched yet.`);
     const groups = new Map();
     for (const d of notRead) {
       const key = `${d.parseStatus === 'failed' ? 'could not be read' : 'not read'}: ${d.parseReason || 'no reason recorded'}`;
@@ -40,7 +42,8 @@ function coverageStatement({ sources = [], rows = [], sentWatermark = null, gove
   for (const r of rows) {
     if (r.status === 'unverified') verify.push(`"${r.items.join(', ')}" (${r.partyLabel || r.party}) has had no recent evidence: confirm whether it is still open.`);
     if (r.status === 'open' && r.conflictWith) verify.push(`"${r.items.join(', ')}": ${r.conflictQuestion || 'two sources disagree on the figure'}`);
-    if (r.status === 'open' && r.due && r.due.status !== 'exact') verify.push(`"${r.items.join(', ')}": the deadline needs a person (${(r.due.missing || []).join('; ') || 'wording unclear'}; said "${r.due.raw || ''}").`);
+    // Only a deadline someone SAID and the tool could not work out is something to check. No deadline in the email is not a to-do.
+    if (r.status === 'open' && r.due && r.due.status !== 'exact' && r.due.raw) verify.push(`"${r.items.join(', ')}": the deadline needs a person (${(r.due.missing || []).join('; ') || 'wording unclear'}; said "${r.due.raw || ''}").`);
     if (r.status === 'open' && r.authority === 'unconfirmed') verify.push(`"${r.items.join(', ')}": ${r.partyLabel || r.party} took this over but their authority is unconfirmed.`);
     if (r.status === 'open' && r.claimType === 'conditional') verify.push(`"${r.items.join(', ')}": depends on "${r.condition}", which has not been shown to be met.`);
   }
