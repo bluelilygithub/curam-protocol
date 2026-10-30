@@ -155,7 +155,7 @@ async function reread(pool, tables, entry) {
  * when every fixture row stands alone. This adds the few extra rows that make those routes answer with A's data.
  * Each is a copy of A's fixture row with the link columns changed; a failure to add one is reported, not fatal.
  */
-async function seedDerived(pool, tables, fx) {
+async function seedDerived(pool, tables, fx, finance) {
   const notes = [];
   async function clone(table, overrides) {
     const e = fx[table]; if (!e) throw new Error(`no fixture row for ${table}`);
@@ -177,6 +177,29 @@ async function seedDerived(pool, tables, fx) {
   await step('mood tied to a task', () => clone('mood_checkins', { entity_type: 'task', entity_id: String(idOf('tasks')) }));
   await step('current mission statement', () => pool.query('UPDATE mission_statements SET is_current = true WHERE id = $1', [idOf('mission_statements')]));
   await step('search index entry', () => pool.query(`INSERT INTO search_index (type,"projectId",title,body) VALUES ('project',$1,$2,$3)`, [String(idOf('projects')), `${MARK}search-title`, `${MARK}search-body`]));
+  // Finance lists are built from journal lines on the chart of accounts the Finance routes create, so the accounts are made
+  // the way the app makes them, then A gets an interest entry on the bank account, a readable unread receipt, an asset that
+  // still needs depreciation and a fixed-rate home-office year. `finance` is passed in by the test, which has the app loaded.
+  if (finance) {
+    const A = finance.userId;
+    await step('finance accounts', () => finance.ensureAccounts(A));
+    await step('journal entry on the bank account', async () => {
+      const acc = async (where) => (await pool.query(`SELECT id FROM fin_accounts WHERE "userId"=$1 AND ${where} ORDER BY code LIMIT 1`, [A])).rows[0].id;
+      const bank = await acc(`code='1000'`); const expense = await acc(`type='expense'`);
+      const e = (await pool.query(`INSERT INTO fin_journal_entries ("userId", date, description, type) VALUES ($1, CURRENT_DATE, $2, 'interest') RETURNING id`, [A, `${MARK}interest`])).rows[0].id;
+      await pool.query(`INSERT INTO fin_journal_lines ("entryId","accountId",debit,credit) VALUES ($1,$2,50,0),($1,$3,0,50)`, [e, expense, bank]);
+    });
+    await step('unread receipt', () => pool.query(`UPDATE fin_documents SET "mimeType"='application/pdf', kind='receipt', "readAt"=NULL WHERE "userId"=$1`, [A]));
+    await step('asset needing depreciation', () => pool.query(`UPDATE fin_assets SET method='prime_cost', "effectiveLifeYears"=5, "dateFirstUsed"='2025-07-01', amount=1000, "accumulatedDepreciation"=0, "lastDepreciatedFy"=NULL, "disposedDate"=NULL WHERE "userId"=$1`, [A]));
+    await step('overdue invoice', () => pool.query(`UPDATE fin_invoices SET status='sent', "issueDate"=CURRENT_DATE-40, "dueDate"=CURRENT_DATE-10, subtotal=100, gst=10, total=110 WHERE "userId"=$1`, [A]));
+    await step('invoice document type', () => pool.query(`UPDATE fin_invoices SET "docType"='invoice' WHERE "userId"=$1`, [A]));
+    await step('paid invoice', () => clone('fin_invoices', { number: `${MARK}paid-${rnd()}`, status: 'paid', paidAt: new Date(), issueDate: new Date(), dueDate: new Date() }));
+    await step('fixed-rate home-office year', async () => {
+      const map = {};
+      for (let i = 0; i <= 16; i++) map[finance.finYearForDate(new Date(Date.now() - i * 86400000).toISOString().slice(0, 10))] = 'fixed_rate';
+      await pool.query(`INSERT INTO settings ("userId", key, value) VALUES ($1,'fin_home_office_method_by_year',$2) ON CONFLICT ("userId", key) DO UPDATE SET value = EXCLUDED.value`, [A, JSON.stringify(map)]);
+    });
+  }
   // an entry with no project: the app never writes one, but search must not show it to anyone if one ever exists
   await step('search index entry with no project', () => pool.query(`INSERT INTO search_index (type,"projectId",title,body) VALUES ('project',NULL,$1,$2)`, [`${MARK}search-orphan-title`, `${MARK}search-orphan-body`]));
   return notes;

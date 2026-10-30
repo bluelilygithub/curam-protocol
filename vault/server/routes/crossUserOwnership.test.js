@@ -58,7 +58,7 @@ const PROBE = (process.argv.find((x) => x.startsWith('--probe=')) || '').slice(8
   const unbuildable = {};
   for (const t of Object.keys(tables)) { try { await builder.build(t); } catch (e) { unbuildable[t] = e.message.slice(0, 80); } }
   const fx = builder.rows;
-  const seedNotes = await seedDerived(pool, tables, fx);
+  const seedNotes = await seedDerived(pool, tables, fx, { userId: A.id, ensureAccounts: require('./finance').ensureAccounts, finYearForDate: require('../utils/finYear').finYearForDate });
   if (seedNotes.length) console.log(`extra link rows not added: ${seedNotes.join('; ')}`);
   console.log(`fixtures: ${Object.keys(fx).length} of ${Object.keys(tables).length} tables hold a row for user A`);
 
@@ -124,7 +124,7 @@ const PROBE = (process.argv.find((x) => x.startsWith('--probe=')) || '').slice(8
   // 1. leak sweep ────────────────────────────────────────────────────────────────────────────────
   // Routes that need a date range or a search term answer 400 to a bare call; retry with ordinary values.
   // routes that answer nothing without a search word
-  const QUERY_HINTS = { '/api/search': 'q=' + MARK.replace(/-$/, '') };
+  const QUERY_HINTS = { '/api/search': 'q=' + MARK.replace(/-$/, ''), '/api/finance/reports/customer-statement': `clientId=${idOf('clients')}`, '/api/finance/reports/customer-statement/pdf': `clientId=${idOf('clients')}` };
   const STD_QUERY = 'from=2000-01-01&to=2100-01-01&start=2000-01-01&end=2100-01-01&fy=2025-26&year=2026&month=1&q=probe&limit=50';
   const withQuery = (u) => u + (u.includes('?') ? '&' : '?') + STD_QUERY;
   const get = async (user, url) => {
