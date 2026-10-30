@@ -2,7 +2,9 @@ import { memo } from 'react';
 import type { ClipMeta } from '../bridge/types';
 import type { Described } from '../lib/describe';
 import { timeAgo } from '../lib/time';
+import { cardTip } from '../lib/tips';
 import Icon from './Icon';
+import Tooltip from './Tooltip';
 
 export const CARD_W = 172;
 export const CARD_H = 150;
@@ -69,6 +71,7 @@ interface Props { meta: ClipMeta; desc: Described; selected: boolean; thumb: str
 
 function ClipCard({ meta, desc, selected, thumb, index, onSelect }: Props) {
   return (
+    <Tooltip text={cardTip(desc.label, meta.sourceApp ?? null, meta.masked)}>
     <button
       type="button"
       role="option"
@@ -89,6 +92,7 @@ function ClipCard({ meta, desc, selected, thumb, index, onSelect }: Props) {
         {index < 9 && <kbd className="ml-auto px-1 rounded border border-shelf-line text-[9px] leading-4">{index + 1}</kbd>}
       </div>
     </button>
+    </Tooltip>
   );
 }
 

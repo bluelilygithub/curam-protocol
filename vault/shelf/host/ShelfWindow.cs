@@ -116,12 +116,13 @@ internal sealed class ShelfWindow : Form
 
     private static bool IsOurs(string uri) => uri.StartsWith($"https://{HostName}/", StringComparison.OrdinalIgnoreCase) || uri.StartsWith("about:blank", StringComparison.OrdinalIgnoreCase);
 
-    private void OnMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    private async void OnMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
         // only our own page may talk to the shell
         if (!IsOurs(e.Source)) return;
-        string? reply = _bridge.Handle(e.WebMessageAsJson);
-        if (reply is not null && _view?.CoreWebView2 is { } core) core.PostWebMessageAsJson(reply);
+        string json = e.WebMessageAsJson;                      // read before waiting: the event arguments are only valid inside the event
+        string? reply = await _bridge.HandleAsync(json);       // sending to Vault can take a few seconds; the window stays responsive
+        if (reply is not null && _view?.CoreWebView2 is { } core) core.PostWebMessageAsJson(reply);   // the window may have closed meanwhile: then there is nobody to tell
     }
 
     private async Task WaitForCardsAsync(CoreWebView2 core)

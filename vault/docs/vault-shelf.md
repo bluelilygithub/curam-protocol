@@ -1,7 +1,7 @@
 # Vault Shelf
 
-A small Windows clipboard companion (Tauri v2, in `vault/shelf/`, not built yet) that keeps what you copy and sends the bits you choose into
-Vault. This file covers the **Vault side (Milestone 1, built)** and the plan for the rest. The app itself is milestones M2 to M5 below.
+A small Windows clipboard companion (C# / .NET 10 + WebView2 shell in `vault/shelf/host/`, React tray page in `vault/shelf/`) that keeps what you copy and
+sends the bits you choose into Vault. This file covers the **Vault side (Milestone 1)** and the status of the app milestones M2 to M5 below.
 
 ## Milestones
 
@@ -10,7 +10,7 @@ Vault. This file covers the **Vault side (Milestone 1, built)** and the plan for
 | M1 | Vault server: keys, `/api/quick-ingest/*`, Settings card, CRM inbox, Invoice Review tag, tests | **Built** (local only; not on `staging` until the owner says) |
 | M2 | Native shell: tray, global hotkey, clipboard listener with exclusion flags, secret masking, DPAPI-encrypted SQLite. **Starts with a measuring spike** (idle memory, WebView teardown, focus return) | **Stack: C# / .NET 10 + WebView2** (`shelf/host/`). **Built and tested:** tray, hotkey, on-demand window, clipboard listener with the password-manager markers, secret masking, DPAPI-encrypted SQLite history with retention and auto-clear, settings, Start with Windows, Credential Manager store (171 tests + a live self-test). Still to build: sending to Vault is M4 |
 | M3 | The tray page (`vault/shelf/`): shelf of cards, filters, previews, actions, Settings, hotkey recorder, behind a bridge contract (`shelf/README.md`) | **Built and verified in Chrome** against sample data (32 unit tests, 47 browser checks, light and dark). The window lifecycle (create on open, destroy on dismiss) is done by the shell (M2) |
-| M4 | Dispatch from Rust (`reqwest`) with the key from Windows Credential Manager, Settings view | Not started |
+| M4 | Sending to Vault from the shell (`shelf/host/Vault/VaultClient.cs`): connect (check the address and key, then save), verify, and the four send actions, key read from Windows Credential Manager. Plus **tooltips, Help and a tour** on the tray page | **Built** (225 host tests incl. an opt-in live test against a real Vault; 47 page tests; 77 browser checks in each of light and dark; the whole chain driven in the real window against a local Vault server: all four buttons live, each confirmation shown) |
 | M5 | `vault-shelf://open` handler (no parameters), "Open Shelf" button in Vault's top bar, packaging | Not started |
 
 ## M2 spike results (2026-10-29, Windows 10 22H2, .NET 10.0.14, WebView2 runtime 156)
@@ -101,6 +101,27 @@ These counters are in memory and **reset when the server restarts**.
 `npm run test:shelf` (helpers, then the real app against a throwaway Postgres; `DATABASE_URL=postgresql://vault@127.0.0.1:15433/vault_shelf_test`, the harness refuses anything not on this machine and blocks the network).
 Also `npm run test:settings-nav`, `test:settings-tutor`, `test:guides`. The 14 routes are in `server/testing/routeManifest.json` (ingest = `public`, i.e. key-authenticated like the PC Health helper; the rest `authed`).
 
+## Sending to Vault (M4): how the shell talks to Vault
+
+Only the native shell talks to Vault; the page never sees the key. `Bridge.HandleAsync` answers `verify`, `save_connection` and `dispatch` through `VaultClient`:
+
+- **Connect** (Settings, Vault connection): the address is normalised (https only, plain http only for localhost, no user name or password in it, only its origin is used), the key must look like `vsh_` plus 64 hex, and Vault is asked (`GET /api/quick-ingest/verify`) **before anything is saved**. Only then is the key written to Credential Manager and the address to `settings.json`. Leaving the key box empty re-checks the saved key against a new address.
+- **Verify** runs each time the shelf opens; the four buttons come alive from its answer (greyed, with the reason in a tooltip, when the key cannot do that).
+- **Dispatch**: text goes as JSON `{ text, clipId, sourceApp }`; a picture goes as multipart with the original PNG; redaction sends only `{ text }`. The clip id makes a retry safe (Vault answers `duplicate`, shown as "Already in Vault").
+- **Refused before any network call:** a clip with a masked secret, text over 200,000 characters, a picture sent to redaction, a picture whose original was over 10 MB, a bad address or key.
+- **Redirects are never followed** (the key would otherwise go to a second address), responses are read up to 2 MB only, a server answer of the wrong shape never throws, and the person sees fixed plain sentences for network faults, never exception text. The log (`%LOCALAPPDATA%\VaultShelf\vaultshelf.log`) records the action and the outcome only, never what was sent.
+- Live check: set `VAULT_URL` and `VAULT_KEY` and run `dotnet test` in `shelf/host.tests` (the live test sends real clips: use a throwaway account), or run the self-test with those two set to drive the real window against that Vault.
+
+## Help, tooltips and the tour (tray page)
+
+Same conventions as Finance and Video Tools, scaled to a small tray window:
+
+- **A tooltip on every control** (`components/Tooltip.tsx`, the shelf's version of Vault's: themed card, 200 ms, hover and keyboard focus, kept inside the window). All wording is in `src/lib/tips.ts` (send buttons: `ACTION_TIPS`; tabs: `FILTER_TIPS`; everything else: `TIPS`). A greyed send button shows the reason it is greyed (it uses `aria-disabled`, not `disabled`, so the tip still shows). No control may use the browser's plain `title`.
+- **Help** (the (i) button beside Settings; opens by itself the first time, remembered in `localStorage` key `shelf:info-seen:v1`): six plain-word sections in `src/lib/help.ts` (what it is, using it, sending to Vault, connecting, privacy, if something is wrong).
+- **Tour** (the compass button inside Help): spotlight steps on elements marked `data-tour="..."`, also in `help.ts` (`TOUR_STEPS`). Esc ends the tour without closing the shelf.
+- **Not built: a guide chat.** The other tools have one (`/api/<tool>-tutor`), but it needs the page to call Vault, and here only the shell does. If wanted later it would be a bridge command that sends the question through `VaultClient`.
+- **When a button, setting or screen changes, update `tips.ts` and `help.ts` together.** `npm test` in `vault/shelf` fails if a tab or send button has no tip, a control is not wrapped in a Tooltip, a plain `title` creeps back, a help section is missing, or a tour step points at nothing.
+
 ## Decisions made with the owner (so they are not re-opened)
 
 - Server first, with real endpoints, before any app code.
@@ -109,4 +130,4 @@ Also `npm run test:settings-nav`, `test:settings-tutor`, `test:guides`. The 14 r
 - CRM = an unfiled inbox, no client picker in the app.
 - Webview created on open and destroyed on dismiss to meet the idle-memory goal; normal window activation with the previous window restored on dismiss (validated in the M2 spike).
 - Originals of pictures are kept encrypted on disk in the app (10 MB cap); the thumbnail is separate.
-- HTTP dispatch happens in the Rust process, so the key never reaches the webview.
+- HTTP dispatch happens in the native shell process (C#, not Rust: the stack changed in M2), so the key never reaches the webview.

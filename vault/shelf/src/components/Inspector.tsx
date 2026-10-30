@@ -3,7 +3,9 @@ import type { Described } from '../lib/describe';
 import type { ActionState } from '../lib/settings';
 import { formatBytes, timeAgo } from '../lib/time';
 import ActionBar from './ActionBar';
+import { TIPS } from '../lib/tips';
 import Icon from './Icon';
+import Tooltip from './Tooltip';
 import { HtmlView, ImageView, PlainText, RedactionView, SvgView, TextClipView } from './Preview';
 
 export interface RedactState { clipId: string; result: DispatchResult }
@@ -50,12 +52,12 @@ export default function Inspector(p: Props) {
         <span className="font-semibold text-shelf-text">{desc.label}</span>
         <span className="truncate">{timeAgo(meta.createdAt)}{meta.sourceApp ? ` · ${meta.sourceApp}` : ''} · {formatBytes(meta.sizeBytes)}{dims}</span>
         <div className="ml-auto flex items-center gap-1 shrink-0">
-          <button type="button" onClick={p.onCopy} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-shelf-text hover:opacity-70 transition-colors" title="Copy again (Enter copies and closes)"><Icon name="copy" size={14} /> Copy</button>
-          <button type="button" onClick={p.onDelete} className="inline-flex items-center px-1.5 py-1 rounded-lg text-shelf-muted hover:opacity-70 transition-colors" title="Remove from the shelf (Delete)" aria-label="Remove from the shelf"><Icon name="trash" size={14} /></button>
+          <Tooltip text={TIPS.copy}><button type="button" onClick={p.onCopy} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-shelf-text hover:opacity-70 transition-opacity"><Icon name="copy" size={14} /> Copy</button></Tooltip>
+          <Tooltip text={TIPS.remove}><button type="button" onClick={p.onDelete} className="inline-flex items-center px-1.5 py-1 rounded-lg text-shelf-muted hover:opacity-70 transition-opacity" aria-label="Remove from the shelf"><Icon name="trash" size={14} /></button></Tooltip>
         </div>
       </div>
       {meta.masked && (
-        <div className="flex items-center gap-2 rounded-card bg-shelf-danger/10 text-shelf-danger text-xs px-3 py-2" role="note">
+        <div className="flex items-center gap-2 rounded-card bg-shelf-danger/10 text-shelf-danger text-xs px-3 py-2" role="note" data-tip-masked="">
           <Icon name="lock" size={14} /> A secret was found in this copy and hidden. It can be read here but is never sent to Vault.
         </div>
       )}

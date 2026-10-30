@@ -4,14 +4,20 @@ import type { ActionId, Bridge, ClipMeta, Settings, VerifyResult } from './bridg
 import CardStrip from './components/CardStrip';
 import FilterBar from './components/FilterBar';
 import Inspector, { type RedactState } from './components/Inspector';
+import HelpView from './components/HelpView';
 import SettingsView from './components/SettingsView';
+import Tour from './components/Tour';
 import Toast from './components/Toast';
 import { useClipContent, useThumbs, useToast } from './hooks';
+import { HELP_SEEN_KEY } from './lib/help';
 import { countByFilter, describeClip, matchesFilter, type Described, type FilterId } from './lib/describe';
 import { ACTION_DONE, DEFAULT_SETTINGS, visibleActions } from './lib/settings';
 import { applyLook, resolveLook } from './lib/theme';
 
 const AUTO_DISMISS_DELAY_MS = 800; // long enough to read "Pushed to Vault" before the tray slides away
+
+const seenHelp = (): boolean => { try { return window.localStorage.getItem(HELP_SEEN_KEY) === '1'; } catch { return true; } };
+const markHelpSeen = () => { try { window.localStorage.setItem(HELP_SEEN_KEY, '1'); } catch { /* not remembered: it will show again next time */ } };
 
 const typing = (t: EventTarget | null) => t instanceof HTMLElement && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
 
@@ -22,7 +28,8 @@ export default function App() {
   const [verify, setVerify] = useState<VerifyResult | null>(null);
   const [filter, setFilter] = useState<FilterId>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [view, setView] = useState<'shelf' | 'settings'>('shelf');
+  const [view, setView] = useState<'shelf' | 'settings' | 'help'>('shelf');
+  const [touring, setTouring] = useState(false);
   const [busy, setBusy] = useState<ActionId | null>(null);
   const [redact, setRedact] = useState<RedactState | null>(null);
   const [visiblePictures, setVisiblePictures] = useState<string[]>([]);
@@ -43,6 +50,7 @@ export default function App() {
       if (!live) return;
       setSettings(s);
       void refreshVerify(b);
+      if (!seenHelp()) { markHelpSeen(); setView('help'); }
     });
     return () => { live = false; };
   }, [refreshClips, refreshVerify]);
@@ -119,12 +127,13 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       if (!bridge) return;
       if (e.key === 'Escape') {
+        if (touring) { e.preventDefault(); setTouring(false); return; }
         if (typing(e.target) && view !== 'settings') return;
         e.preventDefault();
-        if (view === 'settings') setView('shelf'); else if (redact) setRedact(null); else void bridge.hide();
+        if (view === 'settings' || view === 'help') setView('shelf'); else if (redact) setRedact(null); else void bridge.hide();
         return;
       }
-      if (view !== 'shelf' || typing(e.target) || e.ctrlKey || e.altKey || e.metaKey) return;
+      if (view !== 'shelf' || touring || typing(e.target) || e.ctrlKey || e.altKey || e.metaKey) return;
       const index = shown.findIndex((c) => c.id === selectedId);
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); const n = shown[Math.min(shown.length - 1, index + 1)]; if (n) setSelectedId(n.id); }
       else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); const n = shown[Math.max(0, index - 1)]; if (n) setSelectedId(n.id); }
@@ -138,7 +147,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [bridge, view, redact, shown, selectedId, copy, remove]);
+  }, [bridge, view, touring, redact, shown, selectedId, copy, remove]);
 
   // ---- screens
   if (bridge === undefined) return null;
@@ -149,20 +158,22 @@ export default function App() {
   return (
     <div ref={root} tabIndex={-1} className="h-screen w-screen box-border p-2.5 outline-none">
       <div className="relative h-full flex flex-col rounded-tray border border-shelf-line bg-shelf-bg/70 shadow-2xl overflow-hidden">
-        {view === 'settings' ? (
+        {view === 'help' ? (
+          <div className="flex-1 min-h-0 p-4"><HelpView onBack={() => setView('shelf')} onTour={() => { setView('shelf'); window.setTimeout(() => setTouring(true), 50); }} /></div>
+        ) : view === 'settings' ? (
           <div className="flex-1 min-h-0 p-4">
             <SettingsView bridge={bridge} settings={settings} verify={verify} onSettings={setSettings} onVerify={setVerify} onBack={() => setView('shelf')} onCleared={() => { void refreshClips(bridge); show('History cleared', 'info'); }} />
           </div>
         ) : (
           <>
-            <header className="px-4 pt-3 pb-2"><FilterBar filter={filter} counts={counts} onFilter={setFilter} onSettings={() => setView('settings')} /></header>
+            <header className="px-4 pt-3 pb-2"><FilterBar filter={filter} counts={counts} onFilter={setFilter} onSettings={() => setView('settings')} onHelp={() => setView('help')} /></header>
             <main className="flex-1 min-h-0 grid grid-cols-2 gap-4 px-4 pb-2">
-              <section className="min-w-0 min-h-0" aria-label="Recent copies">
+              <section className="min-w-0 min-h-0" aria-label="Recent copies" data-tour="cards">
                 {shown.length === 0
                   ? <div className="h-full flex items-center justify-center text-sm text-shelf-muted text-center px-6">{clips.length === 0 ? 'Nothing copied yet. Copy something and it will appear here.' : 'Nothing of this kind on the shelf.'}</div>
                   : <CardStrip clips={shown} described={described} selectedId={selectedId} thumbs={thumbs} onSelect={setSelectedId} onVisiblePictures={onVisiblePictures} />}
               </section>
-              <section className="min-w-0 min-h-0 border-l border-shelf-line pl-4" aria-label="Preview">
+              <section className="min-w-0 min-h-0 border-l border-shelf-line pl-4" aria-label="Preview" data-tour="preview">
                 <Inspector
                   meta={selected} desc={selected ? described.get(selected.id) ?? null : null} content={content}
                   actions={actions} busy={busy} redact={redact}
@@ -176,6 +187,7 @@ export default function App() {
             </footer>
           </>
         )}
+        {touring && <Tour onDone={() => setTouring(false)} />}
         <Toast toast={toast} />
       </div>
     </div>

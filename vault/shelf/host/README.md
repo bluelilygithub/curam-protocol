@@ -26,7 +26,7 @@ dismiss**); focus remembered and restored; click-away dismiss; the page-to-shell
 
 ## Not built yet
 
-Sending to Vault (M4: `verify`, `save_connection` and `dispatch` currently answer that they are not built), the `vault-shelf://` handler, the installer.
+The `vault-shelf://` handler and the installer (M5). Sending to Vault is built (M4): `Vault/VaultClient.cs` does verify and the four send actions, `Bridge.HandleAsync` wires `verify`, `save_connection` and `dispatch` to it. The opt-in live test (`VAULT_URL` and `VAULT_KEY` set) runs the real client against a real Vault.
 
 ## Build and run
 
@@ -39,6 +39,26 @@ bin/Release/net10.0-windows/VaultShelf.exe # tray icon appears; press Ctrl+Shift
 ```
 
 `nuget.config` points at nuget.org only (a fresh SDK install has no package source). WebView2 is pinned in the `.csproj`.
+
+## Make a copy you can just double-click (use this one, not the build above)
+
+The plain build above only starts if `DOTNET_ROOT` points at the SDK. A double-click does not set it, so Windows reports "framework not found" (exit code `0x80008083`) and the
+program exits without a window: **that is why the shortcut "does nothing" on a normal launch.** Publish a self-contained copy instead; it needs no .NET on the PC:
+
+```
+cd vault/shelf && npm run build
+cd host && dotnet publish -c Release -r win-x64 --self-contained true -p:PublishReadyToRun=true -o publish
+publish\VaultShelf.exe                      # about 116 MB on disk, no install, the page is bundled in publish\shelf
+```
+
+`publish/` is not committed. Look for the blue icon in the tray (near the clock; it may be under the ^ arrow), then press `Ctrl+Shift+Space`.
+
+## If the shortcut does nothing
+
+- **The log:** `%LOCALAPPDATA%\VaultShelf\vaultshelf.log` says whether the program started, whether the shortcut was registered or refused, and any crash (type only, never anything copied).
+- **Another program owns the shortcut:** the log says `REFUSED` and a notification appears at the tray. Click the tray icon instead, or open Settings and record another shortcut.
+- **It was already running:** a second start does nothing (log: `start ignored`). Use the existing tray icon.
+- **A crash** shows a message box naming the problem.
 
 ## Tests
 

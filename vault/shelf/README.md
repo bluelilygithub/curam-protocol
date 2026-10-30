@@ -71,6 +71,10 @@ refuses to send a masked clip even if asked.
 - `get_clip` for a picture returns the small copy; the original stays encrypted in the shell and is what `dispatch` uploads.
 - Nothing the page receives is trusted: text is rendered as text, SVG/HTML go through the sanitiser, a picture must be a `data:image/(png|jpeg|gif|webp);base64` URL.
 
+## Help, tooltips and the tour
+
+Every control has a themed tooltip (`src/components/Tooltip.tsx`, wording in `src/lib/tips.ts`), the (i) button opens Help (`src/lib/help.ts`, `HelpView.tsx`, opens by itself once) and the compass inside it starts a short tour (`Tour.tsx`, steps point at `data-tour` attributes). Change the wording in those two lib files, not at the call site; `npm test` (`tests/tips.test.ts`) fails on a missing tip, a stray plain `title`, a missing help section or a tour step without a target.
+
 ## The look: it follows Vault's own design system
 
 The shelf uses Vault's tokens, themes and fonts, not a palette of its own (see `../client/DESIGN.md`):

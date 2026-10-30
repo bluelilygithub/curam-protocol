@@ -13,7 +13,7 @@ namespace VaultShelf.Host;
 /// </summary>
 internal sealed class Spike
 {
-    private const ushort VK_SHIFT = 0x10, VK_CONTROL = 0x11, VK_SPACE = 0x20, VK_ESCAPE = 0x1B;
+    private const ushort VK_SHIFT = 0x10, VK_CONTROL = 0x11, VK_MENU = 0x12, VK_F11 = 0x7A, VK_ESCAPE = 0x1B;   // the test shortcut is Ctrl+Alt+Shift+F11
     private const int Cycles = 5;
 
     private readonly TrayApp _app;
@@ -157,6 +157,50 @@ private async Task<CaptureOutcome?> WaitOutcome(Action trigger, int timeoutMs = 
         return r;
     }
 
+private const string ButtonsProbe = "JSON.stringify([...document.querySelectorAll('[role=group] button')].map(b => ({ t: b.textContent.trim(), disabled: b.disabled })))";
+    private const string ToastProbe = "(document.querySelector('[role=status]') || {}).innerText || ''";
+
+    /// <summary>
+    /// The whole chain in the real window, against a real Vault (only when VAULT_URL and VAULT_KEY are set): connect, open the shelf, see the buttons come alive
+    /// after the key is checked, click each one, and read the confirmation the person would see. The test data lives in the self-test's own folders.
+    /// </summary>
+    private async Task<Dictionary<string, object?>> VaultFromWindowAsync(string url, string key)
+    {
+        var r = new Dictionary<string, object?>();
+        string connect = await _app.Bridge.HandleAsync(System.Text.Json.JsonSerializer.Serialize(new { id = 1, command = "save_connection", args = new { baseUrl = url, key } })) ?? "";
+        r["connected"] = connect.Contains("\"ok\":true");
+        r["keyLeakedInAnswer"] = connect.Contains(key);
+        var marker = "SHELF E2E " + Guid.NewGuid().ToString("N");
+        _app.Store.Add(new Storage.NewClip(Storage.ClipKind.Text, marker, null, null, "spike.exe", false, false, 0, 0, marker.Length));
+        r["marker"] = marker;
+
+        var clicks = new (string label, string name)[] { ("Save as Note", "notes"), ("Attach to CRM", "crm"), ("Ingest to Finance", "finance"), ("Ask Redaction", "redact") };
+        var toasts = new Dictionary<string, string>();
+        bool first = true;
+        foreach (var (label, name) in clicks)
+        {
+            await _app.OpenAsync();
+            var win = _app.Window;
+            if (win is null) { toasts[name] = "(the shelf did not open)"; continue; }
+            await Task.WhenAny(win.Ready.Task, Task.Delay(10000));
+            await Task.Delay(1800);                                    // the key is checked with Vault when the shelf opens; the buttons come alive after that
+            if (first) { r["buttons"] = JsonSerializer.Deserialize<string>(await win.EvalAsync(ButtonsProbe)); first = false; }
+            await win.EvalAsync($"([...document.querySelectorAll('[role=group] button')].find(b => b.textContent.includes('{label}')) || {{ click() {{}} }}).click()");
+            string toast = "";
+            for (int i = 0; i < 60 && toast.Length == 0 && !win.IsDisposed; i++)      // the confirmation shows for a couple of seconds, and sending closes the shelf shortly after
+            {
+                await Task.Delay(100);
+                try { toast = JsonSerializer.Deserialize<string>(await win.EvalAsync(ToastProbe)) ?? ""; } catch (Exception e) when (e is JsonException or ObjectDisposedException or InvalidOperationException) { break; }
+            }
+            toasts[name] = toast + (win.IsDisposed ? " [the shelf closed itself]" : "") + (toast.Length == 0 ? " [no confirmation seen; foreground now: " + NativeMethods.TitleOf(GetForegroundWindow()) + "]" : "");
+            await Task.Delay(1200);
+            if (_app.Window is not null) _app.Close();                 // sending closes the shelf by itself after a moment; a check does not
+            await Task.Delay(500);
+        }
+        r["toasts"] = toasts;
+        return r;
+    }
+
     public async Task RunAsync()
     {
         var result = new Dictionary<string, object?>
@@ -201,7 +245,7 @@ private async Task<CaptureOutcome?> WaitOutcome(Action trigger, int timeoutMs = 
                 if (!preOk) { c["skipped"] = "could not put Notepad in front first, so keys were not sent (they would have gone to another program)"; continue; }
 
                 var sw = Stopwatch.StartNew();
-                Chord(VK_CONTROL, VK_SHIFT, VK_SPACE);
+                Chord(VK_CONTROL, VK_MENU, VK_SHIFT, VK_F11);
                 while (_app.Window is null && sw.ElapsedMilliseconds < 3000) await Task.Delay(5);
                 var win = _app.Window;
                 if (win is null) { c["error"] = "the hotkey did not open the shelf"; continue; }
@@ -267,7 +311,7 @@ private async Task<CaptureOutcome?> WaitOutcome(Action trigger, int timeoutMs = 
                 await Task.Delay(400);
                 if (GetForegroundWindow() == notepad)
                 {
-                    Chord(VK_CONTROL, VK_SHIFT, VK_SPACE);
+                    Chord(VK_CONTROL, VK_MENU, VK_SHIFT, VK_F11);
                     var sw2 = Stopwatch.StartNew();
                     while (_app.Window is null && sw2.ElapsedMilliseconds < 3000) await Task.Delay(5);
                     if (_app.Window is { } w2) { await Task.WhenAny(w2.Ready.Task, Task.Delay(10000)); await Task.Delay(500); }
@@ -304,6 +348,10 @@ private async Task<CaptureOutcome?> WaitOutcome(Action trigger, int timeoutMs = 
             result["lookDefault"] = await LookInRealWindowAsync("warm-sand", "DM Sans");
             result["lookDarkInter"] = await LookInRealWindowAsync("dark-slate", "Inter");
             await LookInRealWindowAsync("warm-sand", "DM Sans");
+
+            // ---- 6. the whole chain against a real Vault, if one was given
+            if (Environment.GetEnvironmentVariable("VAULT_URL") is { Length: > 0 } vurl && Environment.GetEnvironmentVariable("VAULT_KEY") is { Length: > 0 } vkey)
+                result["vaultFromRealWindow"] = await VaultFromWindowAsync(vurl, vkey);
         }
         catch (Exception e)
         {

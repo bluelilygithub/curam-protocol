@@ -6,7 +6,9 @@ import { hexToRgba, hslText, rgbText } from '../lib/color';
 import { highlightCode } from '../lib/highlight';
 import { htmlPreviewDocument, sanitizeHtml, sanitizeSvg, svgBlobUrl } from '../lib/sanitize';
 import type { RedactFinding } from '../bridge/types';
+import { TIPS } from '../lib/tips';
 import Icon from './Icon';
+import Tooltip from './Tooltip';
 
 export const MAX_SHOWN_CHARS = 50000;
 const LANGUAGE_NAMES: Record<CodeLanguage, string> = { javascript: 'JavaScript', typescript: 'TypeScript', python: 'Python', sql: 'SQL', json: 'JSON', css: 'CSS', xml: 'HTML / XML' };
@@ -146,14 +148,14 @@ export function RedactionView({ text, findings, note, truncated, onBack }: { tex
   return (
     <div className="h-full flex flex-col min-h-0 gap-2">
       <div className="flex items-center gap-2">
-        <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-xs text-shelf-accent hover:opacity-70 transition-opacity"><Icon name="back" size={14} /> Back to preview</button>
+        <Tooltip text={TIPS.backToPreview}><button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-xs text-shelf-accent hover:opacity-70 transition-opacity"><Icon name="back" size={14} /> Back to preview</button></Tooltip>
         <span className="ml-auto text-xs font-medium">{findings.length === 0 ? 'Nothing sensitive-looking found' : `${findings.length} possible ${findings.length === 1 ? 'detail' : 'details'} found`}</span>
       </div>
       {counts.length > 0 && <div className="flex flex-wrap gap-1.5">{counts.map(([cat, n]) => <span key={cat} className="text-[11px] px-2 py-0.5 rounded-full bg-shelf-danger/15 text-shelf-danger font-medium">{cat.replace(/_/g, ' ')} · {n}</span>)}</div>}
       <div className="flex-1 min-h-0 overflow-auto rounded-card border border-shelf-line bg-shelf-text/[0.04] p-3">
         <pre className="m-0 whitespace-pre-wrap break-words font-sans text-sm leading-[1.6]">
           {segments.map((s, i) => (s.hit
-            ? <mark key={i} title={`${s.hit.category.replace(/_/g, ' ')} (${Math.round(s.hit.confidence * 100)}%)`} className="rounded px-0.5 bg-shelf-danger/25 text-shelf-text">{s.text}</mark>
+            ? <Tooltip key={i} text={`${s.hit.category.replace(/_/g, ' ')} (${Math.round(s.hit.confidence * 100)}% sure). Found by pattern, so check it yourself.`}><mark className="rounded px-0.5 bg-shelf-danger/25 text-shelf-text">{s.text}</mark></Tooltip>
             : <span key={i}>{s.text}</span>))}
         </pre>
       </div>

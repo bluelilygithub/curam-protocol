@@ -3,6 +3,7 @@ using VaultShelf.Host.Clipboard;
 using VaultShelf.Host.Security;
 using VaultShelf.Host.Settings;
 using VaultShelf.Host.Storage;
+using VaultShelf.Host.Vault;
 
 namespace VaultShelf.Host;
 
@@ -28,6 +29,7 @@ internal sealed class TrayApp : ApplicationContext
     public CredentialStore Credentials { get; }
     public StartupRegistration Startup { get; }
     public ClipboardMonitor Monitor { get; }
+    public VaultClient Vault { get; }
     public Bridge Bridge { get; }
     public ShelfWindow? Window { get; private set; }
     public bool TrimAfterClose { get; set; } = true;
@@ -43,7 +45,9 @@ internal sealed class TrayApp : ApplicationContext
         Credentials = credentials ?? new CredentialStore();
         Startup = startup ?? new StartupRegistration();
         Monitor = new ClipboardMonitor(Store, () => Settings.Current);
-        Bridge = new Bridge(Store, Settings, Credentials, Startup, Monitor, ApplyHotkey);
+        AppLog.Write(Monitor.Listening ? "clipboard listener registered" : "clipboard listener could NOT be registered");
+        Vault = new VaultClient();
+        Bridge = new Bridge(Store, Settings, Credentials, Startup, Monitor, Vault, ApplyHotkey);
 
         _icon = MakeIcon();
         _activeHotkey = Settings.Current.Hotkey;
@@ -62,6 +66,12 @@ internal sealed class TrayApp : ApplicationContext
         _hotkey.Pressed += async () => await ToggleAsync();
         HotkeyRegistered = _hotkey.Register(_activeHotkey);
         UpdateTooltip();
+        AppLog.Write(HotkeyRegistered ? $"shortcut {_activeHotkey} registered" : $"shortcut {_activeHotkey} REFUSED: another program already uses it");
+        if (!HotkeyRegistered)
+        {
+            // the commonest reason for "the shortcut does nothing": say so, where it will be seen
+            _tray.ShowBalloonTip(10000, "Vault Shelf", $"{_activeHotkey} is already used by another program, so it will not open the shelf. Click this tray icon instead, or choose another shortcut in the shelf's Settings.", ToolTipIcon.Warning);
+        }
 
         Monitor.Processed += outcome => { if (outcome.Captured) NotifyPage("clips_changed"); };
         Bridge.ClipsChanged += () => NotifyPage("clips_changed");
@@ -150,6 +160,7 @@ internal sealed class TrayApp : ApplicationContext
         Monitor.Dispose();
         _hotkey.Dispose();
         Store.Dispose();
+        Vault.Dispose();
         _icon.Dispose();
         base.ExitThreadCore();
     }

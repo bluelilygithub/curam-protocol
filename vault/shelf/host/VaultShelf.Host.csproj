@@ -29,4 +29,16 @@
     <InternalsVisibleTo Include="VaultShelf.Host.Tests" />
   </ItemGroup>
 
+  <!--
+    Publishing (see README, "Make an installable copy"): a self-contained build needs no .NET on the PC, so a double-click just works. The built page (../dist) is copied
+    next to the program as the "shelf" folder, where the program looks for it. Run `npm run build` in vault/shelf first.
+  -->
+  <Target Name="CopyShelfPage" AfterTargets="Publish">
+    <ItemGroup>
+      <ShelfPageFiles Include="$(MSBuildProjectDirectory)\..\dist\**\*" />
+    </ItemGroup>
+    <Error Condition="'@(ShelfPageFiles)' == ''" Text="The shelf page is not built. Run 'npm run build' in vault/shelf first." />
+    <Copy SourceFiles="@(ShelfPageFiles)" DestinationFiles="@(ShelfPageFiles->'$(PublishDir)shelf\%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
+
 </Project>

@@ -18,6 +18,7 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const run = async (scheme) => {
   const ctx = await browser.newContext({ viewport: { width: 1500, height: 430 }, colorScheme: scheme });
   await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new globalThis.URL(URL).origin }).catch(() => {});
+  await ctx.addInitScript(() => { try { localStorage.setItem('shelf:info-seen:v1', '1'); } catch { /* ignore */ } });
   const page = await ctx.newPage();
   const problems = [];
   const dialogs = [];
@@ -121,7 +122,12 @@ const run = async (scheme) => {
   // ---- actions
   await choose(1);
   const finance = preview.getByRole('button', { name: /Ingest to Finance/ });
-  check(tag('a button the key cannot do is greyed, with the reason on hover'), (await finance.isDisabled()) && (await finance.getAttribute('title'))?.includes('Finance is switched off'));
+  await finance.hover();
+  const greyTip = await page.locator('[role=tooltip]').innerText().catch(() => '');
+  check(tag('a button the key cannot do is greyed, with the reason in a tooltip'), (await finance.isDisabled()) && greyTip.includes('Finance is switched off'), greyTip);
+  const noteBtn = preview.getByRole('button', { name: /Save as Note/ });
+  await noteBtn.hover();
+  check(tag('an available send button says what it does'), /note in Vault Notes/i.test(await page.locator('[role=tooltip]').innerText().catch(() => '')));
   await preview.getByRole('button', { name: /Save as Note/ }).click();
   await page.locator('[role=status]').getByText('Pushed to Vault').waitFor({ timeout: 3000 }).then(() => check(tag('dispatch shows the "Pushed to Vault" toast'), true)).catch(() => check(tag('dispatch shows the "Pushed to Vault" toast'), false));
   await shot('08-toast');
@@ -241,6 +247,47 @@ const run = async (scheme) => {
   await choose(1);
   check(tag('an action switched off in settings disappears from the preview'), (await preview.getByRole('button', { name: /Ingest to Finance/ }).count()) === 0);
   await shot('13-after-settings');
+
+  // ---- tooltips, help and the tour
+  await page.mouse.move(5, 5);
+  await page.getByRole('tab', { name: /^Links/ }).hover();
+  check(tag('a tab has a themed tooltip'), /Web addresses/.test(await page.locator('[role=tooltip]').innerText().catch(() => '')));
+  await page.getByRole('button', { name: 'Settings' }).hover();
+  const gearTip = page.locator('[role=tooltip]');
+  const gearBox = await gearTip.boundingBox();
+  check(tag('a tooltip stays inside the window'), !!gearBox && gearBox.x >= 0 && gearBox.x + gearBox.width <= 1500 && gearBox.y >= 0);
+  check(tag('only one tooltip at a time, and none left behind after the pointer leaves'), (await page.locator('[role=tooltip]').count()) === 1 && (await (async () => { await page.mouse.move(700, 300); await page.waitForTimeout(80); return page.locator('[role=tooltip]').count(); })()) === 0);
+  check(tag('no control still uses the browser\'s plain title tip'), (await page.locator('button[title],input[title],select[title],label[title]').count()) === 0);
+
+  await page.getByRole('button', { name: 'Help' }).click();
+  await page.getByRole('heading', { name: 'How Vault Shelf works' }).waitFor();
+  check(tag('Help shows all six sections in plain words'), (await page.locator('section[aria-labelledby^=help-]').count()) === 6);
+  await shot('15-help');
+  await page.getByRole('button', { name: /Take the tour/ }).click();
+  await page.getByRole('dialog', { name: 'Guided tour' }).waitFor();
+  check(tag('the tour starts on the first step'), /Step 1 of 6/.test(await page.getByRole('dialog').innerText()));
+  await shot('16-tour');
+  for (let n = 0; n < 5; n++) await page.getByRole('button', { name: 'Next' }).click();
+  check(tag('the tour reaches its last step and offers Done'), /Step 6 of 6/.test(await page.getByRole('dialog').innerText()) && (await page.getByRole('button', { name: 'Done' }).count()) === 1);
+  await page.getByRole('button', { name: 'Done' }).click();
+  check(tag('Done ends the tour'), (await page.getByRole('dialog', { name: 'Guided tour' }).count()) === 0);
+  await page.getByRole('button', { name: 'Take the tour' }).count();
+  await page.getByRole('button', { name: 'Help' }).click();
+  await page.getByRole('button', { name: /Take the tour/ }).click();
+  await page.getByRole('dialog', { name: 'Guided tour' }).waitFor();
+  await page.keyboard.press('Escape');
+  check(tag('Esc ends the tour and keeps the shelf open'), (await page.getByRole('dialog', { name: 'Guided tour' }).count()) === 0 && (await cards().count()) > 0);
+
+  // first time ever: the help opens by itself, once
+  const fresh = await browser.newContext({ viewport: { width: 1500, height: 430 }, colorScheme: scheme });
+  const firstPage = await fresh.newPage();
+  await firstPage.goto(URL);
+  const autoHelp = await firstPage.getByRole('heading', { name: 'How Vault Shelf works' }).waitFor({ timeout: 4000 }).then(() => true).catch(() => false);
+  check(tag('the first time, Help opens by itself'), autoHelp);
+  await firstPage.reload();
+  await firstPage.locator('[role=option]').first().waitFor({ timeout: 4000 }).catch(() => {});
+  check(tag('and not again the second time'), (await firstPage.getByRole('heading', { name: 'How Vault Shelf works' }).count()) === 0);
+  await fresh.close();
 
   // ---- narrow window still works
   await page.setViewportSize({ width: 900, height: 400 });
