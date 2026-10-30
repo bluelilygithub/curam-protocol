@@ -13,7 +13,7 @@ function createCase(input, actor) {
   if (!title) throw new RuleError('1.1', 'a case needs a title');
   if (!obligation) throw new RuleError('1.1', 'a case is opened from an obligation: say what is owed');
   const profile = input.profile === 'professional' ? 'professional' : 'soft';
-  return { title, obligation, kind: input.kind || 'other', profile, governing: input.governing || [], status: 'draft' };
+  return { title, obligation, kind: input.kind || 'other', profile, governing: input.governing || [], status: 'active' };
 }
 
 /** Rule 1.2: mail never creates a case. */
@@ -43,6 +43,8 @@ function sentSweepCovers(watermark, requestDate, now, { toleranceMs = 15 * 60 * 
 
 /**
  * May this row produce a nudge draft right now?
+ * NOTE: the `sentLinks` branches (answered / chased) are exercised by the rule suite only. The app does not feed them: whether a Sent
+ * message already answers a row is a judgement for a person, shown as the SENT_SINCE warning on the draft (case model log v1.0.2, section 10).
  * @returns {{ok:boolean, close?:boolean, blocks:{rule:string, reason:string}[]}}
  */
 function canDraft({ row, watermark, now, pendingDrafts = 0, cap = 5, sentLinks = [] }) {
@@ -72,6 +74,9 @@ function canDraft({ row, watermark, now, pendingDrafts = 0, cap = 5, sentLinks =
 
 /**
  * Export gates that depend on sources and governing items (case model §6).
+ * NOTE: NOT CALLED BY THE APP (case model log v1.0.3). It is the rule as written, tested by fixtures 18 and 22 with inputs the app never
+ * supplies: there is no way to add governing items, nothing sets `candidateObligations`, and a file that could not be read yields no row
+ * that could point at it. The coverage statement is what tells the person about unreadable files.
  * @param {{profile, sources: {id, parseStatus, candidateObligations?:number}[], rows: object[], governing: {id, mappedRowId?, notApplicable?:string}[]}} p
  * @returns {{exportBlocked:boolean, reasons:string[], blockedDraftSources:string[]}}
  */

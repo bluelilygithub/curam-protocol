@@ -80,7 +80,7 @@ export function startEmailFollowUpTour() {
   tour.addStep({
     id: 'ef-steps',
     title: 'Find, attachments, read, check Sent',
-    text: '1. Find mail lists threads with these people for you to attach. 2. Get attachments reads the text of PDFs and Word files that came with them, and scanned pages by OCR. 3. Read asks the AI to propose ledger rows; each must quote the text word for word or it is dropped. 4. Check Sent looks for replies you already sent, and chasing stays blocked until it has worked.',
+    text: '1. Find mail lists threads with these people for you to attach. 2. Get attachments reads the text of PDFs and Word files that came with them, and scanned pages by OCR. 3. Read asks the AI to propose ledger rows; each must quote the text word for word or it is dropped. 4. Check Sent looks for replies you already sent. Draft follow-up runs it for you when it is out of date, and drafts nothing if it cannot.',
     attachTo: { element: '[data-tour="ef-steps"]', on: 'bottom' },
     beforeShowPromise: check('ef-steps', '[data-tour="ef-steps"]'),
     when: { show() { injectStepCounter(4); } },

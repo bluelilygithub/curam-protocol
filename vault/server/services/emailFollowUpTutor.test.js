@@ -23,6 +23,7 @@ checkGuide({
     ['get-attachments', 'notes', /OCR is a machine reading/, 'OCR may misread figures'],
     ['get-attachments', 'notes', /program/, 'a disguised program is refused'],
     ['check-sent', 'notes', /Required before chasing/, 'Sent must be checked first'],
+    ['check-sent', 'notes', /runs it for you/, 'Draft follow-up checks Sent itself'],
     ['draft-followup', 'notes', /No AI writes the draft/, 'drafts are not model-written'],
     ['condition-met', 'notes', /"thanks" never counts/, 'a polite reply does not meet a condition'],
     ['took-over', 'notes', /unconfirmed/, 'a substitute is unconfirmed'],
@@ -31,6 +32,6 @@ checkGuide({
     ['coverage', 'does', /could not see/, 'coverage says what it could not see'],
   ],
   gaps: [/Sending an email/, /photos and pictures of documents/, /misread digits/, /phone calls, portals/, /Opening a case by itself/, /legal, tax or accounting advice/, /Editing the wording/, /Medical, mortgage/],
-  rules: [/only reads Gmail/, /never guesses a date/, /check Sent before chasing/, /five drafts/, /word for word/],
+  rules: [/only reads Gmail/, /never guesses a date/, /Sent folder first/, /five drafts/, /word for word/],
   system: [/cannot see any case, email/, /cannot send|it cannot/],
 }).catch((e) => { console.error(e); process.exit(1); });

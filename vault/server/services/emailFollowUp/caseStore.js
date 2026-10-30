@@ -41,16 +41,47 @@ async function getCase(userId, id) {
   return rows[0] || null;
 }
 
+/** A client or project id from the request must belong to this person (it is only a foreign key to a shared table). Returns the id or null. */
+async function ownedLink(userId, table, id) {
+  const n = Number(id);
+  if (!Number.isInteger(n) || n <= 0) return null;
+  const { rows } = await pool.query(`SELECT id FROM ${table === 'projects' ? 'projects' : 'clients'} WHERE id=$1 AND "userId"=$2`, [n, userId]);
+  if (!rows[0]) throw Object.assign(new Error(`That ${table === 'projects' ? 'project' : 'client'} was not found in your account.`), { status: 400 });
+  return n;
+}
+
 async function insertCase(userId, c, extra) {
+  const clientId = extra.clientId ? await ownedLink(userId, 'clients', extra.clientId) : null;
+  const projectId = extra.projectId ? await ownedLink(userId, 'projects', extra.projectId) : null;
   const { rows } = await pool.query(
     `INSERT INTO ef_cases ("userId", title, obligation, kind, profile, status, aliases, governing, "clientId", "projectId")
      VALUES ($1,$2,$3,$4,$5,'active',$6,$7,$8,$9) RETURNING ${CASE_COLS}`,
-    [userId, c.title, c.obligation, c.kind, c.profile, JSON.stringify(cleanAliases(extra.aliases)), JSON.stringify(c.governing || []), extra.clientId || null, extra.projectId || null]);
+    [userId, c.title, c.obligation, c.kind, c.profile, JSON.stringify(cleanAliases(extra.aliases)), JSON.stringify(c.governing || []), clientId, projectId]);
   return rows[0];
 }
 
-async function saveLedger(caseId, ledger) {
-  await pool.query(`UPDATE ef_cases SET ledger=$1, "updatedAt"=NOW() WHERE id=$2`, [JSON.stringify(ledger), caseId]);
+/**
+ * Read-modify-write of a case's ledger under a row lock, in one transaction. Every change to the ledger goes through here, so two
+ * requests at once (a Read and a "Make a task", say) take turns instead of the later one overwriting the earlier. `fn(ledger, client)`
+ * returns { ledger?, value }: a new ledger to save (omit to leave it alone) and what to hand back. Anything it does through `client`
+ * (marking a source read, adding a task) commits or rolls back together with the ledger. Slow work (a model call) belongs OUTSIDE fn.
+ */
+async function withLedger(userId, caseId, fn) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(`SELECT ledger FROM ef_cases WHERE id=$1 AND "userId"=$2 FOR UPDATE`, [caseId, userId]);
+    if (!rows[0]) throw Object.assign(new Error('Case not found.'), { status: 404 });
+    const out = await fn(rows[0].ledger || [], client);
+    if (out && out.ledger) await client.query(`UPDATE ef_cases SET ledger=$1, "updatedAt"=NOW() WHERE id=$2`, [JSON.stringify(out.ledger), caseId]);
+    await client.query('COMMIT');
+    return out ? out.value : undefined;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 async function patchCase(userId, id, patch) {
@@ -60,13 +91,20 @@ async function patchCase(userId, id, patch) {
   if (patch.title !== undefined) add('title', String(patch.title).trim().slice(0, 200));
   if (patch.aliases !== undefined) add('aliases', JSON.stringify(cleanAliases(patch.aliases)));
   if (patch.status !== undefined && ['active', 'closed', 'abandoned'].includes(patch.status)) add('status', patch.status);
-  if (patch.profile !== undefined && ['soft', 'professional'].includes(patch.profile)) add('profile', patch.profile);
-  if (patch.clientId !== undefined) add('"clientId"', patch.clientId || null);
-  if (patch.projectId !== undefined) add('"projectId"', patch.projectId || null);
+  let profileChanged = false;
+  if (patch.profile !== undefined && ['soft', 'professional'].includes(patch.profile)) {
+    const cur = await getCase(userId, id);
+    profileChanged = !!cur && cur.profile !== patch.profile;
+    add('profile', patch.profile);
+  }
+  if (patch.clientId !== undefined) add('"clientId"', patch.clientId ? await ownedLink(userId, 'clients', patch.clientId) : null);
+  if (patch.projectId !== undefined) add('"projectId"', patch.projectId ? await ownedLink(userId, 'projects', patch.projectId) : null);
   if (!sets.length) return getCase(userId, id);
   vals.push(id, userId);
   const { rows } = await pool.query(
     `UPDATE ef_cases SET ${sets.join(', ')}, "updatedAt"=NOW() WHERE id=$${vals.length - 1} AND "userId"=$${vals.length} RETURNING ${CASE_COLS}`, vals);
+  // An approval is only good under the checking it was given under: a stricter or looser profile sends approved drafts back for a fresh look.
+  if (rows[0] && profileChanged) await pool.query(`UPDATE ef_drafts SET status='pending', "updatedAt"=NOW() WHERE "caseId"=$1 AND status='approved'`, [id]);
   return rows[0] || null;
 }
 
@@ -312,7 +350,7 @@ async function latestSweep(caseId) {
 }
 
 /** Copy-time check (Rule 9.4): mail in the cited threads newer than the draft, read live from Gmail. Fails closed. */
-async function freshInbound(userId, threadIds, sinceIso, knownExternalIds, ownerAddr) {
+async function freshInbound(userId, threadIds, sinceIso, ownerAddr) {
   const g = gmailHelpers();
   const gmail = await g.getGmailClient(userId);
   const since = new Date(sinceIso).getTime();
@@ -323,7 +361,7 @@ async function freshInbound(userId, threadIds, sinceIso, knownExternalIds, owner
       if (Number(m.internalDate) <= since) continue;
       const from = g.getHeader(m.payload?.headers || [], 'From') || '';
       if ((m.labelIds || []).includes('SENT') || (ownerAddr && from.toLowerCase().includes(ownerAddr.toLowerCase()))) continue;
-      out.push({ id: m.id, from, threadId, receivedAt: new Date(Number(m.internalDate)).toISOString(), known: knownExternalIds.includes(m.id) });
+      out.push({ id: m.id, from, threadId, receivedAt: new Date(Number(m.internalDate)).toISOString() });
     }
   }
   return out;
@@ -373,7 +411,7 @@ async function latestApproval(draftId) {
 }
 
 module.exports = {
-  EMAIL_RE, cleanAliases, listCases, getCase, insertCase, saveLedger, patchCase,
+  EMAIL_RE, cleanAliases, listCases, getCase, insertCase, withLedger, patchCase,
   listSources, getSource, addSource, markExtracted,
   attachThread, suggestThreads, previewThread, fetchAttachments, runSentSweep, latestSweep, freshInbound, ownerEmail,
   listDrafts, getDraft, pendingDraftCount, insertDraft, setDraftStatus, addApproval, latestApproval,

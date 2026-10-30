@@ -125,7 +125,7 @@ const CHECKS = {
     try { gates.createCase({ title: 'x', obligation: 'y' }, { type: 'system' }); fail(fx.id, 'a non-human actor opened a case'); } catch (e) { if (e.rule !== '1.1') fail(fx.id, e.message); }
     try { gates.createCase({ title: 'x' }, { type: 'human' }); fail(fx.id, 'a case opened with no obligation'); } catch (e) { if (e.rule !== '1.1') fail(fx.id, e.message); }
     const ok = gates.createCase({ title: 'Q3 documents', obligation: 'Client owes the Q3 ledger' }, { type: 'human' });
-    if (ok.status !== 'draft' || ok.profile !== 'soft') fail(fx.id, `new case should start as a soft draft, got ${JSON.stringify(ok)}`);
+    if (ok.status !== 'active' || ok.profile !== 'soft') fail(fx.id, `new case should start active with relaxed checking, got ${JSON.stringify(ok)}`);
   },
 
   can_draft(fx) {

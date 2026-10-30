@@ -6,7 +6,6 @@
 // never sends, drafts or files mail. Drafts are text for the person to copy into their own mail program.
 
 const express = require('express');
-const { pool } = require('../db');
 const { getLogger } = require('../middleware/requestContext');
 const { aiLimiter } = require('../middleware/aiRateLimit');
 const { RuleError } = require('../services/emailFollowUp/common');
@@ -16,7 +15,7 @@ const { checkDraft } = require('../services/emailFollowUp/guard');
 const approvalLib = require('../services/emailFollowUp/approval');
 const { buildNudgeDraft } = require('../services/emailFollowUp/draft');
 const { coverageStatement } = require('../services/emailFollowUp/coverage');
-const { extractFromSource } = require('../services/emailFollowUp/extract');
+const extractMod = require('../services/emailFollowUp/extract'); // called as extractMod.extractFromSource so a test can stand in for the model
 const store = require('../services/emailFollowUp/caseStore');
 const { resolveUserTimezone } = require('../services/fitness/timezone');
 
@@ -75,7 +74,7 @@ function coverageOf(c, sources, sweep) {
 
 // ---------- drafts (named routes first) ----------
 
-async function guardFor(c, sources, content, sweep) {
+function guardFor(c, sources, content) {
   const notes = content.notes || [];
   const row = c.ledger.find((r) => r.id === content.rowIds[0]);
   const res = checkDraft(content, { sources: guardSourcesOf(sources), profile: c.profile, row, notes });
@@ -90,7 +89,7 @@ router.post('/drafts/:draftId/approve', async (req, res) => {
     const c = await store.getCase(req.user.id, draft.caseId);
     const sources = await store.listSources(c.id, { withText: true });
     const content = { ...draft.content, id: draft.id, version: draft.version };
-    const g = await guardFor(c, sources, content, null);
+    const g = guardFor(c, sources, content);
     if (g.verdict === 'fail') return res.status(409).json({ error: 'The guard failed this draft. It cannot be approved.', verdict: g });
 
     const accepted = Array.isArray(req.body?.acceptedWarnings) ? req.body.acceptedWarnings : [];
@@ -125,10 +124,25 @@ router.post('/drafts/:draftId/copy', async (req, res) => {
     if (!draft) return res.status(404).json({ error: 'Draft not found.' });
     const content = { ...draft.content, id: draft.id, version: draft.version };
     const approval = draft.status === 'approved' ? await store.latestApproval(draft.id) : null;
+
+    // The guard is run again now, under the case's CURRENT checking: an approval does not outlive a source that has since become unreadable,
+    // or a warning the person never saw. Anything open now that was not accepted at approval sends the draft back to pending.
+    if (approval) {
+      const c = await store.getCase(req.user.id, draft.caseId);
+      const g = guardFor(c, await store.listSources(c.id, { withText: true }), content);
+      const accepted = new Set((approval.acceptedWarnings || []).map((w) => `${w.index}:${w.code}`));
+      const unaccepted = g.results.filter((r) => r.verdict === 'needs_review' && !accepted.has(`${r.index}:${r.code}`));
+      if (g.verdict === 'fail' || unaccepted.length) {
+        await store.setDraftStatus(draft.id, 'pending');
+        const why = g.verdict === 'fail' ? g.reasons[0] : unaccepted[0].message;
+        return res.status(409).json({ ok: false, status: 'pending', rule: '7', reason: `The check has changed since you approved this: ${why}` });
+      }
+    }
+
     let inboundSince = [];
     try {
       const owner = await store.ownerEmail(req.user.id);
-      inboundSince = await store.freshInbound(req.user.id, content.threadIds || [], draft.createdAt, [], owner);
+      inboundSince = await store.freshInbound(req.user.id, content.threadIds || [], draft.createdAt, owner);
     } catch (err) {
       return res.status(502).json({ ok: false, reason: 'Could not check Gmail for new mail, so this draft cannot be released. Try again.', detail: String(err.message).slice(0, 160) });
     }
@@ -161,7 +175,7 @@ router.patch('/drafts/:draftId', async (req, res) => {
     const sources = await store.listSources(c.id, { withText: true });
     const version = draft.version + 1;
     const content = { ...next, id: null, version };
-    const verdict = await guardFor(c, sources, content, null);
+    const verdict = guardFor(c, sources, content);
     const created = await store.insertDraft(req.user.id, c.id, draft.rowId, next, approvalLib.draftHash(content), verdict, { version, previousId: draft.id });
     await store.setDraftStatus(draft.id, 'replaced');
     res.json({ draft: created });
@@ -256,26 +270,49 @@ router.post('/:id/extract', aiLimiter, async (req, res) => {
     const { timezone } = await resolveUserTimezone(req.user.id);
     const owner = await store.ownerEmail(req.user.id);
     const sources = (await store.listSources(c.id, { withText: true })).filter((s) => !s.extractedAt && s.parseStatus === 'parsed' && s.channel !== 'note');
-    let ledger = c.ledger;
-    const newId = nextRowId(ledger);
-    const summary = { read: 0, added: 0, evidence: 0, superseded: 0, conflicts: 0, dropped: [], remaining: Math.max(0, sources.length - EXTRACT_BATCH) };
+    const summary = { read: 0, added: 0, evidence: 0, superseded: 0, conflicts: 0, dropped: [], remaining: Math.max(0, sources.length - EXTRACT_BATCH), stopped: null };
 
+    // One source at a time, each saved and marked read TOGETHER under the ledger lock. If the model fails on the seventh, the first six are
+    // already kept, and pressing Read again carries on from the seventh. The slow model call is made outside the lock.
     for (const s of sources.slice(0, EXTRACT_BATCH)) {
-      const out = await extractFromSource(req.user.id, { ...s, receivedAt: s.receivedAt ? new Date(s.receivedAt).toISOString() : new Date().toISOString() }, { tz: timezone, ownerEmail: owner, obligation: c.obligation });
-      for (const m of out.mentions) {
-        const r = ledgerLib.applyMention(ledger, m, { newId });
-        ledger = r.rows;
-        if (r.action === 'new') summary.added += 1;
-        else if (r.action === 'conflict') summary.conflicts += 1;
-        else if (r.action === 'evidence') summary.evidence += 1;
-        else summary.superseded += 1;
+      let out;
+      try {
+        out = await extractMod.extractFromSource(req.user.id, { ...s, receivedAt: s.receivedAt ? new Date(s.receivedAt).toISOString() : new Date().toISOString() }, { tz: timezone, ownerEmail: owner, obligation: c.obligation });
+      } catch (err) {
+        if (!summary.read) throw err;
+        summary.stopped = err && err.message ? String(err.message).slice(0, 160) : 'the AI did not answer';
+        break;
       }
-      summary.dropped.push(...out.dropped.map((d) => ({ ...d, source: s.id })));
-      await store.markExtracted(s.id);
+      const counts = await store.withLedger(req.user.id, c.id, async (ledger, client) => {
+        // A second press may have read this source while the model was thinking: then there is nothing to add.
+        const { rows: cur } = await client.query('SELECT "extractedAt" FROM ef_sources WHERE id=$1 FOR UPDATE', [s.id]);
+        if (!cur[0] || cur[0].extractedAt) return { value: null };
+        let next = ledger;
+        const newId = nextRowId(next);
+        const n = { added: 0, evidence: 0, superseded: 0, conflicts: 0, dropped: out.dropped.map((d) => ({ ...d, source: s.id })) };
+        for (const m of out.mentions) {
+          try {
+            const r = ledgerLib.applyMention(next, m, { newId });
+            next = r.rows;
+            if (r.action === 'new') n.added += 1;
+            else if (r.action === 'conflict') n.conflicts += 1;
+            else if (r.action === 'evidence') n.evidence += 1;
+            else n.superseded += 1;
+          } catch (err) {
+            // one bad mention is dropped with its reason; it must not undo or block the rest of the source
+            n.dropped.push({ reason: String(err.message).slice(0, 140), quote: String(m.quote || '').slice(0, 120), source: s.id });
+          }
+        }
+        await client.query('UPDATE ef_sources SET "extractedAt"=NOW() WHERE id=$1', [s.id]);
+        return { ledger: next, value: n };
+      });
+      if (!counts) continue;
+      summary.added += counts.added; summary.evidence += counts.evidence; summary.superseded += counts.superseded; summary.conflicts += counts.conflicts;
+      summary.dropped.push(...counts.dropped);
       summary.read += 1;
     }
-    await store.saveLedger(c.id, ledger);
-    res.json({ ...summary, rows: ledger });
+    const fresh = await store.getCase(req.user.id, c.id);
+    res.json({ ...summary, rows: fresh.ledger });
   } catch (err) { fail(res, err); }
 });
 
@@ -289,27 +326,27 @@ router.post('/:id/sent-sweep', async (req, res) => {
 
 // ---------- ledger rows ----------
 
-async function saveRow(c, rowId, next) {
-  const ledger = c.ledger.map((r) => (r.id === rowId ? next : r));
-  await store.saveLedger(c.id, ledger);
-  return ledger;
-}
+// Every ledger change below goes through store.withLedger (row lock, one transaction): the row is looked up INSIDE it, so a change made by
+// another request a moment ago is never overwritten.
 
 router.post('/:id/rows/:rowId/event', async (req, res) => {
   try {
     const c = await loadCase(req, res);
     if (!c) return;
-    const row = c.ledger.find((r) => r.id === req.params.rowId);
-    if (!row) return res.status(404).json({ error: 'Row not found.' });
     const type = String(req.body?.type || '');
     // Only human actions are offered here: closing, waiving, confirming authority, asserting a condition was met.
     if (!['human_close', 'waive', 'confirm_authority', 'condition_met'].includes(type)) return res.status(400).json({ error: 'Unknown action.' });
     const event = { type, note: String(req.body?.note || '').slice(0, 500), by: req.body?.by || 'human_note', humanNote: String(req.body?.note || '').slice(0, 500) };
-    const t = ledgerLib.transition(row, event);
-    if (!t.ok) return res.status(409).json({ error: t.reason, rule: t.rule });
-    const ledger = ledgerLib.clearConflict(c.ledger.map((r) => (r.id === row.id ? t.row : r)), row.id);
-    await store.saveLedger(c.id, ledger);
-    res.json({ row: ledger.find((r) => r.id === row.id) });
+    const out = await store.withLedger(req.user.id, c.id, async (ledger) => {
+      const row = ledger.find((r) => r.id === req.params.rowId);
+      if (!row) return { value: { status: 404, error: 'Row not found.' } };
+      const t = ledgerLib.transition(row, event);
+      if (!t.ok) return { value: { status: 409, error: t.reason, rule: t.rule } };
+      const next = ledgerLib.clearConflict(ledger.map((r) => (r.id === row.id ? t.row : r)), row.id);
+      return { ledger: next, value: { row: next.find((r) => r.id === row.id) } };
+    });
+    if (out.error) return res.status(out.status).json({ error: out.error, rule: out.rule });
+    res.json({ row: out.row });
   } catch (err) { fail(res, err); }
 });
 
@@ -330,9 +367,11 @@ router.post('/:id/rows/:rowId/substitute', async (req, res) => {
     if (!where) return res.status(400).json({ error: 'That wording is not word for word in the message.' });
     const exact = src.text.slice(where.start, where.end);
     const anchor = { sourceId: src.id, versionHash: sha256(src.text), locator: { start: where.start, end: where.end }, spanHash: spanHash(exact) };
-    const out = ledgerLib.suspendForSubstitute(c.ledger, req.params.rowId, { party, sourceId: src.id, quote: exact, anchor }, { newId: nextRowId(c.ledger) });
-    await store.saveLedger(c.id, out.rows);
-    res.json({ rows: out.rows });
+    const rows = await store.withLedger(req.user.id, c.id, async (ledger) => {
+      const out = ledgerLib.suspendForSubstitute(ledger, req.params.rowId, { party, sourceId: src.id, quote: exact, anchor }, { newId: nextRowId(ledger) });
+      return { ledger: out.rows, value: out.rows };
+    });
+    res.json({ rows });
   } catch (err) { fail(res, err); }
 });
 
@@ -341,18 +380,22 @@ router.post('/:id/rows/:rowId/task', async (req, res) => {
   try {
     const c = await loadCase(req, res);
     if (!c) return;
-    const row = c.ledger.find((r) => r.id === req.params.rowId);
-    if (!row) return res.status(404).json({ error: 'Row not found.' });
-    if (row.taskId) return res.status(409).json({ error: 'A task already exists for this row.' });
-    const title = `${row.direction === 'i_owe' ? 'Deliver' : 'Chase'}: ${row.items.join(', ')} (${row.partyLabel || row.party})`.slice(0, 200);
-    const due = row.due && row.due.status === 'exact' ? row.due.date : null;
-    const { rows } = await pool.query(
-      `INSERT INTO tasks (title, notes, status, priority, "dueDate", "clientId", "userId", "updatedAt")
-       VALUES ($1,$2,'todo','medium',$3,$4,$5,NOW()) RETURNING id`,
-      [title, `From Email Follow-Up case "${c.title}". Source wording: "${row.quote || ''}"`, due, c.clientId || null, req.user.id]);
-    const next = { ...row, taskId: rows[0].id };
-    await saveRow(c, row.id, next);
-    res.status(201).json({ taskId: rows[0].id, row: next });
+    // The task and the row's link to it are made in one transaction: no task without the link, no link without the task.
+    const out = await store.withLedger(req.user.id, c.id, async (ledger, client) => {
+      const row = ledger.find((r) => r.id === req.params.rowId);
+      if (!row) return { value: { status: 404, error: 'Row not found.' } };
+      if (row.taskId) return { value: { status: 409, error: 'A task already exists for this row.' } };
+      const title = `${row.direction === 'i_owe' ? 'Deliver' : 'Chase'}: ${row.items.join(', ')} (${row.partyLabel || row.party})`.slice(0, 200);
+      const due = row.due && row.due.status === 'exact' ? row.due.date : null;
+      const { rows } = await client.query(
+        `INSERT INTO tasks (title, notes, status, priority, "dueDate", "clientId", "userId", "updatedAt")
+         VALUES ($1,$2,'todo','medium',$3,$4,$5,NOW()) RETURNING id`,
+        [title, `From Email Follow-Up case "${c.title}". Source wording: "${row.quote || ''}"`, due, c.clientId || null, req.user.id]);
+      const next = { ...row, taskId: rows[0].id };
+      return { ledger: ledger.map((r) => (r.id === row.id ? next : r)), value: { taskId: rows[0].id, row: next } };
+    });
+    if (out.error) return res.status(out.status).json({ error: out.error });
+    res.status(201).json(out);
   } catch (err) { fail(res, err); }
 });
 
@@ -364,10 +407,22 @@ router.post('/:id/rows/:rowId/draft', async (req, res) => {
     if (!c) return;
     const row = c.ledger.find((r) => r.id === req.params.rowId);
     if (!row) return res.status(404).json({ error: 'Row not found.' });
-    const sources = await store.listSources(c.id, { withText: true });
-    const sweep = await store.latestSweep(c.id);
 
-    const can = gates.canDraft({ row, watermark: sweep, now: new Date().toISOString(), pendingDrafts: await store.pendingDraftCount(c.id), cap: DRAFT_CAP, sentLinks: [] });
+    // Chasing someone needs a Sent check that reaches up to now (Rule 10.1). If the last one is stale, run it here rather than make the
+    // person press another button: the rule stays strict, the friction goes. If it cannot be done, nothing is drafted.
+    let sweep = await store.latestSweep(c.id);
+    const chasing = row.direction === 'they_owe' || row.direction === 'external';
+    if (chasing && (row.status === 'open') && !gates.sentSweepCovers(sweep, row.requestDate, new Date().toISOString())) {
+      try { await store.runSentSweep(req.user.id, c); sweep = await store.latestSweep(c.id); }
+      catch (err) {
+        if (err && err.status) return res.status(err.status).json({ error: err.message });
+        return res.status(502).json({ error: 'Your Sent folder could not be checked just now, so nothing was drafted. Try again.', detail: String(err && err.message).slice(0, 140) });
+      }
+    }
+    const sources = await store.listSources(c.id, { withText: true });
+
+    // (The Sent-link branches in canDraft are rule-suite only; the app answers "did I already reply?" with the SENT_SINCE warning below.)
+    const can = gates.canDraft({ row, watermark: sweep, now: new Date().toISOString(), pendingDrafts: await store.pendingDraftCount(c.id), cap: DRAFT_CAP });
     if (!can.ok) return res.status(409).json({ error: can.blocks.map((b) => b.reason).join(' '), blocks: can.blocks });
 
     const email = store.EMAIL_RE.test(String(row.party)) ? String(row.party).toLowerCase() : ((c.aliases || []).length === 1 ? c.aliases[0] : null);
@@ -394,7 +449,7 @@ router.post('/:id/rows/:rowId/draft', async (req, res) => {
     draft.notes = notes;
 
     const content = { ...draft, id: null, version: 1 };
-    const verdict = await guardFor(c, sources, content, sweep);
+    const verdict = guardFor(c, sources, content);
     const created = await store.insertDraft(req.user.id, c.id, row.id, draft, approvalLib.draftHash(content), verdict);
     res.status(201).json({ draft: created });
   } catch (err) { fail(res, err); }

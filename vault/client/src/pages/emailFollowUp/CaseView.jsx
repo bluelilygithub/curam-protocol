@@ -286,7 +286,7 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
           <Btn small disabled={busy === 'sweep'} tip={EF_TIPS.checkSent} onClick={async () => { const r = await run('sweep', () => api.post(`/api/email-follow-up/${caseId}/sent-sweep`, {}), 'Sent mail checked.'); if (r.ok) reload(); }}>{busy === 'sweep' ? 'Checking…' : '4. Check Sent'}</Btn>
         </div>
         <p className="text-xs" style={{ color: sentSweep && sentSweep.completed ? GOOD : WARN }}>
-          {sentSweep ? (sentSweep.completed ? `Sent checked ${new Date(sentSweep.at).toLocaleString()} (${sentSweep.found} new).` : `Last Sent check failed: ${sentSweep.error || 'unknown'}. Drafting to chase others stays blocked.`) : 'Sent has not been checked yet: you cannot draft a chase until it is.'}
+          {sentSweep ? (sentSweep.completed ? `Sent checked ${new Date(sentSweep.at).toLocaleString()} (${sentSweep.found} new).` : `Last Sent check failed: ${sentSweep.error || 'unknown'}. Draft follow-up will try again, and drafts nothing until it works.`) : 'Sent has not been checked yet. Draft follow-up checks it for you when you chase someone.'}
         </p>
         {lastAtt && (
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
@@ -299,6 +299,7 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
             Read {lastRead.read}: {lastRead.added} new, {lastRead.evidence} restated, {lastRead.superseded} changed{lastRead.conflicts ? `, ${lastRead.conflicts} disagreeing` : ''}.
             {lastRead.dropped.length > 0 && ` ${lastRead.dropped.length} dropped (${[...new Set(lastRead.dropped.map((d) => d.reason))].slice(0, 3).join('; ')}).`}
             {lastRead.remaining > 0 && ` ${lastRead.remaining} more to read.`}
+            {lastRead.stopped && ` Stopped early (${lastRead.stopped}). What was read is kept: press again to carry on.`}
           </p>
         )}
       </div>

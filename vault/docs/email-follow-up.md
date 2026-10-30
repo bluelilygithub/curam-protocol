@@ -24,7 +24,7 @@ The design set recommended a **separate local product** with Vault as an optiona
 | API | `server/routes/emailFollowUp.js` at `/api/email-follow-up`: cases, `GET /:id/suggestions`, `GET /:id/threads/:threadId/preview` (read-only look before attaching), `POST /:id/threads`, `POST /:id/attachments`, `POST /:id/extract`, `POST /:id/sent-sweep`, row actions, drafts (approve, copy, edit, decline) |
 | Page | `client/src/pages/EmailFollowUpPage.jsx`, `client/src/pages/emailFollowUp/CaseView.jsx`, `labels.mjs` |
 | Help, tips, tour, guide | `emailFollowUp/emailFollowUpTools.mjs` (the five places, group and tool tips, the (i) box text, what the guide can point at), `emailFollowUp/efTips.mjs` (one tip per control), `emailFollowUp/EmailFollowUpTutorChat.jsx`, `client/src/utils/tours/emailFollowUpTour.js`, `server/services/emailFollowUpTutor.js` + `server/routes/emailFollowUpTutor.js` (`POST /api/email-follow-up-tutor`), registered in `server/config/guides.js` |
-| Tests | `npm run test:email-follow-up` (24 fixtures + unit checks incl. attachment reading and OCR decisions, extractor with a fake model, labels, tips/helpers, guide, and a real-Tesseract test); `npm run test:email-follow-up-tutor` for the guide alone; `npm run test:guides` |
+| Tests | `npm run test:email-follow-up` (24 fixtures + unit checks incl. attachment reading and OCR decisions, extractor with a fake model, labels, tips/helpers, guide, a real-Tesseract test, and the route/storage test); `npm run test:email-follow-up-tutor` for the guide alone; `npm run test:guides` |
 
 ## Helpers (the Vault tool conventions)
 
@@ -43,8 +43,8 @@ The design set recommended a **separate local product** with Vault as an optiona
 - **Deadlines (5.x).** Code reads the person's own words against the message's sent date in the person's time zone (`resolveUserTimezone`, the same rule Fitness uses). "Early next week", "next Friday", "within 14 days of receipt" with no stated receipt date, and business days with no pinned calendar all come back `needs_review` with what is missing. Nothing is guessed.
 - **Guard (7.x).** Deterministic only: citation exists, clause exists, version current, the cited text is still the same bytes, figures present in the span, hedges ("might", "if") and negations preserved, "as agreed" refused unless the row is `agreed`. Paraphrase is `needs_review`, never `pass`. **No model judges a draft.**
 - **Drafting (7.1).** Retrieve first, then assemble: a draft is fixed sentence templates around the row's own quoted words. **No model writes any draft prose.** This is narrower than the spec (which allowed a generator); it makes drafts repeatable and removes the unmeasured "generation quality" risk. Wording cannot be edited in the page for the same reason (the body *is* the cited claims); recipients and subject can, and an edit mints a new version (9.2).
-- **Sent reconciliation (10.x).** "Check Sent" lists the case's Sent mail across every address in the case (per case, never per party) and records a watermark. Chasing someone is blocked until a sweep covering the request date to now has completed; a failed sweep is recorded as not completed and blocks. After a sweep, mail sent to that person since the request is shown as a warning the person must accept ("check none already answers this"). The tool does not decide that a Sent message answers a row; a person does.
-- **Approval and copy (9.x).** Approval hashes the whole outbound object (subject, body, To, Cc, Bcc, reply chain, citations). **Copy** re-reads Gmail for new mail in the cited threads and refuses (and resets to pending) if the counterparty wrote or a cited thread grew; if Gmail cannot be read, copy is refused. Absence of an approval record means no.
+- **Sent reconciliation (10.x).** "Check Sent" lists the case's Sent mail across every address in the case (per case, never per party) and records a watermark. Chasing someone needs a sweep covering the request date to now (15 minutes' tolerance): **Draft follow-up makes the check itself when the last one is older**, and if it cannot be made (Gmail down, no addresses on the case) nothing is drafted. A failed sweep is recorded as not completed. After a sweep, mail sent to that person since the request is shown as a warning the person must accept ("check none already answers this"). The tool does not decide that a Sent message answers a row; a person does.
+- **Approval and copy (9.x).** Approval hashes the whole outbound object (subject, body, To, Cc, Bcc, reply chain, citations). **Copy** re-reads Gmail for new mail in the cited threads and refuses (and resets to pending) if the counterparty wrote or a cited thread grew; if Gmail cannot be read, copy is refused. Copy also runs the guard again under the case's current checking: a source that has since become unreadable, or a warning that was not accepted at approval, sends the draft back to pending. Changing a case's profile sends its approved drafts back to pending too. Absence of an approval record means no.
 - **Review capacity (8.x).** At most 5 drafts waiting per case; above that, no new drafts.
 - **Coverage statement (11.3).** Shown on the "What was covered" tab: what was read, what this tool cannot see (phone, portals, other mailboxes, how many attachments were read and which were not, grouped by reason, Sent if unchecked), what the person must verify.
 
@@ -54,12 +54,20 @@ The design set recommended a **separate local product** with Vault as an optiona
 - **OCR has not been run end to end on the server.** The real Tesseract engine is tested on a picture of an invoice (`ocrPdf.test.js`, 95% confidence, total read correctly), but the page-to-picture step uses poppler's `pdftoppm` (already in the Dockerfile for Contract Review) and that tool is not installed on this PC, so the first real scanned PDF on Railway is the first full run. If `pdftoppm` is ever missing there, each scan is recorded as failed with "OCR is not available on this server" and is **not retried** (the message is marked fetched).
 - **No governing documents yet.** `governing` is stored but there is no upload for a contract or a request list; the gate is vacuous, which is legal per Rule 1.4. The attachment reader could be pointed at this next.
 - **Attachment reading has not been run on a real mailbox.** It is tested with real PDFs generated in the tests and a fake Gmail in a local database, not against Gmail itself.
-- **Ageing job.** `ageRows()` is tested but nothing runs it on a schedule, so rows never become `unverified` by themselves yet.
+- **Ageing (§11.2) is not wired.** `ageRows()` is tested but nothing calls it, so rows never become `unverified`.
+- **Source versions (§2.3/2.4) do not exist.** One version of each source is stored and never re-read.
+- **The §6 export gates are not called**, governing items cannot be added, and a file that could not be read cannot be tied to an obligation (so §6.1 cannot fire). The coverage statement is the only warning about unreadable files.
+- **The "answered / chased in Sent" branches of `canDraft` are not fed by the app** (the SENT_SINCE warning does that job).
+  All four are logged in the case model as v1.0.3.
 - **Deleting a case.** Not offered. Cases are closed or abandoned (`PATCH /:id { status }`). Deleting needs a recycle-bin adapter first (CLAUDE.md rule for any tool that deletes).
 - **Suggestions inbox hook.** Nothing here calls `SuggestionService.capture()` yet (for example when a Sent check keeps failing or rows go unverified). The guide route also does not file a "something is missing" suggestion beyond what `guideRouter` already does.
 - **No microphone on email-address boxes** (case people, recipients, "who took over"): a spoken address is too error-prone, so those stay typed.
 - **Not run against a real model or mailbox.** Rate of correct extraction (fixture plan Rule S2), the misrepresented-claim rate (7.5) and retrieval recall (7.6) are all still unmeasured.
 - **The UI has not been looked at in a browser.** It compiles and the API behind it passes a smoke test against the local Postgres (22 route checks), nothing more.
+
+## Route and storage test
+
+`server/routes/emailFollowUp.test.js` runs the real routes and storage against a throwaway local Postgres with a stand-in for Gmail and for the model (the rule suite cannot see what the app does with its rules). It needs `EF_TEST_DATABASE_URL=postgresql://vault@127.0.0.1:15433/vault_local`; without it, it prints `SKIPPED` and passes, so `npm run test:email-follow-up` stays runnable anywhere. It refuses a database that is not on this machine and deletes the two users it makes. It covers: a client/project id that is not yours is refused; a model failure on the third message keeps the first two and a second press carries on; two Reads at once read each message once; a Read while a task is made keeps both changes; the ledger lock itself (two slow changes at once both survive; a change that throws leaves the ledger as it was); a profile change sends approved drafts back; copy re-checks the guard; Draft follow-up checks Sent itself, drafts nothing if it cannot, and checks again when the last check is stale. All seven fixes were broken one at a time to prove the test notices (it found a bug in the first version of the profile fix).
 
 ## OCR (scanned PDFs)
 
@@ -80,7 +88,7 @@ The design set recommended a **separate local product** with Vault as an optiona
 
 ## Decisions Log (additions to `email-follow-up-case-model.md`)
 
-Recorded in the case model's own log as v1.0.2. In short:
+Recorded in the case model's own log as v1.0.2 (first build) and v1.0.3 (after a code review: what the product does not run, and what changed). In short:
 
 1. **Fixture 23 added** (deterministic claim checks: hedge dropped, figure not in source, negation flipped, exact quote with hedge kept, paraphrase never passes).
 2. **A paraphrase of hedged text that drops the hedge word fails (`HEDGE_DROPPED`) rather than going to `needs_review`.** Found when fixture 23's first draft expected `needs_review`. The stricter result stands: a reader should not be asked to approve a flat statement of something the source only floated.

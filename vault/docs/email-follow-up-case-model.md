@@ -303,6 +303,25 @@ No open questions remain. The next edit to this document comes from a fixture th
 
 ## Decisions log
 
+### v1.0.3 — after a code review of the first build: what the product does NOT run, and what changed
+
+Rules written in this document that the application does not run (each is real in the pure modules and tested by fixtures, but nothing in the app calls it). They are recorded here so nobody assumes otherwise:
+
+- **§1.3** The unmatched queue: nothing ingests mail automatically, so there is no queue. (Logged in v1.0.2.)
+- **§2.3 / §2.4 Source versions.** There is no version column; a source is stored once and never re-read in place, so a new version never arises. `supersededBy` is always null in the app and the guard's `SUPERSEDED_VERSION` result can only come from a content-hash mismatch, which does not happen either. The one thing that replaces source records is the OCR upgrade (it deletes the old text-less "no OCR" records of scanned PDFs and reads them again); nothing could cite those records, as they hold no text.
+- **§6 Export gates** (`gates.exportGates`): never called. Governing items cannot be added (no route or screen), nothing sets `candidateObligations`, and a file that could not be read yields no row that could point at it, so §6.1 ("an unreadable file carrying an obligation blocks the case") cannot be detected: only the coverage statement tells the person about unreadable files. Fixtures 18 and 22 test the function with inputs the app never supplies. Wiring the strict-profile "an unreadable source blocks" check was considered and rejected for now: it would block every copy in a case with no way to clear it, so it needs an "I have seen this file" action first.
+- **§11.2 Ageing** (`ledger.ageRows`): never called, so a row never becomes `unverified` and the `canDraft` block for it is unreachable. The risk register's "age downgrades rather than nags" mitigation is therefore not in the product.
+- **§10 `sentLinks`** (the "answered" and "chased" branches of `canDraft`): the app passes none. Whether a Sent message already answers a row is left to the person, as the SENT_SINCE warning (v1.0.2). Fixtures 5 and 6 test the function.
+
+Fixtures that exercise rule modules the app does not call: 5 and 6 (the answered/chased branches), 13 (source versions), 18 and 22 (§6 gates). They stay as tests of the rules as written.
+
+Behaviour changed by the review (all with tests in `server/routes/emailFollowUp.test.js`):
+
+- **Every ledger change is made under a row lock in one transaction.** Before, a Read saved the ledger once at the end and marked each message read as it went, so a model failure on message 7 threw away messages 1 to 6 for good, and any two requests at once (a Read and a "Make a task") could overwrite each other. Now each message is saved and marked read together; a failure keeps what was read and a second press carries on; a double press reads each message once.
+- **§10.1 is implemented as: a chase needs a Sent check that reaches up to now (15 minutes' tolerance), and Draft follow-up makes that check itself when the last one is older.** The rule is unchanged; only the extra button press is gone. If the check cannot be made, nothing is drafted.
+- **Approval is checked again at copy time** under the case's current checking, so a draft approved under one profile, or before a source became unreadable, cannot be copied on its old approval. Changing a case's profile also sends its approved drafts back to pending.
+- **A client or project id in a request must belong to the caller.**
+
 ### v1.0.2 — first build inside Vault (see `email-follow-up.md`); forced by running the fixtures, not by review
 
 - **§14** Fixture 23 added (deterministic claim checks). Found by deliberately breaking ten rules one at a time: the dropped-hedge rule (§7.2) survived all 20 fixtures because other checks caught the only fixtures that touched it.

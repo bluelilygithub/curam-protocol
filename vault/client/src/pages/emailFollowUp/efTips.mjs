@@ -20,7 +20,7 @@ export const EF_TIPS = {
   findMail: 'Looks in Gmail for threads with these people. You pick which to attach; nothing attaches itself.',
   getAttachments: (count) => (count ? `Downloads the ${count} attachment${count === 1 ? '' : 's'} on the attached mail (read-only) and reads the text of PDFs, Word and text files, and reads scanned PDF pages by OCR, a few files at a time. Pictures and spreadsheets are listed as not read.` : 'There are no attachments waiting. Attach a thread first, or they have all been fetched.'),
   read: (count) => (count ? `The AI proposes ledger rows from the ${count} message${count === 1 ? '' : 's'} and attachment${count === 1 ? '' : 's'} you have not read yet. Each row must quote the text word for word or it is dropped.` : 'There is nothing unread. Attach a thread, or get its attachments, first.'),
-  checkSent: 'Checks your Sent folder for this case so you do not chase something you already answered. Required before chasing anyone.',
+  checkSent: 'Checks your Sent folder for this case so you do not chase something you already answered. Draft follow-up does this for you when it is out of date, so pressing it yourself is optional.',
   tabLedger: 'Everything owed in this case, with the words it came from.',
   tabMail: 'The email threads attached to this case.',
   tabDrafts: 'Follow-up text waiting for you to read, approve and copy.',
@@ -29,7 +29,7 @@ export const EF_TIPS = {
   hidePreview: 'Close the preview.',
   attach:'Attach every message in this thread to the case. You can then read them into the ledger.',
   // ledger rows
-  draftFollowup: 'Writes follow-up text from this row\'s own quoted words. Nothing is sent.',
+  draftFollowup: 'Writes follow-up text from this row\'s own quoted words. If you are chasing someone it checks your Sent folder first. Nothing is sent.',
   resolvedElsewhere: 'It was dealt with by phone, in person or in a portal. Closes the row, with an optional note.',
   conditionMet: 'Say the condition was met, in your own words. A polite "thanks" never counts.',
   confirmAuthority: 'You have checked that this person may act on it, so the row can now be completed.',

@@ -29,7 +29,7 @@ const CATALOG = [
     notes: 'A row is kept only if its quote is word for word in the text, otherwise it is dropped and the count is shown. Dates are worked out by code, not the AI. If an email and its attachment give two different amounts, both rows stay open and flagged, and no draft can be made until you waive the wrong one.' },
   { id: 'check-sent', label: 'Check Sent', group: 'Inside a case',
     does: 'Step 4. Looks through your Sent folder for mail to the people in the case, from before the first request until now, and records that it did. After that, drafting a chase for something someone else owes is allowed.',
-    notes: 'Required before chasing: without a completed check the Draft follow-up button is refused. If the check fails, chasing stays blocked. Mail you sent to them since the request is shown as a warning on the draft for you to read.' },
+    notes: 'Required before chasing, and Draft follow-up runs it for you when the last check is more than 15 minutes old, so pressing it yourself is optional. If the check cannot be done, nothing is drafted. Mail you sent to them since the request is shown as a warning on the draft for you to read.' },
   { id: 'mail', label: 'Mail', group: 'Inside a case',
     does: 'The Mail tab lists the threads suggested by Find mail, and every message attached to the case with its date and whether it has been read yet.',
     notes: 'Under each message, its files are listed with whether they were read; a file that was not read says why.' },
@@ -38,7 +38,7 @@ const CATALOG = [
     notes: 'A deadline it could not work out says what is missing and what was said, and is never filled with a guess. A changed ask makes a new row that replaces the old one, with the change in words.' },
   { id: 'draft-followup', label: 'Draft follow-up', group: 'Inside a case',
     does: 'On a ledger card, writes follow-up text from that row\'s own quoted words, then checks every sentence against the email it came from. The draft appears on the Drafts tab.',
-    notes: 'Refused if Sent has not been checked, if the row is not open, if the ask was refused, or if five drafts are already waiting for review. No AI writes the draft, so the wording is fixed.' },
+    notes: 'When chasing someone it checks Sent first (and drafts nothing if that cannot be done). Refused if the row is not open, if the ask was refused, or if five drafts are already waiting for review. No AI writes the draft, so the wording is fixed.' },
   { id: 'resolved-elsewhere', label: 'Resolved elsewhere', group: 'Inside a case',
     does: 'Closes a row that was dealt with by phone, in person or in a portal. You can add a note saying how.',
     notes: 'This is your own statement and is recorded as such.' },
@@ -73,7 +73,7 @@ const RULES = [
   'The tool only reads Gmail. It never sends, drafts in your mailbox, files or deletes mail. Drafts are text you paste into your own mail program.',
   'A ledger row only exists if its quote is word for word in an email or readable attachment of the case. Nothing is inferred from mail you did not attach, or from a file it could not read.',
   'A deadline it cannot work out (such as "early next week" or "within 14 days of receipt" with no receipt date) is left for you with what is missing. It never guesses a date.',
-  'You must check Sent before chasing someone, so you do not nag about something you already answered.',
+  'Chasing someone always checks your Sent folder first (Draft follow-up does it for you), so you do not nag about something you already answered.',
   'At most five drafts can be waiting for review in a case. Review or decline some to make more.',
   'Cases, emails and drafts are stored in Vault, and the text of attached emails is read by the AI model Vault is set up with.',
   'The Open buttons in this chat only switch to a tool (they show a tab or the case list); they never read, draft, approve or copy anything by themselves. The tabs only exist once a case is open.',
@@ -99,7 +99,7 @@ Rules:
 - Be plain and short, as to a friend who is not technical. Explain any word like "ledger" or "supersede" in a few everyday words the first time you use it.
 - Give steps in order. Each step names exactly one tool by its id and says in a sentence what to do there.
 - If they ask whether it can send an email, say clearly that it cannot and that they paste the copied text into their own mail program.
-- If they ask why they cannot draft, the usual causes are: Sent has not been checked, five drafts are already waiting, or the row is not open.
+- If they ask why they cannot draft, the usual causes are: your Sent folder could not be checked, five drafts are already waiting, the two figures for the row disagree, or the row is not open.
 - If you need one more fact to answer, ask ONE short question and give no steps.
 ${VERDICT_HELP}
 
