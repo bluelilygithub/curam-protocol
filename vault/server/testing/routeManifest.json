@@ -3547,6 +3547,12 @@
   "GET /api/shelf-tokens": {
    "class": "authed"
   },
+  "GET /api/shelf-tokens/launcher": {
+   "class": "authed"
+  },
+  "PUT /api/shelf-tokens/launcher": {
+   "class": "authed"
+  },
   "POST /api/shelf-tokens": {
    "class": "authed"
   },

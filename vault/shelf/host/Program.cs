@@ -1,11 +1,15 @@
+using VaultShelf.Host.Install;
+
 namespace VaultShelf.Host;
 
-internal sealed record Options(string Dist, string UserData, string? BrowserArgs, string? SpikeOut, bool NoTrim, string Root)
+internal sealed record Options(string Dist, string UserData, string? BrowserArgs, string? SpikeOut, bool NoTrim, string Root,
+    string? OpenUrl = null, bool Register = false, bool Unregister = false, bool Silent = false, bool Purge = false)
 {
     public static Options Parse(string[] args)
     {
         string? dist = null, userData = null, browserArgs = null, spike = null, root = null;
-        bool noTrim = false;
+        bool noTrim = false, register = false, unregister = false, silent = false, purge = false;
+        string? openUrl = null;
         for (int i = 0; i < args.Length; i++)
         {
             switch (args[i])
@@ -16,13 +20,20 @@ internal sealed record Options(string Dist, string UserData, string? BrowserArgs
                 case "--spike": spike = args[++i]; break;
                 case "--no-trim": noTrim = true; break;
                 case "--root": root = args[++i]; break;
+                case "--open": openUrl = args[++i]; break;      // what Windows passes for a vault-shelf:// link (checked in Main, never trusted here)
+                case "--register": register = true; break;     // run by the setup program
+                case "--unregister": unregister = true; break; // run from the Windows Apps list
+                case "--silent": silent = true; break;
+                case "--purge": purge = true; break;           // with --unregister: also delete the copy history
                 case "--background": break;   // what Start-with-Windows passes: the program always starts quietly in the tray
             }
         }
         // the self-test keeps its data in its own folder, so it can never touch the real history, settings, registry entry or saved key
         root ??= spike is not null ? Path.Combine(spike, "data") : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VaultShelf");
         userData ??= Path.Combine(root, "webview2");
-        return new Options(dist ?? FindDist(), userData, browserArgs, spike, noTrim, root);
+        // installing and removing never need the page, so they must not fail because it is missing
+        bool needsPage = !(register || unregister);
+        return new Options(dist ?? (needsPage ? FindDist() : ""), userData, browserArgs, spike, noTrim, root, openUrl, register, unregister, silent, purge);
     }
 
     /// <summary>The built page: next to the program, or in shelf/dist when run from the source tree.</summary>
@@ -54,9 +65,20 @@ internal static class Program
             return 1;
         }
         AppLog.Init(opts.Root);
+        if (opts.Register) return InstallCommands.RegisterSelf();
+        if (opts.Unregister) { ApplicationConfiguration.Initialize(); return InstallCommands.UnregisterSelf(opts.Root, opts.Silent, opts.Purge); }
         // one copy at a time (the spike has its own name so it can run beside the real app)
-        using var mutex = new Mutex(true, opts.SpikeOut is null ? "Local\\VaultShelf" : "Local\\VaultShelf.Spike", out bool first);
-        if (!first) { AppLog.Write("start ignored: Vault Shelf is already running (look for its icon in the tray, near the clock)"); return 0; }
+        bool selfTest = opts.SpikeOut is not null;
+        using var mutex = new Mutex(true, selfTest ? "Local\\VaultShelf.Spike" : "Local\\VaultShelf", out bool first);
+        bool openAsked = ProtocolUrl.IsOpenRequest(opts.OpenUrl);
+        if (opts.OpenUrl is not null && !openAsked) AppLog.Write("ignored a link that asks for something other than opening the shelf");
+        if (!first)
+        {
+            // a vault-shelf://open link while the app is already running: ask that copy to open its shelf, then leave
+            if (openAsked) AppLog.Write(OpenSignal.Raise(OpenSignal.NameFor(selfTest)) ? "asked the running copy to open the shelf" : "link opened, but the running copy did not answer");
+            else AppLog.Write("start ignored: Vault Shelf is already running (look for its icon in the tray, near the clock)");
+            return 0;
+        }
 
         ApplicationConfiguration.Initialize();
         // a crash must say so: a tray program that just disappears looks exactly like one that never started
@@ -72,6 +94,15 @@ internal static class Program
         if (test) SampleData.Seed(app.Store, 100);
         SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
         app.HookBridge(SynchronizationContext.Current!);
+        var ui = SynchronizationContext.Current!;
+        using var openRequests = OpenSignal.Listen(OpenSignal.NameFor(selfTest), () => ui.Post(_ => _ = app.OpenAsync(), null));
+        if (openAsked && !selfTest)
+        {
+            // started by a vault-shelf://open link: show the shelf as soon as the program is up
+            var openOnce = new System.Windows.Forms.Timer { Interval = 300 };
+            openOnce.Tick += async (_, _) => { openOnce.Stop(); openOnce.Dispose(); await app.OpenAsync(); };
+            openOnce.Start();
+        }
         if (opts.SpikeOut is not null)
         {
             var spike = new Spike(app, opts, opts.SpikeOut);

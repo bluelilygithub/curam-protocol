@@ -13,6 +13,7 @@ import InquirySession from './mood/InquirySession';
 import TourButton from './TourButton';
 import Toast from './Toast';
 import AppsLauncher from './AppsLauncher';
+import ShelfLauncher from './ShelfLauncher';
 import WfhHoursPrompt from './WfhHoursPrompt';
 import useSettingsStore from '../store/settingsStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
@@ -479,6 +480,8 @@ function Layout() {
           >
             {getIcon('pen-line', { size: 16 })}
           </Link>
+
+          <ShelfLauncher allowed={canUseFeature('shelf')} />
 
           <AppsLauncher
             canUseFeature={canUseFeature}

@@ -26,7 +26,7 @@ dismiss**); focus remembered and restored; click-away dismiss; the page-to-shell
 
 ## Not built yet
 
-The `vault-shelf://` handler and the installer (M5). Sending to Vault is built (M4): `Vault/VaultClient.cs` does verify and the four send actions, `Bridge.HandleAsync` wires `verify`, `save_connection` and `dispatch` to it. The opt-in live test (`VAULT_URL` and `VAULT_KEY` set) runs the real client against a real Vault.
+Sending to Vault, the `vault-shelf://open` handler (`Install/ProtocolUrl.cs`, `OpenSignal.cs`) and install/uninstall registration (`Install/Registration.cs`, `InstallCommands.cs`: `--register`, `--unregister [--silent] [--purge]`, `--open URL`) are built; the installer that wraps them is `../setup/` (`build-installer.ps1`). Sending to Vault is built (M4): `Vault/VaultClient.cs` does verify and the four send actions, `Bridge.HandleAsync` wires `verify`, `save_connection` and `dispatch` to it. The opt-in live test (`VAULT_URL` and `VAULT_KEY` set) runs the real client against a real Vault.
 
 ## Build and run
 

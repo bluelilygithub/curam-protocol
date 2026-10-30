@@ -264,6 +264,39 @@ async function part2() {
     });
     await setFlag('shelf', 'true');
 
+    // ---------------- the Open Shelf button switch (admin) and installer address
+    await t('the Open Shelf button is off until an admin switches it on; only an admin can change it', async () => {
+      assert.strictEqual((await api('GET', '/api/shelf-tokens/launcher')).status, 401, 'signed out');
+      const first = j(await api('GET', '/api/shelf-tokens/launcher', { token: member.token }));
+      assert.deepStrictEqual([first.enabled, first.installerUrl, first.canEdit], [false, '', false]);
+      assert.strictEqual((await api('PUT', '/api/shelf-tokens/launcher', { token: member.token, body: { enabled: true } })).status, 403);
+      assert.strictEqual(j(await api('GET', '/api/shelf-tokens/launcher', { token: member.token })).enabled, false, 'a refused change changes nothing');
+      const on = await api('PUT', '/api/shelf-tokens/launcher', { token: admin.token, body: { enabled: true, installerUrl: ' https://downloads.example.com/VaultShelfSetup.exe ' } });
+      assert.strictEqual(on.status, 200);
+      const seen = j(await api('GET', '/api/shelf-tokens/launcher', { token: member.token }));
+      assert.deepStrictEqual([seen.enabled, seen.installerUrl, seen.canEdit], [true, 'https://downloads.example.com/VaultShelfSetup.exe', false]);
+      assert.strictEqual(j(await api('GET', '/api/shelf-tokens/launcher', { token: admin.token })).canEdit, true);
+      // a partial change keeps the other half
+      await api('PUT', '/api/shelf-tokens/launcher', { token: admin.token, body: { enabled: false } });
+      const half = j(await api('GET', '/api/shelf-tokens/launcher', { token: member.token }));
+      assert.deepStrictEqual([half.enabled, half.installerUrl], [false, 'https://downloads.example.com/VaultShelfSetup.exe']);
+    });
+    await t('the installer address must be a plain https address', async () => {
+      for (const bad of ['http://x.example.com/a.exe', 'javascript:alert(1)', 'ftp://x.example.com/a.exe', 'not a url', 'https://user:pw@x.example.com/a.exe', 'https://x.example.com/' + 'a'.repeat(500)]) {
+        const r = await api('PUT', '/api/shelf-tokens/launcher', { token: admin.token, body: { installerUrl: bad } });
+        assert.strictEqual(r.status, 400, bad.slice(0, 40));
+      }
+      assert.strictEqual((await api('PUT', '/api/shelf-tokens/launcher', { token: admin.token, body: { enabled: 'yes' } })).status, 400);
+      assert.strictEqual(j(await api('GET', '/api/shelf-tokens/launcher', { token: admin.token })).installerUrl, 'https://downloads.example.com/VaultShelfSetup.exe', 'bad input changes nothing');
+      assert.strictEqual((await api('PUT', '/api/shelf-tokens/launcher', { token: admin.token, body: { installerUrl: '' } })).status, 200);
+      assert.strictEqual(j(await api('GET', '/api/shelf-tokens/launcher', { token: admin.token })).installerUrl, '', 'an empty address clears it');
+    });
+    await t('with the Shelf switched off for the account, the button setting is hidden too', async () => {
+      await setFlag('shelf', 'false');
+      assert.strictEqual((await api('GET', '/api/shelf-tokens/launcher', { token: member.token })).status, 403);
+      await setFlag('shelf', 'true');
+    });
+
     let memberKey;
     await t('a key is shown once, stored only as a hash, and listed without the secret', async () => {
       const r = await make(member, ALL, { expiresInDays: 30 });

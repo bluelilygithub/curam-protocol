@@ -349,6 +349,55 @@ function createRouters(deps) {
     }
   });
 
+  // ---- the "Open Shelf" button in the top bar: an admin switch plus where to download the Windows installer (Settings -> Vault Shelf)
+  // GET /api/shelf-tokens/launcher  -> { enabled, installerUrl, canEdit }   (anyone who may use the Shelf; it decides whether the button shows)
+  // PUT /api/shelf-tokens/launcher  { enabled?, installerUrl? }             (admins only)
+  const LAUNCHER_KEY = 'shelf_launcher';
+  async function readLauncher() {
+    const { rows } = await pool.query(`SELECT value FROM workspace_settings WHERE key=$1`, [LAUNCHER_KEY]);
+    let v = {};
+    try { v = rows[0] ? (typeof rows[0].value === 'string' ? JSON.parse(rows[0].value) : rows[0].value) || {} : {}; } catch { v = {}; }
+    return { enabled: v.enabled === true, installerUrl: typeof v.installerUrl === 'string' ? v.installerUrl : '' };
+  }
+  tokens.get('/launcher', async (req, res) => {
+    try {
+      res.set('Cache-Control', 'no-store').json({ ...(await readLauncher()), canEdit: !!req.user.isAdmin });
+    } catch (err) {
+      log().error(errInfo(err), '[shelf launcher read]');
+      sendError(res, 500, 'Could not load the Shelf button setting.');
+    }
+  });
+  tokens.put('/launcher', async (req, res) => {
+    try {
+      if (!req.user.isAdmin) return sendError(res, 403, 'Only an admin can change this.');
+      const body = req.body || {};
+      const now = await readLauncher();
+      const next = { ...now };
+      if (body.enabled !== undefined) {
+        if (typeof body.enabled !== 'boolean') return sendError(res, 400, 'Switch must be on or off.');
+        next.enabled = body.enabled;
+      }
+      if (body.installerUrl !== undefined) {
+        const u = String(body.installerUrl).trim();
+        if (u) {
+          let parsed;
+          try { parsed = new URL(u); } catch { return sendError(res, 400, 'The installer address is not a web address.'); }
+          if (parsed.protocol !== 'https:') return sendError(res, 400, 'The installer address must start with https://.');
+          if (parsed.username || parsed.password) return sendError(res, 400, 'The installer address must not contain a name or password.');
+          if (u.length > 500) return sendError(res, 400, 'The installer address is too long.');
+          next.installerUrl = parsed.toString();
+        } else next.installerUrl = '';
+      }
+      await pool.query(
+        `INSERT INTO workspace_settings (key, value, "updatedAt") VALUES ($1, $2, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, "updatedAt" = NOW()`, [LAUNCHER_KEY, JSON.stringify(next)]);
+      res.set('Cache-Control', 'no-store').json({ ...next, canEdit: true });
+    } catch (err) {
+      log().error(errInfo(err), '[shelf launcher save]');
+      sendError(res, 500, 'Could not save that.');
+    }
+  });
+
   // POST /api/shelf-tokens  { label, scopes: [...], expiresInDays? } -> the key, shown ONCE
   tokens.post('/', async (req, res) => {
     try {

@@ -17,6 +17,13 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
   </ItemGroup>
 
+  <!-- the installer's own unpacking, folder rule and runtime check are tested here (it is a separate program, so its files are compiled in) -->
+  <ItemGroup>
+    <Compile Include="..\setup\VaultShelf.Setup\SafeZip.cs" Link="Setup\SafeZip.cs" />
+    <Compile Include="..\setup\VaultShelf.Setup\InstallFolder.cs" Link="Setup\InstallFolder.cs" />
+    <Compile Include="..\setup\VaultShelf.Setup\WebView2Runtime.cs" Link="Setup\WebView2Runtime.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\host\VaultShelf.Host.csproj" />
   </ItemGroup>

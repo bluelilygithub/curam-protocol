@@ -3,6 +3,7 @@ import api from '../../utils/apiClient';
 import useToastStore from '../../store/toastStore';
 import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../Tooltip';
+import ShelfLauncherAdmin from './ShelfLauncherAdmin';
 import { statusWord, whenText, EXPIRY_CHOICES } from '../../utils/shelfKeys.mjs';
 
 /**
@@ -130,6 +131,8 @@ export default function ShelfTokensPanel() {
           </button>
         </Tooltip>
       </div>
+
+      <ShelfLauncherAdmin />
 
       {fresh && (
         <div className="rounded-xl border p-4 space-y-2" style={{ borderColor: '#f59e0b', background: '#fef3c7' }} role="status">

@@ -69,6 +69,11 @@ export default function CrmInfoModal({ onClose }) {
               attach a file, or export it to your calendar (.ics).
             </p>
             <p style={{ color: 'var(--color-text)' }}>
+              <strong>Unfiled from Shelf</strong> (button at the top of the Clients list, when you use the Vault Shelf
+              Windows app) holds things you sent from your clipboard with "Attach to CRM Touchpoint". They wait there
+              until you pick the client they belong to; then each becomes an activity on that client.
+            </p>
+            <p style={{ color: 'var(--color-text)' }}>
               <strong>Attachments</strong> live on the client itself (Info), on individual activities (📎 on
               hover), or on a task — three separate places, by design.
             </p>
