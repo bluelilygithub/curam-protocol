@@ -27,13 +27,10 @@ router.get('/', async (req, res) => {
             AND si.title = 'Chat: ' || ds."sessionId"
             AND ds."deletedAt" IS NOT NULL
         )
-        AND (
-          si."projectId" IS NULL
-          OR EXISTS (
-            SELECT 1 FROM projects up
-            WHERE up.id::text = si."projectId"
-              AND up."userId" = $2
-          )
+        AND EXISTS (
+          SELECT 1 FROM projects up
+          WHERE up.id::text = si."projectId"
+            AND up."userId" = $2
         )
       LIMIT 20
     `, [q.trim(), req.user.id]);

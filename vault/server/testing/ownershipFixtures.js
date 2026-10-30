@@ -177,6 +177,8 @@ async function seedDerived(pool, tables, fx) {
   await step('mood tied to a task', () => clone('mood_checkins', { entity_type: 'task', entity_id: String(idOf('tasks')) }));
   await step('current mission statement', () => pool.query('UPDATE mission_statements SET is_current = true WHERE id = $1', [idOf('mission_statements')]));
   await step('search index entry', () => pool.query(`INSERT INTO search_index (type,"projectId",title,body) VALUES ('project',$1,$2,$3)`, [String(idOf('projects')), `${MARK}search-title`, `${MARK}search-body`]));
+  // an entry with no project: the app never writes one, but search must not show it to anyone if one ever exists
+  await step('search index entry with no project', () => pool.query(`INSERT INTO search_index (type,"projectId",title,body) VALUES ('project',NULL,$1,$2)`, [`${MARK}search-orphan-title`, `${MARK}search-orphan-body`]));
   return notes;
 }
 
