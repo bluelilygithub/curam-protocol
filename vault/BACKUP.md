@@ -42,6 +42,8 @@ So **the only complete backup is a full Postgres copy**, taken from Railway (bel
 
 ### Restore rehearsal (do once, then note the date here)
 
+**Railway's Restore button works inside the same environment.** On the production Postgres service, Backups tab → Restore stages a swap of the live volume for the backup (the current volume is kept, and nothing changes until the staged change is deployed). Anything written after that backup is lost once it is deployed, and a stray "Deploy all" would apply it. So do not use it for a rehearsal on production: if the backup's menu offers a restore to another environment, use that with `staging` as the target, otherwise use the `pg_dump` route below. Use production's Restore only in a real emergency, after **Backup now**, and discard any staged change you do not intend to deploy.
+
 Never against production. Use the staging environment or a scratch database.
 
 1. Take a dump of production as in step 1.
