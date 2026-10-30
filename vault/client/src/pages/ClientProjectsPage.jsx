@@ -59,7 +59,7 @@ function NewProjectForm({ clients, convertible, onDone, onCancel }) {
       const data = await res.json();
       if (!res.ok) { addToast(data.error || 'Could not save', 'error'); return; }
       id = data.id;
-      addToast(mode === 'new' ? 'Client project created' : 'Now a client project');
+      addToast(mode === 'new' ? 'Client work created' : 'Now client work');
       onDone();
       navigate(`/client-projects/${id}`);
     } catch {
@@ -74,7 +74,7 @@ function NewProjectForm({ clients, convertible, onDone, onCancel }) {
   return (
     <form onSubmit={submit} className="rounded-2xl border p-5 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
       <div className="flex gap-2">
-        {[['new', 'New client project'], ['convert', 'Use an existing project']].map(([m, label]) => (
+        {[['new', 'New client work'], ['convert', 'Use an existing project']].map(([m, label]) => (
           <button
             key={m} type="button" onClick={() => setMode(m)}
             className="px-3 py-1.5 text-sm rounded-lg font-medium transition-opacity hover:opacity-70"
@@ -108,7 +108,7 @@ function NewProjectForm({ clients, convertible, onDone, onCancel }) {
 
       <div className="flex gap-2">
         <button type="submit" disabled={busy || !ready} className="px-3.5 py-1.5 text-sm rounded-lg font-medium transition-opacity hover:opacity-80 disabled:opacity-40" style={{ background: 'var(--color-primary)', color: '#fff' }}>
-          {busy ? 'Saving…' : mode === 'new' ? 'Create' : 'Make it a client project'}
+          {busy ? 'Saving…' : mode === 'new' ? 'Create' : 'Make it client work'}
         </button>
         <button type="button" onClick={onCancel} className="px-3.5 py-1.5 text-sm rounded-lg transition-opacity hover:opacity-70" style={{ border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>Cancel</button>
       </div>
@@ -158,7 +158,7 @@ export default function ClientProjectsPage() {
       <div className="max-w-5xl w-full mx-auto p-4 sm:p-6 space-y-5">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Client projects</h1>
+            <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Client work</h1>
             <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>One place per piece of client work.</p>
           </div>
           <div className="flex items-center gap-2">
@@ -167,7 +167,7 @@ export default function ClientProjectsPage() {
               <option value="all">All</option>
             </select>
             {!showForm && (
-              <button onClick={openForm} className="px-3.5 py-1.5 text-sm rounded-lg font-medium transition-opacity hover:opacity-80" style={{ background: 'var(--color-primary)', color: '#fff' }}>New client project</button>
+              <button onClick={openForm} className="px-3.5 py-1.5 text-sm rounded-lg font-medium transition-opacity hover:opacity-80" style={{ background: 'var(--color-primary)', color: '#fff' }}>New client work</button>
             )}
           </div>
         </div>
@@ -178,7 +178,7 @@ export default function ClientProjectsPage() {
           <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>
         ) : shown.length === 0 ? (
           <div className="rounded-2xl border p-6 text-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
-            No client projects yet. Create one, or turn an existing project into one with <strong>New client project → Use an existing project</strong>.
+            No client work yet. Create one, or turn an existing project into one with <strong>New client work → Use an existing project</strong>.
           </div>
         ) : (
           <div className="rounded-2xl border overflow-hidden" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>

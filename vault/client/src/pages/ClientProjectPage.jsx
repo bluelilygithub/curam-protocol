@@ -545,7 +545,7 @@ export default function ClientProjectPage() {
   if (missing) {
     return (
       <div className="flex-1 p-6" style={{ background: 'var(--color-bg)' }}>
-        <p className="text-sm" style={{ color: 'var(--color-text)' }}>This client project was not found. <Link to="/client-projects" style={{ color: 'var(--color-primary)' }}>Back to client projects</Link></p>
+        <p className="text-sm" style={{ color: 'var(--color-text)' }}>This client work was not found. <Link to="/client-projects" style={{ color: 'var(--color-primary)' }}>Back to client work</Link></p>
       </div>
     );
   }
@@ -557,7 +557,7 @@ export default function ClientProjectPage() {
     <div className="flex flex-col flex-1 min-h-0 overflow-y-auto" style={{ background: 'var(--color-bg)' }}>
       <div className="max-w-4xl w-full mx-auto p-4 sm:p-6 space-y-5">
         <div>
-          <Link to="/client-projects" className="text-xs hover:opacity-70" style={{ color: 'var(--color-muted)' }}>← Client projects</Link>
+          <Link to="/client-projects" className="text-xs hover:opacity-70" style={{ color: 'var(--color-muted)' }}>← Client work</Link>
           <div className="flex items-start justify-between gap-3 flex-wrap mt-1">
             <div className="min-w-0">
               <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>{project.name}</h1>

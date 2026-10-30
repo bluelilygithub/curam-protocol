@@ -475,7 +475,7 @@ export default function SeoPage() {
   const loadList = useCallback(async () => {
     const res = await api.get('/api/google-ads/projects');
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Could not load projects');
+    if (!res.ok) throw new Error(data.error || 'Could not load campaigns');
     setProjects(Array.isArray(data) ? data : []);
   }, []);
 
@@ -547,7 +547,7 @@ export default function SeoPage() {
         offer: offer.trim() || undefined,
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Could not create project');
+      if (!res.ok) throw new Error(data.error || 'Could not create campaign');
       await loadList();
       setName('');
       setUrl('');
@@ -652,7 +652,7 @@ export default function SeoPage() {
       if (!res.ok) throw new Error(data.error || 'Delete failed');
       setDeleteConfirm(false);
       await loadList();
-      addToast('Project deleted', 'success');
+      addToast('Campaign deleted', 'success');
       navigate('/google-ads');
     } catch (err) {
       addToast(err.message, 'error');
@@ -702,11 +702,11 @@ export default function SeoPage() {
           </Tooltip>
         </div>
 
-        <Tooltip text="Filter projects by name or website.">
+        <Tooltip text="Filter campaigns by name or website.">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search projects…"
+            placeholder="Search campaigns…"
             className="w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none"
             style={FIELD}
           />
@@ -723,7 +723,7 @@ export default function SeoPage() {
               color: !id ? 'var(--color-text)' : 'var(--color-muted)',
             }}
           >
-            New project
+            New campaign
           </button>
         </Tooltip>
 
@@ -734,13 +734,13 @@ export default function SeoPage() {
             className="text-xs font-semibold w-full text-left py-1 transition-opacity hover:opacity-70"
             style={{ color: 'var(--color-primary)' }}
           >
-            {openGroup === 'projects' ? '▼' : '▶'} Projects
+            {openGroup === 'projects' ? '▼' : '▶'} Campaigns
           </button>
           {(openGroup === 'projects' || search.trim()) && (
             <ul className="pl-2 border-l ml-1 space-y-0.5 mt-1" style={{ borderColor: 'var(--color-border)' }}>
               {filteredProjects.length === 0 && (
                 <li className="px-2 py-1.5 text-xs" style={{ color: 'var(--color-muted)' }}>
-                  No projects yet
+                  No campaigns yet
                 </li>
               )}
               {filteredProjects.map((p) => (
@@ -774,7 +774,7 @@ export default function SeoPage() {
         {!id && (
           <section className="space-y-4">
             <div>
-              <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>New Google Ads project</h2>
+              <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>New Google Ads campaign</h2>
               <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
                 Paste a website URL and what the business actually sells. Keyword lists follow the offer. The scrape is used for URLs, brand, and extra detail — not if it describes a different industry.
               </p>
@@ -808,7 +808,7 @@ export default function SeoPage() {
             </label>
 
             <label className="block space-y-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Project name (optional)</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Campaign name (optional)</span>
               <Tooltip text="Shown in the sidebar. Leave blank to use the offer or scraped page title.">
                 <input
                   value={name}
@@ -878,7 +878,7 @@ export default function SeoPage() {
                     <button type="button" onClick={() => setDeleteConfirm(false)} className="transition-opacity hover:opacity-70">No</button>
                   </span>
                 ) : (
-                  <Tooltip text="Delete this project and its generated lists and ads.">
+                  <Tooltip text="Delete this campaign and its generated lists and ads.">
                     <button
                       type="button"
                       onClick={() => setDeleteConfirm(true)}
