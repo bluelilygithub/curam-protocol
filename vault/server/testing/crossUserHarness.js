@@ -65,6 +65,19 @@ process.env.UPLOAD_DIR = require('fs').mkdtempSync(require('path').join(require(
 // The app syncs Fitness sessions into tasks a few seconds after boot. In a slow boot that write lands in the
 // middle of a probe and would be blamed on the probing user, so the startup sync is switched off here.
 require('../cron/fitnessCron').startFitnessTasksSync = () => {};
+// The same goes for every other timer that writes shortly after boot (the recycle-bin purge fires 60 s in, which in a
+// run this long landed on whichever probe happened to be running), and for the background jobs a request can start
+// (reading attached files, embedding notes). They run one at a time after the response, so their rows appeared in the
+// middle of a later probe and were blamed on it. Probes must see only the writes their own request makes.
+require('../cron/recycleBinCron').startRecycleBinPurge = () => {};
+require('../cron/attachmentExpiryCron').startAttachmentExpiry = () => {};
+require('../cron/burnerMailCron').startBurnerMailPurge = () => {};
+{
+  const noteFileText = require('../services/noteFileText');
+  noteFileText.backfill = () => {};
+  noteFileText.queueExtract = () => {};
+  require('../services/noteEmbeddings').backfill = () => {};
+}
 const app = require('../index.js');
 const { pool } = require('../db');
 
