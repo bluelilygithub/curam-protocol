@@ -1,6 +1,18 @@
 {
  "_note": "Every route the app serves and who may call it: public (no sign-in, by design), admin, or authed (any signed-in user; ids are checked per owner). Add new routes with --update, then review.",
  "routes": {
+  "PUT /api/admin/accountants/:id": {
+   "class": "admin"
+  },
+  "GET /api/admin/accountants/log": {
+   "class": "admin"
+  },
+  "GET /api/admin/accountants": {
+   "class": "admin"
+  },
+  "POST /api/admin/accountants": {
+   "class": "admin"
+  },
   "DELETE /api/admin/cellar-lite/config": {
    "class": "admin"
   },
@@ -8,6 +20,12 @@
    "class": "admin"
   },
   "PUT /api/admin/cellar-lite/config": {
+   "class": "admin"
+  },
+  "GET /api/admin/landing": {
+   "class": "admin"
+  },
+  "PUT /api/admin/landing": {
    "class": "admin"
   },
   "GET /api/admin/monitor": {
@@ -26,6 +44,9 @@
    "class": "admin"
   },
   "POST /api/admin/users/:id/feature-access": {
+   "class": "admin"
+  },
+  "PUT /api/admin/users/:id/landing": {
    "class": "admin"
   },
   "PUT /api/admin/users/:id/password": {
@@ -118,16 +139,16 @@
   "POST /api/burner-mail-tutor": {
    "class": "authed"
   },
-  "GET /api/burner-mail/addresses": {
-   "class": "authed"
-  },
-  "POST /api/burner-mail/addresses": {
+  "GET /api/burner-mail/addresses/:id/messages": {
    "class": "authed"
   },
   "DELETE /api/burner-mail/addresses/:id": {
    "class": "authed"
   },
-  "GET /api/burner-mail/addresses/:id/messages": {
+  "GET /api/burner-mail/addresses": {
+   "class": "authed"
+  },
+  "POST /api/burner-mail/addresses": {
    "class": "authed"
   },
   "DELETE /api/burner-mail/messages/:id": {
@@ -352,6 +373,9 @@
   "GET /api/clients/:id/activity": {
    "class": "authed"
   },
+  "PATCH /api/clients/:id/assign-project": {
+   "class": "authed"
+  },
   "POST /api/clients/:id/attachments": {
    "class": "authed"
   },
@@ -505,6 +529,9 @@
   "GET /api/contract-review/search": {
    "class": "authed"
   },
+  "POST /api/crm-tutor": {
+   "class": "authed"
+  },
   "GET /api/dashboard/attention": {
    "class": "authed"
   },
@@ -532,124 +559,16 @@
   "POST /api/deals": {
    "class": "authed"
   },
-  "POST /api/password-vault-tutor": {
-   "class": "authed"
-  },
-  "GET /api/password-vault/status": {
-   "class": "authed"
-  },
-  "POST /api/password-vault/setup": {
-   "class": "authed"
-  },
-  "GET /api/password-vault/entries": {
-   "class": "authed"
-  },
-  "POST /api/password-vault/entries": {
-   "class": "authed"
-  },
-  "PUT /api/password-vault/entries/:id": {
-   "class": "authed"
-  },
-  "PATCH /api/password-vault/entries/:id/client": {
-   "class": "authed"
-  },
-  "DELETE /api/password-vault/entries/:id": {
-   "class": "authed"
-  },
-  "POST /api/password-vault/rekey": {
-   "class": "authed"
-  },
-  "POST /api/password-vault/reset": {
-   "class": "authed"
-  },
-  "POST /api/crm-tutor": {
-   "class": "authed"
-  },
-  "POST /api/shares-tutor": {
-   "class": "authed"
-  },
-  "POST /api/settings-tutor": {
-   "class": "authed"
-  },
   "POST /api/dns-lookup-tutor": {
+   "class": "authed"
+  },
+  "POST /api/dns-lookup/email": {
    "class": "authed"
   },
   "GET /api/dns-lookup/options": {
    "class": "authed"
   },
   "POST /api/dns-lookup/records": {
-   "class": "authed"
-  },
-  "POST /api/dns-lookup/email": {
-   "class": "authed"
-  },
-  "POST /api/email-follow-up/drafts/:draftId/approve": {
-   "class": "authed"
-  },
-  "POST /api/email-follow-up/drafts/:draftId/decline": {
-   "class": "authed"
-  },
-  "POST /api/email-follow-up/drafts/:draftId/copy": {
-   "class": "authed"
-  },
-  "PATCH /api/email-follow-up/drafts/:draftId": {
-   "class": "authed"
-  },
-  "GET /api/email-follow-up": {
-   "class": "authed"
-  },
-  "POST /api/email-follow-up": {
-   "class": "authed"
-  },
-  "GET /api/email-follow-up/:id": {
-   "class": "authed"
-  },
-  "PATCH /api/email-follow-up/:id": {
-   "class": "authed"
-  },
-  "GET /api/email-follow-up/:id/suggestions": {
-   "class": "authed"
-  },
-  "GET /api/email-follow-up/:id/threads/:threadId/preview": {
-   "class": "authed"
-  },
-  "GET /api/email-follow-up/:id/delete-preview": {
-   "class": "authed"
-  },
-  "DELETE /api/email-follow-up/:id": {
-   "class": "authed"
-  },
-  "POST /api/email-follow-up/:id/threads/:threadId/set-aside": {
-   "class": "authed"
-  },
-  "POST /api/email-follow-up/:id/threads/:threadId/detach": {
-   "class": "authed"
-  },
-  "POST /api/email-follow-up/:id/threads": {
-   "class": "authed"
-  },
-  "POST /api/email-follow-up/:id/attachments": {
-   "class": "authed"
-  },
-  "POST /api/email-follow-up/:id/extract": {
-   "class": "authed"
-  },
-  "POST /api/email-follow-up/:id/sent-sweep": {
-   "class": "authed"
-  },
-  "POST /api/email-follow-up/:id/rows/:rowId/event": {
-   "class": "authed"
-  },
-  "POST /api/email-follow-up/:id/rows/:rowId/substitute": {
-   "class": "authed"
-  },
-  "POST /api/email-follow-up/:id/rows/:rowId/task": {
-   "class": "authed"
-  },
-  "POST /api/email-follow-up/:id/rows/:rowId/draft": {
-   "class": "authed"
-  },
-  "POST /api/email-follow-up-tutor": {
    "class": "authed"
   },
   "POST /api/document-redaction/jobs/:id/apply": {
@@ -731,6 +650,75 @@
    "class": "authed"
   },
   "GET /api/domains/suggest": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up-tutor": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/:id/attachments": {
+   "class": "authed"
+  },
+  "GET /api/email-follow-up/:id/delete-preview": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/:id/extract": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/:id/rows/:rowId/draft": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/:id/rows/:rowId/event": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/:id/rows/:rowId/substitute": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/:id/rows/:rowId/task": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/:id/sent-sweep": {
+   "class": "authed"
+  },
+  "GET /api/email-follow-up/:id/suggestions": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/:id/threads/:threadId/detach": {
+   "class": "authed"
+  },
+  "GET /api/email-follow-up/:id/threads/:threadId/preview": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/:id/threads/:threadId/set-aside": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/:id/threads": {
+   "class": "authed"
+  },
+  "DELETE /api/email-follow-up/:id": {
+   "class": "authed"
+  },
+  "GET /api/email-follow-up/:id": {
+   "class": "authed"
+  },
+  "PATCH /api/email-follow-up/:id": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/drafts/:draftId/approve": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/drafts/:draftId/copy": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/drafts/:draftId/decline": {
+   "class": "authed"
+  },
+  "PATCH /api/email-follow-up/drafts/:draftId": {
+   "class": "authed"
+  },
+  "GET /api/email-follow-up": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up": {
    "class": "authed"
   },
   "POST /api/email": {
@@ -950,24 +938,6 @@
    "class": "authed"
   },
   "PUT /api/finance/export/account-map": {
-   "class": "authed"
-  },
-  "GET /api/finance/export/excel": {
-   "class": "authed"
-  },
-  "DELETE /api/finance/export/history": {
-   "class": "authed"
-  },
-  "PUT /api/finance/export/history": {
-   "class": "authed"
-  },
-  "GET /api/finance/export/myob": {
-   "class": "authed"
-  },
-  "GET /api/finance/export/sheets": {
-   "class": "authed"
-  },
-  "GET /api/finance/export/xero": {
    "class": "authed"
   },
   "GET /api/finance/home-office-daily-log/export": {
@@ -1636,16 +1606,7 @@
   "POST /api/graphics/background": {
    "class": "authed"
   },
-  "POST /api/graphics/batch-text": {
-   "class": "authed"
-  },
-  "POST /api/graphics/batch": {
-   "class": "authed"
-  },
   "POST /api/graphics/batch-job": {
-   "class": "authed"
-  },
-  "GET /api/graphics/batch-jobs/:id": {
    "class": "authed"
   },
   "GET /api/graphics/batch-jobs/:id/results": {
@@ -1654,13 +1615,13 @@
   "DELETE /api/graphics/batch-jobs/:id": {
    "class": "authed"
   },
-  "GET /api/graphics/print-profile": {
+  "GET /api/graphics/batch-jobs/:id": {
    "class": "authed"
   },
-  "POST /api/graphics/print-profile": {
+  "POST /api/graphics/batch-text": {
    "class": "authed"
   },
-  "DELETE /api/graphics/print-profile": {
+  "POST /api/graphics/batch": {
    "class": "authed"
   },
   "POST /api/graphics/blur-detect": {
@@ -1681,25 +1642,16 @@
   "GET /api/graphics/convert/info": {
    "class": "authed"
   },
-  "GET /api/graphics/describe/info": {
-   "class": "authed"
-  },
-  "POST /api/graphics/describe": {
+  "POST /api/graphics/convert": {
    "class": "authed"
   },
   "GET /api/graphics/cost-preview": {
    "class": "authed"
   },
-  "GET /api/graphics/recipes": {
+  "GET /api/graphics/describe/info": {
    "class": "authed"
   },
-  "POST /api/graphics/recipes": {
-   "class": "authed"
-  },
-  "DELETE /api/graphics/recipes/:id": {
-   "class": "authed"
-  },
-  "POST /api/graphics/convert": {
+  "POST /api/graphics/describe": {
    "class": "authed"
   },
   "POST /api/graphics/diff": {
@@ -1765,7 +1717,25 @@
   "POST /api/graphics/preflight": {
    "class": "authed"
   },
+  "DELETE /api/graphics/print-profile": {
+   "class": "authed"
+  },
+  "GET /api/graphics/print-profile": {
+   "class": "authed"
+  },
+  "POST /api/graphics/print-profile": {
+   "class": "authed"
+  },
   "POST /api/graphics/print-ready": {
+   "class": "authed"
+  },
+  "DELETE /api/graphics/recipes/:id": {
+   "class": "authed"
+  },
+  "GET /api/graphics/recipes": {
+   "class": "authed"
+  },
+  "POST /api/graphics/recipes": {
    "class": "authed"
   },
   "POST /api/graphics/recolor": {
@@ -2107,6 +2077,42 @@
   "POST /api/notes-tutor": {
    "class": "authed"
   },
+  "POST /api/notes/:id/ai": {
+   "class": "authed"
+  },
+  "POST /api/notes/:id/attachments": {
+   "class": "authed"
+  },
+  "PATCH /api/notes/:id/audio/:attachmentId": {
+   "class": "authed"
+  },
+  "PATCH /api/notes/:id/pin": {
+   "class": "authed"
+  },
+  "POST /api/notes/:id/reminder/done": {
+   "class": "authed"
+  },
+  "PUT /api/notes/:id/reminder": {
+   "class": "authed"
+  },
+  "POST /api/notes/:id/rewrite": {
+   "class": "authed"
+  },
+  "PUT /api/notes/:id/tags": {
+   "class": "authed"
+  },
+  "POST /api/notes/:id/todos": {
+   "class": "authed"
+  },
+  "POST /api/notes/:id/versions/:vid/restore": {
+   "class": "authed"
+  },
+  "GET /api/notes/:id/versions/:vid": {
+   "class": "authed"
+  },
+  "GET /api/notes/:id/versions": {
+   "class": "authed"
+  },
   "DELETE /api/notes/:id": {
    "class": "authed"
   },
@@ -2116,6 +2122,60 @@
   "PUT /api/notes/:id": {
    "class": "authed"
   },
+  "DELETE /api/notes/ask/:id": {
+   "class": "authed"
+  },
+  "DELETE /api/notes/ask": {
+   "class": "authed"
+  },
+  "GET /api/notes/ask": {
+   "class": "authed"
+  },
+  "POST /api/notes/ask": {
+   "class": "authed"
+  },
+  "POST /api/notes/from-conversation": {
+   "class": "authed"
+  },
+  "GET /api/notes/options": {
+   "class": "authed"
+  },
+  "DELETE /api/notes/tags/:tag": {
+   "class": "authed"
+  },
+  "POST /api/notes/tags/rename": {
+   "class": "authed"
+  },
+  "GET /api/notes/tags": {
+   "class": "authed"
+  },
+  "DELETE /api/notes/templates/:id": {
+   "class": "authed"
+  },
+  "PUT /api/notes/templates/:id": {
+   "class": "authed"
+  },
+  "GET /api/notes/templates": {
+   "class": "authed"
+  },
+  "POST /api/notes/templates": {
+   "class": "authed"
+  },
+  "GET /api/notes/unfiled-count": {
+   "class": "authed"
+  },
+  "DELETE /api/notes/views/:id": {
+   "class": "authed"
+  },
+  "PUT /api/notes/views/:id": {
+   "class": "authed"
+  },
+  "GET /api/notes/views": {
+   "class": "authed"
+  },
+  "POST /api/notes/views": {
+   "class": "authed"
+  },
   "POST /api/notes/voice": {
    "class": "authed"
   },
@@ -2123,6 +2183,36 @@
    "class": "authed"
   },
   "POST /api/notes": {
+   "class": "authed"
+  },
+  "POST /api/password-vault-tutor": {
+   "class": "authed"
+  },
+  "PATCH /api/password-vault/entries/:id/client": {
+   "class": "authed"
+  },
+  "DELETE /api/password-vault/entries/:id": {
+   "class": "authed"
+  },
+  "PUT /api/password-vault/entries/:id": {
+   "class": "authed"
+  },
+  "GET /api/password-vault/entries": {
+   "class": "authed"
+  },
+  "POST /api/password-vault/entries": {
+   "class": "authed"
+  },
+  "POST /api/password-vault/rekey": {
+   "class": "authed"
+  },
+  "POST /api/password-vault/reset": {
+   "class": "authed"
+  },
+  "POST /api/password-vault/setup": {
+   "class": "authed"
+  },
+  "GET /api/password-vault/status": {
    "class": "authed"
   },
   "POST /api/pc-health-tutor": {
@@ -2449,6 +2539,21 @@
   "POST /api/property-scenario/proformas": {
    "class": "authed"
   },
+  "POST /api/quick-ingest/crm": {
+   "class": "public"
+  },
+  "POST /api/quick-ingest/finance": {
+   "class": "public"
+  },
+  "POST /api/quick-ingest/notes": {
+   "class": "public"
+  },
+  "POST /api/quick-ingest/redact": {
+   "class": "public"
+  },
+  "GET /api/quick-ingest/verify": {
+   "class": "public"
+  },
   "POST /api/recipes/expand": {
    "class": "authed"
   },
@@ -2510,6 +2615,18 @@
    "class": "authed"
   },
   "POST /api/recipes/suggest": {
+   "class": "authed"
+  },
+  "POST /api/recycle-bin/:id/restore": {
+   "class": "authed"
+  },
+  "DELETE /api/recycle-bin/:id": {
+   "class": "authed"
+  },
+  "DELETE /api/recycle-bin": {
+   "class": "authed"
+  },
+  "GET /api/recycle-bin": {
    "class": "authed"
   },
   "POST /api/restyle-tutor": {
@@ -2575,7 +2692,19 @@
   "POST /api/room-projects": {
    "class": "authed"
   },
+  "POST /api/route-tracks/:id/copy": {
+   "class": "authed"
+  },
+  "POST /api/route-tracks/:id/email-file": {
+   "class": "authed"
+  },
+  "GET /api/route-tracks/:id/file": {
+   "class": "authed"
+  },
   "GET /api/route-tracks/:id/gpx": {
+   "class": "authed"
+  },
+  "POST /api/route-tracks/:id/reverse": {
    "class": "authed"
   },
   "DELETE /api/route-tracks/:id": {
@@ -2609,6 +2738,9 @@
    "class": "authed"
   },
   "POST /api/route-tracks/loop": {
+   "class": "authed"
+  },
+  "POST /api/route-tracks/multi": {
    "class": "authed"
   },
   "POST /api/route-tracks/places": {
@@ -2648,6 +2780,9 @@
    "class": "authed"
   },
   "POST /api/session-files/:sessionId": {
+   "class": "authed"
+  },
+  "POST /api/settings-tutor": {
    "class": "authed"
   },
   "GET /api/settings/content-restrictions": {
@@ -2722,6 +2857,9 @@
   "GET /api/shared/task/:token": {
    "class": "public"
   },
+  "POST /api/shares-tutor": {
+   "class": "authed"
+  },
   "DELETE /api/shares/ask": {
    "class": "authed"
   },
@@ -2755,6 +2893,18 @@
   "GET /api/shares/dividends/summary": {
    "class": "authed"
   },
+  "GET /api/shares/documents/:id/file": {
+   "class": "authed"
+  },
+  "DELETE /api/shares/documents/:id": {
+   "class": "authed"
+  },
+  "GET /api/shares/documents": {
+   "class": "authed"
+  },
+  "POST /api/shares/documents": {
+   "class": "authed"
+  },
   "GET /api/shares/fx": {
    "class": "authed"
   },
@@ -2771,6 +2921,18 @@
    "class": "authed"
   },
   "GET /api/shares/news": {
+   "class": "authed"
+  },
+  "GET /api/shares/pack/pdf": {
+   "class": "authed"
+  },
+  "GET /api/shares/pack/preview": {
+   "class": "authed"
+  },
+  "GET /api/shares/pack/xlsx": {
+   "class": "authed"
+  },
+  "GET /api/shares/pack/zip": {
    "class": "authed"
   },
   "POST /api/shares/refresh": {
@@ -2810,6 +2972,48 @@
    "class": "authed"
   },
   "POST /api/shares/trades": {
+   "class": "authed"
+  },
+  "POST /api/shelf-inbox/:id/assign": {
+   "class": "authed"
+  },
+  "GET /api/shelf-inbox/:id/file": {
+   "class": "authed"
+  },
+  "DELETE /api/shelf-inbox/:id": {
+   "class": "authed"
+  },
+  "GET /api/shelf-inbox/count": {
+   "class": "authed"
+  },
+  "GET /api/shelf-inbox": {
+   "class": "authed"
+  },
+  "POST /api/shelf-tokens/:id/revoke": {
+   "class": "authed"
+  },
+  "DELETE /api/shelf-tokens/:id": {
+   "class": "authed"
+  },
+  "DELETE /api/shelf-tokens/installer": {
+   "class": "authed"
+  },
+  "GET /api/shelf-tokens/installer": {
+   "class": "authed"
+  },
+  "POST /api/shelf-tokens/installer": {
+   "class": "authed"
+  },
+  "GET /api/shelf-tokens/launcher": {
+   "class": "authed"
+  },
+  "PUT /api/shelf-tokens/launcher": {
+   "class": "authed"
+  },
+  "GET /api/shelf-tokens": {
+   "class": "authed"
+  },
+  "POST /api/shelf-tokens": {
    "class": "authed"
   },
   "DELETE /api/student-quizzes/:id": {
@@ -2998,22 +3202,13 @@
   "POST /api/tasks": {
    "class": "authed"
   },
-  "GET /api/topic-research/runs/:id": {
+  "POST /api/topic-research-tutor": {
    "class": "authed"
   },
-  "POST /api/topic-research/topics/:id/run": {
+  "POST /api/topic-research/briefs/:id/draft": {
    "class": "authed"
   },
-  "DELETE /api/topic-research/topics/:id": {
-   "class": "authed"
-  },
-  "GET /api/topic-research/topics/:id": {
-   "class": "authed"
-  },
-  "POST /api/topic-research/runs/:id/brief": {
-   "class": "authed"
-  },
-  "GET /api/topic-research/runs/:id/briefs": {
+  "GET /api/topic-research/briefs/:id/drafts": {
    "class": "authed"
   },
   "DELETE /api/topic-research/briefs/:id": {
@@ -3022,7 +3217,64 @@
   "GET /api/topic-research/briefs/:id": {
    "class": "authed"
   },
+  "GET /api/topic-research/drafts/:id/review-prompt": {
+   "class": "authed"
+  },
+  "POST /api/topic-research/drafts/:id/review": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/drafts/:id/reviews": {
+   "class": "authed"
+  },
+  "DELETE /api/topic-research/drafts/:id": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/drafts/:id": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/history": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/linked": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/model-config": {
+   "class": "authed"
+  },
+  "POST /api/topic-research/model-config": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/progress/:opId": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/review-model-config": {
+   "class": "authed"
+  },
+  "POST /api/topic-research/review-model-config": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/reviews/:id": {
+   "class": "authed"
+  },
+  "POST /api/topic-research/runs/:id/brief": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/runs/:id/briefs": {
+   "class": "authed"
+  },
+  "POST /api/topic-research/runs/:id/relevance": {
+   "class": "authed"
+  },
   "POST /api/topic-research/runs/:id/rescore": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/runs/:id": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/settings": {
+   "class": "authed"
+  },
+  "PUT /api/topic-research/settings": {
    "class": "authed"
   },
   "GET /api/topic-research/source-weights": {
@@ -3034,16 +3286,28 @@
   "GET /api/topic-research/sources": {
    "class": "authed"
   },
-  "GET /api/topic-research/settings": {
+  "POST /api/topic-research/suggest-queries": {
    "class": "authed"
   },
-  "PUT /api/topic-research/settings": {
+  "POST /api/topic-research/topics/:id/run": {
+   "class": "authed"
+  },
+  "DELETE /api/topic-research/topics/:id": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/topics/:id": {
+   "class": "authed"
+  },
+  "PATCH /api/topic-research/topics/:id": {
    "class": "authed"
   },
   "GET /api/topic-research/topics": {
    "class": "authed"
   },
   "POST /api/topic-research/topics": {
+   "class": "authed"
+  },
+  "GET /api/topic-research/usage": {
    "class": "authed"
   },
   "GET /api/translate/config": {
@@ -3557,102 +3821,6 @@
    "class": "authed"
   },
   "POST /api/youtube/watch-history": {
-   "class": "authed"
-  },
-  "POST /api/topic-research-tutor": {
-   "class": "authed"
-  },
-  "GET /api/topic-research/model-config": {
-   "class": "authed"
-  },
-  "POST /api/topic-research/model-config": {
-   "class": "authed"
-  },
-  "GET /api/topic-research/usage": {
-   "class": "authed"
-  },
-  "PATCH /api/topic-research/topics/:id": {
-   "class": "authed"
-  },
-  "GET /api/topic-research/history": {
-   "class": "authed"
-  },
-  "POST /api/topic-research/briefs/:id/draft": {
-   "class": "authed"
-  },
-  "GET /api/topic-research/briefs/:id/drafts": {
-   "class": "authed"
-  },
-  "GET /api/topic-research/drafts/:id": {
-   "class": "authed"
-  },
-  "DELETE /api/topic-research/drafts/:id": {
-   "class": "authed"
-  },
-  "GET /api/topic-research/progress/:opId": {
-   "class": "authed"
-  },
-  "POST /api/topic-research/suggest-queries": {
-   "class": "authed"
-  },
-  "POST /api/topic-research/runs/:id/relevance": {
-   "class": "authed"
-  },
-  "GET /api/quick-ingest/verify": {
-   "class": "public"
-  },
-  "POST /api/quick-ingest/notes": {
-   "class": "public"
-  },
-  "POST /api/quick-ingest/finance": {
-   "class": "public"
-  },
-  "POST /api/quick-ingest/crm": {
-   "class": "public"
-  },
-  "POST /api/quick-ingest/redact": {
-   "class": "public"
-  },
-  "GET /api/shelf-tokens": {
-   "class": "authed"
-  },
-  "GET /api/shelf-tokens/launcher": {
-   "class": "authed"
-  },
-  "PUT /api/shelf-tokens/launcher": {
-   "class": "authed"
-  },
-  "GET /api/shelf-tokens/installer": {
-   "class": "authed"
-  },
-  "POST /api/shelf-tokens/installer": {
-   "class": "authed"
-  },
-  "DELETE /api/shelf-tokens/installer": {
-   "class": "authed"
-  },
-  "POST /api/shelf-tokens": {
-   "class": "authed"
-  },
-  "POST /api/shelf-tokens/:id/revoke": {
-   "class": "authed"
-  },
-  "DELETE /api/shelf-tokens/:id": {
-   "class": "authed"
-  },
-  "GET /api/shelf-inbox": {
-   "class": "authed"
-  },
-  "GET /api/shelf-inbox/count": {
-   "class": "authed"
-  },
-  "GET /api/shelf-inbox/:id/file": {
-   "class": "authed"
-  },
-  "POST /api/shelf-inbox/:id/assign": {
-   "class": "authed"
-  },
-  "DELETE /api/shelf-inbox/:id": {
    "class": "authed"
   }
  }
