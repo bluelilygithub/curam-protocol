@@ -31,6 +31,9 @@ const FEATURE_ACCESS_DEFAULTS = {
   seo: true,
   html: true,
   searchConsole: true,
+  // Translate and Guitar routes are not gated by requireFeature; the key lets the admin switch the menu entry off (client list parity)
+  translate: true,
+  guitar: true,
   webExtractor: true,
   fonts: true,
   restyle: true,
