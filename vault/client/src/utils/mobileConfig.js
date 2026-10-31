@@ -1,5 +1,7 @@
 'use strict';
 
+import { APP_NAV_GROUPS } from '../config/appNavigation.js';
+
 export const DEFAULT_TILES = [
   { id: 'tasks',    label: 'Tasks',        enabled: true },
   { id: 'projects', label: 'Projects',     enabled: true },
@@ -202,6 +204,34 @@ export const DEFAULT_NAV_ITEMS = [
   { id: 'settings',  label: 'Settings',        path: '/settings',    enabled: true },
   { id: 'guide',     label: 'User Guide',      path: '/guide',       enabled: true },
 ];
+
+// ── Nothing in the nav catalog is missing on a phone ─────────────────────────
+// The lists above are the phone's own order (people reorder and hide them). Anything the nav catalog (config/appNavigation.js) has that they
+// do not mention is added at the end here, with its feature switch, so a new tool shows up on the phone without a second edit. Admin-only
+// items and external links are left out. mergeWithDefaults() then appends it to a saved layout too. `npm run test:nav` checks the coverage.
+export const GENERATED_NAV_FEATURES = {}; // nav id -> feature key, for the items added below (the menu's own map only knows the older ones)
+(function addCatalogItems() {
+  const navPaths = new Set(DEFAULT_NAV_ITEMS.map((n) => n.path));
+  const tileIds = new Set(DEFAULT_TILES.map((t) => t.id));
+  const tilePaths = new Set(Object.values(APP_TILES).map((t) => t.path));
+  for (const group of APP_NAV_GROUPS) {
+    for (const item of group.items) {
+      if (item.external || item.adminOnly || !item.path) continue;
+      if (!navPaths.has(item.path)) {
+        DEFAULT_NAV_ITEMS.push({ id: item.id, label: item.label, path: item.path, enabled: true });
+        navPaths.add(item.path);
+        if (item.featureKey) GENERATED_NAV_FEATURES[item.id] = item.featureKey;
+      }
+      if (!tileIds.has(item.id) && !tilePaths.has(item.path)) {
+        DEFAULT_TILES.push({ id: item.id, label: item.label, enabled: true });
+        APP_TILES[item.id] = { path: item.path, icon: item.icon || 'layout-grid', description: group.label };
+        if (item.featureKey) FEATURE_BY_TILE_ID[item.id] = item.featureKey;
+        tileIds.add(item.id);
+        tilePaths.add(item.path);
+      }
+    }
+  }
+})();
 
 export function mergeWithDefaults(saved, defaults) {
   if (!saved || !Array.isArray(saved) || saved.length === 0) return defaults.map(d => ({ ...d }));

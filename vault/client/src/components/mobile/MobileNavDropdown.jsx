@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import api from '../../utils/apiClient';
-import { DEFAULT_NAV_ITEMS, mergeWithDefaults } from '../../utils/mobileConfig';
+import { DEFAULT_NAV_ITEMS, GENERATED_NAV_FEATURES, mergeWithDefaults } from '../../utils/mobileConfig';
 import { DEFAULT_FEATURE_ACCESS } from '../../utils/featureAccess';
 
 export default function MobileNavDropdown({ onClose, isAdmin = false }) {
@@ -80,7 +80,7 @@ export default function MobileNavDropdown({ onClose, isAdmin = false }) {
         expenseReview: 'gmailIntel',
         pipeline: 'clients',
       };
-      const featureKey = featureByNavId[i.id];
+      const featureKey = featureByNavId[i.id] ?? GENERATED_NAV_FEATURES[i.id];
       if (!featureKey) return true;
       return featureAccess[featureKey] !== false;
     })

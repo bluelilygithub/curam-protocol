@@ -20,6 +20,24 @@ for (const t of DEFAULT_TILES) {
 }
 assert.deepEqual(drift, [], 'mobile names drifted from the nav catalog:\n  ' + drift.join('\n  '));
 
+// nothing a person may open from the Apps menu is missing on a phone (menu AND home tiles), and what is added keeps its feature switch
+const { APP_TILES, FEATURE_BY_TILE_ID, GENERATED_NAV_FEATURES } = await import('./mobileConfig.js');
+const tileIds = new Set(DEFAULT_TILES.map((t) => t.id));
+const tilePaths = new Set(Object.values(APP_TILES).map((t) => t.path));
+const navPaths = new Set(DEFAULT_NAV_ITEMS.map((n) => n.path));
+const absent = [];
+for (const it of items) {
+  if (it.external || it.adminOnly) continue;
+  if (!navPaths.has(it.path)) absent.push(`${it.label} is not in the mobile menu`);
+  if (!tileIds.has(it.id) && !tilePaths.has(it.path)) absent.push(`${it.label} is not a mobile tile`);
+}
+assert.deepEqual(absent, [], 'catalog items missing on a phone: ' + absent.join('; '));
+for (const [id, key] of Object.entries(GENERATED_NAV_FEATURES)) assert.equal(byId.get(id).featureKey, key, `${id} keeps its feature switch in the mobile menu`);
+for (const t of DEFAULT_TILES) {
+  const c = byId.get(t.id);
+  if (c && c.featureKey && APP_TILES[t.id] && t.id in FEATURE_BY_TILE_ID) assert.equal(FEATURE_BY_TILE_ID[t.id], c.featureKey, `tile ${t.id} uses the catalog's feature switch`);
+}
+
 // the top-bar quick links are real and unique
 assert.equal(new Set(TOP_BAR_LINKS.map((l) => l.id)).size, TOP_BAR_LINKS.length);
 for (const l of TOP_BAR_LINKS) assert.ok(l.path.startsWith('/') && l.label && l.icon, `top bar link ${l.id} is complete`);
