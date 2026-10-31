@@ -658,6 +658,15 @@ export default function NotesPage() {
     setShowRecorder(true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // /notes?new=1 starts a new note straight away (the command palette's "New note").
+  useEffect(() => {
+    if (!searchParams.get('new')) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('new');
+    setSearchParams(next, { replace: true });
+    createNote({ focusTitle: true });
+  }, [searchParams.get('new')]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Settings -> Tours -> Notes Tour opens /notes?tour=1
   useEffect(() => {
     if (!searchParams.get('tour')) return;

@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import useSettingsStore from '../store/settingsStore';
 import useAuthStore from '../store/authStore';
 import { themes, fontOptions, iconPackOptions } from '../themes';
@@ -220,6 +220,13 @@ function SettingsPage() {
     setTab(t);
     localStorage.setItem('settingsTab', t);
   }
+
+  // /settings?tab=Recycle%20bin opens that section (the command palette's Settings results); the check below drops a section the person may not open.
+  const settingsLocation = useLocation();
+  useEffect(() => {
+    const wanted = new URLSearchParams(settingsLocation.search).get('tab');
+    if (wanted) selectTab(wanted);
+  }, [settingsLocation.search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const allowedTabs = allowedTabIds(!!user?.isAdmin, undefined, featureAccess);
