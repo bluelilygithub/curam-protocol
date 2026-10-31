@@ -522,6 +522,15 @@ function Layout() {
                 </Link>
               )}
               <button
+                onClick={() => document.dispatchEvent(new CustomEvent('vault:open-search'))}
+                className="w-8 h-8 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+                style={{ color: 'var(--color-muted)' }}
+                data-tip="Search"
+                aria-label="Search"
+              >
+                {getIcon('search', { size: 16 })}
+              </button>
+              <button
                 onClick={() => setMobileNavOpen(true)}
                 className="w-8 h-8 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
                 style={{ color: 'var(--color-muted)' }}

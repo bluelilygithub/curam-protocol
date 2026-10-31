@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../utils/apiClient';
+import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { DEFAULT_TILES, APP_TILES, FEATURE_BY_TILE_ID, mergeWithDefaults } from '../utils/mobileConfig';
@@ -24,6 +25,7 @@ const TILE_MAP = {
 
 export default function MobileDashboard() {
   const { user } = useAuthStore();
+  const getIcon = useIcon();
   const isAdmin = !!user?.isAdmin;
   const [tiles, setTiles] = useState(null);
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
@@ -58,6 +60,16 @@ export default function MobileDashboard() {
 
   return (
     <div className="px-4 pt-4 pb-24 space-y-4">
+      {/* Looks like a search box; opens the same command palette as Ctrl/Cmd+K (notes, clients, invoices, chats, tasks, apps, settings). */}
+      <button
+        type="button"
+        onClick={() => document.dispatchEvent(new CustomEvent('vault:open-search'))}
+        className="w-full flex items-center gap-3 px-4 rounded-xl border text-left hover:opacity-70 transition-opacity duration-200"
+        style={{ minHeight: 48, background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+      >
+        {getIcon('search', { size: 18 })}
+        <span className="text-sm">Search notes, clients, chats, apps...</span>
+      </button>
       {visible.map(tile => {
         const TileComponent = TILE_MAP[tile.id];
         if (TileComponent) return <TileComponent key={tile.id} />;
