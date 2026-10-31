@@ -763,29 +763,6 @@ async function initSchema() {
       )
     `);
 
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS gmail_routing_rules (
-        id SERIAL PRIMARY KEY,
-        "ruleType" TEXT NOT NULL UNIQUE,
-        label TEXT NOT NULL DEFAULT 'Deliveries/ToProcess',
-        query TEXT,
-        enabled BOOLEAN NOT NULL DEFAULT TRUE,
-        "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-        "updatedAt" TIMESTAMPTZ DEFAULT NOW()
-      )
-    `);
-
-    await client.query(`
-      INSERT INTO gmail_routing_rules ("ruleType", label, query, enabled)
-      VALUES (
-        'shop',
-        'Deliveries/ToProcess',
-        'from:(delivery@amazon.com.au OR auto-confirm@amazon.com OR shipment-tracking@amazon.com OR *shopify.com OR *shop.app) (shipped OR delivered OR "tracking number" OR "order confirmation" OR "your order" OR "dispatch" OR "out for delivery")',
-        TRUE
-      )
-      ON CONFLICT ("ruleType") DO NOTHING
-    `);
-
     // ── Notes ─────────────────────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS notes (
