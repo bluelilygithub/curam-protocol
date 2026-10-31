@@ -257,10 +257,10 @@ export const TOP_BAR_LINKS = [
 
 // Pages that are in the top bar or sidebar but not in an Apps group still get a trail.
 const EXTRA_TRAIL_ENTRIES = [
-  { path: '/chat', label: 'Chat', group: 'Workspace' },
-  { path: '/history', label: 'Chat History', group: 'Workspace' },
-  { path: '/tasks', label: 'Tasks', group: 'Workspace' },
-  { path: '/settings', label: 'Settings', group: '' },
+  { id: 'chat', path: '/chat', label: 'Chat', group: 'Workspace' },
+  { id: 'history', path: '/history', label: 'Chat History', group: 'Workspace' },
+  { id: 'tasks', path: '/tasks', label: 'Tasks', group: 'Workspace' },
+  { id: 'settings', path: '/settings', label: 'Settings', group: '' },
 ];
 
 /** Every page section the header trail knows about: the Apps groups, the 7 Habits group, the sidebar links and the extras above. */
@@ -268,10 +268,10 @@ export function getTrailEntries() {
   const entries = [];
   for (const g of [...APP_NAV_GROUPS, HABITS_NAV_GROUP]) {
     for (const it of g.items) {
-      if (!it.external && it.path) entries.push({ path: it.path, label: it.label, group: g.label, activeUnder: it.activeUnder });
+      if (!it.external && it.path) entries.push({ id: it.id, path: it.path, label: it.label, group: g.label, activeUnder: it.activeUnder });
     }
   }
-  for (const l of SIDEBAR_WORKSPACE_LINKS) entries.push({ path: l.path, label: l.label, group: 'Workspace' });
+  for (const l of SIDEBAR_WORKSPACE_LINKS) entries.push({ id: l.id, path: l.path, label: l.label, group: 'Workspace' });
   return [...entries, ...EXTRA_TRAIL_ENTRIES];
 }
 

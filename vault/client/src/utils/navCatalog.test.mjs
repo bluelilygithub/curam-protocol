@@ -40,7 +40,7 @@ for (const e of getTrailEntries().filter((x) => !x.path.includes('?') && x.path 
   const t = trailForPath(e.path);
   assert.ok(t, `${e.path} has a trail`);
 }
-assert.deepEqual(trailForPath('/clients/12'), { group: 'Business', label: 'CRM', to: '/clients', deeper: true });
+assert.deepEqual(trailForPath('/clients/12'), { id: 'clients', group: 'Business', label: 'CRM', to: '/clients', deeper: true });
 assert.equal(trailForPath('/mobile-dashboard'), null);
 
 console.log('navCatalog: ok');

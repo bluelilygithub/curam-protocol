@@ -7,6 +7,7 @@ import { relativeTime } from '../utils/relativeTime';
 import UsersAdminPanel from '../components/UsersAdminPanel';
 import SettingsTutorChat from './settings/SettingsTutorChat';
 import Dialog from '../components/Dialog';
+import AppUsagePanel from '../components/AppUsagePanel';
 
 // ── Stats helpers ─────────────────────────────────────────────────────────────
 
@@ -972,6 +973,8 @@ function AdminPage() {
 
       {/* ── Sentry ─────────────────────────────────────────────────────────── */}
       <SentryPanel />
+
+      <AppUsagePanel />
 
       {/* ── Users ─────────────────────────────────────────────────────────── */}
       <UsersAdminPanel title="Users" />

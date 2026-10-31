@@ -1,5 +1,5 @@
 // Navigation helpers shared by the top bar, the Apps menu and the page trail. Pure, so they run in node tests (utils/navTrail.test.mjs).
-// An entry is { path, label, group?, activeUnder? }. `path` is where it links; `activeUnder` (optional) is the folder it counts as being in
+// An entry is { id?, path, label, group?, activeUnder? }. `path` is where it links; `activeUnder` (optional) is the folder it counts as being in
 // when that differs from `path` (Student links to /student/quiz but also owns /student/cards).
 
 const strip = (p) => String(p || '').split('?')[0].replace(/\/+$/, '') || '/';
@@ -26,12 +26,12 @@ export function matchEntry(pathname, entries) {
 }
 
 /**
- * What to show in the header after the app name: `{ group, label, to, deeper }`, or null on pages that are not part of a section.
+ * What to show in the header after the app name: `{ id, group, label, to, deeper }`, or null on pages that are not part of a section.
  * `deeper` = the page is inside the section but not its front page (a client, a saved audit), so the label becomes a link back to `to`.
  */
 export function trailFor(pathname, entries) {
   const e = matchEntry(pathname, entries);
   if (!e) return null;
   const front = strip(e.path);
-  return { group: e.group || '', label: e.label, to: e.path, deeper: strip(pathname) !== front };
+  return { id: e.id || '', group: e.group || '', label: e.label, to: e.path, deeper: strip(pathname) !== front };
 }

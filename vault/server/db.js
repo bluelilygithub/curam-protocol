@@ -2809,6 +2809,19 @@ async function initSchema() {
   await pool.query(`ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS cache_read_tokens INTEGER NOT NULL DEFAULT 0`);
   await pool.query(`ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS cache_creation_tokens INTEGER NOT NULL DEFAULT 0`);
 
+  // Which parts of Vault get opened (Admin -> Which tools get used). Counts only: a section key (the nav id, e.g. 'notes'), a day and a number.
+  // Nothing about what was on the page. Used to decide which tools earn their place in the menu.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_visits (
+      "userId" INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      day      DATE NOT NULL,
+      key      TEXT NOT NULL,
+      visits   INTEGER NOT NULL DEFAULT 1,
+      PRIMARY KEY ("userId", day, key)
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_app_visits_day ON app_visits(day)`);
+
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_mood_checkins_user ON mood_checkins(user_id, created_at DESC)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_mood_checkins_entity ON mood_checkins(entity_type, entity_id)`);
 

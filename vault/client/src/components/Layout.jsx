@@ -304,6 +304,18 @@ function Layout() {
 
   const trail = trailForPath(location.pathname);
 
+  // Count one visit per section (not per page or click) so the admin can see which tools get used. At most one per section per 30 minutes; the
+  // server stores only the section id, the day and a number.
+  const lastVisit = useRef({ key: '', at: 0 });
+  useEffect(() => {
+    const key = trail?.id;
+    if (!key) return;
+    const now = Date.now();
+    if (lastVisit.current.key === key && now - lastVisit.current.at < 30 * 60 * 1000) return;
+    lastVisit.current = { key, at: now };
+    api.post('/api/app-visits', { key }).catch(() => {});
+  }, [trail?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // One quick link in the top bar. Name, path and icon come from TOP_BAR_LINKS; it lights up for the whole section (a note open, a settings tab).
   const renderTopBarLink = (l) => {
     const active = isNavItemActive(l, location.pathname, location.search);

@@ -159,6 +159,21 @@ router.get('/sentry-overview', async (_req, res) => {
   }
 });
 
+// GET /api/admin/app-usage?days=90 — per section: visits, people, days with a visit, last day. Sections never opened are absent (the page lists them from the menu).
+router.get('/app-usage', async (req, res) => {
+  const days = Math.min(365, Math.max(7, parseInt(req.query.days, 10) || 90));
+  try {
+    const { rows } = await pool.query(
+      `SELECT key, SUM(visits)::int AS visits, COUNT(DISTINCT "userId")::int AS people, COUNT(DISTINCT day)::int AS days, MAX(day)::text AS "lastDay"
+         FROM app_visits WHERE day >= CURRENT_DATE - $1::int GROUP BY key ORDER BY visits DESC`,
+      [days]
+    );
+    res.json({ days, items: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/admin/users
 router.get('/users', async (_req, res) => {
   try {

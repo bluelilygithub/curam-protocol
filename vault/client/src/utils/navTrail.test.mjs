@@ -13,7 +13,7 @@ assert.equal(isPathActive('/', '/'), true);
 assert.equal(isPathActive('/goals?section=mission', '/goals'), true, 'a query on the link is ignored here');
 
 const entries = [
-  { path: '/clients', label: 'CRM', group: 'Business' },
+  { id: 'clients', path: '/clients', label: 'CRM', group: 'Business' },
   { path: '/client-projects', label: 'Client work', group: 'Business' },
   { path: '/student/quiz', label: 'Student', group: 'Business', activeUnder: '/student' },
   { path: '/goals?section=mission', label: 'Mission' },
@@ -27,8 +27,8 @@ assert.equal(matchEntry('/goals', entries), null, 'links with a query never clai
 assert.equal(matchEntry('/', entries), null, 'the home page has no section');
 assert.equal(matchEntry('/nowhere', entries), null);
 
-assert.deepEqual(trailFor('/clients', entries), { group: 'Business', label: 'CRM', to: '/clients', deeper: false });
-assert.deepEqual(trailFor('/clients/12', entries), { group: 'Business', label: 'CRM', to: '/clients', deeper: true });
+assert.deepEqual(trailFor('/clients', entries), { id: 'clients', group: 'Business', label: 'CRM', to: '/clients', deeper: false });
+assert.deepEqual(trailFor('/clients/12', entries), { id: 'clients', group: 'Business', label: 'CRM', to: '/clients', deeper: true });
 assert.equal(trailFor('/student/cards', entries).deeper, true);
 assert.equal(trailFor('/student/quiz', entries).deeper, false);
 assert.equal(trailFor('/nowhere', entries), null);
