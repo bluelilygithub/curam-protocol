@@ -64,7 +64,11 @@ DEVICES[1].height = 1024;
  * Landscape swaps the two sizes, so a phone becomes 844 wide and 390 high. Portrait keeps the preview as tall as the window.
  * @returns {{width:number|null, height:number|null, canTurn:boolean}}
  */
-export function previewScreen(deviceId, orientation) {
+export function previewScreen(deviceId, orientation, model = null) {
+  // A chosen real device (or a typed size) fixes both sizes, upright or on its side; without one the standard tablet/phone/desktop sizes apply.
+  if (model && model.width && model.height) {
+    return orientation === 'landscape' ? { width: model.height, height: model.width, canTurn: true } : { width: model.width, height: model.height, canTurn: true };
+  }
   const d = DEVICES.find((x) => x.id === deviceId);
   if (!d || !d.width) return { width: null, height: null, canTurn: false };
   if (orientation === 'landscape') return { width: d.height, height: d.width, canTurn: true };

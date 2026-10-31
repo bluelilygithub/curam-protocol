@@ -79,6 +79,7 @@ export const APP_NAV_GROUPS = [
       { id: 'searchConsole', label: 'Search Console', path: '/search-console', icon: 'line-chart', featureKey: 'searchConsole', aliases: 'gsc google search queries' },
       { id: 'googleAds', label: 'Google Ads', path: '/google-ads', icon: 'megaphone', featureKey: 'googleAds', matchPrefix: true, aliases: 'adwords keywords rsa' },
       { id: 'domains', label: 'Domain', path: '/domains', icon: 'globe', featureKey: 'domains' },
+      { id: 'devicePreview', label: 'Device preview', path: '/device-preview', icon: 'smartphone', featureKey: 'restyle', aliases: 'responsive mobile phone tablet screen size ipad iphone' },
       { id: 'html', label: 'Page speed', path: '/html', icon: 'gauge', featureKey: 'html', matchPrefix: true, aliases: 'lighthouse pagespeed audit' },
       { id: 'webExtractor', label: 'Web Extractor', path: '/web-extractor', icon: 'scissors', featureKey: 'webExtractor' },
       { id: 'browserAgent', label: 'Browser Agent', path: '/browser-agent', icon: 'mouse-pointer', featureKey: 'browserAgent' },

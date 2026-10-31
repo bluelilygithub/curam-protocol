@@ -59,6 +59,7 @@ import BrowserAgentPage from './pages/BrowserAgentPage';
 import BrowserAgentArchivePage from './pages/BrowserAgentArchivePage';
 import BrowserAgentSettingsPage from './pages/BrowserAgentSettingsPage';
 import RestylePage from './pages/RestylePage';
+import DevicePreviewPage from './pages/DevicePreviewPage';
 import SearchConsolePage from './pages/SearchConsolePage';
 import WellbeingPage from './pages/WellbeingPage';
 import GmailIntelPage from './pages/GmailIntelPage';
@@ -228,6 +229,7 @@ function App() {
               <Route path="/browser-agent/archive" element={<BrowserAgentArchivePage />} />
               <Route path="/browser-agent/settings" element={<BrowserAgentSettingsPage />} />
               <Route path="/restyle" element={<RestylePage />} />
+              <Route path="/device-preview" element={<DevicePreviewPage />} />
               <Route path="/wellbeing" element={<WellbeingPage />} />
               <Route path="/gmail-intel" element={<GmailIntelPage />} />
               <Route path="/expense-review" element={<ExpenseReviewPage />} />

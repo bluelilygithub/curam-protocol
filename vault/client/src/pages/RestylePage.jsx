@@ -21,6 +21,7 @@ import { uniqueSelector, labelFor, scopeOptionsFor } from './restyle/selectors.m
 import * as H from './restyle/history.mjs';
 import { combineCss, fileNameFor, settingsJson, settingsMarkdown, sizeLabel, sourceLabel, topColours } from './restyle/scrapeModel.mjs';
 import { checkTextContrast, scanDocument } from './restyle/a11y.mjs';
+import { devicesOfKind, deviceById, customScreen, CUSTOM_LIMITS } from '../utils/deviceCatalog.mjs';
 import { DEMO_HTML, DEMO_CSS, OUTLINE_CSS, matchFontOption, normalizeWeight, parseLineHeight, scanCssAssets, TEXT_ALIGN_OPTIONS } from './restyle/pageHelpers.mjs';
 import {
   PagePanel, StylesPanel, BrandPanel, ChangesPanel, ChecksPanel, ExportPanel, SavedPanel, HistoryPanel, SharePanel,
@@ -99,6 +100,9 @@ export default function RestylePage() {
   const suppressControlEvents = useRef(false);
   const [device, setDevice] = useState('desktop');
   const [orientation, setOrientation] = useState('portrait'); // a phone or tablet held upright, or on its side
+  const [deviceModel, setDeviceModel] = useState('');   // '' = the standard size for the kind, a catalog id, or 'custom'
+  const [customW, setCustomW] = useState('480');
+  const [customH, setCustomH] = useState('800');
   const [ctrl, setCtrl] = useState(DEFAULT_CTRL);
   const [contrast, setContrast] = useState(null);
 
@@ -886,7 +890,8 @@ export default function RestylePage() {
     if (target) setTool(target.tool);
   };
 
-  const screen = previewScreen(device, orientation);
+  const modelScreen = deviceModel === 'custom' ? customScreen(customW, customH) : deviceById(deviceModel);
+  const screen = previewScreen(device, orientation, modelScreen);
   const deviceWidth = screen.width;
 
   const renderPanel = () => {
@@ -1015,10 +1020,31 @@ export default function RestylePage() {
                 <div className="flex" role="group" aria-label="Preview size">
                   {DEVICES.map((d, i) => (
                     <Tooltip key={d.id} text={d.tip}>
-                      <button type="button" onClick={() => setDevice(d.id)} aria-pressed={device === d.id} className="transition-opacity duration-200 hover:opacity-70" style={{ ...segment(device === d.id), borderRadius: i === 0 ? '8px 0 0 8px' : i === DEVICES.length - 1 ? '0 8px 8px 0' : 0 }}>{d.label}</button>
+                      <button type="button" onClick={() => { setDevice(d.id); setDeviceModel(''); }} aria-pressed={device === d.id} className="transition-opacity duration-200 hover:opacity-70" style={{ ...segment(device === d.id), borderRadius: i === 0 ? '8px 0 0 8px' : i === DEVICES.length - 1 ? '0 8px 8px 0' : 0 }}>{d.label}</button>
                     </Tooltip>
                   ))}
                 </div>
+                <Tooltip text={device === 'desktop' ? 'Pick a laptop or monitor size to check a page at that width.' : `Pick a real ${device} to see the page at its size, or type your own size.`}>
+                  <select
+                    aria-label="Choose a device"
+                    value={deviceModel}
+                    onChange={(e) => setDeviceModel(e.target.value)}
+                    className="h-8 rounded-lg border px-2 text-sm max-w-[16rem]"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    <option value="">{device === 'desktop' ? 'Full window' : 'Standard size'}</option>
+                    {devicesOfKind(device).map((d) => <option key={d.id} value={d.id}>{d.label} ({d.width} x {d.height})</option>)}
+                    <option value="custom">Custom size...</option>
+                  </select>
+                </Tooltip>
+                {deviceModel === 'custom' && (
+                  <span className="inline-flex items-center gap-1 text-sm" style={{ color: 'var(--color-muted)' }}>
+                    <input aria-label="Width in pixels" type="number" inputMode="numeric" min={CUSTOM_LIMITS.min} max={CUSTOM_LIMITS.max} value={customW} onChange={(e) => setCustomW(e.target.value)} className="h-8 w-20 rounded-lg border px-2 text-sm" style={{ background: 'var(--color-bg)', borderColor: modelScreen ? 'var(--color-border)' : '#ef4444', color: 'var(--color-text)' }} />
+                    x
+                    <input aria-label="Height in pixels" type="number" inputMode="numeric" min={CUSTOM_LIMITS.min} max={CUSTOM_LIMITS.max} value={customH} onChange={(e) => setCustomH(e.target.value)} className="h-8 w-20 rounded-lg border px-2 text-sm" style={{ background: 'var(--color-bg)', borderColor: modelScreen ? 'var(--color-border)' : '#ef4444', color: 'var(--color-text)' }} />
+                    px
+                  </span>
+                )}
                 <Tooltip text={screen.canTurn ? `Turn the ${device} on its side, or back upright. Now: ${orientation}.` : 'Choose Tablet or Phone first: a desktop window has no sides to turn.'}>
                   <button
                     type="button"
