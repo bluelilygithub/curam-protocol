@@ -276,9 +276,11 @@ Full reference: **`client/DESIGN.md`**. Cursor rule `.cursor/rules/vault-ui.mdc`
 
 **Theming:** Six CSS custom properties (`--color-bg`, `--color-surface`, `--color-border`, `--color-primary`, `--color-text`, `--color-muted`). ThemeProvider writes them to `<head>`. Use `var(--color-xxx)` inline, not Tailwind `dark:` classes. Warnings: hardcoded amber (`#f59e0b`). Errors: hardcoded red (`#ef4444`). Status colours are intentionally outside the theme system.
 
-**Default palette (warm-sand):** bg `#F5F5F0` · surface `#EEEEE8` · border `#D8D8D0` · primary `#CC785C` · text `#1A1A1A` · muted `#888888`
+**Default palette (warm-sand):** bg `#F5F5F0` · surface `#EEEEE8` · border `#D8D8D0` · primary `#CC785C` · text `#1A1A1A` · muted `#6A6A6A` (each theme's `muted` in `themes.js` is held at 4.5:1 or better on its bg and surface; keep it that way when adding a theme)
 
 **Layout:** Full-viewport flex row: sidebar + main (flex-1). Use `100dvh` with `100vh` fallback. Single responsive breakpoint: `sm` (640px). Sidebar has three states: **expanded** (user's saved width, 180–520px, default 240px) · **collapsed** (48px icon rail, desktop default on first load) · **hidden** (mobile only, fixed overlay). Desktop state persisted in `localStorage` key `vault:sidebarOpen`. `ProjectSidebar` receives `collapsed` prop from `Layout`; collapsed renders icon-only rail, full renders the complete project/session tree.
+
+**Accessibility baseline (`client/src/index.css`):** a global `:focus-visible` ring on buttons/links/tabbables, row actions written as `opacity-0 group-hover:opacity-*` are shown automatically on touch, on keyboard focus within the row, and when focused, `prefers-reduced-motion` is honoured (spinners keep turning), and `Toast` is a permanent `aria-live` region (errors `role="alert"`, 5 s default). Do not add `outline-none` without a visible replacement, and do not hide an action on hover alone without using these class names.
 
 **Hover:** Always `hover:opacity-60` or `hover:opacity-70`. Never colour-shift hover. Works across all themes without per-theme tokens.
 

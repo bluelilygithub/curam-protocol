@@ -5,10 +5,11 @@ import useToastStore from '../store/toastStore';
 export default function Toast() {
   const { toasts, removeToast } = useToastStore();
   const navigate = useNavigate();
-  if (!toasts.length) return null;
-
+  // The live region is always on the page (even with no toasts) so a screen reader announces a toast the moment it is added.
   return (
     <div
+      aria-live="polite"
+      aria-atomic="false"
       style={{
         position: 'fixed',
         bottom: '24px',
@@ -23,6 +24,7 @@ export default function Toast() {
       {toasts.map(t => (
         <div
           key={t.id}
+          role={t.type === 'error' ? 'alert' : 'status'}
           onClick={() => removeToast(t.id)}
           style={{
             pointerEvents: 'auto',
@@ -34,8 +36,8 @@ export default function Toast() {
             color: '#fff',
             background:
               t.type === 'error' ? '#dc2626' :
-              t.type === 'warn'  ? '#d97706' :
-              '#16a34a',
+              t.type === 'warn'  ? '#b45309' :
+              '#15803d', // darker than the usual green/amber so white text is 4.5:1 or better
             boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
             maxWidth: '320px',
             animation: 'toast-in 0.2s ease',
@@ -45,12 +47,13 @@ export default function Toast() {
           {t.action && (
             <>
               {' '}
-              <span
+              <button
+                type="button"
                 onClick={(e) => { e.stopPropagation(); removeToast(t.id); if (t.action.onClick) t.action.onClick(); else navigate(t.action.href); }}
-                style={{ textDecoration: 'underline', fontWeight: 700 }}
+                style={{ textDecoration: 'underline', fontWeight: 700, background: 'none', border: 'none', padding: 0, color: 'inherit', font: 'inherit', cursor: 'pointer' }}
               >
                 {t.action.label}
-              </span>
+              </button>
             </>
           )}
         </div>

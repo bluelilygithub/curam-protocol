@@ -9,7 +9,7 @@ const useToastStore = create((set) => ({
   // Longer duration when an action is present so there's time to click it.
   addToast: (message, type = 'success', duration, action) => {
     const id = ++_id;
-    const finalDuration = duration ?? (action ? 8000 : 3500);
+    const finalDuration = duration ?? (action ? 10000 : 5000); // long enough to read (WCAG 2.2.1)
     set(s => ({ toasts: [...s.toasts, { id, message, type, action }] }));
     setTimeout(() => set(s => ({ toasts: s.toasts.filter(t => t.id !== id) })), finalDuration);
   },

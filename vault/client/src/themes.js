@@ -1,3 +1,4 @@
+// `muted` is chosen to give at least 4.5:1 (WCAG AA for normal text) against both that theme's bg and surface.
 export const themes = {
   'warm-sand': {
     label: 'Warm Sand',
@@ -6,7 +7,7 @@ export const themes = {
     border: '#D8D8D0',
     primary: '#CC785C',
     text: '#1A1A1A',
-    muted: '#888888',
+    muted: '#6A6A6A',
   },
   'dark-slate': {
     label: 'Dark Slate',
@@ -15,7 +16,7 @@ export const themes = {
     border: '#2A2D3A',
     primary: '#7C8CF8',
     text: '#F0F0F0',
-    muted: '#666666',
+    muted: '#878787',
   },
   forest: {
     label: 'Forest',
@@ -24,7 +25,7 @@ export const themes = {
     border: '#C8D4C8',
     primary: '#3D7A5E',
     text: '#1A2A1A',
-    muted: '#777777',
+    muted: '#686868',
   },
   'midnight-blue': {
     label: 'Midnight Blue',
@@ -33,7 +34,7 @@ export const themes = {
     border: '#243D52',
     primary: '#5DADE2',
     text: '#EAF4FB',
-    muted: '#5A7080',
+    muted: '#8096A6',
   },
   'paper-white': {
     label: 'Paper White',
@@ -42,7 +43,7 @@ export const themes = {
     border: '#E0E0E0',
     primary: '#333333',
     text: '#111111',
-    muted: '#888888',
+    muted: '#707070',
   },
 };
 

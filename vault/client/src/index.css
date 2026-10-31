@@ -10,7 +10,7 @@
   --color-border: #D8D8D0;
   --color-primary: #CC785C;
   --color-text: #1A1A1A;
-  --color-muted: #888888;
+  --color-muted: #6A6A6A; /* 4.5:1+ on bg and surface; each theme sets its own in themes.js */
 }
 
 * { box-sizing: border-box; }
@@ -199,4 +199,52 @@ input[type="file"]::file-selector-button:hover { opacity: 0.7; }
 .wellbeing-page button[style*="#991b1b"]:not(:disabled):hover :where(span, p, h1, h2, h3, h4, h5, h6, div, svg),
 .wellbeing-page button[style*="#dc2626"]:not(:disabled):hover :where(span, p, h1, h2, h3, h4, h5, h6, div, svg) {
   color: #fff !important;
+}
+
+/* ── Accessibility baseline ─────────────────────────────────────────────── */
+
+/* A visible keyboard focus ring on anything that can be tabbed to. !important because many controls carry Tailwind's outline-none. */
+button:focus-visible,
+a[href]:focus-visible,
+summary:focus-visible,
+[role="button"]:focus-visible,
+[role="tab"]:focus-visible,
+[role="menuitem"]:focus-visible,
+[role="switch"]:focus-visible,
+[role="checkbox"]:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
+  outline: 2px solid var(--color-primary) !important;
+  outline-offset: 2px !important;
+}
+select:focus-visible,
+input[type="checkbox"]:focus-visible,
+input[type="radio"]:focus-visible,
+input[type="range"]:focus-visible,
+input[type="file"]:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Row actions revealed only on mouse hover (opacity-0 group-hover:opacity-*) are also shown on touch screens, when anything inside
+   the row has keyboard focus, and when the control itself is focused. Covers plain `group` and the named groups used here. */
+@media (hover: none) {
+  [class*="opacity-0"][class*="group-hover"] { opacity: 1 !important; }
+}
+.group:focus-within [class*="opacity-0"][class*="group-hover"],
+[class~="group/att"]:focus-within [class*="opacity-0"][class*="group-hover"],
+[class~="group/comment"]:focus-within [class*="opacity-0"][class*="group-hover"],
+[class*="opacity-0"][class*="group-hover"]:focus-visible {
+  opacity: 1 !important;
+}
+
+/* Respect the operating system's "reduce motion" setting. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* A spinner is the only sign that something is still working, so it keeps turning. */
+  .animate-spin { animation-duration: 1s !important; animation-iteration-count: infinite !important; }
 }
