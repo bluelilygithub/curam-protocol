@@ -1,17 +1,13 @@
 import { useEffect } from 'react';
 import { useIcon } from '../providers/IconProvider';
+import useDialogBehavior from '../hooks/useDialogBehavior';
 
 export const INFO_SEEN_KEY = 'vault_browser_agent_info_seen';
 
 // Mirrors CrmInfoModal.jsx's pattern (info icon in the header, auto-shows once
 // per browser, always reachable again via that icon).
 export default function BrowserAgentInfoModal({ onClose }) {
-  useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
-
+  const panelRef = useDialogBehavior({ onClose });
   const getIcon = useIcon();
 
   return (
@@ -21,6 +17,10 @@ export default function BrowserAgentInfoModal({ onClose }) {
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="How this works"
         className="w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden"
         style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
       >

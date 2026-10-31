@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../utils/apiClient';
+import useDialogBehavior from '../hooks/useDialogBehavior';
 
 function NewProjectModal({ onClose, onCreate }) {
+  const panelRef = useDialogBehavior({ onClose });
   const [name, setName] = useState('');
   const [goal, setGoal] = useState('');
   const [clientId, setClientId] = useState('');
@@ -39,6 +41,10 @@ function NewProjectModal({ onClose, onCreate }) {
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="New project"
         className="w-full max-w-md rounded-2xl shadow-2xl"
         style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', maxHeight: '90vh', overflowY: 'auto' }}
       >

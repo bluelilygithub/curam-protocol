@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useIcon } from '../providers/IconProvider';
+import useDialogBehavior from '../hooks/useDialogBehavior';
 
 export const INFO_SEEN_KEY = 'vault_crm_client_info_seen';
 
@@ -7,12 +8,7 @@ export const INFO_SEEN_KEY = 'vault_crm_client_info_seen';
 // instead of sparkles, since Summarize already uses sparkles on this page) —
 // auto-shows once per browser, always reachable via the header (i) button.
 export default function CrmInfoModal({ onClose }) {
-  useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
-
+  const panelRef = useDialogBehavior({ onClose });
   const getIcon = useIcon();
 
   return (
@@ -22,6 +18,10 @@ export default function CrmInfoModal({ onClose }) {
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="How this works"
         className="w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden"
         style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
       >

@@ -120,7 +120,7 @@ Copy patterns from these before improvising:
 
 - **Settings-style page:** `pages/SettingsPage.jsx`
 - **Simple content page:** `pages/MemoryPage.jsx`
-- **Modal:** `components/ConfirmModal.jsx`
+- **Modal:** `components/Dialog.jsx` (new modals); `components/ConfirmModal.jsx` for confirms
 - **Toolbar:** `components/PageToolbar.jsx`
 
 ---

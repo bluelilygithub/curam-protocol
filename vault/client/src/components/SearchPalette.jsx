@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSearch } from '../hooks/useSearch';
+import Dialog from './Dialog';
 import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
 import api from '../utils/apiClient';
@@ -21,7 +22,6 @@ function SearchPalette() {
   const { results, loading, search, clear } = useSearch();
   const inputRef = useRef(null);
   const listRef = useRef(null);
-  const returnFocusRef = useRef(null);
   const navigate = useNavigate();
   const getIcon = useIcon();
   const token = useAuthStore((s) => s.token);
@@ -34,8 +34,6 @@ function SearchPalette() {
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && String(e.key).toLowerCase() === 'k') {
         e.preventDefault();
         setOpen((o) => !o);
-      } else if (e.key === 'Escape') {
-        setOpen(false);
       }
     };
     document.addEventListener('keydown', handler);
@@ -48,7 +46,6 @@ function SearchPalette() {
 
   useEffect(() => {
     if (open) {
-      returnFocusRef.current = document.activeElement;
       setRecents(readRecents(window.localStorage));
       api.get('/api/settings/feature-access')
         .then((r) => (r.ok ? r.json() : { flags: {} }))
@@ -60,7 +57,6 @@ function SearchPalette() {
     setQuery('');
     clear();
     setSelectedIdx(0);
-    try { returnFocusRef.current?.focus?.(); } catch (_) { /* element gone */ }
     return undefined;
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -111,8 +107,6 @@ function SearchPalette() {
     } else if (e.key === 'Enter') {
       e.preventDefault();
       choose(flat[selectedIdx]);
-    } else if (e.key === 'Tab') {
-      e.preventDefault(); // the box is the only stop; arrows move through the results
     }
   };
 
@@ -123,18 +117,7 @@ function SearchPalette() {
   let optionIndex = -1;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 px-4"
-      style={{ background: 'rgba(0,0,0,0.5)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Search and commands"
-        className="w-full max-w-xl rounded-xl border shadow-2xl overflow-hidden"
-        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-      >
+    <Dialog bare size="xl" surface="surface" position="top" label="Search and commands" onClose={() => setOpen(false)}>
         <div className="flex items-center gap-3 px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
           {getIcon('search', { size: 18, style: { color: 'var(--color-muted)', flexShrink: 0 } })}
           <input
@@ -210,8 +193,7 @@ function SearchPalette() {
         <div className="sr-only" role="status" aria-live="polite">
           {searching ? 'Searching' : q ? `${flat.length} results` : ''}
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }
 

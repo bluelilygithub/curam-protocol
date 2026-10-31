@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
+import useDialogBehavior from '../hooks/useDialogBehavior';
 
 function EmailModal({ sessionId, studyDeckId, onClose, defaultSubject = 'Chat Export' }) {
+  const panelRef = useDialogBehavior({ onClose });
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState(defaultSubject);
   useEffect(() => {
@@ -40,6 +42,10 @@ function EmailModal({ sessionId, studyDeckId, onClose, defaultSubject = 'Chat Ex
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Email"
         className="w-full max-w-md rounded-xl border shadow-2xl p-6"
         style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
       >

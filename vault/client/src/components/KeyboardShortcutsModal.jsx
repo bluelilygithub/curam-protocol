@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { X } from 'lucide-react';
+import React from 'react';
+import Dialog from './Dialog';
 
 const SHORTCUTS = [
   { keys: ['⌘', 'K'], desc: 'Open search' },
@@ -12,29 +12,9 @@ const SHORTCUTS = [
 ];
 
 function KeyboardShortcutsModal({ onClose }) {
-  useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        className="w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden"
-        style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
-      >
-        <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Keyboard Shortcuts</h2>
-          <button onClick={onClose} className="hover:opacity-60 transition-opacity" style={{ color: 'var(--color-muted)' }}>
-            <X size={16} />
-          </button>
-        </div>
-        <div className="px-5 py-4 space-y-3">
+    <Dialog title="Keyboard Shortcuts" size="sm" onClose={onClose}>
+        <div className="space-y-3">
           {SHORTCUTS.map((s, i) => (
             <div key={i} className="flex items-center justify-between">
               <span className="text-sm" style={{ color: 'var(--color-text)' }}>{s.desc}</span>
@@ -52,7 +32,7 @@ function KeyboardShortcutsModal({ onClose }) {
             </div>
           ))}
         </div>
-        <div className="px-5 py-4 border-t" style={{ borderColor: 'var(--color-border)' }}>
+        <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--color-border)' }}>
           <p className="text-xs font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Leaving a chat without a reply</p>
           <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
             Nothing is sent until you press <kbd className="font-mono">Enter</kbd> (or Send), so you can walk away from a chat at any
@@ -60,8 +40,7 @@ function KeyboardShortcutsModal({ onClose }) {
             and no reply is requested. If a reply is already on its way, the Stop button cancels it.
           </p>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }
 
