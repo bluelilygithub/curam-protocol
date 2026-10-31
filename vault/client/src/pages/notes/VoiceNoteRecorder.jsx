@@ -10,6 +10,7 @@ import {
   STYLE_CHOICES, KEEP_CHOICES, readPrefs, savePrefs, describeRecovered, describePrefs,
 } from './voiceNoteUtils.mjs';
 import * as recovery from './voiceRecovery';
+import DialogGuard from '../../components/DialogGuard';
 
 /**
  * "New voice note": record from the microphone, then the words are written into a new note. The recording is turned into text on the
@@ -281,6 +282,7 @@ export default function VoiceNoteRecorder({ onClose, onCreated, mobile = false }
 
   return (
     <div className={`fixed inset-0 flex ${mobile ? 'items-end' : 'items-center'} justify-center z-50 ${mobile ? '' : 'p-4'}`} style={{ background: 'rgba(0,0,0,0.4)' }}>
+      <DialogGuard />
       <div
         className={`${mobile ? 'rounded-t-2xl' : 'rounded-2xl'} p-5 sm:p-6 max-w-md w-full shadow-xl space-y-4 max-h-full overflow-y-auto`}
         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', paddingBottom: mobile ? 'max(20px, env(safe-area-inset-bottom))' : undefined }}

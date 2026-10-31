@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useIcon } from '../../providers/IconProvider';
 import { ExerciseDetail } from './LibraryView';
+import DialogGuard from '../../components/DialogGuard';
 
 /**
  * An exercise explained in a window over whatever you were looking at, so closing it puts you straight back where you were.
@@ -27,6 +28,7 @@ export default function ExerciseModal({ slug, onClose, onOpen, onHiddenChange })
       style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
+      <DialogGuard />
       <div
         ref={panel}
         role="dialog"

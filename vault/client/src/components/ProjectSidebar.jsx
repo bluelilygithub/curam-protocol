@@ -9,6 +9,7 @@ import { openNewChatModal } from '../utils/openNewChatModal';
 import { loadSessionById } from '../utils/chatNavigation';
 import ChatListPanel from './ChatListPanel';
 import OverflowMenu from './OverflowMenu';
+import DialogGuard from './DialogGuard';
 
 const UNASSIGNED_ID = 'unassigned';
 const COLLECTION_COLOR = '#5B7C99';
@@ -322,6 +323,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
 
       {archiveTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <DialogGuard />
           <div className="w-full max-w-sm mx-4 rounded-2xl border shadow-xl p-6" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
             <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Archive "{archiveTarget.name}"?</h3>
             <p className="text-xs mb-5" style={{ color: 'var(--color-muted)' }}>
@@ -347,6 +349,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
 
       {moveProjectTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <DialogGuard />
           <div className="w-full max-w-sm mx-4 rounded-2xl border shadow-xl p-6" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
             <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Move to collection</h3>
             <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
@@ -396,6 +399,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
 
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <DialogGuard />
           <div className="w-full max-w-sm mx-4 rounded-2xl border shadow-xl p-6" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
             <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Delete "{deleteTarget.name}"?</h3>
             <p className="text-xs mb-5" style={{ color: 'var(--color-muted)' }}>
@@ -422,6 +426,7 @@ function ProjectSidebar({ onClose, showClientContext = false, collapsed = false 
 
       {deleteFolderTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <DialogGuard />
           <div className="w-full max-w-sm mx-4 rounded-2xl border shadow-xl p-6" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
             <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Delete collection "{deleteFolderTarget.name}"?</h3>
             <p className="text-xs mb-5" style={{ color: 'var(--color-muted)' }}>

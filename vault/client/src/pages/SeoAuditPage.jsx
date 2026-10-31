@@ -8,6 +8,7 @@ import useProcessingStore from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { formatRunDate, formatSeoCampaignBrief, seoBriefFilename } from '../utils/seoCampaignBrief';
 import Tooltip from '../components/Tooltip';
+import DialogGuard from '../components/DialogGuard';
 
 const TOOL_HELP = {
   title: 'SEO',
@@ -30,6 +31,7 @@ function HelpModal({ onClose }) {
       style={{ background: 'rgba(0,0,0,0.4)' }}
       onClick={onClose}
     >
+      <DialogGuard />
       <div
         className="rounded-xl p-6 max-w-md w-full mx-4 shadow-xl"
         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}

@@ -4,6 +4,7 @@ import EmotionWheel from './EmotionWheel';
 import useToastStore from '../../store/toastStore';
 import { useVoice } from '../../hooks/useVoice';
 import { useIcon } from '../../providers/IconProvider';
+import DialogGuard from '../DialogGuard';
 
 const BODY_LOCATIONS = ['Head', 'Chest', 'Throat', 'Stomach', 'Shoulders', 'Arms', 'Hands', 'Legs', 'Whole body'];
 const BODY_QUALITIES  = ['Tight', 'Heavy', 'Light', 'Fluttery', 'Hot', 'Cold', 'Hollow', 'Numb', 'Racing', 'Aching', 'Expansive', 'Buzzing'];
@@ -350,6 +351,7 @@ export default function InquirySession({ onClose, onComplete }) {
       style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)' }}
       onClick={(e) => { if (e.target === e.currentTarget) handleCloseAttempt(); }}
     >
+      <DialogGuard />
       <div
         className="w-full max-w-xl rounded-2xl border shadow-2xl flex flex-col"
         style={{

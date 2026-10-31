@@ -7,6 +7,7 @@ import useToastStore from '../store/toastStore';
 import { useIcon } from '../providers/IconProvider';
 import CrmTutorChat from './crm/CrmTutorChat';
 import ShelfInboxModal from './crm/ShelfInboxModal';
+import DialogGuard from '../components/DialogGuard';
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
 
@@ -197,6 +198,7 @@ function ClientModal({ client, onClose, onSaved }) {
       style={{ background: 'rgba(0,0,0,0.5)' }}
       onClick={onClose}
     >
+      <DialogGuard />
       <div
         className="relative w-full max-w-lg rounded-xl shadow-xl overflow-y-auto"
         style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', maxHeight: '88vh' }}

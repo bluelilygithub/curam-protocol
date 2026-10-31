@@ -8,6 +8,7 @@ import { useModels } from '../hooks/useModels';
 import { getModelShortName } from '../utils/models';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import DocumentRedactionCompare from '../components/DocumentRedactionCompare';
+import DialogGuard from '../components/DialogGuard';
 
 const LAST_JOB_KEY = 'vault:documentRedaction:lastJobId';
 const FIELD = {
@@ -1535,6 +1536,7 @@ export default function DocumentRedactionPage() {
           role="dialog"
           aria-modal="true"
         >
+          <DialogGuard />
           <div
             className="w-full max-w-2xl max-h-[90dvh] overflow-auto rounded-2xl border shadow-2xl p-5 space-y-4"
             style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}

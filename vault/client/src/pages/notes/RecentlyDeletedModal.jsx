@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useIcon } from '../../providers/IconProvider';
 import RecycleBinPanel from '../../components/RecycleBinPanel';
+import DialogGuard from '../../components/DialogGuard';
 
 /** Notes' window onto the shared recycle bin: only notes, note templates and saved views, so it stays about Notes. Everything else is in Settings. */
 export default function RecentlyDeletedModal({ mobile, onRestored, onClose }) {
@@ -13,6 +14,7 @@ export default function RecentlyDeletedModal({ mobile, onRestored, onClose }) {
 
   return (
     <div className={`fixed inset-0 z-50 flex ${mobile ? 'items-end' : 'items-center'} justify-center`} style={{ background: 'rgba(0,0,0,0.4)' }} onClick={onClose}>
+      <DialogGuard />
       <div
         className={`w-full max-w-lg flex flex-col shadow-xl ${mobile ? 'rounded-t-2xl' : 'rounded-2xl m-4'}`}
         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', maxHeight: '85dvh', paddingBottom: mobile ? 'max(16px, env(safe-area-inset-bottom))' : undefined }}

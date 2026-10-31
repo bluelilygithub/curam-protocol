@@ -76,6 +76,7 @@ import {
   CashFlowTimeline,
   FundingAlertBanner,
 } from '../components/propertyScenario/PropertyScenarioViews';
+import DialogGuard from '../components/DialogGuard';
 
 const TABS = [
   { id: 'overview', label: 'Scenario' },
@@ -3883,6 +3884,7 @@ function AgentPurposeModal({ agent, onClose, getIcon }) {
       aria-modal="true"
       aria-labelledby="agent-purpose-title"
     >
+      <DialogGuard />
       <div
         className="relative flex flex-col rounded-2xl border shadow-2xl mx-4 overflow-hidden"
         style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '100%', maxWidth: 520, maxHeight: '85dvh' }}
@@ -3966,6 +3968,7 @@ function PropertyScenarioHelp({ onClose, getIcon }) {
       style={{ background: 'rgba(0,0,0,0.45)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
+      <DialogGuard />
       <div
         className="relative flex flex-col rounded-2xl border shadow-2xl mx-4 overflow-hidden"
         style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '100%', maxWidth: 760, maxHeight: '90dvh' }}

@@ -12,6 +12,7 @@ import { useIcon } from '../providers/IconProvider';
 import useProcessingStore from '../store/processingStore';
 import ExtraReport, { EXTRA_REPORTS, REPORT_GROUPS } from './finance/ExtraReports';
 import StatementReview from './finance/StatementReview';
+import DialogGuard from '../components/DialogGuard';
 
 // ── Per-tab help (TOOL_HELP + HelpModal) ────────────────────────────────────────
 // Mirrors the HtmlAuditPage / SeoAuditPage TOOL_HELP + click-to-open HelpModal pattern,
@@ -218,6 +219,7 @@ function FinanceHelpModal({ tab, onClose }) {
       style={{ background: 'rgba(0,0,0,0.4)' }}
       onClick={onClose}
     >
+      <DialogGuard />
       <div
         className="rounded-xl p-6 max-w-md w-full mx-4 shadow-xl"
         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
@@ -293,6 +295,7 @@ function Modal({ title, onClose, children, wide }) {
       style={{ background: 'rgba(0,0,0,0.5)' }}
       onClick={onClose}
     >
+      <DialogGuard />
       <div
         className={`relative w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} rounded-xl shadow-xl overflow-y-auto`}
         style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', maxHeight: '85vh' }}
@@ -4061,6 +4064,7 @@ function BASStatusBar({ status }) {
 function WarningsModal({ warnings, unpaidInvoices, onProceed, onCancel }) {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
+      <DialogGuard />
       <div className="relative w-full max-w-lg rounded-xl shadow-xl overflow-y-auto" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', maxHeight: '85vh' }}>
         <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
           <span style={{ color: '#f59e0b' }}>⚠</span>
@@ -5844,6 +5848,7 @@ function RecurringTab() {
       {/* Create / Edit modal */}
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.4)' }}>
+          <DialogGuard />
           <div className="w-full max-w-xl rounded-2xl shadow-2xl overflow-y-auto max-h-[90vh]" style={{ background: 'var(--color-surface)' }}>
             <div className="p-6 border-b" style={{ borderColor: 'var(--color-border)' }}>
               <h3 className="font-semibold" style={{ color: 'var(--color-text)' }}>{modal === 'edit' ? 'Edit' : 'New'} Recurring Schedule</h3>
@@ -5936,6 +5941,7 @@ function RecurringTab() {
       {/* Delete confirm */}
       {confirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.4)' }}>
+          <DialogGuard />
           <div className="rounded-2xl p-6 shadow-2xl max-w-sm w-full" style={{ background: 'var(--color-surface)' }}>
             <p className="font-medium mb-4" style={{ color: 'var(--color-text)' }}>Delete this recurring schedule?</p>
             <div className="flex gap-3 justify-end">

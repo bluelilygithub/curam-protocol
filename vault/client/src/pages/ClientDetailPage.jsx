@@ -14,6 +14,7 @@ import CrmInfoModal, { INFO_SEEN_KEY as CRM_INFO_SEEN_KEY } from '../components/
 import { useLinkedResearch, ResearchList } from '../components/LinkedResearch';
 import { useLinkedEmailFollowUp, EmailFollowUpList } from '../components/LinkedEmailFollowUp';
 import CrmTutorChat from './crm/CrmTutorChat';
+import DialogGuard from '../components/DialogGuard';
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
 
@@ -254,6 +255,7 @@ function EditModal({ client, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
+      <DialogGuard />
       <div className="relative w-full max-w-lg rounded-xl shadow-xl overflow-y-auto" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', maxHeight: '88vh' }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
           <span className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>Edit client</span>
@@ -2420,6 +2422,7 @@ function EmailThreadModal({ threadId, subject, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
+      <DialogGuard />
       <div className="relative w-full max-w-2xl rounded-xl shadow-xl overflow-y-auto" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
           <span className="font-semibold text-sm truncate pr-3" style={{ color: 'var(--color-text)' }}>{subject || '(no subject)'}</span>

@@ -5,6 +5,7 @@ import Tooltip from '../../components/Tooltip';
 import { NOTE_TIPS } from './noteTips.mjs';
 import { diffLines, diffStats, collapse } from './noteDiff.mjs';
 import { STYLE_CHOICES, readPrefs } from './voiceNoteUtils.mjs';
+import DialogGuard from '../../components/DialogGuard';
 
 /**
  * "Write this voice note up another way": the recording is not needed again, because the words that were said are kept at the bottom of the note.
@@ -44,6 +45,7 @@ export default function VoiceRewritePanel({ noteId, currentTitle, currentBody, m
 
   return (
     <div className={`fixed inset-0 flex ${mobile ? 'items-end' : 'items-center'} justify-center z-50 ${mobile ? '' : 'p-4'}`} style={{ background: 'rgba(0,0,0,0.4)' }}>
+      <DialogGuard />
       <div
         className={`${mobile ? 'rounded-t-2xl' : 'rounded-2xl'} w-full ${mobile ? '' : 'max-w-2xl'} shadow-xl flex flex-col`}
         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', maxHeight: mobile ? '92dvh' : '80vh', paddingBottom: mobile ? 'env(safe-area-inset-bottom)' : undefined }}

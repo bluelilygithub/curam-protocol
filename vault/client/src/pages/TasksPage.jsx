@@ -17,6 +17,7 @@ import { parseNaturalDate, formatDateForInput, toISOForAPI } from '../utils/pars
 import AttachmentChip from '../components/AttachmentChip';
 import { startTasksTour, TOUR_KEY as TASKS_TOUR_KEY } from '../utils/tours/tasksTour';
 import PageToolbar from '../components/PageToolbar';
+import DialogGuard from '../components/DialogGuard';
 
 const PRIORITY_COLOR = { high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
 const PRIORITY_LABEL = { high: 'High', medium: 'Medium', low: 'Low' };
@@ -118,6 +119,7 @@ function TaskShortcutsModal({ onClose }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <DialogGuard />
       <div className="w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden"
         style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
         <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
@@ -188,6 +190,7 @@ function MatrixMoveModal({ task, fromQuadrant, toQuadrant, onConfirm, onCancel }
       style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
     >
+      <DialogGuard />
       <div
         className="w-full max-w-sm rounded-2xl border shadow-2xl p-6 space-y-4"
         style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
@@ -2082,6 +2085,7 @@ export default function TasksPage() {
           style={{ background: 'rgba(0,0,0,0.55)' }}
           onClick={(e) => { if (e.target === e.currentTarget) setRecurringDeleteModal(null); }}
         >
+          <DialogGuard />
           <div
             className="w-full max-w-sm rounded-2xl border p-6 space-y-4"
             style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
@@ -2567,6 +2571,7 @@ export default function TasksPage() {
       {/* Task form modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <DialogGuard />
           <div className="w-full max-w-lg rounded-2xl border shadow-xl overflow-hidden" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
             <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
               <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{editTask ? 'Edit Task' : 'New Task'}</h2>

@@ -6,6 +6,7 @@ import useProcessingStore from '../store/processingStore';
 import { useIcon } from '../providers/IconProvider';
 import { LANGUAGES, orderLanguages, languageOptionLabel } from '../utils/translateLanguages';
 import { pickPdfFontUrl, needsNotoFont } from '../utils/translatePdfFonts.mjs';
+import DialogGuard from '../components/DialogGuard';
 
 // Deployed commit shown on QA/Lessons-learnt reports so a stale build is checkable at a glance
 // instead of re-testing a fix against a report that never actually deployed — see /api/health.
@@ -90,6 +91,7 @@ function Modal({ title, onClose, children, wide }) {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4"
       style={{ background: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
+      <DialogGuard />
       <div
         className={`relative w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} rounded-xl shadow-xl overflow-y-auto`}
         style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', maxHeight: '85vh' }}
@@ -2478,6 +2480,7 @@ function TranslateAboutModal({ onClose, getIcon }) {
       aria-modal="true"
       aria-labelledby="translate-about-title"
     >
+      <DialogGuard />
       <div
         className="relative flex flex-col rounded-2xl border shadow-2xl mx-4 overflow-hidden"
         style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '100%', maxWidth: 560, maxHeight: '85dvh' }}

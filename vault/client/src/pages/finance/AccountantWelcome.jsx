@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useIcon } from '../../providers/IconProvider';
+import DialogGuard from '../../components/DialogGuard';
 
 export const ACCOUNTANT_WELCOME_SEEN_KEY = 'vault_finance_accountant_welcome_seen';
 
@@ -38,6 +39,7 @@ export default function AccountantWelcome({ onClose, onOpenTab, ownerEmail }) {
       style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
+      <DialogGuard />
       <div
         className="w-full max-w-2xl max-h-[92dvh] flex flex-col rounded-2xl shadow-2xl overflow-hidden"
         style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}

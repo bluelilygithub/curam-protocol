@@ -7,6 +7,7 @@ import useProjectStore from '../store/projectStore';
 import { formatSessionLabel, formatSessionLocation } from '../utils/sessionDisplay';
 import { openNewChatModal } from '../utils/openNewChatModal';
 import RecycleBinPanel from '../components/RecycleBinPanel';
+import DialogGuard from '../components/DialogGuard';
 
 function getPeriodDates(key) {
   const now = new Date();
@@ -718,6 +719,7 @@ export default function ChatHistoryPage() {
 
       {moveSessionTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <DialogGuard />
           <div className="w-full max-w-sm mx-4 rounded-2xl border shadow-xl p-6" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
             <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Move chat to project</h3>
             <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>

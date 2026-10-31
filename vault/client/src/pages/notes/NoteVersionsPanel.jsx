@@ -5,6 +5,7 @@ import Tooltip from '../../components/Tooltip';
 import { NOTE_TIPS } from './noteTips.mjs';
 import { diffLines, diffStats, collapse } from './noteDiff.mjs';
 import { describeWhen, describeReason, describeSize, describeLength } from './noteVersions.mjs';
+import DialogGuard from '../../components/DialogGuard';
 
 /**
  * "Earlier versions" of the open note: what it said at earlier times, how each differs from now, and a button to put one back. The note is saved
@@ -61,6 +62,7 @@ export default function NoteVersionsPanel({ noteId, currentTitle, currentBody, m
 
   return (
     <div className={`fixed inset-0 flex ${mobile ? 'items-end' : 'items-center'} justify-center z-50 ${mobile ? '' : 'p-4'}`} style={{ background: 'rgba(0,0,0,0.4)' }}>
+      <DialogGuard />
       <div
         className={`${mobile ? 'rounded-t-2xl' : 'rounded-2xl'} w-full ${mobile ? '' : 'max-w-3xl'} shadow-xl flex flex-col`}
         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', maxHeight: mobile ? '92dvh' : '80vh', paddingBottom: mobile ? 'env(safe-area-inset-bottom)' : undefined }}

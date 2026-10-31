@@ -23,6 +23,7 @@ import ClipTimeline from './videos/ClipTimeline';
 import TutorChat from './videos/TutorChat';
 import { parseClock, formatClock } from './videos/clock.mjs';
 import { describeFit } from './videos/replaceCheck.mjs';
+import DialogGuard from '../components/DialogGuard';
 
 const VIDEO_GOOGLE_FONTS = [
   'Roboto',
@@ -5540,6 +5541,7 @@ export default function VideosPage() {
           style={{ background: 'rgba(0,0,0,0.4)' }}
           onClick={() => setHelpTool(null)}
         >
+          <DialogGuard />
           <div
             className="rounded-2xl p-6 max-w-md w-full shadow-xl"
             style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', border: '1px solid' }}
@@ -5575,6 +5577,7 @@ export default function VideosPage() {
           style={{ background: 'rgba(0,0,0,0.4)' }}
           onClick={() => setProviderInfoOpen(false)}
         >
+          <DialogGuard />
           <div
             className="rounded-2xl p-6 max-w-md w-full shadow-xl"
             style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', border: '1px solid' }}

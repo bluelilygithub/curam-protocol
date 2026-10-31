@@ -12,6 +12,7 @@ import { BeforeAfter, readFileAsDataUrl } from './graphics/shared';
 import { GoalStart, GoalBar } from './graphics/GoalStart';
 import { HistoryPanel, HistoryRecorder } from './graphics/HistoryPanel';
 import { historyEnabled, addHistory, makeThumb } from './graphics/historyStore.mjs';
+import DialogGuard from '../components/DialogGuard';
 
 const MODES = [
   { id: 'generate', label: 'Generate', icon: 'sparkles' },
@@ -963,6 +964,7 @@ export default function GraphicsPage() {
                 style={{ background: 'rgba(0,0,0,0.72)' }}
                 onClick={() => setPreviewImage(null)}
               >
+                <DialogGuard />
                 <div
                   className="w-full max-w-4xl max-h-full rounded-2xl border overflow-hidden shadow-xl"
                   style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
@@ -1020,6 +1022,7 @@ export default function GraphicsPage() {
                 style={{ background: 'rgba(0,0,0,0.55)' }}
                 onClick={() => setBrandKitOpen(false)}
               >
+                <DialogGuard />
                 <div
                   className="w-full max-w-md rounded-2xl border shadow-xl overflow-hidden"
                   style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
@@ -1106,6 +1109,7 @@ export default function GraphicsPage() {
                 style={{ background: 'rgba(0,0,0,0.55)' }}
                 onClick={() => setHelpTool(null)}
               >
+                <DialogGuard />
                 <div
                   className="w-full max-w-md rounded-2xl border shadow-xl overflow-hidden"
                   style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}

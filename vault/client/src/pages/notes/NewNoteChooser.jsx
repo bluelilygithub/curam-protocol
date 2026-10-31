@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useIcon } from '../../providers/IconProvider';
+import DialogGuard from '../../components/DialogGuard';
 
 /**
  * What the + on the Notes list opens: a new note, written or spoken. "Write a note" opens the editor, where the title and the text are
@@ -41,6 +42,7 @@ export default function NewNoteChooser({ onWrite, onVoice, onTalk, onTemplate, o
       style={{ background: 'rgba(0,0,0,0.4)' }}
       onClick={onClose}
     >
+      <DialogGuard />
       <div
         className={`w-full max-w-md p-5 space-y-3 shadow-xl ${mobile ? 'rounded-t-2xl' : 'rounded-2xl m-4'}`}
         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', paddingBottom: mobile ? 'max(20px, env(safe-area-inset-bottom))' : undefined }}

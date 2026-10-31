@@ -6,6 +6,7 @@ import useAuthStore from '../store/authStore';
 import { relativeTime } from '../utils/relativeTime';
 import UsersAdminPanel from '../components/UsersAdminPanel';
 import SettingsTutorChat from './settings/SettingsTutorChat';
+import DialogGuard from '../components/DialogGuard';
 
 // ── Stats helpers ─────────────────────────────────────────────────────────────
 
@@ -1138,6 +1139,7 @@ function AdminPage() {
           style={{ background: 'rgba(0,0,0,0.6)' }}
           onClick={(e) => { if (e.target === e.currentTarget && !restoreRunning) setRestoreTarget(null); }}
         >
+          <DialogGuard />
           <div className="w-full max-w-md rounded-2xl border p-6 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
             <div>
               <p className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Restore from backup</p>

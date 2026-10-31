@@ -3,6 +3,7 @@ import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
 import { NOTE_TIPS } from './noteTips.mjs';
 import { BUILT_IN_TEMPLATES } from './noteTemplates.mjs';
+import DialogGuard from '../../components/DialogGuard';
 
 /**
  * "New note from a template": the built-in ones, the person's own, and (when a note is open) a way to save that note as a template.
@@ -45,6 +46,7 @@ export default function TemplatePicker({ templates, mobile, canSave, onUse, onSa
 
   return (
     <div className={`fixed inset-0 z-50 flex ${mobile ? 'items-end' : 'items-center'} justify-center`} style={{ background: 'rgba(0,0,0,0.4)' }} onClick={onClose}>
+      <DialogGuard />
       <div
         className={`w-full max-w-md flex flex-col shadow-xl ${mobile ? 'rounded-t-2xl' : 'rounded-2xl m-4'}`}
         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', maxHeight: '85dvh', paddingBottom: mobile ? 'max(16px, env(safe-area-inset-bottom))' : undefined }}

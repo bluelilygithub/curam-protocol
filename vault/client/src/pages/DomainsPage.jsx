@@ -3,6 +3,7 @@ import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
 import useProcessingStore from '../store/processingStore';
 import Tooltip from '../components/Tooltip';
+import DialogGuard from '../components/DialogGuard';
 
 // ── Tool metadata ─────────────────────────────────────────────────────────────
 
@@ -77,6 +78,7 @@ function HelpModal({ tool, onClose }) {
       style={{ background: 'rgba(0,0,0,0.4)' }}
       onClick={onClose}
     >
+      <DialogGuard />
       <div
         className="rounded-xl p-6 max-w-md w-full mx-4 shadow-xl"
         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}

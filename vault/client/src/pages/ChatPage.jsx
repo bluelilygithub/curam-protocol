@@ -32,6 +32,7 @@ import { formatSessionLabel } from '../utils/sessionDisplay';
 import { openRecentSession } from '../utils/chatNavigation';
 import { offerUndo } from '../utils/binUndo';
 import { replyToNote, chatToNote } from '../utils/chatToNote.mjs';
+import DialogGuard from '../components/DialogGuard';
 
 const EMOTION_COLOURS = {
   joy: '#C9A84C', trust: '#6B9E70', fear: '#507A60', surprise: '#6B97B5',
@@ -2197,6 +2198,7 @@ function ChatPage({ general = false }) {
 
       {branchResponseTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <DialogGuard />
           <div
             className="w-full max-w-md mx-4 rounded-2xl border shadow-xl p-6"
             style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
@@ -2268,6 +2270,7 @@ function ChatPage({ general = false }) {
       {/* Branching loading modal */}
       {isBranching && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.35)' }}>
+          <DialogGuard />
           <div
             className="px-8 py-6 rounded-2xl shadow-2xl flex flex-col items-center gap-3 text-center"
             style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', minWidth: '260px' }}

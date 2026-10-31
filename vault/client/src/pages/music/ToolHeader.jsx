@@ -1,6 +1,7 @@
 import React from 'react';
 import { useIcon } from '../../providers/IconProvider';
 import { TOOL_HELP } from './musicTools.mjs';
+import DialogGuard from '../../components/DialogGuard';
 
 // Tool title with a (?) that opens that tool's help, same pattern as Video Tools.
 export function ToolHeader({ id, label, onHelp }) {
@@ -31,6 +32,7 @@ export function ToolHelpModal({ toolId, onClose }) {
       style={{ background: 'rgba(0,0,0,0.4)' }}
       onClick={onClose}
     >
+      <DialogGuard />
       <div
         className="rounded-2xl p-6 max-w-md w-full shadow-xl"
         style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', border: '1px solid' }}

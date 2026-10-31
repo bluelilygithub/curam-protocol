@@ -4,6 +4,7 @@ import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
 import { NOTE_TIPS } from './noteTips.mjs';
 import { normalizeTag, MAX_TAG_LENGTH } from './noteTags.mjs';
+import DialogGuard from '../../components/DialogGuard';
 
 /**
  * Tidy the tags across all notes: rename one (naming it after an existing tag merges the two) or remove one from every note.
@@ -52,6 +53,7 @@ export default function TagManager({ tags, mobile, onChanged, onClose }) {
 
   return (
     <div className={`fixed inset-0 z-50 flex ${mobile ? 'items-end' : 'items-center'} justify-center`} style={{ background: 'rgba(0,0,0,0.4)' }} onClick={onClose}>
+      <DialogGuard />
       <div
         className={`w-full max-w-md flex flex-col shadow-xl ${mobile ? 'rounded-t-2xl' : 'rounded-2xl m-4'}`}
         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', maxHeight: '85dvh', paddingBottom: mobile ? 'max(16px, env(safe-area-inset-bottom))' : undefined }}

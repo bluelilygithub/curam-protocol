@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
+import DialogGuard from '../DialogGuard';
 
 const CSV_HEADERS = ['title', 'notes', 'priority', 'status', 'category', 'dueDate', 'tags', 'projectId', 'isMilestone'];
 
@@ -154,6 +155,7 @@ export default function TaskImport({ onClose, onImported }) {
       style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
+      <DialogGuard />
       <div
         className="w-full max-w-2xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col"
         style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', maxHeight: '90vh' }}

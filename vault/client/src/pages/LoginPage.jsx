@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import { useIcon } from '../providers/IconProvider';
+import DialogGuard from '../components/DialogGuard';
 
 function safeNextPath(search) {
   const next = new URLSearchParams(search || '').get('next');
@@ -81,6 +82,7 @@ function LoginPage() {
           style={{ background: 'rgba(0,0,0,0.5)' }}
           onClick={(e) => { if (e.target === e.currentTarget) setShowForgot(false); }}
         >
+          <DialogGuard />
           <div
             className="w-full max-w-sm rounded-2xl border p-6 space-y-4"
             style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}

@@ -12,6 +12,7 @@ import { PageToImageTool, ExtractImagesTool, OcrTool, RemoveBlankTool, CropTool,
 // Vite copies this to the build output and returns a same-origin URL,
 // which satisfies script-src 'self' and avoids blob: worker CSP issues.
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import DialogGuard from '../components/DialogGuard';
 
 // ─── Fonts available in the field designer, grouped for the picker ─────────────
 // pdf-lib's 14 built-in "standard" PDF fonts only — no fetching, no embedding,
@@ -826,6 +827,7 @@ function PdfResultModal({ dataUrl, filename, meta, onClose, getIcon, onContinue 
       style={{ background: 'rgba(0,0,0,0.55)' }}
       onClick={onClose}
     >
+      <DialogGuard />
       <div
         className="rounded-2xl shadow-2xl flex flex-col"
         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', width: '100%', maxWidth: 820, maxHeight: '92vh' }}
@@ -5076,6 +5078,7 @@ export default function PdfPage() {
             style={{ background: 'rgba(0,0,0,0.4)' }}
             onClick={() => setHelpTool(null)}
           >
+            <DialogGuard />
             <div
               className="rounded-2xl p-6 max-w-md w-full shadow-xl"
               style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', border: '1px solid' }}

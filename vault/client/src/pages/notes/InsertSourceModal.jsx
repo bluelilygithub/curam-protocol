@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
+import DialogGuard from '../../components/DialogGuard';
 
 /**
  * The "@" pull-ins: search the web, Gmail or Calendar and put what is found into the open note. One component for all three
@@ -103,6 +104,7 @@ export default function InsertSourceModal({ kind, onInsert, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-3 sm:p-4" style={{ background: 'rgba(0,0,0,0.35)' }} onClick={onClose}>
+      <DialogGuard />
       <div
         className="rounded-xl border shadow-xl overflow-hidden w-full mt-12 sm:mt-0"
         style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', maxWidth: 520 }}

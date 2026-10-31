@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
+import DialogGuard from './DialogGuard';
 
 const EMPTY = { title: '', priority: 'medium', dueDate: '', isUrgent: 0, isMilestone: 0, projectId: null, sessionId: null, notes: '' };
 
@@ -73,6 +74,7 @@ export default function QuickCapture() {
           style={{ background: 'rgba(0,0,0,0.45)' }}
           onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
         >
+          <DialogGuard />
           <div
             className="w-full max-w-sm rounded-2xl border shadow-2xl overflow-hidden"
             style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}

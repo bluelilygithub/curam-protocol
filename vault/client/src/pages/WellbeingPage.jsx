@@ -18,6 +18,7 @@ import WellbeingVisualSummaryPanel from '../components/wellbeing/WellbeingVisual
 import QuizPurposePanel from '../components/wellbeing/QuizPurposePanel';
 import SlideshowPreviewModal from '../components/wellbeing/SlideshowPreviewModal';
 import ConfirmModal from '../components/ConfirmModal';
+import DialogGuard from '../components/DialogGuard';
 
 const MOOD_DRAFT_KEY = 'curam:wellbeing-mood:draft';
 const GAD7_DRAFT_KEY = 'curam:gad-7-style:draft';
@@ -232,6 +233,7 @@ function ModuleGroup({ module, tests, onReport, onCharts, onMindMap, onSuggestio
 function ModuleCompletionModal({ moduleTitle, nextLabel, onReport, onContinue, onDashboard }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.55)' }}>
+      <DialogGuard />
       <div
         role="dialog"
         aria-modal="true"
@@ -1848,6 +1850,7 @@ export default function WellbeingPage() {
           style={{ background: 'rgba(0,0,0,0.55)' }}
           onClick={(e) => { if (e.target === e.currentTarget && !inviteSending) setShowInviteModal(false); }}
         >
+          <DialogGuard />
           <div className="w-full max-w-lg rounded-2xl border p-6 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
             <div className="flex items-start justify-between gap-3">
               <div>

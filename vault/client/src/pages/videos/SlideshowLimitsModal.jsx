@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { SLIDESHOW_CAN, orderedLimits } from './slideshowLimits.mjs';
+import DialogGuard from '../../components/DialogGuard';
 
 const SLIDESHOW_FOOTNOTE = 'It only sees your description and the file names — not the pictures themselves.';
 
@@ -36,6 +37,7 @@ export default function SlideshowLimitsModal({
       aria-modal="true"
       aria-labelledby="slideshow-limits-title"
     >
+      <DialogGuard />
       <div
         className="w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden max-h-[88vh] flex flex-col"
         style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}

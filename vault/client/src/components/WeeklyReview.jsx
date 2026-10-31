@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
+import DialogGuard from './DialogGuard';
 
 const PRIORITY_COLOR = { high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
 
@@ -215,6 +216,7 @@ export default function WeeklyReview({ tasks, onClose, onTasksChanged }) {
       style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
+      <DialogGuard />
       <div
         className="w-full max-w-2xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col"
         style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', maxHeight: '90vh' }}

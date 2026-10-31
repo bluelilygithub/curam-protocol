@@ -3,6 +3,7 @@ import api from '../../utils/apiClient';
 import Tooltip from '../../components/Tooltip';
 import useProjectStore from '../../store/projectStore';
 import { TALK_TIPS } from './talkTips.mjs';
+import DialogGuard from '../../components/DialogGuard';
 
 /**
  * The end of a conversation: the note it would become (a summary, decisions, to-dos as tick-boxes, then everything that was said), to read, change,
@@ -27,6 +28,7 @@ export default function TalkReviewPanel({ proposal, mobile, saving, onSave, onKe
 
   return (
     <div className={`fixed inset-0 flex ${mobile ? 'items-end' : 'items-center'} justify-center z-50 ${mobile ? '' : 'p-4'}`} style={{ background: 'rgba(0,0,0,0.4)' }}>
+      <DialogGuard />
       <div
         className={`${mobile ? 'rounded-t-2xl' : 'rounded-2xl'} w-full ${mobile ? '' : 'max-w-2xl'} shadow-xl flex flex-col`}
         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', maxHeight: mobile ? '94dvh' : '86vh', paddingBottom: mobile ? 'env(safe-area-inset-bottom)' : undefined }}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import api from '../utils/apiClient';
 import useToastStore from '../store/toastStore';
+import DialogGuard from '../components/DialogGuard';
 
 // ── Music theory constants ────────────────────────────────────────────────────
 const ROOTS = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
@@ -415,6 +416,7 @@ function CorrectionModal({ event, onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4"
       style={{ background: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
+      <DialogGuard />
       <div className="w-full max-w-sm rounded-xl p-5 flex flex-col gap-4"
         style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
         onClick={e => e.stopPropagation()}>

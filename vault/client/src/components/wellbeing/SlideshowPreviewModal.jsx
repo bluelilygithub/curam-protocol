@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import DialogGuard from '../DialogGuard';
 
 function buildSlides(slideshow) {
   if (!slideshow) return [];
@@ -59,6 +60,7 @@ export default function SlideshowPreviewModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.58)' }}>
+      <DialogGuard />
       <div className="w-full max-w-5xl rounded-3xl border shadow-2xl overflow-hidden" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
           <div>

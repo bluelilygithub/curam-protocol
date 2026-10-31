@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../../utils/apiClient';
 import ModelInsightPanel from './ModelInsightPanel';
 import SlideshowPreviewModal from './SlideshowPreviewModal';
+import DialogGuard from '../DialogGuard';
 
 const PROFILE_VARIANTS = {
   summary: {
@@ -217,6 +218,7 @@ export default function CombinedProfilePanel({
     <div className="space-y-6">
       {showSuggestionsWaitModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.55)' }}>
+          <DialogGuard />
           <div
             role="status"
             aria-live="polite"

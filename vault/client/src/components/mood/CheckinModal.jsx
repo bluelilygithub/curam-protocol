@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import api from '../../utils/apiClient';
 import EmotionWheel from './EmotionWheel';
 import useToastStore from '../../store/toastStore';
+import DialogGuard from '../DialogGuard';
 
 const BODY_LOCATIONS = ['Head', 'Chest', 'Throat', 'Stomach', 'Shoulders', 'Arms', 'Hands', 'Legs', 'Whole body'];
 const BODY_QUALITIES  = ['Tight', 'Heavy', 'Light', 'Fluttery', 'Hot', 'Cold', 'Hollow', 'Numb', 'Racing', 'Aching', 'Expansive', 'Buzzing'];
@@ -143,6 +144,7 @@ export default function CheckinModal({ entityType, entityId, entityTitle, onClos
       style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
       onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
     >
+      <DialogGuard />
       <div
         className="w-full max-w-lg rounded-2xl border shadow-2xl flex flex-col max-h-[90vh]"
         style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}

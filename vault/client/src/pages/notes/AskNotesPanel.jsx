@@ -9,6 +9,7 @@ import { mdComponents } from '../../utils/mdComponents';
 import useDictation from './useDictation';
 import { NOTE_TIPS } from './noteTips.mjs';
 import { citeLinks, historyFor, buildMap, STARTERS, SCOPES, RELATED_KINDS } from './askNotes.mjs';
+import DialogGuard from '../../components/DialogGuard';
 
 const MARKDOWN_PLUGINS = [remarkBreaks];
 const RELATED_KEY = 'vault:notes-ask-related';
@@ -136,6 +137,7 @@ export default function AskNotesPanel({ scopeQuery, openNoteId, listCount, mobil
 
   return (
     <div className={`fixed inset-0 z-50 flex ${mobile ? 'items-end' : 'items-center'} justify-center`} style={{ background: 'rgba(0,0,0,0.4)' }} onClick={onClose}>
+      <DialogGuard />
       <div
         className={`w-full flex flex-col shadow-xl ${mobile ? 'rounded-t-2xl' : 'rounded-2xl m-4 max-w-2xl'}`}
         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', height: mobile ? '92dvh' : '85dvh', maxHeight: '92dvh' }}
