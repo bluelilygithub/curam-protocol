@@ -22,10 +22,7 @@ export default function AppsLauncher({
       .catch(() => setNavLayout(null));
   }, []);
 
-  const allGroups = getAppsNavGroups({ canUseFeature, isAdmin });
-  // Admin always gets its own top-level icon, independent of any saved nav layout.
-  const groups = isAdmin ? allGroups.filter((g) => g.id !== 'admin') : allGroups;
-  const adminGroup = isAdmin ? allGroups.find((g) => g.id === 'admin') : null;
+  const groups = getAppsNavGroups({ canUseFeature, isAdmin });
   const sets = navLayout ? applyNavLayout(navLayout, groups) : null;
 
   const openFromEvent = useRef(null);
@@ -37,27 +34,16 @@ export default function AppsLauncher({
 
   if (!sets) {
     return (
-      <>
-        <NavDropdown
-          label="Apps"
-          icon="layout-grid"
-          groups={groups}
-          location={location}
-          missionReminderDue={missionReminderDue}
-          newSuggestionCount={newSuggestionCount}
-          registerOpen={(fn) => { openFromEvent.current = fn; }}
-          dataTour="apps-launcher"
-        />
-        {isAdmin && adminGroup && (
-          <NavDropdown
-            key="admin-standalone"
-            label="Admin"
-            icon="bar-chart"
-            groups={[adminGroup]}
-            location={location}
-          />
-        )}
-      </>
+      <NavDropdown
+        label="Apps"
+        icon="layout-grid"
+        groups={groups}
+        location={location}
+        missionReminderDue={missionReminderDue}
+        newSuggestionCount={newSuggestionCount}
+        registerOpen={(fn) => { openFromEvent.current = fn; }}
+        dataTour="apps-launcher"
+      />
     );
   }
 
@@ -76,15 +62,6 @@ export default function AppsLauncher({
           dataTour={i === 0 ? 'apps-launcher' : undefined}
         />
       ))}
-      {isAdmin && adminGroup && (
-        <NavDropdown
-          key="admin-standalone"
-          label="Admin"
-          icon="bar-chart"
-          groups={[adminGroup]}
-          location={location}
-        />
-      )}
     </div>
   );
 }
