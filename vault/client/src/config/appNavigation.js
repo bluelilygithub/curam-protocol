@@ -1,4 +1,5 @@
-/** Central nav catalog for Apps launcher, mobile nav, and sidebar workspace links. */
+/** Central nav catalog for the Apps launcher, the top-bar quick links, the sidebar workspace links, the mobile menu labels and the header trail. */
+import { isPathActive, trailFor } from '../utils/navTrail.mjs';
 
 export const APP_NAV_GROUPS = [
   {
@@ -124,22 +125,19 @@ export const APP_NAV_GROUPS = [
     label: 'Productivity',
     items: [
       { id: 'goals', label: 'Goals', path: '/goals', icon: 'target', featureKey: 'goals', badgeKey: 'missionReminder' },
-      { id: 'student', label: 'Student', path: '/student/quiz', icon: 'graduation-cap', featureKey: 'student', matchPrefix: true },
+      { id: 'student', label: 'Student', path: '/student/quiz', icon: 'graduation-cap', featureKey: 'student', matchPrefix: true, activeUnder: '/student' },
       { id: 'usage', label: 'Usage & Cost', path: '/usage', icon: 'usage', featureKey: 'usage' },
     ],
   },
 ];
 
+/** Is this link's section the page being shown? By whole path segments, so detail pages (/clients/12) keep their section lit. */
 export function isNavItemActive(item, pathname, search = '') {
   if (item.path.includes('?')) {
     const [path, query] = item.path.split('?');
     return pathname === path && String(search).includes(query);
   }
-  if (item.matchPrefix) return pathname.startsWith(item.path.replace(/\/[^/]+$/, '') || item.path);
-  if (item.path === '/student/quiz') return pathname.startsWith('/student');
-  if (item.path === '/clients') return pathname.startsWith('/clients');
-  if (item.path === '/suggestions') return pathname === '/suggestions';
-  return pathname === item.path;
+  return isPathActive(item.activeUnder || item.path, pathname);
 }
 
 export function filterNavGroups({ groups = APP_NAV_GROUPS, canUseFeature, isAdmin = false }) {
@@ -247,4 +245,37 @@ export function applyNavLayout(navLayout, groups) {
   // A set with nothing in it (for example the third one, left empty) gets no dropdown button.
   const shown = sets.filter((set) => set.groups.length > 0);
   return shown.length > 0 ? shown : null;
+}
+
+/** The quick links in the top bar. They come from here (not typed into Layout) so the bar, the Apps menu and the sidebar share one set of names, paths and icons. */
+export const TOP_BAR_LINKS = [
+  { id: 'tasks', label: 'Tasks', path: '/tasks', icon: 'list-checks', placement: 'before-apps' },
+  { id: 'history', label: 'Chat History', path: '/history', icon: 'clock', placement: 'before-apps', badgeKey: 'bookmarks' },
+  { id: 'notes', label: 'Notes', path: '/notes', icon: 'pen-line', placement: 'before-apps' },
+  { id: 'settings', label: 'Settings', path: '/settings', icon: 'settings', placement: 'after-apps' },
+];
+
+// Pages that are in the top bar or sidebar but not in an Apps group still get a trail.
+const EXTRA_TRAIL_ENTRIES = [
+  { path: '/chat', label: 'Chat', group: 'Workspace' },
+  { path: '/history', label: 'Chat History', group: 'Workspace' },
+  { path: '/tasks', label: 'Tasks', group: 'Workspace' },
+  { path: '/settings', label: 'Settings', group: '' },
+];
+
+/** Every page section the header trail knows about: the Apps groups, the 7 Habits group, the sidebar links and the extras above. */
+export function getTrailEntries() {
+  const entries = [];
+  for (const g of [...APP_NAV_GROUPS, HABITS_NAV_GROUP]) {
+    for (const it of g.items) {
+      if (!it.external && it.path) entries.push({ path: it.path, label: it.label, group: g.label, activeUnder: it.activeUnder });
+    }
+  }
+  for (const l of SIDEBAR_WORKSPACE_LINKS) entries.push({ path: l.path, label: l.label, group: 'Workspace' });
+  return [...entries, ...EXTRA_TRAIL_ENTRIES];
+}
+
+/** `{ group, label, to, deeper }` for the header, or null. See utils/navTrail.mjs. */
+export function trailForPath(pathname) {
+  return trailFor(pathname, getTrailEntries());
 }

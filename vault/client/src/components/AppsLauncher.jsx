@@ -158,6 +158,7 @@ function NavDropdown({ label, icon, groups, location, missionReminderDue, newSug
                         key={item.id}
                         {...linkProps}
                         onClick={() => setOpen(false)}
+                        aria-current={active ? 'page' : undefined}
                         className="relative flex items-center gap-2 px-2 py-2 rounded-lg text-xs transition-opacity hover:opacity-70"
                         style={{
                           color: active ? 'var(--color-primary)' : 'var(--color-text)',

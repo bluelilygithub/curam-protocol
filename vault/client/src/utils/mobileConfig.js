@@ -198,7 +198,7 @@ export const DEFAULT_NAV_ITEMS = [
   { id: 'news',      label: 'News Digest',     path: '/news-digest', enabled: true },
   { id: 'mood',      label: 'Mood',            path: '/mood',        enabled: true },
   { id: 'usage',     label: 'Usage & Cost',    path: '/usage',       enabled: true },
-  { id: 'admin',     label: 'Admin',           path: '/admin',       enabled: true },
+  { id: 'admin',     label: 'Dashboard',           path: '/admin',       enabled: true },
   { id: 'settings',  label: 'Settings',        path: '/settings',    enabled: true },
   { id: 'guide',     label: 'User Guide',      path: '/guide',       enabled: true },
 ];

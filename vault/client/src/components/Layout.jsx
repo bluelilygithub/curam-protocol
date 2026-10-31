@@ -17,6 +17,7 @@ import ShelfLauncher from './ShelfLauncher';
 import WfhHoursPrompt from './WfhHoursPrompt';
 import useSettingsStore from '../store/settingsStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
+import { TOP_BAR_LINKS, trailForPath, isNavItemActive } from '../config/appNavigation';
 
 function Layout() {
   const isMobileNow = () => typeof window !== 'undefined' && window.innerWidth < 640;
@@ -301,6 +302,29 @@ function Layout() {
     return featureAccess[key] !== false;
   };
 
+  const trail = trailForPath(location.pathname);
+
+  // One quick link in the top bar. Name, path and icon come from TOP_BAR_LINKS; it lights up for the whole section (a note open, a settings tab).
+  const renderTopBarLink = (l) => {
+    const active = isNavItemActive(l, location.pathname, location.search);
+    return (
+      <Link
+        key={l.id}
+        to={l.path}
+        className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity relative"
+        style={{ color: active ? 'var(--color-primary)' : 'var(--color-muted)' }}
+        data-tip={l.label}
+        aria-label={l.label}
+        aria-current={active ? 'page' : undefined}
+      >
+        {getIcon(l.icon, { size: 16 })}
+        {l.badgeKey === 'bookmarks' && bookmarkCount > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full" style={{ background: '#f59e0b' }} />
+        )}
+      </Link>
+    );
+  };
+
   // Sidebar styles differ on mobile (fixed overlay) vs desktop (push)
   const sidebarStyle = isMobile
     ? {
@@ -436,6 +460,30 @@ function Layout() {
             Project Vault
           </Link>
 
+          {/* Where you are: Group > Page. On a page inside a section (a client, a saved audit) the page name links back to the section's front page. */}
+          {trail && (
+            <nav aria-label="You are here" className="flex items-center gap-1.5 min-w-0 text-xs" style={{ color: 'var(--color-muted)' }}>
+              {isMobile && trail.deeper && (
+                <Link to={trail.to} aria-label={`Back to ${trail.label}`} className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity flex-shrink-0">
+                  {getIcon('chevron-right', { size: 16, style: { transform: 'rotate(180deg)' } })}
+                </Link>
+              )}
+              {!isMobile && trail.group && (
+                <>
+                  <span aria-hidden="true">/</span>
+                  <span className="truncate hidden md:inline">{trail.group}</span>
+                  <span aria-hidden="true" className="hidden md:inline">/</span>
+                </>
+              )}
+              {!isMobile && !trail.group && <span aria-hidden="true">/</span>}
+              {!isMobile && (trail.deeper ? (
+                <Link to={trail.to} className="truncate hover:opacity-60 transition-opacity duration-200" style={{ color: 'var(--color-text)' }}>{trail.label}</Link>
+              ) : (
+                <span className="truncate" aria-current="page" style={{ color: 'var(--color-text)' }}>{trail.label}</span>
+              ))}
+            </nav>
+          )}
+
           <div className="flex-1" />
 
           <button
@@ -448,38 +496,7 @@ function Layout() {
             <kbd className="text-xs opacity-60">⌘K</kbd>
           </button>
 
-          <Link
-            to="/tasks"
-            className="w-7 h-7 hidden sm:flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
-            style={{ color: location.pathname === '/tasks' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            data-tip="Tasks"
-          >
-            {getIcon('list-checks', { size: 16 })}
-          </Link>
-
-          <Link
-            to="/history"
-            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity relative"
-            style={{ color: location.pathname === '/history' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            data-tip="Chat History"
-          >
-            {getIcon('clock', { size: 16 })}
-            {bookmarkCount > 0 && (
-              <span
-                className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
-                style={{ background: '#f59e0b' }}
-              />
-            )}
-          </Link>
-
-          <Link
-            to="/notes"
-            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
-            style={{ color: location.pathname === '/notes' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            data-tip="Notes"
-          >
-            {getIcon('pen-line', { size: 16 })}
-          </Link>
+          {TOP_BAR_LINKS.filter((l) => l.placement === 'before-apps').map(renderTopBarLink)}
 
           <ShelfLauncher allowed={canUseFeature('shelf')} />
 
@@ -490,14 +507,7 @@ function Layout() {
             newSuggestionCount={newSuggestionCount}
           />
 
-          <Link
-            to="/settings"
-            className="w-7 h-7 hidden sm:flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
-            style={{ color: location.pathname === '/settings' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            data-tip="Settings"
-          >
-            {getIcon('settings', { size: 16 })}
-          </Link>
+          {TOP_BAR_LINKS.filter((l) => l.placement === 'after-apps').map(renderTopBarLink)}
 
           <button
             onClick={handleLogout}
