@@ -9,7 +9,7 @@ import { mdComponents } from '../../utils/mdComponents';
 import useDictation from './useDictation';
 import { NOTE_TIPS } from './noteTips.mjs';
 import { citeLinks, historyFor, buildMap, STARTERS, SCOPES, RELATED_KINDS } from './askNotes.mjs';
-import DialogGuard from '../../components/DialogGuard';
+import Dialog from '../../components/Dialog';
 
 const MARKDOWN_PLUGINS = [remarkBreaks];
 const RELATED_KEY = 'vault:notes-ask-related';
@@ -136,12 +136,14 @@ export default function AskNotesPanel({ scopeQuery, openNoteId, listCount, mobil
   const scopes = useMemo(() => SCOPES.map((s) => ({ ...s, disabled: s.id === 'note' && !openNoteId, label: s.id === 'filters' && listCount != null ? `${s.label} (${listCount})` : s.label })), [openNoteId, listCount]);
 
   return (
-    <div className={`fixed inset-0 z-50 flex ${mobile ? 'items-end' : 'items-center'} justify-center`} style={{ background: 'rgba(0,0,0,0.4)' }} onClick={onClose}>
-      <DialogGuard />
-      <div
-        className={`w-full flex flex-col shadow-xl ${mobile ? 'rounded-t-2xl' : 'rounded-2xl m-4 max-w-2xl'}`}
-        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', height: mobile ? '92dvh' : '85dvh', maxHeight: '92dvh' }}
-        onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Ask your notes"
+    <Dialog raw onClose={onClose}
+        overlayClassName={`fixed inset-0 z-50 flex ${mobile ? 'items-end' : 'items-center'} justify-center`}
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)' }}
+        panelClassName={`w-full flex flex-col shadow-xl ${mobile ? 'rounded-t-2xl' : 'rounded-2xl m-4 max-w-2xl'}`}
+        panelStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', height: mobile ? '92dvh' : '85dvh', maxHeight: '92dvh' }}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-label="Ask your notes"
       >
         {/* header */}
         <div className="flex items-center justify-between px-4 pt-3 pb-2 flex-shrink-0">
@@ -326,7 +328,6 @@ export default function AskNotesPanel({ scopeQuery, openNoteId, listCount, mobil
           </div>
           <p className="text-xs mt-1.5" style={{ color: 'var(--color-muted)' }}>The text of the notes it reads is sent to the AI to answer, with a small cost each time. Notes are also sent once to the embedding service so they can be found by meaning. Nothing is changed.</p>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }

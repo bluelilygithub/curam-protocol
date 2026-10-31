@@ -3,7 +3,7 @@ import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
 import { NOTE_TIPS } from './noteTips.mjs';
 import { BUILT_IN_TEMPLATES } from './noteTemplates.mjs';
-import DialogGuard from '../../components/DialogGuard';
+import Dialog from '../../components/Dialog';
 
 /**
  * "New note from a template": the built-in ones, the person's own, and (when a note is open) a way to save that note as a template.
@@ -45,12 +45,14 @@ export default function TemplatePicker({ templates, mobile, canSave, onUse, onSa
   }
 
   return (
-    <div className={`fixed inset-0 z-50 flex ${mobile ? 'items-end' : 'items-center'} justify-center`} style={{ background: 'rgba(0,0,0,0.4)' }} onClick={onClose}>
-      <DialogGuard />
-      <div
-        className={`w-full max-w-md flex flex-col shadow-xl ${mobile ? 'rounded-t-2xl' : 'rounded-2xl m-4'}`}
-        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', maxHeight: '85dvh', paddingBottom: mobile ? 'max(16px, env(safe-area-inset-bottom))' : undefined }}
-        onClick={(e) => e.stopPropagation()} role="dialog" aria-label="New note from a template"
+    <Dialog raw onClose={onClose}
+        overlayClassName={`fixed inset-0 z-50 flex ${mobile ? 'items-end' : 'items-center'} justify-center`}
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)' }}
+        panelClassName={`w-full max-w-md flex flex-col shadow-xl ${mobile ? 'rounded-t-2xl' : 'rounded-2xl m-4'}`}
+        panelStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', maxHeight: '85dvh', paddingBottom: mobile ? 'max(16px, env(safe-area-inset-bottom))' : undefined }}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-label="New note from a template"
       >
         <div className="flex items-center justify-between px-4 pt-4 pb-2 flex-shrink-0">
           <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>New note from a template</h3>
@@ -109,7 +111,6 @@ export default function TemplatePicker({ templates, mobile, canSave, onUse, onSa
             <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Keeps its title, text and tags. Dates written as {'{{date}}'} are filled in each time it is used.</p>
           </div>
         )}
-      </div>
-    </div>
+      </Dialog>
   );
 }

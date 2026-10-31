@@ -5,7 +5,7 @@ import Tooltip from '../../components/Tooltip';
 import { NOTE_TIPS } from './noteTips.mjs';
 import { AI_ACTIONS, todayLocal, taskPayload } from './noteAiActions.mjs';
 import { diffLines, diffStats, collapse } from './noteDiff.mjs';
-import DialogGuard from '../../components/DialogGuard';
+import Dialog from '../../components/Dialog';
 
 /**
  * The result of one AI action on the open note (summary, to-dos, tidy-up, title). The AI only proposes: nothing changes until the
@@ -104,13 +104,15 @@ export default function NoteAiPanel({ action, note, mobile, ensureSaved, onApply
   const input = { background: 'var(--color-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)', fontSize: 16, minHeight: mobile ? 44 : 32 };
 
   return (
-    <div className={`fixed inset-0 z-50 flex ${mobile ? 'items-end' : 'items-center'} justify-center`} style={{ background: 'rgba(0,0,0,0.4)' }} onClick={onClose}>
-      <DialogGuard />
-      <div
-        className={`w-full max-w-lg flex flex-col shadow-xl ${mobile ? 'rounded-t-2xl' : 'rounded-2xl m-4'}`}
-        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', maxHeight: '85dvh', paddingBottom: mobile ? 'max(16px, env(safe-area-inset-bottom))' : undefined }}
+    <Dialog raw onClose={onClose}
+        overlayClassName={`fixed inset-0 z-50 flex ${mobile ? 'items-end' : 'items-center'} justify-center`}
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)' }}
+        panelClassName={`w-full max-w-lg flex flex-col shadow-xl ${mobile ? 'rounded-t-2xl' : 'rounded-2xl m-4'}`}
+        panelStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', maxHeight: '85dvh', paddingBottom: mobile ? 'max(16px, env(safe-area-inset-bottom))' : undefined }}
         onClick={(e) => e.stopPropagation()}
-        role="dialog" aria-label={meta.label} aria-busy={state === 'working'}
+        role="dialog"
+        aria-label={meta.label}
+        aria-busy={state === 'working'}
       >
         <div className="flex items-center justify-between px-4 pt-4 pb-2 flex-shrink-0">
           <h3 className="text-base font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
@@ -296,7 +298,6 @@ export default function NoteAiPanel({ action, note, mobile, ensureSaved, onApply
             </>
           )}
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }

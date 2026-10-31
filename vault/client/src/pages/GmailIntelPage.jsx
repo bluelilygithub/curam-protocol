@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../utils/apiClient';
 import useToastStore from '../store/toastStore';
 import { useIcon } from '../providers/IconProvider';
-import DialogGuard from '../components/DialogGuard';
+import Dialog from '../components/Dialog';
 
 const CATEGORY_ORDER = ['urgent', 'waiting', 'fyi', 'noise'];
 const CATEGORY_LABELS = { urgent: 'Urgent', waiting: 'Waiting', fyi: 'FYI', noise: 'Noise' };
@@ -320,10 +320,12 @@ function ExpenseModal({ email, onClose, onActioned, addToast, getIcon }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.4)' }}>
-      <DialogGuard />
-      <div className="rounded-2xl border shadow-xl w-full max-w-md p-6 space-y-4"
-           style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+    <Dialog raw
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)' }}
+        panelClassName="rounded-2xl border shadow-xl w-full max-w-md p-6 space-y-4"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+      >
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-semibold" style={{ color: 'var(--color-text)' }}>Add Expense</h3>
@@ -409,8 +411,7 @@ function ExpenseModal({ email, onClose, onActioned, addToast, getIcon }) {
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </Dialog>
   );
 }
 

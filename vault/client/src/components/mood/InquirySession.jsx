@@ -4,7 +4,7 @@ import EmotionWheel from './EmotionWheel';
 import useToastStore from '../../store/toastStore';
 import { useVoice } from '../../hooks/useVoice';
 import { useIcon } from '../../providers/IconProvider';
-import DialogGuard from '../DialogGuard';
+import Dialog from '../Dialog';
 
 const BODY_LOCATIONS = ['Head', 'Chest', 'Throat', 'Stomach', 'Shoulders', 'Arms', 'Hands', 'Legs', 'Whole body'];
 const BODY_QUALITIES  = ['Tight', 'Heavy', 'Light', 'Fluttery', 'Hot', 'Cold', 'Hollow', 'Numb', 'Racing', 'Aching', 'Expansive', 'Buzzing'];
@@ -346,15 +346,11 @@ export default function InquirySession({ onClose, onComplete }) {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div
-      className="fixed inset-0 z-[80] flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) handleCloseAttempt(); }}
-    >
-      <DialogGuard />
-      <div
-        className="w-full max-w-xl rounded-2xl border shadow-2xl flex flex-col"
-        style={{
+    <Dialog raw onClose={handleCloseAttempt}
+        overlayClassName="fixed inset-0 z-[80] flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)' }}
+        panelClassName="w-full max-w-xl rounded-2xl border shadow-2xl flex flex-col"
+        panelStyle={{
           background:   'var(--color-surface)',
           borderColor:  'var(--color-border)',
           height:       stage === 4 ? '85vh' : 'auto',
@@ -913,7 +909,6 @@ export default function InquirySession({ onClose, onComplete }) {
           </div>
         )}
 
-      </div>
-    </div>
+      </Dialog>
   );
 }

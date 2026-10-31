@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
-import DialogGuard from './DialogGuard';
+import Dialog from './Dialog';
 
 const CSV_HEADERS = ['title', 'notes', 'priority', 'status', 'category', 'dueDate', 'tags', 'projectId'];
 
@@ -149,15 +149,11 @@ export default function TaskImport({ onClose, onImported }) {
   const invalidCount = rows ? rows.filter(r => !r._valid).length : 0;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <DialogGuard />
-      <div
-        className="w-full max-w-2xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col"
-        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', maxHeight: '90vh' }}
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
+        panelClassName="w-full max-w-2xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', maxHeight: '90vh' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-border)' }}>
@@ -293,7 +289,6 @@ export default function TaskImport({ onClose, onImported }) {
             </button>
           </div>
         )}
-      </div>
-    </div>
+      </Dialog>
   );
 }

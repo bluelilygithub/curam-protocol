@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import DialogGuard from '../DialogGuard';
+import Dialog from '../Dialog';
 
 function buildSlides(slideshow) {
   if (!slideshow) return [];
@@ -59,9 +59,12 @@ export default function SlideshowPreviewModal({
   const goNext = () => setIndex(value => Math.min(slides.length - 1, value + 1));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.58)' }}>
-      <DialogGuard />
-      <div className="w-full max-w-5xl rounded-3xl border shadow-2xl overflow-hidden" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+    <Dialog raw
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.58)' }}
+        panelClassName="w-full max-w-5xl rounded-3xl border shadow-2xl overflow-hidden"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+      >
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
           <div>
             <p className="text-xs uppercase tracking-widest font-semibold" style={{ color: 'var(--color-muted)' }}>Slideshow preview</p>
@@ -180,7 +183,6 @@ export default function SlideshowPreviewModal({
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }

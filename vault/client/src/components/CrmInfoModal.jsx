@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { useIcon } from '../providers/IconProvider';
-import useDialogBehavior from '../hooks/useDialogBehavior';
+import Dialog from './Dialog';
 
 export const INFO_SEEN_KEY = 'vault_crm_client_info_seen';
 
@@ -8,22 +8,17 @@ export const INFO_SEEN_KEY = 'vault_crm_client_info_seen';
 // instead of sparkles, since Summarize already uses sparkles on this page) —
 // auto-shows once per browser, always reachable via the header (i) button.
 export default function CrmInfoModal({ onClose }) {
-  const panelRef = useDialogBehavior({ onClose });
   const getIcon = useIcon();
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        ref={panelRef}
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
         role="dialog"
         aria-modal="true"
         aria-label="How this works"
-        className="w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden"
-        style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+        panelClassName="w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden"
+        panelStyle={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
           <div className="flex items-center gap-2">
@@ -89,7 +84,6 @@ export default function CrmInfoModal({ onClose }) {
             Got it
           </button>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }

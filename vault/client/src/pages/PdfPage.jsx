@@ -12,7 +12,7 @@ import { PageToImageTool, ExtractImagesTool, OcrTool, RemoveBlankTool, CropTool,
 // Vite copies this to the build output and returns a same-origin URL,
 // which satisfies script-src 'self' and avoids blob: worker CSP issues.
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import DialogGuard from '../components/DialogGuard';
+import Dialog from '../components/Dialog';
 
 // ─── Fonts available in the field designer, grouped for the picker ─────────────
 // pdf-lib's 14 built-in "standard" PDF fonts only — no fetching, no embedding,
@@ -822,15 +822,11 @@ const NOT_PDF_INPUT = new Set(['img2pdf', 'text2pdf', 'officetopdf', 'googletopd
 function PdfResultModal({ dataUrl, filename, meta, onClose, getIcon, onContinue }) {
   if (!dataUrl) return null;
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.55)' }}
-      onClick={onClose}
-    >
-      <DialogGuard />
-      <div
-        className="rounded-2xl shadow-2xl flex flex-col"
-        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', width: '100%', maxWidth: 820, maxHeight: '92vh' }}
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.55)' }}
+        panelClassName="rounded-2xl shadow-2xl flex flex-col"
+        panelStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', width: '100%', maxWidth: 820, maxHeight: '92vh' }}
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-3 border-b flex-shrink-0" style={{ borderColor: 'var(--color-border)' }}>
@@ -872,8 +868,7 @@ function PdfResultModal({ dataUrl, filename, meta, onClose, getIcon, onContinue 
         <div className="overflow-auto flex-1 p-4" style={{ background: 'var(--color-bg)' }}>
           <PdfPagePreview dataUrl={dataUrl} maxWidth={760} />
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }
 
@@ -5073,17 +5068,13 @@ export default function PdfPage() {
         const h = TOOL_HELP[helpTool];
         if (!h) return null;
         return (
-          <div
-            className="fixed inset-0 flex items-center justify-center z-50 p-4"
-            style={{ background: 'rgba(0,0,0,0.4)' }}
-            onClick={() => setHelpTool(null)}
-          >
-            <DialogGuard />
-            <div
-              className="rounded-2xl p-6 max-w-md w-full shadow-xl"
-              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', border: '1px solid' }}
-              onClick={e => e.stopPropagation()}
-            >
+          <Dialog raw onClose={() => setHelpTool(null)}
+        overlayClassName="fixed inset-0 flex items-center justify-center z-50 p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)' }}
+        panelClassName="rounded-2xl p-6 max-w-md w-full shadow-xl"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', border: '1px solid' }}
+        onClick={e => e.stopPropagation()}
+      >
               <div className="flex items-start justify-between mb-3">
                 <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{h.title}</h3>
                 <button
@@ -5114,8 +5105,7 @@ export default function PdfPage() {
                   </ol>
                 </div>
               )}
-            </div>
-          </div>
+            </Dialog>
         );
       })()}
     </div>

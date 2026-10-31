@@ -12,7 +12,7 @@ import { BeforeAfter, readFileAsDataUrl } from './graphics/shared';
 import { GoalStart, GoalBar } from './graphics/GoalStart';
 import { HistoryPanel, HistoryRecorder } from './graphics/HistoryPanel';
 import { historyEnabled, addHistory, makeThumb } from './graphics/historyStore.mjs';
-import DialogGuard from '../components/DialogGuard';
+import Dialog from '../components/Dialog';
 
 const MODES = [
   { id: 'generate', label: 'Generate', icon: 'sparkles' },
@@ -959,17 +959,13 @@ export default function GraphicsPage() {
       
 
             {previewImage?.imageDataUrl && (
-              <div
-                className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6"
-                style={{ background: 'rgba(0,0,0,0.72)' }}
-                onClick={() => setPreviewImage(null)}
-              >
-                <DialogGuard />
-                <div
-                  className="w-full max-w-4xl max-h-full rounded-2xl border overflow-hidden shadow-xl"
-                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
-                  onClick={e => e.stopPropagation()}
-                >
+              <Dialog raw onClose={() => setPreviewImage(null)}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center px-4 py-6"
+        overlayStyle={{ background: 'rgba(0,0,0,0.72)' }}
+        panelClassName="w-full max-w-4xl max-h-full rounded-2xl border overflow-hidden shadow-xl"
+        panelStyle={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+        onClick={e => e.stopPropagation()}
+      >
                   <div className="px-4 py-3 border-b flex items-center justify-between gap-3" style={{ borderColor: 'var(--color-border)' }}>
                     <div>
                       <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
@@ -999,8 +995,7 @@ export default function GraphicsPage() {
                       {previewImage.refinedPrompt || previewImage.prompt}
                     </p>
                   </div>
-                </div>
-              </div>
+                </Dialog>
             )}
 
             <HistoryPanel
@@ -1017,17 +1012,13 @@ export default function GraphicsPage() {
             />
 
             {brandKitOpen && (
-              <div
-                className="fixed inset-0 z-50 flex items-center justify-center px-4"
-                style={{ background: 'rgba(0,0,0,0.55)' }}
-                onClick={() => setBrandKitOpen(false)}
-              >
-                <DialogGuard />
-                <div
-                  className="w-full max-w-md rounded-2xl border shadow-xl overflow-hidden"
-                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
-                  onClick={e => e.stopPropagation()}
-                >
+              <Dialog raw onClose={() => setBrandKitOpen(false)}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center px-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.55)' }}
+        panelClassName="w-full max-w-md rounded-2xl border shadow-xl overflow-hidden"
+        panelStyle={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+        onClick={e => e.stopPropagation()}
+      >
                   <div className="px-5 py-4 border-b flex items-start justify-between gap-4" style={{ borderColor: 'var(--color-border)' }}>
                     <div>
                       <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Brand Kit</h2>
@@ -1097,24 +1088,19 @@ export default function GraphicsPage() {
                       </Tooltip>
                     </div>
                   </div>
-                </div>
-              </div>
+                </Dialog>
             )}
 
             <GraphicsTutorChat currentTool={mode} onOpenTool={openToolById} />
 
             {helpTool && TOOL_HELP[helpTool] && (
-              <div
-                className="fixed inset-0 z-50 flex items-center justify-center px-4"
-                style={{ background: 'rgba(0,0,0,0.55)' }}
-                onClick={() => setHelpTool(null)}
-              >
-                <DialogGuard />
-                <div
-                  className="w-full max-w-md rounded-2xl border shadow-xl overflow-hidden"
-                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
-                  onClick={e => e.stopPropagation()}
-                >
+              <Dialog raw onClose={() => setHelpTool(null)}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center px-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.55)' }}
+        panelClassName="w-full max-w-md rounded-2xl border shadow-xl overflow-hidden"
+        panelStyle={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+        onClick={e => e.stopPropagation()}
+      >
                   <div className="px-5 py-4 border-b flex items-start justify-between gap-4" style={{ borderColor: 'var(--color-border)' }}>
                     <div>
                       <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{TOOL_HELP[helpTool].title}</h2>
@@ -1130,8 +1116,7 @@ export default function GraphicsPage() {
                       </li>
                     ))}
                   </ul>
-                </div>
-              </div>
+                </Dialog>
             )}
           </div>
     </GraphicsContext.Provider>

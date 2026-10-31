@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../utils/apiClient';
-import useDialogBehavior from '../hooks/useDialogBehavior';
+import Dialog from './Dialog';
 
 function NewProjectModal({ onClose, onCreate }) {
-  const panelRef = useDialogBehavior({ onClose });
   const [name, setName] = useState('');
   const [goal, setGoal] = useState('');
   const [clientId, setClientId] = useState('');
@@ -35,18 +34,14 @@ function NewProjectModal({ onClose, onCreate }) {
   const fieldStyle = { background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        ref={panelRef}
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
         role="dialog"
         aria-modal="true"
         aria-label="New project"
-        className="w-full max-w-md rounded-2xl shadow-2xl"
-        style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', maxHeight: '90vh', overflowY: 'auto' }}
+        panelClassName="w-full max-w-md rounded-2xl shadow-2xl"
+        panelStyle={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', maxHeight: '90vh', overflowY: 'auto' }}
       >
         <div className="px-6 pt-6 pb-4">
           <h2 className="text-base font-semibold mb-1" style={{ color: 'var(--color-text)' }}>New Project</h2>
@@ -123,8 +118,7 @@ function NewProjectModal({ onClose, onCreate }) {
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </Dialog>
   );
 }
 

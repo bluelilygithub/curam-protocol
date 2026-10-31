@@ -76,7 +76,7 @@ import {
   CashFlowTimeline,
   FundingAlertBanner,
 } from '../components/propertyScenario/PropertyScenarioViews';
-import DialogGuard from '../components/DialogGuard';
+import Dialog from '../components/Dialog';
 
 const TABS = [
   { id: 'overview', label: 'Scenario' },
@@ -3876,18 +3876,14 @@ function BrokerPrepPanel({ getIcon, checked: checkedProp, onChecked }) {
 function AgentPurposeModal({ agent, onClose, getIcon }) {
   if (!agent) return null;
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center z-50"
-      style={{ background: 'rgba(0,0,0,0.45)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="agent-purpose-title"
-    >
-      <DialogGuard />
-      <div
-        className="relative flex flex-col rounded-2xl border shadow-2xl mx-4 overflow-hidden"
-        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '100%', maxWidth: 520, maxHeight: '85dvh' }}
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 flex items-center justify-center z-50"
+        overlayStyle={{ background: 'rgba(0,0,0,0.45)' }}
+        panelClassName="relative flex flex-col rounded-2xl border shadow-2xl mx-4 overflow-hidden"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '100%', maxWidth: 520, maxHeight: '85dvh' }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="agent-purpose-title"
       >
         <div className="flex items-start justify-between gap-3 px-5 py-4 border-b shrink-0" style={{ borderColor: 'var(--color-border)' }}>
           <div className="flex items-start gap-3 min-w-0">
@@ -3947,8 +3943,7 @@ function AgentPurposeModal({ agent, onClose, getIcon }) {
             Got it
           </button>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }
 
@@ -3963,15 +3958,11 @@ function PropertyScenarioHelp({ onClose, getIcon }) {
   ];
 
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center z-50"
-      style={{ background: 'rgba(0,0,0,0.45)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <DialogGuard />
-      <div
-        className="relative flex flex-col rounded-2xl border shadow-2xl mx-4 overflow-hidden"
-        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '100%', maxWidth: 760, maxHeight: '90dvh' }}
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 flex items-center justify-center z-50"
+        overlayStyle={{ background: 'rgba(0,0,0,0.45)' }}
+        panelClassName="relative flex flex-col rounded-2xl border shadow-2xl mx-4 overflow-hidden"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '100%', maxWidth: 760, maxHeight: '90dvh' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b shrink-0" style={{ borderColor: 'var(--color-border)' }}>
@@ -4087,8 +4078,7 @@ function PropertyScenarioHelp({ onClose, getIcon }) {
             Got it
           </button>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }
 

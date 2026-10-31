@@ -5,7 +5,7 @@ import { FOCUSABLE_SELECTOR, nextFocusIndex, createDialogStack } from '../utils/
 // autoFocus input), keep Tab inside it, close on Escape (only the newest open dialog), stop the page behind from scrolling, and give focus
 // back to whatever opened it. Put the returned ref on the dialog panel together with role="dialog" aria-modal="true" and a name
 // (aria-labelledby or aria-label). `components/Dialog.jsx` does all of that for you; use this hook to upgrade a hand-built modal.
-// `components/DialogGuard.jsx` uses `attachDialogBehavior` directly for modals written inline inside a big page.
+// `attachDialogBehavior` is the same behaviour for an element that is already on the page (no React ref needed).
 
 const stack = createDialogStack();
 let scrollLocks = 0;

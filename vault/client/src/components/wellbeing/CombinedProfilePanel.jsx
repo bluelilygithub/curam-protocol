@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../../utils/apiClient';
 import ModelInsightPanel from './ModelInsightPanel';
 import SlideshowPreviewModal from './SlideshowPreviewModal';
-import DialogGuard from '../DialogGuard';
+import Dialog from '../Dialog';
 
 const PROFILE_VARIANTS = {
   summary: {
@@ -217,14 +217,14 @@ export default function CombinedProfilePanel({
   return (
     <div className="space-y-6">
       {showSuggestionsWaitModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.55)' }}>
-          <DialogGuard />
-          <div
-            role="status"
-            aria-live="polite"
-            className="w-full max-w-md rounded-2xl border p-6 text-center shadow-xl"
-            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-          >
+        <Dialog raw
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.55)' }}
+        role="status"
+        aria-live="polite"
+        panelClassName="w-full max-w-md rounded-2xl border p-6 text-center shadow-xl"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+      >
             <div className="mx-auto h-10 w-10 rounded-full border-4 border-t-transparent animate-spin mb-4" style={{ borderColor: 'var(--color-primary)', borderTopColor: 'transparent' }} />
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Preparing suggestions report</h2>
             <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
@@ -233,8 +233,7 @@ export default function CombinedProfilePanel({
             <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>
               The report will appear automatically when it is ready.
             </p>
-          </div>
-        </div>
+          </Dialog>
       )}
 
       <div className="flex flex-wrap items-start justify-between gap-3">

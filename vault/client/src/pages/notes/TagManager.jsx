@@ -4,7 +4,7 @@ import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
 import { NOTE_TIPS } from './noteTips.mjs';
 import { normalizeTag, MAX_TAG_LENGTH } from './noteTags.mjs';
-import DialogGuard from '../../components/DialogGuard';
+import Dialog from '../../components/Dialog';
 
 /**
  * Tidy the tags across all notes: rename one (naming it after an existing tag merges the two) or remove one from every note.
@@ -52,12 +52,14 @@ export default function TagManager({ tags, mobile, onChanged, onClose }) {
   const btn = { background: 'var(--color-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)', minHeight: mobile ? 40 : 28 };
 
   return (
-    <div className={`fixed inset-0 z-50 flex ${mobile ? 'items-end' : 'items-center'} justify-center`} style={{ background: 'rgba(0,0,0,0.4)' }} onClick={onClose}>
-      <DialogGuard />
-      <div
-        className={`w-full max-w-md flex flex-col shadow-xl ${mobile ? 'rounded-t-2xl' : 'rounded-2xl m-4'}`}
-        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', maxHeight: '85dvh', paddingBottom: mobile ? 'max(16px, env(safe-area-inset-bottom))' : undefined }}
-        onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Manage tags"
+    <Dialog raw onClose={onClose}
+        overlayClassName={`fixed inset-0 z-50 flex ${mobile ? 'items-end' : 'items-center'} justify-center`}
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)' }}
+        panelClassName={`w-full max-w-md flex flex-col shadow-xl ${mobile ? 'rounded-t-2xl' : 'rounded-2xl m-4'}`}
+        panelStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', maxHeight: '85dvh', paddingBottom: mobile ? 'max(16px, env(safe-area-inset-bottom))' : undefined }}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-label="Manage tags"
       >
         <div className="flex items-center justify-between px-4 pt-4 pb-2 flex-shrink-0">
           <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Manage tags</h3>
@@ -106,7 +108,6 @@ export default function TagManager({ tags, mobile, onChanged, onClose }) {
         <div className="px-4 pt-2 flex justify-end flex-shrink-0">
           <button type="button" onClick={onClose} className="text-sm font-medium px-4 rounded-lg hover:opacity-80 transition-opacity duration-200" style={{ background: 'var(--color-primary)', color: '#fff', minHeight: mobile ? 48 : 36 }}>Done</button>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }

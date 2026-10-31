@@ -18,7 +18,7 @@ import WellbeingVisualSummaryPanel from '../components/wellbeing/WellbeingVisual
 import QuizPurposePanel from '../components/wellbeing/QuizPurposePanel';
 import SlideshowPreviewModal from '../components/wellbeing/SlideshowPreviewModal';
 import ConfirmModal from '../components/ConfirmModal';
-import DialogGuard from '../components/DialogGuard';
+import Dialog from '../components/Dialog';
 
 const MOOD_DRAFT_KEY = 'curam:wellbeing-mood:draft';
 const GAD7_DRAFT_KEY = 'curam:gad-7-style:draft';
@@ -232,13 +232,13 @@ function ModuleGroup({ module, tests, onReport, onCharts, onMindMap, onSuggestio
 
 function ModuleCompletionModal({ moduleTitle, nextLabel, onReport, onContinue, onDashboard }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.55)' }}>
-      <DialogGuard />
-      <div
+    <Dialog raw
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.55)' }}
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-md rounded-2xl border p-6 shadow-xl space-y-4"
-        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+        panelClassName="w-full max-w-md rounded-2xl border p-6 shadow-xl space-y-4"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
       >
         <div>
           <p className="text-xs uppercase tracking-wider font-semibold" style={{ color: 'var(--color-primary)' }}>Module complete</p>
@@ -273,8 +273,7 @@ function ModuleCompletionModal({ moduleTitle, nextLabel, onReport, onContinue, o
             Back to dashboard
           </button>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }
 
@@ -1845,13 +1844,12 @@ export default function WellbeingPage() {
       )}
 
       {showInviteModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.55)' }}
-          onClick={(e) => { if (e.target === e.currentTarget && !inviteSending) setShowInviteModal(false); }}
-        >
-          <DialogGuard />
-          <div className="w-full max-w-lg rounded-2xl border p-6 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <Dialog raw onClose={() => { if (!inviteSending) setShowInviteModal(false); }}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.55)' }}
+        panelClassName="w-full max-w-lg rounded-2xl border p-6 space-y-4"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+      >
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
@@ -1917,8 +1915,7 @@ export default function WellbeingPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+          </Dialog>
       )}
 
       {showResetTestsConfirm && (

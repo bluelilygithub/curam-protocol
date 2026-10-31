@@ -32,7 +32,7 @@ import { formatSessionLabel } from '../utils/sessionDisplay';
 import { openRecentSession } from '../utils/chatNavigation';
 import { offerUndo } from '../utils/binUndo';
 import { replyToNote, chatToNote } from '../utils/chatToNote.mjs';
-import DialogGuard from '../components/DialogGuard';
+import Dialog from '../components/Dialog';
 
 const EMOTION_COLOURS = {
   joy: '#C9A84C', trust: '#6B9E70', fear: '#507A60', surprise: '#6B97B5',
@@ -2197,12 +2197,12 @@ function ChatPage({ general = false }) {
       </div>
 
       {branchResponseTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
-          <DialogGuard />
-          <div
-            className="w-full max-w-md mx-4 rounded-2xl border shadow-xl p-6"
-            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-          >
+        <Dialog raw
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center"
+        overlayStyle={{ background: 'rgba(0,0,0,0.45)' }}
+        panelClassName="w-full max-w-md mx-4 rounded-2xl border shadow-xl p-6"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+      >
             <h3 className="text-base font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Branch latest response</h3>
             <p className="text-xs mb-5" style={{ color: 'var(--color-muted)' }}>
               This creates a project chat with a collapsed summary of this thread, followed by the latest response.
@@ -2263,18 +2263,17 @@ function ChatPage({ general = false }) {
                 {isBranching ? 'Creating…' : 'Create branch'}
               </button>
             </div>
-          </div>
-        </div>
+          </Dialog>
       )}
 
       {/* Branching loading modal */}
       {isBranching && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.35)' }}>
-          <DialogGuard />
-          <div
-            className="px-8 py-6 rounded-2xl shadow-2xl flex flex-col items-center gap-3 text-center"
-            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', minWidth: '260px' }}
-          >
+        <Dialog raw
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center"
+        overlayStyle={{ background: 'rgba(0,0,0,0.35)' }}
+        panelClassName="px-8 py-6 rounded-2xl shadow-2xl flex flex-col items-center gap-3 text-center"
+        panelStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', minWidth: '260px' }}
+      >
             <div
               className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
               style={{ borderColor: 'var(--color-primary)', borderTopColor: 'transparent' }}
@@ -2283,8 +2282,7 @@ function ChatPage({ general = false }) {
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
               Generating a focused opening based on your project context and this conversation.
             </p>
-          </div>
-        </div>
+          </Dialog>
       )}
 
       {/* Smart Model Advisor modal */}

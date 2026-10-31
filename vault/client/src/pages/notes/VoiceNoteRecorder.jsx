@@ -10,7 +10,7 @@ import {
   STYLE_CHOICES, KEEP_CHOICES, readPrefs, savePrefs, describeRecovered, describePrefs,
 } from './voiceNoteUtils.mjs';
 import * as recovery from './voiceRecovery';
-import DialogGuard from '../../components/DialogGuard';
+import Dialog from '../../components/Dialog';
 
 /**
  * "New voice note": record from the microphone, then the words are written into a new note. The recording is turned into text on the
@@ -281,12 +281,13 @@ export default function VoiceNoteRecorder({ onClose, onCreated, mobile = false }
   const hintFor = STYLE_CHOICES.find((c) => c.value === prefs.style)?.hint || '';
 
   return (
-    <div className={`fixed inset-0 flex ${mobile ? 'items-end' : 'items-center'} justify-center z-50 ${mobile ? '' : 'p-4'}`} style={{ background: 'rgba(0,0,0,0.4)' }}>
-      <DialogGuard />
-      <div
-        className={`${mobile ? 'rounded-t-2xl' : 'rounded-2xl'} p-5 sm:p-6 max-w-md w-full shadow-xl space-y-4 max-h-full overflow-y-auto`}
-        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', paddingBottom: mobile ? 'max(20px, env(safe-area-inset-bottom))' : undefined }}
-        role="dialog" aria-label="New voice note"
+    <Dialog raw
+        overlayClassName={`fixed inset-0 flex ${mobile ? 'items-end' : 'items-center'} justify-center z-50 ${mobile ? '' : 'p-4'}`}
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)' }}
+        panelClassName={`${mobile ? 'rounded-t-2xl' : 'rounded-2xl'} p-5 sm:p-6 max-w-md w-full shadow-xl space-y-4 max-h-full overflow-y-auto`}
+        panelStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', paddingBottom: mobile ? 'max(20px, env(safe-area-inset-bottom))' : undefined }}
+        role="dialog"
+        aria-label="New voice note"
       >
         <div className="flex items-start justify-between gap-3">
           <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>New voice note</h3>
@@ -439,7 +440,6 @@ export default function VoiceNoteRecorder({ onClose, onCreated, mobile = false }
             <button type="button" onClick={() => setConfirmDiscard(false)} className="transition-opacity duration-200 hover:opacity-70" style={{ ...muted, background: 'none', border: 'none', cursor: 'pointer', minHeight: 32 }}>No</button>
           </div>
         )}
-      </div>
-    </div>
+      </Dialog>
   );
 }

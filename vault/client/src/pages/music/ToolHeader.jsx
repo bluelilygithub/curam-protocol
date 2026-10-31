@@ -1,7 +1,7 @@
 import React from 'react';
 import { useIcon } from '../../providers/IconProvider';
 import { TOOL_HELP } from './musicTools.mjs';
-import DialogGuard from '../../components/DialogGuard';
+import Dialog from '../../components/Dialog';
 
 // Tool title with a (?) that opens that tool's help, same pattern as Video Tools.
 export function ToolHeader({ id, label, onHelp }) {
@@ -27,15 +27,11 @@ export function ToolHelpModal({ toolId, onClose }) {
   const help = TOOL_HELP[toolId];
   if (!help) return null;
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center z-50 p-4"
-      style={{ background: 'rgba(0,0,0,0.4)' }}
-      onClick={onClose}
-    >
-      <DialogGuard />
-      <div
-        className="rounded-2xl p-6 max-w-md w-full shadow-xl"
-        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', border: '1px solid' }}
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 flex items-center justify-center z-50 p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)' }}
+        panelClassName="rounded-2xl p-6 max-w-md w-full shadow-xl"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', border: '1px solid' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-3">
@@ -59,7 +55,6 @@ export function ToolHelpModal({ toolId, onClose }) {
             </li>
           ))}
         </ul>
-      </div>
-    </div>
+      </Dialog>
   );
 }

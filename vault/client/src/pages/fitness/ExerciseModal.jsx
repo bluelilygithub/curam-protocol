@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useIcon } from '../../providers/IconProvider';
 import { ExerciseDetail } from './LibraryView';
-import DialogGuard from '../../components/DialogGuard';
+import Dialog from '../../components/Dialog';
 
 /**
  * An exercise explained in a window over whatever you were looking at, so closing it puts you straight back where you were.
@@ -23,19 +23,15 @@ export default function ExerciseModal({ slug, onClose, onOpen, onHiddenChange })
   useEffect(() => { panel.current?.scrollTo({ top: 0 }); }, [slug]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6"
-      style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)' }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <DialogGuard />
-      <div
-        ref={panel}
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6"
+        overlayStyle={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)' }}
+        panelRef={panel}
         role="dialog"
         aria-modal="true"
         aria-label="Exercise"
-        className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl"
-        style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+        panelClassName="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl"
+        panelStyle={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
       >
         <div className="sticky top-0 z-10 flex justify-end p-2" style={{ background: 'linear-gradient(var(--color-bg) 70%, transparent)' }}>
           <button
@@ -52,7 +48,6 @@ export default function ExerciseModal({ slug, onClose, onOpen, onHiddenChange })
         <div className="px-3 pb-4 sm:px-5 sm:pb-6 -mt-1">
           <ExerciseDetail slug={slug} onOpen={onOpen} onHiddenChange={onHiddenChange} />
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }

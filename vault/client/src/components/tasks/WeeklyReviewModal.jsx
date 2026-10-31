@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
-import DialogGuard from '../DialogGuard';
+import Dialog from '../Dialog';
 
 const PRIORITY_COLOR = { high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
 
@@ -221,15 +221,11 @@ export default function WeeklyReview({ tasks, onClose, onTasksChanged }) {
   const STEPS = ['Last Week', 'Carry Forward', 'Week Ahead'];
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <DialogGuard />
-      <div
-        className="w-full max-w-2xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col"
-        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', maxHeight: '90vh' }}
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
+        panelClassName="w-full max-w-2xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', maxHeight: '90vh' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-border)' }}>
@@ -575,8 +571,7 @@ export default function WeeklyReview({ tasks, onClose, onTasksChanged }) {
             </button>
           )}
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }
 

@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
-import useDialogBehavior from '../hooks/useDialogBehavior';
+import Dialog from './Dialog';
 
 function EmailModal({ sessionId, studyDeckId, onClose, defaultSubject = 'Chat Export' }) {
-  const panelRef = useDialogBehavior({ onClose });
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState(defaultSubject);
   useEffect(() => {
@@ -36,18 +35,14 @@ function EmailModal({ sessionId, studyDeckId, onClose, defaultSubject = 'Chat Ex
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center px-4"
-      style={{ background: 'rgba(0,0,0,0.5)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        ref={panelRef}
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center px-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.5)' }}
         role="dialog"
         aria-modal="true"
         aria-label="Email"
-        className="w-full max-w-md rounded-xl border shadow-2xl p-6"
-        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+        panelClassName="w-full max-w-md rounded-xl border shadow-2xl p-6"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
       >
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>
@@ -111,8 +106,7 @@ function EmailModal({ sessionId, studyDeckId, onClose, defaultSubject = 'Chat Ex
             Cancel
           </button>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }
 

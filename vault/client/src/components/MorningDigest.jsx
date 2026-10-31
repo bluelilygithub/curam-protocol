@@ -3,7 +3,7 @@ import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import CheckinModal from './mood/CheckinModal';
 import InquirySession from './mood/InquirySession';
-import DialogGuard from './DialogGuard';
+import Dialog from './Dialog';
 
 const PRIORITY_COLOR = { high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
 
@@ -63,14 +63,13 @@ export default function MorningDigest() {
   const dayLabel = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}
-    >
-      <DialogGuard />
-      <div
-        className="w-full max-w-xl rounded-2xl border shadow-2xl flex flex-col"
-        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', maxHeight: '85vh' }}
+    <>
+      <Dialog
+        raw
+        overlayClassName="fixed inset-0 z-[60] flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}
+        panelClassName="w-full max-w-xl rounded-2xl border shadow-2xl flex flex-col"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', maxHeight: '85vh' }}
       >
         {/* Header */}
         <div className="px-6 py-5 border-b flex items-start justify-between" style={{ borderColor: 'var(--color-border)' }}>
@@ -193,7 +192,7 @@ export default function MorningDigest() {
             Got it — let's go
           </button>
         </div>
-      </div>
+      </Dialog>
 
       {showMoodModal && (
         <CheckinModal
@@ -217,6 +216,6 @@ export default function MorningDigest() {
           }}
         />
       )}
-    </div>
+    </>
   );
 }

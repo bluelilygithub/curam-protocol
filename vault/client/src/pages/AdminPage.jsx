@@ -6,7 +6,7 @@ import useAuthStore from '../store/authStore';
 import { relativeTime } from '../utils/relativeTime';
 import UsersAdminPanel from '../components/UsersAdminPanel';
 import SettingsTutorChat from './settings/SettingsTutorChat';
-import DialogGuard from '../components/DialogGuard';
+import Dialog from '../components/Dialog';
 
 // ── Stats helpers ─────────────────────────────────────────────────────────────
 
@@ -1134,13 +1134,12 @@ function AdminPage() {
 
       {/* ── Restore modal ──────────────────────────────────────────────────── */}
       {restoreTarget && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.6)' }}
-          onClick={(e) => { if (e.target === e.currentTarget && !restoreRunning) setRestoreTarget(null); }}
-        >
-          <DialogGuard />
-          <div className="w-full max-w-md rounded-2xl border p-6 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <Dialog raw onClose={() => { if (!restoreRunning) setRestoreTarget(null); }}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.6)' }}
+        panelClassName="w-full max-w-md rounded-2xl border p-6 space-y-4"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+      >
             <div>
               <p className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Restore from backup</p>
               <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
@@ -1195,8 +1194,7 @@ function AdminPage() {
                 </div>
               </>
             )}
-          </div>
-        </div>
+          </Dialog>
       )}
 
       <SettingsTutorChat currentTab="admin-dashboard" />

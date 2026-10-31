@@ -7,7 +7,7 @@ import useToastStore from '../store/toastStore';
 import { useIcon } from '../providers/IconProvider';
 import CrmTutorChat from './crm/CrmTutorChat';
 import ShelfInboxModal from './crm/ShelfInboxModal';
-import DialogGuard from '../components/DialogGuard';
+import Dialog from '../components/Dialog';
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
 
@@ -193,15 +193,11 @@ function ClientModal({ client, onClose, onSaved }) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4"
-      style={{ background: 'rgba(0,0,0,0.5)' }}
-      onClick={onClose}
-    >
-      <DialogGuard />
-      <div
-        className="relative w-full max-w-lg rounded-xl shadow-xl overflow-y-auto"
-        style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', maxHeight: '88vh' }}
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.5)' }}
+        panelClassName="relative w-full max-w-lg rounded-xl shadow-xl overflow-y-auto"
+        panelStyle={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', maxHeight: '88vh' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -299,8 +295,7 @@ function ClientModal({ client, onClose, onSaved }) {
             <Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Btn>
           </div>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }
 

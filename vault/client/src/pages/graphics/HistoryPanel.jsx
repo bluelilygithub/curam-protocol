@@ -5,7 +5,7 @@ import {
   HISTORY_MAX_ITEMS, BATCH_KEEP, listHistory, getHistoryImage, removeHistory, clearHistory, addHistory, makeThumb,
   blobToDataUrl, setHistoryEnabled, timeAgo, signatureOf,
 } from './historyStore.mjs';
-import DialogGuard from '../../components/DialogGuard';
+import Dialog from '../../components/Dialog';
 
 // Renders nothing. Put one beside a tool's result: when the result changes and history is switched on, the result is
 // kept on this device (see historyStore.mjs). A tool that shows "Use in…" gets this automatically.
@@ -78,9 +78,12 @@ export function HistoryPanel({ open, onClose, enabled, onToggle, tick, failed, l
   const clearAll = async () => { setConfirmAll(false); await clearHistory(); reload(); };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto" style={{ background: 'rgba(0,0,0,0.4)' }} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <DialogGuard />
-      <div className="w-full max-w-3xl rounded-2xl border p-5 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)' }}
+        panelClassName="w-full max-w-3xl rounded-2xl border p-5 space-y-4"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+      >
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Recent results</h2>
           <Tooltip text="Close this window."><button type="button" onClick={onClose} className="hover:opacity-60" style={{ color: 'var(--color-muted)' }}>{getIcon('x', { size: 16 })}</button></Tooltip>
@@ -163,7 +166,6 @@ export function HistoryPanel({ open, onClose, enabled, onToggle, tick, failed, l
             </div>
           </>
         )}
-      </div>
-    </div>
+      </Dialog>
   );
 }

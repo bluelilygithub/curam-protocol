@@ -9,7 +9,7 @@ import useProcessingStore from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import Tooltip from '../components/Tooltip';
 import { scaleIngredients } from '../utils/recipeScaling';
-import DialogGuard from '../components/DialogGuard';
+import Dialog from '../components/Dialog';
 
 // Same button-hierarchy pattern as ContractReviewPage.jsx's PrimaryButton/
 // SecondaryButton — page-local per DESIGN.md's "no shared <Button>
@@ -102,15 +102,11 @@ const TOOL_HELP = {
 
 function HelpModal({ onClose }) {
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center z-50"
-      style={{ background: 'rgba(0,0,0,0.4)' }}
-      onClick={onClose}
-    >
-      <DialogGuard />
-      <div
-        className="rounded-xl p-6 max-w-md w-full mx-4 shadow-xl"
-        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 flex items-center justify-center z-50"
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)' }}
+        panelClassName="rounded-xl p-6 max-w-md w-full mx-4 shadow-xl"
+        panelStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 mb-3">
@@ -126,8 +122,7 @@ function HelpModal({ onClose }) {
             </li>
           ))}
         </ul>
-      </div>
-    </div>
+      </Dialog>
   );
 }
 

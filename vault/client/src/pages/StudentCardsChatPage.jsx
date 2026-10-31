@@ -14,7 +14,7 @@ import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import ExportMenu from '../components/ExportMenu';
 import useToastStore from '../store/toastStore';
 import { extractLatestVaultDeck, extractLatestVaultChoices, stripVaultMachineBlocks } from '../utils/studyDeckParse';
-import DialogGuard from '../components/DialogGuard';
+import Dialog from '../components/Dialog';
 
 const TEMPERATURES = [
   { label: 'Precise', value: 0.2 },
@@ -1235,18 +1235,14 @@ export default function StudentCardsChatPage() {
       )}
 
       {libraryDetail && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center px-4"
-          style={{ background: 'rgba(0,0,0,0.45)' }}
-          onClick={() => dismissLibraryDetail()}
-        >
-          <DialogGuard />
-          <div
-            role="dialog"
-            className="w-full max-w-[min(96vw,900px)] max-h-[88vh] overflow-y-auto rounded-xl border shadow-2xl p-5 sm:p-6"
-            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-            onClick={(e) => e.stopPropagation()}
-          >
+        <Dialog raw onClose={() => dismissLibraryDetail()}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center px-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.45)' }}
+        role="dialog"
+        panelClassName="w-full max-w-[min(96vw,900px)] max-h-[88vh] overflow-y-auto rounded-xl border shadow-2xl p-5 sm:p-6"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{libraryDetail.title || 'Saved deck'}</h3>
               <button type="button" className="text-xs hover:opacity-70" style={{ color: 'var(--color-muted)' }} onClick={() => dismissLibraryDetail()}>Close</button>
@@ -1293,8 +1289,7 @@ export default function StudentCardsChatPage() {
                 Email this deck
               </button>
             </div>
-          </div>
-        </div>
+          </Dialog>
       )}
     </div>
   );

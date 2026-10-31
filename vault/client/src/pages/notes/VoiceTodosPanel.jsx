@@ -4,7 +4,7 @@ import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
 import { NOTE_TIPS } from './noteTips.mjs';
 import { localDay } from './noteTemplates.mjs';
-import DialogGuard from '../../components/DialogGuard';
+import Dialog from '../../components/Dialog';
 
 /**
  * After a voice note is made: the to-dos found in what was said, each with a tick, so the ones that matter can go to Tasks in one tap.
@@ -39,12 +39,13 @@ export default function VoiceTodosPanel({ todos, note, mobile, onMade, onLinked,
 
   const btn = (primary) => ({ minHeight: mobile ? 48 : 36, background: primary ? 'var(--color-primary)' : 'var(--color-bg)', color: primary ? '#fff' : 'var(--color-text)', border: primary ? 'none' : '1px solid var(--color-border)' });
   return (
-    <div className={`fixed inset-0 flex ${mobile ? 'items-end' : 'items-center'} justify-center z-50 ${mobile ? '' : 'p-4'}`} style={{ background: 'rgba(0,0,0,0.4)' }}>
-      <DialogGuard />
-      <div
-        className={`${mobile ? 'rounded-t-2xl' : 'rounded-2xl'} p-5 max-w-md w-full shadow-xl space-y-3 max-h-full overflow-y-auto`}
-        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', paddingBottom: mobile ? 'max(20px, env(safe-area-inset-bottom))' : undefined }}
-        role="dialog" aria-label="To-dos from your voice note"
+    <Dialog raw
+        overlayClassName={`fixed inset-0 flex ${mobile ? 'items-end' : 'items-center'} justify-center z-50 ${mobile ? '' : 'p-4'}`}
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)' }}
+        panelClassName={`${mobile ? 'rounded-t-2xl' : 'rounded-2xl'} p-5 max-w-md w-full shadow-xl space-y-3 max-h-full overflow-y-auto`}
+        panelStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', paddingBottom: mobile ? 'max(20px, env(safe-area-inset-bottom))' : undefined }}
+        role="dialog"
+        aria-label="To-dos from your voice note"
       >
         <div className="flex items-start justify-between gap-3">
           <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{items.length === 1 ? 'A to-do' : `${items.length} to-dos`} in what you said</h3>
@@ -75,7 +76,6 @@ export default function VoiceTodosPanel({ todos, note, mobile, onMade, onLinked,
           </Tooltip>
           <button type="button" onClick={onClose} className="flex-1 px-3 rounded-lg text-sm hover:opacity-70 transition-opacity duration-200" style={btn(false)}>Not now</button>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }

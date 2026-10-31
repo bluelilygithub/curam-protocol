@@ -6,7 +6,7 @@ import useProcessingStore from '../store/processingStore';
 import { useIcon } from '../providers/IconProvider';
 import { LANGUAGES, orderLanguages, languageOptionLabel } from '../utils/translateLanguages';
 import { pickPdfFontUrl, needsNotoFont } from '../utils/translatePdfFonts.mjs';
-import DialogGuard from '../components/DialogGuard';
+import Dialog from '../components/Dialog';
 
 // Deployed commit shown on QA/Lessons-learnt reports so a stale build is checkable at a glance
 // instead of re-testing a fix against a report that never actually deployed — see /api/health.
@@ -89,12 +89,11 @@ function Btn({ onClick, disabled, variant = 'primary', children, className = '' 
 
 function Modal({ title, onClose, children, wide }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4"
-      style={{ background: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
-      <DialogGuard />
-      <div
-        className={`relative w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} rounded-xl shadow-xl overflow-y-auto`}
-        style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', maxHeight: '85vh' }}
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.5)' }}
+        panelClassName={`relative w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} rounded-xl shadow-xl overflow-y-auto`}
+        panelStyle={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', maxHeight: '85vh' }}
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
@@ -103,8 +102,7 @@ function Modal({ title, onClose, children, wide }) {
             style={{ color: 'var(--color-muted)' }}>✕</button>
         </div>
         <div className="p-5">{children}</div>
-      </div>
-    </div>
+      </Dialog>
   );
 }
 
@@ -2472,18 +2470,14 @@ const TABS = ['Translations', 'Glossaries'];
 // tooltips across the intake form.
 function TranslateAboutModal({ onClose, getIcon }) {
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center z-50"
-      style={{ background: 'rgba(0,0,0,0.45)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="translate-about-title"
-    >
-      <DialogGuard />
-      <div
-        className="relative flex flex-col rounded-2xl border shadow-2xl mx-4 overflow-hidden"
-        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '100%', maxWidth: 560, maxHeight: '85dvh' }}
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 flex items-center justify-center z-50"
+        overlayStyle={{ background: 'rgba(0,0,0,0.45)' }}
+        panelClassName="relative flex flex-col rounded-2xl border shadow-2xl mx-4 overflow-hidden"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '100%', maxWidth: 560, maxHeight: '85dvh' }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="translate-about-title"
       >
         <div className="flex items-start justify-between gap-3 px-5 py-4 border-b shrink-0" style={{ borderColor: 'var(--color-border)' }}>
           <div className="flex items-start gap-3 min-w-0">
@@ -2541,8 +2535,7 @@ function TranslateAboutModal({ onClose, getIcon }) {
             Got it
           </button>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }
 

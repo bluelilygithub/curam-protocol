@@ -3,7 +3,7 @@ import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
 import GeneratorPanel from './GeneratorPanel';
 import { BTN, BTN_OUTLINE, BTN_PRIMARY } from './shared';
-import DialogGuard from '../../components/DialogGuard';
+import Dialog from '../../components/Dialog';
 
 /**
  * "Make one" for a single login: every generator option in a window, so each login can have its own rules (length, kinds of character,
@@ -23,14 +23,16 @@ export default function GeneratorModal({ title, startOptions, hasSavedRules, onU
   }, [onClose]);
 
   return (
-    <div
-      // z-[44], not the usual z-50: tooltips are z-45, and this window is full of controls that have one
-      className="fixed inset-0 z-[44] flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <DialogGuard />
-      <div role="dialog" aria-modal="true" aria-label="Password rules for this login" className="w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+    // z-[44], not the usual z-50: tooltips are z-45, and this window is full of controls that have one
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 z-[44] flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Password rules for this login"
+        panelClassName="w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+        panelStyle={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+      >
         <div className="flex items-center justify-between px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-border)' }}>
           <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Password rules{title ? ` for ${title}` : ''}</h2>
           <Tooltip text="Close without using a password. Nothing changes.">
@@ -55,7 +57,6 @@ export default function GeneratorModal({ title, startOptions, hasSavedRules, onU
           </Tooltip>
           <button type="button" onClick={onClose} className={BTN} style={BTN_OUTLINE}>Cancel</button>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }

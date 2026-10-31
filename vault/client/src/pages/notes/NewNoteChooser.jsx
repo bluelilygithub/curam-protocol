@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { useIcon } from '../../providers/IconProvider';
-import DialogGuard from '../../components/DialogGuard';
+import Dialog from '../../components/Dialog';
 
 /**
  * What the + on the Notes list opens: a new note, written or spoken. "Write a note" opens the editor, where the title and the text are
@@ -37,15 +37,11 @@ export default function NewNoteChooser({ onWrite, onVoice, onTalk, onTemplate, o
   );
 
   return (
-    <div
-      className={`fixed inset-0 flex ${mobile ? 'items-end' : 'items-center'} justify-center z-50`}
-      style={{ background: 'rgba(0,0,0,0.4)' }}
-      onClick={onClose}
-    >
-      <DialogGuard />
-      <div
-        className={`w-full max-w-md p-5 space-y-3 shadow-xl ${mobile ? 'rounded-t-2xl' : 'rounded-2xl m-4'}`}
-        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', paddingBottom: mobile ? 'max(20px, env(safe-area-inset-bottom))' : undefined }}
+    <Dialog raw onClose={onClose}
+        overlayClassName={`fixed inset-0 flex ${mobile ? 'items-end' : 'items-center'} justify-center z-50`}
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)' }}
+        panelClassName={`w-full max-w-md p-5 space-y-3 shadow-xl ${mobile ? 'rounded-t-2xl' : 'rounded-2xl m-4'}`}
+        panelStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', paddingBottom: mobile ? 'max(20px, env(safe-area-inset-bottom))' : undefined }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label="New note"
@@ -64,7 +60,6 @@ export default function NewNoteChooser({ onWrite, onVoice, onTalk, onTemplate, o
         {option('mic', 'Record a voice note', 'Talk it through. Your words are written up into a note for you.', onVoice, false)}
         {onTalk && option('volume-2', 'Talk it through', 'Ask out loud and hear the answers. When you finish, the conversation becomes a note with a summary.', onTalk, false)}
         {onTemplate && option('file-text', 'From a template', 'Meeting notes, a client call, a weekly review, or one of your own.', onTemplate, false)}
-      </div>
-    </div>
+      </Dialog>
   );
 }

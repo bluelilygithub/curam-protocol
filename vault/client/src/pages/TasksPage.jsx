@@ -17,7 +17,7 @@ import { parseNaturalDate, formatDateForInput, toISOForAPI } from '../utils/pars
 import AttachmentChip from '../components/AttachmentChip';
 import { startTasksTour, TOUR_KEY as TASKS_TOUR_KEY } from '../utils/tours/tasksTour';
 import PageToolbar from '../components/PageToolbar';
-import DialogGuard from '../components/DialogGuard';
+import Dialog from '../components/Dialog';
 
 const PRIORITY_COLOR = { high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
 const PRIORITY_LABEL = { high: 'High', medium: 'Medium', low: 'Low' };
@@ -116,12 +116,12 @@ function TaskShortcutsModal({ onClose }) {
     return () => document.removeEventListener('keydown', handler);
   }, [onClose]);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <DialogGuard />
-      <div className="w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden"
-        style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
+        panelClassName="w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden"
+        panelStyle={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+      >
         <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
           <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Tasks Keyboard Shortcuts</h2>
           <button onClick={onClose} className="hover:opacity-60 transition-opacity" style={{ color: 'var(--color-muted)' }}>✕</button>
@@ -139,8 +139,7 @@ function TaskShortcutsModal({ onClose }) {
             </div>
           ))}
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }
 
@@ -185,15 +184,11 @@ function MatrixMoveModal({ task, fromQuadrant, toQuadrant, onConfirm, onCancel }
     return () => document.removeEventListener('keydown', handler);
   }, [onCancel]);
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
-    >
-      <DialogGuard />
-      <div
-        className="w-full max-w-sm rounded-2xl border shadow-2xl p-6 space-y-4"
-        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+    <Dialog raw onClose={onCancel}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
+        panelClassName="w-full max-w-sm rounded-2xl border shadow-2xl p-6 space-y-4"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
       >
         {/* Quadrant transition header */}
         <div className="flex items-center gap-2 text-sm font-semibold">
@@ -238,8 +233,7 @@ function MatrixMoveModal({ task, fromQuadrant, toQuadrant, onConfirm, onCancel }
             Move to {to.label}
           </button>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }
 
@@ -2080,16 +2074,12 @@ export default function TasksPage() {
       )}
       {/* Recurring delete modal */}
       {recurringDeleteModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.55)' }}
-          onClick={(e) => { if (e.target === e.currentTarget) setRecurringDeleteModal(null); }}
-        >
-          <DialogGuard />
-          <div
-            className="w-full max-w-sm rounded-2xl border p-6 space-y-4"
-            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-          >
+        <Dialog raw onClose={() => setRecurringDeleteModal(null)}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.55)' }}
+        panelClassName="w-full max-w-sm rounded-2xl border p-6 space-y-4"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+      >
             <p className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Delete recurring task</p>
             <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
               "{recurringDeleteModal.task.title}" repeats {recurringDeleteModal.task.recurrence}. What would you like to delete?
@@ -2117,8 +2107,7 @@ export default function TasksPage() {
                 Cancel
               </button>
             </div>
-          </div>
-        </div>
+          </Dialog>
       )}
 
       {/* Templates side panel */}
@@ -2570,9 +2559,12 @@ export default function TasksPage() {
 
       {/* Task form modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }}>
-          <DialogGuard />
-          <div className="w-full max-w-lg rounded-2xl border shadow-xl overflow-hidden" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <Dialog raw
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.45)' }}
+        panelClassName="w-full max-w-lg rounded-2xl border shadow-xl overflow-hidden"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+      >
             <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
               <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{editTask ? 'Edit Task' : 'New Task'}</h2>
               <button onClick={() => setShowForm(false)} style={{ color: 'var(--color-muted)' }}>{getIcon('x', { size: 16 })}</button>
@@ -2885,8 +2877,7 @@ export default function TasksPage() {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+          </Dialog>
       )}
 
       {/* Keyboard shortcuts modal */}

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { useIcon } from '../../providers/IconProvider';
-import DialogGuard from '../../components/DialogGuard';
+import Dialog from '../../components/Dialog';
 
 export const TUTORIAL_SEEN_KEY = 'vault_fonts_tutorial_seen';
 
@@ -26,15 +26,11 @@ export default function FontTutorialModal({ onClose, onRunDemo }) {
   const getIcon = useIcon();
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <DialogGuard />
-      <div
-        className="w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden"
-        style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
+        panelClassName="w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden"
+        panelStyle={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
           <div className="flex items-center gap-2">
@@ -90,7 +86,6 @@ export default function FontTutorialModal({ onClose, onRunDemo }) {
             Show me →
           </button>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }

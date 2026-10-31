@@ -10,7 +10,7 @@ import api from '../utils/apiClient';
 import { formatSessionLabel, formatSessionLocation, formatSessionWhen, sessionPreviewText } from '../utils/sessionDisplay';
 import CheckinModal from '../components/mood/CheckinModal';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
-import DialogGuard from '../components/DialogGuard';
+import Dialog from '../components/Dialog';
 
 const EMOTION_COLOURS = {
   joy: '#C9A84C', trust: '#6B9E70', fear: '#507A60', surprise: '#6B97B5',
@@ -911,9 +911,12 @@ function ProjectList() {
 
       {/* Delete confirmation */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
-          <DialogGuard />
-          <div className="w-full max-w-sm mx-4 rounded-2xl border shadow-xl p-6" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <Dialog raw
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center"
+        overlayStyle={{ background: 'rgba(0,0,0,0.45)' }}
+        panelClassName="w-full max-w-sm mx-4 rounded-2xl border shadow-xl p-6"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+      >
             <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Delete "{deleteTarget.name}"?</h3>
             <p className="text-xs mb-5" style={{ color: 'var(--color-muted)' }}>
               This will permanently delete the project
@@ -924,15 +927,17 @@ function ProjectList() {
               <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 rounded-xl text-xs border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
               <button onClick={handleConfirmDelete} className="px-4 py-2 rounded-xl text-xs font-medium text-white bg-red-500 hover:opacity-80 transition-opacity">Delete project</button>
             </div>
-          </div>
-        </div>
+          </Dialog>
       )}
 
       {/* Archive confirmation */}
       {archiveTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
-          <DialogGuard />
-          <div className="w-full max-w-sm mx-4 rounded-2xl border shadow-xl p-6" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <Dialog raw
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center"
+        overlayStyle={{ background: 'rgba(0,0,0,0.45)' }}
+        panelClassName="w-full max-w-sm mx-4 rounded-2xl border shadow-xl p-6"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+      >
             <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Archive "{archiveTarget.name}"?</h3>
             <p className="text-xs mb-5" style={{ color: 'var(--color-muted)' }}>
               It will be hidden from your workspace but all data will be kept. You can unarchive it at any time.
@@ -941,8 +946,7 @@ function ProjectList() {
               <button onClick={() => setArchiveTarget(null)} className="px-4 py-2 rounded-xl text-xs border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
               <button onClick={handleConfirmArchive} className="px-4 py-2 rounded-xl text-xs font-medium text-white transition-opacity hover:opacity-80" style={{ background: 'var(--color-primary)' }}>Archive project</button>
             </div>
-          </div>
-        </div>
+          </Dialog>
       )}
 
       {/* Toast */}

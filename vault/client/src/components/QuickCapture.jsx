@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
-import DialogGuard from './DialogGuard';
+import Dialog from './Dialog';
 
 const EMPTY = { title: '', priority: 'medium', dueDate: '', isUrgent: 0, isMilestone: 0, projectId: null, sessionId: null, notes: '' };
 
@@ -69,16 +69,12 @@ export default function QuickCapture() {
 
       {/* Modal */}
       {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.45)' }}
-          onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
-        >
-          <DialogGuard />
-          <div
-            className="w-full max-w-sm rounded-2xl border shadow-2xl overflow-hidden"
-            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-          >
+        <Dialog raw onClose={() => setOpen(false)}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.45)' }}
+        panelClassName="w-full max-w-sm rounded-2xl border shadow-2xl overflow-hidden"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+      >
             <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
               <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Quick Capture</span>
               <button onClick={() => setOpen(false)} className="hover:opacity-60" style={{ color: 'var(--color-muted)' }}>
@@ -168,8 +164,7 @@ export default function QuickCapture() {
                 {saving ? 'Saving…' : 'Capture'}
               </button>
             </div>
-          </div>
-        </div>
+          </Dialog>
       )}
 
       {/* Toast */}

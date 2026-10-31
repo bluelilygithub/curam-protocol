@@ -8,7 +8,7 @@ import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import Tooltip from '../components/Tooltip';
 import ConfirmModal from '../components/ConfirmModal';
 import { startContractReviewTour, TOUR_KEY as CR_TOUR_KEY } from '../utils/tours/contractReviewTour';
-import DialogGuard from '../components/DialogGuard';
+import Dialog from '../components/Dialog';
 
 const CARD = { background: 'var(--color-surface)', borderColor: 'var(--color-border)' };
 const FIELD = { background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' };
@@ -525,15 +525,11 @@ function ContractReviewHelp({ onClose, getIcon }) {
   ];
 
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center z-50"
-      style={{ background: 'rgba(0,0,0,0.45)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <DialogGuard />
-      <div
-        className="relative flex flex-col rounded-2xl border shadow-2xl mx-4 overflow-hidden"
-        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '100%', maxWidth: 720, maxHeight: '90dvh' }}
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 flex items-center justify-center z-50"
+        overlayStyle={{ background: 'rgba(0,0,0,0.45)' }}
+        panelClassName="relative flex flex-col rounded-2xl border shadow-2xl mx-4 overflow-hidden"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '100%', maxWidth: 720, maxHeight: '90dvh' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b shrink-0" style={{ borderColor: 'var(--color-border)' }}>
@@ -613,8 +609,7 @@ function ContractReviewHelp({ onClose, getIcon }) {
             Got it
           </button>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }
 

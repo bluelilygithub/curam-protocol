@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { SLIDESHOW_CAN, orderedLimits } from './slideshowLimits.mjs';
-import DialogGuard from '../../components/DialogGuard';
+import Dialog from '../../components/Dialog';
 
 const SLIDESHOW_FOOTNOTE = 'It only sees your description and the file names — not the pictures themselves.';
 
@@ -30,17 +30,14 @@ export default function SlideshowLimitsModal({
   }, [onCancel]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="slideshow-limits-title"
-    >
-      <DialogGuard />
-      <div
-        className="w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden max-h-[88vh] flex flex-col"
-        style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+    <Dialog raw
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
+        panelClassName="w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden max-h-[88vh] flex flex-col"
+        panelStyle={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="slideshow-limits-title"
       >
         <div className="px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-border)' }}>
           <h2 id="slideshow-limits-title" className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
@@ -100,7 +97,6 @@ export default function SlideshowLimitsModal({
             {confirmLabel}
           </button>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }

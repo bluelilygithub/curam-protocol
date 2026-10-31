@@ -3,7 +3,7 @@ import api from '../../utils/apiClient';
 import Tooltip from '../../components/Tooltip';
 import useProjectStore from '../../store/projectStore';
 import { TALK_TIPS } from './talkTips.mjs';
-import DialogGuard from '../../components/DialogGuard';
+import Dialog from '../../components/Dialog';
 
 /**
  * The end of a conversation: the note it would become (a summary, decisions, to-dos as tick-boxes, then everything that was said), to read, change,
@@ -27,12 +27,13 @@ export default function TalkReviewPanel({ proposal, mobile, saving, onSave, onKe
   const todoCount = (body.match(/^\s*[-*+]\s+\[ \]\s+\S/gm) || []).length;
 
   return (
-    <div className={`fixed inset-0 flex ${mobile ? 'items-end' : 'items-center'} justify-center z-50 ${mobile ? '' : 'p-4'}`} style={{ background: 'rgba(0,0,0,0.4)' }}>
-      <DialogGuard />
-      <div
-        className={`${mobile ? 'rounded-t-2xl' : 'rounded-2xl'} w-full ${mobile ? '' : 'max-w-2xl'} shadow-xl flex flex-col`}
-        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', maxHeight: mobile ? '94dvh' : '86vh', paddingBottom: mobile ? 'env(safe-area-inset-bottom)' : undefined }}
-        role="dialog" aria-label="Save this conversation as a note"
+    <Dialog raw
+        overlayClassName={`fixed inset-0 flex ${mobile ? 'items-end' : 'items-center'} justify-center z-50 ${mobile ? '' : 'p-4'}`}
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)' }}
+        panelClassName={`${mobile ? 'rounded-t-2xl' : 'rounded-2xl'} w-full ${mobile ? '' : 'max-w-2xl'} shadow-xl flex flex-col`}
+        panelStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', maxHeight: mobile ? '94dvh' : '86vh', paddingBottom: mobile ? 'env(safe-area-inset-bottom)' : undefined }}
+        role="dialog"
+        aria-label="Save this conversation as a note"
       >
         <div className="p-4 pb-2 flex-shrink-0">
           <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Your conversation as a note</h3>
@@ -70,7 +71,6 @@ export default function TalkReviewPanel({ proposal, mobile, saving, onSave, onKe
             <button type="button" disabled={saving} onClick={onDiscard} className="px-4 rounded-lg text-sm hover:opacity-70 transition-opacity duration-200" style={{ minHeight: mobile ? 48 : 38, color: 'var(--color-muted)' }}>Do not save</button>
           </Tooltip>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }

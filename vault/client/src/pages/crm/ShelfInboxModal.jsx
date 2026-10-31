@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import api from '../../utils/apiClient';
 import useToastStore from '../../store/toastStore';
 import { useIcon } from '../../providers/IconProvider';
-import DialogGuard from '../../components/DialogGuard';
+import Dialog from '../../components/Dialog';
 
 /**
  * CRM -> "Unfiled from Shelf": things the Vault Shelf Windows app sent to the CRM with no client chosen (docs/vault-shelf.md).
@@ -87,9 +87,15 @@ export default function ShelfInboxModal({ onClose, onChanged }) {
 
   const border = { borderColor: 'var(--color-border)' };
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.4)' }} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <DialogGuard />
-      <div role="dialog" aria-modal="true" aria-label="Unfiled from Shelf" className="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl border" style={{ ...border, background: 'var(--color-surface)' }}>
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)' }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Unfiled from Shelf"
+        panelClassName="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl border"
+        panelStyle={{ ...border, background: 'var(--color-surface)' }}
+      >
         <div className="flex items-center justify-between gap-3 p-4 border-b" style={border}>
           <div>
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Unfiled from Shelf</h2>
@@ -151,7 +157,6 @@ export default function ShelfInboxModal({ onClose, onChanged }) {
             </div>
           ))}
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }

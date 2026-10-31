@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import useDialogBehavior from '../hooks/useDialogBehavior';
+import Dialog from './Dialog';
 
 export default function ModelAdvisorModal({
   isOpen,
@@ -12,7 +12,6 @@ export default function ModelAdvisorModal({
   onDismiss,
 }) {
   const [selected, setSelected] = useState(null);
-  const panelRef = useDialogBehavior({ onClose: onDismiss, active: !!isOpen });
 
   // Pre-select the first suggested model whenever the modal opens
   useEffect(() => {
@@ -28,18 +27,14 @@ export default function ModelAdvisorModal({
   const canSwitch = !needsImage && selected !== null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.6)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onDismiss(); }}
-    >
-      <div
-        ref={panelRef}
+    <Dialog raw onClose={onDismiss}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.6)' }}
         role="dialog"
         aria-modal="true"
         aria-label="Switch model"
-        className="w-full max-w-md rounded-2xl border p-6 space-y-4"
-        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+        panelClassName="w-full max-w-md rounded-2xl border p-6 space-y-4"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -146,7 +141,6 @@ export default function ModelAdvisorModal({
             Keep &amp; Send
           </button>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }

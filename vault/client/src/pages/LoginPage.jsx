@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import { useIcon } from '../providers/IconProvider';
-import DialogGuard from '../components/DialogGuard';
+import Dialog from '../components/Dialog';
 
 function safeNextPath(search) {
   const next = new URLSearchParams(search || '').get('next');
@@ -77,16 +77,12 @@ function LoginPage() {
     >
       {/* Forgot password modal */}
       {showForgot && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center px-4"
-          style={{ background: 'rgba(0,0,0,0.5)' }}
-          onClick={(e) => { if (e.target === e.currentTarget) setShowForgot(false); }}
-        >
-          <DialogGuard />
-          <div
-            className="w-full max-w-sm rounded-2xl border p-6 space-y-4"
-            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-          >
+        <Dialog raw onClose={() => setShowForgot(false)}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center px-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.5)' }}
+        panelClassName="w-full max-w-sm rounded-2xl border p-6 space-y-4"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+      >
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Reset Password</h2>
               <button
@@ -125,8 +121,7 @@ function LoginPage() {
                 {forgotLoading ? 'Sending…' : 'Send Reset Link'}
               </button>
             </form>
-          </div>
-        </div>
+          </Dialog>
       )}
 
       <div className="w-full max-w-sm">

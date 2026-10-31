@@ -4,7 +4,7 @@ import api from '../../../utils/apiClient';
 import Tooltip from '../../../components/Tooltip';
 import { useGraphics } from '../GraphicsContext';
 import { STYLE_PRESETS, useProcessingWhile, formatCost, CostNote } from '../shared';
-import DialogGuard from '../../../components/DialogGuard';
+import Dialog from '../../../components/Dialog';
 
 export default function GenerateTool({ active }) {
   const getIcon = useIcon();
@@ -426,9 +426,12 @@ export default function GenerateTool({ active }) {
       </section>
 
       {restrictionWarning && !generating && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: 'rgba(0,0,0,0.55)' }}>
-          <DialogGuard />
-          <div className="w-full max-w-md rounded-2xl border p-5 shadow-xl" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+        <Dialog raw
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center px-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.55)' }}
+        panelClassName="w-full max-w-md rounded-2xl border p-5 shadow-xl"
+        panelStyle={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+      >
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
               This description is not allowed
             </h2>
@@ -453,8 +456,7 @@ export default function GenerateTool({ active }) {
                 OK
               </button>
             </div>
-          </div>
-        </div>
+          </Dialog>
       )}
     </>
   );

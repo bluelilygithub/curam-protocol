@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useIcon } from '../providers/IconProvider';
-import DialogGuard from './DialogGuard';
+import Dialog from './Dialog';
 
 export default function NewChatModal({
   projects = [],
@@ -35,15 +35,11 @@ export default function NewChatModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.45)' }}
-      onClick={onClose}
-    >
-      <DialogGuard />
-      <div
-        className="w-full max-w-md rounded-2xl border shadow-xl p-6"
-        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.45)' }}
+        panelClassName="w-full max-w-md rounded-2xl border shadow-xl p-6"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
@@ -134,7 +130,6 @@ export default function NewChatModal({
             Start chat
           </button>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }

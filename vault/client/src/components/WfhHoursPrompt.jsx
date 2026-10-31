@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../utils/apiClient';
 import Tooltip from './Tooltip';
-import DialogGuard from './DialogGuard';
+import Dialog from './Dialog';
 
 // Global daily popup prompting for yesterday's (and any recent unfilled) work-from-home hours —
 // a SEPARATE, purely diary/substantiation record from the periodic dollar-deduction "Save Hours"
@@ -76,14 +76,11 @@ export default function WfhHoursPrompt({ enabled }) {
   };
 
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center z-50"
-      style={{ background: 'rgba(0,0,0,0.4)' }}
-    >
-      <DialogGuard />
-      <div
-        className="rounded-xl p-6 max-w-md w-full mx-4 shadow-xl"
-        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+    <Dialog raw
+        overlayClassName="fixed inset-0 flex items-center justify-center z-50"
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)' }}
+        panelClassName="rounded-xl p-6 max-w-md w-full mx-4 shadow-xl"
+        panelStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
       >
         <div className="flex items-start justify-between gap-3 mb-3">
           <h3 className="font-semibold text-base" style={{ color: 'var(--color-text)' }}>
@@ -146,7 +143,6 @@ export default function WfhHoursPrompt({ enabled }) {
             Didn't work from home that day (0 hours)
           </button>
         </Tooltip>
-      </div>
-    </div>
+      </Dialog>
   );
 }

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
-import DialogGuard from '../../components/DialogGuard';
+import Dialog from '../../components/Dialog';
 
 /**
  * The "@" pull-ins: search the web, Gmail or Calendar and put what is found into the open note. One component for all three
@@ -103,11 +103,11 @@ export default function InsertSourceModal({ kind, onInsert, onClose }) {
   const doneLabel = kind === 'web' ? 'Insert' : 'Done';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-3 sm:p-4" style={{ background: 'rgba(0,0,0,0.35)' }} onClick={onClose}>
-      <DialogGuard />
-      <div
-        className="rounded-xl border shadow-xl overflow-hidden w-full mt-12 sm:mt-0"
-        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', maxWidth: 520 }}
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-3 sm:p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.35)' }}
+        panelClassName="rounded-xl border shadow-xl overflow-hidden w-full mt-12 sm:mt-0"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', maxWidth: 520 }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label={cfg.placeholder}
@@ -181,7 +181,6 @@ export default function InsertSourceModal({ kind, onInsert, onClose }) {
         ) : !error && (
           <p className="px-3 pb-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>{cfg.hint}</p>
         )}
-      </div>
-    </div>
+      </Dialog>
   );
 }

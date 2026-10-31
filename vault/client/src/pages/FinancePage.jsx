@@ -12,7 +12,7 @@ import { useIcon } from '../providers/IconProvider';
 import useProcessingStore from '../store/processingStore';
 import ExtraReport, { EXTRA_REPORTS, REPORT_GROUPS } from './finance/ExtraReports';
 import StatementReview from './finance/StatementReview';
-import DialogGuard from '../components/DialogGuard';
+import Dialog from '../components/Dialog';
 
 // ── Per-tab help (TOOL_HELP + HelpModal) ────────────────────────────────────────
 // Mirrors the HtmlAuditPage / SeoAuditPage TOOL_HELP + click-to-open HelpModal pattern,
@@ -214,15 +214,11 @@ const TOOL_HELP = {
 function FinanceHelpModal({ tab, onClose }) {
   const entry = TOOL_HELP[tab] || TOOL_HELP.Dashboard;
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center z-50"
-      style={{ background: 'rgba(0,0,0,0.4)' }}
-      onClick={onClose}
-    >
-      <DialogGuard />
-      <div
-        className="rounded-xl p-6 max-w-md w-full mx-4 shadow-xl"
-        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 flex items-center justify-center z-50"
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)' }}
+        panelClassName="rounded-xl p-6 max-w-md w-full mx-4 shadow-xl"
+        panelStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 mb-3">
@@ -238,8 +234,7 @@ function FinanceHelpModal({ tab, onClose }) {
             </li>
           ))}
         </ul>
-      </div>
-    </div>
+      </Dialog>
   );
 }
 
@@ -290,15 +285,11 @@ function Btn({ onClick, disabled, variant = 'primary', children, className = '' 
 
 function Modal({ title, onClose, children, wide }) {
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4"
-      style={{ background: 'rgba(0,0,0,0.5)' }}
-      onClick={onClose}
-    >
-      <DialogGuard />
-      <div
-        className={`relative w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} rounded-xl shadow-xl overflow-y-auto`}
-        style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', maxHeight: '85vh' }}
+    <Dialog raw onClose={onClose}
+        overlayClassName="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.5)' }}
+        panelClassName={`relative w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} rounded-xl shadow-xl overflow-y-auto`}
+        panelStyle={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', maxHeight: '85vh' }}
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
@@ -310,8 +301,7 @@ function Modal({ title, onClose, children, wide }) {
           >✕</button>
         </div>
         <div className="p-5">{children}</div>
-      </div>
-    </div>
+      </Dialog>
   );
 }
 
@@ -4063,9 +4053,12 @@ function BASStatusBar({ status }) {
 
 function WarningsModal({ warnings, unpaidInvoices, onProceed, onCancel }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
-      <DialogGuard />
-      <div className="relative w-full max-w-lg rounded-xl shadow-xl overflow-y-auto" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', maxHeight: '85vh' }}>
+    <Dialog raw
+        overlayClassName="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.5)' }}
+        panelClassName="relative w-full max-w-lg rounded-xl shadow-xl overflow-y-auto"
+        panelStyle={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', maxHeight: '85vh' }}
+      >
         <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
           <span style={{ color: '#f59e0b' }}>⚠</span>
           <span className="font-semibold text-sm" style={{ color: '#f59e0b' }}>Reconciliation Warnings</span>
@@ -4124,8 +4117,7 @@ function WarningsModal({ warnings, unpaidInvoices, onProceed, onCancel }) {
             </Tooltip>
           </div>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }
 
@@ -5847,9 +5839,12 @@ function RecurringTab() {
 
       {/* Create / Edit modal */}
       {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.4)' }}>
-          <DialogGuard />
-          <div className="w-full max-w-xl rounded-2xl shadow-2xl overflow-y-auto max-h-[90vh]" style={{ background: 'var(--color-surface)' }}>
+        <Dialog raw
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)' }}
+        panelClassName="w-full max-w-xl rounded-2xl shadow-2xl overflow-y-auto max-h-[90vh]"
+        panelStyle={{ background: 'var(--color-surface)' }}
+      >
             <div className="p-6 border-b" style={{ borderColor: 'var(--color-border)' }}>
               <h3 className="font-semibold" style={{ color: 'var(--color-text)' }}>{modal === 'edit' ? 'Edit' : 'New'} Recurring Schedule</h3>
             </div>
@@ -5934,22 +5929,23 @@ function RecurringTab() {
               <Tooltip text="Discard without saving."><button onClick={() => setModal(null)} className="px-4 py-2 text-sm rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button></Tooltip>
               <Tooltip text="Save this recurring schedule."><button onClick={save} disabled={saving} className="px-4 py-2 text-sm rounded-lg text-white" style={{ background: 'var(--color-primary)' }}>{saving ? 'Saving…' : 'Save Schedule'}</button></Tooltip>
             </div>
-          </div>
-        </div>
+          </Dialog>
       )}
 
       {/* Delete confirm */}
       {confirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.4)' }}>
-          <DialogGuard />
-          <div className="rounded-2xl p-6 shadow-2xl max-w-sm w-full" style={{ background: 'var(--color-surface)' }}>
+        <Dialog raw
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)' }}
+        panelClassName="rounded-2xl p-6 shadow-2xl max-w-sm w-full"
+        panelStyle={{ background: 'var(--color-surface)' }}
+      >
             <p className="font-medium mb-4" style={{ color: 'var(--color-text)' }}>Delete this recurring schedule?</p>
             <div className="flex gap-3 justify-end">
               <Tooltip text="Keep this schedule."><button onClick={() => setConfirm(null)} className="px-4 py-2 text-sm rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button></Tooltip>
               <Tooltip text="Permanently delete this schedule."><button onClick={() => del(confirm)} className="px-4 py-2 text-sm rounded-lg text-white" style={{ background: '#dc2626' }}>Delete</button></Tooltip>
             </div>
-          </div>
-        </div>
+          </Dialog>
       )}
     </div>
   );

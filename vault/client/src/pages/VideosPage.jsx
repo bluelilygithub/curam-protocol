@@ -23,7 +23,7 @@ import ClipTimeline from './videos/ClipTimeline';
 import TutorChat from './videos/TutorChat';
 import { parseClock, formatClock } from './videos/clock.mjs';
 import { describeFit } from './videos/replaceCheck.mjs';
-import DialogGuard from '../components/DialogGuard';
+import Dialog from '../components/Dialog';
 
 const VIDEO_GOOGLE_FONTS = [
   'Roboto',
@@ -5536,17 +5536,13 @@ export default function VideosPage() {
       </main>
 
       {helpTool && TOOL_HELP[helpTool] && (
-        <div
-          className="fixed inset-0 flex items-center justify-center z-50 p-4"
-          style={{ background: 'rgba(0,0,0,0.4)' }}
-          onClick={() => setHelpTool(null)}
-        >
-          <DialogGuard />
-          <div
-            className="rounded-2xl p-6 max-w-md w-full shadow-xl"
-            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', border: '1px solid' }}
-            onClick={(e) => e.stopPropagation()}
-          >
+        <Dialog raw onClose={() => setHelpTool(null)}
+        overlayClassName="fixed inset-0 flex items-center justify-center z-50 p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)' }}
+        panelClassName="rounded-2xl p-6 max-w-md w-full shadow-xl"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', border: '1px solid' }}
+        onClick={(e) => e.stopPropagation()}
+      >
             <div className="flex items-start justify-between mb-3">
               <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{TOOL_HELP[helpTool].title}</h3>
               <button
@@ -5567,22 +5563,17 @@ export default function VideosPage() {
                 </li>
               ))}
             </ul>
-          </div>
-        </div>
+          </Dialog>
       )}
 
       {providerInfoOpen && (
-        <div
-          className="fixed inset-0 flex items-center justify-center z-50 p-4"
-          style={{ background: 'rgba(0,0,0,0.4)' }}
-          onClick={() => setProviderInfoOpen(false)}
-        >
-          <DialogGuard />
-          <div
-            className="rounded-2xl p-6 max-w-md w-full shadow-xl"
-            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', border: '1px solid' }}
-            onClick={(e) => e.stopPropagation()}
-          >
+        <Dialog raw onClose={() => setProviderInfoOpen(false)}
+        overlayClassName="fixed inset-0 flex items-center justify-center z-50 p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)' }}
+        panelClassName="rounded-2xl p-6 max-w-md w-full shadow-xl"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', border: '1px solid' }}
+        onClick={(e) => e.stopPropagation()}
+      >
             <div className="flex items-start justify-between mb-3">
               <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>FAL vs Replicate</h3>
               <button
@@ -5610,8 +5601,7 @@ export default function VideosPage() {
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
               Both are billed pay-per-generation by their respective providers, independent of each other and of this app. Set or remove <code>REPLICATE_API_TOKEN</code> in Railway to switch which one runs — no code change needed. The badge above always shows which one is actually active right now.
             </p>
-          </div>
-        </div>
+          </Dialog>
       )}
       <TutorChat currentTool={tool} onOpenTool={openToolById} />
     </div>

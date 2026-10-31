@@ -8,7 +8,7 @@ import { useModels } from '../hooks/useModels';
 import { getModelShortName } from '../utils/models';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import DocumentRedactionCompare from '../components/DocumentRedactionCompare';
-import DialogGuard from '../components/DialogGuard';
+import Dialog from '../components/Dialog';
 
 const LAST_JOB_KEY = 'vault:documentRedaction:lastJobId';
 const FIELD = {
@@ -1530,17 +1530,14 @@ export default function DocumentRedactionPage() {
       )}
 
       {applyModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
-          role="dialog"
-          aria-modal="true"
-        >
-          <DialogGuard />
-          <div
-            className="w-full max-w-2xl max-h-[90dvh] overflow-auto rounded-2xl border shadow-2xl p-5 space-y-4"
-            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}
-          >
+        <Dialog raw
+        overlayClassName="fixed inset-0 z-50 flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
+        panelClassName="w-full max-w-2xl max-h-[90dvh] overflow-auto rounded-2xl border shadow-2xl p-5 space-y-4"
+        panelStyle={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}
+        role="dialog"
+        aria-modal="true"
+      >
             <div>
               <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
                 Confirm apply — {applyStyleId}
@@ -1683,8 +1680,7 @@ export default function DocumentRedactionPage() {
                 Apply with this style
               </button>
             </div>
-          </div>
-        </div>
+          </Dialog>
       )}
     </div>
   );

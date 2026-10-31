@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useIcon } from '../providers/IconProvider';
-import useDialogBehavior from '../hooks/useDialogBehavior';
+import Dialog from './Dialog';
 
 const PRIORITY_COLOR = { high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
 
@@ -13,7 +13,6 @@ function formatTime(time24) {
 }
 
 export default function TaskReminderModal({ time, overdue, today, onDismiss }) {
-  const panelRef = useDialogBehavior({ closeOnEscape: false, active: (overdue?.length || 0) + (today?.length || 0) > 0 });
   const navigate = useNavigate();
   const getIcon = useIcon();
 
@@ -29,17 +28,14 @@ export default function TaskReminderModal({ time, overdue, today, onDismiss }) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}
-    >
-      <div
-        ref={panelRef}
+    <Dialog raw
+        overlayClassName="fixed inset-0 z-[60] flex items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}
         role="dialog"
         aria-modal="true"
         aria-label="Task reminder"
-        className="w-full max-w-xl rounded-2xl border shadow-2xl flex flex-col"
-        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', maxHeight: '85vh' }}
+        panelClassName="w-full max-w-xl rounded-2xl border shadow-2xl flex flex-col"
+        panelStyle={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', maxHeight: '85vh' }}
       >
         {/* Header */}
         <div className="px-6 py-5 border-b flex items-start justify-between" style={{ borderColor: 'var(--color-border)' }}>
@@ -124,7 +120,6 @@ export default function TaskReminderModal({ time, overdue, today, onDismiss }) {
             Go to Tasks
           </button>
         </div>
-      </div>
-    </div>
+      </Dialog>
   );
 }
