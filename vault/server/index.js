@@ -150,6 +150,7 @@ app.use('/api/pdf', require('./routes/pdf'));
 app.use('/api/pdf-tutor', aiLimiter, require('./routes/pdfTutor'));
 app.use('/api/tutor-email', require('./routes/tutorEmail')); // email a guide conversation to the person and/or the admin (the person chooses)
 app.use('/api/search', require('./routes/search'));
+app.use('/api/attention', require('./routes/attention')); // the "needs attention" list on Home and the mobile dashboard
 app.use('/api/email', require('./routes/email'));
 app.use('/api/export', require('./routes/export'));
 app.use('/api/study-decks', require('./routes/studyDecks'));

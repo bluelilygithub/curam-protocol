@@ -11,6 +11,7 @@ import { formatSessionLabel, formatSessionLocation, formatSessionWhen, sessionPr
 import CheckinModal from '../components/mood/CheckinModal';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import Dialog from '../components/Dialog';
+import NeedsAttention from '../components/NeedsAttention';
 
 const EMOTION_COLOURS = {
   joy: '#C9A84C', trust: '#6B9E70', fear: '#507A60', surprise: '#6B97B5',
@@ -965,6 +966,7 @@ function ProjectList() {
       {projects.length === 0 ? (
         <div className="flex-1 overflow-auto p-6">
           <div className="max-w-4xl mx-auto">
+            <NeedsAttention className="mb-6" />
             {continueSection}
             <div className="flex flex-col items-center px-6 pb-16 pt-4">
               <div
@@ -1005,6 +1007,7 @@ function ProjectList() {
       ) : (
         <div className="flex-1 overflow-auto p-6">
           <div className="max-w-4xl mx-auto">
+            <NeedsAttention className="mb-6" />
             <div className="flex items-center justify-between mb-6">
               <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Home</h1>
               <button

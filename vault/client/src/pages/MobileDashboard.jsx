@@ -5,6 +5,7 @@ import useAuthStore from '../store/authStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { DEFAULT_TILES, APP_TILES, FEATURE_BY_TILE_ID, mergeWithDefaults } from '../utils/mobileConfig';
 import AppLaunchTile from '../components/mobile/AppLaunchTile';
+import NeedsAttention from '../components/NeedsAttention';
 import TasksTile from '../components/mobile/TasksTile';
 import FinanceTile from '../components/mobile/FinanceTile';
 import ChatHistoryTile from '../components/mobile/ChatHistoryTile';
@@ -70,6 +71,7 @@ export default function MobileDashboard() {
         {getIcon('search', { size: 18 })}
         <span className="text-sm">Search notes, clients, chats, apps...</span>
       </button>
+      <NeedsAttention />
       {visible.map(tile => {
         const TileComponent = TILE_MAP[tile.id];
         if (TileComponent) return <TileComponent key={tile.id} />;
