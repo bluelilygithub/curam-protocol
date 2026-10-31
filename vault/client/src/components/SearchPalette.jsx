@@ -165,7 +165,7 @@ function SearchPalette() {
                     tabIndex={-1}
                     onClick={() => choose(item)}
                     onMouseMove={() => { if (!selected) setSelectedIdx(idx); }}
-                    className="w-full text-left px-4 py-2.5 flex items-start gap-3 transition-colors duration-200"
+                    className="w-full text-left px-4 py-2.5 min-h-[44px] flex items-start gap-3 transition-colors duration-200"
                     style={{ background: selected ? 'var(--color-bg)' : 'transparent', color: 'var(--color-text)' }}
                   >
                     <span style={{ color: 'var(--color-muted)', flexShrink: 0, marginTop: 2 }}>

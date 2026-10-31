@@ -4,6 +4,7 @@ import { useIcon } from '../providers/IconProvider';
 import CheckinModal from './mood/CheckinModal';
 import InquirySession from './mood/InquirySession';
 import Dialog from './Dialog';
+import usePopupSlot from '../hooks/usePopupSlot';
 
 const PRIORITY_COLOR = { high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
 
@@ -58,7 +59,8 @@ export default function MorningDigest() {
     setVisible(false);
   };
 
-  if (loading || !visible || !data) return null;
+  const myTurn = usePopupSlot('morning-digest', !loading && visible && !!data); // waits behind nothing: it is the most important popup
+  if (!myTurn) return null;
 
   const dayLabel = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 

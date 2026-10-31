@@ -1544,7 +1544,7 @@ function ChatPage({ general = false }) {
                         style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
                         title="Pinned — available in all chats in this project"
                       >
-                        📌 {f.name}
+                        <span aria-hidden="true">📌</span><span className="sr-only">Pinned file: </span>{f.name}
                       </span>
                     ))}
                     {sessionFiles.map(f => (
@@ -1554,13 +1554,14 @@ function ChatPage({ general = false }) {
                         style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
                         title="Attached this session"
                       >
-                        📎 {f.name}
+                        <span aria-hidden="true">📎</span><span className="sr-only">File attached to this chat: </span>{f.name}
                         <button
                           onClick={() => {
                             if (sessionId) api.delete(`/api/session-files/${sessionId}/${f.id}`).catch(() => {});
                             setSessionFiles(prev => prev.filter(x => x.id !== f.id));
                           }}
                           className="hover:opacity-60 ml-0.5"
+                          aria-label={`Remove ${f.name} from this chat`}
                         >×</button>
                       </span>
                     ))}

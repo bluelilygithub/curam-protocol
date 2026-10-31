@@ -8,7 +8,8 @@
   --color-bg: #F5F5F0;
   --color-surface: #EEEEE8;
   --color-border: #D8D8D0;
-  --color-primary: #CC785C;
+  --color-primary: #9B5B46;
+  --color-on-primary: #FFFFFF;
   --color-text: #1A1A1A;
   --color-muted: #6A6A6A; /* 4.5:1+ on bg and surface; each theme sets its own in themes.js */
 }
@@ -235,6 +236,13 @@ input[type="file"]:focus-visible {
 [class~="group/comment"]:focus-within [class*="opacity-0"][class*="group-hover"],
 [class*="opacity-0"][class*="group-hover"]:focus-visible {
   opacity: 1 !important;
+}
+
+/* Text on anything with a primary-coloured background uses the theme's on-primary colour (white on the dark primaries, dark on the light blue
+   ones) so it stays readable in every theme. Matches the inline style the pages write, so no page needs to change. */
+[style*="background: var(--color-primary)"],
+[style*="background-color: var(--color-primary)"] {
+  color: var(--color-on-primary) !important;
 }
 
 /* Respect the operating system's "reduce motion" setting. */

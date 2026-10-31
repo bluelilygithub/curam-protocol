@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../utils/apiClient';
 import { APP_NAV_GROUPS } from '../config/appNavigation';
+import Skeleton from './Skeleton';
+import EmptyState from './EmptyState';
 
 // Admin -> "Which tools get used": how often each part of Vault was opened in the last 90 days, and which were never opened. Counts only (the
 // server keeps the section, the day and a number, nothing about what was on the page), so it is safe to look at and a good basis for deciding
@@ -70,11 +72,12 @@ export default function AppUsagePanel() {
       </div>
 
       {error && <p className="text-sm" style={{ color: '#ef4444' }}>{error}</p>}
+      {!data && !error && <Skeleton lines={4} label="Loading tool usage" />}
 
       {data && (
         <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
           {used.length === 0 ? (
-            <p className="p-6 text-sm text-center" style={{ color: 'var(--color-muted)' }}>Nothing counted yet. Open a few tools and check back.</p>
+            <EmptyState icon="bar-chart" title="Nothing counted yet" body="Open a few tools and check back. Counting started when this panel was added." />
           ) : (
             <table className="w-full text-sm">
               <thead>

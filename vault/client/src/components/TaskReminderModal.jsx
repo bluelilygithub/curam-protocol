@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useIcon } from '../providers/IconProvider';
 import Dialog from './Dialog';
+import usePopupSlot from '../hooks/usePopupSlot';
 
 const PRIORITY_COLOR = { high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
 
@@ -20,7 +21,8 @@ export default function TaskReminderModal({ time, overdue, today, onDismiss }) {
   const todayCount = today?.length || 0;
   const total = overdueCount + todayCount;
 
-  if (!total) return null;
+  const myTurn = usePopupSlot('task-reminder', total > 0);
+  if (!myTurn) return null;
 
   const handleGoToTasks = () => {
     onDismiss();

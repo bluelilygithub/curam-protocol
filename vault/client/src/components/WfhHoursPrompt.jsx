@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import api from '../utils/apiClient';
 import Tooltip from './Tooltip';
 import Dialog from './Dialog';
+import usePopupSlot from '../hooks/usePopupSlot';
 
 // Global daily popup prompting for yesterday's (and any recent unfilled) work-from-home hours —
 // a SEPARATE, purely diary/substantiation record from the periodic dollar-deduction "Save Hours"
@@ -47,7 +48,8 @@ export default function WfhHoursPrompt({ enabled }) {
       .catch(() => {});
   }, [enabled]);
 
-  if (!enabled || dismissed || !queue.length) return null;
+  const myTurn = usePopupSlot('wfh-hours', !!enabled && !dismissed && queue.length > 0);
+  if (!myTurn) return null;
 
   const currentDate = queue[0];
 

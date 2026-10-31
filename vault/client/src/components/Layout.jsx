@@ -18,6 +18,7 @@ import WfhHoursPrompt from './WfhHoursPrompt';
 import useSettingsStore from '../store/settingsStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { TOP_BAR_LINKS, trailForPath, isNavItemActive } from '../config/appNavigation';
+import usePopupSlot from '../hooks/usePopupSlot';
 
 function Layout() {
   const isMobileNow = () => typeof window !== 'undefined' && window.innerWidth < 640;
@@ -91,6 +92,8 @@ function Layout() {
   const [newSuggestionCount,  setNewSuggestionCount]  = useState(0);
   const [showInquiryReminder, setShowInquiryReminder] = useState(false);
   const [showInquirySession,  setShowInquirySession]  = useState(false);
+  // The reflection reminder waits its turn behind the morning digest, task reminder and hours prompt (utils/popupQueue.mjs).
+  const inquiryReminderTurn = usePopupSlot('inquiry-reminder', showInquiryReminder && !showInquirySession);
   const [inquiryReminderSettings, setInquiryReminderSettings] = useState(null);
   const [missionReminderDue,  setMissionReminderDue]  = useState(false);
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
@@ -476,7 +479,7 @@ function Layout() {
           {trail && (
             <nav aria-label="You are here" className="flex items-center gap-1.5 min-w-0 text-xs" style={{ color: 'var(--color-muted)' }}>
               {isMobile && trail.deeper && (
-                <Link to={trail.to} aria-label={`Back to ${trail.label}`} className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity flex-shrink-0">
+                <Link to={trail.to} aria-label={`Back to ${trail.label}`} className="w-11 h-11 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity flex-shrink-0">
                   {getIcon('chevron-right', { size: 16, style: { transform: 'rotate(180deg)' } })}
                 </Link>
               )}
@@ -536,7 +539,7 @@ function Layout() {
               {location.pathname !== '/mobile-dashboard' && (
                 <Link
                   to="/mobile-dashboard"
-                  className="w-8 h-8 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+                  className="w-11 h-11 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
                   style={{ color: 'var(--color-muted)' }}
                   data-tip="Dashboard"
                 >
@@ -545,7 +548,7 @@ function Layout() {
               )}
               <button
                 onClick={() => document.dispatchEvent(new CustomEvent('vault:open-search'))}
-                className="w-8 h-8 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+                className="w-11 h-11 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
                 style={{ color: 'var(--color-muted)' }}
                 data-tip="Search"
                 aria-label="Search"
@@ -554,7 +557,7 @@ function Layout() {
               </button>
               <button
                 onClick={() => setMobileNavOpen(true)}
-                className="w-8 h-8 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+                className="w-11 h-11 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
                 style={{ color: 'var(--color-muted)' }}
                 data-tip="Menu"
               >
@@ -562,7 +565,7 @@ function Layout() {
               </button>
               <button
                 onClick={handleLogout}
-                className="w-8 h-8 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+                className="w-11 h-11 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
                 style={{ color: 'var(--color-muted)' }}
                 data-tip="Sign out"
               >
@@ -636,7 +639,7 @@ function Layout() {
       )}
 
       {/* Inquiry reminder banner */}
-      {showInquiryReminder && !showInquirySession && (
+      {inquiryReminderTurn && (
         <div
           className="fixed bottom-5 left-1/2 z-[65] w-full max-w-sm"
           style={{ transform: 'translateX(-50%)', animation: 'slideUp 0.25s ease' }}

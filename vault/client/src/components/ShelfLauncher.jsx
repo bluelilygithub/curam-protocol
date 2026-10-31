@@ -57,8 +57,8 @@ export default function ShelfLauncher({ allowed }) {
         onClick={() => { setOpen(true); window.location.href = SHELF_URL; }}
         className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
         style={{ color: open ? 'var(--color-primary)' : 'var(--color-muted)' }}
-        data-tip="Open Shelf (your clipboard history)"
-        aria-label="Open Shelf"
+        data-tip="Open the clipboard shelf (your copy history)"
+        aria-label="Open clipboard shelf"
       >
         {getIcon('clipboard-list', { size: 16 })}
       </button>

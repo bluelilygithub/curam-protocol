@@ -41,6 +41,7 @@ function ThemeProvider({ children }) {
         --color-border: ${t.border};
         --color-primary: ${t.primary};
         --color-primary-rgb: ${hexToRgb(t.primary)};
+        --color-on-primary: ${t.onPrimary || '#FFFFFF'};
         --color-text: ${t.text};
         --color-muted: ${t.muted};
       }
