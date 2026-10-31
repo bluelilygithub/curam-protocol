@@ -51,6 +51,10 @@ Three more page guides on `guideCore.js`/`guideRouter.js`, each with a tools lis
 
 They see no fonts, values, documents or pages. The CSS guide follows that tool's rule of no code words in anything a person reads (its test checks the catalogue, rules and page wording). The three tests use `server/services/guideTestKit.js` (`checkGuide`), which also checks the page's menu against the catalogue (every menu tool has a tip, a blurb and the same group in the guide); use it for the next page guide. The pages' menu is the shared `client/src/components/ToolSidebar.jsx` (see client/DESIGN.md).
 
+## The Device preview guide
+
+**Device preview guide** (`guideId` `device-preview`, `POST /api/device-preview-tutor`, flag `restyle` because the page uses the Style editor's page loader, `server/services/devicePreviewTutor.js` on `guideCore.js`, `server/routes/devicePreviewTutor.js` on `guideRouter.js`, wrapper `client/src/pages/devicePreview/DevicePreviewTutorChat.jsx`). It knows the address box, the JavaScript option, Show the page, Choose screens (up to four), Your own size, Turn on its side and Size on screen, and says plainly that it only looks (no scripts, no logins, no styling changes: that is the Style editor). It sees no address or page. `client/src/pages/devicePreview/devicePreviewTools.mjs` is the list the page and guide share (three areas the Open buttons scroll to: `data-guide="show"`, `"choose-screens"`, `"turn"`); `npm run test:device-preview-tutor` fails if it and the catalogue drift, tested with `guideTestKit.js`.
+
 ## The CRM, Shares and Settings guides
 
 Three guides on `guideCore.js`/`guideRouter.js`, tested with `server/services/guideBasicsKit.js` (`checkBasics`: prompt, untrusted answers, model call, safety wording) plus a drift check against the page. They see no clients, holdings, settings, keys or users.

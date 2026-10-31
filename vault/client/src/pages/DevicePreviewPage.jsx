@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import Tooltip from '../components/Tooltip';
@@ -8,6 +9,9 @@ import { VoiceInput, VoiceInputProvider } from '../components/voiceInput/VoiceIn
 import useProcessingStore from '../store/processingStore';
 import useToastStore from '../store/toastStore';
 import { devicesOfKind, customScreen, CUSTOM_LIMITS } from '../utils/deviceCatalog.mjs';
+import DevicePreviewTutorChat from './devicePreview/DevicePreviewTutorChat';
+import { GUIDE_TOOLS, HOW_IT_WORKS } from './devicePreview/devicePreviewTools.mjs';
+import { startDevicePreviewTour, TOUR_KEY as DP_TOUR_KEY } from '../utils/tours/devicePreviewTour';
 import { DEFAULT_SELECTION, MAX_SCREENS, ZOOMS, buildPreviewDoc, toggleScreen, resolveScreens, cardLayout } from './devicePreview/devicePreviewModel.mjs';
 
 // Device preview: type the address of a public page and see it at the size of real phones, tablets and monitors, side by side. It uses the same
@@ -28,6 +32,7 @@ export default function DevicePreviewPage() {
   const addToast = useToastStore((s) => s.addToast);
   const { startProcessing, stopProcessing } = useProcessingStore();
   const info = useToolInfoModal('vault_device_preview_info_seen');
+  const [params, setParams] = useSearchParams();
 
   const [url, setUrl] = useState('');
   const [render, setRender] = useState(false);
@@ -40,6 +45,26 @@ export default function DevicePreviewPage() {
   const [customH, setCustomH] = useState('800');
   const [landscape, setLandscape] = useState(false);
   const [zoom, setZoom] = useState('fit');
+
+  // Settings -> Device preview Tour opens /device-preview?tour=1
+  useEffect(() => {
+    if (params.get('tour')) {
+      const next = new URLSearchParams(params); next.delete('tour');
+      setParams(next, { replace: true });
+      setTimeout(startDevicePreviewTour, 300);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startTour = () => {
+    try { localStorage.removeItem(DP_TOUR_KEY); } catch (_) { /* ignore */ }
+    startDevicePreviewTour();
+  };
+
+  // The guide's "Open" buttons: scroll to the area that holds the control.
+  const openToolById = (id) => {
+    const target = GUIDE_TOOLS.find((t) => t.id === id);
+    document.querySelector(`[data-guide="${target ? target.tool : id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   useEffect(() => {
     api.get('/api/restyle/capabilities').then((r) => r.json()).then((d) => setRenderAvailable(!!d?.render)).catch(() => {});
@@ -97,10 +122,15 @@ export default function DevicePreviewPage() {
               {getIcon('info', { size: 16 })}
             </button>
           </Tooltip>
+          <Tooltip text="Take the guided tour of Device preview.">
+            <button type="button" onClick={startTour} aria-label="Take the guided tour of Device preview" className="w-8 h-8 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }}>
+              {getIcon('compass', { size: 16 })}
+            </button>
+          </Tooltip>
         </div>
 
         <section className="rounded-xl border p-4 space-y-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <div className="flex flex-wrap items-start gap-2">
+          <div className="flex flex-wrap items-start gap-2" data-guide="show" data-tour="dp-address">
             <div className="flex-1 min-w-[16rem]">
               <Tooltip text="The address of a public page, such as https://www.example.com/. You can say it with the microphone.">
                 <div>
@@ -132,7 +162,8 @@ export default function DevicePreviewPage() {
           </Tooltip>
           {error && <p role="alert" className="text-sm" style={{ color: '#ef4444' }}>{error}</p>}
 
-          <div className="space-y-2 pt-1">
+          <div className="space-y-2 pt-1" data-guide="choose-screens">
+            <div className="space-y-2" data-tour="dp-devices">
             {GROUPS.map((g) => (
               <div key={g.kind}>
                 <Tooltip text={g.tip}><p className="text-xs font-semibold uppercase tracking-widest mb-1 w-fit" style={{ color: 'var(--color-muted)' }}>{g.label}</p></Tooltip>
@@ -155,7 +186,8 @@ export default function DevicePreviewPage() {
                 </div>
               </div>
             ))}
-            <div>
+            </div>
+            <div data-tour="dp-own">
               <Tooltip text="Any size you like, in pixels. Up to 3 of your own sizes."><p className="text-xs font-semibold uppercase tracking-widest mb-1 w-fit" style={{ color: 'var(--color-muted)' }}>Your own size</p></Tooltip>
               <div className="flex flex-wrap items-center gap-1.5">
                 {customs.map((c) => {
@@ -177,7 +209,7 @@ export default function DevicePreviewPage() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 pt-1">
+          <div className="flex flex-wrap items-center gap-3 pt-1" data-guide="turn" data-tour="dp-view">
             <Tooltip text="Hold phones and tablets on their side. Laptops and monitors are not turned.">
               <button
                 type="button"
@@ -239,6 +271,8 @@ export default function DevicePreviewPage() {
           </div>
         )}
       </div>
+
+      <DevicePreviewTutorChat currentTool="show" onOpenTool={openToolById} />
 
       {info.show && (
         <ToolInfoModal title="How Device preview Works" onClose={info.close}>

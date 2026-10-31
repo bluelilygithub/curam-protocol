@@ -32,6 +32,7 @@
     "test:dialog": "node client/src/utils/dialogFocus.test.mjs",
     "test:attention": "node server/services/attention.test.js",
     "test:popups": "node client/src/utils/popupQueue.test.mjs",
+    "test:device-preview-tutor": "node server/services/devicePreviewTutor.test.js",
     "test:device-preview": "node client/src/utils/deviceCatalog.test.mjs && node client/src/pages/devicePreview/devicePreviewModel.test.mjs",
     "test:nav": "node client/src/utils/navTrail.test.mjs && node client/src/utils/navCatalog.test.mjs",
     "test:shelf-launcher": "node client/src/utils/shelfLauncher.test.mjs",

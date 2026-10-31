@@ -559,6 +559,9 @@
   "POST /api/deals": {
    "class": "authed"
   },
+  "POST /api/device-preview-tutor": {
+   "class": "authed"
+  },
   "POST /api/dns-lookup-tutor": {
    "class": "authed"
   },

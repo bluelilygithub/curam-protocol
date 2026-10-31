@@ -20,6 +20,7 @@ const GUIDES = {
   fonts: { name: 'Font Customizer guide', endpoint: '/api/fonts-tutor' },
   measurements: { name: 'Measurements guide', endpoint: '/api/measurements-tutor' },
   css: { name: 'Style editor guide', endpoint: '/api/restyle-tutor' },
+  'device-preview': { name: 'Device preview guide', endpoint: '/api/device-preview-tutor' },
   finance: { name: 'Finance guide', endpoint: '/api/finance-tutor' },
   cellar: { name: 'Cellar Planner guide', endpoint: '/api/cellar-tutor' },
   route: { name: 'Route Tracer guide', endpoint: '/api/route-tutor' },
