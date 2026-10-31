@@ -60,7 +60,7 @@ export const APP_NAV_GROUPS = [
     items: [
       { id: 'pdf', label: 'PDF Tools', path: '/pdf', icon: 'file-text', featureKey: 'pdf' },
       { id: 'fonts', label: 'Font Customizer', path: '/fonts', icon: 'type', featureKey: 'fonts' },
-      { id: 'restyle', label: 'CSS', path: '/restyle', icon: 'brush', featureKey: 'restyle' },
+      { id: 'restyle', label: 'Style editor', path: '/restyle', icon: 'brush', featureKey: 'restyle', aliases: 'css restyle' },
       { id: 'graphics', label: 'Graphics', path: '/graphics', icon: 'palette', featureKey: 'graphics' },
       { id: 'videos', label: 'Video Tools', path: '/videos', icon: 'film', featureKey: 'videos' },
       { id: 'music', label: 'Music', path: '/music', icon: 'music', featureKey: 'music' },
@@ -75,10 +75,10 @@ export const APP_NAV_GROUPS = [
     label: 'Web & SEO',
     items: [
       { id: 'seo', label: 'SEO', path: '/seo', icon: 'scan-search', featureKey: 'seo', matchPrefix: true },
-      { id: 'searchConsole', label: 'Search', path: '/search-console', icon: 'line-chart', featureKey: 'searchConsole' },
-      { id: 'googleAds', label: 'Adwords', path: '/google-ads', icon: 'megaphone', featureKey: 'googleAds', matchPrefix: true },
+      { id: 'searchConsole', label: 'Search Console', path: '/search-console', icon: 'line-chart', featureKey: 'searchConsole', aliases: 'gsc google search queries' },
+      { id: 'googleAds', label: 'Google Ads', path: '/google-ads', icon: 'megaphone', featureKey: 'googleAds', matchPrefix: true, aliases: 'adwords keywords rsa' },
       { id: 'domains', label: 'Domain', path: '/domains', icon: 'globe', featureKey: 'domains' },
-      { id: 'html', label: 'Lighthouse', path: '/html', icon: 'gauge', featureKey: 'html', matchPrefix: true },
+      { id: 'html', label: 'Page speed', path: '/html', icon: 'gauge', featureKey: 'html', matchPrefix: true, aliases: 'lighthouse pagespeed audit' },
       { id: 'webExtractor', label: 'Web Extractor', path: '/web-extractor', icon: 'scissors', featureKey: 'webExtractor' },
       { id: 'browserAgent', label: 'Browser Agent', path: '/browser-agent', icon: 'mouse-pointer', featureKey: 'browserAgent' },
     ],

@@ -40,12 +40,12 @@ export const DEFAULT_TILES = [
   { id: 'videos',        label: 'Video Tools',      enabled: true },
   { id: 'recipes',       label: 'Recipes',          enabled: true },
   { id: 'domains',       label: 'Domain',           enabled: true },
-  { id: 'googleAds',     label: 'Adwords',          enabled: true },
+  { id: 'googleAds',     label: 'Google Ads',          enabled: true },
   { id: 'seo',           label: 'SEO',              enabled: true },
-  { id: 'searchConsole', label: 'Search',           enabled: true },
-  { id: 'html',          label: 'Lighthouse',       enabled: true },
+  { id: 'searchConsole', label: 'Search Console',           enabled: true },
+  { id: 'html',          label: 'Page speed',       enabled: true },
   { id: 'webExtractor',  label: 'Web Extractor',    enabled: true },
-  { id: 'restyle',       label: 'CSS',              enabled: true },
+  { id: 'restyle',       label: 'Style editor',              enabled: true },
   { id: 'news',          label: 'News Digest',      enabled: true },
   { id: 'mood',          label: 'Mood',             enabled: true },
   { id: 'wellbeing',     label: 'Wellbeing Check',  enabled: true },
@@ -159,12 +159,12 @@ export const DEFAULT_NAV_ITEMS = [
   { id: 'videos',    label: 'Video Tools',     path: '/videos',      enabled: true },
   { id: 'recipes',   label: 'Recipes',         path: '/recipes',     enabled: true },
   { id: 'domains',   label: 'Domain',          path: '/domains',     enabled: true },
-  { id: 'googleAds', label: 'Adwords',         path: '/google-ads',  enabled: true },
+  { id: 'googleAds', label: 'Google Ads',         path: '/google-ads',  enabled: true },
   { id: 'seo',       label: 'SEO',             path: '/seo',         enabled: true },
-  { id: 'searchConsole', label: 'Search',      path: '/search-console', enabled: true },
-  { id: 'html',      label: 'Lighthouse',      path: '/html',        enabled: true },
+  { id: 'searchConsole', label: 'Search Console',      path: '/search-console', enabled: true },
+  { id: 'html',      label: 'Page speed',      path: '/html',        enabled: true },
   { id: 'webExtractor', label: 'Web Extractor', path: '/web-extractor', enabled: true },
-  { id: 'restyle',   label: 'CSS',              path: '/restyle',     enabled: true },
+  { id: 'restyle',   label: 'Style editor',              path: '/restyle',     enabled: true },
   { id: 'pdf',       label: 'PDF Tools',        path: '/pdf',         enabled: true },
   { id: 'fonts',     label: 'Font Customizer',  path: '/fonts',       enabled: true },
   { id: 'music',     label: 'Music',            path: '/music',       enabled: true },
@@ -208,7 +208,7 @@ export function mergeWithDefaults(saved, defaults) {
   const savedIds = new Set(saved.map(i => i.id));
   const merged = saved.map(s => {
     const def = defaults.find(d => d.id === s.id);
-    return def ? { ...def, ...s } : s;
+    return def ? { ...def, ...s, label: def.label } : s; // the name always comes from the code, so a rename reaches saved layouts
   });
   for (const d of defaults) {
     if (!savedIds.has(d.id)) merged.push({ ...d });

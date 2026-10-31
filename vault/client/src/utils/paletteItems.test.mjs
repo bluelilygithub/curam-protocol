@@ -3,9 +3,9 @@ import { actionItems, appItems, settingItems, scoreItem, rankLocal, remoteItems,
 
 const apps = appItems([
   { label: 'Workspace', items: [{ id: 'notes', label: 'Notes', path: '/notes', icon: 'pen-line' }, { id: 'showcase', label: 'Showcase', path: 'https://x', external: true }] },
-  { label: 'Business', items: [{ id: 'clients', label: 'CRM', path: '/clients', icon: 'briefcase' }, { id: 'notes', label: 'Notes dup', path: '/notes' }] },
+  { label: 'Business', items: [{ id: 'clients', label: 'CRM', path: '/clients', icon: 'briefcase' }, { id: 'restyle', label: 'Style editor', path: '/restyle', aliases: 'css restyle' }, { id: 'notes', label: 'Notes dup', path: '/notes' }] },
 ]);
-assert.equal(apps.length, 2, 'external links and duplicates are dropped');
+assert.equal(apps.length, 3, 'external links and duplicates are dropped');
 
 const settings = settingItems([{ label: 'You', tabs: [{ id: 'Appearance', tip: 'Theme, font' }, { id: 'Recycle bin', tip: 'Deleted things' }] }]);
 assert.equal(settings[0].to, '/settings?tab=Appearance');
@@ -22,6 +22,7 @@ assert.ok(scoreItem({ title: 'New task', keywords: 'todo add' }, 'add todo') > 0
 const all = [...actionItems(), ...apps, ...settings];
 assert.equal(rankLocal(all, 'new')[0].key, 'new-note');
 assert.equal(rankLocal(all, 'crm')[0].key, 'clients');
+assert.equal(rankLocal(all, 'css')[0].key, 'restyle', 'old names still find a renamed app');
 assert.ok(rankLocal(all, 'n', 1).filter((x) => x.kind === 'app').length <= 1, 'capped per kind');
 
 // remote shaping and section order

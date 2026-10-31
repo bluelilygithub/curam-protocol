@@ -29,7 +29,7 @@ export function appItems(groups = []) {
     for (const it of g.items || []) {
       if (it.external || !it.path || seen.has(it.id)) continue;
       seen.add(it.id);
-      out.push({ kind: 'app', key: it.id, title: it.label, subtitle: g.label, icon: it.icon, to: it.path });
+      out.push({ kind: 'app', key: it.id, title: it.label, subtitle: g.label, icon: it.icon, to: it.path, keywords: it.aliases || '' });
     }
   }
   return out;
