@@ -41,7 +41,7 @@ export function settingsMarkdown(result, { date = new Date() } = {}) {
   const s = result.summary;
   const out = [
     `# Design settings of ${result.title || result.finalUrl || result.url}`, '',
-    `Page: ${result.finalUrl || result.url}`, `Read on ${date.toISOString().slice(0, 10)} with the Vault CSS tool.`,
+    `Page: ${result.finalUrl || result.url}`, `Read on ${date.toISOString().slice(0, 10)} with the Vault Style editor.`,
     `${s.stats.files} style file${s.stats.files === 1 ? '' : 's'}, ${sizeLabel(s.stats.bytes)}, ${s.stats.rules} rules, ${s.stats.declarations} settings.`, '',
     '## Style files', '', table(result.files, [
       { label: 'File', get: (f) => f.filename }, { label: 'Where from', get: (f) => sourceLabel(f.source) },

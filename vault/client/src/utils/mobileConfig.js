@@ -90,7 +90,7 @@ export const APP_TILES = {
   googleAds:     { path: '/google-ads',    icon: 'megaphone',      description: 'Keywords and ad copy' },
   seo:           { path: '/seo',           icon: 'scan-search',    description: 'Crawl and audit a site' },
   searchConsole: { path: '/search-console', icon: 'line-chart',    description: 'Google Search Console data' },
-  html:          { path: '/html',          icon: 'gauge',          description: 'Lighthouse page audits' },
+  html:          { path: '/html',          icon: 'gauge',          description: 'Page speed audits' },
   webExtractor:  { path: '/web-extractor', icon: 'scissors',       description: 'Pull text and images from a page' },
   restyle:       { path: '/restyle',       icon: 'brush',          description: 'Edit page styling in plain English' },
   news:          { path: '/news-digest',   icon: 'news',           description: 'Your news digest' },

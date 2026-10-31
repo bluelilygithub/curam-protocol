@@ -23,7 +23,7 @@ checkGuide({
     ['compare', 'does', /same answer or different/, 'compare says same or different'],
     ['email-check', 'notes', /DKIM/, 'DKIM is not checked'],
   ],
-  gaps: [/Changing, adding or deleting/, /Lighthouse/, /WHOIS/, /DKIM/, /private network/, /Watching a name/],
+  gaps: [/Changing, adding or deleting/, /Page speed/, /WHOIS/, /DKIM/, /private network/, /Watching a name/],
   rules: [/never opens the website/, /Compare both/, /No names or answers are saved/],
   system: [/Never state or guess what a name's records are/],
 }).catch((e) => { console.error(e); process.exit(1); });

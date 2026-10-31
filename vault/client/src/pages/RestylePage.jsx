@@ -30,7 +30,7 @@ import { SessionHistoryPanel, ScrapePanel } from './restyle/SessionAndScrapePane
 import SourceViewer from './restyle/SourceViewer';
 import { formatHtml, formatCss, shortenDataUris } from './restyle/sourceView.mjs';
 
-// CSS tool (displayed as "CSS"; the internal feature key, route and files still say "restyle"). The job: restyle a page you already have,
+// CSS tool (displayed as "Style editor"; the internal feature key, route and files still say "restyle"). The job: restyle a page you already have,
 // without writing code, then take the CSS away and paste it into the real site. See docs/restyle.md.
 //
 // Changes are NOT written into the page's elements. Each change is a rule in `edits` (restyle/editModel.mjs); the preview, the export
@@ -974,7 +974,7 @@ export default function RestylePage() {
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Roboto:wght@400;700&family=Merriweather:wght@400;700&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
 
       <div className="flex flex-col sm:flex-row min-h-[calc(100dvh-3rem)]">
-        <ToolSidebar title="CSS" icon="palette" groups={menu} current={tool} onSelect={setTool} onInfo={info.open} infoTip="How this tool works, and what it cannot do." />
+        <ToolSidebar title="Style editor" icon="palette" groups={menu} current={tool} onSelect={setTool} onInfo={info.open} infoTip="How this tool works, and what it cannot do." />
 
         <div className="flex-1 min-w-0 p-4 sm:p-5 flex flex-col gap-3" style={{ background: 'var(--color-bg)' }}>
           <div className="flex flex-wrap items-start justify-between gap-3">

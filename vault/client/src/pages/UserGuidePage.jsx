@@ -256,7 +256,7 @@ function UserGuidePage() {
 
         <SubHeading>Top bar</SubHeading>
         <UL>
-          <LI><strong>Search</strong> (<Kbd>⌘K</Kbd>) — projects, files, and messages.</LI>
+          <LI><strong>Search</strong> (<Kbd>⌘K</Kbd>) — notes, clients, invoices, chats, tasks, projects and files, plus shortcuts to every app and Settings section. On a phone, use the search icon in the top bar.</LI>
           <LI><strong>Tasks</strong> and <strong>Chat History</strong> — always one click away.</LI>
           <LI><strong>Notes</strong> — always visible on the top bar for quick capture.</LI>
           <LI><strong>Apps</strong> (grid icon) — grouped menu: Workspace, Productivity, AI tools, Content tools, Money &amp; data, Personal, and Admin (Suggestions, Clients, Dashboard). Badge on Apps when new Suggestions exist.</LI>
@@ -1624,18 +1624,18 @@ function UserGuidePage() {
         <P>
           Crawls a public site (1–40 same-origin pages) for <strong>organic campaign</strong> work: indexation,
           SERP title/description quality, thin or duplicate pages, schema, hreflang, sitemap gaps, and click depth.
-          Produces a copyable campaign brief. This is not a page-speed audit (that's Lighthouse) and not keyword
-          research (that's Adwords).
+          Produces a copyable campaign brief. This is not a page-speed audit (that's Page speed) and not keyword
+          research (that's Google Ads).
         </P>
 
-        <SubHeading>Search (Search Console)</SubHeading>
+        <SubHeading>Search Console</SubHeading>
         <P>
           Connects your Google Search Console account (OAuth) to pull real 28-day query and page performance —
           what people actually searched to find your site, and which of your pages showed up — plus a
           query/page cannibalisation shortlist.
         </P>
 
-        <SubHeading>Adwords (Google Ads)</SubHeading>
+        <SubHeading>Google Ads</SubHeading>
         <P>
           Paste a site URL and describe what it sells; Vault scrapes the site and generates a starter Google Ads
           Search campaign — 100 keywords, 100 negatives, and ad copy (either a full RSA set or a simple 10-headline/
@@ -1653,7 +1653,7 @@ function UserGuidePage() {
           alert mechanism that was never actually wired up.
         </P>
 
-        <SubHeading>Lighthouse (HTML)</SubHeading>
+        <SubHeading>Page speed (Lighthouse)</SubHeading>
         <P>
           Runs Google's PageSpeed Insights for both mobile and desktop and turns the result into a prioritised
           work order (P0–P2 tickets a developer can action), alongside category scores, lab metrics, and specific
@@ -1668,7 +1668,7 @@ function UserGuidePage() {
           rendered read-only in a sandboxed frame.
         </P>
 
-        <SubHeading>CSS</SubHeading>
+        <SubHeading>Style editor</SubHeading>
         <P>
           Change how a website looks without touching any code. Try the built-in demo page (Header, Paragraph,
           Card, Image) to get a feel for it, or upload/paste your own HTML and one or more style files, reorder

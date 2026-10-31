@@ -1190,8 +1190,8 @@ function buildSiteAudit({ crawl }) {
     globalUpdates,
     indexability,
     notCovered: [
-      'Page speed, Core Web Vitals, unused JS/CSS, contrast — use HTML (Lighthouse) at /html',
-      'Paid search keywords and RSA copy — use Adwords at /google-ads',
+      'Page speed, Core Web Vitals, unused JS/CSS, contrast — use Page speed at /html',
+      'Paid search keywords and RSA copy — use Google Ads at /google-ads',
       'Backlink profile and rank tracking',
     ],
     pages: pageReports.map((p) => ({

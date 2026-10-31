@@ -25,7 +25,7 @@ export function formatSeoCampaignBrief(audit) {
     `Score ${audit?.score ?? '—'} · crawled ${crawled}${discovered > crawled ? ` of ${discovered} found` : ''}`,
     '',
     'This crawl is for organic campaigns: which URLs can rank, how they look in SERPs, thin/duplicate content, and internal links.',
-    'Page speed and Core Web Vitals are in HTML (Lighthouse). Paid keywords are in Adwords.',
+    'Page speed and Core Web Vitals are in Page speed. Paid keywords are in Google Ads.',
     '',
     '## Campaign work order',
   ];

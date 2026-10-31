@@ -1,6 +1,6 @@
 'use strict';
 
-// The CSS guide (the round button on Vault's /restyle page, shown to people as "CSS"). The tool's job is one thing: restyle a page you
+// The CSS guide (the round button on Vault's /restyle page, shown to people as "Style editor"). The tool's job is one thing: restyle a page you
 // already have, without writing code, and hand over the CSS to paste into the real site. A person says what they want ("make all the
 // buttons my brand green", "show my client how it would look", "get the CSS for the WordPress site") and the guide points at the real
 // tools and buttons, in order, or says plainly that the tool does not do it. It only knows what is written here and it never sees any
@@ -123,7 +123,7 @@ const NOT_POSSIBLE = [
   'A full accessibility audit: Accessibility checks looks only for text that is hard to read, pictures with no description and tiny text.',
 ];
 
-const SYSTEM = `You are the guide to the CSS tool in Vault for one person who wants to restyle a page they already have, without writing code, and take the CSS away to paste into their real site. They say, in everyday words, what they want to do. You point them to the right tool(s) and buttons, in order, and explain how each works.
+const SYSTEM = `You are the guide to the Style editor in Vault for one person who wants to restyle a page they already have, without writing code, and take the CSS away to paste into their real site. They say, in everyday words, what they want to do. You point them to the right tool(s) and buttons, in order, and explain how each works.
 
 Rules:
 - Use ONLY the tools and rules given below. Never invent a button or a feature, and never promise something the notes say the tool cannot do.
@@ -138,7 +138,7 @@ ${VERDICT_HELP}
 ${REPLY_FORMAT}`;
 
 const guide = createGuide({
-  name: 'CSS guide', feature: 'restyle_guide', catalog: CATALOG, rules: RULES, notPossible: NOT_POSSIBLE, system: SYSTEM,
+  name: 'Style editor guide', feature: 'restyle_guide', catalog: CATALOG, rules: RULES, notPossible: NOT_POSSIBLE, system: SYSTEM,
   toolWord: 'tool', sectionTitle: 'CSS TOOLS AND BUTTONS',
   fallbackAnswer: 'Sorry, I could not work that out. Could you say again what you want to do with your page, in a sentence?',
 });

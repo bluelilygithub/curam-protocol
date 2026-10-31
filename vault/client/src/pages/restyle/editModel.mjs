@@ -202,7 +202,7 @@ export function changeReport(edits, tokens = [], { title = 'Page', sourceUrl = '
   const rows = changeRows(edits);
   const lines = [`# Changes to ${title}`, ''];
   if (sourceUrl) lines.push(`Page: ${sourceUrl}`);
-  lines.push(`Made with the Vault CSS tool on ${date.toISOString().slice(0, 10)}.`, `${rows.length} change${rows.length === 1 ? '' : 's'}${important ? ', written to win over the page\'s own styles' : ''}.`, '');
+  lines.push(`Made with the Vault Style editor on ${date.toISOString().slice(0, 10)}.`, `${rows.length} change${rows.length === 1 ? '' : 's'}${important ? ', written to win over the page\'s own styles' : ''}.`, '');
   if (tokens.length) {
     lines.push('## Brand colours and fonts', '');
     tokens.forEach((t) => lines.push(`- ${t.name} (${t.kind}): ${t.value}  ->  ${tokenRef(t)}`));

@@ -141,10 +141,10 @@ export default function SearchConsolePage() {
         <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-surface)', color: 'var(--color-primary)' }}>
           {getIcon('line-chart', { size: 16 })}
         </div>
-        <h1 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Search</h1>
+        <h1 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Search Console</h1>
       </div>
       <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-        Google Search Console for organic campaigns: queries, landing pages, and queries that split across URLs. Use SEO for the HTML crawl and HTML for Lighthouse. Add <span className="font-medium" style={{ color: 'var(--color-text)' }}>{'{APP_URL}/api/gsc/callback'}</span> as an authorised redirect in Google Cloud (or set GSC_REDIRECT_URI).
+        Google Search Console for organic campaigns: queries, landing pages, and queries that split across URLs. Use SEO for the site crawl and Page speed for speed tests. Add <span className="font-medium" style={{ color: 'var(--color-text)' }}>{'{APP_URL}/api/gsc/callback'}</span> as an authorised redirect in Google Cloud (or set GSC_REDIRECT_URI).
       </p>
 
       {!status.connected ? (

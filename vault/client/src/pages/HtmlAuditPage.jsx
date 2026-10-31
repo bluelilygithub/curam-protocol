@@ -16,7 +16,7 @@ const FIELD = {
 };
 
 const TOOL_HELP = {
-  title: 'Lighthouse',
+  title: 'Page speed',
   description: 'Runs a real Google PageSpeed Insights audit (mobile + desktop) against any public URL and turns the results into a ranked, developer-ready work order — not just raw scores.',
   features: [
     'Real Lighthouse data via Google\'s PageSpeed Insights API, run for mobile and desktop in parallel',
@@ -443,7 +443,7 @@ export default function HtmlAuditPage() {
           <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-bg)', color: 'var(--color-primary)' }}>
             {getIcon('gauge', { size: 16 })}
           </div>
-          <h1 className="text-sm font-semibold flex-1" style={{ color: 'var(--color-text)' }}>Lighthouse</h1>
+          <h1 className="text-sm font-semibold flex-1" style={{ color: 'var(--color-text)' }}>Page speed</h1>
           <Tooltip text="What this tool does and its full feature list.">
             <button
               type="button"
@@ -501,7 +501,7 @@ export default function HtmlAuditPage() {
           </select>
         </Tooltip>
 
-        <Tooltip text="Start a fresh Lighthouse run on a new URL.">
+        <Tooltip text="Start a fresh page speed run on a new URL.">
           <button
             type="button"
             onClick={() => navigate('/html')}
@@ -512,7 +512,7 @@ export default function HtmlAuditPage() {
                 : { background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-text)' }
             }
           >
-            New Lighthouse run
+            New page speed run
           </button>
         </Tooltip>
 
@@ -577,7 +577,7 @@ export default function HtmlAuditPage() {
         {!id && (
           <section className="space-y-4">
             <div>
-              <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Lighthouse</h2>
+              <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Page speed</h2>
               <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
                 Runs Google Lighthouse on a public URL for <span className="font-medium" style={{ color: 'var(--color-text)' }}>mobile and desktop</span>, then stores a developer brief (opportunities, files, failed checks, docs links). This is lab performance, not the SEO crawl.
               </p>
@@ -616,7 +616,7 @@ export default function HtmlAuditPage() {
                 className="px-4 py-2 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
                 style={{ background: 'var(--color-primary)' }}
               >
-                Run Lighthouse
+                Run page speed test
               </button>
             </Tooltip>
           </section>

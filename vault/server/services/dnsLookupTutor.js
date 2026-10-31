@@ -40,7 +40,7 @@ const RULES = [
 
 const NOT_POSSIBLE = [
   'Changing, adding or deleting DNS records: it only reads them (records are changed where the domain is managed, such as Cloudflare).',
-  'Checking whether a website is up or fast (use Lighthouse), or whether a domain name is free to buy (use Domain).',
+  'Checking whether a website is up or fast (use Page speed), or whether a domain name is free to buy (use Domain).',
   'Showing who owns a domain (WHOIS) or when it expires.',
   'Checking DKIM, or whether an email will actually be delivered.',
   'Looking up a name on a private network or one that only exists inside a company.',

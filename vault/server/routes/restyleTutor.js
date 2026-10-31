@@ -5,4 +5,4 @@
 const { makeGuideRouter } = require('./guideRouter');
 const { askRestyleTutor } = require('../services/restyleTutor');
 
-module.exports = makeGuideRouter({ ask: askRestyleTutor, source: 'restyleTutor', productName: 'CSS', logTag: '[restyle/tutor]' });
+module.exports = makeGuideRouter({ ask: askRestyleTutor, source: 'restyleTutor', productName: 'Style editor', logTag: '[restyle/tutor]' });

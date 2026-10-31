@@ -421,7 +421,7 @@ export default function SeoAuditPage() {
             <div>
               <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>New SEO audit</h2>
               <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-                Crawl the site for an organic campaign: which URLs can be indexed, how titles and descriptions look in search, thin or duplicate pages, and internal links. Speed and Core Web Vitals are in <span className="font-medium" style={{ color: 'var(--color-text)' }}>HTML</span>. Paid keywords are in <span className="font-medium" style={{ color: 'var(--color-text)' }}>Adwords</span>.
+                Crawl the site for an organic campaign: which URLs can be indexed, how titles and descriptions look in search, thin or duplicate pages, and internal links. Speed and Core Web Vitals are in <span className="font-medium" style={{ color: 'var(--color-text)' }}>Page speed</span>. Paid keywords are in <span className="font-medium" style={{ color: 'var(--color-text)' }}>Google Ads</span>.
               </p>
             </div>
             <label className="block space-y-1">
@@ -706,7 +706,7 @@ export default function SeoAuditPage() {
               >
                 <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Not in this audit</p>
                 <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-                  Use HTML for Lighthouse (speed, CWV, contrast). Use Adwords for paid keywords. This crawl does not track rankings or backlinks.
+                  Use Page speed for speed, Core Web Vitals and contrast. Use Google Ads for paid keywords. This crawl does not track rankings or backlinks.
                 </p>
                 <ul className="text-xs space-y-0.5" style={{ color: 'var(--color-muted)' }}>
                   {notCovered.map((item) => (

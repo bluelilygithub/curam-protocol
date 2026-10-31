@@ -43,7 +43,7 @@ const CATALOG = [
     notes: 'CSV is one table per file.' },
   { id: 'metadata', label: 'Metadata', group: 'Data',
     does: 'Paste a web address and press Extract. You get what the page says about itself: title, description, canonical address, author, published and updated dates, language, the robots tag, the share-card tags (Open Graph and Twitter), any structured data (JSON-LD), and the outline of its headings H1 to H6. It warns when the page does not have exactly one main heading (H1).',
-    notes: 'It shows what the page declares, not whether it is good or ranks well. It is not a full SEO audit (Vault has an SEO and a Lighthouse tool for that).' },
+    notes: 'It shows what the page declares, not whether it is good or ranks well. It is not a full SEO audit (Vault has an SEO and a Page speed tool for that).' },
   { id: 'copy-metadata', label: 'Copy metadata', group: 'Data',
     does: 'The Copy JSON button above the metadata puts everything shown on the clipboard as JSON.', notes: 'It copies the data as JSON, not as the formatted view.' },
   { id: 'styled', label: 'Exact scrape', group: 'Page',
@@ -73,7 +73,7 @@ const NOT_POSSIBLE = [
   'Checking whether links work (broken-link check), following links to other pages, or reading more than one page at a time.',
   'Phone numbers or emails that are not written as links, or lists of contacts. Links and the text of the page are all it reads.',
   'Pictures or files that are not pictures: videos, audio and downloads such as PDFs are not listed or downloaded.',
-  'A full SEO audit or a speed test: the Metadata tool only reads what the page declares. the SEO and Lighthouse tools in Vault do the audits.',
+  'A full SEO audit or a speed test: the Metadata tool only reads what the page declares. the SEO and Page speed tools in Vault do the audits.',
   'Checking whether the person may copy or reuse the page\'s text or pictures: that is the owner\'s copyright and is up to the person.',
 ];
 
