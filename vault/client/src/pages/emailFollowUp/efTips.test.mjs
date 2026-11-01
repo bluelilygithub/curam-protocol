@@ -79,7 +79,7 @@ const settings = read('pages/SettingsPage.jsx');
 assert.ok(settings.includes('emailFollowUpTour') && settings.includes('/email-follow-up?tour=1'), 'Settings has an Email Follow-Up Tour card');
 
 // ---- the guide's Open buttons: every place the guide can show exists on the page
-for (const place of ['cases', 'ledger', 'mail', 'drafts', 'coverage']) {
+for (const place of ['cases', 'ledger', 'ask', 'mail', 'drafts', 'coverage']) {
   assert.ok(place === 'cases' ? page.includes('data-guide="cases"') : (caseView.includes(`data-guide="${place}"`) || place === 'mail'), `the page marks data-guide="${place}"`);
 }
 console.log('email-follow-up tips/helpers: passed');

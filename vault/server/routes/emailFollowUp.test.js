@@ -438,6 +438,36 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     r = await call('DELETE', `/${cBigBin.id}`, { confirmTitle: 'Big one', forever: true });
     ok('and delete forever then works', r.status === 200 && (await store.getCase(userA, cBigBin.id)) === null, r.body);
 
+    // ---- summary and ask: what the model is given, who may ask, closed cases ----
+    console.log('summary and ask');
+    const caseAsk = require('../services/emailFollowUp/caseAsk');
+    const realSummarise = caseAsk.summariseCase;
+    const realAsk = caseAsk.askCase;
+    let seen = null;
+    caseAsk.summariseCase = async (uid, cs, corpus) => { seen = { kind: 'summary', corpus }; return { overview: 'ok', terms: [], timeline: [], openPoints: [], inconsistencies: [], stats: { droppedQuotes: 0, uncited: 0 } }; };
+    caseAsk.askCase = async (uid, cs, corpus, q, hist) => { seen = { kind: 'ask', corpus, q, hist }; return { answer: 'fine [S1]', found: true, citations: [], unsure: null, uncited: false, unstructured: false, droppedQuotes: 0 }; };
+    try {
+      const cQ = await newCase({ title: 'Ask me' });
+      r = await call('POST', `/${cQ.id}/summary`, {});
+      ok('the summary route works on a case with nothing in it (the reader says there is nothing to read)', r.status === 200 && seen.corpus.count === 0, r);
+      const m1 = await addMsg(userA, cQ.id, 1);
+      const m2 = await addMsg(userA, cQ.id, 2);
+      await store.addSource(userA, cQ.id, { kind: 'document', channel: 'inbound', externalId: 'doc-1', threadId: `thread-${cQ.id}-1`, parentId: m1.id, filename: 'scan.png', receivedAt: new Date().toISOString(), text: '', parseStatus: 'reference_only', parseReason: 'a picture, not read' });
+      await call('POST', `/${cQ.id}/threads/thread-${cQ.id}-2/set-aside`, { aside: true });
+      r = await call('POST', `/${cQ.id}/summary`, {});
+      ok('only mail that is attached, readable and not set aside is given to the reader', r.status === 200 && seen.corpus.count === 1 && seen.corpus.index[0].sourceId === m1.id, { count: seen.corpus.count });
+      ok('and the page is told what was left out, in words', r.body.left.some((x) => /1 message set aside/.test(x)) && r.body.left.some((x) => /scan\.png: a picture, not read/.test(x)), r.body.left);
+      r = await call('POST', `/${cQ.id}/ask`, { question: 'What was agreed on price?', history: [{ question: 'a', answer: 'b' }, { nope: 1 }, 'x'] });
+      ok('a question reaches the reader with only well-formed earlier turns', r.status === 200 && seen.kind === 'ask' && seen.q === 'What was agreed on price?' && seen.hist.length === 1, { q: seen.q, hist: seen.hist });
+      r = await call('POST', `/${cQ.id}/ask`, { question: 'Whose case is this?' }, userB);
+      ok('another person cannot ask about my case', r.status === 404, r.status);
+      r = await call('POST', `/${cQ.id}/summary`, {}, userB);
+      ok('or summarise it', r.status === 404, r.status);
+      await call('PATCH', `/${cQ.id}`, { status: 'closed' });
+      r = await call('POST', `/${cQ.id}/ask`, { question: 'Still readable?' });
+      ok('a closed case can still be asked about (it only reads)', r.status === 200, r);
+    } finally { caseAsk.summariseCase = realSummarise; caseAsk.askCase = realAsk; }
+
     // ---- every Gmail route is limited per person ----
     console.log('rate limit');
     const userC = await mkUser('c');

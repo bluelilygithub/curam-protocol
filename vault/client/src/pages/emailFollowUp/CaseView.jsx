@@ -19,6 +19,7 @@ const GOOD = '#16a34a';
 
 const TABS = [
   ['ledger', 'tabLedger', (n) => `Ledger (${n.rows})`],
+  ['ask', 'tabAsk', () => 'Summary and Ask'],
   ['mail', 'tabMail', (n) => `Mail (${n.sources})`],
   ['drafts', 'tabDrafts', (n) => `Drafts (${n.pending}/${n.cap} waiting)`],
   ['coverage', 'tabCoverage', () => 'What was covered'],
@@ -211,6 +212,188 @@ function DraftCard({ draft, reload, locked }) {
   );
 }
 
+// ---------- summary and ask ----------
+
+const STATUS_COLOR = { agreed: GOOD, proposed: WARN, disputed: BAD, open: 'var(--color-muted)' };
+
+/** [S3] markers in a sentence become small numbered chips; hovering one shows which email or attachment it is. */
+function WithSources({ text, index }) {
+  const parts = String(text || '').split(/(\[S\d+\])/g);
+  return (
+    <>
+      {parts.map((p, i) => {
+        const m = /^\[S(\d+)\]$/.exec(p);
+        if (!m) return <React.Fragment key={i}>{p}</React.Fragment>;
+        return <SourceChip key={i} n={Number(m[1])} index={index} />;
+      })}
+    </>
+  );
+}
+
+function SourceChip({ n, index }) {
+  const s = index.find((x) => x.n === n);
+  const tip = s ? `${s.label}${s.date ? `, ${new Date(s.date).toLocaleDateString()}` : ''}${s.ocr ? ' (read by OCR: check the figures)' : ''}` : 'An email or attachment of this case.';
+  return (
+    <Tooltip text={tip}>
+      <span className="inline-block text-xs font-medium px-1.5 mx-0.5 rounded align-baseline" style={{ background: 'var(--color-surface)', color: 'var(--color-primary)' }}>{n}</span>
+    </Tooltip>
+  );
+}
+
+function Chips({ list, index }) {
+  if (!list || !list.length) return <Badge color={WARN}>no source cited</Badge>;
+  return <span className="whitespace-nowrap">{list.map((n) => <SourceChip key={n} n={n} index={index} />)}</span>;
+}
+
+function Quote({ quote, n, index }) {
+  if (!quote) return null;
+  return (
+    <p className="text-xs leading-relaxed border-l-2 pl-2" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+      "{quote}" <SourceChip n={n} index={index} />
+    </p>
+  );
+}
+
+function SummaryView({ result, onCopy }) {
+  const { summary: s, sources: index, cut, left } = result;
+  return (
+    <div className="space-y-4">
+      {s.overview && <p className="text-sm leading-relaxed"><WithSources text={s.overview} index={index} /></p>}
+      {s.terms.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold">Where each point stands</h3>
+          {s.terms.map((t, i) => (
+            <div key={i} className="rounded-xl border p-3 space-y-1.5" style={CARD}>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-semibold">{t.topic}</span>
+                <Badge color={STATUS_COLOR[t.status]}>{t.status}</Badge>
+                <Chips list={t.sources} index={index} />
+              </div>
+              <p className="text-sm leading-relaxed"><WithSources text={t.position} index={index} /></p>
+              <Quote quote={t.quote} n={t.quoteSource} index={index} />
+            </div>
+          ))}
+        </div>
+      )}
+      {s.inconsistencies.length > 0 && (
+        <div className="space-y-1.5">
+          <h3 className="text-sm font-semibold" style={{ color: BAD }}>Things that disagree</h3>
+          {s.inconsistencies.map((t, i) => <p key={i} className="text-sm leading-relaxed"><WithSources text={t.note} index={index} /> <Chips list={t.sources} index={index} /></p>)}
+        </div>
+      )}
+      {s.openPoints.length > 0 && (
+        <div className="space-y-1.5">
+          <h3 className="text-sm font-semibold">Still open</h3>
+          <ul className="list-disc pl-5 space-y-1">{s.openPoints.map((t, i) => <li key={i} className="text-sm leading-relaxed"><WithSources text={t.point} index={index} /> <Chips list={t.sources} index={index} /></li>)}</ul>
+        </div>
+      )}
+      {s.timeline.length > 0 && (
+        <div className="space-y-1.5">
+          <h3 className="text-sm font-semibold">Timeline</h3>
+          <ul className="space-y-1">{s.timeline.map((t, i) => (
+            <li key={i} className="text-sm leading-relaxed flex gap-3"><span className="text-xs w-20 shrink-0 pt-0.5" style={{ color: 'var(--color-muted)' }}>{t.date || 'date unclear'}</span><span><WithSources text={t.event} index={index} /> <Chips list={t.sources} index={index} /></span></li>
+          ))}</ul>
+        </div>
+      )}
+      <ReadNotes cut={cut} left={left} stats={s.stats} />
+      <Btn small tip={EF_TIPS.copyAnswer} onClick={onCopy}>Copy this summary</Btn>
+    </div>
+  );
+}
+
+function ReadNotes({ cut, left, stats }) {
+  const lines = [];
+  if (cut && cut.length) lines.push(`${cut.length} long item${cut.length === 1 ? ' was' : 's were'} read only in part: ${cut.slice(0, 3).map((c) => c.label).join('; ')}.`);
+  if (left && left.length) lines.push(`Not given to the AI: ${left.join('; ')}.`);
+  if (stats && stats.droppedQuotes) lines.push(`${stats.droppedQuotes} quote${stats.droppedQuotes === 1 ? '' : 's'} the AI offered could not be found word for word in the mail and ${stats.droppedQuotes === 1 ? 'was' : 'were'} left out.`);
+  if (!lines.length) return null;
+  return <div className="text-xs space-y-1" style={{ color: WARN }}>{lines.map((l) => <p key={l}>{l}</p>)}</div>;
+}
+
+function AskPanel({ caseId, usable, locked, state, setState }) {
+  const call = useCall();
+  const toast = useToastStore((s) => s.addToast);
+  const [busy, setBusy] = useState('');
+  const [q, setQ] = useState('');
+  const [showSources, setShowSources] = useState(false);
+  const { summary, turns } = state;
+  const sourceIndex = (summary && summary.sources) || (turns.length ? turns[turns.length - 1].sources : []) || [];
+
+  const summarise = async () => {
+    setBusy('summary');
+    const r = await call(() => api.post(`/api/email-follow-up/${caseId}/summary`, {}));
+    setBusy('');
+    if (r.ok) setState((s) => ({ ...s, summary: r.data }));
+  };
+  const send = async () => {
+    const question = q.trim();
+    if (question.length < 3) return;
+    setBusy('ask');
+    const history = turns.filter((t) => t.answer && t.answer.answer).slice(-4).map((t) => ({ question: t.question, answer: t.answer.answer }));
+    const r = await call(() => api.post(`/api/email-follow-up/${caseId}/ask`, { question, history }));
+    setBusy('');
+    if (r.ok) { setQ(''); setState((s) => ({ ...s, turns: [...s.turns, { question, answer: r.data.answer, sources: r.data.sources, cut: r.data.cut, left: r.data.left }] })); }
+  };
+  const copy = async (text) => {
+    try { await navigator.clipboard.writeText(text); toast('Copied.'); } catch { toast('Copy was blocked by the browser.', 'error'); }
+  };
+  const summaryText = () => {
+    const s = summary.summary;
+    const names = (list) => (list && list.length ? ` [${list.map((n) => `S${n}`).join(', ')}]` : '');
+    return [s.overview, '', ...s.terms.map((t) => `${t.topic} (${t.status}): ${t.position}${names(t.sources)}`), '', ...(s.openPoints.length ? ['Still open:', ...s.openPoints.map((t) => `- ${t.point}${names(t.sources)}`)] : []),
+      '', 'Sources:', ...summary.sources.map((x) => `S${x.n} ${x.label}${x.date ? `, ${new Date(x.date).toLocaleDateString()}` : ''}`)].join('\n');
+  };
+
+  return (
+    <div className="space-y-5" data-guide="ask" data-tour="ef-ask">
+      <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+        The AI reads the {usable} attached email{usable === 1 ? '' : 's'} and readable attachment{usable === 1 ? '' : 's'} together, then answers from them only. Every claim points at its source number; hover a number to see which email. It is not legal advice: check the original wording. Nothing here is saved.
+      </p>
+
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Btn primary disabled={busy === 'summary' || !usable} tip={EF_TIPS.summarise(usable)} onClick={summarise}>{busy === 'summary' ? 'Reading everything…' : summary ? 'Summarise again' : 'Summarise this case'}</Btn>
+          {summary && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Made {new Date(summary.at).toLocaleString()} from {summary.count} item{summary.count === 1 ? '' : 's'}.</span>}
+        </div>
+        {summary && <SummaryView result={summary} onCopy={() => copy(summaryText())} />}
+      </div>
+
+      <div className="space-y-3 border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
+        <h3 className="text-sm font-semibold">Ask a question</h3>
+        {turns.map((t, i) => (
+          <div key={i} className="space-y-2">
+            <p className="text-sm font-medium rounded-xl px-3 py-2" style={{ background: 'var(--color-surface)' }}>{t.question}</p>
+            <div className="rounded-xl border p-3 space-y-2" style={CARD}>
+              <p className="text-sm leading-relaxed whitespace-pre-wrap"><WithSources text={t.answer.answer} index={t.sources} /></p>
+              {t.answer.found === false && <Badge color={WARN}>not found in these emails</Badge>}
+              {t.answer.uncited && <p className="text-xs" style={{ color: WARN }}>{t.answer.unstructured ? 'The AI did not follow the checking format, so nothing in this answer was checked against the emails. ' : ''}This answer cites no email. Treat it with care and check it yourself.</p>}
+              {t.answer.citations.map((c, k) => <Quote key={k} quote={c.quote} n={c.source} index={t.sources} />)}
+              {t.answer.unsure && <p className="text-xs" style={{ color: WARN }}>Unclear in the emails: <WithSources text={t.answer.unsure} index={t.sources} /></p>}
+              <ReadNotes cut={t.cut} left={t.left} stats={{ droppedQuotes: t.answer.droppedQuotes }} />
+              <Btn small tip={EF_TIPS.copyAnswer} onClick={() => copy(t.answer.answer)}>Copy answer</Btn>
+            </div>
+          </div>
+        ))}
+        {busy === 'ask' && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Reading the mail…</p>}
+        <Tooltip text={EF_TIPS.question}>
+          <div><VoiceInput type="textarea" rows={2} value={q} onChange={setQ} append placeholder={usable ? 'For example: what did we agree about payment terms, and has the other side accepted the 12 month term?' : 'Attach a thread under Mail first.'} /></div>
+        </Tooltip>
+        <div className="flex flex-wrap gap-2">
+          <Btn small primary disabled={busy === 'ask' || !usable || q.trim().length < 3} tip={EF_TIPS.askGo} onClick={send}>Ask</Btn>
+          {turns.length > 0 && <Btn small tip={EF_TIPS.askClear} onClick={() => setState((s) => ({ ...s, turns: [] }))}>Clear questions</Btn>}
+          {sourceIndex.length > 0 && <Btn small tip={EF_TIPS.showSources} onClick={() => setShowSources(!showSources)}>{showSources ? 'Hide sources' : 'Show sources'}</Btn>}
+        </div>
+        {locked && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>This case is closed, but you can still read it and ask about it.</p>}
+        {showSources && (
+          <ul className="text-xs space-y-1" style={{ color: 'var(--color-muted)' }}>
+            {sourceIndex.map((x) => <li key={x.n}><span className="font-medium" style={{ color: 'var(--color-primary)' }}>{x.n}</span> {x.label}{x.date ? `, ${new Date(x.date).toLocaleDateString()}` : ''}{x.ocr ? ' (read by OCR)' : ''}</li>)}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ---------- case ----------
 
 export default function CaseView({ caseId, tab, onTab, onBack }) {
@@ -237,6 +420,8 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
   const [delForever, setDelForever] = useState(false);
   const [delNote, setDelNote] = useState('');
   const [removing, setRemoving] = useState(''); // threadId waiting for "Yes, remove"
+  const [askState, setAskState] = useState({ summary: null, turns: [] }); // kept while you move between tabs; never stored
+  useEffect(() => { setAskState({ summary: null, turns: [] }); }, [caseId]);
 
   const reload = useCallback(async () => {
     try {
@@ -456,6 +641,8 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
           {ordered.map((r) => <RowCard key={r.id} row={r} caseId={caseId} sources={sources} reload={reload} onDraft={draftRow} locked={locked} />)}
         </div>
       )}
+
+      {tab === 'ask' && <AskPanel caseId={caseId} usable={sources.filter((s) => !s.setAsideAt && s.parseStatus === 'parsed' && s.channel !== 'note').length} locked={locked} state={askState} setState={setAskState} />}
 
       {tab === 'mail' && (
         <div className="space-y-4">

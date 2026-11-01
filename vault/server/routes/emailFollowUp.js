@@ -17,6 +17,7 @@ const approvalLib = require('../services/emailFollowUp/approval');
 const { buildNudgeDraft } = require('../services/emailFollowUp/draft');
 const { coverageStatement } = require('../services/emailFollowUp/coverage');
 const extractMod = require('../services/emailFollowUp/extract'); // called as extractMod.extractFromSource so a test can stand in for the model
+const caseAsk = require('../services/emailFollowUp/caseAsk'); // called as caseAsk.askCase so a test can stand in for the model
 const store = require('../services/emailFollowUp/caseStore');
 const { resolveUserTimezone } = require('../services/fitness/timezone');
 
@@ -403,6 +404,58 @@ router.post('/:id/extract', aiLimiter, async (req, res) => {
     }
     const fresh = await store.getCase(req.user.id, c.id);
     res.json({ ...summary, rows: fresh.ledger });
+  } catch (err) { fail(res, err); }
+});
+
+// ---------- summary and ask (the model reads the whole case together; nothing is stored) ----------
+
+/** What was not given to the model, in words, so the person knows what an answer is based on. */
+function leftOut(sources) {
+  const left = [];
+  const aside = sources.filter((s) => s.setAsideAt && s.kind !== 'document').length;
+  if (aside) left.push(`${aside} message${aside === 1 ? '' : 's'} set aside`);
+  for (const d of sources) {
+    if (d.kind === 'document' && !d.setAsideAt && d.parseStatus !== 'parsed') left.push(`${d.filename || 'a file'}: ${d.parseReason || 'not read'}`);
+  }
+  const waiting = sources.reduce((n, s) => {
+    if (s.kind === 'document' || s.attachmentsFetchedAt || s.setAsideAt || !Array.isArray(s.attachments) || !s.attachments.length) return n;
+    return n + Math.max(0, s.attachments.length - sources.filter((d) => d.parentId === s.id).length);
+  }, 0);
+  if (waiting) left.push(`${waiting} attachment${waiting === 1 ? '' : 's'} not fetched yet (press Get attachments)`);
+  return left.slice(0, 25);
+}
+
+async function corpusFor(req, c) {
+  const { timezone } = await resolveUserTimezone(req.user.id);
+  const owner = await store.ownerEmail(req.user.id);
+  const sources = (await store.listSources(c.id, { withText: true })).map((s) => ({ ...s, label: sourceLabel(s) }));
+  return { corpus: caseAsk.buildCorpus(sources, { tz: timezone, ownerEmail: owner }), left: leftOut(sources) };
+}
+
+function corpusInfo(corpus, left) {
+  return { sources: corpus.index, cut: corpus.cut, left, count: corpus.count };
+}
+
+// Works on a closed case too: it only reads.
+router.post('/:id/summary', aiLimiter, async (req, res) => {
+  try {
+    const c = await loadCase(req, res);
+    if (!c) return;
+    const { corpus, left } = await corpusFor(req, c);
+    const summary = await caseAsk.summariseCase(req.user.id, c, corpus);
+    res.json({ summary, ...corpusInfo(corpus, left), at: new Date().toISOString() });
+  } catch (err) { fail(res, err); }
+});
+
+router.post('/:id/ask', aiLimiter, async (req, res) => {
+  try {
+    const c = await loadCase(req, res);
+    if (!c) return;
+    const history = (Array.isArray(req.body?.history) ? req.body.history : [])
+      .filter((h) => h && typeof h.question === 'string' && typeof h.answer === 'string').slice(-4);
+    const { corpus, left } = await corpusFor(req, c);
+    const answer = await caseAsk.askCase(req.user.id, c, corpus, req.body?.question, history);
+    res.json({ answer, ...corpusInfo(corpus, left) });
   } catch (err) { fail(res, err); }
 });
 

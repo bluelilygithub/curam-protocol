@@ -37,6 +37,18 @@ The design set recommended a **separate local product** with Vault as an optiona
 - **Microphone:** on the free-text fields (case name, what is owed, notes, their words, subject) through the shared `VoiceInput`.
 - **Cross-user route list:** the 19 routes are in `server/testing/routeManifest.json` as `authed`. (Running `crossUser.test.js --update` rewrote about 400 unrelated lines because the manifest was already out of date, so only these entries were added by hand; the inventory step of that test still fails on 62 other routes that were missing before this work.)
 
+## Summary and Ask (2026-11-02)
+
+The ledger reads one message at a time and only lists discrete things owed, so it says almost nothing about a negotiated contract (price, term, scope and so on are positions that change, not items owed). The **Summary and Ask** tab (`ask`, second tab) is the other half: the model reads the whole case together.
+
+- **What it sees** (`caseAsk.js` `buildCorpus`): every attached email and readable attachment that is not set aside, numbered S1.. in date order, with direction (sent or received), date in the person's time zone, sender and subject. `>` quoted reply lines are dropped. Total budget about 350,000 characters; short items stay whole and long ones share what is left, and anything cut is reported. A scanned (OCR) attachment is labelled as such.
+- **What it does:** `POST /:id/summary` gives overview, per-point position with status (agreed, proposed, disputed, open), open points, contradictions and a timeline. `POST /:id/ask` answers a question (the last four turns are sent back as context only). Both use the `standard` tier (the ledger Read keeps using `light`), no tools, correspondence fenced as data, rate limited with `aiLimiter`, cost logged as `email_follow_up_summary` / `email_follow_up_ask`.
+- **Code checks the answer** (same stance as `extract.js`): a source number that does not exist is removed, a quote that is not word for word in the cited source is dropped and counted, a claim with no source is marked "no source cited", a reply not in the agreed form is shown flagged as unchecked. The prompt says: only the emails, never fill gaps from general knowledge, never upgrade "might"/"if"/an offer to agreed, latest message wins and says what it replaced, flag contradictions, not legal advice.
+- **Nothing is stored.** Summary and answers live in the page while you stay in the case. No new table. Copy buttons take the text with source numbers.
+- **The person is told what was left out:** set-aside mail, attachments not yet fetched, files that could not be read (with the reason), items read in part.
+- Works on a closed case (it only reads). Same privacy cost as Read: case text goes to the configured model, so the same "not for medical or mortgage matters" scope applies.
+- **Not measured:** answer quality against a real model and real contract threads. Tests use a fake model (`caseAsk.test.js`, 14 checks; route checks in `emailFollowUp.test.js`). The compass tour has no step for the new tab yet.
+
 ## What was built from the spec, and how
 
 - **Manual cases only (1.1, 1.2).** `POST /` needs a title and an obligation. Mail is only ever *suggested* (`GET /:id/suggestions`) and attached when the person presses Attach. There is no inbound queue because nothing ingests automatically, so Rule 1.3 (queue expiry) has nothing to apply to; `gates.suggestCaseForMessage` stays as the tested invariant.

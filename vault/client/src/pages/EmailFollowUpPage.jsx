@@ -22,7 +22,7 @@ const KINDS = [
   ['job-search', 'Job search'],
   ['other', 'Something else'],
 ];
-const TABS = ['ledger', 'mail', 'drafts', 'coverage'];
+const TABS = ['ledger', 'ask', 'mail', 'drafts', 'coverage'];
 
 export default function EmailFollowUpPage() {
   const getIcon = useIcon();
