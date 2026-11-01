@@ -92,7 +92,16 @@ Every YouTube Data API call goes through `server/services/youtubeApi.js`: answer
 
 Fixed at the same time: the page called `addToast({ type, message })` but the toast store takes `(message, type)`, so those toasts (copied, saved as a list, errors) could not render properly.
 
-Not built yet (from the 2026-11 review): following channels and saved-search alerts, quiz/flashcards from a video, a tagged watch-later queue, search across saved transcripts, comparing several videos, YouTube as a Topic Research source.
+## Following channels and searches (added 2026-11)
+
+**+ Follow channel** (in a video's window, or **+ Follow this channel** in a channel view) and **+ Follow this search** (under the results) make Vault look for new videos for you. They appear on a new **Following** tab (with a count badge, **Check now** and **Mark all as seen**; opening a new video marks it seen) and as a line in **Needs attention** on the home page ("N new videos from what you follow on YouTube", opens `/youtube?tab=following`).
+
+- **Cost-aware:** a channel is checked through its uploads list (1 quota unit), about every 5 hours; a followed search costs 100 units, so it is checked about once a day and the daily job skips searches when fewer than 10 are left. Limits: 30 channels, 5 searches. Check now only re-checks channels.
+- **No flood:** the first look when you follow something records what is already there as seen, so only videos published afterwards are new.
+- **Retention:** videos found by a check are deleted after 30 days (API terms).
+- **How:** `server/services/youtubeFollows.js` (rules and tests without a database; the database parts were checked against a real database), `server/cron/youtubeFollowsCron.js` (every 6 hours, cron-locked, sends no email), tables `youtube_follows` and `youtube_follow_videos`. Routes: `GET /follows`, `POST /follows`, `DELETE /follows/:id`, `GET /follows/new`, `POST /follows/seen {videoIds | all}`, `POST /follows/check`.
+
+Not built yet (from the 2026-11 review): quiz/flashcards from a video, a tagged watch-later queue, search across saved transcripts, comparing several videos, YouTube as a Topic Research source, email or phone alerts for new videos.
 
 ---
 

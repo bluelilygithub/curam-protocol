@@ -20,6 +20,8 @@ checkGuide({
     ['filters', 'does', /Live now/, 'the Live now box is named'],
     ['open-playlist', 'notes', /unlisted/, 'which playlists work is stated'],
     ['browse-tabs', 'does', /Re-run/, 'history has a Re-run button'],
+    ['following', 'notes', /30 channels and 5 searches/, 'the follow limits are stated'],
+    ['following', 'notes', /only videos published afterwards/, 'the first check only notes what is there'],
     ['watch', 'notes', /never downloads/, 'videos are never downloaded'],
     ['insights', 'notes', /captions only/, 'notes come from captions only'],
     ['ask', 'does', /clickable times/, 'answers carry clickable moments'],
@@ -27,7 +29,7 @@ checkGuide({
     ['transcript', 'does', /Timestamps/, 'the Timestamps view is named'],
     ['comments', 'notes', /Read only/, 'comments are read only'],
   ],
-  gaps: [/Downloading a video/, /captions/, /subscribing/, /Following channels/, /quiz or flashcards/, /Private videos/],
+  gaps: [/Downloading a video/, /captions/, /subscribing/, /Email or phone alerts/, /quiz or flashcards/, /Private videos/],
   rules: [/captions/, /daily limit on new searches/, /never search, play or save/],
   system: [/Never state or guess what a particular video says/],
 }).catch((e) => { console.error(e); process.exit(1); });

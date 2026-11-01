@@ -15,7 +15,7 @@ const names = (list, count, max = 3) => {
 /**
  * raw = {
  *   invoicesOverdue: { count, total, sample[] }, tasksOverdue: { count, sample[] }, remindersDue: { count, sample[] },
- *   expensePending: { count }, tasksToday: { count, sample[] }, suggestionsNew: { count }
+ *   expensePending: { count }, tasksToday: { count, sample[] }, youtubeNew: { count, sample[] }, suggestionsNew: { count }
  * }  (any key may be missing: that source is off for this person or had nothing)
  * Returns [{ id, severity: 'high'|'normal'|'low', title, detail, to, count }], most urgent first, empty ones left out.
  */
@@ -38,6 +38,9 @@ function buildAttentionItems(raw = {}) {
 
   const today = raw.tasksToday || {};
   add('tasks-today', 'normal', today.count, `${plural(today.count, 'task', 'tasks')} due today`, names(today.sample, today.count), '/tasks');
+
+  const yt = raw.youtubeNew || {};
+  add('youtube-new', 'normal', yt.count, `${plural(yt.count, 'new video', 'new videos')} from what you follow on YouTube`, names(yt.sample, yt.count), '/youtube?tab=following');
 
   const sug = raw.suggestionsNew || {};
   add('suggestions-new', 'low', sug.count, `${plural(sug.count, 'new suggestion', 'new suggestions')}`, 'Findings from Vault\'s background checks.', '/suggestions');

@@ -19,7 +19,6 @@
  * Requires env: YOUTUBE_API_KEY
  */
 
-const https   = require('https');
 const express = require('express');
 const { pool } = require('../db');
 const { requireAuth } = require('../middleware/auth');
@@ -27,48 +26,17 @@ const { getModelsForUser } = require('../services/modelResolver');
 const { callModel } = require('../services/callModel');
 const { logUsage } = require('../utils/logUsage');
 const { fetchYoutubeTranscript, fetchYoutubeCaptionLanguages } = require('../services/youtubeTranscript');
-const { cachedGet, quotaStatus } = require('../services/youtubeApi');
+const youtubeApi = require('../services/youtubeApi');
+const { getKey, quotaStatus } = youtubeApi;
+const follows = require('../services/youtubeFollows');
 const insightsLib = require('../services/youtubeInsights');
 const { aiLimiter } = require('../middleware/aiRateLimit');
 
 const router = express.Router();
 router.use(requireAuth);
 
-function getKey() {
-  const k = process.env.YOUTUBE_API_KEY;
-  if (!k) throw new Error('YOUTUBE_API_KEY not configured');
-  return k;
-}
-
-function ytRawGet(path) {
-  return new Promise((resolve, reject) => {
-    const url = new URL(`https://www.googleapis.com${path}`);
-    const req = https.request(
-      { hostname: url.hostname, path: url.pathname + url.search, method: 'GET', headers: { Accept: 'application/json' } },
-      (res) => {
-        let body = '';
-        res.on('data', (c) => (body += c));
-        res.on('end', () => {
-          try {
-            const json = JSON.parse(body);
-            if (res.statusCode >= 400) {
-              reject(new Error(json.error?.message || `YouTube API error HTTP ${res.statusCode}`));
-            } else {
-              resolve(json);
-            }
-          } catch {
-            reject(new Error('Invalid response from YouTube API'));
-          }
-        });
-      }
-    );
-    req.on('error', reject);
-    req.end();
-  });
-}
-
 // Every Data API call goes through the cache and the daily quota count (services/youtubeApi.js).
-const ytGet = (path) => cachedGet(pool, ytRawGet, path);
+const ytGet = (path) => youtubeApi.ytGet(pool, path);
 
 // ── NLP parse ────────────────────────────────────────────────────────────────
 
@@ -817,6 +785,50 @@ router.post('/note-draft', aiLimiter, async (req, res) => {
     if (noCaptions(err, res)) return;
     res.status(500).json({ error: userFacing(err, 'Could not prepare the note.') });
   }
+});
+
+// ── Follow channels and searches ──────────────────────────────────────────────
+
+router.get('/follows', async (req, res) => {
+  try { res.json({ follows: await follows.listFollows(pool, req.user.id), limits: follows.LIMITS }); }
+  catch (err) { console.error('[youtube/follows]', err.message); res.status(500).json({ error: 'Could not read what you follow.' }); }
+});
+
+router.get('/follows/new', async (req, res) => {
+  try { res.json({ videos: await follows.listNew(pool, req.user.id) }); }
+  catch (err) { console.error('[youtube/follows/new]', err.message); res.status(500).json({ error: 'Could not read the new videos.' }); }
+});
+
+router.post('/follows/seen', async (req, res) => {
+  try {
+    const n = await follows.markSeen(pool, req.user.id, { videoIds: req.body && req.body.videoIds, all: !!(req.body && req.body.all) });
+    res.json({ marked: n });
+  } catch (err) { console.error('[youtube/follows/seen]', err.message); res.status(500).json({ error: 'Could not mark them as seen.' }); }
+});
+
+// "Check now": looks at the channels you follow that have not been looked at in the last 5 minutes. Searches are left to the daily check (100 units each).
+router.post('/follows/check', async (req, res) => {
+  try {
+    const out = await follows.runChecks(pool, ytGet, { userId: req.user.id, channelsOnly: true, minGapMs: 5 * 60 * 1000 });
+    res.json({ ...out, videos: await follows.listNew(pool, req.user.id) });
+  } catch (err) { console.error('[youtube/follows/check]', err.message); res.status(err.status || 500).json({ error: err.status === 429 ? err.message : 'Could not check just now.' }); }
+});
+
+router.post('/follows', async (req, res) => {
+  try {
+    const r = await follows.addFollow(pool, ytGet, req.user.id, req.body);
+    if (r.error) return res.status(r.status || 400).json({ error: r.error });
+    res.status(201).json({ follow: r.follow });
+  } catch (err) { console.error('[youtube/follows add]', err.message); res.status(500).json({ error: 'Could not follow that just now.' }); }
+});
+
+router.delete('/follows/:id', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad id.' });
+  try {
+    const ok = await follows.removeFollow(pool, req.user.id, id);
+    res.status(ok ? 200 : 404).json(ok ? { ok: true } : { error: 'Not found.' });
+  } catch (err) { console.error('[youtube/follows delete]', err.message); res.status(500).json({ error: 'Could not unfollow.' }); }
 });
 
 module.exports = router;

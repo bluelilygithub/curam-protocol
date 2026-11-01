@@ -3769,6 +3769,24 @@
   "POST /api/youtube-tutor": {
    "class": "authed"
   },
+  "GET /api/youtube/follows": {
+   "class": "authed"
+  },
+  "POST /api/youtube/follows": {
+   "class": "authed"
+  },
+  "DELETE /api/youtube/follows/:id": {
+   "class": "authed"
+  },
+  "GET /api/youtube/follows/new": {
+   "class": "authed"
+  },
+  "POST /api/youtube/follows/seen": {
+   "class": "authed"
+  },
+  "POST /api/youtube/follows/check": {
+   "class": "authed"
+  },
   "POST /api/youtube/ask": {
    "class": "authed"
   },

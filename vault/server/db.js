@@ -3405,6 +3405,37 @@ async function initSchema() {
       units INTEGER NOT NULL DEFAULT 0
     )
   `);
+  // Channels and searches a person follows, and the videos a check found (seenAt null = not looked at yet). Videos are deleted after 30 days.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS youtube_follows (
+      id              SERIAL PRIMARY KEY,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind            TEXT NOT NULL CHECK (kind IN ('channel','search')),
+      "channelId"     TEXT,
+      "channelTitle"  TEXT,
+      query           TEXT,
+      "sortOrder"     TEXT,
+      duration        TEXT,
+      "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "lastCheckedAt" TIMESTAMPTZ,
+      "lastError"     TEXT
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_youtube_follows_user ON youtube_follows ("userId")`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS youtube_follow_videos (
+      "followId"    INTEGER NOT NULL REFERENCES youtube_follows(id) ON DELETE CASCADE,
+      "videoId"     TEXT NOT NULL,
+      title         TEXT NOT NULL,
+      channel       TEXT,
+      thumbnail     TEXT,
+      "publishedAt" TIMESTAMPTZ,
+      "seenAt"      TIMESTAMPTZ,
+      "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY ("followId", "videoId")
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_youtube_follow_videos_unseen ON youtube_follow_videos ("followId") WHERE "seenAt" IS NULL`);
   // The AI's notes on a video (summary, key points, chapters, to-dos, quotes), one per person, video and caption language, so they are
   // paid for once. Written by the model from the captions; see services/youtubeInsights.js.
   await pool.query(`

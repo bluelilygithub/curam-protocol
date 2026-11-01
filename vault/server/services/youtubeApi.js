@@ -7,6 +7,8 @@
 // (what a call costs, the cache key, the quota day) are tested in youtubeApi.test.js; the database parts are small and read the pool you pass.
 // Cached answers are deleted after 7 days: YouTube's API terms do not let API data be kept for long.
 
+const https = require('https');
+
 const DAILY_QUOTA = () => Math.max(1, parseInt(process.env.YOUTUBE_DAILY_QUOTA, 10) || 10000);
 const HOUR = 3600 * 1000;
 const CACHE_PURGE_DAYS = 7;
@@ -121,7 +123,42 @@ async function quotaStatus(pool) {
   return { used, limit, searchesLeft: searchesLeft(used, limit) };
 }
 
+function getKey() {
+  const k = process.env.YOUTUBE_API_KEY;
+  if (!k) throw new Error('YOUTUBE_API_KEY not configured');
+  return k;
+}
+
+/** The real request to the YouTube Data API (no cache, no counting). Resolves the JSON, rejects with Google's message. */
+function ytRawGet(path) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(`https://www.googleapis.com${path}`);
+    const req = https.request(
+      { hostname: url.hostname, path: url.pathname + url.search, method: 'GET', headers: { Accept: 'application/json' } },
+      (res) => {
+        let body = '';
+        res.on('data', (c) => (body += c));
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(body);
+            if (res.statusCode >= 400) reject(new Error((json.error && json.error.message) || `YouTube API error HTTP ${res.statusCode}`));
+            else resolve(json);
+          } catch {
+            reject(new Error('Invalid response from YouTube API'));
+          }
+        });
+      }
+    );
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+/** Cached, quota-counted GET: what every route and the daily job use. */
+const ytGet = (pool, path) => cachedGet(pool, ytRawGet, path);
+
 module.exports = {
+  getKey, ytRawGet, ytGet,
   DAILY_QUOTA, CACHE_PURGE_DAYS, QUOTA_MESSAGE, QuotaError,
   endpointInfo, cacheKey, quotaDay, canSpend, searchesLeft, isQuotaError,
   cachedGet, quotaStatus,

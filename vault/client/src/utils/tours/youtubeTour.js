@@ -89,7 +89,7 @@ export function startYoutubeTour() {
   tour.addStep({
     id: 'yt-tabs',
     title: 'Results, Trending and your own collections',
-    text: 'Results holds this search. Trending shows what is popular by country and category. Favourites are videos you saved. History keeps your searches (press Re-run to repeat one) and what you watched. Lists are whole result sets you saved under a name.',
+    text: 'Results holds this search. Trending shows what is popular by country and category. Favourites are videos you saved. History keeps your searches (press Re-run to repeat one) and what you watched. Lists are whole result sets you saved under a name. Following shows new videos from channels and searches you follow.',
     attachTo: { element: '[data-tour="yt-tabs"]', on: 'bottom' },
     beforeShowPromise: check('yt-tabs', '[data-tour="yt-tabs"]'),
     when: { show() { injectStepCounter(5); } },

@@ -458,7 +458,7 @@ function CommentsPanel({ video, onClose }) {
 
 // ── Video Modal ───────────────────────────────────────────────────────────────
 
-function VideoModal({ video, isFav, onClose, onToggleFav, onMoreFromChannel }) {
+function VideoModal({ video, isFav, onClose, onToggleFav, onMoreFromChannel, isFollowing, onToggleFollow }) {
   const [showTranscript, setShowTranscript] = useState(false);
   const [showComments, setShowComments]     = useState(false);
   const [showStudy, setShowStudy]           = useState(false);
@@ -523,6 +523,13 @@ function VideoModal({ video, isFav, onClose, onToggleFav, onMoreFromChannel }) {
               <Tooltip text="See other videos from this same channel.">
                 <button onClick={() => onMoreFromChannel(video)} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
                   More from this channel
+                </button>
+              </Tooltip>
+            )}
+            {video.channelId && onToggleFollow && (
+              <Tooltip text={isFollowing ? 'Stop following this channel.' : 'Follow this channel: its new videos will show on the Following tab and in Needs attention.'}>
+                <button onClick={() => onToggleFollow(video)} aria-pressed={!!isFollowing} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: isFollowing ? 'var(--color-primary)' : 'var(--color-bg)', border: '1px solid var(--color-border)', color: isFollowing ? '#fff' : 'var(--color-muted)' }}>
+                  {isFollowing ? '✓ Following' : '+ Follow channel'}
                 </button>
               </Tooltip>
             )}
@@ -604,9 +611,25 @@ export default function YoutubePage() {
   // How much of today's YouTube allowance is left (shown only when it is getting low)
   const [quota, setQuota] = useState(null);
 
+  // A video that was new on the Following tab stops being new once it is opened
+  useEffect(() => {
+    if (!activeVideo || !followNew.some((v) => v.id === activeVideo.id)) return;
+    setFollowNew((list) => list.filter((v) => v.id !== activeVideo.id));
+    api.post('/api/youtube/follows/seen', { videoIds: [activeVideo.id] }).then(() => loadFollows()).catch(() => {});
+  }, [activeVideo && activeVideo.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Following: channels and searches whose new videos are looked for in the background
+  const [follows, setFollows] = useState([]);
+  const [followNew, setFollowNew] = useState([]);
+  const [followLimits, setFollowLimits] = useState({ channel: 30, search: 5 });
+  const [followChecking, setFollowChecking] = useState(false);
+
   // Help: the (i) box (opens once), the guided tour (also from Settings -> Tours: /youtube?tour=1) and the guide chat's Open buttons
   const info = useToolInfoModal('vault_youtube_info_seen');
   const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    if (params.get('tab') === 'following') setTab('following');
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (params.get('tour')) {
       const next = new URLSearchParams(params); next.delete('tour');
@@ -645,6 +668,7 @@ export default function YoutubePage() {
     loadLists();
     loadWatchHistory();
     loadCategories('US');
+    loadFollows();
     api.get('/api/youtube/quota').then((r) => r.json()).then((q) => { if (q && typeof q.searchesLeft === 'number') setQuota(q); }).catch(() => {});
   }, []);
 
@@ -674,6 +698,70 @@ export default function YoutubePage() {
     api.get('/api/youtube/lists').then(r => r.json()).then((rows) => {
       setLists(Array.isArray(rows) ? rows : []);
     }).catch(() => {});
+  }
+
+  function loadFollows() {
+    api.get('/api/youtube/follows').then((r) => r.json()).then((d) => {
+      if (Array.isArray(d.follows)) setFollows(d.follows);
+      if (d.limits) setFollowLimits(d.limits);
+    }).catch(() => {});
+    api.get('/api/youtube/follows/new').then((r) => r.json()).then((d) => setFollowNew(Array.isArray(d.videos) ? d.videos : [])).catch(() => {});
+  }
+
+  async function followThing(input, doneMessage) {
+    try {
+      const res = await api.post('/api/youtube/follows', input);
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Could not follow that.');
+      addToast(doneMessage, 'success');
+      loadFollows();
+    } catch (err) {
+      addToast(err.message || 'Could not follow that.', 'error');
+    }
+  }
+
+  async function unfollow(f) {
+    try {
+      const res = await api.delete(`/api/youtube/follows/${f.id}`);
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not unfollow.');
+      loadFollows();
+    } catch (err) {
+      addToast(err.message || 'Could not unfollow.', 'error');
+    }
+  }
+
+  // Follow a channel, or stop following it if it is already followed (used by the watch window and the channel view).
+  function toggleFollowChannel(video) {
+    if (!video || !video.channelId) return;
+    const existing = follows.find((f) => f.kind === 'channel' && f.channelId === video.channelId);
+    if (existing) return unfollow(existing);
+    return followThing({ kind: 'channel', channelId: video.channelId, channelTitle: video.channel }, `Following ${video.channel || 'this channel'}. New videos will show on the Following tab.`);
+  }
+
+  function followCurrentSearch() {
+    const q = query.trim();
+    if (!q) return;
+    return followThing({ kind: 'search', query: q, order: order === 'relevance' ? 'date' : order, duration }, 'Following that search. New videos will show on the Following tab (checked once a day).');
+  }
+
+  async function checkFollowsNow() {
+    setFollowChecking(true);
+    try {
+      const res = await api.post('/api/youtube/follows/check', {});
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Could not check just now.');
+      setFollowNew(Array.isArray(d.videos) ? d.videos : []);
+      loadFollows();
+      addToast(d.found > 0 ? `Found ${d.found} new video${d.found === 1 ? '' : 's'}.` : 'Nothing new yet.', 'success');
+    } catch (err) {
+      addToast(err.message || 'Could not check just now.', 'error');
+    } finally {
+      setFollowChecking(false);
+    }
+  }
+
+  function markAllFollowSeen() {
+    api.post('/api/youtube/follows/seen', { all: true }).then(() => { setFollowNew([]); loadFollows(); }).catch(() => {});
   }
 
   function loadWatchHistory() {
@@ -920,6 +1008,7 @@ export default function YoutubePage() {
     favourites: 'Videos you\'ve saved for quick access.',
     history: 'Your past searches — click Re-run to search again.',
     lists: 'Named lists of results you\'ve saved to come back to later.',
+    following: 'New videos from the channels and searches you follow.',
   };
 
   const tabBtn = (key, label, badge, onClick) => (
@@ -1107,6 +1196,7 @@ export default function YoutubePage() {
         {tabBtn('favourites', 'Favourites', favs.length)}
         {tabBtn('history',    'History',    history.length)}
         {tabBtn('lists',      'Lists',      lists.length)}
+        {tabBtn('following',  'Following',  followNew.length)}
       </div>
 
       {/* Error */}
@@ -1179,6 +1269,18 @@ export default function YoutubePage() {
                     Save this search as a list
                   </button>
                 </Tooltip>
+                {(channelView || (!extraView && query.trim())) && (
+                  <Tooltip text={channelView ? 'Follow this channel: its new videos will show on the Following tab and in Needs attention.' : 'Follow this search: videos that match it and are new will show on the Following tab and in Needs attention. Checked once a day.'}>
+                    <button
+                      onClick={channelView ? () => toggleFollowChannel({ channelId: channelView.channelId, channel: channelView.channelName }) : followCurrentSearch}
+                      style={{ ...btnBase, padding: '0.3rem 0.7rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
+                    >
+                      {channelView
+                        ? (follows.some((f) => f.kind === 'channel' && f.channelId === channelView.channelId) ? '✓ Following this channel' : '+ Follow this channel')
+                        : '+ Follow this search'}
+                    </button>
+                  </Tooltip>
+                )}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
                 {(extraView ? extraVideos : videos).map((v) => (
@@ -1227,6 +1329,66 @@ export default function YoutubePage() {
       )}
 
       {/* ── Favourites ─────────────────────────────────────────────────────── */}
+
+      {/* ── Following ─────────────────────────────────────────── */}
+      {tab === 'following' && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+            <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-text)' }}>
+              New from what you follow{followNew.length > 0 ? ` (${followNew.length})` : ''}
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <Tooltip text="Look for new uploads from the channels you follow right now. Followed searches are checked once a day.">
+                <button onClick={checkFollowsNow} disabled={followChecking || follows.filter((f) => f.kind === 'channel').length === 0} style={{ ...btnBase, padding: '0.3rem 0.7rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)', opacity: followChecking ? 0.6 : 1 }}>
+                  {followChecking ? 'Checking…' : 'Check now'}
+                </button>
+              </Tooltip>
+              <Tooltip text="Clear the list of new videos. They are not deleted from YouTube, you just will not be reminded of them.">
+                <button onClick={markAllFollowSeen} disabled={followNew.length === 0} style={{ ...btnBase, padding: '0.3rem 0.7rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)', opacity: followNew.length === 0 ? 0.5 : 1 }}>
+                  Mark all as seen
+                </button>
+              </Tooltip>
+            </div>
+          </div>
+
+          {followNew.length > 0 ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+              {followNew.map((v) => (
+                <VideoCard key={v.id} video={v} isFav={favSet.has(v.id)} onPlay={setActiveVideo} onToggleFav={toggleFav} />
+              ))}
+            </div>
+          ) : (
+            <p style={{ color: 'var(--color-muted)', fontSize: '0.85rem', margin: '0 0 1.5rem' }}>
+              {follows.length === 0
+                ? 'You are not following anything yet. Open a video and press "+ Follow channel", or run a search and press "Follow this search". New videos from them will appear here and in Needs attention.'
+                : 'Nothing new right now. Channels are checked about every 5 hours and searches about once a day.'}
+            </p>
+          )}
+
+          <p style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-text)' }}>You follow</p>
+          {follows.length === 0 && <p style={{ color: 'var(--color-muted)', fontSize: '0.8rem', margin: 0 }}>Nothing yet.</p>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            {follows.map((f) => (
+              <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
+                <span aria-hidden="true" style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', width: 56, flexShrink: 0 }}>{f.kind === 'channel' ? 'Channel' : 'Search'}</span>
+                <span style={{ flex: 1, minWidth: 0, fontSize: '0.85rem', color: 'var(--color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {f.kind === 'channel' ? f.channelTitle : `“${f.query}”`}
+                  {f.lastError && <span style={{ color: '#b91c1c', fontSize: '0.72rem', marginLeft: 8 }}>could not check: {f.lastError}</span>}
+                </span>
+                {f.newCount > 0 && <span style={{ fontSize: '0.7rem', fontWeight: 700, background: 'var(--color-primary)', color: '#fff', padding: '1px 7px', borderRadius: 10 }}>{f.newCount} new</span>}
+                <span style={{ fontSize: '0.72rem', color: 'var(--color-muted)', flexShrink: 0 }}>{f.lastCheckedAt ? `checked ${timeAgo(f.lastCheckedAt)}` : 'not checked yet'}</span>
+                <Tooltip text={f.kind === 'channel' ? 'Stop following this channel.' : 'Stop following this search.'}>
+                  <button onClick={() => unfollow(f)} aria-label={`Unfollow ${f.kind === 'channel' ? f.channelTitle : f.query}`} style={{ ...btnBase, padding: '0.25rem 0.6rem', fontSize: '0.72rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>Unfollow</button>
+                </Tooltip>
+              </div>
+            ))}
+          </div>
+          <p style={{ color: 'var(--color-muted)', fontSize: '0.72rem', margin: '0.75rem 0 0' }}>
+            Up to {followLimits.channel} channels and {followLimits.search} searches. A search uses a lot of YouTube&apos;s daily allowance, so it is checked once a day; a channel costs almost nothing.
+          </p>
+        </div>
+      )}
+
       {tab === 'favourites' && (
         <div>
           {favs.length === 0 ? (
@@ -1410,6 +1572,8 @@ export default function YoutubePage() {
           onClose={() => setActiveVideo(null)}
           onToggleFav={toggleFav}
           onMoreFromChannel={openMoreFromChannel}
+          isFollowing={follows.some((f) => f.kind === 'channel' && f.channelId === activeVideo.channelId)}
+          onToggleFollow={toggleFollowChannel}
         />
       )}
 
