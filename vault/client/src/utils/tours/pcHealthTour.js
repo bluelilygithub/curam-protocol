@@ -15,7 +15,7 @@ function injectStepCounter(stepIndex) {
       counter = document.createElement('div');
       counter.className = 'vault-tour-step-count';
       const footer = el.querySelector('.shepherd-footer');
-      if (footer) el.insertBefore(counter, footer);
+      if (footer) footer.parentNode.insertBefore(counter, footer);
     }
     counter.textContent = `Step ${stepIndex} of ${TOTAL_STEPS}`;
   });

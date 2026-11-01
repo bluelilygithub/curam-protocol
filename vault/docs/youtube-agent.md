@@ -96,6 +96,14 @@ Not built yet (from the 2026-11 review): following channels and saved-search ale
 
 ---
 
+## Help: info box, tour and guide (added 2026-11)
+
+- **(i) box** - opens once, then from the (i) beside the title (`HOW_IT_WORKS` in `client/src/pages/youtube/youtubeTools.mjs`).
+- **Tour** - 7 steps (`client/src/utils/tours/youtubeTour.js`), from the compass beside the title or Settings -> Tours -> YouTube Tour (`/youtube?tour=1`). The page marks its parts with `data-tour` (`yt-search`, `yt-filters`, `yt-playlist`, `yt-tabs`).
+- **YouTube guide** - the shared round-button chat (`guideId` `youtube`, `POST /api/youtube-tutor` behind the `youtube` switch, `server/services/youtubeTutor.js`, wrapper `client/src/pages/youtube/YoutubeTutorChat.jsx`). It knows the search box, filters, Open playlist, the tabs, the watch window, Insights, Ask, Save to Notes, Transcript and Comments, and says plainly what is not built (channel alerts, quizzes, searching saved transcripts, comparing videos) and what never will be (downloads). It sees no searches, videos or notes. Its Open buttons scroll to `data-guide="search-box"` or `"browse-tabs"` (the watch window only exists once a video is open, so its controls scroll to the results). Update `youtubeTools.mjs` and `CATALOG` together; `npm run test:youtube-tutor`.
+
+---
+
 ## Tooltips
 
 Every control (search input, mic button, sort/duration/date/live filters, Search button, tab switcher, favourite/remove/close buttons, history Re-run/delete, transcript/summarize/copy/language picker, comments/load-more, more-from-channel, open-playlist, back-to-search, trending region/category, save-as-list, open/delete list, recently-watched toggle/remove/clear-all) shows a themed hover popover via the shared `client/src/components/Tooltip.jsx` component — same one used by Graphics, PDF Tools, and Video Tools. This is a single-purpose page rather than a multi-tool grid, so it doesn't have the click-to-open per-tool help-icon layer those three pages have; the hover tooltips cover it.

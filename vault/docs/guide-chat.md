@@ -55,6 +55,10 @@ They see no fonts, values, documents or pages. The CSS guide follows that tool's
 
 **Device preview guide** (`guideId` `device-preview`, `POST /api/device-preview-tutor`, flag `restyle` because the page uses the Style editor's page loader, `server/services/devicePreviewTutor.js` on `guideCore.js`, `server/routes/devicePreviewTutor.js` on `guideRouter.js`, wrapper `client/src/pages/devicePreview/DevicePreviewTutorChat.jsx`). It knows the address box, the JavaScript option, Show the page, Choose screens (up to four), Your own size, Turn on its side and Size on screen, and says plainly that it only looks (no scripts, no logins, no styling changes: that is the Style editor). It sees no address or page. `client/src/pages/devicePreview/devicePreviewTools.mjs` is the list the page and guide share (three areas the Open buttons scroll to: `data-guide="show"`, `"choose-screens"`, `"turn"`); `npm run test:device-preview-tutor` fails if it and the catalogue drift, tested with `guideTestKit.js`.
 
+## The YouTube guide
+
+**YouTube guide** (`guideId` `youtube`, `POST /api/youtube-tutor`, flag `youtube`, `server/services/youtubeTutor.js` on `guideCore.js`, wrapper `client/src/pages/youtube/YoutubeTutorChat.jsx`). It knows the search box, filters, Open playlist, the tabs (Results, Trending, Favourites, History, Lists), the watch window, Insights, Ask this video, Save to Notes, Transcript and Comments, and the daily search limit. It sees no searches, videos or notes. `client/src/pages/youtube/youtubeTools.mjs` is the list the page and guide share; `npm run test:youtube-tutor` fails if it and the catalogue drift.
+
 ## The CRM, Shares and Settings guides
 
 Three guides on `guideCore.js`/`guideRouter.js`, tested with `server/services/guideBasicsKit.js` (`checkBasics`: prompt, untrusted answers, model call, safety wording) plus a drift check against the page. They see no clients, holdings, settings, keys or users.

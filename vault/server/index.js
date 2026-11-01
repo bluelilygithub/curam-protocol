@@ -205,6 +205,7 @@ app.use('/api/shares/documents', requireFeature('shares'), require('./routes/sha
 app.use('/api/shares/pack', requireFeature('shares'), require('./routes/sharesPack'));
 app.use('/api/shares', requireFeature('shares'), require('./routes/shares'));
 app.use('/api/metals', requireFeature('shares'), require('./routes/metals'));
+app.use('/api/youtube-tutor', requireFeature('youtube'), aiLimiter, require('./routes/youtubeTutor')); // the YouTube guide chat (sees no searches, videos or notes)
 app.use('/api/youtube', requireFeature('youtube'), require('./routes/youtube'));
 app.use('/api/graphics', requireFeature('graphics'), aiLimiter, require('./routes/graphics'));
 app.use('/api/graphics-tutor', requireFeature('graphics'), aiLimiter, require('./routes/graphicsTutor'));

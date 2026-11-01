@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
@@ -7,6 +7,10 @@ import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { useVoice } from '../hooks/useVoice';
 import Tooltip from '../components/Tooltip';
 import VideoStudyPanel from './youtube/VideoStudyPanel';
+import YoutubeTutorChat from './youtube/YoutubeTutorChat';
+import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
+import { GUIDE_TOOLS, HOW_IT_WORKS } from './youtube/youtubeTools.mjs';
+import { startYoutubeTour, TOUR_KEY as YT_TOUR_KEY } from '../utils/tours/youtubeTour';
 import { embedSrc, formatTime } from './youtube/youtubeFormat.mjs';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -600,6 +604,28 @@ export default function YoutubePage() {
   // How much of today's YouTube allowance is left (shown only when it is getting low)
   const [quota, setQuota] = useState(null);
 
+  // Help: the (i) box (opens once), the guided tour (also from Settings -> Tours: /youtube?tour=1) and the guide chat's Open buttons
+  const info = useToolInfoModal('vault_youtube_info_seen');
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    if (params.get('tour')) {
+      const next = new URLSearchParams(params); next.delete('tour');
+      setParams(next, { replace: true });
+      setTimeout(startYoutubeTour, 300);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const startTour = () => {
+    try { localStorage.removeItem(YT_TOUR_KEY); } catch (_) { /* ignore */ }
+    startYoutubeTour();
+  };
+  const openToolById = (id) => {
+    const target = GUIDE_TOOLS.find((t) => t.id === id);
+    const area = target ? target.tool : id;
+    // the watch window only exists once a video is open, so its controls scroll to the results
+    const el = document.querySelector(`[data-guide="${area}"]`) || document.querySelector('[data-guide="browse-tabs"]');
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   // Trending
   const [trendingRegion,   setTrendingRegion]   = useState('US');
   const [trendingCategory, setTrendingCategory] = useState('');
@@ -931,6 +957,12 @@ export default function YoutubePage() {
             <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
           </svg>
           <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>YouTube</h1>
+          <Tooltip text="How YouTube works here, and what it cannot do.">
+            <button type="button" onClick={info.open} aria-label="How YouTube works" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-muted)', padding: 4, fontSize: '1rem', lineHeight: 1 }}>&#9432;</button>
+          </Tooltip>
+          <Tooltip text="Take the guided tour of YouTube.">
+            <button type="button" onClick={startTour} aria-label="Take the guided tour of YouTube" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-muted)', padding: 4, fontSize: '0.9rem', lineHeight: 1 }}>&#129517;</button>
+          </Tooltip>
         </div>
         <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
           Search YouTube videos, save favourites, and replay past searches.
@@ -938,9 +970,9 @@ export default function YoutubePage() {
       </div>
 
       {/* Search form */}
-      <form onSubmit={handleSearch} style={{ marginBottom: '1rem' }}>
+      <form onSubmit={handleSearch} style={{ marginBottom: '1rem' }} data-guide="search-box">
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <div style={{ flex: '1 1 240px', minWidth: 200, position: 'relative' }}>
+          <div style={{ flex: '1 1 240px', minWidth: 200, position: 'relative' }} data-tour="yt-search">
             <Tooltip text="Type a topic, or describe what you want in plain language — filters like duration or date get picked up automatically.">
               <input
                 type="text"
@@ -981,7 +1013,7 @@ export default function YoutubePage() {
           </div>
 
           <Tooltip text="How to sort the results — relevance, newest first, most viewed, or highest rated.">
-            <select value={order}        onChange={(e) => setOrder(e.target.value)}        style={selectStyle}>
+            <select value={order}        onChange={(e) => setOrder(e.target.value)}        style={selectStyle} data-tour="yt-filters" aria-label="Sort results by">
               {ORDER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </Tooltip>
@@ -1024,7 +1056,7 @@ export default function YoutubePage() {
       </form>
 
       {/* Playlist entry */}
-      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap' }} data-tour="yt-playlist">
         <Tooltip text="Paste a full YouTube playlist URL, or just its playlist id, to open it as an ordered set of videos.">
           <input
             type="text"
@@ -1069,7 +1101,7 @@ export default function YoutubePage() {
       )}
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1rem' }} data-tour="yt-tabs" data-guide="browse-tabs">
         {tabBtn('search',     'Results',    videos.length)}
         {tabBtn('trending',   'Trending',   0, openTrendingTab)}
         {tabBtn('favourites', 'Favourites', favs.length)}
@@ -1379,6 +1411,21 @@ export default function YoutubePage() {
           onToggleFav={toggleFav}
           onMoreFromChannel={openMoreFromChannel}
         />
+      )}
+
+      <YoutubeTutorChat currentTool="search-box" onOpenTool={openToolById} />
+
+      {info.show && (
+        <ToolInfoModal title="How YouTube Works" onClose={info.close}>
+          <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+            Find videos, watch them here, and pull the useful parts out of them. Not sure what to do? Press the round button at the bottom right and tell the guide in your own words.
+          </p>
+          <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+            {HOW_IT_WORKS.map(([heading, text]) => (
+              <p key={heading} style={{ color: 'var(--color-text)' }}><strong>{heading}</strong> — {text}</p>
+            ))}
+          </div>
+        </ToolInfoModal>
       )}
 
       <style>{`
