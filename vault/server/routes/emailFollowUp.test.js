@@ -468,6 +468,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       ok('a closed case can still be asked about (it only reads)', r.status === 200, r);
     } finally { caseAsk.summariseCase = realSummarise; caseAsk.askCase = realAsk; }
 
+    // ---- the Summary and Ask model is a setting, not a literal ----
+    r = await call('GET', '/model-config');
+    ok('the model setting can be read (and is not mistaken for a case id)', r.status === 200 && r.body.settingsKey === 'email_follow_up_ask_model' && Array.isArray(r.body.choices), r);
+    r = await call('POST', '/model-config', { modelId: 'definitely-not-connected' });
+    ok('only a connected model can be chosen', r.status === 400, r);
+    r = await call('POST', '/model-config', { modelId: 5 });
+    ok('a non-text model is refused', r.status === 400, r);
+    r = await call('POST', '/model-config', { modelId: '' });
+    ok('clearing the choice works', r.status === 200 && r.body.modelId === '', r);
+
     // ---- every Gmail route is limited per person ----
     console.log('rate limit');
     const userC = await mkUser('c');

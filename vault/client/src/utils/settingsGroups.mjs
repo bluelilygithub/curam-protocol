@@ -18,6 +18,7 @@ export const SETTINGS_GROUPS = [
     { id: 'Translation', tip: 'Languages and translation choices.' },
     { id: 'Amazon Search', tip: 'The Amazon store Product Scout searches.' },
     { id: 'Topic Research', tip: 'Which AI model writes Topic Research briefs.' },
+    { id: 'Email Follow-Up', tip: 'Which AI model answers Email Follow-Up summaries and questions.' },
     { id: 'Shares', tip: 'Share portfolio alerts and options.' },
     { id: 'Integrations', tip: 'Connect Gmail, Calendar and Drive.' },
   ] },

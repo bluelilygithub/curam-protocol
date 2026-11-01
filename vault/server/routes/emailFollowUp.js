@@ -17,6 +17,7 @@ const approvalLib = require('../services/emailFollowUp/approval');
 const { buildNudgeDraft } = require('../services/emailFollowUp/draft');
 const { coverageStatement } = require('../services/emailFollowUp/coverage');
 const extractMod = require('../services/emailFollowUp/extract'); // called as extractMod.extractFromSource so a test can stand in for the model
+const askModels = require('../services/emailFollowUp/modelResolver');
 const caseAsk = require('../services/emailFollowUp/caseAsk'); // called as caseAsk.askCase so a test can stand in for the model
 const store = require('../services/emailFollowUp/caseStore');
 const { resolveUserTimezone } = require('../services/fitness/timezone');
@@ -206,6 +207,18 @@ router.patch('/drafts/:draftId', async (req, res) => {
 });
 
 // ---------- cases ----------
+
+// Which connected model answers Summary and Ask ('' = the workspace default). Named routes stay before /:id.
+router.get('/model-config', async (req, res) => {
+  try { res.json(await askModels.getAskModelConfig(req.user.id)); } catch (err) { fail(res, err); }
+});
+router.post('/model-config', async (req, res) => {
+  try {
+    const id = req.body?.modelId;
+    if (id !== undefined && id !== null && typeof id !== 'string') return res.status(400).json({ error: 'The model must be text.' });
+    res.json(await askModels.saveAskModel(req.user.id, id));
+  } catch (err) { fail(res, err); }
+});
 
 router.get('/', async (req, res) => {
   try {

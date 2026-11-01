@@ -24,7 +24,7 @@ const sources = [
 ];
 const corpus = ask.buildCorpus(sources, { tz: 'Australia/Brisbane', ownerEmail: 'me@x.test' });
 const c = { title: 'Acme contract', obligation: 'Agree the contract terms' };
-const fakeDeps = (reply) => ({ getModels: async () => ({ standard: 'test-model' }), callModel: async () => ({ text: reply, inputTokens: 1, outputTokens: 1 }), logUsage: () => {} });
+const fakeDeps = (reply) => ({ resolveModel: async () => 'test-model', callModel: async () => ({ text: reply, inputTokens: 1, outputTokens: 1 }), logUsage: () => {} });
 
 (async () => {
   await check('only attached, readable, not set aside, not note sources are given to the model, numbered in order', () => {
@@ -147,7 +147,7 @@ const fakeDeps = (reply) => ({ getModels: async () => ({ standard: 'test-model' 
 
   await check('an empty question is refused; no model set up gives a plain error', async () => {
     await assert.rejects(() => ask.askCase(1, c, corpus, '  ', [], fakeDeps('{}')), /Type a question/);
-    await assert.rejects(() => ask.askCase(1, c, corpus, 'What term?', [], { ...fakeDeps('{}'), getModels: async () => ({}) }), /No AI model/);
+    await assert.rejects(() => ask.askCase(1, c, corpus, 'What term?', [], { ...fakeDeps('{}'), resolveModel: async () => null }), /No AI model/);
   });
 
   await check('end to end with a fake model: ask and summarise return checked output', async () => {

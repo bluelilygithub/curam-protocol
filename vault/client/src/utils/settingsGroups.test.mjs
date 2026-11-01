@@ -6,7 +6,7 @@ let passed = 0;
 const t = (name, fn) => { try { fn(); passed++; } catch (e) { console.error(`FAIL  ${name}\n   ${e.message}`); process.exitCode = 1; } };
 
 // the sections the page had before the menu was grouped: none may go missing, none may be added by accident
-const ORIGINAL_ADMIN = ['Appearance', 'Profile', 'AI & Chat', 'Translation', 'Tasks', 'Goals', 'Integrations', 'Shares', 'Amazon Search', 'Topic Research', 'Mobile', 'Navigation', 'Members', 'Feature Access', 'Wellbeing Invites', 'Content Restrictions', 'Tool Maintenance', 'Environment', 'Tours', 'Recycle bin', 'Vault Shelf'];
+const ORIGINAL_ADMIN = ['Appearance', 'Profile', 'AI & Chat', 'Translation', 'Tasks', 'Goals', 'Integrations', 'Shares', 'Amazon Search', 'Topic Research', 'Email Follow-Up', 'Mobile', 'Navigation', 'Members', 'Feature Access', 'Wellbeing Invites', 'Content Restrictions', 'Tool Maintenance', 'Environment', 'Tours', 'Recycle bin', 'Vault Shelf'];
 
 t('an admin sees exactly the original sections plus the Recycle bin and Vault Shelf, once each', () => {
   const ids = allowedTabIds(true);

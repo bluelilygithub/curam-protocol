@@ -239,10 +239,10 @@ function normalizeAnswer(modelText, corpus) {
 
 // ---------- the two model calls ----------
 
+// The model is the person's choice in Settings -> Email Follow-Up (modelResolver.js), else the workspace default. No model id is written here.
 async function modelFor(userId, deps) {
-  const getModels = deps.getModels || require('../modelResolver').getModelsForUser;
-  const tiers = await getModels(userId);
-  const modelId = tiers.standard || tiers.light;
+  const resolve = deps.resolveModel || require('./modelResolver').resolveAskModel;
+  const modelId = await resolve(userId);
   if (!modelId) throw Object.assign(new Error('No AI model is set up in Settings.'), { status: 400 });
   return modelId;
 }

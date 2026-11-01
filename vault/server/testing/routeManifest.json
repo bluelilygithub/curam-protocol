@@ -667,6 +667,12 @@
   "POST /api/email-follow-up/:id/extract": {
    "class": "authed"
   },
+  "GET /api/email-follow-up/model-config": {
+   "class": "authed"
+  },
+  "POST /api/email-follow-up/model-config": {
+   "class": "authed"
+  },
   "POST /api/email-follow-up/:id/summary": {
    "class": "authed"
   },

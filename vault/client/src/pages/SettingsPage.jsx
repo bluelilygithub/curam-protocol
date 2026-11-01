@@ -32,6 +32,7 @@ import { TOUR_KEY as EMAIL_FOLLOW_UP_TOUR_KEY } from '../utils/tours/emailFollow
 import { TOUR_KEY as PASSWORD_VAULT_TOUR_KEY } from '../utils/tours/passwordVaultTour';
 import { TOUR_KEY as TOPIC_RESEARCH_TOUR_KEY } from '../utils/tours/topicResearchTour';
 import TopicResearchModelCard from './topicResearch/TopicResearchModelCard';
+import EmailFollowUpModelCard from './emailFollowUp/EmailFollowUpModelCard';
 import { TOUR_KEY as NOTES_TOUR_KEY } from '../utils/tours/notesTour';
 import { TOUR_KEY as TALK_TOUR_KEY } from '../utils/tours/talkTour';
 import { TOUR_KEY as FITNESS_TOUR_KEY } from '../utils/tours/fitnessTour';
@@ -3122,6 +3123,10 @@ function SettingsPage() {
           <TopicResearchModelCard choices={textModelChoices} defaultModel={defaultModel} />
           <TopicResearchModelCard choices={textModelChoices} defaultModel={defaultModel} kind="review" />
         </>
+      )}
+
+      {tab === 'Email Follow-Up' && (
+        <EmailFollowUpModelCard choices={textModelChoices} defaultModel={defaultModel} />
       )}
 
       {/* Mobile tab */}
