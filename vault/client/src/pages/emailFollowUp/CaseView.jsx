@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../utils/apiClient';
 import useToastStore from '../../store/toastStore';
+import useProcessingStore, { runWithStepLog } from '../../store/processingStore';
 import { useIcon } from '../../providers/IconProvider';
 import Tooltip from '../../components/Tooltip';
 import { VoiceInput } from '../../components/voiceInput/VoiceInput';
@@ -347,9 +348,13 @@ function AskPanel({ caseId, usable, locked, state, setState }) {
   const { summary, turns } = state;
   const sourceIndex = (summary && summary.sources) || (turns.length ? turns[turns.length - 1].sources : []) || [];
 
+  // The whole screen shows a "still working" box with the seconds counting up while the AI reads (a long thread can take a minute or two).
+  const withBox = (title, detail, label, fn) => runWithStepLog(useProcessingStore.getState(), title, detail, [label], fn);
+
   const summarise = async () => {
     setBusy('summary');
-    const r = await call(() => api.post(`/api/email-follow-up/${caseId}/summary`, {}));
+    const r = await withBox('Summarising your case…', `The AI is reading all ${usable} attached item${usable === 1 ? '' : 's'} together. This can take a minute or two for a long thread.`, 'Reading the mail and writing the summary',
+      () => call(() => api.post(`/api/email-follow-up/${caseId}/summary`, {})));
     setBusy('');
     if (r.ok) setState((s) => ({ ...s, summary: r.data }));
   };
@@ -358,7 +363,8 @@ function AskPanel({ caseId, usable, locked, state, setState }) {
     if (question.length < 3) return;
     setBusy('ask');
     const history = turns.filter((t) => t.answer && t.answer.answer).slice(-4).map((t) => ({ question: t.question, answer: t.answer.answer }));
-    const r = await call(() => api.post(`/api/email-follow-up/${caseId}/ask`, { question, history }));
+    const r = await withBox('Reading your emails…', `The AI is reading all ${usable} attached item${usable === 1 ? '' : 's'} to answer your question, then checking what it quotes. This can take a minute or two.`, 'Reading the mail and writing the answer',
+      () => call(() => api.post(`/api/email-follow-up/${caseId}/ask`, { question, history })));
     setBusy('');
     if (r.ok) { setQ(''); setState((s) => ({ ...s, turns: [...s.turns, { question, answer: r.data.answer, sources: r.data.sources, cut: r.data.cut, left: r.data.left }] })); }
   };
@@ -407,7 +413,6 @@ function AskPanel({ caseId, usable, locked, state, setState }) {
             </div>
           </div>
         ))}
-        {busy === 'ask' && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Reading the mail…</p>}
         <Tooltip text={EF_TIPS.question}>
           <div><VoiceInput type="textarea" rows={2} value={q} onChange={setQ} append placeholder={usable ? 'For example: what did we agree about payment terms, and has the other side accepted the 12 month term?' : 'Attach a thread under Mail first.'} /></div>
         </Tooltip>
