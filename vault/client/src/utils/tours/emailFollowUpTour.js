@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_email_follow_up_completed';
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 8;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -98,10 +98,20 @@ export function startEmailFollowUpTour() {
   });
 
   tour.addStep({
+    id: 'ef-ask',
+    title: 'Summary and Ask',
+    text: 'The ledger lists what is owed; this tab tells the story. Press Summarise to have the AI read all the attached mail together and show where each point stands (agreed, proposed, disputed or open), what is still open and anything that contradicts itself. Or ask a question, such as "what did we agree about payment?". Every claim has a source number: hover it to see which email. Answers use only the attached mail, nothing is saved, and it is not legal advice. Pick the model in Settings, Email Follow-Up.',
+    attachTo: { element: '[data-tour="ef-tabs"]', on: 'bottom' },
+    beforeShowPromise: check('ef-ask', '[data-tour="ef-tabs"]'),
+    when: { show() { injectStepCounter(6); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  tour.addStep({
     id: 'ef-drafts',
     title: 'Drafts you approve and copy',
     text: 'Draft follow-up writes fixed sentences around the row\'s own quoted words, checked against the email. Read any warnings, approve, then Copy: just before copying, Gmail is checked for new replies. Paste it into your own mail program; nothing is sent.',
-    when: { show() { injectStepCounter(6); } },
+    when: { show() { injectStepCounter(7); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -109,7 +119,7 @@ export function startEmailFollowUpTour() {
     id: 'ef-limits',
     title: 'Good to know',
     text: 'The tool cannot see phone calls, portals, other mailboxes, or anything that is only a photo. Scans are read by OCR, which can misread a figure, so check those against the original. The What was covered tab says so. Use it for accounting, freelance and job-search matters, not medical or mortgage ones. Stuck? Press the round button at the bottom right and ask the guide.',
-    when: { show() { injectStepCounter(7); } },
+    when: { show() { injectStepCounter(8); } },
     buttons: [
       btnBack(),
       { text: 'Finish Tour ✓', action() { try { localStorage.setItem(TOUR_KEY, '1'); } catch (_) { /* ignore */ } tour.complete(); } },
