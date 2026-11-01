@@ -32,6 +32,7 @@ const follows = require('../services/youtubeFollows');
 const { createAiTranscripts } = require('../services/youtubeAiJobs');
 const { watchVideo } = require('../services/geminiVideo');
 const insightsLib = require('../services/youtubeInsights');
+const mainPointsLib = require('../services/youtubeMainPoints');
 const { aiLimiter } = require('../middleware/aiRateLimit');
 
 const router = express.Router();
@@ -775,6 +776,61 @@ router.post('/insights', aiLimiter, async (req, res) => {
   }
 });
 
+// ── Main points: a bullet list from Gemini, saved with the transcript ──────────
+
+const pointsPayload = (row) => ({ points: row.points, title: row.title, truncated: row.truncated, createdAt: row.createdAt });
+
+router.get('/main-points/:videoId', async (req, res) => {
+  if (!VIDEO_ID.test(req.params.videoId)) return res.status(400).json({ error: 'A valid videoId is required.' });
+  try {
+    const { rows } = await pool.query('SELECT * FROM youtube_main_points WHERE "userId"=$1 AND "videoId"=$2', [req.user.id, req.params.videoId]);
+    res.json(rows[0] ? pointsPayload(rows[0]) : { points: null });
+  } catch (err) { console.error('[youtube/main-points get]', err.message); res.status(500).json({ error: 'Could not read the saved main points.' }); }
+});
+
+router.post('/main-points', aiLimiter, async (req, res) => {
+  const { videoId, languageCode = '', refresh = false } = req.body || {};
+  if (!VIDEO_ID.test(String(videoId || ''))) return res.status(400).json({ error: 'A valid videoId is required.' });
+  const userId = req.user.id;
+  try {
+    if (!refresh) {
+      const have = await pool.query('SELECT * FROM youtube_main_points WHERE "userId"=$1 AND "videoId"=$2', [userId, videoId]);
+      if (have.rows[0]) return res.json({ ...pointsPayload(have.rows[0]), cached: true });
+    }
+    const t = await getCaptions(videoId, String(languageCode), userId);
+    const view = mainPointsLib.transcriptForModel(t.segments);
+    if (!view.text) throw new Error('The captions are empty.');
+    const models = await getModelsForUser(userId);
+    const model = models.gemini || models.light;
+    if (!model) return res.status(400).json({ error: 'No Gemini model is set up in Settings.' });
+    const result = await callModel(model, mainPointsLib.buildPrompt(t.title, view.text), { maxTokens: 2500, system: mainPointsLib.MAIN_POINTS_SYSTEM, returnUsage: true });
+    logUsage({ userId, model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'youtube' });
+    const points = mainPointsLib.normalizePoints(result.text);
+    if (!points) throw new Error('The AI did not return usable points. Try again.');
+    await pool.query(
+      `INSERT INTO youtube_main_points ("userId","videoId",title,points,model,truncated)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT ("userId","videoId")
+       DO UPDATE SET title=EXCLUDED.title, points=EXCLUDED.points, model=EXCLUDED.model, truncated=EXCLUDED.truncated, "createdAt"=NOW()`,
+      [userId, videoId, t.title, JSON.stringify(points), model, view.truncated]
+    );
+    const { rows } = await pool.query('SELECT * FROM youtube_main_points WHERE "userId"=$1 AND "videoId"=$2', [userId, videoId]);
+    res.json({ ...pointsPayload(rows[0]), cached: false });
+  } catch (err) {
+    console.error('[youtube/main-points]', err.message);
+    if (noCaptions(err, res)) return;
+    res.status(500).json({ error: userFacing(err, 'Could not write the main points for this video.') });
+  }
+});
+
+router.delete('/main-points/:videoId', async (req, res) => {
+  if (!VIDEO_ID.test(req.params.videoId)) return res.status(400).json({ error: 'A valid videoId is required.' });
+  try {
+    await pool.query('DELETE FROM youtube_main_points WHERE "userId"=$1 AND "videoId"=$2', [req.user.id, req.params.videoId]);
+    res.json({ ok: true });
+  } catch (err) { console.error('[youtube/main-points delete]', err.message); res.status(500).json({ error: 'Could not delete them.' }); }
+});
+
 router.post('/ask', aiLimiter, async (req, res) => {
   const { videoId, languageCode = '', question, history = [] } = req.body || {};
   if (!VIDEO_ID.test(String(videoId || ''))) return res.status(400).json({ error: 'A valid videoId is required.' });
@@ -897,6 +953,7 @@ router.delete('/ai-transcript/:videoId', async (req, res) => {
   if (!VIDEO_ID.test(req.params.videoId)) return res.status(400).json({ error: 'A valid videoId is required.' });
   try {
     const ok = await aiTranscripts.remove(req.user.id, req.params.videoId);
+    await pool.query('DELETE FROM youtube_main_points WHERE "userId"=$1 AND "videoId"=$2', [req.user.id, req.params.videoId]); // they were written from that transcript
     res.status(ok ? 200 : 404).json(ok ? { ok: true } : { error: 'No saved transcript.' });
   } catch (err) { console.error('[youtube/ai-transcript delete]', err.message); res.status(500).json({ error: 'Could not delete it.' }); }
 });

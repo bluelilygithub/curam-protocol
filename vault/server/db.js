@@ -3470,6 +3470,21 @@ async function initSchema() {
     )
   `);
 
+  // The bullet list of a video's main points, written by Gemini from the transcript (captions, or the one Gemini wrote) and kept with it:
+  // one per person and video. See services/youtubeMainPoints.js.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS youtube_main_points (
+      "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "videoId"   TEXT NOT NULL,
+      title       TEXT,
+      points      JSONB NOT NULL,
+      model       TEXT,
+      truncated   BOOLEAN NOT NULL DEFAULT FALSE,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY ("userId", "videoId")
+    )
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS gmail_classifications (
       "userId"        TEXT NOT NULL,

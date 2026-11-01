@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { formatTime, embedSrc, coverageNote, ASK_STARTERS, noteHref, formatUsd, formatWait, formatLength, elapsedText, TRANSCRIPTS_CHANGED, transcriptParagraphs, transcriptCopyText } from './youtubeFormat.mjs';
+import { formatTime, embedSrc, coverageNote, ASK_STARTERS, noteHref, formatUsd, formatWait, formatLength, elapsedText, TRANSCRIPTS_CHANGED, transcriptParagraphs, transcriptCopyText, splitPoint, pointsCopyText } from './youtubeFormat.mjs';
 
 assert.equal(formatTime(0), '0:00');
 assert.equal(formatTime(75), '1:15');
@@ -48,5 +48,11 @@ assert.equal(transcriptCopyText([{ start: 65, text: 'Hi  there' }, { start: 70, 
 assert.equal(transcriptCopyText([{ start: 0, text: 'Hi.' }], 'x'), 'Hi.');
 assert.equal(transcriptCopyText([], 'plain words'), 'plain words', 'no timed lines: the plain text is copied');
 assert.ok(!transcriptCopyText(lines, '').includes('['), 'paragraph copy carries no times');
+
+// main points
+assert.deepEqual(splitPoint('Budget: set it first.'), { lead: 'Budget', rest: 'set it first.' });
+assert.deepEqual(splitPoint('No lead-in here'), { lead: '', rest: 'No lead-in here' });
+assert.equal(pointsCopyText(['Budget: set it first.', 'Plain point']), '- **Budget:** set it first.\n- Plain point');
+assert.equal(pointsCopyText(null), '');
 
 console.log('youtubeFormat: ok');

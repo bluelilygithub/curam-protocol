@@ -3877,5 +3877,14 @@
   "POST /api/youtube/watch-history": {
    "class": "authed"
   }
+ },
+ "GET /api/youtube/main-points/:videoId": {
+  "class": "authed"
+ },
+ "POST /api/youtube/main-points": {
+  "class": "authed"
+ },
+ "DELETE /api/youtube/main-points/:videoId": {
+  "class": "authed"
  }
 }

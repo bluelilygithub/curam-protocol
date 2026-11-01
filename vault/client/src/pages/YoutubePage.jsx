@@ -12,7 +12,7 @@ import YoutubeTutorChat from './youtube/YoutubeTutorChat';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { GUIDE_TOOLS, HOW_IT_WORKS } from './youtube/youtubeTools.mjs';
 import { startYoutubeTour, TOUR_KEY as YT_TOUR_KEY } from '../utils/tours/youtubeTour';
-import { embedSrc, formatTime, transcriptParagraphs, transcriptCopyText, TRANSCRIPTS_CHANGED } from './youtube/youtubeFormat.mjs';
+import { embedSrc, formatTime, transcriptParagraphs, transcriptCopyText, splitPoint, pointsCopyText, TRANSCRIPTS_CHANGED } from './youtube/youtubeFormat.mjs';
 
 // Which videos have an AI-written transcript saved (so cards can say so wherever a saved video is shown).
 const TranscriptsContext = React.createContext(new Set());
@@ -261,6 +261,25 @@ function TranscriptPanel({ video, onClose, onSeek }) {
   const [source, setSource] = useState('captions'); // 'ai' when the saved transcript was written by AI
   const [canGenerate, setCanGenerate] = useState(false);
   const [showAi, setShowAi] = useState(false);
+  const [points, setPoints] = useState(null); // the bullet list of main points Gemini wrote, saved with the transcript
+  const [pointsBusy, setPointsBusy] = useState(false);
+  const [pointsError, setPointsError] = useState('');
+  const [pointsNote, setPointsNote] = useState('');
+
+  async function writePoints(refresh) {
+    setPointsBusy(true); setPointsError('');
+    try {
+      const res = await api.post('/api/youtube/main-points', { videoId: video.id, languageCode: languageCode || undefined, refresh: !!refresh });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Could not write the main points.');
+      setPoints(data.points || null);
+      setPointsNote(data.truncated ? 'The video is very long, so these cover the first part of it.' : '');
+    } catch (err) {
+      setPointsError(err.message || 'Could not write the main points.');
+    } finally {
+      setPointsBusy(false);
+    }
+  }
 
   async function loadTranscript(summarize, langOverride) {
     if (summarize) setSummarizing(true); else setLoading(true);
@@ -288,6 +307,9 @@ function TranscriptPanel({ video, onClose, onSeek }) {
 
   useEffect(() => {
     loadTranscript(false);
+    api.get(`/api/youtube/main-points/${video.id}`).then(r => r.json()).then((data) => {
+      if (Array.isArray(data.points)) { setPoints(data.points); setPointsNote(data.truncated ? 'The video is very long, so these cover the first part of it.' : ''); }
+    }).catch(() => {});
     api.get(`/api/youtube/transcript-languages/${video.id}`).then(r => r.json()).then((data) => {
       const langs = Array.isArray(data.languages) ? data.languages : [];
       setLanguages(langs);
@@ -305,7 +327,7 @@ function TranscriptPanel({ video, onClose, onSeek }) {
     try {
       await api.delete(`/api/youtube/ai-transcript/${video.id}`);
       document.dispatchEvent(new CustomEvent(TRANSCRIPTS_CHANGED));
-      setSource('captions'); setSummary(''); setShowSummary(false); setSegments([]); setShowTimes(false);
+      setSource('captions'); setSummary(''); setShowSummary(false); setSegments([]); setShowTimes(false); setPoints(null);
       loadTranscript(false);
     } catch (_) { addToast('Could not delete it.', 'error'); }
   }
@@ -370,6 +392,15 @@ function TranscriptPanel({ video, onClose, onSeek }) {
               </button>
             </Tooltip>
           )}
+          <Tooltip text={points ? 'Gemini has already listed the main points. They are saved below the transcript. Press to write them again.' : "Ask Google's Gemini AI for a bullet list of the main points of this video, written from the transcript. It is saved below the transcript."}>
+            <button
+              onClick={() => writePoints(!!points)}
+              disabled={loading || pointsBusy || !transcript}
+              style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)', opacity: (loading || pointsBusy || !transcript) ? 0.6 : 1 }}
+            >
+              {pointsBusy ? 'Asking Gemini…' : points ? 'Main points again' : 'Main points'}
+            </button>
+          </Tooltip>
           {source === 'ai' && !loading && (
             <Tooltip text="This transcript was written by AI from the video's sound and is saved with the video. Delete it to go back to having none.">
               <button onClick={removeAiTranscript} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
@@ -428,6 +459,36 @@ function TranscriptPanel({ video, onClose, onSeek }) {
             <p style={{ whiteSpace: 'pre-wrap', fontSize: '0.82rem', lineHeight: 1.55, color: 'var(--color-text)', margin: 0 }}>
               {showSummary ? summary : transcript}
             </p>
+          )}
+
+          {!loading && !error && (points || pointsBusy || pointsError) && (
+            <section aria-label="Main points" style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--color-border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.6rem' }}>
+                <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-text)', flex: 1 }}>Main points</h3>
+                {points && (
+                  <Tooltip text="Copy the main points to your clipboard as a bullet list.">
+                    <button onClick={() => copyText(pointsCopyText(points))} style={{ ...btnBase, padding: '0.3rem 0.65rem', fontSize: '0.72rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+                      Copy points
+                    </button>
+                  </Tooltip>
+                )}
+              </div>
+              {pointsBusy && <p style={{ margin: 0, color: 'var(--color-muted)', fontSize: '0.82rem' }}>Gemini is reading the transcript…</p>}
+              {!pointsBusy && pointsError && <p style={{ margin: 0, color: '#b91c1c', fontSize: '0.82rem' }}>{pointsError}</p>}
+              {!pointsBusy && points && (
+                <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.85rem', lineHeight: 1.6, color: 'var(--color-text)' }}>
+                  {points.map((pt, i) => {
+                    const { lead, rest } = splitPoint(pt);
+                    return (
+                      <li key={i} style={{ marginBottom: '0.45rem' }}>
+                        {lead && <strong>{lead}: </strong>}{rest}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {!pointsBusy && points && <p style={{ margin: '0.6rem 0 0', fontSize: '0.72rem', color: 'var(--color-muted)' }}>Written by Gemini from the transcript above and saved with it.{pointsNote ? ` ${pointsNote}` : ''}</p>}
+            </section>
           )}
         </div>
       </div>

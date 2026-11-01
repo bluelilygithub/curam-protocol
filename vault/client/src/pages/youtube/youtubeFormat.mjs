@@ -103,3 +103,19 @@ export function transcriptCopyText(segments, plain, { times = false } = {}) {
   if (times) return segs.map((s) => `[${formatTime(s.start)}] ${String(s.text).replace(/\s+/g, ' ').trim()}`).join('\n');
   return transcriptParagraphs(segs).map((p) => p.text).join('\n\n');
 }
+
+// ── Main points (the bullet list Gemini writes from a transcript) ──
+
+/** "Budget: set it first." -> { lead: 'Budget', rest: 'set it first.' }; a point with no short lead-in has lead ''. */
+export function splitPoint(point) {
+  const m = /^([^:]{2,40}):\s+(\S.*)$/.exec(String(point || ''));
+  return m ? { lead: m[1].trim(), rest: m[2].trim() } : { lead: '', rest: String(point || '') };
+}
+
+/** The list as Markdown for the clipboard: "- **Lead:** rest". */
+export function pointsCopyText(points) {
+  return (Array.isArray(points) ? points : []).map((p) => {
+    const { lead, rest } = splitPoint(p);
+    return lead ? `- **${lead}:** ${rest}` : `- ${rest}`;
+  }).join('\n');
+}
