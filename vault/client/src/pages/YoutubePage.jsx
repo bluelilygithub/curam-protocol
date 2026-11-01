@@ -8,11 +8,12 @@ import { useVoice } from '../hooks/useVoice';
 import Tooltip from '../components/Tooltip';
 import VideoStudyPanel from './youtube/VideoStudyPanel';
 import AiTranscriptDialog from './youtube/AiTranscriptDialog';
+import FavLabelsDialog from './youtube/FavLabelsDialog';
 import YoutubeTutorChat from './youtube/YoutubeTutorChat';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { GUIDE_TOOLS, HOW_IT_WORKS } from './youtube/youtubeTools.mjs';
 import { startYoutubeTour, TOUR_KEY as YT_TOUR_KEY } from '../utils/tours/youtubeTour';
-import { embedSrc, formatTime, transcriptParagraphs, transcriptCopyText, splitPoint, pointsCopyText, TRANSCRIPTS_CHANGED } from './youtube/youtubeFormat.mjs';
+import { embedSrc, formatTime, transcriptParagraphs, transcriptCopyText, splitPoint, pointsCopyText, collectLabels, filterFavourites, groupFavourites, noteHref, UNCATEGORISED, TRANSCRIPTS_CHANGED } from './youtube/youtubeFormat.mjs';
 
 // Which videos have an AI-written transcript saved (so cards can say so wherever a saved video is shown).
 const TranscriptsContext = React.createContext(new Set());
@@ -201,7 +202,7 @@ function VideoCard({ video, isFav, onPlay, onToggleFav }) {
 
 // ── Favourites row ────────────────────────────────────────────────────────────
 
-function FavCard({ fav, onPlay, onRemove }) {
+function FavCard({ fav, onPlay, onRemove, onLabels, onNote, onPickCategory, onPickTag }) {
   const dur     = parseDuration(fav.duration);
   const views   = fmtViews(fav.viewCount || fav.view_count);
   const videoId = fav.videoId || fav.video_id;
@@ -234,7 +235,33 @@ function FavCard({ fav, onPlay, onRemove }) {
         <p style={{ fontSize: '0.7rem', color: 'var(--color-muted)', margin: '2px 0 0' }}>
           {fav.channel}{views ? ` · ${views}` : ''}
         </p>
+        {(fav.category || (fav.tags && fav.tags.length > 0)) && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 5 }}>
+            {fav.category && (
+              <Tooltip text="Show only videos in this category.">
+                <button type="button" onClick={() => onPickCategory(fav.category)} style={{ fontFamily: 'inherit', cursor: 'pointer', fontSize: '0.65rem', fontWeight: 700, padding: '1px 7px', borderRadius: 999, border: '1px solid var(--color-primary)', background: 'var(--color-bg)', color: 'var(--color-primary)' }}>
+                  {fav.category}
+                </button>
+              </Tooltip>
+            )}
+            {(fav.tags || []).map((t) => (
+              <button key={t} type="button" onClick={() => onPickTag(t)} style={{ fontFamily: 'inherit', cursor: 'pointer', fontSize: '0.65rem', padding: '1px 7px', borderRadius: 999, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-muted)' }}>
+                #{t}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+      <Tooltip text="Give this video a category and tags, so you can group, filter and search your favourites.">
+        <button onClick={() => onLabels(videoId)} style={{ ...btnBase, fontSize: '0.72rem', padding: '0.3rem 0.6rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)', flexShrink: 0 }}>
+          Labels
+        </button>
+      </Tooltip>
+      <Tooltip text="Start a new note about this video: its link and details, its category and tags, and the main points and summary if they were already written. The tags go on the note too.">
+        <button onClick={() => onNote(videoId)} style={{ ...btnBase, fontSize: '0.72rem', padding: '0.3rem 0.6rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)', flexShrink: 0 }}>
+          Create note
+        </button>
+      </Tooltip>
       <Tooltip text="Remove this video from your saved favourites.">
         <button onClick={() => onRemove(videoId)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', color: 'var(--color-muted)', flexShrink: 0 }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -576,7 +603,7 @@ function CommentsPanel({ video, onClose }) {
 
 // ── Video Modal ───────────────────────────────────────────────────────────────
 
-function VideoModal({ video, isFav, onClose, onToggleFav, onMoreFromChannel, isFollowing, onToggleFollow }) {
+function VideoModal({ video, isFav, onClose, onToggleFav, onMoreFromChannel, isFollowing, onToggleFollow, onLabels, onNote }) {
   const savedTranscripts = React.useContext(TranscriptsContext);
   const [showTranscript, setShowTranscript] = useState(false);
   const [showComments, setShowComments]     = useState(false);
@@ -659,6 +686,20 @@ function VideoModal({ video, isFav, onClose, onToggleFav, onMoreFromChannel, isF
                 {isFav ? '♥ Saved' : '♡ Save'}
               </button>
             </Tooltip>
+            {isFav && onLabels && (
+              <Tooltip text="Give this saved video a category and tags.">
+                <button onClick={() => onLabels(video.id)} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+                  Category &amp; tags
+                </button>
+              </Tooltip>
+            )}
+            {isFav && onNote && (
+              <Tooltip text="Start a new note about this saved video, with its category and tags.">
+                <button onClick={() => onNote(video.id)} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+                  Create note
+                </button>
+              </Tooltip>
+            )}
             <Tooltip text="Open this video directly on YouTube in a new tab.">
               <a href={youtubeUrl(video.id)} target="_blank" rel="noopener noreferrer" style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: '#ef4444', color: '#fff', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
                 Open on YouTube
@@ -812,6 +853,44 @@ export default function YoutubePage() {
       runSearch(transcript);
     }
   }, [transcript]);
+
+  const [favSearch, setFavSearch] = useState('');
+  const [favCategory, setFavCategory] = useState('');
+  const [favTags, setFavTags] = useState([]);
+  const [favGroup, setFavGroup] = useState('none');
+  const [labelsFor, setLabelsFor] = useState(null); // the videoId whose category and tags are being edited
+  const labelInfo = collectLabels(favs);
+  const favById = (id) => favs.find((f) => (f.videoId || f.video_id) === id);
+
+  async function saveLabels(labels) {
+    const id = labelsFor;
+    try {
+      const res = await api.patch(`/api/youtube/favourites/${id}`, labels);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not save the labels.');
+      setFavs((list) => list.map((f) => ((f.videoId || f.video_id) === id ? { ...f, category: data.category, tags: data.tags } : f)));
+      addToast('Saved.', 'success');
+    } catch (err) {
+      addToast(err.message || 'Could not save the labels.', 'error');
+      throw err;
+    }
+  }
+
+  // A new note about a saved video: the text comes from the server (no AI), the labels go on the note as tags.
+  async function createNoteFromFav(videoId) {
+    try {
+      const draftRes = await api.get(`/api/youtube/favourites/${videoId}/note-draft`);
+      const draft = await draftRes.json();
+      if (!draftRes.ok) throw new Error(draft.error || 'Could not prepare the note.');
+      const noteRes = await api.post('/api/notes', { title: draft.title, body: draft.body });
+      const note = await noteRes.json();
+      if (!noteRes.ok) throw new Error(note.error || 'The note could not be saved.');
+      if (draft.tags && draft.tags.length) await api.put(`/api/notes/${note.id}/tags`, { tags: draft.tags }).catch(() => {});
+      addToast('Note created.', 'success', undefined, { label: 'Open note', href: noteHref(note.id) });
+    } catch (err) {
+      addToast(err.message || 'The note could not be saved.', 'error');
+    }
+  }
 
   function loadFavs() {
     api.get('/api/youtube/favourites').then(r => r.json()).then((rows) => {
@@ -1534,22 +1613,85 @@ export default function YoutubePage() {
             <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '1rem' }}>
               <p style={{ color: 'var(--color-muted)', fontSize: '0.9rem' }}>No saved videos yet. Click the heart icon on any video to save it.</p>
             </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              {favs.map((fav) => (
-                <FavCard
-                  key={fav.videoId || fav.video_id}
-                  fav={fav}
-                  onPlay={setActiveVideo}
-                  onRemove={async (videoId) => {
-                    await api.delete(`/api/youtube/favourites/${videoId}`).catch(() => {});
-                    setFavSet((s) => { const n = new Set(s); n.delete(videoId); return n; });
-                    setFavs((f) => f.filter((x) => (x.videoId || x.video_id) !== videoId));
-                  }}
-                />
-              ))}
-            </div>
-          )}
+          ) : (() => {
+            const shown = filterFavourites(favs, { search: favSearch, category: favCategory, tags: favTags });
+            const groups = groupFavourites(shown, favGroup);
+            const filtering = !!(favSearch.trim() || favCategory || favTags.length);
+            const miniBtn = { fontFamily: 'inherit', cursor: 'pointer', fontSize: '0.72rem', padding: '0.2rem 0.6rem', borderRadius: 999 };
+            return (
+              <>
+                <div data-tour="fav-filters" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center', marginBottom: '0.75rem' }}>
+                  <Tooltip text="Search your favourites by title, channel, category or tag. Every word you type has to match.">
+                    <input
+                      value={favSearch}
+                      onChange={(e) => setFavSearch(e.target.value)}
+                      placeholder="Search favourites…"
+                      aria-label="Search favourites"
+                      style={{ ...selectStyle, cursor: 'text', flex: '1 1 14rem', minWidth: 0 }}
+                    />
+                  </Tooltip>
+                  <Tooltip text="Show only the videos in one category.">
+                    <select value={favCategory} onChange={(e) => setFavCategory(e.target.value)} aria-label="Filter by category" style={selectStyle}>
+                      <option value="">All categories</option>
+                      {labelInfo.categories.map((c) => <option key={c.name} value={c.name}>{c.name} ({c.count})</option>)}
+                      {favs.some((f) => !f.category) && <option value={UNCATEGORISED}>{UNCATEGORISED}</option>}
+                    </select>
+                  </Tooltip>
+                  <Tooltip text="Lay the favourites out in groups.">
+                    <select value={favGroup} onChange={(e) => setFavGroup(e.target.value)} aria-label="Group favourites" style={selectStyle}>
+                      <option value="none">No grouping</option>
+                      <option value="category">Group by category</option>
+                      <option value="channel">Group by channel</option>
+                    </select>
+                  </Tooltip>
+                  {filtering && (
+                    <button onClick={() => { setFavSearch(''); setFavCategory(''); setFavTags([]); }} style={{ ...miniBtn, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-muted)' }}>
+                      Clear filters
+                    </button>
+                  )}
+                </div>
+                {labelInfo.tags.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: '0.75rem' }}>
+                    {labelInfo.tags.map((t) => {
+                      const on = favTags.includes(t.name);
+                      return (
+                        <button key={t.name} aria-pressed={on} onClick={() => setFavTags((cur) => (on ? cur.filter((x) => x !== t.name) : [...cur, t.name]))}
+                          style={{ ...miniBtn, border: '1px solid var(--color-border)', background: on ? 'var(--color-primary)' : 'var(--color-bg)', color: on ? '#fff' : 'var(--color-muted)' }}>
+                          #{t.name} {t.count}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {filtering && <p style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', color: 'var(--color-muted)' }}>{shown.length} of {favs.length} videos</p>}
+                {shown.length === 0 ? (
+                  <p style={{ color: 'var(--color-muted)', fontSize: '0.85rem', padding: '1.5rem 0' }}>No favourites match. Try fewer words or clear the filters.</p>
+                ) : groups.map((g) => (
+                  <div key={g.key} style={{ marginBottom: '1rem' }}>
+                    {g.label && <h3 style={{ margin: '0 0 0.4rem', fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-text)' }}>{g.label} <span style={{ fontWeight: 400, color: 'var(--color-muted)' }}>({g.items.length})</span></h3>}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {g.items.map((fav) => (
+                        <FavCard
+                          key={fav.videoId || fav.video_id}
+                          fav={fav}
+                          onPlay={setActiveVideo}
+                          onLabels={setLabelsFor}
+                          onNote={createNoteFromFav}
+                          onPickCategory={(c) => setFavCategory(c)}
+                          onPickTag={(t) => setFavTags((cur) => (cur.includes(t) ? cur : [...cur, t]))}
+                          onRemove={async (videoId) => {
+                            await api.delete(`/api/youtube/favourites/${videoId}`).catch(() => {});
+                            setFavSet((st) => { const n = new Set(st); n.delete(videoId); return n; });
+                            setFavs((f) => f.filter((x) => (x.videoId || x.video_id) !== videoId));
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </>
+            );
+          })()}
         </div>
       )}
 
@@ -1713,6 +1855,18 @@ export default function YoutubePage() {
           onMoreFromChannel={openMoreFromChannel}
           isFollowing={follows.some((f) => f.kind === 'channel' && f.channelId === activeVideo.channelId)}
           onToggleFollow={toggleFollowChannel}
+          onLabels={setLabelsFor}
+          onNote={createNoteFromFav}
+        />
+      )}
+
+      {labelsFor && favById(labelsFor) && (
+        <FavLabelsDialog
+          fav={favById(labelsFor)}
+          categories={labelInfo.categories}
+          tags={labelInfo.tags}
+          onSave={saveLabels}
+          onClose={() => setLabelsFor(null)}
         />
       )}
 

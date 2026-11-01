@@ -3336,6 +3336,9 @@ async function initSchema() {
     CREATE UNIQUE INDEX IF NOT EXISTS uq_youtube_favourites_user_video
       ON youtube_favourites ("userId", "videoId")
   `);
+  // A category (one, free text) and tags (same rule as note tags) on a saved video. See services/youtubeLabels.js.
+  await pool.query(`ALTER TABLE youtube_favourites ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT ''`);
+  await pool.query(`ALTER TABLE youtube_favourites ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}'`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS youtube_saved_lists (
       id            SERIAL PRIMARY KEY,

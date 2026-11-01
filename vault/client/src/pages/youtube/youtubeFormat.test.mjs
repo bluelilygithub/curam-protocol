@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { formatTime, embedSrc, coverageNote, ASK_STARTERS, noteHref, formatUsd, formatWait, formatLength, elapsedText, TRANSCRIPTS_CHANGED, transcriptParagraphs, transcriptCopyText, splitPoint, pointsCopyText } from './youtubeFormat.mjs';
+import { formatTime, embedSrc, coverageNote, ASK_STARTERS, noteHref, formatUsd, formatWait, formatLength, elapsedText, TRANSCRIPTS_CHANGED, transcriptParagraphs, transcriptCopyText, splitPoint, pointsCopyText, UNCATEGORISED, cleanTag, collectLabels, filterFavourites, groupFavourites } from './youtubeFormat.mjs';
 
 assert.equal(formatTime(0), '0:00');
 assert.equal(formatTime(75), '1:15');
@@ -54,5 +54,36 @@ assert.deepEqual(splitPoint('Budget: set it first.'), { lead: 'Budget', rest: 's
 assert.deepEqual(splitPoint('No lead-in here'), { lead: '', rest: 'No lead-in here' });
 assert.equal(pointsCopyText(['Budget: set it first.', 'Plain point']), '- **Budget:** set it first.\n- Plain point');
 assert.equal(pointsCopyText(null), '');
+
+// categories and tags on saved videos
+const favs = [
+  { videoId: 'a', title: 'Sourdough basics', channel: 'Baker Bob', category: 'Recipes', tags: ['bread', 'home cooking'] },
+  { videoId: 'b', title: 'Mortgage rates explained', channel: 'Money Mel', category: 'Finance', tags: ['home loan'] },
+  { videoId: 'c', title: 'Pizza dough', channel: 'Baker Bob', category: 'recipes', tags: ['bread'] },
+  { videoId: 'd', title: 'Random cat video', channel: 'Cats', category: '', tags: [] },
+  { videoId: 'e', title: 'Old save', channel: '' },
+];
+assert.equal(cleanTag(' #Home   Loan, '), 'home loan');
+const lab = collectLabels(favs);
+assert.deepEqual(lab.categories, [{ name: 'Recipes', count: 2 }, { name: 'Finance', count: 1 }], 'categories match regardless of capitals');
+assert.deepEqual(lab.tags[0], { name: 'bread', count: 2 });
+assert.equal(lab.tags.length, 3);
+assert.deepEqual(collectLabels(null), { categories: [], tags: [] });
+const ids = (r) => r.map((f) => f.videoId).join('');
+assert.equal(ids(filterFavourites(favs, {})), 'abcde');
+assert.equal(ids(filterFavourites(favs, { category: 'Recipes' })), 'ac', 'category is not case sensitive');
+assert.equal(ids(filterFavourites(favs, { category: UNCATEGORISED })), 'de');
+assert.equal(ids(filterFavourites(favs, { tags: ['bread'] })), 'ac');
+assert.equal(ids(filterFavourites(favs, { tags: ['#Bread', 'home cooking'] })), 'a', 'every tag is required');
+assert.equal(ids(filterFavourites(favs, { search: 'baker pizza' })), 'c', 'every word, across title and channel');
+assert.equal(ids(filterFavourites(favs, { search: 'finance' })), 'b', 'search reads the category');
+assert.equal(ids(filterFavourites(favs, { search: 'home loan' })), 'b', 'search reads the tags');
+assert.equal(ids(filterFavourites(favs, { search: 'zzz' })), '');
+const byCat = groupFavourites(favs, 'category');
+assert.deepEqual(byCat.map((g) => g.label), ['Finance', 'Recipes', UNCATEGORISED], 'A to Z, Uncategorised last');
+assert.equal(byCat[1].items.length, 2);
+assert.deepEqual(groupFavourites(favs, 'channel').map((g) => g.label), ['Baker Bob', 'Cats', 'Money Mel', 'Unknown channel']);
+assert.equal(groupFavourites(favs, 'none').length, 1);
+assert.equal(groupFavourites(favs, 'none')[0].items.length, 5);
 
 console.log('youtubeFormat: ok');

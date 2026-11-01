@@ -33,6 +33,7 @@ const { createAiTranscripts } = require('../services/youtubeAiJobs');
 const { watchVideo } = require('../services/geminiVideo');
 const insightsLib = require('../services/youtubeInsights');
 const mainPointsLib = require('../services/youtubeMainPoints');
+const labelsLib = require('../services/youtubeLabels');
 const { aiLimiter } = require('../middleware/aiRateLimit');
 
 const router = express.Router();
@@ -488,7 +489,7 @@ router.delete('/history/:id', async (req, res) => {
 router.get('/favourites', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT "videoId", title, channel, thumbnail, duration, "viewCount", "publishedAt", "createdAt"
+      `SELECT "videoId", title, channel, thumbnail, duration, "viewCount", "publishedAt", "createdAt", category, tags
        FROM youtube_favourites
        WHERE "userId" = $1
        ORDER BY "createdAt" DESC`,
@@ -503,16 +504,58 @@ router.get('/favourites', async (req, res) => {
 router.post('/favourites', async (req, res) => {
   const { videoId, title, channel, thumbnail, duration, viewCount, publishedAt } = req.body;
   if (!videoId) return res.status(400).json({ error: 'videoId required.' });
+  const labels = labelsLib.readLabels(req.body);
+  if (!labels) return res.status(400).json({ error: 'category must be text and tags a list.' });
   try {
     await pool.query(
-      `INSERT INTO youtube_favourites ("userId", "videoId", title, channel, thumbnail, duration, "viewCount", "publishedAt")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      `INSERT INTO youtube_favourites ("userId", "videoId", title, channel, thumbnail, duration, "viewCount", "publishedAt", category, tags)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        ON CONFLICT ("userId", "videoId") DO NOTHING`,
-      [req.user.id, videoId, title, channel || null, thumbnail || null, duration || null, viewCount || null, publishedAt || null]
+      [req.user.id, videoId, title, channel || null, thumbnail || null, duration || null, viewCount || null, publishedAt || null, labels.category || '', labels.tags || []]
     );
     res.json({ ok: true });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// Change a saved video's category and/or tags (only the fields sent). null or '' clears the category.
+router.patch('/favourites/:videoId', async (req, res) => {
+  if (!VIDEO_ID.test(req.params.videoId)) return res.status(400).json({ error: 'A valid videoId is required.' });
+  const labels = labelsLib.readLabels(req.body);
+  if (!labels) return res.status(400).json({ error: 'category must be text and tags a list.' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE youtube_favourites SET category = COALESCE($3, category), tags = COALESCE($4::text[], tags)
+       WHERE "userId" = $1 AND "videoId" = $2 RETURNING category, tags`,
+      [req.user.id, req.params.videoId, labels.category === undefined ? null : labels.category, labels.tags === undefined ? null : labels.tags]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'That video is not in your favourites.' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[youtube/favourites patch]', err.message);
+    res.status(500).json({ error: 'Could not save the labels.' });
+  }
+});
+
+// The text of a new note about a saved video (no AI is asked): link, details, labels, and the Main points / Insights summary if they were already
+// written. The page saves it through /api/notes and puts the labels on the note as tags.
+router.get('/favourites/:videoId/note-draft', async (req, res) => {
+  const { videoId } = req.params;
+  if (!VIDEO_ID.test(videoId)) return res.status(400).json({ error: 'A valid videoId is required.' });
+  try {
+    const fav = (await pool.query('SELECT * FROM youtube_favourites WHERE "userId"=$1 AND "videoId"=$2', [req.user.id, videoId])).rows[0];
+    if (!fav) return res.status(404).json({ error: 'That video is not in your favourites.' });
+    const pts = (await pool.query('SELECT points FROM youtube_main_points WHERE "userId"=$1 AND "videoId"=$2', [req.user.id, videoId])).rows[0];
+    const ins = await savedInsights(req.user.id, videoId, '');
+    const body = labelsLib.buildVideoNote({
+      videoId, title: fav.title, channel: fav.channel, duration: fav.duration, publishedAt: fav.publishedAt,
+      category: fav.category, tags: fav.tags, points: pts && pts.points, overview: ins && ins.insights && ins.insights.overview,
+    });
+    res.json({ title: String(fav.title || 'YouTube video').slice(0, 200), body, tags: labelsLib.noteTagsFor(fav) });
+  } catch (err) {
+    console.error('[youtube/favourites note-draft]', err.message);
+    res.status(500).json({ error: 'Could not prepare the note.' });
   }
 });
 

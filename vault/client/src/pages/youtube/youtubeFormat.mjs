@@ -119,3 +119,73 @@ export function pointsCopyText(points) {
     return lead ? `- **${lead}:** ${rest}` : `- ${rest}`;
   }).join('\n');
 }
+
+// ── Categories and tags on saved videos: finding, filtering and grouping the Favourites ──
+
+export const UNCATEGORISED = 'Uncategorised';
+
+/** A tag the way the server keeps it (the same rule as note tags): no leading #, single spaces, lowercase, at most 30 characters. */
+export function cleanTag(value) {
+  return String(value == null ? '' : value)
+    .replace(/[\u0000-\u001f\u007f,;]/g, ' ')
+    .replace(/^[#\s]+/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+    .slice(0, 30)
+    .trim();
+}
+
+const catOf = (f) => String((f && f.category) || '').trim();
+const tagsOf = (f) => (Array.isArray(f && f.tags) ? f.tags : []);
+
+/** Every category and tag in use, with how many videos carry it, most used first: { categories: [{ name, count }], tags: [{ name, count }] }. */
+export function collectLabels(favs) {
+  const cats = new Map();
+  const tags = new Map();
+  for (const f of Array.isArray(favs) ? favs : []) {
+    const c = catOf(f);
+    if (c) { const k = c.toLowerCase(); cats.set(k, { name: cats.get(k)?.name || c, count: (cats.get(k)?.count || 0) + 1 }); }
+    for (const t of tagsOf(f)) tags.set(t, { name: t, count: (tags.get(t)?.count || 0) + 1 });
+  }
+  const order = (m) => [...m.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  return { categories: order(cats), tags: order(tags) };
+}
+
+/**
+ * The saved videos that match: every word typed must appear in the title, channel, category or a tag; `category` is '' (any), UNCATEGORISED
+ * (none set) or a category name; `tags` are all required.
+ */
+export function filterFavourites(favs, { search = '', category = '', tags = [] } = {}) {
+  const words = String(search).toLowerCase().split(/\s+/).filter(Boolean);
+  const want = (Array.isArray(tags) ? tags : []).map(cleanTag).filter(Boolean);
+  const cat = String(category || '').toLowerCase();
+  return (Array.isArray(favs) ? favs : []).filter((f) => {
+    const c = catOf(f);
+    if (cat === UNCATEGORISED.toLowerCase()) { if (c) return false; }
+    else if (cat && c.toLowerCase() !== cat) return false;
+    const have = tagsOf(f);
+    if (!want.every((t) => have.includes(t))) return false;
+    if (!words.length) return true;
+    const hay = [f.title, f.channel, c, ...have].join(' ').toLowerCase();
+    return words.every((w) => hay.includes(w));
+  });
+}
+
+/** Saved videos in groups: by 'category' (A to Z, Uncategorised last), by 'channel' (A to Z), or one group for 'none'. [{ key, label, items }] */
+export function groupFavourites(favs, by) {
+  const list = Array.isArray(favs) ? favs : [];
+  if (by !== 'category' && by !== 'channel') return [{ key: 'all', label: '', items: list }];
+  const groups = new Map();
+  for (const f of list) {
+    const label = by === 'category' ? (catOf(f) || UNCATEGORISED) : (String(f.channel || '').trim() || 'Unknown channel');
+    const key = label.toLowerCase();
+    if (!groups.has(key)) groups.set(key, { key, label, items: [] });
+    groups.get(key).items.push(f);
+  }
+  return [...groups.values()].sort((a, b) => {
+    const au = a.label === UNCATEGORISED ? 1 : 0;
+    const bu = b.label === UNCATEGORISED ? 1 : 0;
+    return au - bu || a.label.localeCompare(b.label);
+  });
+}

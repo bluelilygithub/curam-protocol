@@ -3886,5 +3886,11 @@
  },
  "DELETE /api/youtube/main-points/:videoId": {
   "class": "authed"
+ },
+ "PATCH /api/youtube/favourites/:videoId": {
+  "class": "authed"
+ },
+ "GET /api/youtube/favourites/:videoId/note-draft": {
+  "class": "authed"
  }
 }
