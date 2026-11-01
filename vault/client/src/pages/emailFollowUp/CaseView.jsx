@@ -412,7 +412,7 @@ function AskPanel({ caseId, usable, locked, state, setState }) {
         {turns.length > SHOWN && !showAll && <Btn small tip={EF_TIPS.showEarlier} onClick={() => setShowAll(true)}>Show {turns.length - SHOWN} earlier question{turns.length - SHOWN === 1 ? '' : 's'}</Btn>}
         {(showAll ? turns : turns.slice(-SHOWN)).map((t, i) => (
           <div key={t.key || i} className="space-y-2">
-            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{new Date(t.createdAt).toLocaleString()}{t.model ? ` · answered by ${t.model}` : ''}</p>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{new Date(t.createdAt).toLocaleString()}{t.model ? ` · answered by ${t.model}` : ''} · {String(t.key || '').startsWith('q') ? <span style={{ color: GOOD }}>saved with this case ✓</span> : <span style={{ color: WARN }}>NOT saved: copy it if you want to keep it</span>}</p>
             <p className="text-sm font-medium rounded-xl px-3 py-2" style={{ background: 'var(--color-surface)' }}>{t.question}</p>
             <div className="rounded-xl border p-3 space-y-2" style={CARD}>
               <RichText text={t.answer.answer} index={t.sources} />
@@ -475,7 +475,7 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
   const [delForever, setDelForever] = useState(false);
   const [delNote, setDelNote] = useState('');
   const [removing, setRemoving] = useState(''); // threadId waiting for "Yes, remove"
-  const [askState, setAskState] = useState({ summary: null, turns: [] }); // kept while you move between tabs; never stored
+  const [askState, setAskState] = useState({ summary: null, turns: [] }); // the summary and this sitting's answers, kept while you move between tabs; the questions are loaded from the saved log below
   // The saved questions come back whenever a case is opened, so the log is always there for later reference.
   useEffect(() => {
     let live = true;
