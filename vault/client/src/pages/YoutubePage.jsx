@@ -201,7 +201,7 @@ function VideoCard({ video, isFav, onPlay, onToggleFav, select }) {
 
 // ── Favourites row ────────────────────────────────────────────────────────────
 
-function FavCard({ fav, hit, noteId, select, onPlay, onRemove, onLabels, onNote, onPickCategory, onPickTag }) {
+function FavCard({ fav, hit, noteId, select, onPlay, onLabels, onNote, onPickCategory, onPickTag }) {
   const dur     = parseDuration(fav.duration);
   const views   = fmtViews(fav.viewCount || fav.view_count);
   const videoId = fav.videoId || fav.video_id;
@@ -269,11 +269,6 @@ function FavCard({ fav, hit, noteId, select, onPlay, onRemove, onLabels, onNote,
       <Tooltip text={noteId ? 'A note for this video already exists. Open it in Notes.' : 'Create a note in Notes about this video: its link and details, category and tags, main points if written, and the transcript.'}>
         <button onClick={() => onNote(playable)} style={{ ...btnBase, fontSize: '0.72rem', padding: '0.3rem 0.6rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: noteId ? 'var(--color-primary)' : 'var(--color-muted)', flexShrink: 0 }}>
           {noteId ? 'Open note' : 'Create note'}
-        </button>
-      </Tooltip>
-      <Tooltip text="Remove this video from your saved favourites.">
-        <button onClick={() => onRemove(videoId)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', color: 'var(--color-muted)', flexShrink: 0 }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </Tooltip>
     </div>
@@ -1256,13 +1251,6 @@ export default function YoutubePage() {
     }
   }, [favSet, addToast]);
 
-  async function deleteHistory(id) {
-    const res = await api.delete(`/api/youtube/history/${id}`).catch(() => null);
-    const data = res ? await res.json().catch(() => ({})) : {};
-    setHistory((h) => h.filter((r) => r.id !== id));
-    offerUndo({ message: 'Search deleted.', binIds: data.binIds, after: loadHistory });
-  }
-
   async function replaySearch(row) {
     const filters = row.filters || {};
     const q   = row.query;
@@ -1628,9 +1616,6 @@ export default function YoutubePage() {
                 </span>
                 {f.newCount > 0 && <span style={{ fontSize: '0.7rem', fontWeight: 700, background: 'var(--color-primary)', color: '#fff', padding: '1px 7px', borderRadius: 10 }}>{f.newCount} new</span>}
                 <span style={{ fontSize: '0.72rem', color: 'var(--color-muted)', flexShrink: 0 }}>{f.lastCheckedAt ? `checked ${timeAgo(f.lastCheckedAt)}` : 'not checked yet'}</span>
-                <Tooltip text={f.kind === 'channel' ? 'Stop following this channel. It goes to the recycle bin for 30 days.' : 'Stop following this search. It goes to the recycle bin for 30 days.'}>
-                  <button onClick={() => unfollow(f)} aria-label={`Unfollow ${f.kind === 'channel' ? f.channelTitle : f.query}`} style={{ ...btnBase, padding: '0.25rem 0.6rem', fontSize: '0.72rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>Unfollow</button>
-                </Tooltip>
               </div>
             ))}
           </div>
@@ -1721,11 +1706,6 @@ export default function YoutubePage() {
                           onNote={createNoteFromFav}
                           onPickCategory={(c) => setFavCategory(c)}
                           onPickTag={(t) => setFavTags((cur) => (cur.includes(t) ? cur : [...cur, t]))}
-                          onRemove={async (videoId) => {
-                            await api.delete(`/api/youtube/favourites/${videoId}`).catch(() => {});
-                            setFavSet((st) => { const n = new Set(st); n.delete(videoId); return n; });
-                            setFavs((f) => f.filter((x) => (x.videoId || x.video_id) !== videoId));
-                          }}
                         />
                       ))}
                     </div>
@@ -1831,9 +1811,6 @@ export default function YoutubePage() {
                         <Tooltip text="Run this search again with the same query and filters.">
                           <button onClick={() => replaySearch(row)} style={{ fontSize: '0.7rem', fontWeight: 600, padding: '2px 8px', borderRadius: 5, border: '1px solid var(--color-primary)', background: 'none', color: 'var(--color-primary)', cursor: 'pointer', marginRight: 6, fontFamily: 'inherit' }}>Re-run</button>
                         </Tooltip>
-                        <Tooltip text="Remove this entry from your search history.">
-                          <button onClick={() => deleteHistory(row.id)} style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: 5, border: '1px solid var(--color-border)', background: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontFamily: 'inherit' }}>×</button>
-                        </Tooltip>
                       </td>
                     </tr>
                   );
@@ -1903,9 +1880,6 @@ export default function YoutubePage() {
                   </div>
                   <Tooltip text="Open this list's videos.">
                     <button onClick={() => openSavedList(l)} style={{ fontSize: '0.75rem', fontWeight: 600, padding: '4px 10px', borderRadius: 5, border: '1px solid var(--color-primary)', background: 'none', color: 'var(--color-primary)', cursor: 'pointer', fontFamily: 'inherit' }}>Open</button>
-                  </Tooltip>
-                  <Tooltip text="Delete this saved list. It goes to the recycle bin for 30 days.">
-                    <button onClick={() => deleteSavedList(l.id)} aria-label={`Delete ${l.title}`} style={{ fontSize: '0.75rem', padding: '4px 8px', borderRadius: 5, border: '1px solid var(--color-border)', background: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontFamily: 'inherit' }}>×</button>
                   </Tooltip>
                 </div>
               ))}
