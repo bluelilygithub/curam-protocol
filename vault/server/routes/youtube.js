@@ -417,18 +417,16 @@ router.post('/history/bulk-delete', async (req, res) => {
   const ids = (Array.isArray(req.body && req.body.ids) ? req.body.ids : []).map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 500);
   if (!ids.length) return res.status(400).json({ error: 'Choose at least one entry.' });
   try {
-    const r = await pool.query('DELETE FROM youtube_search_history WHERE id = ANY($1::int[]) AND "userId" = $2', [ids, req.user.id]);
-    res.json({ ok: true, deleted: r.rowCount });
+    const binIds = await ytBin.binSearches(pool, req.user.id, ids);
+    res.json({ ok: true, deleted: ids.length, binIds });
   } catch (err) { console.error('[youtube/history bulk]', err.message); res.status(500).json({ error: 'Could not delete them.' }); }
 });
 
 router.delete('/history/:id', async (req, res) => {
   try {
-    await pool.query(
-      'DELETE FROM youtube_search_history WHERE id = $1 AND "userId" = $2',
-      [req.params.id, req.user.id]
-    );
-    res.json({ ok: true });
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad id.' });
+    res.json({ ok: true, binIds: await ytBin.binSearches(pool, req.user.id, [id]) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
@@ -654,15 +652,14 @@ router.post('/watch-history/bulk-delete', async (req, res) => {
   const videoIds = (Array.isArray(req.body && req.body.videoIds) ? req.body.videoIds : []).map(String).filter((v) => VIDEO_ID.test(v)).slice(0, 500);
   if (!videoIds.length) return res.status(400).json({ error: 'Choose at least one video.' });
   try {
-    const r = await pool.query('DELETE FROM youtube_watch_history WHERE "userId" = $1 AND "videoId" = ANY($2::text[])', [req.user.id, videoIds]);
-    res.json({ ok: true, deleted: r.rowCount });
+    const binIds = await ytBin.binWatched(pool, req.user.id, videoIds);
+    res.json({ ok: true, deleted: videoIds.length, binIds });
   } catch (err) { console.error('[youtube/watch-history bulk]', err.message); res.status(500).json({ error: 'Could not delete them.' }); }
 });
 
 router.delete('/watch-history/all', async (req, res) => {
   try {
-    await pool.query('DELETE FROM youtube_watch_history WHERE "userId" = $1', [req.user.id]);
-    res.json({ ok: true });
+    res.json({ ok: true, binIds: await ytBin.binWatched(pool, req.user.id, null) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
@@ -670,11 +667,7 @@ router.delete('/watch-history/all', async (req, res) => {
 
 router.delete('/watch-history/:videoId', async (req, res) => {
   try {
-    await pool.query(
-      'DELETE FROM youtube_watch_history WHERE "userId" = $1 AND "videoId" = $2',
-      [req.user.id, req.params.videoId]
-    );
-    res.json({ ok: true });
+    res.json({ ok: true, binIds: await ytBin.binWatched(pool, req.user.id, [String(req.params.videoId)]) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }

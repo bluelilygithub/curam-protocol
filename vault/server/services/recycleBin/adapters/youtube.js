@@ -120,4 +120,73 @@ register('youtube-favourite', {
   },
 });
 
-module.exports = { binList, binFollow, binFavourites };
+// ── Search history and recently watched (one bin item per delete, however many rows) ──
+
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+
+/** Move search-history rows to the bin as one item. `ids` null = all of them. Returns bin ids ([] when nothing matched). */
+async function binSearches(pool, userId, ids) {
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const rows = (ids
+      ? await db.query('SELECT * FROM youtube_search_history WHERE "userId"=$1 AND id = ANY($2::int[]) ORDER BY id', [userId, ids])
+      : await db.query('SELECT * FROM youtube_search_history WHERE "userId"=$1 ORDER BY id', [userId])).rows;
+    if (!rows.length) { await db.query('ROLLBACK'); return []; }
+    const binId = await moveToBin(db, {
+      userId, type: 'youtube-searches', id: rows[0].id,
+      title: rows.length === 1 ? `Search: ${rows[0].query}` : `${plural(rows.length, 'search')} from YouTube history`,
+      detail: rows.length === 1 ? null : rows.slice(0, 3).map((r) => r.query).join(', '), payload: { rows },
+    });
+    await db.query('DELETE FROM youtube_search_history WHERE "userId"=$1 AND id = ANY($2::int[])', [userId, rows.map((r) => r.id)]);
+    await db.query('COMMIT');
+    return [binId];
+  } catch (err) { await db.query('ROLLBACK').catch(() => {}); throw err; } finally { db.release(); }
+}
+
+register('youtube-searches', {
+  label: 'YouTube searches',
+  async restore(db, userId, payload) {
+    const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+    if (!rows.length) throw new Error('These deleted searches have nothing to restore.');
+    let first = null;
+    for (const r of rows) { const id = await insertRow(db, 'youtube_search_history', r, { userId }); first = first ?? id; }
+    return { entityId: first };
+  },
+});
+
+/** Move watched videos to the bin as one item. `videoIds` null = all of them. Returns bin ids ([] when nothing matched). */
+async function binWatched(pool, userId, videoIds) {
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const rows = (videoIds
+      ? await db.query('SELECT * FROM youtube_watch_history WHERE "userId"=$1 AND "videoId" = ANY($2::text[]) ORDER BY id', [userId, videoIds])
+      : await db.query('SELECT * FROM youtube_watch_history WHERE "userId"=$1 ORDER BY id', [userId])).rows;
+    if (!rows.length) { await db.query('ROLLBACK'); return []; }
+    const binId = await moveToBin(db, {
+      userId, type: 'youtube-watched', id: rows[0].videoId,
+      title: rows.length === 1 ? rows[0].title : plural(rows.length, 'recently watched video'),
+      detail: rows.length === 1 ? rows[0].channel : rows.slice(0, 3).map((r) => r.title).join(', '), payload: { rows },
+    });
+    await db.query('DELETE FROM youtube_watch_history WHERE "userId"=$1 AND "videoId" = ANY($2::text[])', [userId, rows.map((r) => r.videoId)]);
+    await db.query('COMMIT');
+    return [binId];
+  } catch (err) { await db.query('ROLLBACK').catch(() => {}); throw err; } finally { db.release(); }
+}
+
+register('youtube-watched', {
+  label: 'Recently watched videos',
+  async restore(db, userId, payload) {
+    const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+    if (!rows.length) throw new Error('These deleted videos have nothing to restore.');
+    for (const r of rows) {
+      // Watched again in the meantime: keep the newer row.
+      if ((await db.query('SELECT 1 FROM youtube_watch_history WHERE "userId"=$1 AND "videoId"=$2', [userId, r.videoId])).rows.length) continue;
+      await insertRow(db, 'youtube_watch_history', r, { userId });
+    }
+    return { entityId: rows[0].videoId };
+  },
+});
+
+module.exports = { binList, binFollow, binFavourites, binSearches, binWatched };

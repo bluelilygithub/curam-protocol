@@ -954,14 +954,18 @@ export default function YoutubePage() {
     offerUndo({ message: `Removed ${ids.length} from your favourites.`, binIds: binIdsOf, after: loadFavs });
   }
   async function deleteWatched(ids) {
-    if (!(await bulk('/api/youtube/watch-history/bulk-delete', { videoIds: ids }, 'delete them'))) return;
+    const binIds = await bulk('/api/youtube/watch-history/bulk-delete', { videoIds: ids }, 'delete them');
+    if (!binIds) return;
     const gone = new Set(ids);
     setWatchHistory((w) => w.filter((x) => !gone.has(x.videoId)));
+    offerUndo({ message: `Removed ${ids.length} from recently watched.`, binIds, after: loadWatchHistory });
   }
   async function deleteSearches(ids) {
-    if (!(await bulk('/api/youtube/history/bulk-delete', { ids }, 'delete them'))) return;
+    const binIds = await bulk('/api/youtube/history/bulk-delete', { ids }, 'delete them');
+    if (!binIds) return;
     const gone = new Set(ids);
     setHistory((h) => h.filter((r) => !gone.has(r.id)));
+    offerUndo({ message: ids.length === 1 ? 'Search deleted.' : `${ids.length} searches deleted.`, binIds, after: loadHistory });
   }
   function hideFromResults(ids) {
     const gone = new Set(ids);
@@ -1253,8 +1257,10 @@ export default function YoutubePage() {
   }, [favSet, addToast]);
 
   async function deleteHistory(id) {
-    await api.delete(`/api/youtube/history/${id}`).catch(() => {});
+    const res = await api.delete(`/api/youtube/history/${id}`).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
     setHistory((h) => h.filter((r) => r.id !== id));
+    offerUndo({ message: 'Search deleted.', binIds: data.binIds, after: loadHistory });
   }
 
   async function replaySearch(row) {
@@ -1752,10 +1758,15 @@ export default function YoutubePage() {
                   <>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: '0.5rem' }}>
                       <SelectBar sel={watchSel} allIds={watchHistory.map((v) => v.videoId)} verb="Delete" noun="videos"
-                        tip="Delete the ticked videos from your watch history." onDelete={deleteWatched} />
-                      <Tooltip text="Remove every entry from your watch history.">
+                        tip="Delete the ticked videos from your watch history. They go to the recycle bin for 30 days." onDelete={deleteWatched} />
+                      <Tooltip text="Remove every entry from your watch history. They go to the recycle bin for 30 days.">
                         <button
-                          onClick={async () => { await api.delete('/api/youtube/watch-history/all').catch(() => {}); setWatchHistory([]); }}
+                          onClick={async () => {
+                            const res = await api.delete('/api/youtube/watch-history/all').catch(() => null);
+                            const data = res ? await res.json().catch(() => ({})) : {};
+                            setWatchHistory([]);
+                            offerUndo({ message: 'Recently watched cleared.', binIds: data.binIds, after: loadWatchHistory });
+                          }}
                           style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 5, border: '1px solid var(--color-border)', background: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontFamily: 'inherit' }}
                         >
                           Clear all
@@ -1782,7 +1793,7 @@ export default function YoutubePage() {
         {history.length > 0 && (
           <div style={{ marginBottom: '0.6rem' }}>
             <SelectBar sel={historySel} allIds={history.map((r) => r.id)} verb="Delete" noun="searches"
-              tip="Delete the ticked searches from your search history." onDelete={deleteSearches} />
+              tip="Delete the ticked searches from your search history. They go to the recycle bin for 30 days." onDelete={deleteSearches} />
           </div>
         )}
         <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '1rem', overflow: 'hidden' }}>
