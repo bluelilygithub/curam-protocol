@@ -1605,7 +1605,7 @@ function UserGuidePage() {
         <P>
           Search YouTube by keyword or a plain-language description, watch videos in an embedded player, and pull
           a transcript or AI summary with a language picker. Also covers browsing a channel's other videos, opening
-          a full playlist, filtering to live streams, reading comments, browsing what's trending by region, saving
+          a full playlist, filtering to live streams, reading comments, saving
           favourites and named result-set lists, and a recently-watched history. There is no download feature —
           watching happens entirely through YouTube's own embed.
         </P>
