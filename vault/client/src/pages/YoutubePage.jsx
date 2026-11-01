@@ -543,15 +543,16 @@ function VideoModal({ video, isFav, onClose, onToggleFav, onMoreFromChannel, isF
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
           />
         </div>
-        <div style={{ padding: '0.75rem 1rem', display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
+        {/* Title and details on their own line, the buttons below it: with a dozen buttons they filled the row and squeezed the title to a sliver */}
+        <div style={{ padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '0.6rem' }}>
+          <div style={{ minWidth: 0 }}>
             <p style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-text)', margin: 0, lineHeight: 1.3 }}>{video.title}</p>
             <p style={{ fontSize: '0.75rem', color: 'var(--color-muted)', margin: '3px 0 0' }}>
               {video.channel}{video.viewCount ? ` · ${fmtViews(video.viewCount)}` : ''}
               {savedTranscripts.has(video.id) && <span title="An AI-written transcript is saved with this video." style={{ marginLeft: 8, background: 'var(--color-primary)', color: '#fff', fontSize: '0.65rem', fontWeight: 700, padding: '1px 6px', borderRadius: 4 }}>Transcript saved</span>}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-start' }}>
             <Tooltip text="AI notes on this video (summary, key points, chapters, things to do), clickable times, a button to save them to Notes, and a place to ask the video questions.">
               <button onClick={() => setShowStudy((v) => !v)} aria-expanded={showStudy} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: showStudy ? 'var(--color-primary)' : 'var(--color-bg)', border: '1px solid var(--color-border)', color: showStudy ? '#fff' : 'var(--color-muted)' }}>
                 Insights &amp; Ask

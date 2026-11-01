@@ -19,6 +19,11 @@ assert.match(G.explainError(400, 'Video is private'), /private, age-restricted o
 assert.match(G.explainError(403, 'permission denied'), /private, age-restricted or blocked/);
 assert.match(G.explainError(401, 'bad key'), /Gemini key/);
 assert.match(G.explainError(500, 'boom'), /could not write the transcript: boom/);
+assert.match(G.explainError(503, 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.'), /very busy right now.*Nothing was charged/);
+assert.equal(G.isBusy(503, ''), true);
+assert.equal(G.isBusy(500, 'overloaded'), true);
+assert.equal(G.isBusy(400, 'high demand'), false, 'only server-side answers count as busy');
+assert.equal(G.isBusy(429, 'quota'), false, 'a spent allowance is not a busy spike');
 assert.match(G.explainError(500, ''), /could not write the transcript\.$/);
 
 (async () => {
@@ -48,6 +53,22 @@ assert.match(G.explainError(500, ''), /could not write the transcript\.$/);
 
   // an empty or blocked answer
   await assert.rejects(() => G.watchVideo({ apiKey: 'k', model: 'm', url: 'u', prompt: 'p', maxOutputTokens: 10, send: async () => ({ status: 200, json: { candidates: [{ content: { parts: [] }, finishReason: 'SAFETY' }] } }) }), /returned nothing \(SAFETY\)/);
+
+  // Google says it is busy: wait and try again, up to three tries, without the real waits
+  const busy = { status: 503, json: { error: { message: 'This model is currently experiencing high demand. Please try again later.' } } };
+  let tries = 0;
+  const waits = [];
+  r = await G.watchVideo({ apiKey: 'k', model: 'm', url: 'u', prompt: 'p', maxOutputTokens: 10, sleep: async (ms) => { waits.push(ms); }, send: async () => { tries += 1; return tries < 3 ? busy : ok('[]'); } });
+  assert.equal(tries, 3, 'the third try got through');
+  assert.deepEqual(waits, [5000, 15000], 'waited a little longer each time');
+  tries = 0;
+  await assert.rejects(() => G.watchVideo({ apiKey: 'k', model: 'm', url: 'u', prompt: 'p', maxOutputTokens: 10, sleep: async () => {}, send: async () => { tries += 1; return busy; } }), /very busy right now/);
+  assert.equal(tries, 3, 'gives up after three tries, with the plain message');
+  // a busy spike and the picture-quality retry can both happen in one job
+  const seq = [busy, { status: 400, json: { error: { message: 'Unknown name "mediaResolution"' } } }, ok('[]')];
+  let n = 0;
+  r = await G.watchVideo({ apiKey: 'k', model: 'm', url: 'u', prompt: 'p', maxOutputTokens: 10, sleep: async () => {}, send: async () => seq[n++] });
+  assert.equal(n, 3);
 
   // not set up
   await assert.rejects(() => G.watchVideo({ apiKey: '', model: 'm', url: 'u', prompt: 'p', maxOutputTokens: 1 }), /GEMINI_API_KEY/);

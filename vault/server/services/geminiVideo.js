@@ -4,6 +4,8 @@
 // visible and testable. The request and the error wording are pure and tested in geminiVideo.test.js; `send` (the real network call) is passed in.
 // Pictures are not needed for a transcript, so the video is read at LOW media resolution, which is about a third of the input tokens. A model that
 // does not know that setting answers 400 naming it; we then ask again without it (and the cost estimate shown to the person already allows for it).
+// When Google says the model is overloaded (503, "high demand") the request is repeated after a short wait, up to three tries in all, because those spikes
+// are usually over within a minute; a job that still cannot run says so plainly and has cost nothing.
 
 const https = require('https');
 
@@ -17,9 +19,17 @@ function buildRequest({ url, prompt, maxOutputTokens, lowResolution = true }) {
   };
 }
 
+const BUSY_WAITS_MS = [5000, 15000]; // before the second and third tries
+
+/** Google's "try again later" answers: the model is overloaded or briefly unavailable. */
+function isBusy(status, message) {
+  return status === 503 || /high demand|overloaded|currently experiencing|try again later|temporarily unavailable/i.test(String(message || '')) && status >= 500;
+}
+
 /** Gemini's failure as a sentence a person can act on. */
 function explainError(status, message) {
   const m = String(message || '');
+  if (isBusy(status, m)) return 'Gemini is very busy right now (Google says demand is high). Nothing was charged. Try again in a few minutes.';
   if (status === 429 || /quota|resource.?exhausted|rate.?limit/i.test(m)) return "Gemini's allowance is used up or it is busy. Try again in a few minutes.";
   if (/private|unavailable|not found|cannot access|can't access|permission|forbidden|age|blocked/i.test(m) && status >= 400 && status < 500) {
     return 'Gemini could not open this video. It may be private, age-restricted or blocked. Only public videos work.';
@@ -57,11 +67,12 @@ function defaultSend(model, apiKey, body, timeoutMs) {
  * Ask Gemini to watch a video and return what it wrote.
  * @returns {Promise<{ text:string, inputTokens:number, outputTokens:number, finishReason:string }>}
  */
-async function watchVideo({ apiKey, model, url, prompt, maxOutputTokens, timeoutMs = 9 * 60 * 1000, send = defaultSend }) {
+async function watchVideo({ apiKey, model, url, prompt, maxOutputTokens, timeoutMs = 9 * 60 * 1000, send = defaultSend, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), busyWaits = BUSY_WAITS_MS }) {
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured.');
   if (!model) throw new Error('No Gemini model is set up in Settings.');
   let resolution = true;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  let busyTries = 0;
+  for (let attempt = 0; attempt < 2 + busyWaits.length; attempt++) {
     const r = await send(model, apiKey, buildRequest({ url, prompt, maxOutputTokens, lowResolution: resolution }), timeoutMs);
     if (r.status >= 200 && r.status < 300 && r.json) {
       const cand = r.json.candidates && r.json.candidates[0];
@@ -75,9 +86,10 @@ async function watchVideo({ apiKey, model, url, prompt, maxOutputTokens, timeout
     }
     const message = r.json && r.json.error && r.json.error.message;
     if (resolution && r.status === 400 && /media.?resolution/i.test(String(message || ''))) { resolution = false; continue; }
+    if (isBusy(r.status, message) && busyTries < busyWaits.length) { await sleep(busyWaits[busyTries]); busyTries += 1; continue; }
     throw new Error(explainError(r.status, message));
   }
   throw new Error('Gemini could not write the transcript.');
 }
 
-module.exports = { buildRequest, explainError, watchVideo };
+module.exports = { BUSY_WAITS_MS, isBusy, buildRequest, explainError, watchVideo };
