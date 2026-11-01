@@ -29,6 +29,15 @@ export function enquiryBody(f: QuoteFields, d: QuoteDesign, honeypot = ''): Reco
   };
 }
 
+/** The design as plain text, for pasting into an email when the form could not be sent. */
+export const fallbackText = (d: QuoteDesign): string => `${d.summary}
+About ${d.bottles} bottles${d.priceText ? `, guide price ${d.priceText}` : ''}
+Design code: ${d.code}`;
+
+async function copyText(text: string): Promise<boolean> {
+  try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
+}
+
 type Phase = 'form' | 'sending' | 'sent' | 'failed';
 
 /**
@@ -43,6 +52,7 @@ export function QuoteForm({ open, onClose, design, phone, note = '', onSent, fet
   const [phase, setPhase] = useState<Phase>('form');
   const [shown, setShown] = useState<{ field: keyof QuoteFields | ''; text: string } | null>(null);
   const [trap, setTrap] = useState('');
+  const [copied, setCopied] = useState(false);
   const first = useRef<HTMLInputElement>(null);
   const before = useRef<Element | null>(null);
   const refs = { name: first, email: useRef<HTMLInputElement>(null), phone: useRef<HTMLInputElement>(null), state: useRef<HTMLSelectElement>(null), message: useRef<HTMLTextAreaElement>(null) };
@@ -50,7 +60,8 @@ export function QuoteForm({ open, onClose, design, phone, note = '', onSent, fet
   useEffect(() => {
     if (!open) return undefined;
     before.current = document.activeElement;
-    setPhase((p) => (p === 'sent' ? p : 'form')); setShown(null);
+    // a second visit to the form after a send is a fresh enquiry: keep who they are, clear what they said
+    setPhase((p) => { if (p === 'sent') setF((o) => ({ ...o, message: '' })); return 'form'; }); setShown(null); setCopied(false);
     const t = window.setTimeout(() => first.current?.focus(), 30);
     const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
@@ -118,9 +129,12 @@ export function QuoteForm({ open, onClose, design, phone, note = '', onSent, fet
             </div>
             {shown?.text && <p id="quote-error" className="lite-note qf-error" role="alert" data-testid="lite-quote-error">{shown.text}</p>}
             {phase === 'failed' && (
-              <p className="lite-note qf-error" role="alert" data-testid="lite-quote-failed">
-                We could not send that just now, and nothing has been lost: your design is still here. Please press Send again in a moment{phone ? `, or call us on ${phone}` : ''}.
-              </p>
+              <div className="lite-note qf-error" role="alert" data-testid="lite-quote-failed">
+                <p>We could not send that just now, and nothing has been lost: your design is still here. Please press Send again in a moment{phone ? `, or call us on ${phone}` : ''}.</p>
+                <p>Or copy your design below and send it to us by email or through our contact page, so we still have exactly what you made.</p>
+                <textarea readOnly rows={3} value={fallbackText(design)} aria-label="Your design, to copy" data-testid="lite-quote-fallback-text" onFocus={(e) => e.currentTarget.select()} />
+                <button type="button" className="btn" data-testid="lite-quote-copy" title="Copy your design so you can paste it into an email or our contact form." onClick={() => { void copyText(fallbackText(design)).then((ok) => setCopied(ok)); }}>{copied ? 'Copied' : 'Copy my design'}</button>
+              </div>
             )}
             <div className="lite-nav two">
               <button type="button" className="btn lite-backbtn" title="Close this form without sending anything." onClick={onClose} data-testid="lite-quote-cancel">Cancel</button>

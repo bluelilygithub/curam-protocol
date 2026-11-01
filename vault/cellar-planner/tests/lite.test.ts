@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { LITE_TOUR_KEY, LITE_TOUR_STEPS } from '../src/lite/liteTour';
 import { analyseApp, deserializeApp, serializeApp } from '../src/app/model';
 import { findDesignCode, projectFromCode } from '../src/ui/CodeModal';
+import { DEFAULT_CONFIG } from '../src/lite/config';
 import { BOTTLES, LITE_UNIT_WIDTH_MM, WALLS, decodeDesign, defaultLite, encodeDesign, liteResult, liteToProject, normaliseLite, summaryLine, type LiteSettings } from '../src/lite/settings';
 
 const bottlesOf = (s: LiteSettings): number => liteResult(s).bottles;
@@ -207,5 +208,30 @@ describe('single and double doors', () => {
   it('the summary line says which door', () => {
     expect(summaryLine({ ...defaultLite(), doorStyle: 'DOUBLE' }, 100)).toMatch(/double door/);
     expect(summaryLine(defaultLite(), 100)).toMatch(/single door/);
+  });
+});
+
+describe('lite estimate uses the owner\'s real rack values', () => {
+  const withRack = (rack: Record<string, number>, confirmed: boolean) => {
+    const base = DEFAULT_CONFIG;
+    const t = { ...base.rackTypes[0]!, ...rack, confirmed };
+    return { ...base, rackTypes: [t], defaultRackType: t.id, rack: { ...base.rack, ...rack } };
+  };
+  it('takes depth, row pitch, posts, bottles per row and rows from the default type', () => {
+    const p = liteToProject(defaultLite(), withRack({ unitDepthMm: 400, rowPitchMm: 120, postsPerUnit: 3, bottlesPerRow: 5, rowsPerUnit: 15 }, true));
+    expect(p.rackSpec).toMatchObject({ unitDepthMm: 400, rowPitchMm: 120, postsPerUnit: 3, bottlesPerRow: 5, rowsPerUnit: 15 });
+  });
+  it('changes the bottle count when the owner\'s values differ from the guess', () => {
+    const guess = analyseApp(liteToProject(defaultLite())).racks.total;
+    const real = analyseApp(liteToProject(defaultLite(), withRack({ bottlesPerRow: 4 }, true))).racks.total;
+    expect(real).not.toEqual(guess);
+  });
+  it('never goes below what the bottle physically needs', () => {
+    const p = liteToProject({ ...defaultLite(), bottle: 'MAGNUM' }, withRack({ unitDepthMm: 200, rowPitchMm: 50 }, true));
+    expect(p.rackSpec.unitDepthMm).toBeGreaterThan(200); expect(p.rackSpec.rowPitchMm).toBeGreaterThan(50);
+  });
+  it('marks values estimated unless the type is supplier-confirmed', () => {
+    expect(liteToProject(defaultLite(), withRack({ unitDepthMm: 400 }, false)).estimated).toContain('unitDepthMm');
+    expect(liteToProject(defaultLite(), withRack({ unitDepthMm: 400 }, true)).estimated).not.toContain('unitDepthMm');
   });
 });

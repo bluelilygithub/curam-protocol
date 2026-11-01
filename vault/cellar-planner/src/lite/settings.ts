@@ -113,7 +113,27 @@ export function liteToProject(input: LiteSettings, cfg: LiteConfig = DEFAULT_CON
   // best-guess racks, made deep and tall-pitched enough for the chosen bottle (a magnum does not fit the 350 x 100 mm guess)
   const prof = BOTTLE_PROFILES[s.bottle];
   // the owner's unit width and height; a unit can never be taller than the room it stands in
-  const spec = { ...BEST_GUESS_RACK, unitWidthMm: cfg.rack.unitWidthMm, unitHeightMm: Math.min(cfg.rack.unitHeightMm, s.heightMm), unitDepthMm: Math.max(350, Math.ceil((prof.lengthMm + 15) / 50) * 50), rowPitchMm: Math.max(100, prof.diameterMm + 5) };
+  // The owner's real values win where they are set, but never below what this bottle physically needs (a magnum in a shallow rack would be unbuildable).
+  const needDepth = Math.max(350, Math.ceil((prof.lengthMm + 15) / 50) * 50), needPitch = Math.max(100, prof.diameterMm + 5);
+  const own = cfg.rack, ownType = cfg.rackTypes.find((r) => r.id === cfg.defaultRackType);
+  // bottles per row is the owner's figure for the standard (Bordeaux) bottle only; other styles keep the calculated figure
+  const ownRow = s.bottle === 'BORDEAUX' && own.bottlesPerRow ? own.bottlesPerRow : null;
+  const spec = {
+    ...BEST_GUESS_RACK,
+    unitWidthMm: own.unitWidthMm, unitHeightMm: Math.min(own.unitHeightMm, s.heightMm),
+    unitDepthMm: Math.max(own.unitDepthMm ?? 0, needDepth), rowPitchMm: Math.max(own.rowPitchMm ?? 0, needPitch),
+    ...(own.postsPerUnit ? { postsPerUnit: own.postsPerUnit } : {}),
+    ...(ownRow ? { bottlesPerRow: ownRow } : {}),
+    ...(own.rowsPerUnit ? { rowsPerUnit: own.rowsPerUnit } : {}),
+  };
+  // a field taken as it stands from a supplier-confirmed type is no longer a guess
+  const confirmedFields = new Set<string>(!ownType?.confirmed ? [] : [
+    'unitWidthMm',
+    ...(own.unitDepthMm && own.unitDepthMm >= needDepth ? ['unitDepthMm'] : []),
+    ...(own.unitHeightMm <= s.heightMm ? ['unitHeightMm'] : []),
+    ...(own.rowPitchMm && own.rowPitchMm >= needPitch ? ['rowPitchMm'] : []),
+    ...(own.postsPerUnit ? ['postsPerUnit'] : []),
+  ]);
   const unitW = spec.unitWidthMm as number, unitD = spec.unitDepthMm as number;
   const strip = ({ id, wall, startMm, units }: RackRun): RunPlacement => ({ id, wall, startMm, units });
   const inner = internalSize(enclosure);
@@ -132,7 +152,7 @@ export function liteToProject(input: LiteSettings, cfg: LiteConfig = DEFAULT_CON
   }
   // the picks travel with the design as codes; the staff planner reads them against the owner's current list (a pick that no longer applies is ignored there)
   const picks = s.features;
-  const base: AppProject = { schemaVersion: APP_SCHEMA, name: 'Lite design (estimate)', enclosure, rackSpec: spec, bottle: s.bottle, runs, walkwayMm: null, estimated: [...ESTIMATE_FIELDS], ...(picks.length ? { features: picks } : {}) };
+  const base: AppProject = { schemaVersion: APP_SCHEMA, name: 'Lite design (estimate)', enclosure, rackSpec: spec, bottle: s.bottle, runs, walkwayMm: null, estimated: ESTIMATE_FIELDS.filter((k) => !confirmedFields.has(k)), ...(picks.length ? { features: picks } : {}) };
   return s.mode === 'TARGET' ? trimToTarget(base, s.target) : base;
 }
 
