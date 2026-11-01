@@ -29,7 +29,7 @@ const CATALOG = [
     notes: 'Vault never downloads or stores the video; it plays from YouTube.' },
   { id: 'insights', label: 'Insights', group: 'Watch and study',
     does: 'Press Insights & Ask under the player. Write notes for this video produces a short summary, key points, chapters, things to do and quotes, each with a time you can click to jump the video there. The notes are written once and kept for next time; Refresh writes them again.',
-    notes: 'They are written by AI from the video\'s captions only, so a video with no captions cannot be done, and they can contain mistakes. A very long video is read only as far as the AI can take, and the panel says so.' },
+    notes: 'They are written by AI from the video\'s captions only (or an AI-written transcript if the video had none), and they can contain mistakes. A very long video is read only as far as the AI can take, and the panel says so.' },
   { id: 'ask', label: 'Ask this video', group: 'Watch and study',
     does: 'The Ask this video tab next to Insights. Type a question (or press a suggested one) and get an answer taken from what is said in the video, with the moments it comes from as clickable times. Follow-up questions remember the last few.',
     notes: 'It answers only from the captions: if the video does not say, it says so. It cannot see the pictures or hear the sound.' },
@@ -38,7 +38,7 @@ const CATALOG = [
     notes: 'The note says it was written by AI. Editing it later is done in Notes.' },
   { id: 'transcript', label: 'Transcript', group: 'Watch and study',
     does: 'The Transcript button shows the video\'s captions as text. A language list appears when the video has captions in more than one language. Timestamps shows it line by line with a time on each line (click a time to jump the video), Summarize gives a short summary instead, and Copy copies what is shown.',
-    notes: 'Only works for videos that have captions.' },
+    notes: 'Reads the video\'s captions. If a video has none, a Generate a transcript with AI button appears: a window first shows the video\'s length, the estimated cost and the estimated wait, and nothing starts until you press Generate. Google\'s Gemini then listens to the video, which keeps going if you close the window, and the transcript is saved with the video, marked Transcript saved, and used by Transcript, Insights and Ask from then on. It works on public videos up to an hour, can mishear names and numbers, and costs a few cents.' },
   { id: 'comments', label: 'Comments', group: 'Watch and study',
     does: 'The Comments button shows the video\'s top public comments with author, likes and how long ago, and Load more for the next page.',
     notes: 'Read only. A video with comments turned off says so.' },
@@ -46,7 +46,7 @@ const CATALOG = [
 
 const RULES = [
   'Find a video first (search, a trending video, a favourite or a playlist), then click it to open the watch window. Insights, Ask, Transcript and Comments are all inside that window.',
-  'Insights, Ask and Transcript read only the video\'s captions. No captions means none of them work for that video.',
+  'Insights, Ask and Transcript read only the video\'s captions, or a transcript you had AI write for it. With neither, none of them work for that video.',
   'Notes written by AI are saved, so asking for them again is instant; Refresh writes them again.',
   'There is a daily limit on new searches set by YouTube. Repeat searches are free, and the page warns when few are left.',
   'The Open buttons in this chat only switch to a tool (they scroll to its area); they never search, play or save anything by themselves.',
@@ -59,7 +59,7 @@ const NOT_POSSIBLE = [
   'Email or phone alerts when a new video appears (new videos show on the Following tab and in Needs attention only).',
   'Making a quiz or flashcards from a video (not built yet).',
   'Searching inside the transcripts of videos you saved, or comparing several videos side by side (not built yet).',
-  'Private videos and videos with no captions (notes and questions need captions).',
+  'Private videos, live streams and videos over an hour (not even the AI transcript can do them); notes and questions need captions or an AI transcript.',
 ];
 
 const SYSTEM = `You are the guide to YouTube in Vault for one person who searches YouTube, watches videos and wants to get the useful parts out of them. They say, in everyday words, what they want to do. You point them to the right controls, in order, and explain how each works.

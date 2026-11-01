@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import api from '../../utils/apiClient';
 import useToastStore from '../../store/toastStore';
 import Tooltip from '../../components/Tooltip';
+import AiTranscriptDialog from './AiTranscriptDialog';
 import { formatTime, coverageNote, ASK_STARTERS, noteHref } from './youtubeFormat.mjs';
 
 // Sits under the player in the watch window: AI notes on the video (summary, key points, chapters, to-dos, quotes) with timestamps that jump the
@@ -41,6 +42,8 @@ export default function VideoStudyPanel({ video, onSeek, onClose }) {
   const [writing, setWriting] = useState(false);
   const [data, setData] = useState(null); // { insights, truncated, coveredSec, createdAt }
   const [error, setError] = useState('');
+  const [canGenerate, setCanGenerate] = useState(false); // the video has no readable captions: offer the AI transcript
+  const [showAi, setShowAi] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -56,6 +59,7 @@ export default function VideoStudyPanel({ video, onSeek, onClose }) {
     try {
       const res = await api.post('/api/youtube/insights', { videoId: video.id, refresh });
       const d = await res.json();
+      setCanGenerate(!res.ok && !!d.canGenerate);
       if (!res.ok) throw new Error(d.error || 'Could not write notes for this video.');
       setData(d);
     } catch (e) {
@@ -122,6 +126,7 @@ export default function VideoStudyPanel({ video, onSeek, onClose }) {
         history: turns.slice(-4).map((t) => ({ question: t.question, answer: t.answer })),
       });
       const d = await res.json();
+      setCanGenerate(!res.ok && !!d.canGenerate);
       if (!res.ok) throw new Error(d.error || 'Could not answer that just now.');
       setTurns((t) => [...t, { question: text, answer: d.answer, citations: d.citations || [], partial: !!d.partial }]);
       setQuestion('');
@@ -189,6 +194,11 @@ export default function VideoStudyPanel({ video, onSeek, onClose }) {
               </div>
             )}
             {error && <p style={{ ...body, color: '#b91c1c', marginTop: '0.5rem' }}>{error}</p>}
+            {canGenerate && <Tooltip text="Have Google's Gemini AI listen to this video and write a transcript. It shows the cost and waiting time first and does nothing until you agree.">
+              <button onClick={() => setShowAi(true)} style={{ fontFamily: 'inherit', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem', padding: '0.45rem 0.9rem', borderRadius: '0.5rem', border: '1px solid var(--color-primary)', background: 'var(--color-bg)', color: 'var(--color-primary)', marginTop: '0.5rem' }}>
+                Generate a transcript with AI…
+              </button>
+              </Tooltip>}
             {ins && (
               <div>
                 {note && <p style={{ ...body, color: 'var(--color-muted)', fontStyle: 'italic' }}>{note}</p>}
@@ -221,6 +231,11 @@ export default function VideoStudyPanel({ video, onSeek, onClose }) {
               </div>
             ))}
             {askError && <p style={{ ...body, color: '#b91c1c' }}>{askError}</p>}
+            {canGenerate && <Tooltip text="Have Google's Gemini AI listen to this video and write a transcript. It shows the cost and waiting time first and does nothing until you agree.">
+              <button onClick={() => setShowAi(true)} style={{ fontFamily: 'inherit', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem', padding: '0.45rem 0.9rem', borderRadius: '0.5rem', border: '1px solid var(--color-primary)', background: 'var(--color-bg)', color: 'var(--color-primary)', marginTop: '0.5rem' }}>
+                Generate a transcript with AI…
+              </button>
+              </Tooltip>}
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <input
                 value={question}
@@ -239,6 +254,13 @@ export default function VideoStudyPanel({ video, onSeek, onClose }) {
           </div>
         )}
       </div>
+      {showAi && (
+        <AiTranscriptDialog
+          video={video}
+          onClose={() => setShowAi(false)}
+          onDone={() => { setCanGenerate(false); setError(''); setAskError(''); if (!data) writeNotes(false); }}
+        />
+      )}
     </div>
   );
 }

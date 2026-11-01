@@ -99,7 +99,7 @@ export function startYoutubeTour() {
   tour.addStep({
     id: 'yt-study',
     title: 'Insights & Ask',
-    text: 'Click any video to watch it. Under the player, Insights & Ask writes notes on it (summary, key points, chapters, things to do, quotes) with times you can click to jump the video, lets you ask it questions, and saves the notes to Notes, optionally under a project or client. It all comes from the video\'s captions, so a video with no captions cannot be done.',
+    text: 'Click any video to watch it. Under the player, Insights & Ask writes notes on it (summary, key points, chapters, things to do, quotes) with times you can click to jump the video, lets you ask it questions, and saves the notes to Notes, optionally under a project or client. It all comes from the video\'s captions, so for a video with none, a Generate a transcript with AI button first shows the cost and wait and asks you to agree.',
     when: { show() { injectStepCounter(6); } },
     buttons: [btnBack(), btnNext],
   });

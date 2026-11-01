@@ -33,3 +33,39 @@ export const ASK_STARTERS = [
 
 /** Where a saved note lives, for the "Open note" link. */
 export const noteHref = (id) => `/notes?note=${encodeURIComponent(id)}`;
+
+// ── "Generate a transcript with AI": the words the confirmation window uses (the same wording as the server's estimate) ──
+
+/** 0.0312 -> "US$0.03", 0.004 -> "under US$0.01". */
+export function formatUsd(n) {
+  const v = Number(n) || 0;
+  if (v < 0.01) return 'under US$0.01';
+  return 'US$' + v.toFixed(2);
+}
+
+/** A waiting-time range: "under 2 minutes", "about 3 minutes", "1 to 4 minutes". */
+export function formatWait(lowSec, highSec) {
+  const min = (s) => Math.max(1, Math.round(s / 60));
+  const a = min(lowSec);
+  const b = min(highSec);
+  if (highSec < 90) return 'under 2 minutes';
+  return a === b ? `about ${a} minute${a === 1 ? '' : 's'}` : `${a} to ${b} minutes`;
+}
+
+/** A video's length: "10 minutes", "1 hour 5 minutes". */
+export function formatLength(sec) {
+  const s = Math.max(0, Math.round(sec));
+  const h = Math.floor(s / 3600);
+  const m = Math.round((s % 3600) / 60);
+  if (h > 0) return `${h} hour${h === 1 ? '' : 's'}${m ? ` ${m} minute${m === 1 ? '' : 's'}` : ''}`;
+  return m < 1 ? 'under a minute' : `${m} minute${m === 1 ? '' : 's'}`;
+}
+
+/** Time spent so far on a running job: 83000 -> "1:23". */
+export function elapsedText(ms) {
+  const s = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** Event the page listens for so the "Transcript saved" labels refresh after a transcript is made or deleted. */
+export const TRANSCRIPTS_CHANGED = 'vault:youtube-transcripts-changed';

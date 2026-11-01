@@ -29,11 +29,16 @@ const { fetchYoutubeTranscript, fetchYoutubeCaptionLanguages } = require('../ser
 const youtubeApi = require('../services/youtubeApi');
 const { getKey, quotaStatus } = youtubeApi;
 const follows = require('../services/youtubeFollows');
+const { createAiTranscripts } = require('../services/youtubeAiJobs');
+const { watchVideo } = require('../services/geminiVideo');
 const insightsLib = require('../services/youtubeInsights');
 const { aiLimiter } = require('../middleware/aiRateLimit');
 
 const router = express.Router();
 router.use(requireAuth);
+
+// AI-written transcripts for videos with no captions (Gemini watches the video), their saved copies and the background job.
+const aiTranscripts = createAiTranscripts({ pool, ytGet: (p) => youtubeApi.ytGet(pool, p), getKey, getModelsForUser, logUsage, watchVideo });
 
 // Every Data API call goes through the cache and the daily quota count (services/youtubeApi.js).
 const ytGet = (path) => youtubeApi.ytGet(pool, path);
@@ -321,6 +326,27 @@ router.get('/channel/:channelId', async (req, res) => {
   }
 });
 
+// Why a video could not be read, in plain words. `err.code === 'UNPLAYABLE'` comes from the caption fetch (private, removed, age-restricted or
+// a robot check); a video that is fine but has no captions is a different message. Returns true when it answered.
+function captionProblem(err, res) {
+  if (err && err.code === 'UNPLAYABLE') {
+    const bot = /bot|sign in/i.test(err.reason || '');
+    res.status(404).json({
+      error: bot
+        ? "YouTube is asking Vault's server to prove it is not a robot, so the captions cannot be read right now. Try again later, or have AI write a transcript."
+        : `YouTube would not let Vault read this video (${String(err.reason).slice(0, 120)}).`,
+      reason: err.reason,
+      canGenerate: bot, // Gemini reads the video from Google's side, so a robot check on our server does not stop it; a private video does
+    });
+    return true;
+  }
+  if (/no captions available/i.test((err && err.message) || '')) {
+    res.status(404).json({ error: 'This video has no captions, so there is nothing to read.', canGenerate: true });
+    return true;
+  }
+  return false;
+}
+
 // ── Transcript / summary ────────────────────────────────────────────────────────
 
 const SUMMARY_SYSTEM = `You summarize YouTube video transcripts. Write a concise summary in a few sentences covering what the video is about and its key points. Do not re-transcribe the video or list timestamps — just the gist, in plain prose.`;
@@ -330,14 +356,13 @@ router.get('/transcript-languages/:videoId', async (req, res) => {
   if (!videoId) return res.status(400).json({ error: 'videoId required.' });
 
   try {
+    if (await aiTranscripts.stored(req.user.id, videoId)) return res.json({ languages: [], source: 'ai' });
     const url = `https://www.youtube.com/watch?v=${videoId}`;
     const languages = await fetchYoutubeCaptionLanguages(url);
     res.json({ languages });
   } catch (err) {
     console.error('[youtube/transcript-languages]', err.message);
-    if (/no captions available/i.test(err.message || '')) {
-      return res.status(404).json({ error: 'No captions are available for this video.' });
-    }
+    if (captionProblem(err, res)) return;
     res.status(500).json({ error: 'Could not fetch caption languages for this video.' });
   }
 });
@@ -348,12 +373,20 @@ router.post('/transcript', async (req, res) => {
 
   try {
     const url = `https://www.youtube.com/watch?v=${videoId}`;
-    const { title, content, segments } = await fetchYoutubeTranscript(url, languageCode);
+    const mine = await aiTranscripts.stored(req.user.id, videoId);
+    const { title, content, segments } = mine
+      ? {
+        title: mine.title || 'YouTube video',
+        content: `[YouTube Transcript: ${mine.title || 'YouTube video'}]\n\n${(mine.segments || []).map((x) => x.text).join(' ')}`.substring(0, 50000),
+        segments: mine.segments || [],
+      }
+      : await fetchYoutubeTranscript(url, languageCode);
+    const source = mine ? 'ai' : 'captions';
     // `segments` = the same captions with their start time in seconds, so the page can show and jump to a moment
     const timed = (segments || []).map((x) => ({ start: Math.floor(x.start), text: x.text }));
 
     if (!summarize) {
-      return res.json({ title, transcript: content, segments: timed });
+      return res.json({ title, transcript: content, segments: timed, source });
     }
 
     const { light: lightModel } = await getModelsForUser(req.user?.id);
@@ -364,12 +397,10 @@ router.post('/transcript', async (req, res) => {
     });
     logUsage({ userId: req.user?.id, model: lightModel, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'youtube' });
 
-    res.json({ title, transcript: content, segments: timed, summary: result.text });
+    res.json({ title, transcript: content, segments: timed, summary: result.text, source });
   } catch (err) {
     console.error('[youtube/transcript]', err.message);
-    if (/no captions available/i.test(err.message || '')) {
-      return res.status(404).json({ error: 'No captions are available for this video.' });
-    }
+    if (captionProblem(err, res)) return;
     res.status(500).json({ error: 'Could not fetch a transcript for this video.' });
   }
 });
@@ -664,7 +695,11 @@ const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
 // A small in-memory cache of fetched captions so asking several questions about one video fetches them once (30 minutes, 20 videos).
 const captionCache = new Map();
 const CAPTION_TTL_MS = 30 * 60 * 1000;
-async function getCaptions(videoId, languageCode) {
+async function getCaptions(videoId, languageCode, userId) {
+  if (userId) {
+    const mine = await aiTranscripts.stored(userId, videoId);
+    if (mine) return { title: mine.title || 'YouTube video', segments: mine.segments || [], languageCode: mine.language || '', source: 'ai' };
+  }
   const key = `${videoId}:${languageCode || ''}`;
   const hit = captionCache.get(key);
   if (hit && Date.now() - hit.at < CAPTION_TTL_MS) return hit.value;
@@ -675,13 +710,7 @@ async function getCaptions(videoId, languageCode) {
   return value;
 }
 
-function noCaptions(err, res) {
-  if (/no captions available/i.test(err.message || '')) {
-    res.status(404).json({ error: 'No captions are available for this video, so there is nothing to read.' });
-    return true;
-  }
-  return false;
-}
+const noCaptions = captionProblem;
 
 async function savedInsights(userId, videoId, languageCode) {
   const { rows } = languageCode
@@ -695,7 +724,7 @@ const insightsPayload = (row) => ({
 });
 
 async function writeInsights(userId, videoId, languageCode) {
-  const t = await getCaptions(videoId, languageCode);
+  const t = await getCaptions(videoId, languageCode, userId);
   const view = insightsLib.formatForModel(t.segments);
   if (!view.text) throw new Error('The captions are empty.');
   const durationSec = insightsLib.coveredSeconds(t.segments);
@@ -752,7 +781,7 @@ router.post('/ask', aiLimiter, async (req, res) => {
   const q = String(question || '').trim().slice(0, 500);
   if (!q) return res.status(400).json({ error: 'Type a question first.' });
   try {
-    const t = await getCaptions(videoId, String(languageCode));
+    const t = await getCaptions(videoId, String(languageCode), req.user.id);
     const durationSec = insightsLib.coveredSeconds(t.segments);
     const picked = insightsLib.pickPassages(t.segments, q);
     if (!picked.text) return res.status(404).json({ error: 'The captions are empty, so there is nothing to read.' });
@@ -829,6 +858,47 @@ router.delete('/follows/:id', async (req, res) => {
     const ok = await follows.removeFollow(pool, req.user.id, id);
     res.status(ok ? 200 : 404).json(ok ? { ok: true } : { error: 'Not found.' });
   } catch (err) { console.error('[youtube/follows delete]', err.message); res.status(500).json({ error: 'Could not unfollow.' }); }
+});
+
+// ── AI-written transcripts (for videos with no captions) ──────────────────────
+
+router.get('/ai-transcripts', async (req, res) => {
+  try { res.json({ videoIds: await aiTranscripts.savedIds(req.user.id) }); }
+  catch (err) { console.error('[youtube/ai-transcripts]', err.message); res.status(500).json({ error: 'Could not read your saved transcripts.' }); }
+});
+
+// What pressing "Generate" would do and cost, for the confirmation window. Starts nothing.
+router.get('/ai-transcript/:videoId/plan', async (req, res) => {
+  if (!VIDEO_ID.test(req.params.videoId)) return res.status(400).json({ error: 'A valid videoId is required.' });
+  try { res.json(await aiTranscripts.plan(req.user.id, req.params.videoId)); }
+  catch (err) { console.error('[youtube/ai-transcript plan]', err.message); res.status(err.status || 500).json({ error: err.status === 429 ? err.message : 'Could not work out the cost just now.' }); }
+});
+
+router.get('/ai-transcript/:videoId', async (req, res) => {
+  if (!VIDEO_ID.test(req.params.videoId)) return res.status(400).json({ error: 'A valid videoId is required.' });
+  try { res.json(await aiTranscripts.status(req.user.id, req.params.videoId)); }
+  catch (err) { console.error('[youtube/ai-transcript status]', err.message); res.status(500).json({ error: 'Could not read the transcript status.' }); }
+});
+
+router.post('/ai-transcript', aiLimiter, async (req, res) => {
+  const videoId = String((req.body && req.body.videoId) || '');
+  if (!VIDEO_ID.test(videoId)) return res.status(400).json({ error: 'A valid videoId is required.' });
+  try {
+    const r = await aiTranscripts.start(req.user.id, videoId);
+    if (r.error) return res.status(r.status || 400).json({ error: r.error });
+    res.status(202).json({ started: true });
+  } catch (err) {
+    console.error('[youtube/ai-transcript start]', err.message);
+    res.status(err.status || 500).json({ error: err.status === 429 ? err.message : 'Could not start the transcript.' });
+  }
+});
+
+router.delete('/ai-transcript/:videoId', async (req, res) => {
+  if (!VIDEO_ID.test(req.params.videoId)) return res.status(400).json({ error: 'A valid videoId is required.' });
+  try {
+    const ok = await aiTranscripts.remove(req.user.id, req.params.videoId);
+    res.status(ok ? 200 : 404).json(ok ? { ok: true } : { error: 'No saved transcript.' });
+  } catch (err) { console.error('[youtube/ai-transcript delete]', err.message); res.status(500).json({ error: 'Could not delete it.' }); }
 });
 
 module.exports = router;

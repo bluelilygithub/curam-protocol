@@ -7,11 +7,25 @@ import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { useVoice } from '../hooks/useVoice';
 import Tooltip from '../components/Tooltip';
 import VideoStudyPanel from './youtube/VideoStudyPanel';
+import AiTranscriptDialog from './youtube/AiTranscriptDialog';
 import YoutubeTutorChat from './youtube/YoutubeTutorChat';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { GUIDE_TOOLS, HOW_IT_WORKS } from './youtube/youtubeTools.mjs';
 import { startYoutubeTour, TOUR_KEY as YT_TOUR_KEY } from '../utils/tours/youtubeTour';
-import { embedSrc, formatTime } from './youtube/youtubeFormat.mjs';
+import { embedSrc, formatTime, TRANSCRIPTS_CHANGED } from './youtube/youtubeFormat.mjs';
+
+// Which videos have an AI-written transcript saved (so cards can say so wherever a saved video is shown).
+const TranscriptsContext = React.createContext(new Set());
+
+function TranscriptSavedLabel({ videoId, style }) {
+  const saved = React.useContext(TranscriptsContext);
+  if (!saved.has(videoId)) return null;
+  return (
+    <span title="An AI-written transcript is saved with this video." style={{ position: 'absolute', top: 6, left: 6, background: 'var(--color-primary)', color: '#fff', fontSize: '0.62rem', fontWeight: 700, padding: '1px 6px', borderRadius: 4, ...style }}>
+      Transcript saved
+    </span>
+  );
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -150,6 +164,7 @@ function VideoCard({ video, isFav, onPlay, onToggleFav }) {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="#ef4444"><polygon points="5,3 19,12 5,21"/></svg>
           </div>
         </div>
+        <TranscriptSavedLabel videoId={video.id} />
         {dur && (
           <span style={{ position: 'absolute', bottom: 6, right: 6, background: 'rgba(0,0,0,0.8)', color: '#fff', fontSize: '0.7rem', fontWeight: 600, padding: '1px 5px', borderRadius: 4 }}>
             {dur}
@@ -205,6 +220,7 @@ function FavCard({ fav, onPlay, onRemove }) {
     <div style={{ display: 'flex', gap: '0.75rem', padding: '0.6rem', borderRadius: '0.5rem', border: '1px solid var(--color-border)', background: 'var(--color-surface)', alignItems: 'center' }}>
       <div onClick={() => onPlay(playable)} style={{ position: 'relative', flexShrink: 0, width: 112, height: 63, borderRadius: 6, overflow: 'hidden', background: '#000', cursor: 'pointer' }}>
         {fav.thumbnail && <img src={fav.thumbnail} alt={fav.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+        <TranscriptSavedLabel videoId={videoId} style={{ top: 3, left: 3, fontSize: '0.55rem', padding: '0 4px' }} />
         {dur && (
           <span style={{ position: 'absolute', bottom: 3, right: 4, background: 'rgba(0,0,0,0.8)', color: '#fff', fontSize: '0.65rem', fontWeight: 600, padding: '1px 4px', borderRadius: 3 }}>
             {dur}
@@ -242,6 +258,9 @@ function TranscriptPanel({ video, onClose, onSeek }) {
   const [languageCode, setLanguageCode] = useState('');
   const [segments, setSegments] = useState([]);
   const [showTimes, setShowTimes] = useState(false);
+  const [source, setSource] = useState('captions'); // 'ai' when the saved transcript was written by AI
+  const [canGenerate, setCanGenerate] = useState(false);
+  const [showAi, setShowAi] = useState(false);
 
   async function loadTranscript(summarize, langOverride) {
     if (summarize) setSummarizing(true); else setLoading(true);
@@ -252,7 +271,9 @@ function TranscriptPanel({ video, onClose, onSeek }) {
         summarize,
         languageCode: langOverride ?? languageCode ?? undefined,
       }).then(r => r.json());
+      setCanGenerate(!!data.error && !!data.canGenerate);
       if (data.error) throw new Error(data.error);
+      setSource(data.source || 'captions');
       setTranscript(data.transcript || '');
       setSegments(Array.isArray(data.segments) ? data.segments : []);
       if (data.summary) { setSummary(data.summary); setShowSummary(true); }
@@ -280,6 +301,15 @@ function TranscriptPanel({ video, onClose, onSeek }) {
     loadTranscript(false, code);
   }
 
+  async function removeAiTranscript() {
+    try {
+      await api.delete(`/api/youtube/ai-transcript/${video.id}`);
+      document.dispatchEvent(new CustomEvent(TRANSCRIPTS_CHANGED));
+      setSource('captions'); setSummary(''); setShowSummary(false); setSegments([]); setShowTimes(false);
+      loadTranscript(false);
+    } catch (_) { addToast('Could not delete it.', 'error'); }
+  }
+
   function copyText(text) {
     navigator.clipboard?.writeText(text).then(
       () => addToast('Copied to clipboard.', 'success'),
@@ -288,6 +318,7 @@ function TranscriptPanel({ video, onClose, onSeek }) {
   }
 
   return (
+    <>
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '1rem', width: '100%', maxWidth: 640, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '0.9rem 1.1rem', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -339,6 +370,13 @@ function TranscriptPanel({ video, onClose, onSeek }) {
               </button>
             </Tooltip>
           )}
+          {source === 'ai' && !loading && (
+            <Tooltip text="This transcript was written by AI from the video's sound and is saved with the video. Delete it to go back to having none.">
+              <button onClick={removeAiTranscript} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+                AI transcript · Delete
+              </button>
+            </Tooltip>
+          )}
           <Tooltip text="Copy the text shown below to your clipboard.">
             <button
               onClick={() => copyText(showSummary ? summary : transcript)}
@@ -353,6 +391,12 @@ function TranscriptPanel({ video, onClose, onSeek }) {
         <div style={{ padding: '1rem 1.1rem', overflowY: 'auto', flex: 1 }}>
           {loading && <p style={{ color: 'var(--color-muted)', fontSize: '0.85rem' }}>Fetching transcript…</p>}
           {!loading && error && <p style={{ color: '#b91c1c', fontSize: '0.85rem' }}>{error}</p>}
+          {!loading && error && canGenerate && <Tooltip text="Have Google's Gemini AI listen to this video and write a transcript. It shows the cost and waiting time first and does nothing until you agree.">
+            <button onClick={() => setShowAi(true)} style={{ fontFamily: 'inherit', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem', padding: '0.45rem 0.9rem', borderRadius: '0.5rem', border: '1px solid var(--color-primary)', background: 'var(--color-bg)', color: 'var(--color-primary)', marginTop: '0.5rem' }}>
+              Generate a transcript with AI…
+            </button>
+              </Tooltip>}
+
           {!loading && !error && showTimes && !showSummary && segments.length > 0 && (
             <div style={{ fontSize: '0.82rem', lineHeight: 1.55, color: 'var(--color-text)' }}>
               {segments.map((seg, i) => (
@@ -377,6 +421,8 @@ function TranscriptPanel({ video, onClose, onSeek }) {
         </div>
       </div>
     </div>
+    {showAi && <AiTranscriptDialog video={video} onClose={() => setShowAi(false)} onDone={() => loadTranscript(false)} />}
+    </>
   );
 }
 
@@ -459,6 +505,7 @@ function CommentsPanel({ video, onClose }) {
 // ── Video Modal ───────────────────────────────────────────────────────────────
 
 function VideoModal({ video, isFav, onClose, onToggleFav, onMoreFromChannel, isFollowing, onToggleFollow }) {
+  const savedTranscripts = React.useContext(TranscriptsContext);
   const [showTranscript, setShowTranscript] = useState(false);
   const [showComments, setShowComments]     = useState(false);
   const [showStudy, setShowStudy]           = useState(false);
@@ -501,6 +548,7 @@ function VideoModal({ video, isFav, onClose, onToggleFav, onMoreFromChannel, isF
             <p style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-text)', margin: 0, lineHeight: 1.3 }}>{video.title}</p>
             <p style={{ fontSize: '0.75rem', color: 'var(--color-muted)', margin: '3px 0 0' }}>
               {video.channel}{video.viewCount ? ` · ${fmtViews(video.viewCount)}` : ''}
+              {savedTranscripts.has(video.id) && <span title="An AI-written transcript is saved with this video." style={{ marginLeft: 8, background: 'var(--color-primary)', color: '#fff', fontSize: '0.65rem', fontWeight: 700, padding: '1px 6px', borderRadius: 4 }}>Transcript saved</span>}
             </p>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -618,6 +666,17 @@ export default function YoutubePage() {
     api.post('/api/youtube/follows/seen', { videoIds: [activeVideo.id] }).then(() => loadFollows()).catch(() => {});
   }, [activeVideo && activeVideo.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Videos that have an AI-written transcript saved (labels on cards and in the watch window)
+  const [aiSaved, setAiSaved] = useState(() => new Set());
+  function loadAiSaved() {
+    api.get('/api/youtube/ai-transcripts').then((r) => r.json()).then((d) => setAiSaved(new Set(Array.isArray(d.videoIds) ? d.videoIds : []))).catch(() => {});
+  }
+  useEffect(() => {
+    loadAiSaved();
+    document.addEventListener(TRANSCRIPTS_CHANGED, loadAiSaved);
+    return () => document.removeEventListener(TRANSCRIPTS_CHANGED, loadAiSaved);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Following: channels and searches whose new videos are looked for in the background
   const [follows, setFollows] = useState([]);
   const [followNew, setFollowNew] = useState([]);
@@ -669,7 +728,7 @@ export default function YoutubePage() {
     loadWatchHistory();
     loadCategories('US');
     loadFollows();
-    api.get('/api/youtube/quota').then((r) => r.json()).then((q) => { if (q && typeof q.searchesLeft === 'number') setQuota(q); }).catch(() => {});
+    refreshQuota();
   }, []);
 
   // When mic finishes, populate query and auto-search
@@ -698,6 +757,10 @@ export default function YoutubePage() {
     api.get('/api/youtube/lists').then(r => r.json()).then((rows) => {
       setLists(Array.isArray(rows) ? rows : []);
     }).catch(() => {});
+  }
+
+  function refreshQuota() {
+    api.get('/api/youtube/quota').then((r) => r.json()).then((q) => { if (q && typeof q.searchesLeft === 'number') setQuota(q); }).catch(() => {});
   }
 
   function loadFollows() {
@@ -944,9 +1007,11 @@ export default function YoutubePage() {
       setVideos(data.videos ?? []);
       setTotalResults(data.totalResults ?? 0);
       loadHistory();
+      refreshQuota();
       setTab('search');
     } catch (err) {
       setError(err.message || 'Search failed');
+      refreshQuota();
     } finally {
       setLoading(false);
     }
@@ -1037,6 +1102,7 @@ export default function YoutubePage() {
   const isBusy = loading || parsing;
 
   return (
+    <TranscriptsContext.Provider value={aiSaved}>
     <div className="p-5 max-w-7xl mx-auto" style={{ fontFamily: 'inherit' }}>
 
       {/* Header */}
@@ -1200,11 +1266,11 @@ export default function YoutubePage() {
       </div>
 
       {/* Error */}
-      {quota && quota.searchesLeft <= 20 && (
+      {quota && (
         <p style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', color: quota.searchesLeft === 0 ? '#b91c1c' : 'var(--color-muted)' }}>
           {quota.searchesLeft === 0
             ? "Today's YouTube search allowance is used up. Searches you have already run still work. It resets at midnight Pacific time."
-            : `About ${quota.searchesLeft} new searches left today (YouTube's daily allowance). Repeat searches are free.`}
+            : `About ${quota.searchesLeft} new searches left today of YouTube's daily allowance (${quota.used.toLocaleString()} of ${quota.limit.toLocaleString()} units used). Repeat searches are free.`}
         </p>
       )}
       {error && (
@@ -1599,5 +1665,6 @@ export default function YoutubePage() {
         }
       `}</style>
     </div>
+    </TranscriptsContext.Provider>
   );
 }

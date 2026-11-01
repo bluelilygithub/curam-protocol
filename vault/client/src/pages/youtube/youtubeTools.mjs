@@ -38,6 +38,7 @@ export const HOW_IT_WORKS = [
   ['Watch', 'Click a video to watch it here. You can save it as a favourite, see more from its channel, read the transcript (in any language the video has captions in) or the top comments.'],
   ['Insights & Ask', 'Under the player: AI notes on the video (a summary, key points, chapters, things to do, quotes) with times you can click to jump the video, and a box to ask it questions. Both come only from the video\'s captions, so a video with no captions cannot be done. Notes are written once and kept.'],
   ['Save to Notes', 'Turns those notes into a note in Notes, with the link and clickable times, optionally filed under a project or a client.'],
+  ['No captions?', 'Some videos have no captions Vault can read. The Transcript, Insights and Ask panels then offer Generate a transcript with AI: a window shows the video\'s length, the estimated cost and wait first, and nothing starts until you press Generate. Google\'s Gemini listens to the video (it keeps working if you close the window) and the transcript is saved with the video, marked Transcript saved. Public videos up to an hour; it can mishear names and numbers.'],
   ['Limits', 'YouTube lets Vault run roughly 100 new searches a day; repeat searches are free and a warning shows when few are left. Vault does not download videos. The AI can get things wrong, so check anything important against the video.'],
 ];
 

@@ -132,6 +132,7 @@ function parseCaptionXml(xml) {
 // fetchYoutubeTranscript and fetchYoutubeCaptionLanguages).
 async function fetchCaptionTracks(videoId) {
   let captionTracks;
+  let playability = null;
   try {
     const data = await httpsPost(
       'https://www.youtube.com/youtubei/v1/player?prettyPrint=false',
@@ -141,11 +142,21 @@ async function fetchCaptionTracks(videoId) {
       }
     );
     captionTracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+    playability = data?.playabilityStatus || null;
   } catch (err) {
     throw new Error(`Failed to fetch video metadata: ${err.message}`);
   }
 
   if (!Array.isArray(captionTracks) || captionTracks.length === 0) {
+    // "No captions" is only true when YouTube says the video is playable and still lists none. A private, removed, age-restricted or
+    // robot-checked video has no caption list either, but that is a different problem and the person needs to be told which.
+    if (playability && playability.status && playability.status !== 'OK') {
+      const reason = String(playability.reason || playability.status);
+      const e = new Error(`Video not readable: ${reason}`);
+      e.code = 'UNPLAYABLE';
+      e.reason = reason;
+      throw e;
+    }
     throw new Error('No captions available for this video');
   }
   return captionTracks;

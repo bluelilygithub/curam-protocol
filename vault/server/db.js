@@ -3436,6 +3436,23 @@ async function initSchema() {
     )
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_youtube_follow_videos_unseen ON youtube_follow_videos ("followId") WHERE "seenAt" IS NULL`);
+  // A transcript written by AI (Gemini watching the video) for a video that has no captions, kept per person and video so it is paid for once and
+  // used everywhere captions would be. Segments are [{ start, dur, text }] in seconds.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS youtube_transcripts (
+      "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "videoId"     TEXT NOT NULL,
+      title         TEXT,
+      segments      JSONB NOT NULL,
+      language      TEXT NOT NULL DEFAULT '',
+      source        TEXT NOT NULL DEFAULT 'gemini',
+      model         TEXT,
+      "durationSec" INTEGER NOT NULL DEFAULT 0,
+      "costUsd"     NUMERIC(10,5) NOT NULL DEFAULT 0,
+      "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY ("userId", "videoId")
+    )
+  `);
   // The AI's notes on a video (summary, key points, chapters, to-dos, quotes), one per person, video and caption language, so they are
   // paid for once. Written by the model from the captions; see services/youtubeInsights.js.
   await pool.query(`

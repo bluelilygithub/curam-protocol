@@ -3787,6 +3787,21 @@
   "POST /api/youtube/follows/check": {
    "class": "authed"
   },
+  "GET /api/youtube/ai-transcripts": {
+   "class": "authed"
+  },
+  "GET /api/youtube/ai-transcript/:videoId/plan": {
+   "class": "authed"
+  },
+  "GET /api/youtube/ai-transcript/:videoId": {
+   "class": "authed"
+  },
+  "POST /api/youtube/ai-transcript": {
+   "class": "authed"
+  },
+  "DELETE /api/youtube/ai-transcript/:videoId": {
+   "class": "authed"
+  },
   "POST /api/youtube/ask": {
    "class": "authed"
   },
