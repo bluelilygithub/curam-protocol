@@ -468,7 +468,25 @@ router.post('/:id/ask', aiLimiter, async (req, res) => {
       .filter((h) => h && typeof h.question === 'string' && typeof h.answer === 'string').slice(-4);
     const { corpus, left } = await corpusFor(req, c);
     const answer = await caseAsk.askCase(req.user.id, c, corpus, req.body?.question, history);
-    res.json({ answer, ...corpusInfo(corpus, left) });
+    // Every question is kept with the case, for later reference. If saving fails the person still gets the answer, and is told it was not kept.
+    let saved = null;
+    try {
+      saved = await store.addQuestion(req.user.id, c.id, {
+        question: String(req.body.question).trim(), answer,
+        sources: corpus.index.map(({ sourceId, ...rest }) => rest), // the numbers, labels and dates; not internal ids, which can change on a restore
+        cut: corpus.cut, left, model: answer.model,
+      });
+    } catch (err) { log().error({ err: err && err.message }, '[email-follow-up] could not save a question'); }
+    res.json({ answer, ...corpusInfo(corpus, left), saved: saved ? { id: saved.id, createdAt: saved.createdAt } : null });
+  } catch (err) { fail(res, err); }
+});
+
+// The case's saved questions and answers, oldest first.
+router.get('/:id/questions', async (req, res) => {
+  try {
+    const c = await loadCase(req, res);
+    if (!c) return;
+    res.json({ questions: await store.listQuestions(c.id) });
   } catch (err) { fail(res, err); }
 });
 

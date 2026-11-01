@@ -232,16 +232,17 @@ async function detachThread(userId, caseId, threadId) {
 /** What deleting a case would take with it, in counts, for the confirmation. */
 async function deletePreview(userId, caseRow) {
   const one = async (sql) => Number((await pool.query(sql, [caseRow.id])).rows[0].n);
-  const [messages, attachments, drafts, approvals, approvedEver, sweeps] = await Promise.all([
+  const [messages, attachments, drafts, approvals, approvedEver, sweeps, questions] = await Promise.all([
     one("SELECT COUNT(*) AS n FROM ef_sources WHERE \"caseId\"=$1 AND kind='message'"),
     one("SELECT COUNT(*) AS n FROM ef_sources WHERE \"caseId\"=$1 AND kind='document'"),
     one("SELECT COUNT(*) AS n FROM ef_drafts WHERE \"caseId\"=$1 AND status <> 'replaced'"),
     one('SELECT COUNT(*) AS n FROM ef_approvals a JOIN ef_drafts d ON d.id=a."draftId" WHERE d."caseId"=$1'),
     one("SELECT COUNT(*) AS n FROM ef_approvals a JOIN ef_drafts d ON d.id=a.\"draftId\" WHERE d.\"caseId\"=$1 AND a.decision='approved'"),
     one('SELECT COUNT(*) AS n FROM ef_sent_sweeps WHERE "caseId"=$1'),
+    one('SELECT COUNT(*) AS n FROM ef_questions WHERE "caseId"=$1'),
   ]);
   const tasks = (caseRow.ledger || []).filter((r) => r.taskId).length;
-  return { messages, attachments, drafts, approvals, approvedEver, sweeps, rows: (caseRow.ledger || []).length, tasks };
+  return { messages, attachments, drafts, approvals, approvedEver, sweeps, questions, rows: (caseRow.ledger || []).length, tasks };
 }
 
 /**
@@ -267,6 +268,7 @@ async function deleteCase(userId, caseRow, { forever = false } = {}) {
         drafts: await q('SELECT * FROM ef_drafts WHERE "caseId"=$1 ORDER BY id'),
         approvals: await q('SELECT a.* FROM ef_approvals a JOIN ef_drafts d ON d.id=a."draftId" WHERE d."caseId"=$1 ORDER BY a.id'),
         sweeps: await q('SELECT * FROM ef_sent_sweeps WHERE "caseId"=$1 ORDER BY id'),
+        questions: await q('SELECT * FROM ef_questions WHERE "caseId"=$1 ORDER BY id'),
       };
       binId = await moveToBin(client, {
         userId, type: 'email-follow-up-case', id: caseRow.id, title: locked[0].title,
@@ -529,6 +531,27 @@ async function freshInbound(userId, threadIds, sinceIso, ownerAddr) {
   return out;
 }
 
+// ---------- saved questions (Summary and Ask) ----------
+
+const QUESTIONS_KEPT = 500; // per case; the oldest go first
+
+/** Save one question and the answer as it was shown, with the source list its [S#] numbers meant at the time. */
+async function addQuestion(userId, caseId, q) {
+  const { rows } = await pool.query(
+    `INSERT INTO ef_questions ("caseId","userId",question,answer,sources,cut,"leftOut",model) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, "createdAt"`,
+    [caseId, userId, String(q.question).slice(0, 1000), JSON.stringify(q.answer), JSON.stringify(q.sources || []), JSON.stringify(q.cut || []), JSON.stringify(q.left || []), q.model || null]);
+  await pool.query(
+    `DELETE FROM ef_questions WHERE "caseId"=$1 AND id NOT IN (SELECT id FROM ef_questions WHERE "caseId"=$1 ORDER BY id DESC LIMIT $2)`, [caseId, QUESTIONS_KEPT]);
+  return rows[0];
+}
+
+/** The case's saved questions, oldest first. */
+async function listQuestions(caseId) {
+  const { rows } = await pool.query(
+    `SELECT id, question, answer, sources, cut, "leftOut" AS "left", model, "createdAt" FROM ef_questions WHERE "caseId"=$1 ORDER BY id ASC LIMIT $2`, [caseId, QUESTIONS_KEPT]);
+  return rows;
+}
+
 // ---------- drafts ----------
 
 async function listDrafts(caseId) {
@@ -576,6 +599,7 @@ module.exports = {
   EMAIL_RE, cleanAliases, listCases, clientName, getCase, insertCase, withLedger, patchCase,
   listSources, getSource, addSource, markExtracted,
   attachThread, suggestThreads, previewThread, fetchAttachments, setThreadAside, detachThread, deletePreview, deleteCase, runSentSweep, latestSweep, freshInbound, ownerEmail,
+  addQuestion, listQuestions,
   listDrafts, getDraft, pendingDraftCount, insertDraft, setDraftStatus, addApproval, latestApproval,
   localDate,
 };

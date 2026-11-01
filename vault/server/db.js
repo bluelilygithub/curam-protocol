@@ -1674,6 +1674,23 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ef_sweeps_case ON ef_sent_sweeps ("caseId", id DESC)`);
+    // The questions asked on a case's Summary and Ask tab, with the answer as it was shown and the list of emails its [S#] numbers pointed at then
+    // (so a saved answer still reads correctly after the case changes). Deleted with the case, and kept in its recycle-bin copy.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ef_questions (
+        id          SERIAL PRIMARY KEY,
+        "caseId"    INTEGER NOT NULL REFERENCES ef_cases(id) ON DELETE CASCADE,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        question    TEXT NOT NULL,
+        answer      JSONB NOT NULL,
+        sources     JSONB NOT NULL DEFAULT '[]',
+        cut         JSONB NOT NULL DEFAULT '[]',
+        "leftOut"   JSONB NOT NULL DEFAULT '[]',
+        model       TEXT,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ef_questions_case ON ef_questions ("caseId", id)`);
     // Closing a case (finished, off the list) and setting a thread aside (kept so citations still resolve, but no longer read).
     await client.query(`ALTER TABLE ef_cases ADD COLUMN IF NOT EXISTS "closedAt" TIMESTAMPTZ`);
     await client.query(`ALTER TABLE ef_cases ADD COLUMN IF NOT EXISTS "closeReason" TEXT`);

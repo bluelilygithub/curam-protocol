@@ -344,7 +344,9 @@ function AskPanel({ caseId, usable, locked, state, setState }) {
   const [busy, setBusy] = useState('');
   const [q, setQ] = useState('');
   const [showSources, setShowSources] = useState(false);
-  const [quotesOpen, setQuotesOpen] = useState({}); // turn index -> true while its quotes are shown
+  const [quotesOpen, setQuotesOpen] = useState({}); // turn key -> true while its quotes are shown
+  const [showAll, setShowAll] = useState(false);
+  const SHOWN = 8; // the latest questions shown; the rest sit behind "Show earlier"
   const { summary, turns } = state;
   const sourceIndex = (summary && summary.sources) || (turns.length ? turns[turns.length - 1].sources : []) || [];
 
@@ -362,14 +364,24 @@ function AskPanel({ caseId, usable, locked, state, setState }) {
     const question = q.trim();
     if (question.length < 3) return;
     setBusy('ask');
-    const history = turns.filter((t) => t.answer && t.answer.answer).slice(-4).map((t) => ({ question: t.question, answer: t.answer.answer }));
+    // Only questions asked in this sitting count as the conversation so far; older saved ones are the record, not the context.
+    const history = turns.filter((t) => t.live && t.answer && t.answer.answer).slice(-4).map((t) => ({ question: t.question, answer: t.answer.answer }));
     const r = await withBox('Reading your emails…', `The AI is reading all ${usable} attached item${usable === 1 ? '' : 's'} to answer your question, then checking what it quotes. This can take a minute or two.`, 'Reading the mail and writing the answer',
       () => call(() => api.post(`/api/email-follow-up/${caseId}/ask`, { question, history })));
     setBusy('');
-    if (r.ok) { setQ(''); setState((s) => ({ ...s, turns: [...s.turns, { question, answer: r.data.answer, sources: r.data.sources, cut: r.data.cut, left: r.data.left }] })); }
+    if (r.ok) {
+      setQ('');
+      if (!r.data.saved) toast('The answer could not be saved with the case. Copy it if you want to keep it.', 'error');
+      setState((s) => ({ ...s, turns: [...s.turns, { key: r.data.saved ? `q${r.data.saved.id}` : `n${Date.now()}`, live: true, question, answer: r.data.answer, sources: r.data.sources, cut: r.data.cut, left: r.data.left, model: r.data.answer.model, createdAt: r.data.saved ? r.data.saved.createdAt : new Date().toISOString() }] }));
+    }
   };
   const copy = async (text) => {
     try { await navigator.clipboard.writeText(text); toast('Copied.'); } catch { toast('Copy was blocked by the browser.', 'error'); }
+  };
+  const logText = () => {
+    const nl = String.fromCharCode(10);
+    const src = (t) => (t.sources || []).map((x) => `S${x.n} ${x.label}${x.date ? `, ${new Date(x.date).toLocaleDateString()}` : ''}`).join(nl);
+    return turns.map((t) => [`Q (${new Date(t.createdAt).toLocaleString()}): ${t.question}`, '', t.answer.answer, '', 'Sources:', src(t)].join(nl)).join(`${nl}${nl}----------${nl}${nl}`);
   };
   const summaryText = () => {
     const s = summary.summary;
@@ -381,7 +393,7 @@ function AskPanel({ caseId, usable, locked, state, setState }) {
   return (
     <div className="space-y-5" data-guide="ask" data-tour="ef-ask">
       <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-        The AI reads the {usable} attached email{usable === 1 ? '' : 's'} and readable attachment{usable === 1 ? '' : 's'} together, then answers from them only. Every claim points at its source number; hover a number to see which email. It is not legal advice: check the original wording. Nothing here is saved.
+        The AI reads the {usable} attached email{usable === 1 ? '' : 's'} and readable attachment{usable === 1 ? '' : 's'} together, then answers from them only. Every claim points at its source number; hover a number to see which email. It is not legal advice: check the original wording. Your questions and the answers are saved with this case, so you can come back to them; the summary is made fresh each time and is not saved.
       </p>
 
       <div className="space-y-3">
@@ -393,9 +405,14 @@ function AskPanel({ caseId, usable, locked, state, setState }) {
       </div>
 
       <div className="space-y-3 border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
-        <h3 className="text-sm font-semibold">Ask a question</h3>
-        {turns.map((t, i) => (
-          <div key={i} className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-sm font-semibold">Ask a question</h3>
+          {turns.length > 0 && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{turns.length} saved with this case</span>}
+        </div>
+        {turns.length > SHOWN && !showAll && <Btn small tip={EF_TIPS.showEarlier} onClick={() => setShowAll(true)}>Show {turns.length - SHOWN} earlier question{turns.length - SHOWN === 1 ? '' : 's'}</Btn>}
+        {(showAll ? turns : turns.slice(-SHOWN)).map((t, i) => (
+          <div key={t.key || i} className="space-y-2">
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{new Date(t.createdAt).toLocaleString()}{t.model ? ` · answered by ${t.model}` : ''}</p>
             <p className="text-sm font-medium rounded-xl px-3 py-2" style={{ background: 'var(--color-surface)' }}>{t.question}</p>
             <div className="rounded-xl border p-3 space-y-2" style={CARD}>
               <RichText text={t.answer.answer} index={t.sources} />
@@ -404,8 +421,8 @@ function AskPanel({ caseId, usable, locked, state, setState }) {
               {t.answer.unsure && <div className="text-xs space-y-1" style={{ color: WARN }}><p className="font-medium">Unclear in the emails</p><RichText text={t.answer.unsure} index={t.sources} /></div>}
               {t.answer.citations.length > 0 && (
                 <div className="space-y-1.5">
-                  <Btn small tip={EF_TIPS.showQuotes} onClick={() => setQuotesOpen((q) => ({ ...q, [i]: !q[i] }))}>{quotesOpen[i] ? 'Hide the quotes' : `Show the quotes (${t.answer.citations.length})`}</Btn>
-                  {quotesOpen[i] && t.answer.citations.map((c, k) => <Quote key={k} quote={c.quote} n={c.source} index={t.sources} />)}
+                  <Btn small tip={EF_TIPS.showQuotes} onClick={() => setQuotesOpen((q) => ({ ...q, [t.key || i]: !q[t.key || i] }))}>{quotesOpen[t.key || i] ? 'Hide the quotes' : `Show the quotes (${t.answer.citations.length})`}</Btn>
+                  {quotesOpen[t.key || i] && t.answer.citations.map((c, k) => <Quote key={k} quote={c.quote} n={c.source} index={t.sources} />)}
                 </div>
               )}
               <ReadNotes cut={t.cut} left={t.left} stats={{ droppedQuotes: t.answer.droppedQuotes, truncated: t.answer.truncated }} />
@@ -418,7 +435,7 @@ function AskPanel({ caseId, usable, locked, state, setState }) {
         </Tooltip>
         <div className="flex flex-wrap gap-2">
           <Btn small primary disabled={busy === 'ask' || !usable || q.trim().length < 3} tip={EF_TIPS.askGo} onClick={send}>Ask</Btn>
-          {turns.length > 0 && <Btn small tip={EF_TIPS.askClear} onClick={() => setState((s) => ({ ...s, turns: [] }))}>Clear questions</Btn>}
+          {turns.length > 0 && <Btn small tip={EF_TIPS.copyLog} onClick={() => copy(logText())}>Copy all questions and answers</Btn>}
           {sourceIndex.length > 0 && <Btn small tip={EF_TIPS.showSources} onClick={() => setShowSources(!showSources)}>{showSources ? 'Hide sources' : 'Show sources'}</Btn>}
         </div>
         {locked && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>This case is closed, but you can still read it and ask about it.</p>}
@@ -459,7 +476,16 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
   const [delNote, setDelNote] = useState('');
   const [removing, setRemoving] = useState(''); // threadId waiting for "Yes, remove"
   const [askState, setAskState] = useState({ summary: null, turns: [] }); // kept while you move between tabs; never stored
-  useEffect(() => { setAskState({ summary: null, turns: [] }); }, [caseId]);
+  // The saved questions come back whenever a case is opened, so the log is always there for later reference.
+  useEffect(() => {
+    let live = true;
+    setAskState({ summary: null, turns: [] });
+    api.get(`/api/email-follow-up/${caseId}/questions`).then((r) => r.json()).then((d) => {
+      if (!live || !Array.isArray(d.questions)) return;
+      setAskState((s) => ({ ...s, turns: d.questions.map((x) => ({ key: `q${x.id}`, live: false, question: x.question, answer: x.answer, sources: x.sources || [], cut: x.cut || [], left: x.left || [], model: x.model, createdAt: x.createdAt })) }));
+    }).catch(() => { /* the log stays empty; asking still works */ });
+    return () => { live = false; };
+  }, [caseId]);
 
   const reload = useCallback(async () => {
     try {
@@ -610,7 +636,7 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
         <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: BAD, background: 'var(--color-surface)' }}>
           <h3 className="text-base font-semibold">Delete this case?</h3>
           <p className="text-sm leading-relaxed">
-            This removes {delPreview.messages} message{delPreview.messages === 1 ? '' : 's'}, {delPreview.attachments} attachment{delPreview.attachments === 1 ? '' : 's'}, {delPreview.drafts} draft{delPreview.drafts === 1 ? '' : 's'}, {delPreview.approvals} approval record{delPreview.approvals === 1 ? '' : 's'}, {delPreview.sweeps} Sent check{delPreview.sweeps === 1 ? '' : 's'} and the ledger of {delPreview.rows} row{delPreview.rows === 1 ? '' : 's'}.
+            This removes {delPreview.messages} message{delPreview.messages === 1 ? '' : 's'}, {delPreview.attachments} attachment{delPreview.attachments === 1 ? '' : 's'}, {delPreview.drafts} draft{delPreview.drafts === 1 ? '' : 's'}, {delPreview.approvals} approval record{delPreview.approvals === 1 ? '' : 's'}, {delPreview.sweeps} Sent check{delPreview.sweeps === 1 ? '' : 's'}, {delPreview.questions || 0} saved question{delPreview.questions === 1 ? '' : 's'} and the ledger of {delPreview.rows} row{delPreview.rows === 1 ? '' : 's'}.
             Your Gmail is not touched.{delPreview.tasks ? ` The ${delPreview.tasks} task${delPreview.tasks === 1 ? '' : 's'} made from this case stay in Tasks.` : ''} A copy waits 30 days in Settings, Recycle bin, unless you choose Delete forever below.
           </p>
           {delPreview.approvedEver > 0 && (

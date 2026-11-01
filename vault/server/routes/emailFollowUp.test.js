@@ -466,6 +466,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       await call('PATCH', `/${cQ.id}`, { status: 'closed' });
       r = await call('POST', `/${cQ.id}/ask`, { question: 'Still readable?' });
       ok('a closed case can still be asked about (it only reads)', r.status === 200, r);
+      r = await call('GET', `/${cQ.id}/questions`);
+      ok('every question is saved with the case, with its answer, in order', r.status === 200 && r.body.questions.length === 2 && r.body.questions[0].question === 'What was agreed on price?' && r.body.questions[0].answer.answer === 'fine [S1]' && r.body.questions[1].question === 'Still readable?', r.body);
+      ok('the saved answer keeps the list of emails its numbers meant, without internal ids', r.body.questions[0].sources.length === 1 && r.body.questions[0].sources[0].n === 1 && !('sourceId' in r.body.questions[0].sources[0]) && Array.isArray(r.body.questions[0].left), r.body.questions[0]);
+      r = await call('GET', `/${cQ.id}/questions`, null, userB);
+      ok('another person cannot read my saved questions', r.status === 404, r.status);
+      r = await call('GET', `/${cQ.id}/delete-preview`);
+      ok('the delete preview counts the saved questions', r.body.questions === 2, r.body);
+      const askLedger = JSON.stringify(await ledgerOf(cQ.id));
+      r = await call('DELETE', `/${cQ.id}`, { confirmTitle: 'Ask me' });
+      ok('deleting the case removes its saved questions', r.status === 200 && (await pool.query('SELECT COUNT(*) AS n FROM ef_questions WHERE "caseId"=$1', [cQ.id])).rows[0].n === '0', r.body);
+      const backQ = await recycle.restoreItem(userA, r.body.binId);
+      const qBack = await store.listQuestions(Number(backQ.entityId));
+      ok('restoring it from the recycle bin brings the questions and answers back', qBack.length === 2 && qBack[0].answer.answer === 'fine [S1]' && JSON.stringify(await ledgerOf(Number(backQ.entityId))) === askLedger, qBack.length);
     } finally { caseAsk.summariseCase = realSummarise; caseAsk.askCase = realAsk; }
 
     // ---- the Summary and Ask model is a setting, not a literal ----

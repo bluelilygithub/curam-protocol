@@ -1,7 +1,7 @@
 'use strict';
 
 // How the recycle bin handles an Email Follow-Up case. The delete route (server/routes/emailFollowUp.js) snapshots the case, every source
-// (message and attachment text), every draft with its approval records, and the Sent checks, then calls moveToBin(); this says how to put it
+// (message and attachment text), every draft with its approval records, the Sent checks and the saved Summary and Ask questions, then calls moveToBin(); this says how to put it
 // all back. A case with a lot of attachment text can be big, so the item is allowed more than the default 5 MB (see CASE_BIN_MAX_BYTES);
 // one bigger than that cannot be kept and the person is offered "Delete forever" instead. See docs/recycle-bin.md and docs/email-follow-up.md.
 // Tasks made from a case's rows are the person's own to-dos and are NOT in the snapshot: they were never removed.
@@ -61,6 +61,12 @@ register('email-follow-up-case', {
     for (const w of payload.sweeps || []) {
       // eslint-disable-next-line no-await-in-loop
       await insertRow(db, 'ef_sent_sweeps', w, { userId, override: { caseId } });
+    }
+
+    for (const qn of payload.questions || []) {
+      // The saved answers carry their own source list (labels and dates), not ids, so nothing needs remapping.
+      // eslint-disable-next-line no-await-in-loop
+      await insertRow(db, 'ef_questions', qn, { userId, override: { caseId, answer: json(qn.answer), sources: json(qn.sources ?? []), cut: json(qn.cut ?? []), leftOut: json(qn.leftOut ?? []) } });
     }
 
     if (moved) {
