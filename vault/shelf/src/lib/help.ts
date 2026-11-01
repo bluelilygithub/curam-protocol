@@ -50,6 +50,15 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
+    id: 'launcher',
+    title: 'The quick launcher',
+    body: [
+      'A second shortcut (Ctrl+Alt+Space to start with) opens a grid of the Vault tools you use most. Click one, or press its number, and it opens in your browser.',
+      'In Settings, under Quick launcher, tick the tools you want, choose how many tiles sit across, and record a different shortcut if you like. The Fn key cannot be used in a shortcut because Windows never sees it.',
+      'It opens the address saved under Vault connection, so connect to Vault first.',
+    ],
+  },
+  {
     id: 'trouble',
     title: 'If something is wrong',
     body: [
@@ -68,6 +77,6 @@ export const TOUR_STEPS: TourStep[] = [
   { target: 'cards', title: 'Your recent copies', text: 'Newest first. Click one, or use the arrow keys and the numbers 1 to 9.' },
   { target: 'preview', title: 'See it properly', text: 'Code is coloured, tables become grids, pictures are shown, colours get a swatch.' },
   { target: 'actions', title: 'Send it to Vault', text: 'One click sends the copy to Notes, CRM or Finance, or checks it for private details. Hover a button for what it does.' },
-  { target: 'settings', title: 'Make it yours', text: 'Connect to Vault, change the shortcut and the look, and choose what is never kept.' },
+  { target: 'settings', title: 'Make it yours', text: 'Connect to Vault, change the shortcut and the look, choose the tools in the quick launcher, and choose what is never kept.' },
   { target: 'help', title: 'Help is always here', text: 'This button explains everything in plain words, and the compass inside it takes this tour again.' },
 ];

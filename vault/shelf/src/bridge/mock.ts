@@ -81,6 +81,7 @@ export function createMockBridge(): Bridge {
     async deleteClip(id) { data = { ...data, metas: data.metas.filter((c) => c.id !== id) }; emit('clips_changed'); },
     async clearHistory() { data = { ...data, metas: [] }; emit('clips_changed'); },
     async hide() { /* the page stays; a real shell hides the window */ },
+    async openPage(path) { if (settings.baseUrl) window.open(settings.baseUrl + path, '_blank', 'noopener'); },
     async verify() { await wait(80); return verifyResult(); },
     async getSettings() { return { ...settings }; },
     async saveSettings(patch) { settings = { ...settings, ...patch, actions: { ...settings.actions, ...(patch.actions ?? {}) } }; persist(); return { ...settings }; },

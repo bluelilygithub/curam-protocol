@@ -28,7 +28,11 @@ internal sealed class ShelfWindow : Form
     private readonly string _userData;
     private readonly string? _browserArgs;
     private readonly string _query;
+    private readonly bool _launcher;
     private WebView2? _view;
+
+    /// <summary>True for the quick launcher (a smaller, centred window of tool tiles) rather than the clipboard shelf.</summary>
+    public bool IsLauncher => _launcher;
 
     /// <summary>Completes when the page has loaded and drawn its first cards.</summary>
     public TaskCompletionSource<bool> Ready { get; } = new();
@@ -43,9 +47,9 @@ internal sealed class ShelfWindow : Form
     /// <summary>Run a script in the page and return its JSON result (used by the self-test; nothing else calls this).</summary>
     public async Task<string> EvalAsync(string js) => _view?.CoreWebView2 is { } core ? await core.ExecuteScriptAsync(js) : "null";
 
-    public ShelfWindow(Bridge bridge, string distFolder, string userDataFolder, string? browserArgs = null, string query = "")
+    public ShelfWindow(Bridge bridge, string distFolder, string userDataFolder, string? browserArgs = null, string query = "", bool launcher = false, int launcherTiles = 0, int launcherColumns = 4)
     {
-        _bridge = bridge; _dist = distFolder; _userData = userDataFolder; _browserArgs = browserArgs ?? DefaultBrowserArgs; _query = query;
+        _bridge = bridge; _dist = distFolder; _userData = userDataFolder; _browserArgs = browserArgs ?? DefaultBrowserArgs; _query = query; _launcher = launcher;
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         TopMost = true;
@@ -53,8 +57,18 @@ internal sealed class ShelfWindow : Form
         KeyPreview = false;
         BackColor = SystemColors.Control;
         var area = Screen.FromPoint(Cursor.Position).WorkingArea;
-        int w = Math.Min(area.Width - 24, 1600), h = 400;
-        Bounds = new Rectangle(area.Left + (area.Width - w) / 2, area.Bottom - h - 12, w, h);
+        if (launcher)
+        {
+            // sized to the tiles chosen (about 210 x 135 px each, plus the heading and hint line), so four tiles do not float in an empty window
+            int cols = Math.Max(1, launcherColumns), rows = Math.Max(1, (launcherTiles + cols - 1) / cols);
+            int lw = Math.Min(area.Width - 24, Math.Clamp(cols * 215 + 60, 480, 1100)), lh = Math.Min(area.Height - 24, Math.Clamp(120 + rows * 135, 280, 640));
+            Bounds = new Rectangle(area.Left + (area.Width - lw) / 2, area.Top + (area.Height - lh) / 2, lw, lh);
+        }
+        else
+        {
+            int w = Math.Min(area.Width - 24, 1600), h = 400;
+            Bounds = new Rectangle(area.Left + (area.Width - w) / 2, area.Bottom - h - 12, w, h);
+        }
         Shown += (_, _) => MsToWindowShown = SinceOpen.ElapsedMilliseconds;
     }
 
@@ -131,7 +145,7 @@ internal sealed class ShelfWindow : Form
         {
             for (int i = 0; i < 100; i++)
             {
-                string n = await core.ExecuteScriptAsync("document.querySelectorAll('[role=option]').length");
+                string n = await core.ExecuteScriptAsync(_launcher ? "document.querySelectorAll('[data-launcher-ready]').length" : "document.querySelectorAll('[role=option]').length");
                 if (int.TryParse(n, out int cards) && cards > 0) { Mark("cardsDrawn"); Ready.TrySetResult(true); return; }
                 await Task.Delay(30);
             }

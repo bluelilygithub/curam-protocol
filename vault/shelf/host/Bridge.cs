@@ -41,15 +41,20 @@ internal sealed class Bridge
     private readonly ClipboardMonitor _monitor;
     private readonly VaultClient _vault;
     private readonly Func<string, bool> _applyHotkey;
+    private readonly Func<string, bool> _applyLauncherHotkey;
+    private readonly Action<string> _openUrl;
 
     /// <summary>The page asked the shell to hide the tray (Esc, or after sending to Vault).</summary>
     public event Action? HideRequested;
     /// <summary>The list changed because of something the page did (delete, clear); the page is told to reload.</summary>
     public event Action? ClipsChanged;
 
-    public Bridge(ClipStore store, SettingsStore settings, CredentialStore credentials, StartupRegistration startup, ClipboardMonitor monitor, VaultClient vault, Func<string, bool> applyHotkey)
+    public Bridge(ClipStore store, SettingsStore settings, CredentialStore credentials, StartupRegistration startup, ClipboardMonitor monitor, VaultClient vault, Func<string, bool> applyHotkey,
+        Func<string, bool>? applyLauncherHotkey = null, Action<string>? openUrl = null)
     {
         _store = store; _settings = settings; _credentials = credentials; _startup = startup; _monitor = monitor; _vault = vault; _applyHotkey = applyHotkey;
+        _applyLauncherHotkey = applyLauncherHotkey ?? (_ => true);
+        _openUrl = openUrl ?? (url => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }));
     }
 
     private static JsonObject Meta(ClipRecord c)
@@ -86,6 +91,11 @@ internal sealed class Bridge
         {
             // another program already owns that shortcut: keep the one that works
             next.Hotkey = before.Hotkey; _applyHotkey(before.Hotkey); _settings.Save();
+            problems.Add("Another program is already using that shortcut. Try a different one.");
+        }
+        if (!string.Equals(next.LauncherHotkey, before.LauncherHotkey, StringComparison.Ordinal) && !_applyLauncherHotkey(next.LauncherHotkey))
+        {
+            next.LauncherHotkey = before.LauncherHotkey; _applyLauncherHotkey(before.LauncherHotkey); _settings.Save();
             problems.Add("Another program is already using that shortcut. Try a different one.");
         }
         if (next.StartOnBoot != before.StartOnBoot) { try { _startup.Set(next.StartOnBoot); } catch (Exception e) when (e is UnauthorizedAccessException or System.Security.SecurityException) { next.StartOnBoot = before.StartOnBoot; _settings.Save(); problems.Add("Windows would not let this be changed."); } }
@@ -143,6 +153,15 @@ internal sealed class Bridge
         return outcome.ToJson();
     }
 
+    /// <summary>The quick launcher: open a Vault page in the default browser, then close the launcher. The address is built here from the saved Vault address.</summary>
+    private void OpenPage(string? path)
+    {
+        if (string.IsNullOrEmpty(_settings.Current.BaseUrl)) throw new InvalidOperationException("Enter your Vault address in the shelf's Settings first.");
+        string url = PageLink.Build(_settings.Current.BaseUrl, path) ?? throw new InvalidOperationException("That page address is not allowed.");
+        _openUrl(url);
+        HideRequested?.Invoke();
+    }
+
     /// <summary>Handle one message from the page that needs no waiting. The Vault commands are answered by <see cref="HandleAsync"/>.</summary>
     public string? Handle(string json)
     {
@@ -159,6 +178,7 @@ internal sealed class Bridge
                 "clear_history" => Run(() => { _store.Clear(); ClipsChanged?.Invoke(); }),
                 "copy_clip" => Run(() => { if (args["id"]?.GetValue<string>() is { } cid && _store.Get(cid) is { } c) ClipboardWriter.CopyBack(_store, c, _monitor); }),
                 "hide_shelf" => Run(() => HideRequested?.Invoke()),
+                "open_page" => Run(() => OpenPage(args["path"]?.GetValue<string>())),
                 _ when AsyncCommands.Contains(command) => throw new InvalidOperationException("That command needs HandleAsync."),
                 _ => throw new InvalidOperationException($"Unknown command: {command}"),
             };

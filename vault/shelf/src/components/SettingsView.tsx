@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ACTION_IDS, type ActionId, type Bridge, type Settings, type VerifyResult } from '../bridge/types';
 import { HOTKEY_PROBLEM_TEXT, hotkeyFromEvent, hotkeyProblem } from '../lib/hotkey';
 import { ACTION_LABELS, AUTO_CLEAR_CHOICES, DEFAULT_SETTINGS, RETENTION_MAX, RETENTION_MIN, clampRetention, normalizeAppName, normalizeBaseUrl } from '../lib/settings';
+import { COLUMNS_MAX, COLUMNS_MIN, DEFAULT_LAUNCHER_HOTKEY, LAUNCHER_GROUPS, toggleTile } from '../lib/launcher';
 import { FONT_LIST, THEME_LIST } from '../lib/theme';
 import { TIPS } from '../lib/tips';
 import Icon from './Icon';
@@ -41,7 +42,7 @@ function Toggle({ label, hint, tip, checked, onChange }: { label: string; hint?:
 }
 
 /** Press "Record", then the new shortcut. Escape cancels. The shortcut only counts if it passes the same rules the shell enforces. */
-function HotkeyRecorder({ value, onChange }: { value: string; onChange: (hotkey: string) => void }) {
+function HotkeyRecorder({ value, onChange, defaultValue = DEFAULT_SETTINGS.hotkey, tip = TIPS.recordShortcut, resetTip = TIPS.resetShortcut }: { value: string; onChange: (hotkey: string) => void; defaultValue?: string; tip?: string; resetTip?: string }) {
   const [recording, setRecording] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [heard, setHeard] = useState<string | null>(null);
@@ -66,8 +67,8 @@ function HotkeyRecorder({ value, onChange }: { value: string; onChange: (hotkey:
         <kbd className={`px-2.5 py-1 rounded-lg border text-sm font-mono ${recording ? 'border-shelf-accent text-shelf-accent animate-pulse' : 'border-shelf-line'}`} aria-live="polite">
           {recording ? (heard ? `${heard}…` : 'Press the new shortcut…') : value}
         </kbd>
-        <Tooltip text={TIPS.recordShortcut}><button type="button" onClick={() => { setRecording((r) => !r); setProblem(null); setHeard(null); }} className="px-3 py-1 rounded-lg text-xs border border-shelf-line hover:opacity-70 transition-opacity">{recording ? 'Cancel' : 'Record'}</button></Tooltip>
-        {value !== DEFAULT_SETTINGS.hotkey && !recording && <Tooltip text={TIPS.resetShortcut}><button type="button" onClick={() => onChange(DEFAULT_SETTINGS.hotkey)} className="text-xs text-shelf-accent hover:opacity-70 transition-opacity">Reset to {DEFAULT_SETTINGS.hotkey}</button></Tooltip>}
+        <Tooltip text={tip}><button type="button" onClick={() => { setRecording((r) => !r); setProblem(null); setHeard(null); }} className="px-3 py-1 rounded-lg text-xs border border-shelf-line hover:opacity-70 transition-opacity">{recording ? 'Cancel' : 'Record'}</button></Tooltip>
+        {value !== defaultValue && !recording && <Tooltip text={resetTip}><button type="button" onClick={() => onChange(defaultValue)} className="text-xs text-shelf-accent hover:opacity-70 transition-opacity">Reset to {defaultValue}</button></Tooltip>}
       </div>
       {problem && <p className="m-0 text-xs text-shelf-danger" role="alert">{problem}</p>}
     </div>
@@ -172,6 +173,30 @@ export default function SettingsView({ bridge, settings, verify, onSettings, onV
             <div className="space-y-1"><div className="text-xs text-shelf-muted">Open the shelf with</div><HotkeyRecorder value={settings.hotkey} onChange={(hotkey) => void save({ hotkey })} /></div>
             <Toggle label="Start with Windows" hint="Opens quietly in the tray when you sign in." tip={TIPS.startWithWindows} checked={settings.startOnBoot} onChange={(startOnBoot) => void save({ startOnBoot })} />
             <Toggle label="Close the shelf after sending to Vault" tip={TIPS.closeAfterSend} checked={settings.autoDismiss} onChange={(autoDismiss) => void save({ autoDismiss })} />
+          </Section>
+
+          <Section title="Quick launcher">
+            <p className="m-0 text-xs text-shelf-muted">A second shortcut that opens a grid of the Vault tools you use most. Click one and it opens in your browser.</p>
+            <div className="space-y-1"><div className="text-xs text-shelf-muted">Open the launcher with</div><HotkeyRecorder value={settings.launcherHotkey} onChange={(launcherHotkey) => void save({ launcherHotkey })} defaultValue={DEFAULT_LAUNCHER_HOTKEY} tip={TIPS.launcherShortcut} resetTip={TIPS.resetLauncherShortcut} /></div>
+            <label className="flex items-center justify-between gap-3 text-sm">
+              <span>Tiles across</span>
+              <Tooltip text={TIPS.launcherColumns}><select value={settings.launcherColumns} onChange={(e) => void save({ launcherColumns: Number(e.target.value) })} className="px-2 py-1 rounded-lg border border-shelf-line bg-shelf-card/80 text-sm">
+                {Array.from({ length: COLUMNS_MAX - COLUMNS_MIN + 1 }, (_, i) => COLUMNS_MIN + i).map((n) => <option key={n} value={n}>{n}</option>)}
+              </select></Tooltip>
+            </label>
+            <div className="space-y-2.5">
+              <div className="text-xs text-shelf-muted">Tools to show ({settings.launcherTiles.length} chosen)</div>
+              {LAUNCHER_GROUPS.map((g) => (
+                <div key={g.id} className="space-y-1.5">
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-shelf-muted">{g.label}</div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                    {g.tiles.map((t) => (
+                      <Toggle key={t.id} label={t.label} tip={TIPS.launcherTileSwitch(t.label)} checked={settings.launcherTiles.includes(t.id)} onChange={(on) => void save({ launcherTiles: toggleTile(settings.launcherTiles, t.id, on) })} />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </Section>
 
           <Section title="Vault connection">

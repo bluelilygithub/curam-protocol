@@ -39,6 +39,13 @@ export const TIPS = {
   removeExcluded: (name: string) => `Keep copies from ${name} again.`,
   clearHistory: 'Delete every copy on the shelf. This cannot be undone.',
   confirmClear: 'Yes deletes everything on the shelf for good.',
+  // quick launcher
+  launcherShortcut: 'Click, then press the shortcut that opens the quick launcher. It needs Ctrl, Alt or Win plus a key. Esc cancels. (The Fn key cannot be used: Windows never sees it.)',
+  resetLauncherShortcut: 'Go back to the usual launcher shortcut.',
+  launcherColumns: 'How many tiles sit side by side in the launcher.',
+  launcherTileSwitch: (label: string) => `Show or hide ${label} in the quick launcher.`,
+  launcherTile: (label: string) => `Open ${label} in Vault, in your browser.`,
+  launcherClose: 'Close the launcher. (Esc)',
   actionSwitch: (label: string) => `Show or hide the ${label.replace(/^\S+\s/, '')} button under a preview.`,
 } as const;
 

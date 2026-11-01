@@ -72,6 +72,7 @@ export function createNativeBridge(native: ShelfNative): Bridge {
     async deleteClip(id) { await call('delete_clip', { id }); },
     async clearHistory() { await call('clear_history'); },
     async hide() { await call('hide_shelf'); },
+    async openPage(path) { await call('open_page', { path }); },
     async verify() {
       try { return asVerify(await call('verify')); } catch (e) { return { ok: false, scopes: [], unavailable: [], error: words(e) }; }
     },

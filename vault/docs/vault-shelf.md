@@ -136,6 +136,17 @@ Same conventions as Finance and Video Tools, scaled to a small tray window:
 - **Not built: a guide chat.** The other tools have one (`/api/<tool>-tutor`), but it needs the page to call Vault, and here only the shell does. If wanted later it would be a bridge command that sends the question through `VaultClient`.
 - **When a button, setting or screen changes, update `tips.ts` and `help.ts` together.** `npm test` in `vault/shelf` fails if a tab or send button has no tip, a control is not wrapped in a Tooltip, a plain `title` creeps back, a help section is missing, or a tour step points at nothing.
 
+## Quick launcher (second shortcut)
+
+A second global shortcut, **Ctrl+Alt+Space** by default, opens a centred window of tiles for the Vault tools the person uses most; a click (or 1-9, or Enter on a tile) opens that tool in the default browser and closes the launcher. **Ctrl+Fn cannot be used:** Windows never sees the Fn key, so it is not offered.
+
+- **Same page, second window.** `ShelfWindow` is created with `launcher: true` and the page address gets `&view=launcher`; `main.tsx` then draws `components/LauncherView.tsx` instead of the shelf. Pressing the other shortcut while one window is open swaps to the other. The window is sized from the number of tiles and columns (`ShelfWindow` constructor).
+- **Tiles come from Vault's navigation catalog** (`client/src/config/appNavigation.js`, read through the `@vault-client` alias in `src/lib/launcher.ts`), so a new tool in the catalog is offered with no change here. External links are left out. Tiles are drawn in catalog order.
+- **Settings -> Quick launcher** (the shelf's Settings screen): record the shortcut, tiles across (2 to 6), tick the tools. Stored by the shell in `settings.json` (`launcherHotkey`, `launcherTiles` = nav ids, `launcherColumns`), per PC, not on the server. Defaults: CRM, Finance, Shares, YouTube, 4 across.
+- **Opening a page.** Bridge command `open_page { path }`: the shell builds the address from the saved Vault address plus the path (`Vault/PageLink.cs`, plain in-site paths only, otherwise refused), starts the browser and hides the launcher. It needs the Vault address saved under Vault connection (not the key).
+- **Limits.** The launcher does not know which tools the account may use: a tile for a tool switched off for the person opens Vault's own "not available" page. It is a per-PC setting, not an admin or workspace one. Tiles use a letter badge, not Vault's icons. Not tried on the installed Windows build yet: rebuild the host (`dotnet publish`, see `host/README.md`) and reinstall.
+- Tests: `npm test` in `vault/shelf` (`tests/launcher.test.ts`) and `dotnet test` in `host.tests` (`LauncherTests.cs`).
+
 ## Decisions made with the owner (so they are not re-opened)
 
 - Server first, with real endpoints, before any app code.

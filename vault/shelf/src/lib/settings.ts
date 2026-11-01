@@ -2,6 +2,7 @@
 
 import { ACTION_IDS, ACTION_SCOPE, type ActionId, type Settings, type VerifyResult } from '../bridge/types';
 import { DEFAULT_HOTKEY } from './hotkey';
+import { DEFAULT_LAUNCHER_COLUMNS, DEFAULT_LAUNCHER_HOTKEY, DEFAULT_LAUNCHER_TILES } from './launcher';
 
 export const RETENTION_MIN = 10;
 export const RETENTION_MAX = 200;
@@ -20,6 +21,9 @@ export const DEFAULT_SETTINGS: Settings = {
   autoClearHours: 0,
   excludedApps: [],
   actions: { finance: true, notes: true, redact: true, crm: true },
+  launcherHotkey: DEFAULT_LAUNCHER_HOTKEY,
+  launcherTiles: DEFAULT_LAUNCHER_TILES,
+  launcherColumns: DEFAULT_LAUNCHER_COLUMNS,
 };
 
 export const clampRetention = (n: number) => Math.min(RETENTION_MAX, Math.max(RETENTION_MIN, Math.round(Number.isFinite(n) ? n : DEFAULT_SETTINGS.retentionItems)));

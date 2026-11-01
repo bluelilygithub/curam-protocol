@@ -18,6 +18,11 @@ internal sealed class AppSettings
     public int AutoClearHours { get; set; }
     public List<string> ExcludedApps { get; set; } = new();
     public Dictionary<string, bool> Actions { get; set; } = new() { ["finance"] = true, ["notes"] = true, ["redact"] = true, ["crm"] = true };
+    /// <summary>The second shortcut: opens a grid of Vault tools (the quick launcher). Ctrl+Fn cannot be used: Windows never sees the Fn key.</summary>
+    public string LauncherHotkey { get; set; } = "Ctrl+Alt+Space";
+    /// <summary>Nav ids (client/src/config/appNavigation.js) shown as tiles, in the order the page lists them. Which ids exist is Vault's table, held by the page.</summary>
+    public List<string> LauncherTiles { get; set; } = new() { "clients", "finance", "shares", "youtube" };
+    public int LauncherColumns { get; set; } = 4;
 }
 
 /// <summary>The rules for each setting, the same ones the page applies (src/lib/settings.ts and hotkey.ts), because the shell must not trust the page.</summary>
@@ -36,6 +41,11 @@ internal static class SettingsRules
     public static bool IsFontName(string s) => System.Text.RegularExpressions.Regex.IsMatch(s, @"^[A-Za-z][A-Za-z0-9 ]{0,39}$");
 
     public static int ClampRetention(int n) => Math.Min(RetentionMax, Math.Max(RetentionMin, n));
+
+    public const int ColumnsMin = 2, ColumnsMax = 6, TilesMax = 80;
+    public static int ClampColumns(int n) => Math.Min(ColumnsMax, Math.Max(ColumnsMin, n));
+    /// <summary>A nav id is a plain word (notes, clientProjects, habits-mission). The page opens the tool by id, so nothing but a short word is accepted.</summary>
+    public static bool IsTileId(string s) => System.Text.RegularExpressions.Regex.IsMatch(s, @"^[A-Za-z][A-Za-z0-9-]{0,39}$");
 
     /// <summary>null when the shortcut can be used, otherwise a sentence saying why not.</summary>
     public static string? HotkeyProblem(string hotkey)
@@ -117,6 +127,8 @@ internal sealed class SettingsStore
         ["ignorePasswords"] = s.IgnorePasswords, ["retentionItems"] = s.RetentionItems, ["autoClearHours"] = s.AutoClearHours,
         ["excludedApps"] = new JsonArray(s.ExcludedApps.Select(a => (JsonNode)JsonValue.Create(a)!).ToArray()),
         ["actions"] = new JsonObject(s.Actions.Select(kv => new KeyValuePair<string, JsonNode?>(kv.Key, JsonValue.Create(kv.Value)))),
+        ["launcherHotkey"] = s.LauncherHotkey, ["launcherColumns"] = s.LauncherColumns,
+        ["launcherTiles"] = new JsonArray(s.LauncherTiles.Select(t => (JsonNode)JsonValue.Create(t)!).ToArray()),
         };
         if (hasKey is bool k) o["hasKey"] = k;
         return o;
@@ -133,6 +145,7 @@ internal sealed class SettingsStore
         {
             Hotkey = start.Hotkey, Theme = start.Theme, Font = start.Font, StartOnBoot = start.StartOnBoot, AutoDismiss = start.AutoDismiss, BaseUrl = start.BaseUrl, IgnorePasswords = start.IgnorePasswords,
             RetentionItems = start.RetentionItems, AutoClearHours = start.AutoClearHours, ExcludedApps = new List<string>(start.ExcludedApps), Actions = new Dictionary<string, bool>(start.Actions),
+            LauncherHotkey = start.LauncherHotkey, LauncherTiles = new List<string>(start.LauncherTiles), LauncherColumns = start.LauncherColumns,
         };
         bool? Bool(string k) => patch[k] is JsonValue v && v.TryGetValue<bool>(out var b) ? b : null;
         int? Int(string k) => patch[k] is JsonValue v && v.TryGetValue<int>(out var n) ? n : null;
@@ -141,6 +154,25 @@ internal sealed class SettingsStore
         if (Str("hotkey") is { } hk) { var p = SettingsRules.HotkeyProblem(hk); if (p is null) s.Hotkey = hk; else problems.Add(p); }
         if (Str("theme") is { } th) { if (SettingsRules.IsThemeId(th)) s.Theme = th; else problems.Add("That theme name is not valid."); }
         if (Str("font") is { } fo) { if (SettingsRules.IsFontName(fo)) s.Font = fo; else problems.Add("That font name is not valid."); }
+        if (Str("launcherHotkey") is { } lk)
+        {
+            var p = SettingsRules.HotkeyProblem(lk);
+            if (p is not null) problems.Add(p);
+            else if (string.Equals(lk, s.Hotkey, StringComparison.OrdinalIgnoreCase)) problems.Add("That is the shortcut that opens the shelf. Choose a different one for the launcher.");
+            else s.LauncherHotkey = lk;
+        }
+        if (Int("launcherColumns") is { } lc) s.LauncherColumns = SettingsRules.ClampColumns(lc);
+        if (patch["launcherTiles"] is JsonArray tiles)
+        {
+            var list = new List<string>();
+            foreach (var n in tiles)
+            {
+                string? id = n is JsonValue v && v.TryGetValue<string>(out var t) ? t : null;
+                if (id is null || !SettingsRules.IsTileId(id)) { problems.Add("A launcher tile name was not valid."); continue; }
+                if (!list.Contains(id)) list.Add(id);
+            }
+            s.LauncherTiles = list.Take(SettingsRules.TilesMax).ToList();
+        }
         if (Bool("startOnBoot") is { } sb) s.StartOnBoot = sb;
         if (Bool("autoDismiss") is { } ad) s.AutoDismiss = ad;
         if (Bool("ignorePasswords") is { } ip) s.IgnorePasswords = ip;

@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import LauncherView from './components/LauncherView';
 import './fonts';
 import './index.css';
 import { applyLook, lookFromSearch } from './lib/theme';
@@ -11,4 +12,4 @@ applyLook(lookFromSearch(window.location.search));
 // Hosted by the native shell, the window itself is the translucent (Mica) surface, so the page must not paint an opaque background over it.
 if (window.shelfNative) document.documentElement.dataset.hosted = 'true';
 
-createRoot(document.getElementById('root') as HTMLElement).render(<StrictMode><App /></StrictMode>);
+createRoot(document.getElementById('root') as HTMLElement).render(<StrictMode>{new URLSearchParams(window.location.search).get('view') === 'launcher' ? <LauncherView /> : <App />}</StrictMode>);

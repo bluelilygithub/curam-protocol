@@ -76,6 +76,10 @@ export interface Settings {
   excludedApps: string[];
   /** Which quick-action buttons the person wants to see. */
   actions: Record<ActionId, boolean>;
+  /** The quick launcher: its own shortcut, which Vault pages show as tiles (nav ids from Vault's catalog) and how many tiles across. */
+  launcherHotkey: string;
+  launcherTiles: string[];
+  launcherColumns: number;
 }
 
 export type ShellEvent = 'clips_changed' | 'show';
@@ -93,6 +97,8 @@ export interface Bridge {
   clearHistory(): Promise<void>;
   /** Hide the tray and give the previous window back its focus. */
   hide(): Promise<void>;
+  /** Quick launcher: open a Vault page (a path such as /clients) in the browser and close the launcher. The shell builds the address from the saved Vault address. */
+  openPage(path: string): Promise<void>;
   /** Ask Vault what the saved key may do right now. */
   verify(): Promise<VerifyResult>;
   getSettings(): Promise<Settings>;

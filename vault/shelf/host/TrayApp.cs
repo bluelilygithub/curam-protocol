@@ -17,11 +17,12 @@ internal sealed class TrayApp : ApplicationContext
     private readonly string? _browserArgs;
     private readonly NotifyIcon _tray;
     private readonly HotkeyWindow _hotkey = new();
+    private readonly HotkeyWindow _launcherKey = new();
     private readonly FocusKeeper _focus = new();
     private readonly Icon _icon;
     private readonly System.Windows.Forms.Timer _pruneTimer = new() { Interval = 10 * 60 * 1000 };
     private readonly ToolStripMenuItem _pauseItem;
-    private string _activeHotkey;
+    private string _activeHotkey, _activeLauncherHotkey;
     private bool _opening;
 
     public ClipStore Store { get; }
@@ -34,6 +35,7 @@ internal sealed class TrayApp : ApplicationContext
     public ShelfWindow? Window { get; private set; }
     public bool TrimAfterClose { get; set; } = true;
     public bool HotkeyRegistered { get; private set; }
+    public bool LauncherHotkeyRegistered { get; private set; }
     public (bool ok, string how) LastActivate { get; private set; }
     public (bool ok, string how) LastRestore { get; private set; }
 
@@ -47,12 +49,14 @@ internal sealed class TrayApp : ApplicationContext
         Monitor = new ClipboardMonitor(Store, () => Settings.Current);
         AppLog.Write(Monitor.Listening ? "clipboard listener registered" : "clipboard listener could NOT be registered");
         Vault = new VaultClient();
-        Bridge = new Bridge(Store, Settings, Credentials, Startup, Monitor, Vault, ApplyHotkey);
+        Bridge = new Bridge(Store, Settings, Credentials, Startup, Monitor, Vault, ApplyHotkey, ApplyLauncherHotkey);
 
         _icon = MakeIcon();
         _activeHotkey = Settings.Current.Hotkey;
+        _activeLauncherHotkey = Settings.Current.LauncherHotkey;
         var menu = new ContextMenuStrip();
         menu.Items.Add("Open", null, async (_, _) => await OpenAsync());
+        menu.Items.Add("Quick launcher", null, async (_, _) => await ToggleAsync(launcher: true));
         menu.Items.Add("Settings", null, async (_, _) => await OpenAsync());      // opens the shelf; it will go straight to Settings once that is wired
         _pauseItem = new ToolStripMenuItem("Pause monitoring") { CheckOnClick = true };
         _pauseItem.CheckedChanged += (_, _) => { Monitor.Paused = _pauseItem.Checked; UpdateTooltip(); };
@@ -72,6 +76,12 @@ internal sealed class TrayApp : ApplicationContext
             // the commonest reason for "the shortcut does nothing": say so, where it will be seen
             _tray.ShowBalloonTip(10000, "Vault Shelf", $"{_activeHotkey} is already used by another program, so it will not open the shelf. Click this tray icon instead, or choose another shortcut in the shelf's Settings.", ToolTipIcon.Warning);
         }
+
+        _launcherKey.Pressed += async () => await ToggleAsync(launcher: true);
+        LauncherHotkeyRegistered = _launcherKey.Register(_activeLauncherHotkey);
+        AppLog.Write(LauncherHotkeyRegistered ? $"launcher shortcut {_activeLauncherHotkey} registered" : $"launcher shortcut {_activeLauncherHotkey} REFUSED: another program already uses it");
+        if (!LauncherHotkeyRegistered)
+            _tray.ShowBalloonTip(10000, "Vault Shelf", $"{_activeLauncherHotkey} is already used by another program, so it will not open the quick launcher. Choose another shortcut in the shelf's Settings.", ToolTipIcon.Warning);
 
         Monitor.Processed += outcome => { if (outcome.Captured) NotifyPage("clips_changed"); };
         Bridge.ClipsChanged += () => NotifyPage("clips_changed");
@@ -95,6 +105,14 @@ internal sealed class TrayApp : ApplicationContext
         return true;
     }
 
+    /// <summary>Change the quick launcher's shortcut. False (and the old one kept) when another program already uses it.</summary>
+    public bool ApplyLauncherHotkey(string hotkey)
+    {
+        if (!_launcherKey.Register(hotkey)) { LauncherHotkeyRegistered = _launcherKey.Register(_activeLauncherHotkey); return false; }
+        _activeLauncherHotkey = hotkey; LauncherHotkeyRegistered = true;
+        return true;
+    }
+
     private void NotifyPage(string name) => Window?.PostEvent(name);
 
     private void ConfirmClear()
@@ -104,12 +122,19 @@ internal sealed class TrayApp : ApplicationContext
         NotifyPage("clips_changed");
     }
 
-    public async Task ToggleAsync()
+    /// <summary>Open the window asked for, or close it if it is already showing. Pressing the other shortcut swaps to the other window.</summary>
+    public async Task ToggleAsync(bool launcher = false)
     {
-        if (Window is not null) Close(); else await OpenAsync();
+        if (Window is not null)
+        {
+            bool same = Window.IsLauncher == launcher;
+            Close();
+            if (same) return;
+        }
+        await OpenAsync(launcher);
     }
 
-    public async Task OpenAsync()
+    public async Task OpenAsync(bool launcher = false)
     {
         if (Window is not null || _opening) return;
         _opening = true;
@@ -118,7 +143,7 @@ internal sealed class TrayApp : ApplicationContext
             _focus.Remember();                                  // before any window of ours exists
             // the chosen theme and font go in the page address, so the first paint already wears them (no flash of the default)
             var look = Settings.Current;
-            var w = new ShelfWindow(Bridge, _dist, _userData, _browserArgs, $"?theme={Uri.EscapeDataString(look.Theme)}&font={Uri.EscapeDataString(look.Font)}");
+            var w = new ShelfWindow(Bridge, _dist, _userData, _browserArgs, $"?theme={Uri.EscapeDataString(look.Theme)}&font={Uri.EscapeDataString(look.Font)}{(launcher ? "&view=launcher" : "")}", launcher, look.LauncherTiles.Count, look.LauncherColumns);
             Window = w;
             w.Show();
             LastActivate = _focus.Activate(w.Handle);
@@ -159,6 +184,7 @@ internal sealed class TrayApp : ApplicationContext
         _tray.Dispose();
         Monitor.Dispose();
         _hotkey.Dispose();
+        _launcherKey.Dispose();
         Store.Dispose();
         Vault.Dispose();
         _icon.Dispose();
