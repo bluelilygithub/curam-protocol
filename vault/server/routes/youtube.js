@@ -34,6 +34,7 @@ const { watchVideo } = require('../services/geminiVideo');
 const insightsLib = require('../services/youtubeInsights');
 const mainPointsLib = require('../services/youtubeMainPoints');
 const labelsLib = require('../services/youtubeLabels');
+const { decodeHtml, decodeFields } = require('../services/htmlText');
 const { aiLimiter } = require('../middleware/aiRateLimit');
 
 const router = express.Router();
@@ -129,9 +130,9 @@ async function enrichAndMapItems(items, key) {
       const s  = item.snippet;
       return {
         id,
-        title:       s.title,
-        description: s.description,
-        channel:     s.channelTitle,
+        title:       decodeHtml(s.title),
+        description: decodeHtml(s.description),
+        channel:     decodeHtml(s.channelTitle),
         channelId:   s.channelId,
         publishedAt: s.publishedAt,
         thumbnail:   s.thumbnails?.medium?.url || s.thumbnails?.default?.url,
@@ -257,9 +258,9 @@ router.get('/trending', async (req, res) => {
     // videos.list(chart=mostPopular) already returns duration/viewCount in one call — no enrichment call needed.
     const videos = items.map((v) => ({
       id:          v.id,
-      title:       v.snippet?.title,
-      description: v.snippet?.description,
-      channel:     v.snippet?.channelTitle,
+      title:       decodeHtml(v.snippet?.title),
+      description: decodeHtml(v.snippet?.description),
+      channel:     decodeHtml(v.snippet?.channelTitle),
       channelId:   v.snippet?.channelId,
       publishedAt: v.snippet?.publishedAt,
       thumbnail:   v.snippet?.thumbnails?.medium?.url || v.snippet?.thumbnails?.default?.url,
@@ -498,7 +499,7 @@ router.get('/favourites', async (req, res) => {
        ORDER BY "createdAt" DESC`,
       [req.user.id]
     );
-    res.json(rows);
+    res.json(decodeFields(rows, ['title', 'channel']));
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
@@ -514,7 +515,7 @@ router.post('/favourites', async (req, res) => {
       `INSERT INTO youtube_favourites ("userId", "videoId", title, channel, thumbnail, duration, "viewCount", "publishedAt", category, tags)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        ON CONFLICT ("userId", "videoId") DO NOTHING`,
-      [req.user.id, videoId, title, channel || null, thumbnail || null, duration || null, viewCount || null, publishedAt || null, labels.category || '', labels.tags || []]
+      [req.user.id, videoId, decodeHtml(title), channel ? decodeHtml(channel) : null, thumbnail || null, duration || null, viewCount || null, publishedAt || null, labels.category || '', labels.tags || []]
     );
     // read and keep its captions in the background so the favourites search can look inside them (fails quietly, e.g. a robot check)
     if (VIDEO_ID.test(String(videoId))) getCaptions(videoId, '', req.user.id).catch(() => {});
@@ -603,10 +604,10 @@ router.post('/video-note', async (req, res) => {
     }
     const paragraphs = labelsLib.transcriptParagraphs(segments || []);
 
-    const title = String((fav && fav.title) || b.title || 'YouTube video');
+    const title = decodeHtml((fav && fav.title) || b.title || 'YouTube video');
     const labels = fav ? { category: fav.category, tags: fav.tags } : { category: '', tags: [] };
     const body = labelsLib.buildVideoNote({
-      videoId, title, channel: (fav && fav.channel) || b.channel, duration: (fav && fav.duration) || b.duration, publishedAt: (fav && fav.publishedAt) || b.publishedAt,
+      videoId, title, channel: decodeHtml((fav && fav.channel) || b.channel || ''), duration: (fav && fav.duration) || b.duration, publishedAt: (fav && fav.publishedAt) || b.publishedAt,
       category: labels.category, tags: labels.tags, points: pts && pts.points, overview: ins && ins.insights && ins.insights.overview,
       paragraphs, transcriptMissing: !paragraphs.length,
     });
@@ -642,7 +643,7 @@ router.get('/watch-history', async (req, res) => {
        LIMIT 30`,
       [req.user.id]
     );
-    res.json(rows);
+    res.json(decodeFields(rows, ['title', 'channel']));
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
@@ -656,7 +657,7 @@ router.post('/watch-history', async (req, res) => {
       `INSERT INTO youtube_watch_history ("userId", "videoId", title, channel, thumbnail, duration, "viewCount", "publishedAt", "watchedAt")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
        ON CONFLICT ("userId", "videoId") DO UPDATE SET "watchedAt" = NOW()`,
-      [req.user.id, videoId, title || 'YouTube video', channel || null, thumbnail || null, duration || null, viewCount || null, publishedAt || null]
+      [req.user.id, videoId, decodeHtml(title) || 'YouTube video', channel ? decodeHtml(channel) : null, thumbnail || null, duration || null, viewCount || null, publishedAt || null]
     );
     res.json({ ok: true });
   } catch (err) {
@@ -754,7 +755,7 @@ router.get('/lists/:id', async (req, res) => {
       [req.params.id]
     );
 
-    res.json({ ...listRows[0], videos: items });
+    res.json({ ...listRows[0], videos: decodeFields(items, ['title', 'channel']) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
@@ -983,7 +984,7 @@ router.post('/note-draft', aiLimiter, async (req, res) => {
   if (!VIDEO_ID.test(String(videoId || ''))) return res.status(400).json({ error: 'A valid videoId is required.' });
   try {
     const row = (await savedInsights(req.user.id, videoId, String(languageCode))) || (await writeInsights(req.user.id, videoId, String(languageCode)));
-    const title = row.title || 'YouTube video';
+    const title = decodeHtml(row.title || 'YouTube video');
     const body = insightsLib.buildNoteMarkdown({ videoId, title, channel: String(channel).slice(0, 120), insights: row.insights });
     res.json({ title: title.slice(0, 200), body });
   } catch (err) {

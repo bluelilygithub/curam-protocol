@@ -103,12 +103,12 @@ function dateText(v) {
 }
 
 /**
- * A new note about a saved video, as Markdown: title, link, who and how long, its category and tags, then (only if they were already written
+ * A new note about a video, as Markdown (the title is the note's own title, so the text starts with the link): link, who and how long, its category and tags, then (only if they were already written
  * and saved, nothing is asked of any AI here) the Main points and the Insights summary, and an empty "My notes" section to write in.
  */
 function buildVideoNote({ videoId, title, channel, duration, publishedAt, category, tags, points, overview, paragraphs, transcriptMissing }) {
   const name = stripMd(title) || 'YouTube video';
-  const lines = [`# ${name}`, '', `[Watch on YouTube](https://www.youtube.com/watch?v=${encodeURIComponent(videoId)})`];
+  const lines = [`[Watch on YouTube](https://www.youtube.com/watch?v=${encodeURIComponent(videoId)})`];
   const facts = [];
   if (channel) facts.push(stripMd(channel));
   const secs = parseIsoDuration(duration);

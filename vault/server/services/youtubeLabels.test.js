@@ -27,7 +27,8 @@ const md = L.buildVideoNote({
   videoId: 'abc123DEF45', title: 'Sourdough <b>basics</b>', channel: 'Baker Bob', duration: 'PT12M30S', publishedAt: '2026-03-04T10:00:00Z',
   category: 'Recipes', tags: ['bread', 'home cooking'], points: ['Starter: feed it daily.', ''], overview: 'A short guide.',
 });
-assert.match(md, /^# Sourdough basics\n/);
+assert.ok(!/^# /m.test(md), 'the title is the note title, not a heading in the text');
+assert.match(md, /^\[Watch on YouTube\]/);
 assert.match(md, /\[Watch on YouTube\]\(https:\/\/www\.youtube\.com\/watch\?v=abc123DEF45\)/);
 assert.match(md, /Baker Bob · 13 minutes · published 2026-03-04/);
 assert.match(md, /\*\*Category:\*\* Recipes/);
@@ -36,7 +37,7 @@ assert.match(md, /## Main points\n\n- Starter: feed it daily\.\n/);
 assert.match(md, /## Summary\n\nA short guide\./);
 assert.match(md, /## My notes\n$/);
 const bare = L.buildVideoNote({ videoId: 'abc123DEF45', title: '', tags: [] });
-assert.match(bare, /^# YouTube video\n/);
+assert.match(bare, /^\[Watch on YouTube\]/);
 assert.ok(!/Category|Tags|Main points|Summary/.test(bare), 'nothing is invented when nothing was saved');
 assert.ok(!/\n\n\n/.test(md), 'no stacked blank lines');
 

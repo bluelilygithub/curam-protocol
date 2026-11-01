@@ -8,6 +8,8 @@
 // youtube_follows / youtube_follow_videos through the pool and the (cached, quota-counted) `ytGet` it is given.
 // YouTube's API terms limit how long API data may be kept, so videos found by a check are deleted after 30 days.
 
+const { decodeHtml, decodeFields } = require('./htmlText');
+
 const HOUR = 3600 * 1000;
 const LIMITS = { channel: 30, search: 5 };
 const EVERY_MS = { channel: 5 * HOUR, search: 20 * HOUR };
@@ -50,12 +52,12 @@ function shapeItem(item) {
   const videoId = (item && item.snippet && item.snippet.resourceId && item.snippet.resourceId.videoId) || (item && item.id && item.id.videoId) || null;
   const s = item && item.snippet;
   if (!videoId || !s) return null;
-  const title = String(s.title || '').trim();
+  const title = decodeHtml(String(s.title || '')).trim();
   if (!title || /^(private video|deleted video)$/i.test(title)) return null;
   return {
     videoId,
     title: title.slice(0, 300),
-    channel: String(s.channelTitle || '').slice(0, 120),
+    channel: decodeHtml(String(s.channelTitle || '')).slice(0, 120),
     thumbnail: (s.thumbnails && ((s.thumbnails.medium && s.thumbnails.medium.url) || (s.thumbnails.default && s.thumbnails.default.url))) || '',
     publishedAt: s.publishedAt || null,
   };
@@ -168,7 +170,7 @@ async function listNew(pool, userId, limit = 60) {
      ) t ORDER BY "publishedAt" DESC NULLS LAST LIMIT $2`,
     [userId, limit]
   );
-  return rows;
+  return decodeFields(rows, ['title', 'channel']); // rows saved before titles were decoded still hold things like &quot;
 }
 
 async function markSeen(pool, userId, { videoIds, all } = {}) {

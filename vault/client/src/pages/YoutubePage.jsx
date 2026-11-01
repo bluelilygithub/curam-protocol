@@ -911,6 +911,7 @@ export default function YoutubePage() {
       const noteRes = await api.post('/api/notes', { title: draft.title, body: draft.body });
       const note = await noteRes.json();
       if (!noteRes.ok) throw new Error(note.error || 'The note could not be saved.');
+      if (note.title !== draft.title) await api.put(`/api/notes/${note.id}`, { title: draft.title }).catch(() => {}); // the note carries the video's title
       if (draft.tags && draft.tags.length) await api.put(`/api/notes/${note.id}/tags`, { tags: draft.tags }).catch(() => {});
       addToast(draft.hasTranscript ? 'Note created with the transcript.' : 'Note created. No transcript could be read for this video.', 'success', 6000, { label: 'Open note', href: noteHref(note.id) });
     } catch (err) {
