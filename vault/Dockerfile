@@ -29,13 +29,17 @@ RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt \
 
 WORKDIR /app
 
+# Playwright Chromium for the Browser Agent (server/services/browserAgent/) — --with-deps pulls the OS libs Chromium needs on top of node:20-slim.
+# This sits BEFORE `COPY package*.json` on purpose: it used to come after, so any edit to package.json (even just adding a test script) re-ran this
+# slow download on every deploy. The version here only has to be close to the one in package-lock.json; the `playwright install chromium` below,
+# after npm install, fetches the exact browser if the locked version ever needs a different one (and does nothing when it matches).
+ARG PLAYWRIGHT_VERSION=1.61.1
+RUN npx --yes playwright@${PLAYWRIGHT_VERSION} install --with-deps chromium
+
 # Install dependencies
 COPY package*.json ./
 RUN npm install --include=dev
-
-# Playwright Chromium for the Browser Agent (server/services/browserAgent/) —
-# --with-deps pulls the OS libs Chromium needs on top of node:20-slim.
-RUN npx playwright install --with-deps chromium
+RUN npx playwright install chromium
 
 # Font Customizer pipeline (fontTools) and statement redaction (PyMuPDF, removes text from the PDF itself).
 # Only the requirements files are copied, so these layers stay cached until a requirements file changes

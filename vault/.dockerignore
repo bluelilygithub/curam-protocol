@@ -1,0 +1,24 @@
+# Keeps the build context small and stops a developer's own folders from being copied over the ones the image builds.
+# (Railway builds from a git checkout, where most of this is absent already; this matters for `docker build` on a laptop.)
+
+.git
+.github
+.vscode
+.claude
+.env
+.env.*
+*.log
+*.traineddata
+
+# Installed or built inside the image, never copied in (a Windows node_modules would overwrite the Linux one).
+node_modules
+**/node_modules
+dist
+**/dist
+uploads
+
+# Vault Shelf's native Windows app and installer: not part of the web build.
+shelf/host
+shelf/host.tests
+shelf/setup
+shelf/node_modules
