@@ -4,6 +4,16 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 
 ---
 
+## DEPLOY SPEED — MANDATORY, READ BEFORE ANY PUSH OR BUILD CHANGE
+
+**Full rules and the layer table: [`docs/deploy-speed.md`](docs/deploy-speed.md). Read it first.** Deploys should take about 2-3 minutes. The owner measures you by how fast changes go live.
+
+1. **NEVER edit `package.json` or `package-lock.json` just to add or rename a test script.** One edit re-runs the root `npm install`, both pip installs and all four planner installs, and pushes gigabytes of image layers. Run new tests with `node path/to/file.test.js`. If a `package.json` change is unavoidable, tell the owner first, in plain words, that the deploy will be slow, and batch every such change into one commit.
+2. **NEVER diagnose, propose or change anything about deploys, builds or the `Dockerfile` without first reading `docs/deploy-speed.md` and running `git log --oneline -- Dockerfile .dockerignore`.** This has been fixed twice already (72aac7cc, 7874897c). Re-proposing it from the `Dockerfile` alone wastes the owner's time. It happened on 2026-11-02.
+3. **Before every push, run `git diff --stat origin/<branch>..HEAD`.** If `package.json`, `package-lock.json`, `Dockerfile` or any `requirements.txt` is in it, say "this push will be a slow deploy, because ..." BEFORE pushing.
+
+---
+
 ## Stack
 
 **Backend:** Node.js/Express · PostgreSQL 15 + pgvector · `pg` (no ORM) · node-cron · multer  
