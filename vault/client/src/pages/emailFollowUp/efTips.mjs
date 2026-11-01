@@ -53,6 +53,7 @@ export const EF_TIPS = {
   askGo: 'Send the question. The AI answers from the attached mail only, and says so when the answer is not in it.',
   askClear: 'Clear the questions and answers on this screen. Nothing else is changed.',
   showSources: 'Show or hide the list of emails and attachments the AI was given, with their numbers.',
+  showQuotes: 'Show the exact sentences from the emails that back this answer, each checked word for word, or hide them again.',
   copyAnswer: 'Copy this text, with its source numbers, to paste somewhere else.',
   tabCoverage: 'What the tool read, what it could not see, and what you must check yourself.',
   preview: 'Read the emails in this thread here before deciding. Nothing is attached or saved by looking.',

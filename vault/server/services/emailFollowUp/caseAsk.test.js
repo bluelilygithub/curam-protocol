@@ -158,5 +158,39 @@ const fakeDeps = (reply) => ({ resolveModel: async () => 'test-model', callModel
     await assert.rejects(() => ask.summariseCase(1, c, corpus, fakeDeps('garbled')), /could not be read/);
   });
 
+  await check('a reply cut off by the token limit inside the citations keeps the answer and the finished citations, and says so', () => {
+    const cut = '{\n  "answer": "Twelve months were offered [S1].\\n\\n- Pat offered 12 months at $5,000 [S1]",\n  "found": true,\n  "citations": [\n    { "source": 1, "quote": "a 12 month term at $5,000 per month" },\n    { "source": 4, "quote": "The term is twelve (12) mon';
+    const a = ask.normalizeAnswer(cut, corpus);
+    assert.strictEqual(a.unstructured, false);
+    assert.strictEqual(a.truncated, true);
+    assert.strictEqual(a.citations.length, 1);
+    assert.ok(a.answer.includes('\n\n- Pat offered'), a.answer);
+    assert.ok(!a.answer.includes('"answer"'));
+  });
+
+  await check('a reply cut off inside the answer text itself is shown as plain text, never as raw JSON', () => {
+    const cut = '{\n  "answer": "The emails give no contract. Monica said **no change** [S3].\\n\\n- Price stays $25 [S3]\\n- Servi';
+    const a = ask.normalizeAnswer(cut, corpus);
+    assert.strictEqual(a.unstructured, true);
+    assert.strictEqual(a.truncated, true);
+    assert.ok(a.answer.startsWith('The emails give no contract.'), a.answer);
+    assert.ok(a.answer.includes('\n- Price stays $25 [S3]'));
+    assert.ok(!/[{}"]answer/.test(a.answer));
+    assert.deepStrictEqual(a.citations, []);
+  });
+
+  await check('a summary cut off part-way keeps every finished entry and is marked', () => {
+    const cut = '{"overview":"A contract negotiation.","terms":[{"topic":"Term","position":"12 months","status":"agreed","sources":[1]},{"topic":"Pay","position":"Monthly","status":"open","sources":[2]},{"topic":"Cancel","position":"Not yet';
+    const s = ask.normalizeSummary(cut, corpus);
+    assert.ok(s, 'a repaired summary');
+    assert.strictEqual(s.stats.truncated, true);
+    assert.strictEqual(s.terms.length, 2);
+    assert.strictEqual(ask.normalizeSummary(JSON.stringify({ overview: 'ok', terms: [] }), corpus).stats.truncated, false);
+  });
+
+  await check('the answer prompt asks for a direct answer first, a term-by-term list, short quotes and no disclaimer padding', () => {
+    for (const re of [/direct answer in one or two sentences/, /list EVERY term/, /confirmed in writing/, /Not settled/, /no longer than 30 words/, /Do not pad/]) assert.match(ask.ASK_SYSTEM, re);
+  });
+
   if (!process.exitCode) console.log(`email-follow-up case ask: ${n} checks passed`);
 })();

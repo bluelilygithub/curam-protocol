@@ -218,15 +218,41 @@ const STATUS_COLOR = { agreed: GOOD, proposed: WARN, disputed: BAD, open: 'var(-
 
 /** [S3] markers in a sentence become small numbered chips; hovering one shows which email or attachment it is. */
 function WithSources({ text, index }) {
-  const parts = String(text || '').split(/(\[S\d+\])/g);
+  // **bold** labels, then [S3] markers inside each piece
+  const pieces = String(text || '').split(/(\*\*[^*\n]+\*\*)/g);
+  const chips = (str, k) => str.split(/(\[S\d+\])/g).map((p, i) => {
+    const m = /^\[S(\d+)\]$/.exec(p);
+    if (!m) return <React.Fragment key={`${k}-${i}`}>{p}</React.Fragment>;
+    return <SourceChip key={`${k}-${i}`} n={Number(m[1])} index={index} />;
+  });
   return (
     <>
-      {parts.map((p, i) => {
-        const m = /^\[S(\d+)\]$/.exec(p);
-        if (!m) return <React.Fragment key={i}>{p}</React.Fragment>;
-        return <SourceChip key={i} n={Number(m[1])} index={index} />;
-      })}
+      {pieces.map((p, k) => (/^\*\*[^*\n]+\*\*$/.test(p) ? <strong key={k}>{chips(p.slice(2, -2), k)}</strong> : <React.Fragment key={k}>{chips(p, k)}</React.Fragment>))}
     </>
+  );
+}
+
+/** An answer written as short paragraphs and "- " lines: shown as paragraphs and a bulleted list, not one wall of text. */
+function RichText({ text, index }) {
+  const blocks = String(text || '').replace(/\r/g, '').split(/\n{2,}/).map((b) => b.trim()).filter(Boolean);
+  return (
+    <div className="space-y-2.5">
+      {blocks.map((b, bi) => {
+        const parts = [];
+        let list = null;
+        for (const line of b.split('\n')) {
+          const m = /^\s*(?:[-*\u2022])\s+(.*)$/.exec(line);
+          if (m) { if (!list) { list = []; parts.push({ list }); } list.push(m[1]); } else { list = null; if (line.trim()) parts.push({ line: line.trim() }); }
+        }
+        return (
+          <div key={bi} className="space-y-1">
+            {parts.map((p, pi) => (p.list
+              ? <ul key={pi} className="list-disc pl-5 space-y-1">{p.list.map((li, k) => <li key={k} className="text-sm leading-relaxed"><WithSources text={li} index={index} /></li>)}</ul>
+              : <p key={pi} className="text-sm leading-relaxed"><WithSources text={p.line} index={index} /></p>))}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -305,6 +331,7 @@ function ReadNotes({ cut, left, stats }) {
   const lines = [];
   if (cut && cut.length) lines.push(`${cut.length} long item${cut.length === 1 ? ' was' : 's were'} read only in part: ${cut.slice(0, 3).map((c) => c.label).join('; ')}.`);
   if (left && left.length) lines.push(`Not given to the AI: ${left.join('; ')}.`);
+  if (stats && stats.truncated) lines.push("The AI's reply was cut off before it finished, so the end may be missing. Everything shown was complete. Ask a narrower question, or choose a more capable model in Settings, Email Follow-Up.");
   if (stats && stats.droppedQuotes) lines.push(`${stats.droppedQuotes} quote${stats.droppedQuotes === 1 ? '' : 's'} the AI offered could not be found word for word in the mail and ${stats.droppedQuotes === 1 ? 'was' : 'were'} left out.`);
   if (!lines.length) return null;
   return <div className="text-xs space-y-1" style={{ color: WARN }}>{lines.map((l) => <p key={l}>{l}</p>)}</div>;
@@ -316,6 +343,7 @@ function AskPanel({ caseId, usable, locked, state, setState }) {
   const [busy, setBusy] = useState('');
   const [q, setQ] = useState('');
   const [showSources, setShowSources] = useState(false);
+  const [quotesOpen, setQuotesOpen] = useState({}); // turn index -> true while its quotes are shown
   const { summary, turns } = state;
   const sourceIndex = (summary && summary.sources) || (turns.length ? turns[turns.length - 1].sources : []) || [];
 
@@ -364,12 +392,17 @@ function AskPanel({ caseId, usable, locked, state, setState }) {
           <div key={i} className="space-y-2">
             <p className="text-sm font-medium rounded-xl px-3 py-2" style={{ background: 'var(--color-surface)' }}>{t.question}</p>
             <div className="rounded-xl border p-3 space-y-2" style={CARD}>
-              <p className="text-sm leading-relaxed whitespace-pre-wrap"><WithSources text={t.answer.answer} index={t.sources} /></p>
+              <RichText text={t.answer.answer} index={t.sources} />
               {t.answer.found === false && <Badge color={WARN}>not found in these emails</Badge>}
-              {t.answer.uncited && <p className="text-xs" style={{ color: WARN }}>{t.answer.unstructured ? 'The AI did not follow the checking format, so nothing in this answer was checked against the emails. ' : ''}This answer cites no email. Treat it with care and check it yourself.</p>}
-              {t.answer.citations.map((c, k) => <Quote key={k} quote={c.quote} n={c.source} index={t.sources} />)}
-              {t.answer.unsure && <p className="text-xs" style={{ color: WARN }}>Unclear in the emails: <WithSources text={t.answer.unsure} index={t.sources} /></p>}
-              <ReadNotes cut={t.cut} left={t.left} stats={{ droppedQuotes: t.answer.droppedQuotes }} />
+              {t.answer.uncited && <p className="text-xs" style={{ color: WARN }}>{t.answer.unstructured && !t.answer.truncated ? 'The AI did not follow the checking format, so nothing in this answer was checked against the emails. ' : t.answer.unstructured ? 'The reply was cut off, so no quote in this answer was checked against the emails. ' : ''}This answer cites no email. Treat it with care and check it yourself.</p>}
+              {t.answer.unsure && <div className="text-xs space-y-1" style={{ color: WARN }}><p className="font-medium">Unclear in the emails</p><RichText text={t.answer.unsure} index={t.sources} /></div>}
+              {t.answer.citations.length > 0 && (
+                <div className="space-y-1.5">
+                  <Btn small tip={EF_TIPS.showQuotes} onClick={() => setQuotesOpen((q) => ({ ...q, [i]: !q[i] }))}>{quotesOpen[i] ? 'Hide the quotes' : `Show the quotes (${t.answer.citations.length})`}</Btn>
+                  {quotesOpen[i] && t.answer.citations.map((c, k) => <Quote key={k} quote={c.quote} n={c.source} index={t.sources} />)}
+                </div>
+              )}
+              <ReadNotes cut={t.cut} left={t.left} stats={{ droppedQuotes: t.answer.droppedQuotes, truncated: t.answer.truncated }} />
               <Btn small tip={EF_TIPS.copyAnswer} onClick={() => copy(t.answer.answer)}>Copy answer</Btn>
             </div>
           </div>

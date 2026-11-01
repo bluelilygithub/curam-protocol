@@ -127,7 +127,14 @@ Output exactly one JSON object:
   "citations": [ { "source": 3, "quote": "word-for-word quote that supports the answer" } ],
   "unsure": "anything the emails leave unclear, contradictory or unsettled that the person should know, or null"
 }
-If the emails do not answer the question, set "found" to false, say so in "answer", and say what the emails do cover that is closest. Keep the answer as short as the question allows.`;
+How to write the "answer":
+1. Start with the direct answer in one or two sentences. If the emails settle the question, say what the answer is. If they only partly do, say what is settled and what is not. Do not open with a disclaimer.
+2. Then give the detail as short lines starting with "- ", one fact per line, with the actual figures, dates and names, who said it, and [S#]. When the question asks for the terms, list EVERY term the emails touch (price, length of term, what it covers, how many services or people or items, payment dates and method, renewal, cancellation and fees, discounts, who is to confirm what), each with its value and one of: confirmed in writing / said by an agent or the other side / only proposed / not mentioned.
+3. If anything is contradictory or unsettled, add a short last group of "- " lines under the label **Not settled**.
+4. One short closing sentence of caution at most. Do not pad with repeated disclaimers.
+Format inside the answer string: a blank line between paragraphs, "- " bullets, **bold** for short labels. No # headings and no tables.
+Citations: at most 6, each quote the single most decisive sentence and no longer than 30 words.
+If the emails do not answer the question at all, set "found" to false, say so in "answer", and say what the emails do cover that is closest.`;
 
 function buildSummaryPrompt(corpus, c) {
   return `Case: ${clip(c.title, 200)}\nWhat is owed / the matter: ${clip(c.obligation, 400)}\nMailbox owner: ${corpus.ownerEmail || 'unknown'}\n\n<corpus>\n${corpus.text}\n</corpus>`;
@@ -140,14 +147,46 @@ function buildAskPrompt(corpus, c, question, history) {
 
 // ---------- checking what the model said ----------
 
+/**
+ * A reply that hit the token limit stops mid-way. Cut it back to the last point where an object or list was complete and close what is
+ * still open, so everything the model finished is kept. Returns parsed JSON or null.
+ */
+function repairTruncatedJson(text) {
+  const stack = [];
+  let inStr = false;
+  let esc = false;
+  let cut = -1;
+  let closers = '';
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (inStr) { if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inStr = false; continue; }
+    if (ch === '"') inStr = true;
+    else if (ch === '{' || ch === '[') stack.push(ch === '{' ? '}' : ']');
+    else if (ch === '}' || ch === ']') { stack.pop(); cut = i; closers = stack.slice().reverse().join(''); }
+  }
+  if (cut < 0) return null;
+  try { return JSON.parse(text.slice(0, cut + 1) + closers); } catch { return null; }
+}
+
+/** Returns { value, repaired } or null. `repaired` means the reply was cut off and only the finished part is kept. */
 function parseJson(text) {
   const s = String(text || '').trim();
-  const fenced = s.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const fenced = s.match(/```(?:json)?\s*([\s\S]*?)(?:```|$)/);
   const body = fenced ? fenced[1] : s;
   const first = body.indexOf('{');
+  if (first < 0) return null;
   const last = body.lastIndexOf('}');
-  if (first < 0 || last <= first) return null;
-  try { return JSON.parse(body.slice(first, last + 1)); } catch { return null; }
+  if (last > first) { try { return { value: JSON.parse(body.slice(first, last + 1)), repaired: false }; } catch { /* try to repair below */ } }
+  const fixed = repairTruncatedJson(body.slice(first));
+  return fixed && typeof fixed === 'object' ? { value: fixed, repaired: true } : null;
+}
+
+/** The "answer" text of a reply that was cut off inside it, so the person never sees raw JSON. */
+function salvageAnswerText(text) {
+  const m = /"answer"\s*:\s*"((?:[^"\\]|\\[\s\S])*)/.exec(String(text || ''));
+  if (!m) return null;
+  const body = m[1].replace(/\\$/, ''); // a reply cut off right after a backslash
+  try { return JSON.parse(`"${body}"`); } catch { return body.replace(/\\n/g, '\n').replace(/\\"/g, '"'); }
 }
 
 /** Keep only real source numbers (1..count), once each. */
@@ -173,10 +212,11 @@ function stripBadMarkers(text, count) {
 }
 
 function normalizeSummary(modelText, corpus) {
-  const parsed = parseJson(modelText);
-  if (!parsed || typeof parsed !== 'object') return null;
+  const got = parseJson(modelText);
+  if (!got || typeof got.value !== 'object') return null;
+  const parsed = got.value;
   const count = corpus.count;
-  const stats = { droppedQuotes: 0, uncited: 0 };
+  const stats = { droppedQuotes: 0, uncited: 0, truncated: got.repaired };
   const cite = (list) => { const s = cleanSources(list, count); if (!s.length) stats.uncited += 1; return s; };
 
   const terms = (Array.isArray(parsed.terms) ? parsed.terms : []).slice(0, 40).map((t) => {
@@ -213,13 +253,16 @@ function normalizeSummary(modelText, corpus) {
 }
 
 function normalizeAnswer(modelText, corpus) {
-  const parsed = parseJson(modelText);
+  const got = parseJson(modelText);
+  const parsed = got && got.value;
   const count = corpus.count;
   if (!parsed || typeof parsed !== 'object' || !clip(parsed.answer, 1)) {
-    // The model did not follow the format. Show what it said, but with no citations and plainly marked as unchecked.
-    const raw = clip(modelText, 3000);
+    // The reply was cut off before it finished, or did not follow the format. Show the answer text (never raw JSON), with no citations and
+    // plainly marked as unchecked.
+    const salvaged = salvageAnswerText(modelText);
+    const raw = clip(salvaged || (/^\s*[{`]/.test(String(modelText)) ? '' : modelText), 6000);
     if (!raw) return null;
-    return { answer: stripBadMarkers(raw, count), found: null, citations: [], unsure: null, uncited: true, unstructured: true, droppedQuotes: 0 };
+    return { answer: stripBadMarkers(raw, count), found: null, citations: [], unsure: null, uncited: true, unstructured: true, truncated: !!salvaged, droppedQuotes: 0 };
   }
   let droppedQuotes = 0;
   const citations = [];
@@ -231,10 +274,10 @@ function normalizeAnswer(modelText, corpus) {
     if (!quote) { droppedQuotes += 1; continue; }
     citations.push({ source: n, quote });
   }
-  const answer = stripBadMarkers(clip(parsed.answer, 4000), count);
+  const answer = stripBadMarkers(clip(parsed.answer, 6000), count);
   const found = parsed.found === false ? false : true;
   const cited = /\[S\d+\]/.test(answer) || citations.length > 0;
-  return { answer, found, citations, unsure: parsed.unsure ? stripBadMarkers(clip(parsed.unsure, 800), count) : null, uncited: found && !cited, unstructured: false, droppedQuotes };
+  return { answer, found, citations, unsure: parsed.unsure ? stripBadMarkers(clip(parsed.unsure, 800), count) : null, uncited: found && !cited, unstructured: false, truncated: got.repaired, droppedQuotes };
 }
 
 // ---------- the two model calls ----------
@@ -256,7 +299,7 @@ async function summariseCase(userId, c, corpus, deps = {}) {
   const call = deps.callModel || require('../callModel').callModel;
   const log = deps.logUsage || require('../../utils/logUsage').logUsage;
   const modelId = await modelFor(userId, deps);
-  const result = await call(modelId, buildSummaryPrompt(corpus, c), { system: SUMMARY_SYSTEM, maxTokens: 4500, returnUsage: true, timeoutMs: SUMMARY_TIMEOUT_MS });
+  const result = await call(modelId, buildSummaryPrompt(corpus, c), { system: SUMMARY_SYSTEM, maxTokens: 6500, returnUsage: true, timeoutMs: SUMMARY_TIMEOUT_MS });
   log({ userId, model: result.model || modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'email_follow_up_summary' });
   const summary = normalizeSummary(String(result.text || ''), corpus);
   if (!summary) throw Object.assign(new Error('The AI answered in a form that could not be read. Please try again.'), { status: 502 });
@@ -270,7 +313,7 @@ async function askCase(userId, c, corpus, question, history, deps = {}) {
   const call = deps.callModel || require('../callModel').callModel;
   const log = deps.logUsage || require('../../utils/logUsage').logUsage;
   const modelId = await modelFor(userId, deps);
-  const result = await call(modelId, buildAskPrompt(corpus, c, q, history), { system: ASK_SYSTEM, maxTokens: 2200, returnUsage: true, timeoutMs: ASK_TIMEOUT_MS });
+  const result = await call(modelId, buildAskPrompt(corpus, c, q, history), { system: ASK_SYSTEM, maxTokens: 4000, returnUsage: true, timeoutMs: ASK_TIMEOUT_MS });
   log({ userId, model: result.model || modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'email_follow_up_ask' });
   const answer = normalizeAnswer(String(result.text || ''), corpus);
   if (!answer) throw Object.assign(new Error('The AI did not answer. Please try again.'), { status: 502 });
