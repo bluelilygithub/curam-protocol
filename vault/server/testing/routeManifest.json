@@ -3757,9 +3757,6 @@
   "DELETE /api/wellbeing/reset": {
    "class": "authed"
   },
-  "GET /api/youtube/categories": {
-   "class": "authed"
-  },
   "GET /api/youtube/channel/:channelId": {
    "class": "authed"
   },
@@ -3862,9 +3859,6 @@
   "POST /api/youtube/transcript": {
    "class": "authed"
   },
-  "GET /api/youtube/trending": {
-   "class": "authed"
-  },
   "DELETE /api/youtube/watch-history/:videoId": {
    "class": "authed"
   },
@@ -3876,39 +3870,45 @@
   },
   "POST /api/youtube/watch-history": {
    "class": "authed"
+  },
+  "GET /api/youtube/main-points/:videoId": {
+   "class": "authed"
+  },
+  "POST /api/youtube/main-points": {
+   "class": "authed"
+  },
+  "DELETE /api/youtube/main-points/:videoId": {
+   "class": "authed"
+  },
+  "PATCH /api/youtube/favourites/:videoId": {
+   "class": "authed"
+  },
+  "GET /api/youtube/favourites/search": {
+   "class": "authed"
+  },
+  "POST /api/youtube/video-note": {
+   "class": "authed"
+  },
+  "POST /api/youtube/history/bulk-delete": {
+   "class": "authed"
+  },
+  "POST /api/youtube/favourites/bulk-delete": {
+   "class": "authed"
+  },
+  "POST /api/youtube/watch-history/bulk-delete": {
+   "class": "authed"
+  },
+  "GET /api/youtube/video-notes": {
+   "class": "authed"
+  },
+  "PUT /api/youtube/video-notes/:videoId": {
+   "class": "authed"
+  },
+  "POST /api/youtube/lists/bulk-delete": {
+   "class": "authed"
+  },
+  "POST /api/youtube/follows/bulk-delete": {
+   "class": "authed"
   }
- },
- "GET /api/youtube/main-points/:videoId": {
-  "class": "authed"
- },
- "POST /api/youtube/main-points": {
-  "class": "authed"
- },
- "DELETE /api/youtube/main-points/:videoId": {
-  "class": "authed"
- },
- "PATCH /api/youtube/favourites/:videoId": {
-  "class": "authed"
- },
- "GET /api/youtube/favourites/search": {
-  "class": "authed"
- },
- "POST /api/youtube/video-note": {
-  "class": "authed"
- },
- "POST /api/youtube/history/bulk-delete": {
-  "class": "authed"
- },
- "POST /api/youtube/favourites/bulk-delete": {
-  "class": "authed"
- },
- "POST /api/youtube/watch-history/bulk-delete": {
-  "class": "authed"
- },
- "GET /api/youtube/video-notes": {
-  "class": "authed"
- },
- "PUT /api/youtube/video-notes/:videoId": {
-  "class": "authed"
  }
 }

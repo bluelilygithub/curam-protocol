@@ -9,3 +9,4 @@ require('./graphicsRecipes');
 require('./topicResearch');
 require('./passwordVault');
 require('./emailFollowUp');
+require('./youtube'); // saved lists, follows, favourites

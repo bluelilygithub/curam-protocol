@@ -27,6 +27,7 @@ const { callModel } = require('../services/callModel');
 const { logUsage } = require('../utils/logUsage');
 const { fetchYoutubeTranscript, fetchYoutubeCaptionLanguages } = require('../services/youtubeTranscript');
 const youtubeApi = require('../services/youtubeApi');
+const ytBin = require('../services/recycleBin/adapters/youtube');
 const { getKey, quotaStatus } = youtubeApi;
 const follows = require('../services/youtubeFollows');
 const { createAiTranscripts } = require('../services/youtubeAiJobs');
@@ -230,69 +231,6 @@ router.get('/playlist/:playlistId', async (req, res) => {
     res.json({ videos, totalResults: listData.pageInfo?.totalResults ?? videos.length });
   } catch (err) {
     console.error('[youtube/playlist]', err.message);
-    res.status(err.status || 500).json({ error: err.message });
-  }
-});
-
-// ── Trending ──────────────────────────────────────────────────────────────────
-
-router.get('/trending', async (req, res) => {
-  const { regionCode = 'US', categoryId } = req.query;
-
-  let key;
-  try { key = getKey(); } catch (e) { return res.status(500).json({ error: e.message }); }
-
-  try {
-    const searchParams = new URLSearchParams({
-      part: 'snippet,contentDetails,statistics',
-      chart: 'mostPopular',
-      regionCode,
-      maxResults: '20',
-      key,
-    });
-    if (categoryId) searchParams.set('videoCategoryId', categoryId);
-
-    const data = await ytGet(`/youtube/v3/videos?${searchParams}`);
-    const items = data.items ?? [];
-
-    // videos.list(chart=mostPopular) already returns duration/viewCount in one call — no enrichment call needed.
-    const videos = items.map((v) => ({
-      id:          v.id,
-      title:       decodeHtml(v.snippet?.title),
-      description: decodeHtml(v.snippet?.description),
-      channel:     decodeHtml(v.snippet?.channelTitle),
-      channelId:   v.snippet?.channelId,
-      publishedAt: v.snippet?.publishedAt,
-      thumbnail:   v.snippet?.thumbnails?.medium?.url || v.snippet?.thumbnails?.default?.url,
-      duration:    v.contentDetails?.duration,
-      viewCount:   v.statistics?.viewCount,
-    }));
-
-    res.json({ videos, totalResults: data.pageInfo?.totalResults ?? videos.length });
-  } catch (err) {
-    console.error('[youtube/trending]', err.message);
-    res.status(err.status || 500).json({ error: err.message });
-  }
-});
-
-// ── Categories ────────────────────────────────────────────────────────────────
-
-router.get('/categories', async (req, res) => {
-  const { regionCode = 'US' } = req.query;
-
-  let key;
-  try { key = getKey(); } catch (e) { return res.status(500).json({ error: e.message }); }
-
-  try {
-    const searchParams = new URLSearchParams({ part: 'snippet', regionCode, key });
-    const data = await ytGet(`/youtube/v3/videoCategories?${searchParams}`);
-    const categories = (data.items ?? [])
-      .filter((c) => c.snippet?.assignable)
-      .map((c) => ({ id: c.id, title: c.snippet?.title }));
-
-    res.json({ categories });
-  } catch (err) {
-    console.error('[youtube/categories]', err.message);
     res.status(err.status || 500).json({ error: err.message });
   }
 });
@@ -658,25 +596,20 @@ router.post('/video-note', async (req, res) => {
   }
 });
 
-// Several saved videos at once: { videoIds: [...] } (at most 500). Their kept captions go too.
+// Several saved videos at once: { videoIds: [...] } (at most 500). They go to the recycle bin (30 days) with their labels and kept captions.
 router.post('/favourites/bulk-delete', async (req, res) => {
   const videoIds = (Array.isArray(req.body && req.body.videoIds) ? req.body.videoIds : []).map(String).filter((v) => VIDEO_ID.test(v)).slice(0, 500);
   if (!videoIds.length) return res.status(400).json({ error: 'Choose at least one video.' });
   try {
-    const r = await pool.query('DELETE FROM youtube_favourites WHERE "userId" = $1 AND "videoId" = ANY($2::text[])', [req.user.id, videoIds]);
-    await pool.query('DELETE FROM youtube_caption_segments WHERE "userId" = $1 AND "videoId" = ANY($2::text[])', [req.user.id, videoIds]);
-    res.json({ ok: true, deleted: r.rowCount });
+    const binIds = await ytBin.binFavourites(pool, req.user.id, videoIds);
+    res.json({ ok: true, deleted: binIds.length, binIds });
   } catch (err) { console.error('[youtube/favourites bulk]', err.message); res.status(500).json({ error: 'Could not remove them.' }); }
 });
 
 router.delete('/favourites/:videoId', async (req, res) => {
   try {
-    await pool.query(
-      'DELETE FROM youtube_favourites WHERE "userId" = $1 AND "videoId" = $2',
-      [req.user.id, req.params.videoId]
-    );
-    await pool.query('DELETE FROM youtube_caption_segments WHERE "userId" = $1 AND "videoId" = $2', [req.user.id, req.params.videoId]);
-    res.json({ ok: true });
+    const binIds = await ytBin.binFavourites(pool, req.user.id, [String(req.params.videoId)]);
+    res.json({ ok: true, binIds });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
@@ -822,13 +755,23 @@ router.get('/lists/:id', async (req, res) => {
   }
 });
 
-router.delete('/lists/:id', async (req, res) => {
+// Several saved lists at once: { ids: [...] } (at most 200). They go to the recycle bin (30 days).
+router.post('/lists/bulk-delete', async (req, res) => {
+  const ids = (Array.isArray(req.body && req.body.ids) ? req.body.ids : []).map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 200);
+  if (!ids.length) return res.status(400).json({ error: 'Choose at least one list.' });
   try {
-    await pool.query(
-      'DELETE FROM youtube_saved_lists WHERE id = $1 AND "userId" = $2',
-      [req.params.id, req.user.id]
-    );
-    res.json({ ok: true });
+    const binIds = [];
+    for (const id of ids) { const b = await ytBin.binList(pool, req.user.id, id); if (b) binIds.push(b); }
+    res.json({ ok: true, deleted: binIds.length, binIds });
+  } catch (err) { console.error('[youtube/lists bulk]', err.message); res.status(500).json({ error: 'Could not delete them.' }); }
+});
+
+router.delete('/lists/:id', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad id.' });
+  try {
+    const binId = await ytBin.binList(pool, req.user.id, id);
+    res.json({ ok: true, binIds: binId ? [binId] : [] });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
@@ -1090,12 +1033,23 @@ router.post('/follows', async (req, res) => {
   } catch (err) { console.error('[youtube/follows add]', err.message); res.status(500).json({ error: 'Could not follow that just now.' }); }
 });
 
+// Several follows at once: { ids: [...] } (at most 100). They go to the recycle bin (30 days).
+router.post('/follows/bulk-delete', async (req, res) => {
+  const ids = (Array.isArray(req.body && req.body.ids) ? req.body.ids : []).map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 100);
+  if (!ids.length) return res.status(400).json({ error: 'Choose at least one.' });
+  try {
+    const binIds = [];
+    for (const id of ids) { const b = await ytBin.binFollow(pool, req.user.id, id); if (b) binIds.push(b); }
+    res.json({ ok: true, deleted: binIds.length, binIds });
+  } catch (err) { console.error('[youtube/follows bulk]', err.message); res.status(500).json({ error: 'Could not unfollow them.' }); }
+});
+
 router.delete('/follows/:id', async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad id.' });
   try {
-    const ok = await follows.removeFollow(pool, req.user.id, id);
-    res.status(ok ? 200 : 404).json(ok ? { ok: true } : { error: 'Not found.' });
+    const binId = await ytBin.binFollow(pool, req.user.id, id);
+    res.status(binId ? 200 : 404).json(binId ? { ok: true, binIds: [binId] } : { error: 'Not found.' });
   } catch (err) { console.error('[youtube/follows delete]', err.message); res.status(500).json({ error: 'Could not unfollow.' }); }
 });
 

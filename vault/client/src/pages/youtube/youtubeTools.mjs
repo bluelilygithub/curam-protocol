@@ -14,28 +14,28 @@ export const GROUPS = ['Find videos', 'Browse', 'Watch and study'];
 
 export const GROUP_TIPS = {
   'Find videos': 'Search by topic or describe what you want, filter the results, or open a whole playlist.',
-  Browse: 'Results, what is trending, your saved favourites, past searches and lists, and new videos from what you follow.',
+  Browse: 'Results, your saved favourites, past searches and lists, and new videos from what you follow.',
   'Watch and study': 'Watch a video here, then get AI notes on it, ask it questions, save the notes to Notes, read the transcript or the comments.',
 };
 
 export const TOOL_TIPS = {
   'search-box': 'The search box, the sort, length and date filters, Live now, and Open playlist.',
-  'browse-tabs': 'The tabs: Results, Trending, Favourites, History, Lists and Following.',
+  'browse-tabs': 'The tabs: Results, Favourites, History, Lists and Following.',
   watch: 'The watch window that opens when you click a video, with Insights & Ask, Transcript and Comments.',
 };
 
 export const TOOL_BLURBS = {
   'search-box': 'Find videos by topic or description.',
-  'browse-tabs': 'Results, trending, favourites, history, lists, following.',
+  'browse-tabs': 'Results, favourites, history, lists, following.',
   watch: 'Watch, get notes, ask, save to Notes.',
 };
 
 // The longer text for the (i) "How YouTube works" box.
 export const HOW_IT_WORKS = [
   ['Search', 'Type a topic, or describe what you want in your own words ("short recent videos about sourdough"). Vault works out the filters for you. Sort by relevance, newest, views or rating, pick a length and a date, or tick Live now.'],
-  ['Browse', 'Results, Trending (by country and category), your Favourites, your search History (with a Re-run button and a Recently watched list) and Lists, which are whole result sets you saved under a name. You can also open a whole playlist by pasting its address.'],
+  ['Browse', 'Results, your Favourites, your search History (with a Re-run button and a Recently watched list) and Lists, which are whole result sets you saved under a name. You can also open a whole playlist by pasting its address.'],
   ['Follow', 'Press + Follow channel in a video\'s window, or + Follow this search under your results. New videos from them then appear on the Following tab and in Needs attention on your home page, so you do not have to keep looking. Channels are checked about every 5 hours and searches about once a day; the first look only notes what is already there.'],
-  ['Favourites', 'Press the heart to save a video; a window then lets you pick a category from your list (or make one) and add tags. On the Favourites tab the videos are grouped by category; filter by category or tag, or search titles and saved transcripts. Create note, next to the other buttons under the player, adds a note to Notes with the video, its labels and its transcript, and then becomes Open note. Select above any list ticks several videos so you can remove or delete them together.'],
+  ['Favourites', 'Press the heart to save a video; a window then lets you pick a category from your list (or make one) and add tags. On the Favourites tab the videos are grouped by category; filter by category or tag, or search titles and saved transcripts. Create note, next to the other buttons under the player, adds a note to Notes with the video, its labels and its transcript, and then becomes Open note. Select above any list, including saved Lists and Following, ticks several items so you can remove or delete them together; deleted favourites, lists and follows wait in the recycle bin for 30 days.'],
   ['Watch', 'Click a video to watch it here. You can save it as a favourite, see more from its channel, read the transcript (in any language the video has captions in) or the top comments.'],
   ['Insights & Ask', 'Under the player: AI notes on the video (a summary, key points, chapters, things to do, quotes) with times you can click to jump the video, and a box to ask it questions. Both come only from the video\'s captions, so a video with no captions cannot be done. Notes are written once and kept.'],
   ['Save to Notes', 'Turns those notes into a note in Notes, with the link and clickable times, optionally filed under a project or a client.'],
@@ -48,7 +48,7 @@ export const GUIDE_TOOLS = [
   { id: 'search-box', label: 'Search box', tool: 'search-box' },
   { id: 'filters', label: 'Sort, length and date filters', tool: 'search-box' },
   { id: 'open-playlist', label: 'Open playlist', tool: 'search-box' },
-  { id: 'browse-tabs', label: 'Results, Trending, Favourites, History and Lists', tool: 'browse-tabs' },
+  { id: 'browse-tabs', label: 'Results, Favourites, History and Lists', tool: 'browse-tabs' },
   { id: 'following', label: 'Following', tool: 'browse-tabs' },
   { id: 'favourite-labels', label: 'Categories and tags on favourites', tool: 'browse-tabs' },
   { id: 'select-several', label: 'Select several videos', tool: 'browse-tabs' },

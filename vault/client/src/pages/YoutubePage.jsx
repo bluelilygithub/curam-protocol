@@ -9,6 +9,7 @@ import Tooltip from '../components/Tooltip';
 import VideoStudyPanel from './youtube/VideoStudyPanel';
 import AiTranscriptDialog from './youtube/AiTranscriptDialog';
 import FavLabelsDialog from './youtube/FavLabelsDialog';
+import { offerUndo } from '../utils/binUndo';
 import SelectBar from './youtube/SelectBar';
 import useSelection from './youtube/useSelection';
 import YoutubeTutorChat from './youtube/YoutubeTutorChat';
@@ -100,15 +101,6 @@ const ORDER_OPTIONS = [
 const PUBLISHED_LABEL = Object.fromEntries(PUBLISHED_AFTER_OPTIONS.map(o => [o.key, o.label]));
 const DURATION_LABEL  = Object.fromEntries(DURATION_OPTIONS.map(o => [o.value, o.label]));
 const ORDER_LABEL     = Object.fromEntries(ORDER_OPTIONS.map(o => [o.value, o.label]));
-
-// A short curated list of YouTube's supported regionCode ISO values — not exhaustive.
-const REGION_OPTIONS = [
-  { label: 'United States', value: 'US' },
-  { label: 'United Kingdom', value: 'GB' },
-  { label: 'Australia',      value: 'AU' },
-  { label: 'Canada',         value: 'CA' },
-  { label: 'India',          value: 'IN' },
-];
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
@@ -839,14 +831,6 @@ export default function YoutubePage() {
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  // Trending
-  const [trendingRegion,   setTrendingRegion]   = useState('US');
-  const [trendingCategory, setTrendingCategory] = useState('');
-  const [categories,       setCategories]       = useState([]);
-  const [trendingVideos,   setTrendingVideos]   = useState([]);
-  const [trendingLoading,  setTrendingLoading]  = useState(false);
-  const [trendingLoaded,   setTrendingLoaded]   = useState(false);
-
   useEffect(() => {
     api.get('/api/settings/feature-access').then(r => r.json()).then(data => {
       if (data?.flags && typeof data.flags === 'object') {
@@ -857,7 +841,6 @@ export default function YoutubePage() {
     loadHistory();
     loadLists();
     loadWatchHistory();
-    loadCategories('US');
     loadFollows();
     refreshQuota();
   }, []);
@@ -879,10 +862,12 @@ export default function YoutubePage() {
   const [justSaved, setJustSaved] = useState(false);
   const navigate = useNavigate();
   const resultsSel = useSelection();
-  const trendingSel = useSelection();
   const favSel = useSelection();
   const watchSel = useSelection();
   const historySel = useSelection();
+  const listSel = useSelection();
+  const followSel = useSelection();
+  const followNewSel = useSelection();
   const [videoNotes, setVideoNotes] = useState({}); // { videoId: noteId } for videos that already have a note
   const selProps = (sel, id) => (sel.mode ? { on: true, checked: sel.has(id), onToggle: () => sel.toggle(id) } : null);
   const [labelsFor, setLabelsFor] = useState(null); // the videoId whose category and tags are being edited
@@ -894,6 +879,7 @@ export default function YoutubePage() {
 
   // ticks cleared when the favourites list is filtered, so "Delete selected" never touches something that is hidden
   useEffect(() => { favSel.clear(); }, [favSearch, favCategory, favTags, favGroup]);
+  useEffect(() => { listSel.stop(); followSel.stop(); followNewSel.stop(); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Search the kept transcripts of the favourites as the person types (after a short pause).
   useEffect(() => {
@@ -949,20 +935,23 @@ export default function YoutubePage() {
     }
   }
 
-  // Several at once. Results and Trending are only what is on screen, so "removing" them hides them from this page and changes nothing saved.
+  // Several at once. Results are only what is on screen, so "removing" them hides them from this page and changes nothing saved. Favourites, Lists and Following deletes go to the recycle bin.
+  // Returns the bin ids when the delete went to the recycle bin (empty array for deletes that do not), or null when it failed.
   async function bulk(url, body, what) {
     try {
       const res = await api.post(url, body);
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Could not ${what}.`);
-      return true;
-    } catch (err) { addToast(err.message || `Could not ${what}.`, 'error'); return false; }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Could not ${what}.`);
+      return Array.isArray(data.binIds) ? data.binIds : [];
+    } catch (err) { addToast(err.message || `Could not ${what}.`, 'error'); return null; }
   }
   async function deleteFavs(ids) {
-    if (!(await bulk('/api/youtube/favourites/bulk-delete', { videoIds: ids }, 'remove them'))) return;
+    const binIdsOf = await bulk('/api/youtube/favourites/bulk-delete', { videoIds: ids }, 'remove them');
+    if (!binIdsOf) return;
     const gone = new Set(ids);
     setFavs((f) => f.filter((x) => !gone.has(x.videoId || x.video_id)));
     setFavSet((st) => { const n = new Set(st); ids.forEach((i) => n.delete(i)); return n; });
-    addToast(`Removed ${ids.length} from your favourites.`, 'success');
+    offerUndo({ message: `Removed ${ids.length} from your favourites.`, binIds: binIdsOf, after: loadFavs });
   }
   async function deleteWatched(ids) {
     if (!(await bulk('/api/youtube/watch-history/bulk-delete', { videoIds: ids }, 'delete them'))) return;
@@ -980,11 +969,6 @@ export default function YoutubePage() {
     setChannelVideos((v) => v.filter((x) => !gone.has(x.id)));
     setPlaylistVideos((v) => v.filter((x) => !gone.has(x.id)));
   }
-  function hideFromTrending(ids) {
-    const gone = new Set(ids);
-    setTrendingVideos((v) => v.filter((x) => !gone.has(x.id)));
-  }
-
   function loadFavs() {
     api.get('/api/youtube/favourites').then(r => r.json()).then((rows) => {
       setFavs(Array.isArray(rows) ? rows : []);
@@ -1028,14 +1012,21 @@ export default function YoutubePage() {
     }
   }
 
-  async function unfollow(f) {
+  async function unfollowMany(ids) {
+    const binIds = await bulk('/api/youtube/follows/bulk-delete', { ids }, 'unfollow them');
+    if (!binIds) return;
+    loadFollows();
+    offerUndo({ message: ids.length === 1 ? 'Unfollowed.' : `Unfollowed ${ids.length}.`, binIds, after: loadFollows });
+  }
+  const unfollow = (f) => unfollowMany([f.id]);
+  // Ticked new videos are marked as seen (they leave the list; nothing is deleted from YouTube).
+  async function dismissNew(ids) {
     try {
-      const res = await api.delete(`/api/youtube/follows/${f.id}`);
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not unfollow.');
+      await api.post('/api/youtube/follows/seen', { videoIds: ids });
+      const gone = new Set(ids);
+      setFollowNew((n) => n.filter((v) => !gone.has(v.id)));
       loadFollows();
-    } catch (err) {
-      addToast(err.message || 'Could not unfollow.', 'error');
-    }
+    } catch { addToast('Could not mark them as seen.', 'error'); }
   }
 
   // Follow a channel, or stop following it if it is already followed (used by the watch window and the channel view).
@@ -1076,45 +1067,6 @@ export default function YoutubePage() {
     api.get('/api/youtube/watch-history').then(r => r.json()).then((rows) => {
       setWatchHistory(Array.isArray(rows) ? rows : []);
     }).catch(() => {});
-  }
-
-  function loadCategories(regionCode) {
-    api.get(`/api/youtube/categories?regionCode=${encodeURIComponent(regionCode)}`).then(r => r.json()).then((data) => {
-      setCategories(Array.isArray(data.categories) ? data.categories : []);
-    }).catch(() => {});
-  }
-
-  async function loadTrending(regionCode = trendingRegion, categoryId = trendingCategory) {
-    setTrendingLoading(true);
-    setTrendingLoaded(true);
-    try {
-      const params = new URLSearchParams({ regionCode });
-      if (categoryId) params.set('categoryId', categoryId);
-      const data = await api.get(`/api/youtube/trending?${params}`).then(r => r.json());
-      if (data.error) throw new Error(data.error);
-      setTrendingVideos(data.videos ?? []);
-    } catch (err) {
-      addToast(err.message || 'Could not load trending videos.', 'error');
-    } finally {
-      setTrendingLoading(false);
-    }
-  }
-
-  function openTrendingTab() {
-    setTab('trending');
-    if (!trendingLoaded) loadTrending();
-  }
-
-  function changeTrendingRegion(regionCode) {
-    setTrendingRegion(regionCode);
-    setTrendingCategory('');
-    loadCategories(regionCode);
-    loadTrending(regionCode, '');
-  }
-
-  function changeTrendingCategory(categoryId) {
-    setTrendingCategory(categoryId);
-    loadTrending(trendingRegion, categoryId);
   }
 
   async function openPlaylist(rawInput) {
@@ -1196,11 +1148,15 @@ export default function YoutubePage() {
     }
   }
 
-  async function deleteSavedList(id) {
-    await api.delete(`/api/youtube/lists/${id}`).catch(() => {});
-    setLists((l) => l.filter((x) => x.id !== id));
-    setOpenList((o) => (o && o.id === id ? null : o));
+  async function deleteSavedLists(ids) {
+    const binIds = await bulk('/api/youtube/lists/bulk-delete', { ids }, 'delete them');
+    if (!binIds) return;
+    const gone = new Set(ids);
+    setLists((l) => l.filter((x) => !gone.has(x.id)));
+    setOpenList((o) => (o && gone.has(o.id) ? null : o));
+    offerUndo({ message: ids.length === 1 ? 'List deleted.' : `${ids.length} lists deleted.`, binIds, after: loadLists });
   }
+  const deleteSavedList = (id) => deleteSavedLists([id]);
 
   async function runSearch(rawInput, overrideParams = null) {
     const input = (rawInput ?? query).trim();
@@ -1318,7 +1274,6 @@ export default function YoutubePage() {
 
   const TAB_TOOLTIPS = {
     search: 'This search\'s results.',
-    trending: 'What\'s popular right now, by region and category.',
     favourites: 'Videos you\'ve saved for quick access.',
     history: 'Your past searches — click Re-run to search again.',
     lists: 'Named lists of results you\'ve saved to come back to later.',
@@ -1507,7 +1462,6 @@ export default function YoutubePage() {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1rem' }} data-tour="yt-tabs" data-guide="browse-tabs">
         {tabBtn('search',     'Results',    videos.length)}
-        {tabBtn('trending',   'Trending',   0, openTrendingTab)}
         {tabBtn('favourites', 'Favourites', favs.length)}
         {tabBtn('history',    'History',    history.length)}
         {tabBtn('lists',      'Lists',      lists.length)}
@@ -1610,47 +1564,6 @@ export default function YoutubePage() {
         );
       })()}
 
-      {/* ── Trending ───────────────────────────────────────────────────────── */}
-      {tab === 'trending' && (
-        <div>
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-            <Tooltip text="Show what's popular in this region.">
-              <select value={trendingRegion} onChange={(e) => changeTrendingRegion(e.target.value)} style={selectStyle}>
-                {REGION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </Tooltip>
-            <Tooltip text="Only show trending videos in this category.">
-              <select value={trendingCategory} onChange={(e) => changeTrendingCategory(e.target.value)} style={selectStyle}>
-                <option value="">All categories</option>
-                {categories.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
-              </select>
-            </Tooltip>
-          </div>
-
-          {trendingLoading && (
-            <div style={{ textAlign: 'center', padding: '4rem 2rem', color: 'var(--color-muted)', fontSize: '0.9rem' }}>Loading trending videos…</div>
-          )}
-          {!trendingLoading && trendingVideos.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '1rem' }}>
-              <p style={{ color: 'var(--color-muted)', fontSize: '0.9rem' }}>No trending videos found for this region/category.</p>
-            </div>
-          )}
-          {!trendingLoading && trendingVideos.length > 0 && (
-            <>
-              <div style={{ marginBottom: '0.75rem' }}>
-                <SelectBar sel={trendingSel} allIds={trendingVideos.map((v) => v.id)} verb="Remove" noun="videos"
-                  tip="Take the ticked videos off this page. Nothing saved is changed." onDelete={async (ids) => hideFromTrending(ids)} />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
-                {trendingVideos.map((v) => (
-                  <VideoCard key={v.id} video={v} isFav={favSet.has(v.id)} onPlay={setActiveVideo} onToggleFav={toggleFav} select={selProps(trendingSel, v.id)} />
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
       {/* ── Favourites ─────────────────────────────────────────────────────── */}
 
       {/* ── Following ─────────────────────────────────────────── */}
@@ -1666,6 +1579,8 @@ export default function YoutubePage() {
                   {followChecking ? 'Checking…' : 'Check now'}
                 </button>
               </Tooltip>
+              <SelectBar sel={followNewSel} allIds={followNew.map((v) => v.id)} verb="Dismiss" noun="videos"
+                tip="Mark the ticked new videos as seen so they leave this list. Nothing is deleted from YouTube." onDelete={dismissNew} />
               <Tooltip text="Clear the list of new videos. They are not deleted from YouTube, you just will not be reminded of them.">
                 <button onClick={markAllFollowSeen} disabled={followNew.length === 0} style={{ ...btnBase, padding: '0.3rem 0.7rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)', opacity: followNew.length === 0 ? 0.5 : 1 }}>
                   Mark all as seen
@@ -1677,7 +1592,7 @@ export default function YoutubePage() {
           {followNew.length > 0 ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
               {followNew.map((v) => (
-                <VideoCard key={v.id} video={v} isFav={favSet.has(v.id)} onPlay={setActiveVideo} onToggleFav={toggleFav} />
+                <VideoCard key={v.id} video={v} isFav={favSet.has(v.id)} onPlay={setActiveVideo} onToggleFav={toggleFav} select={selProps(followNewSel, v.id)} />
               ))}
             </div>
           ) : (
@@ -1688,11 +1603,18 @@ export default function YoutubePage() {
             </p>
           )}
 
-          <p style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-text)' }}>You follow</p>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', flexWrap: 'wrap', margin: '0 0 0.5rem' }}>
+            <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: 'var(--color-text)' }}>You follow</p>
+            <SelectBar sel={followSel} allIds={follows.map((f) => f.id)} verb="Unfollow" noun="follows"
+              tip="Stop following the ticked channels and searches. They go to the recycle bin for 30 days, so you can bring them back." onDelete={unfollowMany} />
+          </div>
           {follows.length === 0 && <p style={{ color: 'var(--color-muted)', fontSize: '0.8rem', margin: 0 }}>Nothing yet.</p>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
             {follows.map((f) => (
-              <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
+              <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: `1px solid ${followSel.mode && followSel.has(f.id) ? 'var(--color-primary)' : 'var(--color-border)'}`, background: 'var(--color-surface)' }}>
+                {followSel.mode && (
+                  <input type="checkbox" checked={followSel.has(f.id)} onChange={() => followSel.toggle(f.id)} aria-label={`Select ${f.kind === 'channel' ? f.channelTitle : f.query}`} style={{ cursor: 'pointer', flexShrink: 0 }} />
+                )}
                 <span aria-hidden="true" style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', width: 56, flexShrink: 0 }}>{f.kind === 'channel' ? 'Channel' : 'Search'}</span>
                 <span style={{ flex: 1, minWidth: 0, fontSize: '0.85rem', color: 'var(--color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {f.kind === 'channel' ? f.channelTitle : `“${f.query}”`}
@@ -1700,7 +1622,7 @@ export default function YoutubePage() {
                 </span>
                 {f.newCount > 0 && <span style={{ fontSize: '0.7rem', fontWeight: 700, background: 'var(--color-primary)', color: '#fff', padding: '1px 7px', borderRadius: 10 }}>{f.newCount} new</span>}
                 <span style={{ fontSize: '0.72rem', color: 'var(--color-muted)', flexShrink: 0 }}>{f.lastCheckedAt ? `checked ${timeAgo(f.lastCheckedAt)}` : 'not checked yet'}</span>
-                <Tooltip text={f.kind === 'channel' ? 'Stop following this channel.' : 'Stop following this search.'}>
+                <Tooltip text={f.kind === 'channel' ? 'Stop following this channel. It goes to the recycle bin for 30 days.' : 'Stop following this search. It goes to the recycle bin for 30 days.'}>
                   <button onClick={() => unfollow(f)} aria-label={`Unfollow ${f.kind === 'channel' ? f.channelTitle : f.query}`} style={{ ...btnBase, padding: '0.25rem 0.6rem', fontSize: '0.72rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>Unfollow</button>
                 </Tooltip>
               </div>
@@ -1924,7 +1846,7 @@ export default function YoutubePage() {
                   </button>
                 </Tooltip>
                 <p style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-text)', margin: 0 }}>{openList.title}</p>
-                <Tooltip text="Permanently delete this saved list.">
+                <Tooltip text="Delete this saved list. It goes to the recycle bin for 30 days.">
                   <button onClick={() => deleteSavedList(openList.id)} style={{ ...btnBase, marginLeft: 'auto', padding: '0.3rem 0.7rem', fontSize: '0.75rem', background: '#fee2e2', border: '1px solid #fca5a5', color: '#ef4444' }}>
                     Delete list
                   </button>
@@ -1953,9 +1875,17 @@ export default function YoutubePage() {
               <p style={{ color: 'var(--color-muted)', fontSize: '0.9rem' }}>No saved lists yet. Run a search, then use "Save this search as a list".</p>
             </div>
           ) : (
+            <div>
+            <div style={{ marginBottom: '0.75rem' }}>
+              <SelectBar sel={listSel} allIds={lists.map((l) => l.id)} verb="Delete" noun="lists"
+                tip="Delete the ticked lists. They go to the recycle bin for 30 days, so you can bring them back." onDelete={deleteSavedLists} />
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {lists.map((l) => (
-                <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderRadius: '0.5rem', border: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
+                <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderRadius: '0.5rem', border: `1px solid ${listSel.mode && listSel.has(l.id) ? 'var(--color-primary)' : 'var(--color-border)'}`, background: 'var(--color-surface)' }}>
+                  {listSel.mode && (
+                    <input type="checkbox" checked={listSel.has(l.id)} onChange={() => listSel.toggle(l.id)} aria-label={`Select ${l.title}`} style={{ cursor: 'pointer', flexShrink: 0 }} />
+                  )}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>{l.title}</p>
                     <p style={{ fontSize: '0.7rem', color: 'var(--color-muted)', margin: '2px 0 0' }}>{l.itemCount} video{l.itemCount === 1 ? '' : 's'} · {timeAgo(l.createdAt)}</p>
@@ -1963,11 +1893,12 @@ export default function YoutubePage() {
                   <Tooltip text="Open this list's videos.">
                     <button onClick={() => openSavedList(l)} style={{ fontSize: '0.75rem', fontWeight: 600, padding: '4px 10px', borderRadius: 5, border: '1px solid var(--color-primary)', background: 'none', color: 'var(--color-primary)', cursor: 'pointer', fontFamily: 'inherit' }}>Open</button>
                   </Tooltip>
-                  <Tooltip text="Permanently delete this saved list.">
-                    <button onClick={() => deleteSavedList(l.id)} style={{ fontSize: '0.75rem', padding: '4px 8px', borderRadius: 5, border: '1px solid var(--color-border)', background: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontFamily: 'inherit' }}>×</button>
+                  <Tooltip text="Delete this saved list. It goes to the recycle bin for 30 days.">
+                    <button onClick={() => deleteSavedList(l.id)} aria-label={`Delete ${l.title}`} style={{ fontSize: '0.75rem', padding: '4px 8px', borderRadius: 5, border: '1px solid var(--color-border)', background: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontFamily: 'inherit' }}>×</button>
                   </Tooltip>
                 </div>
               ))}
+            </div>
             </div>
           )}
         </div>

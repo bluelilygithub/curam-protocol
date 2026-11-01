@@ -1,6 +1,6 @@
 # YouTube
 
-A YouTube search tool mounted in Vault at **`/youtube`**. Search by keyword or plain-language description, watch videos in an embedded player, pull a transcript or AI summary (with a language picker), browse more from a channel or open a full playlist, filter to live streams, see comments, browse trending videos by region/category, save favourites, save whole result sets as named lists, replay past searches, and see a recently-watched list.
+A YouTube search tool mounted in Vault at **`/youtube`**. Search by keyword or plain-language description, watch videos in an embedded player, pull a transcript or AI summary (with a language picker), browse more from a channel or open a full playlist, filter to live streams, see comments, save favourites, save whole result sets as named lists, replay past searches, and see a recently-watched list.
 
 **Frontend:** `vault/client/src/pages/YoutubePage.jsx`
 **Backend:** `vault/server/routes/youtube.js` (mounted at `/api/youtube`)
@@ -22,10 +22,8 @@ Requires `YOUTUBE_API_KEY` (YouTube Data API v3). Feature flag `youtube` in work
 - **History** — every search is recorded (`youtube_search_history`, last 30 shown), with a one-click "Re-run" to repeat a past search exactly, and per-row delete.
 - **Saved lists** — "Save this search as a list" on the results view (or a channel/playlist view) prompts for a title and saves the current set of videos as a named list, separate from per-video favourites. A "Lists" tab shows saved lists; opening one shows its videos in the same grid; a list can be deleted entirely.
 - **Playlists** — paste a full YouTube playlist URL or a bare playlist id into the "Open playlist" field near the search form to view it as an ordered set of videos in the same grid, with a "back to search" affordance matching the channel-view pattern.
-- **Trending** — a "Trending" tab shows what's currently popular (`videos.list(chart=mostPopular)`), with a region dropdown (US/GB/AU/CA/IN) and an optional category filter fed by the categories endpoint.
 - **Live now filter** — a "Live now" checkbox next to the other search filters restricts results to currently-broadcasting live streams matching the query (`eventType=live`).
 - **Comments** — from the watch modal, a "Comments" button opens a read-only panel of top-level comments (author, text, like count, relative time) with a "Load more" page. Videos with comments disabled show a friendly message instead of a raw error.
-- **Category browsing** — `videoCategories.list` backs the Trending category dropdown; there's no separate category-browsing surface since Trending already covers the real use case.
 - **Subtitle language picker** — the transcript panel lists all available caption languages for a video (when more than one exists) and lets you pick one before fetching the transcript or a summary, instead of always defaulting to English/first.
 - **Recently watched** — opening the watch modal on any video records it (upsert on videoId, most-recent-first, capped display of last 30). A collapsible "Recently watched" section sits at the top of the History tab, with per-video removal via the same grid and a "Clear all" convenience action.
 
@@ -40,7 +38,6 @@ POST   /api/youtube/parse-query        JSON { input } → { q, order, duration, 
 GET    /api/youtube/search             ?q=&order=&duration=&publishedAfter=&eventType= → { videos, totalResults }
 GET    /api/youtube/channel/:channelId → { videos, totalResults } — that channel's videos, newest first
 GET    /api/youtube/playlist/:playlistId → { videos, totalResults } — a playlist's videos in order (accepts a full playlist URL or a bare id)
-GET    /api/youtube/trending           ?regionCode=&categoryId= → { videos, totalResults } — currently popular videos
 GET    /api/youtube/categories         ?regionCode= → { categories: [{ id, title }] } — assignable video categories for a region
 GET    /api/youtube/comments/:videoId  ?pageToken= → { comments: [{ id, author, authorImage, text, likeCount, publishedAt }], nextPageToken }
 POST   /api/youtube/transcript         JSON { videoId, summarize?, languageCode? } → { title, transcript, summary? }
@@ -63,7 +60,6 @@ DELETE /api/youtube/lists/:id/items/:videoId   remove one video from a saved lis
 
 Search results are two YouTube Data API calls per request: `search.list` (query + filters) then `videos.list` (duration/view-count enrichment for the matched ids). The `/channel/:channelId` and `/playlist/:playlistId` routes reuse the same `enrichAndMapItems()` helper — extended to also read a playlist item's `snippet.resourceId.videoId` shape — against `search.list`/`playlistItems.list` calls instead of a text query. `snippet.channelId` is included in every mapped video object so the client can offer "More from this channel". `eventType=live` is an additive param on `/search`, only meaningful alongside the hardcoded `type=video`.
 
-`/trending` calls `videos.list(chart=mostPopular)` directly — that call already returns `contentDetails`/`statistics` in one shot, so no second enrichment call is made (unlike search/channel/playlist). `/categories` calls `videoCategories.list` and filters to `snippet.assignable` categories; the client's Trending tab is the only consumer of this list today.
 
 `/transcript` calls the existing `fetchYoutubeTranscript()` service, now accepting an optional `languageCode` to pick a specific caption track instead of always defaulting to English/first. `/transcript-languages/:videoId` calls a new shared `fetchCaptionTracks()` helper (factored out of `fetchYoutubeTranscript()`) to list available languages without fetching transcript text. When `summarize` is true, `/transcript` also sends the transcript to `callModel` on the workspace `light` tier (via `getModelsForUser`) with a short system prompt asking for a concise summary. A video with no captions returns a 404 with a friendly message rather than the raw service error.
 
@@ -134,7 +130,7 @@ Not built yet (from the 2026-11 review): quiz/flashcards from a video, a tagged 
 
 ## Tooltips
 
-Every control (search input, mic button, sort/duration/date/live filters, Search button, tab switcher, favourite/remove/close buttons, history Re-run/delete, transcript/summarize/copy/language picker, comments/load-more, more-from-channel, open-playlist, back-to-search, trending region/category, save-as-list, open/delete list, recently-watched toggle/remove/clear-all) shows a themed hover popover via the shared `client/src/components/Tooltip.jsx` component — same one used by Graphics, PDF Tools, and Video Tools. This is a single-purpose page rather than a multi-tool grid, so it doesn't have the click-to-open per-tool help-icon layer those three pages have; the hover tooltips cover it.
+Every control (search input, mic button, sort/duration/date/live filters, Search button, tab switcher, favourite/remove/close buttons, history Re-run/delete, transcript/summarize/copy/language picker, comments/load-more, more-from-channel, open-playlist, back-to-search, save-as-list, open/delete list, recently-watched toggle/remove/clear-all) shows a themed hover popover via the shared `client/src/components/Tooltip.jsx` component — same one used by Graphics, PDF Tools, and Video Tools. This is a single-purpose page rather than a multi-tool grid, so it doesn't have the click-to-open per-tool help-icon layer those three pages have; the hover tooltips cover it.
 
 ---
 
@@ -155,3 +151,6 @@ Every control (search input, mic button, sort/duration/date/live filters, Search
 | `YOUTUBE_API_KEY` | YouTube Data API v3 — search + video details |
 
 ---
+
+- **Trending removed (2026-11)** - the Trending tab and its `GET /trending` and `GET /categories` routes were taken out; search and the Following tab cover finding videos.
+- **Soft deletes (2026-11)** - saved lists, follows and favourites go to the shared recycle bin (30 days): `server/services/recycleBin/adapters/youtube.js` (`youtube-list`, `youtube-follow`, `youtube-favourite`; a favourite keeps its category, tags and kept caption text). `DELETE /lists/:id`, `/follows/:id`, `/favourites/:videoId` and the `POST .../bulk-delete` routes (lists, follows, favourites) answer `binIds`; the page shows an Undo toast (`utils/binUndo.js`). Search history and Recently watched are plain logs and are still deleted for good. The Lists tab and the Following tab (new videos, and the list of what you follow) have Select tick boxes like the other lists.
