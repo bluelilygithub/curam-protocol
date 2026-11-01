@@ -6,8 +6,8 @@
 //   - every [S#] a claim cites must be a real source of this case;
 //   - every quote must be word for word in the text that was sent, or it is dropped (and counted);
 //   - a claim with no valid source is marked "uncited" so the page can say so.
-// The summary is made on request and not stored. Each question and its answer IS saved with the case (caseStore.addQuestion, table
-// ef_questions) as a log for later reference; the ledger stays the record of what is owed.
+// Each summary (table ef_summaries) and each question with its answer (table ef_questions) is saved with the case as it was shown, for later
+// reference (caseStore.addSummary / addQuestion); the ledger stays the record of what is owed.
 // Same `deps` ({ getModels, callModel, logUsage }) shape as extract.js, so tests run without a model.
 
 const { locateQuote } = require('./extract');
@@ -304,6 +304,7 @@ async function summariseCase(userId, c, corpus, deps = {}) {
   log({ userId, model: result.model || modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'email_follow_up_summary' });
   const summary = normalizeSummary(String(result.text || ''), corpus);
   if (!summary) throw Object.assign(new Error('The AI answered in a form that could not be read. Please try again.'), { status: 502 });
+  summary.model = result.model || modelId; // kept with the saved summary
   return summary;
 }
 

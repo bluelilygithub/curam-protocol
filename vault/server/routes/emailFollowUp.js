@@ -456,7 +456,23 @@ router.post('/:id/summary', aiLimiter, async (req, res) => {
     if (!c) return;
     const { corpus, left } = await corpusFor(req, c);
     const summary = await caseAsk.summariseCase(req.user.id, c, corpus);
-    res.json({ summary, ...corpusInfo(corpus, left), at: new Date().toISOString() });
+    // Every summary is kept with the case. If saving fails the person still gets it, and is told it was not kept.
+    let saved = null;
+    try {
+      saved = await store.addSummary(req.user.id, c.id, {
+        summary, sources: corpus.index.map(({ sourceId, ...rest }) => rest), cut: corpus.cut, left, count: corpus.count, model: summary.model,
+      });
+    } catch (err) { log().error({ err: err && err.message }, '[email-follow-up] could not save a summary'); }
+    res.json({ summary, ...corpusInfo(corpus, left), at: saved ? saved.createdAt : new Date().toISOString(), saved: saved ? { id: saved.id, createdAt: saved.createdAt } : null });
+  } catch (err) { fail(res, err); }
+});
+
+// The case's saved summaries, newest first.
+router.get('/:id/summaries', async (req, res) => {
+  try {
+    const c = await loadCase(req, res);
+    if (!c) return;
+    res.json({ summaries: await store.listSummaries(c.id) });
   } catch (err) { fail(res, err); }
 });
 

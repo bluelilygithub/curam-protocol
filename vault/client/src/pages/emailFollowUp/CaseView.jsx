@@ -358,7 +358,11 @@ function AskPanel({ caseId, usable, locked, state, setState }) {
     const r = await withBox('Summarising your case…', `The AI is reading all ${usable} attached item${usable === 1 ? '' : 's'} together. This can take a minute or two for a long thread.`, 'Reading the mail and writing the summary',
       () => call(() => api.post(`/api/email-follow-up/${caseId}/summary`, {})));
     setBusy('');
-    if (r.ok) setState((s) => ({ ...s, summary: r.data }));
+    if (r.ok) {
+      if (!r.data.saved) toast('The summary could not be saved with the case. Copy it if you want to keep it.', 'error');
+      const item = { key: r.data.saved ? `s${r.data.saved.id}` : `n${Date.now()}`, saved: !!r.data.saved, summary: r.data.summary, sources: r.data.sources, cut: r.data.cut, left: r.data.left, count: r.data.count, model: r.data.summary.model, at: r.data.at };
+      setState((s) => ({ ...s, summary: item, summaries: [item, ...s.summaries] }));
+    }
   };
   const send = async () => {
     const question = q.trim();
@@ -393,14 +397,22 @@ function AskPanel({ caseId, usable, locked, state, setState }) {
   return (
     <div className="space-y-5" data-guide="ask" data-tour="ef-ask">
       <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-        The AI reads the {usable} attached email{usable === 1 ? '' : 's'} and readable attachment{usable === 1 ? '' : 's'} together, then answers from them only. Every claim points at its source number; hover a number to see which email. It is not legal advice: check the original wording. Your questions and the answers are saved with this case, so you can come back to them; the summary is made fresh each time and is not saved.
+        The AI reads the {usable} attached email{usable === 1 ? '' : 's'} and readable attachment{usable === 1 ? '' : 's'} together, then answers from them only. Every claim points at its source number; hover a number to see which email. It is not legal advice: check the original wording. Every summary and every question with its answer is saved with this case, so you can come back to them: the latest summary is shown when you open the case.
       </p>
 
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <Btn primary disabled={busy === 'summary' || !usable} tip={EF_TIPS.summarise(usable)} onClick={summarise}>{busy === 'summary' ? 'Reading everything…' : summary ? 'Summarise again' : 'Summarise this case'}</Btn>
-          {summary && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Made {new Date(summary.at).toLocaleString()} from {summary.count} item{summary.count === 1 ? '' : 's'}.</span>}
+          {summary && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Made {new Date(summary.at).toLocaleString()} from {summary.count} item{summary.count === 1 ? '' : 's'}{summary.model ? ` · by ${summary.model}` : ''} · {summary.saved ? <span style={{ color: GOOD }}>saved with this case ✓</span> : <span style={{ color: WARN }}>NOT saved: copy it if you want to keep it</span>}</span>}
+          {state.summaries.length > 1 && (
+            <Tooltip text={EF_TIPS.olderSummaries}>
+              <select className={`${FIELD} text-xs`} style={FIELD_STYLE} aria-label="Earlier summaries" value={summary ? summary.key : ''} onChange={(e) => setState((s) => ({ ...s, summary: s.summaries.find((x) => x.key === e.target.value) || s.summary }))}>
+                {state.summaries.map((x, i) => <option key={x.key} value={x.key}>{i === 0 ? 'Latest: ' : 'Earlier: '}{new Date(x.at).toLocaleString()}</option>)}
+              </select>
+            </Tooltip>
+          )}
         </div>
+        {summary && usable !== summary.count && <p className="text-xs" style={{ color: WARN }}>The case has {usable} readable item{usable === 1 ? '' : 's'} now, and this summary was made from {summary.count}. Press Summarise again to include the change.</p>}
         {summary && <SummaryView result={summary} onCopy={() => copy(summaryText())} />}
       </div>
 
@@ -475,11 +487,16 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
   const [delForever, setDelForever] = useState(false);
   const [delNote, setDelNote] = useState('');
   const [removing, setRemoving] = useState(''); // threadId waiting for "Yes, remove"
-  const [askState, setAskState] = useState({ summary: null, turns: [] }); // the summary and this sitting's answers, kept while you move between tabs; the questions are loaded from the saved log below
+  const [askState, setAskState] = useState({ summary: null, summaries: [], turns: [] }); // the summary and this sitting's answers, kept while you move between tabs; the questions are loaded from the saved log below
   // The saved questions come back whenever a case is opened, so the log is always there for later reference.
   useEffect(() => {
     let live = true;
-    setAskState({ summary: null, turns: [] });
+    setAskState({ summary: null, summaries: [], turns: [] });
+    api.get(`/api/email-follow-up/${caseId}/summaries`).then((r) => r.json()).then((d) => {
+      if (!live || !Array.isArray(d.summaries)) return;
+      const list = d.summaries.map((x) => ({ key: `s${x.id}`, saved: true, summary: x.summary, sources: x.sources || [], cut: x.cut || [], left: x.left || [], count: x.count, model: x.model, at: x.createdAt }));
+      setAskState((s) => ({ ...s, summaries: list, summary: s.summary || list[0] || null })); // the newest one is shown when the case is opened
+    }).catch(() => { /* no saved summaries shown; summarising still works */ });
     api.get(`/api/email-follow-up/${caseId}/questions`).then((r) => r.json()).then((d) => {
       if (!live || !Array.isArray(d.questions)) return;
       setAskState((s) => ({ ...s, turns: d.questions.map((x) => ({ key: `q${x.id}`, live: false, question: x.question, answer: x.answer, sources: x.sources || [], cut: x.cut || [], left: x.left || [], model: x.model, createdAt: x.createdAt })) }));
@@ -636,7 +653,7 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
         <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: BAD, background: 'var(--color-surface)' }}>
           <h3 className="text-base font-semibold">Delete this case?</h3>
           <p className="text-sm leading-relaxed">
-            This removes {delPreview.messages} message{delPreview.messages === 1 ? '' : 's'}, {delPreview.attachments} attachment{delPreview.attachments === 1 ? '' : 's'}, {delPreview.drafts} draft{delPreview.drafts === 1 ? '' : 's'}, {delPreview.approvals} approval record{delPreview.approvals === 1 ? '' : 's'}, {delPreview.sweeps} Sent check{delPreview.sweeps === 1 ? '' : 's'}, {delPreview.questions || 0} saved question{delPreview.questions === 1 ? '' : 's'} and the ledger of {delPreview.rows} row{delPreview.rows === 1 ? '' : 's'}.
+            This removes {delPreview.messages} message{delPreview.messages === 1 ? '' : 's'}, {delPreview.attachments} attachment{delPreview.attachments === 1 ? '' : 's'}, {delPreview.drafts} draft{delPreview.drafts === 1 ? '' : 's'}, {delPreview.approvals} approval record{delPreview.approvals === 1 ? '' : 's'}, {delPreview.sweeps} Sent check{delPreview.sweeps === 1 ? '' : 's'}, {delPreview.questions || 0} saved question{delPreview.questions === 1 ? '' : 's'}, {delPreview.summaries || 0} saved summar{delPreview.summaries === 1 ? 'y' : 'ies'} and the ledger of {delPreview.rows} row{delPreview.rows === 1 ? '' : 's'}.
             Your Gmail is not touched.{delPreview.tasks ? ` The ${delPreview.tasks} task${delPreview.tasks === 1 ? '' : 's'} made from this case stay in Tasks.` : ''} A copy waits 30 days in Settings, Recycle bin, unless you choose Delete forever below.
           </p>
           {delPreview.approvedEver > 0 && (

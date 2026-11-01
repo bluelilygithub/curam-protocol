@@ -1691,6 +1691,23 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ef_questions_case ON ef_questions ("caseId", id)`);
+    // Each summary made on the Summary and Ask tab, as it was shown, with the list of emails its [S#] numbers meant then. The newest is shown when
+    // the case is opened; older ones stay to look back at (20 kept per case).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ef_summaries (
+        id          SERIAL PRIMARY KEY,
+        "caseId"    INTEGER NOT NULL REFERENCES ef_cases(id) ON DELETE CASCADE,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        summary     JSONB NOT NULL,
+        sources     JSONB NOT NULL DEFAULT '[]',
+        cut         JSONB NOT NULL DEFAULT '[]',
+        "leftOut"   JSONB NOT NULL DEFAULT '[]',
+        "itemCount" INTEGER NOT NULL DEFAULT 0,
+        model       TEXT,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ef_summaries_case ON ef_summaries ("caseId", id DESC)`);
     // Closing a case (finished, off the list) and setting a thread aside (kept so citations still resolve, but no longer read).
     await client.query(`ALTER TABLE ef_cases ADD COLUMN IF NOT EXISTS "closedAt" TIMESTAMPTZ`);
     await client.query(`ALTER TABLE ef_cases ADD COLUMN IF NOT EXISTS "closeReason" TEXT`);

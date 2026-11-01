@@ -100,7 +100,7 @@ export function startEmailFollowUpTour() {
   tour.addStep({
     id: 'ef-ask',
     title: 'Summary and Ask',
-    text: 'The ledger lists what is owed; this tab tells the story. Press Summarise to have the AI read all the attached mail together and show where each point stands (agreed, proposed, disputed or open), what is still open and anything that contradicts itself. Or ask a question, such as "what did we agree about payment?". Every claim has a source number: hover it to see which email. Answers use only the attached mail, your questions and answers are saved with the case, and it is not legal advice. Pick the model in Settings, Email Follow-Up.',
+    text: 'The ledger lists what is owed; this tab tells the story. Press Summarise to have the AI read all the attached mail together and show where each point stands (agreed, proposed, disputed or open), what is still open and anything that contradicts itself. Or ask a question, such as "what did we agree about payment?". Every claim has a source number: hover it to see which email. Answers use only the attached mail, every summary and every question and answer is saved with the case, and it is not legal advice. Pick the model in Settings, Email Follow-Up.',
     attachTo: { element: '[data-tour="ef-tabs"]', on: 'bottom' },
     beforeShowPromise: check('ef-ask', '[data-tour="ef-tabs"]'),
     when: { show() { injectStepCounter(6); } },
