@@ -17,18 +17,11 @@ export default function SelectBar({ sel, allIds, verb = 'Delete', noun = 'videos
     try { await onDelete([...sel.ids]); sel.stop(); } finally { setBusy(false); setConfirm(false); }
   }
 
-  if (!sel.mode) {
-    return (
-      <Tooltip text={`Tick several ${noun} to ${verb.toLowerCase()} them together.`}>
-        <button type="button" onClick={sel.start} disabled={!all.length} style={{ ...small, opacity: all.length ? 1 : 0.5 }}>Select</button>
-      </Tooltip>
-    );
-  }
-
   const allTicked = all.length > 0 && all.every((id) => sel.has(id));
+  if (!all.length) return null;
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
-      <button type="button" onClick={() => (allTicked ? sel.clear() : sel.setAll(all))} style={small}>{allTicked ? 'Clear' : `Select all (${all.length})`}</button>
+      <button type="button" onClick={() => (allTicked ? sel.clear() : sel.setAll(all))} style={small}>{allTicked ? 'Clear selection' : `Select all (${all.length})`}</button>
       <span style={{ fontSize: '0.75rem', color: 'var(--color-muted)' }}>{sel.count} selected</span>
       {!confirm ? (
         <Tooltip text={tip || `${verb} the ticked ${noun}.`}>
@@ -41,7 +34,6 @@ export default function SelectBar({ sel, allIds, verb = 'Delete', noun = 'videos
           <button type="button" disabled={busy} onClick={() => setConfirm(false)} style={small}>No</button>
         </span>
       )}
-      <button type="button" onClick={() => { setConfirm(false); sel.stop(); }} style={small}>Done</button>
     </div>
   );
 }

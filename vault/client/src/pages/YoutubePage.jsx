@@ -128,7 +128,7 @@ const btnBase = {
 // ── Video Card ────────────────────────────────────────────────────────────────
 
 function VideoCard({ video, isFav, onPlay, onToggleFav, select }) {
-  const open = () => (select && select.on ? select.onToggle() : onPlay(video));
+  const open = () => onPlay(video);
   const dur   = parseDuration(video.duration);
   const views = fmtViews(video.viewCount);
   const ago   = timeAgo(video.publishedAt);
@@ -216,7 +216,7 @@ function FavCard({ fav, hit, noteId, select, onPlay, onRemove, onLabels, onNote,
     publishedAt: fav.publishedAt || fav.published_at,
   };
 
-  const open = () => (select && select.on ? select.onToggle() : onPlay(playable));
+  const open = () => onPlay(playable);
 
   return (
     <div style={{ display: 'flex', gap: '0.75rem', padding: '0.6rem', borderRadius: '0.5rem', border: select && select.checked ? '2px solid var(--color-primary)' : '1px solid var(--color-border)', background: 'var(--color-surface)', alignItems: 'center' }}>
