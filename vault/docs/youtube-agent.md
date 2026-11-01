@@ -73,6 +73,29 @@ Search results are two YouTube Data API calls per request: `search.list` (query 
 
 ---
 
+## Study tools: insights, ask this video, save to Notes (added 2026-11)
+
+Open any video and press **Insights & Ask** (under the player). Everything is read from the video's **captions** only (nothing from the picture or sound), so a video with no captions cannot be done.
+
+- **Insights** - AI notes written once and kept (`youtube_video_insights`, one per person, video and caption language): overview, key points, chapters, things to do, quotes. Every key point, chapter and quote carries a time; clicking it reloads the player at that moment. Written by the workspace `light` model from the timestamped transcript (`[m:ss] words` lines, about 20 seconds each, cut at 90,000 characters; a longer video says "These notes cover the first N minutes"). Refresh writes them again.
+- **Ask this video** - type a question, get an answer taken from the captions, with the moments it comes from (clickable). Uses the workspace `standard` model. A long video sends only the minute-long windows that share the most words with the question. If the video does not say, the answer is "The video doesn't cover that." Follow-ups carry the last four turns.
+- **Save to Notes** - builds a Markdown note (link, summary, key points and chapters with timestamp links, `- [ ]` to-dos, quotes, a line saying AI wrote it) and saves it through the normal Notes API, optionally filed under a project and/or linked to a client. A toast links to the note.
+- **Transcript timestamps** - the Transcript panel has a Timestamps view (line by line; click a time to jump the player).
+
+Both models treat the transcript as untrusted data (the prompts say so) and everything they return is parsed, stripped of HTML, clamped to the video's length and cut to size before it is stored or shown (`server/services/youtubeInsights.js`, tested without a model in `youtubeInsights.test.js`).
+
+Routes: `GET /insights/:videoId`, `POST /insights {videoId, languageCode?, refresh?}`, `POST /ask {videoId, languageCode?, question, history?}`, `POST /note-draft {videoId, channel?}` (the last three behind the per-user AI rate limit), `GET /quota`. `POST /transcript` now also returns `segments: [{start, text}]` (the plain `transcript` text and `fetchYoutubeTranscript()`'s `{title, content}` are unchanged, so pinned URLs and Fetch URL behave as before; the function also returns `segments` and `languageCode`).
+
+## Cache and quota (added 2026-11)
+
+Every YouTube Data API call goes through `server/services/youtubeApi.js`: answers are cached (searches, details and playlists 6 hours, channels 12, categories 24, comments 1) in `youtube_api_cache` and deleted after **7 days** (the API terms limit how long API data may be kept); the day's quota is counted in `youtube_quota` (a search is 100 units, anything else about 1; the allowance resets at midnight **Pacific** time; `YOUTUBE_DAILY_QUOTA` overrides the default 10,000). A spent allowance (counted, or reported by Google) gives a plain **429** message instead of a raw Google error; searches already cached still work. The page warns when about 20 new searches are left. The captions themselves (InnerTube, not the Data API) are held in memory for 30 minutes so several questions about one video fetch them once. `npm run test:youtube`.
+
+Fixed at the same time: the page called `addToast({ type, message })` but the toast store takes `(message, type)`, so those toasts (copied, saved as a list, errors) could not render properly.
+
+Not built yet (from the 2026-11 review): following channels and saved-search alerts, quiz/flashcards from a video, a tagged watch-later queue, search across saved transcripts, comparing several videos, YouTube as a Topic Research source.
+
+---
+
 ## Tooltips
 
 Every control (search input, mic button, sort/duration/date/live filters, Search button, tab switcher, favourite/remove/close buttons, history Re-run/delete, transcript/summarize/copy/language picker, comments/load-more, more-from-channel, open-playlist, back-to-search, trending region/category, save-as-list, open/delete list, recently-watched toggle/remove/clear-all) shows a themed hover popover via the shared `client/src/components/Tooltip.jsx` component — same one used by Graphics, PDF Tools, and Video Tools. This is a single-purpose page rather than a multi-tool grid, so it doesn't have the click-to-open per-tool help-icon layer those three pages have; the hover tooltips cover it.

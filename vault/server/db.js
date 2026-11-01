@@ -3390,6 +3390,38 @@ async function initSchema() {
       ON youtube_watch_history ("userId", "watchedAt" DESC)
   `);
 
+  // YouTube Data API answers cached for a few hours, and the day's quota use (services/youtubeApi.js). API data is deleted after 7 days.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS youtube_api_cache (
+      key         TEXT PRIMARY KEY,
+      payload     JSONB NOT NULL,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_youtube_api_cache_created ON youtube_api_cache ("createdAt")`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS youtube_quota (
+      day   DATE PRIMARY KEY,
+      units INTEGER NOT NULL DEFAULT 0
+    )
+  `);
+  // The AI's notes on a video (summary, key points, chapters, to-dos, quotes), one per person, video and caption language, so they are
+  // paid for once. Written by the model from the captions; see services/youtubeInsights.js.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS youtube_video_insights (
+      "userId"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "videoId"      TEXT NOT NULL,
+      "languageCode" TEXT NOT NULL DEFAULT '',
+      title          TEXT,
+      insights       JSONB NOT NULL,
+      model          TEXT,
+      truncated      BOOLEAN NOT NULL DEFAULT FALSE,
+      "coveredSec"   INTEGER NOT NULL DEFAULT 0,
+      "createdAt"    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY ("userId", "videoId", "languageCode")
+    )
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS gmail_classifications (
       "userId"        TEXT NOT NULL,

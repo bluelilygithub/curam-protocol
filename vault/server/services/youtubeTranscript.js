@@ -92,35 +92,40 @@ async function fetchVideoTitle(videoId) {
   }
 }
 
-// Parse caption XML into plain text (strips timestamps)
-function parseCaptionXml(xml) {
+const decodeEntities = (t) => t
+  .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+  .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'")
+  .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+  .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(parseInt(n, 10)));
+
+// Parse caption XML into timed segments [{ start, dur, text }] (seconds). Handles YouTube's two formats: newer <p t="ms" d="ms"> and legacy
+// <text start="s" dur="s">.
+function parseCaptionSegments(xml) {
   const segments = [];
   // Try TTML <p> tags first (newer format)
-  const pRe = /<p\s+t="\d+"[^>]*>([\s\S]*?)<\/p>/g;
+  const pRe = /<p\s+([^>]*)>([\s\S]*?)<\/p>/g;
   let m;
   while ((m = pRe.exec(xml)) !== null) {
-    const text = m[1]
-      .replace(/<s[^>]*>([^<]*)<\/s>/g, '$1')
-      .replace(/<[^>]+>/g, '')
-      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'")
-      .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
-      .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(parseInt(n, 10)))
-      .trim();
-    if (text) segments.push(text);
+    const t = /\bt="(\d+)"/.exec(m[1]);
+    if (!t) continue;
+    const d = /\bd="(\d+)"/.exec(m[1]);
+    const text = decodeEntities(m[2].replace(/<s[^>]*>([^<]*)<\/s>/g, '$1').replace(/<[^>]+>/g, '')).trim();
+    if (text) segments.push({ start: Number(t[1]) / 1000, dur: d ? Number(d[1]) / 1000 : 0, text });
   }
-  if (segments.length > 0) return segments.join(' ');
+  if (segments.length > 0) return segments;
 
   // Fall back to legacy <text> tags
-  const textRe = /<text start="[^"]*" dur="[^"]*">([^<]*)<\/text>/g;
+  const textRe = /<text start="([^"]*)" dur="([^"]*)">([^<]*)<\/text>/g;
   while ((m = textRe.exec(xml)) !== null) {
-    const text = m[1]
-      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-      .trim();
-    if (text) segments.push(text);
+    const text = decodeEntities(m[3]).trim();
+    if (text) segments.push({ start: Number(m[1]) || 0, dur: Number(m[2]) || 0, text });
   }
-  return segments.join(' ');
+  return segments;
+}
+
+// The same captions as plain text (timestamps dropped).
+function parseCaptionXml(xml) {
+  return parseCaptionSegments(xml).map((s) => s.text).join(' ');
 }
 
 // Fetch the raw caption track list for a video via InnerTube (shared by
@@ -190,7 +195,8 @@ async function fetchYoutubeTranscript(url, languageCode) {
     throw new Error(`Failed to fetch captions: ${err.message}`);
   }
 
-  const transcriptText = parseCaptionXml(xml);
+  const segments = parseCaptionSegments(xml);
+  const transcriptText = segments.map((x) => x.text).join(' ');
   if (!transcriptText) throw new Error('Could not parse caption data');
 
   // Step 3: get the title (best-effort)
@@ -200,7 +206,8 @@ async function fetchYoutubeTranscript(url, languageCode) {
   const header = `[YouTube Transcript: ${title}]\n\n`;
   const content = (header + transcriptText).substring(0, 50000);
 
-  return { title, content };
+  // `segments` has the timing (seconds) for callers that need it; `content` is the capped plain text everything else uses.
+  return { title, content, segments, languageCode: track.languageCode };
 }
 
 async function fetchYoutubeReference(url) {
@@ -229,4 +236,4 @@ async function fetchYoutubeReference(url) {
   };
 }
 
-module.exports = { isYoutubeUrl, fetchYoutubeTranscript, extractVideoId, fetchYoutubeReference, fetchYoutubeCaptionLanguages };
+module.exports = { parseCaptionSegments, parseCaptionXml, isYoutubeUrl, fetchYoutubeTranscript, extractVideoId, fetchYoutubeReference, fetchYoutubeCaptionLanguages };

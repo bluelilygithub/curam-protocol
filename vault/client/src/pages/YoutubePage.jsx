@@ -6,6 +6,8 @@ import useToastStore from '../store/toastStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { useVoice } from '../hooks/useVoice';
 import Tooltip from '../components/Tooltip';
+import VideoStudyPanel from './youtube/VideoStudyPanel';
+import { embedSrc, formatTime } from './youtube/youtubeFormat.mjs';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -224,7 +226,7 @@ function FavCard({ fav, onPlay, onRemove }) {
 
 // ── Transcript panel ──────────────────────────────────────────────────────────
 
-function TranscriptPanel({ video, onClose }) {
+function TranscriptPanel({ video, onClose, onSeek }) {
   const addToast = useToastStore((s) => s.addToast);
   const [loading, setLoading] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
@@ -234,6 +236,8 @@ function TranscriptPanel({ video, onClose }) {
   const [showSummary, setShowSummary] = useState(false);
   const [languages, setLanguages] = useState([]);
   const [languageCode, setLanguageCode] = useState('');
+  const [segments, setSegments] = useState([]);
+  const [showTimes, setShowTimes] = useState(false);
 
   async function loadTranscript(summarize, langOverride) {
     if (summarize) setSummarizing(true); else setLoading(true);
@@ -246,6 +250,7 @@ function TranscriptPanel({ video, onClose }) {
       }).then(r => r.json());
       if (data.error) throw new Error(data.error);
       setTranscript(data.transcript || '');
+      setSegments(Array.isArray(data.segments) ? data.segments : []);
       if (data.summary) { setSummary(data.summary); setShowSummary(true); }
       else if (!summarize) { setSummary(''); setShowSummary(false); }
     } catch (err) {
@@ -273,8 +278,8 @@ function TranscriptPanel({ video, onClose }) {
 
   function copyText(text) {
     navigator.clipboard?.writeText(text).then(
-      () => addToast({ type: 'success', message: 'Copied to clipboard.' }),
-      () => addToast({ type: 'error', message: 'Could not copy.' })
+      () => addToast('Copied to clipboard.', 'success'),
+      () => addToast('Could not copy.', 'error')
     );
   }
 
@@ -319,6 +324,17 @@ function TranscriptPanel({ video, onClose }) {
               {summarizing ? 'Summarizing…' : 'Summarize'}
             </button>
           </Tooltip>
+          {segments.length > 0 && onSeek && (
+            <Tooltip text="Show the transcript line by line with the time each line is said. Click a time to jump the video to it.">
+              <button
+                onClick={() => { setShowSummary(false); setShowTimes((v) => !v); }}
+                disabled={loading}
+                style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: showTimes && !showSummary ? 'var(--color-primary)' : 'var(--color-bg)', color: showTimes && !showSummary ? '#fff' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+              >
+                Timestamps
+              </button>
+            </Tooltip>
+          )}
           <Tooltip text="Copy the text shown below to your clipboard.">
             <button
               onClick={() => copyText(showSummary ? summary : transcript)}
@@ -333,7 +349,23 @@ function TranscriptPanel({ video, onClose }) {
         <div style={{ padding: '1rem 1.1rem', overflowY: 'auto', flex: 1 }}>
           {loading && <p style={{ color: 'var(--color-muted)', fontSize: '0.85rem' }}>Fetching transcript…</p>}
           {!loading && error && <p style={{ color: '#b91c1c', fontSize: '0.85rem' }}>{error}</p>}
-          {!loading && !error && (
+          {!loading && !error && showTimes && !showSummary && segments.length > 0 && (
+            <div style={{ fontSize: '0.82rem', lineHeight: 1.55, color: 'var(--color-text)' }}>
+              {segments.map((seg, i) => (
+                <p key={i} style={{ margin: '0 0 0.25rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => { onSeek(seg.start); onClose(); }}
+                    style={{ fontFamily: 'inherit', fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 0.5rem 0 0', textDecoration: 'underline' }}
+                  >
+                    {formatTime(seg.start)}
+                  </button>
+                  {seg.text}
+                </p>
+              ))}
+            </div>
+          )}
+          {!loading && !error && !(showTimes && !showSummary && segments.length > 0) && (
             <p style={{ whiteSpace: 'pre-wrap', fontSize: '0.82rem', lineHeight: 1.55, color: 'var(--color-text)', margin: 0 }}>
               {showSummary ? summary : transcript}
             </p>
@@ -425,6 +457,8 @@ function CommentsPanel({ video, onClose }) {
 function VideoModal({ video, isFav, onClose, onToggleFav, onMoreFromChannel }) {
   const [showTranscript, setShowTranscript] = useState(false);
   const [showComments, setShowComments]     = useState(false);
+  const [showStudy, setShowStudy]           = useState(false);
+  const [startAt, setStartAt]               = useState(0); // seconds; changing it reloads the player at that moment
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -446,10 +480,11 @@ function VideoModal({ video, isFav, onClose, onToggleFav, onMoreFromChannel }) {
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--color-surface)', borderRadius: '1rem', overflow: 'hidden', width: '100%', maxWidth: 900, boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--color-surface)', borderRadius: '1rem', overflow: 'hidden', width: '100%', maxWidth: 900, maxHeight: '96vh', overflowY: 'auto', boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
         <div style={{ position: 'relative', aspectRatio: '16/9', background: '#000' }}>
           <iframe
-            src={`https://www.youtube.com/embed/${video.id}?rel=0`}
+            key={startAt}
+            src={embedSrc(video.id, startAt)}
             title={video.title}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
@@ -465,6 +500,11 @@ function VideoModal({ video, isFav, onClose, onToggleFav, onMoreFromChannel }) {
             </p>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <Tooltip text="AI notes on this video (summary, key points, chapters, things to do), clickable times, a button to save them to Notes, and a place to ask the video questions.">
+              <button onClick={() => setShowStudy((v) => !v)} aria-expanded={showStudy} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: showStudy ? 'var(--color-primary)' : 'var(--color-bg)', border: '1px solid var(--color-border)', color: showStudy ? '#fff' : 'var(--color-muted)' }}>
+                Insights &amp; Ask
+              </button>
+            </Tooltip>
             <Tooltip text="Fetch the caption transcript for this video, or an AI summary of it.">
               <button onClick={() => setShowTranscript(true)} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
                 Transcript
@@ -499,8 +539,9 @@ function VideoModal({ video, isFav, onClose, onToggleFav, onMoreFromChannel }) {
             </Tooltip>
           </div>
         </div>
+        {showStudy && <VideoStudyPanel video={video} onSeek={(sec) => setStartAt(Math.max(1, sec))} onClose={() => setShowStudy(false)} />}
       </div>
-      {showTranscript && <TranscriptPanel video={video} onClose={() => setShowTranscript(false)} />}
+      {showTranscript && <TranscriptPanel video={video} onClose={() => setShowTranscript(false)} onSeek={(sec) => setStartAt(Math.max(1, sec))} />}
       {showComments && <CommentsPanel video={video} onClose={() => setShowComments(false)} />}
     </div>
   );
@@ -556,6 +597,9 @@ export default function YoutubePage() {
   const [openList,     setOpenList]     = useState(null); // { id, title, videos }
   const [listLoading,  setListLoading]  = useState(false);
 
+  // How much of today's YouTube allowance is left (shown only when it is getting low)
+  const [quota, setQuota] = useState(null);
+
   // Trending
   const [trendingRegion,   setTrendingRegion]   = useState('US');
   const [trendingCategory, setTrendingCategory] = useState('');
@@ -575,6 +619,7 @@ export default function YoutubePage() {
     loadLists();
     loadWatchHistory();
     loadCategories('US');
+    api.get('/api/youtube/quota').then((r) => r.json()).then((q) => { if (q && typeof q.searchesLeft === 'number') setQuota(q); }).catch(() => {});
   }, []);
 
   // When mic finishes, populate query and auto-search
@@ -627,7 +672,7 @@ export default function YoutubePage() {
       if (data.error) throw new Error(data.error);
       setTrendingVideos(data.videos ?? []);
     } catch (err) {
-      addToast({ type: 'error', message: err.message || 'Could not load trending videos.' });
+      addToast(err.message || 'Could not load trending videos.', 'error');
     } finally {
       setTrendingLoading(false);
     }
@@ -664,7 +709,7 @@ export default function YoutubePage() {
       if (data.error) throw new Error(data.error);
       setPlaylistVideos(data.videos ?? []);
     } catch (err) {
-      addToast({ type: 'error', message: err.message || 'Could not open this playlist.' });
+      addToast(err.message || 'Could not open this playlist.', 'error');
       setPlaylistView(null);
     } finally {
       setPlaylistLoading(false);
@@ -690,7 +735,7 @@ export default function YoutubePage() {
       if (data.error) throw new Error(data.error);
       setChannelVideos(data.videos ?? []);
     } catch (err) {
-      addToast({ type: 'error', message: err.message || 'Could not load this channel.' });
+      addToast(err.message || 'Could not load this channel.', 'error');
     } finally {
       setChannelLoading(false);
     }
@@ -708,10 +753,10 @@ export default function YoutubePage() {
     if (!title?.trim()) return;
     try {
       await api.post('/api/youtube/lists', { title: title.trim(), videos: source });
-      addToast({ type: 'success', message: 'Saved as a list.' });
+      addToast('Saved as a list.', 'success');
       loadLists();
     } catch (err) {
-      addToast({ type: 'error', message: err.message || 'Could not save this list.' });
+      addToast(err.message || 'Could not save this list.', 'error');
     }
   }
 
@@ -723,7 +768,7 @@ export default function YoutubePage() {
       if (data.error) throw new Error(data.error);
       setOpenList(data);
     } catch (err) {
-      addToast({ type: 'error', message: err.message || 'Could not load this list.' });
+      addToast(err.message || 'Could not load this list.', 'error');
     } finally {
       setListLoading(false);
     }
@@ -819,7 +864,7 @@ export default function YoutubePage() {
         loadFavs();
       }
     } catch (err) {
-      addToast({ type: 'error', message: err.message || 'Failed.' });
+      addToast(err.message || 'Failed.', 'error');
     }
   }, [favSet, addToast]);
 
@@ -1033,6 +1078,13 @@ export default function YoutubePage() {
       </div>
 
       {/* Error */}
+      {quota && quota.searchesLeft <= 20 && (
+        <p style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', color: quota.searchesLeft === 0 ? '#b91c1c' : 'var(--color-muted)' }}>
+          {quota.searchesLeft === 0
+            ? "Today's YouTube search allowance is used up. Searches you have already run still work. It resets at midnight Pacific time."
+            : `About ${quota.searchesLeft} new searches left today (YouTube's daily allowance). Repeat searches are free.`}
+        </p>
+      )}
       {error && (
         <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '0.75rem', padding: '0.75rem 1rem', marginBottom: '1rem' }}>
           <p style={{ fontSize: '0.875rem', color: '#b91c1c', margin: 0 }}>{error}</p>

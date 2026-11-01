@@ -10,6 +10,11 @@
  * GET  /favourites          — user's saved videos
  * POST /favourites          — save a video
  * DELETE /favourites/:videoId — remove a saved video
+ * GET  /quota                — today's YouTube quota use and roughly how many searches are left
+ * GET  /insights/:videoId    — the saved AI notes for a video (summary, key points, chapters, to-dos, quotes)
+ * POST /insights             — write them (once; refresh to redo)
+ * POST /ask                  — answer a question about a video from its captions, with timestamps
+ * POST /note-draft           — the Notes text for a video (the page saves it through /api/notes)
  *
  * Requires env: YOUTUBE_API_KEY
  */
@@ -22,6 +27,9 @@ const { getModelsForUser } = require('../services/modelResolver');
 const { callModel } = require('../services/callModel');
 const { logUsage } = require('../utils/logUsage');
 const { fetchYoutubeTranscript, fetchYoutubeCaptionLanguages } = require('../services/youtubeTranscript');
+const { cachedGet, quotaStatus } = require('../services/youtubeApi');
+const insightsLib = require('../services/youtubeInsights');
+const { aiLimiter } = require('../middleware/aiRateLimit');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -32,7 +40,7 @@ function getKey() {
   return k;
 }
 
-function ytGet(path) {
+function ytRawGet(path) {
   return new Promise((resolve, reject) => {
     const url = new URL(`https://www.googleapis.com${path}`);
     const req = https.request(
@@ -58,6 +66,9 @@ function ytGet(path) {
     req.end();
   });
 }
+
+// Every Data API call goes through the cache and the daily quota count (services/youtubeApi.js).
+const ytGet = (path) => cachedGet(pool, ytRawGet, path);
 
 // ── NLP parse ────────────────────────────────────────────────────────────────
 
@@ -216,7 +227,7 @@ router.get('/search', async (req, res) => {
     res.json({ videos, totalResults: searchData.pageInfo?.totalResults ?? videos.length });
   } catch (err) {
     console.error('[youtube/search]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -243,7 +254,7 @@ router.get('/playlist/:playlistId', async (req, res) => {
     res.json({ videos, totalResults: listData.pageInfo?.totalResults ?? videos.length });
   } catch (err) {
     console.error('[youtube/playlist]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -284,7 +295,7 @@ router.get('/trending', async (req, res) => {
     res.json({ videos, totalResults: data.pageInfo?.totalResults ?? videos.length });
   } catch (err) {
     console.error('[youtube/trending]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -306,7 +317,7 @@ router.get('/categories', async (req, res) => {
     res.json({ categories });
   } catch (err) {
     console.error('[youtube/categories]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -338,7 +349,7 @@ router.get('/channel/:channelId', async (req, res) => {
     res.json({ videos, totalResults: searchData.pageInfo?.totalResults ?? videos.length });
   } catch (err) {
     console.error('[youtube/channel]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -369,10 +380,12 @@ router.post('/transcript', async (req, res) => {
 
   try {
     const url = `https://www.youtube.com/watch?v=${videoId}`;
-    const { title, content } = await fetchYoutubeTranscript(url, languageCode);
+    const { title, content, segments } = await fetchYoutubeTranscript(url, languageCode);
+    // `segments` = the same captions with their start time in seconds, so the page can show and jump to a moment
+    const timed = (segments || []).map((x) => ({ start: Math.floor(x.start), text: x.text }));
 
     if (!summarize) {
-      return res.json({ title, transcript: content });
+      return res.json({ title, transcript: content, segments: timed });
     }
 
     const { light: lightModel } = await getModelsForUser(req.user?.id);
@@ -383,7 +396,7 @@ router.post('/transcript', async (req, res) => {
     });
     logUsage({ userId: req.user?.id, model: lightModel, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'youtube' });
 
-    res.json({ title, transcript: content, summary: result.text });
+    res.json({ title, transcript: content, segments: timed, summary: result.text });
   } catch (err) {
     console.error('[youtube/transcript]', err.message);
     if (/no captions available/i.test(err.message || '')) {
@@ -435,7 +448,7 @@ router.get('/comments/:videoId', async (req, res) => {
     if (/commentsDisabled|disabled comments/i.test(err.message || '')) {
       return res.status(404).json({ error: 'Comments are disabled for this video.' });
     }
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -454,7 +467,7 @@ router.get('/history', async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error('[youtube/history]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -466,7 +479,7 @@ router.delete('/history/:id', async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -483,7 +496,7 @@ router.get('/favourites', async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -499,7 +512,7 @@ router.post('/favourites', async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -511,7 +524,7 @@ router.delete('/favourites/:videoId', async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -529,7 +542,7 @@ router.get('/watch-history', async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -545,7 +558,7 @@ router.post('/watch-history', async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -554,7 +567,7 @@ router.delete('/watch-history/all', async (req, res) => {
     await pool.query('DELETE FROM youtube_watch_history WHERE "userId" = $1', [req.user.id]);
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -566,7 +579,7 @@ router.delete('/watch-history/:videoId', async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -585,7 +598,7 @@ router.get('/lists', async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -617,7 +630,7 @@ router.post('/lists', async (req, res) => {
     res.json({ ok: true, id: list.id });
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   } finally {
     client.release();
   }
@@ -641,7 +654,7 @@ router.get('/lists/:id', async (req, res) => {
 
     res.json({ ...listRows[0], videos: items });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -653,7 +666,7 @@ router.delete('/lists/:id', async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -666,7 +679,143 @@ router.delete('/lists/:id/items/:videoId', async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// ── Quota ─────────────────────────────────────────────────────────────────────
+
+router.get('/quota', async (_req, res) => {
+  try { res.json(await quotaStatus(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Video insights, ask this video, note ──────────────────────────────────────
+
+const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
+
+// A small in-memory cache of fetched captions so asking several questions about one video fetches them once (30 minutes, 20 videos).
+const captionCache = new Map();
+const CAPTION_TTL_MS = 30 * 60 * 1000;
+async function getCaptions(videoId, languageCode) {
+  const key = `${videoId}:${languageCode || ''}`;
+  const hit = captionCache.get(key);
+  if (hit && Date.now() - hit.at < CAPTION_TTL_MS) return hit.value;
+  const t = await fetchYoutubeTranscript(`https://www.youtube.com/watch?v=${videoId}`, languageCode || undefined);
+  const value = { title: t.title, segments: t.segments || [], languageCode: t.languageCode || languageCode || '' };
+  captionCache.set(key, { at: Date.now(), value });
+  if (captionCache.size > 20) captionCache.delete(captionCache.keys().next().value);
+  return value;
+}
+
+function noCaptions(err, res) {
+  if (/no captions available/i.test(err.message || '')) {
+    res.status(404).json({ error: 'No captions are available for this video, so there is nothing to read.' });
+    return true;
+  }
+  return false;
+}
+
+async function savedInsights(userId, videoId, languageCode) {
+  const { rows } = languageCode
+    ? await pool.query('SELECT * FROM youtube_video_insights WHERE "userId"=$1 AND "videoId"=$2 AND "languageCode"=$3', [userId, videoId, languageCode])
+    : await pool.query('SELECT * FROM youtube_video_insights WHERE "userId"=$1 AND "videoId"=$2 ORDER BY "createdAt" DESC LIMIT 1', [userId, videoId]);
+  return rows[0] || null;
+}
+
+const insightsPayload = (row) => ({
+  insights: row.insights, title: row.title, languageCode: row.languageCode, truncated: row.truncated, coveredSec: row.coveredSec, createdAt: row.createdAt,
+});
+
+async function writeInsights(userId, videoId, languageCode) {
+  const t = await getCaptions(videoId, languageCode);
+  const view = insightsLib.formatForModel(t.segments);
+  if (!view.text) throw new Error('The captions are empty.');
+  const durationSec = insightsLib.coveredSeconds(t.segments);
+  const { light } = await getModelsForUser(userId);
+  const result = await callModel(light, view.text, { maxTokens: 1800, system: insightsLib.INSIGHTS_SYSTEM, returnUsage: true });
+  logUsage({ userId, model: light, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'youtube' });
+  const insights = insightsLib.normalizeInsights(result.text, { durationSec });
+  if (!insights) throw new Error('The AI did not return usable notes. Try again.');
+  const lang = t.languageCode || '';
+  await pool.query(
+    `INSERT INTO youtube_video_insights ("userId","videoId","languageCode",title,insights,model,truncated,"coveredSec")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+     ON CONFLICT ("userId","videoId","languageCode")
+     DO UPDATE SET title=EXCLUDED.title, insights=EXCLUDED.insights, model=EXCLUDED.model, truncated=EXCLUDED.truncated, "coveredSec"=EXCLUDED."coveredSec", "createdAt"=NOW()`,
+    [userId, videoId, lang, t.title, JSON.stringify(insights), light, view.truncated, view.coveredSec]
+  );
+  return savedInsights(userId, videoId, lang);
+}
+
+const userFacing = (err, fallback) => (err.message && /AI did not|captions are empty/.test(err.message) ? err.message : fallback);
+
+router.get('/insights/:videoId', async (req, res) => {
+  const { videoId } = req.params;
+  if (!VIDEO_ID.test(videoId)) return res.status(400).json({ error: 'A valid videoId is required.' });
+  try {
+    const row = await savedInsights(req.user.id, videoId, String(req.query.languageCode || ''));
+    res.json(row ? insightsPayload(row) : { insights: null });
+  } catch (err) {
+    console.error('[youtube/insights get]', err.message);
+    res.status(500).json({ error: 'Could not read the saved notes.' });
+  }
+});
+
+router.post('/insights', aiLimiter, async (req, res) => {
+  const { videoId, languageCode = '', refresh = false } = req.body || {};
+  if (!VIDEO_ID.test(String(videoId || ''))) return res.status(400).json({ error: 'A valid videoId is required.' });
+  try {
+    if (!refresh) {
+      const have = await savedInsights(req.user.id, videoId, String(languageCode));
+      if (have) return res.json({ ...insightsPayload(have), cached: true });
+    }
+    const row = await writeInsights(req.user.id, videoId, String(languageCode));
+    res.json({ ...insightsPayload(row), cached: false });
+  } catch (err) {
+    console.error('[youtube/insights]', err.message);
+    if (noCaptions(err, res)) return;
+    res.status(500).json({ error: userFacing(err, 'Could not write notes for this video.') });
+  }
+});
+
+router.post('/ask', aiLimiter, async (req, res) => {
+  const { videoId, languageCode = '', question, history = [] } = req.body || {};
+  if (!VIDEO_ID.test(String(videoId || ''))) return res.status(400).json({ error: 'A valid videoId is required.' });
+  const q = String(question || '').trim().slice(0, 500);
+  if (!q) return res.status(400).json({ error: 'Type a question first.' });
+  try {
+    const t = await getCaptions(videoId, String(languageCode));
+    const durationSec = insightsLib.coveredSeconds(t.segments);
+    const picked = insightsLib.pickPassages(t.segments, q);
+    if (!picked.text) return res.status(404).json({ error: 'The captions are empty, so there is nothing to read.' });
+    const earlier = (Array.isArray(history) ? history : []).slice(-4)
+      .map((h) => `Q: ${String((h && h.question) || '').slice(0, 300)}\nA: ${String((h && h.answer) || '').slice(0, 600)}`).join('\n\n');
+    const prompt = `TRANSCRIPT${picked.partial ? ' (only the parts most likely to matter for the question)' : ''}:\n${picked.text}\n\n${earlier ? `EARLIER QUESTIONS:\n${earlier}\n\n` : ''}QUESTION: ${q}`;
+    const { standard } = await getModelsForUser(req.user.id);
+    const result = await callModel(standard, prompt, { maxTokens: 700, system: insightsLib.ASK_SYSTEM, returnUsage: true });
+    logUsage({ userId: req.user.id, model: standard, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'youtube' });
+    const out = insightsLib.normalizeAnswer(result.text, { durationSec });
+    if (!out) return res.status(502).json({ error: 'The AI did not give an answer. Try asking again.' });
+    res.json({ ...out, partial: picked.partial });
+  } catch (err) {
+    console.error('[youtube/ask]', err.message);
+    if (noCaptions(err, res)) return;
+    res.status(500).json({ error: 'Could not answer that just now.' });
+  }
+});
+
+router.post('/note-draft', aiLimiter, async (req, res) => {
+  const { videoId, languageCode = '', channel = '' } = req.body || {};
+  if (!VIDEO_ID.test(String(videoId || ''))) return res.status(400).json({ error: 'A valid videoId is required.' });
+  try {
+    const row = (await savedInsights(req.user.id, videoId, String(languageCode))) || (await writeInsights(req.user.id, videoId, String(languageCode)));
+    const title = row.title || 'YouTube video';
+    const body = insightsLib.buildNoteMarkdown({ videoId, title, channel: String(channel).slice(0, 120), insights: row.insights });
+    res.json({ title: title.slice(0, 200), body });
+  } catch (err) {
+    console.error('[youtube/note-draft]', err.message);
+    if (noCaptions(err, res)) return;
+    res.status(500).json({ error: userFacing(err, 'Could not prepare the note.') });
   }
 });
 

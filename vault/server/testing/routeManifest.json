@@ -3766,6 +3766,21 @@
   "GET /api/youtube/comments/:videoId": {
    "class": "authed"
   },
+  "POST /api/youtube/ask": {
+   "class": "authed"
+  },
+  "GET /api/youtube/insights/:videoId": {
+   "class": "authed"
+  },
+  "POST /api/youtube/insights": {
+   "class": "authed"
+  },
+  "POST /api/youtube/note-draft": {
+   "class": "authed"
+  },
+  "GET /api/youtube/quota": {
+   "class": "authed"
+  },
   "DELETE /api/youtube/favourites/:videoId": {
    "class": "authed"
   },
