@@ -61,7 +61,7 @@ internal sealed class ShelfWindow : Form
         {
             // sized to the tiles chosen (about 210 x 135 px each, plus the heading and hint line), so four tiles do not float in an empty window
             int cols = Math.Max(1, launcherColumns), rows = Math.Max(1, (launcherTiles + cols - 1) / cols);
-            int lw = Math.Min(area.Width - 24, Math.Clamp(cols * 215 + 60, 480, 1100)), lh = Math.Min(area.Height - 24, Math.Clamp(120 + rows * 135, 280, 640));
+            int lw = Math.Min(area.Width - 24, Math.Clamp(cols * 215 + 60, 480, 1100)), lh = Math.Min(area.Height - 24, Math.Clamp(120 + rows * 135, 460, 640));
             Bounds = new Rectangle(area.Left + (area.Width - lw) / 2, area.Top + (area.Height - lh) / 2, lw, lh);
         }
         else

@@ -45,6 +45,7 @@ export const TIPS = {
   launcherColumns: 'How many tiles sit side by side in the launcher.',
   launcherTileSwitch: (label: string) => `Show or hide ${label} in the quick launcher.`,
   launcherTile: (label: string) => `Open ${label} in Vault, in your browser.`,
+  launcherSettings: 'Choose which tools show here, how many tiles sit across, and the shortcut that opens this launcher.',
   launcherClose: 'Close the launcher. (Esc)',
   actionSwitch: (label: string) => `Show or hide the ${label.replace(/^\S+\s/, '')} button under a preview.`,
 } as const;

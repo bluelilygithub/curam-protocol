@@ -54,7 +54,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     title: 'The quick launcher',
     body: [
       'A second shortcut (Ctrl+Alt+Space to start with) opens a grid of the Vault tools you use most. Click one, or press its number, and it opens in your browser.',
-      'To choose what appears: press the shelf shortcut, click the gear (Settings), then Quick launcher. Tick the tools you want (each shows the icon it has in Vault), choose how many tiles sit across, and record a different shortcut if you like. The launcher shows the ticked tools in the same order as the Vault menu. The Fn key cannot be used in a shortcut because Windows never sees it.',
+      'To choose what appears: click the gear in the top right of the launcher itself (or open the shelf, then Settings, then Quick launcher). Tick the tools you want (each shows the icon it has in Vault), choose how many tiles sit across, and record a different shortcut if you like. The launcher shows the ticked tools in the same order as the Vault menu. The Fn key cannot be used in a shortcut because Windows never sees it.',
       'It opens the address saved under Vault connection, so connect to Vault first.',
     ],
   },

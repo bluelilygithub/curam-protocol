@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { ACTION_IDS, type ActionId, type Bridge, type Settings, type VerifyResult } from '../bridge/types';
-import { HOTKEY_PROBLEM_TEXT, hotkeyFromEvent, hotkeyProblem } from '../lib/hotkey';
-import { ACTION_LABELS, AUTO_CLEAR_CHOICES, DEFAULT_SETTINGS, RETENTION_MAX, RETENTION_MIN, clampRetention, normalizeAppName, normalizeBaseUrl } from '../lib/settings';
-import { COLUMNS_MAX, COLUMNS_MIN, DEFAULT_LAUNCHER_HOTKEY, LAUNCHER_GROUPS, toggleTile } from '../lib/launcher';
+import { ACTION_LABELS, AUTO_CLEAR_CHOICES, RETENTION_MAX, RETENTION_MIN, clampRetention, normalizeAppName, normalizeBaseUrl } from '../lib/settings';
 import { FONT_LIST, THEME_LIST } from '../lib/theme';
 import { TIPS } from '../lib/tips';
 import Icon from './Icon';
-import { NavIcon } from '../lib/navIcons';
+import LauncherSettings from './LauncherSettings';
+import { HotkeyRecorder, Toggle } from './SettingsParts';
 import Tooltip from './Tooltip';
 
 interface Props {
@@ -25,54 +24,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <h2 className="m-0 text-sm font-semibold">{title}</h2>
       {children}
     </section>
-  );
-}
-
-function Toggle({ label, hint, tip, checked, onChange, icon }: { label: string; hint?: string; tip?: string; checked: boolean; onChange: (v: boolean) => void; icon?: string }) {
-  return (
-    <Tooltip text={tip}>
-    <label className="flex items-start gap-3 cursor-pointer">
-      <input type="checkbox" role="switch" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[rgb(var(--shelf-accent))]" />
-      <span>
-        <span className="text-sm inline-flex items-center gap-1.5">{icon !== undefined && <span className="text-shelf-muted"><NavIcon name={icon} size={14} /></span>}{label}</span>
-        {hint && <span className="block text-xs text-shelf-muted">{hint}</span>}
-      </span>
-    </label>
-    </Tooltip>
-  );
-}
-
-/** Press "Record", then the new shortcut. Escape cancels. The shortcut only counts if it passes the same rules the shell enforces. */
-function HotkeyRecorder({ value, onChange, defaultValue = DEFAULT_SETTINGS.hotkey, tip = TIPS.recordShortcut, resetTip = TIPS.resetShortcut }: { value: string; onChange: (hotkey: string) => void; defaultValue?: string; tip?: string; resetTip?: string }) {
-  const [recording, setRecording] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  const [heard, setHeard] = useState<string | null>(null);
-  useEffect(() => {
-    if (!recording) return undefined;
-    const onKey = (e: KeyboardEvent) => {
-      e.preventDefault(); e.stopPropagation();
-      if (e.key === 'Escape') { setRecording(false); setHeard(null); setProblem(null); return; }
-      const h = hotkeyFromEvent(e);
-      if (!h) { setHeard([e.ctrlKey && 'Ctrl', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Win'].filter(Boolean).join('+') || null); return; }
-      const p = hotkeyProblem(h);
-      setHeard(h);
-      if (p) { setProblem(HOTKEY_PROBLEM_TEXT[p]); return; }
-      setProblem(null); setRecording(false); onChange(h);
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [recording, onChange]);
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-3">
-        <kbd className={`px-2.5 py-1 rounded-lg border text-sm font-mono ${recording ? 'border-shelf-accent text-shelf-accent animate-pulse' : 'border-shelf-line'}`} aria-live="polite">
-          {recording ? (heard ? `${heard}…` : 'Press the new shortcut…') : value}
-        </kbd>
-        <Tooltip text={tip}><button type="button" onClick={() => { setRecording((r) => !r); setProblem(null); setHeard(null); }} className="px-3 py-1 rounded-lg text-xs border border-shelf-line hover:opacity-70 transition-opacity">{recording ? 'Cancel' : 'Record'}</button></Tooltip>
-        {value !== defaultValue && !recording && <Tooltip text={resetTip}><button type="button" onClick={() => onChange(defaultValue)} className="text-xs text-shelf-accent hover:opacity-70 transition-opacity">Reset to {defaultValue}</button></Tooltip>}
-      </div>
-      {problem && <p className="m-0 text-xs text-shelf-danger" role="alert">{problem}</p>}
-    </div>
   );
 }
 
@@ -177,27 +128,7 @@ export default function SettingsView({ bridge, settings, verify, onSettings, onV
           </Section>
 
           <Section title="Quick launcher">
-            <p className="m-0 text-xs text-shelf-muted">A second shortcut that opens a grid of the Vault tools you use most. Click one and it opens in your browser.</p>
-            <div className="space-y-1"><div className="text-xs text-shelf-muted">Open the launcher with</div><HotkeyRecorder value={settings.launcherHotkey} onChange={(launcherHotkey) => void save({ launcherHotkey })} defaultValue={DEFAULT_LAUNCHER_HOTKEY} tip={TIPS.launcherShortcut} resetTip={TIPS.resetLauncherShortcut} /></div>
-            <label className="flex items-center justify-between gap-3 text-sm">
-              <span>Tiles across</span>
-              <Tooltip text={TIPS.launcherColumns}><select value={settings.launcherColumns} onChange={(e) => void save({ launcherColumns: Number(e.target.value) })} className="px-2 py-1 rounded-lg border border-shelf-line bg-shelf-card/80 text-sm">
-                {Array.from({ length: COLUMNS_MAX - COLUMNS_MIN + 1 }, (_, i) => COLUMNS_MIN + i).map((n) => <option key={n} value={n}>{n}</option>)}
-              </select></Tooltip>
-            </label>
-            <div className="space-y-2.5">
-              <div className="text-xs text-shelf-muted">Tools to show ({settings.launcherTiles.length} chosen)</div>
-              {LAUNCHER_GROUPS.map((g) => (
-                <div key={g.id} className="space-y-1.5">
-                  <div className="text-[11px] font-medium uppercase tracking-wide text-shelf-muted">{g.label}</div>
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                    {g.tiles.map((t) => (
-                      <Toggle key={t.id} label={t.label} icon={t.icon} tip={TIPS.launcherTileSwitch(t.label)} checked={settings.launcherTiles.includes(t.id)} onChange={(on) => void save({ launcherTiles: toggleTile(settings.launcherTiles, t.id, on) })} />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <LauncherSettings settings={settings} save={save} />
           </Section>
 
           <Section title="Vault connection">
