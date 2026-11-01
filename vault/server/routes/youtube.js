@@ -384,6 +384,7 @@ router.post('/transcript', async (req, res) => {
       }
       : await fetchYoutubeTranscript(url, languageCode);
     const source = mine ? 'ai' : 'captions';
+    if (!mine) keepCaptions(req.user.id, videoId, { segments, languageCode: languageCode || '' }).catch(() => {});
     // `segments` = the same captions with their start time in seconds, so the page can show and jump to a moment
     const timed = (segments || []).map((x) => ({ start: Math.floor(x.start), text: x.text }));
 
@@ -489,8 +490,10 @@ router.delete('/history/:id', async (req, res) => {
 router.get('/favourites', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT "videoId", title, channel, thumbnail, duration, "viewCount", "publishedAt", "createdAt", category, tags
-       FROM youtube_favourites
+      `SELECT "videoId", title, channel, thumbnail, duration, "viewCount", "publishedAt", "createdAt", category, tags,
+              (EXISTS (SELECT 1 FROM youtube_caption_segments c WHERE c."userId" = f."userId" AND c."videoId" = f."videoId")
+               OR EXISTS (SELECT 1 FROM youtube_transcripts t WHERE t."userId" = f."userId" AND t."videoId" = f."videoId")) AS "hasTranscript"
+       FROM youtube_favourites f
        WHERE "userId" = $1
        ORDER BY "createdAt" DESC`,
       [req.user.id]
@@ -513,6 +516,8 @@ router.post('/favourites', async (req, res) => {
        ON CONFLICT ("userId", "videoId") DO NOTHING`,
       [req.user.id, videoId, title, channel || null, thumbnail || null, duration || null, viewCount || null, publishedAt || null, labels.category || '', labels.tags || []]
     );
+    // read and keep its captions in the background so the favourites search can look inside them (fails quietly, e.g. a robot check)
+    if (VIDEO_ID.test(String(videoId))) getCaptions(videoId, '', req.user.id).catch(() => {});
     res.json({ ok: true });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
@@ -538,23 +543,76 @@ router.patch('/favourites/:videoId', async (req, res) => {
   }
 });
 
-// The text of a new note about a saved video (no AI is asked): link, details, labels, and the Main points / Insights summary if they were already
-// written. The page saves it through /api/notes and puts the labels on the note as tags.
-router.get('/favourites/:videoId/note-draft', async (req, res) => {
-  const { videoId } = req.params;
-  if (!VIDEO_ID.test(videoId)) return res.status(400).json({ error: 'A valid videoId is required.' });
+// Which saved videos mention what was typed in their kept transcripts (captions kept for saved videos, and AI-written transcripts).
+// Every word has to appear somewhere in the video's transcript. Returns the first matching line of each so the card can show it.
+router.get('/favourites/search', async (req, res) => {
+  const q = String(req.query.q || '').slice(0, 200);
+  const patterns = labelsLib.searchPatterns(q);
+  if (!patterns.length) return res.json({ hits: [] });
   try {
-    const fav = (await pool.query('SELECT * FROM youtube_favourites WHERE "userId"=$1 AND "videoId"=$2', [req.user.id, videoId])).rows[0];
-    if (!fav) return res.status(404).json({ error: 'That video is not in your favourites.' });
-    const pts = (await pool.query('SELECT points FROM youtube_main_points WHERE "userId"=$1 AND "videoId"=$2', [req.user.id, videoId])).rows[0];
-    const ins = await savedInsights(req.user.id, videoId, '');
-    const body = labelsLib.buildVideoNote({
-      videoId, title: fav.title, channel: fav.channel, duration: fav.duration, publishedAt: fav.publishedAt,
-      category: fav.category, tags: fav.tags, points: pts && pts.points, overview: ins && ins.insights && ins.insights.overview,
-    });
-    res.json({ title: String(fav.title || 'YouTube video').slice(0, 200), body, tags: labelsLib.noteTagsFor(fav) });
+    const { rows } = await pool.query(
+      `SELECT "videoId", segments FROM (
+         SELECT "videoId", segments, (SELECT string_agg(e->>'text', ' ') FROM jsonb_array_elements(segments) e) AS full
+         FROM (
+           SELECT "videoId", segments FROM youtube_caption_segments WHERE "userId" = $1
+           UNION ALL
+           SELECT "videoId", segments FROM youtube_transcripts WHERE "userId" = $1
+         ) u
+       ) x
+       WHERE "videoId" IN (SELECT "videoId" FROM youtube_favourites WHERE "userId" = $1)
+         AND full ILIKE ALL ($2::text[])
+       LIMIT 200`,
+      [req.user.id, patterns]
+    );
+    const seen = new Set();
+    const hits = [];
+    for (const r of rows) {
+      if (seen.has(r.videoId)) continue;
+      seen.add(r.videoId);
+      hits.push({ videoId: r.videoId, ...(labelsLib.snippetFor(r.segments, q) || {}) });
+    }
+    res.json({ hits });
   } catch (err) {
-    console.error('[youtube/favourites note-draft]', err.message);
+    console.error('[youtube/favourites search]', err.message);
+    res.status(500).json({ error: 'Could not search the transcripts.' });
+  }
+});
+
+// The text of a new note about a video (no AI is asked): link, details, its category and tags if it is a saved favourite, the Main points and
+// Insights summary if already written, and the transcript (kept, AI-written, or read now if YouTube allows). The page saves it through
+// /api/notes and puts the category and tags on the note as tags.
+router.post('/video-note', async (req, res) => {
+  const b = req.body || {};
+  const videoId = String(b.videoId || '');
+  if (!VIDEO_ID.test(videoId)) return res.status(400).json({ error: 'A valid videoId is required.' });
+  const userId = req.user.id;
+  try {
+    const fav = (await pool.query('SELECT * FROM youtube_favourites WHERE "userId"=$1 AND "videoId"=$2', [userId, videoId])).rows[0] || null;
+    const pts = (await pool.query('SELECT points FROM youtube_main_points WHERE "userId"=$1 AND "videoId"=$2', [userId, videoId])).rows[0];
+    const ins = await savedInsights(userId, videoId, '');
+
+    let segments = null;
+    const ai = await aiTranscripts.stored(userId, videoId);
+    if (ai) segments = ai.segments || [];
+    if (!segments) {
+      const kept = (await pool.query('SELECT segments FROM youtube_caption_segments WHERE "userId"=$1 AND "videoId"=$2', [userId, videoId])).rows[0];
+      if (kept) segments = kept.segments;
+    }
+    if (!segments) {
+      try { segments = (await getCaptions(videoId, '', userId)).segments || []; } catch (_) { segments = null; } // a robot check or no captions: the note says so
+    }
+    const paragraphs = labelsLib.transcriptParagraphs(segments || []);
+
+    const title = String((fav && fav.title) || b.title || 'YouTube video');
+    const labels = fav ? { category: fav.category, tags: fav.tags } : { category: '', tags: [] };
+    const body = labelsLib.buildVideoNote({
+      videoId, title, channel: (fav && fav.channel) || b.channel, duration: (fav && fav.duration) || b.duration, publishedAt: (fav && fav.publishedAt) || b.publishedAt,
+      category: labels.category, tags: labels.tags, points: pts && pts.points, overview: ins && ins.insights && ins.insights.overview,
+      paragraphs, transcriptMissing: !paragraphs.length,
+    });
+    res.json({ title: title.slice(0, 200), body: body.slice(0, 400000), tags: labelsLib.noteTagsFor(labels), hasTranscript: paragraphs.length > 0 });
+  } catch (err) {
+    console.error('[youtube/video-note]', err.message);
     res.status(500).json({ error: 'Could not prepare the note.' });
   }
 });
@@ -565,6 +623,7 @@ router.delete('/favourites/:videoId', async (req, res) => {
       'DELETE FROM youtube_favourites WHERE "userId" = $1 AND "videoId" = $2',
       [req.user.id, req.params.videoId]
     );
+    await pool.query('DELETE FROM youtube_caption_segments WHERE "userId" = $1 AND "videoId" = $2', [req.user.id, req.params.videoId]);
     res.json({ ok: true });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
@@ -739,7 +798,26 @@ const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
 // A small in-memory cache of fetched captions so asking several questions about one video fetches them once (30 minutes, 20 videos).
 const captionCache = new Map();
 const CAPTION_TTL_MS = 30 * 60 * 1000;
+// Keep the caption text of a SAVED video so the Favourites search can look inside it. Best effort: never breaks the request that triggered it.
+async function keepCaptions(userId, videoId, t) {
+  const fav = await pool.query('SELECT 1 FROM youtube_favourites WHERE "userId"=$1 AND "videoId"=$2', [userId, videoId]);
+  if (!fav.rows.length) return;
+  const segments = (t.segments || []).map((x) => ({ start: Math.floor(Number(x.start) || 0), text: String(x.text || '') })).filter((x) => x.text);
+  if (!segments.length) return;
+  await pool.query(
+    `INSERT INTO youtube_caption_segments ("userId","videoId",language,segments) VALUES ($1,$2,$3,$4)
+     ON CONFLICT ("userId","videoId") DO UPDATE SET language=EXCLUDED.language, segments=EXCLUDED.segments, "createdAt"=NOW()`,
+    [userId, videoId, t.languageCode || '', JSON.stringify(segments)]
+  );
+}
+
 async function getCaptions(videoId, languageCode, userId) {
+  const t = await getCaptionsRaw(videoId, languageCode, userId);
+  if (userId && t.source !== 'ai') keepCaptions(userId, videoId, t).catch(() => {});
+  return t;
+}
+
+async function getCaptionsRaw(videoId, languageCode, userId) {
   if (userId) {
     const mine = await aiTranscripts.stored(userId, videoId);
     if (mine) return { title: mine.title || 'YouTube video', segments: mine.segments || [], languageCode: mine.language || '', source: 'ai' };

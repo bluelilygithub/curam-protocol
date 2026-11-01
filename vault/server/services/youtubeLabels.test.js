@@ -40,4 +40,25 @@ assert.match(bare, /^# YouTube video\n/);
 assert.ok(!/Category|Tags|Main points|Summary/.test(bare), 'nothing is invented when nothing was saved');
 assert.ok(!/\n\n\n/.test(md), 'no stacked blank lines');
 
+// transcript paragraphs and the transcript in the note
+const lines = [];
+for (let i = 0; i < 20; i++) lines.push({ start: i * 10, text: i % 4 === 3 ? `Line ${i}.` : `Line ${i}` });
+const paras = L.transcriptParagraphs(lines);
+assert.ok(paras.length > 1 && paras.length < 20 && paras[0].start === 0);
+assert.equal(L.transcriptParagraphs(null).length, 0);
+const withT = L.buildVideoNote({ videoId: 'abc123DEF45', title: 'T', paragraphs: [{ start: 65, text: 'Hello there.' }] });
+assert.match(withT, /## Transcript\n\n\[1:05\]\(https:\/\/www\.youtube\.com\/watch\?v=abc123DEF45&t=65s\) Hello there\./);
+assert.ok(withT.indexOf('## Transcript') < withT.indexOf('## My notes'));
+const noT = L.buildVideoNote({ videoId: 'abc123DEF45', title: 'T', paragraphs: [], transcriptMissing: true });
+assert.match(noT, /No transcript could be read/);
+assert.ok(!/## Transcript/.test(L.buildVideoNote({ videoId: 'abc123DEF45', title: 'T' })), 'no transcript section unless asked');
+
+// searching inside transcripts
+assert.deepEqual(L.searchPatterns('Bread dough'), ['%bread%', '%dough%']);
+assert.deepEqual(L.searchPatterns('a'), []);
+assert.deepEqual(L.searchPatterns('100%_x'), ['%100\\%\\_x%'], 'LIKE characters are escaped');
+assert.equal(L.searchPatterns('aa bb cc dd ee ff gg hh').length, 6);
+assert.deepEqual(L.snippetFor([{ start: 5, text: 'nothing' }, { start: 12.7, text: 'Feed the Starter daily' }], 'starter'), { at: 12, text: 'Feed the Starter daily' });
+assert.equal(L.snippetFor([{ start: 5, text: 'nothing' }], 'zzz'), null);
+
 console.log('youtubeLabels: ok');

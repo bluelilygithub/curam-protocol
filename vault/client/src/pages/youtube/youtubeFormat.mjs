@@ -189,3 +189,14 @@ export function groupFavourites(favs, by) {
     return au - bu || a.label.localeCompare(b.label);
   });
 }
+
+/**
+ * The Favourites list for what is typed and chosen. `hits` is { [videoId]: {...} } for videos whose kept transcript mentions the words: they
+ * are shown too, even when the title does not match, as long as the category and tag choices still fit.
+ */
+export function searchFavourites(favs, { search = '', category = '', tags = [] } = {}, hits = {}) {
+  const base = filterFavourites(favs, { search: '', category, tags });
+  if (!String(search).trim()) return base;
+  const byMeta = new Set(filterFavourites(favs, { search, category, tags }).map((f) => f.videoId || f.video_id));
+  return base.filter((f) => { const id = f.videoId || f.video_id; return byMeta.has(id) || !!(hits && hits[id]); });
+}

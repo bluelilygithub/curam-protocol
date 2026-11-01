@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { formatTime, embedSrc, coverageNote, ASK_STARTERS, noteHref, formatUsd, formatWait, formatLength, elapsedText, TRANSCRIPTS_CHANGED, transcriptParagraphs, transcriptCopyText, splitPoint, pointsCopyText, UNCATEGORISED, cleanTag, collectLabels, filterFavourites, groupFavourites } from './youtubeFormat.mjs';
+import { formatTime, embedSrc, coverageNote, ASK_STARTERS, noteHref, formatUsd, formatWait, formatLength, elapsedText, TRANSCRIPTS_CHANGED, transcriptParagraphs, transcriptCopyText, splitPoint, pointsCopyText, UNCATEGORISED, cleanTag, collectLabels, filterFavourites, groupFavourites, searchFavourites } from './youtubeFormat.mjs';
 
 assert.equal(formatTime(0), '0:00');
 assert.equal(formatTime(75), '1:15');
@@ -85,5 +85,12 @@ assert.equal(byCat[1].items.length, 2);
 assert.deepEqual(groupFavourites(favs, 'channel').map((g) => g.label), ['Baker Bob', 'Cats', 'Money Mel', 'Unknown channel']);
 assert.equal(groupFavourites(favs, 'none').length, 1);
 assert.equal(groupFavourites(favs, 'none')[0].items.length, 5);
+
+// search that also reads kept transcripts
+assert.equal(ids(searchFavourites(favs, { search: 'starter' }, { a: { at: 5 } })), 'a');
+assert.equal(ids(searchFavourites(favs, { search: 'zzz' }, { d: { at: 9, text: 'zzz here' } })), 'd', 'a transcript match shows the video though its title does not match');
+assert.equal(ids(searchFavourites(favs, { search: 'zzz', category: 'Recipes' }, { d: { at: 9 } })), '', 'a transcript match still obeys the category');
+assert.equal(ids(searchFavourites(favs, { search: 'bread' }, {})), 'ac', 'tags are searched too');
+assert.equal(ids(searchFavourites(favs, { search: '' }, { d: {} })), 'abcde', 'no words typed: the hits are ignored');
 
 console.log('youtubeFormat: ok');

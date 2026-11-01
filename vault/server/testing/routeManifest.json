@@ -3890,7 +3890,10 @@
  "PATCH /api/youtube/favourites/:videoId": {
   "class": "authed"
  },
- "GET /api/youtube/favourites/:videoId/note-draft": {
+ "GET /api/youtube/favourites/search": {
+  "class": "authed"
+ },
+ "POST /api/youtube/video-note": {
   "class": "authed"
  }
 }

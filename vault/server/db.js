@@ -3339,6 +3339,18 @@ async function initSchema() {
   // A category (one, free text) and tags (same rule as note tags) on a saved video. See services/youtubeLabels.js.
   await pool.query(`ALTER TABLE youtube_favourites ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT ''`);
   await pool.query(`ALTER TABLE youtube_favourites ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}'`);
+  // The caption text of a SAVED video, kept so the Favourites search can look inside transcripts (segments = [{ start, text }]). AI-written transcripts
+  // live in youtube_transcripts and are searched there. Rows go when the video is removed from the favourites.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS youtube_caption_segments (
+      "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "videoId"   TEXT NOT NULL,
+      language    TEXT NOT NULL DEFAULT '',
+      segments    JSONB NOT NULL,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY ("userId", "videoId")
+    )
+  `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS youtube_saved_lists (
       id            SERIAL PRIMARY KEY,

@@ -45,6 +45,56 @@ function noteTagsFor({ category, tags }) {
   return all || [];
 }
 
+/** 75 -> "1:15", 3725 -> "1:02:05". */
+function clock(sec) {
+  const t = Math.max(0, Math.floor(Number(sec) || 0));
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const r = String(t % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${r}` : `${m}:${r}`;
+}
+
+/**
+ * Timed lines gathered into paragraphs: [{ start, text }]. A paragraph closes at the end of a sentence once it has run about 40 seconds (or 6
+ * lines), and always by 75 seconds. Same rule as the Transcript panel (client/src/pages/youtube/youtubeFormat.mjs).
+ */
+function transcriptParagraphs(segments) {
+  const out = [];
+  let cur = null;
+  for (const seg of Array.isArray(segments) ? segments : []) {
+    const text = String((seg && seg.text) || '').replace(/\s+/g, ' ').trim();
+    if (!text) continue;
+    const start = Math.max(0, Math.floor(Number(seg.start) || 0));
+    if (!cur) cur = { start, text, lines: 1 };
+    else { cur.text += ' ' + text; cur.lines += 1; }
+    const span = start - cur.start;
+    const endsSentence = /[.!?\u2026]["')\]]*$/.test(text);
+    if ((endsSentence && (span >= 40 || cur.lines >= 6)) || span >= 75) { out.push({ start: cur.start, text: cur.text }); cur = null; }
+  }
+  if (cur) out.push({ start: cur.start, text: cur.text });
+  return out;
+}
+
+const likeEscape = (w) => String(w).replace(/[\\%_]/g, (c) => '\\' + c);
+
+/** What was typed in the Favourites search box as LIKE patterns, one per word (at most 6, each at least 2 characters), or [] when too short to search. */
+function searchPatterns(q) {
+  const words = String(q || '').toLowerCase().split(/\s+/).filter((w) => w.length >= 2).slice(0, 6);
+  if (!words.length || words.join('').length < 3) return [];
+  return words.map((w) => `%${likeEscape(w)}%`);
+}
+
+/** The first line of a transcript that mentions the first word typed: { at, text } or null. */
+function snippetFor(segments, q) {
+  const word = String(q || '').toLowerCase().split(/\s+/).filter((w) => w.length >= 2)[0];
+  if (!word) return null;
+  for (const seg of Array.isArray(segments) ? segments : []) {
+    const text = String((seg && seg.text) || '').replace(/\s+/g, ' ').trim();
+    if (text.toLowerCase().includes(word)) return { at: Math.max(0, Math.floor(Number(seg.start) || 0)), text: text.slice(0, 200) };
+  }
+  return null;
+}
+
 const stripMd = (s) => String(s == null ? '' : s).replace(/<[^>]*>/g, '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 function dateText(v) {
@@ -56,7 +106,7 @@ function dateText(v) {
  * A new note about a saved video, as Markdown: title, link, who and how long, its category and tags, then (only if they were already written
  * and saved, nothing is asked of any AI here) the Main points and the Insights summary, and an empty "My notes" section to write in.
  */
-function buildVideoNote({ videoId, title, channel, duration, publishedAt, category, tags, points, overview }) {
+function buildVideoNote({ videoId, title, channel, duration, publishedAt, category, tags, points, overview, paragraphs, transcriptMissing }) {
   const name = stripMd(title) || 'YouTube video';
   const lines = [`# ${name}`, '', `[Watch on YouTube](https://www.youtube.com/watch?v=${encodeURIComponent(videoId)})`];
   const facts = [];
@@ -74,8 +124,15 @@ function buildVideoNote({ videoId, title, channel, duration, publishedAt, catego
   if (pts.length) { lines.push('', '## Main points', ''); for (const p of pts) lines.push(`- ${p}`); }
   const ov = stripMd(overview);
   if (ov) lines.push('', '## Summary', '', ov);
+  const paras = Array.isArray(paragraphs) ? paragraphs : [];
+  if (paras.length) {
+    lines.push('', '## Transcript', '');
+    for (const para of paras) lines.push(`[${clock(para.start)}](https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}&t=${Math.max(0, Math.floor(para.start))}s) ${stripMd(para.text)}`, '');
+  } else if (transcriptMissing) {
+    lines.push('', '## Transcript', '', '*No transcript could be read for this video when this note was made.*');
+  }
   lines.push('', '## My notes', '', '');
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\n+$/, '\n');
 }
 
-module.exports = { MAX_CATEGORY_CHARS, normalizeCategory, readLabels, noteTagsFor, buildVideoNote };
+module.exports = { MAX_CATEGORY_CHARS, normalizeCategory, readLabels, noteTagsFor, buildVideoNote, transcriptParagraphs, searchPatterns, snippetFor };
