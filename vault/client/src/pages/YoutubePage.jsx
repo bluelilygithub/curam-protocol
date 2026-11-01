@@ -12,7 +12,7 @@ import YoutubeTutorChat from './youtube/YoutubeTutorChat';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { GUIDE_TOOLS, HOW_IT_WORKS } from './youtube/youtubeTools.mjs';
 import { startYoutubeTour, TOUR_KEY as YT_TOUR_KEY } from '../utils/tours/youtubeTour';
-import { embedSrc, formatTime, TRANSCRIPTS_CHANGED } from './youtube/youtubeFormat.mjs';
+import { embedSrc, formatTime, transcriptParagraphs, transcriptCopyText, TRANSCRIPTS_CHANGED } from './youtube/youtubeFormat.mjs';
 
 // Which videos have an AI-written transcript saved (so cards can say so wherever a saved video is shown).
 const TranscriptsContext = React.createContext(new Set());
@@ -359,8 +359,8 @@ function TranscriptPanel({ video, onClose, onSeek }) {
               {summarizing ? 'Summarizing…' : 'Summarize'}
             </button>
           </Tooltip>
-          {segments.length > 0 && onSeek && (
-            <Tooltip text="Show the transcript line by line with the time each line is said. Click a time to jump the video to it.">
+          {segments.length > 0 && (
+            <Tooltip text={onSeek ? 'Show the transcript line by line with the time each line is said. Click a time to jump the video to it.' : 'Show the transcript line by line with the time each line is said.'}>
               <button
                 onClick={() => { setShowSummary(false); setShowTimes((v) => !v); }}
                 disabled={loading}
@@ -377,13 +377,13 @@ function TranscriptPanel({ video, onClose, onSeek }) {
               </button>
             </Tooltip>
           )}
-          <Tooltip text="Copy the text shown below to your clipboard.">
+          <Tooltip text={showSummary ? 'Copy the summary to your clipboard.' : showTimes && segments.length > 0 ? 'Copy the transcript to your clipboard, one line at a time with the time at the start of each line.' : 'Copy the transcript to your clipboard as tidy paragraphs.'}>
             <button
-              onClick={() => copyText(showSummary ? summary : transcript)}
+              onClick={() => copyText(showSummary ? summary : transcriptCopyText(segments, transcript, { times: showTimes }))}
               disabled={loading || (!transcript && !summary)}
               style={{ ...btnBase, marginLeft: 'auto', padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
             >
-              Copy
+              {showSummary ? 'Copy summary' : 'Copy transcript'}
             </button>
           </Tooltip>
         </div>
@@ -401,19 +401,30 @@ function TranscriptPanel({ video, onClose, onSeek }) {
             <div style={{ fontSize: '0.82rem', lineHeight: 1.55, color: 'var(--color-text)' }}>
               {segments.map((seg, i) => (
                 <p key={i} style={{ margin: '0 0 0.25rem' }}>
-                  <button
-                    type="button"
-                    onClick={() => { onSeek(seg.start); onClose(); }}
-                    style={{ fontFamily: 'inherit', fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 0.5rem 0 0', textDecoration: 'underline' }}
-                  >
-                    {formatTime(seg.start)}
-                  </button>
+                  {onSeek ? (
+                    <button
+                      type="button"
+                      onClick={() => { onSeek(seg.start); onClose(); }}
+                      style={{ fontFamily: 'inherit', fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 0.5rem 0 0', textDecoration: 'underline' }}
+                    >
+                      {formatTime(seg.start)}
+                    </button>
+                  ) : (
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)', paddingRight: '0.5rem' }}>{formatTime(seg.start)}</span>
+                  )}
                   {seg.text}
                 </p>
               ))}
             </div>
           )}
-          {!loading && !error && !(showTimes && !showSummary && segments.length > 0) && (
+          {!loading && !error && !showSummary && !showTimes && segments.length > 0 && (
+            <div style={{ fontSize: '0.85rem', lineHeight: 1.65, color: 'var(--color-text)' }}>
+              {transcriptParagraphs(segments).map((para, i) => (
+                <p key={i} style={{ margin: '0 0 0.9rem' }}>{para.text}</p>
+              ))}
+            </div>
+          )}
+          {!loading && !error && (showSummary || segments.length === 0) && (
             <p style={{ whiteSpace: 'pre-wrap', fontSize: '0.82rem', lineHeight: 1.55, color: 'var(--color-text)', margin: 0 }}>
               {showSummary ? summary : transcript}
             </p>

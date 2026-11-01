@@ -81,6 +81,7 @@ Open any video and press **Insights & Ask** (under the player). Everything is re
 - **Ask this video** - type a question, get an answer taken from the captions, with the moments it comes from (clickable). Uses the workspace `standard` model. A long video sends only the minute-long windows that share the most words with the question. If the video does not say, the answer is "The video doesn't cover that." Follow-ups carry the last four turns.
 - **Save to Notes** - builds a Markdown note (link, summary, key points and chapters with timestamp links, `- [ ]` to-dos, quotes, a line saying AI wrote it) and saves it through the normal Notes API, optionally filed under a project and/or linked to a client. A toast links to the note.
 - **Transcript timestamps** - the Transcript panel has a Timestamps view (line by line; click a time to jump the player).
+- **Transcript layout and copy** - the default Transcript view groups the timed lines into readable paragraphs (`transcriptParagraphs` in `youtubeFormat.mjs`: closes at a sentence end after about 40 seconds, always by 75). **Copy transcript** puts those paragraphs on the clipboard, or `[m:ss] line` per line while the Timestamps view is on (`transcriptCopyText`); it reads "Copy summary" on the Summary view.
 
 Both models treat the transcript as untrusted data (the prompts say so) and everything they return is parsed, stripped of HTML, clamped to the video's length and cut to size before it is stored or shown (`server/services/youtubeInsights.js`, tested without a model in `youtubeInsights.test.js`).
 

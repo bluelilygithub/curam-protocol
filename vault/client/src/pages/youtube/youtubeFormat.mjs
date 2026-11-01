@@ -69,3 +69,37 @@ export function elapsedText(ms) {
 
 /** Event the page listens for so the "Transcript saved" labels refresh after a transcript is made or deleted. */
 export const TRANSCRIPTS_CHANGED = 'vault:youtube-transcripts-changed';
+
+// ── Reading and copying a transcript ──
+
+/**
+ * Timed lines gathered into paragraphs a person can read: [{ start, text }]. A paragraph closes at the end of a sentence once it has run about
+ * 40 seconds (or 6 lines), and always by 75 seconds, so a transcript with no full stops still breaks up.
+ */
+export function transcriptParagraphs(segments) {
+  const out = [];
+  let cur = null;
+  for (const seg of Array.isArray(segments) ? segments : []) {
+    const text = String(seg && seg.text || '').replace(/\s+/g, ' ').trim();
+    if (!text) continue;
+    const start = Math.max(0, Math.floor(Number(seg.start) || 0));
+    if (!cur) cur = { start, text, lines: 1 };
+    else { cur.text += ' ' + text; cur.lines += 1; }
+    const span = start - cur.start;
+    const endsSentence = /[.!?…]["')\]]*$/.test(text);
+    if ((endsSentence && (span >= 40 || cur.lines >= 6)) || span >= 75) { out.push({ start: cur.start, text: cur.text }); cur = null; }
+  }
+  if (cur) out.push({ start: cur.start, text: cur.text });
+  return out;
+}
+
+/**
+ * The text that goes on the clipboard. `times: false` = paragraphs separated by a blank line; `times: true` = one "[m:ss] line" per timed line.
+ * With no timed lines it falls back to the plain text it was given.
+ */
+export function transcriptCopyText(segments, plain, { times = false } = {}) {
+  const segs = Array.isArray(segments) ? segments.filter((s) => s && String(s.text || '').trim()) : [];
+  if (!segs.length) return String(plain || '');
+  if (times) return segs.map((s) => `[${formatTime(s.start)}] ${String(s.text).replace(/\s+/g, ' ').trim()}`).join('\n');
+  return transcriptParagraphs(segs).map((p) => p.text).join('\n\n');
+}

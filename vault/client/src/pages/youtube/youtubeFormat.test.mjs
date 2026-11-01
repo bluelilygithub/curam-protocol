@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { formatTime, embedSrc, coverageNote, ASK_STARTERS, noteHref, formatUsd, formatWait, formatLength, elapsedText, TRANSCRIPTS_CHANGED } from './youtubeFormat.mjs';
+import { formatTime, embedSrc, coverageNote, ASK_STARTERS, noteHref, formatUsd, formatWait, formatLength, elapsedText, TRANSCRIPTS_CHANGED, transcriptParagraphs, transcriptCopyText } from './youtubeFormat.mjs';
 
 assert.equal(formatTime(0), '0:00');
 assert.equal(formatTime(75), '1:15');
@@ -33,5 +33,20 @@ assert.equal(elapsedText(83000), '1:23');
 assert.equal(elapsedText(5000), '0:05');
 assert.equal(elapsedText(-1), '0:00');
 assert.equal(typeof TRANSCRIPTS_CHANGED, 'string');
+
+// reading and copying
+const lines = [];
+for (let i = 0; i < 20; i++) lines.push({ start: i * 10, text: i % 4 === 3 ? `Line ${i}.` : `Line ${i}` });
+const paras = transcriptParagraphs(lines);
+assert.ok(paras.length > 1 && paras.length < 20, 'lines are gathered into a few paragraphs');
+assert.equal(paras[0].start, 0);
+assert.ok(paras[0].text.endsWith('.'), 'a paragraph closes at the end of a sentence');
+assert.equal(transcriptParagraphs([{ start: 0, text: 'a' }, { start: 80, text: 'b' }]).length, 1, 'a paragraph never runs past about 75 seconds');
+assert.equal(transcriptParagraphs([]).length, 0);
+assert.equal(transcriptParagraphs([{ start: 3, text: '  ' }]).length, 0, 'empty lines are dropped');
+assert.equal(transcriptCopyText([{ start: 65, text: 'Hi  there' }, { start: 70, text: 'Bye' }], 'x', { times: true }), '[1:05] Hi there\n[1:10] Bye');
+assert.equal(transcriptCopyText([{ start: 0, text: 'Hi.' }], 'x'), 'Hi.');
+assert.equal(transcriptCopyText([], 'plain words'), 'plain words', 'no timed lines: the plain text is copied');
+assert.ok(!transcriptCopyText(lines, '').includes('['), 'paragraph copy carries no times');
 
 console.log('youtubeFormat: ok');
