@@ -43,3 +43,10 @@ describe('the quick launcher tiles', () => {
     expect(clampColumns(Number.NaN)).toBe(4);
   });
 });
+
+describe('the tile icons', () => {
+  it('are the icons Vault itself uses for each tool: every tile resolves to a real icon', async () => {
+    const { navIcon } = await import('../src/lib/navIcons');
+    for (const t of LAUNCHER_TILES) expect(navIcon(t.icon), `${t.id} (${t.icon})`).not.toBeNull();
+  });
+});

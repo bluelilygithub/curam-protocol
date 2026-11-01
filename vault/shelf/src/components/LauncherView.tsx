@@ -7,6 +7,7 @@ import { DEFAULT_SETTINGS } from '../lib/settings';
 import { applyLook, resolveLook } from '../lib/theme';
 import { TIPS } from '../lib/tips';
 import Icon from './Icon';
+import { NavIcon } from '../lib/navIcons';
 import Toast from './Toast';
 import Tooltip from './Tooltip';
 
@@ -84,11 +85,11 @@ export default function LauncherView() {
                     type="button"
                     role="listitem"
                     onClick={() => void open(t.path)}
-                    className="relative flex flex-col items-center justify-center gap-2 aspect-[5/3] min-h-[84px] rounded-card border border-shelf-line bg-shelf-card/70 p-3 text-center hover:opacity-70 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-accent"
+                    className="relative flex flex-col items-center justify-center gap-2.5 min-h-[96px] rounded-xl border border-shelf-line bg-shelf-card px-3 py-4 text-center hover:opacity-70 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelf-accent"
                   >
-                    <span className="h-9 w-9 rounded-full bg-shelf-accent text-shelf-onaccent flex items-center justify-center text-base font-semibold" aria-hidden="true">{t.label.charAt(0).toUpperCase()}</span>
-                    <span className="text-sm font-medium leading-tight">{t.label}</span>
-                    {i < 9 && <span className="absolute top-1.5 right-2 text-[10px] text-shelf-muted font-mono" aria-hidden="true">{i + 1}</span>}
+                    <span className="text-shelf-accent"><NavIcon name={t.icon} size={26} strokeWidth={1.6} /></span>
+                    <span className="text-sm leading-tight">{t.label}</span>
+                    {i < 9 && <kbd className="absolute top-1.5 right-2 text-[10px] text-shelf-muted font-mono" aria-hidden="true">{i + 1}</kbd>}
                   </button>
                 </Tooltip>
               ))}

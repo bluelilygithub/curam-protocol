@@ -3,7 +3,7 @@
 
 import { APP_NAV_GROUPS, HABITS_NAV_GROUP } from '@vault-client/config/appNavigation';
 
-export interface LauncherTile { id: string; label: string; path: string; group: string }
+export interface LauncherTile { id: string; label: string; path: string; group: string; icon: string }
 export interface LauncherGroup { id: string; label: string; tiles: LauncherTile[] }
 
 export const COLUMNS_MIN = 2;
@@ -23,7 +23,7 @@ export function buildLauncherGroups(): LauncherGroup[] {
     for (const item of g.items) {
       if (item.external || !plainPath(item.path) || seen.has(item.id)) continue;
       seen.add(item.id);
-      tiles.push({ id: item.id, label: item.label, path: item.path, group: g.label });
+      tiles.push({ id: item.id, label: item.label, path: item.path, group: g.label, icon: item.icon ?? '' });
     }
     if (tiles.length > 0) groups.push({ id: g.id, label: g.label, tiles });
   }

@@ -12,3 +12,8 @@ declare module '@vault-client/config/appNavigation' {
   export const APP_NAV_GROUPS: NavGroup[];
   export const HABITS_NAV_GROUP: NavGroup;
 }
+
+// Vault's icon-name table (client/src/providers/iconMap.js).
+declare module '@vault-client/providers/iconMap' {
+  export const semanticMap: Record<string, { lucide: string }>;
+}

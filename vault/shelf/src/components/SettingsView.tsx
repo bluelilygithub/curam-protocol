@@ -6,6 +6,7 @@ import { COLUMNS_MAX, COLUMNS_MIN, DEFAULT_LAUNCHER_HOTKEY, LAUNCHER_GROUPS, tog
 import { FONT_LIST, THEME_LIST } from '../lib/theme';
 import { TIPS } from '../lib/tips';
 import Icon from './Icon';
+import { NavIcon } from '../lib/navIcons';
 import Tooltip from './Tooltip';
 
 interface Props {
@@ -27,13 +28,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Toggle({ label, hint, tip, checked, onChange }: { label: string; hint?: string; tip?: string; checked: boolean; onChange: (v: boolean) => void }) {
+function Toggle({ label, hint, tip, checked, onChange, icon }: { label: string; hint?: string; tip?: string; checked: boolean; onChange: (v: boolean) => void; icon?: string }) {
   return (
     <Tooltip text={tip}>
     <label className="flex items-start gap-3 cursor-pointer">
       <input type="checkbox" role="switch" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[rgb(var(--shelf-accent))]" />
       <span>
-        <span className="text-sm">{label}</span>
+        <span className="text-sm inline-flex items-center gap-1.5">{icon !== undefined && <span className="text-shelf-muted"><NavIcon name={icon} size={14} /></span>}{label}</span>
         {hint && <span className="block text-xs text-shelf-muted">{hint}</span>}
       </span>
     </label>
@@ -191,7 +192,7 @@ export default function SettingsView({ bridge, settings, verify, onSettings, onV
                   <div className="text-[11px] font-medium uppercase tracking-wide text-shelf-muted">{g.label}</div>
                   <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
                     {g.tiles.map((t) => (
-                      <Toggle key={t.id} label={t.label} tip={TIPS.launcherTileSwitch(t.label)} checked={settings.launcherTiles.includes(t.id)} onChange={(on) => void save({ launcherTiles: toggleTile(settings.launcherTiles, t.id, on) })} />
+                      <Toggle key={t.id} label={t.label} icon={t.icon} tip={TIPS.launcherTileSwitch(t.label)} checked={settings.launcherTiles.includes(t.id)} onChange={(on) => void save({ launcherTiles: toggleTile(settings.launcherTiles, t.id, on) })} />
                     ))}
                   </div>
                 </div>
