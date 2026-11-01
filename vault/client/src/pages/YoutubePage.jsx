@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Navigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../utils/apiClient';
 import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
@@ -9,6 +9,8 @@ import Tooltip from '../components/Tooltip';
 import VideoStudyPanel from './youtube/VideoStudyPanel';
 import AiTranscriptDialog from './youtube/AiTranscriptDialog';
 import FavLabelsDialog from './youtube/FavLabelsDialog';
+import SelectBar from './youtube/SelectBar';
+import useSelection from './youtube/useSelection';
 import YoutubeTutorChat from './youtube/YoutubeTutorChat';
 import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
 import { GUIDE_TOOLS, HOW_IT_WORKS } from './youtube/youtubeTools.mjs';
@@ -133,7 +135,8 @@ const btnBase = {
 
 // ── Video Card ────────────────────────────────────────────────────────────────
 
-function VideoCard({ video, isFav, onPlay, onToggleFav }) {
+function VideoCard({ video, isFav, onPlay, onToggleFav, select }) {
+  const open = () => (select && select.on ? select.onToggle() : onPlay(video));
   const dur   = parseDuration(video.duration);
   const views = fmtViews(video.viewCount);
   const ago   = timeAgo(video.publishedAt);
@@ -142,7 +145,7 @@ function VideoCard({ video, isFav, onPlay, onToggleFav }) {
     <div
       style={{
         background: 'var(--color-surface)',
-        border: '1px solid var(--color-border)',
+        border: select && select.checked ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
         borderRadius: '0.75rem',
         overflow: 'hidden',
         display: 'flex',
@@ -155,7 +158,7 @@ function VideoCard({ video, isFav, onPlay, onToggleFav }) {
     >
       <div
         style={{ position: 'relative', aspectRatio: '16/9', background: '#000', overflow: 'hidden' }}
-        onClick={() => onPlay(video)}
+        onClick={open}
       >
         {video.thumbnail && (
           <img src={video.thumbnail} alt={video.title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
@@ -165,6 +168,10 @@ function VideoCard({ video, isFav, onPlay, onToggleFav }) {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="#ef4444"><polygon points="5,3 19,12 5,21"/></svg>
           </div>
         </div>
+        {select && select.on && (
+          <input type="checkbox" checked={!!select.checked} onChange={select.onToggle} onClick={(e) => e.stopPropagation()} aria-label={`Select ${video.title}`}
+            style={{ position: 'absolute', top: 8, right: 8, width: 20, height: 20, cursor: 'pointer', zIndex: 2 }} />
+        )}
         <TranscriptSavedLabel videoId={video.id} />
         {dur && (
           <span style={{ position: 'absolute', bottom: 6, right: 6, background: 'rgba(0,0,0,0.8)', color: '#fff', fontSize: '0.7rem', fontWeight: 600, padding: '1px 5px', borderRadius: 4 }}>
@@ -174,7 +181,7 @@ function VideoCard({ video, isFav, onPlay, onToggleFav }) {
       </div>
 
       <div style={{ padding: '0.6rem 0.75rem', flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <p style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text)', lineHeight: 1.3, margin: 0 }} onClick={() => onPlay(video)} title={video.title}>
+        <p style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text)', lineHeight: 1.3, margin: 0 }} onClick={open} title={video.title}>
           {video.title.length > 80 ? video.title.slice(0, 80) + '…' : video.title}
         </p>
         <p style={{ fontSize: '0.7rem', color: 'var(--color-muted)', margin: 0 }}>{video.channel}</p>
@@ -202,7 +209,7 @@ function VideoCard({ video, isFav, onPlay, onToggleFav }) {
 
 // ── Favourites row ────────────────────────────────────────────────────────────
 
-function FavCard({ fav, hit, onPlay, onRemove, onLabels, onNote, onPickCategory, onPickTag }) {
+function FavCard({ fav, hit, noteId, select, onPlay, onRemove, onLabels, onNote, onPickCategory, onPickTag }) {
   const dur     = parseDuration(fav.duration);
   const views   = fmtViews(fav.viewCount || fav.view_count);
   const videoId = fav.videoId || fav.video_id;
@@ -217,9 +224,14 @@ function FavCard({ fav, hit, onPlay, onRemove, onLabels, onNote, onPickCategory,
     publishedAt: fav.publishedAt || fav.published_at,
   };
 
+  const open = () => (select && select.on ? select.onToggle() : onPlay(playable));
+
   return (
-    <div style={{ display: 'flex', gap: '0.75rem', padding: '0.6rem', borderRadius: '0.5rem', border: '1px solid var(--color-border)', background: 'var(--color-surface)', alignItems: 'center' }}>
-      <div onClick={() => onPlay(playable)} style={{ position: 'relative', flexShrink: 0, width: 112, height: 63, borderRadius: 6, overflow: 'hidden', background: '#000', cursor: 'pointer' }}>
+    <div style={{ display: 'flex', gap: '0.75rem', padding: '0.6rem', borderRadius: '0.5rem', border: select && select.checked ? '2px solid var(--color-primary)' : '1px solid var(--color-border)', background: 'var(--color-surface)', alignItems: 'center' }}>
+      {select && select.on && (
+        <input type="checkbox" checked={!!select.checked} onChange={select.onToggle} aria-label={`Select ${fav.title}`} style={{ width: 20, height: 20, cursor: 'pointer', flexShrink: 0 }} />
+      )}
+      <div onClick={open} style={{ position: 'relative', flexShrink: 0, width: 112, height: 63, borderRadius: 6, overflow: 'hidden', background: '#000', cursor: 'pointer' }}>
         {fav.thumbnail && <img src={fav.thumbnail} alt={fav.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
         <TranscriptSavedLabel videoId={videoId} style={{ top: 3, left: 3, fontSize: '0.55rem', padding: '0 4px' }} />
         {dur && (
@@ -229,7 +241,7 @@ function FavCard({ fav, hit, onPlay, onRemove, onLabels, onNote, onPickCategory,
         )}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p onClick={() => onPlay(playable)} style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text)', margin: 0, cursor: 'pointer' }}>
+        <p onClick={open} style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text)', margin: 0, cursor: 'pointer' }}>
           {fav.title.length > 90 ? fav.title.slice(0, 90) + '…' : fav.title}
         </p>
         <p style={{ fontSize: '0.7rem', color: 'var(--color-muted)', margin: '2px 0 0' }}>
@@ -262,9 +274,9 @@ function FavCard({ fav, hit, onPlay, onRemove, onLabels, onNote, onPickCategory,
           Category &amp; tags
         </button>
       </Tooltip>
-      <Tooltip text="Create a note in Notes about this video: its link and details, category and tags, main points if written, and the transcript.">
-        <button onClick={() => onNote(playable)} style={{ ...btnBase, fontSize: '0.72rem', padding: '0.3rem 0.6rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)', flexShrink: 0 }}>
-          Create note
+      <Tooltip text={noteId ? 'A note for this video already exists. Open it in Notes.' : 'Create a note in Notes about this video: its link and details, category and tags, main points if written, and the transcript.'}>
+        <button onClick={() => onNote(playable)} style={{ ...btnBase, fontSize: '0.72rem', padding: '0.3rem 0.6rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: noteId ? 'var(--color-primary)' : 'var(--color-muted)', flexShrink: 0 }}>
+          {noteId ? 'Open note' : 'Create note'}
         </button>
       </Tooltip>
       <Tooltip text="Remove this video from your saved favourites.">
@@ -608,7 +620,7 @@ function CommentsPanel({ video, onClose }) {
 
 // ── Video Modal ───────────────────────────────────────────────────────────────
 
-function VideoModal({ video, isFav, onClose, onToggleFav, onMoreFromChannel, isFollowing, onToggleFollow, onLabels, onNote }) {
+function VideoModal({ video, isFav, noteId, onClose, onToggleFav, onMoreFromChannel, isFollowing, onToggleFollow, onLabels, onNote }) {
   const savedTranscripts = React.useContext(TranscriptsContext);
   const [showTranscript, setShowTranscript] = useState(false);
   const [showComments, setShowComments]     = useState(false);
@@ -699,9 +711,9 @@ function VideoModal({ video, isFav, onClose, onToggleFav, onMoreFromChannel, isF
               </Tooltip>
             )}
             {onNote && (
-              <Tooltip text="Create a note in Notes about this video: its link and details, category and tags if saved, main points if written, and the transcript.">
-                <button onClick={() => onNote(video)} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
-                  Create note
+              <Tooltip text={noteId ? 'A note for this video already exists. Open it in Notes.' : 'Create a note in Notes about this video: its link and details, category and tags if saved, main points if written, and the transcript.'}>
+                <button onClick={() => onNote(video)} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: noteId ? 'var(--color-primary)' : 'var(--color-muted)' }}>
+                  {noteId ? 'Open note' : 'Create note'}
                 </button>
               </Tooltip>
             )}
@@ -865,8 +877,23 @@ export default function YoutubePage() {
   const [favGroup, setFavGroup] = useState('category');
   const [captionHits, setCaptionHits] = useState({});
   const [justSaved, setJustSaved] = useState(false);
+  const navigate = useNavigate();
+  const resultsSel = useSelection();
+  const trendingSel = useSelection();
+  const favSel = useSelection();
+  const watchSel = useSelection();
+  const historySel = useSelection();
+  const [videoNotes, setVideoNotes] = useState({}); // { videoId: noteId } for videos that already have a note
+  const selProps = (sel, id) => (sel.mode ? { on: true, checked: sel.has(id), onToggle: () => sel.toggle(id) } : null);
   const [labelsFor, setLabelsFor] = useState(null); // the videoId whose category and tags are being edited
   const labelInfo = collectLabels(favs);
+
+  useEffect(() => {
+    api.get('/api/youtube/video-notes').then((r) => r.json()).then((d) => setVideoNotes((d && d.notes) || {})).catch(() => {});
+  }, []);
+
+  // ticks cleared when the favourites list is filtered, so "Delete selected" never touches something that is hidden
+  useEffect(() => { favSel.clear(); }, [favSearch, favCategory, favTags, favGroup]);
 
   // Search the kept transcripts of the favourites as the person types (after a short pause).
   useEffect(() => {
@@ -901,6 +928,7 @@ export default function YoutubePage() {
 
   // A new note in Notes about a video: the text (details, labels, main points, transcript) comes from the server with no AI; the labels go on the note as tags.
   async function createNoteFromFav(video) {
+    if (videoNotes[video.id]) { navigate(noteHref(videoNotes[video.id])); return; } // already made: go to it
     try {
       addToast('Creating the note…', 'info', 2500);
       const draftRes = await api.post('/api/youtube/video-note', {
@@ -911,12 +939,50 @@ export default function YoutubePage() {
       const noteRes = await api.post('/api/notes', { title: draft.title, body: draft.body });
       const note = await noteRes.json();
       if (!noteRes.ok) throw new Error(note.error || 'The note could not be saved.');
+      setVideoNotes((m) => ({ ...m, [video.id]: note.id }));
+      api.put(`/api/youtube/video-notes/${video.id}`, { noteId: note.id }).catch(() => {});
       if (note.title !== draft.title) await api.put(`/api/notes/${note.id}`, { title: draft.title }).catch(() => {}); // the note carries the video's title
       if (draft.tags && draft.tags.length) await api.put(`/api/notes/${note.id}/tags`, { tags: draft.tags }).catch(() => {});
       addToast(draft.hasTranscript ? 'Note created with the transcript.' : 'Note created. No transcript could be read for this video.', 'success', 6000, { label: 'Open note', href: noteHref(note.id) });
     } catch (err) {
       addToast(err.message || 'The note could not be saved.', 'error');
     }
+  }
+
+  // Several at once. Results and Trending are only what is on screen, so "removing" them hides them from this page and changes nothing saved.
+  async function bulk(url, body, what) {
+    try {
+      const res = await api.post(url, body);
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Could not ${what}.`);
+      return true;
+    } catch (err) { addToast(err.message || `Could not ${what}.`, 'error'); return false; }
+  }
+  async function deleteFavs(ids) {
+    if (!(await bulk('/api/youtube/favourites/bulk-delete', { videoIds: ids }, 'remove them'))) return;
+    const gone = new Set(ids);
+    setFavs((f) => f.filter((x) => !gone.has(x.videoId || x.video_id)));
+    setFavSet((st) => { const n = new Set(st); ids.forEach((i) => n.delete(i)); return n; });
+    addToast(`Removed ${ids.length} from your favourites.`, 'success');
+  }
+  async function deleteWatched(ids) {
+    if (!(await bulk('/api/youtube/watch-history/bulk-delete', { videoIds: ids }, 'delete them'))) return;
+    const gone = new Set(ids);
+    setWatchHistory((w) => w.filter((x) => !gone.has(x.videoId)));
+  }
+  async function deleteSearches(ids) {
+    if (!(await bulk('/api/youtube/history/bulk-delete', { ids }, 'delete them'))) return;
+    const gone = new Set(ids);
+    setHistory((h) => h.filter((r) => !gone.has(r.id)));
+  }
+  function hideFromResults(ids) {
+    const gone = new Set(ids);
+    setVideos((v) => v.filter((x) => !gone.has(x.id)));
+    setChannelVideos((v) => v.filter((x) => !gone.has(x.id)));
+    setPlaylistVideos((v) => v.filter((x) => !gone.has(x.id)));
+  }
+  function hideFromTrending(ids) {
+    const gone = new Set(ids);
+    setTrendingVideos((v) => v.filter((x) => !gone.has(x.id)));
   }
 
   function loadFavs() {
@@ -1513,6 +1579,8 @@ export default function YoutubePage() {
                     ? `Showing ${extraVideos.length} videos`
                     : `Showing ${videos.length} of ~${totalResults.toLocaleString()} results`}
                 </p>
+                <SelectBar sel={resultsSel} allIds={(extraView ? extraVideos : videos).map((v) => v.id)} verb="Remove" noun="videos"
+                  tip="Take the ticked videos off this page. Nothing saved is changed; search again to bring them back." onDelete={async (ids) => hideFromResults(ids)} />
                 <Tooltip text="Save this whole set of results as a named list you can come back to later.">
                   <button onClick={saveCurrentSearchAsList} style={{ ...btnBase, padding: '0.3rem 0.7rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
                     Save this search as a list
@@ -1533,7 +1601,7 @@ export default function YoutubePage() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
                 {(extraView ? extraVideos : videos).map((v) => (
-                  <VideoCard key={v.id} video={v} isFav={favSet.has(v.id)} onPlay={setActiveVideo} onToggleFav={toggleFav} />
+                  <VideoCard key={v.id} video={v} isFav={favSet.has(v.id)} onPlay={setActiveVideo} onToggleFav={toggleFav} select={selProps(resultsSel, v.id)} />
                 ))}
               </div>
             </>
@@ -1568,11 +1636,17 @@ export default function YoutubePage() {
             </div>
           )}
           {!trendingLoading && trendingVideos.length > 0 && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
-              {trendingVideos.map((v) => (
-                <VideoCard key={v.id} video={v} isFav={favSet.has(v.id)} onPlay={setActiveVideo} onToggleFav={toggleFav} />
-              ))}
-            </div>
+            <>
+              <div style={{ marginBottom: '0.75rem' }}>
+                <SelectBar sel={trendingSel} allIds={trendingVideos.map((v) => v.id)} verb="Remove" noun="videos"
+                  tip="Take the ticked videos off this page. Nothing saved is changed." onDelete={async (ids) => hideFromTrending(ids)} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
+                {trendingVideos.map((v) => (
+                  <VideoCard key={v.id} video={v} isFav={favSet.has(v.id)} onPlay={setActiveVideo} onToggleFav={toggleFav} select={selProps(trendingSel, v.id)} />
+                ))}
+              </div>
+            </>
           )}
         </div>
       )}
@@ -1676,6 +1750,8 @@ export default function YoutubePage() {
                       <option value="channel">Group by channel</option>
                     </select>
                   </Tooltip>
+                  <SelectBar sel={favSel} allIds={shown.map((f) => f.videoId || f.video_id)} verb="Remove" noun="videos"
+                    tip="Remove the ticked videos from your favourites. Their kept transcripts go too; notes already made stay in Notes." onDelete={deleteFavs} />
                   {filtering && (
                     <button onClick={() => { setFavSearch(''); setFavCategory(''); setFavTags([]); }} style={{ ...miniBtn, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-muted)' }}>
                       Clear filters
@@ -1710,6 +1786,8 @@ export default function YoutubePage() {
                           key={fav.videoId || fav.video_id}
                           fav={fav}
                           hit={favSearch.trim().length >= 3 ? captionHits[fav.videoId || fav.video_id] : null}
+                          noteId={videoNotes[fav.videoId || fav.video_id]}
+                          select={selProps(favSel, fav.videoId || fav.video_id)}
                           onPlay={setActiveVideo}
                           onLabels={(id) => { setJustSaved(false); setLabelsFor(id); }}
                           onNote={createNoteFromFav}
@@ -1750,7 +1828,9 @@ export default function YoutubePage() {
                   <p style={{ color: 'var(--color-muted)', fontSize: '0.85rem', margin: 0 }}>Nothing watched yet — opening a video records it here.</p>
                 ) : (
                   <>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: '0.5rem' }}>
+                      <SelectBar sel={watchSel} allIds={watchHistory.map((v) => v.videoId)} verb="Delete" noun="videos"
+                        tip="Delete the ticked videos from your watch history." onDelete={deleteWatched} />
                       <Tooltip text="Remove every entry from your watch history.">
                         <button
                           onClick={async () => { await api.delete('/api/youtube/watch-history/all').catch(() => {}); setWatchHistory([]); }}
@@ -1768,6 +1848,7 @@ export default function YoutubePage() {
                           isFav={favSet.has(v.videoId)}
                           onPlay={setActiveVideo}
                           onToggleFav={toggleFav}
+                          select={selProps(watchSel, v.videoId)}
                         />
                       ))}
                     </div>
@@ -1776,6 +1857,12 @@ export default function YoutubePage() {
               </div>
             )}
           </div>
+        {history.length > 0 && (
+          <div style={{ marginBottom: '0.6rem' }}>
+            <SelectBar sel={historySel} allIds={history.map((r) => r.id)} verb="Delete" noun="searches"
+              tip="Delete the ticked searches from your search history." onDelete={deleteSearches} />
+          </div>
+        )}
         <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '1rem', overflow: 'hidden' }}>
           {history.length === 0 ? (
             <p style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-muted)', fontSize: '0.875rem' }}>No search history yet.</p>
@@ -1783,7 +1870,7 @@ export default function YoutubePage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
               <thead>
                 <tr style={{ background: 'var(--color-bg)' }}>
-                  {['Query', 'Filters', 'Results', 'When', ''].map((h) => (
+                  {[...(historySel.mode ? ['Pick'] : []), 'Query', 'Filters', 'Results', 'When', ''].map((h) => (
                     <th key={h} style={{ padding: '0.6rem 0.9rem', textAlign: 'left', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-muted)', borderBottom: '1px solid var(--color-border)' }}>{h}</th>
                   ))}
                 </tr>
@@ -1797,7 +1884,12 @@ export default function YoutubePage() {
                     f.publishedAfter ? 'date filtered' : null,
                   ].filter(Boolean);
                   return (
-                    <tr key={row.id} style={{ borderTop: '1px solid var(--color-border)' }}>
+                    <tr key={row.id} style={{ borderTop: '1px solid var(--color-border)', background: historySel.has(row.id) ? 'var(--color-bg)' : undefined }}>
+                      {historySel.mode && (
+                        <td style={{ padding: '0.6rem 0.9rem' }}>
+                          <input type="checkbox" checked={historySel.has(row.id)} onChange={() => historySel.toggle(row.id)} aria-label={`Select search ${row.query}`} style={{ width: 18, height: 18, cursor: 'pointer' }} />
+                        </td>
+                      )}
                       <td style={{ padding: '0.6rem 0.9rem', color: 'var(--color-text)', fontWeight: 600 }}>{row.query}</td>
                       <td style={{ padding: '0.6rem 0.9rem', color: 'var(--color-muted)' }}>{filterParts.length ? filterParts.join(', ') : '—'}</td>
                       <td style={{ padding: '0.6rem 0.9rem', color: 'var(--color-muted)' }}>{row.resultCount ?? row.result_count}</td>
@@ -1891,6 +1983,7 @@ export default function YoutubePage() {
           onMoreFromChannel={openMoreFromChannel}
           isFollowing={follows.some((f) => f.kind === 'channel' && f.channelId === activeVideo.channelId)}
           onToggleFollow={toggleFollowChannel}
+          noteId={videoNotes[activeVideo.id]}
           onLabels={(id) => { setJustSaved(false); setLabelsFor(id); }}
           onNote={createNoteFromFav}
         />

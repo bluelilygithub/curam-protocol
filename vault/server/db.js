@@ -3339,6 +3339,17 @@ async function initSchema() {
   // A category (one, free text) and tags (same rule as note tags) on a saved video. See services/youtubeLabels.js.
   await pool.query(`ALTER TABLE youtube_favourites ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT ''`);
   await pool.query(`ALTER TABLE youtube_favourites ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}'`);
+  // Which note was made for a video with "Create note", so the button can become "Open note". No foreign key on purpose: the route joins to notes, so a
+  // note deleted to the recycle bin drops out (the button returns to Create note) and comes back by itself if the note is restored.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS youtube_video_notes (
+      "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "videoId"   TEXT NOT NULL,
+      "noteId"    INTEGER NOT NULL,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY ("userId", "videoId")
+    )
+  `);
   // The caption text of a SAVED video, kept so the Favourites search can look inside transcripts (segments = [{ start, text }]). AI-written transcripts
   // live in youtube_transcripts and are searched there. Rows go when the video is removed from the favourites.
   await pool.query(`

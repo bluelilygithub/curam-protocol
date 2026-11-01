@@ -3895,5 +3895,20 @@
  },
  "POST /api/youtube/video-note": {
   "class": "authed"
+ },
+ "POST /api/youtube/history/bulk-delete": {
+  "class": "authed"
+ },
+ "POST /api/youtube/favourites/bulk-delete": {
+  "class": "authed"
+ },
+ "POST /api/youtube/watch-history/bulk-delete": {
+  "class": "authed"
+ },
+ "GET /api/youtube/video-notes": {
+  "class": "authed"
+ },
+ "PUT /api/youtube/video-notes/:videoId": {
+  "class": "authed"
  }
 }

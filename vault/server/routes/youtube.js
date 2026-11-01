@@ -474,6 +474,16 @@ router.get('/history', async (req, res) => {
   }
 });
 
+// Several search-history entries at once: { ids: [1, 2, ...] } (at most 500).
+router.post('/history/bulk-delete', async (req, res) => {
+  const ids = (Array.isArray(req.body && req.body.ids) ? req.body.ids : []).map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 500);
+  if (!ids.length) return res.status(400).json({ error: 'Choose at least one entry.' });
+  try {
+    const r = await pool.query('DELETE FROM youtube_search_history WHERE id = ANY($1::int[]) AND "userId" = $2', [ids, req.user.id]);
+    res.json({ ok: true, deleted: r.rowCount });
+  } catch (err) { console.error('[youtube/history bulk]', err.message); res.status(500).json({ error: 'Could not delete them.' }); }
+});
+
 router.delete('/history/:id', async (req, res) => {
   try {
     await pool.query(
@@ -582,6 +592,36 @@ router.get('/favourites/search', async (req, res) => {
 // The text of a new note about a video (no AI is asked): link, details, its category and tags if it is a saved favourite, the Main points and
 // Insights summary if already written, and the transcript (kept, AI-written, or read now if YouTube allows). The page saves it through
 // /api/notes and puts the category and tags on the note as tags.
+// The notes already made with "Create note": { notes: { [videoId]: noteId } }. Only notes that still exist (not in the recycle bin) are listed.
+router.get('/video-notes', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT v."videoId", v."noteId" FROM youtube_video_notes v JOIN notes n ON n.id = v."noteId" AND n.user_id = v."userId" WHERE v."userId" = $1`,
+      [req.user.id]
+    );
+    const notes = {};
+    for (const r of rows) notes[r.videoId] = r.noteId;
+    res.json({ notes });
+  } catch (err) { console.error('[youtube/video-notes]', err.message); res.status(500).json({ error: 'Could not read your notes.' }); }
+});
+
+// Remember that a video has a note: { noteId } (must be one of the person's own notes).
+router.put('/video-notes/:videoId', async (req, res) => {
+  const videoId = String(req.params.videoId || '');
+  const noteId = Number(req.body && req.body.noteId);
+  if (!VIDEO_ID.test(videoId) || !Number.isInteger(noteId) || noteId < 1) return res.status(400).json({ error: 'A video and a note are required.' });
+  try {
+    const own = await pool.query('SELECT 1 FROM notes WHERE id = $1 AND user_id = $2', [noteId, req.user.id]);
+    if (!own.rows.length) return res.status(404).json({ error: 'That note was not found.' });
+    await pool.query(
+      `INSERT INTO youtube_video_notes ("userId","videoId","noteId") VALUES ($1,$2,$3)
+       ON CONFLICT ("userId","videoId") DO UPDATE SET "noteId" = EXCLUDED."noteId", "createdAt" = NOW()`,
+      [req.user.id, videoId, noteId]
+    );
+    res.json({ ok: true });
+  } catch (err) { console.error('[youtube/video-notes put]', err.message); res.status(500).json({ error: 'Could not remember the note.' }); }
+});
+
 router.post('/video-note', async (req, res) => {
   const b = req.body || {};
   const videoId = String(b.videoId || '');
@@ -616,6 +656,17 @@ router.post('/video-note', async (req, res) => {
     console.error('[youtube/video-note]', err.message);
     res.status(500).json({ error: 'Could not prepare the note.' });
   }
+});
+
+// Several saved videos at once: { videoIds: [...] } (at most 500). Their kept captions go too.
+router.post('/favourites/bulk-delete', async (req, res) => {
+  const videoIds = (Array.isArray(req.body && req.body.videoIds) ? req.body.videoIds : []).map(String).filter((v) => VIDEO_ID.test(v)).slice(0, 500);
+  if (!videoIds.length) return res.status(400).json({ error: 'Choose at least one video.' });
+  try {
+    const r = await pool.query('DELETE FROM youtube_favourites WHERE "userId" = $1 AND "videoId" = ANY($2::text[])', [req.user.id, videoIds]);
+    await pool.query('DELETE FROM youtube_caption_segments WHERE "userId" = $1 AND "videoId" = ANY($2::text[])', [req.user.id, videoIds]);
+    res.json({ ok: true, deleted: r.rowCount });
+  } catch (err) { console.error('[youtube/favourites bulk]', err.message); res.status(500).json({ error: 'Could not remove them.' }); }
 });
 
 router.delete('/favourites/:videoId', async (req, res) => {
@@ -663,6 +714,16 @@ router.post('/watch-history', async (req, res) => {
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
+});
+
+// Several watched videos at once: { videoIds: [...] } (at most 500).
+router.post('/watch-history/bulk-delete', async (req, res) => {
+  const videoIds = (Array.isArray(req.body && req.body.videoIds) ? req.body.videoIds : []).map(String).filter((v) => VIDEO_ID.test(v)).slice(0, 500);
+  if (!videoIds.length) return res.status(400).json({ error: 'Choose at least one video.' });
+  try {
+    const r = await pool.query('DELETE FROM youtube_watch_history WHERE "userId" = $1 AND "videoId" = ANY($2::text[])', [req.user.id, videoIds]);
+    res.json({ ok: true, deleted: r.rowCount });
+  } catch (err) { console.error('[youtube/watch-history bulk]', err.message); res.status(500).json({ error: 'Could not delete them.' }); }
 });
 
 router.delete('/watch-history/all', async (req, res) => {
