@@ -74,6 +74,10 @@ Three guides on `guideCore.js`/`guideRouter.js`, tested with `server/services/gu
 - **Settings:** ids are the Settings section ids (`utils/settingsGroups.mjs`) plus six `admin-…` parts of the Admin page. Admin-only sections must say "Admin only" (tested). From another page an Open button stores `settingsTab` and goes to `/settings`; `admin-…` goes to `/admin`. A new Settings tab needs a `CATALOG` entry or the test fails.
 - The Finance guide already existed (`finance`); it is hidden for accountant logins.
 
+## The Guitar guide
+
+**Guitar guide** (`guideId` `guitar`, `POST /api/guitar-tutor`, flag `guitar`, `server/services/guitarTutor.js` on `guideCore.js`, `server/routes/guitarTutor.js` on `guideRouter.js`, wrapper `client/src/pages/guitar/GuitarTutorChat.jsx`). It knows the four tabs (Today, Drills, Library, Player) and the controls in them: I played this, song status, adding a song, transpose, capo, the chord chart, the key and Roman numerals, the easiest capo, practice loops, the tempo trainer and the one-minute drill. It sees no songs, chords or scores. `client/src/pages/guitar/guitarTools.mjs` is the list the page and guide share (an Open button switches to a tab); `node server/services/guitarTutor.test.js` fails if it and the catalogue drift. `guitarTips.mjs` holds the hover tip for every control and `node client/src/pages/guitar/guitarTips.test.mjs` fails if a control has no tooltip, a native `title=""` is used, or the (i) box, the tour (`utils/tours/guitarTour.js`, Settings -> Guitar Tour) or the guide is missing. The two small dialogs (correct a chord, I played this) are left out of the tooltip check because a tooltip sits below a dialog. When a Guitar control is added or changed, update `guitarTools.mjs`, `CATALOG`, `guitarTips.mjs` and the tour together.
+
 ## Behaviour changes belong in the shared files
 
 Change how all guides look or behave in `TutorChat.jsx` (client) or `tutorEmail.js` (server), never in a wrapper. Tooltip behaviour belongs in `Tooltip.jsx` and applies to the whole app.

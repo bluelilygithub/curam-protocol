@@ -4601,6 +4601,20 @@ async function initSchema() {
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_guitar_loop_runs_loop ON guitar_loop_runs ("loopId", "playedAt")`);
 
+  // Transition drills: one-minute chord-change scores. chordA/chordB are the pair in alphabetical order (G <-> C is one pair)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS guitar_transition_scores (
+      id          SERIAL PRIMARY KEY,
+      "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "chordA"    TEXT NOT NULL,
+      "chordB"    TEXT NOT NULL,
+      changes     INTEGER NOT NULL CHECK (changes BETWEEN 0 AND 300),
+      seconds     INTEGER NOT NULL DEFAULT 60 CHECK (seconds BETWEEN 10 AND 300),
+      "playedAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_guitar_transition_scores_user ON guitar_transition_scores ("userId", "playedAt" DESC)`);
+
   // Seed basic open-chord shapes if table is empty
   const shapeCount = await pool.query('SELECT COUNT(*) FROM guitar_chord_shapes');
   if (parseInt(shapeCount.rows[0].count) === 0) {

@@ -1,10 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import Tooltip from '../components/Tooltip';
+import { GT, ADD_TIPS, tabTip } from './guitar/guitarTips.mjs';
 import api from '../utils/apiClient';
 import useToastStore from '../store/toastStore';
 import Dialog from '../components/Dialog';
-import TempoTrainer from './guitar/TempoTrainer';
+import ToolInfoModal, { useToolInfoModal } from '../components/ToolInfoModal';
+import { useIcon } from '../providers/IconProvider';
+import GuitarTutorChat from './guitar/GuitarTutorChat';
+import { HOW_IT_WORKS, GUITAR_TOOLS, GUIDE_TOOLS } from './guitar/guitarTools.mjs';
+import { startGuitarTour, TOUR_KEY as GUITAR_TOUR_KEY } from '../utils/tours/guitarTour';
+import { useSearchParams } from 'react-router-dom';
+import TempoTrainer from './guitar/TempoTrainer.jsx';
 import { snapRate, songTimeAfter } from './guitar/tempoTrainer.mjs';
 import TheoryPanel, { KIND_STYLE } from './guitar/TheoryPanel';
+import TransitionDrills from './guitar/TransitionDrills';
 import { analyseSong, shapeAtCapo } from './guitar/theory.mjs';
 
 // ── Music theory constants ────────────────────────────────────────────────────
@@ -268,31 +277,37 @@ function VoicingBrowser({ chordRoot, chordQuality, transposeOffset = 0 }) {
         </span>
       </div>
       <div className="flex items-center justify-center gap-2 mb-2">
-        <button type="button" disabled={idx <= 0} onClick={() => setIdx(i => i - 1)}
-          className="text-xs px-2 py-1 rounded border disabled:opacity-30"
-          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>‹</button>
+        <Tooltip text={GT.prevShape}>
+          <button type="button" disabled={idx <= 0} onClick={() => setIdx(i => i - 1)}
+            className="text-xs px-2 py-1 rounded border disabled:opacity-30"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>‹</button>
+        </Tooltip>
         <div className="flex flex-col items-center">
           <ChordDiagram shape={shape} />
           <span className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
             {shape.voicingType}{shape.baseFret > 1 ? ` · ${shape.label}` : ''}
           </span>
         </div>
-        <button type="button" disabled={idx >= voicings.length - 1} onClick={() => setIdx(i => i + 1)}
-          className="text-xs px-2 py-1 rounded border disabled:opacity-30"
-          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>›</button>
+        <Tooltip text={GT.nextShape}>
+          <button type="button" disabled={idx >= voicings.length - 1} onClick={() => setIdx(i => i + 1)}
+            className="text-xs px-2 py-1 rounded border disabled:opacity-30"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>›</button>
+        </Tooltip>
       </div>
       <div className="flex flex-wrap gap-1 justify-center">
         {voicings.map((v, i) => (
-          <button key={v.id} type="button" onClick={() => setIdx(i)}
-            className="text-xs px-1.5 py-0.5 rounded border"
-            style={{
-              borderColor: i === idx ? 'var(--color-primary)' : 'var(--color-border)',
-              background: i === idx ? 'rgba(37,99,235,0.1)' : 'transparent',
-              color: i === idx ? 'var(--color-primary)' : 'var(--color-muted)',
-              fontWeight: i === idx ? 600 : 400,
-            }}>
-            {v.baseFret === 1 && v.voicingType === 'open' ? 'open' : `fr${v.baseFret}`}
-          </button>
+          <Tooltip text={GT.pickShape} key={v.id}>
+            <button type="button" onClick={() => setIdx(i)}
+              className="text-xs px-1.5 py-0.5 rounded border"
+              style={{
+                borderColor: i === idx ? 'var(--color-primary)' : 'var(--color-border)',
+                background: i === idx ? 'rgba(37,99,235,0.1)' : 'transparent',
+                color: i === idx ? 'var(--color-primary)' : 'var(--color-muted)',
+                fontWeight: i === idx ? 600 : 400,
+              }}>
+              {v.baseFret === 1 && v.voicingType === 'open' ? 'open' : `fr${v.baseFret}`}
+            </button>
+          </Tooltip>
         ))}
       </div>
     </div>
@@ -580,7 +595,7 @@ function PracticeDialog({ song, loop, onClose, onSaved }) {
 }
 
 /** Today: "I have 20 minutes, what should I do?" */
-function TodayView({ songs, onOpenSong, onPlayed, refreshKey }) {
+function TodayView({ songs, onOpenSong, onPlayed, onStartDrill, refreshKey }) {
   const [queue, setQueue] = useState(null);
   const [logging, setLogging] = useState(null); // { song, loop }
 
@@ -592,7 +607,7 @@ function TodayView({ songs, onOpenSong, onPlayed, refreshKey }) {
 
   if (!queue) return <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
   const songOf = (id) => songs.find(s => s.id === id);
-  const KIND = { learning: 'Learn', loop: 'Work up a loop', rusty: 'Revive', polishing: 'Polish' };
+  const KIND = { learning: 'Learn', loop: 'Work up a loop', rusty: 'Revive', polishing: 'Polish', transition: 'Chord change drill' };
 
   return (
     <div className="flex flex-col gap-4">
@@ -620,15 +635,29 @@ function TodayView({ songs, onOpenSong, onPlayed, refreshKey }) {
                     {it.reason}{it.daysIdle != null ? ` · last played ${it.daysIdle === 0 ? 'today' : `${it.daysIdle}d ago`}` : ''}
                   </p>
                 </div>
-                <PracticeBadge state={it.state} />
-                {song && (
-                  <button onClick={() => onOpenSong(song)}
-                    className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 transition-opacity duration-200"
-                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Open</button>
+                {it.kind === 'transition' ? (
+                  <Tooltip text={GT.startDrill}>
+                    <button onClick={() => onStartDrill({ a: it.a, b: it.b })}
+                      className="text-xs px-3 py-1.5 rounded-lg font-medium hover:opacity-70 transition-opacity duration-200"
+                      style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }}>Start drill</button>
+                  </Tooltip>
+                ) : (
+                  <>
+                    <PracticeBadge state={it.state} />
+                    {song && (
+                      <Tooltip text={GT.openSong}>
+                        <button onClick={() => onOpenSong(song)}
+                          className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 transition-opacity duration-200"
+                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Open</button>
+                      </Tooltip>
+                    )}
+                    <Tooltip text={GT.played}>
+                      <button onClick={() => setLogging({ song: { id: it.songId, title: it.title }, loop: it.loopId ? { id: it.loopId, name: it.loopName } : null })}
+                        className="text-xs px-3 py-1.5 rounded-lg font-medium hover:opacity-70 transition-opacity duration-200"
+                        style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }}>I played this</button>
+                    </Tooltip>
+                  </>
                 )}
-                <button onClick={() => setLogging({ song: { id: it.songId, title: it.title }, loop: it.loopId ? { id: it.loopId, name: it.loopName } : null })}
-                  className="text-xs px-3 py-1.5 rounded-lg font-medium hover:opacity-70 transition-opacity duration-200"
-                  style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }}>I played this</button>
               </div>
             );
           })}
@@ -640,9 +669,12 @@ function TodayView({ songs, onOpenSong, onPlayed, refreshKey }) {
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
-const TABS = ['Today', 'Library', 'Player'];
+const TABS = ['Today', 'Drills', 'Library', 'Player'];
 
 export default function GuitarPage() {
+  const getIcon = useIcon();
+  const info = useToolInfoModal('vault_guitar_info_seen');
+  const [params, setParams] = useSearchParams();
   const [tab, setTab]           = useState('Today');
   const [practiceDialog, setPracticeDialog] = useState(null); // song being logged from Library / Player
   const [practiceTick, setPracticeTick]     = useState(0);
@@ -664,6 +696,7 @@ export default function GuitarPage() {
   const [loopActive, setLoopActive] = useState(null);
   const [loopPasses, setLoopPasses] = useState(0); // times the active loop has come round
   const rateRef = useRef(1);                       // playback speed, 1 = normal; song time moves at this rate
+  const [drillPair, setDrillPair]       = useState(null);   // { a, b } chord pair opened from Today
   const [keyChoice, setKeyChoice]       = useState('auto'); // 'auto' or 'Root|mode'
   const [showNumerals, setShowNumerals] = useState(true);
   const [showShapes, setShowShapes]     = useState(true);
@@ -1033,6 +1066,27 @@ export default function GuitarPage() {
       style={{ color: s.c, background: s.bg }}>{s.l}</span>;
   };
 
+  // Settings -> Guitar Tour opens /guitar?tour=1
+  useEffect(() => {
+    if (params.get('tour')) {
+      const next = new URLSearchParams(params); next.delete('tour');
+      setParams(next, { replace: true });
+      setTimeout(() => startGuitarTour({ goTab: setTab }), 300);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startTour = () => {
+    try { localStorage.removeItem(GUITAR_TOUR_KEY); } catch (_) { /* ignore */ }
+    startGuitarTour({ goTab: setTab });
+  };
+
+  // The guide's "Open" buttons: switch to the tab that holds the control.
+  const openToolById = (id) => {
+    const target = GUIDE_TOOLS.find((t) => t.id === id);
+    const tool = GUITAR_TOOLS.find((t) => t.id === (target ? target.tool : id));
+    if (tool) setTab(tool.tab);
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full">
@@ -1041,18 +1095,32 @@ export default function GuitarPage() {
         <div className="px-6 pt-4 pb-0">
           <div className="flex items-center gap-2 mb-3">
             <span style={{ fontSize: 20 }}>🎸</span>
-            <h1 className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>Guitar Learning</h1>
+            <h1 className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>Guitar</h1>
+            <Tooltip text={GT.howItWorks}>
+              <button type="button" aria-label="How Guitar works" onClick={info.open}
+                className="opacity-60 hover:opacity-100 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }}>
+                {getIcon('info', { size: 16 })}
+              </button>
+            </Tooltip>
+            <Tooltip text={GT.tour}>
+              <button type="button" aria-label="Take the guided tour of Guitar" onClick={startTour}
+                className="opacity-60 hover:opacity-100 transition-opacity duration-200" style={{ color: 'var(--color-muted)' }}>
+                {getIcon('compass', { size: 16 })}
+              </button>
+            </Tooltip>
           </div>
-          <div className="flex gap-0">
+          <div className="flex gap-0" data-tour="guitar-tabs">
             {TABS.map(t => (
-              <button key={t} onClick={() => setTab(t)}
-                className="text-sm px-4 py-2 border-b-2 transition-colors flex-shrink-0"
-                style={{
-                  background: 'transparent',
-                  color: tab === t ? 'var(--color-primary)' : 'var(--color-muted)',
-                  borderBottomColor: tab === t ? 'var(--color-primary)' : 'transparent',
-                  fontWeight: tab === t ? 600 : 400,
-                }}>{t}</button>
+              <Tooltip text={tabTip(t)} key={t}>
+                <button onClick={() => setTab(t)}
+                  className="text-sm px-4 py-2 border-b-2 transition-colors flex-shrink-0"
+                  style={{
+                    background: 'transparent',
+                    color: tab === t ? 'var(--color-primary)' : 'var(--color-muted)',
+                    borderBottomColor: tab === t ? 'var(--color-primary)' : 'transparent',
+                    fontWeight: tab === t ? 600 : 400,
+                  }}>{t}</button>
+              </Tooltip>
             ))}
           </div>
         </div>
@@ -1061,8 +1129,16 @@ export default function GuitarPage() {
       <div className="flex-1 overflow-y-auto">
         {/* ── Today tab ────────────────────────────────────────────────── */}
         {tab === 'Today' && (
-          <div className="p-6 max-w-3xl">
-            <TodayView songs={songs} refreshKey={practiceTick} onOpenSong={openSong} onPlayed={() => loadSongs()} />
+          <div className="p-6 max-w-3xl" data-tour="guitar-today">
+            <TodayView songs={songs} refreshKey={practiceTick} onOpenSong={openSong} onPlayed={() => loadSongs()}
+              onStartDrill={(pair) => { setDrillPair(pair); setTab('Drills'); }} />
+          </div>
+        )}
+
+        {/* ── Drills tab ───────────────────────────────────────────────── */}
+        {tab === 'Drills' && (
+          <div className="p-6 max-w-3xl" data-tour="guitar-drills">
+            <TransitionDrills initialPair={drillPair} onChanged={() => setPracticeTick(t => t + 1)} />
           </div>
         )}
 
@@ -1070,7 +1146,7 @@ export default function GuitarPage() {
         {tab === 'Library' && (
           <div className="p-6 max-w-3xl flex flex-col gap-6">
             {/* Add song — three modes */}
-            <div>
+            <div data-tour="guitar-add">
               <h2 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Add a song</h2>
               <div className="flex gap-1 mb-3">
                 {[
@@ -1078,30 +1154,36 @@ export default function GuitarPage() {
                   { id: 'upload', label: 'Upload audio' },
                   { id: 'manual', label: 'Manual chart' },
                 ].map(m => (
-                  <button key={m.id} onClick={() => setAddMode(m.id)}
-                    className="text-xs px-3 py-1.5 rounded-lg border"
-                    style={{
-                      borderColor: addMode === m.id ? 'var(--color-primary)' : 'var(--color-border)',
-                      color: addMode === m.id ? 'var(--color-primary)' : 'var(--color-muted)',
-                      background: addMode === m.id ? 'rgba(37,99,235,0.06)' : 'transparent',
-                      fontWeight: addMode === m.id ? 600 : 400,
-                    }}>{m.label}</button>
+                  <Tooltip text={ADD_TIPS[m.id]} key={m.id}>
+                    <button onClick={() => setAddMode(m.id)}
+                      className="text-xs px-3 py-1.5 rounded-lg border"
+                      style={{
+                        borderColor: addMode === m.id ? 'var(--color-primary)' : 'var(--color-border)',
+                        color: addMode === m.id ? 'var(--color-primary)' : 'var(--color-muted)',
+                        background: addMode === m.id ? 'rgba(37,99,235,0.06)' : 'transparent',
+                        fontWeight: addMode === m.id ? 600 : 400,
+                      }}>{m.label}</button>
+                  </Tooltip>
                 ))}
               </div>
 
               {addMode === 'ug' && (
                 <div>
                   <div className="flex gap-2">
-                    <input value={ugUrl} onChange={e => setUgUrl(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && submitUg()}
-                      placeholder="Paste an Ultimate Guitar Chords tab URL…"
-                      className="flex-1 text-sm px-3 py-2 rounded-lg border"
-                      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
-                    <button onClick={submitUg} disabled={submitting || !ugUrl.trim()}
-                      className="px-4 py-2 text-sm rounded-lg font-medium disabled:opacity-40"
-                      style={{ background: 'var(--color-primary)', color: '#fff' }}>
-                      {submitting ? 'Importing…' : 'Import chords'}
-                    </button>
+                    <Tooltip text={GT.ugUrl}>
+                      <input value={ugUrl} onChange={e => setUgUrl(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && submitUg()}
+                        placeholder="Paste an Ultimate Guitar Chords tab URL…"
+                        className="flex-1 text-sm px-3 py-2 rounded-lg border"
+                        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
+                    </Tooltip>
+                    <Tooltip text={GT.ugImport}>
+                      <button onClick={submitUg} disabled={submitting || !ugUrl.trim()}
+                        className="px-4 py-2 text-sm rounded-lg font-medium disabled:opacity-40"
+                        style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                        {submitting ? 'Importing…' : 'Import chords'}
+                      </button>
+                    </Tooltip>
                   </div>
                   <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
                     Go to <a href="https://www.ultimate-guitar.com" target="_blank" rel="noopener noreferrer" className="underline">ultimate-guitar.com</a>, search for your song, open a free <strong>Chords</strong> tab, and paste its URL here.
@@ -1112,30 +1194,40 @@ export default function GuitarPage() {
 
               {addMode === 'upload' && (
                 <div className="flex flex-col gap-2">
-                  <input type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
-                    onChange={e => {
-                      const f = e.target.files?.[0] || null;
-                      setUploadFile(f);
-                      if (f && !uploadTitle) setUploadTitle(f.name.replace(/\.[^.]+$/, ''));
-                    }}
-                    className="text-sm" />
+                  <Tooltip text={GT.audioFile}>
+                    <input type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
+                      onChange={e => {
+                        const f = e.target.files?.[0] || null;
+                        setUploadFile(f);
+                        if (f && !uploadTitle) setUploadTitle(f.name.replace(/\.[^.]+$/, ''));
+                      }}
+                      className="text-sm" />
+                  </Tooltip>
                   <div className="flex gap-2">
-                    <input value={uploadTitle} onChange={e => setUploadTitle(e.target.value)}
-                      placeholder="Title" className="flex-1 text-sm px-3 py-2 rounded-lg border"
-                      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
-                    <input value={uploadArtist} onChange={e => setUploadArtist(e.target.value)}
-                      placeholder="Artist (optional)" className="flex-1 text-sm px-3 py-2 rounded-lg border"
-                      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
+                    <Tooltip text={GT.uploadTitle}>
+                      <input value={uploadTitle} onChange={e => setUploadTitle(e.target.value)}
+                        placeholder="Title" className="flex-1 text-sm px-3 py-2 rounded-lg border"
+                        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
+                    </Tooltip>
+                    <Tooltip text={GT.uploadArtist}>
+                      <input value={uploadArtist} onChange={e => setUploadArtist(e.target.value)}
+                        placeholder="Artist (optional)" className="flex-1 text-sm px-3 py-2 rounded-lg border"
+                        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
+                    </Tooltip>
                   </div>
-                  <input value={uploadYtUrl} onChange={e => setUploadYtUrl(e.target.value)}
-                    placeholder="Optional YouTube URL for video sync while practising"
-                    className="text-sm px-3 py-2 rounded-lg border"
-                    style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
-                  <button onClick={submitUpload} disabled={submitting || !uploadFile}
-                    className="self-start px-4 py-2 text-sm rounded-lg font-medium disabled:opacity-40"
-                    style={{ background: 'var(--color-primary)', color: '#fff' }}>
-                    {submitting ? 'Uploading…' : 'Upload & detect'}
-                  </button>
+                  <Tooltip text={GT.youtubeUrl}>
+                    <input value={uploadYtUrl} onChange={e => setUploadYtUrl(e.target.value)}
+                      placeholder="Optional YouTube URL for video sync while practising"
+                      className="text-sm px-3 py-2 rounded-lg border"
+                      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
+                  </Tooltip>
+                  <Tooltip text={GT.uploadGo}>
+                    <button onClick={submitUpload} disabled={submitting || !uploadFile}
+                      className="self-start px-4 py-2 text-sm rounded-lg font-medium disabled:opacity-40"
+                      style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                      {submitting ? 'Uploading…' : 'Upload & detect'}
+                    </button>
+                  </Tooltip>
                   <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
                     Reliable path for age-restricted or offline tracks. Max 25 MB (mp3, wav, m4a…).
                   </p>
@@ -1145,22 +1237,30 @@ export default function GuitarPage() {
               {addMode === 'manual' && (
                 <div className="flex flex-col gap-2">
                   <div className="flex gap-2">
-                    <input value={manualTitle} onChange={e => setManualTitle(e.target.value)}
-                      placeholder="Song title" className="flex-1 text-sm px-3 py-2 rounded-lg border"
-                      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
-                    <input value={manualArtist} onChange={e => setManualArtist(e.target.value)}
-                      placeholder="Artist (optional)" className="flex-1 text-sm px-3 py-2 rounded-lg border"
-                      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
+                    <Tooltip text={GT.manualTitle}>
+                      <input value={manualTitle} onChange={e => setManualTitle(e.target.value)}
+                        placeholder="Song title" className="flex-1 text-sm px-3 py-2 rounded-lg border"
+                        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
+                    </Tooltip>
+                    <Tooltip text={GT.manualArtist}>
+                      <input value={manualArtist} onChange={e => setManualArtist(e.target.value)}
+                        placeholder="Artist (optional)" className="flex-1 text-sm px-3 py-2 rounded-lg border"
+                        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
+                    </Tooltip>
                   </div>
-                  <input value={manualYtUrl} onChange={e => setManualYtUrl(e.target.value)}
-                    placeholder="Optional YouTube URL for playback"
-                    className="text-sm px-3 py-2 rounded-lg border"
-                    style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
-                  <button onClick={submitManual} disabled={submitting || !manualTitle.trim()}
-                    className="self-start px-4 py-2 text-sm rounded-lg font-medium disabled:opacity-40"
-                    style={{ background: 'var(--color-primary)', color: '#fff' }}>
-                    Create blank chart
-                  </button>
+                  <Tooltip text={GT.youtubeUrl}>
+                    <input value={manualYtUrl} onChange={e => setManualYtUrl(e.target.value)}
+                      placeholder="Optional YouTube URL for playback"
+                      className="text-sm px-3 py-2 rounded-lg border"
+                      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
+                  </Tooltip>
+                  <Tooltip text={GT.manualGo}>
+                    <button onClick={submitManual} disabled={submitting || !manualTitle.trim()}
+                      className="self-start px-4 py-2 text-sm rounded-lg font-medium disabled:opacity-40"
+                      style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                      Create blank chart
+                    </button>
+                  </Tooltip>
                   <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
                     Skip detection — enter chords yourself while practising.
                   </p>
@@ -1176,7 +1276,7 @@ export default function GuitarPage() {
                 No songs yet — add a YouTube URL, upload audio, or create a manual chart.
               </p>
             ) : (
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2" data-tour="guitar-songs">
                 {songs.map(song => (
                   <div key={song.id}
                     onClick={() => song.status === 'done' && openSong(song)}
@@ -1216,26 +1316,32 @@ export default function GuitarPage() {
                     {song.status === 'done' && (
                       <>
                         <PracticeBadge state={song.practiceState} />
-                        <select aria-label={`Status for ${song.title || 'song'}`}
-                          value={song.learnStatus || 'learning'}
-                          onClick={e => e.stopPropagation()}
-                          onChange={e => setLearnStatus(song, e.target.value)}
-                          className="text-xs px-2 py-1 rounded border flex-shrink-0"
-                          style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}>
-                          <option value="learning">Learning</option>
-                          <option value="polishing">Polishing</option>
-                          <option value="ready">Ready</option>
-                        </select>
-                        <button onClick={e => { e.stopPropagation(); setPracticeDialog({ song }); }}
-                          className="text-xs px-2 py-1 rounded border flex-shrink-0 hover:opacity-70 transition-opacity duration-200"
-                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>I played this</button>
+                        <Tooltip text={GT.songStatus}>
+                          <select aria-label={`Status for ${song.title || 'song'}`}
+                            value={song.learnStatus || 'learning'}
+                            onClick={e => e.stopPropagation()}
+                            onChange={e => setLearnStatus(song, e.target.value)}
+                            className="text-xs px-2 py-1 rounded border flex-shrink-0"
+                            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}>
+                            <option value="learning">Learning</option>
+                            <option value="polishing">Polishing</option>
+                            <option value="ready">Ready</option>
+                          </select>
+                        </Tooltip>
+                        <Tooltip text={GT.played}>
+                          <button onClick={e => { e.stopPropagation(); setPracticeDialog({ song }); }}
+                            className="text-xs px-2 py-1 rounded border flex-shrink-0 hover:opacity-70 transition-opacity duration-200"
+                            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>I played this</button>
+                        </Tooltip>
                       </>
                     )}
-                    <button onClick={e => deleteSong(song.id, e)}
-                      className="text-xs px-2 py-1 rounded border"
-                      style={{ borderColor: 'rgba(220,38,38,0.3)', color: '#dc2626', flexShrink: 0 }}>
-                      Remove
-                    </button>
+                    <Tooltip text={GT.removeSong}>
+                      <button onClick={e => deleteSong(song.id, e)}
+                        className="text-xs px-2 py-1 rounded border"
+                        style={{ borderColor: 'rgba(220,38,38,0.3)', color: '#dc2626', flexShrink: 0 }}>
+                        Remove
+                      </button>
+                    </Tooltip>
                   </div>
                 ))}
               </div>
@@ -1265,36 +1371,46 @@ export default function GuitarPage() {
                       {activeSong.capoSuggested > 0 ? ` · Capo ${activeSong.capoSuggested} (per tab)` : ''}
                     </p>
                   </div>
-                  <button onClick={() => setPracticeDialog({ song: activeSong })}
-                    className="text-xs px-3 py-1.5 rounded-lg font-medium hover:opacity-70 transition-opacity duration-200"
-                    style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }}>I played this</button>
+                  <Tooltip text={GT.played}>
+                    <button onClick={() => setPracticeDialog({ song: activeSong })}
+                      className="text-xs px-3 py-1.5 rounded-lg font-medium hover:opacity-70 transition-opacity duration-200"
+                      style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }}>I played this</button>
+                  </Tooltip>
                   {/* Transpose */}
                   <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
                     <span>Transpose</span>
-                    <button onClick={() => changeTranspose(transpose - 1)}
-                      className="w-6 h-6 rounded border flex items-center justify-center font-mono"
-                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>−</button>
+                    <Tooltip text={GT.transposeDown}>
+                      <button onClick={() => changeTranspose(transpose - 1)}
+                        className="w-6 h-6 rounded border flex items-center justify-center font-mono"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>−</button>
+                    </Tooltip>
                     <span className="w-6 text-center font-mono" style={{ color: 'var(--color-text)' }}>{transpose > 0 ? `+${transpose}` : transpose}</span>
-                    <button onClick={() => changeTranspose(transpose + 1)}
-                      className="w-6 h-6 rounded border flex items-center justify-center font-mono"
-                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>+</button>
+                    <Tooltip text={GT.transposeUp}>
+                      <button onClick={() => changeTranspose(transpose + 1)}
+                        className="w-6 h-6 rounded border flex items-center justify-center font-mono"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>+</button>
+                    </Tooltip>
                   </div>
                   {/* Capo — fingering note only; does not rename chords on the chart */}
                   <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
                     <span>Capo</span>
-                    <select value={capoFret} onChange={e => changeCapo(parseInt(e.target.value))}
-                      className="text-xs px-2 py-1 rounded border"
-                      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}>
-                      {Array.from({ length: 8 }).map((_, i) => (
-                        <option key={i} value={i}>{i === 0 ? 'None' : `Fret ${i}`}
-                          {i === activeSong.capoSuggested && i > 0 ? ' (tab)' : ''}</option>
-                      ))}
-                    </select>
+                    <Tooltip text={GT.capo}>
+                      <select value={capoFret} onChange={e => changeCapo(parseInt(e.target.value))}
+                        className="text-xs px-2 py-1 rounded border"
+                        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}>
+                        {Array.from({ length: 8 }).map((_, i) => (
+                          <option key={i} value={i}>{i === 0 ? 'None' : `Fret ${i}`}
+                            {i === activeSong.capoSuggested && i > 0 ? ' (tab)' : ''}</option>
+                        ))}
+                      </select>
+                    </Tooltip>
                   </div>
                   {/* Auto-scroll only useful with playback */}
                   {(activeSong.hasAudio || videoIdOf(activeSong.youtubeUrl)) && (
                     <label className="flex items-center gap-1 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
-                      <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} />
+                      <Tooltip text={GT.autoScroll}>
+                        <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} />
+                      </Tooltip>
                       Auto-scroll
                     </label>
                   )}
@@ -1323,18 +1439,20 @@ export default function GuitarPage() {
                     )}
 
                     {/* Chord chart */}
-                    <div ref={chartRef} className="rounded-xl border p-3"
+                    <div ref={chartRef} data-tour="guitar-chart" className="rounded-xl border p-3"
                       style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
                       <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
                         <span className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
                           Chord Chart {loadingChords && <span style={{ color: 'var(--color-muted)' }}>· Loading…</span>}
                         </span>
                         <div className="flex items-center gap-2">
-                          <button onClick={addChordAtPlayhead} disabled={addingChord}
-                            className="text-xs px-2 py-1 rounded border"
-                            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                            {addingChord ? 'Adding…' : 'Add chord at playhead'}
-                          </button>
+                          <Tooltip text={GT.addChord}>
+                            <button onClick={addChordAtPlayhead} disabled={addingChord}
+                              className="text-xs px-2 py-1 rounded border"
+                              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                              {addingChord ? 'Adding…' : 'Add chord at playhead'}
+                            </button>
+                          </Tooltip>
                           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
                             Click to hear · double-click to edit · hover for diagram
                           </span>
@@ -1387,36 +1505,38 @@ export default function GuitarPage() {
                                     const isActive = flatIdx === activeChordIdx;
                                     return (
                                       <div key={ev.id} data-chord-idx={flatIdx} className="relative group">
-                                        <button
-                                          onClick={() => {
-                                            setFretboardChord({ root: ev.chordRoot, quality: ev.chordQuality || '' });
-                                            playChordAudio(ev.chordRoot, ev.chordQuality || '');
-                                          }}
-                                          onDoubleClick={() => setCorrecting({ ...ev, songId: activeSong.id })}
-                                          title={`${label} — click to hear & show fretboard · double-click to edit`}
-                                          style={{
-                                            fontFamily: 'monospace', fontSize: '0.8rem', fontWeight: 700,
-                                            padding: '2px 8px', borderRadius: 6, cursor: 'pointer',
-                                            background: isActive ? 'var(--color-primary)' : 'var(--color-bg)',
-                                            color: isActive ? '#fff' : 'var(--color-primary)',
-                                            border: `1.5px solid ${isActive ? 'var(--color-primary)' : 'var(--color-primary)'}`,
-                                            opacity: isActive ? 1 : 0.85,
-                                          }}>
-                                          {label}
-                                        </button>
+                                        <Tooltip text={`${label}. ${GT.chord}`}>
+                                          <button
+                                            onClick={() => {
+                                              setFretboardChord({ root: ev.chordRoot, quality: ev.chordQuality || '' });
+                                              playChordAudio(ev.chordRoot, ev.chordQuality || '');
+                                            }}
+                                            onDoubleClick={() => setCorrecting({ ...ev, songId: activeSong.id })}
+                                            style={{
+                                              fontFamily: 'monospace', fontSize: '0.8rem', fontWeight: 700,
+                                              padding: '2px 8px', borderRadius: 6, cursor: 'pointer',
+                                              background: isActive ? 'var(--color-primary)' : 'var(--color-bg)',
+                                              color: isActive ? '#fff' : 'var(--color-primary)',
+                                              border: `1.5px solid ${isActive ? 'var(--color-primary)' : 'var(--color-primary)'}`,
+                                              opacity: isActive ? 1 : 0.85,
+                                            }}>
+                                            {label}
+                                          </button>
+                                        </Tooltip>
                                         {(() => {
                                           const th = showNumerals ? theory?.byId.get(ev.id) : null;
                                           const shape = showShapes && capoFret > 0
                                             ? shapeAtCapo(ev.chordRoot, ev.chordQuality, transpose, capoFret) : null;
                                           if (!th && !shape) return null;
                                           return (
-                                            <div style={{ textAlign: 'center', fontSize: '0.65rem', lineHeight: 1.2, marginTop: 1 }}
-                                              title={th?.note || undefined}>
-                                              {th && <span style={{ fontFamily: 'monospace', color: KIND_STYLE[th.kind].color,
-                                                fontWeight: th.kind === 'diatonic' ? 400 : 700 }}>{th.numeral}</span>}
-                                              {th && shape && ' '}
-                                              {shape && <span style={{ color: 'var(--color-muted)' }}>({shape})</span>}
-                                            </div>
+                                            <Tooltip text={th ? (th.note ? `${th.note}.` : GT.numeral) : GT.shapeChip}>
+                                              <div style={{ textAlign: 'center', fontSize: '0.65rem', lineHeight: 1.2, marginTop: 1 }}>
+                                                {th && <span style={{ fontFamily: 'monospace', color: KIND_STYLE[th.kind].color,
+                                                  fontWeight: th.kind === 'diatonic' ? 400 : 700 }}>{th.numeral}</span>}
+                                                {th && shape && ' '}
+                                                {shape && <span style={{ color: 'var(--color-muted)' }}>({shape})</span>}
+                                              </div>
+                                            </Tooltip>
                                           );
                                         })()}
                                         <div className="absolute z-30 hidden group-hover:block"
@@ -1442,10 +1562,12 @@ export default function GuitarPage() {
 
                   {/* Right: fretboard + loops */}
                   <div className="flex flex-col gap-4">
-                    <TheoryPanel theory={theory} keyChoice={keyChoice} onKeyChoice={setKeyChoice}
-                      showNumerals={showNumerals} onShowNumerals={setShowNumerals}
-                      showShapes={showShapes} onShowShapes={setShowShapes}
-                      capoFret={capoFret} onUseCapo={changeCapo} />
+                    <div data-tour="guitar-theory">
+                      <TheoryPanel theory={theory} keyChoice={keyChoice} onKeyChoice={setKeyChoice}
+                        showNumerals={showNumerals} onShowNumerals={setShowNumerals}
+                        showShapes={showShapes} onShowShapes={setShowShapes}
+                        capoFret={capoFret} onUseCapo={changeCapo} />
+                    </div>
                     {/* Chord voicings (UG-style) */}
                     <div className="rounded-xl border p-3"
                       style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
@@ -1463,7 +1585,7 @@ export default function GuitarPage() {
                     </div>
 
                     {/* Practice loops */}
-                    <div className="rounded-xl border p-3"
+                    <div data-tour="guitar-loops" className="rounded-xl border p-3"
                       style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
                       <p className="text-xs font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Practice Loops</p>
                       {!activeSong?.hasAudio && !activeSong?.youtubeUrl ? (
@@ -1473,37 +1595,47 @@ export default function GuitarPage() {
                       ) : (
                       <>
                       <div className="flex gap-1 mb-2">
-                        <input value={loopName} onChange={e => setLoopName(e.target.value)}
-                          placeholder="Loop name…"
-                          className="flex-1 text-xs px-2 py-1 rounded border"
-                          style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
-                        <button onClick={saveLoop}
-                          className="text-xs px-2 py-1 rounded border font-medium"
-                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                          + Save at current
-                        </button>
+                        <Tooltip text={GT.loopName}>
+                          <input value={loopName} onChange={e => setLoopName(e.target.value)}
+                            placeholder="Loop name…"
+                            className="flex-1 text-xs px-2 py-1 rounded border"
+                            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }} />
+                        </Tooltip>
+                        <Tooltip text={GT.saveLoop}>
+                          <button onClick={saveLoop}
+                            className="text-xs px-2 py-1 rounded border font-medium"
+                            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                            + Save at current
+                          </button>
+                        </Tooltip>
                       </div>
                       {loops.length === 0
                         ? <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No loops yet.</p>
                         : loops.map(l => (
                           <div key={l.id} className="flex items-center gap-1 mb-1">
-                            <button onClick={() => activateLoop(l)}
-                              className="flex-1 text-xs px-2 py-1 rounded text-left truncate"
-                              style={{
-                                background: loopActive?.id === l.id ? 'var(--color-primary)' : 'var(--color-bg)',
-                                color: loopActive?.id === l.id ? '#fff' : 'var(--color-text)',
-                                border: '1px solid var(--color-border)',
-                              }}>
-                              {l.name} <span style={{ opacity: 0.7 }}>{fmtTime(l.startTimeSec)}–{fmtTime(l.endTimeSec)}</span>
-                            </button>
+                            <Tooltip text={GT.playLoop}>
+                              <button onClick={() => activateLoop(l)}
+                                className="flex-1 text-xs px-2 py-1 rounded text-left truncate"
+                                style={{
+                                  background: loopActive?.id === l.id ? 'var(--color-primary)' : 'var(--color-bg)',
+                                  color: loopActive?.id === l.id ? '#fff' : 'var(--color-text)',
+                                  border: '1px solid var(--color-border)',
+                                }}>
+                                {l.name} <span style={{ opacity: 0.7 }}>{fmtTime(l.startTimeSec)}–{fmtTime(l.endTimeSec)}</span>
+                              </button>
+                            </Tooltip>
                             {loopActive?.id === l.id && (
-                              <button onClick={() => setLoopActive(null)}
-                                className="text-xs px-1.5 py-1 rounded border"
-                                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>✕</button>
+                              <Tooltip text={GT.clearLoop}>
+                                <button onClick={() => setLoopActive(null)}
+                                  className="text-xs px-1.5 py-1 rounded border"
+                                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>✕</button>
+                              </Tooltip>
                             )}
-                            <button onClick={() => deleteLoop(l.id)}
-                              className="text-xs px-1.5 py-1 rounded border"
-                              style={{ borderColor: 'rgba(220,38,38,0.3)', color: '#dc2626' }}>🗑</button>
+                            <Tooltip text={GT.deleteLoop}>
+                              <button onClick={() => deleteLoop(l.id)}
+                                className="text-xs px-1.5 py-1 rounded border"
+                                style={{ borderColor: 'rgba(220,38,38,0.3)', color: '#dc2626' }}>🗑</button>
+                            </Tooltip>
                           </div>
                         ))
                       }
@@ -1530,6 +1662,19 @@ export default function GuitarPage() {
       {correcting && (
         <CorrectionModal event={correcting} onSave={saveCorrection} onClose={() => setCorrecting(null)} />
       )}
+      {info.show && (
+        <ToolInfoModal title="How Guitar Works" onClose={info.close}>
+          <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+            Learn songs, keep them sharp and practise the hard parts. Not sure where to start? Press the round button at the bottom right and tell the guide what you want to do.
+          </p>
+          <div className="rounded-lg p-3 text-sm space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+            {HOW_IT_WORKS.map(([heading, text]) => (
+              <p key={heading} style={{ color: 'var(--color-text)' }}><strong>{heading}</strong> — {text}</p>
+            ))}
+          </div>
+        </ToolInfoModal>
+      )}
+      <GuitarTutorChat currentTool={tab.toLowerCase()} onOpenTool={openToolById} />
       {practiceDialog && (
         <PracticeDialog song={practiceDialog.song} loop={null} onClose={() => setPracticeDialog(null)}
           onSaved={() => { loadSongs(); setPracticeTick(t => t + 1); }} />

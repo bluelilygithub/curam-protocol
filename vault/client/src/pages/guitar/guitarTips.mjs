@@ -1,0 +1,95 @@
+// Hover tips for every control on the Guitar page (the shared Tooltip, never a native title=""). One plain sentence each.
+// guitarTips.test.mjs fails if a control on the page has no tip, a tip used on the page does not exist, or a tip is not a real sentence.
+
+export const GT = {
+  // Tabs
+  tabToday: 'Today: what to play in the time you have, picked from your own songs, loops and chord changes.',
+  tabDrills: 'Drills: practise the chord changes your own songs use most, one minute at a time.',
+  tabLibrary: 'Library: add songs and say how well you know each one.',
+  tabPlayer: 'Player: the chord chart for the open song, with playback, loops, the key and the capo.',
+
+  // Today and the practice log
+  startDrill: 'Open this chord change in Drills and start the one-minute drill.',
+  openSong: 'Open this song in the Player.',
+  played: 'Log that you played this: minutes, how clean it was and a note. It stops the song going rusty.',
+
+  // Adding songs
+  addUg: 'Add a song from an Ultimate Guitar chords page.',
+  addUpload: 'Add a song by uploading an audio file. Vault works out the chords, key and tempo.',
+  addManual: 'Add a song with a blank chart and type the chords yourself.',
+  ugUrl: 'Paste the address of a free Ultimate Guitar chords page.',
+  ugImport: 'Fetch the chords from that page and add the song.',
+  audioFile: 'Choose an mp3, wav, m4a, aac, ogg or flac file, up to 25 MB.',
+  uploadTitle: 'The song title. Leave it empty to use the file name.',
+  uploadArtist: 'The artist. Optional.',
+  youtubeUrl: 'A YouTube address to play along with. Optional.',
+  uploadGo: 'Upload the file and detect its chords. This can take a minute or two.',
+  manualTitle: 'The song title.',
+  manualArtist: 'The artist. Optional.',
+  manualGo: 'Create the song with an empty chart. Add chords as you play.',
+
+  // Library rows
+  songStatus: 'How well you know this song. Polishing and Ready songs turn Rusty if you leave them unplayed for 14 days.',
+  removeSong: 'Remove this song and its chords from your library.',
+
+  // Player bar
+  transposeDown: 'Move the whole chart down one semitone.',
+  transposeUp: 'Move the whole chart up one semitone.',
+  capo: 'Where your capo is. The chart keeps the sounding chords; the capo shapes show what to finger.',
+  autoScroll: 'Keep the chord being played in the middle of the chart as the song plays.',
+  addChord: 'Add a chord to the chart at the point the song has reached.',
+  chord: 'Click to hear this chord and see its shapes. Double-click to change it.',
+
+  // Loops
+  loopName: 'Give the loop a name, such as Solo or Chorus.',
+  saveLoop: 'Save the last five seconds up to now as a loop you can repeat.',
+  playLoop: 'Repeat this loop. The tempo trainer appears below it.',
+  clearLoop: 'Stop repeating this loop and go back to normal speed.',
+  deleteLoop: 'Delete this loop and its speed history.',
+
+  // Chord shapes
+  prevShape: 'Show the previous way to play this chord.',
+  nextShape: 'Show the next way to play this chord, further up the neck.',
+  pickShape: 'Show this way of playing the chord.',
+
+  // Theory and capo
+  keyChoice: 'The key the numerals are worked out in. Automatic uses the detected key. Pick one if the numerals look wrong.',
+  showNumerals: 'Show a Roman numeral under each chord on the chart.',
+  showShapes: 'Show the shape you finger under each chord when a capo is set.',
+  useCapo: 'Set the capo to this fret.',
+  shapeChip: 'The shape you finger with the capo on for this chord.',
+  shapeBarre: 'This shape needs a barre.',
+  shapeOpen: 'This is an open shape, with no barre.',
+  numeral: 'The Roman numeral: where this chord sits in the key. Capital letters are major chords.',
+
+  // Tempo trainer
+  slower: 'Play 5% slower. The pitch stays the same.',
+  faster: 'Play 5% faster.',
+  speed: 'Playback speed. Slowing a song down does not change its pitch.',
+  startRamp: 'Start at 70% and speed up by 5% after each run of clean passes.',
+  stopRamp: 'Turn the automatic speed-up off. The speed stays where it is.',
+  countIn: 'Four clicks at the song\'s tempo, then the loop plays from its start.',
+  click: 'A metronome at the song\'s tempo for this speed. It keeps time but is not locked to the recording.',
+  logSpeed: 'Save the current speed as one you reached on this loop, for the progress graph.',
+  cleanPass: 'Tap after a pass you played cleanly. Enough in a row and the speed goes up.',
+  messyPass: 'Tap after a messy pass. The run of clean passes starts again.',
+  cleanTarget: 'How many clean passes in a row before the speed goes up.',
+
+  // Drills
+  drill: 'Start the one-minute drill for this chord change.',
+  startMinute: 'Start a 3-second countdown, then one minute of switching between the two chords.',
+  countChange: 'Tap each time you land the new chord cleanly. The Space bar does the same.',
+  cancelDrill: 'Stop and go back without saving a score.',
+  stopDrill: 'Stop the minute now. No score is saved.',
+  closeDrill: 'Close the drill.',
+  againDrill: 'Run the minute again for this chord change.',
+
+  // Header
+  howItWorks: 'How Guitar works.',
+  tour: 'Take a guided tour of Guitar.',
+};
+
+// The guide's menu is the page's tabs.
+export const tabTip = (tab) => GT[`tab${tab}`];
+
+export const ADD_TIPS = { ug: GT.addUg, upload: GT.addUpload, manual: GT.addManual };

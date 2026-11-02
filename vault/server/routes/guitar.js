@@ -10,6 +10,7 @@ const multer  = require('multer');
 const { spawn } = require('child_process');
 const { pool }  = require('../db');
 const { LEARN_STATUSES, practiceState, buildQueue } = require('../services/guitarPractice');
+const { isChord, orderPair, countTransitions, rankTransitions } = require('../services/guitarTransitions');
 
 const router = express.Router();
 const PIPELINE_SCRIPT = path.join(__dirname, '../scripts/guitar_pipeline.py');
@@ -655,6 +656,38 @@ router.get('/practice', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// The chord changes this person's songs ask for most, ranked by how much they need drilling
+async function loadTransitions(userId, limit = 15) {
+  const { rows: events } = await pool.query(
+    `SELECT ce."songId", ce."chordRoot", ce."chordQuality"
+     FROM guitar_chord_events ce JOIN guitar_songs s ON s.id=ce."songId"
+     WHERE s."userId"=$1 ORDER BY ce."songId", ce."timestampSec", ce.id`, [userId]);
+  const { rows: scores } = await pool.query(
+    `SELECT "chordA", "chordB", changes, seconds, "playedAt" FROM guitar_transition_scores WHERE "userId"=$1`, [userId]);
+  return rankTransitions(countTransitions(events), scores, new Date(), { limit });
+}
+
+router.get('/transitions', async (req, res) => {
+  try { res.json(await loadTransitions(req.user.id)); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/transitions/score', async (req, res) => {
+  try {
+    const { a, b, changes, seconds } = req.body;
+    if (!isChord(a) || !isChord(b) || a === b) return res.status(400).json({ error: 'Two different chords are needed' });
+    const n = Number(changes);
+    const secs = seconds == null ? 60 : Number(seconds);
+    if (!(Number.isInteger(n) && n >= 0 && n <= 300)) return res.status(400).json({ error: 'Changes must be a whole number from 0 to 300' });
+    if (!(Number.isInteger(secs) && secs >= 10 && secs <= 300)) return res.status(400).json({ error: 'Seconds must be 10 to 300' });
+    const [x, y] = orderPair(a, b);
+    const { rows } = await pool.query(
+      `INSERT INTO guitar_transition_scores ("userId","chordA","chordB",changes,seconds) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [req.user.id, x, y, n, secs]);
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.get('/practice/queue', async (req, res) => {
   try {
     const { rows: songs } = await pool.query(
@@ -667,7 +700,7 @@ router.get('/practice/queue', async (req, res) => {
     const { rows: week } = await pool.query(
       `SELECT COUNT(*) AS sessions, COALESCE(SUM(minutes),0) AS minutes FROM guitar_practice_sessions
        WHERE "userId"=$1 AND "playedAt" > NOW() - INTERVAL '7 days'`, [req.user.id]);
-    res.json({ items: buildQueue(songs, loops), week: { sessions: Number(week[0].sessions), minutes: Number(week[0].minutes) } });
+    res.json({ items: buildQueue(songs, loops, new Date(), await loadTransitions(req.user.id)), week: { sessions: Number(week[0].sessions), minutes: Number(week[0].minutes) } });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

@@ -3930,6 +3930,30 @@
   },
   "POST /api/youtube/follows/bulk-delete": {
    "class": "authed"
+  },
+  "GET /api/guitar/practice": {
+   "class": "authed"
+  },
+  "POST /api/guitar/practice": {
+   "class": "authed"
+  },
+  "GET /api/guitar/practice/queue": {
+   "class": "authed"
+  },
+  "POST /api/guitar/loop-runs": {
+   "class": "authed"
+  },
+  "GET /api/guitar/loop-runs/:loopId": {
+   "class": "authed"
+  },
+  "GET /api/guitar/transitions": {
+   "class": "authed"
+  },
+  "POST /api/guitar/transitions/score": {
+   "class": "authed"
+  },
+  "POST /api/guitar-tutor": {
+   "class": "authed"
   }
  }
 }

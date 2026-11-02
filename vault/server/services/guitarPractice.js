@@ -34,11 +34,11 @@ function byLeastRecent(a, b) {
 
 /**
  * "I have 20 minutes, what should I do?" One song being learned, one loop to work up, one song going rusty, and one
- * song being polished. Each slot is left out when there is nothing for it. A song is never offered twice.
+ * song being polished, plus one chord change to drill. Each slot is left out when there is nothing for it. A song is never offered twice.
  * songs: [{ id, title, artist, learnStatus, lastPracticedAt, rustyAfterDays, createdAt }]
  * loops: [{ id, name, songId, startTimeSec, endTimeSec }]
  */
-function buildQueue(songs, loops, now = new Date()) {
+function buildQueue(songs, loops, now = new Date(), transitions = []) {
   const rows = (songs || []).map(s => ({ ...s, state: practiceState(s, now) }));
   const used = new Set();
   const items = [];
@@ -71,6 +71,16 @@ function buildQueue(songs, loops, now = new Date()) {
 
   const polishing = take(rows.filter(s => s.state === 'polishing'));
   if (polishing) items.push(describe(polishing, 'polishing', 'Polish it until it is clean'));
+
+  // One chord change to drill: the top-ranked pair that still needs work (see guitarTransitions.js)
+  const drill = (transitions || []).find(t => t.priority > 0);
+  if (drill) {
+    items.push({
+      kind: 'transition', a: drill.a, b: drill.b, title: `${drill.a} to ${drill.b}`,
+      reason: drill.lastRate == null ? 'A change you have not drilled yet' : `Last drill: ${drill.lastRate} changes a minute`,
+      lastRate: drill.lastRate,
+    });
+  }
 
   return items;
 }

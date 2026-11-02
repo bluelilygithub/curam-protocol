@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import Tooltip from '../../components/Tooltip';
+import { GT } from './guitarTips.mjs';
 import api from '../../utils/apiClient';
 import useToastStore from '../../store/toastStore';
 import {
@@ -139,10 +141,16 @@ export default function TempoTrainer({ loop, song, passes, onSpeed, onPlay, onPa
     <div className="mt-3 pt-3 border-t flex flex-col gap-2" style={{ borderColor: 'var(--color-border)' }}>
       <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Tempo trainer · {loop.name}</p>
       <div className="flex items-center gap-1">
-        <button className={btn} style={bs} aria-label="Slower" onClick={() => applySpeed(speed - 5)}>−</button>
-        <input type="range" min={MIN_SPEED} max={MAX_SPEED} step="5" value={speed} aria-label="Playback speed"
-          onChange={e => applySpeed(parseInt(e.target.value, 10))} className="flex-1" />
-        <button className={btn} style={bs} aria-label="Faster" onClick={() => applySpeed(speed + 5)}>+</button>
+        <Tooltip text={GT.slower}>
+          <button className={btn} style={bs} aria-label="Slower" onClick={() => applySpeed(speed - 5)}>−</button>
+        </Tooltip>
+        <Tooltip text={GT.speed}>
+          <input type="range" min={MIN_SPEED} max={MAX_SPEED} step="5" value={speed} aria-label="Playback speed"
+            onChange={e => applySpeed(parseInt(e.target.value, 10))} className="flex-1" />
+        </Tooltip>
+        <Tooltip text={GT.faster}>
+          <button className={btn} style={bs} aria-label="Faster" onClick={() => applySpeed(speed + 5)}>+</button>
+        </Tooltip>
         <span className="text-xs font-mono w-24 text-right" style={{ color: 'var(--color-text)' }}>
           {speed}%{song.bpm ? ` · ${Math.round(song.bpm * speed / 100)} bpm` : ''}
         </span>
@@ -151,18 +159,28 @@ export default function TempoTrainer({ loop, song, passes, onSpeed, onPlay, onPa
 
       <div className="flex items-center gap-1 flex-wrap">
         {!ramp ? (
-          <button className={btn} style={bs} onClick={startTrainer}>Start at {START_SPEED}%</button>
+          <Tooltip text={GT.startRamp}>
+            <button className={btn} style={bs} onClick={startTrainer}>Start at {START_SPEED}%</button>
+          </Tooltip>
         ) : (
-          <button className={btn} style={bs} onClick={() => { setRamp(false); setClean(0); }}>Stop ramp</button>
+          <Tooltip text={GT.stopRamp}>
+            <button className={btn} style={bs} onClick={() => { setRamp(false); setClean(0); }}>Stop ramp</button>
+          </Tooltip>
         )}
-        <button className={btn} style={bs} onClick={countIn} disabled={counting}>{counting ? 'Counting…' : 'Count in & play'}</button>
+        <Tooltip text={GT.countIn}>
+          <button className={btn} style={bs} onClick={countIn} disabled={counting}>{counting ? 'Counting…' : 'Count in & play'}</button>
+        </Tooltip>
         {song.bpm ? (
           <label className="flex items-center gap-1 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
-            <input type="checkbox" checked={click} onChange={e => setClick(e.target.checked)} />
+            <Tooltip text={GT.click}>
+              <input type="checkbox" checked={click} onChange={e => setClick(e.target.checked)} />
+            </Tooltip>
             Click
           </label>
         ) : null}
-        <button className={btn} style={bs} onClick={() => logRun(speed, ramp ? clean : null)}>Log this speed</button>
+        <Tooltip text={GT.logSpeed}>
+          <button className={btn} style={bs} onClick={() => logRun(speed, ramp ? clean : null)}>Log this speed</button>
+        </Tooltip>
       </div>
       {click && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>The click keeps the song's tempo but is not locked to the recording.</p>}
 
@@ -172,15 +190,21 @@ export default function TempoTrainer({ loop, song, passes, onSpeed, onPlay, onPa
             Passes: {passes} · clean in a row: {clean} of {target}. Tap Clean after a pass you played cleanly; at {target} the speed goes up 5%.
           </p>
           <div className="flex items-center gap-1">
-            <button className={btn} style={{ ...bs, borderColor: 'var(--color-primary)' }} onClick={() => mark(true)}>Clean</button>
-            <button className={btn} style={bs} onClick={() => mark(false)}>Messy</button>
+            <Tooltip text={GT.cleanPass}>
+              <button className={btn} style={{ ...bs, borderColor: 'var(--color-primary)' }} onClick={() => mark(true)}>Clean</button>
+            </Tooltip>
+            <Tooltip text={GT.messyPass}>
+              <button className={btn} style={bs} onClick={() => mark(false)}>Messy</button>
+            </Tooltip>
             <label className="flex items-center gap-1 text-xs ml-auto" style={{ color: 'var(--color-muted)' }}>
               Clean passes to step up
-              <select value={target} onChange={e => { setTarget(parseInt(e.target.value, 10)); setClean(0); }}
-                className="text-xs px-1 py-0.5 rounded border"
-                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
+              <Tooltip text={GT.cleanTarget}>
+                <select value={target} onChange={e => { setTarget(parseInt(e.target.value, 10)); setClean(0); }}
+                  className="text-xs px-1 py-0.5 rounded border"
+                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                  {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </Tooltip>
             </label>
           </div>
         </div>

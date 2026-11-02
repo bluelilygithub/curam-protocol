@@ -1,4 +1,6 @@
 import React from 'react';
+import Tooltip from '../../components/Tooltip';
+import { GT } from './guitarTips.mjs';
 import { NAMES, keyLabel } from './theory.mjs';
 
 export const KIND_STYLE = {
@@ -40,13 +42,15 @@ export default function TheoryPanel({
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs" style={{ color: 'var(--color-text)' }}>Key: <strong>{keyLabel(key)}</strong></span>
-          <select aria-label="Key for the numerals" value={keyChoice} onChange={e => onKeyChoice(e.target.value)}
-            className="text-xs px-1 py-0.5 rounded border" style={select}>
-            <option value="auto">Automatic</option>
-            {NAMES.flatMap(n => ['major', 'minor'].map(m => (
-              <option key={`${n}|${m}`} value={`${n}|${m}`}>{n} {m}</option>
-            )))}
-          </select>
+          <Tooltip text={GT.keyChoice}>
+            <select aria-label="Key for the numerals" value={keyChoice} onChange={e => onKeyChoice(e.target.value)}
+              className="text-xs px-1 py-0.5 rounded border" style={select}>
+              <option value="auto">Automatic</option>
+              {NAMES.flatMap(n => ['major', 'minor'].map(m => (
+                <option key={`${n}|${m}`} value={`${n}|${m}`}>{n} {m}</option>
+              )))}
+            </select>
+          </Tooltip>
         </div>
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
           Key {sourceText}. Detection is a guess, so change it here if the numerals look wrong.
@@ -55,11 +59,15 @@ export default function TheoryPanel({
 
       <div className="flex items-center gap-3 flex-wrap">
         <label className="flex items-center gap-1 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
-          <input type="checkbox" checked={showNumerals} onChange={e => onShowNumerals(e.target.checked)} />
+          <Tooltip text={GT.showNumerals}>
+            <input type="checkbox" checked={showNumerals} onChange={e => onShowNumerals(e.target.checked)} />
+          </Tooltip>
           Roman numerals
         </label>
         <label className="flex items-center gap-1 text-xs cursor-pointer" style={{ color: 'var(--color-text)' }}>
-          <input type="checkbox" checked={showShapes} onChange={e => onShowShapes(e.target.checked)} />
+          <Tooltip text={GT.showShapes}>
+            <input type="checkbox" checked={showShapes} onChange={e => onShowShapes(e.target.checked)} />
+          </Tooltip>
           Capo shapes
         </label>
       </div>
@@ -87,23 +95,27 @@ export default function TheoryPanel({
           </p>
           <div className="flex flex-wrap gap-x-3 gap-y-1">
             {best.shapes.map(s => (
-              <span key={s.concert} className="text-xs font-mono" style={{ color: s.barre ? '#b45309' : 'var(--color-text)' }}
-                title={s.barre ? 'Needs a barre' : 'Open shape'}>
-                {s.concert}{best.capo > 0 ? ` → ${s.shape}` : ''}
-              </span>
+              <Tooltip text={s.barre ? GT.shapeBarre : GT.shapeOpen} key={s.concert}>
+                <span className="text-xs font-mono" style={{ color: s.barre ? '#b45309' : 'var(--color-text)' }}>
+                  {s.concert}{best.capo > 0 ? ` → ${s.shape}` : ''}
+                </span>
+              </Tooltip>
             ))}
           </div>
           <div className="flex items-center gap-1 flex-wrap">
             {best.capo !== capoFret && (
-              <button className={btn} style={bs} onClick={() => onUseCapo(best.capo)}>
-                {best.capo === 0 ? 'Remove capo' : `Use capo ${best.capo}`}
-              </button>
+              <Tooltip text={GT.useCapo}>
+                <button className={btn} style={bs} onClick={() => onUseCapo(best.capo)}>
+                  {best.capo === 0 ? 'Remove capo' : `Use capo ${best.capo}`}
+                </button>
+              </Tooltip>
             )}
             {capo.options.filter(o => o.capo !== best.capo).slice(0, 2).map(o => (
-              <button key={o.capo} className={btn} style={bs} onClick={() => onUseCapo(o.capo)}
-                title={`${o.barres} barre ${o.barres === 1 ? 'chord' : 'chords'}`}>
-                Capo {o.capo} ({o.barres} barre)
-              </button>
+              <Tooltip text={`Capo ${o.capo}: ${o.barres} barre ${o.barres === 1 ? 'chord' : 'chords'}.`} key={o.capo}>
+                <button className={btn} style={bs} onClick={() => onUseCapo(o.capo)}>
+                  Capo {o.capo} ({o.barres} barre)
+                </button>
+              </Tooltip>
             ))}
           </div>
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>

@@ -261,6 +261,7 @@ app.use('/api/web-extractor-tutor', requireFeature('webExtractor'), aiLimiter, r
 app.use('/api/browser-agent', requireFeature('browserAgent'), require('./routes/browserAgent'));
 app.use('/api/wellbeing', requireFeature('wellbeing'), require('./routes/wellbeing'));
 app.use('/api/translate', requireFeature('translate'), aiLimiter, require('./routes/translate'));
+app.use('/api/guitar-tutor', requireFeature('guitar'), aiLimiter, require('./routes/guitarTutor')); // the Guitar guide chat (sees no songs, chords or scores)
 app.use('/api/guitar',    requireFeature('guitar'),    require('./routes/guitar'));
 
 if (process.env.NODE_ENV === 'production') {
