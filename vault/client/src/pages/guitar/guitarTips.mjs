@@ -137,6 +137,17 @@ export const GT = {
   strumAuto: 'Move up a step by itself after the number of bars you choose.',
   strumBars: 'How many bars to stay on each step before moving up.',
 
+  // Backing band
+  bandOn: 'Play drums and a bass along with the arrows. Untick it to practise with only the click.',
+  bandDrums: 'The drum beat the band plays.',
+  bandBass: 'How the bass plays: the root note of each chord on the beat, with the fifth, or on every eighth note.',
+  bandVolume: 'How loud the drums and bass are. The click and the strum ticks are separate.',
+  bandFromProgression: 'Use a well-known chord progression in a key you choose, one chord a bar.',
+  bandFromSong: 'Use the chords of one of your songs, one chord a bar, so you can strum along as if it were that song.',
+  bandKey: 'The key the progression is played in.',
+  bandProgression: 'The chord progression the bass follows. It goes round, one chord a bar.',
+  bandSong: 'The song whose chords the bass follows. It plays the first eight chords of its chart in order.',
+
   // Ear training
   earChords: 'Chords: hear a chord and name it. The choices come from your own songs.',
   earNumerals: 'Numerals: hear the key chord, then a chord from one of your songs, and name its Roman numeral.',

@@ -114,3 +114,6 @@ export function pairSummary(r, now = Date.now()) {
     : 'No one-minute score saved yet.';
   return `${inSongs} ${score}`;
 }
+
+/** The progressions suggestions are drawn from, so the backing band can play the same ones. */
+export const PROGRESSION_LIBRARY = { major: MAJOR, minor: MINOR };

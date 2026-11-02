@@ -37,6 +37,8 @@ checkGuide({
     ['simplify', 'notes', /sound a little different/, 'a swapped chord sounds different'],
     ['simplify', 'notes', /only how the chart is shown/, 'the saved chords are not changed'],
     ['strum', 'does', /air swings/, 'the arrows show hits and air swings'],
+    ['backing-band', 'does', /Drums and a bass/, 'the band is drums and bass'],
+    ['backing-band', 'notes', /does not listen to you/, 'the band does not follow the player'],
     ['strum', 'notes', /does not listen/, 'the strum tab does not listen'],
     ['pattern-ladder', 'does', /down strum on every beat/, 'the ladder starts on the beat'],
     ['milestones', 'notes', /never ticked by hand/, 'milestones come from real practice'],

@@ -96,6 +96,9 @@ const CATALOG = [
   { id: 'explain-song', label: 'Explain this song', group: 'Songs',
     does: 'A button in the Player bar. It opens a window with a short theory breakdown of the open song (why its chords work together) and a few things to practise, such as a strumming pattern, a barre or a section to loop.',
     notes: 'AI writes it from the chart only, so it knows the chords and key shown, not the recording. It needs a few chords on the chart and an AI model set up in the workspace.' },
+  { id: 'backing-band', label: 'Backing band', group: 'Practise',
+    does: 'In the Strum tab, under the arrows. Drums and a bass play along with the beat so you strum with a band instead of only a click. Choose the drums (rock beat, pop beat or slow ballad), the bass (a root note on every beat, root and fifth, or driving eighths), the volume, and the chords the bass follows, a bar each: A progression (a well-known one in a key you pick, such as the three-chord song in A) or The chords of a song (the first eight chords of the chart of one of your songs, in order). While it plays, the chord for the bar and the next one show above the arrows and the chord loop lights up. Untick Play drums and bass to go back to the click alone.',
+    notes: 'The sounds are made in your browser, so they are simple. The band does not listen to you or follow you if you slow down; it keeps its own tempo. Your choices are remembered in this browser.' },
   { id: 'strum-pattern', label: 'Strumming pattern', group: 'Practise',
     does: 'In the Strum tab: choose Down on every beat, Down up down up, The old faithful, Pop strum or Gentle ballad. The tempo slider (40 to 160 beats a minute) can be changed while it plays and the arrows keep their place; Match a song sets the tempo to one of your songs. Click on the beat and Hear the strums can each be turned off.',
     notes: 'The pattern and tempo are remembered in this browser.' },
@@ -143,7 +146,7 @@ const NOT_POSSIBLE = [
   'Keeping a song in step with a live band or a backing track: play mode moves at a set tempo or when you press a key, it does not listen.',
   'Sharing songs or practice history with other people.',
   'Recording a video clip of a milestone, a streak counter, or reminders to practise: none of these are built.',
-  'Hearing whether you played a chord cleanly or in time, a built-in tuner, a backing band, or riff tab: none of these are built yet.',
+  'Hearing whether you played a chord cleanly or in time, a built-in tuner, or riff tab: none of these are built yet.',
 ];
 
 const SYSTEM = `You are the guide to Guitar in Vault for one person who learns songs, practises them and keeps them from going rusty. They say, in everyday words, what they want to do. You point them to the right controls, in order, and explain how each works.

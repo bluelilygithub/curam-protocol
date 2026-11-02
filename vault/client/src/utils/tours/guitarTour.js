@@ -184,7 +184,7 @@ export function startGuitarTour({ goTab } = {}) {
   tour.addStep({
     id: 'guitar-strum',
     title: 'Strumming',
-    text: 'The arrows show your strumming pattern in time with a click. Your arm swings down on every beat and up in between; solid arrows hit the strings, faint ones are air swings. The ladder starts with a down on every beat and adds one up strum at a time.',
+    text: 'The arrows show your strumming pattern in time with a click. Your arm swings down on every beat and up in between; solid arrows hit the strings, faint ones are air swings. The ladder starts with a down on every beat and adds one up strum at a time, and a backing band of drums and bass can play along on a chord loop.',
     attachTo: { element: '[data-tour="guitar-strum"]', on: 'bottom' },
     beforeShowPromise: onTab('guitar-strum', 'Strum', '[data-tour="guitar-strum"]'),
     when: { show() { injectStepCounter(14); } },

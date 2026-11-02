@@ -3,6 +3,11 @@ import Tooltip from '../../components/Tooltip';
 import { GT } from './guitarTips.mjs';
 import { GlossText } from './GlossaryTerm';
 import { audioContextFrom } from './chordSound.js';
+import BandPanel from './BandPanel.jsx';
+import { playKick, playSnare, playHat, playBass } from './bandSound.js';
+import {
+  drumHits, bassNote, midiFreq, bassLengthSlots, chordForBar, loopFromProgression, PROGRESSIONS, DRUM_STYLES, BASS_STYLES,
+} from './band.mjs';
 import {
   PATTERNS, SLOTS, swings, ladder, slotMs, slotAt, describe,
 } from './strumming.mjs';
@@ -46,6 +51,20 @@ export default function StrumTrainer({ songs = [] }) {
   const [bars, setBars] = useState(4);
   const [clickOn, setClickOn] = useState(true);
   const [soundOn, setSoundOn] = useState(true);
+  const [band, setBand] = useState(() => {
+    const b = init.band || {};
+    return {
+      on: b.on !== false,
+      drums: DRUM_STYLES.some(d => d.id === b.drums) ? b.drums : 'rock',
+      bass: BASS_STYLES.some(x => x.id === b.bass) ? b.bass : 'roots',
+      vol: typeof b.vol === 'number' ? Math.min(1, Math.max(0, b.vol)) : 0.7,
+      source: b.source === 'song' ? 'song' : 'progression',
+      tonic: Number.isInteger(b.tonic) && b.tonic >= 0 && b.tonic < 12 ? b.tonic : 9,
+      progId: PROGRESSIONS.some(p => p.id === b.progId) ? b.progId : PROGRESSIONS[0].id,
+      songId: null,
+    };
+  });
+  const [songLoop, setSongLoop] = useState([]);
 
   const target = PATTERNS.find(p => p.id === patternId) || PATTERNS[2];
   const rungs = ladder(target.pattern);
@@ -59,9 +78,13 @@ export default function StrumTrainer({ songs = [] }) {
   const timer = useRef(null);
   const raf = useRef(null);
   const live = useRef({});
-  live.current = { shown, bpm, clickOn, soundOn };
+  // The chords the band plays, a bar each: a well-known progression in the chosen key, or the chords of a chosen song
+  const loop = band.source === 'song' ? songLoop : loopFromProgression(band.tonic, band.progId);
+  live.current = { shown, bpm, clickOn, soundOn, band: { ...band, loop } };
 
-  useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify({ patternId, bpm })); } catch { /* private window */ } }, [patternId, bpm]);
+  useEffect(() => {
+    try { localStorage.setItem(KEY, JSON.stringify({ patternId, bpm, band: { on: band.on, drums: band.drums, bass: band.bass, vol: band.vol, source: band.source, tonic: band.tonic, progId: band.progId } })); } catch { /* private window */ }
+  }, [patternId, bpm, band.on, band.drums, band.bass, band.vol, band.source, band.tonic, band.progId]);
 
   const stop = useCallback(() => {
     clearInterval(timer.current); timer.current = null;
@@ -80,6 +103,14 @@ export default function StrumTrainer({ songs = [] }) {
       const counting = n < COUNT_IN;
       if (live.current.clickOn || counting) { if (slot % 2 === 0) tick(ctx, when, slot === 0 ? 1500 : 1000, slot === 0 ? 0.35 : 0.22); }
       if (!counting && live.current.soundOn && live.current.shown[slot] !== '-') tick(ctx, when, slot % 2 === 0 ? 330 : 520, 0.16, 0.09);
+      // The band: drums and bass on the same grid, the bass on the chord of this bar (bar 0 is the first bar after the count-in)
+      const b = live.current.band;
+      if (!counting && b && b.on && b.loop.length) {
+        const chord = chordForBar(b.loop, Math.floor(n / SLOTS) - 1);
+        for (const hit of drumHits(b.drums, slot)) (hit === 'kick' ? playKick : hit === 'snare' ? playSnare : playHat)(ctx, when, b.vol);
+        const note = chord ? bassNote(b.bass, slot, chord.pc) : null;
+        if (note != null) playBass(ctx, when, midiFreq(note), stepSec * bassLengthSlots(b.bass), b.vol);
+      }
       nextN.current += 1;
     }
   }, []);
@@ -125,6 +156,9 @@ export default function StrumTrainer({ songs = [] }) {
 
   const pickPattern = (id) => { setPatternId(id); setStep(0); };
   const counting = running && position.bar === 0;
+  const bandBar = running && band.on && loop.length && position.bar >= 1 ? position.bar - 1 : -1;
+  const nowChord = bandBar >= 0 ? chordForBar(loop, bandBar) : null;
+  const nextChord = bandBar >= 0 ? chordForBar(loop, bandBar + 1) : null;
   const sw = swings(shown);
 
   return (
@@ -169,6 +203,12 @@ export default function StrumTrainer({ songs = [] }) {
           {counting ? 'Get ready: one bar of clicks, then strum.' : running ? `Bar ${position.bar}` : ''}
         </p>
 
+        {nowChord && (
+          <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+            Chord this bar: <strong className="font-mono">{nowChord.name}</strong>, next: <span className="font-mono">{nextChord.name}</span>
+          </p>
+        )}
+
         {/* Play and tempo */}
         <div className="flex items-center gap-2 flex-wrap">
           <Tooltip text={running ? GT.strumStop : GT.strumPlay}>
@@ -209,6 +249,8 @@ export default function StrumTrainer({ songs = [] }) {
           </Tooltip>
         </div>
       </section>
+
+      <BandPanel band={band} onChange={setBand} loop={loop} current={bandBar >= 0 ? bandBar % loop.length : -1} songs={songs} onSongLoop={setSongLoop} />
 
       <section className="rounded-xl border p-4 flex flex-col gap-3" style={card}>
         <div className="flex items-center gap-3 flex-wrap">
