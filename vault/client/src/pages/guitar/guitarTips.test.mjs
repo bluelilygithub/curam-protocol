@@ -7,7 +7,7 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { GT, ADD_TIPS, tabTip } from './guitarTips.mjs';
+import { GT, ADD_TIPS, FOCUS_TIPS, tabTip } from './guitarTips.mjs';
 import { HOW_IT_WORKS, GUITAR_TOOLS, GUIDE_TOOLS } from './guitarTools.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -22,11 +22,12 @@ for (const [key, tip] of Object.entries(GT)) {
   assert.ok(/[.!?]$/.test(tip), `${key}: ends with a full stop`);
   assert.ok(!/  |\s$/.test(tip), `${key}: tidy spacing`);
 }
-for (const tab of ['Today', 'Drills', 'Library', 'Player']) assert.ok(tabTip(tab), `tab ${tab} has a tip`);
+for (const tab of ['Today', 'Coach', 'Drills', 'Library', 'Player']) assert.ok(tabTip(tab), `tab ${tab} has a tip`);
+for (const [k, tip] of Object.entries(FOCUS_TIPS)) assert.ok(/^[A-Z].*\.$/.test(tip), `focus tip ${k} is a sentence`);
 for (const id of ['ug', 'upload', 'manual']) assert.ok(ADD_TIPS[id], `add mode ${id} has a tip`);
 for (const [h, t] of HOW_IT_WORKS) assert.ok(h && t.length > 30, `(i) box paragraph "${h}" has text`);
 
-const files = ['pages/GuitarPage.jsx', 'pages/guitar/TheoryPanel.jsx', 'pages/guitar/TempoTrainer.jsx', 'pages/guitar/TransitionDrills.jsx'];
+const files = ['pages/GuitarPage.jsx', 'pages/guitar/CoachView.jsx', 'pages/guitar/TheoryPanel.jsx', 'pages/guitar/TempoTrainer.jsx', 'pages/guitar/TransitionDrills.jsx'];
 const sources = Object.fromEntries(files.map((f) => [f, read(f)]));
 
 // Take the two dialogs out of the page text
@@ -77,7 +78,8 @@ assert.match(page, /<GuitarTutorChat\b/);
 const tour = read('utils/tours/guitarTour.js');
 const marks = [...tour.matchAll(/\[data-tour="([a-z-]+)"\]/g)].map((m) => m[1]);
 assert.ok(marks.length >= 6, 'the tour points at several parts of the page');
-for (const mark of new Set(marks)) assert.ok(page.includes(`data-tour="${mark}"`), `the page marks data-tour="${mark}"`);
+const everything = Object.values(sources).join(' ');
+for (const mark of new Set(marks)) assert.ok(everything.includes(`data-tour="${mark}"`), `the page marks data-tour="${mark}"`);
 assert.match(tour, /Guitar — Quick Tour/, 'the tour is titled with the app name');
 assert.match(tour, new RegExp(`TOTAL_STEPS = ${(tour.match(/tour\.addStep\(/g) || []).length}`), 'the step counter matches the number of steps');
 

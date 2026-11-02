@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_guitar_completed';
 
-const TOTAL_STEPS = 9;
+const TOTAL_STEPS = 10;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -132,12 +132,22 @@ export function startGuitarTour({ goTab } = {}) {
   });
 
   tour.addStep({
+    id: 'guitar-coach',
+    title: 'Your coach',
+    text: 'Write a short review of your last seven days, or tell it how long you have and it builds a session from your own songs, loops and chord changes. The numbers and the plan come from your practice; AI only writes the wording.',
+    attachTo: { element: '[data-tour="guitar-coach"]', on: 'bottom' },
+    beforeShowPromise: onTab('guitar-coach', 'Coach', '[data-tour="guitar-coach"]'),
+    when: { show() { injectStepCounter(9); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  tour.addStep({
     id: 'guitar-drills',
     title: 'Chord change drills',
     text: 'Drills lists the chord changes your own songs use most, worst first. Press Drill, switch between the two chords for a minute and tap each clean change. Stuck on anything? Press the round button at the bottom right and ask the guide.',
     attachTo: { element: '[data-tour="guitar-drills"]', on: 'bottom' },
     beforeShowPromise: onTab('guitar-drills', 'Drills', '[data-tour="guitar-drills"]'),
-    when: { show() { injectStepCounter(9); } },
+    when: { show() { injectStepCounter(10); } },
     buttons: [
       btnBack(),
       { text: 'Finish Tour ✓', action() { try { localStorage.setItem(TOUR_KEY, '1'); } catch (_) { /* ignore */ } tour.complete(); } },

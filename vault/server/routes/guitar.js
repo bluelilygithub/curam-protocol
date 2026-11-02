@@ -10,7 +10,8 @@ const multer  = require('multer');
 const { spawn } = require('child_process');
 const { pool }  = require('../db');
 const { LEARN_STATUSES, practiceState, buildQueue } = require('../services/guitarPractice');
-const { isChord, orderPair, countTransitions, rankTransitions } = require('../services/guitarTransitions');
+const { isChord, orderPair } = require('../services/guitarTransitions');
+const { loadTransitions } = require('../services/guitarData');
 
 const router = express.Router();
 const PIPELINE_SCRIPT = path.join(__dirname, '../scripts/guitar_pipeline.py');
@@ -655,17 +656,6 @@ router.get('/practice', async (req, res) => {
     res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
-
-// The chord changes this person's songs ask for most, ranked by how much they need drilling
-async function loadTransitions(userId, limit = 15) {
-  const { rows: events } = await pool.query(
-    `SELECT ce."songId", ce."chordRoot", ce."chordQuality"
-     FROM guitar_chord_events ce JOIN guitar_songs s ON s.id=ce."songId"
-     WHERE s."userId"=$1 ORDER BY ce."songId", ce."timestampSec", ce.id`, [userId]);
-  const { rows: scores } = await pool.query(
-    `SELECT "chordA", "chordB", changes, seconds, "playedAt" FROM guitar_transition_scores WHERE "userId"=$1`, [userId]);
-  return rankTransitions(countTransitions(events), scores, new Date(), { limit });
-}
 
 router.get('/transitions', async (req, res) => {
   try { res.json(await loadTransitions(req.user.id)); }

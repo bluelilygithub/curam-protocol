@@ -4,6 +4,7 @@
 export const GT = {
   // Tabs
   tabToday: 'Today: what to play in the time you have, picked from your own songs, loops and chord changes.',
+  tabCoach: 'Coach: a weekly review of your practice, and a practice session built to the time you have.',
   tabDrills: 'Drills: practise the chord changes your own songs use most, one minute at a time.',
   tabLibrary: 'Library: add songs and say how well you know each one.',
   tabPlayer: 'Player: the chord chart for the open song, with playback, loops, the key and the capo.',
@@ -84,6 +85,13 @@ export const GT = {
   closeDrill: 'Close the drill.',
   againDrill: 'Run the minute again for this chord change.',
 
+  // Coach
+  coachReview: 'Write a short review of your last seven days from your own practice log, loops and drills.',
+  coachMinutes: 'How long you have to practise.',
+  coachNote: 'Say what you want to work on in your own words, such as rhythm or my chord changes. Optional.',
+  coachBuild: 'Build a session of exactly this length from your own songs, loops and chord changes.',
+  explainSong: 'Get a short theory breakdown of this song and things to practise. It reads the chart, not the recording.',
+
   // Header
   howItWorks: 'How Guitar works.',
   tour: 'Take a guided tour of Guitar.',
@@ -93,3 +101,11 @@ export const GT = {
 export const tabTip = (tab) => GT[`tab${tab}`];
 
 export const ADD_TIPS = { ug: GT.addUg, upload: GT.addUpload, manual: GT.addManual };
+
+export const FOCUS_TIPS = {
+  learning: 'Give more of the session to songs you are still learning.',
+  loops: 'Give more of the session to loops you are working up to speed, which also builds rhythm and timing.',
+  transitions: 'Give more of the session to chord changes you are slow at.',
+  rusty: 'Give more of the session to songs that are going rusty.',
+  polishing: 'Give more of the session to songs you are polishing.',
+};

@@ -3954,6 +3954,15 @@
   },
   "POST /api/guitar-tutor": {
    "class": "authed"
+  },
+  "GET /api/guitar-coach/week": {
+   "class": "authed"
+  },
+  "POST /api/guitar-coach/session": {
+   "class": "authed"
+  },
+  "POST /api/guitar-coach/explain": {
+   "class": "authed"
   }
  }
 }

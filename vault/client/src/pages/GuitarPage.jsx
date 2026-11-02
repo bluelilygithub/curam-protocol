@@ -14,6 +14,8 @@ import TempoTrainer from './guitar/TempoTrainer.jsx';
 import { snapRate, songTimeAfter } from './guitar/tempoTrainer.mjs';
 import TheoryPanel, { KIND_STYLE } from './guitar/TheoryPanel';
 import TransitionDrills from './guitar/TransitionDrills';
+import CoachView from './guitar/CoachView';
+import ExplainDialog from './guitar/ExplainDialog';
 import { analyseSong, shapeAtCapo } from './guitar/theory.mjs';
 
 // ── Music theory constants ────────────────────────────────────────────────────
@@ -669,7 +671,7 @@ function TodayView({ songs, onOpenSong, onPlayed, onStartDrill, refreshKey }) {
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
-const TABS = ['Today', 'Drills', 'Library', 'Player'];
+const TABS = ['Today', 'Coach', 'Drills', 'Library', 'Player'];
 
 export default function GuitarPage() {
   const getIcon = useIcon();
@@ -696,6 +698,7 @@ export default function GuitarPage() {
   const [loopActive, setLoopActive] = useState(null);
   const [loopPasses, setLoopPasses] = useState(0); // times the active loop has come round
   const rateRef = useRef(1);                       // playback speed, 1 = normal; song time moves at this rate
+  const [explaining, setExplaining] = useState(null);   // { song, analysis } while the Explain this song window is open
   const [drillPair, setDrillPair]       = useState(null);   // { a, b } chord pair opened from Today
   const [keyChoice, setKeyChoice]       = useState('auto'); // 'auto' or 'Root|mode'
   const [showNumerals, setShowNumerals] = useState(true);
@@ -1087,6 +1090,25 @@ export default function GuitarPage() {
     if (tool) setTab(tool.tab);
   };
 
+  // What the Player already knows about the song, sent along so the coach explains the same key and numerals the person sees
+  const explainThisSong = () => {
+    if (!activeSong) return;
+    const nums = [];
+    for (const ev of chords) {
+      const n = theory?.byId.get(ev.id)?.numeral;
+      if (n && nums[nums.length - 1] !== n) nums.push(n);
+    }
+    setExplaining({
+      song: activeSong,
+      analysis: theory ? {
+        key: `${ROOTS[theory.key.tonic]} ${theory.key.mode}`,
+        progression: nums.slice(0, 16),
+        flagged: theory.flagged.map(f => ({ label: f.label, numeral: f.numeral, note: f.note })),
+        capo: theory.advice,
+      } : {},
+    });
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full">
@@ -1132,6 +1154,15 @@ export default function GuitarPage() {
           <div className="p-6 max-w-3xl" data-tour="guitar-today">
             <TodayView songs={songs} refreshKey={practiceTick} onOpenSong={openSong} onPlayed={() => loadSongs()}
               onStartDrill={(pair) => { setDrillPair(pair); setTab('Drills'); }} />
+          </div>
+        )}
+
+        {/* ── Coach tab ────────────────────────────────────────────────── */}
+        {tab === 'Coach' && (
+          <div className="p-6 max-w-3xl">
+            <CoachView songs={songs} onOpenSong={openSong}
+              onStartDrill={(pair) => { setDrillPair(pair); setTab('Drills'); }}
+              onLog={(target) => setPracticeDialog(target)} />
           </div>
         )}
 
@@ -1371,6 +1402,11 @@ export default function GuitarPage() {
                       {activeSong.capoSuggested > 0 ? ` · Capo ${activeSong.capoSuggested} (per tab)` : ''}
                     </p>
                   </div>
+                  <Tooltip text={GT.explainSong}>
+                    <button onClick={explainThisSong}
+                      className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 transition-opacity duration-200"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Explain this song</button>
+                  </Tooltip>
                   <Tooltip text={GT.played}>
                     <button onClick={() => setPracticeDialog({ song: activeSong })}
                       className="text-xs px-3 py-1.5 rounded-lg font-medium hover:opacity-70 transition-opacity duration-200"
@@ -1674,6 +1710,7 @@ export default function GuitarPage() {
           </div>
         </ToolInfoModal>
       )}
+      {explaining && <ExplainDialog song={explaining.song} analysis={explaining.analysis} onClose={() => setExplaining(null)} />}
       <GuitarTutorChat currentTool={tab.toLowerCase()} onOpenTool={openToolById} />
       {practiceDialog && (
         <PracticeDialog song={practiceDialog.song} loop={null} onClose={() => setPracticeDialog(null)}
