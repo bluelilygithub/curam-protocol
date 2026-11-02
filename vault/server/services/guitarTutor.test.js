@@ -40,6 +40,8 @@ checkGuide({
     ['backing-band', 'does', /Drums and a bass/, 'the band is drums and bass'],
     ['backing-band', 'notes', /does not listen to you/, 'the band does not follow the player'],
     ['strum', 'notes', /does not listen/, 'the strum tab does not listen'],
+    ['fingerpicking', 'does', /Travis picking/, 'the ladder ends at Travis picking'],
+    ['fingerpicking', 'notes', /cannot hear you/, 'the person judges each step'],
     ['pattern-ladder', 'does', /down strum on every beat/, 'the ladder starts on the beat'],
     ['milestones', 'notes', /never ticked by hand/, 'milestones come from real practice'],
     ['milestones', 'notes', /no streaks/, 'there are no streaks'],

@@ -75,3 +75,18 @@ export function playToneMidi(ctx, midi, delaySec = 0) {
   osc.stop(t0 + 1.8);
   return 1.7;
 }
+
+/** One plucked string at an exact time on the audio clock (`when` is in the context's seconds), for the fingerpicking ladder. */
+export function playPluck(ctx, midi, when, gain = 0.2) {
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = 'triangle';
+  osc.frequency.value = 440 * Math.pow(2, (midi - 69) / 12);
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(gain, when + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + 0.9);
+  osc.connect(g);
+  g.connect(ctx.destination);
+  osc.start(when);
+  osc.stop(when + 1);
+}

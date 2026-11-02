@@ -23,6 +23,7 @@ import CoachView from './guitar/CoachView';
 import LearnView from './guitar/LearnView';
 import EarTraining from './guitar/EarTraining';
 import StrumTrainer from './guitar/StrumTrainer';
+import FingerpickLadder from './guitar/FingerpickLadder';
 import { GentleTips, MilestonesCard } from './guitar/ProgressCards';
 import GigMode from './guitar/GigMode';
 import SetLists from './guitar/SetLists';
@@ -1149,8 +1150,9 @@ export default function GuitarPage() {
 
         {/* ── Strum tab ────────────────────────────────────────────────── */}
         {tab === 'Strum' && (
-          <div className="p-6 max-w-3xl">
+          <div className="p-6 max-w-3xl flex flex-col gap-4">
             <StrumTrainer songs={songs} />
+            <FingerpickLadder />
           </div>
         )}
 

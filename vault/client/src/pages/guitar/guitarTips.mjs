@@ -154,6 +154,15 @@ export const GT = {
   strumHarder: 'Go up one step in the ladder.',
   strumFull: 'Go straight to the full pattern.',
   strumAuto: 'Move up a step by itself after the number of bars you choose.',
+  pickRung: 'Choose this step of the fingerpicking ladder to see its tab and practise it.',
+  pickChord: 'Which chord to hold while you pick. The tab and the diagram change to match.',
+  pickPlay: 'Start with one bar of clicks, then the tab lights up each note as you should pluck it.',
+  pickStop: 'Stop the beat.',
+  pickTempo: 'The speed in beats a minute. Start slow; you can change it while it plays.',
+  pickSound: 'Play each note of the tab as a soft plucked string, so you can hear the pattern you are aiming for.',
+  pickEasier: 'Go back one step in the fingerpicking ladder.',
+  pickHarder: 'Go up one step in the fingerpicking ladder.',
+  pickComfy: 'Mark this step as comfortable once you can play it evenly without looking. Tap again to take the mark off.',
   strumBars: 'How many bars to stay on each step before moving up.',
 
   // Backing band

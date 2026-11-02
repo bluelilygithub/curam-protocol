@@ -26,7 +26,7 @@ export const TOOL_TIPS = {
   coach: 'Coach: a weekly review of your practice, and a practice session built to the time you have.',
   drills: 'Drills: practise the chord changes your own songs use most, one minute at a time.',
   ear: 'Ear: train your ear on the chords and keys of your own songs.',
-  strum: 'Strum: strumming arrows that move with the beat, and a ladder that builds up to a full pattern.',
+  strum: 'Strum: strumming arrows that move with the beat, a backing band, and a fingerpicking ladder.',
   library: 'Library: add songs and say how well you know each one.',
   player: 'Player: the chord chart for the open song, with playback, loops, the key and the capo.',
 };
@@ -37,7 +37,7 @@ export const TOOL_BLURBS = {
   coach: 'Weekly review and session builder.',
   drills: 'One-minute chord change drills.',
   ear: 'Name chords and numerals by ear.',
-  strum: 'Strumming arrows and the pattern ladder.',
+  strum: 'Strumming arrows, the pattern ladder and the fingerpicking ladder.',
   library: 'Add songs and set their status.',
   player: 'Chart, loops, tempo trainer, key and capo.',
 };
@@ -56,6 +56,7 @@ export const HOW_IT_WORKS = [
   ['Coach', 'Writes a short review of your last seven days from your own practice, loops and drills, builds a practice session of exactly the time you have from your own songs, and can explain the chords of a song and suggest what to practise. The numbers and the plan are worked out in Vault; AI only writes the wording.'],
   ['Backing band', 'On the Strum tab, drums and a bass play along with the arrows so practice feels like playing in a band. Choose a drum beat and a bass style, then the chords the bass follows: a well-known progression in a key you pick, or the chords of one of your songs, a bar each. The chord for the bar shows above the arrows. All of it is made in your browser.'],
   ['Strumming', 'Shows a strumming pattern as arrows that move with a click, so you can see which swings hit the strings and which are air swings. The pattern ladder starts with a down strum on every beat and adds one up strum at a time until you reach the full pattern. You can change the tempo while it plays, or match the tempo of one of your songs.'],
+  ['Fingerpicking', 'Under the strumming on the Strum tab, a six-step ladder teaches fingerpicking: the thumb alone, a pinch, rolling up the strings, up and back down, alternating bass and then Travis picking. A small tab for the chord you choose (C, G, Am, Em, D, Dm, A or E) lights up each note in time with a click, with the picking finger under it (p thumb, i index, m middle, a ring), and you can hear every note. The strings and frets come from a checked table, not a guess. Vault cannot hear you, so you tick a step as comfortable yourself.'],
   ['Ear training', 'Five kinds of round, ten questions each. Major or minor plays a chord from your songs and you say which it is (then you can hear it as major and as minor to catch the one note that changes). Name the chord and Find the bass note use your own chords, and the bass round can play the lowest note on its own as a hint. Name the numeral plays the key chord and then another and you name its Roman numeral, and Name the progression plays the key chord and then a well-known run of chords such as I V vi IV. The chords you miss come up more, and your scores are kept. The sound comes from a synth built into Vault, not from the recording.'],
   ['Play mode and set lists', 'Play mode opens a big chart for performing. It moves along at the song tempo, or one chord at a time from the keyboard, and foot pedals and Bluetooth page turners work because they send arrow and Page keys. Set lists (in the Library) put songs in playing order and open them in play mode.'],
   ['Drills', 'Finds the chord changes your own songs use most, worst first, and says in plain words how often your songs make each one and how your drills are going. Press Drill and choose what to practise for the minute: just the two chords, or a progression that goes between them through other chords (for A and E, for example, A to D to E and back). Suggestions come from well-known progressions in the key the two chords share, and say which chords are new to you. Under the choices, Finger moves shows for every change which notes can stay held (ringed on small chord diagrams), which fingers slide or move and where to, and which lift or land, with a tip. Tap for every clean change and the score is kept. Above the cards, Major and minor pairs (E and Em, A and Am, D and Dm) shows the one note that changes between each pair, plays them one after the other, and starts the same one-minute drill on the pair. The Barre chord ladder under it takes the barre chord in five steps (two strings, the mini F, the full F, B flat, then sliding the shape up the neck); a step is cleared with three clean ten-second holds, where every string must ring.'],
@@ -96,6 +97,7 @@ export const GUIDE_TOOLS = [
   { id: 'backing-band', label: 'Backing band', tool: 'strum' },
   { id: 'strum-pattern', label: 'Strumming pattern', tool: 'strum' },
   { id: 'pattern-ladder', label: 'Pattern ladder', tool: 'strum' },
+  { id: 'fingerpicking', label: 'Fingerpicking ladder', tool: 'strum' },
   { id: 'major-minor-pairs', label: 'Major and minor pairs', tool: 'drills' },
   { id: 'barre-ladder', label: 'Barre chord ladder', tool: 'drills' },
   { id: 'ear-round', label: 'Ear training round', tool: 'ear' },
