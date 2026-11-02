@@ -34,6 +34,8 @@ export const EF_TIPS = {
   cancelRemove: 'Keep the thread.',
   openClient: 'Open this client in your CRM. You can come back here with the Email follow-up section on the client page.',
   changeClient: 'Link this case to a different CRM client, or to none. Nothing is changed in the CRM.',
+  createNote: 'Make a note in Notes for this case, titled with the case name and "email followup", with a link back to this case. Nothing else changes.',
+  linkedNote: 'Open the note made for this case in Notes. It has a link that brings you back here.',
   clientPick: 'Choose the CRM client this case belongs to.',
   saveClient: 'Save the link to this client.',
   clientNewCase: 'Open a new Email Follow-Up case for this client, ready filled in.',

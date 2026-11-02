@@ -486,6 +486,34 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       ok('restoring it from the recycle bin brings the questions, answers and summaries back', qBack.length === 2 && sBack.length === 2 && sBack[0].summary.overview === 'ok' && qBack[0].answer.answer === 'fine [S1]' && JSON.stringify(await ledgerOf(Number(backQ.entityId))) === askLedger, qBack.length);
     } finally { caseAsk.summariseCase = realSummarise; caseAsk.askCase = realAsk; }
 
+    // ---- a note made from a case, linked both ways ----
+    console.log('case note');
+    const clientRow = (await pool.query(`INSERT INTO clients (name, "userId") VALUES ('Note Client', $1) RETURNING id`, [userA])).rows[0];
+    const cNote = await newCase({ title: 'Acme contract', obligation: 'They owe the signed terms', clientId: clientRow.id });
+    r = await call('GET', `/${cNote.id}`);
+    ok('a new case has no note yet', r.status === 200 && r.body.case.noteId === null, r.body.case.noteId);
+    r = await call('POST', `/${cNote.id}/note`, {}, userB);
+    ok('another person cannot make a note for my case', r.status === 404, r.status);
+    r = await call('POST', `/${cNote.id}/note`, {});
+    ok('making the note works', r.status === 201 && r.body.created === true && Number.isInteger(r.body.noteId), r);
+    const noteRow = (await pool.query('SELECT * FROM notes WHERE id=$1', [r.body.noteId])).rows[0];
+    ok('its title is the case name then ": email followup"', noteRow.title === 'Acme contract: email followup', noteRow.title);
+    ok('it is the person\'s own note, filed under the case\'s client', noteRow.user_id === userA && noteRow.client_id === clientRow.id, [noteRow.user_id, noteRow.client_id]);
+    ok('and its text links back to the case', noteRow.body.includes(`](/email-follow-up?case=${cNote.id})`) && noteRow.body.includes('They owe the signed terms'), noteRow.body);
+    r = await call('GET', `/${cNote.id}`);
+    ok('the case now points at the note', r.body.case.noteId === noteRow.id, r.body.case.noteId);
+    r = await call('POST', `/${cNote.id}/note`, {});
+    ok('asking again returns the same note, never a second', r.status === 200 && r.body.created === false && r.body.noteId === noteRow.id && (await pool.query('SELECT COUNT(*) AS n FROM notes WHERE user_id=$1 AND title=$2', [userA, 'Acme contract: email followup'])).rows[0].n === '1', r.body);
+    await pool.query('DELETE FROM notes WHERE id=$1', [noteRow.id]);
+    r = await call('GET', `/${cNote.id}`);
+    ok('if the note is deleted the case simply has no note (the button goes back to Create note)', r.body.case.noteId === null, r.body.case.noteId);
+    r = await call('POST', `/${cNote.id}/note`, {});
+    ok('and a new one can be made', r.status === 201 && r.body.noteId !== noteRow.id, r.body);
+    await call('PATCH', `/${cNote.id}`, { status: 'closed' });
+    r = await call('POST', `/${cNote.id}/note`, {});
+    ok('a closed case can still have its note (the ledger is not touched)', r.status === 200, r);
+    await pool.query('DELETE FROM notes WHERE user_id=$1 AND title=$2', [userA, 'Acme contract: email followup']);
+
     // ---- the Summary and Ask model is a setting, not a literal ----
     r = await call('GET', '/model-config');
     ok('the model setting can be read (and is not mistaken for a case id)', r.status === 200 && r.body.settingsKey === 'email_follow_up_ask_model' && Array.isArray(r.body.choices), r);

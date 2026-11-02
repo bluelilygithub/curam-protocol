@@ -241,7 +241,7 @@ router.get('/:id', async (req, res) => {
     if (!c) return;
     const [sources, drafts, sweep] = await Promise.all([store.listSources(c.id), store.listDrafts(c.id), store.latestSweep(c.id)]);
     res.json({
-      case: { ...c, ledger: undefined, clientName: await store.clientName(req.user.id, c.clientId) },
+      case: { ...c, ledger: undefined, clientName: await store.clientName(req.user.id, c.clientId), noteId: await store.liveNoteId(req.user.id, c) },
       rows: c.ledger,
       sources: sources.map((s) => ({ ...s, label: sourceLabel(s) })),
       drafts,
@@ -249,6 +249,17 @@ router.get('/:id', async (req, res) => {
       coverage: coverageOf(c, sources, sweep),
       draftCap: DRAFT_CAP,
     });
+  } catch (err) { fail(res, err); }
+});
+
+// Make the case's note ("<case name>: email followup", with a link back to the case) and link it to the case. Asking again returns the same note.
+// Allowed on a closed case too: the note is the person's own and the ledger is not touched.
+router.post('/:id/note', async (req, res) => {
+  try {
+    const c = await loadCase(req, res);
+    if (!c) return;
+    const out = await store.createCaseNote(req.user.id, c);
+    res.status(out.created ? 201 : 200).json(out);
   } catch (err) { fail(res, err); }
 });
 

@@ -667,6 +667,9 @@
   "POST /api/email-follow-up/:id/extract": {
    "class": "authed"
   },
+  "POST /api/email-follow-up/:id/note": {
+   "class": "authed"
+  },
   "GET /api/email-follow-up/:id/summaries": {
    "class": "authed"
   },

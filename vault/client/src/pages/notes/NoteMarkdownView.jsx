@@ -41,6 +41,8 @@ export default function NoteMarkdownView({ body, onToggleTask, linkedTasks = {},
     // a to-do linked to a task ends with a small chip: its due date or state, opening Tasks
     a: ({ href, children, ...props }) => {
       const m = /^vault-task:(\d+)$/.exec(href || '');
+      // a link to another page of Vault (such as the case an Email Follow-Up note came from) opens inside the app, not as a fresh page load
+      if (!m && /^\/(?!\/)/.test(href || '')) return <Link to={href}>{children}</Link>;
       if (!m) return mdComponents.a({ href, children, ...props });
       const task = linkedTasks[m[1]];
       const label = dueLabel(task, today);

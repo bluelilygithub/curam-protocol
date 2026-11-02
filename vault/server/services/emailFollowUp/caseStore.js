@@ -24,7 +24,7 @@ function cleanAliases(list) {
 
 // ---------- cases ----------
 
-const CASE_COLS = `id, "userId", title, obligation, kind, profile, status, aliases, governing, ledger, "clientId", "projectId", "closedAt", "closeReason", "createdAt", "updatedAt"`;
+const CASE_COLS = `id, "userId", title, obligation, kind, profile, status, aliases, governing, ledger, "clientId", "projectId", "noteId", "closedAt", "closeReason", "createdAt", "updatedAt"`;
 
 /** A person's cases, newest first. `clientId` narrows to the cases linked to one CRM client (the client page lists them). */
 async function listCases(userId, { clientId = null } = {}) {
@@ -36,6 +36,47 @@ async function listCases(userId, { clientId = null } = {}) {
             (SELECT COUNT(*) FROM ef_sources s WHERE s."caseId"=c.id) AS "sourceCount"
        FROM ef_cases c WHERE c."userId"=$1 AND ($2::int IS NULL OR c."clientId"=$2) ORDER BY c."updatedAt" DESC LIMIT 200`, [userId, clientId]);
   return rows.map((r) => ({ ...r, rowCount: Number(r.rowCount), pendingDrafts: Number(r.pendingDrafts), sourceCount: Number(r.sourceCount) }));
+}
+
+/** The case's linked note id, or null when there is none or the note no longer exists (deleted, or in the recycle bin). The link itself is kept, so a restored note is found again. */
+async function liveNoteId(userId, c) {
+  if (!c || !c.noteId) return null;
+  const { rows } = await pool.query('SELECT id FROM notes WHERE id=$1 AND user_id=$2', [c.noteId, userId]);
+  return rows[0] ? rows[0].id : null;
+}
+
+/**
+ * Make the note for a case: title "<case name>: email followup", filed under the case's client and project, whose text links back to the case.
+ * Returns { noteId, created }. A case that already has a live note gets that one back, never a second.
+ */
+async function createCaseNote(userId, c) {
+  const existing = await liveNoteId(userId, c);
+  if (existing) return { noteId: existing, created: false };
+  const lines = [
+    `Email Follow-Up case: ${String(c.title).trim()}`,
+    '',
+    `[Open this case in Email Follow-Up](/email-follow-up?case=${c.id})`,
+    '',
+    `What is owed: ${String(c.obligation || '').trim()}`,
+  ];
+  const people = (c.aliases || []).filter(Boolean);
+  if (people.length) lines.push('', `People: ${people.join(', ')}`);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      'INSERT INTO notes (user_id, project_id, client_id, title, body) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+      [userId, c.projectId || null, c.clientId || null, `${String(c.title).trim()}: email followup`.slice(0, 300), lines.join('\n')]);
+    await client.query('UPDATE ef_cases SET "noteId"=$1, "updatedAt"=NOW() WHERE id=$2 AND "userId"=$3', [rows[0].id, c.id, userId]);
+    await client.query('COMMIT');
+    try { require('../noteEmbeddings').queueEmbed(userId, rows[0].id); } catch { /* finding the note by meaning is a bonus */ }
+    return { noteId: rows[0].id, created: true };
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 async function clientName(userId, clientId) {
@@ -617,7 +658,7 @@ async function latestApproval(draftId) {
 }
 
 module.exports = {
-  EMAIL_RE, cleanAliases, listCases, clientName, getCase, insertCase, withLedger, patchCase,
+  EMAIL_RE, cleanAliases, listCases, liveNoteId, createCaseNote, clientName, getCase, insertCase, withLedger, patchCase,
   listSources, getSource, addSource, markExtracted,
   attachThread, suggestThreads, previewThread, fetchAttachments, setThreadAside, detachThread, deletePreview, deleteCase, runSentSweep, latestSweep, freshInbound, ownerEmail,
   addQuestion, listQuestions, addSummary, listSummaries,

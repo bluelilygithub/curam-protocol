@@ -1691,6 +1691,9 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ef_questions_case ON ef_questions ("caseId", id)`);
+    // The note made from a case ("Create note" on the case): its id. No foreign key on purpose, like notes.client_id: a deleted note simply stops being
+    // found (and comes back if the note is restored from the recycle bin); the route checks the note is the person's own.
+    await client.query(`ALTER TABLE ef_cases ADD COLUMN IF NOT EXISTS "noteId" INTEGER`);
     // Each summary made on the Summary and Ask tab, as it was shown, with the list of emails its [S#] numbers meant then. The newest is shown when
     // the case is opened; older ones stay to look back at (20 kept per case).
     await client.query(`

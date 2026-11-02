@@ -523,6 +523,13 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
       setClientList(list.filter((x) => x && x.id && x.name).slice(0, 300));
     } catch { /* the list stays empty: the person can still choose "No CRM client" */ }
   };
+  // Make the case's note (title "<case name>: email followup", with a link back to this case) and link it here.
+  const createNote = async () => {
+    setBusy('note');
+    const r = await call(() => api.post(`/api/email-follow-up/${caseId}/note`, {}), 'Note created. Press Linked note to open it.');
+    setBusy('');
+    if (r.ok) reload();
+  };
   const saveClient = async () => {
     const r = await call(() => api.patch(`/api/email-follow-up/${caseId}`, { clientId: pickClient ? Number(pickClient) : null }), 'Saved.');
     if (r.ok) { setEditClient(false); reload(); }
@@ -616,6 +623,9 @@ export default function CaseView({ caseId, tab, onTab, onBack }) {
         <span style={{ color: 'var(--color-muted)' }}>{c.clientId ? `Client: ${c.clientName || 'in your CRM'}` : 'Not linked to a CRM client'}</span>
         {c.clientId && <Btn small tip={EF_TIPS.openClient} onClick={() => navigate(`/clients/${c.clientId}`)}>Open in CRM</Btn>}
         <Btn small tip={EF_TIPS.changeClient} onClick={startEditClient}>{c.clientId ? 'Change client' : 'Link to a client'}</Btn>
+        {c.noteId
+          ? <Btn small tip={EF_TIPS.linkedNote} onClick={() => navigate(`/notes?note=${c.noteId}`)}>Linked note</Btn>
+          : <Btn small disabled={busy === 'note'} tip={EF_TIPS.createNote} onClick={createNote}>{busy === 'note' ? 'Creating…' : 'Create note'}</Btn>}
         {editClient && (
           <>
             <Tooltip text={EF_TIPS.clientPick}>
