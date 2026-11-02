@@ -2667,7 +2667,7 @@ function SettingsPage() {
             <div>
               <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Guitar Tour</p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                12-step tour — adding songs, song status, Today, the chord chart, key and capo, loops and the tempo trainer, the coach, chord change drills, ear training, set lists and play mode
+                13-step tour — adding songs, song status, Today, what can I play, the chord chart, key and capo, loops and the tempo trainer, the coach, chord change drills, ear training, set lists and play mode
               </p>
             </div>
             <button

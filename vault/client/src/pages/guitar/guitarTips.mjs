@@ -6,6 +6,7 @@ export const GT = {
   tabToday: 'Today: what to play in the time you have, picked from your own songs, loops and chord changes.',
   tabCoach: 'Coach: a weekly review of your practice, and a practice session built to the time you have.',
   tabEar: 'Ear: train your ear on the chords and keys of your own songs.',
+  tabLearn: 'Learn: tick the chords you can play, see which songs you can already play, and what to learn next.',
   tabDrills: 'Drills: practise the chord changes your own songs use most, one minute at a time.',
   tabLibrary: 'Library: add songs and say how well you know each one.',
   tabPlayer: 'Player: the chord chart for the open song, with playback, loops, the key and the capo.',
@@ -92,6 +93,11 @@ export const GT = {
   coachNote: 'Say what you want to work on in your own words, such as rhythm or my chord changes. Optional.',
   coachBuild: 'Build a session of exactly this length from your own songs, loops and chord changes.',
   explainSong: 'Get a short theory breakdown of this song and things to practise. It reads the chart, not the recording.',
+
+  // Learn
+  learnChip: 'Press when you can play this chord cleanly, with every string ringing.',
+  learnHave: 'Add this chord to the ones you can play.',
+  learnPick: 'Choose a song you want to play and see which chords to learn first, and the easier songs you unlock on the way.',
 
   // Ear training
   earChords: 'Chords: hear a chord and name it. The choices come from your own songs.',

@@ -7,6 +7,7 @@ const express = require('express');
 const { pool } = require('../db');
 const { getLogger } = require('../middleware/requestContext');
 const ear = require('../services/guitarEar');
+const playable = require('../services/guitarPlayable');
 
 const router = express.Router();
 const MAX_SETLISTS = 50;
@@ -92,6 +93,60 @@ router.delete('/setlists/:id', async (req, res) => {
     await pool.query('DELETE FROM guitar_setlists WHERE id=$1 AND "userId"=$2', [Number(req.params.id) || 0, req.user.id]);
     res.status(204).end();
   } catch (err) { fail(res, err, 'delete setlist'); }
+});
+
+// ── What can I play? ─────────────────────────────────────────────────────────
+// The person's own songs, split by whether they only use chords the person has ticked as playable.
+async function playableState(userId) {
+  const { rows: events } = await pool.query(
+    `SELECT s.id, s.title, s.artist, ce."chordRoot", ce."chordQuality"
+     FROM guitar_songs s JOIN guitar_chord_events ce ON ce."songId"=s.id
+     WHERE s."userId"=$1 AND s.status='done' ORDER BY s.id, ce."timestampSec", ce.id`, [userId]);
+  const bySong = new Map();
+  for (const e of events) {
+    if (!bySong.has(e.id)) bySong.set(e.id, { id: e.id, title: e.title, artist: e.artist, events: [] });
+    bySong.get(e.id).events.push(e);
+  }
+  const songs = [...bySong.values()].map(s => ({ id: s.id, title: s.title, artist: s.artist, chords: playable.songChordNames(s.events) }));
+  const { rows: knownRows } = await pool.query('SELECT chord FROM guitar_known_chords WHERE "userId"=$1 ORDER BY chord', [userId]);
+  const known = playable.cleanKnown(knownRows.map(r => r.chord));
+  const classified = playable.classifySongs(songs, known);
+  return { known, classified };
+}
+
+router.get('/my-chords', async (req, res) => {
+  try {
+    const { known, classified } = await playableState(req.user.id);
+    res.json({
+      known: [...known],
+      libraryChords: [...new Set(classified.flatMap(s => s.chords))],
+      songs: classified.filter(s => s.chords.length).map(s => ({ id: s.id, title: s.title, artist: s.artist, chords: s.chords, missing: s.missing, playable: s.playable })),
+      suggestions: playable.suggestChords(classified),
+    });
+  } catch (err) { fail(res, err, 'my chords'); }
+});
+
+router.put('/my-chords', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const raw = Array.isArray(req.body?.chords) ? req.body.chords : null;
+    if (!raw) return res.status(400).json({ error: 'Send the list of chords you can play' });
+    const clean = [...playable.cleanKnown(raw)].slice(0, 80);
+    await client.query('BEGIN');
+    await client.query('DELETE FROM guitar_known_chords WHERE "userId"=$1', [req.user.id]);
+    for (const chord of clean) await client.query('INSERT INTO guitar_known_chords ("userId", chord) VALUES ($1,$2)', [req.user.id, chord]);
+    await client.query('COMMIT');
+    res.json({ known: clean });
+  } catch (err) { await client.query('ROLLBACK').catch(() => {}); fail(res, err, 'save my chords'); } finally { client.release(); }
+});
+
+router.get('/roadmap/:songId', async (req, res) => {
+  try {
+    const { known, classified } = await playableState(req.user.id);
+    const target = classified.find(s => s.id === Number(req.params.songId));
+    if (!target) return res.status(404).json({ error: 'Song not found, or it has no chords yet' });
+    res.json(playable.roadmap(target, classified, known));
+  } catch (err) { fail(res, err, 'roadmap'); }
 });
 
 // ── Ear training ─────────────────────────────────────────────────────────────

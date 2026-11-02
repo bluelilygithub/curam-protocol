@@ -4,6 +4,7 @@
 
 export const GUITAR_TOOLS = [
   { id: 'today', label: 'Today', group: 'Practise', tab: 'Today' },
+  { id: 'learn', label: 'Learn', group: 'Practise', tab: 'Learn' },
   { id: 'coach', label: 'Coach', group: 'Practise', tab: 'Coach' },
   { id: 'drills', label: 'Drills', group: 'Practise', tab: 'Drills' },
   { id: 'ear', label: 'Ear', group: 'Practise', tab: 'Ear' },
@@ -20,6 +21,7 @@ export const GROUP_TIPS = {
 
 export const TOOL_TIPS = {
   today: 'Today: what to play in the time you have, picked from your own songs, loops and chord changes.',
+  learn: 'Learn: tick the chords you can play, see which songs you can already play, and what to learn next.',
   coach: 'Coach: a weekly review of your practice, and a practice session built to the time you have.',
   drills: 'Drills: practise the chord changes your own songs use most, one minute at a time.',
   ear: 'Ear: train your ear on the chords and keys of your own songs.',
@@ -29,6 +31,7 @@ export const TOOL_TIPS = {
 
 export const TOOL_BLURBS = {
   today: 'What to play next.',
+  learn: 'Chords I can play and songs I can play now.',
   coach: 'Weekly review and session builder.',
   drills: 'One-minute chord change drills.',
   ear: 'Name chords and numerals by ear.',
@@ -44,6 +47,7 @@ export const HOW_IT_WORKS = [
   ['Player', 'Shows the chart, plays the song and follows along. Transpose it, set the capo, click a chord to hear it and see its shapes, and double-click one to correct it. Play the song and the chart keeps the current chord in view.'],
   ['Loops and tempo', 'Save a section as a loop, then slow it down without changing the pitch. The trainer can step the speed up after clean passes, count you in, click along and chart the speed you reach.'],
   ['Key and capo', 'Shows the key, a Roman numeral under each chord (borrowed chords and chords that lead somewhere else are marked) and the capo position with the fewest barre chords.'],
+  ['Learn', 'Tick the chords you can play cleanly. Vault then shows the songs in your library that use only those chords, which chord to learn next and how many songs it opens up, and, for a song you want to play, the chords to learn first and the easier songs you unlock on the way.'],
   ['Coach', 'Writes a short review of your last seven days from your own practice, loops and drills, builds a practice session of exactly the time you have from your own songs, and can explain the chords of a song and suggest what to practise. The numbers and the plan are worked out in Vault; AI only writes the wording.'],
   ['Ear training', 'Plays you a chord from your own songs and you name it, or plays the key chord and then another and you name its Roman numeral. Rounds are ten questions; the chords you miss come up more, and your scores are kept. The sound comes from a synth built into Vault, not from the recording.'],
   ['Play mode and set lists', 'Play mode opens a big chart for performing. It moves along at the song tempo, or one chord at a time from the keyboard, and foot pedals and Bluetooth page turners work because they send arrow and Page keys. Set lists (in the Library) put songs in playing order and open them in play mode.'],
@@ -53,6 +57,7 @@ export const HOW_IT_WORKS = [
 // Everything the guide can point at: the four tabs plus the controls inside them. `tool` is the tab the Open button switches to.
 export const GUIDE_TOOLS = [
   { id: 'today', label: 'Today', tool: 'today' },
+  { id: 'learn', label: 'Learn', tool: 'learn' },
   { id: 'coach', label: 'Coach', tool: 'coach' },
   { id: 'drills', label: 'Drills', tool: 'drills' },
   { id: 'ear', label: 'Ear', tool: 'ear' },
@@ -69,6 +74,9 @@ export const GUIDE_TOOLS = [
   { id: 'capo-advice', label: 'Easiest capo', tool: 'player' },
   { id: 'loops', label: 'Practice loops', tool: 'player' },
   { id: 'tempo', label: 'Tempo trainer', tool: 'player' },
+  { id: 'my-chords', label: 'Chords I can play', tool: 'learn' },
+  { id: 'learn-next', label: 'Learn next', tool: 'learn' },
+  { id: 'song-roadmap', label: 'I want to play a song', tool: 'learn' },
   { id: 'weekly-review', label: 'Weekly review', tool: 'coach' },
   { id: 'session-builder', label: 'Build a session', tool: 'coach' },
   { id: 'explain-song', label: 'Explain this song', tool: 'player' },

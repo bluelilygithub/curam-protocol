@@ -3999,6 +3999,15 @@
   },
   "GET /api/search/global": {
    "class": "authed"
+  },
+  "GET /api/guitar-play/my-chords": {
+   "class": "authed"
+  },
+  "PUT /api/guitar-play/my-chords": {
+   "class": "authed"
+  },
+  "GET /api/guitar-play/roadmap/:songId": {
+   "class": "authed"
   }
  }
 }

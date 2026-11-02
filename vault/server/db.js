@@ -4647,6 +4647,16 @@ async function initSchema() {
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_guitar_ear_sessions_user ON guitar_ear_sessions ("userId", "playedAt" DESC)`);
 
+  // The chords a player can already play cleanly ("My chords"): drives which songs are playable now and which chord to learn next
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS guitar_known_chords (
+      "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      chord       TEXT NOT NULL,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY ("userId", chord)
+    )
+  `);
+
   // Seed basic open-chord shapes if table is empty
   const shapeCount = await pool.query('SELECT COUNT(*) FROM guitar_chord_shapes');
   if (parseInt(shapeCount.rows[0].count) === 0) {

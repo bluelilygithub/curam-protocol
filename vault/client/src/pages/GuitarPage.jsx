@@ -15,6 +15,7 @@ import { snapRate, songTimeAfter } from './guitar/trainerRules.mjs';
 import TheoryPanel, { KIND_STYLE } from './guitar/TheoryPanel';
 import TransitionDrills from './guitar/TransitionDrills';
 import CoachView from './guitar/CoachView';
+import LearnView from './guitar/LearnView';
 import EarTraining from './guitar/EarTraining';
 import GigMode from './guitar/GigMode';
 import SetLists from './guitar/SetLists';
@@ -675,7 +676,7 @@ function TodayView({ songs, onOpenSong, onPlayed, onStartDrill, refreshKey }) {
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
-const TABS = ['Today', 'Coach', 'Drills', 'Ear', 'Library', 'Player'];
+const TABS = ['Today', 'Learn', 'Coach', 'Drills', 'Ear', 'Library', 'Player'];
 
 export default function GuitarPage() {
   const getIcon = useIcon();
@@ -1132,6 +1133,13 @@ export default function GuitarPage() {
           <div className="p-6 max-w-3xl" data-tour="guitar-today">
             <TodayView songs={songs} refreshKey={practiceTick} onOpenSong={openSong} onPlayed={() => loadSongs()}
               onStartDrill={(pair) => { setDrillPair(pair); setTab('Drills'); }} />
+          </div>
+        )}
+
+        {/* ── Learn tab ────────────────────────────────────────────────── */}
+        {tab === 'Learn' && (
+          <div className="p-6 max-w-3xl" data-tour="guitar-learn">
+            <LearnView songs={songs} onOpenSong={openSong} />
           </div>
         )}
 

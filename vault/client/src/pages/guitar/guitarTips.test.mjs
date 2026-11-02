@@ -22,7 +22,7 @@ for (const [key, tip] of Object.entries(GT)) {
   assert.ok(/[.!?]$/.test(tip), `${key}: ends with a full stop`);
   assert.ok(!/  |\s$/.test(tip), `${key}: tidy spacing`);
 }
-for (const tab of ['Today', 'Coach', 'Drills', 'Ear', 'Library', 'Player']) assert.ok(tabTip(tab), `tab ${tab} has a tip`);
+for (const tab of ['Today', 'Learn', 'Coach', 'Drills', 'Ear', 'Library', 'Player']) assert.ok(tabTip(tab), `tab ${tab} has a tip`);
 for (const [k, tip] of Object.entries(FOCUS_TIPS)) assert.ok(/^[A-Z].*\.$/.test(tip), `focus tip ${k} is a sentence`);
 for (const id of ['ug', 'upload', 'manual']) assert.ok(ADD_TIPS[id], `add mode ${id} has a tip`);
 for (const [h, t] of HOW_IT_WORKS) assert.ok(h && t.length > 30, `(i) box paragraph "${h}" has text`);
@@ -39,7 +39,7 @@ for (const [h, t] of HOW_IT_WORKS) assert.ok(h && t.length > 30, `(i) box paragr
   }
 }
 
-const files = ['pages/GuitarPage.jsx', 'pages/guitar/CoachView.jsx', 'pages/guitar/EarTraining.jsx', 'pages/guitar/SetLists.jsx', 'pages/guitar/GigMode.jsx', 'pages/guitar/TheoryPanel.jsx', 'pages/guitar/TempoTrainer.jsx', 'pages/guitar/TransitionDrills.jsx'];
+const files = ['pages/GuitarPage.jsx', 'pages/guitar/CoachView.jsx', 'pages/guitar/LearnView.jsx', 'pages/guitar/EarTraining.jsx', 'pages/guitar/SetLists.jsx', 'pages/guitar/GigMode.jsx', 'pages/guitar/TheoryPanel.jsx', 'pages/guitar/TempoTrainer.jsx', 'pages/guitar/TransitionDrills.jsx'];
 const sources = Object.fromEntries(files.map((f) => [f, read(f)]));
 
 // Take the two dialogs out of the page text
