@@ -5,6 +5,7 @@ export const GT = {
   // Tabs
   tabToday: 'Today: what to play in the time you have, picked from your own songs, loops and chord changes.',
   tabCoach: 'Coach: a weekly review of your practice, and a practice session built to the time you have.',
+  tabStrum: 'Strum: strumming arrows that move with the beat, and a ladder that builds up to a full pattern.',
   tabEar: 'Ear: train your ear on the chords and keys of your own songs.',
   tabLearn: 'Learn: tick the chords you can play, see which songs you can already play, and what to learn next.',
   tabDrills: 'Drills: practise the chord changes your own songs use most, one minute at a time.',
@@ -104,6 +105,22 @@ export const GT = {
   simplifyExact: 'Keep the exact sound and only move the capo to the fret that leaves the fewest barre chords.',
   simplifyEasier: 'Move the capo and swap hard chords for easy ones, such as F for Fmaj7. The sound changes a little.',
   simplifyFewer: 'Dim the chords that change too fast to land, so you can hold the one before.',
+
+  // Strumming
+  strumPlay: 'Start with one bar of clicks, then the arrows move with the beat.',
+  strumStop: 'Stop the beat.',
+  strumSlower: 'Play 5 beats a minute slower.',
+  strumFaster: 'Play 5 beats a minute faster.',
+  strumTempo: 'The speed in beats a minute. You can change it while it plays and the arrows keep their place.',
+  strumSong: 'Set the tempo to match one of your songs.',
+  strumClick: 'A click on each beat of the bar, with a higher one on beat 1.',
+  strumSound: 'A soft tick for each strum that hits: lower for a down strum, higher for an up strum.',
+  strumLadder: 'Start with a down strum on every beat and add one up strum at a time until you reach the full pattern.',
+  strumEasier: 'Go back one step in the ladder.',
+  strumHarder: 'Go up one step in the ladder.',
+  strumFull: 'Go straight to the full pattern.',
+  strumAuto: 'Move up a step by itself after the number of bars you choose.',
+  strumBars: 'How many bars to stay on each step before moving up.',
 
   // Ear training
   earChords: 'Chords: hear a chord and name it. The choices come from your own songs.',

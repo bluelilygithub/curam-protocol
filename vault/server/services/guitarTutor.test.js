@@ -32,6 +32,9 @@ checkGuide({
     ['simplify', 'does', /F for Fmaj7/, 'the example substitution'],
     ['simplify', 'notes', /sound a little different/, 'a swapped chord sounds different'],
     ['simplify', 'notes', /only how the chart is shown/, 'the saved chords are not changed'],
+    ['strum', 'does', /air swings/, 'the arrows show hits and air swings'],
+    ['strum', 'notes', /does not listen/, 'the strum tab does not listen'],
+    ['pattern-ladder', 'does', /down strum on every beat/, 'the ladder starts on the beat'],
     ['learn', 'does', /only those chords/, 'songs use only the ticked chords'],
     ['my-chords', 'notes', /cannot hear you/, 'the tick is the persons own honest tick'],
     ['learn-next', 'does', /unlocks/, 'a suggestion says how many songs it unlocks'],
@@ -42,7 +45,7 @@ checkGuide({
     ['set-lists', 'notes', /does not delete its songs/, 'deleting a set list keeps the songs'],
     ['played', 'notes', /does not count as practice/, 'capo and transpose are not practice'],
   ],
-  gaps: [/Hearing whether you played a chord cleanly/, /Listening to you play/, /Tabs or sheet music/, /Spotify/, /Ear training from the recording/, /live band/, /Sharing songs/],
+  gaps: [/Hearing whether you played a chord cleanly or in time/, /Listening to you play/, /Tabs or sheet music/, /Spotify/, /Ear training from the recording/, /live band/, /Sharing songs/],
   rules: [/14 days/, /guesses/, /AI only writes the wording/, /Open buttons in this chat only switch/],
   system: [/cannot see any of their songs/],
 }).catch((e) => { console.error(e); process.exit(1); });

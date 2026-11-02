@@ -19,6 +19,7 @@ import TransitionDrills from './guitar/TransitionDrills';
 import CoachView from './guitar/CoachView';
 import LearnView from './guitar/LearnView';
 import EarTraining from './guitar/EarTraining';
+import StrumTrainer from './guitar/StrumTrainer';
 import GigMode from './guitar/GigMode';
 import SetLists from './guitar/SetLists';
 import ExplainDialog from './guitar/ExplainDialog';
@@ -678,7 +679,7 @@ function TodayView({ songs, onOpenSong, onPlayed, onStartDrill, refreshKey }) {
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
-const TABS = ['Today', 'Learn', 'Coach', 'Drills', 'Ear', 'Library', 'Player'];
+const TABS = ['Today', 'Learn', 'Coach', 'Drills', 'Ear', 'Strum', 'Library', 'Player'];
 
 export default function GuitarPage() {
   const getIcon = useIcon();
@@ -1189,6 +1190,13 @@ export default function GuitarPage() {
         {tab === 'Ear' && (
           <div className="p-6 max-w-3xl" data-tour="guitar-ear">
             <EarTraining />
+          </div>
+        )}
+
+        {/* ── Strum tab ────────────────────────────────────────────────── */}
+        {tab === 'Strum' && (
+          <div className="p-6 max-w-3xl">
+            <StrumTrainer songs={songs} />
           </div>
         )}
 

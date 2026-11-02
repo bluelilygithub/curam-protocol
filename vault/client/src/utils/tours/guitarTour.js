@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_guitar_completed';
 
-const TOTAL_STEPS = 14;
+const TOTAL_STEPS = 15;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -182,12 +182,22 @@ export function startGuitarTour({ goTab } = {}) {
   });
 
   tour.addStep({
+    id: 'guitar-strum',
+    title: 'Strumming',
+    text: 'The arrows show your strumming pattern in time with a click. Your arm swings down on every beat and up in between; solid arrows hit the strings, faint ones are air swings. The ladder starts with a down on every beat and adds one up strum at a time.',
+    attachTo: { element: '[data-tour="guitar-strum"]', on: 'bottom' },
+    beforeShowPromise: onTab('guitar-strum', 'Strum', '[data-tour="guitar-strum"]'),
+    when: { show() { injectStepCounter(14); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  tour.addStep({
     id: 'guitar-setlists',
     title: 'Set lists and play mode',
     text: 'Put songs in playing order in a set list, then press Play for a big chart that follows the song at its tempo. The Play mode button in the Player does the same for one song. Arrow keys and Page keys move through it, so a foot pedal or page turner works. Stuck on anything? Press the round button at the bottom right and ask the guide.',
     attachTo: { element: '[data-tour="guitar-setlists"]', on: 'top' },
     beforeShowPromise: onTab('guitar-setlists', 'Library', '[data-tour="guitar-setlists"]'),
-    when: { show() { injectStepCounter(14); } },
+    when: { show() { injectStepCounter(15); } },
     buttons: [
       btnBack(),
       { text: 'Finish Tour ✓', action() { try { localStorage.setItem(TOUR_KEY, '1'); } catch (_) { /* ignore */ } tour.complete(); } },
