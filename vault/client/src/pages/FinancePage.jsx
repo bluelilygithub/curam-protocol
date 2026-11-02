@@ -869,7 +869,7 @@ function calcTotals(items) {
   return { subtotal: subtotal.toFixed(2), gst: gst.toFixed(2), total: (subtotal + gst).toFixed(2) };
 }
 
-function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFilter }) {
+function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFilter, onClientChange }) {
   const isQuoteTab = docType === 'quote';
   const [invoices, setInvoices] = useState([]);
   const [clients, setClients] = useState([]);
@@ -1113,12 +1113,33 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
         ))}
       </div>
 
-      {clientId && (
-        <div className="flex items-center gap-2 mb-3 text-xs px-2.5 py-1.5 rounded-md w-fit" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
-          Filtered to {clients.find(c => String(c.id) === String(clientId))?.name || 'client'}
-          <Tooltip text="Remove the client filter and show every invoice again."><button onClick={onClearClientFilter} className="hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Clear</button></Tooltip>
-        </div>
-      )}
+      {(() => {
+        // Only clients that have at least one document of this kind, A to Z
+        const seen = new Map();
+        for (const inv of invoices) {
+          if ((inv.docType === 'quote') !== isQuoteTab || !inv.clientRef) continue;
+          if (!seen.has(String(inv.clientRef))) seen.set(String(inv.clientRef), clients.find(c => String(c.id) === String(inv.clientRef))?.name || inv.clientName || `Client ${inv.clientRef}`);
+        }
+        if (clientId && !seen.has(String(clientId))) seen.set(String(clientId), clients.find(c => String(c.id) === String(clientId))?.name || 'client');
+        const options = [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+        return (
+          <div className="flex items-center gap-2 mb-3 text-xs">
+            <Tooltip text={`Show only the ${isQuoteTab ? 'quotes' : 'invoices'} for one client.`}>
+              <select
+                value={clientId || ''}
+                onChange={e => onClientChange(e.target.value || null)}
+                aria-label="Filter by client"
+                className="text-xs px-2.5 py-1 rounded-md"
+                style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+              >
+                <option value="">All clients</option>
+                {options.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+              </select>
+            </Tooltip>
+            {clientId && <Tooltip text="Remove the client filter and show every client again."><button onClick={onClearClientFilter} className="hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Clear</button></Tooltip>}
+          </div>
+        );
+      })()}
 
       {(() => {
         const filtered = invoices.filter(inv => {
@@ -7037,6 +7058,12 @@ function FinancePageInner() {
     setSearchParams(next, { replace: true });
   };
 
+  const setClientFilter = (id) => {
+    const next = new URLSearchParams(searchParams);
+    if (id) next.set('clientId', id); else next.delete('clientId');
+    setSearchParams(next, { replace: true });
+  };
+
   const goToVehicleHomeOfficeSettings = () => {
     setSettingsFocusSection('vehicleHomeOffice');
     setTab('Settings');
@@ -7148,8 +7175,8 @@ function FinancePageInner() {
       {/* Tab content */}
       <div className="flex-1 overflow-auto">
         {tab === 'Dashboard' && <DashboardTab from={from} to={to} />}
-        {tab === 'Invoices'  && <InvoicesTab  from={from} to={to} docType="invoice" clientId={clientFilter} onClearClientFilter={clearClientFilter} />}
-        {tab === 'Quotes'    && <InvoicesTab  from={from} to={to} docType="quote" clientId={clientFilter} onClearClientFilter={clearClientFilter} />}
+        {tab === 'Invoices'  && <InvoicesTab  from={from} to={to} docType="invoice" clientId={clientFilter} onClearClientFilter={clearClientFilter} onClientChange={setClientFilter} />}
+        {tab === 'Quotes'    && <InvoicesTab  from={from} to={to} docType="quote" clientId={clientFilter} onClearClientFilter={clearClientFilter} onClientChange={setClientFilter} />}
         {tab === 'Suppliers' && <SuppliersTab />}
         {tab === 'Expenses'  && <ExpensesTab  from={from} to={to} />}
         {tab === 'Documents' && <DocumentsTab />}
