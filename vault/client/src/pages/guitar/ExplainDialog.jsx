@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/apiClient';
 import Dialog from '../../components/Dialog';
+import { GlossText } from './GlossaryTerm';
 
 /**
  * "Explain this song": a short theory breakdown and things to practise. The server works from the song's chords; `analysis` is the
@@ -31,18 +32,18 @@ export default function ExplainDialog({ song, analysis, onClose }) {
         {state.error && <p className="text-sm" style={{ color: '#dc2626' }}>{state.error}</p>}
         {state.data && (
           <>
-            <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{state.data.summary}</p>
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}><GlossText text={state.data.summary} /></p>
             <div>
               <p className={h} style={{ color: 'var(--color-muted)' }}>Why it works</p>
               <ul className="list-disc pl-5 mt-1 flex flex-col gap-1">
-                {state.data.why.map((t, i) => <li key={i} className="text-sm" style={{ color: 'var(--color-text)' }}>{t}</li>)}
+                {state.data.why.map((t, i) => <li key={i} className="text-sm" style={{ color: 'var(--color-text)' }}><GlossText text={t} /></li>)}
               </ul>
             </div>
             {state.data.techniques.length > 0 && (
               <div>
                 <p className={h} style={{ color: 'var(--color-muted)' }}>Things to practise</p>
                 <ul className="list-disc pl-5 mt-1 flex flex-col gap-1">
-                  {state.data.techniques.map((t, i) => <li key={i} className="text-sm" style={{ color: 'var(--color-text)' }}>{t}</li>)}
+                  {state.data.techniques.map((t, i) => <li key={i} className="text-sm" style={{ color: 'var(--color-text)' }}><GlossText text={t} /></li>)}
                 </ul>
               </div>
             )}

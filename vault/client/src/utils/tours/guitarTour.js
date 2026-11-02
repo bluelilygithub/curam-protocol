@@ -104,7 +104,7 @@ export function startGuitarTour({ goTab } = {}) {
   tour.addStep({
     id: 'guitar-learn',
     title: 'What can I play?',
-    text: 'Tick the chords you can play cleanly. Vault then shows which of your songs use only those chords, which chord to learn next and how many songs it opens up, and, for a song you want to play, the chords to learn first.',
+    text: 'Tick the chords you can play cleanly. Vault then shows which of your songs use only those chords, which chord to learn next and how many songs it opens up, and, for a song you want to play, the chords to learn first. Words with a dotted underline, like capo or barre, explain themselves when you press them, and the full list is at the bottom of this tab.',
     attachTo: { element: '[data-tour="guitar-learn"]', on: 'bottom' },
     beforeShowPromise: onTab('guitar-learn', 'Learn', '[data-tour="guitar-learn"]'),
     when: { show() { injectStepCounter(6); } },

@@ -1,6 +1,7 @@
 import React from 'react';
 import Tooltip from '../../components/Tooltip';
 import { GT } from './guitarTips.mjs';
+import { GlossaryTerm, GlossText } from './GlossaryTerm';
 import { NAMES, keyLabel } from './theory.mjs';
 
 export const KIND_STYLE = {
@@ -41,7 +42,7 @@ export default function TheoryPanel({
 
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs" style={{ color: 'var(--color-text)' }}>Key: <strong>{keyLabel(key)}</strong></span>
+          <span className="text-xs" style={{ color: 'var(--color-text)' }}><GlossaryTerm id="key">Key</GlossaryTerm>: <strong>{keyLabel(key)}</strong></span>
           <Tooltip text={GT.keyChoice}>
             <select aria-label="Key for the numerals" value={keyChoice} onChange={e => onKeyChoice(e.target.value)}
               className="text-xs px-1 py-0.5 rounded border" style={select}>
@@ -79,7 +80,7 @@ export default function TheoryPanel({
             <p key={f.label} className="text-xs" style={{ color: 'var(--color-text)' }}>
               <span className="font-mono font-bold" style={{ color: KIND_STYLE[f.kind].color }}>{f.label}</span>
               {' '}<span className="font-mono">{f.numeral}</span>
-              <span style={{ color: 'var(--color-muted)' }}> · {f.note}{f.count > 1 ? ` · ${f.count} times` : ''}</span>
+              <span style={{ color: 'var(--color-muted)' }}> · <GlossText text={f.note} />{f.count > 1 ? ` · ${f.count} times` : ''}</span>
             </p>
           ))}
         </div>
@@ -87,7 +88,7 @@ export default function TheoryPanel({
 
       {best && (
         <div className="flex flex-col gap-2 pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
-          <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Easiest capo</p>
+          <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}><GlossText text="Easiest capo" /></p>
           <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{advice}</p>
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
             {best.barres === 0 ? 'No barre chords.' : `${best.barres} barre ${best.barres === 1 ? 'chord' : 'chords'}.`}
@@ -119,7 +120,7 @@ export default function TheoryPanel({
             ))}
           </div>
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-            Chords stay in the sounding key on the chart. The shape is what you finger with the capo on.
+            <GlossText text="Chords stay in the sounding key on the chart. The shape is what you finger with the capo on." />
           </p>
         </div>
       )}

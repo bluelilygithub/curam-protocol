@@ -3,6 +3,7 @@ import api from '../../utils/apiClient';
 import useToastStore from '../../store/toastStore';
 import Tooltip from '../../components/Tooltip';
 import { GT, FOCUS_TIPS } from './guitarTips.mjs';
+import { GlossText } from './GlossaryTerm';
 
 const MINUTES = [15, 20, 30, 45, 60];
 const FOCUS = [
@@ -85,7 +86,7 @@ export default function CoachView({ songs, onOpenSong, onStartDrill, onLog }) {
         </Tooltip>
         {review && (
           <>
-            <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{review.review}</p>
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}><GlossText text={review.review} /></p>
             <div className="flex flex-wrap gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
               <span>{f.sessions} {f.sessions === 1 ? 'session' : 'sessions'}</span>
               <span>· {f.minutes} min logged</span>
@@ -138,7 +139,7 @@ export default function CoachView({ songs, onOpenSong, onStartDrill, onLog }) {
 
         {plan && (
           <div className="flex flex-col gap-2 pt-2">
-            {plan.intro && <p className="text-sm" style={{ color: 'var(--color-text)' }}>{plan.intro}</p>}
+            {plan.intro && <p className="text-sm" style={{ color: 'var(--color-text)' }}><GlossText text={plan.intro} /></p>}
             {plan.blocks.length === 0 ? null : plan.blocks.map((b, i) => {
               const song = b.songId ? songOf(b.songId) : null;
               return (
@@ -147,7 +148,7 @@ export default function CoachView({ songs, onOpenSong, onStartDrill, onLog }) {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>{KIND[b.kind]}</p>
                     <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{b.title}{b.loopName ? ` · ${b.loopName}` : ''}</p>
-                    {b.tip && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{b.tip}</p>}
+                    {b.tip && <p className="text-xs" style={{ color: 'var(--color-muted)' }}><GlossText text={b.tip} /></p>}
                   </div>
                   {b.kind === 'transitions' ? (
                     <Tooltip text={GT.startDrill}>

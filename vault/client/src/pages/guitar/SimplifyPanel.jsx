@@ -2,6 +2,7 @@ import React from 'react';
 import Tooltip from '../../components/Tooltip';
 import { GT } from './guitarTips.mjs';
 import { summarise } from './simplify.mjs';
+import { GlossText } from './GlossaryTerm';
 
 const MODES = [
   ['off', 'As written', 'simplifyOff'],
@@ -36,7 +37,7 @@ export default function SimplifyPanel({ mode, onMode, plans, canThin, fewer, onF
 
       {!plan && (
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-          Show the chart with the shapes to play instead of the written chords. Same sound only moves the capo; Easier chords swaps hard chords for easy ones.
+          <GlossText text="Show the chart with the shapes to play instead of the written chords. Same sound only moves the capo; Easier chords swaps hard chords for easy ones." />
         </p>
       )}
 
@@ -44,25 +45,25 @@ export default function SimplifyPanel({ mode, onMode, plans, canThin, fewer, onF
         <div className="flex flex-col gap-2">
           <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{summarise(plan)}</p>
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-            The capo is set for you. The chart now shows what to finger; the chord it sounds as is underneath.
+            <GlossText text="The capo is set for you. The chart now shows what to finger; the chord it sounds as is underneath." />
           </p>
           {swapped.length > 0 && (
             <ul className="flex flex-col gap-1">
               {swapped.map(c => (
                 <li key={c.concert} className="text-xs" style={{ color: 'var(--color-text)' }}>
                   <span className="font-mono font-bold">{c.concert}</span> → <span className="font-mono font-bold">{c.play}</span>
-                  {c.note && <span style={{ color: 'var(--color-muted)' }}> · {c.note}</span>}
+                  {c.note && <span style={{ color: 'var(--color-muted)' }}> · <GlossText text={c.note} /></span>}
                 </li>
               ))}
             </ul>
           )}
           {barres.length > 0 && (
             <p className="text-xs" style={{ color: '#b45309' }}>
-              Still needs a barre: {barres.map(c => c.play).join(', ')}.
+              <GlossText text={`Still needs a barre: ${barres.map(c => c.play).join(', ')}.`} />
             </p>
           )}
           {mode === 'easier' && swapped.length === 0 && barres.length === 0 && (
-            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No chord needed swapping: the capo alone makes this easy.</p>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}><GlossText text="No chord needed swapping: the capo alone makes this easy." /></p>
           )}
         </div>
       )}

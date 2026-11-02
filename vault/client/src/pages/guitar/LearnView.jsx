@@ -3,6 +3,7 @@ import api from '../../utils/apiClient';
 import useToastStore from '../../store/toastStore';
 import Tooltip from '../../components/Tooltip';
 import { GT } from './guitarTips.mjs';
+import GlossaryList from './GlossaryList';
 
 // Chords a beginner meets first; shown even when no song uses them yet, so there is always something to tick
 const STARTER = ['G', 'C', 'D', 'Em', 'Am', 'A', 'E', 'Dm', 'F', 'Bm'];
@@ -153,6 +154,8 @@ export default function LearnView({ onOpenSong, songs }) {
         )}
         {notYet.length === 0 && data.songs.length > 0 && <p className="text-xs" style={{ color: 'var(--color-muted)' }}>You can play every song in your library.</p>}
       </section>
+
+      <GlossaryList />
     </div>
   );
 }

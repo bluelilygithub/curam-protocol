@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Tooltip from '../../components/Tooltip';
 import { GT } from './guitarTips.mjs';
+import { GlossText } from './GlossaryTerm';
 import { audioContextFrom } from './chordSound.js';
 import {
   PATTERNS, SLOTS, swings, ladder, slotMs, slotAt, describe,
@@ -129,8 +130,7 @@ export default function StrumTrainer({ songs = [] }) {
   return (
     <div className="flex flex-col gap-4" data-tour="guitar-strum">
       <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-        Your strumming arm never stops: it goes down on every beat and up in between. A pattern is just which swings hit the strings.
-        The solid arrows hit; the faint ones are air swings.
+        <GlossText text="Your strumming arm never stops: it goes down on every beat and up in between. A pattern is just which swings hit the strings. The solid arrows hit; the faint ones are air swings." />
       </p>
 
       <section className="rounded-xl border p-4 flex flex-col gap-3" style={card}>
@@ -227,7 +227,7 @@ export default function StrumTrainer({ songs = [] }) {
                   style={{ background: i === safeStep ? 'var(--color-bg)' : 'transparent', border: i === safeStep ? '1px solid var(--color-primary)' : '1px solid transparent', color: 'var(--color-text)' }}>
                   <span className="w-5 text-right" style={{ color: 'var(--color-muted)' }}>{i + 1}</span>
                   <span className="font-mono">{r.pattern.replace(/-/g, '·')}</span>
-                  <span style={{ color: i === safeStep ? 'var(--color-text)' : 'var(--color-muted)' }}>{i === safeStep ? r.text : describe(r.pattern)}</span>
+                  <span style={{ color: i === safeStep ? 'var(--color-text)' : 'var(--color-muted)' }}><GlossText text={i === safeStep ? r.text : describe(r.pattern)} /></span>
                 </li>
               ))}
             </ol>

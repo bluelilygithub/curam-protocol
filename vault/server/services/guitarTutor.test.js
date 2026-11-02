@@ -39,6 +39,8 @@ checkGuide({
     ['milestones', 'notes', /no streaks/, 'there are no streaks'],
     ['is-this-normal', 'does', /put it away for good/, 'a tip can be put away'],
     ['is-this-normal', 'notes', /not medical advice/, 'tips are not medical advice'],
+    ['glossary', 'does', /two-line explanation/, 'the glossary gives short explanations'],
+    ['glossary', 'notes', /explains words only/, 'the glossary only explains words'],
     ['learn', 'does', /only those chords/, 'songs use only the ticked chords'],
     ['my-chords', 'notes', /cannot hear you/, 'the tick is the persons own honest tick'],
     ['learn-next', 'does', /unlocks/, 'a suggestion says how many songs it unlocks'],

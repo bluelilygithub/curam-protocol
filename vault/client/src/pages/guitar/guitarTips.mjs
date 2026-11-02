@@ -107,6 +107,10 @@ export const GT = {
   tipRestore: 'Bring this tip back so it shows when it fits.',
   tipsAll: 'Show or hide every Is this normal? tip, including the ones you put away.',
 
+  // Glossary
+  glossTerm: 'Press for a short explanation of this word.',
+  glossSearch: 'Search the words guitarists use and what they mean.',
+
   // Make it easier
   simplifyOff: 'Show the chart as written, with no capo change and no swapped chords.',
   simplifyExact: 'Keep the exact sound and only move the capo to the fret that leaves the fewest barre chords.',

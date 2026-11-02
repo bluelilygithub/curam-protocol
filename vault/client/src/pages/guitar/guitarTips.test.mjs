@@ -39,7 +39,7 @@ for (const [h, t] of HOW_IT_WORKS) assert.ok(h && t.length > 30, `(i) box paragr
   }
 }
 
-const files = ['pages/GuitarPage.jsx', 'pages/guitar/CoachView.jsx', 'pages/guitar/LearnView.jsx', 'pages/guitar/SimplifyPanel.jsx', 'pages/guitar/StrumTrainer.jsx', 'pages/guitar/ProgressCards.jsx', 'pages/guitar/EarTraining.jsx', 'pages/guitar/SetLists.jsx', 'pages/guitar/GigMode.jsx', 'pages/guitar/TheoryPanel.jsx', 'pages/guitar/TempoTrainer.jsx', 'pages/guitar/TransitionDrills.jsx'];
+const files = ['pages/GuitarPage.jsx', 'pages/guitar/CoachView.jsx', 'pages/guitar/LearnView.jsx', 'pages/guitar/SimplifyPanel.jsx', 'pages/guitar/StrumTrainer.jsx', 'pages/guitar/ProgressCards.jsx', 'pages/guitar/GlossaryTerm.jsx', 'pages/guitar/GlossaryList.jsx', 'pages/guitar/EarTraining.jsx', 'pages/guitar/SetLists.jsx', 'pages/guitar/GigMode.jsx', 'pages/guitar/TheoryPanel.jsx', 'pages/guitar/TempoTrainer.jsx', 'pages/guitar/TransitionDrills.jsx'];
 const sources = Object.fromEntries(files.map((f) => [f, read(f)]));
 
 // Take the two dialogs out of the page text
