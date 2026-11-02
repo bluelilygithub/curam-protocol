@@ -52,6 +52,8 @@ checkGuide({
     ['learn-next', 'does', /unlocks/, 'a suggestion says how many songs it unlocks'],
     ['song-roadmap', 'notes', /does not simplify/, 'no simplification yet'],
     ['ear', 'notes', /not from the recording/, 'ear training uses a synth, not the recording'],
+    ['sing-range', 'does', /Hear button/, 'the range finder lets the person hear notes'],
+    ['sing-range', 'notes', /does not know the melody/, 'the range finder admits it does not know the melody'],
     ['barre-ladder', 'does', /ten-second|10-second/, 'the ladder has a timed hold'],
     ['barre-ladder', 'notes', /cannot hear you/, 'the person judges each hold'],
     ['major-minor-pairs', 'does', /3rd/, 'the pairs drill says the 3rd is the note that changes'],

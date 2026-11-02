@@ -124,7 +124,7 @@ export function startGuitarTour({ goTab } = {}) {
   tour.addStep({
     id: 'guitar-theory',
     title: 'Key, numerals and capo',
-    text: 'This box shows the song\'s key, puts a Roman numeral under each chord, marks chords that borrow from elsewhere, and suggests the capo that leaves the fewest barre chords. The key is a guess, so change it if the numerals look wrong.',
+    text: 'This box shows the song\'s key, puts a Roman numeral under each chord, marks chords that borrow from elsewhere, and suggests the capo that leaves the fewest barre chords. The key is a guess, so change it if the numerals look wrong. Under it, you can tell Vault the lowest and highest notes you can sing and it suggests the key that suits your voice.',
     attachTo: { element: '[data-tour="guitar-theory"]', on: 'left' },
     beforeShowPromise: onTab('guitar-theory', 'Player', '[data-tour="guitar-theory"]'),
     when: { show() { injectStepCounter(8); } },

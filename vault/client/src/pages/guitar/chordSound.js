@@ -57,3 +57,21 @@ export function playRootNote(ctx, root, delaySec = 0) {
   osc.stop(t0 + 1.6);
   return 1.5;
 }
+
+/** One note by MIDI number (60 = middle C), for hearing the notes of a singing range. Returns how many seconds it rings for. */
+export function playToneMidi(ctx, midi, delaySec = 0) {
+  const t0 = ctx.currentTime + delaySec;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'triangle';
+  osc.frequency.value = 440 * Math.pow(2, (midi - 69) / 12);
+  gain.gain.setValueAtTime(0, t0);
+  gain.gain.linearRampToValueAtTime(0.2, t0 + 0.02);
+  gain.gain.setValueAtTime(0.2, t0 + 1.0);
+  gain.gain.exponentialRampToValueAtTime(0.001, t0 + 1.6);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(t0);
+  osc.stop(t0 + 1.8);
+  return 1.7;
+}

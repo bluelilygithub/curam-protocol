@@ -15,6 +15,7 @@ import { useSearchParams } from 'react-router-dom';
 import TempoTrainer from './guitar/TempoTrainer';
 import { snapRate, songTimeAfter } from './guitar/trainerRules.mjs';
 import TheoryPanel, { KIND_STYLE } from './guitar/TheoryPanel';
+import SingAlong from './guitar/SingAlong';
 import SimplifyPanel from './guitar/SimplifyPanel';
 import { simplifySong, thinChanges } from './guitar/simplify.mjs';
 import TransitionDrills from './guitar/TransitionDrills';
@@ -1596,6 +1597,13 @@ export default function GuitarPage() {
                         showShapes={showShapes} onShowShapes={setShowShapes}
                         capoFret={capoFret} onUseCapo={changeCapo} />
                     </div>
+                    <SingAlong theory={theory} transpose={transpose} onUse={changeTranspose}
+                      adviceFor={(t) => {
+                        const [name, mode] = keyChoice === 'auto' ? [] : keyChoice.split('|');
+                        const keyOverride = name ? { tonic: NOTE_TO_SEMI[name], mode } : null;
+                        const a = analyseSong({ keyDetected: activeSong?.keyDetected, chords, transpose: t, keyOverride });
+                        return a ? a.advice : null;
+                      }} />
                     <SimplifyPanel mode={easyMode} onMode={chooseEasy} plans={easyPlans} canThin={canThin} fewer={easyFewer} onFewer={setEasyFewer} skipped={thinSet.size} />
                     {/* Chord voicings (UG-style) */}
                     <div className="rounded-xl border p-3"
