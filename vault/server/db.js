@@ -4615,6 +4615,38 @@ async function initSchema() {
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_guitar_transition_scores_user ON guitar_transition_scores ("userId", "playedAt" DESC)`);
 
+  // Set lists for gig mode, and ear training rounds
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS guitar_setlists (
+      id          SERIAL PRIMARY KEY,
+      "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name        TEXT NOT NULL,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_guitar_setlists_user ON guitar_setlists ("userId")`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS guitar_setlist_songs (
+      "setlistId" INTEGER NOT NULL REFERENCES guitar_setlists(id) ON DELETE CASCADE,
+      "songId"    INTEGER NOT NULL REFERENCES guitar_songs(id) ON DELETE CASCADE,
+      position    INTEGER NOT NULL,
+      PRIMARY KEY ("setlistId", "songId")
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS guitar_ear_sessions (
+      id          SERIAL PRIMARY KEY,
+      "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      mode        TEXT NOT NULL CHECK (mode IN ('chords','numerals')),
+      correct     INTEGER NOT NULL CHECK (correct >= 0),
+      total       INTEGER NOT NULL CHECK (total BETWEEN 1 AND 100),
+      misses      JSONB NOT NULL DEFAULT '{}'::jsonb,
+      "playedAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_guitar_ear_sessions_user ON guitar_ear_sessions ("userId", "playedAt" DESC)`);
+
   // Seed basic open-chord shapes if table is empty
   const shapeCount = await pool.query('SELECT COUNT(*) FROM guitar_chord_shapes');
   if (parseInt(shapeCount.rows[0].count) === 0) {

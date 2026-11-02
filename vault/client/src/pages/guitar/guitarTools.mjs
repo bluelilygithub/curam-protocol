@@ -6,6 +6,7 @@ export const GUITAR_TOOLS = [
   { id: 'today', label: 'Today', group: 'Practise', tab: 'Today' },
   { id: 'coach', label: 'Coach', group: 'Practise', tab: 'Coach' },
   { id: 'drills', label: 'Drills', group: 'Practise', tab: 'Drills' },
+  { id: 'ear', label: 'Ear', group: 'Practise', tab: 'Ear' },
   { id: 'library', label: 'Library', group: 'Songs', tab: 'Library' },
   { id: 'player', label: 'Player', group: 'Songs', tab: 'Player' },
 ];
@@ -21,6 +22,7 @@ export const TOOL_TIPS = {
   today: 'Today: what to play in the time you have, picked from your own songs, loops and chord changes.',
   coach: 'Coach: a weekly review of your practice, and a practice session built to the time you have.',
   drills: 'Drills: practise the chord changes your own songs use most, one minute at a time.',
+  ear: 'Ear: train your ear on the chords and keys of your own songs.',
   library: 'Library: add songs and say how well you know each one.',
   player: 'Player: the chord chart for the open song, with playback, loops, the key and the capo.',
 };
@@ -29,6 +31,7 @@ export const TOOL_BLURBS = {
   today: 'What to play next.',
   coach: 'Weekly review and session builder.',
   drills: 'One-minute chord change drills.',
+  ear: 'Name chords and numerals by ear.',
   library: 'Add songs and set their status.',
   player: 'Chart, loops, tempo trainer, key and capo.',
 };
@@ -42,6 +45,8 @@ export const HOW_IT_WORKS = [
   ['Loops and tempo', 'Save a section as a loop, then slow it down without changing the pitch. The trainer can step the speed up after clean passes, count you in, click along and chart the speed you reach.'],
   ['Key and capo', 'Shows the key, a Roman numeral under each chord (borrowed chords and chords that lead somewhere else are marked) and the capo position with the fewest barre chords.'],
   ['Coach', 'Writes a short review of your last seven days from your own practice, loops and drills, builds a practice session of exactly the time you have from your own songs, and can explain the chords of a song and suggest what to practise. The numbers and the plan are worked out in Vault; AI only writes the wording.'],
+  ['Ear training', 'Plays you a chord from your own songs and you name it, or plays the key chord and then another and you name its Roman numeral. Rounds are ten questions; the chords you miss come up more, and your scores are kept. The sound comes from a synth built into Vault, not from the recording.'],
+  ['Play mode and set lists', 'Play mode opens a big chart for performing. It moves along at the song tempo, or one chord at a time from the keyboard, and foot pedals and Bluetooth page turners work because they send arrow and Page keys. Set lists (in the Library) put songs in playing order and open them in play mode.'],
   ['Drills', 'Finds the chord changes your own songs use most, worst first. Each drill is one minute of switching between two chords; tap for every clean change and the score is kept.'],
 ];
 
@@ -50,6 +55,7 @@ export const GUIDE_TOOLS = [
   { id: 'today', label: 'Today', tool: 'today' },
   { id: 'coach', label: 'Coach', tool: 'coach' },
   { id: 'drills', label: 'Drills', tool: 'drills' },
+  { id: 'ear', label: 'Ear', tool: 'ear' },
   { id: 'library', label: 'Library', tool: 'library' },
   { id: 'player', label: 'Player', tool: 'player' },
   { id: 'played', label: 'I played this', tool: 'today' },
@@ -66,5 +72,8 @@ export const GUIDE_TOOLS = [
   { id: 'weekly-review', label: 'Weekly review', tool: 'coach' },
   { id: 'session-builder', label: 'Build a session', tool: 'coach' },
   { id: 'explain-song', label: 'Explain this song', tool: 'player' },
+  { id: 'ear-round', label: 'Ear training round', tool: 'ear' },
+  { id: 'set-lists', label: 'Set lists', tool: 'library' },
+  { id: 'play-mode', label: 'Play mode', tool: 'player' },
   { id: 'minute-drill', label: 'One-minute drill', tool: 'drills' },
 ];

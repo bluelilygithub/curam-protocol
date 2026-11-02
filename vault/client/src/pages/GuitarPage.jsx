@@ -10,13 +10,17 @@ import GuitarTutorChat from './guitar/GuitarTutorChat';
 import { HOW_IT_WORKS, GUITAR_TOOLS, GUIDE_TOOLS } from './guitar/guitarTools.mjs';
 import { startGuitarTour, TOUR_KEY as GUITAR_TOUR_KEY } from '../utils/tours/guitarTour';
 import { useSearchParams } from 'react-router-dom';
-import TempoTrainer from './guitar/TempoTrainer.jsx';
-import { snapRate, songTimeAfter } from './guitar/tempoTrainer.mjs';
+import TempoTrainer from './guitar/TempoTrainer';
+import { snapRate, songTimeAfter } from './guitar/trainerRules.mjs';
 import TheoryPanel, { KIND_STYLE } from './guitar/TheoryPanel';
 import TransitionDrills from './guitar/TransitionDrills';
 import CoachView from './guitar/CoachView';
+import EarTraining from './guitar/EarTraining';
+import GigMode from './guitar/GigMode';
+import SetLists from './guitar/SetLists';
 import ExplainDialog from './guitar/ExplainDialog';
 import { analyseSong, shapeAtCapo } from './guitar/theory.mjs';
+import { playChordSound, audioContextFrom } from './guitar/chordSound.js';
 
 // ── Music theory constants ────────────────────────────────────────────────────
 const ROOTS = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
@@ -671,7 +675,7 @@ function TodayView({ songs, onOpenSong, onPlayed, onStartDrill, refreshKey }) {
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
-const TABS = ['Today', 'Coach', 'Drills', 'Library', 'Player'];
+const TABS = ['Today', 'Coach', 'Drills', 'Ear', 'Library', 'Player'];
 
 export default function GuitarPage() {
   const getIcon = useIcon();
@@ -698,6 +702,7 @@ export default function GuitarPage() {
   const [loopActive, setLoopActive] = useState(null);
   const [loopPasses, setLoopPasses] = useState(0); // times the active loop has come round
   const rateRef = useRef(1);                       // playback speed, 1 = normal; song time moves at this rate
+  const [gig, setGig] = useState(null);                 // { queue, startIndex } while play mode is open
   const [explaining, setExplaining] = useState(null);   // { song, analysis } while the Explain this song window is open
   const [drillPair, setDrillPair]       = useState(null);   // { a, b } chord pair opened from Today
   const [keyChoice, setKeyChoice]       = useState('auto'); // 'auto' or 'Root|mode'
@@ -715,41 +720,7 @@ export default function GuitarPage() {
   const addToast    = useToastStore(s => s.addToast);
 
   const playChordAudio = useCallback((root, quality) => {
-    try {
-      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
-        audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
-      }
-      const ctx = audioCtxRef.current;
-      if (ctx.state === 'suspended') ctx.resume();
-      const NOTE_SEMI = { C:0,'C#':1,Db:1,D:2,Eb:3,E:4,F:5,'F#':6,Gb:6,G:7,Ab:8,A:9,Bb:10,B:11 };
-      const INTERVALS = {
-        '': [0,4,7], m: [0,3,7], '7': [0,4,7,10], maj7: [0,4,7,11],
-        m7: [0,3,7,10], dim: [0,3,6], aug: [0,4,8], sus2: [0,2,7], sus4: [0,5,7],
-        dim7: [0,3,6,9], m7b5: [0,3,6,10],
-      };
-      const rootSemi = NOTE_SEMI[root] ?? 0;
-      const intervals = INTERVALS[quality] ?? [0,4,7];
-      // Base at E2 (82.41 Hz) — guitar low-E open string
-      const baseFreq = 82.41 * Math.pow(2, rootSemi / 12);
-      const now = ctx.currentTime;
-      intervals.forEach((iv, i) => {
-        [0, 1].forEach(oct => {
-          const freq = baseFreq * Math.pow(2, (iv + oct * 12) / 12);
-          const osc  = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = 'triangle';
-          osc.frequency.value = freq;
-          const t0 = now + i * 0.03;
-          gain.gain.setValueAtTime(0, t0);
-          gain.gain.linearRampToValueAtTime(0.06, t0 + 0.01);
-          gain.gain.exponentialRampToValueAtTime(0.001, t0 + 1.6);
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start(t0);
-          osc.stop(t0 + 2);
-        });
-      });
-    } catch (_) {}
+    try { playChordSound(audioContextFrom(audioCtxRef), root, quality); } catch (_) { /* audio not available */ }
   }, []);
 
   const [addMode, setAddMode]               = useState('ug'); // ug | upload | manual
@@ -1090,6 +1061,13 @@ export default function GuitarPage() {
     if (tool) setTab(tool.tab);
   };
 
+  // A set list opens in play mode with its songs in order
+  const playSetList = (ids) => {
+    const queue = ids.map(id => songs.find(s => s.id === id)).filter(Boolean);
+    if (!queue.length) { addToast('That set list has no songs yet', 'error'); return; }
+    setGig({ queue, startIndex: 0 });
+  };
+
   // What the Player already knows about the song, sent along so the coach explains the same key and numerals the person sees
   const explainThisSong = () => {
     if (!activeSong) return;
@@ -1170,6 +1148,13 @@ export default function GuitarPage() {
         {tab === 'Drills' && (
           <div className="p-6 max-w-3xl" data-tour="guitar-drills">
             <TransitionDrills initialPair={drillPair} onChanged={() => setPracticeTick(t => t + 1)} />
+          </div>
+        )}
+
+        {/* ── Ear tab ──────────────────────────────────────────────────── */}
+        {tab === 'Ear' && (
+          <div className="p-6 max-w-3xl" data-tour="guitar-ear">
+            <EarTraining />
           </div>
         )}
 
@@ -1377,6 +1362,7 @@ export default function GuitarPage() {
                 ))}
               </div>
             )}
+            <SetLists songs={songs} onPlay={playSetList} />
           </div>
         )}
 
@@ -1402,6 +1388,11 @@ export default function GuitarPage() {
                       {activeSong.capoSuggested > 0 ? ` · Capo ${activeSong.capoSuggested} (per tab)` : ''}
                     </p>
                   </div>
+                  <Tooltip text={GT.playMode}>
+                    <button onClick={() => setGig({ queue: [activeSong], startIndex: 0 })}
+                      className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 transition-opacity duration-200"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Play mode</button>
+                  </Tooltip>
                   <Tooltip text={GT.explainSong}>
                     <button onClick={explainThisSong}
                       className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 transition-opacity duration-200"
@@ -1710,6 +1701,7 @@ export default function GuitarPage() {
           </div>
         </ToolInfoModal>
       )}
+      {gig && <GigMode queue={gig.queue} startIndex={gig.startIndex} onClose={() => setGig(null)} />}
       {explaining && <ExplainDialog song={explaining.song} analysis={explaining.analysis} onClose={() => setExplaining(null)} />}
       <GuitarTutorChat currentTool={tab.toLowerCase()} onOpenTool={openToolById} />
       {practiceDialog && (

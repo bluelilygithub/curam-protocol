@@ -27,6 +27,7 @@
     "api/gmail/thread/:threadId": null,
     "api/gmail/threads/:threadId": null,
     "api/goals/:id": "objectives",
+    "api/guitar-play/setlists/:id": "guitar_setlists",
     "api/guitar/library/:songId": "guitar_user_songs",
     "api/guitar/loops/:loopId": "guitar_user_song_loops",
     "api/guitar/loops/:songId": "guitar_user_songs",

@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_guitar_completed';
 
-const TOTAL_STEPS = 10;
+const TOTAL_STEPS = 12;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -148,6 +148,26 @@ export function startGuitarTour({ goTab } = {}) {
     attachTo: { element: '[data-tour="guitar-drills"]', on: 'bottom' },
     beforeShowPromise: onTab('guitar-drills', 'Drills', '[data-tour="guitar-drills"]'),
     when: { show() { injectStepCounter(10); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  tour.addStep({
+    id: 'guitar-ear',
+    title: 'Ear training',
+    text: 'You hear a chord from one of your own songs and name it, or hear the key chord and then another and name its Roman numeral. Rounds are ten questions, the chords you miss come up more often, and your scores are kept.',
+    attachTo: { element: '[data-tour="guitar-ear"]', on: 'bottom' },
+    beforeShowPromise: onTab('guitar-ear', 'Ear', '[data-tour="guitar-ear"]'),
+    when: { show() { injectStepCounter(11); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  tour.addStep({
+    id: 'guitar-setlists',
+    title: 'Set lists and play mode',
+    text: 'Put songs in playing order in a set list, then press Play for a big chart that follows the song at its tempo. The Play mode button in the Player does the same for one song. Arrow keys and Page keys move through it, so a foot pedal or page turner works. Stuck on anything? Press the round button at the bottom right and ask the guide.',
+    attachTo: { element: '[data-tour="guitar-setlists"]', on: 'top' },
+    beforeShowPromise: onTab('guitar-setlists', 'Library', '[data-tour="guitar-setlists"]'),
+    when: { show() { injectStepCounter(12); } },
     buttons: [
       btnBack(),
       { text: 'Finish Tour ✓', action() { try { localStorage.setItem(TOUR_KEY, '1'); } catch (_) { /* ignore */ } tour.complete(); } },

@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { clampSpeed, afterCleanPass, afterMessyPass, snapRate, songTimeAfter, beatSeconds, dailyBest, progressLine } from './tempoTrainer.mjs';
+import { clampSpeed, afterCleanPass, afterMessyPass, snapRate, songTimeAfter, beatSeconds, dailyBest, progressLine } from './trainerRules.mjs';
 
 assert.strictEqual(clampSpeed(10), 40);
 assert.strictEqual(clampSpeed(500), 120);

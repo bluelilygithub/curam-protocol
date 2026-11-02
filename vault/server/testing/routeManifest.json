@@ -3963,6 +3963,42 @@
   },
   "POST /api/guitar-coach/explain": {
    "class": "authed"
+  },
+  "GET /api/guitar-play/setlists": {
+   "class": "authed"
+  },
+  "POST /api/guitar-play/setlists": {
+   "class": "authed"
+  },
+  "PUT /api/guitar-play/setlists/:id": {
+   "class": "authed"
+  },
+  "DELETE /api/guitar-play/setlists/:id": {
+   "class": "authed"
+  },
+  "GET /api/guitar-play/ear/material": {
+   "class": "authed"
+  },
+  "POST /api/guitar-play/ear/sessions": {
+   "class": "authed"
+  },
+  "GET /api/guitar-play/ear/summary": {
+   "class": "authed"
+  },
+  "GET /api/admin/app-usage": {
+   "class": "admin"
+  },
+  "POST /api/app-visits": {
+   "class": "authed"
+  },
+  "GET /api/attention": {
+   "class": "authed"
+  },
+  "GET /api/finance/email-activity": {
+   "class": "authed"
+  },
+  "GET /api/search/global": {
+   "class": "authed"
   }
  }
 }

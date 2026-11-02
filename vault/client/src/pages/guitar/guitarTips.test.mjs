@@ -22,12 +22,24 @@ for (const [key, tip] of Object.entries(GT)) {
   assert.ok(/[.!?]$/.test(tip), `${key}: ends with a full stop`);
   assert.ok(!/  |\s$/.test(tip), `${key}: tidy spacing`);
 }
-for (const tab of ['Today', 'Coach', 'Drills', 'Library', 'Player']) assert.ok(tabTip(tab), `tab ${tab} has a tip`);
+for (const tab of ['Today', 'Coach', 'Drills', 'Ear', 'Library', 'Player']) assert.ok(tabTip(tab), `tab ${tab} has a tip`);
 for (const [k, tip] of Object.entries(FOCUS_TIPS)) assert.ok(/^[A-Z].*\.$/.test(tip), `focus tip ${k} is a sentence`);
 for (const id of ['ug', 'upload', 'manual']) assert.ok(ADD_TIPS[id], `add mode ${id} has a tip`);
 for (const [h, t] of HOW_IT_WORKS) assert.ok(h && t.length > 30, `(i) box paragraph "${h}" has text`);
 
-const files = ['pages/GuitarPage.jsx', 'pages/guitar/CoachView.jsx', 'pages/guitar/TheoryPanel.jsx', 'pages/guitar/TempoTrainer.jsx', 'pages/guitar/TransitionDrills.jsx'];
+// ---- no component shares its name with a logic module (EarTraining.jsx and earTraining.mjs). On a case-insensitive disk (Windows, Mac)
+// `import X from './EarTraining'` then picks the .mjs and the page goes blank, while Linux (the server) would have worked.
+{
+  const seen = new Map();
+  for (const f of fs.readdirSync(here)) {
+    const stem = f.replace(/\.(test\.)?(m?js|jsx)$/, '').toLowerCase();
+    if (f.includes('.test.')) continue;
+    assert.ok(!seen.has(stem), `${f} and ${seen.get(stem)} have the same name apart from capitals or the extension: rename one`);
+    seen.set(stem, f);
+  }
+}
+
+const files = ['pages/GuitarPage.jsx', 'pages/guitar/CoachView.jsx', 'pages/guitar/EarTraining.jsx', 'pages/guitar/SetLists.jsx', 'pages/guitar/GigMode.jsx', 'pages/guitar/TheoryPanel.jsx', 'pages/guitar/TempoTrainer.jsx', 'pages/guitar/TransitionDrills.jsx'];
 const sources = Object.fromEntries(files.map((f) => [f, read(f)]));
 
 // Take the two dialogs out of the page text

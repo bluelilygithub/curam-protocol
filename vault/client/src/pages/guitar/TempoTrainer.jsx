@@ -6,7 +6,7 @@ import useToastStore from '../../store/toastStore';
 import {
   MIN_SPEED, MAX_SPEED, START_SPEED, DEFAULT_CLEAN_TARGET,
   clampSpeed, afterCleanPass, afterMessyPass, beatSeconds, dailyBest, progressLine,
-} from './tempoTrainer.mjs';
+} from './trainerRules.mjs';
 
 /** Metronome click (WebAudio). `accent` marks the first beat of a count-in. */
 function playClick(ctx, when, accent) {
