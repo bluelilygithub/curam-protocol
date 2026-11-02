@@ -4586,6 +4586,21 @@ async function initSchema() {
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_guitar_practice_user_played ON guitar_practice_sessions ("userId", "playedAt" DESC)`);
 
+  // Tempo trainer: the speed a loop was played cleanly at, so progress (72 -> 96 bpm) can be charted
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS guitar_loop_runs (
+      id            SERIAL PRIMARY KEY,
+      "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "loopId"      INTEGER NOT NULL REFERENCES guitar_user_song_loops(id) ON DELETE CASCADE,
+      "songId"      INTEGER NOT NULL REFERENCES guitar_songs(id) ON DELETE CASCADE,
+      "speedPct"    INTEGER NOT NULL CHECK ("speedPct" BETWEEN 25 AND 150),
+      bpm           INTEGER,
+      "cleanPasses" INTEGER,
+      "playedAt"    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_guitar_loop_runs_loop ON guitar_loop_runs ("loopId", "playedAt")`);
+
   // Seed basic open-chord shapes if table is empty
   const shapeCount = await pool.query('SELECT COUNT(*) FROM guitar_chord_shapes');
   if (parseInt(shapeCount.rows[0].count) === 0) {

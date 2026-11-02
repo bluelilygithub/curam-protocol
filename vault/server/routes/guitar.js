@@ -703,6 +703,38 @@ router.post('/loops/:songId', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Tempo trainer: speed a loop was played cleanly at ───────────────────────
+router.post('/loop-runs', async (req, res) => {
+  try {
+    const { loopId, speedPct, cleanPasses } = req.body;
+    const speed = Number(speedPct);
+    if (!(Number.isInteger(speed) && speed >= 25 && speed <= 150)) return res.status(400).json({ error: 'Speed must be 25 to 150 percent' });
+    const passes = cleanPasses == null ? null : Number(cleanPasses);
+    if (passes !== null && !(Number.isInteger(passes) && passes >= 0 && passes <= 1000)) return res.status(400).json({ error: 'Clean passes must be a whole number' });
+    const { rows: loop } = await pool.query(
+      `SELECT l.id, us."songId", s.bpm FROM guitar_user_song_loops l
+       JOIN guitar_user_songs us ON us.id=l."userSongId" JOIN guitar_songs s ON s.id=us."songId"
+       WHERE l.id=$1 AND us."userId"=$2`, [loopId, req.user.id]);
+    if (!loop.length) return res.status(404).json({ error: 'Loop not found' });
+    const bpm = loop[0].bpm ? Math.round(loop[0].bpm * speed / 100) : null;
+    const { rows } = await pool.query(
+      `INSERT INTO guitar_loop_runs ("userId","loopId","songId","speedPct",bpm,"cleanPasses")
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`, [req.user.id, loop[0].id, loop[0].songId, speed, bpm, passes]);
+    // A loop run is practice, so it keeps the song from going rusty
+    await pool.query(`UPDATE guitar_user_songs SET "lastPracticedAt"=NOW() WHERE "userId"=$1 AND "songId"=$2`, [req.user.id, loop[0].songId]);
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/loop-runs/:loopId', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, "loopId", "speedPct", bpm, "cleanPasses", "playedAt" FROM guitar_loop_runs
+       WHERE "userId"=$1 AND "loopId"=$2 ORDER BY "playedAt" DESC LIMIT 200`, [req.user.id, req.params.loopId]);
+    res.json(rows.reverse());
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.delete('/loops/:loopId', async (req, res) => {
   try {
     await pool.query(

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import api from '../utils/apiClient';
 import useToastStore from '../store/toastStore';
 import Dialog from '../components/Dialog';
+import TempoTrainer from './guitar/TempoTrainer';
+import { snapRate, songTimeAfter } from './guitar/tempoTrainer.mjs';
 
 // ── Music theory constants ────────────────────────────────────────────────────
 const ROOTS = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
@@ -379,6 +381,14 @@ function HtmlAudioPlayer({ songId, onReady, playerRef }) {
     const shim = {
       getCurrentTime: () => el.currentTime || 0,
       seekTo: (t) => { el.currentTime = t; },
+      // Same names as the YouTube player so the tempo trainer has one code path
+      playVideo: () => { el.play().catch(() => {}); },
+      pauseVideo: () => { el.pause(); },
+      setPlaybackRate: (r) => {
+        el.preservesPitch = true; el.mozPreservesPitch = true; el.webkitPreservesPitch = true; // slower without a lower voice
+        el.playbackRate = r;
+      },
+      getPlaybackRate: () => el.playbackRate,
     };
     playerRef.current = shim;
     onReady?.(shim);
@@ -650,6 +660,8 @@ export default function GuitarPage() {
   const [shapesFor, setShapesFor] = useState(null);
   const [loops, setLoops]         = useState([]);
   const [loopActive, setLoopActive] = useState(null);
+  const [loopPasses, setLoopPasses] = useState(0); // times the active loop has come round
+  const rateRef = useRef(1);                       // playback speed, 1 = normal; song time moves at this rate
   const [loopName, setLoopName]   = useState('');
   const [fretboardChord, setFretboardChord] = useState(null);
   const playerRef   = useRef(null);
@@ -800,6 +812,8 @@ export default function GuitarPage() {
     setTranspose(song.transposeOffset ?? 0);
     setCapoFret(song.capoOverride ?? 0); // Capo does not rewrite chart chord names
     setTab('Player');
+    setLoopActive(null); // a loop belongs to one song; also puts the speed back to normal
+    rateRef.current = 1;
     setLoadingChords(true);
     setChords([]);
     setLoops([]);
@@ -842,7 +856,7 @@ export default function GuitarPage() {
           if (ytTime != null) { localBase.current = ytTime; localTimer.current = now; }
         } catch {}
       }
-      const smoothTime = localBase.current + (now - (localTimer.current || now)) / 1000;
+      const smoothTime = songTimeAfter(localBase.current, (now - (localTimer.current || now)) / 1000, rateRef.current);
       setCurrentTimeSec(smoothTime);
 
       // Find active chord
@@ -868,6 +882,7 @@ export default function GuitarPage() {
         const { startTimeSec: s, endTimeSec: e } = loopActive;
         if (smoothTime >= parseFloat(e)) {
           try { player.seekTo(parseFloat(s), true); localBase.current = parseFloat(s); localTimer.current = performance.now(); } catch {}
+          setLoopPasses(n => n + 1);
         }
       }
 
@@ -947,8 +962,34 @@ export default function GuitarPage() {
     if (loopActive?.id === id) setLoopActive(null);
   };
 
+  // Set the playback speed (percent). Returns the percent the player really runs at: YouTube only has fixed rates.
+  // The clock is re-based first so the chart stays in step across the change.
+  const setPlaybackSpeed = useCallback((pct) => {
+    const player = playerRef.current;
+    let rate = pct / 100;
+    try {
+      if (player?.getCurrentTime) { localBase.current = player.getCurrentTime(); localTimer.current = performance.now(); }
+      if (player?.setPlaybackRate) {
+        rate = snapRate(rate, player.getAvailablePlaybackRates?.());
+        player.setPlaybackRate(rate);
+      }
+    } catch (_) { /* player not ready */ }
+    rateRef.current = rate;
+    return Math.round(rate * 100);
+  }, []);
+
+  const seekToLoopStart = useCallback(() => {
+    const p = playerRef.current;
+    if (!p?.seekTo || !loopActive) return;
+    const s = parseFloat(loopActive.startTimeSec);
+    p.seekTo(s, true);
+    localBase.current = s;
+    localTimer.current = performance.now();
+  }, [loopActive]);
+
   const activateLoop = (loop) => {
     setLoopActive(loop);
+    setLoopPasses(0);
     const player = playerRef.current;
     if (player?.seekTo) { player.seekTo(parseFloat(loop.startTimeSec), true); localBase.current = parseFloat(loop.startTimeSec); localTimer.current = performance.now(); }
   };
@@ -1434,6 +1475,14 @@ export default function GuitarPage() {
                           </div>
                         ))
                       }
+                      {loopActive && (
+                        <TempoTrainer
+                          loop={loopActive} song={activeSong} passes={loopPasses}
+                          onSpeed={setPlaybackSpeed}
+                          onPlay={() => { try { playerRef.current?.playVideo?.(); } catch (_) { /* player not ready */ } }}
+                          onPause={() => { try { playerRef.current?.pauseVideo?.(); } catch (_) { /* player not ready */ } }}
+                          onSeek={seekToLoopStart} />
+                      )}
                       </>
                       )}
                     </div>
