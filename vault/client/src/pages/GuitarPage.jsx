@@ -4,6 +4,8 @@ import useToastStore from '../store/toastStore';
 import Dialog from '../components/Dialog';
 import TempoTrainer from './guitar/TempoTrainer';
 import { snapRate, songTimeAfter } from './guitar/tempoTrainer.mjs';
+import TheoryPanel, { KIND_STYLE } from './guitar/TheoryPanel';
+import { analyseSong, shapeAtCapo } from './guitar/theory.mjs';
 
 // ── Music theory constants ────────────────────────────────────────────────────
 const ROOTS = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
@@ -662,6 +664,9 @@ export default function GuitarPage() {
   const [loopActive, setLoopActive] = useState(null);
   const [loopPasses, setLoopPasses] = useState(0); // times the active loop has come round
   const rateRef = useRef(1);                       // playback speed, 1 = normal; song time moves at this rate
+  const [keyChoice, setKeyChoice]       = useState('auto'); // 'auto' or 'Root|mode'
+  const [showNumerals, setShowNumerals] = useState(true);
+  const [showShapes, setShowShapes]     = useState(true);
   const [loopName, setLoopName]   = useState('');
   const [fretboardChord, setFretboardChord] = useState(null);
   const playerRef   = useRef(null);
@@ -812,6 +817,7 @@ export default function GuitarPage() {
     setTranspose(song.transposeOffset ?? 0);
     setCapoFret(song.capoOverride ?? 0); // Capo does not rewrite chart chord names
     setTab('Player');
+    setKeyChoice('auto');
     setLoopActive(null); // a loop belongs to one song; also puts the speed back to normal
     rateRef.current = 1;
     setLoadingChords(true);
@@ -913,6 +919,13 @@ export default function GuitarPage() {
     setCapoFret(v);
     savePrefs(transpose, v);
   };
+
+  // Key, Roman numerals and the capo suggestion. Numerals do not change when the chart is transposed.
+  const theory = useMemo(() => {
+    const [name, mode] = keyChoice === 'auto' ? [] : keyChoice.split('|');
+    const keyOverride = name ? { tonic: NOTE_TO_SEMI[name], mode } : null;
+    return analyseSong({ keyDetected: activeSong?.keyDetected, chords, transpose, keyOverride });
+  }, [activeSong?.keyDetected, chords, transpose, keyChoice]);
 
   // ── Chord correction ───────────────────────────────────────────────────────
   const saveCorrection = (updated) => {
@@ -1391,6 +1404,21 @@ export default function GuitarPage() {
                                           }}>
                                           {label}
                                         </button>
+                                        {(() => {
+                                          const th = showNumerals ? theory?.byId.get(ev.id) : null;
+                                          const shape = showShapes && capoFret > 0
+                                            ? shapeAtCapo(ev.chordRoot, ev.chordQuality, transpose, capoFret) : null;
+                                          if (!th && !shape) return null;
+                                          return (
+                                            <div style={{ textAlign: 'center', fontSize: '0.65rem', lineHeight: 1.2, marginTop: 1 }}
+                                              title={th?.note || undefined}>
+                                              {th && <span style={{ fontFamily: 'monospace', color: KIND_STYLE[th.kind].color,
+                                                fontWeight: th.kind === 'diatonic' ? 400 : 700 }}>{th.numeral}</span>}
+                                              {th && shape && ' '}
+                                              {shape && <span style={{ color: 'var(--color-muted)' }}>({shape})</span>}
+                                            </div>
+                                          );
+                                        })()}
                                         <div className="absolute z-30 hidden group-hover:block"
                                           style={{ bottom: '100%', left: '50%', transform: 'translateX(-50%)', paddingBottom: 4 }}>
                                           <QuickDiagram root={ev.chordRoot} quality={ev.chordQuality || ''} transpose={transpose} />
@@ -1414,6 +1442,10 @@ export default function GuitarPage() {
 
                   {/* Right: fretboard + loops */}
                   <div className="flex flex-col gap-4">
+                    <TheoryPanel theory={theory} keyChoice={keyChoice} onKeyChoice={setKeyChoice}
+                      showNumerals={showNumerals} onShowNumerals={setShowNumerals}
+                      showShapes={showShapes} onShowShapes={setShowShapes}
+                      capoFret={capoFret} onUseCapo={changeCapo} />
                     {/* Chord voicings (UG-style) */}
                     <div className="rounded-xl border p-3"
                       style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
