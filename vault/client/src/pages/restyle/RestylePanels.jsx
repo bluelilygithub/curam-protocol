@@ -67,7 +67,7 @@ function DropBox({ onFiles, accept, multiple, children }) {
 }
 
 /** Your page: a live page by its address, an uploaded file, or pasted HTML. */
-export function PagePanel({ onFile, onPaste, onAddress, status, busy, renderAvailable, sourceUrl }) {
+export function PagePanel({ onFile, onPaste, onAddress, status, busy, renderAvailable, sourceUrl, renderHint, onRenderAgain }) {
   const [tab, setTab] = useState('address');
   const [url, setUrl] = useState('');
   const [render, setRender] = useState(false);
@@ -102,6 +102,12 @@ export function PagePanel({ onFile, onPaste, onAddress, status, busy, renderAvai
             <button type="button" className={PRIMARY_BTN} style={PRIMARY} disabled={!url.trim() || busy} onClick={() => onAddress(url, render)}>{busy ? 'Loading the page…' : 'Load this page'}</button>
           </Tooltip>
           {sourceUrl && <p className="text-xs break-all" style={MUTED}>Loaded from {sourceUrl}</p>}
+          {renderHint && renderAvailable && (
+            <div className="rounded-lg border p-2 text-xs space-y-1.5" style={{ background: '#fdf3ea', borderColor: '#d99a3f', color: '#5a4322' }}>
+              <p>This page has no header, footer or menu in what was loaded. It probably adds them with JavaScript, which a normal load does not run.</p>
+              <button type="button" className={SMALL_BTN} style={OUTLINE} disabled={busy} onClick={() => onRenderAgain(renderHint)}>Load it again in a browser</button>
+            </div>
+          )}
           <p className="text-xs" style={MUTED}>Pages behind a sign-in cannot be loaded. Save the page from your browser and upload it instead.</p>
         </div>
       )}

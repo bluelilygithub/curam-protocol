@@ -103,6 +103,7 @@ export default function RestylePage() {
   const [cssStatus, setCssStatus] = useState({ text: '', kind: '' });
   const [flags, setFlags] = useState([]);
   const [previewErrors, setPreviewErrors] = useState([]);
+  const [renderHint, setRenderHint] = useState('');
   const [detectedAssets, setDetectedAssets] = useState(EMPTY_ASSETS);
 
   // ---------- The preview and what is selected in it ----------
@@ -400,6 +401,7 @@ export default function RestylePage() {
 
   const loadAddress = async (url, render) => {
     setLoadingAddress(true);
+    setRenderHint('');
     setHtmlStatus({ text: render ? 'Opening the page in a browser… this can take half a minute.' : 'Loading the page…', kind: '' });
     const stop = new AbortController();
     const progress = scrapeProgress('load', { render, url });
@@ -409,6 +411,9 @@ export default function RestylePage() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'We couldn\'t load that page.');
         const entries = applyLoadedPage(data, { replaceCss: true, url: data.sourceUrl || url });
+        // A page with scripts but no header, footer or menu in its HTML almost always adds them with JavaScript, which a plain load never runs.
+        const rawHtml = data.rawHtml || '';
+        setRenderHint(!render && /<script[^>]*src=/i.test(rawHtml) && !/<(header|footer|nav)/i.test(rawHtml) ? (data.sourceUrl || url) : '');
         setHtmlStatus({ text: `Loaded ${data.sourceUrl || url}${data.cssFiles?.length ? ` with ${data.cssFiles.length} style file${data.cssFiles.length === 1 ? '' : 's'}` : ''}.`, kind: 'ok' });
         await runBuildPreview(entries);
       }, { onCancel: () => stop.abort() });
@@ -925,7 +930,7 @@ export default function RestylePage() {
     </>);
     switch (tool) {
       case 'page':
-        return <PagePanel onFile={(file) => submitHtml({ file })} onPaste={(html) => submitHtml({ html })} onAddress={loadAddress} status={htmlStatus} busy={loadingAddress} renderAvailable={renderAvailable} sourceUrl={sourceUrl} />;
+        return <PagePanel onFile={(file) => submitHtml({ file })} onPaste={(html) => submitHtml({ html })} onAddress={loadAddress} status={htmlStatus} busy={loadingAddress} renderAvailable={renderAvailable} sourceUrl={sourceUrl} renderHint={renderHint} onRenderAgain={(u) => loadAddress(u, true)} />;
       case 'styles':
         return <StylesPanel entries={cssEntries} onAddFiles={addCssFiles} onAddPaste={addCssPaste} onMove={moveCssEntry} onRemove={removeCssEntry} htmlLoaded={htmlLoaded} onBuild={() => runBuildPreview(cssEntries)} status={cssStatus} flags={flags} previewErrors={previewErrors} onCopy={(t) => copyText(t, 'Copied')} />;
       case 'source':
