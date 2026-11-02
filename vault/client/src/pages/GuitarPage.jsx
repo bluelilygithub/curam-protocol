@@ -1135,7 +1135,7 @@ export default function GuitarPage() {
         {/* ── Drills tab ───────────────────────────────────────────────── */}
         {tab === 'Drills' && (
           <div className="p-6 max-w-3xl" data-tour="guitar-drills">
-            <TransitionDrills initialPair={drillPair} onChanged={() => setPracticeTick(t => t + 1)} />
+            <TransitionDrills initialPair={drillPair} onChanged={() => setPracticeTick(t => t + 1)} onOpenEar={() => setTab('Ear')} />
           </div>
         )}
 

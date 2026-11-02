@@ -11,7 +11,7 @@ const { spawn } = require('child_process');
 const { pool }  = require('../db');
 const { LEARN_STATUSES, practiceState, buildQueue } = require('../services/guitarPractice');
 const { isChord, orderPair } = require('../services/guitarTransitions');
-const { loadTransitions } = require('../services/guitarData');
+const { loadTransitions, loadPairBests } = require('../services/guitarData');
 
 const router = express.Router();
 const PIPELINE_SCRIPT = path.join(__dirname, '../scripts/guitar_pipeline.py');
@@ -659,6 +659,11 @@ router.get('/practice', async (req, res) => {
 
 router.get('/transitions', async (req, res) => {
   try { res.json(await loadTransitions(req.user.id)); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/transitions/pairs', async (req, res) => {
+  try { res.json(await loadPairBests(req.user.id)); }
   catch (err) { res.status(500).json({ error: err.message }); }
 });
 

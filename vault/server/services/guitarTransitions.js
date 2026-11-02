@@ -83,4 +83,22 @@ function rankTransitions(pairs, scores, now = new Date(), { limit = 15 } = {}) {
   return rows.slice(0, limit);
 }
 
-module.exports = { TARGET_PER_MIN, MIN_OCCURRENCES, chordLabel, isChord, pairKey, orderPair, countTransitions, rankTransitions, ratePerMin };
+// The major and minor pairs shown on the Drills tab (the client keeps the same list in pairs.mjs; a test fails if they differ)
+const MAJOR_MINOR_PAIRS = [['E', 'Em'], ['A', 'Am'], ['D', 'Dm']];
+
+/** The scores for the fixed major/minor pairs, whether or not the person's songs use them: [{ a, b, bestRate, lastRate, tries }]. */
+function bestForPairs(scores, pairs = MAJOR_MINOR_PAIRS) {
+  return pairs.map(([x, y]) => {
+    const [a, b] = orderPair(x, y);
+    const list = (scores || []).filter(s => pairKey(s.chordA, s.chordB) === `${a}|${b}`)
+      .sort((p, q) => new Date(p.playedAt) - new Date(q.playedAt));
+    const last = list[list.length - 1] || null;
+    return {
+      a: x, b: y, tries: list.length,
+      bestRate: list.length ? Math.round(Math.max(...list.map(ratePerMin))) : null,
+      lastRate: last ? Math.round(ratePerMin(last)) : null,
+    };
+  });
+}
+
+module.exports = { MAJOR_MINOR_PAIRS, bestForPairs, TARGET_PER_MIN, MIN_OCCURRENCES, chordLabel, isChord, pairKey, orderPair, countTransitions, rankTransitions, ratePerMin };

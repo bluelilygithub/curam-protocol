@@ -3949,6 +3949,9 @@
   "GET /api/guitar/transitions": {
    "class": "authed"
   },
+  "GET /api/guitar/transitions/pairs": {
+   "class": "authed"
+  },
   "POST /api/guitar/transitions/score": {
    "class": "authed"
   },

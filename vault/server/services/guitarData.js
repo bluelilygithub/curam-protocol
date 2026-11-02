@@ -3,7 +3,7 @@
 // The database reads the Guitar practice features share (Today's queue, the coach). Every query is filtered by the person's id.
 
 const { pool } = require('../db');
-const { countTransitions, rankTransitions } = require('./guitarTransitions');
+const { countTransitions, rankTransitions, bestForPairs } = require('./guitarTransitions');
 const { weekFacts } = require('./guitarCoach');
 const { songChordNames } = require('./guitarPlayable');
 
@@ -16,6 +16,13 @@ async function loadTransitions(userId, limit = 15) {
   const { rows: scores } = await pool.query(
     `SELECT "chordA", "chordB", changes, seconds, "playedAt" FROM guitar_transition_scores WHERE "userId"=$1`, [userId]);
   return rankTransitions(countTransitions(events), scores, new Date(), { limit });
+}
+
+/** Best and last score for the fixed major/minor pairs. */
+async function loadPairBests(userId) {
+  const { rows: scores } = await pool.query(
+    `SELECT "chordA", "chordB", changes, seconds, "playedAt" FROM guitar_transition_scores WHERE "userId"=$1`, [userId]);
+  return bestForPairs(scores);
 }
 
 /** Finished songs with where each one stands (status, last played). */
@@ -90,4 +97,4 @@ async function loadMilestoneFacts(userId, now = new Date()) {
   };
 }
 
-module.exports = { loadTransitions, loadPracticeSongs, loadLoops, loadWeekInputs, loadMilestoneFacts };
+module.exports = { loadPairBests, loadTransitions, loadPracticeSongs, loadLoops, loadWeekInputs, loadMilestoneFacts };

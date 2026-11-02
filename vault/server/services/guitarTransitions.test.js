@@ -69,4 +69,22 @@ assert.strictEqual(q[q.length - 1].a, 'C');
 assert.strictEqual(buildQueue(song, [], now, ranked.filter(r => r.priority === 0)).some(i => i.kind === 'transition'), false);
 assert.strictEqual(buildQueue(song, [], now).some(i => i.kind === 'transition'), false);
 
-console.log('guitarTransitions tests passed');
+// The fixed major/minor pairs: scores count whichever way round the pair was saved, and an untried pair is null, not zero
+const { MAJOR_MINOR_PAIRS, bestForPairs } = require('./guitarTransitions');
+const pairScores = [
+  { chordA: 'E', chordB: 'Em', changes: 18, seconds: 60, playedAt: ago(5) },
+  { chordA: 'Em', chordB: 'E', changes: 24, seconds: 60, playedAt: ago(2) },
+  { chordA: 'C', chordB: 'F', changes: 50, seconds: 60, playedAt: ago(2) },
+];
+const best = bestForPairs(pairScores);
+assert.deepStrictEqual(best.map(b => `${b.a}${b.b}`), ['EEm', 'AAm', 'DDm']);
+assert.deepStrictEqual(best[0], { a: 'E', b: 'Em', tries: 2, bestRate: 24, lastRate: 24 });
+assert.deepStrictEqual(best[1], { a: 'A', b: 'Am', tries: 0, bestRate: null, lastRate: null });
+// the client keeps the same list: they must not drift
+(async () => {
+  const path = require('path');
+  const { pathToFileURL } = require('url');
+  const client = await import(pathToFileURL(path.join(__dirname, '../../client/src/pages/guitar/pairs.mjs')).href);
+  assert.deepStrictEqual(client.MAJOR_MINOR_PAIRS, MAJOR_MINOR_PAIRS, 'server and client pair lists match');
+  console.log('guitarTransitions tests passed');
+})().catch(e => { console.error(e); process.exit(1); });

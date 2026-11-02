@@ -6,6 +6,7 @@ import useToastStore from '../../store/toastStore';
 import { suggestProgressions, explainPair, pairSummary } from './progressions.mjs';
 import { GlossText } from './GlossaryTerm';
 import FingerMoves from './FingerMoves';
+import MajorMinorPairs from './MajorMinorPairs';
 import { describeChange } from './fingering.mjs';
 
 const DRILL_SECONDS = 60;
@@ -233,10 +234,11 @@ function DrillRunner({ pair, best: bestNow, known, onClose, onSaved }) {
 }
 
 /** Drills tab: the chord changes your own songs use most, worst first, and the one-minute drill. */
-export default function TransitionDrills({ initialPair, onChanged }) {
+export default function TransitionDrills({ initialPair, onChanged, onOpenEar }) {
   const [rows, setRows] = useState(null);
   const [pair, setPair] = useState(initialPair || null);
   const [known, setKnown] = useState(() => new Set());
+  const [savedTick, setSavedTick] = useState(0);   // bumps when a score is saved, so the pairs card shows the new best
 
   const load = useCallback(() => {
     api.get('/api/guitar/transitions').then(r => r.json()).then(d => setRows(Array.isArray(d) ? d : [])).catch(() => setRows([]));
@@ -259,8 +261,9 @@ export default function TransitionDrills({ initialPair, onChanged }) {
       </p>
       {pair && (
         <DrillRunner key={`${pair.a}|${pair.b}`} pair={pair} best={best} known={known} onClose={() => setPair(null)}
-          onSaved={() => { load(); onChanged?.(); }} />
+          onSaved={() => { load(); setSavedTick(t => t + 1); onChanged?.(); }} />
       )}
+      <MajorMinorPairs onDrill={setPair} onOpenEar={onOpenEar} refreshKey={savedTick} />
       {rows.length === 0 ? (
         <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
           No repeated chord changes yet. Add songs with chords and the changes they use most will show up here.
