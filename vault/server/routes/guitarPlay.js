@@ -7,6 +7,7 @@ const express = require('express');
 const { pool } = require('../db');
 const { getLogger } = require('../middleware/requestContext');
 const ear = require('../services/guitarEar');
+const barre = require('../services/guitarBarre');
 const playable = require('../services/guitarPlayable');
 const milestones = require('../services/guitarMilestones');
 const data = require('../services/guitarData');
@@ -237,6 +238,27 @@ router.get('/ear/summary', async (req, res) => {
       `SELECT mode, correct, total, misses, "playedAt" FROM guitar_ear_sessions WHERE "userId"=$1 ORDER BY "playedAt" DESC LIMIT 100`, [req.user.id]);
     res.json(ear.summarise(rows));
   } catch (err) { fail(res, err, 'ear summary'); }
+});
+
+// ── Barre chord ladder ───────────────────────────────────────────────────────
+router.get('/barre', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT stage, clean, "heldAt" FROM guitar_barre_holds WHERE "userId"=$1 ORDER BY "heldAt" DESC LIMIT 500`, [req.user.id]);
+    res.json({ stages: barre.summarise(rows), holdSeconds: barre.HOLD_SECONDS, clearAt: barre.CLEAR_AT });
+  } catch (err) { fail(res, err, 'barre ladder'); }
+});
+
+router.post('/barre/holds', async (req, res) => {
+  try {
+    const check = barre.checkHold(req.body || {});
+    if (!check.ok) return res.status(400).json({ error: check.error });
+    const v = check.value;
+    const { rows } = await pool.query(
+      `INSERT INTO guitar_barre_holds ("userId", stage, clean, seconds) VALUES ($1,$2,$3,$4) RETURNING id, stage, clean, "heldAt"`,
+      [req.user.id, v.stage, v.clean, v.seconds]);
+    res.status(201).json(rows[0]);
+  } catch (err) { fail(res, err, 'barre hold'); }
 });
 
 module.exports = router;

@@ -7,6 +7,7 @@ import { suggestProgressions, explainPair, pairSummary } from './progressions.mj
 import { GlossText } from './GlossaryTerm';
 import FingerMoves from './FingerMoves';
 import MajorMinorPairs from './MajorMinorPairs';
+import BarreLadder from './BarreLadder';
 import { describeChange } from './fingering.mjs';
 
 const DRILL_SECONDS = 60;
@@ -264,6 +265,7 @@ export default function TransitionDrills({ initialPair, onChanged, onOpenEar }) 
           onSaved={() => { load(); setSavedTick(t => t + 1); onChanged?.(); }} />
       )}
       <MajorMinorPairs onDrill={setPair} onOpenEar={onOpenEar} refreshKey={savedTick} />
+      <BarreLadder />
       {rows.length === 0 ? (
         <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
           No repeated chord changes yet. Add songs with chords and the changes they use most will show up here.

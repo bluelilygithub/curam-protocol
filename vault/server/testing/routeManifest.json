@@ -3988,6 +3988,12 @@
   "GET /api/guitar-play/ear/summary": {
    "class": "authed"
   },
+  "GET /api/guitar-play/barre": {
+   "class": "authed"
+  },
+  "POST /api/guitar-play/barre/holds": {
+   "class": "authed"
+  },
   "GET /api/admin/app-usage": {
    "class": "admin"
   },

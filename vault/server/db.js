@@ -4658,6 +4658,19 @@ async function initSchema() {
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_guitar_ear_sessions_user ON guitar_ear_sessions ("userId", "playedAt" DESC)`);
 
+  // Barre chord ladder: one row per ten-second hold, clean (every string rang) or not
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS guitar_barre_holds (
+      id          SERIAL PRIMARY KEY,
+      "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      stage       TEXT NOT NULL CHECK (stage IN ('two-strings','mini-f','full-f','b-flat','slide-it')),
+      clean       BOOLEAN NOT NULL,
+      seconds     INTEGER NOT NULL CHECK (seconds BETWEEN 10 AND 60),
+      "heldAt"    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_guitar_barre_holds_user ON guitar_barre_holds ("userId", "heldAt" DESC)`);
+
   // The chords a player can already play cleanly ("My chords"): drives which songs are playable now and which chord to learn next
   await pool.query(`
     CREATE TABLE IF NOT EXISTS guitar_known_chords (
