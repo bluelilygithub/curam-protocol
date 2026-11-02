@@ -2002,6 +2002,13 @@ async function initSchema() {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_fin_invoice_send_log_invoice ON fin_invoice_send_log("invoiceId", "sentAt" DESC)`);
+    // Activity-log detail (2026-11): what was sent, from where, and what the mail server said per address
+    for (const col of [
+      `subject TEXT`, `"fromAddr" TEXT`, `"attachmentName" TEXT`, `"attachmentBytes" INTEGER`,
+      `accepted TEXT`, `rejected TEXT`, `"serverResponse" TEXT`,
+    ]) {
+      await client.query(`ALTER TABLE fin_invoice_send_log ADD COLUMN IF NOT EXISTS ${col}`);
+    }
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS fin_invoice_items (

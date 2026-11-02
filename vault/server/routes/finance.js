@@ -991,9 +991,11 @@ router.post('/invoices/:id/send', async (req, res) => {
     const invoiceId = req.params.id;
     const overrideTo = req.body.to || null;
     const message    = (req.body.message || '').trim();
-    if (overrideTo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(overrideTo)) {
-      return res.status(400).json({ error: 'Invalid email address in "to"' });
-    }
+    const EMAIL_RE = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
+    const overrideList = overrideTo ? require('../utils/sendEmail').splitAddresses(overrideTo) : [];
+    const badAddr = overrideList.find(a => !EMAIL_RE.test(a));
+    if (badAddr) return res.status(400).json({ error: `Invalid email address: ${badAddr}` });
+    if (overrideList.length > 10) return res.status(400).json({ error: 'Up to 10 recipients per send' });
 
     // Load invoice + items + client
     const { rows } = await pool.query(
@@ -1018,7 +1020,7 @@ router.post('/invoices/:id/send', async (req, res) => {
       `SELECT * FROM fin_invoice_items WHERE "invoiceId"=$1 ORDER BY id`, [invoiceId]
     );
 
-    const to = overrideTo || inv.clientEmail;
+    const to = overrideList.length ? overrideList.join(', ') : inv.clientEmail;
     if (!to) return res.status(400).json({ error: 'No email address — supply one in the request body' });
 
     // Load finance settings
@@ -1182,26 +1184,49 @@ router.post('/invoices/:id/send', async (req, res) => {
     }
 
     let sendResult;
+    const subject = `${docLabel} ${inv.number}${cfg.fin_biz_name ? ` from ${cfg.fin_biz_name}` : ''}`;
+    const logDetail = [
+      subject,
+      pdfAttachment ? pdfAttachment.filename : null,
+      pdfAttachment ? pdfAttachment.content.length : null,
+    ];
     try {
       sendResult = await sendEmail({
         to,
         cc: adminEmail || undefined,
-        subject: `${docLabel} ${inv.number}${cfg.fin_biz_name ? ` from ${cfg.fin_biz_name}` : ''}`,
+        subject,
         html,
         attachments: pdfAttachment ? [pdfAttachment] : undefined,
       });
+      // An address the mail server refused is a failed delivery for that person even if others went through
+      const rejected = (sendResult?.rejected || []).map(String);
       await pool.query(
         `INSERT INTO fin_invoice_send_log
-           ("invoiceId","userId","sentTo",cc,provider,"messageId","pdfAttached",ok)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE)`,
-        [invoiceId, userId, to, adminEmail || null, sendResult?.provider || null, sendResult?.messageId || null, !!pdfAttachment]
+           ("invoiceId","userId","sentTo",cc,provider,"messageId","pdfAttached",ok,
+            subject,"attachmentName","attachmentBytes",accepted,rejected,"serverResponse")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,$8,$9,$10,$11,$12,$13)`,
+        [invoiceId, userId, to, adminEmail || null, sendResult?.provider || null, sendResult?.messageId || null, !!pdfAttachment,
+         ...logDetail, (sendResult?.accepted || []).join(', ') || null, rejected.join(', ') || null,
+         sendResult?.response ? String(sendResult.response).slice(0, 500) : null]
       );
+      if (rejected.length) {
+        await captureIf(true, {
+          userId,
+          source: 'financeInvoiceSend',
+          category: 'alert',
+          fingerprint: makeFingerprint('financeInvoiceSend', `rejected:${invoiceId}:${rejected.join(',')}`),
+          title: `${docLabel} ${inv.number}: mail server refused ${rejected.join(', ')}`,
+          body: `The other recipients were accepted. Check the spelling of the refused address and resend.`,
+          context: `Finance → ${isQuote ? 'Quotes' : 'Invoices'} → ${inv.number}`,
+        });
+      }
     } catch (sendErr) {
       await pool.query(
         `INSERT INTO fin_invoice_send_log
-           ("invoiceId","userId","sentTo",cc,"pdfAttached",ok,error)
-         VALUES ($1,$2,$3,$4,$5,FALSE,$6)`,
-        [invoiceId, userId, to, adminEmail || null, !!pdfAttachment, sendErr.message]
+           ("invoiceId","userId","sentTo",cc,"pdfAttached",ok,error,
+            subject,"attachmentName","attachmentBytes")
+         VALUES ($1,$2,$3,$4,$5,FALSE,$6,$7,$8,$9)`,
+        [invoiceId, userId, to, adminEmail || null, !!pdfAttachment, sendErr.message, ...logDetail]
       ).catch(() => {});
 
       // Repeated send failures for the same invoice are a real anomaly (bad client email,
@@ -1227,7 +1252,7 @@ router.post('/invoices/:id/send', async (req, res) => {
 
     // Mark as sent and post the invoice journal (AR / Income / GST) if not already posted
     // A paid invoice that is re-sent (e.g. a receipt copy) must stay paid.
-    if (inv.status === 'paid') return res.json({ ok: true, sentTo: to });
+    if (inv.status === 'paid') return res.json({ ok: true, sentTo: to, ...(sendResult?.rejected?.length ? { warning: `Not accepted by the mail server: ${sendResult.rejected.join(', ')}` } : {}) });
     await pool.query(
       `UPDATE fin_invoices SET status='sent',"updatedAt"=NOW() WHERE id=$1 AND "userId"=$2`,
       [invoiceId, userId]
@@ -1250,9 +1275,31 @@ router.post('/invoices/:id/send', async (req, res) => {
       }
     }
 
-    res.json({ ok: true, sentTo: to, ...(journalWarning ? { warning: journalWarning } : {}) });
+    res.json({ ok: true, sentTo: to, ...(sendResult?.rejected?.length ? { warning: `Not accepted by the mail server: ${sendResult.rejected.join(', ')}` } : {}), ...(journalWarning ? { warning: journalWarning } : {}) });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// All emails sent for invoices/quotes, newest first (MYOB-style "Sent invoice activity")
+router.get('/email-activity', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 90, 1), 730);
+    const { rows } = await pool.query(
+      `SELECT sl.*, i.number, COALESCE(i."docType",'invoice') AS "docType", cr.name AS "clientName",
+              u.email AS "sentByName"
+       FROM fin_invoice_send_log sl
+       JOIN fin_invoices i ON i.id = sl."invoiceId"
+       LEFT JOIN clients cr ON cr.id = i."clientRef"
+       LEFT JOIN users u ON u.id = sl."userId"
+       WHERE i."userId"=$1 AND sl."sentAt" > NOW() - ($2 || ' days')::interval
+       ORDER BY sl."sentAt" DESC LIMIT 1000`,
+      [userId, String(days)]
+    );
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -1260,8 +1307,9 @@ router.get('/invoices/:id/send-log', async (req, res) => {
   try {
     const userId = req.user.id;
     const { rows } = await pool.query(
-      `SELECT sl.* FROM fin_invoice_send_log sl
+      `SELECT sl.*, u.email AS "sentByName" FROM fin_invoice_send_log sl
        JOIN fin_invoices i ON i.id = sl."invoiceId"
+       LEFT JOIN users u ON u.id = sl."userId"
        WHERE sl."invoiceId"=$1 AND i."userId"=$2
        ORDER BY sl."sentAt" DESC`,
       [req.params.id, userId]

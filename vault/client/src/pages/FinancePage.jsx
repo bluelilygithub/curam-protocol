@@ -283,6 +283,79 @@ function Btn({ onClick, disabled, variant = 'primary', children, className = '' 
   );
 }
 
+function SendLogEntry({ l, showDoc }) {
+  const rejected = (l.rejected || '').split(',').map(x => x.trim()).filter(Boolean);
+  const accepted = (l.accepted || '').split(',').map(x => x.trim()).filter(Boolean);
+  const color = !l.ok ? '#991b1b' : rejected.length ? '#b45309' : 'var(--color-text)';
+  const status = !l.ok ? 'Failed' : rejected.length ? 'Partly refused' : 'Accepted by mail server';
+  const row = (label, value, c) => value ? (
+    <div className="flex gap-2" style={c ? { color: c } : undefined}><span className="w-20 shrink-0" style={{ opacity: 0.6 }}>{label}</span><span className="break-all">{value}</span></div>
+  ) : null;
+  const attachment = l.attachmentName
+    ? `${l.attachmentName}${l.attachmentBytes ? ` (${Math.max(1, Math.round(l.attachmentBytes / 1024))} KB)` : ''}`
+    : (l.ok ? 'None (PDF could not be made)' : null);
+  return (
+    <div className="text-xs rounded-md p-2" style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
+      <div className="flex items-center gap-2 mb-1 flex-wrap">
+        <span className="font-semibold" style={{ color }}>{l.ok ? '✓' : '✗'} {status}</span>
+        <span style={{ opacity: 0.7 }}>{new Date(l.sentAt).toLocaleString('en-AU')}</span>
+        {showDoc && <span className="font-medium">{l.docType === 'quote' ? 'Quote' : 'Invoice'} {l.number}{l.clientName ? ` · ${l.clientName}` : ''}</span>}
+      </div>
+      <div className="space-y-0.5">
+        {row('To', l.sentTo)}
+        {row('Cc', l.cc)}
+        {row('Subject', l.subject)}
+        {row('Attachment', attachment)}
+        {row('Sent by', l.sentByName)}
+        {row('Via', l.provider)}
+        {row('Message ID', l.messageId)}
+        {row('Refused', rejected.join(', '), '#991b1b')}
+        {row('Accepted', accepted.join(', '))}
+        {row('Server said', l.serverResponse)}
+        {row('Error', l.error, '#991b1b')}
+      </div>
+    </div>
+  );
+}
+
+function EmailActivityModal({ onClose }) {
+  const [rows, setRows] = useState(null);
+  const [days, setDays] = useState(90);
+  const [q, setQ] = useState('');
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    setRows(null); setErr('');
+    api.get(`/api/finance/email-activity?days=${days}`).then(r => r.json())
+      .then(d => { if (d.error) throw new Error(d.error); setRows(d); })
+      .catch(e => setErr(e.message));
+  }, [days]);
+  const needle = q.trim().toLowerCase();
+  const shown = (rows || []).filter(l => !needle ||
+    [l.number, l.clientName, l.sentTo, l.cc, l.subject].some(v => String(v || '').toLowerCase().includes(needle)));
+  const field = { background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' };
+  return (
+    <Modal title="Sent email activity" onClose={onClose} wide>
+      <div className="p-5 flex flex-col gap-3">
+        <div className="flex gap-2 items-center flex-wrap">
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search number, client or address…"
+            className="text-sm px-2 py-1.5 rounded-md flex-1 min-w-[12rem]" style={field} />
+          <select value={days} onChange={e => setDays(Number(e.target.value))} className="text-sm px-2 py-1.5 rounded-md" style={field}>
+            <option value={30}>Last 30 days</option>
+            <option value={90}>Last 90 days</option>
+            <option value={365}>Last year</option>
+            <option value={730}>Last 2 years</option>
+          </select>
+        </div>
+        <ErrMsg msg={err} />
+        {!rows && !err && <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>}
+        {rows && shown.length === 0 && <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No emails sent in this period.</p>}
+        <div className="space-y-2">{shown.map(l => <SendLogEntry key={l.id} l={l} showDoc />)}</div>
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>"Accepted" means the mail server took the email for delivery. It does not report whether it reached the inbox, was filtered as spam, or bounced later. If a client says it never arrived, ask them to check junk or quarantine for the sender address, and try a second address.</p>
+      </div>
+    </Modal>
+  );
+}
+
 function Modal({ title, onClose, children, wide }) {
   return (
     <Dialog raw onClose={onClose}
@@ -804,6 +877,7 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
   const [modal, setModal] = useState(null);
   const [viewInvoice, setViewInvoice] = useState(null);
   const [sendLog, setSendLog] = useState([]);
+  const [activityOpen, setActivityOpen] = useState(false);
   const [sendModal, setSendModal] = useState(null);
   const [sendTo, setSendTo]       = useState('');
   const [sendMessage, setSendMessage] = useState('');
@@ -941,7 +1015,7 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
       if (result.error) throw new Error(result.error);
       await load();
       setSendModal(null);
-      addToast(`${sendModal.docType === 'quote' ? 'Quote' : 'Invoice'} sent to ${sendTo.trim()}`);
+      addToast(`${sendModal.docType === 'quote' ? 'Quote' : 'Invoice'} sent to ${result.sentTo || sendTo.trim()}`);
       if (result.warning) addToast(result.warning, 'error');
       if (viewInvoice?.id === sendModal.id) {
         api.get(`/api/finance/invoices/${sendModal.id}/send-log`).then(r => r.json()).then(setSendLog).catch(() => {});
@@ -1014,7 +1088,10 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
         <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>
           {isQuoteTab ? 'Quotes' : 'Invoices'}
         </h2>
-        <Tooltip text={isQuoteTab ? 'Draft a new quote to send a client.' : 'Draft a new invoice to bill a client.'}><Btn onClick={openNew}>{isQuoteTab ? '+ New Quote' : '+ New Invoice'}</Btn></Tooltip>
+        <div className="flex gap-2">
+          <Tooltip text="See every invoice and quote email sent: who it went to, when, and what the mail server said."><Btn variant="secondary" onClick={() => setActivityOpen(true)}>Email activity</Btn></Tooltip>
+          <Tooltip text={isQuoteTab ? 'Draft a new quote to send a client.' : 'Draft a new invoice to bill a client.'}><Btn onClick={openNew}>{isQuoteTab ? '+ New Quote' : '+ New Invoice'}</Btn></Tooltip>
+        </div>
       </div>
 
       <div className="flex gap-1 mb-3 flex-wrap">
@@ -1323,6 +1400,8 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
         </Modal>
       )}
 
+      {activityOpen && <EmailActivityModal onClose={() => setActivityOpen(false)} />}
+
       {/* Send invoice/quote modal */}
       {sendModal && (
         <Modal title={`Send ${sendModal.number}`} onClose={() => setSendModal(null)}>
@@ -1330,13 +1409,12 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
             <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
               {sendModal.docType === 'quote' ? 'The quote' : 'The invoice'} will be sent as a styled email with a <strong>PDF attachment</strong>. The client's email address is pre-filled from their record and can be edited before sending.
             </p>
-            <Field label={sendModal.clientEmail ? 'Recipient email (pre-filled from client)' : 'Recipient email'}>
-              <Tooltip text="Where the email and PDF attachment will be sent — edit if the client wants a different address this time.">
+            <Field label={sendModal.clientEmail ? 'Recipient email(s) (pre-filled from client)' : 'Recipient email(s)'}>
+              <Tooltip text="Where the email and PDF attachment will be sent. Separate several addresses with commas (up to 10). Edit if the client wants a different address this time.">
                 <Input
-                  type="email"
                   value={sendTo}
                   onChange={setSendTo}
-                  placeholder="client@example.com"
+                  placeholder="client@example.com, accounts@example.com"
                 />
               </Tooltip>
             </Field>
@@ -1443,19 +1521,11 @@ function InvoicesTab({ from, to, docType = 'invoice', clientId, onClearClientFil
 
             {sendLog.length > 0 && (
               <div>
-                <div className="text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Send history</div>
-                <div className="space-y-1">
-                  {sendLog.map(l => (
-                    <div key={l.id} className="text-xs flex items-center gap-2" style={{ color: l.ok ? 'var(--color-text)' : '#991b1b' }}>
-                      <span style={{ opacity: 0.7 }}>{new Date(l.sentAt).toLocaleString('en-AU')}</span>
-                      <span>{l.ok ? '✓ sent' : '✗ failed'}</span>
-                      <span>to {l.sentTo}</span>
-                      {l.pdfAttached && <span style={{ opacity: 0.7 }}>· PDF attached</span>}
-                      {l.provider && <span style={{ opacity: 0.7 }}>· via {l.provider}</span>}
-                      {l.error && <span title={l.error} style={{ opacity: 0.7 }}>· {l.error}</span>}
-                    </div>
-                  ))}
+                <div className="text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Email activity</div>
+                <div className="space-y-2">
+                  {sendLog.map(l => <SendLogEntry key={l.id} l={l} />)}
                 </div>
+                <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>"Accepted" means the mail server took the email for delivery. It does not report whether it reached the inbox, was filtered as spam, or bounced later.</p>
               </div>
             )}
 

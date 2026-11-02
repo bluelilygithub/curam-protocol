@@ -76,9 +76,23 @@ function smtpConfig() {
   };
 }
 
+/** Turn "a@x.com, b@y.com" (or an array) into a clean, de-duplicated array of addresses. */
+function splitAddresses(value) {
+  const list = Array.isArray(value) ? value : String(value || '').split(/[,;\n]+/);
+  const seen = new Set();
+  const out = [];
+  for (const raw of list) {
+    const a = String(raw || '').trim();
+    if (!a || seen.has(a.toLowerCase())) continue;
+    seen.add(a.toLowerCase());
+    out.push(a);
+  }
+  return out;
+}
+
 /**
  * Send an email via MailChannels (if key configured) or SMTP nodemailer.
- * @param {{ to: string, subject: string, html: string, from?: string, cc?: string, replyTo?: string, attachments?: Array<{filename: string, content: Buffer, contentType: string}> }} opts
+ * @param {{ to: string|string[], subject: string, html: string, from?: string, cc?: string|string[], replyTo?: string, attachments?: Array<{filename: string, content: Buffer, contentType: string}> }} opts
  */
 async function sendEmail({ to, subject, html, from, cc, replyTo, attachments }) {
   if (runtimeConfig.disableEmail) {
@@ -87,11 +101,15 @@ async function sendEmail({ to, subject, html, from, cc, replyTo, attachments }) 
     return { ok: false, skipped: true, reason };
   }
 
+  const toList = splitAddresses(to);
+  // An address already in To is not repeated in Cc
+  const ccList = splitAddresses(cc).filter(a => !toList.some(t => t.toLowerCase() === a.toLowerCase()));
+
   const mailChannelKey = await getMailChannelKey();
 
   if (mailChannelKey) {
-    const personalization = { to: [{ email: to }] };
-    if (cc) personalization.cc = [{ email: cc }];
+    const personalization = { to: toList.map(email => ({ email })) };
+    if (ccList.length) personalization.cc = ccList.map(email => ({ email }));
 
     const payload = JSON.stringify({
       personalizations: [personalization],
@@ -127,7 +145,7 @@ async function sendEmail({ to, subject, html, from, cc, replyTo, attachments }) 
           res.on('end', () => {
             if (res.statusCode >= 200 && res.statusCode < 300) {
               const messageId = res.headers['x-message-id'] || null;
-              resolve({ ok: true, provider: 'mailchannels', messageId });
+              resolve({ ok: true, provider: 'mailchannels', messageId, accepted: toList.concat(ccList), rejected: [] });
             } else {
               reject(new Error(`MailChannels error ${res.statusCode}: ${Buffer.concat(chunks).toString()}`));
             }
@@ -149,8 +167,8 @@ async function sendEmail({ to, subject, html, from, cc, replyTo, attachments }) 
 
   const info = await transporter.sendMail({
     from: defaultFromAddress(from),
-    to,
-    cc: cc || undefined,
+    to: toList,
+    cc: ccList.length ? ccList : undefined,
     replyTo: replyTo || undefined,
     subject,
     html,
@@ -158,10 +176,12 @@ async function sendEmail({ to, subject, html, from, cc, replyTo, attachments }) 
       ? attachments.map(a => ({ filename: a.filename, content: a.content, contentType: a.contentType }))
       : undefined,
   });
-  return { ok: true, provider: 'smtp', messageId: info?.messageId || null };
+  return { ok: true, provider: 'smtp', messageId: info?.messageId || null, accepted: info?.accepted || [], rejected: info?.rejected || [], response: info?.response || null };
 }
 
 /** Is email set up on this server (a MailChannels key or SMTP settings, and not switched off)? For screens that offer to send something. */
+sendEmail.splitAddresses = splitAddresses;
+
 sendEmail.isConfigured = async function isConfigured() {
   if (runtimeConfig.disableEmail) return false;
   return !!((await getMailChannelKey()) || smtpConfig());
