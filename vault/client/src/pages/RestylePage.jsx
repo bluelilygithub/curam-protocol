@@ -1070,6 +1070,19 @@ export default function RestylePage() {
                   {selectionLabel}{hasSelection && editingFor ? ` · for ${editingFor}` : ''}
                 </div>
               </div>
+              {previewBuilt && sourceUrl && (() => {
+                let host = '';
+                try { host = new URL(sourceUrl).hostname; } catch { /* not a full address: show it as typed */ }
+                return (
+                  <div className="flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm min-w-0" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }} aria-label="Page being shown">
+                    <span className="shrink-0" style={{ color: 'var(--color-muted)' }}>{showOriginal ? 'Original of' : 'Showing'}</span>
+                    {host && <strong className="shrink-0" style={{ color: 'var(--color-text)' }}>{host}</strong>}
+                    <Tooltip text="The exact address that was loaded. Click to open it in a new tab.">
+                      <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="truncate transition-opacity duration-200 hover:opacity-70" style={{ color: 'var(--color-muted)' }}>{sourceUrl}</a>
+                    </Tooltip>
+                  </div>
+                );
+              })()}
               <div className="relative flex-1 rounded-xl border overflow-auto" style={{ background: '#e8e8e2', borderColor: 'var(--color-border)' }}>
                 <div style={{ width: deviceWidth || '100%', maxWidth: screen.height ? 'none' : '100%', height: screen.height ? `${screen.height}px` : '100%', minHeight: screen.height ? undefined : 'calc(100dvh - 18rem)', margin: '0 auto', background: '#fff', transition: 'width 200ms, height 200ms' }}>
                   <iframe ref={iframeRef} title="Live preview" sandbox="allow-same-origin" style={{ width: '100%', height: '100%', minHeight: 'inherit', border: 'none', display: previewBuilt ? 'block' : 'none' }} />
