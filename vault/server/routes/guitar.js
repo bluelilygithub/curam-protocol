@@ -9,6 +9,7 @@ const http    = require('http');
 const multer  = require('multer');
 const { spawn } = require('child_process');
 const { pool }  = require('../db');
+const { LEARN_STATUSES, practiceState, buildQueue } = require('../services/guitarPractice');
 
 const router = express.Router();
 const PIPELINE_SCRIPT = path.join(__dirname, '../scripts/guitar_pipeline.py');
@@ -319,14 +320,16 @@ router.get('/songs', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT ${SONG_LIST_COLS},
-              us.id AS "userSongId", us."isFavorite", us."transposeOffset", us."capoOverride"
+              us.id AS "userSongId", us."isFavorite", us."transposeOffset", us."capoOverride",
+              us."learnStatus", us."rustyAfterDays", us."lastPracticedAt"
        FROM guitar_songs s
        LEFT JOIN guitar_user_songs us ON us."songId"=s.id AND us."userId"=$1
        WHERE s."userId"=$1
        ORDER BY s."createdAt" DESC`,
       [req.user.id]
     );
-    res.json(rows);
+    const now = new Date();
+    res.json(rows.map(r => ({ ...r, practiceState: practiceState(r, now) })));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -582,20 +585,89 @@ router.post('/library', async (req, res) => {
 
 router.patch('/library/:songId', async (req, res) => {
   try {
-    const { notes, isFavorite, transposeOffset, capoOverride } = req.body;
+    const { notes, isFavorite, transposeOffset, capoOverride, learnStatus, rustyAfterDays } = req.body;
+    if (learnStatus != null && !LEARN_STATUSES.includes(learnStatus)) return res.status(400).json({ error: 'Status must be learning, polishing or ready' });
+    if (rustyAfterDays != null && !(Number.isInteger(rustyAfterDays) && rustyAfterDays >= 1 && rustyAfterDays <= 365)) {
+      return res.status(400).json({ error: 'Rusty after must be 1 to 365 days' });
+    }
+    const { rows: own } = await pool.query('SELECT 1 FROM guitar_songs WHERE id=$1 AND "userId"=$2', [req.params.songId, req.user.id]);
+    if (!own.length) return res.status(404).json({ error: 'Song not found' });
+    // Changing a setting is not practice, so lastPracticedAt is left alone (POST /practice sets it)
     const { rows } = await pool.query(
-      `INSERT INTO guitar_user_songs ("userId","songId",notes,"isFavorite","transposeOffset","capoOverride")
-         VALUES ($1,$2,$3,$4,$5,$6)
+      `INSERT INTO guitar_user_songs ("userId","songId",notes,"isFavorite","transposeOffset","capoOverride","learnStatus","rustyAfterDays")
+         VALUES ($1,$2,$3,$4,$5,$6,COALESCE($7,'learning'),COALESCE($8,14))
        ON CONFLICT ("userId","songId") DO UPDATE SET
          notes=COALESCE($3, guitar_user_songs.notes),
          "isFavorite"=COALESCE($4, guitar_user_songs."isFavorite"),
          "transposeOffset"=COALESCE($5, guitar_user_songs."transposeOffset"),
          "capoOverride"=COALESCE($6, guitar_user_songs."capoOverride"),
-         "lastPracticedAt"=NOW()
+         "learnStatus"=COALESCE($7, guitar_user_songs."learnStatus"),
+         "rustyAfterDays"=COALESCE($8, guitar_user_songs."rustyAfterDays")
        RETURNING *`,
-      [req.user.id, req.params.songId, notes, isFavorite, transposeOffset, capoOverride]
+      [req.user.id, req.params.songId, notes, isFavorite, transposeOffset, capoOverride, learnStatus ?? null, rustyAfterDays ?? null]
     );
-    res.json(rows[0]);
+    res.json({ ...rows[0], practiceState: practiceState(rows[0]) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Practice log and Today's queue ───────────────────────────────────────────
+// "I played this": one tap, with optional minutes, confidence 1-5 and a note. Also stamps lastPracticedAt, which drives Rusty.
+router.post('/practice', async (req, res) => {
+  try {
+    const { songId, loopId, minutes, confidence, note } = req.body;
+    const mins = minutes == null || minutes === '' ? null : Number(minutes);
+    const conf = confidence == null || confidence === '' ? null : Number(confidence);
+    if (mins !== null && !(Number.isInteger(mins) && mins >= 0 && mins <= 600)) return res.status(400).json({ error: 'Minutes must be a whole number from 0 to 600' });
+    if (conf !== null && !(Number.isInteger(conf) && conf >= 1 && conf <= 5)) return res.status(400).json({ error: 'Confidence must be 1 to 5' });
+    const { rows: own } = await pool.query('SELECT 1 FROM guitar_songs WHERE id=$1 AND "userId"=$2', [songId, req.user.id]);
+    if (!own.length) return res.status(404).json({ error: 'Song not found' });
+    let loop = null;
+    if (loopId != null) {
+      const { rows } = await pool.query(
+        `SELECT l.id FROM guitar_user_song_loops l JOIN guitar_user_songs us ON us.id=l."userSongId"
+         WHERE l.id=$1 AND us."userId"=$2 AND us."songId"=$3`, [loopId, req.user.id, songId]);
+      if (!rows.length) return res.status(404).json({ error: 'Loop not found' });
+      loop = rows[0].id;
+    }
+    const { rows } = await pool.query(
+      `INSERT INTO guitar_practice_sessions ("userId","songId","loopId",minutes,confidence,note)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [req.user.id, songId, loop, mins, conf, note ? String(note).slice(0, 1000) : null]
+    );
+    const { rows: us } = await pool.query(
+      `INSERT INTO guitar_user_songs ("userId","songId","lastPracticedAt") VALUES ($1,$2,NOW())
+       ON CONFLICT ("userId","songId") DO UPDATE SET "lastPracticedAt"=NOW()
+       RETURNING *`, [req.user.id, songId]);
+    res.status(201).json({ session: rows[0], practiceState: practiceState(us[0]) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/practice', async (req, res) => {
+  try {
+    const params = [req.user.id];
+    let where = 'p."userId"=$1';
+    if (req.query.songId) { params.push(Number(req.query.songId)); where += ` AND p."songId"=$${params.length}`; }
+    const { rows } = await pool.query(
+      `SELECT p.*, s.title, s.artist FROM guitar_practice_sessions p
+       JOIN guitar_songs s ON s.id=p."songId" WHERE ${where}
+       ORDER BY p."playedAt" DESC LIMIT 100`, params);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/practice/queue', async (req, res) => {
+  try {
+    const { rows: songs } = await pool.query(
+      `SELECT s.id, s.title, s.artist, s."createdAt", us."learnStatus", us."rustyAfterDays", us."lastPracticedAt"
+       FROM guitar_songs s LEFT JOIN guitar_user_songs us ON us."songId"=s.id AND us."userId"=$1
+       WHERE s."userId"=$1 AND s.status='done'`, [req.user.id]);
+    const { rows: loops } = await pool.query(
+      `SELECT l.id, l.name, us."songId", l."startTimeSec", l."endTimeSec"
+       FROM guitar_user_song_loops l JOIN guitar_user_songs us ON us.id=l."userSongId" WHERE us."userId"=$1`, [req.user.id]);
+    const { rows: week } = await pool.query(
+      `SELECT COUNT(*) AS sessions, COALESCE(SUM(minutes),0) AS minutes FROM guitar_practice_sessions
+       WHERE "userId"=$1 AND "playedAt" > NOW() - INTERVAL '7 days'`, [req.user.id]);
+    res.json({ items: buildQueue(songs, loops), week: { sessions: Number(week[0].sessions), minutes: Number(week[0].minutes) } });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -618,7 +690,7 @@ router.post('/loops/:songId', async (req, res) => {
     const { name, startTimeSec, endTimeSec } = req.body;
     const { rows: us } = await pool.query(
       `INSERT INTO guitar_user_songs ("userId","songId") VALUES ($1,$2)
-       ON CONFLICT ("userId","songId") DO UPDATE SET "lastPracticedAt"=NOW()
+       ON CONFLICT ("userId","songId") DO UPDATE SET "userId"=EXCLUDED."userId"
        RETURNING id`,
       [req.user.id, req.params.songId]
     );

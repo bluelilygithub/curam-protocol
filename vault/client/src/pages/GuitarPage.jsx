@@ -486,11 +486,154 @@ function ShapePopover({ chord, anchorRef, onClose }) {
   );
 }
 
+const PRACTICE_STATES = {
+  learning:  { label: 'Learning',  color: '#2563eb', bg: 'rgba(37,99,235,0.1)' },
+  polishing: { label: 'Polishing', color: '#b45309', bg: 'rgba(245,158,11,0.15)' },
+  ready:     { label: 'Ready',     color: '#16a34a', bg: 'rgba(22,163,74,0.1)' },
+  rusty:     { label: 'Rusty',     color: '#dc2626', bg: 'rgba(220,38,38,0.1)' },
+};
+
+function PracticeBadge({ state }) {
+  const s = PRACTICE_STATES[state] || PRACTICE_STATES.learning;
+  return <span className="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0" style={{ color: s.color, background: s.bg }}>{s.label}</span>;
+}
+
+/** One-tap "I played this", with optional minutes, a 1-5 confidence score and a note. */
+function PracticeDialog({ song, loop, onClose, onSaved }) {
+  const [minutes, setMinutes] = useState('');
+  const [confidence, setConfidence] = useState(0);
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+  const addToast = useToastStore(s => s.addToast);
+
+  const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const res = await api.post('/api/guitar/practice', {
+        songId: song.id, loopId: loop?.id ?? null,
+        minutes: minutes === '' ? null : parseInt(minutes, 10),
+        confidence: confidence || null, note: note.trim() || null,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      addToast(`Logged "${song.title}"`, 'success');
+      onSaved?.(data);
+      onClose();
+    } catch (e) { addToast(e.message, 'error'); }
+    finally { setSaving(false); }
+  };
+
+  const field = { background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' };
+  return (
+    <Dialog title="I played this" size="sm" onClose={onClose}
+      footer={
+        <button onClick={save} disabled={saving}
+          className="px-4 py-2 text-sm rounded-lg font-medium disabled:opacity-40 hover:opacity-70 transition-opacity duration-200"
+          style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }}>
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      }>
+      <div className="p-5 flex flex-col gap-4">
+        <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+          {song.title}{loop ? ` · ${loop.name}` : ''}
+        </p>
+        <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
+          Minutes (optional)
+          <input type="number" min="0" max="600" value={minutes} onChange={e => setMinutes(e.target.value)}
+            className="text-sm px-3 py-2 rounded-lg border" style={field} />
+        </label>
+        <div className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
+          How clean was it? (optional)
+          <div className="flex gap-1" role="radiogroup" aria-label="Confidence from 1 to 5">
+            {[1, 2, 3, 4, 5].map(n => (
+              <button key={n} type="button" role="radio" aria-checked={confidence === n}
+                onClick={() => setConfidence(confidence === n ? 0 : n)}
+                className="w-9 h-9 rounded-lg border text-sm font-medium hover:opacity-70 transition-opacity duration-200"
+                style={{ borderColor: confidence === n ? 'var(--color-primary)' : 'var(--color-border)',
+                         background: confidence === n ? 'var(--color-primary)' : 'var(--color-surface)',
+                         color: confidence === n ? 'var(--color-on-primary, #fff)' : 'var(--color-text)' }}>{n}</button>
+            ))}
+          </div>
+        </div>
+        <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
+          Note (optional)
+          <textarea rows={2} value={note} onChange={e => setNote(e.target.value)} maxLength={1000}
+            placeholder="e.g. F barre still buzzing"
+            className="text-sm px-3 py-2 rounded-lg border resize-none" style={field} />
+        </label>
+      </div>
+    </Dialog>
+  );
+}
+
+/** Today: "I have 20 minutes, what should I do?" */
+function TodayView({ songs, onOpenSong, onPlayed, refreshKey }) {
+  const [queue, setQueue] = useState(null);
+  const [logging, setLogging] = useState(null); // { song, loop }
+
+  const load = useCallback(() => {
+    api.get('/api/guitar/practice/queue').then(r => r.json()).then(d => setQueue(d))
+      .catch(() => setQueue({ items: [], week: { sessions: 0, minutes: 0 } }));
+  }, []);
+  useEffect(() => { load(); }, [load, refreshKey]);
+
+  if (!queue) return <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
+  const songOf = (id) => songs.find(s => s.id === id);
+  const KIND = { learning: 'Learn', loop: 'Work up a loop', rusty: 'Revive', polishing: 'Polish' };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+        This week: {queue.week.sessions} {queue.week.sessions === 1 ? 'session' : 'sessions'}
+        {queue.week.minutes ? `, ${queue.week.minutes} min logged` : ''}.
+      </p>
+      {queue.items.length === 0 ? (
+        <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+          Nothing due. Songs you are learning, polishing or letting go rusty will show up here. Set a song's status in the Library tab.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {queue.items.map((it, i) => {
+            const song = songOf(it.songId);
+            return (
+              <div key={`${it.kind}-${it.songId}-${i}`} className="rounded-xl border p-4 flex items-center gap-3 flex-wrap"
+                style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>{KIND[it.kind]}</p>
+                  <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
+                    {it.title}{it.loopName ? ` · ${it.loopName}` : ''}
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                    {it.reason}{it.daysIdle != null ? ` · last played ${it.daysIdle === 0 ? 'today' : `${it.daysIdle}d ago`}` : ''}
+                  </p>
+                </div>
+                <PracticeBadge state={it.state} />
+                {song && (
+                  <button onClick={() => onOpenSong(song)}
+                    className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 transition-opacity duration-200"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Open</button>
+                )}
+                <button onClick={() => setLogging({ song: { id: it.songId, title: it.title }, loop: it.loopId ? { id: it.loopId, name: it.loopName } : null })}
+                  className="text-xs px-3 py-1.5 rounded-lg font-medium hover:opacity-70 transition-opacity duration-200"
+                  style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }}>I played this</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {logging && <PracticeDialog song={logging.song} loop={logging.loop} onClose={() => setLogging(null)} onSaved={() => { load(); onPlayed?.(); }} />}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
-const TABS = ['Library', 'Player'];
+const TABS = ['Today', 'Library', 'Player'];
 
 export default function GuitarPage() {
-  const [tab, setTab]           = useState('Library');
+  const [tab, setTab]           = useState('Today');
+  const [practiceDialog, setPracticeDialog] = useState(null); // song being logged from Library / Player
+  const [practiceTick, setPracticeTick]     = useState(0);
   const [songs, setSongs]       = useState([]);
   const [loading, setLoading]   = useState(true);
   const [urlInput, setUrlInput] = useState('');
@@ -575,6 +718,17 @@ export default function GuitarPage() {
   }, []);
 
   useEffect(() => { loadSongs(); }, [loadSongs]);
+
+  const setLearnStatus = async (song, learnStatus) => {
+    setSongs(list => list.map(x => x.id === song.id ? { ...x, learnStatus } : x));
+    try {
+      const res = await api.patch(`/api/guitar/library/${song.id}`, { learnStatus });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setSongs(list => list.map(x => x.id === song.id ? { ...x, learnStatus: data.learnStatus, practiceState: data.practiceState } : x));
+      setPracticeTick(t => t + 1);
+    } catch (e) { addToast(e.message, 'error'); loadSongs(); }
+  };
 
   const submitUg = async () => {
     if (!ugUrl.trim() || submitting) return;
@@ -851,6 +1005,13 @@ export default function GuitarPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
+        {/* ── Today tab ────────────────────────────────────────────────── */}
+        {tab === 'Today' && (
+          <div className="p-6 max-w-3xl">
+            <TodayView songs={songs} refreshKey={practiceTick} onOpenSong={openSong} onPlayed={() => loadSongs()} />
+          </div>
+        )}
+
         {/* ── Library tab ──────────────────────────────────────────────── */}
         {tab === 'Library' && (
           <div className="p-6 max-w-3xl flex flex-col gap-6">
@@ -998,6 +1159,24 @@ export default function GuitarPage() {
                       )}
                     </div>
                     <StatusBadge status={song.status} />
+                    {song.status === 'done' && (
+                      <>
+                        <PracticeBadge state={song.practiceState} />
+                        <select aria-label={`Status for ${song.title || 'song'}`}
+                          value={song.learnStatus || 'learning'}
+                          onClick={e => e.stopPropagation()}
+                          onChange={e => setLearnStatus(song, e.target.value)}
+                          className="text-xs px-2 py-1 rounded border flex-shrink-0"
+                          style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}>
+                          <option value="learning">Learning</option>
+                          <option value="polishing">Polishing</option>
+                          <option value="ready">Ready</option>
+                        </select>
+                        <button onClick={e => { e.stopPropagation(); setPracticeDialog({ song }); }}
+                          className="text-xs px-2 py-1 rounded border flex-shrink-0 hover:opacity-70 transition-opacity duration-200"
+                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>I played this</button>
+                      </>
+                    )}
                     <button onClick={e => deleteSong(song.id, e)}
                       className="text-xs px-2 py-1 rounded border"
                       style={{ borderColor: 'rgba(220,38,38,0.3)', color: '#dc2626', flexShrink: 0 }}>
@@ -1032,6 +1211,9 @@ export default function GuitarPage() {
                       {activeSong.capoSuggested > 0 ? ` · Capo ${activeSong.capoSuggested} (per tab)` : ''}
                     </p>
                   </div>
+                  <button onClick={() => setPracticeDialog({ song: activeSong })}
+                    className="text-xs px-3 py-1.5 rounded-lg font-medium hover:opacity-70 transition-opacity duration-200"
+                    style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary, #fff)' }}>I played this</button>
                   {/* Transpose */}
                   <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--color-muted)' }}>
                     <span>Transpose</span>
@@ -1266,6 +1448,10 @@ export default function GuitarPage() {
       {/* Chord correction modal */}
       {correcting && (
         <CorrectionModal event={correcting} onSave={saveCorrection} onClose={() => setCorrecting(null)} />
+      )}
+      {practiceDialog && (
+        <PracticeDialog song={practiceDialog.song} loop={null} onClose={() => setPracticeDialog(null)}
+          onSaved={() => { loadSongs(); setPracticeTick(t => t + 1); }} />
       )}
     </div>
   );

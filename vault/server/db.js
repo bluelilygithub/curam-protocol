@@ -4569,6 +4569,23 @@ async function initSchema() {
     )
   `);
 
+  // Practice tracking: where each song is (learning / polishing / ready; "rusty" is worked out from lastPracticedAt) and a log of plays
+  await pool.query(`ALTER TABLE guitar_user_songs ADD COLUMN IF NOT EXISTS "learnStatus" TEXT NOT NULL DEFAULT 'learning'`);
+  await pool.query(`ALTER TABLE guitar_user_songs ADD COLUMN IF NOT EXISTS "rustyAfterDays" INTEGER NOT NULL DEFAULT 14`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS guitar_practice_sessions (
+      id          SERIAL PRIMARY KEY,
+      "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "songId"    INTEGER NOT NULL REFERENCES guitar_songs(id) ON DELETE CASCADE,
+      "loopId"    INTEGER REFERENCES guitar_user_song_loops(id) ON DELETE SET NULL,
+      minutes     INTEGER,
+      confidence  INTEGER CHECK (confidence BETWEEN 1 AND 5),
+      note        TEXT,
+      "playedAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_guitar_practice_user_played ON guitar_practice_sessions ("userId", "playedAt" DESC)`);
+
   // Seed basic open-chord shapes if table is empty
   const shapeCount = await pool.query('SELECT COUNT(*) FROM guitar_chord_shapes');
   if (parseInt(shapeCount.rows[0].count) === 0) {
