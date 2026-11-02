@@ -574,8 +574,9 @@ function TodayView({ songs, onOpenSong, onPlayed, onStartDrill, refreshKey }) {
   const KIND = { learning: 'Learn', loop: 'Work up a loop', rusty: 'Revive', polishing: 'Polish', transition: 'Chord change drill' };
 
   return (
-    <div className="flex flex-col gap-4">
-      <GentleTips refreshKey={`${refreshKey}-${saved}`} />
+    <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:gap-x-6 xl:gap-y-0 xl:items-start">
+      <div className="min-w-0 xl:col-start-2 xl:row-start-1 empty:hidden xl:[&:not(:empty)]:mb-4"><GentleTips refreshKey={`${refreshKey}-${saved}`} /></div>
+      <div className="min-w-0 flex flex-col gap-4 xl:col-start-1 xl:row-start-1 xl:row-span-2">
       <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
         This week: {queue.week.sessions} {queue.week.sessions === 1 ? 'session' : 'sessions'}
         {queue.week.minutes ? `, ${queue.week.minutes} min logged` : ''}.
@@ -628,7 +629,8 @@ function TodayView({ songs, onOpenSong, onPlayed, onStartDrill, refreshKey }) {
           })}
         </div>
       )}
-      <MilestonesCard refreshKey={`${refreshKey}-${saved}`} onTipsChange={() => setSaved(n => n + 1)} />
+      </div>
+      <div className="min-w-0 xl:col-start-2 xl:row-start-2"><MilestonesCard refreshKey={`${refreshKey}-${saved}`} onTipsChange={() => setSaved(n => n + 1)} /></div>
       {logging && <PracticeDialog song={logging.song} loop={logging.loop} onClose={() => setLogging(null)} onSaved={() => { load(); setSaved(n => n + 1); onPlayed?.(); }} />}
     </div>
   );
@@ -1113,7 +1115,7 @@ export default function GuitarPage() {
       <div className="flex-1 overflow-y-auto">
         {/* ── Today tab ────────────────────────────────────────────────── */}
         {tab === 'Today' && (
-          <div className="p-6 max-w-3xl" data-tour="guitar-today">
+          <div className="p-6 max-w-[1700px]" data-tour="guitar-today">
             <TodayView songs={songs} refreshKey={practiceTick} onOpenSong={openSong} onPlayed={() => loadSongs()}
               onStartDrill={(pair) => { setDrillPair(pair); setTab('Drills'); }} />
           </div>
@@ -1121,14 +1123,14 @@ export default function GuitarPage() {
 
         {/* ── Learn tab ────────────────────────────────────────────────── */}
         {tab === 'Learn' && (
-          <div className="p-6 max-w-3xl" data-tour="guitar-learn">
+          <div className="p-6 max-w-[1700px]" data-tour="guitar-learn">
             <LearnView songs={songs} onOpenSong={openSong} />
           </div>
         )}
 
         {/* ── Coach tab ────────────────────────────────────────────────── */}
         {tab === 'Coach' && (
-          <div className="p-6 max-w-3xl">
+          <div className="p-6 max-w-[1700px]">
             <CoachView songs={songs} onOpenSong={openSong}
               onStartDrill={(pair) => { setDrillPair(pair); setTab('Drills'); }}
               onLog={(target) => setPracticeDialog(target)} />
@@ -1137,32 +1139,34 @@ export default function GuitarPage() {
 
         {/* ── Drills tab ───────────────────────────────────────────────── */}
         {tab === 'Drills' && (
-          <div className="p-6 max-w-3xl" data-tour="guitar-drills">
+          <div className="p-6 max-w-[1700px]" data-tour="guitar-drills">
             <TransitionDrills initialPair={drillPair} onChanged={() => setPracticeTick(t => t + 1)} onOpenEar={() => setTab('Ear')} />
           </div>
         )}
 
         {/* ── Ear tab ──────────────────────────────────────────────────── */}
         {tab === 'Ear' && (
-          <div className="p-6 max-w-3xl" data-tour="guitar-ear">
+          <div className="p-6 max-w-5xl" data-tour="guitar-ear">
             <EarTraining />
           </div>
         )}
 
         {/* ── Strum tab ────────────────────────────────────────────────── */}
         {tab === 'Strum' && (
-          <div className="p-6 max-w-3xl flex flex-col gap-4">
+          <div className="p-6 max-w-[1700px] flex flex-col gap-4 xl:grid xl:grid-cols-2 xl:gap-6 xl:items-start">
             <StrumTrainer songs={songs} />
-            <FingerpickLadder />
-            <GapClick />
+            <div className="min-w-0 flex flex-col gap-4">
+              <FingerpickLadder />
+              <GapClick />
+            </div>
           </div>
         )}
 
         {/* ── Library tab ──────────────────────────────────────────────── */}
         {tab === 'Library' && (
-          <div className="p-6 max-w-3xl flex flex-col gap-6">
+          <div className="p-6 max-w-[1700px] flex flex-col gap-6 xl:grid xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] xl:gap-x-6 xl:items-start">
             {/* Add song — three modes */}
-            <div data-tour="guitar-add">
+            <div data-tour="guitar-add" className="min-w-0 xl:col-start-1 xl:row-start-1">
               <h2 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Add a song</h2>
               <div className="flex gap-1 mb-3">
                 {[
@@ -1285,6 +1289,7 @@ export default function GuitarPage() {
             </div>
 
             {/* Song list */}
+            <div className="min-w-0 xl:col-start-2 xl:row-start-1 xl:row-span-2">
             {loading ? (
               <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>
             ) : songs.length === 0 ? (
@@ -1362,13 +1367,14 @@ export default function GuitarPage() {
                 ))}
               </div>
             )}
-            <SetLists songs={songs} onPlay={playSetList} />
+            </div>
+            <div className="min-w-0 xl:col-start-1 xl:row-start-2"><SetLists songs={songs} onPlay={playSetList} /></div>
           </div>
         )}
 
         {/* ── Player tab ───────────────────────────────────────────────── */}
         {tab === 'Player' && (
-          <div className="p-4 flex flex-col gap-4 max-w-5xl">
+          <div className="p-4 flex flex-col gap-4 max-w-[1700px]">
             {!activeSong ? (
               <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
                 Select a song from the Library tab.

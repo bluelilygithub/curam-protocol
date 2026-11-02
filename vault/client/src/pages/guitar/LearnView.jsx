@@ -58,7 +58,7 @@ export default function LearnView({ onOpenSong, songs }) {
   const songOf = (id) => songs.find(s => s.id === id);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 xl:grid xl:grid-cols-2 xl:items-start">
       <section className="rounded-xl border p-4 flex flex-col gap-3" style={card}>
         <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Chords I can play</h2>
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>

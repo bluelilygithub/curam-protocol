@@ -264,14 +264,16 @@ export default function TransitionDrills({ initialPair, onChanged, onOpenEar }) 
         <DrillRunner key={`${pair.a}|${pair.b}`} pair={pair} best={best} known={known} onClose={() => setPair(null)}
           onSaved={() => { load(); setSavedTick(t => t + 1); onChanged?.(); }} />
       )}
-      <MajorMinorPairs onDrill={setPair} onOpenEar={onOpenEar} refreshKey={savedTick} />
-      <BarreLadder />
+      <div className="flex flex-col gap-4 xl:grid xl:grid-cols-2 xl:items-start">
+        <MajorMinorPairs onDrill={setPair} onOpenEar={onOpenEar} refreshKey={savedTick} />
+        <BarreLadder />
+      </div>
       {rows.length === 0 ? (
         <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
           No repeated chord changes yet. Add songs with chords and the changes they use most will show up here.
         </p>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 xl:grid xl:grid-cols-2 xl:gap-3">
           {rows.map(r => (
             <div key={`${r.a}|${r.b}`} className="rounded-xl border p-3 flex items-center gap-3 flex-wrap"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>

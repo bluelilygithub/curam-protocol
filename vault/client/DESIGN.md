@@ -41,6 +41,7 @@ Five themes live in `src/themes.js` (default **warm-sand**: terracotta primary `
 - Breakpoint: **`sm` (640px)** only — mobile vs desktop
 - Sidebar: expanded (180–520px) · collapsed icon rail (48px) · hidden overlay on mobile
 - Page content: usually `flex flex-col flex-1 min-h-0 overflow-hidden`
+- **Wide screens:** do not park page content in a narrow strip (`max-w-3xl`) on a desktop monitor, which left half the screen empty on Guitar. Cap at about `max-w-[1700px]` and, from `xl` (1280px), lay groups of cards out in two columns (`flex flex-col xl:grid xl:grid-cols-2 xl:items-start`). One column below `xl`.
 
 **Top bar:** Search, Tasks, Chat History, Suggestions, **Apps launcher** (`AppsLauncher.jsx`), Settings, Sign out. All other features live in the grouped Apps panel — see `config/appNavigation.js` and `docs/navigation-ia.md`.
 

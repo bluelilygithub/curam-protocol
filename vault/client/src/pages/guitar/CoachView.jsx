@@ -69,7 +69,7 @@ export default function CoachView({ songs, onOpenSong, onStartDrill, onLog }) {
   const f = review?.facts;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 xl:grid xl:grid-cols-2 xl:items-start">
       {/* Weekly review */}
       <section className="rounded-xl border p-4 flex flex-col gap-3" style={card} data-tour="guitar-coach">
         <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>This week</h2>
