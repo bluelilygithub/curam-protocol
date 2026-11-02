@@ -42,6 +42,8 @@ checkGuide({
     ['strum', 'notes', /does not listen/, 'the strum tab does not listen'],
     ['fingerpicking', 'does', /Travis picking/, 'the ladder ends at Travis picking'],
     ['fingerpicking', 'notes', /cannot hear you/, 'the person judges each step'],
+    ['gap-click', 'does', /silent on purpose/, 'the gap click goes silent'],
+    ['gap-click', 'notes', /only your taps/, 'the gap click measures taps, not sound'],
     ['pattern-ladder', 'does', /down strum on every beat/, 'the ladder starts on the beat'],
     ['milestones', 'notes', /never ticked by hand/, 'milestones come from real practice'],
     ['milestones', 'notes', /no streaks/, 'there are no streaks'],

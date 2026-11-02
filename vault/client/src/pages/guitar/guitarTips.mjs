@@ -163,6 +163,13 @@ export const GT = {
   pickEasier: 'Go back one step in the fingerpicking ladder.',
   pickHarder: 'Go up one step in the fingerpicking ladder.',
   pickComfy: 'Mark this step as comfortable once you can play it evenly without looking. Tap again to take the mark off.',
+  gapLevel: 'Choose this step of the gap click. Each step has more silence than the one before.',
+  gapPlay: 'Start with one bar of clicks, then the click goes quiet in gaps while you keep tapping the beat.',
+  gapStop: 'Stop now. Nothing is judged for a run you stop early.',
+  gapTempo: 'The speed in beats a minute. Set it before you start; it cannot change during a run.',
+  gapTap: 'Tap once on every beat, including the silent ones. The space bar does the same.',
+  gapEasier: 'Go back one step, with less silence.',
+  gapHarder: 'Go up one step, with more silence.',
   strumBars: 'How many bars to stay on each step before moving up.',
 
   // Backing band
