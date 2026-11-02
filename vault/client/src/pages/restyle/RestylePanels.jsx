@@ -122,7 +122,7 @@ export function PagePanel({ onFile, onPaste, onAddress, status, busy, renderAvai
 }
 
 /** Style files: add, order, remove, build. */
-export function StylesPanel({ entries, onAddFiles, onAddPaste, onMove, onRemove, htmlLoaded, onBuild, status, flags }) {
+export function StylesPanel({ entries, onAddFiles, onAddPaste, onMove, onRemove, htmlLoaded, onBuild, status, flags, previewErrors = [], onCopy }) {
   const getIcon = useIcon();
   const [tab, setTab] = useState('file');
   const [name, setName] = useState('');
@@ -162,14 +162,39 @@ export function StylesPanel({ entries, onAddFiles, onAddPaste, onMove, onRemove,
 
       {flags.length > 0 && (
         <div className="mt-4">
-          <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Things worth a look</h3>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Things worth a look</h3>
+            {onCopy && <Tooltip text="Copy every item in this list"><button className="hover:opacity-60 transition-opacity duration-200" aria-label="Copy all items" style={MUTED} onClick={() => onCopy(flags.join(String.fromCharCode(10)))}>{getIcon('copy', { size: 14 })}</button></Tooltip>}
+          </div>
           <ul className="flex flex-col gap-1.5 max-h-56 overflow-y-auto">
             {flags.map((flag, i) => (
-              <li key={i} className="text-xs rounded-md p-1.5 pl-2" style={{ background: '#fdf3ea', borderLeft: '3px solid #d99a3f', color: '#5a4322' }}>{flag}</li>
+              <li key={i} className="group flex items-start gap-1.5 text-xs rounded-md p-1.5 pl-2" style={{ background: '#fdf3ea', borderLeft: '3px solid #d99a3f', color: '#5a4322' }}>
+                <span className="flex-1 min-w-0">{flag}</span>
+                {onCopy && <Tooltip text="Copy this item"><button className="shrink-0 hover:opacity-60 transition-opacity duration-200" aria-label="Copy this item" onClick={() => onCopy(flag)}>{getIcon('copy', { size: 13 })}</button></Tooltip>}
+              </li>
             ))}
           </ul>
         </div>
       )}
+
+      <div className="mt-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Errors in the preview</h3>
+          {onCopy && previewErrors.length > 0 && <Tooltip text="Copy every error"><button className="hover:opacity-60 transition-opacity duration-200" aria-label="Copy all errors" style={MUTED} onClick={() => onCopy(previewErrors.join(String.fromCharCode(10)))}>{getIcon('copy', { size: 14 })}</button></Tooltip>}
+        </div>
+        {previewErrors.length === 0 ? (
+          <p className="text-xs" style={MUTED}>{htmlLoaded ? 'None found. This lists pictures, style files and fonts the preview could not load, like the Console in a browser. Build the preview to check.' : 'Add your page and build the preview to check.'}</p>
+        ) : (
+          <ul className="flex flex-col gap-1.5 max-h-56 overflow-y-auto">
+            {previewErrors.map((err, i) => (
+              <li key={i} className="flex items-start gap-1.5 text-xs rounded-md p-1.5 pl-2" style={{ background: '#fdecec', borderLeft: '3px solid #ef4444', color: '#5a2222' }}>
+                <span className="flex-1 min-w-0 break-all">{err}</span>
+                {onCopy && <Tooltip text="Copy this error"><button className="shrink-0 hover:opacity-60 transition-opacity duration-200" aria-label="Copy this error" onClick={() => onCopy(err)}>{getIcon('copy', { size: 13 })}</button></Tooltip>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </section>
   );
 }

@@ -58,6 +58,19 @@ function wasValue(cs, prop) {
   return cs[prop] || '';
 }
 
+/** What a browser Console would complain about in the built preview: pictures, style files and fonts that did not load. */
+function scanPreviewErrors(idoc) {
+  const out = [];
+  const seen = new Set();
+  const add = (msg) => { if (!seen.has(msg)) { seen.add(msg); out.push(msg); } };
+  idoc.querySelectorAll('img[src]').forEach((img) => {
+    if (img.complete && img.naturalWidth === 0 && !img.getAttribute('src').startsWith('data:')) add(`Picture did not load: ${img.getAttribute('src')}`);
+  });
+  idoc.querySelectorAll('link[rel~="stylesheet"][href]').forEach((l) => { if (!l.sheet) add(`Style file did not load: ${l.getAttribute('href')}`); });
+  try { idoc.fonts.forEach((f) => { if (f.status === 'error') add(`Font did not load: ${f.family}`); }); } catch { /* fonts API not available */ }
+  return out;
+}
+
 export default function RestylePage() {
   const getIcon = useIcon();
   const { user } = useAuthStore();
@@ -89,6 +102,7 @@ export default function RestylePage() {
   const mergedCssRef = useRef('');
   const [cssStatus, setCssStatus] = useState({ text: '', kind: '' });
   const [flags, setFlags] = useState([]);
+  const [previewErrors, setPreviewErrors] = useState([]);
   const [detectedAssets, setDetectedAssets] = useState(EMPTY_ASSETS);
 
   // ---------- The preview and what is selected in it ----------
@@ -292,9 +306,15 @@ export default function RestylePage() {
     if (!frame) return;
     const editCss = showOriginalRef.current ? '' : generateCss(editsRef.current, tokensRef.current, { important: importantRef.current, comments: false, preview: true });
     const doc = `<!DOCTYPE html><html><head>${sanitizedRef.current.head}<style id="restyle-merged-css">${mergedCssRef.current}</style><style id="restyle-edits">${editCss}</style></head><body>${sanitizedRef.current.body}</body></html>`;
+    setPreviewErrors([]);
     frame.onload = () => {
       const idoc = frame.contentDocument;
-      if (idoc) { attachIframeInteractivity(idoc); syncEditStyle(); }
+      if (idoc) {
+        attachIframeInteractivity(idoc); syncEditStyle();
+        // The preview runs no scripts, so its "console" is what failed to load. Look once it settles, and again for slow fonts.
+        setPreviewErrors(scanPreviewErrors(idoc));
+        setTimeout(() => { if (frame.contentDocument === idoc) setPreviewErrors(scanPreviewErrors(idoc)); }, 2000);
+      }
     };
     frame.srcdoc = doc;
     setPreviewBuilt(true);
@@ -907,7 +927,7 @@ export default function RestylePage() {
       case 'page':
         return <PagePanel onFile={(file) => submitHtml({ file })} onPaste={(html) => submitHtml({ html })} onAddress={loadAddress} status={htmlStatus} busy={loadingAddress} renderAvailable={renderAvailable} sourceUrl={sourceUrl} />;
       case 'styles':
-        return <StylesPanel entries={cssEntries} onAddFiles={addCssFiles} onAddPaste={addCssPaste} onMove={moveCssEntry} onRemove={removeCssEntry} htmlLoaded={htmlLoaded} onBuild={() => runBuildPreview(cssEntries)} status={cssStatus} flags={flags} />;
+        return <StylesPanel entries={cssEntries} onAddFiles={addCssFiles} onAddPaste={addCssPaste} onMove={moveCssEntry} onRemove={removeCssEntry} htmlLoaded={htmlLoaded} onBuild={() => runBuildPreview(cssEntries)} status={cssStatus} flags={flags} previewErrors={previewErrors} onCopy={(t) => copyText(t, 'Copied')} />;
       case 'source':
         return <p className="text-sm" style={{ color: 'var(--color-muted)' }}>The source fills this space. Choose which version to read along the top.</p>;
       case 'scrape':
