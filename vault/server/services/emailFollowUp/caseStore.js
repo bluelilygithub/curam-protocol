@@ -18,7 +18,8 @@ const MAX_SOURCE_CHARS = 60000;
 function cleanAliases(list) {
   const out = [];
   for (const a of Array.isArray(list) ? list : []) {
-    const v = String(a || '').trim().toLowerCase();
+    // "*@acme.com" means the same as "@acme.com"
+    const v = String(a || '').trim().toLowerCase().replace(/^\*+(?=@)/, '');
     const entry = EMAIL_RE.test(v) ? v : (DOMAIN_RE.test(v) ? `@${v.replace(/^@/, '')}` : null);
     if (entry && !out.includes(entry)) out.push(entry);
   }
