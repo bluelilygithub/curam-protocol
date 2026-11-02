@@ -559,7 +559,7 @@ export default function ClientDetailPage() {
                Cases' Open/Waiting/Closed state machine with a flag instead
                of a workflow. */}
           <Section tourId="crm-outstanding" title="Outstanding" open={sections.outstanding} onToggle={() => toggleSection('outstanding')}>
-            <OutstandingSection clientId={id} refreshKey={activityRefresh} onChanged={() => setActivityRefresh(n => n + 1)} />
+            <OutstandingSection clientId={id} unpaidInvoices={finance?.unpaidInvoices || []} refreshKey={activityRefresh} onChanged={() => setActivityRefresh(n => n + 1)} />
           </Section>
 
           {/* Activity — one log, one input box (LogActivity), one
@@ -879,7 +879,8 @@ function LogActivity({ clientId, contacts, tasks, onLogged }) {
 // clear instead of a dropdown. Reads the same feed endpoint as ActivityFeed
 // and filters client-side rather than adding a second backend query.
 
-function OutstandingSection({ clientId, refreshKey, onChanged }) {
+function OutstandingSection({ clientId, unpaidInvoices = [], refreshKey, onChanged }) {
+  const navigate = useNavigate();
   const [items, setItems] = useState(null);
   const [clearingId, setClearingId] = useState(null);
   const addToast = useToastStore(s => s.addToast);
@@ -906,10 +907,37 @@ function OutstandingSection({ clientId, refreshKey, onChanged }) {
   };
 
   if (items === null) return <p className="text-sm pt-3" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
-  if (!items.length) return <p className="text-sm pt-3" style={{ color: 'var(--color-muted)' }}>Nothing outstanding.</p>;
+  if (!items.length && !unpaidInvoices.length) return <p className="text-sm pt-3" style={{ color: 'var(--color-muted)' }}>Nothing outstanding.</p>;
 
+  const today = todayStr();
   return (
     <div className="pt-3">
+      {unpaidInvoices.length > 0 && (
+        <div className="mb-3">
+          <p className="text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Unpaid invoices</p>
+          {unpaidInvoices.map(inv => {
+            const overdue = inv.dueDate && String(inv.dueDate).slice(0, 10) < today;
+            return (
+              <div key={inv.id} className="flex items-center justify-between gap-3 py-2.5 border-b last:border-b-0" style={{ borderColor: 'var(--color-border)' }}>
+                <div className="min-w-0">
+                  <p className="text-sm" style={{ color: 'var(--color-text)' }}>Invoice {inv.number} · {fmt(inv.total)}</p>
+                  <p className="text-xs mt-0.5" style={{ color: overdue ? '#ef4444' : 'var(--color-muted)' }}>
+                    Issued {fmtDate(inv.issueDate)}{inv.dueDate ? ` · ${overdue ? 'overdue, was due' : 'due'} ${fmtDate(inv.dueDate)}` : ''}
+                  </p>
+                </div>
+                <button
+                  onClick={() => navigate(`/finance?tab=Invoices&clientId=${clientId}`)}
+                  className="text-xs px-2.5 py-1 rounded-lg border hover:opacity-70 transition-opacity flex-shrink-0"
+                  style={{ color: 'var(--color-muted)', borderColor: 'var(--color-border)' }}
+                >
+                  Open in Finance
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {items.length > 0 && unpaidInvoices.length > 0 && <p className="text-xs font-semibold mb-1" style={{ color: 'var(--color-muted)' }}>Follow-ups</p>}
       {items.map(it => (
         <div key={it.id} className="flex items-start justify-between gap-3 py-2.5 border-b last:border-b-0" style={{ borderColor: 'var(--color-border)' }}>
           <div className="min-w-0">

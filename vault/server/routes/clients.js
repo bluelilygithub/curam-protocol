@@ -231,13 +231,22 @@ router.get('/:id', async (req, res) => {
     const { rows: [finSummary] } = await pool.query(`
       SELECT
         COALESCE(SUM(total) FILTER (WHERE status != 'void'), 0)  AS "invoicedYTD",
-        COALESCE(SUM(total) FILTER (WHERE status = 'sent'),  0)  AS "outstanding",
         MAX("issueDate") FILTER (WHERE status != 'void')         AS "lastInvoiceDate",
         COUNT(*)         FILTER (WHERE status != 'void')::int    AS "invoiceCount"
       FROM fin_invoices
       WHERE "clientRef"=$1 AND "userId"=$2 AND "docType" != 'quote'
         AND EXTRACT(year FROM "issueDate") = EXTRACT(year FROM NOW())
     `, [clientId, userId]);
+    // Money still owed is not limited to this year: an unpaid invoice from last year is still owed.
+    const { rows: unpaidInvoices } = await pool.query(
+      `SELECT id, number, "issueDate", "dueDate", total
+       FROM fin_invoices
+       WHERE "clientRef"=$1 AND "userId"=$2 AND "docType" != 'quote' AND status = 'sent'
+       ORDER BY "dueDate" ASC NULLS LAST, "issueDate" ASC`,
+      [clientId, userId]
+    );
+    finSummary.outstanding = unpaidInvoices.reduce((sum, r) => sum + Number(r.total || 0), 0);
+    finSummary.unpaidInvoices = unpaidInvoices;
 
     // Mood summary
     const moodSummary = await getClientMoodSummary(clientId, userId);
@@ -758,13 +767,18 @@ router.post('/:id/summary', async (req, res) => {
     const { rows: [finance] } = await pool.query(
       `SELECT
          COALESCE(SUM(total) FILTER (WHERE status != 'void'), 0) AS "invoicedYTD",
-         COALESCE(SUM(total) FILTER (WHERE status = 'sent'), 0)  AS "outstanding",
          MAX("issueDate") FILTER (WHERE status != 'void')        AS "lastInvoiceDate"
        FROM fin_invoices
        WHERE "clientRef"=$1 AND "userId"=$2 AND "docType" != 'quote'
          AND EXTRACT(year FROM "issueDate") = EXTRACT(year FROM NOW())`,
       [clientId, userId]
     );
+    const { rows: [owed] } = await pool.query(
+      `SELECT COALESCE(SUM(total), 0) AS "outstanding" FROM fin_invoices
+       WHERE "clientRef"=$1 AND "userId"=$2 AND "docType" != 'quote' AND status = 'sent'`,
+      [clientId, userId]
+    );
+    finance.outstanding = owed.outstanding;
 
     if (!deals.length && !touchpoints.length && Number(finance?.invoicedYTD || 0) === 0) {
       return res.json({ summary: 'Not enough activity yet to summarize — no deals, touchpoints, or invoices logged for this client.' });
