@@ -5,6 +5,9 @@ import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import { useVoice } from '../hooks/useVoice';
+import { useIcon } from '../providers/IconProvider';
+import useSpeaker from './talk/useSpeaker';
+import { toSpeakable } from './talk/talkUtils.mjs';
 import Tooltip from '../components/Tooltip';
 import VideoStudyPanel from './youtube/VideoStudyPanel';
 import AiTranscriptDialog from './youtube/AiTranscriptDialog';
@@ -275,6 +278,31 @@ function FavCard({ fav, hit, noteId, select, onPlay, onLabels, onNote, onPickCat
   );
 }
 
+// A small speaker button for a heading: reads that text aloud with the browser's own voice (free, no server). Pressing it again stops it.
+function ListenButton({ id, text, speaker, playing, setPlaying, label }) {
+  const getIcon = useIcon();
+  if (!speaker.supported) return null;
+  const on = playing === id && speaker.speaking;
+  return (
+    <Tooltip text={on ? `Stop reading the ${label} aloud.` : `Hear the ${label} read aloud.`}>
+      <button
+        type="button"
+        aria-label={on ? `Stop reading the ${label}` : `Read the ${label} aloud`}
+        aria-pressed={on}
+        onClick={() => {
+          if (on) { speaker.cancel(); setPlaying(null); return; }
+          setPlaying(id);
+          speaker.speak(toSpeakable(text), () => setPlaying(null));
+        }}
+        className="hover:opacity-70"
+        style={{ fontFamily: 'inherit', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: '0.5rem', border: '1px solid var(--color-border)', background: on ? 'var(--color-primary)' : 'var(--color-bg)', color: on ? '#fff' : 'var(--color-muted)', transition: 'opacity 200ms' }}
+      >
+        {getIcon(on ? 'stop-circle' : 'volume-2', { size: 14 })}
+      </button>
+    </Tooltip>
+  );
+}
+
 // ── Transcript panel ──────────────────────────────────────────────────────────
 
 function TranscriptPanel({ video, onClose, onSeek }) {
@@ -292,6 +320,8 @@ function TranscriptPanel({ video, onClose, onSeek }) {
   const [source, setSource] = useState('captions'); // 'ai' when the saved transcript was written by AI
   const [canGenerate, setCanGenerate] = useState(false);
   const [showAi, setShowAi] = useState(false);
+  const speaker = useSpeaker();
+  const [playing, setPlaying] = useState(null); // which block is being read aloud: 'summary' | 'points'
   const [points, setPoints] = useState(null); // the bullet list of main points Gemini wrote, saved with the transcript
   const [pointsBusy, setPointsBusy] = useState(false);
   const [pointsError, setPointsError] = useState('');
@@ -486,6 +516,12 @@ function TranscriptPanel({ video, onClose, onSeek }) {
               ))}
             </div>
           )}
+          {!loading && !error && showSummary && summary && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.6rem' }}>
+              <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-text)' }}>Summary</h3>
+              <ListenButton id="summary" label="summary" text={summary} speaker={speaker} playing={playing} setPlaying={setPlaying} />
+            </div>
+          )}
           {!loading && !error && (showSummary || segments.length === 0) && (
             <p style={{ whiteSpace: 'pre-wrap', fontSize: '0.82rem', lineHeight: 1.55, color: 'var(--color-text)', margin: 0 }}>
               {showSummary ? summary : transcript}
@@ -495,7 +531,9 @@ function TranscriptPanel({ video, onClose, onSeek }) {
           {!loading && !error && (points || pointsBusy || pointsError) && (
             <section aria-label="Main points" style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--color-border)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.6rem' }}>
-                <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-text)', flex: 1 }}>Main points</h3>
+                <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-text)' }}>Main points</h3>
+                {points && <ListenButton id="points" label="main points" text={points.map((pt) => String(pt).replace(/[.\s]+$/, '')).join('. ')} speaker={speaker} playing={playing} setPlaying={setPlaying} />}
+                <span style={{ flex: 1 }} />
                 {points && (
                   <Tooltip text="Copy the main points to your clipboard as a bullet list.">
                     <button onClick={() => copyText(pointsCopyText(points))} style={{ ...btnBase, padding: '0.3rem 0.65rem', fontSize: '0.72rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
