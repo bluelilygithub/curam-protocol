@@ -13,6 +13,8 @@ import { useSearchParams } from 'react-router-dom';
 import TempoTrainer from './guitar/TempoTrainer';
 import { snapRate, songTimeAfter } from './guitar/trainerRules.mjs';
 import TheoryPanel, { KIND_STYLE } from './guitar/TheoryPanel';
+import SimplifyPanel from './guitar/SimplifyPanel';
+import { simplifySong, thinChanges } from './guitar/simplify.mjs';
 import TransitionDrills from './guitar/TransitionDrills';
 import CoachView from './guitar/CoachView';
 import LearnView from './guitar/LearnView';
@@ -703,6 +705,9 @@ export default function GuitarPage() {
   const [loopActive, setLoopActive] = useState(null);
   const [loopPasses, setLoopPasses] = useState(0); // times the active loop has come round
   const rateRef = useRef(1);                       // playback speed, 1 = normal; song time moves at this rate
+  const [easyMode, setEasyMode]         = useState('off');  // 'off' | 'exact' | 'easier': the chart shows the shapes to finger
+  const [easyFewer, setEasyFewer]       = useState(false);  // dim chords that change too fast (songs detected from audio)
+  const prevCapo = useRef(0);                                  // the capo to go back to when Make it easier is turned off
   const [gig, setGig] = useState(null);                 // { queue, startIndex } while play mode is open
   const [explaining, setExplaining] = useState(null);   // { song, analysis } while the Explain this song window is open
   const [drillPair, setDrillPair]       = useState(null);   // { a, b } chord pair opened from Today
@@ -826,6 +831,7 @@ export default function GuitarPage() {
     setCapoFret(song.capoOverride ?? 0); // Capo does not rewrite chart chord names
     setTab('Player');
     setKeyChoice('auto');
+    setEasyMode('off'); setEasyFewer(false);
     setLoopActive(null); // a loop belongs to one song; also puts the speed back to normal
     rateRef.current = 1;
     setLoadingChords(true);
@@ -1068,6 +1074,26 @@ export default function GuitarPage() {
     if (!queue.length) { addToast('That set list has no songs yet', 'error'); return; }
     setGig({ queue, startIndex: 0 });
   };
+
+  // Make it easier: the shapes to finger for this song, at the same sound or with easier chords. Chords as they sound (transposed).
+  const easyPlans = useMemo(() => {
+    const played = chords.map(c => ({ root: transposeRoot(c.chordRoot, transpose), quality: c.chordQuality || '' }));
+    return { exact: simplifySong(played, { level: 'exact' }), easier: simplifySong(played, { level: 'easier' }) };
+  }, [chords, transpose]);
+  const easyPlan = easyMode === 'off' ? null : easyPlans[easyMode];
+  const easyMap = useMemo(() => new Map((easyPlan?.chords || []).map(c => [c.concert, c])), [easyPlan]);
+  const canThin = !!(activeSong && activeSong.sourceType === 'upload' && activeSong.bpm);
+  const thinSet = useMemo(() => (easyFewer && canThin
+    ? thinChanges(chords.map(c => ({ id: c.id, timestampSec: c.timestampSec })), activeSong.bpm) : new Set()), [easyFewer, canThin, chords, activeSong]);
+
+  const chooseEasy = (mode) => {
+    if (mode !== 'off' && easyMode === 'off') prevCapo.current = capoFret;
+    if (mode === 'off' && easyMode !== 'off') changeCapo(prevCapo.current);
+    setEasyMode(mode);
+  };
+  // Keep the capo where the plan wants it (also when the chart is transposed while it is on)
+  const easyCapo = easyPlan ? easyPlan.capo : null;
+  useEffect(() => { if (easyCapo != null && easyCapo !== capoFret) changeCapo(easyCapo); }, [easyCapo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // What the Player already knows about the song, sent along so the coach explains the same key and numerals the person sees
   const explainThisSong = () => {
@@ -1537,10 +1563,13 @@ export default function GuitarPage() {
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 2 }}>
                                   {line.evs.map(({ ev, flatIdx }) => {
                                     const label    = displayChord(ev.chordRoot, ev.chordQuality || '', transpose);
+                                    const easy     = easyMap.get(label) || null;
+                                    const shown    = easy ? easy.play : label;      // what to finger when Make it easier is on
+                                    const skipped  = thinSet.has(ev.id);
                                     const isActive = flatIdx === activeChordIdx;
                                     return (
                                       <div key={ev.id} data-chord-idx={flatIdx} className="relative group">
-                                        <Tooltip text={`${label}. ${GT.chord}`}>
+                                        <Tooltip text={skipped ? `${shown}. This change is too fast to land: hold the chord before it. ${GT.chord}` : `${shown}${easy && shown !== label ? ` (sounds as ${label})` : ''}. ${GT.chord}`}>
                                           <button
                                             onClick={() => {
                                               setFretboardChord({ root: ev.chordRoot, quality: ev.chordQuality || '' });
@@ -1553,16 +1582,18 @@ export default function GuitarPage() {
                                               background: isActive ? 'var(--color-primary)' : 'var(--color-bg)',
                                               color: isActive ? '#fff' : 'var(--color-primary)',
                                               border: `1.5px solid ${isActive ? 'var(--color-primary)' : 'var(--color-primary)'}`,
-                                              opacity: isActive ? 1 : 0.85,
+                                              opacity: skipped ? 0.3 : isActive ? 1 : 0.85,
+                                              textDecoration: skipped ? 'line-through' : 'none',
                                             }}>
-                                            {label}
+                                            {shown}
                                           </button>
                                         </Tooltip>
                                         {(() => {
                                           const th = showNumerals ? theory?.byId.get(ev.id) : null;
-                                          const shape = showShapes && capoFret > 0
+                                          const shape = !easy && showShapes && capoFret > 0
                                             ? shapeAtCapo(ev.chordRoot, ev.chordQuality, transpose, capoFret) : null;
-                                          if (!th && !shape) return null;
+                                          const sounds = easy && shown !== label ? label : null;
+                                          if (!th && !shape && !sounds) return null;
                                           return (
                                             <Tooltip text={th ? (th.note ? `${th.note}.` : GT.numeral) : GT.shapeChip}>
                                               <div style={{ textAlign: 'center', fontSize: '0.65rem', lineHeight: 1.2, marginTop: 1 }}>
@@ -1570,6 +1601,7 @@ export default function GuitarPage() {
                                                   fontWeight: th.kind === 'diatonic' ? 400 : 700 }}>{th.numeral}</span>}
                                                 {th && shape && ' '}
                                                 {shape && <span style={{ color: 'var(--color-muted)' }}>({shape})</span>}
+                                                {sounds && <span style={{ color: 'var(--color-muted)' }}>{th ? ' · ' : ''}sounds {sounds}</span>}
                                               </div>
                                             </Tooltip>
                                           );
@@ -1603,6 +1635,7 @@ export default function GuitarPage() {
                         showShapes={showShapes} onShowShapes={setShowShapes}
                         capoFret={capoFret} onUseCapo={changeCapo} />
                     </div>
+                    <SimplifyPanel mode={easyMode} onMode={chooseEasy} plans={easyPlans} canThin={canThin} fewer={easyFewer} onFewer={setEasyFewer} skipped={thinSet.size} />
                     {/* Chord voicings (UG-style) */}
                     <div className="rounded-xl border p-3"
                       style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>

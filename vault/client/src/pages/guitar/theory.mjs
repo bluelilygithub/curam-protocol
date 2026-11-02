@@ -125,7 +125,7 @@ const OPEN_COST = {
   C: 0, D: 0, E: 0, G: 0, A: 0, Am: 0, Dm: 0, Em: 0,
   A7: 0, B7: 1, C7: 1, D7: 0, E7: 0, G7: 0,
   Cmaj7: 0, Dmaj7: 0, Emaj7: 1, Fmaj7: 1, Gmaj7: 0, Amaj7: 0,
-  Am7: 0, Dm7: 0, Em7: 0,
+  Am7: 0, Dm7: 0, Em7: 0, Bm7: 1,
   Asus2: 0, Asus4: 0, Dsus2: 0, Dsus4: 0, Esus4: 0, Csus2: 0, Gsus4: 0,
 };
 const BARRE_COST = 3;

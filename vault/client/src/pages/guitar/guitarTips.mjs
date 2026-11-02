@@ -99,6 +99,12 @@ export const GT = {
   learnHave: 'Add this chord to the ones you can play.',
   learnPick: 'Choose a song you want to play and see which chords to learn first, and the easier songs you unlock on the way.',
 
+  // Make it easier
+  simplifyOff: 'Show the chart as written, with no capo change and no swapped chords.',
+  simplifyExact: 'Keep the exact sound and only move the capo to the fret that leaves the fewest barre chords.',
+  simplifyEasier: 'Move the capo and swap hard chords for easy ones, such as F for Fmaj7. The sound changes a little.',
+  simplifyFewer: 'Dim the chords that change too fast to land, so you can hold the one before.',
+
   // Ear training
   earChords: 'Chords: hear a chord and name it. The choices come from your own songs.',
   earNumerals: 'Numerals: hear the key chord, then a chord from one of your songs, and name its Roman numeral.',

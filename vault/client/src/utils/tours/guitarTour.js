@@ -4,7 +4,7 @@ import './goalsTour.css';
 
 export const TOUR_KEY = 'vault_tour_guitar_completed';
 
-const TOTAL_STEPS = 13;
+const TOTAL_STEPS = 14;
 
 function injectStepCounter(stepIndex) {
   requestAnimationFrame(() => {
@@ -132,12 +132,22 @@ export function startGuitarTour({ goTab } = {}) {
   });
 
   tour.addStep({
+    id: 'guitar-simplify',
+    title: 'Make it easier',
+    text: 'Choose Same sound to move the capo so there are fewer barre chords, or Easier chords to swap hard chords for easy ones (F becomes Fmaj7). The chart then shows the shapes to finger, with the chord it sounds as underneath. It says what changes in the sound.',
+    attachTo: { element: '[data-tour="guitar-simplify"]', on: 'left' },
+    beforeShowPromise: onTab('guitar-simplify', 'Player', '[data-tour="guitar-simplify"]'),
+    when: { show() { injectStepCounter(9); } },
+    buttons: [btnBack(), btnNext],
+  });
+
+  tour.addStep({
     id: 'guitar-loops',
     title: 'Loops and the tempo trainer',
     text: 'Save a section as a loop, then slow it down without changing the pitch. Start at 70% and tap Clean after each clean pass: after a few in a row the speed goes up. Your best speeds are charted.',
     attachTo: { element: '[data-tour="guitar-loops"]', on: 'left' },
     beforeShowPromise: onTab('guitar-loops', 'Player', '[data-tour="guitar-loops"]'),
-    when: { show() { injectStepCounter(9); } },
+    when: { show() { injectStepCounter(10); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -147,7 +157,7 @@ export function startGuitarTour({ goTab } = {}) {
     text: 'Write a short review of your last seven days, or tell it how long you have and it builds a session from your own songs, loops and chord changes. The numbers and the plan come from your practice; AI only writes the wording.',
     attachTo: { element: '[data-tour="guitar-coach"]', on: 'bottom' },
     beforeShowPromise: onTab('guitar-coach', 'Coach', '[data-tour="guitar-coach"]'),
-    when: { show() { injectStepCounter(10); } },
+    when: { show() { injectStepCounter(11); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -157,7 +167,7 @@ export function startGuitarTour({ goTab } = {}) {
     text: 'Drills lists the chord changes your own songs use most, worst first. Press Drill, switch between the two chords for a minute and tap each clean change. Stuck on anything? Press the round button at the bottom right and ask the guide.',
     attachTo: { element: '[data-tour="guitar-drills"]', on: 'bottom' },
     beforeShowPromise: onTab('guitar-drills', 'Drills', '[data-tour="guitar-drills"]'),
-    when: { show() { injectStepCounter(11); } },
+    when: { show() { injectStepCounter(12); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -167,7 +177,7 @@ export function startGuitarTour({ goTab } = {}) {
     text: 'You hear a chord from one of your own songs and name it, or hear the key chord and then another and name its Roman numeral. Rounds are ten questions, the chords you miss come up more often, and your scores are kept.',
     attachTo: { element: '[data-tour="guitar-ear"]', on: 'bottom' },
     beforeShowPromise: onTab('guitar-ear', 'Ear', '[data-tour="guitar-ear"]'),
-    when: { show() { injectStepCounter(12); } },
+    when: { show() { injectStepCounter(13); } },
     buttons: [btnBack(), btnNext],
   });
 
@@ -177,7 +187,7 @@ export function startGuitarTour({ goTab } = {}) {
     text: 'Put songs in playing order in a set list, then press Play for a big chart that follows the song at its tempo. The Play mode button in the Player does the same for one song. Arrow keys and Page keys move through it, so a foot pedal or page turner works. Stuck on anything? Press the round button at the bottom right and ask the guide.',
     attachTo: { element: '[data-tour="guitar-setlists"]', on: 'top' },
     beforeShowPromise: onTab('guitar-setlists', 'Library', '[data-tour="guitar-setlists"]'),
-    when: { show() { injectStepCounter(13); } },
+    when: { show() { injectStepCounter(14); } },
     buttons: [
       btnBack(),
       { text: 'Finish Tour ✓', action() { try { localStorage.setItem(TOUR_KEY, '1'); } catch (_) { /* ignore */ } tour.complete(); } },

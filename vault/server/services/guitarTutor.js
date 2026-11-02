@@ -57,6 +57,9 @@ const CATALOG = [
   { id: 'capo-advice', label: 'Easiest capo', group: 'Songs',
     does: 'Also in the Theory and capo box: it tries the capo at each fret from none to 7 and recommends the one that leaves the fewest barre chords, for example "Capo 3, play G shapes". It lists each sounding chord with the shape to play and has buttons to set the capo.',
     notes: 'It counts a chord as easy only if it is a common open shape; check it against how you actually play.' },
+  { id: 'simplify', label: 'Make it easier', group: 'Songs',
+    does: 'In the Player, the Make it easier box has three choices. As written shows the chart untouched. Same sound sets the capo to the fret that leaves the fewest barre chords and shows the shapes to finger, with the chord it sounds as underneath. Easier chords does that and also swaps hard chords for easy ones (F for Fmaj7, Bm for Bm7, B for B7, or a plainer version of a hard seventh or suspended chord). It lists every swap and says what changes in the sound, and names any chord that still needs a barre. For a song detected from audio, a tick dims chords that change too fast to land.',
+    notes: 'Swapped chords sound a little different from the original. Turning it off puts the capo back where it was. It changes only how the chart is shown, not the saved chords.' },
   { id: 'loops', label: 'Practice loops', group: 'Songs',
     does: 'In the Player, type a name and press Save at current to save the last five seconds up to now as a loop. Press a loop to repeat it, the cross to stop repeating and the bin to delete it.',
     notes: 'Loops need an audio file or a YouTube address on the song.' },
@@ -116,7 +119,7 @@ const NOT_POSSIBLE = [
   'Ear training from the recording itself: the ear tab plays chords from a built-in synth, using the chords and keys of your own songs.',
   'Keeping a song in step with a live band or a backing track: play mode moves at a set tempo or when you press a key, it does not listen.',
   'Sharing songs or practice history with other people.',
-  'Hearing whether you played a chord cleanly, a built-in tuner, simplifying a song with easier chord substitutes, or riff tab: none of these are built yet.',
+  'Hearing whether you played a chord cleanly, a built-in tuner, or riff tab: none of these are built yet.',
 ];
 
 const SYSTEM = `You are the guide to Guitar in Vault for one person who learns songs, practises them and keeps them from going rusty. They say, in everyday words, what they want to do. You point them to the right controls, in order, and explain how each works.

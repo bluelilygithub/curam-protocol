@@ -71,6 +71,7 @@ export const GUIDE_TOOLS = [
   { id: 'chart', label: 'Chord chart', tool: 'player' },
   { id: 'add-chord', label: 'Add chord at playhead', tool: 'player' },
   { id: 'numerals', label: 'Key and Roman numerals', tool: 'player' },
+  { id: 'simplify', label: 'Make it easier', tool: 'player' },
   { id: 'capo-advice', label: 'Easiest capo', tool: 'player' },
   { id: 'loops', label: 'Practice loops', tool: 'player' },
   { id: 'tempo', label: 'Tempo trainer', tool: 'player' },
