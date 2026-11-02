@@ -489,6 +489,12 @@ function TranscriptPanel({ video, onClose, onSeek }) {
             </button>
               </Tooltip>}
 
+          {!loading && !error && !showSummary && transcript && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.6rem' }}>
+              <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-text)' }}>Transcript</h3>
+              <ListenButton id="transcript" label="transcript" text={transcript} speaker={speaker} playing={playing} setPlaying={setPlaying} />
+            </div>
+          )}
           {!loading && !error && showTimes && !showSummary && segments.length > 0 && (
             <div style={{ fontSize: '0.82rem', lineHeight: 1.55, color: 'var(--color-text)' }}>
               {segments.map((seg, i) => (
