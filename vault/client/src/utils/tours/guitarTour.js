@@ -94,7 +94,7 @@ export function startGuitarTour({ goTab } = {}) {
   tour.addStep({
     id: 'guitar-today',
     title: 'Today',
-    text: 'A short list for the time you have: a song you are learning, a loop to work up, a song going rusty, a song to polish and a chord change to drill. It fills up as you add songs and loops.',
+    text: 'A short list for the time you have: a song you are learning, a loop to work up, a song going rusty, a song to polish and a chord change to drill. Below it are your milestones, worked out from what you have really done, and a note that says whether something hard is normal when it fits. There is no streak to keep.',
     attachTo: { element: '[data-tour="guitar-today"]', on: 'bottom' },
     beforeShowPromise: onTab('guitar-today', 'Today', '[data-tour="guitar-today"]'),
     when: { show() { injectStepCounter(5); } },

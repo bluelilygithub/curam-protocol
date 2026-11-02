@@ -4008,6 +4008,18 @@
   },
   "GET /api/guitar-play/roadmap/:songId": {
    "class": "authed"
+  },
+  "GET /api/guitar-play/milestones": {
+   "class": "authed"
+  },
+  "GET /api/guitar-play/tips": {
+   "class": "authed"
+  },
+  "POST /api/guitar-play/tips/:id/dismiss": {
+   "class": "authed"
+  },
+  "DELETE /api/guitar-play/tips/:id/dismiss": {
+   "class": "authed"
   }
  }
 }

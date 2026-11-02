@@ -100,6 +100,13 @@ export const GT = {
   learnHave: 'Add this chord to the ones you can play.',
   learnPick: 'Choose a song you want to play and see which chords to learn first, and the easier songs you unlock on the way.',
 
+  // Milestones and reassurance
+  milestoneAll: 'Show or hide the full list of milestones, with the ones you have reached ticked.',
+  milestoneClose: 'Close this message.',
+  tipDismiss: 'Put this tip away for good. You can bring it back from the Is this normal? list.',
+  tipRestore: 'Bring this tip back so it shows when it fits.',
+  tipsAll: 'Show or hide every Is this normal? tip, including the ones you put away.',
+
   // Make it easier
   simplifyOff: 'Show the chart as written, with no capo change and no swapped chords.',
   simplifyExact: 'Keep the exact sound and only move the capo to the fret that leaves the fewest barre chords.',

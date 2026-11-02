@@ -69,6 +69,12 @@ const CATALOG = [
   { id: 'tempo', label: 'Tempo trainer', group: 'Songs',
     does: 'Appears under Practice loops when a loop is on. A speed slider from 40% to 120% slows the loop without changing the pitch. Start at 70% begins an automatic ramp: tap Clean after each clean pass and after a few in a row (you choose how many) the speed goes up 5%; Messy starts the run again. Count in and play gives four clicks first; Click keeps a metronome at the song\'s tempo; Log this speed saves the speed you reached, and a small graph shows your progress on the loop.',
     notes: 'The click keeps time but is not locked to the recording. Pitch-keeping slowdown works for uploaded audio; on a YouTube video the speed steps are the ones YouTube offers.' },
+  { id: 'milestones', label: 'Milestones', group: 'Practise',
+    does: 'In the Today tab, below the practice list. It shows how many milestones you have reached, the three you are closest to with a progress bar (for example "3 of 5 chords"), and Show all milestones for the full list. Milestones include your first practice, an hour and ten hours played, your first chord, five and ten chords, your first barre chord, your first full song (a song marked Ready), your first chord change drill, 30 and 60 clean changes a minute, a loop at full speed and an ear training round of 80% or better. A new one is announced once, in a short friendly message.',
+    notes: 'They are worked out from what you have really done in Guitar, never ticked by hand, so a chord counts once it is ticked in Learn. There are no streaks and nothing is lost by taking a few days off. It does not record video clips.' },
+  { id: 'is-this-normal', label: 'Is this normal?', group: 'Practise',
+    does: 'In the Today tab. When something about your practice fits, a short reassuring note appears at the top: sore fingertips in your first weeks, buzzing strings after a practice you rated as not very clean, a G chord or a barre chord you have not ticked yet, slow chord changes, a score that has stopped improving, short sessions, a song that has gone rusty, or coming back after a few days. Each has a button to put it away for good. The Is this normal? button under Milestones lists every tip and can bring one back.',
+    notes: 'These are general reassurance, not medical advice. The sore fingertips tip says sharp pain, or an ache in the wrist, hand or forearm, is not normal and to rest and ask a teacher.' },
   { id: 'my-chords', label: 'Chords I can play', group: 'Practise',
     does: 'In the Learn tab: a row of chord buttons. Press a chord when you can play it cleanly and it turns on; press again to turn it off. The list saves as you go. Songs, suggestions and roadmaps update straight away.',
     notes: 'Vault cannot hear you, so this is your own honest tick. It also shows the common beginner chords even before any song uses them.' },
@@ -116,6 +122,7 @@ const RULES = [
   'Chord change drills are counted by your taps; the score is saved against the pair of chords.',
   'Strumming arrows and the pattern ladder show rhythm against a click; they do not listen to you play.',
   'In the Learn tab you tick the chords you can play; songs, suggestions and roadmaps come only from the chords in your own songs.',
+  'Milestones are worked out from what you have really done in Guitar; there are no streaks. Is this normal? notes appear only when they fit your practice and can be put away.',
   'Set lists are made in the Library and played in play mode. Foot pedals and page turners work because they send arrow or Page keys.',
   'In the Coach tab the numbers and the plan are worked out by Vault from your own practice; AI only writes the wording, and its wording is checked before it is shown.',
   'The Open buttons in this chat only switch to a tool (they switch to its tab); they never change a song or start a drill by themselves.',
@@ -129,6 +136,7 @@ const NOT_POSSIBLE = [
   'Ear training from the recording itself: the ear tab plays chords from a built-in synth, using the chords and keys of your own songs.',
   'Keeping a song in step with a live band or a backing track: play mode moves at a set tempo or when you press a key, it does not listen.',
   'Sharing songs or practice history with other people.',
+  'Recording a video clip of a milestone, a streak counter, or reminders to practise: none of these are built.',
   'Hearing whether you played a chord cleanly or in time, a built-in tuner, a backing band, or riff tab: none of these are built yet.',
 ];
 

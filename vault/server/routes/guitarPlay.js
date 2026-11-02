@@ -8,6 +8,8 @@ const { pool } = require('../db');
 const { getLogger } = require('../middleware/requestContext');
 const ear = require('../services/guitarEar');
 const playable = require('../services/guitarPlayable');
+const milestones = require('../services/guitarMilestones');
+const data = require('../services/guitarData');
 
 const router = express.Router();
 const MAX_SETLISTS = 50;
@@ -147,6 +149,52 @@ router.get('/roadmap/:songId', async (req, res) => {
     if (!target) return res.status(404).json({ error: 'Song not found, or it has no chords yet' });
     res.json(playable.roadmap(target, classified, known));
   } catch (err) { fail(res, err, 'roadmap'); }
+});
+
+// ── Milestones and "is this normal?" tips ───────────────────────────────────
+// Milestones are worked out from what the person has done. The first time one is reached it is recorded and reported as new, once.
+router.get('/milestones', async (req, res) => {
+  try {
+    const facts = await data.loadMilestoneFacts(req.user.id);
+    const list = milestones.evaluateMilestones(facts);
+    const doneKeys = list.filter(m => m.achieved).map(m => m.key);
+    const fresh = [];
+    for (const key of doneKeys) {
+      const { rowCount } = await pool.query('INSERT INTO guitar_milestones ("userId", key) VALUES ($1,$2) ON CONFLICT DO NOTHING', [req.user.id, key]);
+      if (rowCount) fresh.push(key);
+    }
+    const { rows } = await pool.query('SELECT key, "achievedAt" FROM guitar_milestones WHERE "userId"=$1', [req.user.id]);
+    const when = new Map(rows.map(r => [r.key, r.achievedAt]));
+    res.json({
+      milestones: list.map(m => ({ ...m, achievedAt: m.achieved ? when.get(m.key) || null : null, isNew: fresh.includes(m.key) })),
+      newKeys: fresh,
+    });
+  } catch (err) { fail(res, err, 'milestones'); }
+});
+
+router.get('/tips', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT "tipId" FROM guitar_dismissed_tips WHERE "userId"=$1', [req.user.id]);
+    const dismissed = new Set(rows.map(r => r.tipId));
+    const facts = await data.loadMilestoneFacts(req.user.id);
+    // One note at a time keeps Today calm; putting it away brings up the next that fits
+    res.json({ tips: milestones.selectTips(facts, dismissed, new Date(), 1), all: milestones.allTips(dismissed) });
+  } catch (err) { fail(res, err, 'tips'); }
+});
+
+router.post('/tips/:id/dismiss', async (req, res) => {
+  try {
+    if (!milestones.TIPS.some(t => t.id === req.params.id)) return res.status(404).json({ error: 'Tip not found' });
+    await pool.query('INSERT INTO guitar_dismissed_tips ("userId", "tipId") VALUES ($1,$2) ON CONFLICT DO NOTHING', [req.user.id, req.params.id]);
+    res.status(204).end();
+  } catch (err) { fail(res, err, 'dismiss tip'); }
+});
+
+router.delete('/tips/:id/dismiss', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM guitar_dismissed_tips WHERE "userId"=$1 AND "tipId"=$2', [req.user.id, req.params.id]);
+    res.status(204).end();
+  } catch (err) { fail(res, err, 'restore tip'); }
 });
 
 // ── Ear training ─────────────────────────────────────────────────────────────

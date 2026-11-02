@@ -20,6 +20,7 @@ import CoachView from './guitar/CoachView';
 import LearnView from './guitar/LearnView';
 import EarTraining from './guitar/EarTraining';
 import StrumTrainer from './guitar/StrumTrainer';
+import { GentleTips, MilestonesCard } from './guitar/ProgressCards';
 import GigMode from './guitar/GigMode';
 import SetLists from './guitar/SetLists';
 import ExplainDialog from './guitar/ExplainDialog';
@@ -608,6 +609,7 @@ function PracticeDialog({ song, loop, onClose, onSaved }) {
 function TodayView({ songs, onOpenSong, onPlayed, onStartDrill, refreshKey }) {
   const [queue, setQueue] = useState(null);
   const [logging, setLogging] = useState(null); // { song, loop }
+  const [saved, setSaved] = useState(0);         // bumped when a practice is logged, so the milestones and tips look again
 
   const load = useCallback(() => {
     api.get('/api/guitar/practice/queue').then(r => r.json()).then(d => setQueue(d))
@@ -621,6 +623,7 @@ function TodayView({ songs, onOpenSong, onPlayed, onStartDrill, refreshKey }) {
 
   return (
     <div className="flex flex-col gap-4">
+      <GentleTips refreshKey={`${refreshKey}-${saved}`} />
       <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
         This week: {queue.week.sessions} {queue.week.sessions === 1 ? 'session' : 'sessions'}
         {queue.week.minutes ? `, ${queue.week.minutes} min logged` : ''}.
@@ -673,7 +676,8 @@ function TodayView({ songs, onOpenSong, onPlayed, onStartDrill, refreshKey }) {
           })}
         </div>
       )}
-      {logging && <PracticeDialog song={logging.song} loop={logging.loop} onClose={() => setLogging(null)} onSaved={() => { load(); onPlayed?.(); }} />}
+      <MilestonesCard refreshKey={`${refreshKey}-${saved}`} onTipsChange={() => setSaved(n => n + 1)} />
+      {logging && <PracticeDialog song={logging.song} loop={logging.loop} onClose={() => setLogging(null)} onSaved={() => { load(); setSaved(n => n + 1); onPlayed?.(); }} />}
     </div>
   );
 }

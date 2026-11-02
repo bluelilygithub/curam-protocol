@@ -4657,6 +4657,24 @@ async function initSchema() {
     )
   `);
 
+  // Milestones reached (worked out from the person's own practice) and "is this normal?" tips they have put away
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS guitar_milestones (
+      "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      key           TEXT NOT NULL,
+      "achievedAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY ("userId", key)
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS guitar_dismissed_tips (
+      "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "tipId"     TEXT NOT NULL,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY ("userId", "tipId")
+    )
+  `);
+
   // Seed basic open-chord shapes if table is empty
   const shapeCount = await pool.query('SELECT COUNT(*) FROM guitar_chord_shapes');
   if (parseInt(shapeCount.rows[0].count) === 0) {

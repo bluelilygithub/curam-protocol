@@ -4,6 +4,8 @@
 
 const { pool } = require('../db');
 const { countTransitions, rankTransitions } = require('./guitarTransitions');
+const { weekFacts } = require('./guitarCoach');
+const { songChordNames } = require('./guitarPlayable');
 
 /** The chord changes this person's songs ask for most, ranked by how much they need drilling. */
 async function loadTransitions(userId, limit = 15) {
@@ -50,4 +52,42 @@ async function loadWeekInputs(userId) {
   return { sessions: sessions.rows, loopRuns: loopRuns.rows, scores: scores.rows, songs };
 }
 
-module.exports = { loadTransitions, loadPracticeSongs, loadLoops, loadWeekInputs };
+/** Everything milestones and tips are worked out from. All numbers come from the person's own practice, chords and scores. */
+async function loadMilestoneFacts(userId, now = new Date()) {
+  const [agg, ready, known, events, drills, loopBest, earBest, week] = await Promise.all([
+    pool.query(
+      `SELECT COUNT(*) AS n, COALESCE(SUM(minutes),0) AS minutes, MIN("playedAt") AS first, MAX("playedAt") AS last
+       FROM guitar_practice_sessions WHERE "userId"=$1`, [userId]),
+    pool.query(
+      `SELECT COUNT(*) AS n FROM guitar_user_songs us JOIN guitar_songs s ON s.id=us."songId"
+       WHERE us."userId"=$1 AND s."userId"=$1 AND us."learnStatus"='ready'`, [userId]),
+    pool.query('SELECT chord FROM guitar_known_chords WHERE "userId"=$1', [userId]),
+    pool.query(
+      `SELECT s.id, ce."chordRoot", ce."chordQuality" FROM guitar_songs s JOIN guitar_chord_events ce ON ce."songId"=s.id
+       WHERE s."userId"=$1 AND s.status='done' ORDER BY s.id, ce."timestampSec", ce.id`, [userId]),
+    pool.query(
+      `SELECT COUNT(*) AS n, COALESCE(MAX(changes * 60.0 / seconds),0) AS best FROM guitar_transition_scores WHERE "userId"=$1`, [userId]),
+    pool.query('SELECT COALESCE(MAX("speedPct"),0) AS best FROM guitar_loop_runs WHERE "userId"=$1', [userId]),
+    pool.query('SELECT COALESCE(MAX(correct * 100.0 / total),0) AS best FROM guitar_ear_sessions WHERE "userId"=$1 AND total >= 10', [userId]),
+    loadWeekInputs(userId),
+  ]);
+  const bySong = new Map();
+  for (const e of events.rows) { if (!bySong.has(e.id)) bySong.set(e.id, []); bySong.get(e.id).push(e); }
+  const libraryChords = [...new Set([...bySong.values()].flatMap(songChordNames))];
+
+  const week14 = week.sessions.filter(s => now.getTime() - new Date(s.playedAt).getTime() < 14 * 86400000);
+  const timed = week14.filter(s => s.minutes != null && s.minutes > 0);
+  const wf = weekFacts(week, now);
+  return {
+    practiceCount: Number(agg.rows[0].n), practiceMinutes: Number(agg.rows[0].minutes),
+    firstPracticeAt: agg.rows[0].first, lastPracticeAt: agg.rows[0].last,
+    recentAvgMinutes: timed.length ? timed.reduce((a, s) => a + s.minutes, 0) / timed.length : null,
+    recentLowConfidence: week14.some(s => s.confidence != null && s.confidence <= 2),
+    readySongs: Number(ready.rows[0].n), knownChords: known.rows.map(r => r.chord), libraryChords,
+    drillTries: Number(drills.rows[0].n), bestDrillRate: Math.round(Number(drills.rows[0].best)),
+    bestLoopSpeed: Number(loopBest.rows[0].best), bestEarPct: Math.round(Number(earBest.rows[0].best)),
+    rustySongs: wf.rusty.length, stalled: wf.stalled.length,
+  };
+}
+
+module.exports = { loadTransitions, loadPracticeSongs, loadLoops, loadWeekInputs, loadMilestoneFacts };
